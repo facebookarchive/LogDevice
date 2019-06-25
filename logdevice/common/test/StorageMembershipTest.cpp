@@ -95,21 +95,21 @@ class StorageMembershipTest : public ::testing::Test {
   }
 };
 
-#define ASSERT_SHARD_STATE_FULL(_m,                            \
-                                _shard,                        \
-                                _storage_state,                \
-                                _metadata_state,               \
-                                _flags,                        \
-                                _since_version,                \
-                                _maintenance)                  \
-  do {                                                         \
-    auto res = _m.getShardState(_shard);                       \
-    EXPECT_TRUE(res.first);                                    \
-    EXPECT_EQ(_storage_state, res.second.storage_state);       \
-    EXPECT_EQ(_flags, res.second.flags);                       \
-    EXPECT_EQ(_metadata_state, res.second.metadata_state);     \
-    EXPECT_EQ(_maintenance, res.second.active_maintenance);    \
-    EXPECT_EQ(_since_version, res.second.since_version.val()); \
+#define ASSERT_SHARD_STATE_FULL(_m,                      \
+                                _shard,                  \
+                                _storage_state,          \
+                                _metadata_state,         \
+                                _flags,                  \
+                                _since_version,          \
+                                _maintenance)            \
+  do {                                                   \
+    auto res = _m.getShardState(_shard);                 \
+    EXPECT_TRUE(res.hasValue());                         \
+    EXPECT_EQ(_storage_state, res->storage_state);       \
+    EXPECT_EQ(_flags, res->flags);                       \
+    EXPECT_EQ(_metadata_state, res->metadata_state);     \
+    EXPECT_EQ(_maintenance, res->active_maintenance);    \
+    EXPECT_EQ(_since_version, res->since_version.val()); \
   } while (0)
 
 #define ASSERT_SHARD_STATE(                                              \
@@ -125,7 +125,7 @@ class StorageMembershipTest : public ::testing::Test {
 #define ASSERT_NO_SHARD(_m, _shard)      \
   do {                                   \
     auto res = _m.getShardState(_shard); \
-    EXPECT_FALSE(res.first);             \
+    EXPECT_FALSE(res.hasValue());        \
   } while (0)
 
 #define ASSERT_MEMBERSHIP_NODES(_m, ...)                      \
@@ -145,11 +145,10 @@ class StorageMembershipTest : public ::testing::Test {
     EXPECT_EQ(std::set<ShardID>({__VA_ARGS__}), _m.getMetaDataShards());       \
     for (auto shard : metadata_set) {                                          \
       auto res = _m.getShardState(shard);                                      \
-      EXPECT_TRUE(res.first);                                                  \
-      EXPECT_TRUE(res.second.isValid());                                       \
-      EXPECT_TRUE(                                                             \
-          res.second.metadata_state == MetaDataStorageState::METADATA ||       \
-          res.second.metadata_state == MetaDataStorageState::PROMOTING);       \
+      EXPECT_TRUE(res.hasValue());                                             \
+      EXPECT_TRUE(res->isValid());                                             \
+      EXPECT_TRUE(res->metadata_state == MetaDataStorageState::METADATA ||     \
+                  res->metadata_state == MetaDataStorageState::PROMOTING);     \
     }                                                                          \
     EXPECT_TRUE(_m.validate());                                                \
   } while (0)

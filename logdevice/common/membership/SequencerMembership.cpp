@@ -84,13 +84,13 @@ std::string SequencerMembership::Update::toString() const {
       "[V:{}, {{{}}}]", membership::toString(base_version), node_str);
 }
 
-std::pair<bool, SequencerNodeState>
+folly::Optional<SequencerNodeState>
 SequencerMembership::getNodeState(node_index_t node) const {
   const auto nit = node_states_.find(node);
   if (nit == node_states_.cend()) {
-    return std::make_pair(false, SequencerNodeState{});
+    return folly::none;
   }
-  return std::make_pair(true, nit->second);
+  return nit->second;
 }
 
 const SequencerNodeState*
@@ -156,9 +156,8 @@ int SequencerMembership::applyUpdate(
     const node_index_t node = kv.first;
     const SequencerNodeState::Update& node_update = kv.second;
 
-    bool node_exist;
-    SequencerNodeState current_node_state;
-    std::tie(node_exist, current_node_state) = getNodeState(node);
+    auto current_node_state = getNodeState(node);
+    bool node_exist = current_node_state.hasValue();
 
     if (!node_exist &&
         node_update.transition != SequencerMembershipTransition::ADD_NODE) {
@@ -196,13 +195,13 @@ int SequencerMembership::applyUpdate(
       } break;
       case SequencerMembershipTransition::SET_WEIGHT:
         ld_check(node_exist);
-        current_node_state.setWeight(node_update.weight);
-        target_membership_state.setNodeState(node, current_node_state);
+        current_node_state->setWeight(node_update.weight);
+        target_membership_state.setNodeState(node, *current_node_state);
         break;
       case SequencerMembershipTransition::SET_ENABLED_FLAG:
         ld_check(node_exist);
-        current_node_state.sequencer_enabled = node_update.sequencer_enabled;
-        target_membership_state.setNodeState(node, current_node_state);
+        current_node_state->sequencer_enabled = node_update.sequencer_enabled;
+        target_membership_state.setNodeState(node, *current_node_state);
         break;
       case SequencerMembershipTransition::ADD_NODE:
         target_membership_state.setNodeState(node,

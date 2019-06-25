@@ -215,9 +215,9 @@ TEST_F(NodesConfigurationManagerTest, trackState) {
   {
     auto nc = ncm_->getConfig();
     auto p = nc->getStorageMembership()->getShardState(ShardID{17, 0});
-    EXPECT_TRUE(p.first);
-    EXPECT_EQ(membership::StorageState::READ_ONLY, p.second.storage_state);
-    EXPECT_EQ(membership::MetaDataStorageState::NONE, p.second.metadata_state);
+    EXPECT_TRUE(p.hasValue());
+    EXPECT_EQ(membership::StorageState::READ_ONLY, p->storage_state);
+    EXPECT_EQ(membership::MetaDataStorageState::NONE, p->metadata_state);
   }
 }
 

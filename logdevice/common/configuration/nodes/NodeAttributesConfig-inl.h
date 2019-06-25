@@ -56,13 +56,13 @@ std::string NodeAttributesConfig<Attributes>::Update::toString() const {
 }
 
 template <typename Attributes>
-std::pair<bool, Attributes>
+folly::Optional<Attributes>
 NodeAttributesConfig<Attributes>::getNodeAttributes(node_index_t node) const {
   const auto nit = node_states_.find(node);
   if (nit == node_states_.cend()) {
-    return std::make_pair(false, Attributes{});
+    return folly::none;
   }
-  return std::make_pair(true, nit->second);
+  return nit->second;
 }
 
 template <typename Attributes>
@@ -104,10 +104,9 @@ int NodeAttributesConfig<Attributes>::applyUpdate(
     const node_index_t node = kv.first;
     const NodeUpdate& node_update = kv.second;
 
-    bool node_exist;
-    Attributes current_node_attributes;
     bool erased;
-    std::tie(node_exist, current_node_attributes) = getNodeAttributes(node);
+    auto current_node_attributes = getNodeAttributes(node);
+    bool node_exist = current_node_attributes.hasValue();
 
     if (!node_exist && node_update.transition != UpdateType::PROVISION) {
       err = E::NOTINCONFIG;
@@ -129,7 +128,8 @@ int NodeAttributesConfig<Attributes>::applyUpdate(
         ld_check(node_exist);
         ld_check(node_update.attributes != nullptr);
         ld_check(node_update.attributes->isValid());
-        if (!node_update.attributes->isValidForReset(current_node_attributes)) {
+        if (!node_update.attributes->isValidForReset(
+                *current_node_attributes)) {
           err = E::INVALID_PARAM;
           return -1;
         }

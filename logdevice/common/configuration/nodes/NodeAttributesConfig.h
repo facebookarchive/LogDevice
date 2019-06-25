@@ -60,7 +60,7 @@ class NodeAttributesConfig {
   bool validate() const;
   void dcheckConsistency() const;
 
-  std::pair<bool, Attributes> getNodeAttributes(node_index_t node) const;
+  folly::Optional<Attributes> getNodeAttributes(node_index_t node) const;
   const Attributes* getNodeAttributesPtr(node_index_t node) const;
 
   // caller must ensure that node exists in the configuration

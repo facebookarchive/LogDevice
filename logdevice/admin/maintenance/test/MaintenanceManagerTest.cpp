@@ -464,9 +464,9 @@ void MaintenanceManagerTest::overrideStorageState(
   for (const auto& it : map) {
     auto shard = it.first;
     auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-    ld_check(result.first);
+    ld_check(result.hasValue());
 
-    auto shardState = result.second;
+    auto shardState = result.value();
     membership::ShardState::Update::StateOverride s;
     s.storage_state = it.second;
     s.flags = shardState.flags;

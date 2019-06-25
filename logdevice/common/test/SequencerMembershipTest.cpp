@@ -77,19 +77,19 @@ class SequencerMembershipTest : public ::testing::Test {
   }
 };
 
-#define ASSERT_NODE_STATE(_m, _node, _enabled, _weight)          \
-  do {                                                           \
-    auto res = _m.getNodeState((_node));                         \
-    EXPECT_TRUE(res.first);                                      \
-    EXPECT_EQ(_enabled, res.second.sequencer_enabled);           \
-    EXPECT_EQ(_weight, res.second.getConfiguredWeight());        \
-    EXPECT_EQ(DUMMY_MAINTENANCE, res.second.active_maintenance); \
+#define ASSERT_NODE_STATE(_m, _node, _enabled, _weight)    \
+  do {                                                     \
+    auto res = _m.getNodeState((_node));                   \
+    EXPECT_TRUE(res.hasValue());                           \
+    EXPECT_EQ(_enabled, res->sequencer_enabled);           \
+    EXPECT_EQ(_weight, res->getConfiguredWeight());        \
+    EXPECT_EQ(DUMMY_MAINTENANCE, res->active_maintenance); \
   } while (0)
 
 #define ASSERT_NO_NODE(_m, _node)      \
   do {                                 \
     auto res = _m.getNodeState(_node); \
-    EXPECT_FALSE(res.first);           \
+    EXPECT_FALSE(res.hasValue());      \
   } while (0)
 
 #define ASSERT_MEMBERSHIP_NODES(_m, ...)                      \

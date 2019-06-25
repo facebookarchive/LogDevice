@@ -221,7 +221,7 @@ class StorageMembership : public Membership {
    *           request shard exists in the membership. In such case, its
    *           ShardState is also returned.
    */
-  std::pair<bool, ShardState> getShardState(ShardID shard) const;
+  folly::Optional<ShardState> getShardState(ShardID shard) const;
 
   /**
    * Get the shard states of a given node

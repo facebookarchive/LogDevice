@@ -129,14 +129,14 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
       // TODO: in compatibility mode, use the storage state of ShardID(nid, 0)
       ShardID compatibility_shard(nid, 0);
       auto state_res = storage_membership->getShardState(compatibility_shard);
-      if (state_res.first) {
+      if (state_res.hasValue()) {
         // TODO: use the new storage state string
         // result->set(
         //     "storage_state",
-        //     membership::toString(state_res.second.storage_state).toString());
+        //     membership::toString(state_res->storage_state).toString());
         const auto legacy_storage_state =
             configuration::nodes::NodesConfigLegacyConverter::
-                toLegacyStorageState(state_res.second.storage_state);
+                toLegacyStorageState(state_res->storage_state);
         result->set("storage_state",
                     configuration::storageStateToString(legacy_storage_state));
       } else {

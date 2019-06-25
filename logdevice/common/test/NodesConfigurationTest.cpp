@@ -88,10 +88,9 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
   for (node_index_t n : NodeSetIndices({1, 7})) {
     ASSERT_TRUE(seq_membership->hasNode(n));
     auto result = seq_membership->getNodeState(n);
-    EXPECT_TRUE(result.first);
-    EXPECT_EQ(
-        MaintenanceID::MAINTENANCE_PROVISION, result.second.active_maintenance);
-    EXPECT_EQ(n == 1 ? 1.0 : 7.0, result.second.getConfiguredWeight());
+    EXPECT_TRUE(result.hasValue());
+    EXPECT_EQ(MaintenanceID::MAINTENANCE_PROVISION, result->active_maintenance);
+    EXPECT_EQ(n == 1 ? 1.0 : 7.0, result->getConfiguredWeight());
   }
 
   // test iterating membership nodes
@@ -111,13 +110,12 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
   for (node_index_t n : NodeSetIndices({1, 2, 9})) {
     ASSERT_TRUE(storage_membership->hasNode(n));
     auto result = storage_membership->getShardState(ShardID(n, 0));
-    EXPECT_TRUE(result.first);
-    EXPECT_EQ(
-        MaintenanceID::MAINTENANCE_PROVISION, result.second.active_maintenance);
+    EXPECT_TRUE(result.hasValue());
+    EXPECT_EQ(MaintenanceID::MAINTENANCE_PROVISION, result->active_maintenance);
     // newly provisioned shards should be in rw state
-    EXPECT_EQ(StorageState::READ_WRITE, result.second.storage_state);
-    EXPECT_EQ(StorageStateFlags::NONE, result.second.flags);
-    EXPECT_EQ(MembershipVersion::MIN_VERSION, result.second.since_version);
+    EXPECT_EQ(StorageState::READ_WRITE, result->storage_state);
+    EXPECT_EQ(StorageStateFlags::NONE, result->flags);
+    EXPECT_EQ(MembershipVersion::MIN_VERSION, result->since_version);
   }
 
   // test iterating membership nodes

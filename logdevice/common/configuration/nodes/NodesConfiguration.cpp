@@ -31,9 +31,8 @@ template <typename M>
 bool serviceDiscoveryhasMembershipNodes(const ServiceDiscoveryConfig& serv_conf,
                                         const M& membership) {
   for (const node_index_t node : membership) {
-    bool node_exist;
-    NodeServiceDiscovery serv_discovery;
-    std::tie(node_exist, serv_discovery) = serv_conf.getNodeAttributes(node);
+    auto serv_discovery = serv_conf.getNodeAttributes(node);
+    bool node_exist = serv_discovery.hasValue();
     if (!node_exist) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       5,
@@ -44,7 +43,7 @@ bool serviceDiscoveryhasMembershipNodes(const ServiceDiscoveryConfig& serv_conf,
       return false;
     }
 
-    if (!serv_discovery.hasRole(membership.getType())) {
+    if (!serv_discovery->hasRole(membership.getType())) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       5,
                       "Membership for role %s has node %u whose service "

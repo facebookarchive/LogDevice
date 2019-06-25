@@ -104,11 +104,11 @@ TEST(ShardStateTrackerTest, basic) {
     EXPECT_NE(nullptr, new_config);
     EXPECT_TRUE(new_config->validate());
     auto p = new_config->getStorageMembership()->getShardState(ShardID{17, 0});
-    EXPECT_TRUE(p.first);
-    EXPECT_EQ(StorageState::READ_ONLY, p.second.storage_state);
-    EXPECT_EQ(MetaDataStorageState::NONE, p.second.metadata_state);
-    EXPECT_EQ(new_config->getStorageMembership()->getVersion(),
-              p.second.since_version);
+    EXPECT_TRUE(p.hasValue());
+    EXPECT_EQ(StorageState::READ_ONLY, p->storage_state);
+    EXPECT_EQ(MetaDataStorageState::NONE, p->metadata_state);
+    EXPECT_EQ(
+        new_config->getStorageMembership()->getVersion(), p->since_version);
   };
 
   {
@@ -271,13 +271,13 @@ TEST(ShardStateTrackerTest, basic) {
     EXPECT_TRUE(new_config->validate());
 
     auto& sm = new_config->getStorageMembership();
-    EXPECT_FALSE(sm->getShardState(ShardID{13, 0}).first);
+    EXPECT_FALSE(sm->getShardState(ShardID{13, 0}).hasValue());
     EXPECT_EQ(StorageState::READ_WRITE,
-              sm->getShardState(ShardID{17, 0}).second.storage_state);
+              sm->getShardState(ShardID{17, 0})->storage_state);
     EXPECT_EQ(MetaDataStorageState::METADATA,
-              sm->getShardState(ShardID{17, 0}).second.metadata_state);
+              sm->getShardState(ShardID{17, 0})->metadata_state);
     EXPECT_EQ(toNonIntermediaryState(MetaDataStorageState::PROMOTING),
-              sm->getShardState(ShardID{11, 0}).second.metadata_state);
+              sm->getShardState(ShardID{11, 0})->metadata_state);
   }
 
   std::shared_ptr<const NodesConfiguration> nc8;

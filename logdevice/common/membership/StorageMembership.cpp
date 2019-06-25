@@ -362,20 +362,20 @@ std::string StorageMembership::Update::toString() const {
       "[V:{}, {{{}}}]", membership::toString(base_version), shard_str);
 }
 
-std::pair<bool, ShardState>
+folly::Optional<ShardState>
 StorageMembership::getShardState(ShardID shard) const {
   const auto nit = node_states_.find(shard.node());
   if (nit == node_states_.cend()) {
-    return std::make_pair(false, ShardState{});
+    return folly::none;
   }
 
   const auto& shard_map = nit->second.shard_states;
   const auto sit = shard_map.find(shard.shard());
   if (sit == shard_map.cend()) {
-    return std::make_pair(false, ShardState{});
+    return folly::none;
   }
 
-  return std::make_pair(true, sit->second);
+  return sit->second;
 }
 
 std::unordered_map<shard_index_t, ShardState>
@@ -463,9 +463,8 @@ int StorageMembership::applyUpdate(const Membership::Update& membership_update,
     const ShardState::Update& shard_update = kv.second;
 
     // Step 1: get the current ShardState of the shard of the requested shard
-    bool shard_exist;
-    ShardState current_shard_state;
-    std::tie(shard_exist, current_shard_state) = getShardState(shard);
+    auto current_shard_state = getShardState(shard);
+    bool shard_exist = current_shard_state.hasValue();
 
     if (!shard_exist) {
       if (!isAddingNewShard(shard_update.transition)) {
@@ -483,11 +482,11 @@ int StorageMembership::applyUpdate(const Membership::Update& membership_update,
         return -1;
       }
       // create an initial current state
-      current_shard_state = {StorageState::INVALID,
-                             StorageStateFlags::NONE,
-                             MetaDataStorageState::NONE,
-                             MAINTENANCE_NONE,
-                             EMPTY_VERSION};
+      current_shard_state = ShardState{StorageState::INVALID,
+                                       StorageStateFlags::NONE,
+                                       MetaDataStorageState::NONE,
+                                       MAINTENANCE_NONE,
+                                       EMPTY_VERSION};
     } else {
       if (isAddingNewShard(shard_update.transition)) {
         RATELIMIT_ERROR(
@@ -505,7 +504,7 @@ int StorageMembership::applyUpdate(const Membership::Update& membership_update,
     }
 
     ShardState target_shard_state;
-    int rv = ShardState::transition(current_shard_state,
+    int rv = ShardState::transition(*current_shard_state,
                                     shard_update,
                                     target_membership_state.version_,
                                     &target_shard_state);
@@ -519,7 +518,7 @@ int StorageMembership::applyUpdate(const Membership::Update& membership_update,
                       membership::toString(shard).c_str(),
                       error_description(err),
                       membership::toString(version_).c_str(),
-                      current_shard_state.toString().c_str(),
+                      current_shard_state->toString().c_str(),
                       update.toString().c_str());
       return -1;
     }
@@ -611,12 +610,12 @@ std::vector<node_index_t> StorageMembership::getMembershipNodes() const {
 
 bool StorageMembership::canWriteToShard(ShardID shard) const {
   auto result = getShardState(shard);
-  return result.first ? canWriteTo(result.second.storage_state) : false;
+  return result.hasValue() ? canWriteTo(result->storage_state) : false;
 }
 
 bool StorageMembership::shouldReadFromShard(ShardID shard) const {
   auto result = getShardState(shard);
-  return result.first ? shouldReadFrom(result.second.storage_state) : false;
+  return result.hasValue() ? shouldReadFrom(result->storage_state) : false;
 }
 
 bool StorageMembership::hasWritableShard(node_index_t node) const {
@@ -645,16 +644,16 @@ bool StorageMembership::hasShardShouldReadFrom(node_index_t node) const {
 
 bool StorageMembership::canWriteMetaDataToShard(ShardID shard) const {
   auto result = getShardState(shard);
-  return (result.first ? canWriteMetaDataTo(result.second.storage_state,
-                                            result.second.metadata_state)
-                       : false);
+  return (result.hasValue() ? canWriteMetaDataTo(
+                                  result->storage_state, result->metadata_state)
+                            : false);
 }
 
 bool StorageMembership::shouldReadMetaDataFromShard(ShardID shard) const {
   auto result = getShardState(shard);
-  return (result.first ? shouldReadMetaDataFrom(result.second.storage_state,
-                                                result.second.metadata_state)
-                       : false);
+  return (result.hasValue() ? shouldReadMetaDataFrom(
+                                  result->storage_state, result->metadata_state)
+                            : false);
 }
 
 StorageMembership::StorageMembership() : Membership(EMPTY_VERSION) {

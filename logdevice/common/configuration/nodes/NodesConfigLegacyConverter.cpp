@@ -78,9 +78,9 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
   for (auto qn : seq_mem->getMembershipNodes()) {
     all_nodes.insert(qn);
     auto res = seq_mem->getNodeState(qn);
-    ld_check(res.first);
+    ld_check(res.hasValue());
     res_nodes[qn].addSequencerRole(
-        res.second.sequencer_enabled, res.second.getConfiguredWeight());
+        res->sequencer_enabled, res->getConfiguredWeight());
 
     // generation is not meaningful for sequencer only node, however
     // to maintain compatibility with legacy format, we set it to 1.
@@ -105,7 +105,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     folly::Optional<configuration::StorageState> ss;
     for (shard_index_t sid = 0; sid < attr.num_shards; ++sid) {
       auto res = storage_mem->getShardState(ShardID(sn, sid));
-      if (!res.first) {
+      if (!res.hasValue()) {
         RATELIMIT_ERROR(std::chrono::seconds(10),
                         5,
                         "Shard %s does not exist!",
@@ -114,7 +114,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
         return -1;
       }
 
-      auto shard_ss = toLegacyStorageState(res.second.storage_state);
+      auto shard_ss = toLegacyStorageState(res->storage_state);
       if (ss.hasValue() && ss.value() != shard_ss) {
         RATELIMIT_ERROR(
             std::chrono::seconds(10),

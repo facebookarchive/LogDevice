@@ -166,10 +166,10 @@ void fillNodeConfig(
     roles.insert(thrift::Role::SEQUENCER);
     const auto& seq_membership = nodes_configuration.getSequencerMembership();
     const auto result = seq_membership->getNodeState(node_index);
-    if (result.first) {
+    if (result.hasValue()) {
       // Sequencer Config
       thrift::SequencerConfig sequencer_config;
-      sequencer_config.set_weight(result.second.getConfiguredWeight());
+      sequencer_config.set_weight(result->getConfiguredWeight());
       out.set_sequencer(std::move(sequencer_config));
     }
   }
@@ -266,7 +266,7 @@ void fillNodeState(
       // For every shard in storage membership
       ShardID shard(node_index, shard_index);
       auto result = storage_membership->getShardState(shard);
-      if (!result.first) {
+      if (!result.hasValue()) {
         // shard does not exist in membership
         continue;
       }
@@ -277,17 +277,17 @@ void fillNodeState(
           : nullptr;
       // DEPRECATED
       state.set_current_storage_state(
-          toThrift<thrift::ShardStorageState>(result.second.storage_state));
+          toThrift<thrift::ShardStorageState>(result->storage_state));
 
-      state.set_storage_state(toThrift<membership::thrift::StorageState>(
-          result.second.storage_state));
+      state.set_storage_state(
+          toThrift<membership::thrift::StorageState>(result->storage_state));
 
       state.set_metadata_state(
           toThrift<membership::thrift::MetaDataStorageState>(
-              result.second.metadata_state));
+              result->metadata_state));
 
       state.set_current_operational_state(
-          toShardOperationalState(result.second.storage_state, node_info));
+          toShardOperationalState(result->storage_state, node_info));
       AuthoritativeStatus auth_status =
           AuthoritativeStatus::FULLY_AUTHORITATIVE;
       bool has_dirty_ranges = false;

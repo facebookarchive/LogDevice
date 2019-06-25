@@ -595,8 +595,8 @@ MaintenanceManager::getStorageState(ShardID shard) {
 folly::Expected<membership::StorageState, Status>
 MaintenanceManager::getStorageStateInternal(ShardID shard) const {
   auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-  if (result.first) {
-    return result.second.storage_state;
+  if (result.hasValue()) {
+    return result->storage_state;
   }
   return folly::makeUnexpected(E::NOTFOUND);
 }
@@ -615,8 +615,8 @@ MaintenanceManager::getMetaDataStorageState(ShardID shard) {
 folly::Expected<membership::MetaDataStorageState, Status>
 MaintenanceManager::getMetaDataStorageStateInternal(ShardID shard) const {
   auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-  if (result.first) {
-    return result.second.metadata_state;
+  if (result.hasValue()) {
+    return result->metadata_state;
   }
   return folly::makeUnexpected(E::NOTFOUND);
 }
@@ -1180,9 +1180,8 @@ membership::StateTransitionCondition MaintenanceManager::getCondition(
   membership::StateTransitionCondition c;
   c = membership::required_conditions(transition);
   auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-  ld_check(result.first);
-  if (result.second.metadata_state ==
-      membership::MetaDataStorageState::METADATA) {
+  ld_check(result.hasValue());
+  if (result->metadata_state == membership::MetaDataStorageState::METADATA) {
     c |= membership::Condition::METADATA_CAPACITY_CHECK;
   }
   return c;
@@ -1253,9 +1252,9 @@ MaintenanceManager::runShardWorkflows() {
         nodes_config_->getStorageMembership()->getShardState(shard_id);
     // The shard should be in NodesConfig since workflow is created
     // only for shards in the config
-    ld_check(current_storage_state.first);
+    ld_check(current_storage_state.hasValue());
     shards.push_back(shard_id);
-    futures.push_back(wf->run(current_storage_state.second.storage_state,
+    futures.push_back(wf->run(current_storage_state->storage_state,
                               getShardDataHealthInternal(shard_id).value(),
                               getCurrentRebuildingMode(shard_id)));
   }

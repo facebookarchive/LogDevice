@@ -184,7 +184,7 @@ class SequencerMembership : public Membership {
    *           the request node exists in the membership. In such case, its
    *           SequencerNodeState is also returned.
    */
-  std::pair<bool, SequencerNodeState> getNodeState(node_index_t node) const;
+  folly::Optional<SequencerNodeState> getNodeState(node_index_t node) const;
   const SequencerNodeState* getNodeStatePtr(node_index_t node) const;
 
   size_t numNodes() const {
