@@ -1436,7 +1436,12 @@ int Node::waitUntilStarted(std::chrono::steady_clock::time_point deadline) {
   if (died) {
     rv = -1;
   }
-  ld_info("Node %d %s", node_index_, rv == 0 ? "started" : "failed to start");
+  if (rv != 0) {
+    ld_info("Node %d failed to start. Dumping its error log", node_index_);
+    dump_file_to_stderr(getLogPath().c_str());
+  } else {
+    ld_info("Node %d started", node_index_);
+  }
   return rv;
 }
 
