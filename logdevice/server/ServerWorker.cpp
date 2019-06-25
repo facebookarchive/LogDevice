@@ -95,10 +95,8 @@ ServerWorker::ServerWorker(WorkContext::KeepAlive event_loop,
           // may throw
           new PerWorkerStorageTaskQueue(
               i,
-              getEventBase(),
               immutable_settings_->max_inflight_storage_tasks,
-              immutable_settings_->per_worker_storage_task_queue_size,
-              immutable_settings_->requests_per_iteration));
+              immutable_settings_->per_worker_storage_task_queue_size));
       storage_task_queues_.push_back(std::move(task_queue));
     }
   }

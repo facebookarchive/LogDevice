@@ -26,7 +26,7 @@ constexpr std::array<int8_t, EventLoopTaskQueue::kNumberOfPriorities>
 EventLoopTaskQueue::EventLoopTaskQueue(
     struct event_base* base,
     size_t capacity,
-    const std::array<size_t, kNumberOfPriorities>& dequeues_per_iteration)
+    const std::array<uint32_t, kNumberOfPriorities>& dequeues_per_iteration)
     : capacity_(capacity) {
   setDequeuesPerIteration(dequeues_per_iteration);
 
@@ -127,7 +127,7 @@ void EventLoopTaskQueue::haveTasksEventHandler(void* arg, short what) {
   }
   ld_check(self->sem_waiter_);
   try {
-    auto cb = [self](size_t n) { self->executeTasks(n); };
+    auto cb = [self](uint32_t n) { self->executeTasks(n); };
     // processBatch() decrements the semaphore by some amount and calls our
     // callback with the amount.  We're guaranteed to have at least that many
     // items in the UMPSCQueue, because the producer pushes into the queue
@@ -154,11 +154,11 @@ void EventLoopTaskQueue::haveTasksEventHandler(void* arg, short what) {
   }
 }
 
-void EventLoopTaskQueue::executeTasks(size_t tokens) {
-  std::array<size_t, kNumberOfPriorities> dequeues_to_execute{0};
-  std::array<size_t, kNumberOfPriorities> tasks_available{0};
-  size_t overflow{0};
-  for (size_t i = 0; tokens > 0 && i < dequeues_to_execute.size(); ++i) {
+void EventLoopTaskQueue::executeTasks(uint32_t tokens) {
+  std::array<uint32_t, kNumberOfPriorities> dequeues_to_execute{0};
+  std::array<uint32_t, kNumberOfPriorities> tasks_available{0};
+  uint32_t overflow{0};
+  for (uint32_t i = 0; tokens > 0 && i < dequeues_to_execute.size(); ++i) {
     tasks_available[i] = queues_[i].size();
     auto dequeues_per_iteration = dequeues_per_iteration_[i] + overflow;
     dequeues_to_execute[i] = std::min(
@@ -166,7 +166,7 @@ void EventLoopTaskQueue::executeTasks(size_t tokens) {
     tokens -= dequeues_to_execute[i];
     overflow = dequeues_per_iteration - dequeues_to_execute[i];
   }
-  for (size_t i = 0; tokens > 0; ++i) {
+  for (uint32_t i = 0; tokens > 0; ++i) {
     ld_assert(i < dequeues_to_execute.size());
     auto tasks_remaining = tasks_available[i] - dequeues_to_execute[i];
     auto dequeues = std::min(tokens, tasks_remaining);

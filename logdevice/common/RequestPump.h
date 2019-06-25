@@ -37,9 +37,10 @@ class RequestPump : public EventLoopTaskQueue {
    *
    * @throws ConstructorFailed on error
    */
-  RequestPump(struct event_base* base,
-              size_t capacity,
-              int requests_per_iteration);
+  RequestPump(
+      struct event_base* base,
+      size_t capacity,
+      const std::array<uint32_t, kNumberOfPriorities>& requests_per_iteration);
 
   virtual ~RequestPump();
 
@@ -81,8 +82,9 @@ class RequestPump : public EventLoopTaskQueue {
    * Can be updated on the fly, but only from the thread on which the
    * RequestPump runs.
    */
-  void setNumRequestsPerIteration(size_t requestsPerIteration) {
-    setDequeuesPerIteration({requestsPerIteration, 0, 0});
+  void setNumRequestsPerIteration(
+      const std::array<uint32_t, kNumberOfPriorities>& dequeues_per_iteration) {
+    setDequeuesPerIteration(dequeues_per_iteration);
   }
 
  private:

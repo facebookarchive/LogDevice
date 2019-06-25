@@ -18,6 +18,7 @@
 #include <folly/Executor.h>
 
 #include "logdevice/common/BatchedBufferDisposer.h"
+#include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TimeoutMap.h"
@@ -36,8 +37,6 @@ namespace facebook { namespace logdevice {
  *         thread.
  */
 
-class EventLoopTaskQueue;
-
 class EventLoop : public folly::Executor {
  public:
   /**
@@ -55,7 +54,8 @@ class EventLoop : public folly::Executor {
       std::string thread_name = "",
       ThreadID::Type thread_type = ThreadID::Type::UNKNOWN_EVENT_LOOP,
       size_t request_pump_capacity = 1024,
-      int requests_per_iteration = 16);
+      const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
+          requests_per_iteration = {13, 3, 1});
 
   // destructor has to be virtual because it is invoked by EventLoop::run()
   // as "delete this"

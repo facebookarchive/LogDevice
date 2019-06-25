@@ -3,6 +3,7 @@
 #include "logdevice/common/PayloadHolder.h"
 
 #include <event2/buffer.h>
+#include <folly/container/Array.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/BatchedBufferDisposer.h"
@@ -14,10 +15,12 @@ using namespace ::testing;
 using namespace facebook::logdevice;
 
 TEST(PayloadHolderTest, Simple) {
-  auto ev_loop = std::make_unique<EventLoop>("",
-                                             ThreadID::Type::UNKNOWN_EVENT_LOOP,
-                                             /* capacity */ 2000,
-                                             /* requests per iteration */ 1);
+  auto ev_loop = std::make_unique<EventLoop>(
+      "",
+      ThreadID::Type::UNKNOWN_EVENT_LOOP,
+      /* capacity */ 2000,
+      /* requests per iteration */ folly::make_array<uint32_t>(1, 1, 1));
+
   Semaphore sem0, sem1;
   ev_loop->add([&sem0] {
     ThreadID::set(ThreadID::UNKNOWN_WORKER, "");

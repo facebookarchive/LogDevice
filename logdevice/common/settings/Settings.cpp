@@ -587,10 +587,24 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "deprecated, to be removed",
        SERVER | CLIENT | DEPRECATED);
   init("execute-requests",
-       &requests_per_iteration,
-       "16",
+       &hi_requests_per_iteration,
+       "13",
        parse_positive<ssize_t>(),
-       "number of requests to process per worker event loop iteration",
+       "number of HI_PRI requests to process per worker event loop iteration",
+       SERVER | CLIENT,
+       SettingsCategory::Execution);
+  init("mid_requests_per_iteration",
+       &mid_requests_per_iteration,
+       "2",
+       parse_positive<ssize_t>(),
+       "number of MID_PRI requests to process per worker event loop iteration",
+       SERVER | CLIENT,
+       SettingsCategory::Execution);
+  init("lo_requests_per_iteration",
+       &lo_requests_per_iteration,
+       "1",
+       parse_positive<ssize_t>(),
+       "number of LO_PRI requests to process per worker event loop iteration",
        SERVER | CLIENT,
        SettingsCategory::Execution);
   init("worker-request-pipe-capacity",

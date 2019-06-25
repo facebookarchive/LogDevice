@@ -63,7 +63,7 @@ class EventLoopTaskQueue {
   EventLoopTaskQueue(
       struct event_base* base,
       size_t capacity,
-      const std::array<size_t, kNumberOfPriorities>& dequeues_per_iteration);
+      const std::array<uint32_t, kNumberOfPriorities>& dequeues_per_iteration);
 
   virtual ~EventLoopTaskQueue();
 
@@ -112,21 +112,21 @@ class EventLoopTaskQueue {
   }
 
   void setDequeuesPerIteration(
-      const std::array<size_t, kNumberOfPriorities>& dequeues_per_iteration) {
+      const std::array<uint32_t, kNumberOfPriorities>& dequeues_per_iteration) {
     dequeues_per_iteration_ = dequeues_per_iteration;
     total_dequeues_per_iteration_ =
         std::accumulate(dequeues_per_iteration_.begin(),
                         dequeues_per_iteration_.end(),
-                        size_t(0));
+                        uint32_t(0));
   }
 
-  void setDequeuesPerIterationForPriority(size_t num_dequeues,
+  void setDequeuesPerIterationForPriority(uint32_t num_dequeues,
                                           int8_t priority) {
     dequeues_per_iteration_[translatePriority(priority)] = num_dequeues;
     total_dequeues_per_iteration_ =
         std::accumulate(dequeues_per_iteration_.begin(),
                         dequeues_per_iteration_.end(),
-                        size_t(0));
+                        uint32_t(0));
   }
 
  private:
@@ -146,8 +146,8 @@ class EventLoopTaskQueue {
 
   // Execution probability distribution of different tasks. Hi Priority tasks
   // are called such because they have a higher chance of getting executed.
-  std::array<size_t, kNumberOfPriorities> dequeues_per_iteration_;
-  size_t total_dequeues_per_iteration_;
+  std::array<uint32_t, kNumberOfPriorities> dequeues_per_iteration_;
+  uint32_t total_dequeues_per_iteration_;
 
   // The data structures of choice for queue is an UnboundedQueue paired with a
   // LifoEventSem. The posting codepath writes into the queue, then posts to
@@ -179,7 +179,7 @@ class EventLoopTaskQueue {
   static void haveTasksEventHandler(void* self, short what);
 
   // Invoked by haveTasksEventHandle to dequeue tasks from the queue.
-  void executeTasks(size_t num_tasks_to_dequeue);
+  void executeTasks(uint32_t num_tasks_to_dequeue);
 };
 
 }} // namespace facebook::logdevice

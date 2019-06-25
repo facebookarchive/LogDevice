@@ -271,7 +271,7 @@ class LifoEventSemImpl
     ///
     /// The AsyncWaiter will be recycled even if func throws an exception.
     template <typename Func>
-    void process(Func&& func, size_t maxCalls) {
+    void process(Func&& func, uint32_t maxCalls) {
       DestructorGuard dg(this);
       // We need to call get_event_count in order to introduce acquire memory
       // barrier as node_->isShutdownNotice() call is not safe without it.
@@ -319,7 +319,7 @@ class LifoEventSemImpl
     ///
     /// Shutdown and error semantics are like process().
     template <typename Func>
-    void processBatch(Func&& func, size_t maxBatchSize) {
+    void processBatch(Func&& func, uint32_t maxBatchSize) {
       DestructorGuard dg(this);
       // We need to call get_event_count in order to introduce acquire memory
       // barrier as node_->isShutdownNotice() call is not safe without it.
@@ -332,7 +332,7 @@ class LifoEventSemImpl
 
       try {
         assert(maxBatchSize > 0);
-        auto extra = maxBatchSize > 1 ? owner_.tryWait(maxBatchSize - 1) : 0;
+        auto extra = maxBatchSize > 1 ? owner_.tryWait(maxBatchSize - 1) : 0ul;
         func(1 + extra);
       } catch (...) {
         recycleAndCheckShutdown();

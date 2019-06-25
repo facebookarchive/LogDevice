@@ -62,10 +62,12 @@ static void deleteEventBase(struct event_base* base) {
   }
 }
 
-EventLoop::EventLoop(std::string thread_name,
-                     ThreadID::Type thread_type,
-                     size_t request_pump_capacity,
-                     int requests_per_iteration)
+EventLoop::EventLoop(
+    std::string thread_name,
+    ThreadID::Type thread_type,
+    size_t request_pump_capacity,
+    const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
+        requests_per_iteration)
     : base_(createEventBase(), deleteEventBase),
       thread_type_(thread_type),
       thread_name_(thread_name),
@@ -102,9 +104,7 @@ EventLoop::EventLoop(std::string thread_name,
     throw ConstructorFailed();
   }
   task_queue_ = std::make_unique<EventLoopTaskQueue>(
-      base_.get(),
-      request_pump_capacity,
-      folly::make_array<size_t>(requests_per_iteration, 0, 0));
+      base_.get(), request_pump_capacity, requests_per_iteration);
   task_queue_->setCloseEventLoopOnShutdown();
   rv = pthread_create(&thread_, &attr, EventLoop::enter, this);
   if (rv != 0) {

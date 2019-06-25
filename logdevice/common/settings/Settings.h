@@ -158,7 +158,9 @@ struct Settings : public SettingsBundle {
   // Increasing this improves write coalescing. Decreasing reduces the
   // probability of hitting output buffer limits too early. Capped by
   // RequestPump::MAX.
-  unsigned requests_per_iteration;
+  uint32_t hi_requests_per_iteration;
+  uint32_t mid_requests_per_iteration;
+  uint32_t lo_requests_per_iteration;
 
   // Size worker request pipe to hold this many requests.
   //

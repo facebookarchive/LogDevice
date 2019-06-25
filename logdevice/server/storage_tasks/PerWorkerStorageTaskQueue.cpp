@@ -31,15 +31,10 @@ static size_t inflight_slots_for_task(const StorageTask& task) {
   return task.isWriteTask() ? 2 : 1;
 }
 
-PerWorkerStorageTaskQueue::PerWorkerStorageTaskQueue(
-    shard_index_t shard_idx,
-    struct event_base* base,
-    size_t max_tasks_in_flight,
-    size_t max_buffered_tasks,
-    size_t requests_per_iteration)
-    :
-
-      shard_idx_(shard_idx),
+PerWorkerStorageTaskQueue::PerWorkerStorageTaskQueue(shard_index_t shard_idx,
+                                                     size_t max_tasks_in_flight,
+                                                     size_t max_buffered_tasks)
+    : shard_idx_(shard_idx),
       max_tasks_in_flight_(max_tasks_in_flight),
       max_buffered_tasks_(max_buffered_tasks)
 

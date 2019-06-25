@@ -401,7 +401,9 @@ void Worker::onSettingsUpdated() {
   immutable_settings_ = new_settings;
   auto event_loop = checked_downcast<EventLoop*>(getExecutor());
   event_loop->getTaskQueue().setDequeuesPerIteration(
-      {immutable_settings_->requests_per_iteration, 0, 0});
+      {immutable_settings_->hi_requests_per_iteration,
+       immutable_settings_->mid_requests_per_iteration,
+       immutable_settings_->lo_requests_per_iteration});
   clientReadStreams().noteSettingsUpdated();
   if (logsconfig_manager_) {
     // LogsConfigManager might want to start or stop the underlying RSM if

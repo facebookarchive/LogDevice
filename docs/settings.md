@@ -480,7 +480,9 @@ sidebar_label: Settings
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
 | background-queue-size | Maximum number of events we can queue to background thread.  A single queue is shared by all threads in a process. | 100000 | requires&nbsp;restart |
-| execute-requests | number of requests to process per worker event loop iteration | 16 |  |
+| execute-requests | number of HI\_PRI requests to process per worker event loop iteration | 13 |  |
+| lo\_requests\_per\_iteration | number of LO\_PRI requests to process per worker event loop iteration | 1 |  |
+| mid\_requests\_per\_iteration | number of MID\_PRI requests to process per worker event loop iteration | 2 |  |
 | num-background-workers | The number of workers dedicated for processing time-insensitive requests and operations | 4 | requires&nbsp;restart, server&nbsp;only |
 | num-processor-background-threads | Number of threads in Processor's background thread pool. Background threads are used by, e.g., BufferedWriter to construct/compress large batches.  If 0 (default), use num-workers. | 0 | requires&nbsp;restart |
 | num-workers | number of worker threads to run, or "cores" for one thread per CPU core | cores | requires&nbsp;restart |

@@ -16,6 +16,7 @@
 #include <folly/Hash.h>
 #include <folly/MPMCQueue.h>
 #include <folly/Memory.h>
+#include <folly/container/Array.h>
 #include <folly/synchronization/CallOnce.h>
 
 #include "logdevice/common/AllSequencers.h"
@@ -268,7 +269,10 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
           Worker::makeThreadName(this, type, worker_id_t(i)),
           ThreadID::CPU_EXEC,
           local_settings->worker_request_pipe_capacity,
-          local_settings->requests_per_iteration));
+          folly::make_array<uint32_t>(
+              local_settings->hi_requests_per_iteration,
+              local_settings->mid_requests_per_iteration,
+              local_settings->lo_requests_per_iteration)));
       auto executor = folly::getKeepAliveToken(loops.back().get());
       worker.reset(createWorker(std::move(executor), worker_id_t(i), type));
     } catch (ConstructorFailed&) {

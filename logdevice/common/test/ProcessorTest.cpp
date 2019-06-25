@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <folly/Memory.h>
+#include <folly/container/Array.h>
 #include <gtest/gtest.h>
 #include <sys/types.h>
 
@@ -189,8 +190,11 @@ TEST_F(ProcessorTest, EventLoopKeepAliveTest) {
   {
     ASSERT_DEATH(
         {
-          auto ev_loop = std::make_unique<EventLoop>(
-              "", ThreadID::Type::UNKNOWN_EVENT_LOOP, 1, 1);
+          auto ev_loop =
+              std::make_unique<EventLoop>("",
+                                          ThreadID::Type::UNKNOWN_EVENT_LOOP,
+                                          1,
+                                          folly::make_array<uint32_t>(1, 1, 1));
           auto keep_alive = folly::getKeepAliveToken(ev_loop.get());
           ev_loop.reset();
         },
