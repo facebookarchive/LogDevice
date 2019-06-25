@@ -1377,15 +1377,14 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        &ld_managed_flushes,
        "true",
        nullptr,
-       "By default, decision about when and what memtables to flush is taken "
-       "by rocksdb using it's internal policy. This boolean overrides that "
-       "behavior and stops rocksdb from taking any flush decisions. When set "
-       "all decisions about flushing are taken by logdevice. It uses "
+       "If set to false (deprecated), decision about when and what memtables "
+       "to flush is taken by rocksdb using it's internal policy. If set to "
+       "true, all decisions about flushing are taken by logdevice. It uses "
        "rocksdb-memtable-size-per-node and rocksdb-write-buffer-size settings "
-       "to decide if it's necessary to flush memtables. Also in order to "
-       "enable rocksdb-memtable-size-per-node can be maximum of 32GB. It is "
-       "necessary to have db-write-buffer-size "
-       "set to zero.",
+       "to decide if it's necessary to flush memtables. Requires "
+       "enable rocksdb-memtable-size-per-node to be under 32GB, and "
+       "db-write-buffer-size set to zero; otherwise, we silently fall back to "
+       "rocksdb-managed flushes.",
        SERVER,
        SettingsCategory::RocksDB);
 
@@ -1461,7 +1460,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::LogsDB);
 }
 
-rocksdb::Options RocksDBSettings::toRocksDBOptions() const {
+rocksdb::Options RocksDBSettings::passThroughRocksDBOptions() const {
   rocksdb::Options options;
   options.compaction_style = compaction_style;
   options.compression = compression;
@@ -1484,17 +1483,10 @@ rocksdb::Options RocksDBSettings::toRocksDBOptions() const {
   options.max_background_flushes = max_background_flushes;
   options.max_bytes_for_level_base = max_bytes_for_level_base;
   options.max_bytes_for_level_multiplier = max_bytes_for_level_multiplier;
-  // Disable stalling within rocksdb if ld_managed_flushes is enabled.
-  options.max_write_buffer_number =
-      partitioned && ld_managed_flushes ? 100 : max_write_buffer_number;
+  options.max_write_buffer_number = max_write_buffer_number;
   options.num_levels = num_levels;
   options.target_file_size_base = target_file_size_base;
-  // For LD managed flushes we set memory limit for the node and memtable within
-  // rocksdb to a very high value. By doing this we disable flushes initiated
-  // within rocksdb.
-  options.write_buffer_size = partitioned && ld_managed_flushes
-      ? INFINITE_MEMORY_LIMIT
-      : write_buffer_size;
+  options.write_buffer_size = write_buffer_size;
   options.max_total_wal_size = max_total_wal_size;
   options.db_write_buffer_size = db_write_buffer_size;
   options.arena_block_size = arena_block_size;

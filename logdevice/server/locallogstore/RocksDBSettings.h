@@ -409,7 +409,11 @@ class RocksDBSettings : public SettingsBundle {
   unsigned int uc_size_ratio;
   uint64_t sst_delete_bytes_per_sec;
 
-  rocksdb::Options toRocksDBOptions() const;
+  // Applies the settings that directly correspond to rocksdb::Options fields.
+  // Note that this is not the whole logic of making rocksdb::Options.
+  // The nontrivial logic (like creating caches and table factory and
+  // configuring flushes) is in RocksDBLogStoreConfig's constructor.
+  rocksdb::Options passThroughRocksDBOptions() const;
 
   // rocksdb::BlockBasedTableOptions
   // These settings are copied to a rocksdb::BlockBasedTableOptions struct on DB

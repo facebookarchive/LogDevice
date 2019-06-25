@@ -86,6 +86,11 @@ struct RocksDBLogStoreConfig {
   UpdateableSettings<RocksDBSettings> rocksdb_settings_;
   UpdateableSettings<RebuildingSettings> rebuilding_settings_;
 
+  // Whether memtable flush decisions are made by logdevice rather than rocksdb.
+  // Based on setting ld_managed_flushes, but takes other factors into account
+  // and may be different.
+  bool use_ld_managed_flushes_;
+
   // Create an SstFileManager, used to ratelimit deletes. This should only be
   // called on a copy that has been created for a particular shard.
   void addSstFileManagerForShard();

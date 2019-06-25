@@ -950,10 +950,10 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     openStore(s);
   }
 
-  void openStoreWithLDManagedFlushes() {
+  void openStoreWithoutLDManagedFlushes() {
     closeStore();
     ServerConfig::SettingsConfig s;
-    s["rocksdb-ld-managed-flushes"] = "true";
+    s["rocksdb-ld-managed-flushes"] = "false";
     openStore(s);
   }
 
@@ -980,7 +980,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       std::map<std::string, std::unique_ptr<rocksdb::ColumnFamilyHandle>>&
           out_cfs) {
     RocksDBSettings settings = RocksDBSettings::defaultTestSettings();
-    rocksdb::Options options = settings.toRocksDBOptions();
+    rocksdb::Options options = settings.passThroughRocksDBOptions();
     std::vector<std::string> column_families;
     rocksdb::Status status =
         rocksdb::DB::ListColumnFamilies(options, path_, &column_families);
@@ -9514,7 +9514,6 @@ class MemTableStatsGenerator {
 };
 
 TEST_F(PartitionedRocksDBStoreTest, PartitionFlushSimpleTests) {
-  openStoreWithLDManagedFlushes();
   updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
   updateSetting("rocksdb-partition-idle-flush-trigger", "0");
   using FlushEvaluator = PartitionedRocksDBStore::FlushEvaluator;
@@ -9558,7 +9557,7 @@ TEST_F(PartitionedRocksDBStoreTest, PartitionFlushSimpleTests) {
                              total_budget,
                              max_memtable_size,
                              total_budget,
-                             store_->getSettings());
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     auto buf_stats = evaluator.getBufStats();
     ASSERT_TRUE(cf_data.empty());
@@ -9574,7 +9573,7 @@ TEST_F(PartitionedRocksDBStoreTest, PartitionFlushSimpleTests) {
                              total_budget,
                              max_memtable_size,
                              total_budget,
-                             store_->getSettings());
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     auto buf_stats = evaluator.getBufStats();
     ASSERT_FALSE(cf_data.empty());
@@ -9591,7 +9590,7 @@ TEST_F(PartitionedRocksDBStoreTest, PartitionFlushSimpleTests) {
                              total_budget,
                              max_memtable_size,
                              total_budget,
-                             store_->getSettings());
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     auto buf_stats = evaluator.getBufStats();
     ASSERT_FALSE(cf_data.empty());
@@ -9604,7 +9603,6 @@ TEST_F(PartitionedRocksDBStoreTest, PartitionFlushSimpleTests) {
 // Latest two partitions have different policy compared to other older
 // partitions. Run simple tests for them.
 TEST_F(PartitionedRocksDBStoreTest, FlushLatestPartitionsTest) {
-  openStoreWithLDManagedFlushes();
   updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
   updateSetting("rocksdb-partition-idle-flush-trigger", "0");
   using PartitionPtr = PartitionedRocksDBStore::PartitionPtr;
@@ -9647,7 +9645,7 @@ TEST_F(PartitionedRocksDBStoreTest, FlushLatestPartitionsTest) {
                              total_budget,
                              max_memtable_size,
                              total_budget,
-                             store_->getSettings());
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     ASSERT_TRUE(cf_data.empty());
   }
@@ -9661,7 +9659,7 @@ TEST_F(PartitionedRocksDBStoreTest, FlushLatestPartitionsTest) {
                              total_budget,
                              max_memtable_size,
                              total_budget,
-                             store_->getSettings());
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     auto buf_stats = evaluator.getBufStats();
     ASSERT_FALSE(cf_data.empty());
@@ -9698,7 +9696,7 @@ TEST_F(PartitionedRocksDBStoreTest, FlushLatestPartitionsTest) {
                              total_budget_override,
                              max_memtable_size,
                              total_budget_override,
-                             store_->getSettings());
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     auto buf_stats = evaluator.getBufStats();
     ASSERT_FALSE(cf_data.empty());
@@ -9734,7 +9732,7 @@ TEST_F(PartitionedRocksDBStoreTest, FlushLatestPartitionsTest) {
         total_budget_override,
         max_memtable_size,
         0, // Setting target to zero so that all partitions are selected.
-        store_->getSettings());
+        store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     ASSERT_FALSE(cf_data.empty());
     ASSERT_EQ(2u, cf_data.size());
@@ -9745,7 +9743,6 @@ TEST_F(PartitionedRocksDBStoreTest, FlushLatestPartitionsTest) {
 // Work with four 4 partitions and select the right partitions to flush.
 TEST_F(PartitionedRocksDBStoreTest,
        PickFlushCandidatesFromOldAndNewPartitions) {
-  openStoreWithLDManagedFlushes();
   updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
   updateSetting("rocksdb-partition-idle-flush-trigger", "0");
   using PartitionPtr = PartitionedRocksDBStore::PartitionPtr;
@@ -9796,7 +9793,7 @@ TEST_F(PartitionedRocksDBStoreTest,
                              total_budget,
                              max_memtable_size,
                              total_budget,
-                             store_->getSettings());
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     ASSERT_FALSE(cf_data.empty());
     // Atleast 1 partition should be selected for flushing.
@@ -9820,8 +9817,11 @@ TEST_F(PartitionedRocksDBStoreTest,
     };
     MemTableStatsGenerator generator(
         time_, 4, {100, 0, 0, 0, 0}, 1000, total_budget + 10, std::move(cb));
-    FlushEvaluator evaluator(
-        shard_idx, total_budget, 1000, total_budget / 2, store_->getSettings());
+    FlushEvaluator evaluator(shard_idx,
+                             total_budget,
+                             1000,
+                             total_budget / 2,
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
     ASSERT_FALSE(cf_data.empty());
     ASSERT_TRUE(min_dirtied_time == cf_data[0].cf->first_dirtied_time_);
@@ -9833,7 +9833,6 @@ TEST_F(PartitionedRocksDBStoreTest,
 
 // Make sure metadata cf is picked up correctly for flushing.
 TEST_F(PartitionedRocksDBStoreTest, PickMetadataCFForFlush) {
-  openStoreWithLDManagedFlushes();
   updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
   updateSetting("rocksdb-partition-idle-flush-trigger", "0");
   using FlushEvaluator = PartitionedRocksDBStore::FlushEvaluator;
@@ -9863,7 +9862,7 @@ TEST_F(PartitionedRocksDBStoreTest, PickMetadataCFForFlush) {
     // Single write should mark metadata cf dependent and should be selected
     // when flushing data cf.
     FlushEvaluator evaluator(
-        shard_idx, 0, max_memtable_size, 0, store_->getSettings());
+        shard_idx, 0, max_memtable_size, 0, store_->getRocksDBLogStoreConfig());
     auto cf_data = evaluator.pickCFsToFlush(
         store_->currentSteadyTime(), metadata_cf_data, partition_data);
     ASSERT_FALSE(cf_data.empty());
@@ -9882,7 +9881,7 @@ TEST_F(PartitionedRocksDBStoreTest, PickMetadataCFForFlush) {
     metadata_cf_data.stats =
         store_->getMemTableStats(metadata_cf_holder->get());
     FlushEvaluator evaluator(
-        shard_idx, 0, max_memtable_size, 0, store_->getSettings());
+        shard_idx, 0, max_memtable_size, 0, store_->getRocksDBLogStoreConfig());
     auto cf_data = evaluator.pickCFsToFlush(
         store_->currentSteadyTime(), metadata_cf_data, partition_data);
     ASSERT_FALSE(cf_data.empty());
@@ -9901,7 +9900,7 @@ TEST_F(PartitionedRocksDBStoreTest, PickMetadataCFForFlush) {
                              10000000, // Make sure total budget is huge.
                              max_memtable_size,
                              10000000, // Make sure target is huge.
-                             store_->getSettings());
+                             store_->getRocksDBLogStoreConfig());
     auto cf_data = evaluator.pickCFsToFlush(
         store_->currentSteadyTime(), metadata_cf_data, partition_data);
     ASSERT_FALSE(cf_data.empty());
@@ -9912,7 +9911,6 @@ TEST_F(PartitionedRocksDBStoreTest, PickMetadataCFForFlush) {
 
 // Write into the latest partition and flush the write buf.
 TEST_F(PartitionedRocksDBStoreTest, FlushWriteBufTest) {
-  openStoreWithLDManagedFlushes();
   updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
   updateSetting("rocksdb-partition-idle-flush-trigger", "0");
   updateSetting("rocksdb-memtable-size-per-node", "10G");
@@ -10134,6 +10132,7 @@ TEST_F(PartitionedRocksDBStoreTest, TestClampBacklog) {
 // Test write throttle logic in throttleIOIfNeeded.
 TEST_F(PartitionedRocksDBStoreTest, ThrottleWrites) {
   uint64_t memory_limit = 2000;
+
   // active memory usage and unflushed memory usage below per shard limit, write
   // should not be throttled.
   {
@@ -10204,5 +10203,35 @@ TEST_F(PartitionedRocksDBStoreTest, ThrottleWrites) {
     store_->throttleIOIfNeeded(stats, memory_limit);
     EXPECT_EQ(store_->getWriteThrottleState(),
               LocalLogStore::WriteThrottleState::REJECT_WRITE);
+  }
+
+  // Disable ld-managed flushes for the rest of the test.
+  openStoreWithoutLDManagedFlushes();
+
+  // When ld-managed flushes are disabled, we should never reject appends and
+  // should stall low-pri writes during flushes.
+
+  {
+    WriteBufStats stats;
+    stats.active_memory_usage = memory_limit * 10;
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::NONE);
+  }
+
+  {
+    WriteBufStats stats;
+    stats.pinned_buffer_usage = memory_limit * 10;
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::NONE);
+  }
+
+  {
+    WriteBufStats stats;
+    stats.memory_being_flushed = 1;
+    store_->throttleIOIfNeeded(stats, memory_limit);
+    EXPECT_EQ(store_->getWriteThrottleState(),
+              LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE);
   }
 }

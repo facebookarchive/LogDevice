@@ -184,47 +184,58 @@ void RocksDBLogStoreBase::throttleIOIfNeeded(WriteBufStats buf_stats,
   };
 
   auto new_state = WriteThrottleState::NONE;
-  // Logic that throttles write IO if memory consumption is beyond limits.
-  if (buf_stats.active_memory_usage + buf_stats.memory_being_flushed >=
-      memory_limit / 2) {
-    // Check if active memory threshold is above write stall threshold.
-    new_state = buf_stats.active_memory_usage > memory_limit / 2 *
-                getSettings()->low_pri_write_stall_threshold_percent / 100
-        ? LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE
-        : LocalLogStore::WriteThrottleState::NONE;
 
-    // If sum of active memory usage and amount of memory being flushed goes
-    // above two times per shard limit, start rejecting writes. This will also
-    // stall low priority writes.
+  if (rocksdb_config_.use_ld_managed_flushes_) {
+    // Logic that throttles write IO if memory consumption is beyond limits.
     if (buf_stats.active_memory_usage + buf_stats.memory_being_flushed >=
-        memory_limit) {
-      new_state = WriteThrottleState::REJECT_WRITE;
+        memory_limit / 2) {
+      // Check if active memory threshold is above write stall threshold.
+      new_state = buf_stats.active_memory_usage > memory_limit / 2 *
+                  getSettings()->low_pri_write_stall_threshold_percent / 100
+          ? LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE
+          : LocalLogStore::WriteThrottleState::NONE;
 
+      // If sum of active memory usage and amount of memory being flushed goes
+      // above two times per shard limit, start rejecting writes. This will also
+      // stall low priority writes.
       if (buf_stats.active_memory_usage + buf_stats.memory_being_flushed >=
-          memory_limit * 1.5) {
-        RATELIMIT_WARNING(
-            std::chrono::seconds(1),
-            1,
-            "Shard %d active+flushing memtable size is far above the limit: "
-            "%.3f MB (%.3f MB active + %.3f MB flushing) > %.3f MB. Write "
-            "throttling is supposed to prevent that, please investigate.",
-            static_cast<int>(getShardIdx()),
-            (buf_stats.active_memory_usage + buf_stats.memory_being_flushed) /
-                1e6,
-            buf_stats.active_memory_usage / 1e6,
-            buf_stats.memory_being_flushed / 1e6,
-            memory_limit / 1e6);
+          memory_limit) {
+        new_state = WriteThrottleState::REJECT_WRITE;
+
+        if (buf_stats.active_memory_usage + buf_stats.memory_being_flushed >=
+            memory_limit * 1.5) {
+          RATELIMIT_WARNING(
+              std::chrono::seconds(1),
+              1,
+              "Shard %d active+flushing memtable size is far above the limit: "
+              "%.3f MB (%.3f MB active + %.3f MB flushing) > %.3f MB. Write "
+              "throttling is supposed to prevent that, please investigate.",
+              static_cast<int>(getShardIdx()),
+              (buf_stats.active_memory_usage + buf_stats.memory_being_flushed) /
+                  1e6,
+              buf_stats.active_memory_usage / 1e6,
+              buf_stats.memory_being_flushed / 1e6,
+              memory_limit / 1e6);
+        }
       }
     }
-  }
 
-  uint64_t limit_with_pinned = static_cast<uint64_t>(
-      memory_limit *
-      (1 + getSettings()->pinned_memtables_limit_percent / 100.));
-  if (buf_stats.active_memory_usage + buf_stats.memory_being_flushed +
-          buf_stats.pinned_buffer_usage >
-      limit_with_pinned) {
-    new_state = WriteThrottleState::REJECT_WRITE;
+    uint64_t limit_with_pinned = static_cast<uint64_t>(
+        memory_limit *
+        (1 + getSettings()->pinned_memtables_limit_percent / 100.));
+    if (buf_stats.active_memory_usage + buf_stats.memory_being_flushed +
+            buf_stats.pinned_buffer_usage >
+        limit_with_pinned) {
+      new_state = WriteThrottleState::REJECT_WRITE;
+    }
+  } else {
+    // Flushes and most of throttling are managed by rocksdb, but we still need
+    // to stall low-pri writes separately and more aggressively.
+    // Let's stall all low-pri writes during any flushes. This way we don't need
+    // to make any assumptions about rocksdb's flush policy.
+    new_state = buf_stats.memory_being_flushed > 0
+        ? WriteThrottleState::STALL_LOW_PRI_WRITE
+        : WriteThrottleState::NONE;
   }
 
   new_state = std::max(new_state, subclassSuggestedThrottleState());

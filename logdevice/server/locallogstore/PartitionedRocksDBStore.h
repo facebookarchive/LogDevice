@@ -1059,12 +1059,12 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                    uint64_t total_active_memory_trigger,
                    uint64_t max_memtable_size_trigger,
                    uint64_t total_active_low_watermark,
-                   std::shared_ptr<const RocksDBSettings> settings)
+                   const RocksDBLogStoreConfig& rocksdb_config)
         : shard_idx_(shard_idx),
           total_active_memory_trigger_(total_active_memory_trigger),
           max_memtable_size_trigger_(max_memtable_size_trigger),
           total_active_low_watermark_(total_active_low_watermark),
-          settings_(std::move(settings)) {
+          rocksdb_config_(rocksdb_config) {
       ld_check(total_active_memory_trigger >= total_active_low_watermark);
     }
 
@@ -1137,7 +1137,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     const uint64_t total_active_memory_trigger_;
     const uint64_t max_memtable_size_trigger_;
     const uint64_t total_active_low_watermark_;
-    std::shared_ptr<const RocksDBSettings> settings_;
+    const RocksDBLogStoreConfig& rocksdb_config_;
     WriteBufStats buf_stats_;
   };
 

@@ -6228,7 +6228,7 @@ void PartitionedRocksDBStore::flushBackgroundThreadRun() {
                              flush_trigger,
                              max_individual_memtable_size,
                              low_watermark,
-                             getSettings());
+                             getRocksDBLogStoreConfig());
 
     std::vector<FlushEvaluator::CFData> non_zero_size_cf;
     FlushEvaluator::CFData metadata_cf_data{
@@ -6516,7 +6516,9 @@ std::vector<CFData>
 FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
                                CFData& metadata_cf_data,
                                const std::vector<CFData>& input) {
-  auto ld_managed_flushes = settings_->ld_managed_flushes;
+  std::shared_ptr<const RocksDBSettings> settings =
+      rocksdb_config_.getRocksDBSettings();
+  bool ld_managed_flushes = rocksdb_config_.use_ld_managed_flushes_;
   std::vector<CFData> out;
 
   // Total memory picked for flushing.
@@ -6599,17 +6601,17 @@ FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
 
     auto oldDataThresholdTriggered = [&] {
       auto& cf = cf_data.cf;
-      return settings_->partition_data_age_flush_trigger.count() > 0 &&
+      return settings->partition_data_age_flush_trigger.count() > 0 &&
           (now - cf->first_dirtied_time_) >
-          settings_->partition_data_age_flush_trigger;
+          settings->partition_data_age_flush_trigger;
     };
 
     auto idleThresholdTriggered = [&] {
       auto& latest_dirty_time = cf_data.latest_dirty_time;
-      return (settings_->partition_idle_flush_trigger.count() > 0) &&
+      return (settings->partition_idle_flush_trigger.count() > 0) &&
           (latest_dirty_time != SteadyTimestamp::min()) &&
           (now > latest_dirty_time) &&
-          (now - latest_dirty_time) > settings_->partition_idle_flush_trigger;
+          (now - latest_dirty_time) > settings->partition_idle_flush_trigger;
     };
 
     if (memLimitThresholdTriggered(stats.active_memtable_size)) {
