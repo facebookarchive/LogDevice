@@ -167,7 +167,11 @@ void ClientReadersFlowTracer::sendSyncSequencerRequest() {
       GetSeqStateRequest::MergeType::GSS_MERGE_INTO_OLD);
   ssr->setThreadIdx(Worker::onThisThread()->idx_.val());
   std::unique_ptr<Request> req(std::move(ssr));
-  Worker::onThisThread()->processor_->postRequest(req);
+  auto res = Worker::onThisThread()->processor_->postRequest(req);
+  if (res != 0) {
+    onSyncSequencerRequestResponse(
+        E::NOBUFS, NodeID(), /*next_lsn=*/LSN_INVALID, /*attrs=*/nullptr);
+  }
 }
 
 void ClientReadersFlowTracer::onSyncSequencerRequestResponse(
