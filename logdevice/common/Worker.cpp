@@ -1247,7 +1247,6 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
 
   auto queue_time{
       duration_cast<microseconds>(steady_clock::now() - rq->enqueue_time_)};
-  HISTOGRAM_ADD(stats_, requests_queue_latency, queue_time.count());
   if (queue_time > 20ms) {
     auto priority_to_str = [](int8_t priority) {
       switch (priority) {
@@ -1267,24 +1266,6 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
                       rq->describe().c_str(),
                       rq->id_.val(),
                       priority_to_str(priority));
-  }
-
-  using namespace std::chrono_literals;
-  switch (priority) {
-    case folly::Executor::HI_PRI:
-      HISTOGRAM_ADD(stats_, hi_pri_requests_latency, queue_time.count());
-      STAT_INCR(processor_->stats_, worker_executed_hi_pri_work);
-      break;
-    case folly::Executor::MID_PRI:
-      HISTOGRAM_ADD(stats_, mid_pri_requests_latency, queue_time.count());
-      STAT_INCR(processor_->stats_, worker_executed_mid_pri_work);
-      break;
-    case folly::Executor::LO_PRI:
-      HISTOGRAM_ADD(stats_, lo_pri_requests_latency, queue_time.count());
-      STAT_INCR(processor_->stats_, worker_executed_lo_pri_work);
-      break;
-    default:
-      break;
   }
 
   Worker::onStartedRunning(run_context);
@@ -1345,9 +1326,34 @@ void Worker::addWithPriority(folly::Func func, int8_t priority) {
 
   num_requests_enqueued_.fetch_add(1, std::memory_order_relaxed);
   WorkContext::addWithPriority(
-      [this, func = std::move(func)]() mutable {
+      [this,
+       func = std::move(func),
+       priority,
+       enqueue_time = std::chrono::steady_clock::now()]() mutable {
         WorkerContextScopeGuard g(this);
         num_requests_enqueued_.fetch_sub(1, std::memory_order_relaxed);
+
+        const auto queue_time =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - enqueue_time);
+
+        HISTOGRAM_ADD(stats_, requests_queue_latency, queue_time.count());
+        switch (priority) {
+          case folly::Executor::HI_PRI:
+            HISTOGRAM_ADD(stats_, hi_pri_requests_latency, queue_time.count());
+            STAT_INCR(processor_->stats_, worker_executed_hi_pri_work);
+            break;
+          case folly::Executor::MID_PRI:
+            HISTOGRAM_ADD(stats_, mid_pri_requests_latency, queue_time.count());
+            STAT_INCR(processor_->stats_, worker_executed_mid_pri_work);
+            break;
+          case folly::Executor::LO_PRI:
+            HISTOGRAM_ADD(stats_, lo_pri_requests_latency, queue_time.count());
+            STAT_INCR(processor_->stats_, worker_executed_lo_pri_work);
+            break;
+          default:
+            break;
+        }
         func();
       },
       priority);

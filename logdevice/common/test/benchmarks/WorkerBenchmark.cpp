@@ -16,6 +16,8 @@
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/request_util.h"
+#include "logdevice/common/stats/ServerHistograms.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
 
@@ -68,10 +70,11 @@ BENCHMARK(WorkerBenchmarkpostImportantv2, n) {
   std::vector<std::unique_ptr<Request>> requests;
   Settings settings = create_default_settings<Settings>();
   std::shared_ptr<Processor> processor;
+  StatsHolder stats{StatsParams().setIsServer(true)};
 
   BENCHMARK_SUSPEND {
     settings.num_workers = kNumWorkers;
-    processor = make_test_processor(settings);
+    processor = make_test_processor(settings, nullptr, &stats);
 
     for (int i = 0; i < request_count; ++i) {
       requests.emplace_back(std::make_unique<BenchmarkRequest>(
@@ -94,10 +97,11 @@ BENCHMARK(WorkerBenchmarkPostRequestv2, n) {
   std::vector<std::unique_ptr<Request>> requests;
   Settings settings = create_default_settings<Settings>();
   std::shared_ptr<Processor> processor;
+  StatsHolder stats{StatsParams().setIsServer(true)};
 
   BENCHMARK_SUSPEND {
     settings.num_workers = kNumWorkers;
-    processor = make_test_processor(settings);
+    processor = make_test_processor(settings, nullptr, &stats);
 
     for (int i = 0; i < request_count; ++i) {
       requests.emplace_back(std::make_unique<BenchmarkRequest>(
