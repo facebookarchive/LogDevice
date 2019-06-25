@@ -68,6 +68,7 @@ class StandaloneAdminServer {
   std::shared_ptr<UpdateableConfig> updateable_config_;
 
   UpdateableServerConfig::HookHandle server_config_subscription_;
+  UpdateableNodesConfiguration::HookHandle nodes_configuration_subscription_;
 
   std::unique_ptr<StatsHolder> stats_;
   std::unique_ptr<StatsCollectionThread> stats_thread_;
@@ -100,8 +101,15 @@ class StandaloneAdminServer {
   // startup to set the initial values supplied from the CLI.
   void onSettingsUpdate();
 
-  // Is used to update settings when configuration is updated.
+  // Is used to update settings when configuration is updated
   bool onConfigUpdate(ServerConfig& config);
+  bool onNodesConfigurationUpdate(const NodesConfiguration& config);
+
+  // Validates that all the nodes in the config have names. This is specially
+  // important to the standalone admin server because tooling relies on the
+  // existence of names and config synchronization was poisoning the config.
+  // TODO(T44427489): Remove when the `name` is required everywhere.
+  bool allNodesHaveName(const NodesConfiguration& config);
 };
 } // namespace admin
 }} // namespace facebook::logdevice

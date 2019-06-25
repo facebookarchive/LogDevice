@@ -107,6 +107,12 @@ void StandaloneAdminServer::start() {
       updateable_config_->updateableServerConfig()->addHook(std::bind(
           &StandaloneAdminServer::onConfigUpdate, this, std::placeholders::_1));
 
+  nodes_configuration_subscription_ =
+      updateable_config_->updateableNodesConfiguration()->addHook(
+          std::bind(&StandaloneAdminServer::onNodesConfigurationUpdate,
+                    this,
+                    std::placeholders::_1));
+
   initServerConfig();
   initNodesConfiguration();
 
@@ -478,6 +484,22 @@ bool StandaloneAdminServer::onConfigUpdate(ServerConfig& config) {
   if (settings_updater_) {
     // Ensure that settings are updated when we receive new config.
     settings_updater_->setFromConfig(settings);
+  }
+  return allNodesHaveName(
+      *config.getNodesConfigurationFromServerConfigSource());
+}
+
+bool StandaloneAdminServer::onNodesConfigurationUpdate(
+    const NodesConfiguration& config) {
+  return allNodesHaveName(config);
+}
+
+bool StandaloneAdminServer::allNodesHaveName(const NodesConfiguration& config) {
+  for (const auto& node : *config.getServiceDiscovery()) {
+    if (node.second.name == "") {
+      ld_error("N%d doesn't have a name. Rejecting config ..", node.first);
+      return false;
+    }
   }
   return true;
 }
