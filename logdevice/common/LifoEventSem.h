@@ -45,8 +45,10 @@ class SynchronizationFd {
   }
 
  private:
+  void check_pid();
   enum FdType { Read = 0, Write = 1, FdCount = 2 };
   int fds_[FdType::FdCount];
+  pid_t pid_;
 };
 
 /// Works like a Baton, but performs its handoff via a user-visible

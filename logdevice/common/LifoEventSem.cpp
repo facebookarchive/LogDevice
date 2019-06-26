@@ -20,6 +20,7 @@
 namespace facebook { namespace logdevice { namespace detail {
 
 SynchronizationFd::SynchronizationFd() {
+  pid_ = pid_t(getpid());
 #ifdef FOLLY_HAVE_EVENTFD
   fds_[FdType::Read] = fds_[FdType::Write] =
       eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
@@ -62,6 +63,7 @@ SynchronizationFd::~SynchronizationFd() {
 }
 
 void SynchronizationFd::write() {
+  check_pid();
   ssize_t bytes_written = 0;
   size_t bytes_expected = 0;
 
@@ -84,6 +86,7 @@ void SynchronizationFd::write() {
 }
 
 bool SynchronizationFd::poll(int timeoutMillis) noexcept {
+  check_pid();
   while (true) {
     // wait using poll, since it has less setup for a one-off use
     struct pollfd poll_info;
@@ -119,6 +122,7 @@ bool SynchronizationFd::poll(int timeoutMillis) noexcept {
 }
 
 bool SynchronizationFd::read() noexcept {
+  check_pid();
 #ifdef FOLLY_HAVE_EVENTFD
   if (fds_[FdType::Read] == fds_[FdType::Write]) {
     uint64_t val;
@@ -144,5 +148,9 @@ bool SynchronizationFd::read() noexcept {
     assert(message == 1);
   }
   return result != -1;
+}
+
+void SynchronizationFd::check_pid() {
+  CHECK_EQ(pid_, pid_t(getpid()));
 }
 }}} // namespace facebook::logdevice::detail
