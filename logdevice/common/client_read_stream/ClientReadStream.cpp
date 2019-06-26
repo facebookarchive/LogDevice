@@ -4580,4 +4580,15 @@ void bumpGapStat(logid_t logid, StatsHolder* stats, GapType gap_type) {
       static_cast<int>(GapType::MAX) == 8, "keep in sync with GapType");
 }
 
+bool ClientReadStream::isStreamStuckFor(std::chrono::milliseconds time) {
+  using SystemClock = ClientReadersFlowTracer::SystemClock;
+  using TimePoint = ClientReadersFlowTracer::TimePoint;
+  if (!readers_flow_tracer_) {
+    return false;
+  }
+  auto last_stuck = readers_flow_tracer_->last_time_stuck_;
+  return last_stuck != TimePoint::max() &&
+      SystemClock::now() - last_stuck >= time;
+}
+
 }} // namespace facebook::logdevice

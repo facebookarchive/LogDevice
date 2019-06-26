@@ -751,6 +751,8 @@ class ClientReadStream : boost::noncopyable {
 
   size_t getBytesBuffered() const;
 
+  bool isStreamStuckFor(std::chrono::milliseconds time);
+
  private:
   /**
    * @return True if there are records we can ship right now to the application,

@@ -616,6 +616,13 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     return stats_;
   }
 
+  void finishIfIdle() {
+    auto* stream = Worker::onThisThread()->clientReadStreams().getStream(rsid_);
+    if (stream && stream->isStreamStuckFor(checker_settings->idle_timeout)) {
+      finish("Stream has been stuck for too long: it is idle");
+    }
+  }
+
   folly::dynamic getRecordErrors() const {
     return std::move(record_errors);
   }
@@ -1370,6 +1377,10 @@ class PerWorkerCoordinatorRequest : public Request {
         perf_stats_(perf_stats) {}
 
   Execution execute() override {
+    if (checker_settings->idle_timeout != std::chrono::seconds{0}) {
+      idle_timer_ = std::make_unique<Timer>([this] { checkIdleLogCheckers(); });
+      idle_timer_->activate(checker_settings->idle_timeout);
+    }
     startMoreWork();
     if (in_flight_.empty()) {
       done_callback_();
@@ -1409,6 +1420,14 @@ class PerWorkerCoordinatorRequest : public Request {
   };
   std::set<std::shared_ptr<LogChecker>, LogCheckerPtrComp> in_flight_;
   folly::dynamic per_log_stats = folly::dynamic::object(); // Used if json==true
+  std::unique_ptr<Timer> idle_timer_;
+
+  void checkIdleLogCheckers() {
+    for (auto& lc : in_flight_) {
+      lc->finishIfIdle();
+    }
+    idle_timer_->activate(checker_settings->idle_timeout);
+  }
 
   void startMoreWork() {
     while (in_flight_.size() < checker_settings->logs_in_flight_per_worker) {
