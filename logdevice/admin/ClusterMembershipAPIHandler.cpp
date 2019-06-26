@@ -10,8 +10,10 @@
 
 #include "logdevice/admin/AdminAPIHandlerBase.h"
 #include "logdevice/admin/AdminAPIUtils.h"
+#include "logdevice/admin/cluster_membership/AddNodesHandler.h"
 #include "logdevice/admin/cluster_membership/RemoveNodesHandler.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/configuration/nodes/NodeIndicesAllocator.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/membership/StorageStateTransitions.h"
 #include "logdevice/common/types_internal.h"
@@ -53,6 +55,41 @@ ClusterMembershipAPIHandler::semifuture_removeNodes(
             resp->set_removed_nodes(std::move(removed_nodes));
             resp->set_new_nodes_configuration_version(
                 nodes_configuration->getVersion().val());
+            return std::move(resp);
+          });
+}
+
+folly::SemiFuture<std::unique_ptr<thrift::AddNodesResponse>>
+ClusterMembershipAPIHandler::semifuture_addNodes(
+    std::unique_ptr<thrift::AddNodesRequest> req) {
+  if (auto failed = failIfMMDisabled(); failed) {
+    return *failed;
+  }
+  auto nodes_configuration = processor_->getNodesConfiguration();
+
+  AddNodesHandler handler{};
+  auto res = handler.buildNodesConfigurationUpdates(
+      req->new_node_requests, *nodes_configuration, NodeIndicesAllocator{});
+
+  if (res.hasError()) {
+    return folly::makeSemiFuture<std::unique_ptr<thrift::AddNodesResponse>>(
+        std::move(res).error());
+  }
+
+  auto add_result = std::move(res).value();
+
+  return applyNodesConfigurationUpdates(std::move(add_result.update))
+      .via(this->getThreadManager())
+      .thenValue(
+          [added_nodes = std::move(add_result.to_be_added)](
+              std::shared_ptr<const NodesConfiguration> new_cfg) mutable
+          -> folly::SemiFuture<std::unique_ptr<thrift::AddNodesResponse>> {
+            auto resp = std::make_unique<thrift::AddNodesResponse>();
+            for (const auto& added : added_nodes) {
+              thrift::NodeConfig node_cfg;
+              fillNodeConfig(node_cfg, added, *new_cfg);
+              resp->added_nodes.push_back(std::move(node_cfg));
+            }
             return std::move(resp);
           });
 }

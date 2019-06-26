@@ -8,10 +8,12 @@
 
 #include "logdevice/admin/ClusterMembershipAPIHandler.h"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
+#include "logdevice/admin/if/gen-cpp2/cluster_membership_constants.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -43,6 +45,9 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
             .setParam("--use-nodes-configuration-manager-nodes-configuration",
                       "true",
                       IntegrationTestUtils::ParamScope::ALL)
+            .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                      "timeout",
+                      "2s")
             .runMaintenanceManagerOn(node_index_t(0))
             .setMetaDataLogsConfig(createMetaDataLogsConfig({2, 3}, 2))
             .deferStart()
@@ -56,6 +61,55 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
       thrift::NodesFilter filter;
       filter.set_node(mkNodeID(node_index_t(idx)));
       req.node_filters.push_back(std::move(filter));
+    }
+    return req;
+  }
+
+  thrift::AddNodesRequest buildAddNodesRequest(std::vector<int32_t> idxs) {
+    ld_assert(idxs.size() < 50);
+
+    auto make_address = [](int addr, int port) {
+      thrift::SocketAddress ret;
+      ret.set_address(folly::sformat("127.0.0.{}", addr));
+      ret.set_port(port);
+      return ret;
+    };
+
+    thrift::AddNodesRequest req;
+    for (int32_t idx : idxs) {
+      thrift::NodeConfig cfg;
+
+      cfg.set_node_index(idx);
+      cfg.set_name(folly::sformat("server-{}", idx));
+      cfg.set_data_address(make_address(0 + idx, 1000 + idx));
+
+      {
+        thrift::Addresses other_addresses;
+        other_addresses.set_gossip(make_address(50 + idx, 2000 + idx));
+        other_addresses.set_ssl(make_address(100 + idx, 3000 + idx));
+        cfg.set_other_addresses(other_addresses);
+      }
+
+      cfg.set_roles({thrift::Role::SEQUENCER, thrift::Role::STORAGE});
+
+      {
+        thrift::SequencerConfig seq_cfg;
+        seq_cfg.set_weight(idx);
+        cfg.set_sequencer(seq_cfg);
+      }
+
+      {
+        thrift::StorageConfig storage_cfg;
+        storage_cfg.set_weight(idx);
+        storage_cfg.set_num_shards(2);
+        cfg.set_storage(storage_cfg);
+      }
+
+      cfg.set_location(folly::sformat("PRN.PRN.PRN.PRN.{}", idx));
+
+      thrift::AddSingleNodeRequest single;
+      single.set_new_config(std::move(cfg));
+      req.new_node_requests.push_back(std::move(single));
     }
     return req;
   }
@@ -129,4 +183,144 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNodeSuccess) {
   thrift::NodesConfigResponse nodes_config;
   admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
   EXPECT_EQ(3, nodes_config.nodes.size());
+}
+
+MATCHER_P2(NodeConfigEq, expected_idx, req, "") {
+  return expected_idx == arg.node_index && req.name == arg.name &&
+      req.data_address == arg.data_address &&
+      req.other_addresses_ref() == arg.other_addresses_ref() &&
+      req.location_ref() == arg.location_ref() && req.roles == arg.roles &&
+      req.sequencer_ref() == arg.sequencer_ref() &&
+      req.storage_ref() == arg.storage_ref();
+};
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  thrift::AddNodesRequest req = buildAddNodesRequest({10, 50});
+  // Let the admin server allocate the NodeID for the second node for us
+  req.new_node_requests[1].new_config.set_node_index(
+      thrift::cluster_membership_constants::ANY_NODE_IDX());
+  thrift::AddNodesResponse resp;
+
+  admin_client->sync_addNodes(resp, req);
+  EXPECT_EQ(2, resp.added_nodes.size());
+  EXPECT_THAT(resp.added_nodes,
+              UnorderedElementsAre(
+                  NodeConfigEq(10, req.new_node_requests[0].new_config),
+                  NodeConfigEq(4, req.new_node_requests[1].new_config)));
+
+  wait_until("AdminServer's NC picks the additions", [&]() {
+    thrift::NodesConfigResponse nodes_config;
+    admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
+    return nodes_config.version >= resp.new_nodes_configuration_version;
+  });
+
+  thrift::NodesConfigResponse nodes_config;
+  admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
+  EXPECT_EQ(6, nodes_config.nodes.size());
+  EXPECT_THAT(
+      nodes_config.nodes,
+      AllOf(Contains(NodeConfigEq(10, req.new_node_requests[0].new_config)),
+            Contains(NodeConfigEq(4, req.new_node_requests[1].new_config))));
+}
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddAlreadyExists) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  // Get current Admin server version
+  thrift::NodesConfigResponse nodes_config;
+  admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
+
+  thrift::AddNodesRequest req = buildAddNodesRequest({100});
+  // Copy the address of an existing node
+  req.new_node_requests[0].new_config.data_address =
+      nodes_config.nodes[0].data_address;
+
+  try {
+    thrift::AddNodesResponse resp;
+    admin_client->sync_addNodes(resp, req);
+    FAIL() << "AddNodes call should fail, but it didn't";
+  } catch (const thrift::ClusterMembershipOperationFailed& exception) {
+    ASSERT_EQ(1, exception.failed_nodes.size());
+    auto failed_node = exception.failed_nodes[0];
+    EXPECT_EQ(100, failed_node.node_id.node_index);
+    EXPECT_EQ(thrift::ClusterMembershipFailureReason::ALREADY_EXISTS,
+              failed_node.reason);
+  }
+}
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, TestInvalidAddNodesRequest) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  // Get current Admin server version
+  thrift::NodesConfigResponse nodes_config;
+  admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
+
+  thrift::AddNodesRequest req = buildAddNodesRequest({4});
+  // Let's reset the storage the storage config
+  req.new_node_requests[0].new_config.storage_ref().reset();
+
+  try {
+    thrift::AddNodesResponse resp;
+    admin_client->sync_addNodes(resp, req);
+    FAIL() << "AddNodes call should fail, but it didn't";
+  } catch (const thrift::ClusterMembershipOperationFailed& exception) {
+    ASSERT_EQ(1, exception.failed_nodes.size());
+    auto failed_node = exception.failed_nodes[0];
+    EXPECT_EQ(4, failed_node.node_id.node_index);
+    EXPECT_EQ(
+        thrift::ClusterMembershipFailureReason::INVALID_REQUEST_NODES_CONFIG,
+        failed_node.reason);
+  }
+}
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, TestNewNodeEnableWorkflow) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  {
+    // Add a new node
+    thrift::AddNodesRequest req = buildAddNodesRequest({10});
+    thrift::AddNodesResponse resp;
+    admin_client->sync_addNodes(resp, req);
+    EXPECT_EQ(1, resp.added_nodes.size());
+  }
+
+  thrift::NodesStateResponse node_states;
+
+  wait_until("Wait until the newly added node is enabled", [&]() {
+    thrift::NodesFilter filter;
+    filter.set_node(mkNodeID(node_index_t(10)));
+
+    thrift::NodesStateRequest req;
+    req.set_filter(filter);
+
+    admin_client->sync_getNodesState(node_states, req);
+    if (node_states.states.size() == 0) {
+      return false;
+    }
+    const auto& state = node_states.states[0];
+    ld_assert_eq(10, state.node_index);
+    ld_assert(state.shard_states_ref().has_value());
+    ld_assert_eq(2, state.shard_states_ref().value().size());
+    ld_assert(state.sequencer_state_ref().has_value());
+
+    auto seq_state = state.sequencer_state_ref().value();
+    auto shard_states = state.shard_states_ref().value();
+
+    ld_info("Got state: seq=%d, storage=[{%d, %d]",
+            static_cast<int32_t>(seq_state.state),
+            static_cast<int32_t>(shard_states[0].storage_state),
+            static_cast<int32_t>(shard_states[1].storage_state));
+
+    return seq_state.state == thrift::SequencingState::ENABLED &&
+        shard_states[0].storage_state ==
+        membership::thrift::StorageState::READ_WRITE &&
+        shard_states[1].storage_state ==
+        membership::thrift::StorageState::READ_WRITE;
+  });
 }

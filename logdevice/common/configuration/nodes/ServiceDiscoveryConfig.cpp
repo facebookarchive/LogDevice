@@ -21,8 +21,11 @@ namespace {
 template <typename F>
 bool isFieldValid(const F& field, folly::StringPiece name) {
   if (!field.valid()) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(10), 5, "invalid %s.", name.str().c_str());
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    5,
+                    "Invalid %s: %s.",
+                    name.str().c_str(),
+                    field.toString().c_str());
     return false;
   }
   return true;
