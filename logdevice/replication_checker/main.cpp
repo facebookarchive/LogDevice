@@ -1423,7 +1423,8 @@ class PerWorkerCoordinatorRequest : public Request {
   std::unique_ptr<Timer> idle_timer_;
 
   void checkIdleLogCheckers() {
-    for (auto& lc : in_flight_) {
+    auto log_checkers_in_flight = in_flight_;
+    for (auto& lc : log_checkers_in_flight) {
       lc->finishIfIdle();
     }
     idle_timer_->activate(checker_settings->idle_timeout);
