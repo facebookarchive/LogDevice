@@ -19,9 +19,8 @@ from typing import Collection, FrozenSet, Mapping, Optional, Set
 
 from ldops import admin_api
 from ldops.exceptions import LDOpsError
-from ldops.types.node import Node
 from logdevice.admin.clients import AdminAPI
-from logdevice.admin.common.types import ShardID
+from logdevice.admin.common.types import NodeID, ShardID
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MaintenanceDefinitionResponse,
@@ -60,38 +59,38 @@ class SafetyError(LDOpsError):
 
 def _recombine_shards(shards: Collection[ShardID]) -> Set[ShardID]:
     whole_nodes = set()
-    node_ids = set()
+    node_indexes = set()
     single_shards = set()
     for s in shards:
         if s.shard_index == -1:
             whole_nodes.add(s)
-            node_ids.add(s.node.node_index)
+            node_indexes.add(s.node.node_index)
         else:
             single_shards.add(s)
 
     filtered_shards: FrozenSet[ShardID] = frozenset(
-        s for s in single_shards if s.node.node_index not in node_ids
+        s for s in single_shards if s.node.node_index not in node_indexes
     )
     return whole_nodes.union(filtered_shards)
 
 
 async def check_impact(
     client: AdminAPI,
-    nodes: Optional[Collection[Node]] = None,
+    node_ids: Optional[Collection[NodeID]] = None,
     shards: Optional[Collection[ShardID]] = None,
     target_storage_state: ShardStorageState = ShardStorageState.DISABLED,
     disable_sequencers: bool = True,
 ) -> CheckImpactResponse:
     """
-    Performs Safety check and returns CheckImpactResponse. If no nodes and no
+    Performs Safety check and returns CheckImpactResponse. If no node_ids and no
     shards passed it still does safety check, but will return current state
     of the cluster.
     """
-    nodes = set(nodes or [])
+    node_ids = set(node_ids or [])
     shards = set(shards or [])
 
     req_shards: Set[ShardID] = _recombine_shards(
-        shards.union(ShardID(node=n.to_thrift(), shard_index=-1) for n in nodes)
+        shards.union(ShardID(node=n, shard_index=-1) for n in node_ids)
     )
 
     return await admin_api.check_impact(
@@ -106,7 +105,7 @@ async def check_impact(
 
 async def ensure_safe(
     client: AdminAPI,
-    nodes: Optional[Collection[Node]] = None,
+    node_ids: Optional[Collection[NodeID]] = None,
     shards: Optional[Collection[ShardID]] = None,
     target_storage_state: ShardStorageState = ShardStorageState.DISABLED,
     disable_sequencers: bool = True,
@@ -117,12 +116,12 @@ async def ensure_safe(
     """
     resp: CheckImpactResponse = await check_impact(
         client=client,
-        nodes=nodes,
+        node_ids=node_ids,
         shards=shards,
         target_storage_state=target_storage_state,
         disable_sequencers=disable_sequencers,
     )
-    if not resp.impact:
+    if resp.impact:
         raise SafetyError(check_impact_response=resp)
 
 
@@ -144,12 +143,12 @@ async def get_maintenances(
 
 async def apply_maintenance(
     client: AdminAPI,
-    nodes: Optional[Collection[Node]] = None,
+    node_ids: Optional[Collection[NodeID]] = None,
     shards: Optional[Collection[ShardID]] = None,
     shard_target_state: Optional[
         ShardOperationalState
     ] = ShardOperationalState.MAY_DISAPPEAR,
-    sequencer_nodes: Optional[Collection[Node]] = None,
+    sequencer_nodes: Optional[Collection[NodeID]] = None,
     group: Optional[bool] = True,
     ttl: Optional[timedelta] = None,
     user: Optional[str] = None,
@@ -165,9 +164,9 @@ async def apply_maintenance(
 
     Can return multiple maintenances if group==False.
     """
-    nodes = set(nodes or [])
+    node_ids = set(node_ids or [])
     shards = set(shards or [])
-    sequencer_nodes = set(sequencer_nodes or []).union(nodes)
+    sequencer_nodes = set(sequencer_nodes or []).union(node_ids)
 
     if ttl is None:
         ttl = timedelta(seconds=0)
@@ -181,13 +180,13 @@ async def apply_maintenance(
     if extras is None:
         extras = {}
 
-    shards = shards.union({ShardID(node=n.to_thrift(), shard_index=-1) for n in nodes})
+    shards = shards.union({ShardID(node=n, shard_index=-1) for n in node_ids})
     shards = _recombine_shards(shards)
 
     req = MaintenanceDefinition(
         shards=list(shards),
         shard_target_state=shard_target_state,
-        sequencer_nodes=[n.to_thrift() for n in sequencer_nodes],
+        sequencer_nodes=[n for n in sequencer_nodes],
         sequencer_target_state=SequencingState.DISABLED,
         user=user,
         reason=reason,

@@ -34,9 +34,7 @@ class TestClusterView(TestCase):
                         node=cv.get_node_view_by_node_index(0).node_id, shard_index=1
                     )
                 ],
-                sequencer_nodes=[
-                    Node.from_thrift(cv.get_node_view_by_node_index(0).node_id)
-                ],
+                sequencer_nodes=[cv.get_node_view_by_node_index(0).node_id],
             )
             (cv, nc_resp, ns_resp, mnts_resp) = await asyncio.gather(
                 get_cluster_view(client),
