@@ -143,7 +143,7 @@ class NonAuthoritativeRebuildingTest
         }
         *info = *epoch_metadata[0];
         info->h.epoch = epoch_t(1);
-        return EpochMetaData::UpdateResult::UPDATED;
+        return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
       };
       int rv = meta_provisioner->provisionEpochMetaDataForLog(
           LOG_ID,
@@ -170,7 +170,7 @@ class NonAuthoritativeRebuildingTest
         }
         *info = *epoch_metadata[0];
         info->h.epoch = epoch_t(1);
-        return EpochMetaData::UpdateResult::UPDATED;
+        return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
       };
 
       int rv = meta_provisioner->provisionEpochMetaDataForLog(

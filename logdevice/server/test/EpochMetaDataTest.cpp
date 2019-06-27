@@ -144,7 +144,7 @@ TEST_F(EpochMetaDataTest, MetaDataLogWritten) {
   EXPECT_FALSE(valid_info->isEmpty());
   EXPECT_FALSE(valid_info->writtenInMetaDataLog());
   rv = written_updater(LOGID, valid_info, /* MetaDataTracer */ nullptr);
-  EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);
+  EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   EXPECT_TRUE(valid_info->writtenInMetaDataLog());
 
   rv = written_updater(LOGID, valid_info, /* MetaDataTracer */ nullptr);
@@ -160,7 +160,7 @@ TEST_F(EpochMetaDataTest, MetaDataLogWritten) {
   CustomEpochMetaDataUpdater updater(cfg, selector, true);
   selector->setStorageSet(StorageSet{N1, N2, N3});
   rv = updater(LOGID, valid_info, /* MetaDataTracer */ nullptr);
-  EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);
+  EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   EXPECT_FALSE(valid_info->writtenInMetaDataLog());
 }
 
@@ -563,7 +563,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   // change replication factor, expect metadata to be updated
   attrs.set_replicationFactor(1);
   rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
-  EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);
+  EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   EXPECT_TRUE(zk_record->isValid());
   EXPECT_NE(genValidEpochMetaData(
                 logcfg->attrs().syncReplicationScope().asOptional()),
@@ -579,7 +579,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   *zk_record = genValidEpochMetaData(NodeLocationScope::NODE);
   attrs.set_syncReplicationScope(NodeLocationScope::RACK);
   rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
-  EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);
+  EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   EXPECT_TRUE(zk_record->isValid());
   EXPECT_NE(genValidEpochMetaData(NodeLocationScope::NODE), *zk_record);
   // epoch should remain the same
@@ -593,7 +593,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
       logcfg->attrs().syncReplicationScope().asOptional());
   selector->setStorageSet(new_storage_set);
   rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
-  EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);
+  EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   EXPECT_TRUE(zk_record->isValid());
   EXPECT_EQ(
       genValidEpochMetaData(logcfg->attrs().syncReplicationScope().asOptional())
@@ -635,7 +635,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   auto zk_record = std::make_unique<EpochMetaData>(genValidEpochMetaData(
       logcfg->attrs().syncReplicationScope().asOptional()));
   auto rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
-  EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);
+  EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   auto cmp = genValidEpochMetaData(
       logcfg->attrs().syncReplicationScope().asOptional());
   ++cmp.h.epoch.val_;
@@ -644,7 +644,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   EpochMetaDataUpdateToNextEpoch updater_conditional(cfg, nullptr, cmp.h.epoch);
 
   rv = updater_conditional(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
-  EXPECT_EQ(EpochMetaData::UpdateResult::UPDATED, rv);
+  EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   ++cmp.h.epoch.val_;
   EXPECT_EQ(cmp, *zk_record);
 

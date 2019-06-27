@@ -177,8 +177,10 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
       case EpochMetaData::UpdateResult::FAILED:
         rv = -1;
         break;
+      case EpochMetaData::UpdateResult::ONLY_NODESET_PARAMS_CHANGED:
+      case EpochMetaData::UpdateResult::NONSUBSTANTIAL_RECONFIGURATION:
       case EpochMetaData::UpdateResult::CREATED:
-      case EpochMetaData::UpdateResult::UPDATED: {
+      case EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION: {
         ld_check((*to_update)->isValid());
         // write to the epoch store file
         if (out_len < sizeof(NodeID)) {

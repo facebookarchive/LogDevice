@@ -2727,6 +2727,21 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "(reprovisioning) when the configuration attributes of a log change.",
        SERVER,
        SettingsCategory::Configuration);
+  init(
+      "sequencer-reactivation-delay-secs",
+      &sequencer_reactivation_delay_secs,
+      "60s..3600s",
+      validate_nonnegative<ssize_t>(),
+      "Some sequencer reactivations may be postponed when the changes that "
+      "triggered the reactivation are not important enough to be propogated "
+      "immediately. E.g., changes to replication factor or window size, need "
+      "to be made immediately visible on the other hand changes changes to the "
+      "nodeset due to say the 'exclude_from_nodeset' flag being set as part "
+      "of a passive drain can be postponed. If the reactivations can be "
+      "postponed then the delay is chosen to be a radnom delay seconds "
+      "between the above range. If 0 then don't postpone ",
+      SERVER,
+      SettingsCategory::Configuration);
   init("sequencer-background-activation-retry-interval",
        &sequencer_background_activation_retry_interval,
        "500ms",

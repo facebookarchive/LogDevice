@@ -9,6 +9,7 @@
 
 #include "logdevice/common/MetaDataTracer.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientProcessor.h"
 
@@ -31,7 +32,10 @@ operator()(logid_t log_id,
                              provision_if_empty_,
                              update_if_exists_,
                              force_update_);
-  if (res == UpdateResult::CREATED || res == UpdateResult::UPDATED) {
+  if (res == UpdateResult::ONLY_NODESET_PARAMS_CHANGED ||
+      res == UpdateResult::NONSUBSTANTIAL_RECONFIGURATION ||
+      res == UpdateResult::CREATED ||
+      res == UpdateResult::SUBSTANTIAL_RECONFIGURATION) {
     if (tracer) {
       tracer->setAction(MetaDataTracer::Action::PROVISION_METADATA);
       tracer->setNewMetaData(*info);
@@ -42,9 +46,84 @@ operator()(logid_t log_id,
   return res;
 }
 
+/*
+ * This function processes changes to the log configuration
+ * as well as the nodeset parameters. It classifies changes
+ * between the old and the new state in the following categories:
+ * 1. Nothing changed.
+ * 2. One or more of the the nodeset parameters changed: signature, seed, target
+ * nodeset size.
+ * 3. There were substantial reconfigurations. E.g, the replication factor was
+ * changed.
+ *
+ * The caller can combine this information along with the result from the
+ * NodeSetSelector to determine what actions are needed:
+ * 1. Immediately perform sequencer reactivation.
+ * 2. Immediately update epoch metadata but no sequencer reactivation is needed.
+ * 3. Perform sequencer reactivation but delay the step for some time.
+ *
+ */
 EpochMetaData::UpdateResult
+processConfigChanges(std::unique_ptr<EpochMetaData>& metadata,
+                     const ReplicationProperty& replication,
+                     bool force_update,
+                     epoch_metadata_version::type metadata_version,
+                     folly::Optional<nodeset_size_t> target_nodeset_size,
+                     folly::Optional<uint64_t> nodeset_seed,
+                     const NodeSetSelector::Result& selected) {
+  if (!force_update && metadata->replication == replication &&
+      !metadata->disabled() && metadata->h.version >= metadata_version) {
+    // No change to config. Check the nodeset params.
+    if (target_nodeset_size.value() ==
+            metadata->nodeset_params.target_nodeset_size &&
+        nodeset_seed.value() == metadata->nodeset_params.seed &&
+        selected.signature == metadata->nodeset_params.signature) {
+      return EpochMetaData::UpdateResult::UNCHANGED;
+    } else {
+      // Only need to update nodeset params.
+      // No need to reset effective_since and write a metadata log record.
+      return UpdateResult::ONLY_NODESET_PARAMS_CHANGED;
+    }
+  }
+
+  // More than just the nodeset params changed in the config. Most likely
+  // the replication factor changed.
+  return UpdateResult::SUBSTANTIAL_RECONFIGURATION;
+}
+
+/*
+ * This function processes changes to the epoch metadata and based on the
+ * changes provides a recommendation to the caller about actions to perform:
+ * update epoch metadata only, update epoch metadata and perform sequencer
+ * reactivation, or delay sequencer reactivation. The table below summarizes how
+ * this recommendation is made. The header in each column is the entity that
+ * changed.
+ *
+ *------------------------------------------------------------------------------
+ *   NS   | replFactor  | targetNodesetSize  |   val of enum UpdateResult     |
+ * change | or          | or seed or NC hash |                                |
+ *        | forceUpdate | or signature       |                                |
+ *        | or          |                    |                                |
+ *        | logDisabled |                    |                                |
+ *-----------------------------------------------------------------------------
+ *   N    |     N       |         N          | UNCHANGED                      |
+ *-----------------------------------------------------------------------------
+ *   N    |     N       |         Y          | ONLY_NODESET_PARAMS_CHANGED    |
+ *-----------------------------------------------------------------------------
+ *   *    |     Y       |         *          | SUBSTANTIAL_RECONFIGURATION    |
+ *-----------------------------------------------------------------------------
+ *   Y    |     N       |         N          | NONSUBSTANTIAL_RECONFIGURATION |
+ *-----------------------------------------------------------------------------
+ *   Y    |     N       |  Y (NC hash only)  | NONSUBSTANTIAL_RECONFIGURATION |
+ *-----------------------------------------------------------------------------
+ *   Y    |     N       |         Y          | SUBSTANTIAL_RECONFIGURATION    |
+ *-----------------------------------------------------------------------------
+ *
+ *
+ */
+UpdateResult
 updateMetaDataIfNeeded(logid_t log_id,
-                       std::unique_ptr<EpochMetaData>& info,
+                       std::unique_ptr<EpochMetaData>& metadata,
                        const Configuration& config,
                        folly::Optional<nodeset_size_t> target_nodeset_size,
                        folly::Optional<uint64_t> nodeset_seed,
@@ -52,52 +131,45 @@ updateMetaDataIfNeeded(logid_t log_id,
                        bool use_storage_set_format,
                        bool provision_if_empty,
                        bool update_if_exists,
-                       bool force_update,
-                       bool* out_only_nodeset_params_changed) {
+                       bool force_update) {
   const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
       config.getLogGroupByIDShared(log_id);
   if (!logcfg) {
     err = E::NOTFOUND;
-    return EpochMetaData::UpdateResult::FAILED;
+    return UpdateResult::FAILED;
   }
 
   // If the given metadata is empty, provision it with an initial metadata
   // Otherwise, update the metadata given
-  const bool prev_metadata_exists = info && !info->isEmpty();
+  const bool prev_metadata_exists = metadata && !metadata->isEmpty();
   if (!prev_metadata_exists && !provision_if_empty) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    10,
                    "Metadata not found for log %lu",
                    log_id.val_);
     err = E::EMPTY;
-    return EpochMetaData::UpdateResult::FAILED;
+    return UpdateResult::FAILED;
   }
+
   if (prev_metadata_exists && !update_if_exists) {
     ld_error("Metadata already provisioned for log %lu", log_id.val_);
     err = E::EXISTS;
-    return EpochMetaData::UpdateResult::FAILED;
+    return UpdateResult::FAILED;
   }
 
-  const EpochMetaData::UpdateResult success_res = info
-      ? EpochMetaData::UpdateResult::UPDATED
-      : EpochMetaData::UpdateResult::CREATED;
-
-  ReplicationProperty replication =
-      ReplicationProperty::fromLogAttributes(logcfg->attrs());
-  epoch_metadata_version::type metadata_version =
-      epoch_metadata_version::versionToWrite(config.serverConfig());
-
   if (!target_nodeset_size.hasValue()) {
-    if (prev_metadata_exists && info->nodeset_params.target_nodeset_size != 0) {
-      target_nodeset_size = info->nodeset_params.target_nodeset_size;
+    if (prev_metadata_exists &&
+        metadata->nodeset_params.target_nodeset_size != 0) {
+      target_nodeset_size = metadata->nodeset_params.target_nodeset_size;
     } else {
       target_nodeset_size =
           logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
     }
   }
+
   if (!nodeset_seed.hasValue()) {
     if (prev_metadata_exists) {
-      nodeset_seed = info->nodeset_params.seed;
+      nodeset_seed = metadata->nodeset_params.seed;
     } else {
       nodeset_seed = 0;
     }
@@ -119,10 +191,16 @@ updateMetaDataIfNeeded(logid_t log_id,
       &config,
       target_nodeset_size.value(),
       nodeset_seed.value(),
-      prev_metadata_exists ? info.get() : nullptr,
+      prev_metadata_exists ? metadata.get() : nullptr,
       nullptr);
 
-  bool only_nodeset_params_changed = false;
+  UpdateResult result =
+      prev_metadata_exists ? UpdateResult::UNCHANGED : UpdateResult::CREATED;
+
+  ReplicationProperty replication =
+      ReplicationProperty::fromLogAttributes(logcfg->attrs());
+  epoch_metadata_version::type metadata_version =
+      epoch_metadata_version::versionToWrite(config.serverConfig());
 
   switch (selected.decision) {
     case NodeSetSelector::Decision::FAILED:
@@ -132,7 +210,7 @@ updateMetaDataIfNeeded(logid_t log_id,
                       "%lu",
                       log_id.val_);
       err = E::FAILED;
-      return EpochMetaData::UpdateResult::FAILED;
+      return UpdateResult::FAILED;
     case NodeSetSelector::Decision::KEEP:
       if (!prev_metadata_exists) {
         ld_critical("INTERNAL ERROR: NodeSet selector returned Decision::KEEP "
@@ -142,36 +220,60 @@ updateMetaDataIfNeeded(logid_t log_id,
         // Should be enforced by the nodeset selector.
         ld_check(false);
         err = E::INTERNAL;
-        return EpochMetaData::UpdateResult::FAILED;
+        return UpdateResult::FAILED;
+      }
+      // No change in nodeset. Any change is due to change in the config.
+      result = processConfigChanges(metadata,
+                                    replication,
+                                    force_update,
+                                    metadata_version,
+                                    target_nodeset_size,
+                                    nodeset_seed,
+                                    selected);
+      if (result == UpdateResult::UNCHANGED) {
+        return result;
       }
 
-      // Keep the existing metadata only when:
-      // 1) no change in the nodeset for the log, and
-      // 2) replication property stays the same, and
-      // 3) force_update flag wasn't set, and
-      // 4) existing metadata is not disabled, and
-      // 5) metadata_version is up-to-date, and
-      // 6) nodeset_params stay the same.
-      if (!force_update && info->replication == replication &&
-          !info->disabled() && info->h.version >= metadata_version) {
-        if (target_nodeset_size.value() ==
-                info->nodeset_params.target_nodeset_size &&
-            nodeset_seed.value() == info->nodeset_params.seed &&
-            selected.signature == info->nodeset_params.signature) {
-          return EpochMetaData::UpdateResult::UNCHANGED;
-        } else {
-          // Only need to update nodeset params.
-          // No need to reset effective_since and write a metadata log record.
-          only_nodeset_params_changed = true;
-        }
-      }
       break;
     case NodeSetSelector::Decision::NEEDS_CHANGE:
+      // The nodeset changed. We need to perform metadata log updates and
+      // sequencer reactivation immediately or later depending on what events
+      // triggered the change. But we only need to process this information if
+      // the config already doesn't have significant changes that requires us to
+      // reactivate the sequencer.
+      if (prev_metadata_exists) {
+        // Figure out what else changed on the log config or the nodeset params.
+        UpdateResult configResult = processConfigChanges(metadata,
+                                                         replication,
+                                                         force_update,
+                                                         metadata_version,
+                                                         target_nodeset_size,
+                                                         nodeset_seed,
+                                                         selected);
+
+        // Now reconcile the config changes with the nodeset changes to
+        // generate the final result.
+        if (configResult == UpdateResult::UNCHANGED) {
+          result = UpdateResult::NONSUBSTANTIAL_RECONFIGURATION;
+        } else if (configResult == UpdateResult::ONLY_NODESET_PARAMS_CHANGED &&
+                   target_nodeset_size.value() ==
+                       metadata->nodeset_params.target_nodeset_size &&
+                   nodeset_seed.value() == metadata->nodeset_params.seed) {
+          // just the signature changed
+          result = UpdateResult::NONSUBSTANTIAL_RECONFIGURATION;
+        } else {
+          // Nodeset as well as nodeset parameters changed. Or one of the log
+          // config options, like the replication factor, changed.
+          result = UpdateResult::SUBSTANTIAL_RECONFIGURATION;
+        }
+      }
+
       break;
   }
 
-  if (info == nullptr) {
-    info = std::make_unique<EpochMetaData>();
+  ld_check(result >= UpdateResult::ONLY_NODESET_PARAMS_CHANGED);
+  if (metadata == nullptr) {
+    metadata = std::make_unique<EpochMetaData>();
   }
 
   if (!prev_metadata_exists) {
@@ -182,71 +284,67 @@ updateMetaDataIfNeeded(logid_t log_id,
       // should be enforced by the nodeset selector
       ld_check(false);
       err = E::INTERNAL;
-      return EpochMetaData::UpdateResult::FAILED;
+      return UpdateResult::FAILED;
     }
 
     // provision metadata with the initial epoch
-    info->h.epoch = info->h.effective_since = EPOCH_MIN;
+    metadata->h.epoch = metadata->h.effective_since = EPOCH_MIN;
     // use the configured `metadata_version'
-    info->h.version = metadata_version;
-  } else if (!only_nodeset_params_changed) {
+    metadata->h.version = metadata_version;
+  } else if (result != UpdateResult::ONLY_NODESET_PARAMS_CHANGED) {
     // epoch remains the same
     // update effective_since to be the same as epoch
-    info->h.effective_since = epoch_t(info->h.epoch.val_);
+    metadata->h.effective_since = epoch_t(metadata->h.epoch.val_);
   }
 
-  info->replication = replication;
+  metadata->replication = replication;
 
   // update the version to metadata_version if applicable
-  if (info->h.version < metadata_version) {
-    info->h.version = metadata_version;
+  if (metadata->h.version < metadata_version) {
+    metadata->h.version = metadata_version;
   }
 
   // update nodeset and nodeset_params
-  info->nodeset_params.signature = selected.signature;
-  info->nodeset_params.target_nodeset_size = target_nodeset_size.value();
-  info->nodeset_params.seed = nodeset_seed.value();
+  metadata->nodeset_params.signature = selected.signature;
+  metadata->nodeset_params.target_nodeset_size = target_nodeset_size.value();
+  metadata->nodeset_params.seed = nodeset_seed.value();
   if (selected.decision == NodeSetSelector::Decision::NEEDS_CHANGE) {
-    ld_check(!only_nodeset_params_changed);
-    info->setShards(selected.storage_set);
-    info->weights = selected.weights;
+    ld_check(result != UpdateResult::ONLY_NODESET_PARAMS_CHANGED);
+    metadata->setShards(selected.storage_set);
+    metadata->weights = selected.weights;
   }
 
   // clear the DISABLED flag as well
-  info->h.flags &= ~MetaDataLogRecordHeader::DISABLED;
+  metadata->h.flags &= ~MetaDataLogRecordHeader::DISABLED;
 
   if (use_storage_set_format) {
     // Enable the new copyset serialization format
-    info->h.flags |= MetaDataLogRecordHeader::HAS_STORAGE_SET;
+    metadata->h.flags |= MetaDataLogRecordHeader::HAS_STORAGE_SET;
   } else {
-    info->h.flags &= ~MetaDataLogRecordHeader::HAS_STORAGE_SET;
+    metadata->h.flags &= ~MetaDataLogRecordHeader::HAS_STORAGE_SET;
   }
 
-  if (!only_nodeset_params_changed) {
+  if (result != UpdateResult::ONLY_NODESET_PARAMS_CHANGED) {
     // since this is a newly generated metadata, by default it is not yet
     // written to the metadata log
-    info->h.flags &= ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
-    ld_check(!info->writtenInMetaDataLog());
+    metadata->h.flags &= ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
+    ld_check(!metadata->writtenInMetaDataLog());
   }
 
-  ld_check(!info->disabled());
+  ld_check(!metadata->disabled());
 
-  if (!info->isValid()) {
+  if (!metadata->isValid()) {
     ld_critical(
         "INTERNAL ERROR: Updated epoch metadata is invalid for log %lu: %s",
         log_id.val_,
-        info->toString().c_str());
+        metadata->toString().c_str());
     // nodeset selector should enforce that epoch metadata is valid
     ld_check(false);
     err = E::INTERNAL;
-    return EpochMetaData::UpdateResult::FAILED;
+    return UpdateResult::FAILED;
   }
 
-  if (out_only_nodeset_params_changed) {
-    *out_only_nodeset_params_changed = only_nodeset_params_changed;
-  }
-
-  return success_res;
+  return result;
 }
 
 Status EpochMetaDataUpdateToNextEpoch::canEpochBeBumpedWithoutProvisioning(
@@ -346,9 +444,9 @@ operator()(logid_t log_id,
     return UpdateResult::FAILED;
   }
 
-  // default result is updated, could be changed to CREATED or FAILED by the
-  // updater if sequencers provision logs
-  UpdateResult res = UpdateResult::UPDATED;
+  // default result is SUBSTANTIAL_RECONFIGURATION, could be changed to CREATED
+  // or FAILED by the updater if sequencers provision logs
+  UpdateResult res = UpdateResult::SUBSTANTIAL_RECONFIGURATION;
 
   if (updated_metadata_ != nullptr) {
     // New metadata was provided to us from outside.
@@ -397,7 +495,7 @@ operator()(logid_t log_id,
       }
       if (res == UpdateResult::UNCHANGED) {
         // We're going to bump epoch even if nodeset doesn't need changing.
-        res = UpdateResult::UPDATED;
+        res = UpdateResult::SUBSTANTIAL_RECONFIGURATION;
       } else if (tracer) {
         tracer->setAction(MetaDataTracer::Action::PROVISION_METADATA);
       }
@@ -471,7 +569,7 @@ operator()(logid_t log_id,
     tracer->setAction(MetaDataTracer::Action::SET_WRITTEN_BIT);
     tracer->setNewMetaData(*info);
   }
-  return EpochMetaData::UpdateResult::UPDATED;
+  return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
 }
 
 EpochMetaData::UpdateResult EpochMetaDataUpdateNodeSetParams::
@@ -519,7 +617,7 @@ operator()(logid_t log_id,
     tracer->setAction(MetaDataTracer::Action::UPDATE_NODESET_PARAMS);
     tracer->setNewMetaData(*info);
   }
-  return EpochMetaData::UpdateResult::UPDATED;
+  return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
 }
 
 EpochMetaData::UpdateResult EpochMetaDataClearWrittenBit::
@@ -552,7 +650,7 @@ operator()(logid_t log_id,
     tracer->setAction(MetaDataTracer::Action::CLEAR_WRITTEN_BIT);
     tracer->setNewMetaData(*info);
   }
-  return EpochMetaData::UpdateResult::UPDATED;
+  return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
 }
 
 EpochMetaData::UpdateResult DisableEpochMetaData::
@@ -590,7 +688,7 @@ operator()(logid_t log_id,
     tracer->setAction(MetaDataTracer::Action::DISABLE);
     tracer->setNewMetaData(*info);
   }
-  return EpochMetaData::UpdateResult::UPDATED;
+  return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
 }
 
 EpochMetaData::UpdateResult ReadEpochMetaData::
@@ -617,5 +715,4 @@ operator()(logid_t log_id,
   }
   return EpochMetaData::UpdateResult::UNCHANGED;
 }
-
 }} // namespace facebook::logdevice

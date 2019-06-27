@@ -1143,6 +1143,10 @@ struct Settings : public SettingsBundle {
   // Max number of concurrent background sequencer activations running
   size_t max_sequencer_background_activations_in_flight;
 
+  // This settings control the min and max time delay for postponing
+  // a sequencer reactivation.
+  chrono_interval_t<std::chrono::seconds> sequencer_reactivation_delay_secs;
+
   // An interval after which we retry processing the background sequencer
   // reactivation queue on failure
   std::chrono::milliseconds sequencer_background_activation_retry_interval;

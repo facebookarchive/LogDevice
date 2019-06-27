@@ -39,12 +39,15 @@ TEST_F(RecordCacheIntegrationTest, RecordCacheHitForNewAppends) {
   log_attrs.set_replicationFactor(2);
   log_attrs.set_extraCopies(0);
 
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setParam("--enable-record-cache", "true")
-                     .setNumLogs(NLOGS)
-                     .setLogAttributes(log_attrs)
-                     .useHashBasedSequencerAssignment()
-                     .create(NNODES);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setParam("--enable-record-cache", "true")
+          // If some reactivations are delayed they still complete quickly
+          .setParam("--sequencer-reactivation-delay-secs", "1s..2s")
+          .setNumLogs(NLOGS)
+          .setLogAttributes(log_attrs)
+          .useHashBasedSequencerAssignment()
+          .create(NNODES);
 
   std::shared_ptr<Client> client =
       cluster->createClient(std::chrono::seconds(2));

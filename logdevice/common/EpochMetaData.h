@@ -296,10 +296,46 @@ class EpochMetaData {
   NodeSetParams nodeset_params;
 
  public:
+  /*
+   * The enum defines states that describe the change between the previous epoch
+   * metadata and the newly generated epoch metadata. This exact information is
+   * then used to determine whether and how to perform sequencer reactivation:
+   *
+   * UNCHANGED:
+   * Neither the nodeset changed nor the logs config or the nodeset params.
+   *
+   * ONLY_NODESET_PARAMS_CHANGED:
+   * Just the nodeset params changed, not the log config or the nodeset itself.
+   * Only need to update the epoch store. We can perform this action now
+   * since it is cheap to do.
+   *
+   * NONSUBSTANTIAL_RECONFIGURATION:
+   * The nodeset selector selected a new nodeset but none of the logs config
+   * (replication factor or target nodeset size). We need reactivation but it
+   * can be delayed.
+   *
+   * Note that this state is returned even if the signature in the NodesetParams
+   * changed as long as just the signature and nothing else changed. The
+   * Signature is a hash over a number of input parameters and as long as none
+   * of the other parameters changed we can safely assume that the signature
+   * changed because the Nodes config hash changed. Thich implies that one or
+   * more nodes changed their state or that there was an expansion or a shrink.
+   *
+   * SUBSTANTIAL_RECONFIGURATION: Either nodeset, or repl factor, or one of the
+   * nodeset params (target nodeset size or seed) changed. Update the metadata
+   * log and perform reactivation now.
+   *
+   * CREATED:
+   * A new metadata was generated.
+   *
+   * FAILED: Nothing to do. Return error.
+   */
   enum class UpdateResult : uint8_t {
     UNCHANGED = 0,
+    ONLY_NODESET_PARAMS_CHANGED,
+    NONSUBSTANTIAL_RECONFIGURATION,
+    SUBSTANTIAL_RECONFIGURATION,
     CREATED,
-    UPDATED,
     FAILED,
   };
 
@@ -317,7 +353,8 @@ class EpochMetaData {
    *
    * @return     could be one of
    *             UpdateResult::UNCHANGED  EpochMetaData stays the same
-   *             UpdateResult::UPDATED    EpochMetaData is updated
+   *             UpdateResult::SUBSTANTIAL_RECONFIGURATION    EpochMetaData is
+   *                                                          updated
    *             UpdateResult::CREATED    new EpochMetaData has been created
    *             UpdateResult::FAILED     failed to perform the update
    *

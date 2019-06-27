@@ -108,17 +108,20 @@ void NodeSetTest::init() {
   log_attrs.set_extraCopies(extra_);
   log_attrs.set_syncedCopies(synced_);
 
-  auto factory = IntegrationTestUtils::ClusterFactory()
-                     .enableMessageErrorInjection()
-                     .setLogGroupName("test_log")
-                     .setLogAttributes(log_attrs)
-                     .setNumLogs(NLOGS) // only need 1 log
-                     .deferStart()
-                     .doNotLetSequencersProvisionEpochMetaData()
-                     .setParam("--disable-rebuilding", "false")
-                     .setParam("--bridge-record-in-empty-epoch",
-                               bridge_empty_epoch_ ? "true" : "false")
-                     .setNumDBShards(1);
+  auto factory =
+      IntegrationTestUtils::ClusterFactory()
+          .enableMessageErrorInjection()
+          .setLogGroupName("test_log")
+          .setLogAttributes(log_attrs)
+          .setNumLogs(NLOGS) // only need 1 log
+          .deferStart()
+          .doNotLetSequencersProvisionEpochMetaData()
+          // If some reactivations are delayed they still complete quickly
+          .setParam("--sequencer-reactivation-delay-secs", "1s..2s")
+          .setParam("--disable-rebuilding", "false")
+          .setParam("--bridge-record-in-empty-epoch",
+                    bridge_empty_epoch_ ? "true" : "false")
+          .setNumDBShards(1);
 
   cluster_ = factory.create(nodes_);
 

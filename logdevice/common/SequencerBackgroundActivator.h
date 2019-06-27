@@ -11,9 +11,13 @@
 #include <queue>
 #include <unordered_map>
 
+#include <logdevice/common/Timestamp.h>
+
+#include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ResourceBudget.h"
+#include "logdevice/common/Sequencer.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
@@ -50,7 +54,8 @@ class SequencerBackgroundActivator {
 
   // Schedules the given logs for checking whether recativation is needed.
   // If no updates are needed, this should be cheap.
-  void schedule(std::vector<logid_t> logs);
+  void schedule(std::vector<logid_t> logs,
+                bool queued_by_alarm_callback = false);
 
   // Called when a sequencer activation completes, successfully or not.
   void notifyCompletion(logid_t log, Status st);
@@ -83,6 +88,28 @@ class SequencerBackgroundActivator {
   requestGetLogsDebugInfo(Processor* processor,
                           const std::vector<logid_t>& logs);
 
+  enum class ProcessLogDecision : uint8_t {
+    NOOP = 0,
+    SUCCESS = 1,
+    POSTPONED = 2,
+    FAILED = 3,
+  };
+
+  // These states capture the suggested rectivation decision based on the extent
+  // of the changes to the epoch metadata:
+  // UPDATE_METADATA : Update the epoch_metadata without reactivating the
+  // sequencer.
+  // POSTPONE: Reactivate the sequencer but delay the reactivation.
+  // REACTIVATE: Immediately reactivate the sequencer.
+  // The order here is important as the actual place it is used compares the
+  // decision returned from multiple changes and selects the highest.
+  enum class ReactivationDecision : uint8_t {
+    NOOP = 0,
+    UPDATE_METADATA = 1,
+    POSTPONE = 2,
+    REACTIVATE = 3,
+  };
+
  private:
   struct NodesetAdjustment {
     // The adjustment is conditional on latest sequencer having this epoch.
@@ -104,6 +131,9 @@ class SequencerBackgroundActivator {
     // True if this log is in queue_.
     bool in_queue = false;
 
+    // This log was already postponed once for the purpose of throttling
+    bool queued_by_alarm_callback = false;
+
     folly::Optional<NodesetAdjustment> pending_adjustment;
 
     // Fires every nodeset_adjustment_period to consider changing nodeset size
@@ -124,17 +154,20 @@ class SequencerBackgroundActivator {
     // Calculated based on settings and unclamped target nodeset size.
     std::chrono::milliseconds nodeset_randomization_period =
         std::chrono::milliseconds::max();
+
+    // This timer is used to delay sequencer reactivations when possible.
+    Timer reactivation_delay_timer;
   };
 
   // internal method that checks that SequencerBackgroundActivator methods are
   // running on the right thread
   void checkWorkerAsserts();
 
-  // Processes the given log. Returns false if it failed and needs to be
-  // retried.
-  bool processOneLog(logid_t log_id,
-                     LogState& state,
-                     ResourceBudget::Token& token);
+  // Processes the given log. Returns NOOP, SUCCESS, POSTPONED, or FAILED
+  // depending on the conditions.
+  ProcessLogDecision processOneLog(logid_t log_id,
+                                   LogState& state,
+                                   ResourceBudget::Token& token);
 
   // Called every nodeset_adjustment_period for each log.
   // Updates target_nodeset_size if needed.
@@ -144,6 +177,23 @@ class SequencerBackgroundActivator {
   // Updates nodeset seed.
   void randomizeNodeset(logid_t log_id, LogState& state);
 
+  // Internal function that queues up a sequencer reactivation
+  // with a delay.
+  ProcessLogDecision postponeSequencerReactivation(logid_t logid);
+
+  // queues up a job to update Epoch metadata
+  ProcessLogDecision
+  updateEpochMetadata(logid_t logid,
+                      std::shared_ptr<Sequencer> seq,
+                      std::unique_ptr<EpochMetaData>& new_metadata,
+                      const epoch_t& current_epoch);
+
+  // Processes changes to log medatadata
+  ReactivationDecision
+  processMetadataChanges(logid_t logid,
+                         std::shared_ptr<const EpochMetaData>& current_metadata,
+                         std::unique_ptr<EpochMetaData>& new_metadata);
+
   // Does the actual useful work.
   // Checks if the current sequencer's epoch metadata (nodeset, replication
   // factor etc) and settings (window size) matches the config. If not, starts
@@ -152,7 +202,8 @@ class SequencerBackgroundActivator {
   // If the sequencer is not active or not ready for updating metadata (e.g.
   // current metadata is not written to metadata log yet), returns an error.
   // When sequencer becomes ready for metadata updates, it'll notify us
-  // through notifyCompletion(), and we'll schedule another call to this check.
+  // through notifyCompletion(), and we'll schedule another call to this
+  // check.
   //
   // @return 0 if an update was started. Otherwise returns -1 and assigns err.
   // If update was started, notifyCompletion() will be called when the update is
@@ -162,7 +213,7 @@ class SequencerBackgroundActivator {
   // FAILED, NOBUFS, TOOMANY, NOTCONN, ACCESS.
   // The caller shouldn't retry on the following errors:
   // NOSEQUENCER, INPROGRESS, NOTFOUND, SYSLIMIT, INTERNAL, TOOBIG.
-  int reprovisionOrReactivateIfNeeded(
+  ProcessLogDecision reprovisionOrReactivateIfNeeded(
       logid_t logid,
       LogState& state,
       std::shared_ptr<Sequencer> seq,
@@ -184,13 +235,18 @@ class SequencerBackgroundActivator {
   void activateQueueProcessingTimer(
       folly::Optional<std::chrono::microseconds> timeout);
 
-  // Initializes nodeset_adjustment_timer. Call this after inserting into logs_.
+  // Initializes nodeset_adjustment_timer. Call this after inserting into
+  // logs_.
   void activateNodesetAdjustmentTimerIfNeeded(logid_t log_id, LogState& state);
 
   // deactivates the timer for queue processing
   void deactivateQueueProcessingTimer();
 
-  // Called when a log is added to queue_.
+  // Called when a log is added to the background reactivation queue_.
+  // These jobs on this queue are throttled based on the setting
+  // max-sequencer-background-activations-in-flight. When a job
+  // is taken off this queue, it may be processed immediately or
+  // further postponed.
   void bumpScheduledStat(uint64_t val = 1);
 
   // Called when a Token is released. One token is acquired for every log
@@ -198,9 +254,20 @@ class SequencerBackgroundActivator {
   // bumpCompletedStat() should balance out.
   void bumpCompletedStat(uint64_t val = 1);
 
+  // Called when a log is taken for processing from the
+  // queue_ but instead selected to be further postponed.
+  // The delay horizon of these jobs is a random time point
+  // over a window specified by the settings
+  // sequencer-reactivation-max/max-delay-secs".
+  void bumpDelayedStat(uint64_t val = 1);
+
+  // Updated when associated delay timer fires. Calls to  bumpDelayedStat()
+  // and bumpCompletedDelayStat() should balance out.
+  void bumpCompletedDelayStat(uint64_t val = 1);
+
   std::unordered_map<logid_t, LogState, logid_t::Hash> logs_;
 
-  // Queue of log_ids to process.
+  // Queue of log_ids to process in the background but shortly.
   std::queue<logid_t> queue_;
 
   // timer for retrying processing the queue later in case of failures
@@ -215,5 +282,4 @@ class SequencerBackgroundActivator {
   bool unconditional_nodeset_randomization_enabled_;
   size_t nodeset_max_randomizations_;
 };
-
 }} // namespace facebook::logdevice

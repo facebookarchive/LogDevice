@@ -492,14 +492,17 @@ TEST_F(MetaDataLogsIntegrationTest, MetaDataLogAppendWithStaleSequencerEpoch) {
 // the metadata log.
 TEST_F(MetaDataLogsIntegrationTest, SequencerReadHistoricMetadata) {
   const logid_t LOG_ID(1);
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setParam("--update-metadata-map-interval",
-                               "1s",
-                               IntegrationTestUtils::ParamScope::SEQUENCER)
-                     .setParam("--get-trimpoint-interval",
-                               "1s",
-                               IntegrationTestUtils::ParamScope::SEQUENCER)
-                     .create(4);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setParam("--update-metadata-map-interval",
+                    "1s",
+                    IntegrationTestUtils::ParamScope::SEQUENCER)
+          .setParam("--get-trimpoint-interval",
+                    "1s",
+                    IntegrationTestUtils::ParamScope::SEQUENCER)
+          // If some reactivations are delayed they still complete quickly
+          .setParam("--sequencer-reactivation-delay-secs", "1s..2s")
+          .create(4);
   auto client_orig = cluster->createClient();
   std::shared_ptr<Client> client = cluster->createClient();
   auto* client_impl = static_cast<ClientImpl*>(client.get());

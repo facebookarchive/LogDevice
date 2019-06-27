@@ -341,25 +341,28 @@ void RecoveryTest::init() {
   maint_attrs.set_syncedCopies(0);
   maint_attrs.set_syncReplicationScope(sync_replication_scope_);
 
-  auto factory = IntegrationTestUtils::ClusterFactory()
-                     // use logsdb to support record cache persistence
-                     .enableMessageErrorInjection()
-                     .setLogGroupName("my-log-group")
-                     .setLogAttributes(log_attrs)
-                     .setEventLogDeltaAttributes(event_log_attrs)
-                     .setConfigLogAttributes(config_attrs)
-                     .setMaintenanceLogAttributes(maint_attrs)
-                     .deferStart()
-                     .setParam("--byte-offsets")
-                     // we'll be using fake unrealistic timestamps;
-                     // tell logsdb to not worry about it
-                     .setParam("--rocksdb-partition-duration", "0s")
-                     // purge quickly when nodes are down
-                     .setParam("--gap-grace-period", "10ms")
-                     // allow 1000 reactivations per seconds
-                     .setParam("--reactivation-limit", "1000/1s")
-                     // fall back to non-authoritative quickly
-                     .setParam("--event-log-grace-period", "10ms");
+  auto factory =
+      IntegrationTestUtils::ClusterFactory()
+          // use logsdb to support record cache persistence
+          .enableMessageErrorInjection()
+          .setLogGroupName("my-log-group")
+          .setLogAttributes(log_attrs)
+          .setEventLogDeltaAttributes(event_log_attrs)
+          .setConfigLogAttributes(config_attrs)
+          .setMaintenanceLogAttributes(maint_attrs)
+          .deferStart()
+          // if some reactivations are delayed they still complete quickly
+          .setParam("--sequencer-reactivation-delay-secs", "1s..2s")
+          .setParam("--byte-offsets")
+          // we'll be using fake unrealistic timestamps;
+          // tell logsdb to not worry about it
+          .setParam("--rocksdb-partition-duration", "0s")
+          // purge quickly when nodes are down
+          .setParam("--gap-grace-period", "10ms")
+          // allow 1000 reactivations per seconds
+          .setParam("--reactivation-limit", "1000/1s")
+          // fall back to non-authoritative quickly
+          .setParam("--event-log-grace-period", "10ms");
 
   if (enable_rebuilding_) {
     factory.setParam("--disable-rebuilding", "false");
@@ -684,7 +687,7 @@ void RecoveryTest::provisionInternalLogs(StorageSet storage_set,
     }
     *info = *epoch_metadata[0];
     info->h.epoch = epoch_t(1);
-    return EpochMetaData::UpdateResult::UPDATED;
+    return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
   };
   rv = meta_provisioner->provisionEpochMetaDataForLog(
       configuration::InternalLogs::EVENT_LOG_DELTAS,
@@ -1669,7 +1672,7 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithNodeSet) {
     }
     *info = *epoch_metadata[2];
     info->h.epoch = epoch_t(4);
-    return EpochMetaData::UpdateResult::UPDATED;
+    return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
   };
 
   {
@@ -2173,7 +2176,7 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryAndPurgingWithRNodesEmpty) {
       }
       *info = *epoch_metadata[0];
       info->h.epoch = epoch_t(1);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         LOG_ID,
@@ -2200,7 +2203,7 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryAndPurgingWithRNodesEmpty) {
       }
       *info = *epoch_metadata[0];
       info->h.epoch = epoch_t(1);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         configuration::InternalLogs::EVENT_LOG_DELTAS,
@@ -2377,7 +2380,7 @@ TEST_P(RecoveryTest, RecoveryCannotFullyReplicate) {
       }
       *info = *epoch_metadata[0];
       info->h.epoch = epoch_t(1);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         LOG_ID,
@@ -2404,7 +2407,7 @@ TEST_P(RecoveryTest, RecoveryCannotFullyReplicate) {
       }
       *info = *epoch_metadata[0];
       info->h.epoch = epoch_t(1);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         configuration::InternalLogs::EVENT_LOG_DELTAS,
@@ -2613,7 +2616,7 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
       }
       *info = *epoch_metadata[2];
       info->h.epoch = epoch_t(3);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
 
     rv = meta_provisioner->provisionEpochMetaDataForLog(
@@ -3212,7 +3215,7 @@ TEST_P(RecoveryTest, PurgingAfterSkippedNonAuthoritativeRecovery) {
       }
       *info = *epoch_metadata[0];
       info->h.epoch = epoch_t(1);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         LOG_ID,
@@ -3239,7 +3242,7 @@ TEST_P(RecoveryTest, PurgingAfterSkippedNonAuthoritativeRecovery) {
       }
       *info = *epoch_metadata[0];
       info->h.epoch = epoch_t(1);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         configuration::InternalLogs::EVENT_LOG_DELTAS,
@@ -3836,7 +3839,7 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithDrainingNodes) {
       }
       *info = *epoch_metadata[0];
       info->h.epoch = epoch_t(1);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         LOG_ID,
@@ -3863,7 +3866,7 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithDrainingNodes) {
       }
       *info = *epoch_metadata[0];
       info->h.epoch = epoch_t(1);
-      return EpochMetaData::UpdateResult::UPDATED;
+      return EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION;
     };
     rv = meta_provisioner->provisionEpochMetaDataForLog(
         configuration::InternalLogs::EVENT_LOG_DELTAS,

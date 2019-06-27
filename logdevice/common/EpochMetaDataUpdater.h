@@ -37,16 +37,18 @@ namespace facebook { namespace logdevice {
  *  - If `info` was nullptr, and new metadata was produced,
  *    returns UpdateResult::CREATED.
  *  - If nodeset_params need to be changed while the rest of `info`
- *    stays the same, returns UpdateResult::UPDATED and sets
- *    *out_only_nodeset_params_changed = true. Such change to EpochMetaData
- *    doesn't need to be recorded in metadata log and therefore
+ *    stays the same, returns UpdateResult::NODESET_PARAMS_CHANGED. Such change
+ *    to EpochMetaData doesn't need to be recorded in metadata log and therefore
  *    effective_since and WRITTEN_IN_METADATALOG flag don't need to be
  *    changed.
+ *  - If the nodeset changed but nothing else (other than the signature) then
+ *    it returns UpdateResult::NONSUBSTANTIAL_RECONFIGURATION. This can be used
+ *    to infer that just the storage state of some of the nodes changed and that
+ *    we can defer the reactivation operation.
  *  - If `info` needs to be changed in a more substantial way
  *    (e.g. updated nodeset or replication property), returns
- *    UpdateResult::UPDATED, sets *out_only_nodeset_params_changed = false,
- *    updates effective_since epoch to be the same as `epoch`, and removes
- *    WRITTEN_IN_METADATALOG flag.
+ *    UpdateResult::SUBSTANTIAL_RECONFIGURATION, updates effective_since epoch
+ *    to be the same as `epoch`, and removes WRITTEN_IN_METADATALOG flag.
  *
  * @param log_id  The data log id for which metadata is being manipulated.
  * @param info
@@ -71,10 +73,6 @@ namespace facebook { namespace logdevice {
  *   WRITTEN_IN_METADATALOG flag, then update_if_exists must be false.
  * @param force_update
  *   Update the metadata even if the nodeset doesn't change.
- * @param out_only_nodeset_params_changed
- *   If return value is ::UPDATED, but the only part of exusting_metadata that
- *   was updated is `nodeset_params` (not to be confused with the nodeset
- *   itself), this boolean will be set to true.
  */
 EpochMetaData::UpdateResult
 updateMetaDataIfNeeded(logid_t log_id,
@@ -86,8 +84,7 @@ updateMetaDataIfNeeded(logid_t log_id,
                        bool use_storage_set_format,
                        bool provision_if_empty = false,
                        bool update_if_exists = true,
-                       bool force_update = false,
-                       bool* out_only_nodeset_params_changed = nullptr);
+                       bool force_update = false);
 
 // This class is only used in tests and in deprecated metadata-utility.
 // Normally metadata updates happen together with activating sequencer using
@@ -134,6 +131,18 @@ class CustomEpochMetaDataUpdater final : public EpochMetaData::Updater {
                                          MetaDataTracer* tracer) override;
 
  private:
+  // Internal function that helps processes changes to
+  // the log config. Return an enum that describes
+  // the type of changes that occured.
+  EpochMetaData::UpdateResult
+  processConfigChanges(std::unique_ptr<EpochMetaData>& metadata,
+                       const ReplicationProperty& replication,
+                       bool force_update,
+                       epoch_metadata_version::type metadata_version,
+                       folly::Optional<nodeset_size_t> target_nodeset_size,
+                       folly::Optional<uint64_t> nodeset_seed,
+                       NodeSetSelector::Result& selected);
+
   const std::shared_ptr<Configuration> config_;
   const std::shared_ptr<NodeSetSelector> nodeset_selector_;
   const bool use_storage_set_format_;
@@ -178,12 +187,13 @@ class CustomEpochMetaDataUpdater final : public EpochMetaData::Updater {
  *      This mode is used when something triggered a metadata update, e.g. nodes
  *      were added to the cluster, or nodeset_size changed in log attributes.
  *
- *  @return    UpdateResult::UPDATED    successfully bumped the epoch
+ *  @return
+ *  UpdateResult::SUBSTANTIAL_RECONFIGURATION    successfully bumped the epoch
  *
- *             UpdateResult::CREATED    successfully provisioned new metadata
- *                                      (only if the config allows it)
+ *  UpdateResult::CREATED    successfully provisioned new metadata (only if the
+ *                           config allows it)
  *
- *             UpdateResult::FAILED     some error occurred
+ *  UpdateResult::FAILED     some error occurred
  */
 class EpochMetaDataUpdateToNextEpoch final : public EpochMetaData::Updater {
  public:
@@ -246,8 +256,9 @@ class EpochMetaDataUpdateToNextEpoch final : public EpochMetaData::Updater {
  *  @return    UpdateResult::UNCHANGED  EpochMetaData is already marked as
  *                                      written
  *
- *             UpdateResult::UPDATED    EpochMetaData has been successfully
- *                                      marked as written
+ *             UpdateResult::SUBSTANTIAL_RECONFIGURATION    EpochMetaData has
+ *                                                          been successfully
+ *                                                          marked as written
  *
  *             UpdateResult::FAILED     EpochMetaData is not valid or check with
  *                                      compare_equality failed
@@ -291,8 +302,10 @@ class EpochMetaDataUpdateNodeSetParams : public EpochMetaData::Updater {
  *
  *  @return    UpdateResult::UNCHANGED  the flag is already cleared
  *
- *             UpdateResult::UPDATED    EpochMetaData has been successfully
- *                                      marked as not written
+ *             UpdateResult::SUBSTANTIAL_RECONFIGURATION    EpochMetaData has
+ *                                                          been successfully
+ *                                                          marked as not
+ *                                                          written
  *
  *             UpdateResult::FAILED     EpochMetaData is not valid
  */
@@ -312,8 +325,9 @@ class EpochMetaDataClearWrittenBit : public EpochMetaData::Updater {
  *  @return    UpdateResult::UNCHANGED  EpochMetaData is already marked as
  *                                      disabled or does not exist
  *
- *             UpdateResult::UPDATED    EpochMetaData has been successfully
- *                                      marked as disabled
+ *             UpdateResult::SUBSTANTIAL_RECONFIGURATION   EpochMetaData has
+ *                                                         been successfully
+ *                                                         marked as disabled
  *
  *             UpdateResult::FAILED     EpochMetaData is not valid
  */

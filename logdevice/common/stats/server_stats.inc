@@ -305,6 +305,13 @@ STAT_DEFINE(background_sequencer_reactivations_scheduled, SUM)
 // needed, this is bumped when reactivation completes.
 STAT_DEFINE(background_sequencer_reactivations_completed, SUM)
 
+// Number of times that sequencer reactivations were delayed because there were
+// non-substantial reconfigurations.
+STAT_DEFINE(sequencer_reactivations_delayed, SUM)
+// Number of times that delayed reactivations completed after the delay. This
+// should match the previous stat.
+STAT_DEFINE(sequencer_reactivations_delay_completed, SUM)
+
 // How many sequencers we reactivated in order to update epoch metadata
 // (nodeset, replication factor etc).
 STAT_DEFINE(sequencer_reactivations_for_metadata_update, SUM)

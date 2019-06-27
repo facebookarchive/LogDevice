@@ -176,6 +176,8 @@ class NodeStatsControllerIntegrationTest
             .setParam(
                 "--node-stats-boycott-use-rmsd", GetParam() ? "true" : "false")
 
+            // Disable delays for sequencer reactivations
+            .setParam("--sequencer-reactivation-delay-secs", "0s..0s")
             .setParam("--node-stats-max-boycott-count",
                       std::to_string(params.max_boycott_count))
             /* Increase the speed at which nodes check if they're

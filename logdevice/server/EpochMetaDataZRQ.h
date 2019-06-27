@@ -93,7 +93,9 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
         ld_check(metadata && metadata->isValid());
         next_step = NextStep::PROVISION;
         break;
-      case EpochMetaData::UpdateResult::UPDATED:
+      case EpochMetaData::UpdateResult::ONLY_NODESET_PARAMS_CHANGED:
+      case EpochMetaData::UpdateResult::NONSUBSTANTIAL_RECONFIGURATION:
+      case EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION:
         ld_check(metadata && metadata->isValid());
         next_step = NextStep::MODIFY;
         break;
