@@ -176,12 +176,14 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
     return nullptr;
   }
 
+  auto ncm_enabled =
+      impl_settings->getSettings()->enable_nodes_configuration_manager;
   // Init Nodes Configuration
   auto nodes_configuration_seed =
       impl_settings->getSettings()->nodes_configuration_seed_servers;
   bool use_server_ncs = !nodes_configuration_seed.empty();
   bool use_zk_ncs = impl_settings->getSettings()->admin_client_capabilities;
-  if (use_server_ncs || use_zk_ncs) {
+  if (ncm_enabled && (use_server_ncs || use_zk_ncs)) {
     std::shared_ptr<ZookeeperClientFactory> zk_client_factory =
         plugin_registry->getSinglePlugin<ZookeeperClientFactory>(
             PluginType::ZOOKEEPER_CLIENT_FACTORY);
