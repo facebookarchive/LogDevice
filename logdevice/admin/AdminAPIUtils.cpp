@@ -326,7 +326,8 @@ folly::Optional<node_index_t> findNodeIndex(
 ShardSet resolveShardOrNode(
     const thrift::ShardID& shard,
     const configuration::nodes::NodesConfiguration& nodes_configuration,
-    bool ignore_missing) {
+    bool ignore_missing,
+    bool ignore_non_storage_nodes) {
   ShardSet output;
 
   const auto& serv_disc = nodes_configuration.getServiceDiscovery();
@@ -350,6 +351,9 @@ ShardSet resolveShardOrNode(
   // Node must be a storage node
   if (!nodes_configuration.isStorageNode(*found_node)) {
     // We didn't find the node.
+    if (ignore_non_storage_nodes) {
+      return output;
+    }
     throw thrift::InvalidRequest(
         folly::sformat("Node {} is not a storage node", *found_node));
   }
@@ -368,11 +372,12 @@ ShardSet resolveShardOrNode(
 ShardSet expandShardSet(
     const thrift::ShardSet& thrift_shards,
     const configuration::nodes::NodesConfiguration& nodes_configuration,
-    bool ignore_missing) {
+    bool ignore_missing,
+    bool ignore_non_storage_nodes) {
   ShardSet output;
   for (const auto& it : thrift_shards) {
-    ShardSet expanded =
-        resolveShardOrNode(it, nodes_configuration, ignore_missing);
+    ShardSet expanded = resolveShardOrNode(
+        it, nodes_configuration, ignore_missing, ignore_non_storage_nodes);
     output.insert(expanded.begin(), expanded.end());
   }
   return output;

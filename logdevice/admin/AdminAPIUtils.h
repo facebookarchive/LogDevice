@@ -66,20 +66,31 @@ folly::Optional<node_index_t> findNodeIndex(
  *
  * @param ignore_missing  Will simply ignore nodes that were not found in the
  * configuration file silently. Otherwise, exception will be thrown.
+ *
+ * @param ignore_non_storage_nodes This will ignore nodes that are not storage
+ * nodes instead of failing with InvalidRequest exception.
  */
 ShardSet resolveShardOrNode(
     const thrift::ShardID& shard,
     const configuration::nodes::NodesConfiguration& nodes_configuration,
-    bool ignore_missing = false);
+    bool ignore_missing = false,
+    bool ignore_non_storage_nodes = false);
 
 /**
  * Expands a thrift ShardSet structure into logdevice equivalent. This looks up
  * the nodes via address if specified in the input.
+ *
+ * @param ignore_missing  Will simply ignore nodes that were not found in the
+ * configuration file silently. Otherwise, exception will be thrown.
+ *
+ * @param ignore_non_storage_nodes This will ignore nodes that are not storage
+ * nodes instead of failing with InvalidRequest exception.
  */
 ShardSet expandShardSet(
     const thrift::ShardSet& thrift_shards,
     const configuration::nodes::NodesConfiguration& nodes_configuration,
-    bool ignore_missing = false);
+    bool ignore_missing = false,
+    bool ignore_non_storage_nodes = false);
 
 thrift::ShardOperationalState
 toShardOperationalState(membership::StorageState storage_state,

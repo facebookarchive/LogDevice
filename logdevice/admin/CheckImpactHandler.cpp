@@ -44,7 +44,12 @@ CheckImpactHandler::semifuture_checkImpact(
       rebuilding_set->toShardStatusMap(*nodes_configuration);
 
   // Resolve shards from thrift to logdevice
-  ShardSet shards = expandShardSet(request->get_shards(), *nodes_configuration);
+  // TODO: Handle sequencer-only nodes once we have capacity checking in safety
+  // checker. (T43766732)
+  ShardSet shards = expandShardSet(request->get_shards(),
+                                   *nodes_configuration,
+                                   /* ignore_missing = */ false,
+                                   /* ignore_non_storage_nodes = */ true);
 
   ld_info("SHARDS: %s", toString(shards).c_str());
 
@@ -72,7 +77,7 @@ CheckImpactHandler::semifuture_checkImpact(
   return safety_checker_
       ->checkImpact(std::move(status_map),
                     std::move(shards),
-                    {}, // TODO: Support sequencers
+                    {}, // TODO: Support sequencers (T43766732)
                     target_storage_state,
                     safety_margin,
                     request->check_metadata_logs_ref().value_or(true),
