@@ -64,6 +64,10 @@ TEST_F(AdminAPINodeStateTest, getNodeState) {
     ASSERT_EQ(
         ShardOperationalState::ENABLED, shard.get_current_operational_state());
   }
+  // validate the contents of the NodeConfig object
+  auto config1 = node1.get_config();
+  ASSERT_EQ(0, config1.get_node_index());
+  ASSERT_EQ("server-0", config1.get_name());
 
   // let's kill one node
   cluster->shutdownNodes({0});

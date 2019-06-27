@@ -385,6 +385,7 @@ enum ServiceState {
 struct NodeState {
   /**
    * The index of this node
+   * [DEPECATED] use the config object instead.
    */
   1: common.NodeIndex node_index,
   /**
@@ -400,6 +401,10 @@ struct NodeState {
    * An ordered list of shards to their state.
    */
   4: optional list<ShardState> shard_states,
+  /**
+   * Configuration object for this node.
+   */
+  5: NodeConfig config,
 }
 
 typedef list<NodeConfig> NodesConfig

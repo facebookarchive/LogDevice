@@ -229,6 +229,10 @@ void fillNodeState(
     const ClusterState* cluster_state) {
   out.set_node_index(node_index);
 
+  thrift::NodeConfig node_config;
+  fillNodeConfig(node_config, node_index, nodes_configuration);
+  out.set_config(std::move(node_config));
+
   if (cluster_state) {
     out.set_daemon_state(toThrift<thrift::ServiceState>(
         cluster_state->getNodeState(node_index)));
