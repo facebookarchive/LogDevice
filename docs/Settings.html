@@ -290,6 +290,7 @@
 <tr><td>connection-retries</td><td>the number of TCP connection retries before giving up</td><td style="text-align:center">4</td><td></td></tr>
 <tr><td>handshake-timeout</td><td>LogDevice protocol handshake timeout</td><td style="text-align:center">1s</td><td></td></tr>
 <tr><td>include-destination-on-handshake</td><td>Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated.</td><td style="text-align:center">true</td><td></td></tr>
+<tr><td>inline-message-execution</td><td>Indicates whether message should be processed right after deserialization. Usually within new worker model all messages are processed after posting them into the work context. This option works only when worker context is run with previous eventloop architecture.</td><td style="text-align:center">false</td><td>requires restart</td></tr>
 <tr><td>max-protocol</td><td>maximum version of LogDevice protocol that the server/client will accept</td><td style="text-align:center">95</td><td></td></tr>
 <tr><td>max-time-to-allow-socket-drain</td><td>After hitting NOBUFS, amount of time a socket is allowed to successfully send a single message before it is closed.</td><td style="text-align:center">3min</td><td></td></tr>
 <tr><td>nagle</td><td>enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones</td><td style="text-align:center">false</td><td></td></tr>
@@ -620,6 +621,7 @@
 <tr><td>num-background-workers</td><td>The number of workers dedicated for processing time-insensitive requests and operations</td><td style="text-align:center">4</td><td>requires restart, server only</td></tr>
 <tr><td>num-processor-background-threads</td><td>Number of threads in Processor's background thread pool. Background threads are used by, e.g., BufferedWriter to construct/compress large batches.  If 0 (default), use num-workers.</td><td style="text-align:center">0</td><td>requires restart</td></tr>
 <tr><td>num-workers</td><td>number of worker threads to run, or &quot;cores&quot; for one thread per CPU core</td><td style="text-align:center">cores</td><td>requires restart</td></tr>
+<tr><td>prioritized-task-execution</td><td>Enable prioritized execution of requests within CPU executor. Setting this false ignores per request and per message ExecutorPriority.</td><td style="text-align:center">true</td><td>requires restart</td></tr>
 <tr><td>test-mode</td><td>Enable functionality in integration tests. Currently used for admin commands that are only enabled for testing purposes.</td><td style="text-align:center">false</td><td>CLI only, requires restart, server only</td></tr>
 <tr><td>worker-request-pipe-capacity</td><td>size each worker request queue to hold this many requests</td><td style="text-align:center">524288</td><td>requires restart</td></tr>
 </tbody>
