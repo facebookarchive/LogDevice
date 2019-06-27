@@ -616,6 +616,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
            debt as an MPSCQ-based request queue can be resized at any time. */
        ,
        SettingsCategory::Execution);
+  init("prioritized-task-execution",
+       &enable_executor_priority_queues,
+       "true",
+       nullptr,
+       "Enable prioritized execution of requests within CPU executor. Setting "
+       "this false ignores per request and per message ExecutorPriority.",
+       SERVER | CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Execution);
   init("request-exec-threshold",
        &request_execution_delay_threshold,
        "10ms",
@@ -958,6 +966,17 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "LogDevice protocol handshake timeout",
        SERVER | CLIENT,
        SettingsCategory::Network);
+  init("inline-message-execution",
+       &inline_message_execution,
+       "false",
+       nullptr,
+       "Indicates whether message should be processed right after "
+       "deserialization. Usually within new worker model all messages are "
+       "processed after posting them into the work context. This option works "
+       "only when worker context is run with previous eventloop architecture.",
+       SERVER | CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Network);
+
   init("per-worker-storage-task-queue-size",
        &per_worker_storage_task_queue_size,
        "1",

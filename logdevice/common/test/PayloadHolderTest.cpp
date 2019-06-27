@@ -19,6 +19,7 @@ TEST(PayloadHolderTest, Simple) {
       "",
       ThreadID::Type::UNKNOWN_EVENT_LOOP,
       /* capacity */ 2000,
+      /* enable_priority_queues */ true,
       /* requests per iteration */ folly::make_array<uint32_t>(1, 1, 1));
 
   Semaphore sem0, sem1;

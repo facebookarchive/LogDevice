@@ -54,6 +54,7 @@ class EventLoop : public folly::Executor {
       std::string thread_name = "",
       ThreadID::Type thread_type = ThreadID::Type::UNKNOWN_EVENT_LOOP,
       size_t request_pump_capacity = 1024,
+      bool enable_priority_queues = true,
       const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
           requests_per_iteration = {13, 3, 1});
 
@@ -223,6 +224,11 @@ class EventLoop : public folly::Executor {
 
   // TimeoutMap to cache common timeouts.
   TimeoutMap common_timeouts_;
+
+  // True indicates eventloop honors the priority with used in
+  // EventLoop::addWithPriority. If false EventLoop will override the priority
+  // of the task and make all work added as single priority.
+  bool priority_queues_enabled_;
 
   // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
   // of MAX_COMMON_TIMEOUTS = 256)

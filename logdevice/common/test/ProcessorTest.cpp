@@ -194,6 +194,7 @@ TEST_F(ProcessorTest, EventLoopKeepAliveTest) {
               std::make_unique<EventLoop>("",
                                           ThreadID::Type::UNKNOWN_EVENT_LOOP,
                                           1,
+                                          true,
                                           folly::make_array<uint32_t>(1, 1, 1));
           auto keep_alive = folly::getKeepAliveToken(ev_loop.get());
           ev_loop.reset();

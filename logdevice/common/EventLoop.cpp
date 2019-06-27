@@ -66,6 +66,7 @@ EventLoop::EventLoop(
     std::string thread_name,
     ThreadID::Type thread_type,
     size_t request_pump_capacity,
+    bool enable_priority_queues,
     const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
         requests_per_iteration)
     : base_(createEventBase(), deleteEventBase),
@@ -75,7 +76,8 @@ EventLoop::EventLoop(
       running_(false),
       shutting_down_(false),
       disposer_(this),
-      common_timeouts_(base_.get(), kMaxFastTimeouts) {
+      common_timeouts_(base_.get(), kMaxFastTimeouts),
+      priority_queues_enabled_(enable_priority_queues) {
   int rv;
   pthread_attr_t attr;
 
@@ -151,7 +153,9 @@ void EventLoop::add(folly::Function<void()> func) {
 }
 
 void EventLoop::addWithPriority(folly::Function<void()> func, int8_t priority) {
-  task_queue_->addWithPriority(std::move(func), priority);
+  task_queue_->addWithPriority(
+      std::move(func),
+      priority_queues_enabled_ ? priority : folly::Executor::HI_PRI);
 }
 
 void* EventLoop::enter(void* self) {

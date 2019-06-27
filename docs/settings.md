@@ -199,6 +199,7 @@ sidebar_label: Settings
 | connection-retries | the number of TCP connection retries before giving up | 4 |  |
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
+| inline-message-execution | Indicates whether message should be processed right after deserialization. Usually within new worker model all messages are processed after posting them into the work context. This option works only when worker context is run with previous eventloop architecture. | false | requires&nbsp;restart |
 | max-protocol | maximum version of LogDevice protocol that the server/client will accept | 95 |  |
 | max-time-to-allow-socket-drain | After hitting NOBUFS, amount of time a socket is allowed to successfully send a single message before it is closed. | 3min |  |
 | nagle | enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | false |  |
@@ -486,6 +487,7 @@ sidebar_label: Settings
 | num-background-workers | The number of workers dedicated for processing time-insensitive requests and operations | 4 | requires&nbsp;restart, server&nbsp;only |
 | num-processor-background-threads | Number of threads in Processor's background thread pool. Background threads are used by, e.g., BufferedWriter to construct/compress large batches.  If 0 (default), use num-workers. | 0 | requires&nbsp;restart |
 | num-workers | number of worker threads to run, or "cores" for one thread per CPU core | cores | requires&nbsp;restart |
+| prioritized-task-execution | Enable prioritized execution of requests within CPU executor. Setting this false ignores per request and per message ExecutorPriority. | true | requires&nbsp;restart |
 | test-mode | Enable functionality in integration tests. Currently used for admin commands that are only enabled for testing purposes. | false | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | worker-request-pipe-capacity | size each worker request queue to hold this many requests | 524288 | requires&nbsp;restart |
 

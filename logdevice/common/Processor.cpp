@@ -269,6 +269,7 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
           Worker::makeThreadName(this, type, worker_id_t(i)),
           ThreadID::CPU_EXEC,
           local_settings->worker_request_pipe_capacity,
+          local_settings->enable_executor_priority_queues,
           folly::make_array<uint32_t>(
               local_settings->hi_requests_per_iteration,
               local_settings->mid_requests_per_iteration,

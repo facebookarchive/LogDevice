@@ -2801,7 +2801,7 @@ SocketDependencies::onReceived(Message* msg,
                                std::shared_ptr<PrincipalIdentity> principal) {
   ld_assert(principal);
   auto worker = Worker::onThisThread();
-  if (shouldBeInlined(msg->type_)) {
+  if (getSettings().inline_message_execution || shouldBeInlined(msg->type_)) {
     // This must be synchronous, because we are processing this message
     // during message disposition.
     return worker->message_dispatch_->onReceived(msg, from, *principal);

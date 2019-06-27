@@ -170,6 +170,11 @@ struct Settings : public SettingsBundle {
   // limit on Linux.
   size_t worker_request_pipe_capacity;
 
+  // Indicates whether prioritized queues are used with the CPU Threadpool.
+  // Request and message processing priorities are honored when this is set to
+  // true. Otherwise, all requests and messages are considered same priority.
+  bool enable_executor_priority_queues;
+
   // Request Execution time(in milli-seconds) after which it is considered slow
   // and Worker stats 'worker_slow_requests' is bumped
   std::chrono::milliseconds request_execution_delay_threshold;
@@ -377,6 +382,11 @@ struct Settings : public SettingsBundle {
   // After a TCP connection is established, time to wait for the LD protocol
   // handshake to be completed before giving up. Unlimited if set to 0.
   std::chrono::milliseconds handshake_timeout;
+
+  // Message read from socket and push into worker task queue for further
+  // processing. Setting this true all messages would be processed
+  // as soon as they are deserialized.
+  bool inline_message_execution;
 
   // Maximum number of writes for a storage thread to perform in one batch.
   size_t write_batch_size;
