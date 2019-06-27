@@ -455,6 +455,15 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   std::shared_ptr<UpdateableConfig> config_;
 
+  /**
+   * Get resource token for a message coming into the system. If the token is
+   * not granted the message is not read from evbuffer and enqueued into the
+   * task queue for processing.
+   * This is a way of pushing back clients. It also restricts memory
+   * consumption.
+   */
+  ResourceBudget::Token getIncomingMessageToken(size_t payload_size);
+
  private:
   // Make runningOnStorageNode() return true. Used for tests.
   bool fake_storage_node_ = false;

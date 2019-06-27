@@ -1189,7 +1189,8 @@ class SocketDependencies {
   virtual Message::Disposition
   onReceived(Message* msg,
              const Address& from,
-             std::shared_ptr<PrincipalIdentity> principal);
+             std::shared_ptr<PrincipalIdentity> principal,
+             ResourceBudget::Token resource_token);
   virtual void processDeferredMessageCompletions();
   virtual NodeID getMyNodeID();
   virtual void configureSocket(bool is_tcp,
@@ -1212,6 +1213,7 @@ class SocketDependencies {
   virtual bool includeHELLOCredentials();
   virtual void onStartedRunning(RunContext context);
   virtual void onStoppedRunning(RunContext prev_context);
+  virtual ResourceBudget::Token getResourceToken(size_t payload_size);
 
   virtual ~SocketDependencies() {}
 

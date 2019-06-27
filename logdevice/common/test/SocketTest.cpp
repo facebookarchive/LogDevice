@@ -7,6 +7,7 @@
  */
 #include <gtest/gtest.h>
 
+#include "logdevice/common/protocol/CHECK_NODE_HEALTH_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/test/SocketTest_fixtures.h"
 
@@ -603,6 +604,78 @@ TEST_F(ClientSocketTest, ReconnectPossible) {
   socket_->resetConnectThrottle();
   rv = socket_->connect();
   ASSERT_EQ(0, rv);
+}
+
+TEST_F(ServerSocketTest, IncomingMessageBytesLimitHandshake) {
+  incoming_message_bytes_limit_.setLimit(0);
+  // Simulate HELLO to be received by the server.
+  HELLO_Header hdr{
+      uint16_t(max_proto_), uint16_t(max_proto_), 0, request_id_t(0), {}};
+  receiveMsg(new TestHELLO_Message(hdr));
+  // Simulate the server replying ACK.
+  ACK_Header ackhdr{
+      0, request_id_t(0), client_id_, uint16_t(max_proto_), E::OK};
+  std::unique_ptr<Message> msg = std::make_unique<ACK_Message>(ackhdr);
+  auto envelope = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*envelope);
+  // We should be handshaken now.
+  EXPECT_TRUE(handshaken());
+}
+
+TEST_F(ServerSocketTest, IncomingMessageBytesLimit) {
+  incoming_message_bytes_limit_.setLimit(0);
+  // Simulate HELLO to be received by the server.
+  HELLO_Header hdr{
+      uint16_t(max_proto_), uint16_t(max_proto_), 0, request_id_t(0), {}};
+  receiveMsg(new TestHELLO_Message(hdr));
+  // Simulate the server replying ACK.
+  ACK_Header ackhdr{
+      0, request_id_t(0), client_id_, uint16_t(max_proto_), E::OK};
+  auto envelope =
+      socket_->registerMessage(std::make_unique<ACK_Message>(ackhdr));
+  socket_->releaseMessage(*envelope);
+  // We should be handshaken now.
+  EXPECT_TRUE(handshaken());
+
+  // With limit zero and prev use as zero ResourceBudget allows a single message
+  // even though we go beyond allowed limit.
+  on_received_hook_ = [&](Message* msg,
+                          const Address&,
+                          std::shared_ptr<PrincipalIdentity>,
+                          ResourceBudget::Token token) {
+    ASSERT_TRUE(token.valid());
+    ASSERT_FALSE(incoming_message_bytes_limit_.acquire(msg->size()));
+    auto check_node_hdr = CHECK_NODE_HEALTH_Header{request_id_t(1), 1, 0};
+    // Try sending another message, this message should fail to send with
+    // ENOBUFS.
+    auto new_msg = new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
+                                            MessageType::CHECK_NODE_HEALTH,
+                                            TrafficClass::FAILURE_DETECTOR>(
+        check_node_hdr);
+    ev_timer_add_hook_ = [&](struct event* /* ev */) {
+      if (err != E::OK) {
+        ASSERT_EQ(err, E::NOBUFS);
+      }
+    };
+    receiveMsg(new_msg);
+  };
+
+  auto check_node_hdr = CHECK_NODE_HEALTH_Header{request_id_t(1), 1, 0};
+  auto msg =
+      new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
+                               MessageType::CHECK_NODE_HEALTH,
+                               TrafficClass::FAILURE_DETECTOR>(check_node_hdr);
+  receiveMsg(msg);
+
+  // Reset limit and make sure we do not get the callback.
+  incoming_message_bytes_limit_.setLimit(std::numeric_limits<uint64_t>::max());
+  msg =
+      new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
+                               MessageType::CHECK_NODE_HEALTH,
+                               TrafficClass::FAILURE_DETECTOR>(check_node_hdr);
+  on_received_hook_ = nullptr;
+  ev_timer_add_hook_ = [&](struct event* /* ev */) { ASSERT_EQ(err, E::OK); };
+  receiveMsg(msg);
 }
 
 }} // namespace facebook::logdevice

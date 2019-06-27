@@ -663,6 +663,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "read up to this many incoming messages before returning to libevent",
        SERVER | CLIENT,
        SettingsCategory::Network);
+  init("incoming-messages-max-bytes-limit",
+       &incoming_messages_max_bytes_limit,
+       "524288000",
+       parse_positive<ssize_t>(),
+       "maximum byte limit of unprocessed messages within the system.",
+       SERVER | CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Network);
   init("payload-inline",
        &max_payload_inline,
        "1024",

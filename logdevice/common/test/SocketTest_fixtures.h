@@ -107,7 +107,8 @@ class TestSocketDependencies : public SocketDependencies {
   Message::Disposition
   onReceived(Message* msg,
              const Address& from,
-             std::shared_ptr<PrincipalIdentity> principal) override;
+             std::shared_ptr<PrincipalIdentity> principal,
+             ResourceBudget::Token resource_token) override;
   virtual void processDeferredMessageCompletions() override;
   virtual NodeID getMyNodeID() override;
   virtual void configureSocket(bool is_tcp,
@@ -125,6 +126,7 @@ class TestSocketDependencies : public SocketDependencies {
   virtual bool authenticationEnabled() override;
   virtual void onStartedRunning(RunContext context) override;
   virtual void onStoppedRunning(RunContext prev_context) override;
+  ResourceBudget::Token getResourceToken(size_t payload_size) override;
 
   NodeID getDestinationNodeID();
 
@@ -275,6 +277,9 @@ class SocketTest : public ::testing::Test {
     } else if (ev == &socket_->deferred_event_queue_event_) {
       socket_->processDeferredEventQueue();
     }
+    if (ev_timer_add_hook_) {
+      ev_timer_add_hook_(ev);
+    }
     return 0;
   }
 
@@ -332,6 +337,15 @@ class SocketTest : public ::testing::Test {
   bufferevent_event_cb event_cb_{nullptr};
 
   ResourceBudget conn_budget_external_{std::numeric_limits<uint64_t>::max()};
+  ResourceBudget incoming_message_bytes_limit_{
+      std::numeric_limits<uint64_t>::max()};
+  std::function<void(Message*,
+                     const Address&,
+                     std::shared_ptr<PrincipalIdentity>,
+                     ResourceBudget::Token)>
+      on_received_hook_;
+
+  std::function<void(struct event*)> ev_timer_add_hook_;
 
   std::unique_ptr<Socket> socket_;
 };
@@ -451,7 +465,7 @@ class TestFixedSizeMessage
     return reader.resultMsg(std::move(m));
   }
 
-  virtual Message::Disposition onReceived(const Address& /*from*/) override {
+  Message::Disposition onReceived(const Address& /*from*/) override {
     err = STATUS;
     return DISP;
   }

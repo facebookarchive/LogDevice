@@ -187,6 +187,9 @@ struct Settings : public SettingsBundle {
   // of a Socket bufferevent before returning control to libevent.
   unsigned incoming_messages_max_per_socket;
 
+  // The maximum number of unprocessed messages in the system.
+  size_t incoming_messages_max_bytes_limit;
+
   // if payload of a message read from an evbuffer does not exceed this size,
   // we will malloc one buffer for both the message object and the payload
   // immediately following it. Otherwise, we will zero-copy the payload into an

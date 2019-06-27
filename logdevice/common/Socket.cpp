@@ -706,6 +706,12 @@ void Socket::onBytesAvailable(bool fresh) {
         // a message: one for the protocol header, the other for message body
         int rv = receiveMessage();
         if (rv != 0) {
+          if (err == E::NOBUFS) {
+            STAT_INCR(deps_->getStats(), sock_read_event_nobufs);
+            // Ran out of space to enqueue message into worker. Try again.
+            deps_->evtimerAdd(&read_more_, deps_->getZeroTimeout());
+            break;
+          }
           if (!peer_name_.isClientAddress()) {
             RATELIMIT_ERROR(std::chrono::seconds(10),
                             10,
@@ -1974,7 +1980,6 @@ int Socket::receiveMessage() {
     ld_check(!expectingProtocolHeader());
   } else {
     // Got message body.
-    expectProtocolHeader();
     int rv = onReceived(recv_message_ph_, inbuf);
     if (rv != 0) {
       return rv;
@@ -2123,9 +2128,23 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
 
   size_t protocol_bytes_already_read =
       ProtocolHeader::bytesNeeded(ph.type, proto_);
+  size_t payload_size = ph.len - protocol_bytes_already_read;
 
-  ProtocolReader reader(
-      ph.type, inbuf, ph.len - protocol_bytes_already_read, proto_);
+  // Request reservation to add this message into the system.
+  auto resource_token = deps_->getResourceToken(payload_size);
+  if (!resource_token && !shouldBeInlined(ph.type)) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    1,
+                    "INTERNAL ERROR: message of type %s received from peer "
+                    "%s is too large: %u bytes to accommodate into the system.",
+                    messageTypeNames()[ph.type].c_str(),
+                    conn_description_.c_str(),
+                    ph.len);
+    err = E::NOBUFS;
+    return -1;
+  }
+
+  ProtocolReader reader(ph.type, inbuf, payload_size, proto_);
 
   ++num_messages_received_;
   num_bytes_received_ += ph.len;
@@ -2219,8 +2238,8 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
 
   // 4. Dispatch message to state machines for processing.
 
-  Message::Disposition disp =
-      deps_->onReceived(msg.get(), peer_name_, principal_);
+  Message::Disposition disp = deps_->onReceived(
+      msg.get(), peer_name_, principal_, std::move(resource_token));
 
   // 5. Dispose off message according to state machine's request.
   switch (disp) {
@@ -2765,12 +2784,14 @@ void executeOnWorker(Worker* worker,
                      M message,
                      const Address& from,
                      std::shared_ptr<PrincipalIdentity> identity,
-                     int8_t pri) {
+                     int8_t pri,
+                     ResourceBudget::Token resource_token) {
   worker->addWithPriority(
       [msg = std::unique_ptr<typename std::remove_pointer<M>::type>(message),
        from,
        identity = std::move(identity),
-       cb = std::move(cb)]() mutable {
+       cb = std::move(cb),
+       resource_token = std::move(resource_token)]() mutable {
         auto worker = Worker::onThisThread();
         RunContext run_context(msg->type_);
         worker->onStartedRunning(run_context);
@@ -2798,7 +2819,8 @@ void executeOnWorker(Worker* worker,
 Message::Disposition
 SocketDependencies::onReceived(Message* msg,
                                const Address& from,
-                               std::shared_ptr<PrincipalIdentity> principal) {
+                               std::shared_ptr<PrincipalIdentity> principal,
+                               ResourceBudget::Token resource_token) {
   ld_assert(principal);
   auto worker = Worker::onThisThread();
   if (getSettings().inline_message_execution || shouldBeInlined(msg->type_)) {
@@ -2816,7 +2838,8 @@ SocketDependencies::onReceived(Message* msg,
                   msg,
                   from,
                   principal,
-                  msg->getExecutorPriority());
+                  msg->getExecutorPriority(),
+                  std::move(resource_token));
   return Message::Disposition::KEEP;
 }
 
@@ -3057,5 +3080,10 @@ void SocketDependencies::onStartedRunning(RunContext context) {
 
 void SocketDependencies::onStoppedRunning(RunContext prev_context) {
   Worker::onStoppedRunning(prev_context);
+}
+
+ResourceBudget::Token
+SocketDependencies::getResourceToken(size_t payload_size) {
+  return processor_->getIncomingMessageToken(payload_size);
 }
 }} // namespace facebook::logdevice

@@ -211,7 +211,11 @@ void TestSocketDependencies::onSent(std::unique_ptr<Message> msg,
 Message::Disposition
 TestSocketDependencies::onReceived(Message* msg,
                                    const Address& from,
-                                   std::shared_ptr<PrincipalIdentity>) {
+                                   std::shared_ptr<PrincipalIdentity> identity,
+                                   ResourceBudget::Token token) {
+  if (owner_->on_received_hook_) {
+    owner_->on_received_hook_(msg, from, identity, std::move(token));
+  }
   return msg->onReceived(from);
 }
 
@@ -263,6 +267,11 @@ bool TestSocketDependencies::authenticationEnabled() {
 void TestSocketDependencies::onStartedRunning(RunContext /*context*/) {}
 
 void TestSocketDependencies::onStoppedRunning(RunContext /*prev_context*/) {}
+
+ResourceBudget::Token
+TestSocketDependencies::getResourceToken(size_t payload_size) {
+  return owner_->incoming_message_bytes_limit_.acquireToken(payload_size);
+}
 
 //
 

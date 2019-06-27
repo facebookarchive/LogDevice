@@ -213,6 +213,7 @@ STAT_DEFINE(get_seq_state_unique_context_reader_monitoring, SUM)
 STAT_DEFINE(sock_read_events, SUM)
 STAT_DEFINE(sock_time_spent_reading_message, SUM)
 STAT_DEFINE(sock_num_messages_read, SUM)
+STAT_DEFINE(sock_read_event_nobufs, SUM)
 
 STAT_DEFINE(sock_write_events, SUM)
 STAT_DEFINE(sock_time_spent_to_process_send_done, SUM)

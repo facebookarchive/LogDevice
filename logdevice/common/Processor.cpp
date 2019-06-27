@@ -98,6 +98,10 @@ class ProcessorImpl {
                 std::shared_ptr<TraceLogger> trace_logger)
       : append_probe_controller_(std::chrono::seconds(10)), // TODO configurable
         worker_load_balancing_(settings->num_workers),
+        incoming_message_budget_(
+            settings->inline_message_execution
+                ? std::numeric_limits<uint64_t>::max()
+                : settings->incoming_messages_max_bytes_limit),
         background_init_flag_(),
         background_queue_(),
         nc_publisher_(processor->config_, settings, std::move(trace_logger)) {}
@@ -115,6 +119,7 @@ class ProcessorImpl {
   AppendProbeController append_probe_controller_;
   WorkerLoadBalancing worker_load_balancing_;
   ClientIdxAllocator client_idx_allocator_;
+  ResourceBudget incoming_message_budget_;
 
   // for lazy init of background queue and threads
   folly::once_flag background_init_flag_;
@@ -760,6 +765,10 @@ bool Processor::isLogsConfigLoaded() const {
 void Processor::setSequencerBatching(
     std::unique_ptr<SequencerBatching> sequencer_batching) {
   sequencer_batching_ = std::move(sequencer_batching);
+}
+
+ResourceBudget::Token Processor::getIncomingMessageToken(size_t payload_size) {
+  return impl_->incoming_message_budget_.acquireToken(payload_size);
 }
 
 }} // namespace facebook::logdevice
