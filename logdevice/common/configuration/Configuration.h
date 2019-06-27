@@ -27,11 +27,6 @@ class LocalLogsConfig;
  * structure that holds options altering the behavior of the config parser.
  */
 struct ConfigParserOptions {
-  /**
-   * Indicates that the parser should extract log groups layout information
-   * from the specified property if present instead of the "layout" property.
-   */
-  std::string alternative_layout_property = "";
 };
 
 /**
@@ -229,7 +224,7 @@ class Configuration {
   /**
    * Parses config contents from a string containing JSON, and formats it
    * back into JSON in a deterministic way. The output JSON is easier to
-   * interpret because it doesn't have "defaults" section, "layout" attribute,
+   * interpret because it doesn't have "defaults" section,
    * and has all default values explicitly given for missing attributes.
    *
    * @return On success, returns a string with JSON config.

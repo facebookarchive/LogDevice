@@ -74,16 +74,6 @@ class LogsConfigNamespace {
   std::string s_;
 };
 
-static bool parseLayout(const folly::dynamic&,
-                        const char*,
-                        const ConfigParserOptions&,
-                        uint64_t&,
-                        uint64_t&,
-                        uint64_t&,
-                        std::unordered_map<int, int>&,
-                        const interval_t&,
-                        const std::string&);
-
 static bool parseOneLogEntry(
     LocalLogsConfig::DirectoryNode* parent_ns,
     const LogsConfigNamespace& namespace_prefix,
@@ -98,7 +88,6 @@ static bool parseOneLogEntry(
 static const std::set<std::string> logs_config_recognized_keys = {
     "id",
     "name",
-    "layout",
 
     REPLICATION_FACTOR,
     EXTRA_COPIES,
@@ -129,8 +118,7 @@ static const std::set<std::string> logs_config_recognized_keys = {
 
 static const std::set<std::string> logs_config_non_defaultable_keys = {
     "id",
-    "name",
-    "layout"};
+    "name"};
 
 static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
                          const LogsConfigNamespace& namespace_prefix,
@@ -519,181 +507,10 @@ static bool parseOneLogRange(LocalLogsConfig::DirectoryNode* parent_ns,
     return false;
   }
 
-  uint64_t stride, stride2, count, count2;
-  uint64_t defaultLength, defaultLength2;
-  std::unordered_map<int, int> rangeSizes, rangeSizes2;
-  uint64_t length;
-
-  bool layout_found = false, alternate_layout_found = false;
-  if (!options.alternative_layout_property.empty()) {
-    if (parseLayout(logMap,
-                    options.alternative_layout_property.c_str(),
-                    options,
-                    count2,
-                    stride2,
-                    defaultLength2,
-                    rangeSizes2,
-                    interval_raw,
-                    interval_string)) {
-      alternate_layout_found = true;
-    } else if (err != E::NOTFOUND) {
-      return false;
-    }
-  }
-
-  if (parseLayout(logMap,
-                  "layout",
-                  options,
-                  count,
-                  stride,
-                  defaultLength,
-                  rangeSizes,
-                  interval_raw,
-                  interval_string)) {
-    layout_found = true;
-    // make sure the layout covers the whole range
-    if (count * stride != interval_raw.hi - interval_raw.lo + 1) {
-      ld_error("invalid value of \"layout\" attribute for log(s) %s: "
-               "product of the first two numbers must be equal to log range "
-               "length",
-               interval_string.c_str());
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    if (alternate_layout_found) {
-      // an alternate layout was specified. validate that it defines a
-      // subset of the logs. the number of ranges and their maximum length must
-      // be identical than that of the layout attribute, and the number of logs
-      // in each range must be lesser than or equal to the ones in layout
-      // attribute.
-
-      std::string desc = "";
-      bool match = true;
-      if (count < count2) {
-        desc = "greater number of ranges";
-        match = false;
-      } else if (stride != stride2) {
-        desc = "different maximum range size";
-        match = false;
-      } else if (defaultLength != defaultLength2) {
-        desc = "different default length";
-        match = false;
-      } else {
-        for (auto it2 : rangeSizes2) {
-          auto it = rangeSizes.find(it2.first);
-          if (it == rangeSizes.end()) {
-            if (it2.second > defaultLength) {
-              desc = folly::stringPrintf(
-                  "range #%d in \"%s\" "
-                  "is larger than the default range length",
-                  it2.first,
-                  options.alternative_layout_property.c_str());
-              match = false;
-            }
-          } else if (it2.second > it->second) {
-            desc = folly::stringPrintf(
-                "range #%d in \"%s\" "
-                "is larger than in \"layout\"",
-                it2.first,
-                options.alternative_layout_property.c_str());
-            match = false;
-          }
-        }
-      }
-
-      if (!match) {
-        ld_error("incompatible values of \"layout\" and "
-                 "\"%s\" attributes for log(s) %s: %s",
-                 options.alternative_layout_property.c_str(),
-                 interval_string.c_str(),
-                 desc.c_str());
-        err = E::INVALID_CONFIG;
-        return false;
-      }
-    }
-  } else if (err != E::NOTFOUND) {
+  std::shared_ptr<LocalLogsConfig::LogGroupNode> log_group_node =
+      output.insert(parent_ns, logid_interval, name, attrs.value());
+  if (!log_group_node) {
     return false;
-  } else if (alternate_layout_found) {
-    // an alternative layout was found. since there is no layout defined, this
-    // means that this log group covers the whole range. hence we need to make
-    // sure that the alternative layout does not define more than one range,
-    // the range it defines must be smaller than the interval length
-
-    if (count2 > 1) {
-      ld_error("\"%s\" attribute cannot define more than one range if no "
-               "\"layout\" property is specified for log(s) %s",
-               options.alternative_layout_property.c_str(),
-               interval_string.c_str());
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-
-    length = folly::get_default(rangeSizes2, 0, defaultLength2);
-    if (length > interval_raw.hi - interval_raw.lo + 1) {
-      ld_error("\"%s\" property defines a range that exceeds the size of the "
-               "interval for logs(s) %s",
-               options.alternative_layout_property.c_str(),
-               interval_string.c_str());
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-
-    if (length == 0) {
-      // ignore zero-length range
-      return true;
-    }
-
-    // shorten the interval as specified by this alternative layout if needed
-    logid_interval.second = logid_t(logid_interval.first.val() + length - 1);
-  }
-
-  if (alternate_layout_found) {
-    stride = stride2;
-    defaultLength = defaultLength2;
-    rangeSizes = rangeSizes2;
-    count = count2;
-  }
-
-  if (layout_found) {
-    ld_check(defaultLength <= stride);
-
-    if (count == 0) {
-      // this layout defines no ranges. ignore it.
-      return true;
-    }
-
-    // we need to create a directory (namespace) for the range name, then every
-    // generated sub-range will have this directory as parent.
-    DirectoryNode* new_parent =
-        output.insertNamespace(parent_ns, name, attrs.value());
-    if (new_parent == nullptr) {
-      // we couldn't create the parent directory for layout, failing.
-      ld_error("We couldn't create a directory \"%s\".", name.c_str());
-      return false;
-    }
-
-    for (uint64_t id = interval_raw.lo, i = 0;
-         id <= interval_raw.hi && count > 0;
-         id += stride, ++i, --count) {
-      length = folly::get_default(rangeSizes, i, defaultLength);
-
-      if (length == 0) {
-        // ignore zero-length ranges
-        continue;
-      }
-
-      logid_interval = logid_range_t(logid_t(id), logid_t(id + length - 1));
-      if (!output.insert(
-              new_parent, logid_interval, folly::to<std::string>(i))) {
-        return false;
-      }
-    }
-  } else {
-    std::shared_ptr<LocalLogsConfig::LogGroupNode> log_group_node =
-        output.insert(parent_ns, logid_interval, name, attrs.value());
-    if (!log_group_node) {
-      return false;
-    }
   }
 
   return true;
@@ -1154,114 +971,6 @@ parseAttributes(const folly::dynamic& attrs,
                        tailOptimized,
                        extras};
   return folly::Optional<LogAttributes>(std::move(output));
-}
-
-static bool parseLayout(const folly::dynamic& logMap,
-                        const char* layout_property,
-                        const ConfigParserOptions& /* unused */,
-                        uint64_t& out_count,
-                        uint64_t& out_stride,
-                        uint64_t& out_length,
-                        std::unordered_map<int, int>& rangeSizes,
-                        const interval_t& /*interval_raw*/,
-                        const std::string& interval_string) {
-  std::string str;
-  if (!getStringFromMap(logMap, layout_property, str, nullptr)) {
-    err = E::NOTFOUND;
-    return false;
-  }
-
-  auto complain = [&](const char* reason =
-                          "expected string like \"20x30\" or \"20x30@10\"") {
-    ld_error("invalid value \"%s\" of \"%s\" attribute for log(s) %s: %s",
-             str.c_str(),
-             layout_property,
-             interval_string.c_str(),
-             reason);
-    err = E::INVALID_CONFIG;
-  };
-
-  // split the layout string by spaces
-  std::vector<std::string> chunks;
-  folly::split(" ", str, chunks, true);
-  // the original layout value is the first chunk
-  str = chunks[0];
-
-  int consumed;
-  int rv = sscanf(str.c_str(), "%lux%lu%n", &out_count, &out_stride, &consumed);
-  if (rv < 2) {
-    complain();
-    return false;
-  }
-  ld_check(consumed <= str.size());
-  if (out_count == 0) {
-    complain("the number of ranges must be greater than 0");
-    return false;
-  }
-  if (out_stride == 0) {
-    complain("the maximum range length must be greater than 0");
-    return false;
-  }
-  if (consumed == str.size()) {
-    out_length = 1;
-  } else {
-    int consumed2;
-    rv = sscanf(str.c_str() + consumed, "@%lu%n", &out_length, &consumed2);
-    if (rv <= 0 || consumed + consumed2 != str.length()) {
-      complain();
-      return false;
-    }
-  }
-
-  if (out_length <= 0) {
-    complain("third number must be positive");
-    return false;
-  }
-
-  if (out_length > out_stride) {
-    complain("third number should not be greater than second number");
-    return false;
-  }
-
-  if (chunks.size() > 1) {
-    // parse the range size list as comma-separated elements
-    std::vector<std::string> pairs;
-    folly::split(",", chunks[1], pairs, true);
-
-    // parse the range sizes: list of k:size pairs, where k is the index of
-    // the range, and size is its length.
-    for (int i = 0; i < pairs.size(); i++) {
-      std::vector<std::string> pieces;
-      folly::split(":", pairs[i], pieces, true);
-      if (pieces.size() < 2) {
-        complain("the range size list following the layout must be composed by "
-                 "pairs of numbers separated by colon.");
-        return false;
-      }
-      int k = 0, v = 0;
-      try {
-        k = folly::to<int>(pieces[0]);
-        v = folly::to<int>(pieces[1]);
-      } catch (std::range_error& e) {
-        complain(e.what());
-        return false;
-      }
-
-      if (v > out_stride) {
-        complain("the range size must not be greater than the defined "
-                 "maximum range size");
-        return false;
-      }
-      if (k > out_count) {
-        complain("the range index must not be greater than the number "
-                 "of ranges");
-        return false;
-      }
-      rangeSizes.insert(std::make_pair(k, v));
-    }
-  }
-
-  return true;
 }
 
 }}}} // namespace facebook::logdevice::configuration::parser

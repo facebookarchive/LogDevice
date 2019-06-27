@@ -899,16 +899,8 @@ class Client {
    * in this Client's configuration.
    *
    * If configuration has a JSON object in the "logs" section with "name"
-   * attribute @param name and without "layout" attribute, returns the lowest
-   * and highest log ids in the range. If a JSON object in the "logs"
-   * section has "layout" attribute with value "AxB", it produces A ranges,
-   * each of length 1, named "<name>", "<name>#1", "<name>#2", ...,
-   * "<name>#<A-1>", where <name> is the value of "name" attribute.
-   * Optionally, it is possible to extend the length of a particular range
-   * up to B by specifying pairs of the form <num>:<size> separated by commas,
-   * in the layout attribute, where <num> is the index of the range (starting
-   * at 0) and <size> is its length (within [0,B]). eg: "4x8 1:3,2:5" will
-   * produce 4 ranges of size, respectively, 1, 3, 5 and 1.
+   * attribute @param name, returns the lowest
+   * and highest log ids in the range.
    *
    * Note: This synchronous method may not be called from a callback of an async
    * LogDevice API. This is checked, asserted in debug builds, and causes

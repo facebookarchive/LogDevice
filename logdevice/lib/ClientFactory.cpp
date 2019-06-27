@@ -164,9 +164,6 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
   }
 
   ConfigParserOptions options;
-  options.alternative_layout_property =
-      impl_settings->getSettings()->alternative_layout_property;
-
   ConfigInit config_init(timeout_);
 
   int rv = config_init.attach(config_url,
