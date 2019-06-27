@@ -390,7 +390,11 @@ std::pair<bool, bool> checkReadWriteAvailablity(
         }
         failure_domains.setShardAuthoritativeStatus(shard, status);
         if (!op_shards.count(shard) &&
-            isAlive(cluster_state, shard.node(), require_fully_started_nodes)) {
+            isAlive(cluster_state, shard.node(), require_fully_started_nodes) &&
+            // Any shard that is UNAVAILABLE (or UNDERREPLICATION) is tagged
+            // here as well even if it's ALIVE.
+            status != AuthoritativeStatus::UNAVAILABLE) {
+          // We only tag the shards that we consider healthy.
           failure_domains.setShardAttribute(shard, true);
         }
       }
