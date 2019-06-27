@@ -2846,14 +2846,15 @@ int PartitionedRocksDBStore::writeMultiImpl(
           int rv = LocalLogStoreRecordFormat::checkWellFormed(
               op->record_header, op->data);
           if (rv != 0) {
-            RATELIMIT_ERROR(std::chrono::seconds(10),
-                            10,
-                            "Refusing to write malformed record %lu%s. "
-                            "Header: %s, data: %s",
-                            op->log_id.val_,
-                            lsn_to_string(op->lsn).c_str(),
-                            hexdump_buf(op->record_header, 500).c_str(),
-                            hexdump_buf(op->data, 500).c_str());
+            RATELIMIT_ERROR(
+                std::chrono::seconds(10),
+                10,
+                "checksum mismatch: refusing to write malformed record %lu%s. "
+                "Header: %s, data: %s",
+                op->log_id.val_,
+                lsn_to_string(op->lsn).c_str(),
+                hexdump_buf(op->record_header, 500).c_str(),
+                hexdump_buf(op->data, 500).c_str());
             // Fail and send an error to sequencer. The record was corrupted
             // or malformed by this or sequencer's node, likely due to bad
             // hardware or bug.
@@ -2863,7 +2864,8 @@ int PartitionedRocksDBStore::writeMultiImpl(
           } else if (getSettings()->test_corrupt_stores) {
             RATELIMIT_INFO(std::chrono::seconds(60),
                            5,
-                           "Pretending record %lu%s is corrupt. Header: %s, "
+                           "checksum mismatch: Pretending record %lu%s is "
+                           "corrupt. Header: %s, "
                            "data: %s",
                            op->log_id.val_,
                            lsn_to_string(op->lsn).c_str(),

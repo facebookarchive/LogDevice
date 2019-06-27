@@ -2019,7 +2019,7 @@ bool Socket::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
     RATELIMIT_ERROR(
         std::chrono::seconds(1),
         2,
-        "Checksum mismatch (recvd:%lu, computed:%lu) detected with peer %s"
+        "checksum mismatch: (recvd:%lu, computed:%lu) detected with peer %s"
         ", msgtype:%s",
         cksum_recvd,
         cksum_computed,

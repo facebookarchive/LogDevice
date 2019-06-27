@@ -1769,36 +1769,39 @@ int Appender::onReply(const STORED_Header& header,
       // We're not verifying checksums, yet a storage node rejected this store
       // because of checksum mismatch.
       STAT_INCR(getStats(), payload_corruption_ignored);
-      RATELIMIT_CRITICAL(std::chrono::seconds(10),
-                         10,
-                         "Storage node %s reported checksum mismatch for "
-                         "record %s, but checksum is not checked by "
-                         "sequencer! Ignoring.%s",
-                         from.toString().c_str(),
-                         header.rid.toString().c_str(),
-                         should_graylist ? " Graylisting node." : "");
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          10,
+          "checksum mismatch: Storage node %s reported checksum mismatch for "
+          "record %s, but checksum is not checked by "
+          "sequencer! Ignoring.%s",
+          from.toString().c_str(),
+          header.rid.toString().c_str(),
+          should_graylist ? " Graylisting node." : "");
     } else if (verifyChecksum(&payload_checksum, &expected_checksum)) {
       // Corruption on storage node, likely due to bad hardware or bug
-      RATELIMIT_CRITICAL(std::chrono::seconds(10),
-                         10,
-                         "Record %s was corrupted in storage node %s!%s",
-                         header.rid.toString().c_str(),
-                         from.toString().c_str(),
-                         should_graylist ? " Graylisting node." : "");
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          10,
+          "checksum mismatch: Record %s was corrupted in storage node %s!%s",
+          header.rid.toString().c_str(),
+          from.toString().c_str(),
+          should_graylist ? " Graylisting node." : "");
     } else {
       // Corruption on sequencer node, likely due to bad hardware or bug
       Payload pl = payload_->getFlatPayload();
       Slice payload_slice = Slice(pl.data(), pl.size());
-      RATELIMIT_CRITICAL(std::chrono::seconds(10),
-                         10,
-                         "Record %s was corrupted in the sequencer on this "
-                         "node! Payload: %s, expected checksum: %lu, "
-                         "checksum in payload: %lu. Attempting to abort "
-                         "sequencer node!",
-                         header.rid.toString().c_str(),
-                         hexdump_buf(payload_slice, 500).c_str(),
-                         expected_checksum,
-                         payload_checksum);
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          10,
+          "checksum mismatch: Record %s was corrupted in the sequencer on this "
+          "node! Payload: %s, expected checksum: %lu, "
+          "checksum in payload: %lu. Attempting to abort "
+          "sequencer node!",
+          header.rid.toString().c_str(),
+          hexdump_buf(payload_slice, 500).c_str(),
+          expected_checksum,
+          payload_checksum);
       onMemoryCorruption();
       should_graylist = false;
     }

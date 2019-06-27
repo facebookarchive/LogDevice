@@ -823,7 +823,7 @@ int checkWellFormed(Slice blob, Slice payload) {
       memcpy(&expected_checksum, buf, checksum_size);
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       100,
-                      "Invalid record: checksum mismatch. Payload: %s, "
+                      "checksum mismatch: Invalid record. Payload: %s, "
                       "expected checksum: %lu, checksum in payload: %lu",
                       hexdump_buf(payload, 500).c_str(),
                       expected_checksum,
