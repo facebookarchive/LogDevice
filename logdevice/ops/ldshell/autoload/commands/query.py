@@ -362,6 +362,10 @@ class SelectCommand(Command):
             print("{0:d} rows in set ({1:.2f} msec)".format(res.count, res.latency))
 
             return None
+        except RuntimeError as e:
+            print()
+            cprint("[ERROR] A runtime error occured: {}".format(str(e)), "red")
+            return "Invalid Statement"
         except StatementError as e:
             print()
             cprint("[ERROR] Invalid Statement: {}".format(str(e)), "red")
