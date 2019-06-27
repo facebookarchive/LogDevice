@@ -16,7 +16,6 @@
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/ShapingContainer.h"
-#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
@@ -764,11 +763,13 @@ void AllServerReadStreams::sendShardStatusToClient(ClientID cid) {
   // node configuration. Leaving this here for backward compatibility until that
   // code is deployed everywhere.
   auto my_node_id = Worker::onThisThread()->processor_->getMyNodeID();
-  std::shared_ptr<ServerConfig> server_config =
-      Worker::onThisThread()->getServerConfig();
-  const configuration::Node* node = server_config->getNode(my_node_id);
-  ld_check(node);
-  hdr.num_shards_deprecated = node->getNumShards();
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+
+  auto storage_config =
+      nodes_configuration->getNodeStorageAttribute(my_node_id.index());
+  ld_check(storage_config);
+  hdr.num_shards_deprecated = storage_config->num_shards;
 
   auto msg =
       std::make_unique<SHARD_STATUS_UPDATE_Message>(hdr, shard_status_map);
