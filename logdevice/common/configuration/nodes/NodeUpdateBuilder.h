@@ -22,6 +22,12 @@ namespace nodes {
  */
 class NodeUpdateBuilder {
  public:
+  struct Result {
+    Status status;
+    // If status != Status::OK, message will contain a human readable error
+    std::string message;
+  };
+
   NodeUpdateBuilder& setNodeIndex(node_index_t);
   NodeUpdateBuilder& setDataAddress(Sockaddr);
   NodeUpdateBuilder& setGossipAddress(Sockaddr);
@@ -41,18 +47,25 @@ class NodeUpdateBuilder {
    *  3. If the node is a storage node, then the capacity and num shards are
    *     set.
    */
-  bool validate(std::string* reason = nullptr) const;
+  Result validate() const;
 
   /**
    * Build a new node update and add it to the passed update structure.
    */
-  bool
+  Result
   buildAddNodeUpdate(NodesConfiguration::Update& update,
                      membership::MembershipVersion::Type sequencer_version,
                      membership::MembershipVersion::Type storage_version) &&;
 
+  // Build an attributes update for the node with index *node_index_* by
+  // comparing its current attributes versus the one in the builder.
+  Result buildUpdateNodeUpdate(
+      NodesConfiguration::Update& update,
+      const configuration::nodes::NodesConfiguration& nodes_configuration) &&;
+
  private:
   std::unique_ptr<StorageNodeAttribute> buildStorageAttributes();
+  std::unique_ptr<SequencerNodeAttribute> buildSequencerAttributes();
   std::unique_ptr<NodeServiceDiscovery> buildNodeServiceDiscovery();
 
  private:

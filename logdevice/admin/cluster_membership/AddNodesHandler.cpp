@@ -88,14 +88,13 @@ AddNodesHandler::validateUniquness(
   ld_assert_eq(nodes_configuration.clusterSize(), addresses.size());
 
   auto make_failure = [](thrift::NodeIndex idx,
-                         std::string type,
-                         std::string value) {
-    thrift::ClusterMembershipFailedNode failure;
-    failure.set_node_id(mkNodeID(idx));
-    failure.set_reason(thrift::ClusterMembershipFailureReason::ALREADY_EXISTS);
-    failure.set_message(folly::sformat(
-        "N{} has a duplicate '{}' with value '{}'", idx, type, value));
-    return failure;
+                         const std::string& type,
+                         const std::string& value) {
+    return buildNodeFailure(
+        idx,
+        thrift::ClusterMembershipFailureReason::ALREADY_EXISTS,
+        folly::sformat(
+            "N{} has a duplicate '{}' with value '{}'", idx, type, value));
   };
 
   thrift::ClusterMembershipOperationFailed failures;
@@ -145,14 +144,14 @@ AddNodesHandler::buildUpdateFromNodeConfig(
 
   auto update_builder = std::move(maybe_update_builder).value();
 
-  bool success =
+  auto result =
       std::move(update_builder)
           .buildAddNodeUpdate(
               update /* output update is filled in here */,
               nodes_configuration.getSequencerMembership()->getVersion(),
               nodes_configuration.getStorageMembership()->getVersion());
   // Should always be a non nullptr given that the validation passed.
-  ld_assert(success);
+  ld_assert(result.status == Status::OK);
   return folly::none;
 }
 

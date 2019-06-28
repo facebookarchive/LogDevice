@@ -61,6 +61,10 @@ struct StorageNodeAttribute {
         generation == rhs.generation &&
         exclude_from_nodesets == rhs.exclude_from_nodesets;
   }
+
+  bool operator!=(const StorageNodeAttribute& rhs) const {
+    return !(*this == rhs);
+  }
 };
 
 using StorageAttributeConfig = NodeAttributesConfig<StorageNodeAttribute>;

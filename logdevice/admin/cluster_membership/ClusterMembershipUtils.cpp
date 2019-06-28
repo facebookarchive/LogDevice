@@ -39,12 +39,10 @@ Sockaddr convert_thrift_address(const logdevice::thrift::SocketAddress& addr) {
 logdevice::thrift::ClusterMembershipFailedNode
 make_invalid_nodes_config_request(logdevice::thrift::NodeIndex node_idx,
                                   const std::string& reason) {
-  logdevice::thrift::ClusterMembershipFailedNode failure;
-  failure.set_node_id(mkNodeID(node_idx));
-  failure.set_reason(logdevice::thrift::ClusterMembershipFailureReason::
-                         INVALID_REQUEST_NODES_CONFIG);
-  failure.set_message(reason);
-  return failure;
+  return buildNodeFailure(node_idx,
+                          logdevice::thrift::ClusterMembershipFailureReason::
+                              INVALID_REQUEST_NODES_CONFIG,
+                          reason);
 }
 
 } // namespace
@@ -96,13 +94,31 @@ nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
         .setNumShards(storage_cfg.num_shards);
   }
 
-  std::string validation_failure_reason;
-  if (!update_builder.validate(&validation_failure_reason)) {
+  if (auto validation_result = update_builder.validate();
+      validation_result.status != Status::OK) {
     return folly::makeUnexpected(make_invalid_nodes_config_request(
-        cfg.node_index, validation_failure_reason));
+        cfg.node_index, validation_result.message));
   }
 
   return std::move(update_builder);
+}
+
+logdevice::thrift::ClusterMembershipFailedNode
+buildNodeFailure(logdevice::thrift::NodeID id,
+                 logdevice::thrift::ClusterMembershipFailureReason reason,
+                 const std::string& message) {
+  logdevice::thrift::ClusterMembershipFailedNode failure;
+  failure.set_node_id(id);
+  failure.set_reason(reason);
+  failure.set_message(message);
+  return failure;
+}
+
+logdevice::thrift::ClusterMembershipFailedNode
+buildNodeFailure(node_index_t idx,
+                 logdevice::thrift::ClusterMembershipFailureReason reason,
+                 const std::string& message) {
+  return buildNodeFailure(mkNodeID(idx), reason, message);
 }
 
 }}}} // namespace facebook::logdevice::admin::cluster_membership

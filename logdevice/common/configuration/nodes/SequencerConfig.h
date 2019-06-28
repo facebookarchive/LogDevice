@@ -28,6 +28,10 @@ struct SequencerNodeAttribute {
     return true;
   }
 
+  bool operator!=(const SequencerNodeAttribute& rhs) const {
+    return !(*this == rhs);
+  }
+
   std::string toString() const {
     return "";
   }

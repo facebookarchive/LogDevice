@@ -9,6 +9,7 @@
 #include "logdevice/admin/cluster_membership/RemoveNodesHandler.h"
 
 #include "logdevice/admin/AdminAPIUtils.h"
+#include "logdevice/admin/cluster_membership/ClusterMembershipUtils.h"
 #include "logdevice/common/membership/StorageStateTransitions.h"
 #include "logdevice/common/types_internal.h"
 
@@ -80,16 +81,15 @@ check_is_disabled(const NodesConfiguration& nodes_configuration,
   if (seq_disabled && storage_disabled) {
     return folly::none;
   }
-  thrift::ClusterMembershipFailedNode failure;
-  failure.set_node_id(mkNodeID(idx));
-  failure.set_reason(thrift::ClusterMembershipFailureReason::NOT_DISABLED);
-  failure.set_message(folly::sformat(
-      "N{} should have both sequencing and storage disabled before "
-      "getting removed found: sequencer_enabled={} storage_enabled={}",
+  return buildNodeFailure(
       idx,
-      !seq_disabled,
-      !storage_disabled));
-  return failure;
+      thrift::ClusterMembershipFailureReason::NOT_DISABLED,
+      folly::sformat(
+          "N{} should have both sequencing and storage disabled before "
+          "getting removed found: sequencer_enabled={} storage_enabled={}",
+          idx,
+          !seq_disabled,
+          !storage_disabled));
 };
 
 folly::Optional<thrift::ClusterMembershipFailedNode>
@@ -99,14 +99,12 @@ check_is_dead(const ClusterState& cluster_state, node_index_t idx) {
     return folly::none;
   }
 
-  thrift::ClusterMembershipFailedNode failure;
-  failure.set_node_id(mkNodeID(idx));
-  failure.set_reason(thrift::ClusterMembershipFailureReason::NOT_DEAD);
-  failure.set_message(
+  return buildNodeFailure(
+      idx,
+      thrift::ClusterMembershipFailureReason::NOT_DEAD,
       folly::sformat("N{} must be DEAD before getting removed, but it was {}",
                      idx,
                      ClusterState::getNodeStateString(node_state)));
-  return failure;
 };
 
 } // namespace

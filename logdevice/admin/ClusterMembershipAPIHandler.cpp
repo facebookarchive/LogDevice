@@ -12,6 +12,7 @@
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/cluster_membership/AddNodesHandler.h"
 #include "logdevice/admin/cluster_membership/RemoveNodesHandler.h"
+#include "logdevice/admin/cluster_membership/UpdateNodesHandler.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/nodes/NodeIndicesAllocator.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
@@ -89,6 +90,41 @@ ClusterMembershipAPIHandler::semifuture_addNodes(
               thrift::NodeConfig node_cfg;
               fillNodeConfig(node_cfg, added, *new_cfg);
               resp->added_nodes.push_back(std::move(node_cfg));
+            }
+            return std::move(resp);
+          });
+}
+
+folly::SemiFuture<std::unique_ptr<thrift::UpdateNodesResponse>>
+ClusterMembershipAPIHandler::semifuture_updateNodes(
+    std::unique_ptr<thrift::UpdateNodesRequest> req) {
+  if (auto failed = failIfMMDisabled(); failed) {
+    return *failed;
+  }
+  auto nodes_configuration = processor_->getNodesConfiguration();
+
+  UpdateNodesHandler handler{};
+  auto res = handler.buildNodesConfigurationUpdates(
+      req->get_node_requests(), *nodes_configuration);
+
+  if (res.hasError()) {
+    return folly::makeSemiFuture<std::unique_ptr<thrift::UpdateNodesResponse>>(
+        std::move(res).error());
+  }
+
+  auto update_result = std::move(res).value();
+
+  return applyNodesConfigurationUpdates(std::move(update_result.update))
+      .via(this->getThreadManager())
+      .thenValue(
+          [updated_nodes = std::move(update_result.to_be_updated)](
+              std::shared_ptr<const NodesConfiguration> new_cfg) mutable
+          -> folly::SemiFuture<std::unique_ptr<thrift::UpdateNodesResponse>> {
+            auto resp = std::make_unique<thrift::UpdateNodesResponse>();
+            for (auto updated : updated_nodes) {
+              thrift::NodeConfig node_cfg;
+              fillNodeConfig(node_cfg, updated, *new_cfg);
+              resp->updated_nodes.push_back(std::move(node_cfg));
             }
             return std::move(resp);
           });

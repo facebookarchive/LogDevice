@@ -23,4 +23,14 @@ folly::Expected<configuration::nodes::NodeUpdateBuilder,
                 thrift::ClusterMembershipFailedNode>
 nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg);
 
+thrift::ClusterMembershipFailedNode
+buildNodeFailure(node_index_t idx,
+                 thrift::ClusterMembershipFailureReason reason,
+                 const std::string& message);
+
+thrift::ClusterMembershipFailedNode
+buildNodeFailure(thrift::NodeID id,
+                 thrift::ClusterMembershipFailureReason reason,
+                 const std::string& message);
+
 }}}} // namespace facebook::logdevice::admin::cluster_membership

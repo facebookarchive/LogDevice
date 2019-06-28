@@ -17,7 +17,7 @@ namespace py3 logdevice.admin
  * request can fail because of an invalid input.
  */
 enum ClusterMembershipFailureReason {
-  UNKNNOWN = 0,
+  UNKNOWN = 0,
 
   /**
    * The passed common.NodeID didn't match any node in the nodes configuration.

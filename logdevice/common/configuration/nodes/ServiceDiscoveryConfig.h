@@ -78,6 +78,10 @@ struct NodeServiceDiscovery {
         roles == rhs.roles && name == rhs.name;
   }
 
+  bool operator!=(const NodeServiceDiscovery& rhs) const {
+    return !(*this == rhs);
+  }
+
   bool isValid() const;
   std::string toString() const;
   bool isValidForReset(const NodeServiceDiscovery& current) const;

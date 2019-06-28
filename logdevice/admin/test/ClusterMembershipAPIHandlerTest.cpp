@@ -324,3 +324,117 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestNewNodeEnableWorkflow) {
         membership::thrift::StorageState::READ_WRITE;
   });
 }
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  thrift::NodesFilter filter;
+  filter.set_node(mkNodeID(node_index_t(3)));
+  thrift::NodesConfigResponse nodes_config;
+  admin_client->sync_getNodesConfig(nodes_config, filter);
+  ASSERT_EQ(1, nodes_config.nodes.size());
+
+  // Update N3
+  auto cfg = nodes_config.nodes[0];
+  cfg.set_name("updatedName");
+  cfg.data_address.set_address("/test1");
+  cfg.other_addresses_ref()->gossip_ref()->set_address("/test2");
+  cfg.other_addresses_ref()->ssl_ref()->set_address("/test3");
+  cfg.storage_ref()->set_weight(123);
+  cfg.sequencer_ref()->set_weight(122);
+
+  thrift::UpdateSingleNodeRequest updt;
+  updt.set_node_to_be_updated(mkNodeID(3));
+  updt.set_new_config(cfg);
+  thrift::UpdateNodesRequest req;
+  req.set_node_requests({std::move(updt)});
+
+  thrift::UpdateNodesResponse uresp;
+  admin_client->sync_updateNodes(uresp, req);
+  EXPECT_EQ(1, uresp.updated_nodes.size());
+  EXPECT_THAT(uresp.updated_nodes, UnorderedElementsAre(NodeConfigEq(3, cfg)));
+
+  wait_until("AdminServer's NC picks the updates", [&]() {
+    thrift::NodesConfigResponse nc;
+    admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
+    return nc.version >= uresp.new_nodes_configuration_version;
+  });
+
+  admin_client->sync_getNodesConfig(nodes_config, filter);
+  ASSERT_EQ(1, nodes_config.nodes.size());
+  ASSERT_THAT(nodes_config.nodes[0], NodeConfigEq(3, cfg));
+}
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  thrift::NodesFilter filter;
+  filter.set_node(mkNodeID(node_index_t(3)));
+  thrift::NodesConfigResponse nodes_config;
+  admin_client->sync_getNodesConfig(nodes_config, filter);
+  ASSERT_EQ(1, nodes_config.nodes.size());
+
+  auto cfg = nodes_config.nodes[0];
+  thrift::UpdateSingleNodeRequest updt;
+  updt.set_node_to_be_updated(mkNodeID(3));
+  updt.set_new_config(cfg);
+  thrift::UpdateNodesRequest _req;
+  _req.set_node_requests({std::move(updt)});
+
+  // The constant base for all the updates. Copy it and modify the request.
+  const thrift::UpdateNodesRequest request_tpl{std::move(_req)};
+
+  {
+    // A mismatch in the node's index should fail.
+    auto req = request_tpl;
+    req.node_requests[0].set_node_to_be_updated(mkNodeID(2));
+
+    try {
+      thrift::UpdateNodesResponse resp;
+      admin_client->sync_updateNodes(resp, req);
+      FAIL() << "UpdateNodes call should fail, but it didn't";
+    } catch (const thrift::ClusterMembershipOperationFailed& exception) {
+      ASSERT_EQ(1, exception.failed_nodes.size());
+      auto failed_node = exception.failed_nodes[0];
+      EXPECT_EQ(2, failed_node.node_id.node_index);
+      EXPECT_EQ(
+          thrift::ClusterMembershipFailureReason::INVALID_REQUEST_NODES_CONFIG,
+          failed_node.reason);
+    }
+  }
+
+  {
+    // Trying to update a node that doesn't exist should fail
+    auto req = request_tpl;
+    req.node_requests[0].set_node_to_be_updated(mkNodeID(20));
+
+    try {
+      thrift::UpdateNodesResponse resp;
+      admin_client->sync_updateNodes(resp, req);
+      FAIL() << "UpdateNodes call should fail, but it didn't";
+    } catch (const thrift::ClusterMembershipOperationFailed& exception) {
+      ASSERT_EQ(1, exception.failed_nodes.size());
+      auto failed_node = exception.failed_nodes[0];
+      EXPECT_EQ(20, failed_node.node_id.node_index);
+      EXPECT_EQ(thrift::ClusterMembershipFailureReason::NO_MATCH_IN_CONFIG,
+                failed_node.reason);
+    }
+  }
+
+  {
+    // Trying to update an immutable attribute (e.g location) will fail with an
+    // NCM error.
+    auto req = request_tpl;
+    req.node_requests[0].new_config.set_location("FRC.FRC.FRC.FRC.FRC");
+
+    try {
+      thrift::UpdateNodesResponse resp;
+      admin_client->sync_updateNodes(resp, req);
+      FAIL() << "UpdateNodes call should fail, but it didn't";
+    } catch (const thrift::NodesConfigurationManagerError& exception) {
+      EXPECT_EQ(static_cast<int32_t>(E::INVALID_PARAM), exception.error_code);
+    }
+  }
+}

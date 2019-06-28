@@ -10,6 +10,8 @@
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
+using namespace facebook::logdevice::membership;
+
 NodeUpdateBuilder& NodeUpdateBuilder::setNodeIndex(node_index_t idx) {
   node_index_ = idx;
   return *this;
@@ -65,52 +67,44 @@ NodeUpdateBuilder& NodeUpdateBuilder::setSequencerWeight(double weight) {
   return *this;
 }
 
-bool NodeUpdateBuilder::validate(std::string* reason) const {
-  auto set_reason = [reason](std::string r) {
-    if (reason != nullptr) {
-      *reason = std::move(r);
-    }
-  };
-
+NodeUpdateBuilder::Result NodeUpdateBuilder::validate() const {
   if (!node_index_.hasValue()) {
-    set_reason("Mandatory field 'node_index' is missing");
-    return false;
+    return Result{
+        Status::INVALID_PARAM, "Mandatory field 'node_index' is missing"};
   }
 
   if (!data_address_.hasValue()) {
-    set_reason("Mandatory field 'data_address' is missing");
-    return false;
+    return Result{
+        Status::INVALID_PARAM, "Mandatory field 'data_address' is missing"};
   }
 
   if (!name_.hasValue()) {
-    set_reason("Mandatory field 'name' is missing");
-    return false;
+    return Result{Status::INVALID_PARAM, "Mandatory field 'name' is missing"};
   }
 
   if (roles_.count() == 0) {
-    set_reason("The node is missing the role");
-    return false;
+    return Result{Status::INVALID_PARAM, "The node is missing the role"};
   }
 
   if (hasRole(roles_, NodeRole::SEQUENCER)) {
     if (!sequencer_weight_.hasValue()) {
-      set_reason("Sequencer node without field 'sequencer_weight'");
-      return false;
+      return Result{Status::INVALID_PARAM,
+                    "Sequencer node without field 'sequencer_weight'"};
     }
   }
 
   if (hasRole(roles_, NodeRole::STORAGE)) {
     if (!storage_capacity_.hasValue()) {
-      set_reason("Storage node without field 'storage_capacity'");
-      return false;
+      return Result{Status::INVALID_PARAM,
+                    "Storage node without field 'storage_capacity'"};
     }
     if (!num_shards_.hasValue()) {
-      set_reason("Storage node without field 'num_shards'");
-      return false;
+      return Result{
+          Status::INVALID_PARAM, "Storage node without field 'num_shards'"};
     }
   }
 
-  return true;
+  return {Status::OK, ""};
 }
 
 std::unique_ptr<NodeServiceDiscovery>
@@ -138,68 +132,63 @@ NodeUpdateBuilder::buildStorageAttributes() {
   return attr;
 }
 
-bool NodeUpdateBuilder::buildAddNodeUpdate(
+std::unique_ptr<SequencerNodeAttribute>
+NodeUpdateBuilder::buildSequencerAttributes() {
+  return std::make_unique<SequencerNodeAttribute>();
+}
+
+namespace {
+// A helper function to create the Update structure if it's still nullptr
+template <class T, typename... Args>
+std::unique_ptr<T>& createIfNull(std::unique_ptr<T>& ptr, Args&&... args) {
+  if (ptr == nullptr) {
+    ptr = std::make_unique<T>(std::forward<Args>(args)...);
+  }
+  return ptr;
+}
+} // namespace
+
+NodeUpdateBuilder::Result NodeUpdateBuilder::buildAddNodeUpdate(
     NodesConfiguration::Update& update,
     membership::MembershipVersion::Type sequencer_version,
     membership::MembershipVersion::Type storage_version) && {
-  if (!validate()) {
-    return false;
+  auto validation_result = validate();
+  if (validation_result.status != Status::OK) {
+    return validation_result;
   }
-
-  using namespace facebook::logdevice::membership;
 
   auto node_idx = node_index_.value();
 
   // Service Discovery Update
-  if (update.service_discovery_update == nullptr) {
-    update.service_discovery_update =
-        std::make_unique<ServiceDiscoveryConfig::Update>();
-  }
-  update.service_discovery_update->addNode(
-      node_idx,
-      {ServiceDiscoveryConfig::UpdateType::PROVISION,
-       buildNodeServiceDiscovery()});
+  createIfNull(update.service_discovery_update)
+      ->addNode(node_idx,
+                {ServiceDiscoveryConfig::UpdateType::PROVISION,
+                 buildNodeServiceDiscovery()});
 
   // Sequencer Config Update
   if (hasRole(roles_, NodeRole::SEQUENCER)) {
-    if (update.sequencer_config_update == nullptr) {
-      update.sequencer_config_update =
-          std::make_unique<SequencerConfig::Update>();
-    }
+    createIfNull(update.sequencer_config_update);
     // Sequencer Membership Update
-    if (update.sequencer_config_update->membership_update == nullptr) {
-      update.sequencer_config_update->membership_update =
-          std::make_unique<SequencerMembership::Update>(sequencer_version);
-    }
-    update.sequencer_config_update->membership_update->addNode(
-        node_idx,
-        {SequencerMembershipTransition::ADD_NODE,
-         /* enabled= */ false,
-         sequencer_weight_.value(),
-         MaintenanceID::MAINTENANCE_NONE});
-
+    createIfNull(
+        update.sequencer_config_update->membership_update, sequencer_version)
+        ->addNode(node_idx,
+                  {SequencerMembershipTransition::ADD_NODE,
+                   /* enabled= */ false,
+                   sequencer_weight_.value(),
+                   MaintenanceID::MAINTENANCE_NONE});
     // Sequencer Config
-    if (update.sequencer_config_update->attributes_update == nullptr) {
-      update.sequencer_config_update->attributes_update =
-          std::make_unique<SequencerAttributeConfig::Update>();
-    }
-    update.sequencer_config_update->attributes_update->addNode(
-        node_idx,
-        {SequencerAttributeConfig::UpdateType::PROVISION,
-         std::make_unique<SequencerNodeAttribute>()});
+    createIfNull(update.sequencer_config_update->attributes_update)
+        ->addNode(node_idx,
+                  {SequencerAttributeConfig::UpdateType::PROVISION,
+                   std::make_unique<SequencerNodeAttribute>()});
   }
 
   // Storage Config Update
   if (hasRole(roles_, NodeRole::STORAGE)) {
     // Storage Membership Update
-    if (update.storage_config_update == nullptr) {
-      update.storage_config_update = std::make_unique<StorageConfig::Update>();
-    }
-
-    if (update.storage_config_update->membership_update == nullptr) {
-      update.storage_config_update->membership_update =
-          std::make_unique<StorageMembership::Update>(storage_version);
-    }
+    createIfNull(update.storage_config_update);
+    createIfNull(
+        update.storage_config_update->membership_update, storage_version);
 
     for (int shard = 0; shard < num_shards_.value(); shard++) {
       update.storage_config_update->membership_update->addShard(
@@ -210,17 +199,91 @@ bool NodeUpdateBuilder::buildAddNodeUpdate(
     }
 
     // Storage Attributes Update
-    if (update.storage_config_update->attributes_update == nullptr) {
-      update.storage_config_update->attributes_update =
-          std::make_unique<StorageAttributeConfig::Update>();
-    }
-    update.storage_config_update->attributes_update->addNode(
-        node_idx,
-        {StorageAttributeConfig::UpdateType::PROVISION,
-         buildStorageAttributes()});
+    createIfNull(update.storage_config_update->attributes_update)
+        ->addNode(node_idx,
+                  {StorageAttributeConfig::UpdateType::PROVISION,
+                   buildStorageAttributes()});
   }
 
-  return true;
+  return {Status::OK, ""};
+}
+
+NodeUpdateBuilder::Result NodeUpdateBuilder::buildUpdateNodeUpdate(
+    NodesConfiguration::Update& update,
+    const NodesConfiguration& nodes_configuration) && {
+  auto validation_result = validate();
+  if (validation_result.status != Status::OK) {
+    return validation_result;
+  }
+
+  ld_assert(node_index_.hasValue());
+  auto node_idx = node_index_.value();
+
+  auto current_svc = nodes_configuration.getNodeServiceDiscovery(node_idx);
+  if (current_svc == nullptr) {
+    return {E::NOTINCONFIG, folly::sformat("N{} is not in config", node_idx)};
+  }
+
+  // Roles should be immutable
+  if (roles_ != current_svc->roles) {
+    return {E::INVALID_PARAM,
+            folly::sformat("The roles field should be immutable. Current "
+                           "value: {}, update request: {}",
+                           current_svc->roles.to_string(),
+                           roles_.to_string())};
+  }
+
+  // Compare ServiceDiscovery
+  if (auto new_svc = buildNodeServiceDiscovery(); *current_svc != *new_svc) {
+    createIfNull(update.service_discovery_update)
+        ->addNode(
+            node_idx,
+            {ServiceDiscoveryConfig::UpdateType::RESET, std::move(new_svc)});
+  }
+
+  // Compare Sequencer Attributes
+  if (hasRole(roles_, NodeRole::SEQUENCER)) {
+    const auto& seq_config = nodes_configuration.getSequencerConfig();
+    auto curr_attrs =
+        seq_config->getAttributes()->getNodeAttributesPtr(node_idx);
+    auto curr_weight = seq_config->getMembership()
+                           ->getNodeStatePtr(node_idx)
+                           ->getConfiguredWeight();
+    auto new_attrs = buildSequencerAttributes();
+    if (*curr_attrs != *new_attrs) {
+      createIfNull(update.sequencer_config_update);
+      createIfNull(update.sequencer_config_update->attributes_update)
+          ->addNode(node_idx,
+                    {SequencerAttributeConfig::UpdateType::RESET,
+                     std::move(new_attrs)});
+    }
+
+    if (curr_weight != *sequencer_weight_) {
+      createIfNull(update.sequencer_config_update);
+      createIfNull(update.sequencer_config_update->membership_update,
+                   seq_config->getMembership()->getVersion())
+          ->addNode(node_idx,
+                    {SequencerMembershipTransition::SET_WEIGHT,
+                     /* enabled= */ false /* not used */,
+                     sequencer_weight_.value(),
+                     MaintenanceID::MAINTENANCE_NONE});
+    }
+  }
+
+  // Compare storage attributes
+  if (hasRole(roles_, NodeRole::STORAGE)) {
+    const auto& storage_attrs = nodes_configuration.getStorageAttributes();
+    auto curr_attrs = storage_attrs->getNodeAttributesPtr(node_idx);
+    auto new_attrs = buildStorageAttributes();
+    if (*curr_attrs != *new_attrs) {
+      createIfNull(update.storage_config_update);
+      createIfNull(update.storage_config_update->attributes_update)
+          ->addNode(node_idx,
+                    {StorageAttributeConfig::UpdateType::RESET,
+                     std::move(new_attrs)});
+    }
+  }
+  return {Status::OK, ""};
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes
