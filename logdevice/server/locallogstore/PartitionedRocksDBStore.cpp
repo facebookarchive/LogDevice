@@ -6521,6 +6521,8 @@ FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
   std::shared_ptr<const RocksDBSettings> settings =
       rocksdb_config_.getRocksDBSettings();
   bool ld_managed_flushes = rocksdb_config_.use_ld_managed_flushes_;
+  const auto use_age_size_flush_heuristic =
+      settings->use_age_size_flush_heuristic;
   std::vector<CFData> out;
 
   // Total memory picked for flushing.
@@ -6529,10 +6531,6 @@ FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
 
   // Amount of memory to flush to reach target memory consumption.
   uint64_t target = 0;
-
-  uint64_t idle_thres_triggered = 0;
-  uint64_t old_data_thres_triggered = 0;
-  uint64_t max_memtable_thres_triggered = 0;
 
   // This indicates if there is need to flush metadata memtable.
   auto metadata_memtable_dependency = FlushToken_INVALID;
@@ -6585,7 +6583,6 @@ FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
 
   if (memLimitThresholdTriggered(metadata_cf_data.stats.active_memtable_size)) {
     pick_metadata_cf();
-    ++max_memtable_thres_triggered;
   }
 
   std::vector<CFData> unpicked_cf;
@@ -6616,14 +6613,14 @@ FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
           (now - latest_dirty_time) > settings->partition_idle_flush_trigger;
     };
 
-    if (memLimitThresholdTriggered(stats.active_memtable_size)) {
-      max_memtable_thres_triggered++;
-      pick_cf(cf_data);
-    } else if (oldDataThresholdTriggered()) {
-      old_data_thres_triggered++;
-      pick_cf(cf_data);
-    } else if (idleThresholdTriggered()) {
-      idle_thres_triggered++;
+    // We try to pick to flush those CFs that we cannot ignore:
+    //   * hit memory limit
+    //   * too old
+    //   * memtable was not touched for a long time
+    // The rest of the CFs we will process later and maybe add them to the flush
+    // list as well.
+    if (memLimitThresholdTriggered(stats.active_memtable_size) ||
+        oldDataThresholdTriggered() || idleThresholdTriggered()) {
       pick_cf(cf_data);
     } else {
       unpicked_cf.push_back(std::move(cf_data));
@@ -6641,28 +6638,42 @@ FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
   }
 
   if (target > 0) {
-    // Recent two cfs with non-zero active memory usage are considered newer.
-    // Consider all the others older and sort input in ascending order of data
-    // age in cf.
-    if (unpicked_cf.size() > 3) {
+    if (use_age_size_flush_heuristic) {
+      const auto time_now = SteadyTimestamp::now();
       std::sort(unpicked_cf.begin(),
-                unpicked_cf.end() - 2,
-                [](const CFData& a, const CFData& b) {
-                  return a.cf->first_dirtied_time_ < b.cf->first_dirtied_time_;
+                unpicked_cf.end(),
+                [time_now](const CFData& a, const CFData& b) {
+                  const auto age_a =
+                      (double)(time_now - a.cf->first_dirtied_time_).count();
+                  const auto age_b =
+                      (double)(time_now - b.cf->first_dirtied_time_).count();
+                  return age_a * a.stats.active_memtable_size >
+                      age_b * b.stats.active_memtable_size;
                 });
-    }
+    } else {
+      // Recent two cfs with non-zero active memory usage are considered newer.
+      // Consider all the others older and sort input in ascending order of data
+      // age in cf.
+      if (unpicked_cf.size() > 3) {
+        std::sort(unpicked_cf.begin(),
+                  unpicked_cf.end() - 2,
+                  [](const CFData& a, const CFData& b) {
+                    return a.cf->first_dirtied_time_ <
+                        b.cf->first_dirtied_time_;
+                  });
+      };
 
-    // Arrange the last two cf in descending order according to their
-    // memory usage.
-    if (unpicked_cf.size() >= 2) {
-      auto& latest = unpicked_cf.back();
-      auto& penultimate = *(unpicked_cf.rbegin() + 1);
-      if (latest.stats.active_memtable_size >
-          penultimate.stats.active_memtable_size) {
-        std::swap(latest, penultimate);
+      // Arrange the last two cf in descending order according to their
+      // memory usage.
+      if (unpicked_cf.size() >= 2) {
+        auto& latest = unpicked_cf.back();
+        auto& penultimate = *(unpicked_cf.rbegin() + 1);
+        if (latest.stats.active_memtable_size >
+            penultimate.stats.active_memtable_size) {
+          std::swap(latest, penultimate);
+        }
       }
     }
-
     // Selects all cf to reach the target memory budget.
     // CFs are already sorted in the correct order.
     for (auto i = 0; i < unpicked_cf.size() && target > 0; ++i) {

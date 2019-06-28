@@ -9668,6 +9668,9 @@ TEST_F(PartitionedRocksDBStoreTest, FlushLatestPartitionsTest) {
     ASSERT_EQ(0u, buf_stats.active_memory_usage);
   }
 
+  // NOTE: last 2 tests actually test the old flush logic, so disable the
+  // heuristic.
+  updateSetting("rocksdb-use-age-size-flush-heuristic", "false");
   // Test where single partition of two latest partition is selected for
   // flushing.
   {
@@ -9745,6 +9748,7 @@ TEST_F(PartitionedRocksDBStoreTest,
        PickFlushCandidatesFromOldAndNewPartitions) {
   updateSetting("rocksdb-partition-data-age-flush-trigger", "0");
   updateSetting("rocksdb-partition-idle-flush-trigger", "0");
+  setTime(100);
   using PartitionPtr = PartitionedRocksDBStore::PartitionPtr;
   using RocksDBMemTableStats = PartitionedRocksDBStore::RocksDBMemTableStats;
   using FlushEvaluator = PartitionedRocksDBStore::FlushEvaluator;
@@ -9803,6 +9807,42 @@ TEST_F(PartitionedRocksDBStoreTest,
   // Test in multiple partitions selected for flush. The partitions with oldest
   // data is selected amongst older partition.
   {
+    // 2 of 4 are considered old partitions.
+    auto partition_counter = 2;
+    SteadyTimestamp min_dirtied_time{SteadyTimestamp::max()};
+    SteadyTimestamp second_min{SteadyTimestamp::min()};
+    auto cb = [&partition_counter, &min_dirtied_time, &second_min](
+                  PartitionPtr partition, RocksDBMemTableStats /* stats */) {
+      if (partition_counter > 0) {
+        partition_counter--;
+        min_dirtied_time.storeMin(partition->cf_->first_dirtied_time_);
+        second_min.storeMax(partition->cf_->first_dirtied_time_);
+      }
+    };
+    MemTableStatsGenerator generator(
+        time_, 4, {100, 0, 0, 0, 0}, 1000, total_budget + 10, std::move(cb));
+    FlushEvaluator evaluator(shard_idx,
+                             total_budget,
+                             1000,
+                             total_budget / 2,
+                             store_->getRocksDBLogStoreConfig());
+    auto cf_data = get_candidates_and_evaluate(generator, evaluator);
+    ASSERT_GE(cf_data.size(), 2);
+    // Make sure `age * size` is sorted correctly.
+    // Relative time should have same compare result regardless of now.
+    const auto time_now = SteadyTimestamp::now();
+
+    for (int i = 1; i < cf_data.size(); ++i) {
+      const auto age_a = time_now - cf_data[i - 1].cf->first_dirtied_time_;
+      const auto age_b = time_now - cf_data[i].cf->first_dirtied_time_;
+      ASSERT_GT(cf_data[i - 1].stats.active_memtable_size * age_a,
+                cf_data[i].stats.active_memtable_size * age_b);
+    }
+  }
+  {
+    // NOTE: This came from the original test. Disable flush heuristic and make
+    // sure sorting ordering is correct.
+    updateSetting("rocksdb-use-age-size-flush-heuristic", "false");
     // 2 of 4 are considered old partitions.
     auto partition_counter = 2;
     SteadyTimestamp min_dirtied_time{SteadyTimestamp::max()};

@@ -610,7 +610,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
   //   this trigger when WAL-less rebuilding is disabled.
   init("rocksdb-partition-data-age-flush-trigger",
        &partition_data_age_flush_trigger,
-       "600s",
+       "1200s",
        [](std::chrono::milliseconds val) {
          if (val.count() < 0) {
            throw boost::program_options::error(
@@ -627,7 +627,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
   init(
       "rocksdb-partition-idle-flush-trigger",
       &partition_idle_flush_trigger,
-      "300s",
+      "600s",
       [](std::chrono::milliseconds val) {
         if (val.count() < 0) {
           throw boost::program_options::error(
@@ -723,6 +723,15 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "If true, space based retention will be done on the storage side, "
        "irrespective of whether sequencer initiated it or not. This is meant "
        "to make a node's storage available in case there is a critical bug.",
+       SERVER | EXPERIMENTAL,
+       SettingsCategory::LogsDB);
+
+  init("rocksdb-use-age-size-flush-heuristic",
+       &use_age_size_flush_heuristic,
+       "true",
+       nullptr,
+       "If true, we use `age * size` of the MemTable to decide if we need "
+       "to flush it, otherwise we use `age` for that.",
        SERVER | EXPERIMENTAL,
        SettingsCategory::LogsDB);
 

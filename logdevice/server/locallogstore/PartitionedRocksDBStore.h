@@ -1089,9 +1089,9 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     // 3. Selection amongst old cfs is done by sorting cf's in ascending order
     // of first dirtied time. Here we priortize flushing by oldest data first.
     // 4. Go over the sorted elements in order till we reach low watermark
-    // memory usage.  If there are cf with memtables over max size, add them to
+    // memory usage. If there are cf with memtables over max size, add them to
     // flush candidates regardless.
-    // 5. After processing , if the target memory usage is unreached
+    // 5. After processing, if the target memory usage is unreached
     // start processing latest cf's. Process the latest partititons
     // ordered by biggest memtable first. Add flush candidates
     // till either we reach target usage or we run out of cf to process.
@@ -1122,8 +1122,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
     // before first flush completes). Worst steady-state memory usage seems 25%
     // better. We decided it's not worth the trouble for now.
     //
-    // Returns true if the metadata cf needs to be flushed along with the
-    // cf.
+    // Returns vector of CFs to be flushed.
     std::vector<CFData> pickCFsToFlush(SteadyTimestamp now,
                                        CFData& metadata,
                                        const std::vector<CFData>& candidates);

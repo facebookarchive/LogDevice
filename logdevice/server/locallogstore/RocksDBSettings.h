@@ -203,6 +203,13 @@ class RocksDBSettings : public SettingsBundle {
   // to stable storage.
   std::chrono::milliseconds min_manual_flush_interval;
 
+  // Whether we should flush MemTables according the cost function defined as
+  // age of the memtable multiplied by its size. That *should* give us a good
+  // balance between flushing old, but slow growing tables and new but big.
+  // By default that flag is set to true. We can flip it to return back to just
+  // use age as the decision maker.
+  bool use_age_size_flush_heuristic;
+
   // Maximum allowed age of unflushed data.
   std::chrono::milliseconds partition_data_age_flush_trigger;
 
