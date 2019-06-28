@@ -9,12 +9,12 @@ sidebar_label: Concepts and architecture
 
 LogDevice is a distributed service that provides persistent storage
 and delivery of records organized in sequences called **logs**. For
-durability copies of each record are stored across multiple servers
+durability, copies of each record are stored across multiple servers
 and failure domains. LogDevice uses a novel technique called
 *non-deterministic decentralized record placement* in order to offer
 high write availability and consistently low write latencies even as
 some nodes in the cluster (or even entire failure domains, such as
-racks or datacenters), suffer a total failure, or a severe drop in
+racks or data centers), suffer a total failure, or a severe drop in
 capacity or connectivity.
 
 Log records are stored on **storage nodes** equipped with direct
@@ -110,7 +110,9 @@ all readers see the records of that log. We just need to make sure
 that readers can efficiently find and obtain the copies. We use the
 term **copyset** for the set of storage nodes on which the copies of a
 particular record are stored. The copyset is selected at random, using
-a weighted uniform distribution, and a replication policy. The
+a weighted uniform distribution, and a replication policy.
+
+The
 replication policy for a log includes at least the replication factor
 R, typically 2 or 3. A fault tolerant replication policy may mandate
 the placement of copies in at least two hierarchical failure domains,
@@ -123,7 +125,7 @@ blocks.
 
 A client that wishes to read a particular log contacts all storage
 nodes that are permitted to store records of that log. That set,
-called the **nodeset** of the log is usually kept smaller than the
+called the **nodeset** of the log, is usually kept smaller than the
 total number of storage nodes in the cluster. The nodeset is a part
 of the log’s replication policy. It can be changed at any time, with
 an appropriate note in the log’s metadata history. The readers consult
@@ -160,23 +162,27 @@ by the local log store of each storage node.
 
 ## Sequence numbers
 
-As shown in Figure 1 the sequence numbers of records in LogDevice are
+As shown in Figure 1, the sequence numbers of records in LogDevice are
 not integers, but pairs of integers. The first component of the pair
 is called the **epoch number**, the second one is offset within
-epoch. The usual tuple comparison rules apply. In code the LSN is
-defined as an 8 byte integer with the high 4 bytes containing the
-epoch and the low 4 bytes the offset. The use of epochs in LSNs is
+epoch. The usual tuple comparison rules apply.
+
+In code, the LSN is
+defined as an 8 byte integer. The high 4 bytes contain the
+epoch and the low 4 bytes are the offset.
+
+The use of epochs in LSNs is
 another write availability optimization. When a sequencer node crashes
-or otherwise becomes unavailable LogDevice must bring up replacement
+or otherwise becomes unavailable, LogDevice must bring up replacement
 sequencers for all of the affected logs. The LSNs that each new
 sequencer starts to issue must be strictly greater than the LSNs of
 all records already written for that log. Epochs allow LogDevice to
 guarantee this without actually looking at what has been stored. When
-a new sequencer comes up it receives a new epoch number from the
+a new sequencer comes up, it receives a new epoch number from the
 metadata component called the epoch store. The epoch store acts as a
 repository of durable counters, one per log, that are seldom
 incremented and are guaranteed to never regress. Today we use Apache
-Zookeeper as the epoch store for LogDevice. In principle any durable
+Zookeeper as the epoch store for LogDevice. In principle, any durable
 and highly available data store that supports conditional atomic
 writes will do.
 
@@ -196,7 +202,7 @@ tries to avoid as much as possible. Rebuilding creates more copies of
 records that have become under-replicated (have fewer than the target
 number of copies R) after one or more failures.
 
-In order to be effective rebuilding has to be fast. It must complete
+In order to be effective, rebuilding has to be fast. It must complete
 before the next failure takes out the last copy of some unlucky
 record. LogDevice implements a **many-to-many** rebuilding protocol.
 All storage nodes act as both donors and recipients of record copies.
@@ -220,19 +226,22 @@ devices, such as hard drives or SSDs. RAM-only storage is impractical
 when storing hours worth of records at 100MBps+ per node. When backlog
 duration is measured in days and the ingest rate is high, hard drives
 are far more cost efficient than flash. This is why we designed the
-local storage layer of LogDevice to perform well not only on flash
+local storage layer of LogDevice to perform well not only on flash,
 with its huge random IOPS capacity, but also on hard drives. Commodity HDDs
 can push a respectable amount of sequential writes and reads
 (100-200MBps), but top out at 100-140 random IOPS.
 
-We called the local log store of LogDevice **LogsDB**. It is a write
-optimized data store designed to keep the number of disk seeks small
+We called the local log store of LogDevice **LogsDB**. It's a
+write-optimized data store that's designed to keep the
+number of disk seeks small
 and controlled, and the write and read IO patterns on the storage
-device mostly sequential. As their name implies write-optimized data
+device mostly sequential.
+
+As their name implies, write-optimized data
 stores aim to provide great performance when writing data, even if it
 belongs to multiple files or logs. The write performance is achieved
-at the expense of worse read efficiency on some access patterns. In
-addition to performing well on HDDs LogsDB is particularly efficient
+at the expense of read efficiency in some access patterns. In
+addition to performing well on HDDs, LogsDB is particularly efficient
 for log tailing workloads, a common pattern of log access where
 records are delivered to readers soon after they are written. The
 records are never read again, except in rare emergencies: those
@@ -241,28 +250,33 @@ served from RAM, making the reduced read efficiency of a single log
 irrelevant.
 
 LogsDB is a layer on top of [RocksDB](https://rocksdb.org/), an
-ordered durable key-value data store based on LSM trees. LogsDB is a
+ordered, durable, key-value data store based on LSM trees. LogsDB is a
 time-ordered collection of RocksDB column families, which are
 full-fledged RocksDB instances sharing a common write-ahead log. Each
-RocksDB instance is called a LogsDB partition. All new writes for all
+RocksDB instance is called a LogsDB partition.
+
+All new writes for all
 logs, be it one log or a million, go into the most recent partition,
-which orders them by (log id, LSN), and saves on disk in a sequence of
+which orders them by (log id, LSN), and saves them on disk in a
+sequence of
 large sorted immutable files, called SST files. This makes the write
 IO workload on the drive mostly sequential, but creates the need to
-merge data from multiple files (up to the maximum allowed number of
-files in a LogsDB partition, 10 is common) when reading records.
+merge data from multiple files when reading records.
 Reading from multiple files may lead to read amplification, or wasting
 some read IO.
 
 LogsDB controls read amplification in a way uniquely suited for the
-log data model with its immutable records identified by immutable LSNs
+log data model, with its immutable records identified by immutable LSNs
 monotonically increasing with time. Instead of controlling the number
 of sorted files by compacting (merge-sorting) them into a bigger
-sorted run LogsDB simply leaves the partition alone once it reaches
+sorted run, LogsDB simply leaves the partition alone once it reaches
 its maximum number of SST files, and creates a new most recent
-partition. Because partitions are read sequentially, at no time the
-number of files to read concurrently will exceed the maximum number of
-files in a single partition, even if the total number of SST files in
-all partitions reaches tens of thousands.  Space reclamation is
-performed efficiently by deleting (or in some cases infrequently
+partition.
+
+Because partitions are read sequentially, at no time does the
+number of files to read concurrently exceed the maximum number of
+files in a single partition (usually about 20), even if the
+total number of SST files in
+all partitions reaches tens of thousands.  Space is
+reclaimed efficiently by deleting (or, infrequently,
 compacting) the oldest partition.
