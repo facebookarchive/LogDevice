@@ -139,7 +139,7 @@ bool NodesConfigurationManager::init(
   if (wait_until_initialized) {
     // We should not be on _any_ worker thread, otherwise we will deadlock.
     deps_->dcheckNotOnProcessor();
-    return initialized_.try_wait_for(std::chrono::seconds(10));
+    return initialized_.try_wait_for(std::chrono::seconds(30));
   }
   return true;
 }
