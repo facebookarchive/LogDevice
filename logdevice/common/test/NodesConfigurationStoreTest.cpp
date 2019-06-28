@@ -75,6 +75,14 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
     });
     checkAndResetBaton(b);
 
+    store->getConfig(
+        [&b](Status status, std::string) {
+          EXPECT_EQ(Status::NOTFOUND, status);
+          b.post();
+        },
+        /*base_version*/ version_t(100));
+    checkAndResetBaton(b);
+
     EXPECT_EQ(Status::NOTFOUND, store->getConfigSync(&value_out));
 
     // initial write
@@ -84,6 +92,23 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
 
     EXPECT_EQ(Status::OK, store->getConfigSync(&value_out));
     EXPECT_EQ(TestEntry(10, "foo123"), TestEntry::fromSerialized(value_out));
+
+    store->getConfig(
+        [&b](Status status, std::string) {
+          EXPECT_EQ(Status::UPTODATE, status);
+          b.post();
+        },
+        /*base_version*/ version_t(10));
+    checkAndResetBaton(b);
+
+    store->getConfig(
+        [&b](Status status, std::string str) {
+          EXPECT_EQ(Status::OK, status);
+          EXPECT_EQ(TestEntry(10, "foo123"), TestEntry::fromSerialized(str));
+          b.post();
+        },
+        /*base_version*/ version_t(9));
+    checkAndResetBaton(b);
   }
 
   // update: blind overwrite

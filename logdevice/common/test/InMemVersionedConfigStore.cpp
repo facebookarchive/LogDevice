@@ -14,21 +14,38 @@ namespace facebook { namespace logdevice {
 
 //////// InMemVersionedConfigStore ////////
 
-void InMemVersionedConfigStore::getConfig(std::string key,
-                                          value_callback_t cb) const {
+void InMemVersionedConfigStore::getConfig(
+    std::string key,
+    value_callback_t cb,
+    folly::Optional<version_t> base_version) const {
   std::string value{};
-  Status status = getConfigSync(std::move(key), &value);
+  Status status = getConfigSync(std::move(key), &value, base_version);
   cb(status, std::move(value));
 }
 
-Status InMemVersionedConfigStore::getConfigSync(std::string key,
-                                                std::string* value_out) const {
+Status InMemVersionedConfigStore::getConfigSync(
+    std::string key,
+    std::string* value_out,
+    folly::Optional<version_t> base_version) const {
   {
     auto lockedConfigs = configs_.rlock();
     auto it = lockedConfigs->find(key);
     if (it == lockedConfigs->end()) {
       return Status::NOTFOUND;
     }
+
+    if (base_version.hasValue()) {
+      auto opt = extract_fn_(it->second);
+      if (!opt) {
+        return Status::BADMSG;
+      }
+
+      if (opt.value() <= base_version.value()) {
+        *value_out = "";
+        return Status::UPTODATE;
+      }
+    }
+
     if (value_out) {
       *value_out = it->second;
     }

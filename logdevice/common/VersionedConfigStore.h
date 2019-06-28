@@ -28,6 +28,7 @@ class VersionedConfigStore {
   //   NOTFOUND: key not found, corresponds to ZNONODE
   //   VERSION_MISMATCH: corresponds to ZBADVERSION
   //   ACCESS: permission denied, corresponds to ZNOAUTH
+  //   UPTODATE: current version is up-to-date for conditional get
   //   AGAIN: transient errors (including connection closed ZCONNECTIONLOSS,
   //          timed out ZOPERATIONTIMEOUT, throttled ZWRITETHROTTLE)
   using value_callback_t = folly::Function<void(Status, std::string)>;
@@ -56,10 +57,19 @@ class VersionedConfigStore {
    *   status OK, NOTFOUND, ACCESS, INVALID_PARAM, INVALID_CONFIG, AGAIN, or
    *   SHUTDOWN. If status is OK, cb will be invoked with the value. Otherwise,
    *   the value parameter is meaningless (but default-constructed).
+   * @param base_version
+   *   an optional conditional version. If set, it instructs the store only
+   *   delivers config if its version is > base_version. Otherwise the cb will
+   *   be called with status == E::UPTODATE with an empty string.
+   *   Implementations can take advantage of such conditional fetch to reduce
+   *   the amount of data transmissions.
    *
    * Note that the reads do not need to be linearizable with the writes.
    */
-  virtual void getConfig(std::string key, value_callback_t cb) const = 0;
+  virtual void
+  getConfig(std::string key,
+            value_callback_t cb,
+            folly::Optional<version_t> base_version = {}) const = 0;
 
   /*
    * synchronous read
@@ -68,6 +78,7 @@ class VersionedConfigStore {
    * @param value_out: the config (string)
    *   If the status is OK, value will be set to the returned config. Otherwise,
    *   it will be untouched.
+   * @param base_version   see getConfig() above.
    *
    * @return status is one of:
    *   OK // == 0
@@ -76,9 +87,13 @@ class VersionedConfigStore {
    *   AGAIN
    *   INVALID_PARAM
    *   INVALID_CONFIG
+   *   UPTODATE
    *   SHUTDOWN
    */
-  virtual Status getConfigSync(std::string key, std::string* value_out) const;
+  virtual Status
+  getConfigSync(std::string key,
+                std::string* value_out,
+                folly::Optional<version_t> base_version = {}) const;
 
   /*
    * strongly consistent read. Ensures that the returned config reflects any

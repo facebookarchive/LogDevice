@@ -35,10 +35,14 @@ class NodesConfigurationStore {
   virtual ~NodesConfigurationStore() = default;
 
   // Read the documentation of VersionedConfigStore::getConfig.
-  virtual void getConfig(value_callback_t cb) const = 0;
+  virtual void
+  getConfig(value_callback_t cb,
+            folly::Optional<version_t> base_version = {}) const = 0;
 
   // Read the documentation of VersionedConfigStore::getConfigSync.
-  virtual Status getConfigSync(std::string* value_out) const = 0;
+  virtual Status
+  getConfigSync(std::string* value_out,
+                folly::Optional<version_t> base_version = {}) const = 0;
 
   // Read the documentation of VersionedConfigStore::getLatestConfig.
   virtual void getLatestConfig(value_callback_t cb) const = 0;
@@ -73,12 +77,16 @@ class VersionedNodesConfigurationStore : public NodesConfigurationStore {
 
   virtual ~VersionedNodesConfigurationStore() = default;
 
-  virtual void getConfig(value_callback_t cb) const override {
-    store_->getConfig(path_, std::move(cb));
+  virtual void
+  getConfig(value_callback_t cb,
+            folly::Optional<version_t> base_version = {}) const override {
+    store_->getConfig(path_, std::move(cb), base_version);
   }
 
-  virtual Status getConfigSync(std::string* value_out) const override {
-    return store_->getConfigSync(path_, value_out);
+  virtual Status
+  getConfigSync(std::string* value_out,
+                folly::Optional<version_t> base_version = {}) const override {
+    return store_->getConfigSync(path_, value_out, base_version);
   }
 
   virtual void getLatestConfig(value_callback_t cb) const override {

@@ -28,7 +28,9 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
 
   ~FileBasedVersionedConfigStore();
 
-  void getConfig(std::string key, value_callback_t cb) const override;
+  void getConfig(std::string key,
+                 value_callback_t cb,
+                 folly::Optional<version_t> base_version = {}) const override;
   void getLatestConfig(std::string key, value_callback_t cb) const override;
 
   void updateConfig(std::string key,
@@ -50,7 +52,9 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
   void threadMain();
 
   // must be executed on the TaskThread
-  void getConfigImpl(std::string key, value_callback_t cb) const;
+  void getConfigImpl(std::string key,
+                     value_callback_t cb,
+                     folly::Optional<version_t> base_version) const;
   void updateConfigImpl(std::string key,
                         std::string value,
                         folly::Optional<version_t> base_version,

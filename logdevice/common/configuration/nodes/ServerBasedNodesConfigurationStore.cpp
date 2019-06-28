@@ -28,10 +28,12 @@ class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
  public:
   NodesConfigurationOneTimePollRequest(
       NodesConfigurationPoller::Poller::Options options,
-      NodesConfigurationStore::value_callback_t cb)
+      NodesConfigurationStore::value_callback_t cb,
+      folly::Optional<NodesConfigurationStore::version_t> base_version)
       : FireAndForgetRequest(RequestType::NODES_CONFIGURATION_ONETIME_POLL),
         options_(std::move(options)),
-        cb_(std::move(cb)) {}
+        cb_(std::move(cb)),
+        base_version_(base_version) {}
 
   void executionBody() override {
     poller_ = std::make_unique<NodesConfigurationPoller>(
@@ -41,7 +43,8 @@ class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
                NodesConfigurationPoller::Poller::RoundID /*round*/,
                folly::Optional<std::string> config_str) {
           onPollerCallback(st, std::move(config_str));
-        });
+        },
+        base_version_);
     poller_->start();
   }
 
@@ -57,6 +60,7 @@ class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
       RATELIMIT_DEBUG(std::chrono::seconds(10),
                       2,
                       "NodesConfiguration polling no-op: UPTODATE");
+      st = E::UPTODATE;
     }
     cb_(st, std::move(config_str).value_or(""));
     destroy();
@@ -65,6 +69,7 @@ class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
  private:
   NodesConfigurationPoller::Poller::Options options_;
   NodesConfigurationStore::value_callback_t cb_;
+  const folly::Optional<NodesConfigurationStore::version_t> base_version_;
   std::unique_ptr<NodesConfigurationPoller> poller_;
 };
 
@@ -93,17 +98,18 @@ ServerBasedNodesConfigurationStore::genPollerOptions(
 }
 
 void ServerBasedNodesConfigurationStore::getConfig(
-    value_callback_t callback) const {
+    value_callback_t callback,
+    folly::Optional<version_t> base_version) const {
   if (shutdown_signaled_.load()) {
     callback(E::SHUTDOWN, "");
     return;
   }
 
   auto worker = Worker::onThisThread();
-  // TODO: genPollerOptions is currently using the NodesConfiguration from the
-  // ServerConfig, later this will be switched to use the NodesConfiguration
-  // maintained by NCM, and we need to make sure such NC is always available,
-  // even in the special bootstrapping processor
+  // TODO T44484704: genPollerOptions is currently using the NodesConfiguration
+  // from the ServerConfig, later this will be switched to use the
+  // NodesConfiguration maintained by NCM, and we need to make sure such NC is
+  // always available, even in the special bootstrapping processor
   std::unique_ptr<Request> rq =
       std::make_unique<NodesConfigurationOneTimePollRequest>(
           genPollerOptions(
@@ -111,12 +117,14 @@ void ServerBasedNodesConfigurationStore::getConfig(
               *worker->processor_->settings(),
               *worker->processor_->config_->getServerConfig()
                    ->getNodesConfigurationFromServerConfigSource()),
-          std::move(callback));
+          std::move(callback),
+          base_version);
   worker->processor_->postRequest(rq);
 }
 
 Status ServerBasedNodesConfigurationStore::getConfigSync(
-    std::string* /* value_out */) const {
+    std::string* /* value_out */,
+    folly::Optional<version_t>) const {
   return Status::NOTSUPPORTED;
 }
 

@@ -31,12 +31,15 @@ class ServerBasedNodesConfigurationStore : public NodesConfigurationStore {
   // config fetch request is sent to a random serer in the cluster.
   //
   // Must be called from a worker thread.
-  void getConfig(value_callback_t cb) const override;
+  void getConfig(value_callback_t cb,
+                 folly::Optional<version_t> base_version = {}) const override;
 
   // We can't support a sync config fetch easily. The `getConfig` methods posts
   // a ConfigurationFetchRequest which may end up scheduled on this worker
   // causing a deadlock.
-  Status getConfigSync(std::string* value_out) const override;
+  Status
+  getConfigSync(std::string* value_out,
+                folly::Optional<version_t> base_version = {}) const override;
 
   // This NodesConfigurationStore doesn't support linearizable read.
   // It will unconditionally throw a runtime_error.

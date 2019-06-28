@@ -29,6 +29,7 @@ TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
       std::make_shared<UpdateableConfig>(createSimpleConfig(3, 0));
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 5;
+  settings.bootstrapping = true;
   auto processor = make_test_processor(
       settings, std::move(updatable_config), nullptr, NodeID(0, 1));
   auto nc = processor->getNodesConfiguration();

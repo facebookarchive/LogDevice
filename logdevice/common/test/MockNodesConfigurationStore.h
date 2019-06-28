@@ -16,12 +16,17 @@ namespace nodes {
 
 class MockNodesConfigurationStore : public NodesConfigurationStore {
  public:
-  void getConfig(value_callback_t cb) const {
-    getConfig_(cb);
+  void getConfig(value_callback_t cb,
+                 folly::Optional<version_t> base_version = {}) const {
+    getConfig_(cb, base_version);
   }
-  MOCK_CONST_METHOD1(getConfig_, void(value_callback_t& cb));
+  MOCK_CONST_METHOD2(getConfig_,
+                     void(value_callback_t& cb,
+                          folly::Optional<version_t> base_version));
 
-  MOCK_CONST_METHOD1(getConfigSync, Status(std::string* value_out));
+  MOCK_CONST_METHOD2(getConfigSync,
+                     Status(std::string* value_out,
+                            folly::Optional<version_t> base_version));
 
   void getLatestConfig(value_callback_t cb) const {
     getLatestConfig_(cb);

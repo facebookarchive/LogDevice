@@ -39,7 +39,9 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
   // store the extraction function and Zookeeper client as shared_ptr-s.
   ~ZookeeperVersionedConfigStore() override {}
 
-  void getConfig(std::string key, value_callback_t cb) const override;
+  void getConfig(std::string key,
+                 value_callback_t cb,
+                 folly::Optional<version_t> base_version = {}) const override;
 
   // Does a linearizable read to zookeeper by doing a sync() call first and
   // then the actual read.

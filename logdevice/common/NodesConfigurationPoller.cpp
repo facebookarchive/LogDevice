@@ -18,12 +18,15 @@
 
 namespace facebook { namespace logdevice {
 
-NodesConfigurationPoller::NodesConfigurationPoller(Poller::Options options,
-                                                   VersionExtFn version_fn,
-                                                   Callback cb)
+NodesConfigurationPoller::NodesConfigurationPoller(
+    Poller::Options options,
+    VersionExtFn version_fn,
+    Callback cb,
+    folly::Optional<Version> conditional_base_version)
     : options_(std::move(options)),
       version_fn_(std::move(version_fn)),
       cb_(std::move(cb)),
+      conditional_base_version_(std::move(conditional_base_version)),
       callback_helper_(this) {
   ld_check(version_fn_ != nullptr);
   ld_check(cb_ != nullptr);
@@ -87,6 +90,13 @@ NodesConfigurationPoller::createPoller() {
 }
 
 void NodesConfigurationPoller::onNodesConfigurationChanged() {
+  if (isBootstrapping()) {
+    // do not update highest_seen or update source candidate nodes
+    // in bootstrapping environment as it uses a different bootstrapping
+    // nodes configuration
+    return;
+  }
+
   const auto& nodes_configuration = getNodesConfiguration();
   const auto new_version = nodes_configuration->getVersion();
   if (new_version > highest_seen_) {
@@ -174,6 +184,23 @@ void NodesConfigurationPoller::onPollerCallback(
   cb_(st, round, std::move(config_str));
 }
 
+folly::Optional<NodesConfigurationPoller::Version>
+NodesConfigurationPoller::getConditionalPollVersion() const {
+  if (isBootstrapping()) {
+    return folly::none;
+  }
+
+  if (conditional_base_version_.hasValue()) {
+    // if conditional_base_version_ is set, use the given
+    // conditional_base_version_
+    return conditional_base_version_.value();
+  }
+
+  // otherwise, use the highest seen nodes configuration version,
+  // if any
+  return highest_seen_.val() > 0 ? highest_seen_ : folly::Optional<Version>();
+}
+
 //////////// protected functions ///////////////
 
 ClusterState* NodesConfigurationPoller::getClusterState() {
@@ -182,7 +209,18 @@ ClusterState* NodesConfigurationPoller::getClusterState() {
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 NodesConfigurationPoller::getNodesConfiguration() const {
-  return Worker::onThisThread()->getNodesConfiguration();
+  if (isBootstrapping()) {
+    // for bootstrapping environment, currently only server config
+    // based NC is available
+    // TODO T44484704: use NC for seed hosts in NodesConfigurationInit
+    // bootstrapping
+    return Worker::onThisThread()
+        ->getNodesConfigurationFromServerConfigSource();
+  }
+
+  // Otherwise, NodesConfigurationPoller is used by NCM so it must use
+  // NCM based NC for conditional polling
+  return Worker::onThisThread()->getNodesConfigurationFromNCMSource();
 }
 
 folly::Optional<node_index_t> NodesConfigurationPoller::getMyNodeID() const {
@@ -190,6 +228,10 @@ folly::Optional<node_index_t> NodesConfigurationPoller::getMyNodeID() const {
   return (processor->hasMyNodeID()
               ? folly::Optional<node_index_t>(processor->getMyNodeID().index())
               : folly::none);
+}
+
+bool NodesConfigurationPoller::isBootstrapping() const {
+  return Worker::settings().bootstrapping;
 }
 
 NodesConfigurationPoller::Poller::RequestResult
@@ -211,13 +253,10 @@ NodesConfigurationPoller::sendRequestToNode(Poller::RoundID round,
     });
   };
 
-  folly::Optional<uint64_t> conditional_poll_version;
-  if (!Worker::settings().bootstrapping && highest_seen_.val() > 0) {
-    // if the request is running in a bootstrappig environment, do not enable
-    // conditional polling as the Processor's nodes configuration is not the
-    // real nodes config of the cluster. Otherwise, use the highest nodes
-    // configuration has ever seen for conditional polling
-    conditional_poll_version.assign(highest_seen_.val());
+  folly::Optional<uint64_t> conditional_poll_version_msg;
+  auto conditional_poll_version = getConditionalPollVersion();
+  if (conditional_poll_version.hasValue()) {
+    conditional_poll_version_msg.assign(conditional_poll_version.value().val());
   }
 
   std::unique_ptr<Request> rq = std::make_unique<ConfigurationFetchRequest>(
@@ -229,7 +268,7 @@ NodesConfigurationPoller::sendRequestToNode(Poller::RoundID round,
       WORKER_ID_INVALID,
       // use the full round timeout as the RPC request timeout
       options_.round_timeout,
-      conditional_poll_version);
+      conditional_poll_version_msg);
 
   int rv = worker->processor_->postRequest(rq);
   if (rv != 0 && err == E::NOBUFS) {

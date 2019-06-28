@@ -20,8 +20,10 @@ namespace facebook { namespace logdevice {
 
 //////// ZookeeperVersionedConfigStore ////////
 
-void ZookeeperVersionedConfigStore::getConfig(std::string key,
-                                              value_callback_t callback) const {
+void ZookeeperVersionedConfigStore::getConfig(
+    std::string key,
+    value_callback_t callback,
+    folly::Optional<version_t> base_version) const {
   auto locked_ptr = shutdown_completed_.tryRLock();
   if (shutdownSignaled()) {
     callback(E::SHUTDOWN, "");
@@ -32,9 +34,34 @@ void ZookeeperVersionedConfigStore::getConfig(std::string key,
   ld_assert(locked_ptr && !*locked_ptr);
 
   ZookeeperClientBase::data_callback_t completion =
-      [cb = std::move(callback)](int rc, std::string value, zk::Stat) mutable {
+      [cb = std::move(callback), extract_fn = extract_fn_, base_version, key](
+          int rc, std::string value, zk::Stat) mutable {
         Status status = ZookeeperClientBase::toStatus(rc);
-        cb(status, status == Status::OK ? std::move(value) : "");
+        if (status != Status::OK) {
+          cb(status, "");
+          return;
+        }
+
+        if (base_version.hasValue()) {
+          auto current_version_opt = (*extract_fn)(value);
+          if (!current_version_opt) {
+            RATELIMIT_WARNING(
+                std::chrono::seconds(10),
+                5,
+                "Failed to extract version from value read from "
+                "ZookeeperVersionedConfigurationStore. key: \"%s\"",
+                key.c_str());
+            cb(Status::BADMSG, "");
+            return;
+          }
+          if (current_version_opt.value() <= base_version.value()) {
+            // zk's config version is not larger than the base version
+            cb(Status::UPTODATE, "");
+            return;
+          }
+        }
+
+        cb(Status::OK, std::move(value));
       };
   zk_->getData(std::move(key), std::move(completion));
 }

@@ -132,6 +132,8 @@ NodesConfigurationInit::buildBootstrappingServerConfig(
       ("nodeset", folly::dynamic::array(0))
       ("replication_factor", 1));
 
+  // TODO T44484704: use NC for seed hosts in NodesConfigurationInit
+  // bootstrapping
   for (size_t index = 0; index < host_list.size(); index++) {
     json["nodes"].push_back(folly::dynamic::object
       ("node_id", index)
@@ -165,6 +167,8 @@ std::shared_ptr<Processor> NodesConfigurationInit::buildBootstrappingProcessor(
       createAugmentedCommonBuiltinPluginVector<>());
 
   auto trace_logger = std::make_shared<NoopTraceLogger>(config);
+  // TODO T44484704: use NC for seed hosts in NodesConfigurationInit
+  // bootstrapping
   return Processor::create(std::move(config),
                            trace_logger,
                            UpdateableSettings<Settings>(settings),

@@ -17,9 +17,14 @@ class InMemVersionedConfigStore : public VersionedConfigStore {
  public:
   explicit InMemVersionedConfigStore(extract_version_fn f)
       : configs_(), extract_fn_(std::move(f)) {}
-  void getConfig(std::string key, value_callback_t cb) const override;
+  void getConfig(std::string key,
+                 value_callback_t cb,
+                 folly::Optional<version_t> base_version = {}) const override;
 
-  Status getConfigSync(std::string key, std::string* value_out) const override;
+  Status
+  getConfigSync(std::string key,
+                std::string* value_out,
+                folly::Optional<version_t> base_version = {}) const override;
 
   void getLatestConfig(std::string key, value_callback_t cb) const override;
 

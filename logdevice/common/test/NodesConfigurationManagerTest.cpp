@@ -338,9 +338,11 @@ TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
     // at startup.
     auto processor = make_test_processor(settings);
     auto store = std::make_unique<MockNodesConfigurationStore>();
-    EXPECT_CALL(*store, getConfig_(_)).Times(1).WillOnce(Invoke([&](auto& cb) {
-      cb(Status::OK, config);
-    }));
+    EXPECT_CALL(*store, getConfig_(_, _))
+        .Times(1)
+        .WillOnce(Invoke([&](auto& cb,
+                             folly::Optional<NodesConfigurationStore::version_t>
+                                 base_version) { cb(Status::OK, config); }));
     EXPECT_CALL(*store, getLatestConfig_(testing::_)).Times(0);
     auto deps = std::make_unique<TestDeps>(processor.get(), std::move(store));
     auto m = NodesConfigurationManager::create(
@@ -354,7 +356,7 @@ TEST_F(NodesConfigurationManagerTest, LinearizableReadOnStartup) {
     // This is a storage node NCM. It must do a linearizable read on startup.
     auto processor = make_test_processor(settings);
     auto store = std::make_unique<MockNodesConfigurationStore>();
-    EXPECT_CALL(*store, getConfig_(_)).Times(0);
+    EXPECT_CALL(*store, getConfig_(_, _)).Times(0);
     EXPECT_CALL(*store, getLatestConfig_(_))
         .Times(1)
         .WillOnce(Invoke([&](auto& cb) { cb(Status::OK, config); }));

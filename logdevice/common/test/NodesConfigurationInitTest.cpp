@@ -51,7 +51,8 @@ class TimeControlledNCS : public NodesConfigurationStore {
         available_since_(Timestamp::now() + unavailable_duration),
         get_delay_(std::move(get_delay)) {}
 
-  void getConfig(value_callback_t cb) const override {
+  void getConfig(value_callback_t cb,
+                 folly::Optional<version_t> base_version = {}) const override {
     if (Timestamp::now() < available_since_) {
       cb(E::NOTREADY, "");
       return;
@@ -73,7 +74,9 @@ class TimeControlledNCS : public NodesConfigurationStore {
     getConfig(std::move(cb));
   }
 
-  Status getConfigSync(std::string*) const override {
+  Status
+  getConfigSync(std::string*,
+                folly::Optional<version_t> base_version = {}) const override {
     ld_check(false);
     return E::INTERNAL;
   }

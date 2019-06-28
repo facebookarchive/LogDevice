@@ -18,8 +18,10 @@
 
 namespace facebook { namespace logdevice {
 
-Status VersionedConfigStore::getConfigSync(std::string key,
-                                           std::string* value_out) const {
+Status VersionedConfigStore::getConfigSync(
+    std::string key,
+    std::string* value_out,
+    folly::Optional<version_t> base_version) const {
   folly::Baton<> b;
   Status ret_status = Status::OK;
   value_callback_t cb = [&b, &ret_status, value_out](
@@ -31,7 +33,7 @@ Status VersionedConfigStore::getConfigSync(std::string key,
     b.post();
   };
 
-  getConfig(std::move(key), std::move(cb));
+  getConfig(std::move(key), std::move(cb), std::move(base_version));
   b.wait();
 
   return ret_status;

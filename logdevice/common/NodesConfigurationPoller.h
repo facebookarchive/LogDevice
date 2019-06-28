@@ -38,9 +38,18 @@ class NodesConfigurationPoller {
   using VersionExtFn =
       configuration::nodes::NodesConfigurationStore::extract_version_fn;
 
-  NodesConfigurationPoller(Poller::Options options,
-                           VersionExtFn version_fn,
-                           Callback cb);
+  /**
+   * @param conditional_base_version   if set, always use this
+   *                                   conditional_base_version
+   *                                   as the base version (instead of
+   *                                   highest_seen_) to perform conditional
+   *                                   polling.
+   */
+  NodesConfigurationPoller(
+      Poller::Options options,
+      VersionExtFn version_fn,
+      Callback cb,
+      folly::Optional<Version> conditional_base_version = {});
   virtual ~NodesConfigurationPoller() {}
 
   // must be called on the worker thread
@@ -60,15 +69,20 @@ class NodesConfigurationPoller {
                                                   node_index_t node);
 
   virtual ClusterState* getClusterState();
+
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
 
   virtual folly::Optional<node_index_t> getMyNodeID() const;
+  // return true if the NCPoller is running in the bootstrapping environment
+  // (e.g., NodesConfigurationInit). If so, conditional polling will be disabled
+  virtual bool isBootstrapping() const;
 
  private:
   Poller::Options options_;
   VersionExtFn version_fn_;
   Callback cb_;
+  const folly::Optional<Version> conditional_base_version_;
   Version highest_seen_{0};
 
   std::unique_ptr<Poller> poller_;
@@ -90,6 +104,8 @@ class NodesConfigurationPoller {
   void onPollerCallback(Status st,
                         Poller::RoundID round,
                         folly::Optional<std::string> config_str);
+
+  folly::Optional<Version> getConditionalPollVersion() const;
 
   static NodeSourceSet candidatesFromNodesConfiguration(
       const configuration::nodes::NodesConfiguration& config,

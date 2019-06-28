@@ -75,8 +75,10 @@ void FileBasedVersionedConfigStore::threadMain() {
   }
 }
 
-void FileBasedVersionedConfigStore::getConfigImpl(std::string key,
-                                                  value_callback_t cb) const {
+void FileBasedVersionedConfigStore::getConfigImpl(
+    std::string key,
+    value_callback_t cb,
+    folly::Optional<version_t> base_version) const {
   if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, "");
     return;
@@ -116,6 +118,24 @@ void FileBasedVersionedConfigStore::getConfigImpl(std::string key,
              strerror(errno));
     cb(E::ACCESS, "");
     return;
+  }
+
+  if (base_version.hasValue()) {
+    auto current_version_opt = (extract_fn_)(value);
+    if (!current_version_opt) {
+      RATELIMIT_WARNING(std::chrono::seconds(10),
+                        5,
+                        "Failed to extract version from value read from "
+                        "FileBasedVersionedConfigurationStore. key: \"%s\"",
+                        key.c_str());
+      cb(E::BADMSG, "");
+      return;
+    }
+    if (current_version_opt.value() <= base_version.value()) {
+      // file's config version is not larger than the base version
+      cb(E::UPTODATE, "");
+      return;
+    }
   }
 
   cb(E::OK, std::move(value));
@@ -227,16 +247,18 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
   cb(E::OK, new_version, "");
 }
 
-void FileBasedVersionedConfigStore::getConfig(std::string key,
-                                              value_callback_t cb) const {
+void FileBasedVersionedConfigStore::getConfig(
+    std::string key,
+    value_callback_t cb,
+    folly::Optional<version_t> base_version) const {
   if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, {});
     return;
   }
 
   bool success = task_queue_.writeIfNotFull(
-      [this, key = std::move(key), cb = std::move(cb)]() mutable {
-        getConfigImpl(std::move(key), std::move(cb));
+      [this, key = std::move(key), cb = std::move(cb), base_version]() mutable {
+        getConfigImpl(std::move(key), std::move(cb), base_version);
       });
   if (!success) {
     // queue full, report transient error
