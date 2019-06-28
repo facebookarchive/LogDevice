@@ -90,7 +90,7 @@ policy, or in response to an explicit request to trim a log.</p></li>
 </ul>
 <p>LogDevice is designed from the ground up to serve many types of logs
 with high reliability and efficiency at scale. It is also highly
-tunable allowing each use case to be optimized for the right set of
+tunable, allowing each use case to be optimized for the right set of
 trade-offs in the durability-efficiency and consistency-availability
 space. Here are some examples of workloads supported by LogDevice:</p>
 <ul>
@@ -103,15 +103,16 @@ space. Here are some examples of workloads supported by LogDevice:</p>
 <li>Journals of deferred work items</li>
 </ul>
 <h2><a class="anchor" aria-hidden="true" id="getting-started"></a><a href="#getting-started" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Getting started</h2>
-<p>To learn more about LogDevice start with an explanation of its
-<a href="/docs/Concepts.html">concepts and architecture</a> and an overview of its
+<p>Start by <a href="/docs/LocalCluster.html">running a LogDevice cluster locally</a>.</p>
+<p>After that, try <a href="/docs/FirstCluster.html">Creating your first cluster</a>, which tells
+you how to configure a fully functional LogDevice cluster on multiple servers.</p>
+<p>To learn more about LogDevice, there's an explanation of its
+<a href="/docs/Concepts.html">concepts and architecture</a> and an overview of the
 <a href="/docs/API_Introduction.html">API</a>.</p>
-<p>The <a href="/docs/Installation.html">installation guide</a> explains how to obtain the
+<p>The <a href="/docs/Installation.html">build guide</a> explains how to obtain the
 source code and build LogDevice components including the logdeviced
 server, the client library, and the administrative shell utility called
 <code>ldshell</code>.</p>
-<p>Once you have built LogDevice you can try it out by running a
-LogDevice cluster <a href="/docs/LocalCluster.html">locally</a> on a single machine.</p>
 <h2><a class="anchor" aria-hidden="true" id="administration"></a><a href="#administration" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Administration</h2>
 <p>This release contains minimal support for LogDevice cluster
 administration. You can use the supplied ldshell utility to <a href="/docs/Logs.html">create
