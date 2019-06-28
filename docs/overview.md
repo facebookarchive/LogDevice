@@ -31,7 +31,7 @@ append-only, and trimmable file. In more detail:
 
 LogDevice is designed from the ground up to serve many types of logs
 with high reliability and efficiency at scale. It is also highly
-tunable allowing each use case to be optimized for the right set of
+tunable, allowing each use case to be optimized for the right set of
 trade-offs in the durability-efficiency and consistency-availability
 space. Here are some examples of workloads supported by LogDevice:
 
@@ -45,17 +45,19 @@ space. Here are some examples of workloads supported by LogDevice:
 
 ## Getting started
 
-To learn more about LogDevice start with an explanation of its
-[concepts and architecture](concepts.md) and an overview of its
+Start by [running a LogDevice cluster locally](localcluster.md).
+
+After that, try [Creating your first cluster](firstcluster.md), which tells
+you how to configure a fully functional LogDevice cluster on multiple servers.
+
+To learn more about LogDevice, there's an explanation of its
+[concepts and architecture](concepts.md) and an overview of the
 [API](API_Introduction.md).
 
-The [installation guide](installation.md) explains how to obtain the
+The [build guide](installation.md) explains how to obtain the
 source code and build LogDevice components including the logdeviced
 server, the client library, and the administrative shell utility called
 `ldshell`.
-
-Once you have built LogDevice you can try it out by running a
-LogDevice cluster [locally](localcluster.md) on a single machine.
 
 ## Administration
 
