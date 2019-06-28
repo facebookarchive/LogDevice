@@ -68,12 +68,12 @@
 <h2><a class="anchor" aria-hidden="true" id="introduction"></a><a href="#introduction" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Introduction</h2>
 <p>LogDevice is a distributed service that provides persistent storage
 and delivery of records organized in sequences called <strong>logs</strong>. For
-durability copies of each record are stored across multiple servers
+durability, copies of each record are stored across multiple servers
 and failure domains. LogDevice uses a novel technique called
 <em>non-deterministic decentralized record placement</em> in order to offer
 high write availability and consistently low write latencies even as
 some nodes in the cluster (or even entire failure domains, such as
-racks or datacenters), suffer a total failure, or a severe drop in
+racks or data centers), suffer a total failure, or a severe drop in
 capacity or connectivity.</p>
 <p>Log records are stored on <strong>storage nodes</strong> equipped with direct
 attached storage. The local storage layer of LogDevice is designed to
@@ -156,7 +156,8 @@ all readers see the records of that log. We just need to make sure
 that readers can efficiently find and obtain the copies. We use the
 term <strong>copyset</strong> for the set of storage nodes on which the copies of a
 particular record are stored. The copyset is selected at random, using
-a weighted uniform distribution, and a replication policy. The
+a weighted uniform distribution, and a replication policy.</p>
+<p>The
 replication policy for a log includes at least the replication factor
 R, typically 2 or 3. A fault tolerant replication policy may mandate
 the placement of copies in at least two hierarchical failure domains,
@@ -168,7 +169,7 @@ It effectively groups records on storage nodes in large variable size
 blocks.</p>
 <p>A client that wishes to read a particular log contacts all storage
 nodes that are permitted to store records of that log. That set,
-called the <strong>nodeset</strong> of the log is usually kept smaller than the
+called the <strong>nodeset</strong> of the log, is usually kept smaller than the
 total number of storage nodes in the cluster. The nodeset is a part
 of the log’s replication policy. It can be changed at any time, with
 an appropriate note in the log’s metadata history. The readers consult
@@ -200,23 +201,25 @@ would read and deliver a copy of each record to a particular reader.
 SCD is based on copysets and a dense <strong>copyset index</strong> maintained
 by the local log store of each storage node.</p>
 <h2><a class="anchor" aria-hidden="true" id="sequence-numbers"></a><a href="#sequence-numbers" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Sequence numbers</h2>
-<p>As shown in Figure 1 the sequence numbers of records in LogDevice are
+<p>As shown in Figure 1, the sequence numbers of records in LogDevice are
 not integers, but pairs of integers. The first component of the pair
 is called the <strong>epoch number</strong>, the second one is offset within
-epoch. The usual tuple comparison rules apply. In code the LSN is
-defined as an 8 byte integer with the high 4 bytes containing the
-epoch and the low 4 bytes the offset. The use of epochs in LSNs is
+epoch. The usual tuple comparison rules apply.</p>
+<p>In code, the LSN is
+defined as an 8 byte integer. The high 4 bytes contain the
+epoch and the low 4 bytes are the offset.</p>
+<p>The use of epochs in LSNs is
 another write availability optimization. When a sequencer node crashes
-or otherwise becomes unavailable LogDevice must bring up replacement
+or otherwise becomes unavailable, LogDevice must bring up replacement
 sequencers for all of the affected logs. The LSNs that each new
 sequencer starts to issue must be strictly greater than the LSNs of
 all records already written for that log. Epochs allow LogDevice to
 guarantee this without actually looking at what has been stored. When
-a new sequencer comes up it receives a new epoch number from the
+a new sequencer comes up, it receives a new epoch number from the
 metadata component called the epoch store. The epoch store acts as a
 repository of durable counters, one per log, that are seldom
 incremented and are guaranteed to never regress. Today we use Apache
-Zookeeper as the epoch store for LogDevice. In principle any durable
+Zookeeper as the epoch store for LogDevice. In principle, any durable
 and highly available data store that supports conditional atomic
 writes will do.</p>
 <p>The use of epochs allows a new sequencer to start processing appends
@@ -232,7 +235,7 @@ availability of some records. Both are bad outcomes that LogDevice
 tries to avoid as much as possible. Rebuilding creates more copies of
 records that have become under-replicated (have fewer than the target
 number of copies R) after one or more failures.</p>
-<p>In order to be effective rebuilding has to be fast. It must complete
+<p>In order to be effective, rebuilding has to be fast. It must complete
 before the next failure takes out the last copy of some unlucky
 record. LogDevice implements a <strong>many-to-many</strong> rebuilding protocol.
 All storage nodes act as both donors and recipients of record copies.</p>
@@ -252,18 +255,20 @@ devices, such as hard drives or SSDs. RAM-only storage is impractical
 when storing hours worth of records at 100MBps+ per node. When backlog
 duration is measured in days and the ingest rate is high, hard drives
 are far more cost efficient than flash. This is why we designed the
-local storage layer of LogDevice to perform well not only on flash
+local storage layer of LogDevice to perform well not only on flash,
 with its huge random IOPS capacity, but also on hard drives. Commodity HDDs
 can push a respectable amount of sequential writes and reads
 (100-200MBps), but top out at 100-140 random IOPS.</p>
-<p>We called the local log store of LogDevice <strong>LogsDB</strong>. It is a write
-optimized data store designed to keep the number of disk seeks small
+<p>We called the local log store of LogDevice <strong>LogsDB</strong>. It's a
+write-optimized data store that's designed to keep the
+number of disk seeks small
 and controlled, and the write and read IO patterns on the storage
-device mostly sequential. As their name implies write-optimized data
+device mostly sequential.</p>
+<p>As their name implies, write-optimized data
 stores aim to provide great performance when writing data, even if it
 belongs to multiple files or logs. The write performance is achieved
-at the expense of worse read efficiency on some access patterns. In
-addition to performing well on HDDs LogsDB is particularly efficient
+at the expense of read efficiency in some access patterns. In
+addition to performing well on HDDs, LogsDB is particularly efficient
 for log tailing workloads, a common pattern of log access where
 records are delivered to readers soon after they are written. The
 records are never read again, except in rare emergencies: those
@@ -271,29 +276,32 @@ massive backfills that I mentioned earlier. The reads are then mostly
 served from RAM, making the reduced read efficiency of a single log
 irrelevant.</p>
 <p>LogsDB is a layer on top of <a href="https://rocksdb.org/">RocksDB</a>, an
-ordered durable key-value data store based on LSM trees. LogsDB is a
+ordered, durable, key-value data store based on LSM trees. LogsDB is a
 time-ordered collection of RocksDB column families, which are
 full-fledged RocksDB instances sharing a common write-ahead log. Each
-RocksDB instance is called a LogsDB partition. All new writes for all
+RocksDB instance is called a LogsDB partition.</p>
+<p>All new writes for all
 logs, be it one log or a million, go into the most recent partition,
-which orders them by (log id, LSN), and saves on disk in a sequence of
+which orders them by (log id, LSN), and saves them on disk in a
+sequence of
 large sorted immutable files, called SST files. This makes the write
 IO workload on the drive mostly sequential, but creates the need to
-merge data from multiple files (up to the maximum allowed number of
-files in a LogsDB partition, 10 is common) when reading records.
+merge data from multiple files when reading records.
 Reading from multiple files may lead to read amplification, or wasting
 some read IO.</p>
 <p>LogsDB controls read amplification in a way uniquely suited for the
-log data model with its immutable records identified by immutable LSNs
+log data model, with its immutable records identified by immutable LSNs
 monotonically increasing with time. Instead of controlling the number
 of sorted files by compacting (merge-sorting) them into a bigger
-sorted run LogsDB simply leaves the partition alone once it reaches
+sorted run, LogsDB simply leaves the partition alone once it reaches
 its maximum number of SST files, and creates a new most recent
-partition. Because partitions are read sequentially, at no time the
-number of files to read concurrently will exceed the maximum number of
-files in a single partition, even if the total number of SST files in
-all partitions reaches tens of thousands.  Space reclamation is
-performed efficiently by deleting (or in some cases infrequently
+partition.</p>
+<p>Because partitions are read sequentially, at no time does the
+number of files to read concurrently exceed the maximum number of
+files in a single partition (usually about 20), even if the
+total number of SST files in
+all partitions reaches tens of thousands.  Space is
+reclaimed efficiently by deleting (or, infrequently,
 compacting) the oldest partition.</p>
 </span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/LocalCluster.html"><span class="arrow-prev">← </span><span>Run a local cluster in Docker</span></a><a class="docs-next button" href="/docs/Terminology.html"><span>Terminology</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#introduction">Introduction</a></li><li><a href="#consistency-guarantees">Consistency guarantees</a></li><li><a href="#non-deterministic-record-placement">Non-deterministic record placement</a></li><li><a href="#sequence-numbers">Sequence numbers</a></li><li><a href="#many-to-many-rebuilding">Many-to-many rebuilding</a></li><li><a href="#logsdb-the-local-log-store">LogsDB: the local log store</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2019 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
                 document.addEventListener('keyup', function(e) {
