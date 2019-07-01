@@ -11,8 +11,12 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
+
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration;
+using namespace facebook::logdevice::NodesConfigurationTestUtil;
+using namespace std::literals::string_literals;
 using namespace ::testing;
 
 // Convenient shortcuts for writting NodeIDs.
@@ -29,25 +33,31 @@ using StateList = NodeStatsControllerLocator::StateList;
 class MockLocator : public NodeStatsControllerLocator {
  public:
   MOCK_CONST_METHOD1(getNodeState, StateList(node_index_t));
-  MOCK_CONST_METHOD0(getNodes, std::shared_ptr<const Nodes>());
+  MOCK_CONST_METHOD0(getNodesConfiguration,
+                     std::shared_ptr<const NodesConfiguration>());
 };
 
 class NodeStatsControllerLocatorTest : public Test {
  public:
-  std::shared_ptr<Nodes>
-  nodesWithLocations(std::vector<std::string> locations) {
-    auto nodes = std::make_shared<Nodes>();
+  std::shared_ptr<const NodesConfiguration>
+  nodesWithLocations(std::vector<folly::Optional<std::string>> locations) {
+    std::vector<NodeTemplate> templates;
     for (const auto& location_str : locations) {
-      NodeLocation location;
-      location.fromDomainString(location_str);
-      Node node;
-      node.location = location;
-      node.generation = 1;
-      nodes->emplace(node_index, std::move(node));
-      ++node_index;
+      auto idx = node_index++;
+      if (!location_str.hasValue()) {
+        continue;
+      }
+      templates.emplace_back(NodeTemplate{
+          idx,
+          both_role,
+          *location_str,
+      });
     }
+    auto nc = std::make_shared<const NodesConfiguration>();
+    nc = nc->applyUpdate(initialProvisionUpdate(std::move(templates)));
+    ld_check(nc != nullptr);
 
-    return nodes;
+    return nc;
   }
 
   MockLocator locator;
@@ -55,9 +65,9 @@ class NodeStatsControllerLocatorTest : public Test {
 };
 
 TEST_F(NodeStatsControllerLocatorTest, MoreControllersThanNodes) {
-  auto nodes = nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"});
+  auto nodes = nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"s});
 
-  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
+  EXPECT_CALL(locator, getNodesConfiguration()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{FULLY_STARTED}));
   // best effort
@@ -65,8 +75,8 @@ TEST_F(NodeStatsControllerLocatorTest, MoreControllersThanNodes) {
 }
 
 TEST_F(NodeStatsControllerLocatorTest, SingleNode) {
-  auto nodes = nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"});
-  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
+  auto nodes = nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"s});
+  EXPECT_CALL(locator, getNodesConfiguration()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{FULLY_STARTED}));
 
@@ -75,9 +85,9 @@ TEST_F(NodeStatsControllerLocatorTest, SingleNode) {
 
 TEST_F(NodeStatsControllerLocatorTest, DifferentRack) {
   auto nodes = nodesWithLocations(
-      {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
+      {"rg0.dc0.cl0.ro0.rk0"s, "rg0.dc0.cl0.ro0.rk0"s, "rg0.dc0.cl0.ro0.rk1"s});
   // two in the same rack, one in another
-  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
+  EXPECT_CALL(locator, getNodesConfiguration()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(
           Return(StateList{FULLY_STARTED, FULLY_STARTED, FULLY_STARTED}));
@@ -90,8 +100,8 @@ TEST_F(NodeStatsControllerLocatorTest, DifferentRack) {
 // will choose from same rack if necessary
 TEST_F(NodeStatsControllerLocatorTest, SameRack) {
   auto nodes = nodesWithLocations(
-      {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
-  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
+      {"rg0.dc0.cl0.ro0.rk0"s, "rg0.dc0.cl0.ro0.rk0"s, "rg0.dc0.cl0.ro0.rk1"s});
+  EXPECT_CALL(locator, getNodesConfiguration()).WillRepeatedly(Return(nodes));
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(
           Return(StateList{FULLY_STARTED, FULLY_STARTED, FULLY_STARTED}));
@@ -103,8 +113,8 @@ TEST_F(NodeStatsControllerLocatorTest, SameRack) {
 
 TEST_F(NodeStatsControllerLocatorTest, DeadNode) {
   auto nodes = nodesWithLocations(
-      {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
-  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
+      {"rg0.dc0.cl0.ro0.rk0"s, "rg0.dc0.cl0.ro0.rk0"s, "rg0.dc0.cl0.ro0.rk1"s});
+  EXPECT_CALL(locator, getNodesConfiguration()).WillRepeatedly(Return(nodes));
   // if a node is DEAD, pick another one, even if it's in the same rack
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{FULLY_STARTED, FULLY_STARTED, DEAD}));
@@ -114,12 +124,9 @@ TEST_F(NodeStatsControllerLocatorTest, DeadNode) {
 
 TEST_F(NodeStatsControllerLocatorTest, GapInIndex) {
   auto nodes = nodesWithLocations(
-      {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1"});
-  // make gap
-  nodes->emplace(std::make_pair(2, nodes->at(1)));
-  nodes->erase(1);
+      {"rg0.dc0.cl0.ro0.rk0"s, folly::none, "rg0.dc0.cl0.ro0.rk0"s});
 
-  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
+  EXPECT_CALL(locator, getNodesConfiguration()).WillRepeatedly(Return(nodes));
 
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(Return(StateList{FULLY_STARTED, DEAD, FULLY_STARTED}));
@@ -129,12 +136,10 @@ TEST_F(NodeStatsControllerLocatorTest, GapInIndex) {
 }
 
 TEST_F(NodeStatsControllerLocatorTest, WithoutLocation) {
-  auto nodes = nodesWithLocations(
-      {"rg0.dc0.cl0.ro0.rk0", "rg0.dc0.cl0.ro0.rk1", "rg0.dc0.cl0.ro0.rk2"});
+  auto nodes =
+      nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"s, ""s, "rg0.dc0.cl0.ro0.rk2"s});
 
-  nodes->at(1).location.clear();
-
-  EXPECT_CALL(locator, getNodes()).WillRepeatedly(Return(nodes));
+  EXPECT_CALL(locator, getNodesConfiguration()).WillRepeatedly(Return(nodes));
 
   EXPECT_CALL(locator, getNodeState(_))
       .WillRepeatedly(

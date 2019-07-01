@@ -15,6 +15,7 @@
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/Node.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/server/sequencer_boycotting/MovingAverageAppendOutlierDetector.h"
 #include "logdevice/server/sequencer_boycotting/NodeStatsControllerCallback.h"
 #include "logdevice/server/sequencer_boycotting/PerClientNodeStatsAggregator.h"
@@ -141,9 +142,10 @@ class NodeStatsController : public NodeStatsControllerCallback {
   virtual std::vector<NodeID> getTargetNodes() const;
 
   /**
-   * @return The nodes defined in the nodes config
+   * @return The nodes defined in the nodes configuration
    */
-  virtual const configuration::Nodes& getNodes() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
   /**
    * @return The failure detector if set, nullptr otherwise

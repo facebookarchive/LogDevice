@@ -35,7 +35,9 @@ class MockNodeStatsController : public NodeStatsController {
 
   MOCK_CONST_METHOD0(getRetentionTime, std::chrono::milliseconds());
   MOCK_CONST_METHOD0(getAggregationPeriod, std::chrono::milliseconds());
-  MOCK_CONST_METHOD0(getNodes, const configuration::Nodes&());
+  MOCK_CONST_METHOD0(
+      getNodesConfiguration,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>());
 
   size_t getMaxNodeIndex() const override {
     return max_node_index_;

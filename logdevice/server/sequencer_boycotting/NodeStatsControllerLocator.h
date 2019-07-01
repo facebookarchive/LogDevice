@@ -20,7 +20,7 @@
 namespace facebook { namespace logdevice {
 class NodeStatsControllerLocator {
  public:
-  using Nodes = configuration::Nodes;
+  using NodesConfiguration = configuration::nodes::NodesConfiguration;
   using StateList = std::vector<ClusterState::NodeState>;
 
   virtual ~NodeStatsControllerLocator() = default;
@@ -38,11 +38,11 @@ class NodeStatsControllerLocator {
   bool isController(NodeID node, int count);
 
  protected:
-  virtual std::shared_ptr<const Nodes> getNodes() const;
+  virtual std::shared_ptr<const NodesConfiguration>
+  getNodesConfiguration() const;
   virtual StateList getNodeState(node_index_t max_node_index) const;
 
  private:
-  node_index_t getMaxNodeIndex(const Nodes& nodes) const;
   /**
    * Will try to place the controllers in different racks. If this is not
    * possible due to lack of information, or because lack of nodes, will
@@ -89,7 +89,7 @@ class NodeStatsControllerLocator {
    * to share location with the banned_rack
    */
   void banRack(const NodeLocation& banned_rack,
-               const Nodes& nodes,
+               const NodesConfiguration& nc,
                /*modifiable*/ std::vector<double>* weight_vector) const;
 };
 }} // namespace facebook::logdevice

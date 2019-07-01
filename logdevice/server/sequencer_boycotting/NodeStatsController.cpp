@@ -274,17 +274,14 @@ void NodeStatsController::aggregate() {
 std::vector<NodeID> NodeStatsController::detectOutliers() const {
   const auto now = std::chrono::steady_clock::now();
   auto outliers = outlier_detector_->detectOutliers(now);
-  const auto& nodes = getNodes();
+  const auto& nc = getNodesConfiguration();
   std::vector<NodeID> outlier_nodes;
   outliers.reserve(outliers.size());
 
   // from node_index to NodeID
   for (const auto& outlier_index : outliers) {
-    auto it = nodes.find(outlier_index);
-    // the nodes might've updated since we started
-    if (it != nodes.end()) {
-      outlier_nodes.emplace_back(
-          NodeID{it->first, static_cast<node_gen_t>(it->second.generation)});
+    if (nc->isNodeInServiceDiscoveryConfig(outlier_index)) {
+      outlier_nodes.emplace_back(nc->getNodeID(outlier_index));
     }
   }
 
@@ -356,20 +353,21 @@ std::chrono::milliseconds NodeStatsController::getAggregationPeriod() const {
 }
 
 std::vector<NodeID> NodeStatsController::getTargetNodes() const {
-  const auto& nodes = getNodes();
+  const auto& nc = getNodesConfiguration();
 
   std::vector<NodeID> target_nodes;
-  target_nodes.reserve(nodes.size());
+  target_nodes.reserve(nc->getServiceDiscovery()->numNodes());
 
-  for (auto& entry : nodes) {
-    target_nodes.emplace_back(NodeID(entry.first, entry.second.generation));
+  for (auto& entry : *nc->getServiceDiscovery()) {
+    target_nodes.emplace_back(nc->getNodeID(entry.first));
   }
 
   return target_nodes;
 }
 
-const configuration::Nodes& NodeStatsController::getNodes() const {
-  return Worker::onThisThread()->getServerConfig()->getNodes();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+NodeStatsController::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 FailureDetector* NodeStatsController::getFailureDetector() const {
