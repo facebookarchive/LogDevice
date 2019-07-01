@@ -225,6 +225,11 @@ SafetyChecker::performSafetyCheck(
                   this](auto&&) mutable
                  -> folly::SemiFuture<folly::Expected<Impact, Status>> {
         std::shared_ptr<Configuration> cfg = processor_->getConfig();
+        ld_info("Performing safety check shards: %s, "
+                "sequencers: %s, authoritative status: %s",
+                toString(shards).c_str(),
+                toString(sequencers).c_str(),
+                status_map.describe().c_str());
 
         const auto& local_logs_config = cfg->getLocalLogsConfig();
         const auto& internal_logs = local_logs_config.getInternalLogs();

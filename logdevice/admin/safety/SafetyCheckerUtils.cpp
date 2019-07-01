@@ -366,15 +366,16 @@ std::pair<bool, bool> checkReadWriteAvailablity(
   // isFmajority. We should have f-majority of FULLY_AUTHORITATIVE (ie it's not
   // been drained or being drained, or it's not being rebuilt / in repair)
   // shards, excluding shards on which we are going to be stopped.
-
   auto check_reads =
       [&](FailureDomainNodeSet<bool>& failure_domains) mutable -> bool {
     for (const ShardID& shard : storage_set) {
       if (nodes_config->getStorageMembership()->shouldReadFromShard(shard)) {
         // We always set the authoritative status for all shards.
         AuthoritativeStatus status = shard_status.getShardStatus(shard);
-        if (shard_status.shardIsTimeRangeRebuilding(
-                shard.node(), shard.shard())) {
+
+        bool is_mini_rebuilding = shard_status.shardIsTimeRangeRebuilding(
+            shard.node(), shard.shard());
+        if (is_mini_rebuilding) {
           // The shard has time-range rebuilding, we will lean on the
           // safe-side and mark this shard as UNAVAILABLE instead of
           // FULLY_AUTHORITATIVE to ensure we block operations that _may_
@@ -396,6 +397,11 @@ std::pair<bool, bool> checkReadWriteAvailablity(
             status != AuthoritativeStatus::UNAVAILABLE) {
           // We only tag the shards that we consider healthy.
           failure_domains.setShardAttribute(shard, true);
+        } else if (is_mini_rebuilding) {
+          // Explicitly set this shard to be false since this might have been
+          // set to true by the write availability check. A shard in
+          // mini-rebuilding is writable but not readable.
+          failure_domains.setShardAttribute(shard, false);
         }
       }
     }
