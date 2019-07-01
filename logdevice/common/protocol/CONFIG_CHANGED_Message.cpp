@@ -323,9 +323,11 @@ CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
 
   server_config->setServerOrigin(header_.server_origin);
 
+  const auto& nc = worker->getNodesConfiguration();
+
   if (from.isClientAddress()) { // Check is needed for the ServerConfigSource
     if (!header_.server_origin.isNodeID() ||
-        !current_server_config->getNode(header_.server_origin) ||
+        !nc->isNodeInServiceDiscoveryConfig(header_.server_origin.index()) ||
         current_server_config->getClusterCreationTime() !=
             server_config->getClusterCreationTime() ||
         current_server_config->getClusterName() !=

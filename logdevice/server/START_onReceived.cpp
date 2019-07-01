@@ -115,11 +115,8 @@ Message::Disposition START_onReceived(START_Message* msg,
     return send_error_reply(msg, from, E::AGAIN);
   }
 
-  auto scfg = w->getServerConfig();
-  auto* node = scfg->getNode(w->processor_->getMyNodeID().index());
-  ld_check(node);
-  ld_check(node->storage_attributes);
-  const shard_size_t n_shards = node->getNumShards();
+  const shard_size_t n_shards = w->getNodesConfiguration()->getNumShards(
+      w->processor_->getMyNodeID().index());
   ld_check(n_shards > 0); // We already checked we are a storage node.
 
   shard_index_t shard_idx = header.shard;
@@ -431,6 +428,7 @@ Message::Disposition START_onReceived(START_Message* msg,
   } else if (stream->include_extra_metadata_) {
     stream->setTrafficClass(TrafficClass::REBUILD);
   } else {
+    auto scfg = w->getServerConfig();
     TrafficClass tc =
         scfg->getTrafficShapingConfig().default_read_traffic_class;
     const PrincipalIdentity* principalIdentity = w->sender().getPrincipal(from);

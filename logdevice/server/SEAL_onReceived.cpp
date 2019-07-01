@@ -65,12 +65,8 @@ Message::Disposition SEAL_onReceived(SEAL_Message* msg, const Address& from) {
     return Message::Disposition::NORMAL;
   }
 
-  auto config = worker->getConfig();
-  auto scfg = config->serverConfig();
-  auto* node = scfg->getNode(worker->processor_->getMyNodeID().index());
-  ld_check(node);
-  ld_check(node->storage_attributes);
-  const shard_size_t n_shards = node->getNumShards();
+  const shard_size_t n_shards = worker->getNodesConfiguration()->getNumShards(
+      worker->processor_->getMyNodeID().index());
   ld_check(n_shards > 0); // We already checked we are a storage node.
 
   shard_index_t shard_idx = header.shard;
@@ -126,7 +122,7 @@ Message::Disposition SEAL_onReceived(SEAL_Message* msg, const Address& from) {
   }
 
   bool tail_optimized = false;
-  auto log = config->getLogGroupByIDShared(header.log_id);
+  auto log = worker->getConfig()->getLogGroupByIDShared(header.log_id);
   if (!log) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,

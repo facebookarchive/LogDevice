@@ -32,10 +32,8 @@ Message::Message::Disposition GET_EPOCH_RECOVERY_METADATA_REPLY_onReceived(
   const GET_EPOCH_RECOVERY_METADATA_REPLY_Header& header = msg->getHeader();
   ServerWorker* worker = ServerWorker::onThisThread();
 
-  auto scfg = worker->getServerConfig();
-  auto* node = scfg->getNode(worker->processor_->getMyNodeID().index());
-  ld_check(node);
-  const shard_size_t n_shards = node->getNumShards();
+  const shard_size_t n_shards = worker->getNodesConfiguration()->getNumShards(
+      worker->processor_->getMyNodeID().index());
   ld_check(n_shards > 0); // We already checked we are a storage node.
 
   shard_index_t shard_idx = header.purging_shard;

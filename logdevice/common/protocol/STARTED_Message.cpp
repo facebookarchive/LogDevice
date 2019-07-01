@@ -48,14 +48,14 @@ Message::Disposition STARTED_Message::onReceived(const Address& from) {
   }
 
   auto w = Worker::onThisThread();
-  auto node = w->getServerConfig()->getNode(from.asNodeID().index());
-  if (!node) {
+  const auto& nc = w->getNodesConfiguration();
+  if (!nc->isNodeInServiceDiscoveryConfig(from.asNodeID().index())) {
     ld_check(false);
     err = E::PROTO;
     return Disposition::ERROR;
   }
 
-  shard_size_t n_shards = node->getNumShards();
+  shard_size_t n_shards = nc->getNumShards(from.asNodeID().index());
   if (n_shards <= 0) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,

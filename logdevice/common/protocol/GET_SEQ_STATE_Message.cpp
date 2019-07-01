@@ -801,9 +801,8 @@ bool GET_SEQ_STATE_Message::isReady(Status* status_out) {
   auto processor = w->processor_;
   auto detector_is_running = processor->isFailureDetectorRunning();
   auto node_id = processor->getMyNodeID();
-  auto config = w->getConfig()->serverConfig();
-  const Configuration::Node* node = config->getNode(node_id);
-  ld_check(node);
+  auto nc = w->getNodesConfiguration();
+  ld_check(nc->isNodeInServiceDiscoveryConfig(node_id.index()));
 
   if (detector_is_running && !processor->isNodeAlive(node_id.index())) {
     // node is coming up
@@ -817,7 +816,8 @@ bool GET_SEQ_STATE_Message::isReady(Status* status_out) {
     return false;
   }
 
-  if (!node->isSequencingEnabled()) {
+  if (!nc->getSequencerConfig()->getMembership()->isSequencingEnabled(
+          node_id.index())) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       1,
                       "Node %s is not a sequencer node, "
