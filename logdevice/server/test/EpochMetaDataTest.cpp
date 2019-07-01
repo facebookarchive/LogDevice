@@ -211,17 +211,25 @@ TEST_F(EpochMetaDataTest, Payload) {
 TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   auto cfg = parseConfig();
 
+  // Constants to use for the test case across all of the scenarios.
+  const auto time_replication_conf_changed_at =
+      RecordTimestamp::from(std::chrono::milliseconds(1000));
+  const auto time_epoch_incremented_at =
+      RecordTimestamp::from(std::chrono::milliseconds(5000));
+
   // A bunch of checks of the form:
   //  1. build a legit EpochMetaData,
   //  2. serialize it and compare to a hard-coded string (to ensure that format
   //     wasn't changed accidentally),
   //  3. deserialize and check all fields.
 
-  auto check = [](const EpochMetaData& info2,
-                  int v,
-                  epoch_metadata_flags_t extra_flags = 0) {
-    epoch_metadata_flags_t flags =
-        extra_flags | MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
+  auto check = [time_replication_conf_changed_at, time_epoch_incremented_at](
+                   const EpochMetaData& info2,
+                   int v,
+                   epoch_metadata_flags_t extra_flags = 0) {
+    epoch_metadata_flags_t flags = extra_flags |
+        MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG |
+        MetaDataLogRecordHeader::HAS_TIMESTAMPS;
 
     ReplicationProperty replication;
     if (v < 2) {
@@ -262,12 +270,18 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
     EXPECT_EQ(5, info2.h.nodeset_size);
     EXPECT_EQ(StorageSet({N6, N7, N8, N9, N10}), info2.shards);
     EXPECT_EQ(replication.toString(), info2.replication.toString());
+
     EXPECT_EQ(weights, info2.weights);
 
     if (v >= 2) {
       EXPECT_EQ(flags, info2.h.flags);
+      EXPECT_EQ(
+          time_replication_conf_changed_at, info2.replication_conf_changed_at);
+      EXPECT_EQ(time_epoch_incremented_at, info2.epoch_incremented_at);
     } else {
       EXPECT_EQ(0, info2.h.flags);
+      EXPECT_EQ(RecordTimestamp(), info2.replication_conf_changed_at);
+      EXPECT_EQ(RecordTimestamp(), info2.epoch_incremented_at);
     }
   };
 
@@ -279,6 +293,7 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   info.h.effective_since = epoch_t(2);
   info.setShards(StorageSet{N6, N7, N8, N9, N10});
   info.replication = ReplicationProperty({{NodeLocationScope::NODE, 4}});
+
   ld_check(info.isValid());
 
   std::string str = info.toStringPayload();
@@ -314,13 +329,17 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   // v2
 
   info.h.version = 2;
-  info.h.flags = MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG;
+  info.h.flags = MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG |
+      MetaDataLogRecordHeader::HAS_TIMESTAMPS;
   info.replication = ReplicationProperty(
       {{NodeLocationScope::NODE, 4}, {NodeLocationScope::CLUSTER, 2}});
+  info.replication_conf_changed_at = time_replication_conf_changed_at;
+  info.epoch_incremented_at = time_epoch_incremented_at;
   ld_check(info.isValid());
 
   str = info.toStringPayload();
-  EXPECT_EQ("020000000300000002000000050004030200000006000700080009000A00",
+  EXPECT_EQ("020000000300000002000000050004030201000006000700080009000A00E80300"
+            "00000000008813000000000000",
             hexdump_buf(str.data(), str.size()));
 
   {
@@ -348,10 +367,10 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   ld_check(info.isValid());
 
   str = info.toStringPayload();
-  EXPECT_EQ(
-      "020000000300000002000000050004030A00000006000700080009000A00000000000000"
-      "26400000000000002E400000000000002A400000000000002C400000000000002840",
-      hexdump_buf(str.data(), str.size()));
+  EXPECT_EQ("020000000300000002000000050004030A01000006000700080009000A00000000"
+            "00000026400000000000002E400000000000002A400000000000002C4000000000"
+            "00002840E8030000000000008813000000000000",
+            hexdump_buf(str.data(), str.size()));
 
   {
     EpochMetaData info2;
@@ -369,9 +388,10 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   ld_check(info.isValid());
 
   str = info.toStringPayload();
-  EXPECT_EQ("020000000300000002000000050004051A00000006000700080009000A00000000"
+  EXPECT_EQ("020000000300000002000000050004051A01000006000700080009000A00000000"
             "00000026400000000000002E400000000000002A400000000000002C4000000000"
-            "0000284003000000050000000200000001000000030000000000000004000000",
+            "0000284003000000050000000200000001000000030000000000000004000000E8"
+            "030000000000008813000000000000",
             hexdump_buf(str.data(), str.size()));
 
   {
@@ -401,10 +421,10 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
                                                 // config, update this hash
 
   str = info.toStringPayload();
-  EXPECT_EQ("020000000300000002000000050004053A00000006000700080009000A00000000"
+  EXPECT_EQ("020000000300000002000000050004053A01000006000700080009000A00000000"
             "00000026400000000000002E400000000000002A400000000000002C4000000000"
             "0000284003000000050000000200000001000000030000000000000004000000" +
-                hash_string,
+                hash_string + "E8030000000000008813000000000000",
             hexdump_buf(str.data(), str.size()));
 
   {
@@ -425,10 +445,11 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   ld_check(info.isValid());
 
   str = info.toStringPayload();
-  EXPECT_EQ("02000000030000000200000005000405BA00000006000700080009000A00000000"
+  EXPECT_EQ("02000000030000000200000005000405BA01000006000700080009000A00000000"
             "00000026400000000000002E400000000000002A400000000000002C4000000000"
             "0000284003000000050000000200000001000000030000000000000004000000" +
-                hash_string + "42003412A0CBEDEFCDAB",
+                hash_string +
+                "42003412A0CBEDEFCDABE8030000000000008813000000000000",
             hexdump_buf(str.data(), str.size()));
 
   {
@@ -545,13 +566,20 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   auto selector = std::make_shared<TestNodeSetSelector>();
   CustomEpochMetaDataUpdater updater(cfg, selector, true);
 
+  auto zk_record_default = std::make_unique<EpochMetaData>();
+  auto rv =
+      updater(logid_t(2), zk_record_default, /* MetaDataTracer */ nullptr);
+  EXPECT_EQ(EpochMetaData::UpdateResult::FAILED, rv);
+  EXPECT_EQ(E::EMPTY, err);
+
   EpochMetaData original_meta = genValidEpochMetaData(
       logcfg->attrs().syncReplicationScope().asOptional());
   auto zk_record = std::make_unique<EpochMetaData>(original_meta);
-  auto rv =
-      updater(logid_t(9999),
-              zk_record,
-              /* MetaDataTracer */ nullptr); // log 9999 is not provisioned
+  auto replication_conf_changed_at = zk_record->replication_conf_changed_at;
+  auto initial_epoch_incremented_at = zk_record->epoch_incremented_at;
+  rv = updater(logid_t(9999),
+               zk_record,
+               /* MetaDataTracer */ nullptr); // log 9999 is not provisioned
   EXPECT_EQ(EpochMetaData::UpdateResult::FAILED, rv);
   EXPECT_EQ(E::NOTFOUND, err);
   selector->setStorageSet(StorageSet{N3, N4, N5});
@@ -559,6 +587,9 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   EXPECT_EQ(EpochMetaData::UpdateResult::UNCHANGED, rv);
   EXPECT_EQ(original_meta, *zk_record);
   EXPECT_EQ(original_meta.toString(), zk_record->toString());
+  EXPECT_EQ(
+      replication_conf_changed_at, zk_record->replication_conf_changed_at);
+  EXPECT_EQ(initial_epoch_incremented_at, zk_record->epoch_incremented_at);
 
   // change replication factor, expect metadata to be updated
   attrs.set_replicationFactor(1);
@@ -574,9 +605,13 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
           .h.epoch.val_,
       zk_record->h.epoch.val_);
   EXPECT_EQ(zk_record->h.effective_since.val_, zk_record->h.epoch.val_);
+  EXPECT_EQ(
+      replication_conf_changed_at, zk_record->replication_conf_changed_at);
+  EXPECT_EQ(initial_epoch_incremented_at, zk_record->epoch_incremented_at);
 
   // change sync_replication_scope, expect metadata to be updated
   *zk_record = genValidEpochMetaData(NodeLocationScope::NODE);
+  initial_epoch_incremented_at = zk_record->epoch_incremented_at;
   attrs.set_syncReplicationScope(NodeLocationScope::RACK);
   rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
@@ -586,11 +621,16 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   EXPECT_EQ(genValidEpochMetaData(NodeLocationScope::NODE).h.epoch.val_,
             zk_record->h.epoch.val_);
   EXPECT_EQ(zk_record->h.effective_since.val_, zk_record->h.epoch.val_);
+  EXPECT_EQ(
+      replication_conf_changed_at, zk_record->replication_conf_changed_at);
+  EXPECT_EQ(initial_epoch_incremented_at, zk_record->epoch_incremented_at);
+  replication_conf_changed_at = zk_record->replication_conf_changed_at;
 
   // change nodeset, expect metadata to be updated
   StorageSet new_storage_set{N2, N4, N6};
   *zk_record = genValidEpochMetaData(
       logcfg->attrs().syncReplicationScope().asOptional());
+  initial_epoch_incremented_at = zk_record->epoch_incremented_at;
   selector->setStorageSet(new_storage_set);
   rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
@@ -601,6 +641,9 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
       zk_record->h.epoch.val_);
   EXPECT_EQ(zk_record->h.effective_since.val_, zk_record->h.epoch.val_);
   EXPECT_EQ(new_storage_set, zk_record->shards);
+  EXPECT_TRUE(replication_conf_changed_at <
+              zk_record->replication_conf_changed_at);
+  EXPECT_EQ(initial_epoch_incremented_at, zk_record->epoch_incremented_at);
 
   // test metadata initial provision
   CustomEpochMetaDataUpdater provisioning_updater(cfg,
@@ -632,12 +675,20 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   auto logcfg = cfg->getLogGroupByIDShared(logid_t(2));
   EpochMetaDataUpdateToNextEpoch updater(cfg);
 
+  auto zk_record_default = std::make_unique<EpochMetaData>();
+  auto rv =
+      updater(logid_t(2), zk_record_default, /* MetaDataTracer */ nullptr);
+  EXPECT_EQ(EpochMetaData::UpdateResult::FAILED, rv);
+  EXPECT_EQ(E::FAILED, err);
+
   auto zk_record = std::make_unique<EpochMetaData>(genValidEpochMetaData(
       logcfg->attrs().syncReplicationScope().asOptional()));
-  auto rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
+  rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   auto cmp = genValidEpochMetaData(
       logcfg->attrs().syncReplicationScope().asOptional());
+  EXPECT_NE(cmp.epoch_incremented_at, zk_record->epoch_incremented_at);
+  cmp.epoch_incremented_at = zk_record->epoch_incremented_at;
   ++cmp.h.epoch.val_;
   EXPECT_EQ(cmp, *zk_record);
 
@@ -645,6 +696,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
 
   rv = updater_conditional(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
+  EXPECT_EQ(cmp.epoch_incremented_at, zk_record->epoch_incremented_at);
   ++cmp.h.epoch.val_;
   EXPECT_EQ(cmp, *zk_record);
 

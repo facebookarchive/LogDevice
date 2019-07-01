@@ -364,16 +364,33 @@ void NodeSetTest::markMetaDataWrittenInEpochStore(logid_t log) {
     ASSERT_EQ(lsn_map.cend(), it);                   \
   } while (0)
 
+std::shared_ptr<const EpochMetaDataMap>
+clearUpdateTimestampFromEpochMetaDataMap(const EpochMetaDataMap* map_with_ts) {
+  auto map = *map_with_ts->getMetaDataMap();
+  std::for_each(map.begin(),
+                map.end(),
+                [](std::pair<const epoch_t, EpochMetaData>& record) {
+                  record.second.epoch_incremented_at = RecordTimestamp();
+                });
+  return EpochMetaDataMap::create(
+      std::make_shared<const EpochMetaDataMap::Map>(std::move(map)),
+      map_with_ts->getEffectiveUntil());
+}
+
 #define CHECK_HISTORICAL_METADATA(_client_, _until_)                        \
   do {                                                                      \
     auto* client_impl = static_cast<ClientImpl*>((_client_).get());         \
     auto result = client_impl->getHistoricalMetaDataSync(LOG_ID);           \
     ASSERT_NE(nullptr, result);                                             \
     auto expected = historical_metadata_->withNewEffectiveUntil((_until_)); \
+    auto result_no_ts =                                                     \
+        clearUpdateTimestampFromEpochMetaDataMap(result.get());             \
+    auto expected_no_ts =                                                   \
+        clearUpdateTimestampFromEpochMetaDataMap(expected.get());           \
     ld_info("Historical metadata: expecting: %s, got %s.",                  \
-            expected->toString().c_str(),                                   \
-            result->toString().c_str());                                    \
-    ASSERT_EQ(*expected, *result);                                          \
+            expected_no_ts->toString().c_str(),                             \
+            result_no_ts->toString().c_str());                              \
+    ASSERT_EQ(*expected_no_ts, *result_no_ts);                              \
   } while (0)
 
 static lsn_t write_test_records(std::shared_ptr<Client> client,

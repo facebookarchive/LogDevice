@@ -94,10 +94,12 @@ struct MetaDataLogRecordHeader {
   static const epoch_metadata_flags_t HAS_TARGET_NODESET_SIZE_AND_SEED = 1u
       << 7; // 128
 
+  static const epoch_metadata_flags_t HAS_TIMESTAMPS = 1u << 8; // 256
+
   static const epoch_metadata_flags_t ALL_KNOWN_FLAGS = WRITTEN_IN_METADATALOG |
       DISABLED | HAS_WEIGHTS | HAS_REPLICATION_PROPERTY |
       HAS_NODESET_SIGNATURE | HAS_STORAGE_SET |
-      HAS_TARGET_NODESET_SIZE_AND_SEED;
+      HAS_TARGET_NODESET_SIZE_AND_SEED | HAS_TIMESTAMPS;
 
   // return the actual header size in payload for different versions
   static size_t headerSize(epoch_metadata_version::type version) {
@@ -194,6 +196,9 @@ class EpochMetaData {
         std::numeric_limits<copyset_size_t>::max();
     h.sync_replication_scope_DO_NOT_USE = NodeLocationScope::INVALID;
   }
+
+  // Set epoch increment timestamp to current.
+  void setEpochIncrementAt();
 
   // Change the storage set.
   void setShards(StorageSet shards);
@@ -294,6 +299,9 @@ class EpochMetaData {
   std::vector<double> weights;
 
   NodeSetParams nodeset_params;
+
+  RecordTimestamp replication_conf_changed_at;
+  RecordTimestamp epoch_incremented_at;
 
  public:
   /*

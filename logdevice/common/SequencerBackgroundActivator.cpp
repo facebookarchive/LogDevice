@@ -506,6 +506,7 @@ SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
       std::make_unique<EpochMetaData>(*current_metadata);
   ld_check(current_metadata->h.epoch < EPOCH_MAX);
   ++new_metadata->h.epoch.val_;
+  new_metadata->setEpochIncrementAt();
 
   // Then process the extent to which config params and nodeset
   // have changed.

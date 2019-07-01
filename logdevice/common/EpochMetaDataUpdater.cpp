@@ -312,6 +312,7 @@ updateMetaDataIfNeeded(logid_t log_id,
     ld_check(result != UpdateResult::ONLY_NODESET_PARAMS_CHANGED);
     metadata->setShards(selected.storage_set);
     metadata->weights = selected.weights;
+    metadata->replication_conf_changed_at = RecordTimestamp::now();
   }
 
   // clear the DISABLED flag as well
@@ -510,6 +511,7 @@ operator()(logid_t log_id,
   ld_check(info && info->isValid());
 
   ++info->h.epoch.val_;
+  info->setEpochIncrementAt();
   if (info->h.epoch <= EPOCH_MIN) {
     ld_critical("Unexpected - bumped epoch in EpochStore to epoch %u, "
                 "should be >= 2",
@@ -684,6 +686,7 @@ operator()(logid_t log_id,
   info->h.epoch =
       (info->h.epoch == EPOCH_MAX ? EPOCH_MAX
                                   : epoch_t(info->h.epoch.val_ + 1));
+  info->setEpochIncrementAt();
   if (tracer) {
     tracer->setAction(MetaDataTracer::Action::DISABLE);
     tracer->setNewMetaData(*info);

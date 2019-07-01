@@ -40,6 +40,10 @@ bool EpochMetaData::isValid() const {
   return rv;
 }
 
+void EpochMetaData::setEpochIncrementAt() {
+  epoch_incremented_at = RecordTimestamp::now();
+}
+
 bool EpochMetaData::validWithConfig(
     logid_t log_id,
     const std::shared_ptr<Configuration>& cfg) const {
@@ -74,6 +78,8 @@ void EpochMetaData::reset() {
   h.flags = 0;
 
   shards.clear();
+  replication_conf_changed_at = RecordTimestamp();
+  epoch_incremented_at = RecordTimestamp();
 }
 
 bool EpochMetaData::isEmpty() const {
@@ -92,9 +98,18 @@ bool EpochMetaData::identicalInMetaDataLog(const EpochMetaData& rhs) const {
       ~MetaDataLogRecordHeader::HAS_WEIGHTS &
       ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG &
       ~MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE &
-      ~MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED;
+      ~MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED &
+      ~MetaDataLogRecordHeader::HAS_TIMESTAMPS;
 
-  // ignore epoch and nodeset_params
+  // Ignore epoch, nodeset_params, epoch_incremented_at.
+  // replication_conf_changed_at has same purpose as effective_since so ignore
+  // that as well.
+  // NOTE: it would be good to have a warning if for some reason the timestamp
+  // in epoch store doesn't match the timestamp in metadata log (from
+  // Sequencer::updateMetaDataMap()'s identicalInMetaDataLog() check).
+  // To make it backward compatible we can downgrade, activate the sequencer,
+  // then upgrade, the timestamp in epoch store will be cleared and timestamps
+  // won't match.
   return h.version == rhs.h.version &&
       h.effective_since == rhs.h.effective_since &&
       h.nodeset_size == rhs.h.nodeset_size &&
@@ -108,7 +123,10 @@ bool EpochMetaData::operator!=(const EpochMetaData& rhs) const {
 }
 
 bool EpochMetaData::operator==(const EpochMetaData& rhs) const {
-  return h.epoch == rhs.h.epoch && identicalInMetaDataLog(rhs) &&
+  return h.epoch == rhs.h.epoch &&
+      epoch_incremented_at == rhs.epoch_incremented_at &&
+      identicalInMetaDataLog(rhs) &&
+      replication_conf_changed_at == rhs.replication_conf_changed_at &&
       writtenInMetaDataLog() == rhs.writtenInMetaDataLog() &&
       nodeset_params == rhs.nodeset_params;
 }
@@ -272,6 +290,17 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
     nodeset_params.seed = 0;
   }
 
+  if (h.flags & MetaDataLogRecordHeader::HAS_TIMESTAMPS) {
+    std::chrono::milliseconds replication_conf_changed_at_millis;
+    reader.read(&replication_conf_changed_at_millis);
+    replication_conf_changed_at =
+        RecordTimestamp::from(replication_conf_changed_at_millis);
+
+    std::chrono::milliseconds epoch_incremented_at_millis;
+    reader.read(&epoch_incremented_at_millis);
+    epoch_incremented_at = RecordTimestamp::from(epoch_incremented_at_millis);
+  }
+
   CHECK_READER();
   // Check trailing bytes if expected_size is set.
   // Note that if reader.error(), reader.bytesRemaining() will be zero.
@@ -379,23 +408,40 @@ void EpochMetaData::serialize(ProtocolWriter& writer) const {
     new_h.sync_replication_scope_DO_NOT_USE =
         legacy_replication->sync_replication_scope;
   } else {
-    ld_check(h.version >= 2);
-    new_h.flags |= MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY;
-    new_h.sync_replication_scope_DO_NOT_USE =
-        replication.getBiggestReplicationScope();
+    // TODO: Since version 1 is not used in production any more, we can clean
+    // up that version check.
+    if (h.version >= 2) {
+      new_h.flags |= MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY;
+      new_h.sync_replication_scope_DO_NOT_USE =
+          replication.getBiggestReplicationScope();
+    } else {
+      new_h.flags &= ~MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY;
+    }
   }
 
-  if (weights.empty()) {
+  if (h.version < 2 ||
+      (replication_conf_changed_at == RecordTimestamp() &&
+       epoch_incremented_at == RecordTimestamp())) {
+    new_h.flags &= ~MetaDataLogRecordHeader::HAS_TIMESTAMPS;
+  } else {
+    // TODO: Since version 1 is not used in production any more, we can clean
+    // up that version check.
+    new_h.flags |= MetaDataLogRecordHeader::HAS_TIMESTAMPS;
+  }
+
+  if (h.version < 2 || weights.empty()) {
     new_h.flags &= ~MetaDataLogRecordHeader::HAS_WEIGHTS;
   } else {
-    ld_check(h.version >= 2);
+    // TODO: Since version 1 is not used in production any more, we can clean
+    // up that version check.
     new_h.flags |= MetaDataLogRecordHeader::HAS_WEIGHTS;
   }
 
-  if (nodeset_params.signature == 0) {
+  if (h.version < 2 || nodeset_params.signature == 0) {
     new_h.flags &= ~MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE;
   } else {
-    ld_check(h.version >= 2);
+    // TODO: Since version 1 is not used in production any more, we can clean
+    // up that version check.
     new_h.flags |= MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE;
   }
 
@@ -444,6 +490,11 @@ void EpochMetaData::serialize(ProtocolWriter& writer) const {
     writer.write(nodeset_params.target_nodeset_size);
     writer.write(nodeset_params.seed);
   }
+
+  if (new_h.flags & MetaDataLogRecordHeader::HAS_TIMESTAMPS) {
+    writer.write(replication_conf_changed_at.toMilliseconds());
+    writer.write(epoch_incremented_at.toMilliseconds());
+  }
 }
 
 int EpochMetaData::toPayload(void* payload, size_t size) const {
@@ -473,8 +524,10 @@ std::string EpochMetaData::toStringPayload() const {
 }
 
 std::string EpochMetaData::toString() const {
-  std::string out = "[E:" + std::to_string(h.epoch.val_) +
-      " since:" + std::to_string(h.effective_since.val_) +
+  std::string out = "[E:" + std::to_string(h.epoch.val_) + " (at " +
+      format_time(epoch_incremented_at) + ")" +
+      " since:" + std::to_string(h.effective_since.val_) + " (at " +
+      format_time(replication_conf_changed_at) + ")" +
       " R:" + replication.toString() + " V:" + std::to_string(h.version) +
       " flags:" + flagsToString(h.flags) +
       " params:" + nodeset_params.toString() +
@@ -505,6 +558,7 @@ std::string EpochMetaData::flagsToString(epoch_metadata_flags_t flags) {
   FLAG(HAS_NODESET_SIGNATURE)
   FLAG(HAS_STORAGE_SET)
   FLAG(HAS_TARGET_NODESET_SIZE_AND_SEED)
+  FLAG(HAS_TIMESTAMPS)
 
 #undef FLAG
 
