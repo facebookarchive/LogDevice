@@ -22,7 +22,7 @@ using ClusterMaintenanceState = thrift::ClusterMaintenanceState;
 
 // The user string that identifies the maintenances
 // triggered by logdevice internally
-constexpr static folly::StringPiece INTERNAL_USER{"LOGDEVICE_INTERNAL_USER"};
+constexpr static folly::StringPiece INTERNAL_USER{"_internal_"};
 
 /**
  * An exception type used to encapsulate the various thrift exceptions related
