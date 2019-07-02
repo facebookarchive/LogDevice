@@ -564,6 +564,49 @@ TEST_F(NodesConfigurationTest, SingleInvalidAddressIsInvalid) {
   EXPECT_EQ(-1, cfg.applyUpdate(update, &new_cfg));
 }
 
+TEST_F(NodesConfigurationTest, StorageHash) {
+  auto config = provisionNodes();
+  ASSERT_TRUE(config->validate());
+
+  const auto original_hash = config->getStorageNodesHash();
+  ld_info("Config (version %lu) storage has is 0x%lx.",
+          config->getVersion().val_,
+          original_hash);
+
+  // change the storage state of an existing shard, verify that node hash
+  // changed
+  auto nc1 = config->applyUpdate(disablingWriteUpdate(config->getVersion()));
+  ASSERT_NE(nullptr, nc1);
+  const auto hash1 = nc1->getStorageNodesHash();
+  ld_info("Config (version %lu) storage has is 0x%lx.",
+          nc1->getVersion().val(),
+          hash1);
+  ASSERT_NE(original_hash, hash1);
+
+  // change the storage state back, verify that the hash go back to the original
+  NodesConfiguration::Update update{};
+  update.storage_config_update = std::make_unique<StorageConfig::Update>();
+  update.storage_config_update->membership_update =
+      std::make_unique<StorageMembership::Update>(nc1->getVersion());
+
+  for (node_index_t n : NodeSetIndices({11, 13})) {
+    update.storage_config_update->membership_update->addShard(
+        ShardID{n, 0},
+        {StorageStateTransition::ABORT_DISABLING_WRITE,
+         Condition::FORCE,
+         DUMMY_MAINTENANCE,
+         /* state_override = */ folly::none});
+  }
+
+  auto nc2 = nc1->applyUpdate(std::move(update));
+  ASSERT_NE(nullptr, nc2);
+  const auto hash2 = nc2->getStorageNodesHash();
+  ld_info("Config (version %lu) storage has is 0x%lx.",
+          nc2->getVersion().val(),
+          hash2);
+  ASSERT_EQ(original_hash, hash2);
+}
+
 ///////////// Legacy Format conversion //////////////
 
 TEST_F(NodesConfigurationTest, LegacyConversion1) {

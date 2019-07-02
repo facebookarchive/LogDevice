@@ -318,6 +318,14 @@ uint64_t NodesConfiguration::computeStorageNodesHash() const {
     // appending location str and the terminating null-byte
     std::string location_str = serv_disc.locationStr();
     append(location_str.c_str(), location_str.size() + 1);
+
+    // append per-shard storage states
+    const auto shard_map = storage_mem->getShardStates(node_id);
+    const std::map<shard_index_t, membership::ShardState> ordered_shard_map(
+        shard_map.begin(), shard_map.end());
+    for (const auto& kv : ordered_shard_map) {
+      append(&kv.second.storage_state, sizeof(kv.second.storage_state));
+    }
   }
   const uint64_t SEED = 0x9a6bf3f8ebcd8cdfL; // random
   return folly::hash::SpookyHashV2::Hash64(
