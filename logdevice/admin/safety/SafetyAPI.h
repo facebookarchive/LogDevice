@@ -32,12 +32,14 @@ struct Impact {
    */
   struct ShardMetadata {
     AuthoritativeStatus auth_status;
+    bool has_dirty_ranges;
     bool is_alive;
     configuration::StorageState storage_state;
     folly::Optional<NodeLocation> location;
     bool operator==(ShardMetadata const& x) const {
       return x.auth_status == auth_status && x.is_alive == is_alive &&
-          x.storage_state == storage_state && x.location == location;
+          x.storage_state == storage_state && x.location == location &&
+          has_dirty_ranges == x.has_dirty_ranges;
     }
     bool operator!=(ShardMetadata const& x) const {
       return !(*this == x);

@@ -286,7 +286,7 @@ template <>
 thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input) {
   thrift::ShardMetadata output;
   output.set_data_health(
-      toShardDataHealth(input.auth_status, /* has_dirty_ranges= */ false));
+      toShardDataHealth(input.auth_status, input.has_dirty_ranges));
   output.set_is_alive(input.is_alive);
   output.set_storage_state(
       toThrift<thrift::ShardStorageState>(input.storage_state));

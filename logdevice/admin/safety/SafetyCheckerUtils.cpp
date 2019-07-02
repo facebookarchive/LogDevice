@@ -523,8 +523,11 @@ Impact::StorageSetMetadata getStorageSetMetadata(
       location = discovery->location;
     }
 
+    bool is_mini_rebuilding =
+        shard_status.shardIsTimeRangeRebuilding(shard.node(), shard.shard());
     out.push_back(Impact::ShardMetadata{
         .auth_status = shard_status.getShardStatus(shard),
+        .has_dirty_ranges = is_mini_rebuilding,
         .is_alive = isAlive(cluster_state, shard.node(), require_fully_started),
         .storage_state = storage_state,
         .location = location});
