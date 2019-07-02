@@ -184,15 +184,18 @@ void PurgeSingleEpoch::purgeRecords() {
   const esn_t end_esn = local_last_record_;
 
   if (start_esn > end_esn) {
-    ld_info("No need to delete records for epoch %u, log %lu, shard %u, purge "
-            "to %u start_esn: %u, end_esn: %u, local_lng: %u",
-            epoch_.val_,
-            log_id_.val_,
-            shard_,
-            purge_to_.val_,
-            start_esn.val_,
-            end_esn.val_,
-            local_lng_.val_);
+    RATELIMIT_INFO(
+        std::chrono::seconds(10),
+        5,
+        "No need to delete records for epoch %u, log %lu, shard %u, purge "
+        "to %u start_esn: %u, end_esn: %u, local_lng: %u",
+        epoch_.val_,
+        log_id_.val_,
+        shard_,
+        purge_to_.val_,
+        start_esn.val_,
+        end_esn.val_,
+        local_lng_.val_);
 
     state_ = State::WRITE_RECOVERY_METADATA;
     writeEpochRecoveryMetadata();
