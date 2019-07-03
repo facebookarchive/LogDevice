@@ -234,7 +234,7 @@ class MaintenanceManager : public SerialWorkContext {
   getMetaDataStorageState(ShardID shard);
   // Getter that returns a SemiFuture with the shard's target operational state
   folly::SemiFuture<
-      folly::Expected<std::unordered_set<ShardOperationalState>, Status>>
+      folly::Expected<folly::F14FastSet<ShardOperationalState>, Status>>
   getShardTargetStates(ShardID shard);
   // Getter that returns a SemiFuture with node's target sequencing state
   folly::SemiFuture<folly::Expected<SequencingState, Status>>
@@ -404,12 +404,12 @@ class MaintenanceManager : public SerialWorkContext {
    * Getter that returns the shard's target operational state
    *
    * @param   shard ShardID for which to get the target states
-   * @return  folly::Expected<std::unordered_set<ShardOperationalState>, Status>
+   * @return  folly::Expected<folly::F14FastSet<ShardOperationalState>, Status>
    *          Set of ShardOperationalState for shard if
    *          ClusterMaintenanceWrapper is initialized. Otherwise Status is
    *          E::NOTREADY
    */
-  folly::Expected<std::unordered_set<ShardOperationalState>, Status>
+  folly::Expected<folly::F14FastSet<ShardOperationalState>, Status>
   getShardTargetStatesInternal(ShardID shard) const;
   /**
    * Getter that returns node's target sequencing state

@@ -28,7 +28,7 @@ TEST(ClusterMaintenanceWrapperTest, Empty) {
   ASSERT_EQ(0, wrapper.getGroupsForShard(ShardID(0, 0)).size());
   ASSERT_EQ(0, wrapper.getGroupsForSequencer(0).size());
 
-  std::unordered_set<ShardOperationalState> enabled = {
+  folly::F14FastSet<ShardOperationalState> enabled = {
       ShardOperationalState::ENABLED};
   ASSERT_EQ(enabled, wrapper.getShardTargetStates(ShardID(0, 0)));
   ASSERT_EQ(SequencingState::ENABLED, wrapper.getSequencerTargetState(0));
@@ -123,7 +123,7 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   ASSERT_EQ("Automation", wrapper.getMaintenanceByGroupID("911")->get_user());
 
   ASSERT_EQ(1, wrapper.getGroupsForShard(ShardID(1, 0)).size());
-  ASSERT_EQ(std::unordered_set<GroupID>{"911"},
+  ASSERT_EQ(folly::F14FastSet<GroupID>{"911"},
             wrapper.getGroupsForShard(ShardID(1, 0)));
 
   ASSERT_EQ(2, wrapper.getGroupsForShard(ShardID(2, 0)).size());
@@ -132,7 +132,7 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
 
   // N9 resolved by address.
   ASSERT_EQ(1, wrapper.getGroupsForShard(ShardID(9, 0)).size());
-  ASSERT_EQ(std::unordered_set<GroupID>{"520"},
+  ASSERT_EQ(folly::F14FastSet<GroupID>{"520"},
             wrapper.getGroupsForShard(ShardID(9, 0)));
 
   ASSERT_TRUE(wrapper.shouldSkipSafetyCheck(ShardID(2, 0)));
@@ -147,14 +147,14 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   ASSERT_TRUE(wrapper.isPassiveDrainAllowed(ShardID(9, 0)));
   ASSERT_FALSE(wrapper.shouldSkipSafetyCheck(ShardID(9, 0)));
 
-  std::unordered_set<ShardOperationalState> expected_states = {
+  folly::F14FastSet<ShardOperationalState> expected_states = {
       ShardOperationalState::DRAINED, ShardOperationalState::MAY_DISAPPEAR};
   ASSERT_EQ(expected_states, wrapper.getShardTargetStates(ShardID(2, 0)));
   ASSERT_EQ(
-      std::unordered_set<ShardOperationalState>{ShardOperationalState::DRAINED},
+      folly::F14FastSet<ShardOperationalState>{ShardOperationalState::DRAINED},
       wrapper.getShardTargetStates(ShardID(9, 0)));
   ASSERT_EQ(
-      std::unordered_set<ShardOperationalState>{
+      folly::F14FastSet<ShardOperationalState>{
           ShardOperationalState::MAY_DISAPPEAR},
       wrapper.getShardTargetStates(ShardID(1, 0)));
 
@@ -162,7 +162,7 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   // should return ENABLED
   EXPECT_FALSE(config->getStorageConfig()->getMembership()->hasNode(17));
   ASSERT_EQ(
-      std::unordered_set<ShardOperationalState>{ShardOperationalState::ENABLED},
+      folly::F14FastSet<ShardOperationalState>{ShardOperationalState::ENABLED},
       wrapper.getShardTargetStates(ShardID(17, 0)));
 
   // Added new node to config and ensure an updated config
@@ -171,7 +171,7 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   wrapper.updateNodesConfiguration(config);
   EXPECT_TRUE(config->getStorageConfig()->getMembership()->hasNode(17));
   ASSERT_EQ(
-      std::unordered_set<ShardOperationalState>{ShardOperationalState::DRAINED},
+      folly::F14FastSet<ShardOperationalState>{ShardOperationalState::DRAINED},
       wrapper.getShardTargetStates(ShardID(17, 0)));
 
   auto grouped = wrapper.groupShardsByGroupID(
@@ -241,11 +241,11 @@ TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {
   ASSERT_EQ(0, wrapper.getGroupsForSequencer(900).size());
 
   ASSERT_EQ(
-      std::unordered_set<GroupID>{"911"}, wrapper.getGroupsForSequencer(1));
+      folly::F14FastSet<GroupID>{"911"}, wrapper.getGroupsForSequencer(1));
   ASSERT_THAT(
       wrapper.getGroupsForSequencer(2), UnorderedElementsAre("911", "122"));
   ASSERT_EQ(
-      std::unordered_set<GroupID>{"122"}, wrapper.getGroupsForSequencer(9));
+      folly::F14FastSet<GroupID>{"122"}, wrapper.getGroupsForSequencer(9));
 
   ASSERT_FALSE(wrapper.shouldSkipSafetyCheck(1));
   // Node ID 2 will skip safety since definition-2 includes it.
@@ -259,6 +259,6 @@ TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {
   auto grouped = wrapper.groupSequencersByGroupID({1, 2, 9});
   // 3 groups.
   ASSERT_EQ(2, grouped.size());
-  ASSERT_EQ(std::unordered_set<node_index_t>({1, 2}), grouped["911"]);
-  ASSERT_EQ(std::unordered_set<node_index_t>({2, 9}), grouped["122"]);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>({1, 2}), grouped["911"]);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>({2, 9}), grouped["122"]);
 }

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <folly/Expected.h>
+#include <folly/container/F14Set.h>
 #include <folly/futures/Future.h>
 #include <folly/futures/SharedPromise.h>
 
@@ -44,7 +45,7 @@ class SafetyChecker {
   folly::SemiFuture<folly::Expected<Impact, Status>>
   checkImpact(const ShardAuthoritativeStatusMap& status_map,
               const ShardSet& shards,
-              std::unordered_set<node_index_t> sequencers,
+              folly::F14FastSet<node_index_t> sequencers,
               configuration::StorageState target_storage_state,
               SafetyMargin safety_margin = SafetyMargin(),
               bool check_metadata_logs = true,
@@ -109,7 +110,7 @@ class SafetyChecker {
       std::shared_ptr<LogMetaDataFetcher::Results> metadata,
       /* Can be empty, means check given current state of shards*/
       ShardSet shards,
-      std::unordered_set<node_index_t> sequencers,
+      folly::F14FastSet<node_index_t> sequencers,
       /* Can be READ_WRITE is shards is empty */
       configuration::StorageState target_storage_state,
       SafetyMargin safety_margin,

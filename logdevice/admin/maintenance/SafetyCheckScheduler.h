@@ -11,6 +11,7 @@
 
 #include <folly/Expected.h>
 #include <folly/container/F14Map.h>
+#include <folly/container/F14Set.h>
 #include <folly/futures/Future.h>
 
 #include "logdevice/admin/maintenance/ClusterMaintenanceWrapper.h"
@@ -59,7 +60,7 @@ class SequencerWorkflow;
  */
 class SafetyCheckScheduler {
  public:
-  using NodeIndexSet = std::unordered_set<node_index_t>;
+  using NodeIndexSet = folly::F14FastSet<node_index_t>;
   using ShardsAndSequencers = std::pair<ShardSet, NodeIndexSet>;
   /**
    * A structure holding the results of a safety checker run.

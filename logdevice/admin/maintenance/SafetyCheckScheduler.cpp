@@ -196,10 +196,10 @@ SafetyCheckScheduler::buildExecutionPlan(
     all_sequencers.push_back(workflow->getNodeIndex());
   }
 
-  std::unordered_map<GroupID, ShardSet> shards_in_group =
+  folly::F14FastMap<GroupID, ShardSet> shards_in_group =
       maintenance_state.groupShardsByGroupID(all_shards);
 
-  std::unordered_map<GroupID, NodeIndexSet> sequencers_in_group =
+  folly::F14FastMap<GroupID, NodeIndexSet> sequencers_in_group =
       maintenance_state.groupSequencersByGroupID(all_sequencers);
 
   // Stage 2: Order the shard sets as following:

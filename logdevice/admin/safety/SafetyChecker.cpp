@@ -43,7 +43,7 @@ SafetyChecker::~SafetyChecker() {
 folly::SemiFuture<folly::Expected<Impact, Status>> SafetyChecker::checkImpact(
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& shards,
-    std::unordered_set<node_index_t> /*sequencers*/,
+    folly::F14FastSet<node_index_t> /*sequencers*/,
     StorageState target_storage_state,
     SafetyMargin safety_margin,
     bool check_metadata_logs,
@@ -202,7 +202,7 @@ SafetyChecker::performSafetyCheck(
     ShardAuthoritativeStatusMap status_map,
     std::shared_ptr<LogMetaDataFetcher::Results> metadata,
     ShardSet shards,
-    std::unordered_set<node_index_t> sequencers,
+    folly::F14FastSet<node_index_t> sequencers,
     configuration::StorageState target_storage_state,
     SafetyMargin safety_margin,
     bool check_metadata_logs,

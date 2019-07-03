@@ -20,7 +20,7 @@ folly::Expected<Impact, Status> checkImpactOnLogs(
     const std::shared_ptr<LogMetaDataFetcher::Results>& metadata,
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& op_shards,
-    const std::unordered_set<node_index_t>& sequencers,
+    const folly::F14FastSet<node_index_t>& sequencers,
     configuration::StorageState target_storage_state,
     const SafetyMargin& safety_margin,
     bool internal_logs,
@@ -84,7 +84,7 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
     const std::shared_ptr<LogMetaDataFetcher::Results>& metadata_cache,
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& op_shards,
-    const std::unordered_set<node_index_t>& /*sequencers*/,
+    const folly::F14FastSet<node_index_t>& /*sequencers*/,
     configuration::StorageState target_storage_state,
     const SafetyMargin& safety_margin,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
@@ -154,7 +154,7 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
 
     // in case we can't replicate we return epoch & nodeset for it
 
-    std::unordered_set<node_index_t> nodes_to_drain;
+    folly::F14FastSet<node_index_t> nodes_to_drain;
     for (const auto& shard_id : op_shards) {
       nodes_to_drain.insert(shard_id.node());
     }
@@ -196,7 +196,7 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
 Impact checkMetadataStorageSet(
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& op_shards,
-    const std::unordered_set<node_index_t>& /*sequencers*/,
+    const folly::F14FastSet<node_index_t>& /*sequencers*/,
     StorageState target_storage_state,
     const SafetyMargin& safety_margin,
     const std::shared_ptr<const nodes::NodesConfiguration>& nodes_config,

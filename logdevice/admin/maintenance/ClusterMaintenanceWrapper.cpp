@@ -76,15 +76,15 @@ ShardSet ClusterMaintenanceWrapper::getShardsFromDefinition(
       : ShardSet{};
 }
 
-std::unordered_set<node_index_t>
+folly::F14FastSet<node_index_t>
 ClusterMaintenanceWrapper::getSequencersForGroup(const GroupID& group) const {
   return getSequencersFromDefinition(getMaintenanceByGroupID(group));
 }
 
-std::unordered_set<node_index_t>
+folly::F14FastSet<node_index_t>
 ClusterMaintenanceWrapper::getSequencersFromDefinition(
     const MaintenanceDefinition* def) const {
-  std::unordered_set<node_index_t> result;
+  folly::F14FastSet<node_index_t> result;
   if (def == nullptr) {
     return result;
   }
@@ -108,10 +108,10 @@ ClusterMaintenanceWrapper::getSequencersFromDefinition(
   return result;
 }
 
-const std::unordered_set<GroupID>&
+const folly::F14FastSet<GroupID>&
 ClusterMaintenanceWrapper::getGroupsForShard(const ShardID& shard) const {
   ld_assert(shard.isValid());
-  static const std::unordered_set<GroupID> default_state{};
+  static const folly::F14FastSet<GroupID> default_state{};
   const auto it = shards_to_groups_.find(shard);
   if (it != shards_to_groups_.end()) {
     return it->second;
@@ -119,9 +119,9 @@ ClusterMaintenanceWrapper::getGroupsForShard(const ShardID& shard) const {
   return default_state;
 }
 
-const std::unordered_set<GroupID>&
+const folly::F14FastSet<GroupID>&
 ClusterMaintenanceWrapper::getGroupsForSequencer(node_index_t node) const {
-  static const std::unordered_set<GroupID> default_state{};
+  static const folly::F14FastSet<GroupID> default_state{};
   const auto it = nodes_to_groups_.find(node);
   if (it != nodes_to_groups_.end()) {
     return it->second;
@@ -129,10 +129,10 @@ ClusterMaintenanceWrapper::getGroupsForSequencer(node_index_t node) const {
   return default_state;
 }
 
-std::unordered_map<GroupID, ShardSet>
+folly::F14FastMap<GroupID, ShardSet>
 ClusterMaintenanceWrapper::groupShardsByGroupID(
     const std::vector<ShardID>& shards) const {
-  std::unordered_map<GroupID, ShardSet> output;
+  folly::F14FastMap<GroupID, ShardSet> output;
   for (const auto& shard : shards) {
     // Let's find it in out groups index
     auto groups = getGroupsForShard(shard);
@@ -143,10 +143,10 @@ ClusterMaintenanceWrapper::groupShardsByGroupID(
   return output;
 }
 
-std::unordered_map<GroupID, std::unordered_set<node_index_t>>
+folly::F14FastMap<GroupID, folly::F14FastSet<node_index_t>>
 ClusterMaintenanceWrapper::groupSequencersByGroupID(
     const std::vector<node_index_t>& nodes) const {
-  std::unordered_map<GroupID, std::unordered_set<node_index_t>> output;
+  folly::F14FastMap<GroupID, folly::F14FastSet<node_index_t>> output;
   for (const auto& node : nodes) {
     // Let's find it in out groups index
     auto groups = getGroupsForSequencer(node);
@@ -157,9 +157,9 @@ ClusterMaintenanceWrapper::groupSequencersByGroupID(
   return output;
 }
 
-const std::unordered_set<ShardOperationalState>&
+const folly::F14FastSet<ShardOperationalState>&
 ClusterMaintenanceWrapper::getShardTargetStates(const ShardID& shard) const {
-  static const std::unordered_set<ShardOperationalState> default_state{
+  static const folly::F14FastSet<ShardOperationalState> default_state{
       ShardOperationalState::ENABLED};
   ld_assert(shard.isValid());
   const auto it = shards_to_targets_.find(shard);

@@ -161,14 +161,14 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning1) {
   auto shards1_sequencers1 = group1.second;
   ASSERT_EQ("G1", group1.first);
   ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards1_sequencers1.first);
-  ASSERT_EQ(std::unordered_set<node_index_t>{1}, shards1_sequencers1.second);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{1}, shards1_sequencers1.second);
 
   // G3 (N2:S0 -> DRAINED)
   auto group2 = plan[1];
   auto shards2_sequencers2 = group2.second;
   ASSERT_EQ("G3", group2.first);
   ASSERT_EQ(ShardSet{{ShardID(2, 0)}}, shards2_sequencers2.first);
-  ASSERT_EQ(std::unordered_set<node_index_t>{}, shards2_sequencers2.second);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards2_sequencers2.second);
 
   // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED)
   auto group3 = plan[2];
@@ -176,14 +176,14 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning1) {
   ASSERT_EQ("G2", group3.first);
   ASSERT_EQ(
       ShardSet({ShardID(2, 0), ShardID(11, 0)}), shards3_sequencers3.first);
-  ASSERT_EQ(std::unordered_set<node_index_t>{11}, shards3_sequencers3.second);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{11}, shards3_sequencers3.second);
 
   // G4 (N7 -> DISABLED)
   auto group4 = plan[3];
   auto shards4_sequencers4 = group4.second;
   ASSERT_EQ("G4", group4.first);
   ASSERT_EQ(ShardSet(), shards4_sequencers4.first);
-  ASSERT_EQ(std::unordered_set<node_index_t>{7}, shards4_sequencers4.second);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{7}, shards4_sequencers4.second);
 }
 
 TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
@@ -238,14 +238,14 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
   auto shards1_sequencers1 = group1.second;
   ASSERT_EQ("G1", group1.first);
   ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards1_sequencers1.first);
-  ASSERT_EQ(std::unordered_set<node_index_t>{1}, shards1_sequencers1.second);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{1}, shards1_sequencers1.second);
 
   // G2 () + (N11 -> DISABLED)
   auto group2 = plan[1];
   auto shards2_sequencers2 = group2.second;
   ASSERT_EQ("G2", group2.first);
   ASSERT_EQ(ShardSet(), shards2_sequencers2.first);
-  ASSERT_EQ(std::unordered_set<node_index_t>{11}, shards2_sequencers2.second);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{11}, shards2_sequencers2.second);
 }
 
 TEST(SafetyCheckerSchedulerTest, EmptyPlanning) {

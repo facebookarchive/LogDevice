@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
+#include <folly/container/F14Map.h>
+
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/MetaDataLog.h"
@@ -48,7 +50,7 @@ class LogMetaDataFetcher {
     NodeSetFinder::MetaDataExtrasMap metadata_extras;
   };
 
-  using Results = std::unordered_map<logid_t, Result, logid_t::Hash>;
+  using Results = folly::F14FastMap<logid_t, Result, logid_t::Hash>;
   using Callback = std::function<void(Results)>;
 
   /**

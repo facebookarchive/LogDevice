@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <folly/container/F14Set.h>
+
 #include "logdevice/admin/safety/LogMetaDataFetcher.h"
 #include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/common/ClusterState.h"
@@ -25,7 +27,7 @@ folly::Expected<Impact, Status> checkImpactOnLogs(
     const std::shared_ptr<LogMetaDataFetcher::Results>& metadata,
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& op_shards,
-    const std::unordered_set<node_index_t>& sequencers,
+    const folly::F14FastSet<node_index_t>& sequencers,
     configuration::StorageState target_storage_state,
     const SafetyMargin& safety_margin,
     bool internal_logs,
@@ -42,7 +44,7 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
     const std::shared_ptr<LogMetaDataFetcher::Results>& metadata,
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& op_shards,
-    const std::unordered_set<node_index_t>& sequencers,
+    const folly::F14FastSet<node_index_t>& sequencers,
     configuration::StorageState target_storage_state,
     const SafetyMargin& safety_margin,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
@@ -62,7 +64,7 @@ bool isAlive(ClusterState* cluster_state,
 Impact checkMetadataStorageSet(
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& op_shards,
-    const std::unordered_set<node_index_t>& sequencers,
+    const folly::F14FastSet<node_index_t>& sequencers,
     configuration::StorageState target_storage_state,
     const SafetyMargin& safety_margin,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&

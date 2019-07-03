@@ -622,10 +622,10 @@ MaintenanceManager::getMetaDataStorageStateInternal(ShardID shard) const {
 }
 
 folly::SemiFuture<
-    folly::Expected<std::unordered_set<ShardOperationalState>, Status>>
+    folly::Expected<folly::F14FastSet<ShardOperationalState>, Status>>
 MaintenanceManager::getShardTargetStates(ShardID shard) {
   auto pf = folly::makePromiseContract<
-      folly::Expected<std::unordered_set<ShardOperationalState>, Status>>();
+      folly::Expected<folly::F14FastSet<ShardOperationalState>, Status>>();
   add([this, shard, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getShardTargetStatesInternal(shard));
   });
@@ -633,7 +633,7 @@ MaintenanceManager::getShardTargetStates(ShardID shard) {
   return std::move(pf.second);
 }
 
-folly::Expected<std::unordered_set<ShardOperationalState>, Status>
+folly::Expected<folly::F14FastSet<ShardOperationalState>, Status>
 MaintenanceManager::getShardTargetStatesInternal(ShardID shard) const {
   if (!cluster_maintenance_wrapper_) {
     return folly::makeUnexpected(E::NOTREADY);

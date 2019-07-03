@@ -271,7 +271,7 @@ void ShardWorkflow::updateStatus(MaintenanceStatus status) {
 }
 
 void ShardWorkflow::addTargetOpState(
-    std::unordered_set<ShardOperationalState> state) {
+    folly::F14FastSet<ShardOperationalState> state) {
   // TODO: Enable after implementing toString
   /*ld_check_in(state,
       ({ShardOperationalState::MAY_DISAPPEAR,
@@ -292,7 +292,7 @@ void ShardWorkflow::rebuildInRestoreMode(bool is_restore) {
   restore_mode_rebuilding_ = is_restore;
 }
 
-std::unordered_set<ShardOperationalState>
+folly::F14FastSet<ShardOperationalState>
 ShardWorkflow::getTargetOpStates() const {
   return target_op_state_;
 }

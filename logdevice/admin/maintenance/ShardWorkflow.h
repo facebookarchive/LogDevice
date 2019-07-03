@@ -7,6 +7,7 @@
  **/
 #pragma once
 
+#include <folly/container/F14Set.h>
 #include <folly/futures/Future.h>
 
 #include "logdevice/admin/maintenance/EventLogWriter.h"
@@ -68,7 +69,7 @@ class ShardWorkflow {
   ShardID getShardID() const;
 
   // Adds state to target_op_state_
-  void addTargetOpState(std::unordered_set<ShardOperationalState> state);
+  void addTargetOpState(folly::F14FastSet<ShardOperationalState> state);
 
   // Sets allow_passive_drain to `allow`.
   void isPassiveDrainAllowed(bool allow);
@@ -80,7 +81,7 @@ class ShardWorkflow {
   void rebuildInRestoreMode(bool is_restore);
 
   // Returns the target_op_state_
-  std::unordered_set<ShardOperationalState> getTargetOpStates() const;
+  folly::F14FastSet<ShardOperationalState> getTargetOpStates() const;
 
   // Returns value of last_updated_at_
   SystemTimestamp getLastUpdatedTimestamp() const;
@@ -113,7 +114,7 @@ class ShardWorkflow {
       const;
 
  private:
-  std::unordered_set<ShardOperationalState> target_op_state_;
+  folly::F14FastSet<ShardOperationalState> target_op_state_;
   // The shard this workflow is for
   ShardID shard_;
   // Any even that needs to be written by this workflow

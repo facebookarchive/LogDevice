@@ -9,6 +9,7 @@
 
 #include <folly/Optional.h>
 #include <folly/container/F14Map.h>
+#include <folly/container/F14Set.h>
 
 #include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/ShardID.h"
@@ -47,7 +48,7 @@ class ClusterMaintenanceWrapper {
    * the given group id in current ClusterMaintenanceState and returns a
    * set of nodes from the corresponding MaintenanceDefinition
    */
-  std::unordered_set<node_index_t>
+  folly::F14FastSet<node_index_t>
   getSequencersForGroup(const GroupID& group) const;
 
   /**
@@ -56,7 +57,7 @@ class ClusterMaintenanceWrapper {
    * It's the responsibility of the caller to verify whether this is a storage
    * node or not.
    */
-  const std::unordered_set<ShardOperationalState>&
+  const folly::F14FastSet<ShardOperationalState>&
   getShardTargetStates(const ShardID& shard) const;
 
   /**
@@ -74,28 +75,28 @@ class ClusterMaintenanceWrapper {
    * Returns a reference to a reference to an empty set if no maintenances
    * applied on this shard.
    */
-  const std::unordered_set<GroupID>&
+  const folly::F14FastSet<GroupID>&
   getGroupsForShard(const ShardID& shard) const;
 
   /**
    * Returns a a reference to an empty set if no maintenances applied on this
    * node.
    */
-  const std::unordered_set<GroupID>&
+  const folly::F14FastSet<GroupID>&
   getGroupsForSequencer(node_index_t node) const;
 
   /**
    * Accepts a list of shard ids and return them grouped by group-ids. Note that
    * the shard may appear in multiple groups.
    */
-  std::unordered_map<GroupID, ShardSet>
+  folly::F14FastMap<GroupID, ShardSet>
   groupShardsByGroupID(const std::vector<ShardID>& shards) const;
 
   /**
    * Accepts a list of node ids and return them grouped by group-ids. Note that
    * the node may appear in multiple groups.
    */
-  std::unordered_map<GroupID, std::unordered_set<node_index_t>>
+  folly::F14FastMap<GroupID, folly::F14FastSet<node_index_t>>
   groupSequencersByGroupID(const std::vector<node_index_t>& shards) const;
 
   /**
@@ -150,15 +151,15 @@ class ClusterMaintenanceWrapper {
   std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes_config_;
   folly::F14NodeMap<GroupID, const MaintenanceDefinition*> groups_;
 
-  folly::F14NodeMap<ShardID, std::unordered_set<GroupID>> shards_to_groups_;
-  folly::F14NodeMap<ShardID, std::unordered_set<ShardOperationalState>>
+  folly::F14NodeMap<ShardID, folly::F14FastSet<GroupID>> shards_to_groups_;
+  folly::F14NodeMap<ShardID, folly::F14FastSet<ShardOperationalState>>
       shards_to_targets_;
 
-  folly::F14NodeMap<node_index_t, std::unordered_set<GroupID>> nodes_to_groups_;
+  folly::F14NodeMap<node_index_t, folly::F14FastSet<GroupID>> nodes_to_groups_;
   folly::F14NodeMap<node_index_t, SequencingState> nodes_to_targets_;
 
   ShardSet getShardsFromDefinition(const MaintenanceDefinition* def) const;
-  std::unordered_set<node_index_t>
+  folly::F14FastSet<node_index_t>
   getSequencersFromDefinition(const MaintenanceDefinition* def) const;
 };
 
