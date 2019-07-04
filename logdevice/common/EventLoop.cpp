@@ -172,8 +172,8 @@ void EventLoop::delayCheckCallback(void* arg, short) {
     evtimer_add(self->scheduled_event_, self->getCommonTimeout(1s));
     if (now > self->scheduled_event_start_time_) {
       auto diff = now - self->scheduled_event_start_time_;
-      auto cur_delay = duration_cast<microseconds>(diff);
-      self->delay_us_.store(cur_delay);
+      uint64_t cur_delay = duration_cast<microseconds>(diff).count();
+      self->delay_us_.fetch_add(cur_delay, std::memory_order_relaxed);
     }
     self->scheduled_event_start_time_ = steady_clock::time_point::min();
   } else {
@@ -202,7 +202,7 @@ void EventLoop::run() {
 
   // Initiate runs to detect eventloop delays.
   using namespace std::chrono_literals;
-  delay_us_.store(std::chrono::milliseconds(0));
+  delay_us_.store(0);
   scheduled_event_ = LD_EV(event_new)(
       base_.get(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
   scheduled_event_start_time_ = std::chrono::steady_clock::time_point::min();

@@ -155,8 +155,7 @@ class EventLoop : public folly::Executor {
   std::atomic<size_t> event_handlers_completed_{0};
 
   // Delay in running a default priority event by EventLoo0p
-  std::atomic<std::chrono::microseconds> delay_us_{
-      std::chrono::microseconds(0)};
+  std::atomic<uint64_t> delay_us_{0};
 
  protected:
   // called on this EventLoop's thread before starting the event loop
