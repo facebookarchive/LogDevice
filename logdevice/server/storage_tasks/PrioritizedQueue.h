@@ -11,6 +11,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <vector>
 
 #include <folly/MPMCQueue.h>
@@ -44,7 +45,7 @@ class PrioritizedQueue {
     return rv;
   }
   bool writeIfNotFull(T task) {
-    shared_lock<folly::SharedMutex> l(introspection_mutex_);
+    std::shared_lock<folly::SharedMutex> l(introspection_mutex_);
     bool rv = queues_[getPriority(task)].writeIfNotFull(task);
     if (rv) {
       sem_.post();
@@ -52,7 +53,7 @@ class PrioritizedQueue {
     return rv;
   }
   void blockingWrite(T task) {
-    shared_lock<folly::SharedMutex> l(introspection_mutex_);
+    std::shared_lock<folly::SharedMutex> l(introspection_mutex_);
     queues_[getPriority(task)].blockingWrite(task);
     sem_.post();
   }
@@ -71,7 +72,7 @@ class PrioritizedQueue {
   }
 
   void readQueueGuaranteedNonEmpty(T& out) {
-    shared_lock<folly::SharedMutex> l(introspection_mutex_);
+    std::shared_lock<folly::SharedMutex> l(introspection_mutex_);
 
     // Highest to lowest.
     for (int pri = NumPriorities - 1; pri >= 0; --pri) {
@@ -88,7 +89,7 @@ class PrioritizedQueue {
     if (!sem_.try_wait()) {
       return false;
     }
-    shared_lock<folly::SharedMutex> l(introspection_mutex_);
+    std::shared_lock<folly::SharedMutex> l(introspection_mutex_);
 
     // using readIfNotEmpty() below instead of read() as we can't afford to
     // not ship a queue entry after decrementing the semaphore
@@ -132,7 +133,7 @@ class PrioritizedQueue {
     return res;
   }
   ssize_t size() const {
-    shared_lock<folly::SharedMutex> l(introspection_mutex_);
+    std::shared_lock<folly::SharedMutex> l(introspection_mutex_);
     ssize_t res = 0;
     for (auto& q : queues_) {
       res += q.size();
@@ -140,7 +141,7 @@ class PrioritizedQueue {
     return res;
   }
   ssize_t max_capacity() const {
-    shared_lock<folly::SharedMutex> l(introspection_mutex_);
+    std::shared_lock<folly::SharedMutex> l(introspection_mutex_);
     ssize_t res = 0;
     for (auto& q : queues_) {
       res += q.capacity();

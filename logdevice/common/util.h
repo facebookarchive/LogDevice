@@ -403,60 +403,6 @@ hexdump_buf(const Slice& slice,
 }
 
 /**
- * Simple replacement of std::shared_lock, which is not available until C++14.
- */
-template <typename Mutex>
-class shared_lock {
- private:
-  Mutex* rwlock_ = nullptr;
-  bool locked_ = false;
-
- public:
-  shared_lock(const shared_lock& rhs) = delete;
-  shared_lock& operator=(const shared_lock& rhs) = delete;
-
-  shared_lock() {}
-  explicit shared_lock(Mutex& rwlock) : rwlock_(&rwlock), locked_(true) {
-    rwlock_->lock_shared();
-  }
-  shared_lock(shared_lock&& rhs) noexcept
-      : rwlock_(rhs.rwlock_), locked_(rhs.locked_) {
-    rhs.rwlock_ = nullptr;
-    rhs.locked_ = false;
-  }
-  shared_lock& operator=(shared_lock&& rhs) {
-    using std::swap;
-    swap(rwlock_, rhs.rwlock_);
-    swap(locked_, rhs.locked_);
-    if (rhs.locked_) {
-      rhs.unlock();
-    }
-    rhs.rwlock_ = nullptr;
-    return *this;
-  }
-
-  void lock() {
-    ld_check(rwlock_);
-    ld_check(!locked_);
-    rwlock_->lock_shared();
-    locked_ = true;
-  }
-
-  void unlock() {
-    ld_check(rwlock_);
-    ld_check(locked_);
-    rwlock_->unlock_shared();
-    locked_ = false;
-  }
-
-  ~shared_lock() {
-    if (locked_) {
-      unlock();
-    }
-  }
-};
-
-/**
  * A simple wrapper around an object with a TTL assigned.
  */
 template <typename T>

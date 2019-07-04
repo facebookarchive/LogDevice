@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/StickyCopySetManager.h"
 
+#include <shared_mutex>
+
 #include <folly/Memory.h>
 
 #include "logdevice/common/debug.h"
@@ -28,7 +30,7 @@ StickyCopySetManager::getCopySet(copyset_size_t extras,
 
   State& state = checked_downcast<State&>(csm_state);
 
-  shared_lock<folly::SharedMutex> lock(mutex_);
+  std::shared_lock<folly::SharedMutex> lock(mutex_);
   size_t invalid_block_seq_no = 0;
 
   // returns true if we have to change the copyset
@@ -89,7 +91,7 @@ CopySetSelector::Result StickyCopySetManager::getCopysetUsingUnderlyingSelector(
   ld_check(copyset_out != nullptr);
   ld_check(copyset_size_out != nullptr);
 
-  shared_lock<folly::SharedMutex> lock(mutex_);
+  std::shared_lock<folly::SharedMutex> lock(mutex_);
   auto result =
       underlying_selector_->select(extras, copyset_out, copyset_size_out);
   lock.unlock();

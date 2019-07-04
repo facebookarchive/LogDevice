@@ -8,6 +8,7 @@
 #include "logdevice/lib/RemoteLogsConfig.h"
 
 #include <deque>
+#include <shared_mutex>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -122,7 +123,7 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
 
   {
     // Attempting to fetch result from cache
-    shared_lock<RWSpinLock> lock(id_cache_mutex);
+    std::shared_lock<RWSpinLock> lock(id_cache_mutex);
     auto it = id_result_cache.find(id.val_);
     if (it != id_result_cache.end()) {
       // potential cache hit - check timestamp
@@ -214,7 +215,7 @@ void RemoteLogsConfig::getLogRangeByNameAsync(
   boost::trim_if(name, boost::is_any_of(delimiter));
   // Attempting to fetch result from cache
   {
-    shared_lock<RWSpinLock> lock(name_cache_mutex);
+    std::shared_lock<RWSpinLock> lock(name_cache_mutex);
     auto it = name_result_cache.find(name);
     if (it != name_result_cache.end()) {
       // potential cache hit - check timestamp
@@ -294,7 +295,7 @@ bool RemoteLogsConfig::getLogRangesByNamespaceCached(
     const std::string& ns,
     RangeLookupMap& res) const {
   // using the same mutex as the name cache
-  shared_lock<RWSpinLock> lock(name_cache_mutex);
+  std::shared_lock<RWSpinLock> lock(name_cache_mutex);
   auto ns_it = namespace_last_fetch_times.find(ns);
   if (ns_it == namespace_last_fetch_times.end()) {
     // no result in cache
