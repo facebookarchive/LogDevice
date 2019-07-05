@@ -176,14 +176,15 @@ class MockedNodeSetAccessor : public StorageSetAccessor {
       GetEpochRecoveryMetadataRequestTest* test,
       logid_t logid,
       EpochMetaData epoch_metadata,
-      std::shared_ptr<ServerConfig> config,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
       StorageSetAccessor::ShardAccessFunc node_access,
       StorageSetAccessor::CompletionFunc completion,
       StorageSetAccessor::Property property,
       Settings settings)
       : StorageSetAccessor(logid,
                            epoch_metadata,
-                           config,
+                           nodes_configuration,
                            node_access,
                            completion,
                            property),
@@ -204,7 +205,9 @@ class MockedNodeSetAccessor : public StorageSetAccessor {
       logid_t /*unused*/,
       const EpochMetaData& /*unused*/,
       std::shared_ptr<NodeSetState> /*unused*/,
-      const std::shared_ptr<ServerConfig>& /*unused*/) override {
+      const std::shared_ptr<
+          const configuration::nodes::NodesConfiguration>& /*unused*/)
+      override {
     return std::make_unique<MyLinearCopySetSelector>(test_);
   }
 
@@ -267,7 +270,7 @@ class MockGetEpochRecoveryMetadataRequest
         test_,
         getLogId(),
         *epoch_metadata_,
-        getClusterConfig()->serverConfig(),
+        getNodesConfiguration(),
         node_access,
         completion,
         StorageSetAccessor::Property::REPLICATION,
@@ -300,8 +303,10 @@ class MockGetEpochRecoveryMetadataRequest
     GetEpochRecoveryMetadataRequest::deferredComplete();
   }
 
-  const std::shared_ptr<const Configuration> getClusterConfig() const override {
-    return test_->config_;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    return test_->config_->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
   }
 
   const Settings& getSettings() const override {

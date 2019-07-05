@@ -55,10 +55,6 @@ void GetHeadAttributesRequest::initNodeSetFinder() {
   nodeset_finder_->start();
 }
 
-std::shared_ptr<ServerConfig> GetHeadAttributesRequest::getConfig() const {
-  return Worker::onThisThread()->getConfig()->serverConfig();
-}
-
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 GetHeadAttributesRequest::getNodesConfiguration() const {
   return Worker::onThisThread()->getNodesConfiguration();
@@ -88,14 +84,15 @@ void GetHeadAttributesRequest::initStorageSetAccessor() {
   };
 
   nodeset_accessor_ = makeStorageSetAccessor(
-      getConfig(), shards, minRep, shard_access, completion);
+      getNodesConfiguration(), shards, minRep, shard_access, completion);
   ld_check(nodeset_accessor_ != nullptr);
   nodeset_accessor_->start();
 };
 
 std::unique_ptr<StorageSetAccessor>
 GetHeadAttributesRequest::makeStorageSetAccessor(
-    const std::shared_ptr<ServerConfig>& /*config*/,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_configuration,
     StorageSet shards,
     ReplicationProperty minRep,
     StorageSetAccessor::ShardAccessFunc node_access,
@@ -103,7 +100,7 @@ GetHeadAttributesRequest::makeStorageSetAccessor(
   return std::make_unique<StorageSetAccessor>(
       log_id_,
       shards,
-      getConfig(),
+      nodes_configuration,
       minRep,
       node_access,
       completion,

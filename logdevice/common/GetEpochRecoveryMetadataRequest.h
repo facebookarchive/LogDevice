@@ -117,7 +117,8 @@ class GetEpochRecoveryMetadataRequest
 
   virtual std::unique_ptr<BackoffTimer> createRetryTimer();
 
-  virtual const std::shared_ptr<const Configuration> getClusterConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
   virtual const Settings& getSettings() const;
 

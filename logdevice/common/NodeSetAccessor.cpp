@@ -32,33 +32,37 @@ namespace facebook { namespace logdevice {
     }                                          \
   } while (false)
 
-StorageSetAccessor::StorageSetAccessor(logid_t log_id,
-                                       StorageSet shards,
-                                       std::shared_ptr<ServerConfig> config,
-                                       ReplicationProperty replication,
-                                       ShardAccessFunc shard_access,
-                                       CompletionFunc completion,
-                                       Property property,
-                                       std::chrono::milliseconds timeout)
+StorageSetAccessor::StorageSetAccessor(
+    logid_t log_id,
+    StorageSet shards,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
+    ReplicationProperty replication,
+    ShardAccessFunc shard_access,
+    CompletionFunc completion,
+    Property property,
+    std::chrono::milliseconds timeout)
     : StorageSetAccessor(log_id,
                          EpochMetaData(shards, std::move(replication)),
-                         config,
+                         nodes_configuration,
                          shard_access,
                          completion,
                          property,
                          timeout) {}
 
-StorageSetAccessor::StorageSetAccessor(logid_t log_id,
-                                       EpochMetaData epoch_metadata,
-                                       std::shared_ptr<ServerConfig> config,
-                                       ShardAccessFunc shard_access,
-                                       CompletionFunc completion,
-                                       Property property,
-                                       std::chrono::milliseconds timeout)
+StorageSetAccessor::StorageSetAccessor(
+    logid_t log_id,
+    EpochMetaData epoch_metadata,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
+    ShardAccessFunc shard_access,
+    CompletionFunc completion,
+    Property property,
+    std::chrono::milliseconds timeout)
     : log_id_(log_id),
       property_(property),
       timeout_(timeout),
-      config_(config),
+      nodes_configuration_(nodes_configuration),
       epoch_metadata_(std::move(epoch_metadata)),
       nodeset_state_(
           std::make_shared<NodeSetState>(epoch_metadata_.shards,
@@ -67,9 +71,9 @@ StorageSetAccessor::StorageSetAccessor(logid_t log_id,
       shard_func_(std::move(shard_access)),
       completion_func_(std::move(completion)),
       failure_domain_(epoch_metadata_.shards,
-                      *config_->getNodesConfigurationFromServerConfigSource(),
+                      *nodes_configuration_,
                       epoch_metadata_.replication) {
-  ld_check(config_ != nullptr);
+  ld_check(nodes_configuration_ != nullptr);
   ld_check(epoch_metadata_.isValid());
 }
 
@@ -123,7 +127,7 @@ void StorageSetAccessor::start() {
   if (property_ != Property::FMAJORITY) {
     // copyset selector is not needed for FMAJORITY property
     copyset_selector_ = createCopySetSelector(
-        log_id_, epoch_metadata_, nodeset_state_, config_);
+        log_id_, epoch_metadata_, nodeset_state_, nodes_configuration_);
   }
 
   // Apply shard authoritative statuses.
@@ -836,12 +840,13 @@ std::unique_ptr<CopySetSelector> StorageSetAccessor::createCopySetSelector(
     logid_t log_id,
     const EpochMetaData& epoch_metadata,
     std::shared_ptr<NodeSetState> nodeset_state,
-    const std::shared_ptr<ServerConfig>& config) {
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_configuration) {
   return CopySetSelectorFactory::create(
       log_id,
       epoch_metadata,
       nodeset_state,
-      config->getNodesConfigurationFromServerConfigSource(),
+      nodes_configuration,
       Worker::onThisThread()->processor_->getOptionalMyNodeID(),
       /* log_attrs */ nullptr,
       Worker::settings(),

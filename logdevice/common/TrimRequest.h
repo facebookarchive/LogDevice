@@ -151,17 +151,16 @@ class TrimRequest : public DistributedRequest {
    */
   virtual StorageSetAccessor::SendResult sendTo(ShardID shard);
 
-  virtual std::shared_ptr<ServerConfig> getConfig() const;
-
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
 
-  virtual std::unique_ptr<StorageSetAccessor>
-  makeStorageSetAccessor(const std::shared_ptr<ServerConfig>& config,
-                         StorageSet shards,
-                         ReplicationProperty minRep,
-                         StorageSetAccessor::ShardAccessFunc shard_access,
-                         StorageSetAccessor::CompletionFunc completion);
+  virtual std::unique_ptr<StorageSetAccessor> makeStorageSetAccessor(
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration,
+      StorageSet shards,
+      ReplicationProperty minRep,
+      StorageSetAccessor::ShardAccessFunc shard_access,
+      StorageSetAccessor::CompletionFunc completion);
 
   ClientBridge* client_;
   logid_t log_id_;

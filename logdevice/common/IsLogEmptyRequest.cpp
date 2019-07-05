@@ -53,10 +53,6 @@ void IsLogEmptyRequest::initNodeSetFinder() {
   nodeset_finder_->start();
 }
 
-std::shared_ptr<ServerConfig> IsLogEmptyRequest::getConfig() const {
-  return Worker::onThisThread()->getConfig()->serverConfig();
-}
-
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 IsLogEmptyRequest::getNodesConfiguration() const {
   return Worker::onThisThread()->getNodesConfiguration();
@@ -111,7 +107,7 @@ void IsLogEmptyRequest::initStorageSetAccessor() {
   };
 
   nodeset_accessor_ = makeStorageSetAccessor(
-      getConfig(), shards_, minRep, shard_access, completion);
+      getNodesConfiguration(), shards_, minRep, shard_access, completion);
   nodeset_accessor_->setGracePeriod(grace_period_, completion_cond);
   nodeset_accessor_->setWaveTimeout(getWaveTimeoutInterval(client_timeout_));
   failure_domain_ = makeFailureDomain(shards_, getNodesConfiguration(), minRep);
@@ -222,7 +218,8 @@ void IsLogEmptyRequest::setShardAuthoritativeStatus(ShardID shard,
 }
 
 std::unique_ptr<StorageSetAccessor> IsLogEmptyRequest::makeStorageSetAccessor(
-    const std::shared_ptr<ServerConfig>& /*config*/,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_configuration,
     StorageSet shards,
     ReplicationProperty minRep,
     StorageSetAccessor::ShardAccessFunc node_access,
@@ -230,7 +227,7 @@ std::unique_ptr<StorageSetAccessor> IsLogEmptyRequest::makeStorageSetAccessor(
   return std::make_unique<StorageSetAccessor>(
       log_id_,
       shards,
-      getConfig(),
+      nodes_configuration,
       minRep,
       node_access,
       completion,

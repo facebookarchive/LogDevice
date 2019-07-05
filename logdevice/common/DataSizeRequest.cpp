@@ -58,10 +58,6 @@ void DataSizeRequest::initNodeSetFinder() {
   nodeset_finder_->start();
 }
 
-std::shared_ptr<ServerConfig> DataSizeRequest::getConfig() const {
-  return Worker::onThisThread()->getConfig()->serverConfig();
-}
-
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 DataSizeRequest::getNodesConfiguration() const {
   return Worker::onThisThread()->getNodesConfiguration();
@@ -101,7 +97,7 @@ void DataSizeRequest::initStorageSetAccessor() {
   };
 
   nodeset_accessor_ = makeStorageSetAccessor(
-      getConfig(), shards, minRep, shard_access, completion);
+      getNodesConfiguration(), shards, minRep, shard_access, completion);
   failure_domain_ = makeFailureDomain(shards, getNodesConfiguration(), minRep);
 }
 
@@ -183,7 +179,8 @@ void DataSizeRequest::setShardAuthoritativeStatus(ShardID shard,
 }
 
 std::unique_ptr<StorageSetAccessor> DataSizeRequest::makeStorageSetAccessor(
-    const std::shared_ptr<ServerConfig>& /*config*/,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
     StorageSet shards,
     ReplicationProperty minRep,
     StorageSetAccessor::ShardAccessFunc node_access,
@@ -191,7 +188,7 @@ std::unique_ptr<StorageSetAccessor> DataSizeRequest::makeStorageSetAccessor(
   return std::make_unique<StorageSetAccessor>(
       log_id_,
       shards,
-      getConfig(),
+      nodes_configuration,
       minRep,
       node_access,
       completion,

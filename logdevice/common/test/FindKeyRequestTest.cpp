@@ -233,7 +233,8 @@ class MockFindKeyRequest : public FindKeyRequest {
   }
 
   std::unique_ptr<StorageSetAccessor> makeStorageSetAccessor(
-      const std::shared_ptr<ServerConfig>& config,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
       StorageSet shards,
       ReplicationProperty minRep,
       StorageSetAccessor::ShardAccessFunc shard_access,
@@ -241,7 +242,7 @@ class MockFindKeyRequest : public FindKeyRequest {
     return std::make_unique<MockStorageSetAccessor>(
         logid_t(1),
         shards,
-        config,
+        nodes_configuration,
         minRep,
         shard_access,
         completion,
@@ -254,10 +255,6 @@ class MockFindKeyRequest : public FindKeyRequest {
                     std::chrono::milliseconds timeout,
                     std::function<void(Status status)> cb) const override {
     return std::make_unique<MockNodeSetFinder>(log_id, timeout, cb);
-  }
-
-  std::shared_ptr<ServerConfig> getConfig() const override {
-    return config_;
   }
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>

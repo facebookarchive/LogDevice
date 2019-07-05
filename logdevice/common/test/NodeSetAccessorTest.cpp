@@ -161,6 +161,12 @@ class NodeSetAccessorTest : public ::testing::Test {
     return config_;
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    return config_->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
+  }
+
   void triggerJobTimer() {
     accessor_->onJobTimedout();
   }
@@ -206,7 +212,7 @@ class MockedStorageSetAccessor : public StorageSetAccessor {
   explicit MockedStorageSetAccessor(NodeSetAccessorTest* test)
       : StorageSetAccessor(test->LOG_ID,
                            test->nodeset_,
-                           test->config_->serverConfig(),
+                           test->getNodesConfiguration(),
                            ReplicationProperty(test->replication_,
                                                test->sync_replication_scope_),
                            [test](ShardID shard, const WaveInfo& info) {
@@ -244,11 +250,12 @@ class MockedStorageSetAccessor : public StorageSetAccessor {
     return std::move(timer);
   }
 
-  std::unique_ptr<CopySetSelector>
-  createCopySetSelector(logid_t,
-                        const EpochMetaData&,
-                        std::shared_ptr<NodeSetState>,
-                        const std::shared_ptr<ServerConfig>&) override {
+  std::unique_ptr<CopySetSelector> createCopySetSelector(
+      logid_t,
+      const EpochMetaData&,
+      std::shared_ptr<NodeSetState>,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&)
+      override {
     // transfer the selector to the accessor instance
     return std::move(test_->copyset_selector_);
   }

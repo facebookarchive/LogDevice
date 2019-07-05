@@ -131,7 +131,8 @@ class MockedNodeSetAccessor : public StorageSetAccessor {
       StorageSetAccessor::Property property)
       : StorageSetAccessor(test->LOG_ID,
                            test->shards_,
-                           test->config_->serverConfig(),
+                           test->config_->serverConfig()
+                               ->getNodesConfigurationFromServerConfigSource(),
                            test->replication_,
                            node_access,
                            completion,
@@ -156,18 +157,19 @@ class MockedNodeSetAccessor : public StorageSetAccessor {
     return std::move(timer);
   }
 
-  std::unique_ptr<CopySetSelector>
-  createCopySetSelector(logid_t log_id,
-                        const EpochMetaData& epoch_metadata,
-                        std::shared_ptr<NodeSetState> nodeset_state,
-                        const std::shared_ptr<ServerConfig>& config) override {
+  std::unique_ptr<CopySetSelector> createCopySetSelector(
+      logid_t log_id,
+      const EpochMetaData& epoch_metadata,
+      std::shared_ptr<NodeSetState> nodeset_state,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration) override {
     if (epoch_metadata.replication.toOldRepresentation()
             ->sync_replication_scope > NodeLocationScope::NODE) {
       return std::make_unique<CrossDomainCopySetSelector>(
           log_id,
           epoch_metadata.shards,
           nodeset_state,
-          config->getNodesConfigurationFromServerConfigSource(),
+          nodes_configuration,
           test_->my_node_,
           epoch_metadata.replication.toOldRepresentation()->replication_factor,
           epoch_metadata.replication.toOldRepresentation()
@@ -225,17 +227,20 @@ class MockMutator : public Mutator {
   }
 
  protected:
-  std::shared_ptr<Configuration> getClusterConfig() const override {
-    return test_->getConfig();
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return test_->getConfig()
+        ->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
   }
 
-  std::unique_ptr<StorageSetAccessor>
-  createStorageSetAccessor(logid_t /*log_id*/,
-                           EpochMetaData epoch_metadata_with_mutation_set,
-                           std::shared_ptr<ServerConfig> /*config*/,
-                           StorageSetAccessor::ShardAccessFunc node_access,
-                           StorageSetAccessor::CompletionFunc completion,
-                           StorageSetAccessor::Property property) override {
+  std::unique_ptr<StorageSetAccessor> createStorageSetAccessor(
+      logid_t /*log_id*/,
+      EpochMetaData epoch_metadata_with_mutation_set,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>,
+      StorageSetAccessor::ShardAccessFunc node_access,
+      StorageSetAccessor::CompletionFunc completion,
+      StorageSetAccessor::Property property) override {
     EXPECT_EQ(test_->shards_, epoch_metadata_with_mutation_set.shards);
     EXPECT_EQ(test_->replication_.toString(),
               epoch_metadata_with_mutation_set.replication.toString());

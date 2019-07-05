@@ -19,6 +19,7 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 /**
  * @file  StorageSetAccessor is a utility class that handles the common pattern
@@ -127,7 +128,8 @@ class StorageSetAccessor {
   StorageSetAccessor(
       logid_t log_id,
       StorageSet nodeset,
-      std::shared_ptr<ServerConfig> config,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
       ReplicationProperty replication,
       ShardAccessFunc node_access,
       CompletionFunc completion,
@@ -147,7 +149,8 @@ class StorageSetAccessor {
   StorageSetAccessor(
       logid_t log_id,
       EpochMetaData epoch_metadata,
-      std::shared_ptr<ServerConfig> config,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
       ShardAccessFunc node_access,
       CompletionFunc completion,
       Property property,
@@ -346,11 +349,12 @@ class StorageSetAccessor {
   virtual void cancelGracePeriodTimer();
   virtual std::unique_ptr<BackoffTimer>
   createWaveTimer(std::function<void()> callback);
-  virtual std::unique_ptr<CopySetSelector>
-  createCopySetSelector(logid_t log_id,
-                        const EpochMetaData& epoch_metadata,
-                        std::shared_ptr<NodeSetState> nodeset_state,
-                        const std::shared_ptr<ServerConfig>& config);
+  virtual std::unique_ptr<CopySetSelector> createCopySetSelector(
+      logid_t log_id,
+      const EpochMetaData& epoch_metadata,
+      std::shared_ptr<NodeSetState> nodeset_state,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration);
 
   virtual ShardAuthoritativeStatusMap& getShardAuthoritativeStatusMap();
 
@@ -414,7 +418,8 @@ class StorageSetAccessor {
   const Property property_;
   // timeout for the nodeset access job
   const std::chrono::milliseconds timeout_;
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+      nodes_configuration_;
 
   // Given responses from an f-majority of the nodes, if completion_cond is not
   // satisfied we wait for more responses for up to at most this grace_period.

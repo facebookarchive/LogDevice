@@ -154,15 +154,17 @@ class Mutator {
   }
 
  protected:
-  virtual std::shared_ptr<Configuration> getClusterConfig() const;
+  virtual std::unique_ptr<StorageSetAccessor> createStorageSetAccessor(
+      logid_t log_id,
+      EpochMetaData epoch_metadata_with_mutation_set,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      StorageSetAccessor::ShardAccessFunc node_access,
+      StorageSetAccessor::CompletionFunc completion,
+      StorageSetAccessor::Property property);
 
-  virtual std::unique_ptr<StorageSetAccessor>
-  createStorageSetAccessor(logid_t log_id,
-                           EpochMetaData epoch_metadata_with_mutation_set,
-                           std::shared_ptr<ServerConfig> config,
-                           StorageSetAccessor::ShardAccessFunc node_access,
-                           StorageSetAccessor::CompletionFunc completion,
-                           StorageSetAccessor::Property property);
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
   virtual AuthoritativeStatus getNodeAuthoritativeStatus(ShardID shard) const;
 

@@ -226,7 +226,8 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
   }
 
   std::unique_ptr<StorageSetAccessor> makeStorageSetAccessor(
-      const std::shared_ptr<ServerConfig>& config,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration,
       StorageSet shards,
       ReplicationProperty minRep,
       StorageSetAccessor::ShardAccessFunc shard_access,
@@ -234,7 +235,7 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
     auto res = std::make_unique<MockStorageSetAccessor>(
         logid_t(1),
         shards,
-        config,
+        nodes_configuration,
         minRep,
         shard_access,
         completion,
@@ -249,10 +250,6 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
         storage_set_, replication_, [this](Status status) {
           this->start(status);
         });
-  }
-
-  std::shared_ptr<ServerConfig> getConfig() const override {
-    return config_;
   }
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>

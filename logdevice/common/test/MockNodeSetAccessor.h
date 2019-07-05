@@ -22,7 +22,8 @@ class MockStorageSetAccessor : public StorageSetAccessor {
   MockStorageSetAccessor(
       logid_t log_id,
       StorageSet storage_set,
-      std::shared_ptr<ServerConfig> config,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
       ReplicationProperty replication,
       ShardAccessFunc shard_access,
       CompletionFunc completion,
@@ -30,7 +31,7 @@ class MockStorageSetAccessor : public StorageSetAccessor {
       std::chrono::milliseconds timeout = std::chrono::milliseconds::zero())
       : StorageSetAccessor(log_id,
                            storage_set,
-                           config,
+                           nodes_configuration,
                            replication,
                            shard_access,
                            completion,
@@ -84,11 +85,12 @@ class MockStorageSetAccessor : public StorageSetAccessor {
     return std::move(timer);
   }
 
-  std::unique_ptr<CopySetSelector>
-  createCopySetSelector(logid_t,
-                        const EpochMetaData&,
-                        std::shared_ptr<NodeSetState>,
-                        const std::shared_ptr<ServerConfig>&) override {
+  std::unique_ptr<CopySetSelector> createCopySetSelector(
+      logid_t,
+      const EpochMetaData&,
+      std::shared_ptr<NodeSetState>,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&)
+      override {
     return nullptr;
   }
 

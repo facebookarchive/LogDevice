@@ -108,7 +108,7 @@ void Mutator::start() {
   nodeset_accessor_ = createStorageSetAccessor(
       header_.rid.logid,
       epoch_metadata_with_mutation_set,
-      getClusterConfig()->serverConfig(),
+      getNodesConfiguration(),
       [this](ShardID shard, const StorageSetAccessor::WaveInfo& wave_info)
           -> StorageSetAccessor::SendResult {
         return sendSTORE(shard, wave_info);
@@ -178,8 +178,6 @@ Mutator::sendSTORE(ShardID shard,
     include_payload = false;
     additional_flags |= STORE_Header::AMEND;
   }
-
-  auto server_config = getClusterConfig()->serverConfig();
 
   folly::small_vector<StoreChainLink, 6> copyset(wave_shards.size());
   std::transform(
@@ -385,21 +383,23 @@ void Mutator::printDebugTraceWhenComplete() {
 std::unique_ptr<StorageSetAccessor> Mutator::createStorageSetAccessor(
     logid_t log_id,
     EpochMetaData epoch_metadata_with_mutation_set,
-    std::shared_ptr<ServerConfig> config,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
     StorageSetAccessor::ShardAccessFunc node_access,
     StorageSetAccessor::CompletionFunc completion,
     StorageSetAccessor::Property property) {
   return std::make_unique<StorageSetAccessor>(
       log_id,
       std::move(epoch_metadata_with_mutation_set),
-      std::move(config),
+      std::move(nodes_configuration),
       node_access,
       completion,
       property);
 }
 
-std::shared_ptr<Configuration> Mutator::getClusterConfig() const {
-  return Worker::getConfig();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+Mutator::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 chrono_interval_t<std::chrono::milliseconds>

@@ -383,7 +383,7 @@ void TrimRequest::initStorageSetAccessor() {
   };
 
   nodeset_accessor_ = makeStorageSetAccessor(
-      getConfig(), shards, minRep, shard_access, completion);
+      getNodesConfiguration(), shards, minRep, shard_access, completion);
   nodeset_accessor_->successIfAllShardsAccessed();
 
   ld_check(nodeset_accessor_ != nullptr);
@@ -391,7 +391,8 @@ void TrimRequest::initStorageSetAccessor() {
 }
 
 std::unique_ptr<StorageSetAccessor> TrimRequest::makeStorageSetAccessor(
-    const std::shared_ptr<ServerConfig>& /*config*/,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_configuration,
     StorageSet shards,
     ReplicationProperty minRep,
     StorageSetAccessor::ShardAccessFunc shard_access,
@@ -399,16 +400,12 @@ std::unique_ptr<StorageSetAccessor> TrimRequest::makeStorageSetAccessor(
   return std::make_unique<StorageSetAccessor>(
       log_id_,
       shards,
-      getConfig(),
+      nodes_configuration,
       minRep,
       shard_access,
       completion,
       StorageSetAccessor::Property::FMAJORITY,
       client_timeout_);
-}
-
-std::shared_ptr<ServerConfig> TrimRequest::getConfig() const {
-  return Worker::onThisThread()->getConfig()->serverConfig();
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>

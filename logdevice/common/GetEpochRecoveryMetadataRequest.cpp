@@ -80,9 +80,7 @@ void GetEpochRecoveryMetadataRequest::start() {
   // when _all_ authoritative nodes respond.
   nodes_responded_ = std::make_unique<ResponseNodeSet>(
       epoch_metadata_->shards,
-      *getClusterConfig()
-           ->serverConfig()
-           ->getNodesConfigurationFromServerConfigSource(),
+      *getNodesConfiguration(),
       ReplicationProperty({{NodeLocationScope::NODE, 1}}));
 
   createStorageSetAccessorAndStart();
@@ -108,7 +106,7 @@ GetEpochRecoveryMetadataRequest::makeStorageSetAccessor(
   return std::make_unique<StorageSetAccessor>(
       log_id_,
       *epoch_metadata_,
-      getClusterConfig()->serverConfig(),
+      getNodesConfiguration(),
       node_access,
       completion,
       // TODO 10237599, 11866467 Improve availability of purging
@@ -130,9 +128,11 @@ void GetEpochRecoveryMetadataRequest::onShardStatusChanged() {
   // recheck the state again.
   ld_check(nodes_responded_ != nullptr);
   const auto& shard_status_map = getShardAuthoritativeStatusMap();
+  const auto& storage_membership =
+      getNodesConfiguration()->getStorageMembership();
+
   for (const ShardID shard : epoch_metadata_->shards) {
-    auto node = getClusterConfig()->serverConfig()->getNode(shard.node());
-    if (node != nullptr && node->isReadableStorageNode() &&
+    if (storage_membership->shouldReadFromShard(shard) &&
         nodes_responded_->containsShard(shard)) {
       auto st = shard_status_map.getShardStatus(shard.node(), shard.shard());
       // Purging should not be stalled because some nodes are rebuilding.
@@ -255,9 +255,7 @@ void GetEpochRecoveryMetadataRequest::buildEpochRecoveryStateMap() {
 StorageSetAccessor::SendResult
 GetEpochRecoveryMetadataRequest::sendGetEpochRecoveryMetadataRequest(
     ShardID shard) {
-  auto config = getClusterConfig();
-  auto n = config->serverConfig()->getNode(shard.node());
-  if (n == nullptr) {
+  if (!getNodesConfiguration()->isNodeInServiceDiscoveryConfig(shard.node())) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    10,
                    "Try to send to node %u which is no longer in config",
@@ -316,8 +314,6 @@ void GetEpochRecoveryMetadataRequest::onSent(
   // forward to the state machine
   const GET_EPOCH_RECOVERY_METADATA_Header& header = msg.getHeader();
   Worker* worker = Worker::onThisThread();
-  auto config = worker->getConfig();
-
   const auto& index =
       worker->runningGetEpochRecoveryMetadata()
           .requests.get<GetEpochRecoveryMetadataRequestMap::RequestIndex>();
@@ -563,9 +559,9 @@ void GetEpochRecoveryMetadataRequest::deleteThis() {
   rqmap.erase(it);
 }
 
-const std::shared_ptr<const Configuration>
-GetEpochRecoveryMetadataRequest::getClusterConfig() const {
-  return Worker::getConfig();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+GetEpochRecoveryMetadataRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 const Settings& GetEpochRecoveryMetadataRequest::getSettings() const {

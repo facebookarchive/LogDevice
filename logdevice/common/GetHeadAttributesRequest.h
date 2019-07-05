@@ -120,16 +120,16 @@ class GetHeadAttributesRequest : public DistributedRequest,
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
 
-  virtual std::shared_ptr<ServerConfig> getConfig() const;
   virtual void deleteThis();
   virtual std::unique_ptr<NodeSetFinder> makeNodeSetFinder();
   void initNodeSetFinder();
-  virtual std::unique_ptr<StorageSetAccessor>
-  makeStorageSetAccessor(const std::shared_ptr<ServerConfig>& config,
-                         StorageSet nodes,
-                         ReplicationProperty minRep,
-                         StorageSetAccessor::ShardAccessFunc node_access,
-                         StorageSetAccessor::CompletionFunc completion);
+  virtual std::unique_ptr<StorageSetAccessor> makeStorageSetAccessor(
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration,
+      StorageSet nodes,
+      ReplicationProperty minRep,
+      StorageSetAccessor::ShardAccessFunc node_access,
+      StorageSetAccessor::CompletionFunc completion);
   void initStorageSetAccessor();
 
   /**

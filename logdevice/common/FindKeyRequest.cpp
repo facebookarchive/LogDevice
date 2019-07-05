@@ -345,7 +345,7 @@ void FindKeyRequest::initStorageSetAccessor() {
   };
 
   nodeset_accessor_ = makeStorageSetAccessor(
-      getConfig(), shards, minRep, shard_access, completion);
+      getNodesConfiguration(), shards, minRep, shard_access, completion);
   nodeset_accessor_->noEarlyAbort();
 
   ld_check(nodeset_accessor_ != nullptr);
@@ -353,7 +353,8 @@ void FindKeyRequest::initStorageSetAccessor() {
 }
 
 std::unique_ptr<StorageSetAccessor> FindKeyRequest::makeStorageSetAccessor(
-    const std::shared_ptr<ServerConfig>& config,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
     StorageSet shards,
     ReplicationProperty minRep,
     StorageSetAccessor::ShardAccessFunc shard_access,
@@ -361,16 +362,12 @@ std::unique_ptr<StorageSetAccessor> FindKeyRequest::makeStorageSetAccessor(
   return std::make_unique<StorageSetAccessor>(
       log_id_,
       shards,
-      config,
+      nodes_configuration,
       minRep,
       shard_access,
       completion,
       StorageSetAccessor::Property::FMAJORITY,
       client_timeout_);
-}
-
-std::shared_ptr<ServerConfig> FindKeyRequest::getConfig() const {
-  return Worker::onThisThread()->getConfig()->serverConfig();
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>

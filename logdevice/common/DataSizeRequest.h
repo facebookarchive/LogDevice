@@ -170,7 +170,6 @@ class DataSizeRequest : public DistributedRequest,
   bool haveDeadEnd();
 
   // ------------------  overridden in unit tests  ------------------
-  virtual std::shared_ptr<ServerConfig> getConfig() const;
 
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
@@ -178,12 +177,13 @@ class DataSizeRequest : public DistributedRequest,
   virtual void deleteThis();
   virtual std::unique_ptr<NodeSetFinder> makeNodeSetFinder();
   void initNodeSetFinder();
-  virtual std::unique_ptr<StorageSetAccessor>
-  makeStorageSetAccessor(const std::shared_ptr<ServerConfig>& config,
-                         StorageSet shards,
-                         ReplicationProperty minRep,
-                         StorageSetAccessor::ShardAccessFunc node_access,
-                         StorageSetAccessor::CompletionFunc completion);
+  virtual std::unique_ptr<StorageSetAccessor> makeStorageSetAccessor(
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      StorageSet shards,
+      ReplicationProperty minRep,
+      StorageSetAccessor::ShardAccessFunc node_access,
+      StorageSetAccessor::CompletionFunc completion);
   /**
    * Construct a DATA_SIZE_Message and send it to given shard.
    * can be used as node_access callback in StorageSetAccessor

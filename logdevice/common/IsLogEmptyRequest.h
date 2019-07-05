@@ -192,18 +192,18 @@ class IsLogEmptyRequest : public DistributedRequest,
   bool haveOnlyRebuildingFailures() const;
 
   // ------------------  overridden in unit tests  ------------------
-  virtual std::shared_ptr<ServerConfig> getConfig() const;
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
   virtual void deleteThis();
   virtual std::unique_ptr<NodeSetFinder> makeNodeSetFinder();
   void initNodeSetFinder();
-  virtual std::unique_ptr<StorageSetAccessor>
-  makeStorageSetAccessor(const std::shared_ptr<ServerConfig>& config,
-                         StorageSet shards,
-                         ReplicationProperty minRep,
-                         StorageSetAccessor::ShardAccessFunc node_access,
-                         StorageSetAccessor::CompletionFunc completion);
+  virtual std::unique_ptr<StorageSetAccessor> makeStorageSetAccessor(
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_configuration,
+      StorageSet shards,
+      ReplicationProperty minRep,
+      StorageSetAccessor::ShardAccessFunc node_access,
+      StorageSetAccessor::CompletionFunc completion);
   /**
    * Construct an IS_LOG_EMPTY_Message and send it to given shard.
    * can be used as node_access callback in StorageSetAccessor
