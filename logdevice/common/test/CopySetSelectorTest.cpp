@@ -346,7 +346,10 @@ void CopySetSelectorTest::setUp() {
       nodeset_indices, LOG_ID, NodeSetState::HealthCheck::DISABLED);
 
   hierarchy_ = std::make_unique<NodeLocationHierarchy>(
-      getConfig()->serverConfig(), nodeset_indices);
+      getConfig()
+          ->serverConfig()
+          ->getNodesConfigurationFromServerConfigSource(),
+      nodeset_indices);
 
   if (sticky_copysets_) {
     copyset_manager_.reset(new MockStickyCopySetManager(this));

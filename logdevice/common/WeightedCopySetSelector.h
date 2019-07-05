@@ -42,6 +42,21 @@ class WeightedCopySetSelector : public CopySetSelector {
                           const CopySetSelectorDependencies* deps =
                               CopySetSelectorDependencies::instance());
 
+  WeightedCopySetSelector(
+      logid_t logid,
+      const EpochMetaData& epoch_metadata,
+      std::shared_ptr<NodeSetState> nodeset_state,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      folly::Optional<NodeID> my_node_id,
+      const logsconfig::LogAttributes* log_attrs,
+      bool locality_enabled,
+      StatsHolder* stats = nullptr,
+      RNG& init_rng = DefaultRNG::get(),
+      bool print_bias_warnings = true,
+      const CopySetSelectorDependencies* deps =
+          CopySetSelectorDependencies::instance());
+
   std::string getName() const override;
 
   Result select(copyset_size_t extras,
@@ -315,10 +330,10 @@ class WeightedCopySetSelector : public CopySetSelector {
   // If there are no weights in epoch metadata, this method is used to take
   // weights from config, transforming them to compensate for different-sized
   // domains.
-  std::vector<double>
-  calculateWeightsBasedOnConfig(const EpochMetaData& epoch_metadata,
-                                const ServerConfig* cfg,
-                                const logsconfig::LogAttributes* log_attrs);
+  std::vector<double> calculateWeightsBasedOnConfig(
+      const EpochMetaData& epoch_metadata,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      const logsconfig::LogAttributes* log_attrs);
 
   // Part of calculateWeightsBasedOnConfig(). Shifts some weight between
   // domains to make sequencer's domain's effective weight close
@@ -332,7 +347,7 @@ class WeightedCopySetSelector : public CopySetSelector {
   //   of domains in config. After the call it will contain the adjusted
   //   effective weights of domains.
   void optimizeWeightsForLocality(
-      const ServerConfig* cfg,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
       const logsconfig::LogAttributes* log_attrs,
       std::unordered_map<std::string, double>& domain_target_weight);
 

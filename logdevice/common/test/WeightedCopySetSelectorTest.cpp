@@ -214,7 +214,9 @@ void WeightedCopySetSelectorTest::initIfNeeded() {
 node_index_t WeightedCopySetSelectorTest::getPrimarySequencerNode(logid_t log) {
   initIfNeeded();
   return HashBasedSequencerLocator::getPrimarySequencerNode(
-      log, anon_server_config_.get(), &default_log_attrs_);
+      log,
+      *anon_server_config_->getNodesConfigurationFromServerConfigSource(),
+      &default_log_attrs_);
 }
 
 WeightedCopySetSelector&

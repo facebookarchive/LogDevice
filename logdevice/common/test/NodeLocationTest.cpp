@@ -196,7 +196,8 @@ TEST(NodeLocationTest, BuildHierarchy) {
                         ShardID(3, 0),
                         ShardID(4, 0),
                         ShardID(5, 0)};
-  NodeLocationHierarchy h(config, nodeset);
+  NodeLocationHierarchy h(
+      config->getNodesConfigurationFromServerConfigSource(), nodeset);
   ASSERT_EQ(6, h.numClusterNodes());
   const Domain* root = h.getRoot();
   ASSERT_EQ(nullptr, root->parent_);

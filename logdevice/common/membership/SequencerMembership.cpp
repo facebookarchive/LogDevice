@@ -99,6 +99,12 @@ SequencerMembership::getNodeStatePtr(node_index_t node) const {
   return nit == node_states_.cend() ? nullptr : &nit->second;
 }
 
+double
+SequencerMembership::getEffectiveSequencerWeight(node_index_t node) const {
+  const auto* nptr = getNodeStatePtr(node);
+  return nptr == nullptr ? 0.0 : nptr->getEffectiveWeight();
+}
+
 void SequencerMembership::setNodeState(node_index_t node,
                                        SequencerNodeState state) {
   node_states_[node] = std::move(state);

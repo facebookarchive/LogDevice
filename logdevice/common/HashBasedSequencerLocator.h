@@ -48,10 +48,10 @@ class HashBasedSequencerLocator : public SequencerLocator {
   // Locates sequencer assuming that all nodes are available.
   // Used by nodeset/copyset selector to make Appenders more likely to send
   // copies to local rack or region, to reduce cross-rack traffic.
-  static node_index_t
-  getPrimarySequencerNode(logid_t log_id,
-                          const ServerConfig* config,
-                          const logsconfig::LogAttributes* log_attrs);
+  static node_index_t getPrimarySequencerNode(
+      logid_t log_id,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      const logsconfig::LogAttributes* log_attrs);
 
   // The meat of hash-based sequencer location. Unlike the non-static method,
   // this one is synchronous (and nonblocking) but requires you to already

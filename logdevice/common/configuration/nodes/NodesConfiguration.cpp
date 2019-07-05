@@ -501,6 +501,18 @@ NodesConfiguration::getNodeStorageAttribute(node_index_t node) const {
   return storage_attrs->getNodeAttributesPtr(node);
 }
 
+double NodesConfiguration::getWritableStorageCapacity(ShardID shard) const {
+  const auto& storage_membership = getStorageMembership();
+  if (!storage_membership->canWriteToShard(shard)) {
+    return 0.0;
+  }
+
+  const auto* node_attr = getNodeStorageAttribute(shard.node());
+  // node must exist in storage attribute if in membership
+  ld_check(node_attr != nullptr);
+  return node_attr->capacity;
+}
+
 node_gen_t NodesConfiguration::getNodeGeneration(node_index_t node) const {
   const auto* node_attr = getNodeStorageAttribute(node);
   return node_attr != nullptr ? node_attr->generation : 1;

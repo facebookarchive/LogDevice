@@ -187,6 +187,11 @@ class SequencerMembership : public Membership {
   folly::Optional<SequencerNodeState> getNodeState(node_index_t node) const;
   const SequencerNodeState* getNodeStatePtr(node_index_t node) const;
 
+  /**
+   * Note: for node not existed in the membership, 0.0 is returned.
+   */
+  double getEffectiveSequencerWeight(node_index_t node) const;
+
   size_t numNodes() const {
     return node_states_.size();
   }

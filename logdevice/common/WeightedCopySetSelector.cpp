@@ -9,6 +9,7 @@
 
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
 
@@ -46,6 +47,32 @@ WeightedCopySetSelector::WeightedCopySetSelector(
     RNG& init_rng,
     bool print_bias_warnings,
     const CopySetSelectorDependencies* deps)
+    : WeightedCopySetSelector(
+          logid,
+          epoch_metadata,
+          std::move(nodeset_state),
+          cfg->getNodesConfigurationFromServerConfigSource(),
+          my_node_id,
+          log_attrs,
+          locality_enabled,
+          stats,
+          init_rng,
+          print_bias_warnings,
+          deps) {}
+
+WeightedCopySetSelector::WeightedCopySetSelector(
+    logid_t logid,
+    const EpochMetaData& epoch_metadata,
+    std::shared_ptr<NodeSetState> nodeset_state,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
+    folly::Optional<NodeID> my_node_id,
+    const logsconfig::LogAttributes* log_attrs,
+    bool locality_enabled,
+    StatsHolder* stats,
+    RNG& init_rng,
+    bool print_bias_warnings,
+    const CopySetSelectorDependencies* deps)
     : logid_(logid),
       deps_(deps),
       nodeset_state_(nodeset_state),
@@ -54,6 +81,7 @@ WeightedCopySetSelector::WeightedCopySetSelector(
       stats_(stats),
       nodeset_indices_(epoch_metadata.shards) {
   {
+    ld_check(nodes_configuration != nullptr);
     // Convert replication requirement from the more general ReplictionProperty
     // representation to the more restrictive two-level representation that this
     // copyset selector can work with.
@@ -93,15 +121,16 @@ WeightedCopySetSelector::WeightedCopySetSelector(
   folly::Optional<std::string> my_domain;
   if (my_node_id.hasValue()) {
     node_index_t my_node = my_node_id.value().index();
-    const configuration::Node* my_node_cfg = cfg->getNode(my_node);
-    if (my_node_cfg && my_node_cfg->location.hasValue()) {
-      my_domain = my_node_cfg->location->getDomain(
-          secondary_replication_scope_, my_node);
+    const auto* node_sd = nodes_configuration->getNodeServiceDiscovery(my_node);
+    if (node_sd && node_sd->location.hasValue()) {
+      my_domain =
+          node_sd->location->getDomain(secondary_replication_scope_, my_node);
     }
   }
 
   std::vector<double> weights = epoch_metadata.weights.empty()
-      ? calculateWeightsBasedOnConfig(epoch_metadata, cfg.get(), log_attrs)
+      ? calculateWeightsBasedOnConfig(
+            epoch_metadata, *nodes_configuration, log_attrs)
       : epoch_metadata.weights;
 
   // Build the hierarchy. It'll always have these three levels:
@@ -130,15 +159,26 @@ WeightedCopySetSelector::WeightedCopySetSelector(
   simple_shuffle(
       nodeset_permutation.begin(), nodeset_permutation.end(), init_rng);
 
-  ld_check(cfg);
   for (size_t i : nodeset_permutation) {
     ShardID shard = epoch_metadata.shards[i];
     double weight = weights[i];
-    const configuration::Node* node_cfg = cfg->getNode(shard.node());
-    if (!node_cfg || !node_cfg->isReadableStorageNode()) {
+
+    const auto* node_sd =
+        nodes_configuration->getNodeServiceDiscovery(shard.node());
+    if (node_sd == nullptr) {
       continue;
     }
-    NodeLocation location = node_cfg->location.value_or(NodeLocation());
+
+    const auto& storage_membership =
+        nodes_configuration->getStorageMembership();
+    if (!storage_membership->shouldReadFromShard(shard)) {
+      // storage membership now has more granular view of per-shard storage
+      // state. exclude shards that are not readable (e.g., in NONE storage
+      // state).
+      continue;
+    }
+
+    NodeLocation location = node_sd->location.value_or(NodeLocation());
     std::string domain = location.getDomain(replication_scope_, shard.node());
     std::string secondary_domain =
         location.getDomain(secondary_replication_scope_, shard.node());
@@ -207,7 +247,7 @@ WeightedCopySetSelector::WeightedCopySetSelector(
 
 std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
     const EpochMetaData& epoch_metadata,
-    const ServerConfig* cfg,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
     const logsconfig::LogAttributes* log_attrs) {
   // Epoch metadata doesn't contain weights. Assume the following about how
   // nodeset was selected:
@@ -234,14 +274,19 @@ std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
   // secondary_replication_scope, considering only nodes in nodeset.
   std::unordered_map<std::string, double> domain_nodeset_weight;
   for (ShardID shard : epoch_metadata.shards) {
-    const configuration::Node* node_cfg = cfg->getNode(shard.node());
-    if (!node_cfg) {
+    const auto* node_sd =
+        nodes_configuration.getNodeServiceDiscovery(shard.node());
+    if (node_sd == nullptr) {
       continue;
     }
-    NodeLocation location = node_cfg->location.value_or(NodeLocation());
+    NodeLocation location = node_sd->location.value_or(NodeLocation());
     std::string domain =
         location.getDomain(secondary_replication_scope_, shard.node());
-    domain_nodeset_weight[domain] += node_cfg->getWritableStorageCapacity();
+    // use the more granular per-shard storage state in StorageMembership.
+    // if _shard_ is writable (e.g., in RW state), then use the storage capacity
+    // in it's node's storage attributes.
+    domain_nodeset_weight[domain] +=
+        nodes_configuration.getWritableStorageCapacity(shard);
   }
 
   // Target sum of effective weights of nodes in each domain. Without locality,
@@ -249,14 +294,23 @@ std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
   // the ones not in nodeset). With locality, there's an additional adjustment
   // to increase the relative weight of sequencer domain.
   std::unordered_map<std::string, double> domain_target_weight;
-  for (const auto& p : cfg->getNodes()) {
-    const configuration::Node* node_cfg = &p.second;
-    NodeLocation location = node_cfg->location.value_or(NodeLocation());
-    std::string domain =
-        location.getDomain(secondary_replication_scope_, p.first);
+
+  for (const auto& node : *nodes_configuration.getStorageMembership()) {
+    const auto* node_sd = nodes_configuration.getNodeServiceDiscovery(node);
+    // storage membership nodes must be in the service discovery config
+    ld_check(node_sd != nullptr);
+    NodeLocation location = node_sd->location.value_or(NodeLocation());
+    std::string domain = location.getDomain(secondary_replication_scope_, node);
+    const auto* storage_attr =
+        nodes_configuration.getNodeStorageAttribute(node);
+    ld_check(storage_attr != nullptr);
+
     if (domain_nodeset_weight.count(domain) &&
         domain_nodeset_weight.at(domain) != 0.0) {
-      domain_target_weight[domain] += node_cfg->getWritableStorageCapacity();
+      // Note: we do not take into account of the storage state in the
+      // domain multiplier calculation to correctly take into account of
+      // node selection during nodeset calculation
+      domain_target_weight[domain] += storage_attr->capacity;
     } else {
       // Some positive-weight domain has no positive-weight nodes in nodeset.
       // This is unusual but possible if e.g. a new rack was added to config,
@@ -267,21 +321,40 @@ std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
   }
 
   if (locality_enabled_ && log_attrs != nullptr) {
-    optimizeWeightsForLocality(cfg, log_attrs, domain_target_weight);
+    optimizeWeightsForLocality(
+        nodes_configuration, log_attrs, domain_target_weight);
   }
 
   std::vector<double> weights(epoch_metadata.shards.size());
   for (size_t i = 0; i < weights.size(); ++i) {
     ShardID shard = epoch_metadata.shards[i];
-    const configuration::Node* node_cfg = cfg->getNode(shard.node());
-    if (!node_cfg || !node_cfg->isReadableStorageNode()) {
+
+    const auto* node_sd =
+        nodes_configuration.getNodeServiceDiscovery(shard.node());
+    if (node_sd == nullptr) {
       continue;
     }
-    NodeLocation location = node_cfg->location.value_or(NodeLocation());
+
+    const auto& storage_membership = nodes_configuration.getStorageMembership();
+    if (!storage_membership->shouldReadFromShard(shard)) {
+      // storage membership now has more granular view of per-shard storage
+      // state. exclude shards that are not readable (e.g., in NONE storage
+      // state).
+      continue;
+    }
+
+    NodeLocation location = node_sd->location.value_or(NodeLocation());
     std::string secondary_domain =
         location.getDomain(secondary_replication_scope_, shard.node());
 
-    double weight = node_cfg->getWritableStorageCapacity();
+    const auto* storage_attr =
+        nodes_configuration.getNodeStorageAttribute(shard.node());
+    ld_check(storage_attr != nullptr);
+
+    // Similarily, use the more granular per-shard storage state in
+    // StorageMembership. This is used to prevent the Appender/Sequencer
+    // from sending any STORE to any shard that is not RW.
+    double weight = nodes_configuration.getWritableStorageCapacity(shard);
     ld_check(weight >= 0);
     if (weight > 0) {
       ld_assert(domain_nodeset_weight.at(secondary_domain) > 0);
@@ -296,18 +369,20 @@ std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
 }
 
 void WeightedCopySetSelector::optimizeWeightsForLocality(
-    const ServerConfig* cfg,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
     const logsconfig::LogAttributes* log_attrs,
     std::unordered_map<std::string, double>& domain_target_weight) {
   // Find primary sequencer domain.
   ld_check(log_attrs != nullptr);
   node_index_t sequencer_node =
       HashBasedSequencerLocator::getPrimarySequencerNode(
-          logid_, cfg, log_attrs);
-  const configuration::Node* sequencer_node_cfg = cfg->getNode(sequencer_node);
-  ld_check(sequencer_node_cfg != nullptr);
+          logid_, nodes_configuration, log_attrs);
+
+  const auto* node_sd =
+      nodes_configuration.getNodeServiceDiscovery(sequencer_node);
+  ld_check(node_sd != nullptr);
   std::string sequencer_domain =
-      sequencer_node_cfg->location.value_or(NodeLocation())
+      node_sd->location.value_or(NodeLocation())
           .getDomain(secondary_replication_scope_, sequencer_node);
   ld_check(domain_target_weight.count(sequencer_domain));
 
@@ -317,13 +392,14 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
 
   std::unordered_map<std::string, double> domain_sequencer_weight;
   double total_sequencer_weight = 0;
-  for (const auto& p : cfg->getNodes()) {
-    const configuration::Node* node_cfg = &p.second;
-    NodeLocation location = node_cfg->location.value_or(NodeLocation());
-    std::string domain =
-        location.getDomain(secondary_replication_scope_, p.first);
-    domain_sequencer_weight[domain] += node_cfg->getSequencerWeight();
-    total_sequencer_weight += node_cfg->getSequencerWeight();
+
+  for (const auto& [n, node_sd] : *nodes_configuration.getServiceDiscovery()) {
+    NodeLocation location = node_sd.location.value_or(NodeLocation());
+    std::string domain = location.getDomain(secondary_replication_scope_, n);
+    const auto sequencer_weight = nodes_configuration.getSequencerMembership()
+                                      ->getEffectiveSequencerWeight(n);
+    domain_sequencer_weight[domain] += sequencer_weight;
+    total_sequencer_weight += sequencer_weight;
   }
 
   // Note that, unlike the doc, we have unnormalized weights, so we'll need to

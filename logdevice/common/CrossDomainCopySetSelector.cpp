@@ -41,12 +41,32 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
     copyset_size_t replication_factor,
     NodeLocationScope sync_replication_scope,
     const CopySetSelectorDependencies* deps)
+    : CrossDomainCopySetSelector(
+          logid,
+          std::move(storage_set),
+          nodeset_state,
+          cfg->getNodesConfigurationFromServerConfigSource(),
+          my_node_id,
+          replication_factor,
+          sync_replication_scope,
+          deps) {}
+
+CrossDomainCopySetSelector::CrossDomainCopySetSelector(
+    logid_t logid,
+    StorageSet storage_set,
+    std::shared_ptr<NodeSetState> nodeset_state,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
+    NodeID my_node_id,
+    copyset_size_t replication_factor,
+    NodeLocationScope sync_replication_scope,
+    const CopySetSelectorDependencies* deps)
     : deps_(deps),
       logid_(logid),
       nodeset_state_(nodeset_state),
       replication_factor_(replication_factor),
       sync_replication_scope_(sync_replication_scope),
-      hierarchy_(cfg, storage_set),
+      hierarchy_(nodes_configuration, storage_set),
       domains_in_scope_(hierarchy_.domainsInScope(sync_replication_scope_)) {
   ld_check(logid != LOGID_INVALID);
   ld_check(nodeset_state_ != nullptr);
@@ -58,9 +78,7 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
   local_domains_.fill(nullptr);
   const node_index_t my_index = my_node_id.index();
 
-  // TODO: migrate it to use NodesConfiguration with switchable source
-  const auto* my_sd = cfg->getNodesConfigurationFromServerConfigSource()
-                          ->getNodeServiceDiscovery(my_index);
+  const auto* my_sd = nodes_configuration->getNodeServiceDiscovery(my_index);
   if (my_sd == nullptr) {
     ld_error("This sequencer node (index %hd) for log %lu is no "
              "longer in config!",

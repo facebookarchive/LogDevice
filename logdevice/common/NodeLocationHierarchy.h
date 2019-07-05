@@ -14,8 +14,7 @@
 #include <unordered_set>
 
 #include "logdevice/common/ShardID.h"
-#include "logdevice/common/configuration/NodeLocation.h"
-#include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 namespace facebook { namespace logdevice {
 
@@ -70,13 +69,15 @@ class NodeLocationHierarchy {
 
   /**
    * Construct the NodeLocationHierarchy for a given set of nodes
-   * @param cfg         Configuration of the cluster
+   * @param nodes_configuration       NodesConfiguration of the cluster
    * @param indices     indices of nodes in the cluster to be included in
    *                    the hierarchy. Nodes not specified in _indices_ are
    *                    not included
    */
-  NodeLocationHierarchy(std::shared_ptr<ServerConfig> cfg,
-                        const StorageSet& indices);
+  NodeLocationHierarchy(
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      const StorageSet& indices);
 
   // expose the root Domain
   const Domain* getRoot() const {

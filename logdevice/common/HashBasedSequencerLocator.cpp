@@ -68,26 +68,19 @@ void HashBasedSequencerLocator::locateContinuation(
 
 node_index_t HashBasedSequencerLocator::getPrimarySequencerNode(
     logid_t log_id,
-    const ServerConfig* config,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
     const logsconfig::LogAttributes* log_attrs) {
   NodeID res;
-  // TODO T41319009: use NodesConfiguration instead of ServerConfig,
-  // currently getPrimarySequencerNode() only affects weighted copyset
-  // selection but not sequencer routing
-  auto rv = locateSequencer(
-      log_id,
-      config->getNodesConfigurationFromServerConfigSource().get(),
-      log_attrs,
-      /* cs */ nullptr,
-      &res);
+  auto rv = locateSequencer(log_id,
+                            &nodes_configuration,
+                            log_attrs,
+                            /* cs */ nullptr,
+                            &res);
   if (rv == 0) {
     return res.index();
   } else {
     ld_check(err == E::NOTFOUND);
-    return config->getNodesConfigurationFromServerConfigSource()
-        ->getSequencersConfig()
-        .nodes[0]
-        .index();
+    return nodes_configuration.getSequencersConfig().nodes[0].index();
   }
 }
 
