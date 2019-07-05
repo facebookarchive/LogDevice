@@ -131,7 +131,7 @@ MaintenanceAPIHandler::applyAndGetMaintenances(
           // Augment the combined results with safety checker information. This
           // gets executed on the MaintenanceManager's execution context.
           maintenance_manager_
-              ->augmentWithSafetyCheckResults(std::move(value).value())
+              ->augmentWithProgressInfo(std::move(value).value())
               // inline future to promise fulfillment. Runs on MM's execution
               // context.
               .toUnsafeFuture()

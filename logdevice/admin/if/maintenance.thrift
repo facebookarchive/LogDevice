@@ -15,6 +15,28 @@ namespace py3 logdevice.admin
 namespace php LogDevice
 namespace wiki Thriftdoc.LogDevice.Maintenance
 
+/**
+ * What is the progress for a particular maintenance definition.
+ */
+enum MaintenanceProgress {
+  /**
+   * The MaintenanceManager has not started this maintenance transition yet.
+   */
+  UNKNOWN = 0,
+  /**
+   * A maintenance is considered BLOCKED_UNTIL_SAFE if _any_ of the shards or
+   * sequencers didn't reach the target and has failed the safety check to do
+   * so.
+   */
+  BLOCKED_UNTIL_SAFE = 1,
+  IN_PROGRESS = 2,
+  /**
+   * A maintenance is considered complete if all shards and sequencers in the
+   * maintenance have both reached (at least) the target, and the maintenance
+   * has been loaded by the maintenance manager.
+   */
+  COMPLETED = 3,
+}
 
 struct MaintenanceDefinition {
   /**
@@ -144,6 +166,11 @@ struct MaintenanceDefinition {
    * Timestamp at which the maintenance was first requested (in milliseconds)
    */
   16: optional common.Timestamp created_on,
+  /**
+   * What is the current stage of progress for that maintenance, this is can be
+   * used to know whether this particular maintenance has completed or not.
+   */
+  17: MaintenanceProgress progress,
 }
 
 /**

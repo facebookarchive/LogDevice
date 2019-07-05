@@ -191,10 +191,10 @@ class MaintenanceManager : public SerialWorkContext {
 
   /**
    * Copies the maintenances of the input and augment the safety check results
-   * wherever we have a valid value for it.
+   * and other progress information wherever we have a valid value for it.
    */
   folly::SemiFuture<std::vector<MaintenanceDefinition>>
-  augmentWithSafetyCheckResults(std::vector<MaintenanceDefinition> input);
+  augmentWithProgressInfo(std::vector<MaintenanceDefinition> input);
 
   // Getter that returns a SemiFututre with NodeState for a given node
   folly::SemiFuture<folly::Expected<NodeState, Status>>
@@ -355,7 +355,7 @@ class MaintenanceManager : public SerialWorkContext {
   /**
    * Getter that returns ShardState for a given shard
    *
-   * @param   shard ShardID for which to get SharrdState
+   * @param   shard ShardID for which to get ShardState
    * @return  folly::Expected<ShardState, Status> If shard is found,
    *          valid ShardState. Otherwise Status can be E::NOTFOUND, if
    *          shard is not in config or E::NOTREADY is
@@ -368,6 +368,22 @@ class MaintenanceManager : public SerialWorkContext {
   // Getter that returns ShardOperationalState for the given shard
   folly::Expected<ShardOperationalState, Status>
   getShardOperationalStateInternal(ShardID shard) const;
+  /**
+   * Returns the calculated maintenance progress for a given maintenance. This
+   * will return MaintenanceProgress::UNKNOWN in case we cannot determine
+   * the progress.
+   *
+   * This will return COMPLETED iff, all shards and sequencers in the
+   * maintenance have reached the target state, and this maintenance is
+   * already considered in the existing in-memory workflows.
+   *
+   * The maintenance is considered BLOCKED_UNTIL_SAFE if any of the shards or
+   * sequencers are blocked on not on the target state already.
+   *
+   * Otherwise, the maintenance is considered IN_PROGRESS.
+   */
+  thrift::MaintenanceProgress
+  getMaintenanceProgressInternal(const MaintenanceDefinition& def) const;
   /**
    * Getter that returns ShardDataHealth for the given shard
    *
@@ -588,6 +604,14 @@ class MaintenanceManager : public SerialWorkContext {
   // Returns the RebuildingMode if shard is in rebuilding set
   // otherwise returns RebuildingMode::INVALID
   virtual RebuildingMode getCurrentRebuildingMode(ShardID shard);
+
+  // Answers the question whether the current operational state of a shard meets
+  // a target maintenance or not.
+  static bool isTargetAchieved(ShardOperationalState current,
+                               ShardOperationalState target);
+  // Checks if this maintenance was marked unsafe by the last safety check run
+  // or not.
+  bool isMaintenanceMarkedUnsafe(const GroupID& id) const;
 
   friend class MaintenanceManagerTest;
 };

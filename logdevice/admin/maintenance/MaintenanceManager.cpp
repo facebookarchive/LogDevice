@@ -217,8 +217,8 @@ MaintenanceManager::getLatestMaintenanceState() {
         if (value.hasError()) {
           return folly::makeUnexpected(value.error());
         }
-        // Augment maintenances with safety check results.
-        return augmentWithSafetyCheckResults(value->get_maintenances())
+        // Augment maintenances with progress information.
+        return augmentWithProgressInfo(value->get_maintenances())
             // Boiler-plate to convert SemiFuture<T> to
             // SemiFuture<Expected<T, _>>
             .toUnsafeFuture()
@@ -540,6 +540,52 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
   return std::move(result);
 }
 
+thrift::MaintenanceProgress MaintenanceManager::getMaintenanceProgressInternal(
+    const MaintenanceDefinition& def) const {
+  // If we don't have the maintenance state object, or we didn't load this
+  // maintenance yet in the maintenace manager loop.
+  if (!cluster_maintenance_wrapper_ ||
+      cluster_maintenance_wrapper_->getMaintenanceByGroupID(
+          def.group_id_ref().value()) == nullptr) {
+    // We don't know the state yet, return UNKNWOWN.
+    return thrift::MaintenanceProgress::UNKNOWN;
+  }
+  auto blocked_or_in_progress = [&]() -> thrift::MaintenanceProgress {
+    // We know that we are either in progress or blocked on safety.
+    if (isMaintenanceMarkedUnsafe(def.group_id_ref().value())) {
+      return thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE;
+    }
+    return thrift::MaintenanceProgress::IN_PROGRESS;
+  };
+
+  // Let's check sequencers
+  for (const auto& sequencer : def.get_sequencer_nodes()) {
+    auto current_state =
+        getSequencingStateInternal(sequencer.node_index_ref().value());
+    if (current_state != def.get_sequencer_target_state()) {
+      return blocked_or_in_progress();
+    }
+  }
+
+  // Let's check shards
+  for (const auto& shard : def.get_shards()) {
+    ShardID ld_shard{
+        shard.node.node_index_ref().value(), shard.get_shard_index()};
+    auto op_state = getShardOperationalStateInternal(ld_shard);
+    if (op_state.hasError()) {
+      // We cannot determine the current operational state of this shard, in
+      // this case the maintenance progress is UNKNOWN
+      return thrift::MaintenanceProgress::UNKNOWN;
+    }
+    if (!isTargetAchieved(op_state.value(), def.get_shard_target_state())) {
+      return blocked_or_in_progress();
+    }
+  }
+
+  // If we have reached here, the maintenance is complete.
+  return thrift::MaintenanceProgress::COMPLETED;
+}
+
 folly::SemiFuture<folly::Expected<ShardDataHealth, Status>>
 MaintenanceManager::getShardDataHealth(ShardID shard) {
   auto pf =
@@ -674,7 +720,7 @@ MaintenanceManager::getLatestSafetyCheckResultInternal(GroupID id) const {
   }
   // TODO: Make it possible to separate SAFE maintenances from ones we haven't
   // test yet.
-  return unsafe_groups_.count(id) ? unsafe_groups_.at(id) : Impact();
+  return isMaintenanceMarkedUnsafe(id) ? unsafe_groups_.at(id) : Impact();
 }
 
 void MaintenanceManager::onNodesConfigurationUpdated() {
@@ -1027,7 +1073,7 @@ void MaintenanceManager::processSafetyCheckResult(
 }
 
 folly::SemiFuture<std::vector<MaintenanceDefinition>>
-MaintenanceManager::augmentWithSafetyCheckResults(
+MaintenanceManager::augmentWithProgressInfo(
     std::vector<MaintenanceDefinition> input) {
   // Running this code in our work context
   return folly::via(this).thenValue(
@@ -1048,6 +1094,8 @@ MaintenanceManager::augmentWithSafetyCheckResults(
             def.set_last_check_impact_result(
                 toThrift<thrift::CheckImpactResponse>(result.value()));
           }
+          // Augment with the maintenance progress
+          def.set_progress(getMaintenanceProgressInternal(def));
         }
         return input;
       });
@@ -1376,4 +1424,28 @@ RebuildingMode MaintenanceManager::getCurrentRebuildingMode(ShardID shard) {
       shard.node(), shard.shard());
 }
 
+/* static */
+bool MaintenanceManager::isTargetAchieved(ShardOperationalState current,
+                                          ShardOperationalState target) {
+  // Any of these states are considered higher than the MAY_DISAPPEAR state.
+  static folly::F14FastSet<ShardOperationalState> may_disappear_states{
+      {ShardOperationalState::MAY_DISAPPEAR,
+       ShardOperationalState::MIGRATING_DATA,
+       ShardOperationalState::DRAINED}};
+
+  if (target == ShardOperationalState::MAY_DISAPPEAR) {
+    return may_disappear_states.count(current) > 0;
+  } else if (target == ShardOperationalState::DRAINED) {
+    return current == ShardOperationalState::DRAINED;
+  } else {
+    // we don't know any other targets.
+    ld_assert(false);
+    return false;
+  }
+  return true;
+}
+
+bool MaintenanceManager::isMaintenanceMarkedUnsafe(const GroupID& id) const {
+  return unsafe_groups_.count(id) > 0;
+}
 }}} // namespace facebook::logdevice::maintenance

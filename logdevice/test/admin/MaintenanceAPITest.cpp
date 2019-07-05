@@ -83,6 +83,7 @@ void MaintenanceAPITest::init() {
           .setNodes(nodes)
           .enableSelfInitiatedRebuilding("1s")
           .setParam("--event-log-grace-period", "1ms")
+          .setParam("--enable-safety-check-periodic-metadata-update", "true")
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setParam("--min-gossips-for-stable-state", "0")
@@ -225,6 +226,13 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
     ASSERT_TRUE(result.get_skip_safety_checks());
     ASSERT_TRUE(result.created_on_ref().has_value());
     ASSERT_TRUE(result.created_on_ref().value() > 0);
+    wait_until("Maintenance transition to COMPLETED", [&]() {
+      thrift::MaintenancesFilter req1;
+      thrift::MaintenanceDefinitionResponse resp1;
+      admin_client->sync_getMaintenances(resp1, req1);
+      const auto& def = resp1.get_maintenances()[0];
+      return def.get_progress() == thrift::MaintenanceProgress::COMPLETED;
+    });
   }
   // Let's create another maintenance at which one will match with the existing.
   std::string created_id2;
@@ -338,16 +346,8 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
     thrift::MaintenanceDefinitionResponse resp1;
     admin_client->sync_getMaintenances(resp1, req1);
     const auto& def = resp1.get_maintenances()[0];
-    if (def.last_check_impact_result_ref().has_value()) {
-      // MaintenanceManager has picked up the maintenance but we are not sure if
-      // this is safe or not.
-      const auto& check_impact_result =
-          def.last_check_impact_result_ref().value();
-      if (check_impact_result.get_impact().size() > 0) {
-        return true;
-      }
-    }
-    return false;
+    return thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE ==
+        def.get_progress();
   });
   thrift::MaintenancesFilter req;
   admin_client->sync_getMaintenances(resp, req);
@@ -355,6 +355,8 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
   ASSERT_TRUE(def.last_check_impact_result_ref().has_value());
   const auto& check_impact_result = def.last_check_impact_result_ref().value();
   ASSERT_TRUE(check_impact_result.get_impact().size() > 0);
+  ASSERT_EQ(
+      thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE, def.get_progress());
 }
 
 TEST_F(MaintenanceAPITest, RemoveMaintenancesInvalid) {
@@ -592,5 +594,12 @@ TEST_F(MaintenanceAPITest, getNodeState) {
       ASSERT_THAT(maintenance_progress.get_associated_group_ids(),
                   UnorderedElementsAre(group_id));
     }
+    MaintenancesFilter fltr;
+    MaintenanceDefinitionResponse resp;
+    admin_client->sync_getMaintenances(resp, fltr);
+    auto output = resp.get_maintenances();
+    ASSERT_EQ(1, output.size());
+    const MaintenanceDefinition& result = output[0];
+    ASSERT_EQ(thrift::MaintenanceProgress::COMPLETED, result.get_progress());
   }
 }
