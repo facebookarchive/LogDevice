@@ -363,6 +363,7 @@ void WriteMetaDataRecord::noteConfigurationChanged() {
     // the sequencer node property
     meta_seq->noteConfigurationChanged(
         Worker::onThisThread()->getConfiguration(),
+        Worker::onThisThread()->getNodesConfiguration(),
         /*is_sequencer_node*/ true);
   }
 }

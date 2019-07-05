@@ -21,6 +21,10 @@ namespace facebook { namespace logdevice {
  * @file  create a CopySetSelector object with the given type.
  */
 
+namespace configuration { namespace nodes {
+class NodesConfiguration;
+}} // namespace configuration::nodes
+
 class CopySetManager;
 class ServerConfig;
 struct Settings;
@@ -42,7 +46,8 @@ class CopySetSelectorFactory {
   create(logid_t logid,
          const EpochMetaData& epoch_metadata,
          std::shared_ptr<NodeSetState> nodeset_state,
-         std::shared_ptr<ServerConfig> config,
+         std::shared_ptr<const configuration::nodes::NodesConfiguration>
+             nodes_configuration,
          folly::Optional<NodeID> my_node_id,
          const logsconfig::LogAttributes* log_attrs,
          const Settings& settings,
@@ -53,7 +58,8 @@ class CopySetSelectorFactory {
   createManager(logid_t logid,
                 const EpochMetaData& epoch_metadata,
                 std::shared_ptr<NodeSetState> nodeset_state,
-                std::shared_ptr<ServerConfig> config,
+                std::shared_ptr<const configuration::nodes::NodesConfiguration>
+                    nodes_configuration,
                 folly::Optional<NodeID> my_node_id,
                 const logsconfig::LogAttributes* log_attrs,
                 const Settings& settings,

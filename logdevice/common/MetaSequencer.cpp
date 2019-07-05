@@ -29,7 +29,8 @@ MetaSequencer::createEpochSequencer(epoch_t epoch,
                                            std::move(metadata),
                                            EpochSequencerImmutableOptions(),
                                            this);
-  epoch_seq->createOrUpdateCopySetManager(getClusterConfig(), settings());
+  epoch_seq->createOrUpdateCopySetManager(
+      getClusterConfig(), getNodesConfiguration(), settings());
   ld_check(epoch_seq->getCopySetManager() != nullptr);
   return epoch_seq;
 }

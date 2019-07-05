@@ -18,26 +18,24 @@
 
 namespace facebook { namespace logdevice {
 
-static StorageSet
-getWritableShards(const StorageSet& ns,
-                  const std::shared_ptr<ServerConfig> config) {
-  // TODO: migrate it to use NodesConfiguration with switchable source
-  return config->getNodesConfigurationFromServerConfigSource()
-      ->getStorageMembership()
-      ->writerView(ns);
+static StorageSet getWritableShards(
+    const StorageSet& ns,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  return nodes_configuration.getStorageMembership()->writerView(ns);
 }
 
-std::unique_ptr<CopySetSelector>
-CopySetSelectorFactory::create(logid_t logid,
-                               const EpochMetaData& epoch_metadata,
-                               std::shared_ptr<NodeSetState> nodeset_state,
-                               const std::shared_ptr<ServerConfig> config,
-                               folly::Optional<NodeID> my_node_id,
-                               const logsconfig::LogAttributes* log_attrs,
-                               const Settings& settings,
-                               RNG& init_rng) {
+std::unique_ptr<CopySetSelector> CopySetSelectorFactory::create(
+    logid_t logid,
+    const EpochMetaData& epoch_metadata,
+    std::shared_ptr<NodeSetState> nodeset_state,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
+    folly::Optional<NodeID> my_node_id,
+    const logsconfig::LogAttributes* log_attrs,
+    const Settings& settings,
+    RNG& init_rng) {
   ld_check(nodeset_state != nullptr);
-  ld_check(config != nullptr);
+  ld_check(nodes_configuration != nullptr);
 
   auto legacy_replication = epoch_metadata.replication.toOldRepresentation();
 
@@ -55,23 +53,24 @@ CopySetSelectorFactory::create(logid_t logid,
     // for internal logs.
     bool print_bias_warnings = !MetaDataLog::isMetaDataLog(logid) &&
         !configuration::InternalLogs::isInternal(logid);
-    return std::make_unique<WeightedCopySetSelector>(logid,
-                                                     epoch_metadata,
-                                                     nodeset_state,
-                                                     config,
-                                                     my_node_id,
-                                                     log_attrs,
-                                                     locality_enabled,
-                                                     Worker::stats(),
-                                                     init_rng,
-                                                     print_bias_warnings);
+    return std::make_unique<WeightedCopySetSelector>(
+        logid,
+        epoch_metadata,
+        nodeset_state,
+        std::move(nodes_configuration),
+        my_node_id,
+        log_attrs,
+        locality_enabled,
+        Worker::stats(),
+        init_rng,
+        print_bias_warnings);
   }
 
   if (legacy_replication->sync_replication_scope == NodeLocationScope::NODE ||
       legacy_replication->replication_factor == 1) {
     return std::make_unique<LinearCopySetSelector>(
         legacy_replication->replication_factor,
-        getWritableShards(epoch_metadata.shards, config),
+        getWritableShards(epoch_metadata.shards, *nodes_configuration),
         nodeset_state);
   }
 
@@ -85,9 +84,9 @@ CopySetSelectorFactory::create(logid_t logid,
       legacy_replication->sync_replication_scope == NodeLocationScope::REGION);
   return std::make_unique<CrossDomainCopySetSelector>(
       logid,
-      getWritableShards(epoch_metadata.shards, config),
+      getWritableShards(epoch_metadata.shards, *nodes_configuration),
       nodeset_state,
-      config,
+      nodes_configuration,
       my_node_id.value(),
       legacy_replication->replication_factor,
       legacy_replication->sync_replication_scope);
@@ -97,20 +96,22 @@ std::unique_ptr<CopySetManager> CopySetSelectorFactory::createManager(
     logid_t logid,
     const EpochMetaData& epoch_metadata,
     std::shared_ptr<NodeSetState> nodeset_state,
-    std::shared_ptr<ServerConfig> config,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
     folly::Optional<NodeID> my_node_id,
     const logsconfig::LogAttributes* log_attrs,
     const Settings& settings,
     bool sticky_copysets,
     size_t sticky_copysets_block_size,
     std::chrono::milliseconds sticky_copysets_block_max_time) {
-  std::unique_ptr<CopySetSelector> copyset_selector = create(logid,
-                                                             epoch_metadata,
-                                                             nodeset_state,
-                                                             config,
-                                                             my_node_id,
-                                                             log_attrs,
-                                                             settings);
+  std::unique_ptr<CopySetSelector> copyset_selector =
+      create(logid,
+             epoch_metadata,
+             nodeset_state,
+             nodes_configuration,
+             my_node_id,
+             log_attrs,
+             settings);
   std::unique_ptr<CopySetManager> res;
   if (sticky_copysets) {
     res = std::unique_ptr<CopySetManager>(
@@ -122,7 +123,7 @@ std::unique_ptr<CopySetManager> CopySetSelectorFactory::createManager(
     res = std::unique_ptr<CopySetManager>(new PassThroughCopySetManager(
         std::move(copyset_selector), nodeset_state));
   }
-  res->prepareConfigMatchCheck(epoch_metadata.shards, *config);
+  res->prepareConfigMatchCheck(epoch_metadata.shards, *nodes_configuration);
   return res;
 }
 

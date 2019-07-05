@@ -188,14 +188,17 @@ class MockLinearCopySetSelector : public LinearCopySetSelector {
 class MockCrossDomainCopySetSelector : public CrossDomainCopySetSelector {
  public:
   explicit MockCrossDomainCopySetSelector(CopySetSelectorTest* test)
-      : CrossDomainCopySetSelector(test->LOG_ID,
-                                   test->nodeset_,
-                                   test->nodeset_state_,
-                                   test->getConfig()->serverConfig(),
-                                   test->getMyNodeID(),
-                                   test->replication_,
-                                   test->sync_replication_scope_,
-                                   &test->deps_) {}
+      : CrossDomainCopySetSelector(
+            test->LOG_ID,
+            test->nodeset_,
+            test->nodeset_state_,
+            test->getConfig()
+                ->serverConfig()
+                ->getNodesConfigurationFromServerConfigSource(),
+            test->getMyNodeID(),
+            test->replication_,
+            test->sync_replication_scope_,
+            &test->deps_) {}
 };
 
 class MockStickyCopySetManager : public StickyCopySetManager {

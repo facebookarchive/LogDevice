@@ -51,16 +51,6 @@ class CrossDomainCopySetSelector : public CopySetSelector {
    *                                 scope. value can be RACK, ROW, CLUSTER,
    *                                 ... REGION. Cannot be ROOT or NODE.
    */
-  CrossDomainCopySetSelector(logid_t logid,
-                             StorageSet storage_set,
-                             std::shared_ptr<NodeSetState> nodeset_state,
-                             std::shared_ptr<ServerConfig> cfg,
-                             NodeID my_node_id,
-                             copyset_size_t replication_factor,
-                             NodeLocationScope sync_replication_scope,
-                             const CopySetSelectorDependencies* deps =
-                                 CopySetSelectorDependencies::instance());
-
   CrossDomainCopySetSelector(
       logid_t logid,
       StorageSet storage_set,

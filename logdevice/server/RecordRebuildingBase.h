@@ -84,14 +84,15 @@ struct ReplicationScheme {
     // different donors would select the same copyset for the same block.
     XorShift128PRNG init_rng(folly::hash::twang_mix64(logid.val_),
                              folly::hash::twang_mix64(logid.val_ + 1));
-    copysetSelector = CopySetSelectorFactory::create(logid,
-                                                     epoch_metadata,
-                                                     nodeset_state,
-                                                     cfg,
-                                                     my_node_id,
-                                                     log_attrs,
-                                                     settings,
-                                                     init_rng);
+    copysetSelector = CopySetSelectorFactory::create(
+        logid,
+        epoch_metadata,
+        nodeset_state,
+        cfg->getNodesConfigurationFromServerConfigSource(),
+        my_node_id,
+        log_attrs,
+        settings,
+        init_rng);
   }
 };
 

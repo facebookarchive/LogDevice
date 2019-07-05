@@ -1363,9 +1363,15 @@ Sequencer::createEpochSequencer(epoch_t epoch,
       log_id_, epoch, std::move(metadata), immutable_options, this);
 
   // initialize copyset manager for the epoch
-  epoch_seq->createOrUpdateCopySetManager(cfg, *local_settings);
+  epoch_seq->createOrUpdateCopySetManager(
+      cfg, getNodesConfiguration(), *local_settings);
   ld_check(epoch_seq->getCopySetManager() != nullptr);
   return epoch_seq;
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+Sequencer::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 std::shared_ptr<Configuration> Sequencer::getClusterConfig() const {
@@ -1736,8 +1742,11 @@ void Sequencer::processRedirectedRecords() {
   }
 }
 
-void Sequencer::noteConfigurationChanged(std::shared_ptr<Configuration> cfg,
-                                         bool is_sequencer_node) {
+void Sequencer::noteConfigurationChanged(
+    std::shared_ptr<Configuration> cfg,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
+    bool is_sequencer_node) {
   // Note: nodeset and replication factor are updated upon sequencer
   // activation, with the value from the epochstore. Here we only update
   // properties that do not require an epoch bump.
@@ -1760,10 +1769,12 @@ void Sequencer::noteConfigurationChanged(std::shared_ptr<Configuration> cfg,
   auto seqs = epoch_seqs_.get();
   auto local_settings = settings_.get();
   if (seqs->current) {
-    seqs->current->noteConfigurationChanged(cfg, *local_settings);
+    seqs->current->noteConfigurationChanged(
+        cfg, nodes_configuration, *local_settings);
   }
   if (seqs->draining) {
-    seqs->draining->noteConfigurationChanged(cfg, *local_settings);
+    seqs->draining->noteConfigurationChanged(
+        cfg, nodes_configuration, *local_settings);
   }
 }
 

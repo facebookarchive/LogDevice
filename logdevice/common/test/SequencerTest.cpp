@@ -121,6 +121,11 @@ class SequencerTest : public ::testing::Test {
     return updateable_config_->get();
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    return updateable_config_->getNodesConfiguration();
+  }
+
   ActivateResult completeActivation(int epoch) {
     return sequencer_->completeActivationWithMetaData(
         epoch_t(epoch), getConfig(), genMetaData(epoch_t(epoch)));
@@ -266,6 +271,13 @@ class MockSequencer : public Sequencer {
 
   std::shared_ptr<Configuration> getClusterConfig() const override {
     return test_->getConfig();
+  }
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return test_->getConfig()
+        ->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
   }
 
   void startGetTrimPointRequest() override {}
@@ -1010,7 +1022,8 @@ TEST_F(SequencerTest, LogRemoval) {
 
   // remove the log from config
   removeLogFromConfig();
-  sequencer_->noteConfigurationChanged(getConfig(), true);
+  sequencer_->noteConfigurationChanged(
+      getConfig(), getNodesConfiguration(), true);
   // sequencer should transition to unavailable state and evict all epochs
   ASSERT_EQ(Sequencer::State::UNAVAILABLE, sequencer_->getState());
   ASSERT_EQ(EPOCH_INVALID, sequencer_->getCurrentEpoch());
@@ -1057,7 +1070,8 @@ TEST_F(SequencerTest, RecoveryCompleteAfterUnavailableAndPreemption) {
   completeActivation(3);
 
   // sequencer become unavailable because seq_weight becomes 0
-  sequencer_->noteConfigurationChanged(getConfig(), false);
+  sequencer_->noteConfigurationChanged(
+      getConfig(), getNodesConfiguration(), false);
   ASSERT_EQ(Sequencer::State::UNAVAILABLE, sequencer_->getState());
 
   const NodeID preemptor(2, 1);
@@ -1072,7 +1086,8 @@ TEST_F(SequencerTest, RecoveryCompleteAfterUnavailableAndReactivation) {
   completeActivation(3);
 
   // sequencer become unavailable because seq_weight becomes 0
-  sequencer_->noteConfigurationChanged(getConfig(), false);
+  sequencer_->noteConfigurationChanged(
+      getConfig(), getNodesConfiguration(), false);
   ASSERT_EQ(Sequencer::State::UNAVAILABLE, sequencer_->getState());
 
   // sequencer reactivates itself

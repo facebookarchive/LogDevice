@@ -841,7 +841,7 @@ std::unique_ptr<CopySetSelector> StorageSetAccessor::createCopySetSelector(
       log_id,
       epoch_metadata,
       nodeset_state,
-      config,
+      config->getNodesConfigurationFromServerConfigSource(),
       Worker::onThisThread()->processor_->getOptionalMyNodeID(),
       /* log_attrs */ nullptr,
       Worker::settings(),

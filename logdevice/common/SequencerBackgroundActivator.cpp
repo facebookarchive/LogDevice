@@ -103,7 +103,7 @@ SequencerBackgroundActivator::processOneLog(logid_t log_id,
       nodes_configuration->getSequencerMembership()->isSequencingEnabled(
           my_node_id.index());
 
-  seq->noteConfigurationChanged(config, is_sequencer_node);
+  seq->noteConfigurationChanged(config, nodes_configuration, is_sequencer_node);
 
   if (!is_sequencer_node) {
     // no need to check for reactivation and such. The sequencer should've been

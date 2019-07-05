@@ -36,25 +36,6 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
     logid_t logid,
     StorageSet storage_set,
     std::shared_ptr<NodeSetState> nodeset_state,
-    std::shared_ptr<ServerConfig> cfg,
-    NodeID my_node_id,
-    copyset_size_t replication_factor,
-    NodeLocationScope sync_replication_scope,
-    const CopySetSelectorDependencies* deps)
-    : CrossDomainCopySetSelector(
-          logid,
-          std::move(storage_set),
-          nodeset_state,
-          cfg->getNodesConfigurationFromServerConfigSource(),
-          my_node_id,
-          replication_factor,
-          sync_replication_scope,
-          deps) {}
-
-CrossDomainCopySetSelector::CrossDomainCopySetSelector(
-    logid_t logid,
-    StorageSet storage_set,
-    std::shared_ptr<NodeSetState> nodeset_state,
     std::shared_ptr<const configuration::nodes::NodesConfiguration>
         nodes_configuration,
     NodeID my_node_id,

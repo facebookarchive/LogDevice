@@ -29,19 +29,6 @@ class WeightedCopySetSelector : public CopySetSelector {
   //   Set to false if load balancing is not important, e.g. for internal logs.
   //   Other, non-load-balancing-related, warnings are printed regardless of
   //   this setting.
-  WeightedCopySetSelector(logid_t logid,
-                          const EpochMetaData& epoch_metadata,
-                          std::shared_ptr<NodeSetState> nodeset_state,
-                          std::shared_ptr<ServerConfig> cfg,
-                          folly::Optional<NodeID> my_node_id,
-                          const logsconfig::LogAttributes* log_attrs,
-                          bool locality_enabled,
-                          StatsHolder* stats = nullptr,
-                          RNG& init_rng = DefaultRNG::get(),
-                          bool print_bias_warnings = true,
-                          const CopySetSelectorDependencies* deps =
-                              CopySetSelectorDependencies::instance());
-
   WeightedCopySetSelector(
       logid_t logid,
       const EpochMetaData& epoch_metadata,

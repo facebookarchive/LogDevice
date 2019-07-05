@@ -681,8 +681,11 @@ class Sequencer {
    * Passes the config and the bool that says whether this node is a sequencer
    * node
    */
-  void noteConfigurationChanged(std::shared_ptr<Configuration> cfg,
-                                bool is_sequencer_node);
+  void noteConfigurationChanged(
+      std::shared_ptr<Configuration> cfg,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      bool is_sequencer_node);
 
   /**
    * Perform graceful shutdown by setting the sequencer to UNAVAILABLE state.
@@ -749,6 +752,9 @@ class Sequencer {
   createEpochSequencer(epoch_t epoch, std::unique_ptr<EpochMetaData> metadata);
 
   virtual std::shared_ptr<Configuration> getClusterConfig() const;
+
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
 
   // start a timer when Sequencer starts draining for an epoch
   virtual void startDrainingTimer(epoch_t draining);

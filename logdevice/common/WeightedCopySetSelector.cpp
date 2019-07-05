@@ -39,31 +39,6 @@ WeightedCopySetSelector::WeightedCopySetSelector(
     logid_t logid,
     const EpochMetaData& epoch_metadata,
     std::shared_ptr<NodeSetState> nodeset_state,
-    std::shared_ptr<ServerConfig> cfg,
-    folly::Optional<NodeID> my_node_id,
-    const logsconfig::LogAttributes* log_attrs,
-    bool locality_enabled,
-    StatsHolder* stats,
-    RNG& init_rng,
-    bool print_bias_warnings,
-    const CopySetSelectorDependencies* deps)
-    : WeightedCopySetSelector(
-          logid,
-          epoch_metadata,
-          std::move(nodeset_state),
-          cfg->getNodesConfigurationFromServerConfigSource(),
-          my_node_id,
-          log_attrs,
-          locality_enabled,
-          stats,
-          init_rng,
-          print_bias_warnings,
-          deps) {}
-
-WeightedCopySetSelector::WeightedCopySetSelector(
-    logid_t logid,
-    const EpochMetaData& epoch_metadata,
-    std::shared_ptr<NodeSetState> nodeset_state,
     std::shared_ptr<const configuration::nodes::NodesConfiguration>
         nodes_configuration,
     folly::Optional<NodeID> my_node_id,

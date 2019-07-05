@@ -47,22 +47,20 @@ void CopySetManager::disableCopySetShuffling() {
   shuffle_copysets_ = false;
 }
 
-bool CopySetManager::matchesConfig(const ServerConfig& cfg) {
+bool CopySetManager::matchesConfig(
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   ld_check(!full_nodeset_.empty());
-  // TODO: migrate it to use NodesConfiguration with switchable source
   return effective_nodeset_ ==
-      getEffectiveNodeSet(full_nodeset_,
-                          *cfg.getNodesConfigurationFromServerConfigSource()
-                               ->getStorageMembership());
+      getEffectiveNodeSet(
+             full_nodeset_, *nodes_configuration.getStorageMembership());
 }
-void CopySetManager::prepareConfigMatchCheck(StorageSet nodeset,
-                                             const ServerConfig& cfg) {
+
+void CopySetManager::prepareConfigMatchCheck(
+    StorageSet nodeset,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
   full_nodeset_ = std::move(nodeset);
-  // TODO: migrate it to use NodesConfiguration with switchable source
-  effective_nodeset_ =
-      getEffectiveNodeSet(full_nodeset_,
-                          *cfg.getNodesConfigurationFromServerConfigSource()
-                               ->getStorageMembership());
+  effective_nodeset_ = getEffectiveNodeSet(
+      full_nodeset_, *nodes_configuration.getStorageMembership());
 }
 
 }} // namespace facebook::logdevice

@@ -117,17 +117,18 @@ class CopySetManager {
   void disableCopySetShuffling();
 
   // Returns false if this CopySetManager needs to be replaced with a new one
-  // to reflect config changes. More precisely, if the set of non-zero-weight
-  // nodes in nodeset has changed after prepareConfigMatchCheck() was called.
-  // E.g. if a node changed weight from 1 to 0.
-  // TODO (#13478262): This won't be needed after weights are moved to
-  //                   epoch metadata.
-  bool matchesConfig(const ServerConfig& cfg);
+  // to reflect config changes. More precisely, if the set of writeable storage
+  // shards in nodeset has changed after prepareConfigMatchCheck() was called.
+  bool matchesConfig(
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
+
   // Call this after constructing CopySetManager. Only needed if you're going to
   // use matchesConfig(); matchesConfig() will check whether cfg given to
   // prepareConfigMatchCheck() and to matchesConfig() are significantly
   // different.
-  void prepareConfigMatchCheck(StorageSet nodeset, const ServerConfig& cfg);
+  void prepareConfigMatchCheck(
+      StorageSet nodeset,
+      const configuration::nodes::NodesConfiguration& nodes_configuration);
 
  protected:
   // Randomly permute the copyset. The leftmost node in the copyset is the

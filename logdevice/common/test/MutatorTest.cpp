@@ -167,7 +167,7 @@ class MockedNodeSetAccessor : public StorageSetAccessor {
           log_id,
           epoch_metadata.shards,
           nodeset_state,
-          config,
+          config->getNodesConfigurationFromServerConfigSource(),
           test_->my_node_,
           epoch_metadata.replication.toOldRepresentation()->replication_factor,
           epoch_metadata.replication.toOldRepresentation()

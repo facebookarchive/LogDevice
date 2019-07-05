@@ -940,7 +940,6 @@ void AllSequencers::notifyMetaDataLogWriterOnActivation(Sequencer* seq,
 }
 
 void AllSequencers::noteConfigurationChanged() {
-  std::shared_ptr<Configuration> config = updateable_config_->get();
   if (!processor_->hasMyNodeID()) {
     // not a server node
     ld_check(map_.empty());

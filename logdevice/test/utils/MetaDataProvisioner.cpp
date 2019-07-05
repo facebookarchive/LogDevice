@@ -294,17 +294,20 @@ copyset_t MetaDataProvisioner::genCopySet(const StorageSet& storage_set,
   ld_check(replication.isValid());
 
   TestCopySetSelectorDeps deps;
-  WeightedCopySetSelector selector(LOGID_INVALID,
-                                   EpochMetaData(storage_set, replication),
-                                   nullptr,
-                                   config_->get()->serverConfig(),
-                                   folly::none /* my_node_id */,
-                                   nullptr /* log_attrs */,
-                                   false /* locality */,
-                                   nullptr /* stats */,
-                                   DefaultRNG::get(),
-                                   true /* print_bias_warnings */,
-                                   &deps);
+  WeightedCopySetSelector selector(
+      LOGID_INVALID,
+      EpochMetaData(storage_set, replication),
+      nullptr,
+      config_->get()
+          ->serverConfig()
+          ->getNodesConfigurationFromServerConfigSource(),
+      folly::none /* my_node_id */,
+      nullptr /* log_attrs */,
+      false /* locality */,
+      nullptr /* stats */,
+      DefaultRNG::get(),
+      true /* print_bias_warnings */,
+      &deps);
 
   std::vector<StoreChainLink> cs(selector.getReplicationFactor());
   copyset_size_t cs_sz;

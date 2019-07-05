@@ -377,6 +377,8 @@ bool EpochSequencer::setNodeSetParams(
 
 void EpochSequencer::createOrUpdateCopySetManager(
     const std::shared_ptr<Configuration>& cfg,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
     const Settings& settings) {
   auto metadata = metadata_.get();
   ld_check(metadata);
@@ -399,7 +401,7 @@ void EpochSequencer::createOrUpdateCopySetManager(
       log_id_,
       *metadata,
       std::move(nodeset_state),
-      cfg->serverConfig(),
+      nodes_configuration,
       getProcessor()->getOptionalMyNodeID(),
       log_group ? &log_group->attrs() : nullptr,
       settings,
@@ -413,18 +415,20 @@ void EpochSequencer::createOrUpdateCopySetManager(
 
 void EpochSequencer::noteConfigurationChanged(
     const std::shared_ptr<Configuration>& cfg,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
     const Settings& settings) {
   ld_check(cfg != nullptr);
   auto copyset_manager = copyset_manager_.get();
   if (copyset_manager &&
-      !copyset_manager->matchesConfig(*cfg->serverConfig())) {
+      !copyset_manager->matchesConfig(*nodes_configuration)) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    2,
                    "Updating copyset selector for log %lu epoch %u because of "
                    "config update",
                    log_id_.val_,
                    epoch_.val_);
-    createOrUpdateCopySetManager(cfg, settings);
+    createOrUpdateCopySetManager(cfg, nodes_configuration, settings);
   }
 }
 

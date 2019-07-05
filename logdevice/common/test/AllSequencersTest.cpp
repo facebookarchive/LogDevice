@@ -81,6 +81,11 @@ class AllSequencersTest : public ::testing::Test {
     return updateable_config_->get();
   }
 
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    return updateable_config_->getNodesConfiguration();
+  }
+
   size_t getMetaDataRequests(logid_t log) {
     return logs_state_.at(log).metadata_requests;
   }
@@ -107,6 +112,11 @@ class MockSequencer : public Sequencer {
 
   std::shared_ptr<Configuration> getClusterConfig() const override {
     return test_->getConfig();
+  }
+
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const {
+    return test_->getNodesConfiguration();
   }
 
   void startGetTrimPointRequest() override {}

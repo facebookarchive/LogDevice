@@ -139,8 +139,11 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
    *       as when configuration changes are detected and effective nodeset
    *       might be changed. Must be called before runAppender().
    */
-  void createOrUpdateCopySetManager(const std::shared_ptr<Configuration>& cfg,
-                                    const Settings& settings);
+  void createOrUpdateCopySetManager(
+      const std::shared_ptr<Configuration>& cfg,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      const Settings& settings);
 
   /**
    * Attempt to transition the EpochSequencer from ACTIVE to the DRAINING state.
@@ -379,9 +382,11 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
    * Called when the cluster config has changed causing the effective nodeset
    * to change. Rebuild the copyset manager.
    */
-  virtual void
-  noteConfigurationChanged(const std::shared_ptr<Configuration>& cfg,
-                           const Settings& settings);
+  virtual void noteConfigurationChanged(
+      const std::shared_ptr<Configuration>& cfg,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      const Settings& settings);
 
   /**
    * The following are proxy functions that access the parent Sequencer object,
