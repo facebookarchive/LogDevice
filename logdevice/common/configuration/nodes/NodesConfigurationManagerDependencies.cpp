@@ -323,20 +323,17 @@ void Dependencies::readFromStore(bool should_do_consistent_config_fetch) {
     auto deps = ncm_ptr->deps();
     ld_assert(deps);
     if (status != Status::OK) {
-      RATELIMIT_ERROR(
-          std::chrono::seconds(10),
-          5,
-          "Reading from NodesConfigurationStore failed with error %s",
-          error_name(status));
-      deps->reportEvent(NCMReportType::NCS_READ_FAILED);
+      if (status != Status::UPTODATE) {
+        RATELIMIT_ERROR(
+            std::chrono::seconds(10),
+            5,
+            "Reading from NodesConfigurationStore failed with error %s",
+            error_name(status));
+        deps->reportEvent(NCMReportType::NCS_READ_FAILED);
+      }
       return;
     }
-    if (value.empty()) {
-      RATELIMIT_DEBUG(std::chrono::seconds(30),
-                      1,
-                      "Benign empty config string (presumably UPTODATE)");
-      return;
-    }
+
     deps->postNewConfigRequest(std::move(value));
   };
   if (should_do_consistent_config_fetch) {
