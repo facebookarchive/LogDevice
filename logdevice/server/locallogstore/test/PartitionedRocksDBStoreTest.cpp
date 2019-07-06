@@ -9827,7 +9827,6 @@ TEST_F(PartitionedRocksDBStoreTest,
                              total_budget / 2,
                              store_->getRocksDBLogStoreConfig());
     auto cf_data = get_candidates_and_evaluate(generator, evaluator);
-    ASSERT_GE(cf_data.size(), 2);
     // Make sure `age * size` is sorted correctly.
     // Relative time should have same compare result regardless of now.
     const auto time_now = SteadyTimestamp::now();
