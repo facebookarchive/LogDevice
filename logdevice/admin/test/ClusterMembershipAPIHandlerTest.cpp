@@ -246,7 +246,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddAlreadyExists) {
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
     ASSERT_EQ(1, exception.failed_nodes.size());
     auto failed_node = exception.failed_nodes[0];
-    EXPECT_EQ(100, failed_node.node_id.node_index);
+    EXPECT_EQ(100, failed_node.node_id.node_index_ref().value_unchecked());
     EXPECT_EQ(thrift::ClusterMembershipFailureReason::ALREADY_EXISTS,
               failed_node.reason);
   }
@@ -271,7 +271,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestInvalidAddNodesRequest) {
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
     ASSERT_EQ(1, exception.failed_nodes.size());
     auto failed_node = exception.failed_nodes[0];
-    EXPECT_EQ(4, failed_node.node_id.node_index);
+    EXPECT_EQ(4, failed_node.node_id.node_index_ref().value_unchecked());
     EXPECT_EQ(
         thrift::ClusterMembershipFailureReason::INVALID_REQUEST_NODES_CONFIG,
         failed_node.reason);
@@ -398,7 +398,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
     } catch (const thrift::ClusterMembershipOperationFailed& exception) {
       ASSERT_EQ(1, exception.failed_nodes.size());
       auto failed_node = exception.failed_nodes[0];
-      EXPECT_EQ(2, failed_node.node_id.node_index);
+      EXPECT_EQ(2, failed_node.node_id.node_index_ref().value_unchecked());
       EXPECT_EQ(
           thrift::ClusterMembershipFailureReason::INVALID_REQUEST_NODES_CONFIG,
           failed_node.reason);
@@ -417,7 +417,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
     } catch (const thrift::ClusterMembershipOperationFailed& exception) {
       ASSERT_EQ(1, exception.failed_nodes.size());
       auto failed_node = exception.failed_nodes[0];
-      EXPECT_EQ(20, failed_node.node_id.node_index);
+      EXPECT_EQ(20, failed_node.node_id.node_index_ref().value_unchecked());
       EXPECT_EQ(thrift::ClusterMembershipFailureReason::NO_MATCH_IN_CONFIG,
                 failed_node.reason);
     }
@@ -434,7 +434,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
       admin_client->sync_updateNodes(resp, req);
       FAIL() << "UpdateNodes call should fail, but it didn't";
     } catch (const thrift::NodesConfigurationManagerError& exception) {
-      EXPECT_EQ(static_cast<int32_t>(E::INVALID_PARAM), exception.error_code);
+      EXPECT_EQ(static_cast<int32_t>(E::INVALID_PARAM),
+                exception.error_code_ref().value_unchecked());
     }
   }
 }
