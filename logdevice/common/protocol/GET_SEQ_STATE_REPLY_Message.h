@@ -57,6 +57,10 @@ struct GET_SEQ_STATE_REPLY_Header {
   // if set in .flags, the reply will contain tail record (with payload for
   // tail optimized log
   static const GET_SEQ_STATE_REPLY_flags_t INCLUDES_TAIL_RECORD = 1 << 3;
+
+  // if set in .flags, if the reply status is E::OK, it will contain a bool
+  // indicating whether the log is empty.
+  static const GET_SEQ_STATE_REPLY_flags_t INCLUDES_IS_LOG_EMPTY = 1 << 4;
 } __attribute__((__packed__));
 
 class GET_SEQ_STATE_REPLY_Message : public Message {
@@ -109,6 +113,8 @@ class GET_SEQ_STATE_REPLY_Message : public Message {
   std::shared_ptr<const EpochMetaDataMap> metadata_map_;
 
   std::shared_ptr<TailRecord> tail_record_;
+
+  bool is_log_empty_{false};
 
   virtual std::vector<std::pair<std::string, folly::dynamic>>
   getDebugInfo() const override;

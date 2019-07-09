@@ -175,7 +175,8 @@ void RebuildingPlanner::sendSyncSequencerRequest(logid_t logid) {
                 lsn_t next_lsn,
                 std::unique_ptr<LogTailAttributes> /*tail_attributes*/,
                 std::shared_ptr<const EpochMetaDataMap> metadata_map,
-                std::shared_ptr<TailRecord> /*tail_record*/) {
+                std::shared_ptr<TailRecord> /*tail_record*/,
+                folly::Optional<bool> /*is_log_empty*/) {
     callback_ticket.postCallbackRequest([=](RebuildingPlanner* planner) {
       if (!planner) {
         ld_debug("SyncSequencerRequest finished after RebuildingPlanner was "

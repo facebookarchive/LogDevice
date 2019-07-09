@@ -35,5 +35,6 @@ struct GetSeqStateRequestResult {
   folly::Optional<OffsetMap> epoch_offsets;
   std::shared_ptr<const EpochMetaDataMap> metadata_map;
   std::shared_ptr<TailRecord> tail_record;
+  folly::Optional<bool> is_log_empty;
 };
 }} // namespace facebook::logdevice

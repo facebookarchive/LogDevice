@@ -68,9 +68,11 @@ void GetTrimPointRequest::onRequestTimeout() {
                         2,
                         "get a null pointer of storage set for log id %lu",
                         log_id_.val());
-        ;
       } else {
         // broadcast requests
+        ld_debug("Sending GetTrimPointRequests for epoch = %u, logid = %lu",
+                 sequencer->getCurrentEpoch().val_,
+                 log_id_.val());
         for (auto shard : *storage_set) {
           sendTo(shard);
         }
@@ -78,6 +80,7 @@ void GetTrimPointRequest::onRequestTimeout() {
     }
   }
   // reset timer
+  ld_debug("Activating timer for logid = %lu", log_id_.val());
   request_timer_->activate(request_interval_);
 }
 
@@ -112,7 +115,6 @@ void GetTrimPointRequest::onReply(ShardID from,
            from.toString().c_str(),
            error_name(status),
            trim_point);
-  // status_ = status;
   switch (status) {
     case E::OK:
       updateTrimPoint(status, trim_point);

@@ -55,6 +55,10 @@ MessageReadResult GET_SEQ_STATE_Message::deserialize(ProtocolReader& reader) {
     flags &= ~GET_SEQ_STATE_Message::INCLUDE_TAIL_RECORD;
   }
 
+  if (reader.proto() < Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY) {
+    flags &= ~GET_SEQ_STATE_Message::INCLUDE_IS_LOG_EMPTY;
+  }
+
   reader.allowTrailingBytes();
   return reader.result([&] {
     return new GET_SEQ_STATE_Message(
@@ -63,7 +67,9 @@ MessageReadResult GET_SEQ_STATE_Message::deserialize(ProtocolReader& reader) {
 }
 
 uint16_t GET_SEQ_STATE_Message::getMinProtocolVersion() const {
-  if (flags_ & GET_SEQ_STATE_Message::INCLUDE_TAIL_RECORD) {
+  if (flags_ & GET_SEQ_STATE_Message::INCLUDE_IS_LOG_EMPTY) {
+    return Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY;
+  } else if (flags_ & GET_SEQ_STATE_Message::INCLUDE_TAIL_RECORD) {
     return Compatibility::TAIL_RECORD_IN_GSS_REPLY;
   } else if (flags_ & GET_SEQ_STATE_Message::INCLUDE_HISTORICAL_METADATA) {
     return Compatibility::HISTORICAL_METADATA_IN_GSS_REPLY;
@@ -556,6 +562,7 @@ void GET_SEQ_STATE_Message::continueExecution(Address const& from) {
   folly::Optional<OffsetMap> epoch_offsets = folly::none;
   std::shared_ptr<const EpochMetaDataMap> metadata_map;
   std::shared_ptr<TailRecord> tail_record;
+  folly::Optional<bool> is_log_empty = folly::none;
 
   if (status == E::OK) {
     // If the request is for the metadata log, provide last_released_lsn with
@@ -620,6 +627,13 @@ void GET_SEQ_STATE_Message::continueExecution(Address const& from) {
           status = E::AGAIN;
         }
       }
+
+      if (flags_ & GET_SEQ_STATE_Message::INCLUDE_IS_LOG_EMPTY) {
+        reply_hdr.flags |= GET_SEQ_STATE_REPLY_Header::INCLUDES_IS_LOG_EMPTY;
+        auto res = sequencer->isLogEmpty();
+        status = res.first;
+        is_log_empty = res.second;
+      }
     }
   }
 
@@ -630,7 +644,8 @@ void GET_SEQ_STATE_Message::continueExecution(Address const& from) {
             tail_attributes,
             std::move(epoch_offsets),
             std::move(metadata_map),
-            std::move(tail_record));
+            std::move(tail_record),
+            is_log_empty);
 }
 
 void GET_SEQ_STATE_Message::onSent(Status status, const Address& to) const {
@@ -878,7 +893,8 @@ void GET_SEQ_STATE_Message::sendReply(
     folly::Optional<LogTailAttributes> tail_attributes,
     folly::Optional<OffsetMap> epoch_offsets,
     std::shared_ptr<const EpochMetaDataMap> metadata_map,
-    std::shared_ptr<TailRecord> tail_record) {
+    std::shared_ptr<TailRecord> tail_record,
+    folly::Optional<bool> is_log_empty) {
   auto msg = std::make_unique<GET_SEQ_STATE_REPLY_Message>(header);
   msg->request_id_ = request_id_;
   msg->status_ = status;
@@ -894,6 +910,9 @@ void GET_SEQ_STATE_Message::sendReply(
   }
   if (tail_record) {
     msg->tail_record_ = std::move(tail_record);
+  }
+  if (is_log_empty.hasValue()) {
+    msg->is_log_empty_ = is_log_empty.value();
   }
 
   ld_spew("Sending GET_SEQ_STATE_REPLY(log:%lu, rqid:%lu, status=%s, "

@@ -71,7 +71,8 @@ void TrimRequest::checkForTrimPastTail() {
                              lsn_t next_lsn,
                              std::unique_ptr<LogTailAttributes> /*unused*/,
                              std::shared_ptr<const EpochMetaDataMap> /*unused*/,
-                             std::shared_ptr<TailRecord> /*unused*/) {
+                             std::shared_ptr<TailRecord> /*unused*/,
+                             folly::Optional<bool> /*unused*/) {
     ticket.postCallbackRequest([=](TrimRequest* trimReq) {
       if (trimReq) {
         Status s;

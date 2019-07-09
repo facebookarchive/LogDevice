@@ -68,7 +68,13 @@ class MockTrimDataLogRequest : public TrimDataLogRequest {
 
  protected: // mock stuff that communicates externally
   void getTailLSN(SyncSequencerRequest::Callback cb) override {
-    cb(ssr_status_, NodeID(0, 1), ssr_next_lsn_, nullptr, nullptr, nullptr);
+    cb(ssr_status_,
+       NodeID(0, 1),
+       ssr_next_lsn_,
+       nullptr,
+       nullptr,
+       nullptr,
+       folly::none);
 
     if (ssr_status_ != E::OK) {
       ld_check(reading_finalized_);

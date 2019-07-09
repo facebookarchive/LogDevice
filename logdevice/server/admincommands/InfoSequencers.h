@@ -157,7 +157,7 @@ class InfoSequencers : public AdminCommand {
     table.set<14>(seq.getDrainingEpoch());
     auto metadata = seq.getCurrentMetaData();
     table.set<15>(metadata ? metadata->writtenInMetaDataLog() : false);
-    table.set<16>(seq.getTrimPoint());
+    table.set<16>(seq.getTrimPoint().value_or(LSN_INVALID));
 
     auto tailRecord = seq.getTailRecord();
     OffsetMap bo;

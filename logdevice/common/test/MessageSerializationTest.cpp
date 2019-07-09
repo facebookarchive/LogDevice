@@ -1636,9 +1636,9 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
   logid_t log_id(1337);
   request_id_t req_id(7);
   GET_SEQ_STATE_flags_t flags8 = GET_SEQ_STATE_Message::DONT_WAIT_FOR_RECOVERY;
-  GET_SEQ_STATE_flags_t bit9 = 1u << 8;
-  GET_SEQ_STATE_flags_t flags32 = bit9 | flags8;
   epoch_t min_ep(17);
+  GET_SEQ_STATE_flags_t flags32 =
+      GET_SEQ_STATE_Message::INCLUDE_IS_LOG_EMPTY | flags8;
   GetSeqStateRequest::Context ctx =
       GetSeqStateRequest::Context::GET_TAIL_RECORD;
 
@@ -1675,8 +1675,8 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
     EXPECT_EQ(1337, m2.log_id_.val());
     EXPECT_EQ(7, m2.request_id_.val());
     EXPECT_EQ(
-        flags32,
-        proto < Compatibility::GSS_32BIT_FLAG ? m2.flags_ & ~bit9 : m2.flags_);
+        m2.flags_,
+        proto < Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY ? flags8 : flags32);
     EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
     EXPECT_FALSE(m2.min_epoch_.hasValue());
   };
@@ -1684,9 +1684,10 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
                                     uint16_t proto) {
     EXPECT_EQ(1337, m2.log_id_.val());
     EXPECT_EQ(7, m2.request_id_.val());
-    EXPECT_EQ(
-        flags32 | GET_SEQ_STATE_Message::MIN_EPOCH,
-        proto < Compatibility::GSS_32BIT_FLAG ? m2.flags_ & ~bit9 : m2.flags_);
+    EXPECT_EQ(m2.flags_,
+              proto < Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY
+                  ? flags8 | GET_SEQ_STATE_Message::MIN_EPOCH
+                  : flags32 | GET_SEQ_STATE_Message::MIN_EPOCH);
     EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
     EXPECT_TRUE(m2.min_epoch_.hasValue());
     if (m2.min_epoch_.hasValue()) {
@@ -1695,17 +1696,13 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
   };
 
   // 8-bit supporting message, not requiring 32-bit flag
-  // 39050000000000000700000000000000                   // before flags
-  // 3905000000000000070000000000000004                 // with flags
   // 390500000000000007000000000000000411               // full
   // 390500000000000007000000000000000400000011         // full, 32-bit flag
   // 39050000000000000700000000000000241111000000       // full 8 + min epoch
   // 39050000000000000700000000000000240000001111000000 // full 32 + min epoch
   // 32-bit required
-  // 39050000000000000700000000000000                   // before flags
-  // 3905000000000000070000000000000004010000           // with flags
-  // 390500000000000007000000000000000401000011         // full
-  // 39050000000000000700000000000000240100001111000000 // full with min epoch
+  // 390500000000000007000000000000000401000011         //  full
+  // 39050000000000000700000000000000240100001111000000 //  full with min epoch
   {
     // If it need not use a 32-bit flag, it shouldn't.
     DO_TEST(gss8_no_min_ep,

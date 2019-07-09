@@ -714,7 +714,8 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
                   lsn_t next_lsn,
                   std::unique_ptr<LogTailAttributes> /*tail_attributes*/,
                   std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
-                  std::shared_ptr<TailRecord> /*tail_record*/) {
+                  std::shared_ptr<TailRecord> /*tail_record*/,
+                  folly::Optional<bool> /*is_log_empty*/) {
       callback_ticket.postCallbackRequest([=](LogChecker* checker) {
         if (!checker) {
           ld_error("SyncSequencerRequest finished after"

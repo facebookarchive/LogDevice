@@ -82,6 +82,9 @@ class GET_SEQ_STATE_Message : public Message {
   // from the sequencer
   static const GET_SEQ_STATE_flags_t INCLUDE_TAIL_RECORD = 1u << 7;
 
+  // If set, include is_log_empty in GSS response.
+  static const GET_SEQ_STATE_flags_t INCLUDE_IS_LOG_EMPTY = 1u << 8;
+
   // implementation of the Message interface
   void serialize(ProtocolWriter&) const override;
   static Message::deserializer_t deserialize;
@@ -261,7 +264,8 @@ class GET_SEQ_STATE_Message : public Message {
             folly::Optional<LogTailAttributes> tail_attributes = folly::none,
             folly::Optional<OffsetMap> epoch_offsets = folly::none,
             std::shared_ptr<const EpochMetaDataMap> metadata_map = nullptr,
-            std::shared_ptr<TailRecord> tail_record = nullptr);
+            std::shared_ptr<TailRecord> tail_record = nullptr,
+            folly::Optional<bool> is_log_empty = folly::none);
 
   void onSequencerNodeFound(Status status,
                             logid_t datalog_id,

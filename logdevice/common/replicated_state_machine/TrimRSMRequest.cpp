@@ -36,7 +36,8 @@ Request::Execution TrimRSMRequest::execute() {
                        lsn_t next_lsn,
                        std::unique_ptr<LogTailAttributes> /* unused */,
                        std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
-                       std::shared_ptr<TailRecord> /*tail_record*/) {
+                       std::shared_ptr<TailRecord> /*tail_record*/,
+                       folly::Optional<bool> /*is_log_empty*/) {
       const lsn_t tail_lsn = next_lsn <= LSN_OLDEST ? LSN_OLDEST : next_lsn - 1;
       ticket.postCallbackRequest([=](TrimRSMRequest* rq) {
         if (rq) {
@@ -309,7 +310,8 @@ void TrimRSMRequest::onSnapshotTrimmed(Status st) {
                        lsn_t next_lsn,
                        std::unique_ptr<LogTailAttributes> /* unused */,
                        std::shared_ptr<const EpochMetaDataMap> /* unused */,
-                       std::shared_ptr<TailRecord> /* unused */) {
+                       std::shared_ptr<TailRecord> /* unused */,
+                       folly::Optional<bool> /* unused */) {
       const lsn_t tail_lsn = next_lsn <= LSN_OLDEST ? LSN_OLDEST : next_lsn - 1;
       ticket.postCallbackRequest([=](TrimRSMRequest* rq) {
         if (rq) {

@@ -127,7 +127,8 @@ void ReplicatedStateMachine<T, D>::getSnapshotLogTailLSN() {
                lsn_t next_lsn,
                std::unique_ptr<LogTailAttributes> /*tail*/,
                std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
-               std::shared_ptr<TailRecord> /*tail_record*/) {
+               std::shared_ptr<TailRecord> /*tail_record*/,
+               folly::Optional<bool> /*is_log_empty*/) {
         const lsn_t tail_lsn =
             next_lsn <= LSN_OLDEST ? LSN_OLDEST : next_lsn - 1;
         ticket.postCallbackRequest(
@@ -425,7 +426,8 @@ void ReplicatedStateMachine<T, D>::getDeltaLogTailLSN() {
                 lsn_t next_lsn,
                 std::unique_ptr<LogTailAttributes> /* tail_attributes */,
                 std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
-                std::shared_ptr<TailRecord> /*tail_record*/) {
+                std::shared_ptr<TailRecord> /*tail_record*/,
+                folly::Optional<bool> /*is_log_empty*/) {
     callback_ticket.postCallbackRequest([=](ReplicatedStateMachine<T, D>* s) {
       if (s) {
         lsn_t tail_lsn = next_lsn <= LSN_OLDEST ? LSN_OLDEST : next_lsn - 1;

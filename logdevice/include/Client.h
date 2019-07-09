@@ -703,6 +703,45 @@ class Client {
   virtual int isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept = 0;
 
   /**
+   * Like isLogEmptySync, but instead of asking all the nodes, we ask the
+   * sequencer to compare the trim point to the tail record of the log.
+   *
+   * @param logid is the ID of the log to check
+   * @param empty will be set by this method to either true or false depending
+   *        on the responses received by storage nodes.
+   * @return 0 if the request was successful, -1 otherwise and sets
+   *         logdevice::err to:
+   *     INVALID_PARAM  if the log ID is a metadata log,
+   *     NOSEQUENCER    if the log ID was not found and static sequencer
+   *                    placement is used,
+   *     NOTFOUND       if the log ID was not found and dynamic sequencer
+   *                    placement is used,
+   *     ACCESS         if permission to access the log was denied,
+   *     AGAIN          if the sequencer is currently doing recovery, and thus
+   *                    does not yet know what the tail record is,
+   *     NOBUFS         if too many requests are pending to be delivered to
+   *                    Workers,
+   *     SHUTDOWN       Processor is shutting down,
+   *     FAILED         if the sequencer node does not support isLogEmptyV2,
+   *     INTERNAL       if attempt to write into the request pipe of a
+   *                    Worker failed,
+   *     TIMEDOUT       None of the above happened before the client timeout
+   *                    ran out.
+   */
+  virtual int isLogEmptyV2Sync(logid_t logid, bool* empty) noexcept = 0;
+
+  /**
+   * A non-blocking version of isLogEmptyV2Sync().
+   *
+   * @param logid is the ID of the log to check
+   * @param cb will be called once the state of the log is determined or an
+   *        error occurred. The possible status values are the same as for
+   *        isLogEmptyV2Sync().
+   * @return 0 if the request was successfuly scheduled, -1 otherwise.
+   */
+  virtual int isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept = 0;
+
+  /**
    * Finds the size of stored data for the given log in the given time range,
    * with accuracy as requested. Please note: this is post-batching and
    * compression; the size will likely be larger to a reader. This method is

@@ -156,7 +156,8 @@ void ClientReadersFlowTracer::sendSyncSequencerRequest() {
           lsn_t next_lsn,
           std::unique_ptr<LogTailAttributes> attrs,
           std::shared_ptr<const EpochMetaDataMap> /*unused*/,
-          std::shared_ptr<TailRecord> /*unused*/) {
+          std::shared_ptr<TailRecord> /*unused*/,
+          folly::Optional<bool> /*unused*/) {
         if (auto ptr = weak_ref.get()) {
           ptr->onSyncSequencerRequestResponse(
               st, seq_node, next_lsn, std::move(attrs));

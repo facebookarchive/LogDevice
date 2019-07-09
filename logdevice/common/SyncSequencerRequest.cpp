@@ -21,6 +21,7 @@ const SyncSequencerRequest::flags_t
 const SyncSequencerRequest::flags_t
     SyncSequencerRequest::INCLUDE_HISTORICAL_METADATA;
 const SyncSequencerRequest::flags_t SyncSequencerRequest::INCLUDE_TAIL_RECORD;
+const SyncSequencerRequest::flags_t SyncSequencerRequest::INCLUDE_IS_LOG_EMPTY;
 
 SyncSequencerRequest::SyncSequencerRequest(
     logid_t logid,
@@ -41,11 +42,15 @@ SyncSequencerRequest::SyncSequencerRequest(
       min_epoch_(min_epoch) {}
 
 Request::Execution SyncSequencerRequest::execute() {
+  if (prevent_metadata_logs_ && MetaDataLog::isMetaDataLog(logid_)) {
+    complete(E::INVALID_PARAM, /*delete_this=*/false);
+    return Execution::COMPLETE;
+  }
+
   Worker::onThisThread()->runningSyncSequencerRequests().getList().push_back(
       *this);
 
   retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
-
       [this]() { tryAgain(); }, Worker::settings().seq_state_backoff_time);
 
   if (timeout_.count() > 0) {
@@ -83,6 +88,10 @@ void SyncSequencerRequest::tryAgain() {
 
   if (flags_ & INCLUDE_TAIL_RECORD) {
     opts.include_tail_record = true;
+  }
+
+  if (flags_ & INCLUDE_IS_LOG_EMPTY) {
+    opts.include_is_log_empty = true;
   }
 
   opts.on_complete = [=](GetSeqStateRequest::Result res) {
@@ -202,6 +211,8 @@ void SyncSequencerRequest::onGotSeqState(GetSeqStateRequest::Result res) {
     metadata_map_ = res.metadata_map;
 
     tail_record_ = res.tail_record;
+
+    is_log_empty_ = res.is_log_empty;
   }
 
   if (shouldComplete()) {
@@ -231,10 +242,15 @@ bool SyncSequencerRequest::gotTailRecord() const {
   return tail_record_ != nullptr;
 }
 
+bool SyncSequencerRequest::gotIsLogEmpty() const {
+  return is_log_empty_ != folly::none;
+}
+
 bool SyncSequencerRequest::shouldComplete() const {
   return gotReleasedUntilLSN() &&
       (!(flags_ & INCLUDE_HISTORICAL_METADATA) || gotHistoricalMetaData()) &&
-      (!(flags_ & INCLUDE_TAIL_RECORD) || gotTailRecord());
+      (!(flags_ & INCLUDE_TAIL_RECORD) || gotTailRecord()) &&
+      (!(flags_ & INCLUDE_IS_LOG_EMPTY) || gotIsLogEmpty());
 }
 
 void SyncSequencerRequest::onTimeout() {
@@ -277,7 +293,7 @@ void SyncSequencerRequest::onTimeout() {
   complete(res);
 }
 
-void SyncSequencerRequest::complete(Status status) {
+void SyncSequencerRequest::complete(Status status, bool delete_this) {
   ld_check(cb_);
   ld_check_in(status,
               ({E::OK,
@@ -287,22 +303,29 @@ void SyncSequencerRequest::complete(Status status) {
                 E::FAILED,
                 E::CANCELLED,
                 E::ACCESS,
-                E::NOTFOUND}));
+                E::NOTFOUND,
+                E::INVALID_PARAM}));
   if (!complete_if_log_not_found_) {
-    ld_check(status != E::NOTFOUND);
+    ld_check_ne(status, E::NOTFOUND);
+  }
+  if (!prevent_metadata_logs_) {
+    ld_check_ne(status, E::INVALID_PARAM);
   }
   if (timeout_.count() == 0) {
-    ld_check(status != E::TIMEDOUT);
-    ld_check(status != E::CONNFAILED);
-    ld_check(status != E::NOSEQUENCER);
+    ld_check_ne(status, E::TIMEDOUT);
+    ld_check_ne(status, E::CONNFAILED);
+    ld_check_ne(status, E::NOSEQUENCER);
   }
   cb_(status,
       getLastSequencer(),
       nextLsn_.hasValue() ? nextLsn_.value() : LSN_INVALID,
       std::move(log_tail_attributes_),
       std::move(metadata_map_),
-      std::move(tail_record_));
-  delete this;
+      std::move(tail_record_),
+      is_log_empty_);
+  if (delete_this) {
+    delete this;
+  }
 }
 
 }} // namespace facebook::logdevice

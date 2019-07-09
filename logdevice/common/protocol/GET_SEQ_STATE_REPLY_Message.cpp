@@ -94,6 +94,14 @@ GET_SEQ_STATE_REPLY_Message::deserialize(ProtocolReader& reader) {
     msg->tail_record_->deserialize(reader, /*zero_copy*/ true);
   }
 
+  if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_IS_LOG_EMPTY) {
+    if (reader.proto() < Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY) {
+      ld_check(false);
+      return reader.errorResult(E::BADMSG);
+    }
+    reader.read(&msg->is_log_empty_);
+  }
+
   return reader.resultMsg(std::move(msg));
 }
 
@@ -163,6 +171,22 @@ void GET_SEQ_STATE_REPLY_Message::serialize(ProtocolWriter& writer) const {
 
     ld_check(tail_record_ != nullptr);
     tail_record_->serialize(writer);
+  }
+
+  if (header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_IS_LOG_EMPTY) {
+    if (writer.proto() < Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY) {
+      RATELIMIT_CRITICAL(std::chrono::seconds(10),
+                         10,
+                         "Sending GET_SEQ_STATE_REPLY_Message with "
+                         "INCLUDES_IS_LOG_EMPTY flag in protocol %d.",
+                         writer.proto());
+      // for the same reason above
+      writer.setError(E::BADMSG);
+      ld_check(false);
+      return;
+    }
+
+    writer.write(is_log_empty_);
   }
 }
 

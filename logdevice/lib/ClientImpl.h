@@ -193,6 +193,10 @@ class ClientImpl : public Client,
 
   int isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept override;
 
+  int isLogEmptyV2Sync(logid_t logid, bool* empty) noexcept override;
+
+  int isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept override;
+
   int dataSizeSync(logid_t logid,
                    std::chrono::milliseconds start,
                    std::chrono::milliseconds end,

@@ -132,6 +132,7 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
     HISTORICAL_METADATA,
     GET_TAIL_RECORD,
     READER_MONITORING,
+    IS_LOG_EMPTY_V2,
     MAX,
   };
 
@@ -166,6 +167,9 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
     // If set, sequencer will include the tail record of the log with the
     // reply
     bool include_tail_record{false};
+
+    // If set, sequencer will indicate whether the log is empty.
+    bool include_is_log_empty{false};
 
     // If the caller is ok with piggy-backing on an existing request,
     // it can set this option to GSS_MERGE_INTO_OLD.
@@ -357,6 +361,8 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
   std::shared_ptr<const EpochMetaDataMap> metadata_map_;
 
   std::shared_ptr<TailRecord> tail_record_;
+
+  folly::Optional<bool> is_log_empty_ = folly::none;
 
   std::vector<CompletionCallback> callback_list_;
 

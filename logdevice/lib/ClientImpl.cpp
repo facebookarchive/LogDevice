@@ -1719,6 +1719,56 @@ int ClientImpl::isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept {
   return processor_->postRequest(req);
 }
 
+int ClientImpl::isLogEmptyV2Sync(logid_t logid, bool* empty) noexcept {
+  IsLogEmptyGate gate; // request-reply synchronization
+  int rv;
+
+  ld_check(empty);
+
+  rv = isLogEmptyV2(logid, std::ref(gate));
+
+  if (rv == 0) {
+    gate.wait();
+    if (gate.status == E::OK) {
+      *empty = gate.empty;
+    } else {
+      logdevice::err = gate.status;
+      rv = -1;
+    }
+  }
+
+  return rv;
+}
+
+int ClientImpl::isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept {
+  auto cb_wrapper =
+      [cb, start = SteadyClock::now()](
+          Status st,
+          NodeID /*seq*/,
+          lsn_t /*next_lsn*/,
+          std::unique_ptr<LogTailAttributes> /*tail_attributes*/,
+          std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
+          std::shared_ptr<TailRecord> /*tail_record*/,
+          folly::Optional<bool> is_log_empty) {
+        if (!is_log_empty.hasValue()) {
+          ld_check_ne(st, E::OK);
+          is_log_empty = false;
+        }
+        cb(st, is_log_empty.value());
+      };
+  auto sync_seq_req = std::make_unique<SyncSequencerRequest>(
+      logid,
+      SyncSequencerRequest::INCLUDE_IS_LOG_EMPTY,
+      cb_wrapper,
+      GetSeqStateRequest::Context::IS_LOG_EMPTY_V2,
+      settings_->getSettings()->meta_api_timeout.value_or(timeout_));
+  sync_seq_req->setCompleteIfLogNotFound(true);
+  sync_seq_req->setCompleteIfAccessDenied(true);
+  sync_seq_req->setPreventMetadataLogs(true);
+  std::unique_ptr<Request> req = std::move(sync_seq_req);
+  return processor_->postRequest(req);
+}
+
 namespace {
 struct DataSizeGate {
   void operator()(Status status, size_t size) {
@@ -1831,7 +1881,8 @@ int ClientImpl::getTailLSN(logid_t logid, get_tail_lsn_callback_t cb) noexcept {
           lsn_t next_lsn,
           std::unique_ptr<LogTailAttributes> /*tail_attributes*/,
           std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
-          std::shared_ptr<TailRecord> /*tail_record*/) {
+          std::shared_ptr<TailRecord> /*tail_record*/,
+          folly::Optional<bool> /*is_log_empty*/) {
         auto resp = next_lsn <= LSN_OLDEST ? next_lsn : next_lsn - 1;
         // log response
         Worker* w = Worker::onThisThread();
@@ -1884,7 +1935,8 @@ int ClientImpl::getTailAttributes(logid_t logid,
                         lsn_t /*next_lsn*/,
                         std::unique_ptr<LogTailAttributes> tail_attributes,
                         std::shared_ptr<const EpochMetaDataMap> /*unused*/,
-                        std::shared_ptr<TailRecord> /*unused*/) {
+                        std::shared_ptr<TailRecord> /*unused*/,
+                        folly::Optional<bool> /*unused*/) {
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
@@ -1942,7 +1994,8 @@ int ClientImpl::getHistoricalMetaData(
                          lsn_t /*next_lsn*/,
                          std::unique_ptr<LogTailAttributes> /*unused*/,
                          std::shared_ptr<const EpochMetaDataMap> metadata,
-                         std::shared_ptr<TailRecord> /*unused*/) {
+                         std::shared_ptr<TailRecord> /*unused*/,
+                         folly::Optional<bool> /*unused*/) {
     cb(st, std::move(metadata));
   };
   std::unique_ptr<Request> req = std::make_unique<SyncSequencerRequest>(
@@ -1986,7 +2039,8 @@ int ClientImpl::getTailRecord(logid_t logid,
                          lsn_t /*next_lsn*/,
                          std::unique_ptr<LogTailAttributes> /*unused*/,
                          std::shared_ptr<const EpochMetaDataMap> /*unused*/,
-                         std::shared_ptr<TailRecord> tail_record) {
+                         std::shared_ptr<TailRecord> tail_record,
+                         folly::Optional<bool> /*unused*/) {
     cb(st, std::move(tail_record));
   };
   std::unique_ptr<Request> req = std::make_unique<SyncSequencerRequest>(

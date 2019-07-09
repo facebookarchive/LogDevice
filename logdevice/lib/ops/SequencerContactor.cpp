@@ -43,7 +43,8 @@ void SequencerContactor::contactSequencer(logid_t logid) {
                         lsn_t next_lsn,
                         std::unique_ptr<LogTailAttributes> tail,
                         std::shared_ptr<const EpochMetaDataMap> md_map,
-                        std::shared_ptr<TailRecord> /*tail_record*/) {
+                        std::shared_ptr<TailRecord> /*tail_record*/,
+                        folly::Optional<bool> /*is_log_empty*/) {
     folly::Optional<LogTailAttributes> tail_in;
     if (tail) {
       tail_in = *tail;

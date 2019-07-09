@@ -103,7 +103,8 @@ void NodeSetFinder::readFromSequencer(std::chrono::milliseconds stage_timeout) {
                              lsn_t /*next_lsn*/,
                              std::unique_ptr<LogTailAttributes> /*unused*/,
                              std::shared_ptr<const EpochMetaDataMap> metadata,
-                             std::shared_ptr<TailRecord> /*unused*/) {
+                             std::shared_ptr<TailRecord> /*unused*/,
+                             folly::Optional<bool> /*unused*/) {
     ticket.postCallbackRequest([=](NodeSetFinder* finder) {
       if (finder && finder->getState() != State::FINISHED) {
         finder->onMetaDataFromSequencer(st, seq_node, std::move(metadata));

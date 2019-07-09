@@ -40,7 +40,8 @@ Request::Execution TrimDataLogRequest::execute() {
                        lsn_t next_lsn,
                        std::unique_ptr<LogTailAttributes>,
                        std ::shared_ptr<const EpochMetaDataMap>,
-                       std::shared_ptr<TailRecord>) {
+                       std::shared_ptr<TailRecord>,
+                       folly::Optional<bool>) {
     onTailReceived(status, (next_lsn == 0 ? 0 : next_lsn - 1));
   };
 

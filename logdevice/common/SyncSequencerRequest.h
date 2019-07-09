@@ -66,6 +66,8 @@ class SyncSequencerRequest : public Request {
    *     returned if a sequencer node says that the log is not in config.
    *     complete_if_log_not_found_ is false, we keep trying until timeout
    *     expires and then return FAILED.
+   *   - E::INVALID_PARAM: If prevent_metadata_logs_ is true, and the provided
+   *     log ID is a metadata log, immediately complete with this status.
    *   - The following errors can be returned after timeout expires. If timeout
    *     is infinite, these error codes are not used:
    *      -- E::TIMEDOUT: We could not get successful a reply from a sequencer
@@ -100,7 +102,8 @@ class SyncSequencerRequest : public Request {
                          lsn_t next_lsn,
                          std::unique_ptr<LogTailAttributes> tail_attributes,
                          std::shared_ptr<const EpochMetaDataMap> metadata_map,
-                         std::shared_ptr<TailRecord> tail_record)>;
+                         std::shared_ptr<TailRecord> tail_record,
+                         folly::Optional<bool> is_log_empty)>;
 
   using flags_t = uint8_t;
   // The callback will only be called once all records up to `next_lsn` are
@@ -115,6 +118,8 @@ class SyncSequencerRequest : public Request {
   // If set, log tail record will be fetched from sequencer and send
   // back in GET_SEQ_STATE_REPLY_Message
   static const flags_t INCLUDE_TAIL_RECORD = 1 << 4;
+  // If set, include is_log_empty in GSS response.
+  static const flags_t INCLUDE_IS_LOG_EMPTY = 1u << 5;
 
   folly::IntrusiveListHook list_hook;
 
@@ -178,6 +183,18 @@ class SyncSequencerRequest : public Request {
     return lastGetSeqStateStatus_;
   }
 
+  void setCompleteIfLogNotFound(bool value) {
+    complete_if_log_not_found_ = value;
+  }
+
+  void setCompleteIfAccessDenied(bool value) {
+    complete_if_access_denied_ = value;
+  }
+
+  void setPreventMetadataLogs(bool value) {
+    prevent_metadata_logs_ = value;
+  }
+
  protected:
   NodeID getLastSequencer() const {
     return last_seq_;
@@ -199,6 +216,11 @@ class SyncSequencerRequest : public Request {
   bool gotTailRecord() const;
 
   /**
+   * @return  true if the sequencer told us whether the log is empty
+   */
+  bool gotIsLogEmpty() const;
+
+  /**
    * @return  if we got all result we want and should conclude the state
    *          machine. Until this function returns true, we will keep on
    *          retrying GetSeqStateRequests.
@@ -212,6 +234,9 @@ class SyncSequencerRequest : public Request {
   // If sequencer node replied with E::ACCESS, complete with E::ACCESS right
   // away. If false, we'll keep trying until timeout expires.
   bool complete_if_access_denied_{true};
+
+  // If the log is a metadata log, immediately return E::INVALID_PARAM.
+  bool prevent_metadata_logs_{false};
 
  private:
   logid_t logid_;
@@ -247,8 +272,10 @@ class SyncSequencerRequest : public Request {
 
   std::shared_ptr<TailRecord> tail_record_;
 
+  folly::Optional<bool> is_log_empty_;
+
   void onTimeout();
-  void complete(Status status);
+  void complete(Status status, bool delete_this = true);
 
   void tryAgain();
   void onGotSeqState(GetSeqStateRequest::Result res);

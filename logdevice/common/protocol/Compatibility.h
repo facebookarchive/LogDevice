@@ -98,6 +98,8 @@ enum ProtocolVersion : uint16_t {
   // Increase size of flags in GET_SEQ_STATE_Message
   GSS_32BIT_FLAG, // = 96
 
+  IS_LOG_EMPTY_IN_GSS_REPLY, // = 97
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice

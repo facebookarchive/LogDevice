@@ -17,6 +17,7 @@
 #include <folly/SharedMutex.h>
 
 #include "logdevice/common/Appender.h"
+#include "logdevice/common/AtomicOptional.h"
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/RateEstimator.h"
 #include "logdevice/common/RateLimiter.h"
@@ -388,6 +389,16 @@ class Sequencer {
   void updateTrimPoint(Status status, lsn_t trim_point);
 
   /**
+   * Check whether the log is empty, by comparing the currently known trim
+   * point to the tail.
+   * @return        the resulting status and whether the log was empty. Status
+   *                is one of:
+   *   OK         - Call succeeded
+   *   AGAIN      - recovery is in progress, or trim point is not yet available
+   */
+  std::pair<Status, bool> isLogEmpty();
+
+  /**
    * @return  if log recovery has completed for the current epoch
    */
   bool isRecoveryComplete() const;
@@ -517,8 +528,12 @@ class Sequencer {
 
   ////////////////////////// Get Log Property ////////////////////////////
 
-  lsn_t getTrimPoint() const {
-    return trim_point_;
+  folly::Optional<lsn_t> getTrimPoint() const {
+    folly::Optional<lsn_t> result; // initially empty
+    if (trim_point_.hasValue()) {
+      result.assign(trim_point_.load());
+    }
+    return result;
   }
 
   logid_t getLogID() const {
@@ -784,7 +799,7 @@ class Sequencer {
 
   // indicate if GetTrimPointRequest has been running or not
   std::atomic<bool> get_trim_point_running_{false};
-  std::atomic<lsn_t> trim_point_{LSN_INVALID};
+  AtomicOptional<lsn_t> trim_point_{LSN_INVALID, EMPTY_OPTIONAL};
 
   UpdateableSettings<Settings> settings_;
 
