@@ -1750,7 +1750,7 @@ int ClientImpl::isLogEmptyV2Sync(logid_t logid, bool* empty) noexcept {
 
 int ClientImpl::isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept {
   auto cb_wrapper =
-      [cb, start = SteadyClock::now()](
+      [logid, cb, start = SteadyClock::now()](
           Status st,
           NodeID /*seq*/,
           lsn_t /*next_lsn*/,
@@ -1761,6 +1761,12 @@ int ClientImpl::isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept {
         if (!is_log_empty.hasValue()) {
           ld_check_ne(st, E::OK);
           is_log_empty = false;
+        }
+        // log response
+        Worker* w = Worker::onThisThread();
+        if (w) {
+          w->processor_->api_hits_tracer_->traceIsLogEmptyV2(
+              msec_since(start), logid, st, is_log_empty.value());
         }
         cb(st, is_log_empty.value());
       };

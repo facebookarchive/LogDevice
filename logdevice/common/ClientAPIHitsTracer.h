@@ -64,7 +64,13 @@ class ClientAPIHitsTracer : public SampledTracer {
                        logid_t in_logid,
                        FailedShardsMap&& failed_shards,
                        Status out_status,
-                       bool out_bool);
+                       bool out_bool,
+                       int version = 1);
+
+  void traceIsLogEmptyV2(int64_t msec_resp_time,
+                         logid_t in_logid,
+                         Status out_status,
+                         bool out_bool);
 
   void traceDataSize(int64_t msec_resp_time,
                      logid_t in_logid,

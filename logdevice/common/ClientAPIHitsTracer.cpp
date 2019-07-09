@@ -251,7 +251,8 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
                                           logid_t in_logid,
                                           FailedShardsMap&& failed_shards,
                                           Status out_status,
-                                          bool out_bool) {
+                                          bool out_bool,
+                                          int version) {
   bool is_flappy = assessIsLogEmptyFlappiness(out_status, in_logid, out_bool);
   CLIENT_HISTOGRAM_ADD(Worker::stats(), is_log_empty_latency, msec_resp_time);
   switch (out_status) {
@@ -279,9 +280,18 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
     sample->addIntValue("is_log_empty_flappy", is_flappy);
     sample->addMapValue(
         "failed_shards", failed_shards_to_string_map(std::move(failed_shards)));
+    sample->addIntValue("is_log_empty_version", version);
     return sample;
   };
   publish(API_HITS_TRACER, sample_builder, /*force = */ is_flappy);
+}
+
+void ClientAPIHitsTracer::traceIsLogEmptyV2(int64_t msec_resp_time,
+                                            logid_t in_logid,
+                                            Status out_status,
+                                            bool out_bool) {
+  traceIsLogEmpty(
+      msec_resp_time, in_logid, FailedShardsMap(), out_status, out_bool, 2);
 }
 
 bool ClientAPIHitsTracer::assessIsLogEmptyFlappiness(Status st,
