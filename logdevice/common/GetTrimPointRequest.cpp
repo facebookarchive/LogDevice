@@ -111,10 +111,12 @@ void GetTrimPointRequest::sendTo(ShardID shard) {
 void GetTrimPointRequest::onReply(ShardID from,
                                   Status status,
                                   lsn_t trim_point) {
-  ld_debug("Received GET_TRIM_POINT_REPLY from %s, status=%s, result=%lu",
+  ld_debug("Received GET_TRIM_POINT_REPLY from %s, status=%s, result=%lu for "
+           "logid %lu",
            from.toString().c_str(),
            error_name(status),
-           trim_point);
+           trim_point,
+           log_id_.val());
   switch (status) {
     case E::OK:
       updateTrimPoint(status, trim_point);
