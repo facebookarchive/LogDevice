@@ -109,6 +109,10 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:acea7b4e3a8830fd9b7161470fce43f25"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa402ed205a3138575644c8b3e9e6df85"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aa402ed205a3138575644c8b3e9e6df85">isLogEmpty</a> (logid_t logid, is_empty_callback_t cb) noexcept=0</td></tr>
 <tr class="separator:aa402ed205a3138575644c8b3e9e6df85"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a32adcd8c59fae3ddff5f7b4fcd4135d5"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a32adcd8c59fae3ddff5f7b4fcd4135d5">isLogEmptyV2Sync</a> (logid_t logid, bool *empty) noexcept=0</td></tr>
+<tr class="separator:a32adcd8c59fae3ddff5f7b4fcd4135d5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a619f3439fc94de307169e5640ac9386c"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a619f3439fc94de307169e5640ac9386c">isLogEmptyV2</a> (logid_t logid, is_empty_callback_t cb) noexcept=0</td></tr>
+<tr class="separator:a619f3439fc94de307169e5640ac9386c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a2c058bc9b12472e46ce95d77f32a0b2c"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2c058bc9b12472e46ce95d77f32a0b2c">dataSizeSync</a> (logid_t logid, std::chrono::milliseconds start, std::chrono::milliseconds end, DataSizeAccuracy accuracy, size_t *size) noexcept=0</td></tr>
 <tr class="separator:a2c058bc9b12472e46ce95d77f32a0b2c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af19a0efc76f548b493957873002c1c15"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#af19a0efc76f548b493957873002c1c15">dataSize</a> (logid_t logid, std::chrono::milliseconds start, std::chrono::milliseconds end, DataSizeAccuracy accuracy, data_size_callback_t cb) noexcept=0</td></tr>
@@ -1794,6 +1798,7 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+<p>NOTE: This API call translates to isLogEmptyV2 call, if client setting &ndash;enable-is-log-empty-v2 is set to true. If you intend to use this, please refer to the comment section of isLogEmptyV2Sync for possbile error codes as they are slightly different from V1.</p>
 <p>A non-blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#acea7b4e3a8830fd9b7161470fce43f25">isLogEmptySync()</a>.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -1839,6 +1844,7 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+<p>NOTE: This API call translates to isLogEmptyV2Sync call, if client setting &ndash;enable-is-log-empty-v2 is set to true. If you intend to use this, please refer to the comment section of isLogEmptyV2Sync for possbile error codes as they are slightly different from V1.</p>
 <p>Checks wether a particular log is empty. This method is blocking until the state can be determined or an error occurred.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -1848,6 +1854,96 @@ Static Public Member Functions</h2></td></tr>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>0 if the request was successful, -1 otherwise and sets logdevice::err to: INVALID_PARAM if the log ID is invalid, PARTIAL if we can't answer with certainty. The log is probably either empty or almost empty, and any records are probably not very recent. ACCESS if permission to access the log was denied FAILED if the state of the log could not be determined. NOBUFS if too many requests are pending to be delivered to Workers SHUTDOWN Processor is shutting down INTERNAL if attempt to write into the request pipe of a Worker failed TIMEDOUT None of the above happened before the client timeout ran out. </dd></dl>
+
+</div>
+</div>
+<a id="a619f3439fc94de307169e5640ac9386c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a619f3439fc94de307169e5640ac9386c">&#9670;&nbsp;</a></span>isLogEmptyV2()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual int facebook::logdevice::Client::isLogEmptyV2 </td>
+          <td>(</td>
+          <td class="paramtype">logid_t&#160;</td>
+          <td class="paramname"><em>logid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">is_empty_callback_t&#160;</td>
+          <td class="paramname"><em>cb</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span><span class="mlabel">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>A non-blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a32adcd8c59fae3ddff5f7b4fcd4135d5">isLogEmptyV2Sync()</a>.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">logid</td><td>is the ID of the log to check </td></tr>
+    <tr><td class="paramname">cb</td><td>will be called once the state of the log is determined or an error occurred. The possible status values are the same as for <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a32adcd8c59fae3ddff5f7b4fcd4135d5">isLogEmptyV2Sync()</a>. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>0 if the request was successfuly scheduled, -1 otherwise. </dd></dl>
+
+</div>
+</div>
+<a id="a32adcd8c59fae3ddff5f7b4fcd4135d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a32adcd8c59fae3ddff5f7b4fcd4135d5">&#9670;&nbsp;</a></span>isLogEmptyV2Sync()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual int facebook::logdevice::Client::isLogEmptyV2Sync </td>
+          <td>(</td>
+          <td class="paramtype">logid_t&#160;</td>
+          <td class="paramname"><em>logid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool *&#160;</td>
+          <td class="paramname"><em>empty</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span><span class="mlabel">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Like isLogEmptySync, but instead of asking all the nodes, we ask the sequencer to compare the trim point to the tail record of the log.</p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">logid</td><td>is the ID of the log to check </td></tr>
+    <tr><td class="paramname">empty</td><td>will be set by this method to either true or false depending on the responses received by storage nodes. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>0 if the request was successful, -1 otherwise and sets logdevice::err to: INVALID_PARAM if the log ID is a metadata log, NOSEQUENCER if the log ID was not found and static sequencer placement is used, NOTFOUND if the log ID was not found and dynamic sequencer placement is used, ACCESS if permission to access the log was denied, AGAIN if the sequencer is currently doing recovery, and thus does not yet know what the tail record is, NOBUFS if too many requests are pending to be delivered to Workers, SHUTDOWN Processor is shutting down, FAILED if the sequencer node does not support isLogEmptyV2, INTERNAL if attempt to write into the request pipe of a Worker failed, TIMEDOUT None of the above happened before the client timeout ran out. </dd></dl>
 
 </div>
 </div>
