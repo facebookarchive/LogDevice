@@ -77,6 +77,7 @@ sidebar_label: Settings
 | append-timeout | Timeout for appends. If omitted the client timeout will be used. |  | client&nbsp;only |
 | command-port | TCP port on which the server listens to for admin commands, supports commands over SSL | 5440 | requires&nbsp;restart, server&nbsp;only |
 | enable-hh-wheel-backed-timers | Enables the new version of timers which run on a different threadand use HHWheelTimer backend. | true | requires&nbsp;restart |
+| enable-is-log-empty-v2 | When enabled, the V2 implementation will be used to process all isLogEmpty requests. | false | client&nbsp;only |
 | enable-store-histograms-calculations | Enables estimation of store timeouts per worker per node. | false | server&nbsp;only |
 | external-loglevel | One of the following: critical, error, warning, info, debug, none | critical | server&nbsp;only |
 | findkey-timeout | Findkey API call timeout. If omitted the client timeout will be used. |  | client&nbsp;only |

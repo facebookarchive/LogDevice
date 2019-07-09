@@ -1417,6 +1417,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "how frequently to search for the sequencer in case of an append timeout",
       CLIENT,
       SettingsCategory::FailureDetector);
+  init("enable-is-log-empty-v2",
+       &enable_is_log_empty_v2,
+       "false",
+       nullptr,
+       "When enabled, the V2 implementation will be used to process all isLogEmpty requests.",
+       CLIENT,
+       SettingsCategory::Core);
   init(
       "enable-initial-get-cluster-state",
       &enable_initial_get_cluster_state,

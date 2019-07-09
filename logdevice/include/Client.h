@@ -667,6 +667,11 @@ class Client {
           FindKeyAccuracy accuracy = FindKeyAccuracy::STRICT) noexcept = 0;
 
   /**
+   * NOTE: This API call translates to isLogEmptyV2Sync call, if client setting
+   * --enable-is-log-empty-v2 is set to true. If you intend to use this, please
+   * refer to the comment section of isLogEmptyV2Sync for possbile error codes
+   * as they are slightly different from V1.
+   *
    * Checks wether a particular log is empty. This method is blocking until the
    * state can be determined or an error occurred.
    *
@@ -692,6 +697,11 @@ class Client {
   virtual int isLogEmptySync(logid_t logid, bool* empty) noexcept = 0;
 
   /**
+   * NOTE: This API call translates to isLogEmptyV2 call, if client setting
+   * --enable-is-log-empty-v2 is set to true. If you intend to use this, please
+   * refer to the comment section of isLogEmptyV2Sync for possbile error codes
+   * as they are slightly different from V1.
+   *
    * A non-blocking version of isLogEmptySync().
    *
    * @param logid is the ID of the log to check

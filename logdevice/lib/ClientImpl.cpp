@@ -1680,6 +1680,10 @@ struct IsLogEmptyGate {
 }; // namespace
 
 int ClientImpl::isLogEmptySync(logid_t logid, bool* empty) noexcept {
+  if (settings_->getSettings()->enable_is_log_empty_v2) {
+    return isLogEmptyV2Sync(logid, empty);
+  }
+
   IsLogEmptyGate gate; // request-reply synchronization
   int rv;
 
@@ -1701,6 +1705,10 @@ int ClientImpl::isLogEmptySync(logid_t logid, bool* empty) noexcept {
 }
 
 int ClientImpl::isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept {
+  if (settings_->getSettings()->enable_is_log_empty_v2) {
+    return isLogEmptyV2(logid, cb);
+  }
+
   auto cb_wrapper = [cb, logid, start = SteadyClock::now()](
                         const IsLogEmptyRequest& req, Status st, bool empty) {
     // log response

@@ -551,6 +551,11 @@ struct Settings : public SettingsBundle {
   // which the cluster state will be queried.
   std::chrono::milliseconds cluster_state_refresh_interval;
 
+  // (client-only-setting) Enable isLogEmpty V2 for clients
+  // TODO: (T46341259) Once V2 is hardened, deprecate this setting, and enable
+  // V2 by default
+  bool enable_is_log_empty_v2;
+
   // (client-only setting) If true, executes a GetClusterState at Processor
   // creation
   bool enable_initial_get_cluster_state;
