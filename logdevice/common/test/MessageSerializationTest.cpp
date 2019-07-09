@@ -23,6 +23,7 @@
 #include "logdevice/common/protocol/DELETE_Message.h"
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_Message.h"
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
+#include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/protocol/MUTATED_Message.h"
 #include "logdevice/common/protocol/MessageDeserializers.h"
@@ -1626,6 +1627,122 @@ TEST_F(MessageSerializationTest, MUTATED) {
             [&](uint16_t proto) {
               return (proto >= Compatibility::WAVE_IN_MUTATED) ? expected_new
                                                                : expected_old;
+            },
+            nullptr);
+  }
+}
+
+TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
+  logid_t log_id(1337);
+  request_id_t req_id(7);
+  GET_SEQ_STATE_flags_t flags8 = GET_SEQ_STATE_Message::DONT_WAIT_FOR_RECOVERY;
+  GET_SEQ_STATE_flags_t bit9 = 1u << 8;
+  GET_SEQ_STATE_flags_t flags32 = bit9 | flags8;
+  epoch_t min_ep(17);
+  GetSeqStateRequest::Context ctx =
+      GetSeqStateRequest::Context::GET_TAIL_RECORD;
+
+  // With the old 8-bit flag:
+  GET_SEQ_STATE_Message gss8_no_min_ep(log_id, req_id, flags8, ctx);
+  GET_SEQ_STATE_Message gss8_min_epoch(
+      log_id, req_id, flags8 | GET_SEQ_STATE_Message::MIN_EPOCH, ctx, min_ep);
+  // With the newer 32-bit flag:
+  GET_SEQ_STATE_Message gss32_no_min_ep(log_id, req_id, flags32, ctx);
+  GET_SEQ_STATE_Message gss32_min_epoch(
+      log_id, req_id, flags32 | GET_SEQ_STATE_Message::MIN_EPOCH, ctx, min_ep);
+
+  auto check8_no_min_epoch = [&](const GET_SEQ_STATE_Message& m2,
+                                 uint16_t /*proto*/) {
+    EXPECT_EQ(1337, m2.log_id_.val());
+    EXPECT_EQ(7, m2.request_id_.val());
+    EXPECT_EQ(flags8, m2.flags_);
+    EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
+    EXPECT_FALSE(m2.min_epoch_.hasValue());
+  };
+  auto check8_with_min_epoch = [&](const GET_SEQ_STATE_Message& m2,
+                                   uint16_t /*proto*/) {
+    EXPECT_EQ(1337, m2.log_id_.val());
+    EXPECT_EQ(7, m2.request_id_.val());
+    EXPECT_EQ(flags8 | GET_SEQ_STATE_Message::MIN_EPOCH, m2.flags_);
+    EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
+    EXPECT_TRUE(m2.min_epoch_.hasValue());
+    if (m2.min_epoch_.hasValue()) {
+      EXPECT_EQ(min_ep, m2.min_epoch_.value());
+    }
+  };
+  auto check32_no_min_epoch = [&](const GET_SEQ_STATE_Message& m2,
+                                  uint16_t proto) {
+    EXPECT_EQ(1337, m2.log_id_.val());
+    EXPECT_EQ(7, m2.request_id_.val());
+    EXPECT_EQ(
+        flags32,
+        proto < Compatibility::GSS_32BIT_FLAG ? m2.flags_ & ~bit9 : m2.flags_);
+    EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
+    EXPECT_FALSE(m2.min_epoch_.hasValue());
+  };
+  auto check32_with_min_epoch = [&](const GET_SEQ_STATE_Message& m2,
+                                    uint16_t proto) {
+    EXPECT_EQ(1337, m2.log_id_.val());
+    EXPECT_EQ(7, m2.request_id_.val());
+    EXPECT_EQ(
+        flags32 | GET_SEQ_STATE_Message::MIN_EPOCH,
+        proto < Compatibility::GSS_32BIT_FLAG ? m2.flags_ & ~bit9 : m2.flags_);
+    EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
+    EXPECT_TRUE(m2.min_epoch_.hasValue());
+    if (m2.min_epoch_.hasValue()) {
+      EXPECT_EQ(min_ep, m2.min_epoch_.value());
+    }
+  };
+
+  // 8-bit supporting message, not requiring 32-bit flag
+  // 39050000000000000700000000000000                   // before flags
+  // 3905000000000000070000000000000004                 // with flags
+  // 390500000000000007000000000000000411               // full
+  // 390500000000000007000000000000000400000011         // full, 32-bit flag
+  // 39050000000000000700000000000000241111000000       // full 8 + min epoch
+  // 39050000000000000700000000000000240000001111000000 // full 32 + min epoch
+  // 32-bit required
+  // 39050000000000000700000000000000                   // before flags
+  // 3905000000000000070000000000000004010000           // with flags
+  // 390500000000000007000000000000000401000011         // full
+  // 39050000000000000700000000000000240100001111000000 // full with min epoch
+  {
+    // If it need not use a 32-bit flag, it shouldn't.
+    DO_TEST(gss8_no_min_ep,
+            check8_no_min_epoch,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
+            Compatibility::MAX_PROTOCOL_SUPPORTED,
+            [&](uint16_t proto) {
+              return proto < Compatibility::GSS_32BIT_FLAG
+                  ? "390500000000000007000000000000000411"
+                  : "390500000000000007000000000000000400000011";
+            },
+            nullptr);
+    DO_TEST(gss8_min_epoch,
+            check8_with_min_epoch,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
+            Compatibility::MAX_PROTOCOL_SUPPORTED,
+            [&](uint16_t proto) {
+              return proto < Compatibility::GSS_32BIT_FLAG
+                  ? "39050000000000000700000000000000241111000000"
+                  : "39050000000000000700000000000000240000001111000000";
+            },
+            nullptr);
+    // Using some flag that requires >8 bits, should use 32-bit flag field.
+    DO_TEST(gss32_no_min_ep,
+            check32_no_min_epoch,
+            Compatibility::GSS_32BIT_FLAG,
+            Compatibility::MAX_PROTOCOL_SUPPORTED,
+            [&](uint16_t proto) {
+              return "390500000000000007000000000000000401000011";
+            },
+            nullptr);
+    DO_TEST(gss32_min_epoch,
+            check32_with_min_epoch,
+            Compatibility::GSS_32BIT_FLAG,
+            Compatibility::MAX_PROTOCOL_SUPPORTED,
+            [&](uint16_t proto) {
+              return "39050000000000000700000000000000240100001111000000";
             },
             nullptr);
   }

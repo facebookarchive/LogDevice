@@ -95,6 +95,9 @@ enum ProtocolVersion : uint16_t {
   // SEALED message will include trim point for the given shard of the log
   TRIM_POINT_IN_SEALED, // == 95
 
+  // Increase size of flags in GET_SEQ_STATE_Message
+  GSS_32BIT_FLAG, // = 96
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
@@ -135,6 +138,7 @@ static_assert(HASHMAP_SUPPORT_IN_GOSSIP == 92, "");
 static_assert(RID_IN_CONFIG_MESSAGES == 93, "");
 static_assert(WAVE_IN_MUTATED == 94, "");
 static_assert(TRIM_POINT_IN_SEALED == 95, "");
+static_assert(GSS_32BIT_FLAG == 96, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;

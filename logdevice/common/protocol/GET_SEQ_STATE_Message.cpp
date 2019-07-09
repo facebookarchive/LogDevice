@@ -27,10 +27,17 @@ MessageReadResult GET_SEQ_STATE_Message::deserialize(ProtocolReader& reader) {
   GET_SEQ_STATE_flags_t flags = 0;
   GetSeqStateRequest::Context calling_ctx{GetSeqStateRequest::Context::UNKNOWN};
   folly::Optional<epoch_t> min_epoch;
-
   reader.read(&log_id);
   reader.read(&request_id);
-  reader.read(&flags);
+
+  if (reader.proto() < Compatibility::GSS_32BIT_FLAG) {
+    uint8_t flags_LEGACY = 0;
+    reader.read(&flags_LEGACY);
+    flags = flags_LEGACY;
+  } else {
+    reader.read(&flags);
+  }
+
   reader.read(&calling_ctx);
 
   if (flags & GET_SEQ_STATE_Message::MIN_EPOCH) {
@@ -68,8 +75,17 @@ uint16_t GET_SEQ_STATE_Message::getMinProtocolVersion() const {
 void GET_SEQ_STATE_Message::serialize(ProtocolWriter& writer) const {
   writer.write(log_id_);
   writer.write(request_id_);
-  writer.write(flags_);
+
+  if (writer.proto() >= Compatibility::GSS_32BIT_FLAG) {
+    writer.write(flags_);
+  } else {
+    // Wipe all but last 8 bits, and convert to the legacy 8-bit field
+    uint8_t flags_LEGACY = flags_ & 0xff;
+    writer.write(flags_LEGACY);
+  }
+
   writer.write(calling_ctx_);
+
   if (flags_ & GET_SEQ_STATE_Message::MIN_EPOCH) {
     ld_check(min_epoch_.hasValue());
     writer.write(min_epoch_.value());

@@ -35,7 +35,7 @@ class Sequencer;
 class SequencerLocator;
 class TailRecord;
 
-using GET_SEQ_STATE_flags_t = uint8_t;
+using GET_SEQ_STATE_flags_t = uint32_t;
 
 class GET_SEQ_STATE_Message : public Message {
  public:
