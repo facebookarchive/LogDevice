@@ -199,6 +199,8 @@ install(TARGETS logdeviced
   DESTINATION bin
 )
 
+add_subdirectory(ops/admin_server)
+
 add_subdirectory(replication_checker)
 if(${BUILD_TESTS})
   add_subdirectory(test)
