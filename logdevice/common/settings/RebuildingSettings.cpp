@@ -349,8 +349,10 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "expires the SHARD_IS_REBULT messages may arrive at exactly the same "
        "time from all the hosts overwhelming thread 0 processing those "
        "messages. The messages will be delayed by a random time in seconds "
-       "between 0 and the value specified here. 0 means no delay ",
-       SERVER | REQUIRES_RESTART,
+       "between 0 and the value specified here. 0 means no delay. NOTE: "
+       "changing this value only applies to upcoming rebuildings, if you want "
+       "to apply it to ongoing rebuildings, you'll need to restart the node.",
+       SERVER,
        SettingsCategory::Rebuilding);
   init("enable-self-initiated-rebuilding",
        &enable_self_initiated_rebuilding,
