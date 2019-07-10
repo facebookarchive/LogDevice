@@ -7,8 +7,7 @@
  */
 #pragma once
 
-#include <unordered_map>
-
+#include <folly/container/F14Map.h>
 #include <folly/dynamic.h>
 
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
@@ -45,7 +44,7 @@ class InternalLogs {
   static constexpr logid_t MAINTENANCE_LOG_SNAPSHOTS{4611686018427387898};
   static constexpr logid_t MAINTENANCE_LOG_DELTAS{4611686018427387899};
 
-  using NameLookupMap = std::unordered_map<std::string, logid_t>;
+  using NameLookupMap = folly::F14FastMap<std::string, logid_t>;
   static const NameLookupMap& nameLookup();
   static logid_t lookupByName(const std::string& name);
   static std::string lookupByID(logid_t);

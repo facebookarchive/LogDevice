@@ -11,13 +11,13 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 
 #include <boost/icl/interval_map.hpp>
 #include <boost/icl/map.hpp>
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <folly/String.h>
+#include <folly/container/F14Map.h>
 #include <folly/dynamic.h>
 
 #include "logdevice/common/configuration/ReplicationProperty.h"
@@ -96,10 +96,10 @@ class LogsConfigTreeNode {
 // This is the map that holds the children of a directory. A parent directory is
 // the owner of the memory for his children directory.
 using DirectoryMap =
-    std::unordered_map<std::string, std::unique_ptr<DirectoryNode>>;
+    folly::F14FastMap<std::string, std::unique_ptr<DirectoryNode>>;
 
 using LogGroupMap =
-    std::unordered_map<std::string, std::shared_ptr<LogGroupNode>>;
+    folly::F14FastMap<std::string, std::shared_ptr<LogGroupNode>>;
 /*
  * A node in the tree of logs config representing a directory (aka. Namespace)
  */
@@ -247,9 +247,10 @@ class DirectoryNode : public LogsConfigTreeNode {
   bool replaceChild(const std::string& name, const std::string& new_name) {
     DirectoryMap::iterator search = children_.find(name);
     if (search != children_.end()) {
+      auto value = std::move(search->second);
       // found, replace
-      children_[new_name] = std::move(search->second);
       children_.erase(search);
+      children_[new_name] = std::move(value);
       return true;
     }
     return false;

@@ -225,8 +225,8 @@ void setMetaDataLogsPermission(MetaDataLogsConfig& config) {
   config.setMetadataLogGroup(std::make_shared<LogGroupNode>(
       config.metadata_log_group->name(),
       config.metadata_log_group->attrs().with_permissions(
-          std::unordered_map<std::string,
-                             std::array<bool, static_cast<int>(ACTION::MAX)>>(
+          folly::F14FastMap<std::string,
+                            std::array<bool, static_cast<int>(ACTION::MAX)>>(
               {std::make_pair(Principal::DEFAULT, default_principals)})),
       config.metadata_log_group->range()));
 }

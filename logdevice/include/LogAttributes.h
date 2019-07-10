@@ -13,11 +13,11 @@
 #include <cmath>
 #include <memory>
 #include <set>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <folly/Optional.h>
+#include <folly/container/F14Map.h>
 
 #include "logdevice/include/NodeLocationScope.h"
 #include "logdevice/include/PermissionActions.h"
@@ -256,12 +256,12 @@ compareReplicateAcrossValues(std::pair<NodeLocationScope, int>& lhs,
 class LogAttributes {
  public:
   using PermissionsMap =
-      std::unordered_map<std::string,
-                         std::array<bool, static_cast<int>(ACTION::MAX)>>;
+      folly::F14FastMap<std::string,
+                        std::array<bool, static_cast<int>(ACTION::MAX)>>;
 
   using ACLList = std::vector<std::string>;
 
-  using ExtrasMap = std::unordered_map<std::string, std::string>;
+  using ExtrasMap = folly::F14FastMap<std::string, std::string>;
 
   using ScopeReplicationFactors =
       std::vector<std::pair<NodeLocationScope, int>>;
