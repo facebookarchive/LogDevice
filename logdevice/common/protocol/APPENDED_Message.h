@@ -16,7 +16,6 @@
 
 namespace facebook { namespace logdevice {
 
-struct Legacy_APPENDED_Header;
 
 using APPENDED_flags_t = uint16_t;
 
@@ -80,30 +79,12 @@ struct APPENDED_Header {
   // preemptor doesn't seem to be alive. In that case clients need to retry the
   // append rather than follow the redirect.
   static const APPENDED_flags_t REDIRECT_NOT_ALIVE = 4;
-
-  const APPENDED_Header& operator=(const Legacy_APPENDED_Header&);
 };
 
 static_assert(sizeof(APPENDED_Header) ==
                   (sizeof(request_id_t) + sizeof(lsn_t) + sizeof(uint64_t) +
                    sizeof(NodeID) + sizeof(Status) + sizeof(APPENDED_flags_t)),
               "APPENDED_Header has unexpected compiler inserted padding");
-
-// Subset of APPENDED_Header used for protocol versions prior to
-// RECORD_TIMESTAMP_IN_APPENDED_MSG.
-// Legacy_APPENDED_HEADER can't be represented without packing :-(.
-struct Legacy_APPENDED_Header {
-  request_id_t rqid;
-  lsn_t lsn;
-  Status status;
-  NodeID redirect;
-  uint8_t flags;
-
-  const Legacy_APPENDED_Header& operator=(const APPENDED_Header&);
-} __attribute__((__packed__));
-
-static_assert(sizeof(Legacy_APPENDED_Header) == 23,
-              "Legacy_APPENDED_Header doesn't match wire format");
 
 class APPENDED_Message : public Message {
  public:

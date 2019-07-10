@@ -41,10 +41,4 @@ GET_EPOCH_RECOVERY_METADATA_Message::deserialize(ProtocolReader& reader) {
       [&] { return new GET_EPOCH_RECOVERY_METADATA_Message(hdr); });
 }
 
-uint16_t GET_EPOCH_RECOVERY_METADATA_Message::getMinProtocolVersion() const {
-  return (header_.start != header_.end)
-      ? Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT
-      : Compatibility::MIN_PROTOCOL_SUPPORTED;
-}
-
 }} // namespace facebook::logdevice

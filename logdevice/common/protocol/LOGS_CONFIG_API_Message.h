@@ -40,11 +40,7 @@ struct LOGS_CONFIG_API_Header {
   LogsConfigRequestOrigin origin;
 
   static size_t headerSize(uint16_t proto) {
-    if (proto < Compatibility::LOGS_CONFIG_API_SUBSCRIPTIONS) {
-      return offsetof(LOGS_CONFIG_API_Header, subscribe_to_config_);
-    } else {
-      return sizeof(LOGS_CONFIG_API_Header);
-    }
+    return sizeof(LOGS_CONFIG_API_Header);
   }
 } __attribute__((__packed__));
 

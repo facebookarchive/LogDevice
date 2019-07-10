@@ -148,7 +148,6 @@ class START_Message : public Message {
     return false;
   }
   bool allowUnencrypted() const override;
-  static void readFilteredOut(ProtocolReader& reader, START_Message& m);
   static Message::deserializer_t deserialize;
 
   // `proto_' only populated when receiving

@@ -44,7 +44,6 @@ class GET_TRIM_POINT_Message : public Message {
   void serialize(ProtocolWriter&) const override;
   void onSent(Status st, const Address& to) const override;
   Disposition onReceived(const Address&) override;
-  uint16_t getMinProtocolVersion() const override;
   static Message::deserializer_t deserialize;
 
  private:

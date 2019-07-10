@@ -20,9 +20,6 @@
 namespace facebook { namespace logdevice {
 
 size_t SEALED_Header::getExpectedSize(uint16_t proto) {
-  if (proto < Compatibility::TAIL_RECORD_IN_SEALED) {
-    return offsetof(SEALED_Header, num_tail_records);
-  }
   if (proto < Compatibility::TRIM_POINT_IN_SEALED) {
     return offsetof(SEALED_Header, trim_point);
   }
@@ -51,7 +48,6 @@ void SEALED_Message::serialize(ProtocolWriter& writer) const {
 
   writer.writeVector(last_timestamp_);
 
-  writer.protoGate(Compatibility::TAIL_RECORD_IN_SEALED);
   writer.writeVector(max_seen_lsn_);
 
   for (const auto& tr : tail_records_) {
@@ -89,7 +85,6 @@ MessageReadResult SEALED_Message::deserialize(ProtocolReader& reader) {
   }
 
   reader.readVector(&last_timestamp);
-  reader.protoGate(Compatibility::TAIL_RECORD_IN_SEALED);
 
   reader.readVector(&max_seen_lsn);
 

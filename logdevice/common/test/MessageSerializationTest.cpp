@@ -243,16 +243,9 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(m.header_.lng_list_size, m2.header_.lng_list_size);
     ASSERT_EQ(m.header_.shard, m2.header_.shard);
 
-    if (proto < Compatibility::TAIL_RECORD_IN_SEALED) {
-      ASSERT_EQ(-1, m2.header_.num_tail_records);
-      ASSERT_EQ(0, m2.tail_records_.size());
-      ASSERT_EQ(std::vector<lsn_t>(m.header_.lng_list_size, LSN_INVALID),
-                m2.max_seen_lsn_);
-    } else {
-      ASSERT_EQ(m.header_.num_tail_records, m2.header_.num_tail_records);
-      ASSERT_EQ(m2.header_.num_tail_records, m2.tail_records_.size());
-      ASSERT_EQ(m.max_seen_lsn_, m2.max_seen_lsn_);
-    }
+    ASSERT_EQ(m.header_.num_tail_records, m2.header_.num_tail_records);
+    ASSERT_EQ(m2.header_.num_tail_records, m2.tail_records_.size());
+    ASSERT_EQ(m.max_seen_lsn_, m2.max_seen_lsn_);
 
     if (proto < Compatibility::TRIM_POINT_IN_SEALED) {
       ASSERT_EQ(LSN_INVALID, m2.header_.trim_point);
@@ -265,14 +258,10 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(m.last_timestamp_, m2.last_timestamp_);
     ASSERT_EQ(m.epoch_offset_map_, m2.epoch_offset_map_);
 
-    if (proto < Compatibility::TAIL_RECORD_IN_SEALED) {
-      ASSERT_EQ(0, m2.tail_records_.size());
-    } else {
-      ASSERT_EQ(m.tail_records_.size(), m2.tail_records_.size());
-      for (int i = 0; i < m.tail_records_.size(); ++i) {
-        bool same = m.tail_records_[i].sameContent(m2.tail_records_[i]);
-        ASSERT_TRUE(same);
-      }
+    ASSERT_EQ(m.tail_records_.size(), m2.tail_records_.size());
+    for (int i = 0; i < m.tail_records_.size(); ++i) {
+      bool same = m.tail_records_[i].sameContent(m2.tail_records_[i]);
+      ASSERT_TRUE(same);
     }
   }
 
@@ -315,14 +304,8 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(m1.header_.flags, m2.header_.flags);
     ASSERT_EQ(m1.header_.shard, m2.header_.shard);
     ASSERT_EQ(m1.header_.purging_shard, m2.header_.purging_shard);
-
-    if (proto < Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT) {
-      ASSERT_EQ(m1.header_.start, m2.header_.end);
-      ASSERT_EQ(REQUEST_ID_INVALID, m2.header_.id);
-    } else {
-      ASSERT_EQ(m1.header_.end, m2.header_.end);
-      ASSERT_EQ(m1.header_.id, m2.header_.id);
-    }
+    ASSERT_EQ(m1.header_.end, m2.header_.end);
+    ASSERT_EQ(m1.header_.id, m2.header_.id);
   }
 
   void checkGetEpochRecoveryMetadataReply(
@@ -693,18 +676,13 @@ TEST_F(MessageSerializationTest, GET_EPOCH_RECOVERY_METADATA_RangeEpoch) {
     checkGetEpochRecoveryMetadata(msg, m2, proto);
   };
   {
-    std::string expected_old = "00000000000000000A00000001000000000000000000";
     std::string expected_new =
         "00000000000000000A000000010000000000000000000A0000000A00000000000000";
     DO_TEST(msg,
             check,
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
-            [&](uint16_t proto) {
-              return (proto >= Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT)
-                  ? expected_new
-                  : expected_old;
-            },
+            [&](uint16_t /* proto */) { return expected_new; },
             nullptr);
   }
 }
@@ -775,100 +753,9 @@ TEST_F(MessageSerializationTest, GET_EPOCH_RECOVERY_METADATA_REPLY_RangeEpoch) {
         "00000001F60000000000000000";
     DO_TEST(msg,
             check,
-            Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             [&](uint16_t /*unused*/) { return expected; },
-            nullptr);
-  }
-}
-
-TEST_F(MessageSerializationTest,
-       GET_EPOCH_RECOVERY_METADATA_REPLY_NewSenderOldReceiver) {
-  GET_EPOCH_RECOVERY_METADATA_REPLY_Header h = {logid_t(0),
-                                                epoch_t(10),
-                                                epoch_t(9),
-                                                0,
-                                                E::OK,
-                                                shard_index_t(0),
-                                                shard_index_t(0),
-                                                epoch_t(9),
-                                                0,
-                                                request_id_t(10)};
-
-  std::vector<epoch_t> epochs;
-  std::vector<Status> status;
-  std::vector<std::string> metadata;
-
-  epochs.push_back(epoch_t(9));
-  status.push_back(E::EMPTY);
-
-  GET_EPOCH_RECOVERY_METADATA_REPLY_Message msg(
-      h, std::move(epochs), std::move(status), std::move(metadata));
-
-  auto check = [&](const GET_EPOCH_RECOVERY_METADATA_REPLY_Message& m2,
-                   uint16_t proto) {
-    ASSERT_EQ(msg.header_.log_id, m2.header_.log_id);
-    ASSERT_EQ(msg.header_.purge_to, m2.header_.purge_to);
-    ASSERT_EQ(msg.header_.start, m2.header_.start);
-    ASSERT_EQ(msg.header_.flags, m2.header_.flags);
-    ASSERT_EQ(E::EMPTY, m2.header_.status);
-    ASSERT_EQ(msg.header_.shard, m2.header_.shard);
-    ASSERT_EQ(msg.header_.purging_shard, m2.header_.purging_shard);
-    ASSERT_EQ(msg.header_.start, m2.header_.end);
-    ASSERT_EQ(REQUEST_ID_INVALID, m2.header_.id);
-    ASSERT_EQ(
-        msg.header_.num_non_empty_epochs, m2.header_.num_non_empty_epochs);
-    ASSERT_EQ(msg.status_, m2.status_);
-  };
-  {
-    std::string expected =
-        "00000000000000000A0000000900000000006D000000000000000000";
-    DO_TEST(msg,
-            check,
-            Compatibility::MIN_PROTOCOL_SUPPORTED,
-            Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT - 1,
-            [&](uint16_t) { return expected; },
-            nullptr);
-  }
-
-  GET_EPOCH_RECOVERY_METADATA_REPLY_Header h2 = {logid_t(0),
-                                                 epoch_t(10),
-                                                 epoch_t(9),
-                                                 0,
-                                                 E::EMPTY,
-                                                 shard_index_t(0),
-                                                 shard_index_t(0),
-                                                 epoch_t(9),
-                                                 0,
-                                                 request_id_t(10)};
-
-  std::vector<epoch_t> epochs2;
-  std::vector<Status> status2;
-  GET_EPOCH_RECOVERY_METADATA_REPLY_Message msg2(
-      h2, std::move(epochs2), std::move(status2), std::move(metadata));
-
-  auto check2 = [&](const GET_EPOCH_RECOVERY_METADATA_REPLY_Message& m2,
-                    uint16_t proto) {
-    ASSERT_EQ(msg2.header_.log_id, m2.header_.log_id);
-    ASSERT_EQ(msg2.header_.purge_to, m2.header_.purge_to);
-    ASSERT_EQ(msg2.header_.start, m2.header_.start);
-    ASSERT_EQ(msg2.header_.flags, m2.header_.flags);
-    ASSERT_EQ(msg2.header_.status, m2.header_.status);
-    ASSERT_EQ(msg2.header_.shard, m2.header_.shard);
-    ASSERT_EQ(msg2.header_.purging_shard, m2.header_.purging_shard);
-    ASSERT_EQ(msg2.header_.start, m2.header_.end);
-    ASSERT_EQ(
-        msg2.header_.num_non_empty_epochs, m2.header_.num_non_empty_epochs);
-    ASSERT_EQ(REQUEST_ID_INVALID, m2.header_.id);
-  };
-  {
-    std::string expected =
-        "00000000000000000A0000000900000000006D000000000000000000";
-    DO_TEST(msg2,
-            check2,
-            Compatibility::MIN_PROTOCOL_SUPPORTED,
-            Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT - 1,
-            [&](uint16_t) { return expected; },
             nullptr);
   }
 }
@@ -1038,7 +925,7 @@ TEST_F(MessageSerializationTest, RECORD) {
 
   DO_TEST(m,
           check,
-          Compatibility::SHARD_ID_IN_REBUILD_METADATA,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           expected_fn,
           deserializer);
@@ -1100,20 +987,6 @@ TEST_F(MessageSerializationTest, SEALED) {
 
   {
     std::string expected =
-        "D38347A48A8EC1BB05CE49A8000027FAEBDD3400000003000000070003000000000000"
-        "0004000000000000000500000000000000090000000100020009000000000000000A00"
-        "0000000000000B00000000000000060000000000000007000000000000000800000000"
-        "000000";
-
-    DO_TEST(m,
-            check,
-            Compatibility::MIN_PROTOCOL_SUPPORTED,
-            Compatibility::TAIL_RECORD_IN_SEALED - 1,
-            [&](uint16_t /*proto*/) { return expected; },
-            nullptr);
-  }
-  {
-    std::string expected =
         "D38347A48A8EC1BB05CE49A8000027FAEBDD3400000003000000070002000000030000"
         "0000000000040000000000000005000000000000000900000001000200090000000000"
         "00000A000000000000000B000000000000000600000000000000070000000000000008"
@@ -1127,7 +1000,7 @@ TEST_F(MessageSerializationTest, SEALED) {
     auto test = [&] {
       DO_TEST(m,
               check,
-              Compatibility::TAIL_RECORD_IN_SEALED,
+              Compatibility::MIN_PROTOCOL_SUPPORTED,
               Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG - 1,
               [&](uint16_t /*proto*/) { return expected; },
               nullptr);
@@ -1254,88 +1127,46 @@ TEST_F(MessageSerializationTest, START_num_filtered_out) {
   auto expect = [&](uint16_t proto) {
     if (filtered_out.empty()) {
       // expect num_filtered_out to be 0 and no element in filtered_out
-      if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
-        return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
-               "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
-               "00003A3B472C8D47498B00"    // num_filtered_out = 0
-               "000000000000000000000000000000000000000000"; // attrs_
-      } else {
-        return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
-               "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
-               "00003A3B472C8D47498B00"    // num_filtered_out = 0
-               "000000000000000000000000"  // empty filtered_out
-               "0000000000000000000000000000000000"; // attrs_
-      }
+      return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
+             "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
+             "00003A3B472C8D47498B00"    // num_filtered_out = 0
+             "000000000000000000000000"  // empty filtered_out
+             "0000000000000000000000000000000000"; // attrs_
     } else if (filtered_out.size() == 3) {
       // expect num_filtered_out to be 3 and 3 elements encoded in filtered_out
-      if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
-        return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
-               "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
-               "00003A3B472C8D47498B03"    // num_filtered_out = 3
-               "0000000000000000"          // N0:S0
-               "01000000"                  // N1:S0
-               "02000000"                  // N2:S0
-               "0000000000000000000000000000000000"; // attrs_
-      } else {
-        return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
-               "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
-               "00003A3B472C8D47498B00"    // num_filtered_out = 0
-               "000000000C00000000000000"  // vector size = 3 * 4
-               "00000000"                  // N0:S0
-               "01000000"                  // N1:S0
-               "02000000"                  // N2:S0
-               "0000000000000000000000000000000000"; // attrs_
-      }
+      return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
+             "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
+             "00003A3B472C8D47498B00"    // num_filtered_out = 0
+             "000000000C00000000000000"  // vector size = 3 * 4
+             "00000000"                  // N0:S0
+             "01000000"                  // N1:S0
+             "02000000"                  // N2:S0
+             "0000000000000000000000000000000000"; // attrs_
     } else if (filtered_out.size() == COPYSET_SIZE_MAX + 1) {
       // expect num_filtered_out to be 128 and as many elements encoded
-      if (proto < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
-        return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
-               "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
-               "00003A3B472C8D47498B80"    // num_filtered_out = 128
-               "0000000000000000"          // N0:S0
-               "01000000"                  // ...
-               "020000000300000004000000050000000600000007000000080000000900000"
-               "00A0000000B0000000C0000000D0000000E0000000F00000010000000110000"
-               "001200000013000000140000001500000016000000170000001800000019000"
-               "0001A0000001B0000001C0000001D0000001E0000001F000000200000002100"
-               "000022000000230000002400000025000000260000002700000028000000290"
-               "000002A0000002B0000002C0000002D0000002E0000002F0000003000000031"
-               "000000320000003300000034000000350000003600000037000000380000003"
-               "90000003A0000003B0000003C0000003D0000003E0000003F00000040000000"
-               "410000004200000043000000440000004500000046000000470000004800000"
-               "0490000004A0000004B0000004C0000004D0000004E0000004F000000500000"
-               "005100000052000000530000005400000055000000560000005700000058000"
-               "000590000005A0000005B0000005C0000005D0000005E0000005F0000006000"
-               "000061000000620000006300000064000000650000006600000067000000680"
-               "00000690000006A0000006B0000006C0000006D0000006E0000006F00000070"
-               "000000710000007200000073000000740000007500000076000000770000007"
-               "8000000790000007A0000007B0000007C0000007D0000007E0000007F000000"
-               "0000000000000000000000000000000000"; // attrs_
-      } else {
-        return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
-               "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
-               "00003A3B472C8D47498B00"    // num_filtered_out = 0
-               "000000000002000000000000"  // vector size = 128 * 4 = 512
-               "00000000"                  // N0:S0
-               "01000000"                  // ...
-               "020000000300000004000000050000000600000007000000080000000900000"
-               "00A0000000B0000000C0000000D0000000E0000000F00000010000000110000"
-               "001200000013000000140000001500000016000000170000001800000019000"
-               "0001A0000001B0000001C0000001D0000001E0000001F000000200000002100"
-               "000022000000230000002400000025000000260000002700000028000000290"
-               "000002A0000002B0000002C0000002D0000002E0000002F0000003000000031"
-               "000000320000003300000034000000350000003600000037000000380000003"
-               "90000003A0000003B0000003C0000003D0000003E0000003F00000040000000"
-               "410000004200000043000000440000004500000046000000470000004800000"
-               "0490000004A0000004B0000004C0000004D0000004E0000004F000000500000"
-               "005100000052000000530000005400000055000000560000005700000058000"
-               "000590000005A0000005B0000005C0000005D0000005E0000005F0000006000"
-               "000061000000620000006300000064000000650000006600000067000000680"
-               "00000690000006A0000006B0000006C0000006D0000006E0000006F00000070"
-               "000000710000007200000073000000740000007500000076000000770000007"
-               "8000000790000007A0000007B0000007C0000007D0000007E0000007F000000"
-               "0000000000000000000000000000000000"; // attrs_
-      }
+      return "D38347F48F9EC4DC3A3B472C8D47498B05000000000000000D0000000000000"
+             "0080000000000000080000000" // flags = SINGLE_COPY_DELIVERY
+             "00003A3B472C8D47498B00"    // num_filtered_out = 0
+             "000000000002000000000000"  // vector size = 128 * 4 = 512
+             "00000000"                  // N0:S0
+             "01000000"                  // ...
+             "020000000300000004000000050000000600000007000000080000000900000"
+             "00A0000000B0000000C0000000D0000000E0000000F00000010000000110000"
+             "001200000013000000140000001500000016000000170000001800000019000"
+             "0001A0000001B0000001C0000001D0000001E0000001F000000200000002100"
+             "000022000000230000002400000025000000260000002700000028000000290"
+             "000002A0000002B0000002C0000002D0000002E0000002F0000003000000031"
+             "000000320000003300000034000000350000003600000037000000380000003"
+             "90000003A0000003B0000003C0000003D0000003E0000003F00000040000000"
+             "410000004200000043000000440000004500000046000000470000004800000"
+             "0490000004A0000004B0000004C0000004D0000004E0000004F000000500000"
+             "005100000052000000530000005400000055000000560000005700000058000"
+             "000590000005A0000005B0000005C0000005D0000005E0000005F0000006000"
+             "000061000000620000006300000064000000650000006600000067000000680"
+             "00000690000006A0000006B0000006C0000006D0000006E0000006F00000070"
+             "000000710000007200000073000000740000007500000076000000770000007"
+             "8000000790000007A0000007B0000007C0000007D0000007E0000007F000000"
+             "0000000000000000000000000000000000"; // attrs_
     } else if (filtered_out.size() == 500) {
       // size is larger than what num_filtered_out can accommodate, so expect
       // num_filtered_out to be 0, and the vector size to be encoded before the
@@ -1458,20 +1289,11 @@ TEST_F(MessageSerializationTest, START_num_filtered_out) {
       filtered_out.push_back(ShardID(i, 0));
     }
     START_Message m(h, filtered_out);
-    // Validates that the serialization fails with INVALID_PARAM
-    // for older versions becasue the vector is too big
-    DO_TEST(m,
-            check,
-            Compatibility::MIN_PROTOCOL_SUPPORTED,
-            Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST - 1,
-            expect,
-            nullptr,
-            E::INVALID_PARAM);
     // Validates that it works with protocol versions newer than
     // SUPPORT_LARGER_FILTERED_OUT_LIST
     DO_TEST(m,
             check,
-            Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expect,
             nullptr);

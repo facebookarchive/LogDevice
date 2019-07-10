@@ -43,11 +43,7 @@ struct GET_EPOCH_RECOVERY_METADATA_Header {
 
   // size of the header in message given the protocol version
   static size_t headerSize(uint16_t proto) {
-    if (proto < Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT) {
-      return offsetof(GET_EPOCH_RECOVERY_METADATA_Header, end);
-    } else {
-      return sizeof(GET_EPOCH_RECOVERY_METADATA_Header);
-    }
+    return sizeof(GET_EPOCH_RECOVERY_METADATA_Header);
   }
 } __attribute__((__packed__));
 
@@ -77,8 +73,6 @@ class GET_EPOCH_RECOVERY_METADATA_Message : public Message {
   const GET_EPOCH_RECOVERY_METADATA_Header& getHeader() const {
     return header_;
   }
-
-  uint16_t getMinProtocolVersion() const override;
 
   static Message::deserializer_t deserialize;
 

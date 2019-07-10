@@ -75,39 +75,15 @@ START_Message::START_Message(const START_Header& header,
 }
 
 void START_Message::serialize(ProtocolWriter& writer) const {
-  START_Header hdr = header_;
-  if (writer.proto() < Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
-    if (filtered_out_.size() >
-        std::numeric_limits<decltype(header_.num_filtered_out)>::max()) {
-      // The size of filtered_out_ is too large to be stored in
-      // num_filtered_out, which is a uint8_t. Log a critical error and
-      // fail the serialization.
-      RATELIMIT_CRITICAL(std::chrono::seconds(1),
-                         2,
-                         "The list of filtered out shards is too large (%lu) "
-                         "to be serialized in START message for log %lu",
-                         filtered_out_.size(),
-                         header_.log_id.val());
-      writer.setError(E::INVALID_PARAM);
-      return;
-    }
-    hdr.num_filtered_out = filtered_out_.size();
-  }
-
-  writer.write(hdr);
-
-  if (writer.proto() >= Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
-    writer.writeLengthPrefixedVector(filtered_out_);
-  } else {
-    writer.writeVector(filtered_out_);
-  }
+  writer.write(header_);
+  writer.writeLengthPrefixedVector(filtered_out_);
 
   writer.write(static_cast<uint8_t>(attrs_.filter_type));
   writer.writeLengthPrefixedVector(attrs_.filter_key1);
   writer.writeLengthPrefixedVector(attrs_.filter_key2);
 
   if (writer.proto() >= Compatibility::SERVER_CAN_PROCESS_CSID) {
-    if (hdr.scd_copyset_reordering ==
+    if (header_.scd_copyset_reordering ==
         SCDCopysetReordering::HASH_SHUFFLE_CLIENT_SEED) {
       // Randomly generated seeds for SpookyHash
       // same as in LocalLogStoreReadFilter::applyCopysetReordering
@@ -121,16 +97,6 @@ void START_Message::serialize(ProtocolWriter& writer) const {
       writer.write(h1);
       writer.write(h2);
     }
-  }
-}
-
-void START_Message::readFilteredOut(ProtocolReader& reader, START_Message& m) {
-  if (reader.proto() >= Compatibility::SUPPORT_LARGER_FILTERED_OUT_LIST) {
-    reader.readLengthPrefixedVector(&m.filtered_out_);
-  } else if (m.header_.num_filtered_out == 0) {
-    return;
-  } else {
-    reader.readVector(&m.filtered_out_, m.header_.num_filtered_out);
   }
 }
 
@@ -150,7 +116,7 @@ MessageReadResult START_Message::deserialize(ProtocolReader& reader) {
   m->proto_ = proto;
 
   if (reader.ok()) {
-    readFilteredOut(reader, *m);
+    reader.readLengthPrefixedVector(&m->filtered_out_);
 
     uint8_t temp;
     reader.read(&temp, sizeof(temp));

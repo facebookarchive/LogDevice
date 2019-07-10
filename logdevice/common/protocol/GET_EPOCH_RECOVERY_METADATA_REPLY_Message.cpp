@@ -46,52 +46,15 @@ void GET_EPOCH_RECOVERY_METADATA_REPLY_Message::serialize(
     ld_check_eq(header_.num_non_empty_epochs, metadata_.size());
   }
 
-  if (writer.proto() < Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT) {
-    ld_check(header_.end == header_.start);
-    ld_check(num_epochs == 1);
-    uint32_t size = 0;
-
-    if (header_.status == E::OK) {
-      // This is required to maintain backward compatibility as
-      // with new version of protocol, the status in header could
-      // be different from the individual status of epoch. Since
-      // old version of protocol expects only status for only one epoch,
-      // replace status in header with status of the indiviaul epoch
-      if (status_[0] == E::OK) {
-        writer.write(&header_,
-                     GET_EPOCH_RECOVERY_METADATA_REPLY_Header::headerSize(
-                         writer.proto()));
-        ld_check(!metadata_.empty());
-        size = metadata_[0].size();
-        ld_check(size > 0);
-        writer.write(size);
-        writer.write(metadata_[0].data(), size);
-      } else {
-        Status status = status_[0];
-        GET_EPOCH_RECOVERY_METADATA_REPLY_Header header = header_;
-        header.status = status;
-        writer.write(&header,
-                     GET_EPOCH_RECOVERY_METADATA_REPLY_Header::headerSize(
-                         writer.proto()));
-        writer.write(size);
-      }
-    } else {
-      writer.write(
-          &header_,
-          GET_EPOCH_RECOVERY_METADATA_REPLY_Header::headerSize(writer.proto()));
+  writer.write(header_);
+  if (header_.status == E::OK) {
+    writer.writeVector(epochs_);
+    writer.writeVector(status_);
+    for (auto& metadata : metadata_) {
+      const uint32_t size = metadata.size();
+      ld_check(size != 0);
       writer.write(size);
-    }
-  } else {
-    writer.write(header_);
-    if (header_.status == E::OK) {
-      writer.writeVector(epochs_);
-      writer.writeVector(status_);
-      for (auto& metadata : metadata_) {
-        const uint32_t size = metadata.size();
-        ld_check(size != 0);
-        writer.write(size);
-        writer.write(metadata.data(), size);
-      }
+      writer.write(metadata.data(), size);
     }
   }
 }
@@ -113,34 +76,19 @@ GET_EPOCH_RECOVERY_METADATA_REPLY_Message::deserialize(ProtocolReader& reader) {
   std::vector<epoch_t> epochs;
   std::vector<std::string> metadata;
 
-  if (reader.proto() < Compatibility::GET_EPOCH_RECOVERY_RANGE_SUPPORT) {
-    hdr.end = hdr.start;
-    if (hdr.status == E::OK) {
-      hdr.num_non_empty_epochs = 1;
-    }
-    std::string blob;
-    uint32_t blob_length = 0;
-    reader.read(&blob_length);
-    blob.resize(blob_length);
-    reader.read(const_cast<char*>(blob.data()), blob.size());
-    epochs.push_back(epoch_t(hdr.start));
-    metadata.push_back(std::move(blob));
-    status.push_back(hdr.status);
-  } else {
-    uint64_t num_epochs = hdr.end.val_ - hdr.start.val_ + 1;
-    if (hdr.status == E::OK) {
-      reader.readVector(&epochs, num_epochs);
-      reader.readVector(&status, num_epochs);
-      uint64_t i = 0;
-      while (i < hdr.num_non_empty_epochs) {
-        std::string blob;
-        uint32_t blob_length = 0;
-        reader.read(&blob_length);
-        blob.resize(blob_length);
-        reader.read(const_cast<char*>(blob.data()), blob.size());
-        metadata.push_back(std::move(blob));
-        i++;
-      }
+  uint64_t num_epochs = hdr.end.val_ - hdr.start.val_ + 1;
+  if (hdr.status == E::OK) {
+    reader.readVector(&epochs, num_epochs);
+    reader.readVector(&status, num_epochs);
+    uint64_t i = 0;
+    while (i < hdr.num_non_empty_epochs) {
+      std::string blob;
+      uint32_t blob_length = 0;
+      reader.read(&blob_length);
+      blob.resize(blob_length);
+      reader.read(const_cast<char*>(blob.data()), blob.size());
+      metadata.push_back(std::move(blob));
+      i++;
     }
   }
 

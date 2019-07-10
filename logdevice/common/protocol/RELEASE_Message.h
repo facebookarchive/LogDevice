@@ -33,11 +33,7 @@ struct RELEASE_Header {
 
   // size of the header in message given the protocol version
   static size_t headerSize(uint16_t proto) {
-    if (proto < Compatibility::SHARD_ID_IN_RELEASE_MSG) {
-      return offsetof(RELEASE_Header, shard);
-    } else {
-      return sizeof(RELEASE_Header);
-    }
+    return sizeof(RELEASE_Header);
   }
 } __attribute__((__packed__));
 

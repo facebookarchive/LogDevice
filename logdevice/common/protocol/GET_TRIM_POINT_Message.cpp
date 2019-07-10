@@ -51,8 +51,4 @@ void GET_TRIM_POINT_Message::onSent(Status status, const Address& to) const {
   }
 }
 
-uint16_t GET_TRIM_POINT_Message::getMinProtocolVersion() const {
-  return Compatibility::GET_TRIM_POINT_SUPPORT;
-}
-
 }} // namespace facebook::logdevice

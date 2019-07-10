@@ -20,31 +20,7 @@ enum ProtocolVersion : uint16_t {
   //
   // Minimum version number of the protocol this version of LogDevice is
   // backward compatible with - 1
-  PROTOCOL_VERSION_LOWER_BOUND = 68,
-
-  // Change START to support encoding of the known down size along with the
-  // vector and ignore the num_filtered_out member of the header
-  SUPPORT_LARGER_FILTERED_OUT_LIST, // 69
-
-  // SEALED message will include tail record for the epoch range
-  TAIL_RECORD_IN_SEALED, // == 70
-
-  SHARD_ID_IN_REBUILD_METADATA, // == 71
-
-  SHARD_ID_IN_RELEASE_MSG, // == 72
-
-  SHARD_ID_IN_CHECK_SEAL_MSG, // == 73
-
-  RECORD_TIMESTAMP_IN_APPENDED_MSG, // == 74
-
-  HISTORICAL_METADATA_IN_GSS_REPLY, // == 75
-
-  // GET_EPOCH_RECOVERY_METADATA/REPLY will support a range of epoch
-  GET_EPOCH_RECOVERY_RANGE_SUPPORT, // = 76;
-
-  LOGS_CONFIG_API_SUBSCRIPTIONS, // = 77
-
-  GET_TRIM_POINT_SUPPORT, // = 78
+  PROTOCOL_VERSION_LOWER_BOUND = 78,
 
   // START_Message can specify a hash of the client session id,
   // which server can use to parameterize single copy delivery.
@@ -113,16 +89,6 @@ enum ProtocolVersion : uint16_t {
   // NOTE: do not add anything below PROTOCOL_VERSION_UPPER_BOUND
 };
 
-static_assert(SUPPORT_LARGER_FILTERED_OUT_LIST == 69, "");
-static_assert(TAIL_RECORD_IN_SEALED == 70, "");
-static_assert(SHARD_ID_IN_REBUILD_METADATA == 71, "");
-static_assert(SHARD_ID_IN_RELEASE_MSG == 72, "");
-static_assert(SHARD_ID_IN_CHECK_SEAL_MSG == 73, "");
-static_assert(RECORD_TIMESTAMP_IN_APPENDED_MSG == 74, "");
-static_assert(HISTORICAL_METADATA_IN_GSS_REPLY == 75, "");
-static_assert(GET_EPOCH_RECOVERY_RANGE_SUPPORT == 76, "");
-static_assert(LOGS_CONFIG_API_SUBSCRIPTIONS == 77, "");
-static_assert(GET_TRIM_POINT_SUPPORT == 78, "");
 static_assert(SERVER_CAN_PROCESS_CSID == 79, "");
 static_assert(APPEND_E2E_TRACING_SUPPORT == 80, "");
 static_assert(CHECKSUM_SUPPORT == 81, "");

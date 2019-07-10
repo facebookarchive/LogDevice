@@ -22,11 +22,7 @@ struct LOGS_CONFIG_API_REPLY_Header {
   LogsConfigRequestOrigin origin;
 
   static size_t headerSize(uint16_t proto) {
-    if (proto < Compatibility::LOGS_CONFIG_API_SUBSCRIPTIONS) {
-      return offsetof(LOGS_CONFIG_API_REPLY_Header, origin);
-    } else {
-      return sizeof(LOGS_CONFIG_API_REPLY_Header);
-    }
+    return sizeof(LOGS_CONFIG_API_REPLY_Header);
   }
 } __attribute__((__packed__));
 

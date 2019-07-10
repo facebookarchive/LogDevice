@@ -27,7 +27,7 @@ TEST_F(CompatibilityTest, InBandByteOffsetBasic) {
           .setNumDBShards(3)
           .setNumLogs(1)
           .setParam("--max-protocol",
-                    std::to_string(Compatibility::GET_TRIM_POINT_SUPPORT))
+                    std::to_string(Compatibility::MIN_PROTOCOL_SUPPORTED))
           .create(5);
 
   EXPECT_EQ(0, cluster->waitForRecovery());

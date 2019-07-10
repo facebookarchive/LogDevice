@@ -299,7 +299,6 @@ void write_extra_metadata(ProtocolWriter& writer,
   writer.write(metadata.header);
   // Only servers should pass INCLUDES_EXTRA_METADATA, and servers should have
   // all been upgraded to a recent enough protocol version.
-  ld_check(writer.proto() >= Compatibility::SHARD_ID_IN_REBUILD_METADATA);
   writer.writeVector(metadata.copyset);
   if (metadata.offsets_within_epoch.isValid()) {
     ld_check(header.flags & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH);

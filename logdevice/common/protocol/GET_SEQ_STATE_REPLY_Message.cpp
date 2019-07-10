@@ -60,16 +60,6 @@ GET_SEQ_STATE_REPLY_Message::deserialize(ProtocolReader& reader) {
   }
 
   if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_HISTORICAL_METADATA) {
-    if (reader.proto() < Compatibility::HISTORICAL_METADATA_IN_GSS_REPLY) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      10,
-                      "Bad GET_SEQ_STATE_REPLY_Message: "
-                      "HISTORICAL_METADATA_IN_GSS_REPLY flag received in "
-                      "protocol %d",
-                      reader.proto());
-      return reader.errorResult(E::BADMSG);
-    }
-
     // TODO(TT15517759): do not need log_id and server config for constructing
     // epoch metadata
     auto server_config = Worker::onThisThread()->getServerConfig();
@@ -136,22 +126,6 @@ void GET_SEQ_STATE_REPLY_Message::serialize(ProtocolWriter& writer) const {
 
   if (header_.flags &
       GET_SEQ_STATE_REPLY_Header::INCLUDES_HISTORICAL_METADATA) {
-    if (writer.proto() < Compatibility::HISTORICAL_METADATA_IN_GSS_REPLY) {
-      RATELIMIT_CRITICAL(std::chrono::seconds(10),
-                         10,
-                         "Sending GET_SEQ_STATE_REPLY_Message with "
-                         "HISTORICAL_METADATA_IN_GSS_REPLY flag in "
-                         "protocol %d.",
-                         writer.proto());
-      // this implies that we are replying to a connection w/ lower protocol
-      // version with the new feature, this is not possible as we clear the
-      // GET_SEQ_STATE_Message::INCLUDE_HISTORICAL_METADATA flag on receiving
-      // the initial GSS request message
-      writer.setError(E::BADMSG);
-      ld_check(false);
-      return;
-    }
-
     ld_check(metadata_map_ != nullptr);
     metadata_map_->serialize(writer);
   }

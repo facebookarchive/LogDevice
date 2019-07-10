@@ -23,49 +23,8 @@ namespace facebook { namespace logdevice {
 
 __thread uint32_t APPENDED_Message::last_seq_batching_offset;
 
-const APPENDED_Header& APPENDED_Header::
-operator=(const Legacy_APPENDED_Header& legacy) {
-  rqid = legacy.rqid;
-  lsn = legacy.lsn;
-  timestamp = RecordTimestamp::zero();
-  redirect = legacy.redirect;
-  status = legacy.status;
-  flags = legacy.flags;
-
-  return *this;
-}
-
-const Legacy_APPENDED_Header& Legacy_APPENDED_Header::
-operator=(const APPENDED_Header& hdr) {
-  rqid = hdr.rqid;
-  lsn = hdr.lsn;
-  redirect = hdr.redirect;
-  status = hdr.status;
-  flags = hdr.flags;
-
-  if (hdr.flags != flags) {
-    RATELIMIT_CRITICAL(
-        std::chrono::seconds(1),
-        10,
-        "PROTOCOL ERROR: conversion to legacy header loses data. "
-        "flags:0x%x != legacy_flags:0x%x",
-        hdr.flags,
-        flags);
-  }
-
-  return *this;
-}
-
 void APPENDED_Message::serialize(ProtocolWriter& writer) const {
-  if (writer.proto() >=
-      Compatibility::ProtocolVersion::RECORD_TIMESTAMP_IN_APPENDED_MSG) {
-    writer.write(header_);
-  } else {
-    Legacy_APPENDED_Header legacy;
-    legacy = header_;
-    writer.write(legacy);
-  }
-
+  writer.write(header_);
   ld_check((header_.flags & APPENDED_Header::INCLUDES_SEQ_BATCHING_OFFSET) ==
            seq_batching_offset.hasValue());
   if (seq_batching_offset.hasValue()) {
@@ -77,14 +36,7 @@ void APPENDED_Message::serialize(ProtocolWriter& writer) const {
 MessageReadResult APPENDED_Message::deserialize(ProtocolReader& reader) {
   APPENDED_Header hdr;
   hdr.flags = 0;
-  if (reader.proto() >=
-      Compatibility::ProtocolVersion::RECORD_TIMESTAMP_IN_APPENDED_MSG) {
-    reader.read(&hdr);
-  } else {
-    Legacy_APPENDED_Header legacy;
-    reader.read(&legacy);
-    hdr = legacy;
-  }
+  reader.read(&hdr);
 
   std::unique_ptr<APPENDED_Message> m(new APPENDED_Message(hdr));
 
