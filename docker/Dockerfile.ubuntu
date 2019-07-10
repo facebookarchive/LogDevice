@@ -8,21 +8,23 @@ FROM ubuntu:bionic as builder
 
 MAINTAINER Ahmed Soliman <asoli@fb.com>
 
-ARG PARALLEL=4
+COPY logdevice/build_tools/ubuntu.deps /tmp/ubuntu.deps
 
-COPY logdevice logdevice
+RUN apt-get update \
+    && apt-get install --no-install-recommends \
+      -y $(cat /tmp/ubuntu.deps) \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m pip install --user --upgrade setuptools wheel cython
 
-RUN apt-get update && \
-    apt-get install -y $(cat /logdevice/build_tools/ubuntu.deps) && \
-    python3 -m pip install --user --upgrade setuptools wheel
+COPY . LogDevice
 
 RUN mkdir /build && cd /build && \
-    cmake /logdevice/ && \
-    make -j $PARALLEL && \
+    cmake /LogDevice/logdevice/ && \
+    make -j $(nproc) && \
     make install && \
     cp /build/bin/ld* /usr/local/bin/
 
-RUN cd /logdevice/ops && python3 setup.py sdist bdist_wheel
+RUN cd /LogDevice/logdevice/ops && python3 setup.py sdist bdist_wheel
 
 WORKDIR /build
 
@@ -39,7 +41,7 @@ COPY --from=builder /build/bin/ld* \
                   /build/bin/logdeviced /usr/local/bin/
 
 # Python tools, ldshell, ldquery and client lib
-COPY --from=builder /logdevice/ops/dist/ldshell-*.whl /tmp
+COPY --from=builder /LogDevice/logdevice/ops/dist/ldshell-*.whl /tmp
 COPY --from=builder /build/lib/liblogdevice.so /usr/local/lib/
 COPY --from=builder /build/lib/client.so \
     /usr/local/lib/python3.6/dist-packages/logdevice/client.so
@@ -47,9 +49,9 @@ COPY --from=builder /build/lib/ext.so \
     /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/internal/ext.so
 COPY --from=builder /build/lib/admin_command_client.so \
     /usr/local/lib/python3.6/dist-packages/logdevice/ops/admin_command_client.so
-COPY /logdevice/ops/ldquery/py/lib.py \
+COPY --from=builder /LogDevice/logdevice/ops/ldquery/py/lib.py \
     /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/
-COPY /logdevice/ops/ldquery/py/__init__.py \
+COPY --from=builder /LogDevice/logdevice/ops/ldquery/py/__init__.py \
     /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/
 
 # Install runtime dependencies for ld-dev-cluster, ldshell friends.
@@ -57,7 +59,7 @@ COPY /logdevice/ops/ldquery/py/__init__.py \
 # we depend on python-Levenshtein for which a many-linux binary wheel is not
 # available; these are removed following install to keep docker image size low.
 
-COPY logdevice/build_tools/ubuntu_runtime.deps /tmp/logdevice_runtime.deps
+COPY --from=builder /LogDevice/logdevice/build_tools/ubuntu_runtime.deps /tmp/logdevice_runtime.deps
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends $(cat /tmp/logdevice_runtime.deps) \
@@ -67,6 +69,6 @@ RUN apt-get update && \
     apt-get remove -y --auto-remove gcc python3-setuptools python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
-EXPOSE 4440 4441 4443 5440
+EXPOSE 4440 4441 4443 5440 6440
 
 CMD /usr/local/bin/ld-dev-cluster
