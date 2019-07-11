@@ -40,9 +40,13 @@ class LibEventTimerImpl : public TimerInterface, public LibeventTimer {
   }
 
   void setCallback(std::function<void()> callback) override {
-    auto ev_loop = EventLoop::onThisThread();
-    ld_check(ev_loop);
-    LibeventTimer::assign(ev_loop->getEventBase(), callback);
+    if (isAssigned()) {
+      LibeventTimer::setCallback(callback);
+    } else {
+      auto ev_loop = EventLoop::onThisThread();
+      ld_check(ev_loop);
+      LibeventTimer::assign(ev_loop->getEventBase(), callback);
+    }
   }
 
   bool isAssigned() const override {
