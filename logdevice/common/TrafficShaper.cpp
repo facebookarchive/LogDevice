@@ -88,9 +88,9 @@ void TrafficShaper::onConfigUpdate(TrafficShaper* ts) {
 
 void TrafficShaper::updateStats(const configuration::ShapingConfig* shaping_cfg,
                                 FlowGroupDependencies* deps) {
-  auto scope = NodeLocationScope::NODE;
   for (auto& policy : shaping_cfg->flowGroupPolicies) {
     auto value = 0;
+    auto& scope = policy.first;
     Priority p = Priority::MAX;
     for (const auto& entry : policy.second.entries) {
       value += entry.guaranteed_bw;
@@ -114,7 +114,6 @@ void TrafficShaper::updateStats(const configuration::ShapingConfig* shaping_cfg,
     }
 
     deps->statsSet(&PerFlowGroupStats::limit, scope, value);
-    scope = NodeLocation::nextGreaterScope(scope);
   }
 }
 
@@ -162,7 +161,7 @@ bool TrafficShaper::dispatchUpdateCommon(
     FlowGroupDependencies* deps) {
   bool future_updates_required = false;
   for (auto& policy_it : shaping_config.flowGroupPolicies) {
-    auto scope = policy_it.first;
+    auto& scope = policy_it.first;
     auto& ge = update.group_entries[static_cast<int>(scope)];
     if (policy_it.second.enabled()) {
       future_updates_required = true;
