@@ -387,6 +387,7 @@ TEST_F(ConfigIntegrationTest,
   auto client = ClientFactory()
                     .setSetting("file-config-update-interval", "10ms")
                     .setSetting("on-demand-logs-config", "true")
+                    .setSetting("connect-throttle", "0s..0s")
                     .setTimeout(testTimeout())
                     .create(client_config_path);
 
