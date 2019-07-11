@@ -54,8 +54,11 @@ if(${BUILD_SUBMODULES})
   include(${LOGDEVICE_DIR}/external/fbthrift/ThriftLibrary.cmake)
 else()
   message("Building without submodules")
-  find_package(RocksDB CONFIG REQUIRED)
-  set(ROCKSDB_LIBRARIES RocksDB::rocksdb)
+  include(build-rocksdb)
+  # We're using the external rocksdb even though BUILD_SUBMODULES is OFF because
+  # we don't want to be build against rocksdb master in legocastle.
+  # find_package(RocksDB CONFIG REQUIRED)
+  # set(ROCKSDB_LIBRARIES RocksDB::rocksdb)
   find_package(folly CONFIG REQUIRED)
   set(FOLLY_LIBRARIES Folly::folly)
   set(FOLLY_BENCHMARK_LIBRARIES Folly::follybenchmark)
@@ -84,7 +87,6 @@ else()
 
   # If we are not building the submodules, replace targets with fake targets so
   # that later rules know they are already fulfilled.
-  add_custom_target(rocksdb)
   add_custom_target(folly)
   add_custom_target(fizz)
   add_custom_target(wangle)

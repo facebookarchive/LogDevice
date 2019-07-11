@@ -133,7 +133,9 @@ add_dependencies(admin-${_lang}-target
 
 target_link_libraries(admin-${_lang}
   ${_common_libs}
-  ${LOGDEVICE_EXTERNAL_DEPS}
+  ${FBTHRIFT_LIBRARIES}
+  ${GLOG_LIBRARIES}
+  ${LIBGFLAGS_LIBRARY}
 )
 
 add_dependencies(exceptions-${_lang}-target
