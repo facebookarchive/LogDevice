@@ -257,20 +257,22 @@ bool IsLogEmptyTest::isLogEmptyResultsConsistent(std::vector<uint64_t> log_ids,
       auto* client = with_grace_period ? client_with_grace_period_.get()
                                        : client_no_grace_period_.get();
       int rv = client->isLogEmpty(logid_t(log_id), [&](Status st, bool empty) {
-        std::lock_guard<std::mutex> lock(result_mutex);
-        ld_info("IsLogEmpty[%lu]: %sempty", log_id, empty ? "" : "non-");
+        {
+          std::lock_guard<std::mutex> lock(result_mutex);
+          ld_info("IsLogEmpty[%lu]: %sempty", log_id, empty ? "" : "non-");
 
-        if (previous_result.count(log_id) == 0) {
-          // This is the first result recorded. Just remember it.
-          previous_result[log_id] = {log_id, st, empty};
-        } else {
-          // There was some previous result/s: check if they differ, and if so,
-          // remember that the results for this log varied.
-          IsLogEmptyResult prev = previous_result[log_id];
-          ld_check_eq(prev.log_id, log_id);
+          if (previous_result.count(log_id) == 0) {
+            // This is the first result recorded. Just remember it.
+            previous_result[log_id] = {log_id, st, empty};
+          } else {
+            // There was some previous result/s: check if they differ, and if
+            // so, remember that the results for this log varied.
+            IsLogEmptyResult prev = previous_result[log_id];
+            ld_check_eq(prev.log_id, log_id);
 
-          if (prev.status != st || prev.empty != empty) {
-            result_varied[log_id] = true;
+            if (prev.status != st || prev.empty != empty) {
+              result_varied[log_id] = true;
+            }
           }
         }
 
@@ -291,9 +293,6 @@ bool IsLogEmptyTest::isLogEmptyResultsConsistent(std::vector<uint64_t> log_ids,
   for (int i = 0; i < log_ids.size() * num_runs; i++) {
     sem.wait();
   }
-  // Make sure we don't destroy the mutex before the last callback destroys its
-  // lock_guard!
-  result_mutex.lock();
 
   for (uint64_t log_id : log_ids) {
     if (failures[log_id] != 0) {
