@@ -47,11 +47,17 @@ bool NodesConfigurationInit::init(
     return false;
   }
   auto processor = buildBootstrappingProcessor(std::move(bootstrapping_config));
-  return getConfigWithRetryingAndTimeout(
-             std::move(nodes_configuration_config),
-             processor.get(),
-             settings_->nodes_configuration_init_timeout)
-      .get();
+
+  // This call is blocking.
+  auto rv = getConfigWithRetryingAndTimeout(
+                std::move(nodes_configuration_config),
+                processor.get(),
+                settings_->nodes_configuration_init_timeout)
+                .get();
+  // Explicitly shutdown the processor to drain all the existing requests and
+  // prevent new ones from getting added.
+  processor->shutdown();
+  return rv;
 }
 
 bool NodesConfigurationInit::initWithoutProcessor(
