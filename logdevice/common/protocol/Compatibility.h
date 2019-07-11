@@ -20,28 +20,7 @@ enum ProtocolVersion : uint16_t {
   //
   // Minimum version number of the protocol this version of LogDevice is
   // backward compatible with - 1
-  PROTOCOL_VERSION_LOWER_BOUND = 78,
-
-  // START_Message can specify a hash of the client session id,
-  // which server can use to parameterize single copy delivery.
-  SERVER_CAN_PROCESS_CSID, // == 79;
-
-  // When e2e tracing is on, tracing information should be included
-  APPEND_E2E_TRACING_SUPPORT, // == 80
-
-  // Support for checksumming of any message in the Protocol layer
-  CHECKSUM_SUPPORT, // = 81
-
-  // include tail record in Get Sequencer State message replies
-  TAIL_RECORD_IN_GSS_REPLY, // = 82
-
-  // When e2e tracing is on, store message should also have tracing context
-  STORE_E2E_TRACING_SUPPORT, // = 83
-
-  // Support OffsetMap instead of a uint64_t for byte offset
-  OFFSET_MAP_SUPPORT, // = 84
-
-  OFFSET_MAP_SUPPORT_IN_SEALED_MSG, // = 85
+  PROTOCOL_VERSION_LOWER_BOUND = 85,
 
   CLEAN_MESSAGE_SUPPORT_OFFSET_MAP, // = 86
 
@@ -89,13 +68,6 @@ enum ProtocolVersion : uint16_t {
   // NOTE: do not add anything below PROTOCOL_VERSION_UPPER_BOUND
 };
 
-static_assert(SERVER_CAN_PROCESS_CSID == 79, "");
-static_assert(APPEND_E2E_TRACING_SUPPORT == 80, "");
-static_assert(CHECKSUM_SUPPORT == 81, "");
-static_assert(TAIL_RECORD_IN_GSS_REPLY == 82, "");
-static_assert(STORE_E2E_TRACING_SUPPORT == 83, "");
-static_assert(OFFSET_MAP_SUPPORT == 84, "");
-static_assert(OFFSET_MAP_SUPPORT_IN_SEALED_MSG == 85, "");
 static_assert(CLEAN_MESSAGE_SUPPORT_OFFSET_MAP == 86, "");
 static_assert(RECORD_MESSAGE_SUPPORT_OFFSET_MAP == 87, "");
 static_assert(GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP == 88, "");

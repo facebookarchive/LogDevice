@@ -71,15 +71,6 @@ GET_SEQ_STATE_REPLY_Message::deserialize(ProtocolReader& reader) {
   }
 
   if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_TAIL_RECORD) {
-    if (reader.proto() < Compatibility::TAIL_RECORD_IN_GSS_REPLY) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      10,
-                      "Bad GET_SEQ_STATE_REPLY_Message: "
-                      "INCLUDES_TAIL_RECORD flag received in "
-                      "protocol %d",
-                      reader.proto());
-      return reader.errorResult(E::BADMSG);
-    }
     msg->tail_record_ = std::make_shared<TailRecord>();
     msg->tail_record_->deserialize(reader, /*zero_copy*/ true);
   }
@@ -131,18 +122,6 @@ void GET_SEQ_STATE_REPLY_Message::serialize(ProtocolWriter& writer) const {
   }
 
   if (header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_TAIL_RECORD) {
-    if (writer.proto() < Compatibility::TAIL_RECORD_IN_GSS_REPLY) {
-      RATELIMIT_CRITICAL(std::chrono::seconds(10),
-                         10,
-                         "Sending GET_SEQ_STATE_REPLY_Message with "
-                         "INCLUDES_TAIL_RECORD flag in protocol %d.",
-                         writer.proto());
-      // for the same reason above
-      writer.setError(E::BADMSG);
-      ld_check(false);
-      return;
-    }
-
     ld_check(tail_record_ != nullptr);
     tail_record_->serialize(writer);
   }

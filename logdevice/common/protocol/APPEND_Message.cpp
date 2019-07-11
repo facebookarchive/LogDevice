@@ -36,9 +36,7 @@ namespace facebook { namespace logdevice {
 void APPEND_Message::serialize(ProtocolWriter& writer) const {
   ld_check(payload_.valid());
 
-  const auto proto = writer.proto();
   writer.write(header_);
-
   if (header_.flags & APPEND_Header::LSN_BEFORE_REDIRECT) {
     writer.write(lsn_before_redirect_);
   }
@@ -69,8 +67,7 @@ void APPEND_Message::serialize(ProtocolWriter& writer) const {
     }
   }
 
-  if (header_.flags & APPEND_Header::E2E_TRACING_ON &&
-      proto >= Compatibility::APPEND_E2E_TRACING_SUPPORT) {
+  if (header_.flags & APPEND_Header::E2E_TRACING_ON) {
     ld_check(e2e_tracing_context_.size() < MAX_E2E_TRACING_CONTEXT_SIZE);
     if (e2e_tracing_context_.size() < MAX_E2E_TRACING_CONTEXT_SIZE) {
       // write tracing information
@@ -182,8 +179,7 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
 
   std::string tracing_info;
 
-  if (header.flags & APPEND_Header::E2E_TRACING_ON &&
-      reader.proto() >= Compatibility::APPEND_E2E_TRACING_SUPPORT) {
+  if (header.flags & APPEND_Header::E2E_TRACING_ON) {
     reader.readLengthPrefixedVector(&tracing_info);
   }
 

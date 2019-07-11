@@ -167,14 +167,8 @@ class MessageSerializationTest : public ::testing::Test {
           recv.optional_keys_.find(key_pair.first)->second, key_pair.second);
     }
 
-    if (proto >= Compatibility::STORE_E2E_TRACING_SUPPORT) {
-      ASSERT_EQ(sent.e2e_tracing_context_, recv.e2e_tracing_context_);
-    } else {
-      ASSERT_TRUE(recv.e2e_tracing_context_.empty());
-    }
-
-    if (proto >= Compatibility::OFFSET_MAP_SUPPORT &&
-        sent.header_.flags & STORE_Header::OFFSET_MAP) {
+    ASSERT_EQ(sent.e2e_tracing_context_, recv.e2e_tracing_context_);
+    if (sent.header_.flags & STORE_Header::OFFSET_MAP) {
       ASSERT_EQ(
           sent.extra_.offsets_within_epoch, recv.extra_.offsets_within_epoch);
     }
@@ -201,12 +195,7 @@ class MessageSerializationTest : public ::testing::Test {
       }
     }
 
-    if (proto >= Compatibility::APPEND_E2E_TRACING_SUPPORT) {
-      ASSERT_EQ(m.e2e_tracing_context_, m2.e2e_tracing_context_);
-    } else {
-      ASSERT_TRUE(m2.e2e_tracing_context_.empty());
-    }
-
+    ASSERT_EQ(m.e2e_tracing_context_, m2.e2e_tracing_context_);
     ASSERT_EQ(getPayload(m.payload_), getPayload(m2.payload_));
   }
 
@@ -417,15 +406,12 @@ struct TestStoreMessageFactory {
         "54A58B50" // sequencer_node_id
         ;
 
-    // Take into account OffsetMap bits
-    if (proto >= Compatibility::OFFSET_MAP_SUPPORT) {
-      if (header_.flags & STORE_Header::OFFSET_WITHIN_EPOCH &&
-          header_.flags & STORE_Header::OFFSET_MAP) {
-        // Size of offsetmap containing one counter
-        rv += "01";
-        // BYTE_OFFSET start index in hex. refer to OffsetMap.h
-        rv += "F6";
-      }
+    if (header_.flags & STORE_Header::OFFSET_WITHIN_EPOCH &&
+        header_.flags & STORE_Header::OFFSET_MAP) {
+      // Size of offsetmap containing one counter
+      rv += "01";
+      // BYTE_OFFSET start index in hex. refer to OffsetMap.h
+      rv += "F6";
     }
 
     // Copyset, optional blobs, payload
@@ -454,9 +440,7 @@ struct TestStoreMessageFactory {
     }
 
     if (header_.flags & STORE_Header::E2E_TRACING_ON) {
-      if (proto >= Compatibility::STORE_E2E_TRACING_SUPPORT) {
-        rv += e2e_tracing_context_serialized_;
-      }
+      rv += e2e_tracing_context_serialized_;
     }
 
     rv += "6869"; // payload ("hi" in hex)
@@ -596,7 +580,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetMapInfo) {
   };
   DO_TEST(m,
           check,
-          Compatibility::OFFSET_MAP_SUPPORT,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -988,31 +972,6 @@ TEST_F(MessageSerializationTest, SEALED) {
   {
     std::string expected =
         "D38347A48A8EC1BB05CE49A8000027FAEBDD3400000003000000070002000000030000"
-        "0000000000040000000000000005000000000000000900000001000200090000000000"
-        "00000A000000000000000B000000000000000600000000000000070000000000000008"
-        "000000000000000D000000000000000E000000000000000F00000000000000D38347A4"
-        "8A8EC1BB130D0000A5030000F75C8E590000000060540DEE2202000000020000000000"
-        "00D38347A48A8EC1BB130D0000A5030000F75C8E590000000060540DEE220200000302"
-        "00000000000018000000140000005461696C205265636F726420546573742E000000";
-
-    // this test involves contructing an evbuffer based payload holder and has
-    // to be done on a worker thread
-    auto test = [&] {
-      DO_TEST(m,
-              check,
-              Compatibility::MIN_PROTOCOL_SUPPORTED,
-              Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG - 1,
-              [&](uint16_t /*proto*/) { return expected; },
-              nullptr);
-      return 0;
-    };
-
-    auto processor = make_test_processor(create_default_settings<Settings>());
-    run_on_worker(processor.get(), /*worker_id=*/0, test);
-  }
-  {
-    std::string expected =
-        "D38347A48A8EC1BB05CE49A8000027FAEBDD3400000003000000070002000000030000"
         "000000000004000000000000000500000000000000090000000100020001F609000000"
         "0000000001F60A0000000000000001F60B000000000000000600000000000000070000"
         "000000000008000000000000000D000000000000000E000000000000000F0000000000"
@@ -1026,7 +985,7 @@ TEST_F(MessageSerializationTest, SEALED) {
     auto test = [&] {
       DO_TEST(m,
               check,
-              Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG,
+              Compatibility::MIN_PROTOCOL_SUPPORTED,
               Compatibility::TRIM_POINT_IN_SEALED - 1,
               [&](uint16_t /*proto*/) { return expected; },
               nullptr);

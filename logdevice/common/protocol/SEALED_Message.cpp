@@ -34,20 +34,8 @@ void SEALED_Message::serialize(ProtocolWriter& writer) const {
   writer.write(&header_, SEALED_Header::getExpectedSize(writer.proto()));
   writer.writeVector(epoch_lng_);
   writer.write(seal_);
-
-  if (writer.proto() >= Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG) {
-    writer.writeVectorOfSerializable(epoch_offset_map_);
-  } else {
-    // Serialize the old format.
-    std::vector<uint64_t> epoch_offset_map(epoch_offset_map_.size());
-    for (size_t i = 0; i < epoch_offset_map_.size(); ++i) {
-      epoch_offset_map[i] = epoch_offset_map_[i].getCounter(BYTE_OFFSET);
-    }
-    writer.writeVector(epoch_offset_map);
-  }
-
+  writer.writeVectorOfSerializable(epoch_offset_map_);
   writer.writeVector(last_timestamp_);
-
   writer.writeVector(max_seen_lsn_);
 
   for (const auto& tr : tail_records_) {
@@ -71,21 +59,8 @@ MessageReadResult SEALED_Message::deserialize(ProtocolReader& reader) {
 
   reader.readVector(&epoch_lng);
   reader.read(&seal);
-
-  if (reader.proto() >= Compatibility::OFFSET_MAP_SUPPORT_IN_SEALED_MSG) {
-    reader.readVectorOfSerializable(&epoch_offset_map, header.lng_list_size);
-  } else {
-    // Read the old format.
-    std::vector<uint64_t> epoch_offset_map_legacy(
-        header.lng_list_size, BYTE_OFFSET_INVALID);
-    reader.readVector(&epoch_offset_map_legacy);
-    for (size_t i = 0; i < epoch_offset_map_legacy.size(); ++i) {
-      epoch_offset_map[i].setCounter(BYTE_OFFSET, epoch_offset_map_legacy[i]);
-    }
-  }
-
+  reader.readVectorOfSerializable(&epoch_offset_map, header.lng_list_size);
   reader.readVector(&last_timestamp);
-
   reader.readVector(&max_seen_lsn);
 
   std::vector<TailRecord> tail_records;

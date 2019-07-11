@@ -46,10 +46,6 @@ MessageReadResult GET_SEQ_STATE_Message::deserialize(ProtocolReader& reader) {
     min_epoch.assign(read_min_epoch);
   }
 
-  if (reader.proto() < Compatibility::TAIL_RECORD_IN_GSS_REPLY) {
-    flags &= ~GET_SEQ_STATE_Message::INCLUDE_TAIL_RECORD;
-  }
-
   if (reader.proto() < Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY) {
     flags &= ~GET_SEQ_STATE_Message::INCLUDE_IS_LOG_EMPTY;
   }
@@ -64,8 +60,6 @@ MessageReadResult GET_SEQ_STATE_Message::deserialize(ProtocolReader& reader) {
 uint16_t GET_SEQ_STATE_Message::getMinProtocolVersion() const {
   if (flags_ & GET_SEQ_STATE_Message::INCLUDE_IS_LOG_EMPTY) {
     return Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY;
-  } else if (flags_ & GET_SEQ_STATE_Message::INCLUDE_TAIL_RECORD) {
-    return Compatibility::TAIL_RECORD_IN_GSS_REPLY;
   } else {
     return Compatibility::MIN_PROTOCOL_SUPPORTED;
   }

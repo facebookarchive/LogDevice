@@ -27,7 +27,6 @@ struct ProtocolHeader {
   MessageType type;  // type of message to follow
 
   // Checksum field is always present with the exception of the following cases:
-  // - Negotiated Protocol version is older than Compatibility::CHECKSUM_SUPPORT
   // - HELLO and ACK messages (since protocol gets negotiated after exchanging
   //                           these messages)
   // If checksum computing is disabled on some message(s), the field will be

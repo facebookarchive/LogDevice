@@ -178,8 +178,7 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
   }
 
   if (header_.flags & STORE_Header::OFFSET_WITHIN_EPOCH) {
-    if (header_.flags & STORE_Header::OFFSET_MAP &&
-        writer.proto() >= Compatibility::OFFSET_MAP_SUPPORT) {
+    if (header_.flags & STORE_Header::OFFSET_MAP) {
       extra_.offsets_within_epoch.serialize(writer);
     } else {
       writer.write(extra_.offsets_within_epoch.getCounter(BYTE_OFFSET));
@@ -212,8 +211,7 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
     }
   }
 
-  if (header_.flags & STORE_Header::E2E_TRACING_ON &&
-      proto >= Compatibility::STORE_E2E_TRACING_SUPPORT) {
+  if (header_.flags & STORE_Header::E2E_TRACING_ON) {
     ld_check(e2e_tracing_context_.size() < MAX_E2E_TRACING_CONTEXT_SIZE);
     if (e2e_tracing_context_.size() < MAX_E2E_TRACING_CONTEXT_SIZE) {
       // only serialize the information when its size reasonable
@@ -234,7 +232,6 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader) {
 
 MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
                                              size_t max_payload_inline) {
-  const auto proto = reader.proto();
   STORE_Header hdr;
   STORE_Extra extra;
 
@@ -252,8 +249,7 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
   }
 
   if (hdr.flags & STORE_Header::OFFSET_WITHIN_EPOCH) {
-    if (hdr.flags & STORE_Header::OFFSET_MAP &&
-        reader.proto() >= Compatibility::OFFSET_MAP_SUPPORT) {
+    if (hdr.flags & STORE_Header::OFFSET_MAP) {
       extra.offsets_within_epoch.deserialize(reader, false /*not used */);
     } else {
       uint64_t offset_within_epoch;
@@ -305,8 +301,7 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
 
   std::string tracing_context;
 
-  if (hdr.flags & STORE_Header::E2E_TRACING_ON &&
-      proto >= Compatibility::STORE_E2E_TRACING_SUPPORT) {
+  if (hdr.flags & STORE_Header::E2E_TRACING_ON) {
     reader.readLengthPrefixedVector(&tracing_context);
   }
 

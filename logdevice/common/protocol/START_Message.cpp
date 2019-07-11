@@ -77,26 +77,23 @@ START_Message::START_Message(const START_Header& header,
 void START_Message::serialize(ProtocolWriter& writer) const {
   writer.write(header_);
   writer.writeLengthPrefixedVector(filtered_out_);
-
   writer.write(static_cast<uint8_t>(attrs_.filter_type));
   writer.writeLengthPrefixedVector(attrs_.filter_key1);
   writer.writeLengthPrefixedVector(attrs_.filter_key2);
 
-  if (writer.proto() >= Compatibility::SERVER_CAN_PROCESS_CSID) {
-    if (header_.scd_copyset_reordering ==
-        SCDCopysetReordering::HASH_SHUFFLE_CLIENT_SEED) {
-      // Randomly generated seeds for SpookyHash
-      // same as in LocalLogStoreReadFilter::applyCopysetReordering
-      uint64_t h1 = 0x59d2d101d78f02ad, h2 = 0x430bfb34b1cd41e1;
+  if (header_.scd_copyset_reordering ==
+      SCDCopysetReordering::HASH_SHUFFLE_CLIENT_SEED) {
+    // Randomly generated seeds for SpookyHash
+    // same as in LocalLogStoreReadFilter::applyCopysetReordering
+    uint64_t h1 = 0x59d2d101d78f02ad, h2 = 0x430bfb34b1cd41e1;
 
-      folly::hash::SpookyHashV2::Hash128(
-          client_session_id_.c_str(),
-          client_session_id_.length() * sizeof(char),
-          &h1,
-          &h2);
-      writer.write(h1);
-      writer.write(h2);
-    }
+    folly::hash::SpookyHashV2::Hash128(
+        client_session_id_.c_str(),
+        client_session_id_.length() * sizeof(char),
+        &h1,
+        &h2);
+    writer.write(h1);
+    writer.write(h2);
   }
 }
 
@@ -131,12 +128,10 @@ MessageReadResult START_Message::deserialize(ProtocolReader& reader) {
     reader.readLengthPrefixedVector(&m->attrs_.filter_key1);
     reader.readLengthPrefixedVector(&m->attrs_.filter_key2);
 
-    if (proto >= Compatibility::SERVER_CAN_PROCESS_CSID) {
-      if (m->header_.scd_copyset_reordering ==
-          SCDCopysetReordering::HASH_SHUFFLE_CLIENT_SEED) {
-        reader.read(&m->csid_hash_pt1, sizeof(m->csid_hash_pt1));
-        reader.read(&m->csid_hash_pt2, sizeof(m->csid_hash_pt2));
-      }
+    if (m->header_.scd_copyset_reordering ==
+        SCDCopysetReordering::HASH_SHUFFLE_CLIENT_SEED) {
+      reader.read(&m->csid_hash_pt1, sizeof(m->csid_hash_pt1));
+      reader.read(&m->csid_hash_pt2, sizeof(m->csid_hash_pt2));
     }
   }
 
