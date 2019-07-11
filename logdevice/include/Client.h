@@ -1132,7 +1132,6 @@ class Client {
    *                              sets err to one of:
    *                                 E::ACCESS you don't have permissions to
    *                                           mutate the logs configuration.
-   *                                 E::EXISTS Directory already exists.
    *                                 E::TIMEDOUT Operation timed out.
    *                                 E::NOTFOUND the directory was not found
    *                                             and thus couldn't be deleted.

@@ -948,12 +948,10 @@ Returns a LogGroup if exists, otherwise throws an exception.
 Removes a directory from the LogsConfig tree, if recursive is True, this will
 delete all the children as well. Throws an exception if failed. Returns
 LogsConfig version.
-  E::ACCESS you don't have permissions to
-            mutate the logs configuration.
+  E::ACCESS you don't have permissions to mutate the logs configuration.
   E::EXISTS Directory already exists.
   E::TIMEDOUT Operation timed out.
-  E::NOTFOUND the directory was not found
-              and thus couldn't be deleted.
+  E::NOTFOUND the directory was not found and thus couldn't be deleted.
       )DOC")
       .def("remove_log_group",
            &remove_log_group,
@@ -961,12 +959,9 @@ LogsConfig version.
            R"DOC(
 Removes a log group from the LogsConfig tree. Throws an exception if failed.
 Returns LogsConfig version.
-  E::ACCESS you don't have permissions to
-            mutate the logs configuration.
-  E::EXISTS Directory already exists.
+  E::ACCESS you don't have permissions to mutate the logs configuration.
   E::TIMEDOUT Operation timed out.
-  E::NOTFOUND the directory was not found
-              and thus couldn't be deleted.
+  E::NOTFOUND the log-group was not found and thus couldn't be deleted.
       )DOC")
       .def("rename",
            &rename_path,
@@ -985,8 +980,7 @@ otherwise you will receive status of E::EXISTS
   E::NOTFOUND source path doesn't exist.
   E::EXISTS the destination path already exists!
   E::TIMEDOUT Operation timed out.
-  E::ACCESS you don't have permissions to
-            mutate the logs configuration.
+  E::ACCESS you don't have permissions to mutate the logs configuration.
       )DOC")
       .def("set_attributes",
            &set_attributes,
@@ -1003,8 +997,7 @@ has failed. Returns LogsConfig version.
                        attributes are not valid.
   E::NOTFOUND the path supplied doesn't exist.
   E::TIMEDOUT Operation timed out.
-  E::ACCESS you don't have permissions to
-           mutate the logs configuration.
+  E::ACCESS you don't have permissions to mutate the logs configuration.
       )DOC")
       .def("set_log_group_range",
            &set_log_group_range,
@@ -1012,13 +1005,11 @@ has failed. Returns LogsConfig version.
            R"DOC(
 This sets the log group range to the supplied new range. Throws an exception
 if failed. Returns LogsConfig version.
-  E::NOTFOUND if the path doesn't exist or it's
-     pointing to a directory
+  E::NOTFOUND if the path doesn't exist or it's pointing to a directory
   E::INVALID_ATTRIBUTES the range you supplied is
      invalid or reserved for system-logs.
   E::TIMEDOUT Operation timed out.
-  E::ACCESS you don't have permissions to
-           mutate the logs configuration.
+  E::ACCESS you don't have permissions to mutate the logs configuration.
       )DOC")
       .def("sync_logsconfig_version",
            &sync_logsconfig_version,
