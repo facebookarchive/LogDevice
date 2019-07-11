@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
+
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
 from enum import Enum, auto
 from typing import Any, Dict, Iterator, List, Optional, Tuple, TypeVar
 
-# convenience
+# Convenience
 Attrs = Dict[str, Any]
 lsn_t = int
 
 # everything here is copied from the BOOST_PYTHON_MODULE in
 # ~/fbcode/logdevice/clients/python/logdevice_client.cpp
-# not everything is copied, but i have attempted to be as comprehensive as possible
+# not everything is copied, but I have attempted to be as comprehensive as possible
 
 class LogGroup:
     pass  # TODO flesh out
