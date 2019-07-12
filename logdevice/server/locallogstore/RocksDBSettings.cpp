@@ -1399,7 +1399,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-low-pri-write-stall-threshold-percent",
        &low_pri_write_stall_threshold_percent,
-       "50",
+       "5",
        nullptr,
        "Node stalls rebuilding stores when sum of unflushed memory size and "
        "active memory size is above per shard memory limit, and active memory "

@@ -10171,6 +10171,9 @@ TEST_F(PartitionedRocksDBStoreTest, TestClampBacklog) {
 // Test write throttle logic in throttleIOIfNeeded.
 TEST_F(PartitionedRocksDBStoreTest, ThrottleWrites) {
   uint64_t memory_limit = 2000;
+  double low_pri_write_stall_threshold =
+      store_->getSettings()->low_pri_write_stall_threshold_percent / 100;
+  ASSERT_GT(low_pri_write_stall_threshold, 1e-3);
 
   // active memory usage and unflushed memory usage below per shard limit, write
   // should not be throttled.
@@ -10197,8 +10200,9 @@ TEST_F(PartitionedRocksDBStoreTest, ThrottleWrites) {
   // per shard limit.
   {
     WriteBufStats stats;
-    stats.active_memory_usage = 500;
-    stats.memory_being_flushed = 600;
+    stats.active_memory_usage = static_cast<uint64_t>(
+        memory_limit / 2 * low_pri_write_stall_threshold * .9);
+    stats.memory_being_flushed = 1000;
     store_->throttleIOIfNeeded(stats, memory_limit);
     EXPECT_EQ(store_->getWriteThrottleState(),
               LocalLogStore::WriteThrottleState::NONE);
@@ -10208,11 +10212,9 @@ TEST_F(PartitionedRocksDBStoreTest, ThrottleWrites) {
   // limit.
   {
     WriteBufStats stats;
-    stats.active_memory_usage =
-        store_->getSettings()->low_pri_write_stall_threshold_percent / 100 *
-            memory_limit / 2 +
-        1;
-    stats.memory_being_flushed = 600;
+    stats.active_memory_usage = static_cast<uint64_t>(
+        memory_limit / 2 * low_pri_write_stall_threshold * 1.1);
+    stats.memory_being_flushed = 1000;
     store_->throttleIOIfNeeded(stats, memory_limit);
     EXPECT_EQ(store_->getWriteThrottleState(),
               LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE);
