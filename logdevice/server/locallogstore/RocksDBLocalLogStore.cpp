@@ -257,24 +257,27 @@ int RocksDBLocalLogStore::findKey(logid_t log_id,
 #define ROCKSDB_ACCOUNTED_PREV(iterator, name) \
   ROCKSDB_ACCOUNTED_OP(iterator, prev, Prev(), name)
 
-#define ROCKSDB_ACCOUNTED_OP(iterator, opname, op, itname)                 \
-  do {                                                                     \
-    AddContext opContxt(#opname);                                          \
-    auto* perf_context = rocksdb::get_perf_context();                      \
-    uint64_t prev_reads = perf_context->block_read_byte;                   \
-    uint64_t prev_hits = perf_context->block_cache_hit_count;              \
-    (iterator)->op;                                                        \
-    ROCKSDB_COUNT_STAT(itname##_##opname##_reads, 1);                      \
-    if (prev_reads != perf_context->block_read_byte) {                     \
-      ROCKSDB_COUNT_STAT(itname##_##opname##_reads_from_disk, 1);          \
-      ROCKSDB_COUNT_STAT(itname##_##opname##_block_bytes_read_from_disk,   \
-                         perf_context->block_read_byte - prev_reads);      \
-    }                                                                      \
-    if (prev_hits != perf_context->block_cache_hit_count) {                \
-      ROCKSDB_COUNT_STAT(itname##_##opname##_reads_from_block_cache, 1);   \
-      ROCKSDB_COUNT_STAT(itname##_##opname##_blocks_read_from_block_cache, \
-                         perf_context->block_cache_hit_count - prev_hits); \
-    }                                                                      \
+#define ROCKSDB_ACCOUNTED_OP(iterator, opname, op, itname)                  \
+  do {                                                                      \
+    AddContext opContxt(#opname);                                           \
+    auto* perf_context = rocksdb::get_perf_context();                       \
+    uint64_t prev_reads = perf_context->block_read_byte;                    \
+    uint64_t prev_read_count = perf_context->block_read_count;              \
+    uint64_t prev_hits = perf_context->block_cache_hit_count;               \
+    (iterator)->op;                                                         \
+    ROCKSDB_COUNT_STAT(itname##_##opname##_reads, 1);                       \
+    if (prev_reads != perf_context->block_read_byte) {                      \
+      ROCKSDB_COUNT_STAT(itname##_##opname##_reads_from_disk, 1);           \
+      ROCKSDB_COUNT_STAT(itname##_##opname##_block_bytes_read_from_disk,    \
+                         perf_context->block_read_byte - prev_reads);       \
+      ROCKSDB_COUNT_STAT(itname##_##opname##_blocks_read_from_disk,         \
+                         perf_context->block_read_count - prev_read_count); \
+    }                                                                       \
+    if (prev_hits != perf_context->block_cache_hit_count) {                 \
+      ROCKSDB_COUNT_STAT(itname##_##opname##_reads_from_block_cache, 1);    \
+      ROCKSDB_COUNT_STAT(itname##_##opname##_blocks_read_from_block_cache,  \
+                         perf_context->block_cache_hit_count - prev_hits);  \
+    }                                                                       \
   } while (0)
 
 namespace {

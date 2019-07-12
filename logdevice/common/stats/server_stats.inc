@@ -762,6 +762,7 @@ STAT_DEFINE(real_time_too_new_regular, SUM)
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _reads, SUM) \
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _reads_from_disk, SUM) \
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _block_bytes_read_from_disk, SUM) \
+STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _blocks_read_from_disk, SUM) \
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _reads_from_block_cache, SUM) \
 STAT_DEFINE(read_streams_rocksdb_locallogstore_ ## op ## _blocks_read_from_block_cache, SUM) \
 
