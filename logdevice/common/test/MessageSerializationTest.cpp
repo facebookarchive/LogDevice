@@ -375,8 +375,7 @@ struct TestStoreMessageFactory {
         std::make_shared<PayloadHolder>(
             Payload(payload_.data(), payload_.size()), PayloadHolder::UNOWNED),
         false,
-        e2e_tracing_context_,
-        /* write_sticky_copysets */ true);
+        e2e_tracing_context_);
   }
 
   template <typename IntType>
@@ -475,7 +474,7 @@ TEST_F(MessageSerializationTest, STORE) {
   };
   DO_TEST(m,
           check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -494,7 +493,7 @@ TEST_F(MessageSerializationTest, STORE_WithKey) {
   };
   DO_TEST(m,
           check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -515,7 +514,7 @@ TEST_F(MessageSerializationTest, STORE_WithFilterableKey) {
   };
   DO_TEST(m,
           check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -537,7 +536,7 @@ TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo2) {
   };
   DO_TEST(m,
           check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -559,7 +558,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
   };
   DO_TEST(m,
           check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -580,7 +579,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetMapInfo) {
   };
   DO_TEST(m,
           check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -600,7 +599,7 @@ TEST_F(MessageSerializationTest, STORE_WithFirstAmendableOffset) {
   };
   DO_TEST(m,
           check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -620,7 +619,7 @@ TEST_F(MessageSerializationTest, STORE_WithE2ETracingContext) {
   };
   DO_TEST(m,
           check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });

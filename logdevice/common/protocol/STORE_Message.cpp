@@ -46,15 +46,13 @@ STORE_Message::STORE_Message(const STORE_Header& header,
                              std::map<KeyType, std::string> optional_keys,
                              std::shared_ptr<PayloadHolder> payload,
                              bool appender_context,
-                             std::string e2e_tracing_context,
-                             folly::Optional<bool> write_sticky_copysets)
+                             std::string e2e_tracing_context)
     : Message(MessageType::STORE, calcTrafficClass(header)),
       header_(header),
       extra_(extra),
       appender_context_(appender_context),
       payload_(std::move(payload)),
       copyset_(header.copyset_size),
-      write_sticky_copysets_(write_sticky_copysets),
       optional_keys_(std::move(optional_keys)),
       my_pos_in_copyset_(-1),
       e2e_tracing_context_(std::move(e2e_tracing_context)) {
@@ -128,43 +126,15 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
 
   const auto proto = writer.proto();
 
-  bool write_block_starting_lsn;
-  if (proto >=
+  if (proto <
       Compatibility::ProtocolVersion::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES) {
-    write_block_starting_lsn = header_.flags & STORE_Header::STICKY_COPYSET;
-    writer.write(header_);
-  } else {
-    // TODO (#37280475): This is a temporary measure for backwards
-    //                   compatibility. If you're reading this in Summer 2019
-    //                   or later, it's probably time to remove it.
-    // The meaning of STICKY_COPYSET flag was changed. It used to mean that the
-    // recipient should write CSI entry for the record. Now it just means that
-    // block_starting_lsn is serialized (otherwise it defaults to LSN_INVALID),
-    // and it's up to recipient to decide whether to write CSI or not.
-    // Moreover, now block_starting_lsn and STICKY_COPYSET don't matter at all,
-    // at least until block CSI is implemented, which is probably not soon.
-    //
-    // Since only the older versions care about STICKY_COPYSET flag, let's set
-    // the flag according to its old meaning, i.e. set it if CSI writing is
-    // enabled.
-    if (write_sticky_copysets_.hasValue()) {
-      write_block_starting_lsn = write_sticky_copysets_.value();
-    } else {
-      const auto& worker_settings = Worker::settings();
-      write_block_starting_lsn = worker_settings.write_copyset_index &&
-          worker_settings.write_sticky_copysets_deprecated;
-    }
-    if (write_block_starting_lsn ==
-        (bool)(header_.flags & STORE_Header::STICKY_COPYSET)) {
-      // The flag already matches, we're good.
-      writer.write(header_);
-    } else {
-      // Flip the flag to please the outdated recipient.
-      STORE_Header header_copy = header_;
-      header_copy.flags ^= STORE_Header::STICKY_COPYSET;
-      writer.write(header_copy);
-    }
+    ld_debug("Unsupported version %d: STORE_Message does not support versions "
+             "before %d",
+             proto,
+             Compatibility::ProtocolVersion::
+                 NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES);
   }
+  writer.write(header_);
 
   if (header_.flags & STORE_Header::RECOVERY) {
     writer.write(extra_.recovery_id);
@@ -192,7 +162,7 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
   writer.writeVector(copyset_);
   ld_check(header_.copyset_size == copyset_.size());
 
-  if (write_block_starting_lsn) {
+  if (header_.flags & STORE_Header::STICKY_COPYSET) {
     writer.write(block_starting_lsn_);
   }
 

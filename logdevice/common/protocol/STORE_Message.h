@@ -270,8 +270,7 @@ class STORE_Message : public Message {
                 std::map<KeyType, std::string> optional_keys,
                 std::shared_ptr<PayloadHolder> payload,
                 bool appender_context = false,
-                std::string e2e_tracing_context = "",
-                folly::Optional<bool> write_sticky_copysets = folly::none);
+                std::string e2e_tracing_context = "");
 
   // Movable but not copyable
   STORE_Message(STORE_Message&&) = default;
@@ -444,10 +443,6 @@ class STORE_Message : public Message {
   // sticky copyset selector), or LSN_INVALID if this is a single record.
   // This is essentially unused until block CSI is implemented.
   lsn_t block_starting_lsn_ = LSN_INVALID;
-
-  // A temporary compatibility thing, see comment in serialize().
-  // TODO (#37280475): Remove.
-  folly::Optional<bool> write_sticky_copysets_;
 
   // The (optional) keys provided by the client in the append() operation.
   // See @Record.h for details
