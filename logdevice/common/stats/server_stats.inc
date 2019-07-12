@@ -1011,10 +1011,14 @@ STAT_DEFINE(csi_bytes_written, SUM)
 STAT_DEFINE(record_bytes_written, SUM)
 STAT_DEFINE(index_bytes_written, SUM)
 
-// Number and total size of rocksdb blocks written to sst files.
-// Only when RocksDBFlushBlockPolicy is used.
+// Number and total size of all rocksdb blocks written to sst files.
+// Only when RocksDBFlushBlockPolicy is used. In particular, metadata column
+// family is excluded because it doesn't use RocksDBFlushBlockPolicy.
 STAT_DEFINE(sst_blocks_written, SUM)
 STAT_DEFINE(sst_blocks_bytes, SUM)
+// Number and size of blocks consisting of data records.
+STAT_DEFINE(sst_record_blocks_written, SUM)
+STAT_DEFINE(sst_record_blocks_bytes, SUM)
 
 // Approximate breakdown of the (uncompressed) size of sst files written by
 // rocksdb (both flushes and compactions). Metadata column family excluded.

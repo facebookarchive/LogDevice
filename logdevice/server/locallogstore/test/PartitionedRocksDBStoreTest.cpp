@@ -10276,3 +10276,57 @@ TEST_F(PartitionedRocksDBStoreTest, ThrottleWrites) {
               LocalLogStore::WriteThrottleState::STALL_LOW_PRI_WRITE);
   }
 }
+
+TEST_F(PartitionedRocksDBStoreTest, FlushBlockPolicyTest) {
+  std::vector<StoreChainLink> cs1 = {
+      StoreChainLink{ShardID(0, 0), ClientID::INVALID},
+      StoreChainLink{ShardID(1, 0), ClientID::INVALID}};
+  std::vector<StoreChainLink> cs2 = {
+      StoreChainLink{ShardID(0, 0), ClientID::INVALID},
+      StoreChainLink{ShardID(2, 0), ClientID::INVALID}};
+
+  closeStore();
+  openStore({{"rocksdb-flush-block-policy", "each_log"},
+             {"rocksdb-min-block-size", "16000"}});
+
+  Stats stats = stats_.aggregate();
+  EXPECT_EQ(0, stats.sst_record_blocks_written);
+  EXPECT_EQ(0, stats.sst_record_blocks_bytes);
+
+  lsn_t lsn = 1;
+  auto write_and_flush = [&] {
+    put({TestRecord(logid_t(1), lsn++)}, cs1);
+    put({TestRecord(logid_t(1), lsn++)}, cs2);
+    put({TestRecord(logid_t(2), lsn++)}, cs1);
+    put({TestRecord(logid_t(2), lsn++)}, cs2);
+    store_->flushAllMemtables();
+  };
+
+  // Everyone goes into the same block because it's smaller than
+  // rocksdb-min-block-size.
+  write_and_flush();
+  stats = stats_.aggregate();
+  EXPECT_EQ(1, stats.sst_record_blocks_written);
+  EXPECT_GE(stats.sst_record_blocks_bytes, 40);
+  EXPECT_LE(stats.sst_record_blocks_bytes, 400);
+  stats_.reset();
+
+  closeStore();
+  openStore({{"rocksdb-flush-block-policy", "each_log"},
+             {"rocksdb-min-block-size", "10"}});
+
+  // Each log goes into its own block.
+  write_and_flush();
+  stats = stats_.aggregate();
+  EXPECT_EQ(2, stats.sst_record_blocks_written);
+  stats_.reset();
+
+  closeStore();
+  openStore({{"rocksdb-flush-block-policy", "each_copyset"},
+             {"rocksdb-min-block-size", "10"}});
+
+  // Each log+copyset goes into its own block.
+  write_and_flush();
+  stats = stats_.aggregate();
+  EXPECT_EQ(4, stats.sst_record_blocks_written);
+}

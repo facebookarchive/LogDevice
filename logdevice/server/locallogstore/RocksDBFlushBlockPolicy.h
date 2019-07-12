@@ -12,6 +12,7 @@
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
+#include "logdevice/server/locallogstore/RocksDBWriterMergeOperator.h"
 
 namespace facebook { namespace logdevice {
 
@@ -31,7 +32,9 @@ class RocksDBFlushBlockPolicy : public rocksdb::FlushBlockPolicy {
   bool Update(const rocksdb::Slice& key, const rocksdb::Slice& value) override {
     // RocksDB's default flush block policy uses BlockBuilder to get a better
     // estimate of the current block size. This class just adds up the key
-    // and value sizes, which may underestimate a little.
+    // and value sizes, which may be a little underestimated (because rocksdb
+    // adds some overhead per key-value pair) or overestimated (because rocksdb
+    // uses prefix compression for keys).
 
     bool ret = false;
     Group g = getGroup(key, value);
@@ -43,8 +46,7 @@ class RocksDBFlushBlockPolicy : public rocksdb::FlushBlockPolicy {
         (g != cur_group_ && cur_block_bytes_ >= opts_.min_block_size) ||
         ((g.log == LOGID_INVALID) != (cur_group_.log == LOGID_INVALID) &&
          cur_block_bytes_ != 0)) {
-      STAT_INCR(opts_.stats, sst_blocks_written);
-      STAT_ADD(opts_.stats, sst_blocks_bytes, cur_block_bytes_);
+      bumpStatsForCurBlock();
       cur_group_ = g;
       cur_block_bytes_ = 0;
       ret = true;
@@ -58,11 +60,7 @@ class RocksDBFlushBlockPolicy : public rocksdb::FlushBlockPolicy {
   ~RocksDBFlushBlockPolicy() override {
     // Bump stats for the final block, assuming that RocksDB destroys the
     // FlushBlockPolicy after writing each file.
-    if (cur_block_bytes_ == 0) {
-      return;
-    }
-    STAT_INCR(opts_.stats, sst_blocks_written);
-    STAT_ADD(opts_.stats, sst_blocks_bytes, cur_block_bytes_);
+    bumpStatsForCurBlock();
   }
 
  private:
@@ -92,12 +90,35 @@ class RocksDBFlushBlockPolicy : public rocksdb::FlushBlockPolicy {
     g.log = RocksDBKeyFormat::DataKey::getLogID(key.data());
 
     if (opts_.flush_for_each_copyset) {
-      // ignore return value
+      // Logdevice's value format is slightly different for merge operands vs
+      // full values: merge operands have an extra 'd' prefix. (This doesn't
+      // really serve any purpose and should probably be removed.)
+      // RocksDB doesn't tell us whether the `value` is a merge operand or not,
+      // so we have to guess. It usually is, so if the first character is 'd',
+      // let's assume it's a merge operand.
+      auto modified_value = value;
+      if (!value.empty() &&
+          value.data()[0] == RocksDBWriterMergeOperator::DATA_MERGE_HEADER) {
+        modified_value.remove_prefix(1);
+      }
       LocalLogStoreRecordFormat::getCopysetHash(
-          Slice(value.data(), value.size()), &g.copyset_hash);
+          Slice(modified_value.data(), modified_value.size()), &g.copyset_hash);
     }
 
     return g;
+  }
+
+  void bumpStatsForCurBlock() {
+    if (cur_block_bytes_ == 0) {
+      return;
+    }
+
+    STAT_INCR(opts_.stats, sst_blocks_written);
+    STAT_ADD(opts_.stats, sst_blocks_bytes, cur_block_bytes_);
+    if (cur_group_.log != LOGID_INVALID) {
+      STAT_INCR(opts_.stats, sst_record_blocks_written);
+      STAT_ADD(opts_.stats, sst_record_blocks_bytes, cur_block_bytes_);
+    }
   }
 };
 
