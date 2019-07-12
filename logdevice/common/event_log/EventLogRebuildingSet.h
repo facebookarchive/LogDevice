@@ -11,8 +11,8 @@
 #include <unordered_set>
 
 #include <folly/FBVector.h>
-#include <google/dense_hash_map>
-#include <google/dense_hash_set>
+#include <folly/container/F14Map.h>
+#include <folly/container/F14Set.h>
 
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
@@ -46,9 +46,9 @@ class EventLogRebuildingSet {
 
   struct NodeInfo {
     using set_of_nodes_t =
-        google::dense_hash_set<node_index_t, Hash64<node_index_t>>;
+        folly::F14FastSet<node_index_t, Hash64<node_index_t>>;
     using map_from_node_to_lsn_t =
-        google::dense_hash_map<node_index_t, lsn_t, Hash64<node_index_t>>;
+        folly::F14FastMap<node_index_t, lsn_t, Hash64<node_index_t>>;
 
     // LSN of the last SHARD_NEEDS_REBUILD event we received for this node.
     lsn_t version;
@@ -119,14 +119,7 @@ class EventLogRebuildingSet {
 
     bool operator==(const NodeInfo& rhs) const;
 
-    NodeInfo() {
-      donors_complete.set_empty_key(NODE_INDEX_INVALID);
-      donors_complete.set_deleted_key(NODE_INDEX_INVALID2);
-      donors_complete_authoritatively.set_empty_key(NODE_INDEX_INVALID);
-      donors_complete_authoritatively.set_deleted_key(NODE_INDEX_INVALID2);
-      donors_remaining.set_empty_key(NODE_INDEX_INVALID);
-      donors_remaining.set_deleted_key(NODE_INDEX_INVALID2);
-    }
+    NodeInfo() = default;
   };
 
   struct RebuildingShardInfo {
@@ -138,13 +131,13 @@ class EventLogRebuildingSet {
     // acked helps determine if the node is supposed to be a donor for another
     // node. This RebuildingShardInfo object is erased once all nodes in
     // `nodes_` acked.
-    std::unordered_map<node_index_t, NodeInfo> nodes_;
+    folly::F14FastMap<node_index_t, NodeInfo> nodes_;
     // Track the progress of the donors for this rebuilding version. Reset when
     // the rebuliding version changes. RebuildingCoordinator uses this to slide
     // its local window according to global window deduced from the progress of
     // each donor. This is the union of `donors_remaining` for each node in
     // `nodes_`.
-    std::unordered_map<node_index_t, ts_type> donor_progress;
+    folly::F14FastMap<node_index_t, ts_type> donor_progress;
     // The time intervals across all nodes to process.
     // NOTE: The intervals included here may differ between storage nodes
     //       since each storage node will exclude ranges on itself for which

@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/event_log/EventLogRebuildingSetCodec.h"
 
+#include <folly/container/F14Map.h>
+
 namespace facebook { namespace logdevice {
 
 template <typename T>
@@ -126,8 +128,8 @@ std::unique_ptr<EventLogRebuildingSet> EventLogRebuildingSetCodec::deserialize(
 EventLogRebuildingSet::RebuildingShardInfo
 EventLogRebuildingSetCodec::deserialize(
     const event_log_rebuilding_set::ShardInfo* shard_info) {
-  std::unordered_map<node_index_t, EventLogRebuildingSet::NodeInfo> node_map;
-  std::unordered_map<node_index_t, EventLogRebuildingSet::ts_type> donors;
+  folly::F14FastMap<node_index_t, EventLogRebuildingSet::NodeInfo> node_map;
+  folly::F14FastMap<node_index_t, EventLogRebuildingSet::ts_type> donors;
 
   auto nodes = shard_info->nodes();
   if (nodes) {
