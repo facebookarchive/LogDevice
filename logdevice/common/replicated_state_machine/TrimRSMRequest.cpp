@@ -272,7 +272,7 @@ void TrimRSMRequest::trimSnapshotLog() {
   } else {
     trim_to = min_snapshot_lsn_ - 1;
     rsm_info(rsm_type_,
-             "Trimming snapshot log up %lu to lsn %s",
+             "Trimming snapshot log %lu up to lsn %s",
              snapshot_log_id_.val_,
              lsn_to_string(min_snapshot_lsn_ - 1).c_str());
   }

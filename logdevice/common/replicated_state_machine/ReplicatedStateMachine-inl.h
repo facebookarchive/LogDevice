@@ -318,11 +318,16 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     }
 
     rsm_info(rsm_type_,
-             "Applied snapshot record with lsn %s timestamp %lu "
-             "and base version %s (serialization format version was %d)",
+             "Applied snapshot record with lsn %s timestamp %lu, "
+             "base version %s, delta_log_read_ptr %s (serialization format "
+             "version was %d)",
              lsn_to_string(record->attrs.lsn).c_str(),
              record->attrs.timestamp.count(),
              lsn_to_string(header.base_version).c_str(),
+             (header.format_version >=
+              RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH)
+                 ? lsn_to_string(last_snapshot_last_read_ptr_).c_str()
+                 : "disabled",
              header.format_version);
   }
 
@@ -405,8 +410,9 @@ bool ReplicatedStateMachine<T, D>::onSnapshotGap(const GapRecord& gap) {
 template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::onBaseSnapshotRetrieved() {
   rsm_info(rsm_type_,
-           "Base snapshot has version %s",
-           lsn_to_string(version_).c_str());
+           "Base snapshot has version %s, delta_log_read_ptr %s",
+           lsn_to_string(version_).c_str(),
+           lsn_to_string(last_snapshot_last_read_ptr_).c_str());
   activateGracePeriodForSnapshotting();
   gotInitialState(*data_);
   sync_state_ = SyncState::SYNC_DELTAS;
@@ -1200,20 +1206,23 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
     return;
   }
 
-  rsm_info(rsm_type_,
-           "Creating snapshot with version %s (compression %s)",
-           lsn_to_string(version_).c_str(),
-           snapshot_compression_ ? "enabled" : "disabled");
-  std::string payload = createSnapshotPayload(
-      *data_,
-      version_,
-      Worker::settings().rsm_include_read_pointer_in_snapshot);
+  bool include_read_ptr =
+      Worker::settings().rsm_include_read_pointer_in_snapshot;
+  rsm_info(
+      rsm_type_,
+      "Creating snapshot with version %s, delta_log_read_ptr %s, compression "
+      "%s",
+      lsn_to_string(version_).c_str(),
+      include_read_ptr ? lsn_to_string(delta_read_ptr_).c_str() : "disabled",
+      snapshot_compression_ ? "enabled" : "disabled");
+  std::string payload =
+      createSnapshotPayload(*data_, version_, include_read_ptr);
 
   // We'll capture these in the lambda below.
   const size_t byte_offset_at_time_of_snapshot = delta_log_byte_offset_;
   const size_t offset_at_time_of_snapshot = delta_log_offset_;
 
-  auto append_cb = [=](Status st, lsn_t /*lsn*/) {
+  auto append_cb = [=](Status st, lsn_t lsn) {
     if (st == E::OK) {
       // We don't want to wait for the snapshot to be read before
       // last_snapshot_* members are modified otherwise
@@ -1224,6 +1233,7 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
           std::max(byte_offset_at_time_of_snapshot, last_snapshot_byte_offset_);
       last_snapshot_offset_ =
           std::max(offset_at_time_of_snapshot, last_snapshot_offset_);
+      ld_info("Snapshot was assigned LSN %s", lsn_to_string(lsn).c_str());
     }
     snapshot_in_flight_ = false;
 
