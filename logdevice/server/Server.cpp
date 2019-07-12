@@ -650,8 +650,9 @@ bool Server::initStore() {
       params_->getLocalLogStoreSettings()->local_log_store_path;
   if (params_->isReadableStorageNode()) {
     if (local_log_store_path.empty()) {
-      ld_error("This node is identified as a storage node in config (it has a "
-               "'weight' attribute), but --local-log-store-path is not set ");
+      ld_critical("This node is identified as a storage node in config (it has "
+                  "a 'weight' attribute), but --local-log-store-path is not "
+                  "set ");
       return false;
     }
     auto local_settings = params_->getProcessorSettings().get();
@@ -669,6 +670,7 @@ bool Server::initStore() {
           !ClusterMarkerChecker::check(*sharded_store_,
                                        *server_config_,
                                        params_->getMyNodeID().value())) {
+        ld_critical("Could not initialize log store cluster marker mismatch!");
         return false;
       }
       auto& io_fault_injection = IOFaultInjection::instance();
@@ -685,7 +687,7 @@ bool Server::initStore() {
                                        params_->getStats(),
                                        params_->getTraceLogger()));
     } catch (const ConstructorFailed& ex) {
-      ld_error("Failed to initialize local log store");
+      ld_critical("Failed to initialize local log store");
       return false;
     }
     ld_info("Initialized sharded RocksDB instance at %s with %d shards",
