@@ -54,8 +54,11 @@ if(${BUILD_SUBMODULES})
   include(${LOGDEVICE_DIR}/external/fbthrift/ThriftLibrary.cmake)
 else()
   message("Building without submodules")
-  find_package(RocksDB CONFIG REQUIRED)
-  set(ROCKSDB_LIBRARIES RocksDB::rocksdb)
+  include(build-rocksdb)
+  # We're using the external rocksdb even though BUILD_SUBMODULES is OFF because
+  # we don't want to be build against rocksdb master in legocastle.
+  # find_package(RocksDB CONFIG REQUIRED)
+  # set(ROCKSDB_LIBRARIES RocksDB::rocksdb)
   find_package(folly CONFIG REQUIRED)
   set(FOLLY_LIBRARIES Folly::folly)
   set(FOLLY_BENCHMARK_LIBRARIES Folly::follybenchmark)
@@ -84,7 +87,6 @@ else()
 
   # If we are not building the submodules, replace targets with fake targets so
   # that later rules know they are already fulfilled.
-  add_custom_target(rocksdb)
   add_custom_target(folly)
   add_custom_target(fizz)
   add_custom_target(wangle)
@@ -119,14 +121,30 @@ auto_sources(hfiles "*.h" RECURSE "${LOGDEVICE_CLIENT_HEADER_DIR}")
 
 # The order of these libraries is very important, if library A pulls symbols
 # from B. Then A need to appear before B in that list.
-set(LOGDEVICE_EXTERNAL_DEPS
+
+set (THRIFT_DEPS
   ${FBTHRIFT_LIBRARIES}
   ${WANGLE_LIBRARIES}
   ${FIZZ_LIBRARIES}
-  ${ROCKSDB_LIBRARIES}
-  ${RSOCKET_LIBRARIES}
   ${LIBSODIUM_LIBRARIES}
+  ${RSOCKET_LIBRARIES}
   ${FMT_LIBRARIES}
+  ${FOLLY_LIBRARIES}
+  ${BZIP2_LIBRARIES}
+  ${ZLIB_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${OPENSSL_LIBRARIES}
+  ${ZSTD_LIBRARY}
+  ${GLOG_LIBRARIES}
+  ${LIBGFLAGS_LIBRARY}
+  ${SNAPPY_LIBRARY}
+  Threads::Threads
+  ${LIBLZMA_LIBRARIES})
+
+set(LOGDEVICE_EXTERNAL_DEPS
+  ${THRIFT_DEPS}
+  ${ROCKSDB_LIBRARIES}
+  ${LIBSODIUM_LIBRARIES}
   ${FOLLY_BENCHMARK_LIBRARIES}
   ${FOLLY_LIBRARIES}
   ${FOLLY_TEST_UTIL_LIBRARIES}

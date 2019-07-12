@@ -50,7 +50,7 @@ def fbcode_builder_spec(builder):
         "LogDevice/logdevice/_build:cmake_defines", {"BUILD_SUBMODULES": "OFF"}
     )
     return {
-        "depends_on": [zstd, folly, rocksdb, fizz, wangle, sodium, rsocket, fmt],
+        "depends_on": [zstd, folly, fizz, wangle, sodium, rsocket, fmt],
         "steps": [
             # This isn't a separete spec, since only fbthrift uses mstch.
             builder.github_project_workdir("no1msd/mstch", "build"),
