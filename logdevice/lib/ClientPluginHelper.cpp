@@ -10,12 +10,14 @@
 
 #include "logdevice/common/plugin/BuiltinClientDefaultSettingsProvider.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/plugin/DynamicPluginLoader.h"
 #include "logdevice/common/plugin/StaticPluginLoader.h"
 
 namespace facebook { namespace logdevice {
 
 PluginVector getClientPluginProviders() {
-  return createPluginVector<StaticPluginLoader,
+  return createPluginVector<DynamicPluginLoader,
+                            StaticPluginLoader,
                             BuiltinPluginProvider,
                             BuiltinClientDefaultSettingsProvider>();
 }

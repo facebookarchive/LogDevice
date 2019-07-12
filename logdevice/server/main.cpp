@@ -30,6 +30,7 @@
 #include "logdevice/common/commandline_util.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/plugin/DynamicPluginLoader.h"
 #include "logdevice/common/plugin/HotTextOptimizerPlugin.h"
 #include "logdevice/common/plugin/Logger.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
@@ -280,7 +281,9 @@ int main(int argc, const char** argv) {
 
   std::shared_ptr<PluginRegistry> plugin_registry =
       std::make_shared<PluginRegistry>(
-          createPluginVector<StaticPluginLoader, BuiltinPluginProvider>());
+          createPluginVector<DynamicPluginLoader,
+                             StaticPluginLoader,
+                             BuiltinPluginProvider>());
   auto ht_plugin = plugin_registry->getSinglePlugin<HotTextOptimizerPlugin>(
       PluginType::HOT_TEXT_OPTIMIZER);
   if (ht_plugin) {

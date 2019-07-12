@@ -19,6 +19,7 @@
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/plugin/DynamicPluginLoader.h"
 #include "logdevice/common/plugin/Logger.h"
 #include "logdevice/common/plugin/StaticPluginLoader.h"
 #include "logdevice/common/util.h"
@@ -100,7 +101,9 @@ int main(int argc, const char* argv[]) {
 
   std::shared_ptr<PluginRegistry> plugin_registry =
       std::make_shared<PluginRegistry>(
-          createPluginVector<StaticPluginLoader, BuiltinPluginProvider>());
+          createPluginVector<DynamicPluginLoader,
+                             StaticPluginLoader,
+                             BuiltinPluginProvider>());
 
   {
     std::shared_ptr<Logger> logger_plugin =

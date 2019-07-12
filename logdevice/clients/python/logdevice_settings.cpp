@@ -10,6 +10,7 @@
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/clients/python/util/util.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/plugin/DynamicPluginLoader.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/plugin/StaticPluginLoader.h"
 #include "logdevice/common/settings/GossipSettings.h"
@@ -65,7 +66,9 @@ void validate_server_settings(boost::python::dict input) {
 
   std::shared_ptr<PluginRegistry> plugin_registry =
       std::make_shared<PluginRegistry>(
-          createPluginVector<StaticPluginLoader, BuiltinPluginProvider>());
+          createPluginVector<DynamicPluginLoader,
+                             StaticPluginLoader,
+                             BuiltinPluginProvider>());
   plugin_registry->addOptions(settings_updater.get());
 
   auto input_settings = dict_to_map(input);
