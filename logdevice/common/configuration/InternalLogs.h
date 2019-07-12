@@ -45,6 +45,7 @@ class InternalLogs {
   static constexpr logid_t MAINTENANCE_LOG_DELTAS{4611686018427387899};
 
   using NameLookupMap = folly::F14FastMap<std::string, logid_t>;
+  static uint32_t numInternalLogs();
   static const NameLookupMap& nameLookup();
   static logid_t lookupByName(const std::string& name);
   static std::string lookupByID(logid_t);

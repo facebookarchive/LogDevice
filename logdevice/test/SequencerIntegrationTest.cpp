@@ -3474,11 +3474,12 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
   log_attrs.set_backlogDuration(std::chrono::seconds(40));
   log_attrs.set_nodeSetSize(1);
+  const uint32_t num_user_logs = 1;
 
   // N0 sequencer, N1, N2 storage nodes
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .setNumLogs(1)
+          .setNumLogs(num_user_logs)
           .setLogAttributes(log_attrs)
           .setNumDBShards(1)
           .setParam("--nodeset-adjustment-period", "2s")
@@ -3511,11 +3512,16 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
             stats.at("metadata_updates_without_sequencer_reactivation"));
   };
 
-  // Nodesets of log 1 and internal logs should be randomized every second.
+  // Nodesets of log 1 and internal logs should be randomized every 2 second.
+  const uint32_t num_internal_logs =
+      configuration::InternalLogs::numInternalLogs();
+  uint32_t min_reactivations = (num_internal_logs + num_user_logs) *
+      (10 / 2) /*sleep time / adjustment period*/;
   ld_info("Checking stats");
   stats = cluster->getNode(0).stats();
-  EXPECT_GE(stats.at("nodeset_randomizations_done"), 2);
-  EXPECT_LE(stats.at("nodeset_randomizations_done"), 40);
+
+  // Conservatively since this is a time based test
+  EXPECT_GE(stats.at("nodeset_randomizations_done"), min_reactivations / 1.5);
   EXPECT_EQ(0, stats.at("nodeset_adjustments_done"));
   print_stats();
 
@@ -3532,12 +3538,14 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   std::this_thread::sleep_for(std::chrono::seconds(10));
 
   // No logs have enough throughput to increase nodeset size from 1 to 2.
+  min_reactivations = (2 * min_reactivations);
   ld_info("Checking stats");
   stats = cluster->getNode(0).stats();
   EXPECT_EQ(randomizations_before, stats.at("nodeset_randomizations_done"));
   EXPECT_EQ(0, stats.at("nodeset_adjustments_done"));
-  EXPECT_GE(stats.at("nodeset_adjustments_skipped"), 4);
-  EXPECT_LE(stats.at("nodeset_adjustments_skipped"), 80);
+
+  // Conservatively since this is a time based test
+  EXPECT_GE(stats.at("nodeset_adjustments_skipped"), min_reactivations / 1.5);
   print_stats();
 
   // Append to log 1 at 100 KB/s for 20 seconds.

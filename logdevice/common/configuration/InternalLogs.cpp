@@ -31,6 +31,10 @@ const InternalLogs::NameLookupMap& InternalLogs::nameLookup() {
   return inst;
 }
 
+uint32_t InternalLogs::numInternalLogs() {
+  return nameLookup().size();
+}
+
 logid_t InternalLogs::lookupByName(const std::string& name) {
   auto it = nameLookup().find(name);
   if (it == nameLookup().end()) {
