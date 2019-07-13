@@ -20,23 +20,8 @@ enum ProtocolVersion : uint16_t {
   //
   // Minimum version number of the protocol this version of LogDevice is
   // backward compatible with - 1
-  PROTOCOL_VERSION_LOWER_BOUND = 85,
+  PROTOCOL_VERSION_LOWER_BOUND = 91,
 
-  CLEAN_MESSAGE_SUPPORT_OFFSET_MAP, // = 86
-
-  // RECORD_Message contains offsets in OffsetMap structure
-  RECORD_MESSAGE_SUPPORT_OFFSET_MAP, // = 87
-
-  GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP, // = 88
-
-  // GOSSIP_Message has new data to support adaptive boycotting
-  ADAPTIVE_BOYCOTT_DURATION, // = 89
-
-  // Check GOSSIP_Message.h and GET_CLUSTER_STATE_REPLY_Message.cpp
-  STARTING_STATE_SUPPORT, // == 90;
-
-  // See comment in STORE_Message::serialize()
-  NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES, // = 91
   // GOSSIP_Message includes node_id_list_ to deliver hashmap
   HASHMAP_SUPPORT_IN_GOSSIP, // = 92
 
@@ -68,12 +53,6 @@ enum ProtocolVersion : uint16_t {
   // NOTE: do not add anything below PROTOCOL_VERSION_UPPER_BOUND
 };
 
-static_assert(CLEAN_MESSAGE_SUPPORT_OFFSET_MAP == 86, "");
-static_assert(RECORD_MESSAGE_SUPPORT_OFFSET_MAP == 87, "");
-static_assert(GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP == 88, "");
-static_assert(ADAPTIVE_BOYCOTT_DURATION == 89, "");
-static_assert(STARTING_STATE_SUPPORT == 90, "");
-static_assert(NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES == 91, "");
 static_assert(HASHMAP_SUPPORT_IN_GOSSIP == 92, "");
 static_assert(RID_IN_CONFIG_MESSAGES == 93, "");
 static_assert(WAVE_IN_MUTATED == 94, "");

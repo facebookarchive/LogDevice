@@ -67,11 +67,7 @@ void RECORD_Message::serialize(ProtocolWriter& writer) const {
 
   if (offsets_.isValid()) {
     ld_check(header_.flags & RECORD_Header::INCLUDE_BYTE_OFFSET);
-    if (writer.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
-      offsets_.serialize(writer);
-    } else {
-      writer.write(offsets_.getCounter(BYTE_OFFSET));
-    }
+    offsets_.serialize(writer);
   }
 
   ld_check(payload_.size() < Message::MAX_LEN); // must have been checked
@@ -96,13 +92,7 @@ MessageReadResult RECORD_Message::deserialize(ProtocolReader& reader) {
 
   OffsetMap offsets;
   if (header.flags & RECORD_Header::INCLUDE_BYTE_OFFSET) {
-    if (reader.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
-      offsets.deserialize(reader, false /* unused */);
-    } else {
-      uint64_t byte_offset = BYTE_OFFSET_INVALID;
-      reader.read(&byte_offset);
-      offsets.setCounter(BYTE_OFFSET, byte_offset);
-    }
+    offsets.deserialize(reader, false /* unused */);
   }
 
   if (header.flags & RECORD_Header::DIGEST) {
@@ -278,15 +268,9 @@ std::unique_ptr<ExtraMetadata> read_extra_metadata(ProtocolReader& reader,
   reader.readVector(&result->copyset, result->header.copyset_size);
 
   if (flags & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) {
-    if (reader.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
-      OffsetMap offsets_within_epoch;
-      offsets_within_epoch.deserialize(reader, false /* unused */);
-      result->offsets_within_epoch = std::move(offsets_within_epoch);
-    } else {
-      uint64_t offset_within_epoch = BYTE_OFFSET_INVALID;
-      reader.read(&offset_within_epoch);
-      result->offsets_within_epoch.setCounter(BYTE_OFFSET, offset_within_epoch);
-    }
+    OffsetMap offsets_within_epoch;
+    offsets_within_epoch.deserialize(reader, false /* unused */);
+    result->offsets_within_epoch = std::move(offsets_within_epoch);
   }
   return result;
 }
@@ -302,11 +286,7 @@ void write_extra_metadata(ProtocolWriter& writer,
   writer.writeVector(metadata.copyset);
   if (metadata.offsets_within_epoch.isValid()) {
     ld_check(header.flags & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH);
-    if (writer.proto() >= Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
-      metadata.offsets_within_epoch.serialize(writer);
-    } else {
-      writer.write(metadata.offsets_within_epoch.getCounter(BYTE_OFFSET));
-    }
+    metadata.offsets_within_epoch.serialize(writer);
   }
 }
 

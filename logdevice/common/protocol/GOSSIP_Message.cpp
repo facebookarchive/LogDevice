@@ -60,10 +60,6 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
     std::sort(sorted_node_list.begin(), sorted_node_list.end());
   }
 
-  if (writer.proto() < Compatibility::ProtocolVersion::STARTING_STATE_SUPPORT) {
-    /* remove starting list */
-    flags &= ~HAS_STARTING_LIST_FLAG;
-  }
   writer.write((uint16_t)node_list_.size());
   writer.write(gossip_node_);
   writer.write(flags);
@@ -89,11 +85,7 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
   }
 
   writeBoycottList(writer);
-
-  if (writer.proto() >=
-      Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
-    writeBoycottDurations(writer);
-  }
+  writeBoycottDurations(writer);
 
   if (writer.proto() <
       Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
@@ -151,11 +143,7 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
   }
 
   msg->readBoycottList(reader);
-
-  if (reader.proto() >=
-      Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
-    msg->readBoycottDurations(reader);
-  }
+  msg->readBoycottDurations(reader);
 
   if (reader.proto() <
       Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
@@ -203,10 +191,7 @@ void GOSSIP_Message::writeBoycottList(ProtocolWriter& writer) const {
   for (auto& boycott : boycott_list_) {
     writer.write(boycott.node_index);
     writer.write(boycott.boycott_in_effect_time);
-    if (writer.proto() >=
-        Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
-      writer.write(boycott.boycott_duration);
-    }
+    writer.write(boycott.boycott_duration);
     writer.write(boycott.reset);
   }
 }
@@ -219,12 +204,7 @@ void GOSSIP_Message::readBoycottList(ProtocolReader& reader) {
   for (auto& boycott : boycott_list_) {
     reader.read(&boycott.node_index);
     reader.read(&boycott.boycott_in_effect_time);
-    if (reader.proto() >=
-        Compatibility::ProtocolVersion::ADAPTIVE_BOYCOTT_DURATION) {
-      reader.read(&boycott.boycott_duration);
-    } else {
-      boycott.boycott_duration = getDefaultBoycottDuration();
-    }
+    reader.read(&boycott.boycott_duration);
     reader.read(&boycott.reset);
   }
 }

@@ -36,11 +36,9 @@ void CLEAN_Message::serialize(ProtocolWriter& writer) const {
   write_header.flags |= CLEAN_Header::INCLUDE_TAIL_RECORD;
   writer.write(write_header);
   writer.writeVector(absent_nodes_);
-  if (writer.proto() >= Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
-    ld_check(tail_record_.isValid());
-    tail_record_.serialize(writer);
-    epoch_size_map_.serialize(writer);
-  }
+  ld_check(tail_record_.isValid());
+  tail_record_.serialize(writer);
+  epoch_size_map_.serialize(writer);
 }
 
 StorageSet CLEAN_Message::readAbsentNodes(ProtocolReader& reader,
@@ -65,16 +63,10 @@ MessageReadResult CLEAN_Message::deserialize(ProtocolReader& reader) {
 
   TailRecord tail_record;
   OffsetMap epoch_size_map;
-  if (reader.proto() >= Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
-    if (hdr.flags & CLEAN_Header::INCLUDE_TAIL_RECORD) {
-      tail_record.deserialize(reader, true);
-    }
-    epoch_size_map.deserialize(reader, false /* unused */);
-  } else {
-    epoch_size_map.setCounter(BYTE_OFFSET, hdr.epoch_size_DEPRECATED);
-    tail_record.offsets_map_.setCounter(
-        BYTE_OFFSET, hdr.epoch_end_offset_DEPRECATED);
+  if (hdr.flags & CLEAN_Header::INCLUDE_TAIL_RECORD) {
+    tail_record.deserialize(reader, true);
   }
+  epoch_size_map.deserialize(reader, false /* unused */);
   hdr.epoch_size_DEPRECATED = BYTE_OFFSET_INVALID;
   hdr.epoch_end_offset_DEPRECATED = BYTE_OFFSET_INVALID;
 

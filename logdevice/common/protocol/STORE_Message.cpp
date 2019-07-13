@@ -124,16 +124,6 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
 
   ld_check(!payload_ || payload_->valid());
 
-  const auto proto = writer.proto();
-
-  if (proto <
-      Compatibility::ProtocolVersion::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES) {
-    ld_debug("Unsupported version %d: STORE_Message does not support versions "
-             "before %d",
-             proto,
-             Compatibility::ProtocolVersion::
-                 NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES);
-  }
   writer.write(header_);
 
   if (header_.flags & STORE_Header::RECOVERY) {

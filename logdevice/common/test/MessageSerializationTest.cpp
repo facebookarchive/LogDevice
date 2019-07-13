@@ -130,12 +130,7 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(sent.header_.nsync, recv.header_.nsync);
     ASSERT_EQ(sent.header_.copyset_offset, recv.header_.copyset_offset);
     ASSERT_EQ(sent.header_.copyset_size, recv.header_.copyset_size);
-    if (proto >= Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES) {
-      ASSERT_EQ(sent.header_.flags, recv.header_.flags);
-    } else {
-      ASSERT_EQ(sent.header_.flags | STORE_Header::STICKY_COPYSET,
-                recv.header_.flags);
-    }
+    ASSERT_EQ(sent.header_.flags, recv.header_.flags);
     ASSERT_EQ(sent.header_.timeout_ms, recv.header_.timeout_ms);
     ASSERT_EQ(sent.header_.sequencer_node_id, recv.header_.sequencer_node_id);
     ASSERT_EQ(sent.extra_.recovery_id, recv.extra_.recovery_id);
@@ -271,9 +266,7 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(m.header_.epoch, m2.header_.epoch);
     ASSERT_EQ(m.header_.recovery_id, m2.header_.recovery_id);
     ASSERT_EQ(m.epoch_size_map_, m2.epoch_size_map_);
-    if (proto >= Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
-      ASSERT_TRUE(m.tail_record_.sameContent(m2.tail_record_));
-    }
+    ASSERT_TRUE(m.tail_record_.sameContent(m2.tail_record_));
   }
 
   void checkSHUTDOWN(const SHUTDOWN_Message& m,
@@ -393,9 +386,6 @@ struct TestStoreMessageFactory {
 
   std::string serialized(uint16_t proto) const {
     auto flags = header_.flags;
-    if (proto < Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES) {
-      flags |= STORE_Header::STICKY_COPYSET;
-    }
     std::string rv = "CE0465BE038BE5C5E25152C7813ABC0F" // rid
                      "8EEC9DDEBF2549EB"                 // timestamp
                      "BBB8ECEB"                         // last_known_good
@@ -474,7 +464,7 @@ TEST_F(MessageSerializationTest, STORE) {
   };
   DO_TEST(m,
           check,
-          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -493,7 +483,7 @@ TEST_F(MessageSerializationTest, STORE_WithKey) {
   };
   DO_TEST(m,
           check,
-          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -514,7 +504,7 @@ TEST_F(MessageSerializationTest, STORE_WithFilterableKey) {
   };
   DO_TEST(m,
           check,
-          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -536,7 +526,7 @@ TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo2) {
   };
   DO_TEST(m,
           check,
-          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -558,7 +548,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
   };
   DO_TEST(m,
           check,
-          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -579,7 +569,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetMapInfo) {
   };
   DO_TEST(m,
           check,
-          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -599,7 +589,7 @@ TEST_F(MessageSerializationTest, STORE_WithFirstAmendableOffset) {
   };
   DO_TEST(m,
           check,
-          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -619,7 +609,7 @@ TEST_F(MessageSerializationTest, STORE_WithE2ETracingContext) {
   };
   DO_TEST(m,
           check,
-          Compatibility::NO_BLOCK_STARTING_LSN_IN_STORE_MESSAGES,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
           [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
@@ -894,16 +884,10 @@ TEST_F(MessageSerializationTest, RECORD) {
     return RECORD_Message::deserialize(reader);
   };
 
-  auto expected_fn = [](uint16_t proto) {
-    if (proto < Compatibility::RECORD_MESSAGE_SUPPORT_OFFSET_MAP) {
-      return "ADCDC109386DAEB1425FA4E1402B82F8B066A8C8973993E7E75FF64680896CDA1"
-             "10300000000DA30740BE50A27DB02531D00008702000004000000000000000A00"
-             "000000000000707265766564";
-    } else {
-      return "ADCDC109386DAEB1425FA4E1402B82F8B066A8C8973993E7E75FF64680896CDA1"
-             "10300000000DA30740BE50A27DB02531D00008702000001F60400000000000000"
-             "01F60A00000000000000707265766564";
-    }
+  auto expected_fn = [](uint16_t /*proto*/) {
+    return "ADCDC109386DAEB1425FA4E1402B82F8B066A8C8973993E7E75FF64680896CDA1"
+           "10300000000DA30740BE50A27DB02531D00008702000001F60400000000000000"
+           "01F60A00000000000000707265766564";
   };
 
   DO_TEST(m,
@@ -1292,22 +1276,16 @@ TEST_F(MessageSerializationTest, CLEAN) {
       StorageSet{ShardID(9, 8), ShardID(8, 2), ShardID(113, 0), ShardID(7, 3)};
   CLEAN_Message m2(h, tail, offsets_within_epoch, absent_nodes);
   {
-    std::string expected = "D38347A48A8EC1BB05CE49A83A3B472C8D47498B0100DCC49E8"
-                           "FF7C34E08B373C4D20400AA8684EC3F7B7D9B1354C9492284B4"
-                           "AB030009000800080002007100000007000300";
+    std::string expected =
+        "D38347A48A8EC1BB05CE49A83A3B472C8D47498B0100DCC49E8FF7C34E08B373C4D204"
+        "00AA8684EC3F7B7D9B1354C9492284B4AB030009000800080002007100000007000300"
+        "D38347A48A8EC1BB00000000000000000000000000000000AA8684EC3F7B7D9B000000"
+        "000000000001F61354C9492284B4AB";
     DO_TEST(m2,
             check,
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
-            [&](uint16_t proto) {
-              if (proto < Compatibility::CLEAN_MESSAGE_SUPPORT_OFFSET_MAP) {
-                return expected;
-              } else {
-                return expected +
-                    "D38347A48A8EC1BB00000000000000000000000000000000AA8684EC3F"
-                    "7B7D9B000000000000000001F61354C9492284B4AB";
-              }
-            },
+            [&](uint16_t /*proto*/) { return expected; },
             nullptr);
   }
 }

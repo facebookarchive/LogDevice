@@ -33,30 +33,16 @@ GET_SEQ_STATE_REPLY_Message::deserialize(ProtocolReader& reader) {
     uint64_t timestamp;
     reader.read(&msg->tail_attributes_.last_released_real_lsn);
     reader.read(&timestamp);
-    if (reader.proto() >=
-        Compatibility::GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP) {
-      OffsetMap offsets;
-      offsets.deserialize(reader, false /* unused */);
-      msg->tail_attributes_.offsets = OffsetMap::toRecord(std::move(offsets));
-    } else {
-      uint64_t byte_offset = BYTE_OFFSET_INVALID;
-      reader.read(&byte_offset);
-      msg->tail_attributes_.offsets.setCounter(BYTE_OFFSET, byte_offset);
-    }
+    OffsetMap offsets;
+    offsets.deserialize(reader, false /* unused */);
+    msg->tail_attributes_.offsets = OffsetMap::toRecord(std::move(offsets));
     msg->tail_attributes_.last_timestamp = std::chrono::milliseconds(timestamp);
   }
 
   if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_EPOCH_OFFSET) {
-    if (reader.proto() >=
-        Compatibility::GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP) {
-      OffsetMap epoch_offsets;
-      epoch_offsets.deserialize(reader, false /* unused */);
-      msg->epoch_offsets_ = std::move(epoch_offsets);
-    } else {
-      uint64_t epoch_offset = BYTE_OFFSET_INVALID;
-      reader.read(&epoch_offset);
-      msg->epoch_offsets_.setCounter(BYTE_OFFSET, epoch_offset);
-    }
+    OffsetMap epoch_offsets;
+    epoch_offsets.deserialize(reader, false /* unused */);
+    msg->epoch_offsets_ = std::move(epoch_offsets);
   }
 
   if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_HISTORICAL_METADATA) {
@@ -96,23 +82,13 @@ void GET_SEQ_STATE_REPLY_Message::serialize(ProtocolWriter& writer) const {
     writer.write(tail_attributes_.last_released_real_lsn);
     uint64_t timestamp = tail_attributes_.last_timestamp.count();
     writer.write(timestamp);
-    if (writer.proto() >=
-        Compatibility::GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP) {
-      OffsetMap offsets =
-          OffsetMap::fromRecord(std::move(tail_attributes_.offsets));
-      offsets.serialize(writer);
-    } else {
-      writer.write(tail_attributes_.offsets.getCounter(BYTE_OFFSET));
-    }
+    OffsetMap offsets =
+        OffsetMap::fromRecord(std::move(tail_attributes_.offsets));
+    offsets.serialize(writer);
   }
 
   if (header_.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_EPOCH_OFFSET) {
-    if (writer.proto() >=
-        Compatibility::GET_SEQ_STATE_REPLY_MESSAGE_SUPPORT_OFFSET_MAP) {
-      epoch_offsets_.serialize(writer);
-    } else {
-      writer.write(epoch_offsets_.getCounter(BYTE_OFFSET));
-    }
+    epoch_offsets_.serialize(writer);
   }
 
   if (header_.flags &
