@@ -29,6 +29,7 @@
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/fatalsignal.h"
 #include "logdevice/server/locallogstore/FailingLocalLogStore.h"
+#include "logdevice/server/locallogstore/IOTracing.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBListener.h"
@@ -115,7 +116,15 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
   std::shared_ptr<Configuration> config =
       updateable_config ? updateable_config->get() : nullptr;
 
-  env_ = std::make_unique<RocksDBEnv>(db_settings, stats);
+  std::vector<IOTracing*> tracing_ptrs;
+  for (shard_index_t i = 0; i < nshards; ++i) {
+    io_tracing_by_shard_.push_back(std::make_unique<IOTracing>(i));
+    tracing_ptrs.push_back(io_tracing_by_shard_[i].get());
+  }
+  // If tracing is enabled in settings, enable it before opening the DBs.
+  refreshIOTracingSettings();
+
+  env_ = std::make_unique<RocksDBEnv>(db_settings, stats, tracing_ptrs);
   {
     int num_bg_threads_lo = db_settings->num_bg_threads_lo;
     if (num_bg_threads_lo == -1) {
@@ -187,7 +196,11 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
 
       if (stats) {
         shard_config.options_.listeners.push_back(
-            std::make_shared<RocksDBListener>(stats, shard_idx));
+            std::make_shared<RocksDBListener>(
+                stats,
+                shard_idx,
+                env_.get(),
+                io_tracing_by_shard_[shard_idx].get()));
       }
 
       RocksDBLogStoreFactory factory(
@@ -224,14 +237,16 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
       }
 
       if (should_open_shard) {
-        shard_store = factory.create(shard_idx, nshards, shard_path.string());
+        shard_store = factory.create(shard_idx,
+                                     nshards,
+                                     shard_path.string(),
+                                     io_tracing_by_shard_[shard_idx].get());
       }
 
       if (shard_store) {
         ld_info("Opened RocksDB instance at %s", shard_path.c_str());
-        bool enable_tracing = settings.trace_all_db_shards ||
-            shard_idx == settings.trace_db_shard;
-        shard_store->setTracingEnabled(enable_tracing);
+        ld_check(dynamic_cast<RocksDBLogStoreBase*>(shard_store.get()) !=
+                 nullptr);
       } else {
         PER_SHARD_STAT_INCR(stats_, failing_log_stores, shard_idx);
         shard_store = std::make_unique<FailingLocalLogStore>();
@@ -756,7 +771,25 @@ void ShardedRocksDBLocalLogStore::printDiskShardMapping() {
   ld_info("%s", disk_mapping_ss.str().c_str());
 }
 
+void ShardedRocksDBLocalLogStore::refreshIOTracingSettings() {
+  std::vector<bool> enabled_by_shard(io_tracing_by_shard_.size());
+  for (shard_index_t idx : db_settings_.get()->io_tracing_shards) {
+    if (idx < 0 || idx >= enabled_by_shard.size()) {
+      ld_error("Shard idx out of range in --rocksdb-io-tracing-shards: %d not "
+               "in [0, %lu). Ignoring.",
+               static_cast<int>(idx),
+               io_tracing_by_shard_.size());
+      continue;
+    }
+    enabled_by_shard[idx] = true;
+  }
+  for (shard_index_t i = 0; i < enabled_by_shard.size(); ++i) {
+    io_tracing_by_shard_[i]->setEnabled(enabled_by_shard[i]);
+  }
+}
+
 void ShardedRocksDBLocalLogStore::onSettingsUpdated() {
+  refreshIOTracingSettings();
   for (auto& shard : shards_) {
     auto rocksdb_shard = dynamic_cast<RocksDBLogStoreBase*>(shard.get());
     if (rocksdb_shard == nullptr) {

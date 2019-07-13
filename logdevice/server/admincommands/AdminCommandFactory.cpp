@@ -55,7 +55,6 @@
 #include "logdevice/server/admincommands/InjectShardFault.h"
 #include "logdevice/server/admincommands/ListOrEraseMetadata.h"
 #include "logdevice/server/admincommands/LogStorageStateCommand.h"
-#include "logdevice/server/admincommands/LogStoreTracing.h"
 #include "logdevice/server/admincommands/NewConnections.h"
 #include "logdevice/server/admincommands/Partitions.h"
 #include "logdevice/server/admincommands/PauseOrUnpauseFileEpochStore.h"
@@ -184,7 +183,6 @@ AdminCommandFactory::AdminCommandFactory() {
   deprecated("logstoragestate", "info log_storage_state");
   selector_.add<commands::LogStorageStateCommand>("info log_storage_state");
 
-  selector_.add<commands::LogStoreTracing>("log_store_tracing");
   selector_.add<commands::TrafficShaping>(
       "traffic_shaping", Restriction::LOCALHOST_ONLY);
   selector_.add<commands::Up>("up", Restriction::LOCALHOST_ONLY);

@@ -11,10 +11,6 @@
 
 namespace facebook { namespace logdevice {
 
-thread_local const TrackableIterator* IteratorTracker::active_iterator;
-thread_local const char* IteratorTracker::active_iterator_op;
-thread_local std::string IteratorTracker::active_iterator_op_context;
-
 void TrackableIterator::registerTracking(std::string column_family,
                                          logid_t log_id,
                                          bool tailing,

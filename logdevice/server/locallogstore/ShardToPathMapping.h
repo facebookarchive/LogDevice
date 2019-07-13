@@ -44,6 +44,15 @@ class ShardToPathMapping {
   // expected number of shards and the directory structure on disk
   int get(std::vector<boost::filesystem::path>* paths_out);
 
+  // Parses path to a file in a shard. Expected format:
+  // "<path>/shard<idx>/<filename>
+  // If the given path is of that form, assigns <idx> and <filename> to
+  // *out_shard and *out_filename, and returns true.
+  // Otherwise returns false.
+  static bool parseFilePath(const std::string& path,
+                            shard_index_t* out_shard,
+                            std::string* out_filename);
+
  private:
   const boost::filesystem::path root_;
   const shard_size_t nshards_;

@@ -63,7 +63,6 @@ namespace facebook { namespace logdevice {
  *        always visit one partition at a time.
  */
 
-class StatsHolder;
 class ServerProcessor;
 
 class PartitionedRocksDBStore : public RocksDBLogStoreBase {
@@ -400,14 +399,16 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                                    uint32_t num_shards,
                                    const std::string& path,
                                    RocksDBLogStoreConfig rocksdb_config,
-                                   const Configuration* config = nullptr,
-                                   StatsHolder* stats = nullptr)
+                                   const Configuration* config,
+                                   StatsHolder* stats,
+                                   IOTracing* io_tracing)
       : PartitionedRocksDBStore(shard_idx,
                                 num_shards,
                                 path,
                                 std::move(rocksdb_config),
                                 config,
                                 stats,
+                                io_tracing,
                                 DeferInit::NO) {}
   ~PartitionedRocksDBStore() override;
 
@@ -1680,8 +1681,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   //  - get trimming policy from config.
   std::atomic<ServerProcessor*> processor_{nullptr};
 
-  StatsHolder* stats_;
-
   std::mutex manual_compaction_mutex_;
   std::list<partition_id_t> hi_pri_manual_compactions_;
   std::list<partition_id_t> lo_pri_manual_compactions_;
@@ -1751,6 +1750,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                                    RocksDBLogStoreConfig rocksdb_config,
                                    const Configuration* config,
                                    StatsHolder* stats,
+                                   IOTracing* io_tracing,
                                    DeferInit defer_init);
 
   // Part of initialization.

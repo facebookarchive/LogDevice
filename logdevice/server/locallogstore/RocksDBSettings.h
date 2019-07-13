@@ -334,6 +334,8 @@ class RocksDBSettings : public SettingsBundle {
 
   bool print_details;
 
+  std::vector<shard_index_t> io_tracing_shards;
+
   // When ld manages flushes, memory limit for the node and memtable
   // within rocksdb set to a very high value. rocksdb should never be
   // able to reach those limits and initiate a flush. This limit is a

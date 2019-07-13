@@ -1292,7 +1292,7 @@ CatchupOneStream::readNonBlocking(WeakRef<CatchupQueue> /*catchup_queue*/,
                   read_ctx.max_bytes_to_deliver_,
                   read_ctx.first_record_any_size_ ? "true" : "false");
 
-  LocalLogStore::ReadOptions options("CatchupOneStream::readNonBlocking");
+  LocalLogStore::ReadOptions options("catchup-nonblocking");
   options.allow_blocking_io = false; // on worker thread, disallow blocking I/O
   options.tailing = true;
   options.fill_cache = stream_->fill_cache_;
@@ -1370,7 +1370,7 @@ void CatchupOneStream::readOnStorageThread(
                   read_ctx.max_bytes_to_deliver_,
                   read_ctx.first_record_any_size_ ? "true" : "false");
 
-  LocalLogStore::ReadOptions options("CatchupOneStream::readOnStorageThread");
+  LocalLogStore::ReadOptions options("catchup");
   options.allow_blocking_io = true;
   options.tailing = true;
   options.fill_cache = stream_->fill_cache_;
@@ -2191,7 +2191,7 @@ int read_last_known_good_from_data_record(lsn_t& last_known_good_out,
   // Create log store iterator. Cannot use cached iterator, because we need to
   // perform a random access (no tail read).
   epoch_t epoch = lsn_to_epoch(stream.last_delivered_lsn_);
-  LocalLogStore::ReadOptions read_options(__FUNCTION__);
+  LocalLogStore::ReadOptions read_options("lng-from-record");
   read_options.allow_blocking_io = allow_blocking_io;
   read_options.fill_cache = false;
   auto iterator = store.read(stream.log_id_, read_options);

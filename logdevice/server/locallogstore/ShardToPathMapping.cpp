@@ -13,6 +13,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <folly/Conv.h>
 #include <folly/Random.h>
+#include <folly/ScopeGuard.h>
 
 #include "logdevice/common/debug.h"
 
@@ -180,6 +181,50 @@ bool ShardToPathMapping::assignFreeSlots(std::vector<fs::path> free_slots) {
     }
   }
   ld_check(free_slots.empty());
+  return true;
+}
+
+bool ShardToPathMapping::parseFilePath(const std::string& path,
+                                       shard_index_t* out_shard,
+                                       std::string* out_filename) {
+  auto complainer = folly::makeGuard([&] {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    2,
+                    "Couldn't parse shard idx from path: %s",
+                    path.c_str());
+  });
+
+  // Looking for "/shard42/".
+
+  size_t p = path.find("shard");
+  if (p == std::string::npos || (p != 0 && path[p - 1] != '/')) {
+    return false;
+  }
+
+  size_t q = path.find_first_of('/', p);
+  q = q == std::string::npos ? path.size() : q;
+  p += strlen("shard");
+  ld_check(q >= p);
+
+  shard_index_t shard;
+  try {
+    shard = folly::to<shard_index_t>(path.substr(p, q - p));
+  } catch (std::range_error&) {
+    return false;
+  }
+
+  if (shard < 0 || shard >= MAX_SHARDS) {
+    return false;
+  }
+
+  if (out_shard != nullptr) {
+    *out_shard = shard;
+  }
+  if (out_filename != nullptr) {
+    *out_filename = path.substr(q + (q < path.size() ? 1 : 0));
+  }
+
+  complainer.dismiss();
   return true;
 }
 

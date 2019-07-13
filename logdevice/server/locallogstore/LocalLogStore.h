@@ -38,6 +38,7 @@ namespace facebook { namespace logdevice {
  * @file  Interface for local log store implementations.
  */
 
+class IOTracing;
 class LocalLogStore;
 class Processor;
 class WriteOp;
@@ -67,76 +68,6 @@ enum class IteratorState {
   // Doesn't represent an actual state.
   // Used to count the number of elements.
   MAX
-};
-
-/**
- * A 64bit hash for file names.
- */
-class FileNameHash {
- public:
-  using raw_type = uint64_t;
-  explicit FileNameHash(const std::string& file_name) noexcept;
-  explicit constexpr FileNameHash(const raw_type raw_hash) noexcept
-      : val_(raw_hash) {}
-  constexpr raw_type val() const {
-    return val_;
-  }
-
- private:
-  raw_type val_;
-  // randomly generated
-  static constexpr uint64_t kHashSeed_ = 0xc14bf38163ee5aac;
-};
-
-/**
- * Combines a FileNameHash and a 64bit offset into a single
- * 64bit integer. This makes it possible to use a single atomic
- * operation on a SeekCookie to detect seeks on a device shared
- * by multiple files.
- *
- * When a single SeekCookie is shared by multiple files, interleaved
- * updates due to operations on different files can be detected by
- * using either the toFileHash() or toFileOffset() methods. If the
- * result doesn't match, respectively, the offset or FileNameHash
- * used during the last update for a given file, another operation
- * has modified one or both of the FileNameHash or offset stored
- * in the SeekCookie, indicating a seek unless the buffer cache
- * happens to still have the block in cache.
- */
-class SeekCookie {
- public:
-  using raw_type = uint64_t;
-  constexpr SeekCookie(const FileNameHash name_hash,
-                       const uint64_t offset) noexcept
-      : val_(name_hash.val() ^ offset) {}
-  explicit constexpr SeekCookie(const raw_type raw_cookie) noexcept
-      : val_(raw_cookie) {}
-  constexpr raw_type val() const {
-    return val_;
-  }
-
-  constexpr bool operator==(const SeekCookie& rhs) const {
-    return val() == rhs.val();
-  }
-
-  constexpr bool operator!=(const SeekCookie& rhs) const {
-    return val() != rhs.val();
-  }
-
-  // Extract the FileNameHash component of a SeekCookie given knowledge
-  // of the offset used to create the cookie.
-  constexpr FileNameHash toFileHash(const uint64_t offset) const {
-    return FileNameHash(val() ^ offset);
-  }
-
-  // Extract the offset component of a SeekCookie given knowledge
-  // of the FileNameHash used to create the cookie.
-  constexpr uint64_t toFileOffset(const FileNameHash name_hash) const {
-    return val() ^ name_hash.val();
-  }
-
- private:
-  raw_type val_;
 };
 
 class FlushCallback {
@@ -266,10 +197,6 @@ class LocalLogStore : boost::noncopyable {
 
     const LocalLogStore* getStore() const override {
       return store_;
-    }
-
-    bool tracingEnabled() const override {
-      return store_->tracingEnabled();
     }
 
     // Not copyable or movable
@@ -576,11 +503,8 @@ class LocalLogStore : boost::noncopyable {
     return false;
   }
 
-  bool tracingEnabled() const {
-    return tracing_enabled_.load(std::memory_order_relaxed);
-  }
-  void setTracingEnabled(bool enabled) {
-    tracing_enabled_.store(enabled);
+  IOTracing* getIOTracing() const {
+    return io_tracing_;
   }
 
   /**
@@ -1043,28 +967,6 @@ class LocalLogStore : boost::noncopyable {
   virtual int getShardIdx() const = 0;
 
   /**
-   * Record a new seek position for this shard.
-   *
-   * @param file_name_hash  A FileNameHash representing the file on which
-   *                        the current operation is being performed.
-   * @param offset          The starting offset of the operation.
-   * @param length          The length of the operation.
-   *
-   * @return true iff the new seek position (file/offset+length) is the result
-   *              of a sequential operation from the last recorded seek
-   *              position. (i.e. the passed in file_name_hash and offset
-   *              match what was recorded by the last call to
-   *              updateSeekPosition().)
-   */
-  bool updateSeekPosition(FileNameHash file_name_hash,
-                          uint64_t offset,
-                          size_t length) const {
-    SeekCookie newPos(file_name_hash, offset + length);
-    SeekCookie lastPos(seek_pos_.exchange(newPos.val()));
-    return lastPos != SeekCookie(file_name_hash, offset);
-  }
-
-  /**
    * Register to receive notifications as buffered data is retired
    * to stable storage.
    * Only tests override it.
@@ -1094,8 +996,7 @@ class LocalLogStore : boost::noncopyable {
   virtual ~LocalLogStore() {}
 
  protected:
-  mutable std::atomic<SeekCookie::raw_type> seek_pos_{0};
-  std::atomic<bool> tracing_enabled_{false};
+  IOTracing* io_tracing_ = nullptr;
 
   std::mutex flushing_mtx_;
   FlushCallbackList on_flush_cbs_;

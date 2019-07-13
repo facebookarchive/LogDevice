@@ -33,6 +33,7 @@
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/locallogstore/IOTracing.h"
 #include "logdevice/server/locallogstore/MemtableFlushedRequest.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStoreFindKey.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStoreFindTime.h"
@@ -339,15 +340,16 @@ PartitionedRocksDBStore::PartitionedRocksDBStore(
     RocksDBLogStoreConfig rocksdb_config,
     const Configuration* config,
     StatsHolder* stats,
+    IOTracing* io_tracing,
     DeferInit defer_init)
     : RocksDBLogStoreBase(shard_idx,
                           num_shards,
                           path,
                           std::move(rocksdb_config),
-                          stats),
+                          stats,
+                          io_tracing),
       logs_(),
-      data_cf_options_(rocksdb_config_.options_),
-      stats_(stats) {
+      data_cf_options_(rocksdb_config_.options_) {
   if (defer_init == DeferInit::NO) {
     init(config);
   }
@@ -554,7 +556,11 @@ RocksDBCFPtr PartitionedRocksDBStore::createColumnFamily(
 
   ld_check(db_);
   rocksdb::ColumnFamilyHandle* handle;
-  rocksdb::Status status = db_->CreateColumnFamily(options, name, &handle);
+  rocksdb::Status status;
+  {
+    SCOPED_IO_TRACING_CONTEXT(getIOTracing(), "create-cf:{}", name);
+    status = db_->CreateColumnFamily(options, name, &handle);
+  }
   if (!status.ok()) {
     ld_error("Failed to create column family \'%s\': %s",
              name.c_str(),
@@ -569,12 +575,20 @@ std::vector<std::unique_ptr<rocksdb::ColumnFamilyHandle>>
 PartitionedRocksDBStore::createColumnFamilies(
     const std::vector<std::string>& names,
     const rocksdb::ColumnFamilyOptions& options) {
+  ld_check(!names.empty());
   ld_check(!getSettings()->read_only);
   ld_check(!immutable_.load());
 
   ld_check(db_);
   std::vector<rocksdb::ColumnFamilyHandle*> handles;
-  rocksdb::Status status = db_->CreateColumnFamilies(options, names, &handles);
+  rocksdb::Status status;
+  {
+    SCOPED_IO_TRACING_CONTEXT(
+        getIOTracing(),
+        "create-cfs:{}",
+        names.size() > 1 ? names.front() + "-" + names.back() : names.front());
+    status = db_->CreateColumnFamilies(options, names, &handles);
+  }
   if (!status.ok()) {
     ld_error("Failed to create %lu column families \'%s\' - \'%s\': %s",
              names.size(),
@@ -2421,6 +2435,7 @@ int PartitionedRocksDBStore::findKey(logid_t log_id,
 rocksdb::Status
 PartitionedRocksDBStore::writeBatch(const rocksdb::WriteOptions& options,
                                     rocksdb::WriteBatch* batch) {
+  SCOPED_IO_TRACING_CONTEXT(getIOTracing(), "write-batch");
   uint64_t batch_size = batch->GetDataSize();
   uint64_t total_bytes_written =
       bytes_written_since_flush_eval_.fetch_add(batch_size);
@@ -2592,6 +2607,8 @@ bool PartitionedRocksDBStore::shouldCreatePartition() {
 int PartitionedRocksDBStore::writeMulti(
     const std::vector<const WriteOp*>& writes_in,
     const WriteOptions& options) {
+  SCOPED_IO_TRACING_CONTEXT(getIOTracing(), "writeMulti");
+
   ld_check(!getSettings()->read_only);
   ld_check(!immutable_.load());
 
@@ -2713,9 +2730,8 @@ int PartitionedRocksDBStore::writeMulti(
         std::chrono::seconds(10),
         2,
         "Retrying writeMultiImpl() because target partition was overestimated "
-        "or "
-        "dropped. This should be rare. Old target partition: %lu, new target "
-        "partition: %lu, min ts in batch: %s, min non-recovery ts: %s "
+        "or dropped. This should be rare. Old target partition: %lu, new "
+        "target partition: %lu, min ts in batch: %s, min non-recovery ts: %s "
         "(log: %lu, lsn: %s)",
         old_min_target_partition,
         min_target_partition,
@@ -3638,8 +3654,12 @@ int PartitionedRocksDBStore::dropPartitions(
     cf_handles.push_back(partition->cf_->get());
   }
 
-  ld_spew("Dropping prepared CFs");
-  auto status = db_->DropColumnFamilies(cf_handles);
+  rocksdb::Status status;
+  {
+    SCOPED_IO_TRACING_CONTEXT(
+        getIOTracing(), "drop-cfs:{}-{}", prev_oldest, oldest_to_keep - 1);
+    status = db_->DropColumnFamilies(cf_handles);
+  }
 
   if (!status.ok()) {
     // Ouch, we've already promised that it will be dropped
@@ -4746,6 +4766,8 @@ void PartitionedRocksDBStore::performCompactionInternal(
       }
 
       if (to_compact.reason == PartitionToCompact::Reason::PARTIAL) {
+        SCOPED_IO_TRACING_CONTEXT(
+            getIOTracing(), "part-compact|cf:{}", partition->id_);
         rocksdb::CompactionOptions options;
         options.compression = rocksdb_config_.options_.compression;
 
@@ -4754,6 +4776,11 @@ void PartitionedRocksDBStore::performCompactionInternal(
                                    to_compact.partial_compaction_filenames,
                                    0 /* L0 */);
       } else {
+        // This context currently doesn't do anything because full compactions
+        // run on background threads. But let's keep it in case this changes.
+        SCOPED_IO_TRACING_CONTEXT(
+            getIOTracing(), "full-compact|cf:{}", partition->id_);
+
         status = db_->CompactRange(rocksdb::CompactRangeOptions(),
                                    partition->cf_->get(),
                                    nullptr,
@@ -4949,6 +4976,8 @@ bool PartitionedRocksDBStore::performStronglyFilteredCompactionInternal(
     rocksdb::CompactionOptions options;
     options.compression = rocksdb_config_.options_.compression;
 
+    SCOPED_IO_TRACING_CONTEXT(
+        getIOTracing(), "filter-compact|cf:{}", partition->id_);
     status = db_->CompactFiles(
         options, partition->cf_->get(), files_to_compact, 0 /* L0 */);
   }
@@ -5410,6 +5439,7 @@ void PartitionedRocksDBStore::performMetadataCompaction() {
     if (shutdown_event_.signaled()) {
       return;
     }
+    SCOPED_IO_TRACING_CONTEXT(getIOTracing(), "meta-compact");
     status = db_->CompactRange(rocksdb::CompactRangeOptions(),
                                getMetadataCFHandle(),
                                nullptr,
@@ -5885,7 +5915,7 @@ static void setBGThreadName(const char* pri, shard_index_t shard_idx) {
 
   std::string name = "ld:s" + std::to_string(shard_idx) + ":db-bg-" + pri;
   ld_check_le(name.size(), 15);
-  ThreadID::set(ThreadID::Type::ROCKSDB, name);
+  ThreadID::set(ThreadID::Type::LOGSDB, name);
 }
 
 LocalLogStore::WriteThrottleState

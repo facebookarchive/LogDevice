@@ -102,6 +102,7 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
                                 std::move(rocksdb_config),
                                 config,
                                 stats,
+                                /* io_tracing */ nullptr,
                                 DeferInit::YES),
         time_(time) {
     PartitionedRocksDBStore::init(config);
@@ -4322,7 +4323,9 @@ TEST_F(PartitionedRocksDBStoreTest, IOPrio) {
   CompactionFilter filter;
 
   auto customize_config = [&](RocksDBLogStoreConfig& cfg) {
-    env = std::make_unique<RocksDBEnv>(cfg.rocksdb_settings_, nullptr);
+    env = std::make_unique<RocksDBEnv>(cfg.rocksdb_settings_,
+                                       /* stats */ nullptr,
+                                       std::vector<IOTracing*>());
     cfg.options_.env = env.get();
     cfg.options_.env->SetBackgroundThreads(
         cfg.rocksdb_settings_->num_bg_threads_lo, rocksdb::Env::LOW);
@@ -5785,7 +5788,8 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
   // SstFileManager, which ratelimits deletes, needs RocksDBEnv for OS
   // functionality like the filesystem
   if (!env_) {
-    env_ = std::make_unique<RocksDBEnv>(rocksdb_settings_, nullptr);
+    env_ = std::make_unique<RocksDBEnv>(
+        rocksdb_settings_, /* stats */ nullptr, std::vector<IOTracing*>());
   }
 
   // Measure with fast settings.

@@ -145,6 +145,8 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
  private:
   void printDiskShardMapping();
 
+  void refreshIOTracingSettings();
+
   void onSettingsUpdated();
 
   // Shutdown event to indicate that the sharded store is closing down.
@@ -154,6 +156,18 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   // Shards that use FailingLocalLogStore because they failed to open DB.
   std::set<int> failing_log_store_shards_;
+
+  // Per-shard objects holding IO tracing context. Index in vector is shard idx.
+  //
+  // Note: they could live inside LocalLogStore, but having them here is more
+  // convenient because (a) they're available throughout env_'s lifetime, so
+  // no need to worry e.g. about construction and destruction order of IOContext
+  // vs rocksdb::DB, or about whether it's possibile for Env to be used after
+  // rocksdb::DB is destroyed, (b) in future we'll probably allow switching
+  // LocalLogStore at runtime (e.g. closing the DB before disk repair and
+  // opening after), which would further complicate IOTracing lifetime and its
+  // interaction with Env if IOContext were to be owned by LocalLogStore.
+  std::vector<std::unique_ptr<IOTracing>> io_tracing_by_shard_;
 
   std::unique_ptr<RocksDBEnv> env_;
 

@@ -14,6 +14,8 @@
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/server/locallogstore/IOTracing.h"
+#include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 
 namespace facebook { namespace logdevice {
@@ -75,6 +77,24 @@ void RocksDBListener::OnTableFileCreated(
             toString(info.table_properties.user_collected_properties).c_str());
       }
     }
+  }
+}
+
+void RocksDBListener::OnFlushBegin(rocksdb::DB*,
+                                   const rocksdb::FlushJobInfo& info) {
+  IOTracing::AddContext* io_tracing_context =
+      env_->backgroundJobContextOfThisThread();
+  if (io_tracing_context && io_tracing_ && io_tracing_->isEnabled()) {
+    io_tracing_context->assign(io_tracing_, "flush|cf:{}", info.cf_name);
+  }
+}
+void RocksDBListener::OnCompactionBegin(
+    rocksdb::DB*,
+    const rocksdb::CompactionJobInfo& info) {
+  IOTracing::AddContext* io_tracing_context =
+      env_->backgroundJobContextOfThisThread();
+  if (io_tracing_context && io_tracing_ && io_tracing_->isEnabled()) {
+    io_tracing_context->assign(io_tracing_, "compact|cf:{}", info.cf_name);
   }
 }
 

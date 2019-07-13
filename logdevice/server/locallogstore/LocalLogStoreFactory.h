@@ -22,9 +22,11 @@ class LocalLogStoreFactory {
   virtual ~LocalLogStoreFactory() {}
 
   // On failure returns nullptr.
-  virtual std::unique_ptr<LocalLogStore> create(uint32_t shard_idx,
-                                                uint32_t num_shards,
-                                                std::string path) const = 0;
+  virtual std::unique_ptr<LocalLogStore>
+  create(uint32_t shard_idx,
+         uint32_t num_shards,
+         std::string path,
+         IOTracing* io_tracing) const = 0;
 };
 
 }} // namespace facebook::logdevice

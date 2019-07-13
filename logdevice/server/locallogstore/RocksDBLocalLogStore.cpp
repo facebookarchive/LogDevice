@@ -27,6 +27,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/server/locallogstore/IOTracing.h"
 #include "logdevice/server/locallogstore/IteratorSearch.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
@@ -42,8 +43,6 @@ namespace facebook { namespace logdevice {
  */
 static const int SCHEMA_VERSION = 2;
 
-using DeclareActive = LocalLogStore::ReadIterator::DeclareActive;
-using AddContext = LocalLogStore::ReadIterator::AddContext;
 using Direction = RocksDBLocalLogStore::CSIWrapper::Direction;
 using Location = RocksDBLocalLogStore::CSIWrapper::Location;
 
@@ -53,12 +52,14 @@ RocksDBLocalLogStore::RocksDBLocalLogStore(uint32_t shard_idx,
                                            uint32_t num_shards,
                                            const std::string& path,
                                            RocksDBLogStoreConfig rocksdb_config,
-                                           StatsHolder* stats)
+                                           StatsHolder* stats,
+                                           IOTracing* io_tracing)
     : RocksDBLogStoreBase(shard_idx,
                           num_shards,
                           path,
                           std::move(rocksdb_config),
-                          stats) {
+                          stats,
+                          io_tracing) {
   rocksdb::DB* db;
   rocksdb::Status status;
 
@@ -259,7 +260,6 @@ int RocksDBLocalLogStore::findKey(logid_t log_id,
 
 #define ROCKSDB_ACCOUNTED_OP(iterator, opname, op, itname)                  \
   do {                                                                      \
-    AddContext opContxt(#opname);                                           \
     auto* perf_context = rocksdb::get_perf_context();                       \
     uint64_t prev_reads = perf_context->block_read_byte;                    \
     uint64_t prev_read_count = perf_context->block_read_count;              \
@@ -332,12 +332,6 @@ class RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator
     return parent_->store_;
   }
 
-  // This iterator is not expected to ever be declared active because it's
-  // part of another iterator.
-  bool tracingEnabled() const override {
-    return false;
-  }
-
  private:
   // creates the iterator, if there isn't any
   void createIteratorIfNeeded();
@@ -403,12 +397,6 @@ class RocksDBLocalLogStore::CSIWrapper::DataIterator
 
   const LocalLogStore* getStore() const override {
     return parent_->store_;
-  }
-
-  // This iterator is not expected to ever be declared active because it's
-  // part of another iterator.
-  bool tracingEnabled() const override {
-    return false;
   }
 
   // TODO (#10357210): Temporary, delet.
@@ -544,7 +532,8 @@ void RocksDBLocalLogStore::CSIWrapper::seek(logid_t log,
                                             lsn_t lsn,
                                             ReadFilter* filter,
                                             ReadStats* stats) {
-  DeclareActive activeIter(this, filter ? "seek(filtered)" : "seek");
+  SCOPED_IO_TRACING_CONTEXT_FROM_ITERATOR(
+      this, filter ? "seek(filtered)" : "seek");
   moveTo(Location(log, lsn), Direction::FORWARD, false, filter, stats);
   trackSeek(lsn, 0);
 }
@@ -557,7 +546,7 @@ void RocksDBLocalLogStore::CSIWrapper::seek(lsn_t lsn,
 }
 
 void RocksDBLocalLogStore::CSIWrapper::seekForPrev(lsn_t lsn) {
-  DeclareActive activeIter(this, "seekForPrev");
+  SCOPED_IO_TRACING_CONTEXT_FROM_ITERATOR(this, "seekForPrev");
   ld_check(log_id_.hasValue());
   moveTo(Location(log_id_.value(), lsn),
          Direction::BACKWARD,
@@ -569,7 +558,8 @@ void RocksDBLocalLogStore::CSIWrapper::seekForPrev(lsn_t lsn) {
 
 void RocksDBLocalLogStore::CSIWrapper::next(ReadFilter* filter,
                                             ReadStats* stats) {
-  DeclareActive activeIter(this, filter ? "next(filtered)" : "next");
+  SCOPED_IO_TRACING_CONTEXT_FROM_ITERATOR(
+      this, filter ? "next(filtered)" : "next");
   moveTo(getLocation().advance(Direction::FORWARD, log_id_),
          Direction::FORWARD,
          /* near */ true,
@@ -578,7 +568,7 @@ void RocksDBLocalLogStore::CSIWrapper::next(ReadFilter* filter,
 }
 
 void RocksDBLocalLogStore::CSIWrapper::prev() {
-  DeclareActive activeIter(this, "prev");
+  SCOPED_IO_TRACING_CONTEXT_FROM_ITERATOR(this, "prev");
   moveTo(getLocation().advance(Direction::BACKWARD, log_id_),
          Direction::BACKWARD,
          /* near */ true,
@@ -1208,7 +1198,10 @@ RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::getCurrentEntrySize() {
 void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::seek(
     Location loc,
     Direction dir) {
-  AddContext csiContxt("CSI");
+  SCOPED_IO_TRACING_CONTEXT(getStore()->getIOTracing(),
+                            "CSI:seek{}",
+                            dir == Direction::FORWARD ? "" : "ForPrev");
+
   createIteratorIfNeeded();
   if (dir == Direction::FORWARD) {
     CopySetIndexKey key(loc.log_id, loc.lsn, CopySetIndexKey::SEEK_ENTRY_TYPE);
@@ -1232,7 +1225,9 @@ void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::seek(
 void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::step(
     Direction dir) {
   ld_check(state() == IteratorState::AT_RECORD);
-  AddContext csiContxt("CSI");
+  SCOPED_IO_TRACING_CONTEXT(getStore()->getIOTracing(),
+                            "CSI:{}",
+                            dir == Direction::FORWARD ? "next" : "prev");
   if (dir == Direction::FORWARD) {
     ROCKSDB_ACCOUNTED_NEXT(iterator_, csi);
   } else {
@@ -1342,6 +1337,9 @@ Slice RocksDBLocalLogStore::CSIWrapper::DataIterator::getRecord() const {
 
 void RocksDBLocalLogStore::CSIWrapper::DataIterator::seek(Location loc,
                                                           Direction dir) {
+  SCOPED_IO_TRACING_CONTEXT(getStore()->getIOTracing(),
+                            "data:seek{}",
+                            dir == Direction::FORWARD ? "" : "ForPrev");
   merged_value_.clear();
   createIteratorIfNeeded();
   DataKey key(loc.log_id, loc.lsn);
@@ -1358,6 +1356,9 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::seek(Location loc,
 }
 
 void RocksDBLocalLogStore::CSIWrapper::DataIterator::step(Direction dir) {
+  SCOPED_IO_TRACING_CONTEXT(getStore()->getIOTracing(),
+                            "data:{}",
+                            dir == Direction::FORWARD ? "next" : "prev");
   merged_value_.clear();
   ld_assert(state() == IteratorState::AT_RECORD);
   if (dir == Direction::FORWARD) {
@@ -1418,7 +1419,10 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::
     memcpy(&amend_str[1], slice.data, slice.size);
 
     // Step forward and check if we're still on record and still on same lsn.
-    ROCKSDB_ACCOUNTED_NEXT(iterator_, record);
+    {
+      SCOPED_IO_TRACING_CONTEXT(getStore()->getIOTracing(), "migration");
+      ROCKSDB_ACCOUNTED_NEXT(iterator_, record);
+    }
     if (!iterator_->status().ok() || !iterator_->Valid()) {
       break;
     }
@@ -1511,9 +1515,6 @@ void RocksDBLocalLogStore::AllLogsIteratorImpl::invalidate() {
 const LocalLogStore*
 RocksDBLocalLogStore::AllLogsIteratorImpl::getStore() const {
   return iterator_->getStore();
-}
-bool RocksDBLocalLogStore::AllLogsIteratorImpl::tracingEnabled() const {
-  return false;
 }
 
 }} // namespace facebook::logdevice

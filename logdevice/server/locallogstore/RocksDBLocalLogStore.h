@@ -258,7 +258,6 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
     std::unique_ptr<Location> metadataLogsBegin() const override;
     void invalidate() override;
     const LocalLogStore* getStore() const override;
-    bool tracingEnabled() const override;
     size_t getIOBytesUnnormalized() const override {
       return RocksDBLogStoreBase::getIOBytesUnnormalized();
     }
@@ -281,7 +280,8 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
                                 uint32_t num_shards,
                                 const std::string& path,
                                 RocksDBLogStoreConfig rocksdb_config,
-                                StatsHolder* = nullptr);
+                                StatsHolder*,
+                                IOTracing*);
 
   int writeMulti(const std::vector<const WriteOp*>& writes,
                  const WriteOptions& options) override {

@@ -19,6 +19,7 @@
 namespace facebook { namespace logdevice {
 
 class StatsHolder;
+class IOTracing;
 
 class RocksDBLogStoreFactory : public LocalLogStoreFactory {
  public:
@@ -33,7 +34,8 @@ class RocksDBLogStoreFactory : public LocalLogStoreFactory {
 
   std::unique_ptr<LocalLogStore> create(uint32_t shard_idx,
                                         uint32_t num_shards,
-                                        std::string path) const override;
+                                        std::string path,
+                                        IOTracing* io_tracing) const override;
 
  private:
   RocksDBLogStoreConfig rocksdb_config_;

@@ -121,6 +121,7 @@ sidebar_label: Settings
 | rocksdb-background-wal-sync | Perform all RocksDB WAL syncs on a background thread rather than synchronously on a 'fast' storage thread executing the write. | true | server&nbsp;only |
 | rocksdb-directory-consistency-check-period | LogsDB will compare all on-disk directory entries with the in-memory directory no more frequently than once per this period of time. | 5min | server&nbsp;only |
 | rocksdb-free-disk-space-threshold-low | Keep free disk space above this fraction of disk size by marking node full if we exceed it, and let the sequencer initiate space-based retention. Only counts logdevice data, so storing other data on the disk could cause it to fill up even with space-based retention enabled. 0 means disabled. | 0 | server&nbsp;only |
+| rocksdb-io-tracing-shards | List of shards for which to enable IO tracing. IO tracing prints information about every single IO operation (like file read() and write() calls) to the log at info level. It's very spammy, use with caution. |  | server&nbsp;only |
 | rocksdb-metadata-compaction-period | Metadata column family will be compacted at least this often if it has more than one sst file. This is needed to avoid performance issues in rare cases. Full scenario: suppose all writes to this node stopped; eventually all logs will be fully trimmed, and logsdb directory will be emptied by deleting each key; these deletes will usually be flushed in sst files different than the ones where the original entries are; this makes iterator operations very expensive because merging iterator has to skip all these deleted entries in linear time; this is especially bad for findTime. If we compact every hour, this badness would last for at most an hour. | 1h | server&nbsp;only |
 | rocksdb-new-partition-timestamp-margin | Newly created partitions will get starting timestamp `now + new\_partition\_timestamp\_margin`. This absorbs the latency of creating partition and possible small clock skew between sequencer and storage node. If creating partition takes longer than that, or clock skew is greater than that, FindTime may be inaccurate. For reference, as of August 2017, creating a partition typically takes ~200-800ms on HDD with ~1100 existing partitions. | 10s | server&nbsp;only |
 | rocksdb-num-metadata-locks | number of lock stripes to use to perform LogsDB metadata updates | 256 | requires&nbsp;restart, server&nbsp;only |
@@ -181,8 +182,6 @@ sidebar_label: Settings
 | shadow-client-timeout | Timeout to use for shadow clients. See traffic-shadow-enabled. | 30s | client&nbsp;only |
 | slow-background-task-threshold | Background task execution time beyond which it is considered slow, and we log it | 100ms |  |
 | stats-collection-interval | How often to collect and submit stats upstream.  Set to <=0 to disable collection of stats. | 60s | requires&nbsp;restart |
-| trace-all-db-shards | enable I/O tracing on all database shards | false | requires&nbsp;restart, server&nbsp;only |
-| trace-db-shard | enable I/O tracing on the database shard with this index | -1 | requires&nbsp;restart, server&nbsp;only |
 | traffic-shadow-enabled | Controls the traffic shadowing feature. Defaults to false to disable shadowing on all clients writing to a cluster. Must be set to true to allow traffic shadowing, which will then be controlled on a per-log basic through parameters in LogsConfig. | false | client&nbsp;only |
 | watchdog-abort-on-stall | Should we abort logdeviced if watchdog detected stalled workers. | false |  |
 | watchdog-bt-ratelimit | Maximum allowed rate of printing backtraces. | 10/120s | requires&nbsp;restart |
@@ -348,8 +347,8 @@ sidebar_label: Settings
 | queue-size-overload-percentage | percentage of per-worker-storage-task-queue-size that can be buffered before the queue is considered overloaded | 50 | server&nbsp;only |
 | read-storage-tasks-max-mem-bytes | Maximum amount of memory that can be allocated by read storage tasks. | 16106127360 | server&nbsp;only |
 | rebuilding-stores-max-mem-bytes | Maxumun total size of in-flight StoreStorageTasks from rebuilding. Evenly divided among shards. | 2G | server&nbsp;only |
-| rocksdb-low-ioprio | IO priority to request for low-pri rocksdb threads. This works only if current IO scheduler supports IO priorities.See man ioprio\_set for possible values. "any" or "" to keep the default.  | 3,0 | requires&nbsp;restart, server&nbsp;only |
-| slow-ioprio | IO priority to request for 'slow' storage threads. Storage threads in the 'slow' thread pool handle high-latency RocksDB IO requests,  primarily data reads. Not all kernel IO schedulers supports IO priorities.See man ioprio\_set for possible values."any" or "" to keep the default. | 3,0 | requires&nbsp;restart, server&nbsp;only |
+| rocksdb-low-ioprio | IO priority to request for low-pri rocksdb threads. This works only if current IO scheduler supports IO priorities.See man ioprio\_set for possible values. "any" or "" to keep the default.  |  | requires&nbsp;restart, server&nbsp;only |
+| slow-ioprio | IO priority to request for 'slow' storage threads. Storage threads in the 'slow' thread pool handle high-latency RocksDB IO requests,  primarily data reads. Not all kernel IO schedulers supports IO priorities.See man ioprio\_set for possible values."any" or "" to keep the default. |  | requires&nbsp;restart, server&nbsp;only |
 
 ## RocksDB
 |   Name    |   Description   |  Default  |   Notes   |

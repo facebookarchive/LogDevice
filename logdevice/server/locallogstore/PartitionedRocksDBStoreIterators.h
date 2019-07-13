@@ -17,18 +17,7 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
  public:
   Iterator(const PartitionedRocksDBStore* pstore,
            logid_t log_id,
-           const LocalLogStore::ReadOptions& options)
-      : LocalLogStore::ReadIterator(pstore),
-        log_id_(log_id),
-        pstore_(pstore),
-        options_(options) {
-    registerTracking(std::string(),
-                     log_id,
-                     options.tailing,
-                     options.allow_blocking_io,
-                     IteratorType::PARTITIONED,
-                     options.tracking_ctx);
-  }
+           const LocalLogStore::ReadOptions& options);
 
   IteratorState state() const override;
   bool accessedUnderReplicatedRegion() const override {
@@ -303,7 +292,6 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   void invalidate() override;
 
   const LocalLogStore* getStore() const override;
-  bool tracingEnabled() const override;
 
   size_t getIOBytesUnnormalized() const override {
     return RocksDBLogStoreBase::getIOBytesUnnormalized();

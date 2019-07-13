@@ -20,6 +20,9 @@
 
 namespace facebook { namespace logdevice {
 
+class IOTracing;
+class RocksDBEnv;
+
 /**
  * RocksDBListener gets notified by rocksdb about flushes and compactions.
  * We use it to collect stats about table files.
@@ -34,14 +37,25 @@ namespace facebook { namespace logdevice {
 
 class RocksDBListener : public rocksdb::EventListener {
  public:
-  RocksDBListener(StatsHolder* stats, size_t shard)
-      : stats_(stats), shard_(shard) {}
+  RocksDBListener(StatsHolder* stats,
+                  size_t shard,
+                  RocksDBEnv* env,
+                  IOTracing* io_tracing)
+      : stats_(stats), shard_(shard), env_(env), io_tracing_(io_tracing) {}
 
+  // Bumps stats.
   void OnTableFileCreated(const rocksdb::TableFileCreationInfo& info) override;
+
+  // These provide context to IO tracing.
+  void OnFlushBegin(rocksdb::DB*, const rocksdb::FlushJobInfo&) override;
+  void OnCompactionBegin(rocksdb::DB*,
+                         const rocksdb::CompactionJobInfo&) override;
 
  private:
   StatsHolder* stats_;
   const size_t shard_;
+  RocksDBEnv* env_;
+  IOTracing* io_tracing_;
 };
 
 class RocksDBTablePropertiesCollector

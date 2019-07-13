@@ -85,12 +85,6 @@ struct Settings : public SettingsBundle {
   // are stalled
   rate_limit_t watchdog_bt_ratelimit;
 
-  // enable I/O tracing on the database shard with this index
-  int trace_db_shard;
-
-  // enable I/O tracing on all database shards
-  bool trace_all_db_shards;
-
   // If true, turn off TraceLogger by using NoopTraceLogger implementation
   bool trace_logger_disabled;
 

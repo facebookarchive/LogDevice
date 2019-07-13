@@ -30,6 +30,7 @@ namespace facebook { namespace logdevice {
 class RocksDBIterator;
 class RocksDBMemTableRepFactory;
 class RocksDBWriter;
+class IOTracing;
 
 /**
  * @file Base class for RocksDB-backed local log stores.
@@ -421,7 +422,8 @@ class RocksDBLogStoreBase : public LocalLogStore {
                       uint32_t num_shards,
                       const std::string& path,
                       RocksDBLogStoreConfig rocksdb_config,
-                      StatsHolder* stats_holder);
+                      StatsHolder* stats_holder,
+                      IOTracing* io_tracing);
 
   /**
    * Verifies that the schema version entry matches the code version.  If this

@@ -20,14 +20,7 @@
 
 /**
  * @file A container for keeping track of most rocksdb data iterators, and
- *       a base class for iterators for
- *        (a) registering them in the container,
- *        (b) tracing file IO done by the iterators.
- *
- * Note the distinction between "tracking" and "tracing": tracking refers to
- * maintaining the list of living iterators instances, tracing refers to
- * attributing IO operations to iterators that did them.
- * IteratorTracker/TrackableIterator is used for both.
+ *       a base class for iterators for registering them in the container.
  */
 
 namespace facebook { namespace logdevice {
@@ -43,42 +36,6 @@ class TrackableIterator {
   friend class IteratorTracker;
 
  public:
-  // DeclareActive is a scoped class used to mark an iterator as the
-  // source of lower-level operations performed by the iterator. This
-  // sets the iterator and its operation string into TLS so that the
-  // iterator can be found without having to pass it through APIs that
-  // may be outside of LogDevice's control.
-  //
-  // Note: To reduce the cost of tracing support when tracing is not
-  //       enabled, DeclareActive is a no-op unless an iterator is
-  //       configured for tracing. This makes it cheap to short circuit
-  //       potentially expensive operations in AddContext and other
-  //       tracing infrastructure just by checking to see if any iterator
-  //       is active.
-  //
-  // Note: DeclareActive does not nest. If another iterator is already declared
-  //       active, DeclareActive does nothing. This comes in handy e.g.
-  //       when a filtered seek() calls next() to skip filtered out records.
-  class DeclareActive {
-   public:
-    inline DeclareActive(const TrackableIterator* iter, const char* op);
-    inline ~DeclareActive();
-
-   private:
-    bool set_active_ = false;
-  };
-  // AddContext is a scoped class used to append additional information
-  // about an operation (or portions of an operation) performed on an
-  // iterator.
-  class AddContext {
-   public:
-    inline explicit AddContext(const char* s);
-    inline ~AddContext();
-
-   private:
-    size_t ctx_string_size_;
-  };
-
   enum IteratorType {
     DATA = 0,
     CSI,
@@ -146,9 +103,6 @@ class TrackableIterator {
 
   virtual ~TrackableIterator();
 
-  // Returns true if we should keep track of IO operations made while this
-  // iterator is active.
-  virtual bool tracingEnabled() const = 0;
   virtual const LocalLogStore* getStore() const = 0;
 
   // Sets the context string in case it changes over the lifetime of the
@@ -237,20 +191,6 @@ class IteratorTracker {
   // Returns info on all iterators tracked
   std::vector<TrackableIterator::TrackingInfo> getDebugInfo();
 
-  // These maintain thread-local information about the currently active
-  // iterator. File IO done on this thread is attributed to this iterator
-  // (see RocksDBRandomAccessFile).
-
-  static thread_local const TrackableIterator* active_iterator;
-  // A string representing the high level operation being performed on
-  // an iterator.
-  static thread_local const char* active_iterator_op;
-  // Additional context for the operation or portions of the operation.
-  // Context can be added at any layer of the implementation of the
-  // operation, with each appended piece of context separated from any
-  // preceding context by "::".
-  static thread_local std::string active_iterator_op_context;
-
  private:
   std::mutex mutex_;
   // The list doesn't own TrackableIterators. They unregister themselves from
@@ -258,40 +198,16 @@ class IteratorTracker {
   std::list<TrackableIterator*> list_;
 };
 
-TrackableIterator::DeclareActive::DeclareActive(const TrackableIterator* iter,
-                                                const char* op) {
-  if (iter->tracingEnabled()) {
-    if (!IteratorTracker::active_iterator) {
-      IteratorTracker::active_iterator = iter;
-      IteratorTracker::active_iterator_op = op;
-      set_active_ = true;
-    }
-  }
-}
-TrackableIterator::DeclareActive::~DeclareActive() {
-  if (set_active_) {
-    IteratorTracker::active_iterator = nullptr;
-    IteratorTracker::active_iterator_op = "";
-  }
-}
-
-TrackableIterator::AddContext::AddContext(const char* s) {
-  if (IteratorTracker::active_iterator) {
-    auto ctx_string = std::string("::") + s;
-    IteratorTracker::active_iterator_op_context += ctx_string;
-    ctx_string_size_ = ctx_string.size();
-  }
-}
-TrackableIterator::AddContext::~AddContext() {
-  if (IteratorTracker::active_iterator) {
-    ld_check(IteratorTracker::active_iterator_op_context.size() >=
-             ctx_string_size_);
-    auto pos =
-        IteratorTracker::active_iterator_op_context.size() - ctx_string_size_;
-    ld_assert(
-        IteratorTracker::active_iterator_op_context.compare(pos, 2, "::") == 0);
-    IteratorTracker::active_iterator_op_context.erase(pos);
-  }
-}
+// A convenience macro for propagating information from TrackableIterator to
+// IOTracing context.
+#define SCOPED_IO_TRACING_CONTEXT_FROM_ITERATOR(iterator, op)    \
+  SCOPED_IO_TRACING_CONTEXT(                                     \
+      (iterator)->getStore()->getIOTracing(),                    \
+      "cf:{}|log:{}|it:{}:{}|{}",                                \
+      (iterator)->getImmutableTrackingInfo().column_family_name, \
+      (iterator)->getImmutableTrackingInfo().log_id.val_,        \
+      (iterator)->getImmutableTrackingInfo().high_level_id,      \
+      (iterator)->getMutableTrackingInfo().more_context,         \
+      (op))
 
 }} // namespace facebook::logdevice

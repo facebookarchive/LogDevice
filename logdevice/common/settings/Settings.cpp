@@ -451,20 +451,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "per CPU core",
        SERVER | CLIENT | REQUIRES_RESTART /* used in Processor ctor */,
        SettingsCategory::Execution);
-  init("trace-db-shard",
-       &trace_db_shard,
-       "-1",
-       parse_validate_lower_bound<ssize_t>(-1),
-       "enable I/O tracing on the database shard with this index",
-       SERVER | REQUIRES_RESTART, /* used in ShardedRocksDBLocalLogStore ctor */
-       SettingsCategory::Monitoring);
-  init("trace-all-db-shards",
-       &trace_all_db_shards,
-       "false",
-       nullptr, // no validation
-       "enable I/O tracing on all database shards",
-       SERVER | REQUIRES_RESTART, /* used in ShardedRocksDBLocalLogStore ctor */
-       SettingsCategory::Monitoring);
   init("msg-error-injection-chance",
        &message_error_injection_chance_percent,
        "0",
@@ -1778,7 +1764,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Core);
   init("slow-ioprio",
        &slow_ioprio,
-       "3,0",
+       "",
        [](const std::string& val) -> folly::Optional<std::pair<int, int>> {
          folly::Optional<std::pair<int, int>> res;
          if (parse_ioprio(val, &res) != 0) {

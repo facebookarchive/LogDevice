@@ -19,9 +19,6 @@
 
 namespace facebook { namespace logdevice {
 
-FileNameHash::FileNameHash(const std::string& f) noexcept
-    : val_(folly::hash::SpookyHashV2::Hash64(f.data(), f.size(), kHashSeed_)) {}
-
 void FlushCallback::deactivate() {
   LocalLogStore* store = registered_with.load();
   if (store != nullptr) {

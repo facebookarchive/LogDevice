@@ -124,3 +124,48 @@ TEST_F(LocalLogStoreIntegrationTest, StartWithCorruptDB) {
     }
   }
 }
+
+TEST_F(LocalLogStoreIntegrationTest, IOTracingSmokeTest) {
+  // Run a cluster with IO tracing enabled and check that it doesn't crash.
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--rocksdb-io-tracing-shards", "0,1")
+                     .create(1);
+
+  // Write a record.
+  auto client = cluster->createClient();
+  lsn_t lsn = client->appendSync(logid_t(1), "hi");
+  EXPECT_NE(LSN_INVALID, lsn);
+
+  // Read the record back.
+  auto read = [&] {
+    auto reader = client->createReader(1);
+    reader->startReading(logid_t(1), LSN_OLDEST);
+    lsn_t cur_lsn = LSN_OLDEST;
+    while (true) {
+      std::vector<std::unique_ptr<DataRecord>> recs;
+      GapRecord gap;
+      ssize_t rv = reader->read(1, &recs, &gap);
+      if (rv == 1) {
+        EXPECT_EQ(cur_lsn, recs[0]->attrs.lsn);
+        EXPECT_EQ(lsn, recs[0]->attrs.lsn);
+        EXPECT_EQ("hi", recs[0]->payload.toString());
+        break;
+      } else {
+        ASSERT_EQ(-1, rv);
+        EXPECT_EQ(cur_lsn, gap.lo);
+        EXPECT_GE(gap.hi, gap.lo);
+        EXPECT_LT(gap.hi, lsn);
+        cur_lsn = gap.hi + 1;
+      }
+    }
+  };
+
+  read();
+
+  // Restart the node.
+  cluster->getNode(0).restart(
+      /* graceful */ true, /* wait_until_available */ false);
+
+  // Read again, expecting to hit disk.
+  read();
+}

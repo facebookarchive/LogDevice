@@ -746,7 +746,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-low-ioprio",
        &low_ioprio,
-       "3,0",
+       "",
        [](const std::string& val) -> folly::Optional<std::pair<int, int>> {
          folly::Optional<std::pair<int, int>> prio;
          if (parse_ioprio(val, &prio) != 0) {
@@ -1469,6 +1469,35 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "only in a few places, not to everything using the log attributes. E.g. "
        "disable-data-log-rebuilding is not aware of this setting and will use "
        "full retention from log attributes.",
+       SERVER,
+       SettingsCategory::LogsDB);
+
+  init("rocksdb-io-tracing-shards",
+       &io_tracing_shards,
+       "",
+       [](const std::string& val) -> std::vector<shard_index_t> {
+         std::vector<std::string> tokens;
+         folly::split(',', val, tokens, true /* ignoreEmpty */);
+
+         std::vector<shard_index_t> v;
+         for (const auto& token : tokens) {
+           try {
+             v.push_back(folly::to<shard_index_t>(token));
+           } catch (std::range_error&) {
+             throw boost::program_options::error(
+                 "Invalid shard idx in --rocksdb-io-tracing-shards: " + val);
+           }
+         }
+
+         std::sort(v.begin(), v.end());
+         v.erase(std::unique(v.begin(), v.end()), v.end());
+
+         return v;
+       },
+       "List of shards for which to enable IO tracing. IO tracing prints "
+       "information about every single IO operation (like file read() and "
+       "write() calls) to the log at info level. It's very spammy, use with "
+       "caution.",
        SERVER,
        SettingsCategory::LogsDB);
 }

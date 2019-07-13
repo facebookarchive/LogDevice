@@ -95,10 +95,6 @@ class FailingAllLogsIterator : public LocalLogStore::AllLogsIterator {
     return store_;
   }
 
-  bool tracingEnabled() const override {
-    return false;
-  }
-
   const FailingLocalLogStore* store_;
 };
 

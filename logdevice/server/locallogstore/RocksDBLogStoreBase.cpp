@@ -27,7 +27,8 @@ RocksDBLogStoreBase::RocksDBLogStoreBase(uint32_t shard_idx,
                                          uint32_t num_shards,
                                          const std::string& path,
                                          RocksDBLogStoreConfig rocksdb_config,
-                                         StatsHolder* stats_holder)
+                                         StatsHolder* stats_holder,
+                                         IOTracing* io_tracing)
     : shard_idx_(shard_idx),
       num_shards_(num_shards),
       db_path_(path),
@@ -35,6 +36,7 @@ RocksDBLogStoreBase::RocksDBLogStoreBase(uint32_t shard_idx,
       stats_(stats_holder),
       statistics_(rocksdb_config.options_.statistics),
       rocksdb_config_(std::move(rocksdb_config)) {
+  io_tracing_ = io_tracing;
   // Per RocksDB instance option overrides.
   installMemTableRep();
 }
@@ -140,12 +142,6 @@ void RocksDBLogStoreBase::installMemTableRep() {
     mtr_factory_ = std::dynamic_pointer_cast<RocksDBMemTableRepFactory>(
         rocksdb_config_.options_.memtable_factory);
     if (!mtr_factory_) {
-      if (rocksdb_config_.options_.memtable_factory != nullptr) {
-        ld_warning(
-            "MemTable Factory needs to inherit from RocksDBMemTableRepFactory, "
-            "ignoring value passed in and creating a new factory of known "
-            "type.");
-      }
       create_memtable_factory();
     } else {
       mtr_factory_->setStore(this);

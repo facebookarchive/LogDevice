@@ -235,7 +235,8 @@ TemporaryRocksDBStore::TemporaryRocksDBStore(bool read_find_time_index)
                                                       1,
                                                       path,
                                                       std::move(rocksdb_config),
-                                                      /* stats */ nullptr);
+                                                      /* stats */ nullptr,
+                                                      /* io_tracing */ nullptr);
       }) {}
 
 class TemporaryPartitionedStoreImpl : public PartitionedRocksDBStore {
@@ -244,6 +245,7 @@ class TemporaryPartitionedStoreImpl : public PartitionedRocksDBStore {
                                          RocksDBLogStoreConfig rocksdb_config,
                                          const Configuration* config,
                                          StatsHolder* stats,
+                                         IOTracing* io_tracing,
                                          SystemTimestamp* time)
       : PartitionedRocksDBStore(0,
                                 1,
@@ -251,6 +253,7 @@ class TemporaryPartitionedStoreImpl : public PartitionedRocksDBStore {
                                 std::move(rocksdb_config),
                                 config,
                                 stats,
+                                io_tracing,
                                 DeferInit::YES),
         time_(time) {
     PartitionedRocksDBStore::init(config);
@@ -287,6 +290,7 @@ TemporaryPartitionedStore::TemporaryPartitionedStore(bool use_csi)
                 std::move(rocksdb_config),
                 /* config */ nullptr,
                 /* stats */ nullptr,
+                /* io_tracing */ nullptr,
                 &time_);
           },
           false) {

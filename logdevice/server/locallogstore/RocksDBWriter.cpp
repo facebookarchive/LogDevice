@@ -15,6 +15,7 @@
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/RateLimiter.h"
+#include "logdevice/server/locallogstore/IOTracing.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBWriterMergeOperator.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
@@ -391,11 +392,17 @@ int RocksDBWriter::writeMulti(
 int RocksDBWriter::readLogMetadata(logid_t log_id,
                                    LogMetadata* metadata,
                                    rocksdb::ColumnFamilyHandle* cf) {
+  SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(),
+                            "read-log-meta:{}",
+                            logMetadataTypeNames()[metadata->getType()]);
   return readMetadata(LogMetaKey(metadata->getType(), log_id), metadata, cf);
 }
 
 int RocksDBWriter::readStoreMetadata(StoreMetadata* metadata,
                                      rocksdb::ColumnFamilyHandle* cf) {
+  SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(),
+                            "read-store-meta:{}",
+                            storeMetadataTypeNames()[metadata->getType()]);
   return readMetadata(StoreMetaKey(metadata->getType()), metadata, cf);
 }
 
@@ -528,6 +535,11 @@ int RocksDBWriter::readPreviousPerEpochLogMetadata(
   ld_check(epoch.val_ > 0);
   PerEpochLogMetaKey key(metadata->getType(), log_id, epoch_t(epoch.val_ - 1));
 
+  SCOPED_IO_TRACING_CONTEXT(
+      store_->getIOTracing(),
+      "read-prev-epoch-log-meta:{}",
+      perEpochLogMetadataTypeNames()[metadata->getType()]);
+
   auto read_options = RocksDBLogStoreBase::getReadOptionsSinglePrefix();
 
   if (cf == nullptr) {
@@ -578,6 +590,10 @@ int RocksDBWriter::readPerEpochLogMetadata(logid_t log_id,
                                            rocksdb::ColumnFamilyHandle* cf,
                                            bool find_last_available,
                                            bool allow_blocking_io) {
+  SCOPED_IO_TRACING_CONTEXT(
+      store_->getIOTracing(),
+      "read-epoch-log-meta:{}",
+      perEpochLogMetadataTypeNames()[metadata->getType()]);
   int rv = readMetadata(PerEpochLogMetaKey(metadata->getType(), log_id, epoch),
                         metadata,
                         cf,

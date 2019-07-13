@@ -8,6 +8,7 @@
 #include "logdevice/server/locallogstore/PartitionedRocksDBStoreIterators.h"
 
 #include "logdevice/common/debug.h"
+#include "logdevice/server/locallogstore/IOTracing.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 
 namespace facebook { namespace logdevice {
@@ -16,6 +17,22 @@ using RocksDBKeyFormat::PartitionDirectoryKey;
 using Location = LocalLogStore::AllLogsIterator::Location;
 
 // ==== Iterator ====
+
+PartitionedRocksDBStore::Iterator::Iterator(
+    const PartitionedRocksDBStore* pstore,
+    logid_t log_id,
+    const LocalLogStore::ReadOptions& options)
+    : LocalLogStore::ReadIterator(pstore),
+      log_id_(log_id),
+      pstore_(pstore),
+      options_(options) {
+  registerTracking(std::string(),
+                   log_id,
+                   options.tailing,
+                   options.allow_blocking_io,
+                   IteratorType::PARTITIONED,
+                   options.tracking_ctx);
+}
 
 void PartitionedRocksDBStore::Iterator::setDataIteratorFromCurrent(
     ReadFilter* filter) {
@@ -570,6 +587,7 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
 void PartitionedRocksDBStore::Iterator::seek(lsn_t lsn,
                                              ReadFilter* filter,
                                              ReadStats* stats) {
+  SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(), "p:seek");
   trackSeek(lsn, 0);
 
   // Reset sticky state on seeks.
@@ -627,6 +645,7 @@ void PartitionedRocksDBStore::Iterator::seek(lsn_t lsn,
 }
 
 void PartitionedRocksDBStore::Iterator::seekForPrev(lsn_t lsn) {
+  SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(), "p:seek-prev");
   trackSeek(lsn, 0);
 
   // Reset sticky state on seeks.
@@ -683,6 +702,7 @@ void PartitionedRocksDBStore::Iterator::seekForPrev(lsn_t lsn) {
 
 void PartitionedRocksDBStore::Iterator::next(ReadFilter* filter,
                                              ReadStats* stats) {
+  SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(), "p:next");
   ld_check_eq(state(), IteratorState::AT_RECORD);
 
   PartitionInfo start = current_;
@@ -698,6 +718,7 @@ void PartitionedRocksDBStore::Iterator::next(ReadFilter* filter,
 }
 
 void PartitionedRocksDBStore::Iterator::prev() {
+  SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(), "p:prev");
   ld_assert(state() == IteratorState::AT_RECORD);
 
   PartitionInfo start = current_;
@@ -886,6 +907,7 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seek(
     const Location& base_location,
     ReadFilter* filter,
     ReadStats* stats) {
+  SCOPED_IO_TRACING_CONTEXT(pstore_->getIOTracing(), "all-it:seek");
   if (filter_using_directory_) {
     ld_check(filter != nullptr);
     ld_check(stats != nullptr);
@@ -940,6 +962,7 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seek(
 void PartitionedRocksDBStore::PartitionedAllLogsIterator::next(
     ReadFilter* filter,
     ReadStats* stats) {
+  SCOPED_IO_TRACING_CONTEXT(pstore_->getIOTracing(), "all-it:next");
   ld_assert_eq(state(), IteratorState::AT_RECORD);
   if (filter_using_directory_) {
     ld_check(filter != nullptr);
@@ -1164,10 +1187,6 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::invalidate() {
 const LocalLogStore*
 PartitionedRocksDBStore::PartitionedAllLogsIterator::getStore() const {
   return pstore_;
-}
-bool PartitionedRocksDBStore::PartitionedAllLogsIterator::tracingEnabled()
-    const {
-  return false;
 }
 
 void PartitionedRocksDBStore::PartitionedAllLogsIterator::

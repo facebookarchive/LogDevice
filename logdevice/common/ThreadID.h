@@ -30,7 +30,8 @@ class ThreadID {
     UNKNOWN_EVENT_LOOP, // EventLoop threads that are not Worker's
                         // (only in tests and tools)
     STORAGE,            // Storage threads
-    ROCKSDB,            // RocksDB threads
+    LOGSDB,             // PartitionedRocksDBStore background threads
+    ROCKSDB,            // RocksDB background threads
     UTILITY,            // LogDevice utility threads
     WHEEL_TIMER,        // WheelTimer class
   };
