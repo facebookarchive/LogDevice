@@ -48,8 +48,8 @@ PluginVector DynamicPluginLoader::getPlugins() {
     // available to resolve references in subsequently loaded libraries."
     void* handle = dlopen(path.c_str(), RTLD_LOCAL | RTLD_NOW);
     if (handle == nullptr) {
-      throw std::runtime_error(
-          folly::sformat("Failed to dlopen '{}'", path.string()));
+      throw std::runtime_error(folly::sformat(
+          "Failed to dlopen '{}': {}", path.string(), dlerror()));
     }
     void* ptr = dlsym(handle, kLogDevicePluginSymbolName);
     if (ptr == nullptr) {
