@@ -533,8 +533,8 @@ void Processor::shutdown() {
   }
 
   // First get the pthread_t for all running worker threads
-  std::vector<pthread_t> pthreads;
-  pthreads.reserve(getAllWorkersCount());
+  std::vector<std::thread*> event_threads;
+  event_threads.reserve(getAllWorkersCount());
 
   if (traffic_shaper_) {
     traffic_shaper_->shutdown();
@@ -562,7 +562,7 @@ void Processor::shutdown() {
   // requests through them fail with E::SHUTDOWN.
   for (auto& loop : impl_->ev_loops_) {
     loop->getTaskQueue().shutdown();
-    pthreads.push_back(loop->getThread());
+    event_threads.push_back(&loop->getThread());
   }
 
   for (size_t i = 0; i < impl_->background_threads_.size(); ++i) {
@@ -572,13 +572,13 @@ void Processor::shutdown() {
   // Join all the pthreads to complete shutdown. This is necessary because
   // EventLoops have a pointer to this Processor, so they have to finish
   // before we're destroyed.
-  for (const pthread_t& pthread : pthreads) {
-    int rv = pthread_join(pthread, nullptr);
-    ld_check(rv == 0);
+  for (auto& event_thread : event_threads) {
+    ld_check(event_thread->joinable());
+    event_thread->join();
   }
 
-  for (auto& thread : impl_->background_threads_) {
-    thread->join();
+  for (auto& background_thread : impl_->background_threads_) {
+    background_thread->join();
   }
 }
 

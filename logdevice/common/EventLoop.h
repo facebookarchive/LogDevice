@@ -11,8 +11,8 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
-#include <pthread.h>
 #include <semaphore.h>
+#include <thread>
 #include <unordered_map>
 
 #include <folly/Executor.h>
@@ -87,7 +87,7 @@ class EventLoop : public folly::Executor {
    *
    * @return the pthread handle. This function should never fail.
    */
-  pthread_t getThread() const {
+  std::thread& getThread() {
     return thread_;
   }
 
@@ -104,7 +104,7 @@ class EventLoop : public folly::Executor {
    *           nullptr if this thread is not running a EventLoop.
    */
   static EventLoop* onThisThread() {
-    return EventLoop::thisThreadLoop;
+    return EventLoop::thisThreadLoop_;
   }
 
   void dispose(ZeroCopyPayload* payload);
@@ -120,7 +120,7 @@ class EventLoop : public folly::Executor {
   // event_base_init_common_timeout() and actually containing timer queue
   // ids for this thread's event_base.
   TimeoutMap& commonTimeouts() {
-    return common_timeouts_;
+    return *common_timeouts_;
   }
 
   // Convenience function so callers of commonTimeouts().get() don't need
@@ -158,20 +158,13 @@ class EventLoop : public folly::Executor {
   std::atomic<uint64_t> delay_us_{0};
 
  protected:
-  // called on this EventLoop's thread before starting the event loop
-  virtual void onThreadStarted() {}
-
   bool keepAliveAcquire() override {
-    if (shutting_down_.load()) {
-      return false;
-    }
-
-    num_references_++;
+    num_references_.fetch_add(1, std::memory_order_relaxed);
     return true;
   }
 
   void keepAliveRelease() override {
-    auto prev = num_references_.fetch_sub(1);
+    auto prev = num_references_.fetch_sub(1, std::memory_order_acq_rel);
     ld_assert(prev > 0);
   }
 
@@ -179,7 +172,7 @@ class EventLoop : public folly::Executor {
   ThreadID::Type thread_type_;
   std::string thread_name_;
 
-  pthread_t thread_; // thread on which this loop runs
+  std::thread thread_; // thread on which this loop runs
 
   // pid of thread_
   int tid_{-1};
@@ -187,23 +180,15 @@ class EventLoop : public folly::Executor {
   // Main task queue; (shutting down this TaskQueue stops the event loop)
   std::unique_ptr<EventLoopTaskQueue> task_queue_;
 
-  std::atomic<bool> running_;
-  std::atomic<bool> shutting_down_;
-
-  // entry point of the loop's thread
-  static void* enter(void* self);
-
-  // called by enter() to run this event loop on .thread_
+  Status
+  init(size_t request_pump_capacity,
+       const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
+           requests_per_iteration);
+  // called by EventLoop.thread_ after init if it succeds
   void run();
 
   // this is how a thread finds if it's running an EventLoop, and which one
-  static __thread EventLoop* thisThreadLoop;
-
-  // stack size of this loop's thread (pthread defaults are low)
-  static const size_t STACK_SIZE = (1024 * 1024);
-
-  // Semaphore that coordinates initialization and starting of the event loop.
-  Semaphore start_sem_;
+  static thread_local EventLoop* thisThreadLoop_;
 
   // Constantly repeating event to calculate delay in event loop runs.
   // Every 1s schedules a zero timeout event and notes delays in
@@ -222,7 +207,7 @@ class EventLoop : public folly::Executor {
   BatchedBufferDisposer<ZeroCopyPayload> disposer_;
 
   // TimeoutMap to cache common timeouts.
-  TimeoutMap common_timeouts_;
+  std::unique_ptr<TimeoutMap> common_timeouts_;
 
   // True indicates eventloop honors the priority with used in
   // EventLoop::addWithPriority. If false EventLoop will override the priority
@@ -231,7 +216,7 @@ class EventLoop : public folly::Executor {
 
   // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
   // of MAX_COMMON_TIMEOUTS = 256)
-  static const int kMaxFastTimeouts = 200;
+  static constexpr int kMaxFastTimeouts = 200;
 };
 
 }} // namespace facebook::logdevice

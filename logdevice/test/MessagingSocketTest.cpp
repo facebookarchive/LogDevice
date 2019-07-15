@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <future>
 #include <memory>
+#include <thread>
 #include <unistd.h>
 
 #include <folly/Memory.h>
@@ -293,7 +294,6 @@ createWorker(Processor* p, std::shared_ptr<UpdateableConfig>& config) {
  */
 TEST_F(MessagingSocketTest, SocketConnect) {
   int rv;
-  pthread_t th;
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
@@ -309,8 +309,7 @@ TEST_F(MessagingSocketTest, SocketConnect) {
   auto h = std::move(std::get<0>(out));
   auto w = std::move(std::get<1>(out));
 
-  th = h->getThread();
-  ASSERT_FALSE(pthread_equal(pthread_self(), th));
+  ASSERT_NE(std::this_thread::get_id(), h->getThread().get_id());
 
   config.reset();
 
@@ -411,7 +410,6 @@ STORED_Header SenderBasicSendRequest::hdr1out =
  */
 TEST_F(MessagingSocketTest, SenderBasicSend) {
   int rv;
-  pthread_t th;
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
@@ -428,8 +426,7 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   auto h = std::move(std::get<0>(out));
   auto w = std::move(std::get<1>(out));
 
-  th = h->getThread();
-  ASSERT_FALSE(pthread_equal(pthread_self(), th));
+  ASSERT_NE(std::this_thread::get_id(), h->getThread().get_id());
 
   config.reset();
 

@@ -8,7 +8,6 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
-#include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -123,7 +122,6 @@ int CountingRequest::payload_sum;
  * Verifies that request was processed.
  */
 TEST(MessagingTest, EventLoop) {
-  pthread_t th;
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
   auto processor = make_test_processor(settings);
@@ -137,8 +135,7 @@ TEST(MessagingTest, EventLoop) {
   EXPECT_EQ(0, processor->postRequest(rq));
   EXPECT_EQ(nullptr, rq.get());
 
-  th = l->getThread();
-  ASSERT_FALSE(pthread_equal(pthread_self(), th));
+  ASSERT_NE(std::this_thread::get_id(), l->getThread().get_id());
 
   // since no EventLoop is running on this thread
   ASSERT_EQ(nullptr, EventLoop::onThisThread());

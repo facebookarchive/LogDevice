@@ -10,7 +10,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <pthread.h>
 #include <thread>
 #include <vector>
 
@@ -32,7 +31,7 @@
 
 using namespace facebook::logdevice;
 
-static std::map<pthread_t, int> requests_per_thread;
+static std::map<std::thread::id, int> requests_per_thread;
 static std::mutex requests_per_thread_map_lock;
 
 /**
@@ -45,7 +44,7 @@ struct ThreadCountingRequest : public Request {
 
   Request::Execution execute() override {
     std::lock_guard<std::mutex> guard(requests_per_thread_map_lock);
-    pthread_t id = EventLoop::onThisThread()->getThread();
+    auto id = EventLoop::onThisThread()->getThread().get_id();
     ++requests_per_thread[id];
     return Execution::COMPLETE;
   }

@@ -28,7 +28,7 @@
 
 namespace facebook { namespace logdevice {
 
-__thread EventLoop* EventLoop::thisThreadLoop;
+thread_local EventLoop* EventLoop::thisThreadLoop_{nullptr};
 
 static struct event_base* createEventBase() {
   int rv;
@@ -69,83 +69,44 @@ EventLoop::EventLoop(
     bool enable_priority_queues,
     const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
         requests_per_iteration)
-    : base_(createEventBase(), deleteEventBase),
-      thread_type_(thread_type),
+    : thread_type_(thread_type),
       thread_name_(thread_name),
-      thread_(pthread_self()), // placeholder serving as "invalid" value
-      running_(false),
-      shutting_down_(false),
       disposer_(this),
-      common_timeouts_(base_.get(), kMaxFastTimeouts),
       priority_queues_enabled_(enable_priority_queues) {
-  int rv;
-  pthread_attr_t attr;
-
-  if (!base_) {
-    // logdevice::err was set by createEventBase()
+  Semaphore initialized;
+  Status init_result{E::INTERNAL};
+  thread_ = std::thread([request_pump_capacity,
+                         &requests_per_iteration,
+                         &init_result,
+                         &initialized,
+                         this]() {
+    auto res = init_result =
+        init(request_pump_capacity, requests_per_iteration);
+    initialized.post();
+    if (res == E::OK) {
+      run();
+    }
+  });
+  initialized.wait();
+  if (init_result != E::OK) {
+    err = init_result;
+    thread_.join();
     throw ConstructorFailed();
   }
-
-  ld_check(common_timeouts_.get(std::chrono::milliseconds(0)));
-
-  rv = pthread_attr_init(&attr);
-  if (rv != 0) { // unlikely
-    ld_check(rv == ENOMEM);
-    ld_error("Failed to initialize a pthread attributes struct");
-    err = E::NOMEM;
-    throw ConstructorFailed();
-  }
-
-  rv = pthread_attr_setstacksize(&attr, EventLoop::STACK_SIZE);
-  if (rv != 0) {
-    ld_check(rv == EINVAL);
-    ld_error("Failed to set stack size for an EventLoop thread. "
-             "Stack size %lu is out of range",
-             EventLoop::STACK_SIZE);
-    err = E::SYSLIMIT;
-    throw ConstructorFailed();
-  }
-  task_queue_ = std::make_unique<EventLoopTaskQueue>(
-      base_.get(), request_pump_capacity, requests_per_iteration);
-  task_queue_->setCloseEventLoopOnShutdown();
-  rv = pthread_create(&thread_, &attr, EventLoop::enter, this);
-  if (rv != 0) {
-    ld_error(
-        "Failed to start an EventLoop thread, errno=%d (%s)", rv, strerror(rv));
-    err = E::SYSLIMIT;
-    throw ConstructorFailed();
-  }
-  start_sem_.post();
 }
 
 EventLoop::~EventLoop() {
   // Shutdown drains all the work contexts before invoking this destructor.
   ld_check(num_references_.load() == 0);
-
-  if (running_) {
-    // We just shutdown here explicitly, join the thread and delete
-    // the eventloop instance.
-    if (!task_queue_->isShutdown()) {
-      // Tell EventLoop on the other end to destroy itself and terminate the
-      // thread
-      task_queue_->shutdown();
-      pthread_join(thread_, nullptr);
-    }
+  if (!thread_.joinable()) {
     return;
   }
-
-  // force thread_ to exit
-  shutting_down_ = true;
-  start_sem_.post();
-
-  pthread_join(thread_, nullptr);
-  // Shutdown drains all the work contexts before invoking this destructor.
-
-  if (event_handlers_called_.load() != event_handlers_completed_.load()) {
-    ld_info("EventHandlers called: %lu, EventHandlers completed: %lu",
-            event_handlers_called_.load(),
-            event_handlers_completed_.load());
-  }
+  // We just shutdown here explicitly, join the thread and delete
+  // the eventloop instance.
+  // Tell EventLoop on the other end to destroy itself and terminate the
+  // thread
+  task_queue_->shutdown();
+  thread_.join();
 }
 
 void EventLoop::add(folly::Function<void()> func) {
@@ -156,11 +117,6 @@ void EventLoop::addWithPriority(folly::Function<void()> func, int8_t priority) {
   task_queue_->addWithPriority(
       std::move(func),
       priority_queues_enabled_ ? priority : folly::Executor::HI_PRI);
-}
-
-void* EventLoop::enter(void* self) {
-  reinterpret_cast<EventLoop*>(self)->run();
-  return nullptr;
 }
 
 void EventLoop::delayCheckCallback(void* arg, short) {
@@ -182,43 +138,48 @@ void EventLoop::delayCheckCallback(void* arg, short) {
   }
 }
 
-void EventLoop::run() {
-  int rv;
+E EventLoop::init(
+    size_t request_pump_capacity,
+    const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
+        requests_per_iteration) {
   tid_ = syscall(__NR_gettid);
-
-  // Wait for Constructor to finish
-  start_sem_.wait();
-
-  if (shutting_down_) {
-    // this EventLoop is being destroyed, stop immediately
-    return;
-  }
-
-  running_ = true;
-
   ThreadID::set(thread_type_, thread_name_);
 
-  EventLoop::thisThreadLoop = this; // save in a thread-local
+  base_ = std::unique_ptr<event_base, std::function<void(event_base*)>>(
+      createEventBase(), deleteEventBase);
+  if (!base_) {
+    return err;
+  }
+  scheduled_event_ = LD_EV(event_new)(
+      base_.get(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
+  if (!scheduled_event_) {
+    return E::INTERNAL;
+  }
+  common_timeouts_ =
+      std::make_unique<TimeoutMap>(base_.get(), kMaxFastTimeouts);
+  task_queue_ = std::make_unique<EventLoopTaskQueue>(
+      base_.get(), request_pump_capacity, requests_per_iteration);
+  task_queue_->setCloseEventLoopOnShutdown();
+  return E::OK;
+}
+
+void EventLoop::run() {
+  EventLoop::thisThreadLoop_ = this; // save in a thread-local
 
   // Initiate runs to detect eventloop delays.
   using namespace std::chrono_literals;
   delay_us_.store(0);
-  scheduled_event_ = LD_EV(event_new)(
-      base_.get(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
   scheduled_event_start_time_ = std::chrono::steady_clock::time_point::min();
   evtimer_add(scheduled_event_, getCommonTimeout(1s));
-  onThreadStarted();
 
-  ld_check(base_);
   // this runs until we get destroyed or shutdown is called on
   // EventLoopTaskQueue
-  rv = LD_EV(event_base_loop)(base_.get(), 0);
+  int rv = LD_EV(event_base_loop)(base_.get(), 0);
   if (rv != 0) {
     ld_error("event_base_loop() exited abnormally with return value %d.", rv);
   }
   ld_check_ge(rv, 0);
   LD_EV(event_free)(scheduled_event_);
-
   // the thread on which this EventLoop ran terminates here
 }
 
