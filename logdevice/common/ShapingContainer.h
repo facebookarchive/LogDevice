@@ -73,7 +73,12 @@ class ShapingContainer {
     bool run = false;
 
     for (size_t i = 0; i < flow_groups_.size(); ++i) {
-      if (flow_groups_[i].applyUpdate(update.group_entries[i], stats)) {
+      NodeLocationScope s = static_cast<NodeLocationScope>(i);
+      auto entry_it = update.group_entries.find(s);
+      if (entry_it == update.group_entries.end()) {
+        continue;
+      }
+      if (flow_groups_[i].applyUpdate(entry_it->second, stats)) {
         run = true;
       }
     }

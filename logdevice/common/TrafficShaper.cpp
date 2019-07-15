@@ -44,8 +44,15 @@ class TrafficShaper::RunFlowGroupsRequest : public Request {
 TrafficShaper::TrafficShaper(Processor* processor, StatsHolder* stats)
     : processor_(processor), stats_(stats) {
   nw_update_ = std::make_unique<FlowGroupsUpdate>(
-      static_cast<size_t>(NodeLocationScope::ROOT) + 1);
-  read_io_update_ = std::make_unique<FlowGroupsUpdate>(1);
+      std::set<NodeLocationScope>({NodeLocationScope::NODE,
+                                   NodeLocationScope::RACK,
+                                   NodeLocationScope::ROW,
+                                   NodeLocationScope::CLUSTER,
+                                   NodeLocationScope::DATA_CENTER,
+                                   NodeLocationScope::REGION,
+                                   NodeLocationScope::ROOT}));
+  read_io_update_ = std::make_unique<FlowGroupsUpdate>(
+      std::set<NodeLocationScope>({NodeLocationScope::NODE}));
 
   nw_shaping_deps_ = std::make_unique<NwShapingFlowGroupDeps>(stats);
   read_shaping_deps_ = std::make_unique<ReadShapingFlowGroupDeps>(stats);
@@ -161,8 +168,16 @@ bool TrafficShaper::dispatchUpdateCommon(
     FlowGroupDependencies* deps) {
   bool future_updates_required = false;
   for (auto& policy_it : shaping_config.flowGroupPolicies) {
-    auto& scope = policy_it.first;
-    auto& ge = update.group_entries[static_cast<int>(scope)];
+    auto scope = policy_it.first;
+    auto entry_it = update.group_entries.find(scope);
+    if (entry_it == update.group_entries.end()) {
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      2,
+                      "Didn't find scope:%d in group_entries",
+                      static_cast<int>(scope));
+      continue;
+    }
+    auto& ge = entry_it->second;
     if (policy_it.second.enabled()) {
       future_updates_required = true;
     }

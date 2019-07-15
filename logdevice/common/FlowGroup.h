@@ -73,8 +73,11 @@ namespace facebook { namespace logdevice {
 
 class FlowGroupsUpdate {
  public:
-  explicit FlowGroupsUpdate(size_t num_scopes) {
-    group_entries.resize(num_scopes);
+  explicit FlowGroupsUpdate(std::set<NodeLocationScope> valid_scopes) {
+    for (auto& s : valid_scopes) {
+      GroupEntry g;
+      group_entries[s] = std::move(g);
+    }
   }
 
   struct GroupEntry {
@@ -124,7 +127,7 @@ class FlowGroupsUpdate {
         overflow_entries;
   };
 
-  std::vector<GroupEntry> group_entries;
+  std::unordered_map<NodeLocationScope, GroupEntry> group_entries;
 };
 
 class FlowGroup {
