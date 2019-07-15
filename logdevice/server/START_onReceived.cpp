@@ -10,6 +10,7 @@
 #include "logdevice/common/Address.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/PermissionChecker.h"
+#include "logdevice/common/Sender.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
@@ -90,6 +91,28 @@ Message::Disposition START_onReceived(START_Message* msg,
   }
 
   ServerWorker* w = ServerWorker::onThisThread();
+
+  // Check if connection to client ID is still alive by trying to get the socket
+  // addr.
+  auto sock_addr = w->sender().getSockaddr(from);
+
+  if (!sock_addr.valid()) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   1,
+                   "START message from: disconnected client %s: log_id %" PRIu64
+                   ", "
+                   "read_stream_id %" PRIu64 ", start_lsn %s, "
+                   "until_lsn %s, window_high %s, flags = 0x%x.",
+                   Sender::describeConnection(from).c_str(),
+                   header.log_id.val_,
+                   header.read_stream_id.val_,
+                   lsn_to_string(header.start_lsn).c_str(),
+                   lsn_to_string(header.until_lsn).c_str(),
+                   lsn_to_string(header.window_high).c_str(),
+                   header.flags);
+    return Message::Disposition::NORMAL;
+  }
+
   if (!w->isAcceptingWork()) {
     ld_debug("Ignoring START message: not accepting more work");
     return send_error_reply(msg, from, E::SHUTDOWN);
