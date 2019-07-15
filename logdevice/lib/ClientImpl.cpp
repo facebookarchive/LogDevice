@@ -1498,8 +1498,11 @@ int ClientImpl::trim(logid_t logid,
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
-      w->processor_->api_hits_tracer_->traceTrim(
-          msec_since(start), logid, lsn, req.getFailedShards(st), st);
+      auto& tracer = w->processor_->api_hits_tracer_;
+      if (tracer) {
+        tracer->traceTrim(
+            msec_since(start), logid, lsn, req.getFailedShards(st), st);
+      }
     }
     cb(st);
   };
@@ -1589,14 +1592,16 @@ int ClientImpl::findTime(logid_t logid,
           const FindKeyRequest& req, Status st, lsn_t result) {
         Worker* w = Worker::onThisThread();
         if (w) {
-          w->processor_->api_hits_tracer_->traceFindTime(
-              msec_since(start),
-              logid,
-              timestamp,
-              accuracy,
-              req.getFailedShards(st),
-              st,
-              result);
+          auto& tracer = w->processor_->api_hits_tracer_;
+          if (tracer) {
+            tracer->traceFindTime(msec_since(start),
+                                  logid,
+                                  timestamp,
+                                  accuracy,
+                                  req.getFailedShards(st),
+                                  st,
+                                  result);
+          }
         }
         cb(st, result);
       };
@@ -1637,15 +1642,17 @@ int ClientImpl::findKey(logid_t logid,
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
-      w->processor_->api_hits_tracer_->traceFindKey(
-          msec_since(start),
-          logid,
-          key,
-          accuracy,
-          req.getFailedShards(result.status),
-          result.status,
-          result.lo,
-          result.hi);
+      auto& tracer = w->processor_->api_hits_tracer_;
+      if (tracer) {
+        tracer->traceFindKey(msec_since(start),
+                             logid,
+                             key,
+                             accuracy,
+                             req.getFailedShards(result.status),
+                             result.status,
+                             result.lo,
+                             result.hi);
+      }
     }
     cb(result);
   };
@@ -1714,8 +1721,11 @@ int ClientImpl::isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept {
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
-      w->processor_->api_hits_tracer_->traceIsLogEmpty(
-          msec_since(start), logid, req.getFailedShards(st), st, empty);
+      auto& tracer = w->processor_->api_hits_tracer_;
+      if (tracer) {
+        tracer->traceIsLogEmpty(
+            msec_since(start), logid, req.getFailedShards(st), st, empty);
+      }
     }
     cb(st, empty);
   };
@@ -1765,8 +1775,11 @@ int ClientImpl::isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept {
         // log response
         Worker* w = Worker::onThisThread();
         if (w) {
-          w->processor_->api_hits_tracer_->traceIsLogEmptyV2(
-              msec_since(start), logid, st, is_log_empty.value());
+          auto& tracer = w->processor_->api_hits_tracer_;
+          if (tracer) {
+            tracer->traceIsLogEmptyV2(
+                msec_since(start), logid, st, is_log_empty.value());
+          }
         }
         cb(st, is_log_empty.value());
       };
@@ -1840,15 +1853,17 @@ int ClientImpl::dataSize(logid_t logid,
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
-      w->processor_->api_hits_tracer_->traceDataSize(
-          msec_since(request_start_time),
-          logid,
-          start,
-          end,
-          accuracy,
-          req.getFailedShards(st),
-          st,
-          size);
+      auto& tracer = w->processor_->api_hits_tracer_;
+      if (tracer) {
+        tracer->traceDataSize(msec_since(request_start_time),
+                              logid,
+                              start,
+                              end,
+                              accuracy,
+                              req.getFailedShards(st),
+                              st,
+                              size);
+      }
     }
     cb(st, size);
   };
@@ -1901,8 +1916,10 @@ int ClientImpl::getTailLSN(logid_t logid, get_tail_lsn_callback_t cb) noexcept {
         // log response
         Worker* w = Worker::onThisThread();
         if (w) {
-          w->processor_->api_hits_tracer_->traceGetTailLSN(
-              msec_since(start), logid, st, resp);
+          auto& tracer = w->processor_->api_hits_tracer_;
+          if (tracer) {
+            tracer->traceGetTailLSN(msec_since(start), logid, st, resp);
+          }
         }
         cb(st, resp);
       };
@@ -1954,8 +1971,11 @@ int ClientImpl::getTailAttributes(logid_t logid,
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
-      w->processor_->api_hits_tracer_->traceGetTailAttributes(
-          msec_since(start), logid, st, tail_attributes.get());
+      auto& tracer = w->processor_->api_hits_tracer_;
+      if (tracer) {
+        tracer->traceGetTailAttributes(
+            msec_since(start), logid, st, tail_attributes.get());
+      }
     }
     // Check if recovery is running and sequencer can not provide log tail
     // attributes.
@@ -2162,12 +2182,14 @@ int ClientImpl::getHeadAttributes(logid_t logid,
     // log response
     Worker* w = Worker::onThisThread();
     if (w) {
-      w->processor_->api_hits_tracer_->traceGetHeadAttributes(
-          msec_since(start),
-          logid,
-          req.getFailedShards(st),
-          st,
-          head_attributes.get());
+      auto& tracer = w->processor_->api_hits_tracer_;
+      if (tracer) {
+        tracer->traceGetHeadAttributes(msec_since(start),
+                                       logid,
+                                       req.getFailedShards(st),
+                                       st,
+                                       head_attributes.get());
+      }
     }
     cb(st, std::move(head_attributes));
   };
