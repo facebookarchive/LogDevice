@@ -898,6 +898,17 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::RocksDB);
 #endif
 
+#ifdef LOGDEVICE_ROCKSDB_HAS_FIRST_KEY_IN_INDEX
+  init("rocksdb-first-key-in-index",
+       &first_key_in_index_,
+       "true",
+       nullptr,
+       "If true, rocksdb sst file index will contain first key of each block. "
+       "This reduces read amplification but increases index size.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+#endif
+
   init("rocksdb-track-iterator-versions",
        &track_iterator_versions,
        "false",
@@ -1459,6 +1470,15 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "file, but with fewer logdevice-specific details.",
        SERVER,
        SettingsCategory::LogsDB);
+
+  init("rocksdb-table-format-version",
+       &table_format_version_,
+       "4",
+       nullptr,
+       "Version of rockdb block-based sst file format. See rocksdb/table.h for "
+       "details. You probably don't need to change this.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
 
   init("rocksdb-test-clamp-backlog",
        &test_clamp_backlog,

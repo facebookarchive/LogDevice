@@ -101,6 +101,15 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
   table_options_.index_shortening = rocksdb_settings_->index_shortening_;
 #endif
 
+#ifdef LOGDEVICE_ROCKSDB_HAS_FIRST_KEY_IN_INDEX
+  if (rocksdb_settings_->first_key_in_index_) {
+    table_options_.index_type =
+        rocksdb::BlockBasedTableOptions::IndexType::kBinarySearchWithFirstKey;
+  }
+#endif
+
+  table_options_.format_version = rocksdb_settings_->table_format_version_;
+
   table_options_.block_size = rocksdb_settings_->block_size_;
   table_options_.cache_index_and_filter_blocks =
       rocksdb_settings_->cache_index_;

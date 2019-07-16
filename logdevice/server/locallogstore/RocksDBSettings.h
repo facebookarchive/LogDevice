@@ -44,6 +44,10 @@ static_assert(ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 7),
 #define LOGDEVICE_ROCKSDB_HAS_INDEX_SHORTENING_MODE
 #endif
 
+#if ROCKSDB_MAJOR > 6 || (ROCKSDB_MAJOR == 6 && ROCKSDB_MINOR >= 3)
+#define LOGDEVICE_ROCKSDB_HAS_FIRST_KEY_IN_INDEX
+#endif
+
 namespace boost { namespace program_options {
 class options_description;
 }} // namespace boost::program_options
@@ -274,6 +278,10 @@ class RocksDBSettings : public SettingsBundle {
   rocksdb::BlockBasedTableOptions::IndexShorteningMode index_shortening_;
 #endif
 
+#ifdef LOGDEVICE_ROCKSDB_HAS_FIRST_KEY_IN_INDEX
+  bool first_key_in_index_;
+#endif
+
   // ignored for FlushBlockPolicyType::DEFAULT
   size_t min_block_size_;
 
@@ -372,6 +380,8 @@ class RocksDBSettings : public SettingsBundle {
   int bloom_bits_per_key_;
   int metadata_bloom_bits_per_key_;
   bool bloom_block_based_;
+
+  uint32_t table_format_version_;
 
   std::chrono::seconds test_clamp_backlog;
 
