@@ -160,6 +160,7 @@ void NodeSetTest::updateMetaDataInEpochStore(logid_t log) {
               log,
               std::make_shared<CustomEpochMetaDataUpdater>(
                   config,
+                  config->getNodesConfigurationFromServerConfigSource(),
                   selector,
                   true,
                   true /* provision_if_empty */,

@@ -18,13 +18,14 @@
 
 namespace facebook { namespace logdevice {
 
-NodeSetSelector::Result
-WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
-                                          const Configuration* cfg,
-                                          nodeset_size_t target_nodeset_size,
-                                          uint64_t seed,
-                                          const EpochMetaData* prev,
-                                          const Options* options) {
+NodeSetSelector::Result WeightAwareNodeSetSelector::getStorageSet(
+    logid_t log_id,
+    const Configuration* cfg,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    nodeset_size_t target_nodeset_size,
+    uint64_t seed,
+    const EpochMetaData* prev,
+    const Options* options) {
   Result res;
   res.decision = Decision::FAILED;
 
@@ -39,7 +40,7 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
   res.signature = hash_tuple({15345803578954886993ul, // random salt
                               consistentHashing_,
                               seed,
-                              cfg->serverConfig()->getStorageNodesConfigHash(),
+                              nodes_configuration.getStorageNodesHash(),
                               target_nodeset_size});
   if (prev != nullptr && prev->nodeset_params.signature == res.signature &&
       prev->replication == replication_property) {
@@ -85,30 +86,25 @@ WeightAwareNodeSetSelector::getStorageSet(logid_t log_id,
   };
   std::map<std::string, Domain> domains;
 
-  // TODO: migrate it to use NodesConfiguration with switchable source
-  const auto& nodes_configuration =
-      cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
-  ld_check(nodes_configuration != nullptr);
-  const auto& membership = nodes_configuration->getStorageMembership();
-
+  const auto& membership = nodes_configuration.getStorageMembership();
   for (const auto node : *membership) {
     // Filter nodes excluded from `options`.
     if (options != nullptr && options->exclude_nodes.count(node)) {
       continue;
     }
 
-    const auto num_shards = nodes_configuration->getNumShards(node);
+    const auto num_shards = nodes_configuration.getNumShards(node);
     ld_check(num_shards > 0);
     shard_index_t shard_idx = mapLogToShard_(log_id, num_shards);
     ShardID shard = ShardID(node, shard_idx);
 
     // Filter nodes that shouldn't be included in nodesets
     if (!configuration::nodes::shouldIncludeInNodesetSelection(
-            *nodes_configuration, shard)) {
+            nodes_configuration, shard)) {
       continue;
     }
 
-    const auto* sd = nodes_configuration->getNodeServiceDiscovery(node);
+    const auto* sd = nodes_configuration.getNodeServiceDiscovery(node);
     ld_check(sd != nullptr);
 
     std::string location_str;

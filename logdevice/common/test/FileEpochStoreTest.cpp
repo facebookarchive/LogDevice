@@ -73,6 +73,7 @@ class FileEpochStoreTest : public ::testing::Test {
     int rv = store_->provisionMetaDataLogs(
         std::make_shared<CustomEpochMetaDataUpdater>(
             config,
+            config->getNodesConfigurationFromServerConfigSource(),
             std::move(selector),
             true,
             true /* provision_if_empty */,
@@ -137,7 +138,11 @@ TEST_F(FileEpochStoreTest, UpdateMetaData) {
 
   auto selector = std::make_shared<TestNodeSetSelector>();
   auto updater = std::make_shared<CustomEpochMetaDataUpdater>(
-      cluster_config_->get(), selector, true, true);
+      cluster_config_->get(),
+      cluster_config_->get()->getNodesConfigurationFromServerConfigSource(),
+      selector,
+      true,
+      true);
   // change to a different storage_set
   shards = shards == StorageSet{N1, N2, N3} ? StorageSet{N2, N3, N4}
                                             : StorageSet{N1, N2, N3};

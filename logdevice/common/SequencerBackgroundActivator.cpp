@@ -280,6 +280,8 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
     return ReactivationDecision::NOOP;
   }
 
+  const auto& nodes_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
   const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
       config->getLogGroupByIDShared(logid);
 
@@ -311,6 +313,7 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
   UpdateResult result = updateMetaDataIfNeeded(logid,
                                                new_metadata,
                                                *config,
+                                               *nodes_configuration,
                                                target_nodeset_size,
                                                nodeset_seed,
                                                /* nodeset_selector */ nullptr,
@@ -345,6 +348,7 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
     auto another_res = updateMetaDataIfNeeded(logid,
                                               another_metadata,
                                               *config,
+                                              *nodes_configuration,
                                               target_nodeset_size,
                                               nodeset_seed,
                                               /* nodeset_selector */ nullptr,

@@ -622,6 +622,7 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
         NodeSetSelectorFactory::create(NodeSetSelectorType::SELECT_ALL);
     auto provisioner = std::make_shared<CustomEpochMetaDataUpdater>(
         new_config,
+        new_config->getNodesConfigurationFromServerConfigSource(),
         selector,
         true,
         true /* provision_if_empty */,

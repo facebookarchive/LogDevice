@@ -162,6 +162,7 @@ int AllSequencers::activateSequencer(
         return getEpochMetaData(data_logid,
                                 reason,
                                 cfg,
+                                updateable_config_->getNodesConfiguration(),
                                 acceptable_activation_epoch,
                                 check_metadata_log_before_provisioning,
                                 new_metadata);
@@ -173,6 +174,8 @@ int AllSequencers::getEpochMetaData(
     logid_t logid,
     const std::string& activation_reason,
     std::shared_ptr<Configuration> cfg,
+    std::shared_ptr<const configuration::nodes::NodesConfiguration>
+        nodes_configuration,
     folly::Optional<epoch_t> acceptable_activation_epoch,
     bool check_metadata_log_before_provisioning,
     std::shared_ptr<EpochMetaData> new_metadata) {
@@ -203,6 +206,7 @@ int AllSequencers::getEpochMetaData(
       logid,
       std::make_shared<EpochMetaDataUpdateToNextEpoch>(
           cfg,
+          nodes_configuration,
           new_metadata,
           acceptable_activation_epoch,
           settings_->epoch_metadata_use_new_storage_set_format,
@@ -700,6 +704,7 @@ void AllSequencers::onMetadataLogEmptyCheckResult(
             getEpochMetaData(logid,
                              activation_reason,
                              updateable_config_->get(),
+                             updateable_config_->getNodesConfiguration(),
                              epoch_t(1),
                              /*check_metadata_log_before_provisioning=*/false);
         if (rv == 0) {

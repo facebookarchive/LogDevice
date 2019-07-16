@@ -2526,7 +2526,9 @@ void Cluster::setStartingEpoch(logid_t log_id,
   for (epoch_t e = epoch_t(last_expected_epoch.val_ + 1); e < epoch; ++e.val_) {
     epoch_store->createOrUpdateMetaData(
         log_id,
-        std::make_shared<EpochMetaDataUpdateToNextEpoch>(getConfig()->get()),
+        std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+            getConfig()->get(),
+            getConfig()->get()->getNodesConfigurationFromServerConfigSource()),
         [&semaphore, e](Status status,
                         logid_t,
                         std::unique_ptr<EpochMetaData> info,

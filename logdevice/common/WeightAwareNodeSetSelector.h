@@ -38,12 +38,14 @@ class WeightAwareNodeSetSelector : public NodeSetSelector {
                                       bool hash_flag)
       : mapLogToShard_(map_log_to_shard), consistentHashing_(hash_flag) {}
 
-  Result getStorageSet(logid_t log_id,
-                       const Configuration* cfg,
-                       nodeset_size_t target_nodeset_size,
-                       uint64_t seed,
-                       const EpochMetaData* prev,
-                       const Options* options = nullptr) override;
+  Result getStorageSet(
+      logid_t log_id,
+      const Configuration* cfg,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      nodeset_size_t target_nodeset_size,
+      uint64_t seed,
+      const EpochMetaData* prev,
+      const Options* options = nullptr) override;
 
  private:
   MapLogToShardFn mapLogToShard_;

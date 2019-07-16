@@ -56,7 +56,8 @@ namespace facebook { namespace logdevice {
  *   provisioned yet. Out: new metadata. If the provided value is not nullptr,
  *   the EpochMetaData is modified in place. Otherwise a new EpochMetaData
  *   is created.
- * @param config  Cluster configuration.
+ * @param config  contains configuration for logs config.
+ * @param nodes_configuration    contains configuration of nodes in the cluster
  * @param target_nodeset_size, nodeset_seed
  *   Target nodeset size and seed to pass to nodeset selector and to put into
  *   the new EpochMetaData. If folly::none, kept unchanged; if it's a newly
@@ -74,17 +75,18 @@ namespace facebook { namespace logdevice {
  * @param force_update
  *   Update the metadata even if the nodeset doesn't change.
  */
-EpochMetaData::UpdateResult
-updateMetaDataIfNeeded(logid_t log_id,
-                       std::unique_ptr<EpochMetaData>& info,
-                       const Configuration& config,
-                       folly::Optional<nodeset_size_t> target_nodeset_size,
-                       folly::Optional<uint64_t> nodeset_seed,
-                       NodeSetSelector* nodeset_selector,
-                       bool use_storage_set_format,
-                       bool provision_if_empty = false,
-                       bool update_if_exists = true,
-                       bool force_update = false);
+EpochMetaData::UpdateResult updateMetaDataIfNeeded(
+    logid_t log_id,
+    std::unique_ptr<EpochMetaData>& info,
+    const Configuration& config,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    folly::Optional<nodeset_size_t> target_nodeset_size,
+    folly::Optional<uint64_t> nodeset_seed,
+    NodeSetSelector* nodeset_selector,
+    bool use_storage_set_format,
+    bool provision_if_empty = false,
+    bool update_if_exists = true,
+    bool force_update = false);
 
 // This class is only used in tests and in deprecated metadata-utility.
 // Normally metadata updates happen together with activating sequencer using
@@ -93,7 +95,9 @@ class CustomEpochMetaDataUpdater final : public EpochMetaData::Updater {
  public:
   /**
    * Create an EpochMetaDataUpdater object
-   * @param config                 cluster configuration
+   * @param config  contains configuration for logs config.
+   * @param nodes_configuration    contains configuration of nodes in the
+   * cluster
    * @param nodeset_selector       nodeset_selector for picking a nodeset
    * @param use_storage_set_format Use the new copyset serialization format for
    *                               Flexible Log Sharding.
@@ -110,13 +114,17 @@ class CustomEpochMetaDataUpdater final : public EpochMetaData::Updater {
    * @param force_update           update the metadata even if the nodeset
    *                               doesn't change
    */
-  CustomEpochMetaDataUpdater(std::shared_ptr<Configuration> config,
-                             std::shared_ptr<NodeSetSelector> nodeset_selector,
-                             bool use_storage_set_format,
-                             bool provision_if_empty = false,
-                             bool update_if_exists = true,
-                             bool force_update = false)
+  CustomEpochMetaDataUpdater(
+      std::shared_ptr<Configuration> config,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      std::shared_ptr<NodeSetSelector> nodeset_selector,
+      bool use_storage_set_format,
+      bool provision_if_empty = false,
+      bool update_if_exists = true,
+      bool force_update = false)
       : config_(std::move(config)),
+        nodes_configuration_(std::move(nodes_configuration)),
         nodeset_selector_(std::move(nodeset_selector)),
         use_storage_set_format_(use_storage_set_format),
         provision_if_empty_(provision_if_empty),
@@ -144,6 +152,8 @@ class CustomEpochMetaDataUpdater final : public EpochMetaData::Updater {
                        NodeSetSelector::Result& selected);
 
   const std::shared_ptr<Configuration> config_;
+  const std::shared_ptr<const configuration::nodes::NodesConfiguration>
+      nodes_configuration_;
   const std::shared_ptr<NodeSetSelector> nodeset_selector_;
   const bool use_storage_set_format_;
   const bool provision_if_empty_;
@@ -199,11 +209,14 @@ class EpochMetaDataUpdateToNextEpoch final : public EpochMetaData::Updater {
  public:
   explicit EpochMetaDataUpdateToNextEpoch(
       std::shared_ptr<Configuration> config = nullptr,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration = nullptr,
       std::shared_ptr<EpochMetaData> updated_metadata = nullptr,
       folly::Optional<epoch_t> acceptable_activation_epoch = folly::none,
       bool use_storage_set_format = false,
       bool provision_if_empty = true)
       : config_(std::move(config)),
+        nodes_configuration_(std::move(nodes_configuration)),
         updated_metadata_(updated_metadata),
         acceptable_activation_epoch_(acceptable_activation_epoch),
         use_storage_set_format_(use_storage_set_format),
@@ -237,6 +250,8 @@ class EpochMetaDataUpdateToNextEpoch final : public EpochMetaData::Updater {
 
  private:
   const std::shared_ptr<Configuration> config_;
+  const std::shared_ptr<const configuration::nodes::NodesConfiguration>
+      nodes_configuration_;
   std::shared_ptr<EpochMetaData> updated_metadata_;
   folly::Optional<epoch_t> acceptable_activation_epoch_;
   bool use_storage_set_format_;

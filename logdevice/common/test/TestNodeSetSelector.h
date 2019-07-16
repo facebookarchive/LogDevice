@@ -34,6 +34,7 @@ class TestNodeSetSelector : public NodeSetSelector {
   // must be called after setStorageSet();
   Result getStorageSet(logid_t /*log_id*/,
                        const Configuration* /*cfg*/,
+                       const configuration::nodes::NodesConfiguration&,
                        nodeset_size_t /* target_nodeset_size */,
                        uint64_t /* seed */,
                        const EpochMetaData* prev,

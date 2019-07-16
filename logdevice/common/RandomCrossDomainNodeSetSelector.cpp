@@ -26,7 +26,7 @@
 namespace facebook { namespace logdevice {
 
 int RandomCrossDomainNodeSetSelector::buildDomainMap(
-    const ServerConfig* cfg,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
     NodeLocationScope sync_replication_scope,
     const Options* options,
     DomainMap* map) {
@@ -36,14 +36,10 @@ int RandomCrossDomainNodeSetSelector::buildDomainMap(
 
   map->clear();
 
-  // TODO: migrate it to use NodesConfiguration with switchable source
-  const auto& nodes_configuration =
-      cfg->getNodesConfigurationFromServerConfigSource();
-  ld_check(nodes_configuration != nullptr);
-  const auto& membership = nodes_configuration->getStorageMembership();
+  const auto& membership = nodes_configuration.getStorageMembership();
 
   for (node_index_t node : *membership) {
-    const auto* sd = nodes_configuration->getNodeServiceDiscovery(node);
+    const auto* sd = nodes_configuration.getNodeServiceDiscovery(node);
     ld_check(sd != nullptr);
 
     // filter nodes excluded from @param options
@@ -90,6 +86,7 @@ RandomCrossDomainNodeSetSelector::convertReplicationProperty(
 storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
     logid_t log_id,
     const Configuration* cfg,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
     nodeset_size_t target_nodeset_size,
     NodeLocationScope sync_replication_scope,
     int replication_factor,
@@ -100,10 +97,9 @@ storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
   DomainMap local_domain_map;
   if (!domain_map) {
     domain_map = &local_domain_map;
-    if (buildDomainMap(cfg->serverConfig().get(),
-                       sync_replication_scope,
-                       options,
-                       domain_map) != 0) {
+    if (buildDomainMap(
+            nodes_configuration, sync_replication_scope, options, domain_map) !=
+        0) {
       err = E::FAILED;
       return 0;
     }
@@ -202,6 +198,7 @@ storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
 NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
     logid_t log_id,
     const Configuration* cfg,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
     nodeset_size_t target_nodeset_size,
     uint64_t seed,
     const EpochMetaData* prev,
@@ -221,8 +218,13 @@ NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
     ld_debug("Log %lu is not configured to use cross-domain replication, "
              "fallback to random nodeset selection instead.",
              log_id.val_);
-    return RandomNodeSetSelector::getStorageSet(
-        log_id, cfg, target_nodeset_size, seed, prev, options);
+    return RandomNodeSetSelector::getStorageSet(log_id,
+                                                cfg,
+                                                nodes_configuration,
+                                                target_nodeset_size,
+                                                seed,
+                                                prev,
+                                                options);
   }
 
   if (replication.sync_replication_scope >= NodeLocationScope::ROOT) {
@@ -249,7 +251,7 @@ NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
 
   // TODO: cache the domain_map if it becomes performance bottleneck
   DomainMap domain_map;
-  if (buildDomainMap(cfg->serverConfig().get(),
+  if (buildDomainMap(nodes_configuration,
                      replication.sync_replication_scope,
                      options,
                      &domain_map) != 0) {
@@ -260,6 +262,7 @@ NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
   size_t nodeset_size =
       getStorageSetSizeImpl(log_id,
                             cfg,
+                            nodes_configuration,
                             target_nodeset_size,
                             replication.sync_replication_scope,
                             replication.replication_factor,
@@ -291,8 +294,12 @@ NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
     // 2. With too many zero-weight nodes, it is possible that the nodeset
     // selected does not satisfy the replication requirement. To prevent the
     // loss of write availability, consider the nodeset selection failed.
-    auto selected_nodes = randomlySelectNodes(
-        log_id, cfg, domain_nodes, nodes_per_domain, options);
+    auto selected_nodes = randomlySelectNodes(log_id,
+                                              cfg,
+                                              nodes_configuration,
+                                              domain_nodes,
+                                              nodes_per_domain,
+                                              options);
 
     if (selected_nodes == nullptr) {
       ld_error(
@@ -315,9 +322,7 @@ NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
   // many nodes are of 0 weight. To prevent the loss of write availability,
   // fail the nodeset selection.
   if (!configuration::nodes::validStorageSet(
-          *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-          res.storage_set,
-          replication_property)) {
+          nodes_configuration, res.storage_set, replication_property)) {
     ld_error("Invalid nodeset %s for log %lu, check nodes weights.",
              toString(res.storage_set).c_str(),
              log_id.val_);

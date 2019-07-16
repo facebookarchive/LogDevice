@@ -515,12 +515,15 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
   /* here we obtain the only shard that has internal log records */
   auto selector =
       NodeSetSelectorFactory::create(NodeSetSelectorType::CONSISTENT_HASHING);
-  auto selected =
-      selector->getStorageSet(configuration::InternalLogs::CONFIG_LOG_DELTAS,
-                              cluster->getConfig()->get().get(),
-                              /* target_nodeset_size */ 1,
-                              /* seed */ 0,
-                              nullptr);
+
+  const auto config = cluster->getConfig()->get();
+  auto selected = selector->getStorageSet(
+      configuration::InternalLogs::CONFIG_LOG_DELTAS,
+      config.get(),
+      *config->getNodesConfigurationFromServerConfigSource(),
+      /* target_nodeset_size */ 1,
+      /* seed */ 0,
+      nullptr);
   ASSERT_EQ(selected.decision, NodeSetSelector::Decision::NEEDS_CHANGE);
   ASSERT_EQ(selected.storage_set.size(), 1);
   auto S = selected.storage_set[0];

@@ -70,8 +70,11 @@ class NodeSetSelector {
    * nodeset.
    *
    * @param  log_id   logid of the log
-   * @param  cfg      Cluster configuration. In particular, contains the list of
-   *                  nodes and log attributes.
+   * @param  cfg      contains log attributes.
+   *
+   * @param nodes_configuration   contains the storage node membership and
+   *                              varios attributes of storage nodes
+   *
    * @param  target_nodeset_size  Recommended size of the nodeset to select.
    * @param  seed     Seed/salt for any RNGs/hash functions used by the nodeset
    *                  selector. Nondeterministic nodeset selector may ignore it.
@@ -97,12 +100,14 @@ class NodeSetSelector {
    * as an optimization, to avoid generating new nodeset if nothing changed in
    * the input.
    */
-  virtual Result getStorageSet(logid_t log_id,
-                               const Configuration* cfg,
-                               nodeset_size_t target_nodeset_size,
-                               uint64_t seed,
-                               const EpochMetaData* prev,
-                               const Options* options = nullptr) = 0;
+  virtual Result getStorageSet(
+      logid_t log_id,
+      const Configuration* cfg,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      nodeset_size_t target_nodeset_size,
+      uint64_t seed,
+      const EpochMetaData* prev,
+      const Options* options = nullptr) = 0;
 
   virtual ~NodeSetSelector() {}
 };

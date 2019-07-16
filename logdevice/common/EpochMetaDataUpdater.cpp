@@ -25,6 +25,7 @@ operator()(logid_t log_id,
       updateMetaDataIfNeeded(log_id,
                              info,
                              *config_,
+                             *nodes_configuration_,
                              /* target_nodeset_size */ folly::none,
                              /* nodeset_seed */ folly::none,
                              nodeset_selector_.get(),
@@ -121,17 +122,18 @@ processConfigChanges(std::unique_ptr<EpochMetaData>& metadata,
  *
  *
  */
-UpdateResult
-updateMetaDataIfNeeded(logid_t log_id,
-                       std::unique_ptr<EpochMetaData>& metadata,
-                       const Configuration& config,
-                       folly::Optional<nodeset_size_t> target_nodeset_size,
-                       folly::Optional<uint64_t> nodeset_seed,
-                       NodeSetSelector* nodeset_selector,
-                       bool use_storage_set_format,
-                       bool provision_if_empty,
-                       bool update_if_exists,
-                       bool force_update) {
+UpdateResult updateMetaDataIfNeeded(
+    logid_t log_id,
+    std::unique_ptr<EpochMetaData>& metadata,
+    const Configuration& config,
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    folly::Optional<nodeset_size_t> target_nodeset_size,
+    folly::Optional<uint64_t> nodeset_seed,
+    NodeSetSelector* nodeset_selector,
+    bool use_storage_set_format,
+    bool provision_if_empty,
+    bool update_if_exists,
+    bool force_update) {
   const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
       config.getLogGroupByIDShared(log_id);
   if (!logcfg) {
@@ -189,6 +191,7 @@ updateMetaDataIfNeeded(logid_t log_id,
   auto selected = nodeset_selector->getStorageSet(
       log_id,
       &config,
+      nodes_configuration,
       target_nodeset_size.value(),
       nodeset_seed.value(),
       prev_metadata_exists ? metadata.get() : nullptr,
@@ -483,9 +486,11 @@ operator()(logid_t log_id,
 
     if (provisioning_enabled && provisioning_allowed) {
       ld_check(config_);
+      ld_check(nodes_configuration_);
       res = updateMetaDataIfNeeded(log_id,
                                    info,
                                    *config_,
+                                   *nodes_configuration_,
                                    folly::none,
                                    folly::none,
                                    /* nodeset_selector */ nullptr,

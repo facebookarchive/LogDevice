@@ -26,8 +26,7 @@ class LocalLogsConfig;
 /**
  * structure that holds options altering the behavior of the config parser.
  */
-struct ConfigParserOptions {
-};
+struct ConfigParserOptions {};
 
 /**
  * Represents a parsed config file.  A config file contains configuration for
@@ -87,6 +86,11 @@ class Configuration {
    */
   const std::shared_ptr<ServerConfig>& serverConfig() const {
     return server_config_;
+  }
+
+  const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+  getNodesConfigurationFromServerConfigSource() const {
+    return server_config_->getNodesConfigurationFromServerConfigSource();
   }
 
   /**

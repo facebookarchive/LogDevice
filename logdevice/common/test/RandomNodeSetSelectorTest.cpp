@@ -65,12 +65,14 @@ verify_result(NodeSetSelector* selector,
 
   ld_check(iteration > 0);
   for (size_t i = 0; i < iteration; ++i) {
-    auto res = selector->getStorageSet(logid,
-                                       config.get(),
-                                       target_size.value(),
-                                       /* seed */ 0,
-                                       nullptr,
-                                       options);
+    auto res = selector->getStorageSet(
+        logid,
+        config.get(),
+        *config->getNodesConfigurationFromServerConfigSource(),
+        target_size.value(),
+        /* seed */ 0,
+        nullptr,
+        options);
     ASSERT_EQ(expected_decision, res.decision);
     if (res.decision != Decision::NEEDS_CHANGE) {
       continue;
@@ -89,7 +91,7 @@ verify_result(NodeSetSelector* selector,
     ASSERT_NE(nullptr, logcfg);
     const auto& attrs = logcfg->attrs();
     const auto& nodes_config =
-        *config->serverConfig()->getNodesConfigurationFromServerConfigSource();
+        *config->getNodesConfigurationFromServerConfigSource();
     ASSERT_TRUE(configuration::nodes::validStorageSet(
         nodes_config,
         res.storage_set,
@@ -101,8 +103,13 @@ verify_result(NodeSetSelector* selector,
         res.storage_set, ReplicationProperty::fromLogAttributes(attrs));
     meta.weights = res.weights;
     meta.nodeset_params.signature = res.signature;
-    auto res2 = selector->getStorageSet(
-        logid, config.get(), target_size.value(), 0, &meta, options);
+    auto res2 = selector->getStorageSet(logid,
+                                        config.get(),
+                                        nodes_config,
+                                        target_size.value(),
+                                        0,
+                                        &meta,
+                                        options);
     EXPECT_EQ(Decision::KEEP, res2.decision);
     EXPECT_EQ(res.signature, res2.signature);
 
@@ -121,26 +128,30 @@ compare_nodesets(NodeSetSelector* selector,
                  std::map<ShardID, size_t>& old_distribution,
                  std::map<ShardID, size_t>& new_distribution,
                  const NodeSetSelector::Options* options = nullptr) {
-  auto old_res = selector->getStorageSet(logid,
-                                         config1.get(),
-                                         config1->getLogGroupByIDShared(logid)
-                                             ->attrs()
-                                             .nodeSetSize()
-                                             .value()
-                                             .value_or(NODESET_SIZE_MAX),
-                                         0,
-                                         nullptr,
-                                         options);
-  auto new_res = selector->getStorageSet(logid,
-                                         config2.get(),
-                                         config1->getLogGroupByIDShared(logid)
-                                             ->attrs()
-                                             .nodeSetSize()
-                                             .value()
-                                             .value_or(NODESET_SIZE_MAX),
-                                         0,
-                                         nullptr,
-                                         options);
+  auto old_res = selector->getStorageSet(
+      logid,
+      config1.get(),
+      *config1->getNodesConfigurationFromServerConfigSource(),
+      config1->getLogGroupByIDShared(logid)
+          ->attrs()
+          .nodeSetSize()
+          .value()
+          .value_or(NODESET_SIZE_MAX),
+      0,
+      nullptr,
+      options);
+  auto new_res = selector->getStorageSet(
+      logid,
+      config2.get(),
+      *config2->getNodesConfigurationFromServerConfigSource(),
+      config1->getLogGroupByIDShared(logid)
+          ->attrs()
+          .nodeSetSize()
+          .value()
+          .value_or(NODESET_SIZE_MAX),
+      0,
+      nullptr,
+      options);
 
   ld_check(old_res.decision == Decision::NEEDS_CHANGE);
   ld_check(new_res.decision == Decision::NEEDS_CHANGE);
@@ -851,8 +862,14 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, DisabledNodes) {
   auto selector =
       NodeSetSelectorFactory::create(NodeSetSelectorType::CONSISTENT_HASHING);
 
-  auto res =
-      selector->getStorageSet(logid_t(1), config.get(), 6, 0, nullptr, nullptr);
+  auto res = selector->getStorageSet(
+      logid_t(1),
+      config.get(),
+      *config->getNodesConfigurationFromServerConfigSource(),
+      6,
+      0,
+      nullptr,
+      nullptr);
   ASSERT_EQ(Decision::NEEDS_CHANGE, res.decision);
 
   std::array<int, 3> per_domain{};
@@ -896,19 +913,27 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
   auto selector =
       NodeSetSelectorFactory::create(NodeSetSelectorType::CONSISTENT_HASHING);
 
-  auto res = selector->getStorageSet(logid_t(1),
-                                     config.get(),
-                                     /* target_nodeset_size */ 5,
-                                     /* seed */ 0,
-                                     nullptr,
-                                     nullptr);
+  auto res = selector->getStorageSet(
+      logid_t(1),
+      config.get(),
+      *config->getNodesConfigurationFromServerConfigSource(),
+      /* target_nodeset_size */ 5,
+      /* seed */ 0,
+      nullptr,
+      nullptr);
   ASSERT_EQ(Decision::NEEDS_CHANGE, res.decision);
   ASSERT_EQ(5, res.storage_set.size());
 
   EpochMetaData meta(res.storage_set, replication);
   meta.nodeset_params.signature = res.signature;
-  auto res2 =
-      selector->getStorageSet(logid_t(1), config.get(), 5, 0, &meta, nullptr);
+  auto res2 = selector->getStorageSet(
+      logid_t(1),
+      config.get(),
+      *config->getNodesConfigurationFromServerConfigSource(),
+      5,
+      0,
+      &meta,
+      nullptr);
   EXPECT_EQ(Decision::KEEP, res2.decision);
   EXPECT_EQ(res.signature, res2.signature);
 
@@ -917,30 +942,54 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
   // everything is deterministic, it it passes once it passes always.
   // If you changed the nodeset selector's logic, and this fails, maybe you
   // just got unlucky and need to set a different seed here.
-  auto res3 =
-      selector->getStorageSet(logid_t(1), config.get(), 5, 1, &meta, nullptr);
+  auto res3 = selector->getStorageSet(
+      logid_t(1),
+      config.get(),
+      *config->getNodesConfigurationFromServerConfigSource(),
+      5,
+      1,
+      &meta,
+      nullptr);
   EXPECT_EQ(Decision::NEEDS_CHANGE, res3.decision);
   EXPECT_NE(res3.signature, res2.signature);
   ASSERT_EQ(5, res3.storage_set.size());
 
   meta.shards = res3.storage_set;
   meta.nodeset_params.signature = res3.signature;
-  auto res4 =
-      selector->getStorageSet(logid_t(1), config.get(), 5, 1, &meta, nullptr);
+  auto res4 = selector->getStorageSet(
+      logid_t(1),
+      config.get(),
+      *config->getNodesConfigurationFromServerConfigSource(),
+      5,
+      1,
+      &meta,
+      nullptr);
   EXPECT_EQ(Decision::KEEP, res4.decision);
   EXPECT_EQ(res3.signature, res4.signature);
 
   // Change target nodeset size and check that nodeset changes.
-  auto res5 =
-      selector->getStorageSet(logid_t(1), config.get(), 6, 1, &meta, nullptr);
+  auto res5 = selector->getStorageSet(
+      logid_t(1),
+      config.get(),
+      *config->getNodesConfigurationFromServerConfigSource(),
+      6,
+      1,
+      &meta,
+      nullptr);
   EXPECT_EQ(Decision::NEEDS_CHANGE, res5.decision);
   EXPECT_NE(res5.signature, res4.signature);
   ASSERT_EQ(6, res5.storage_set.size());
 
   meta.shards = res5.storage_set;
   meta.nodeset_params.signature = res5.signature;
-  auto res6 =
-      selector->getStorageSet(logid_t(1), config.get(), 6, 1, &meta, nullptr);
+  auto res6 = selector->getStorageSet(
+      logid_t(1),
+      config.get(),
+      *config->getNodesConfigurationFromServerConfigSource(),
+      6,
+      1,
+      &meta,
+      nullptr);
   EXPECT_EQ(Decision::KEEP, res6.decision);
   EXPECT_EQ(res5.signature, res6.signature);
 }

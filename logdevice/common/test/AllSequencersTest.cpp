@@ -199,6 +199,7 @@ class MockAllSequencers : public AllSequencers {
       logid_t logid,
       const std::string& /* activation_reason */,
       std::shared_ptr<Configuration> /*cfg*/,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>,
       folly::Optional<epoch_t> /*acceptable_activation_epoch*/,
       bool /*provision_if_empty*/,
       std::shared_ptr<EpochMetaData> /* new_metadata */) override {

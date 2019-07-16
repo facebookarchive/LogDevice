@@ -57,7 +57,13 @@ static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
   for (unsigned i = 0; i < iterations; ++i) {
     auto selector = NodeSetSelectorFactory::create(type);
     auto res = selector->getStorageSet(
-        logid_t(1), config.get(), 20, 0, nullptr, nullptr);
+        logid_t(1),
+        config.get(),
+        *config->getNodesConfigurationFromServerConfigSource(),
+        20,
+        0,
+        nullptr,
+        nullptr);
     ld_check(res.decision == NodeSetSelector::Decision::NEEDS_CHANGE);
   }
 }

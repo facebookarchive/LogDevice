@@ -57,12 +57,14 @@ class RandomCrossDomainNodeSetSelector : public RandomNodeSetSelector {
       RandomNodeSetSelector::MapLogToShardFn map_log_to_shard)
       : RandomNodeSetSelector(map_log_to_shard) {}
 
-  Result getStorageSet(logid_t log_id,
-                       const Configuration* cfg,
-                       nodeset_size_t target_nodeset_size,
-                       uint64_t seed,
-                       const EpochMetaData* prev,
-                       const Options* options = nullptr) override;
+  Result getStorageSet(
+      logid_t log_id,
+      const Configuration* cfg,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      nodeset_size_t target_nodeset_size,
+      uint64_t seed,
+      const EpochMetaData* prev,
+      const Options* options = nullptr) override;
 
  private:
   using DomainMap = std::map<std::string, NodeSetIndices>;
@@ -71,18 +73,20 @@ class RandomCrossDomainNodeSetSelector : public RandomNodeSetSelector {
   // mutate, if removing some shards yields a better storage_set_size match) the
   // domain_map if supplied, otherwise generates one from the given config. Uses
   // log_id for logging if it is supplied
-  storage_set_size_t
-  getStorageSetSizeImpl(logid_t log_id,
-                        const Configuration* cfg,
-                        nodeset_size_t target_nodeset_size,
-                        NodeLocationScope sync_replication_scope,
-                        int replication_factor,
-                        DomainMap* domain_map,
-                        const Options* options);
-  static int buildDomainMap(const ServerConfig* cfg,
-                            NodeLocationScope sync_replication_scope,
-                            const Options* options,
-                            DomainMap* map);
+  storage_set_size_t getStorageSetSizeImpl(
+      logid_t log_id,
+      const Configuration* cfg,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      nodeset_size_t target_nodeset_size,
+      NodeLocationScope sync_replication_scope,
+      int replication_factor,
+      DomainMap* domain_map,
+      const Options* options);
+  static int buildDomainMap(
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      NodeLocationScope sync_replication_scope,
+      const Options* options,
+      DomainMap* map);
 
   // Extracts replication factor and highest replication scope from
   // ReplicationProperty.

@@ -25,13 +25,15 @@ namespace facebook { namespace logdevice {
 
 class SelectAllShardsNodeSetSelector : public NodeSetSelector {
  public:
-  Result getStorageSet(logid_t log_id,
-                       const Configuration* cfg,
-                       nodeset_size_t target_nodeset_size,
-                       uint64_t seed,
-                       const EpochMetaData* prev,
-                       const Options* options = nullptr /* ignored */
-                       ) override {
+  Result getStorageSet(
+      logid_t log_id,
+      const Configuration* cfg,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      nodeset_size_t target_nodeset_size,
+      uint64_t seed,
+      const EpochMetaData* prev,
+      const Options* options = nullptr /* ignored */
+      ) override {
     Result res;
     const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
         cfg->getLogGroupByIDShared(log_id);
@@ -47,14 +49,10 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
       return res;
     }
 
-    // TODO: migrate it to use NodesConfiguration with switchable source
-    const auto& nodes_configuration =
-        cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
-    ld_check(nodes_configuration != nullptr);
-    const auto& membership = nodes_configuration->getStorageMembership();
+    const auto& membership = nodes_configuration.getStorageMembership();
     for (const auto node : *membership) {
       if ((!options || !options->exclude_nodes.count(node))) {
-        auto num_shards = nodes_configuration->getNumShards(node);
+        auto num_shards = nodes_configuration.getNumShards(node);
         for (shard_index_t s = 0; s < num_shards; ++s) {
           ShardID shard(node, s);
           if (membership->shouldReadFromShard(shard)) {

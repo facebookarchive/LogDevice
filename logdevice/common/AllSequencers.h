@@ -392,13 +392,15 @@ class AllSequencers {
    *
    * @return   0 for success, -1 for failure
    */
-  virtual int
-  getEpochMetaData(logid_t logid,
-                   const std::string& activation_reason,
-                   std::shared_ptr<Configuration> cfg,
-                   folly::Optional<epoch_t> acceptable_activation_epoch,
-                   bool check_metadata_log_before_provisioning = true,
-                   std::shared_ptr<EpochMetaData> new_metadata = nullptr);
+  virtual int getEpochMetaData(
+      logid_t logid,
+      const std::string& activation_reason,
+      std::shared_ptr<Configuration> cfg,
+      std::shared_ptr<const configuration::nodes::NodesConfiguration>
+          nodes_configuration,
+      folly::Optional<epoch_t> acceptable_activation_epoch,
+      bool check_metadata_log_before_provisioning = true,
+      std::shared_ptr<EpochMetaData> new_metadata = nullptr);
 
   virtual StatsHolder* getStats() const;
 
