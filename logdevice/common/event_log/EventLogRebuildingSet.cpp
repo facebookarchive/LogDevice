@@ -202,7 +202,18 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
   folly::Optional<RebuildingMode> currentMode;
   auto it = shards_[shardIdx].nodes_.find(nodeIdx);
   if (it != shards_[shardIdx].nodes_.end()) {
-    is_recoverable = it->second.recoverable;
+    if (!it->second.dc_dirty_ranges.empty()) {
+      // Switching from time-ranged rebuilding to a full rebuilding.
+      // Reset recoverable to true since the time-ranged rebuilding implied that
+      // the node was up and didn't lose all data.
+    } else if (it->second.acked) {
+      // The shard acked its previous rebuilding, so it's as good as not in
+      // rebuilding set. Reset its recoverable to true.
+    } else {
+      // We're restarting a rebuilding. Preserve unrecoverability.
+      is_recoverable = it->second.recoverable;
+    }
+
     drain = it->second.drain;
     currentMode = it->second.mode;
 

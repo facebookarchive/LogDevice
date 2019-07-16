@@ -340,8 +340,9 @@ using SHARD_ABORT_REBUILD_Event =
  * chance to recover it. Readers should not stall hoping this data may be
  * recovered.
  *
- * The shard is marked back to recoverable when we receive a SHARD_ACK_REBUILT
- * or SHARD_ABORT_REBUILD event for it.
+ * The shard is marked back to recoverable when we receive a SHARD_ACK_REBUILT,
+ * or SHARD_ABORT_REBUILD event for it, or when switching from time-ranged to
+ * full rebuilding.
  */
 
 struct SHARD_UNRECOVERABLE_Header {
