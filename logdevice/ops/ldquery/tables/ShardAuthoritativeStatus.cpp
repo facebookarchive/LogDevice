@@ -27,7 +27,7 @@ namespace facebook {
       namespace tables {
 
 TableColumns ShardAuthoritativeStatus::getColumns() const {
-  return {
+  TableColumns res({
       {"node_id", DataType::BIGINT, "Id of the node."},
       {"shard", DataType::BIGINT, "Id of the shard."},
       {"rebuilding_version",
@@ -72,7 +72,34 @@ TableColumns ShardAuthoritativeStatus::getColumns() const {
       {"rebuilding_completed_ts",
        DataType::TEXT,
        "When the shard transitioned to AUTHORITATIVE_EMPTY."},
-  };
+  });
+
+  if (verbose_ >= Verbose::VERBOSE) {
+    res.push_back(
+        TableColumn{"mode",
+                    DataType::TEXT,
+                    "Whether the shard participates in its own rebuilding"});
+    res.push_back(TableColumn{
+        "acked",
+        DataType::INTEGER,
+        "Whether the node acked the rebuilding. (Why would such nodes remain "
+        "in the rebuilding set at all? No one remembers now.)"});
+    res.push_back(
+        TableColumn{"ack_lsn",
+                    DataType::TEXT,
+                    "LSN of the SHARD_ACK_REBUILT written by this shard."});
+    res.push_back(TableColumn{"ack_version",
+                              DataType::TEXT,
+                              "Version of the rebuilding that was acked."});
+  }
+
+  if (verbose_ >= Verbose::SPEW) {
+    res.push_back(TableColumn{"donors_complete", DataType::TEXT, ""});
+    res.push_back(
+        TableColumn{"donors_complete_authoritatively", DataType::TEXT, ""});
+  }
+
+  return res;
 }
 
 void ShardAuthoritativeStatus::newQuery() {
@@ -102,7 +129,8 @@ ShardAuthoritativeStatus::getData(QueryContext& /*ctx*/) {
 
   for (auto& shard : set.getRebuildingShards()) {
     for (auto& node : shard.second.nodes_) {
-      if (!nodes_configuration->isNodeInServiceDiscoveryConfig(node.first)) {
+      if (verbose_ == Verbose::NORMAL &&
+          !nodes_configuration->isNodeInServiceDiscoveryConfig(node.first)) {
         // ignore nodes that are not in config
         continue;
       }
@@ -110,7 +138,8 @@ ShardAuthoritativeStatus::getData(QueryContext& /*ctx*/) {
       std::vector<node_index_t> donors_remaining;
       auto status = set.getShardAuthoritativeStatus(
           node.first, shard.first, donors_remaining);
-      if (status == AuthoritativeStatus::FULLY_AUTHORITATIVE &&
+      if (verbose_ == Verbose::NORMAL &&
+          status == AuthoritativeStatus::FULLY_AUTHORITATIVE &&
           donors_remaining.empty() && node.second.dc_dirty_ranges.empty()) {
         continue;
       }
@@ -136,6 +165,33 @@ ShardAuthoritativeStatus::getData(QueryContext& /*ctx*/) {
           format_time(node.second.rebuilding_started_ts));
       cached_->cols["rebuilding_completed_ts"].push_back(
           format_time(node.second.rebuilding_completed_ts));
+
+      if (verbose_ >= Verbose::VERBOSE) {
+        std::string mode_name = "???";
+        switch (node.second.mode) {
+          case RebuildingMode::RELOCATE:
+            mode_name = "RELOCATE";
+            break;
+          case RebuildingMode::RESTORE:
+            mode_name = "RESTORE";
+            break;
+          case RebuildingMode::INVALID:
+            mode_name = "INVALID";
+            break;
+        }
+        cached_->cols["mode"].push_back(mode_name);
+        cached_->cols["acked"].push_back(s(node.second.acked));
+        cached_->cols["ack_lsn"].push_back(lsn_to_string(node.second.ack_lsn));
+        cached_->cols["ack_version"].push_back(
+            lsn_to_string(node.second.ack_version));
+      }
+
+      if (verbose_ >= Verbose::SPEW) {
+        cached_->cols["donors_complete"].push_back(
+            toString(node.second.donors_complete));
+        cached_->cols["donors_complete_authoritatively"].push_back(
+            toString(node.second.donors_complete_authoritatively));
+      }
     }
   }
 

@@ -28,7 +28,8 @@ class TableRegistry {
   void registerTable(Args... args) {
     auto t = std::make_unique<T>(args...);
     t->init();
-    return registerTable(T::getName(), std::move(t));
+    std::string name = t->getName();
+    return registerTable(name, std::move(t));
   }
 
   void registerTable(const std::string& name, std::unique_ptr<Table> table);

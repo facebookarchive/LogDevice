@@ -174,7 +174,12 @@ LDQuery::LDQuery(std::string config_path,
   table_registry_.registerTable<tables::Recoveries>(ctx_);
   table_registry_.registerTable<tables::Sequencers>(ctx_);
   table_registry_.registerTable<tables::Settings>(ctx_);
-  table_registry_.registerTable<tables::ShardAuthoritativeStatus>(ctx_);
+  table_registry_.registerTable<tables::ShardAuthoritativeStatus>(
+      ctx_, tables::ShardAuthoritativeStatus::Verbose::NORMAL);
+  table_registry_.registerTable<tables::ShardAuthoritativeStatus>(
+      ctx_, tables::ShardAuthoritativeStatus::Verbose::VERBOSE);
+  table_registry_.registerTable<tables::ShardAuthoritativeStatus>(
+      ctx_, tables::ShardAuthoritativeStatus::Verbose::SPEW);
   table_registry_.registerTable<tables::ShardRebuildings>(ctx_);
   table_registry_.registerTable<tables::Shards>(ctx_);
   table_registry_.registerTable<tables::Sockets>(ctx_);

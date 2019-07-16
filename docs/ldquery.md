@@ -545,7 +545,7 @@ Dumps the state of all settings for all nodes in the cluster.
 | from\_admin\_cmd | string | Value provided by the "set" admin command or null. |
 
 ## shard\_authoritative\_status
-Show the current state in the event log.  This contains each shard's authoritative status (see "logdevice/common/AuthoritativeStatus.h"), as well as additional information related to rebuilding.
+Show the current state in the event log. This contains each shard's authoritative status (see "logdevice/common/AuthoritativeStatus.h"), as well as additional information related to rebuilding.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
@@ -562,6 +562,54 @@ Show the current state in the event log.  This contains each shard's authoritati
 | details | string | Reason for rebuilding this shard. |
 | rebuilding\_started\_ts | string | When rebuilding was started. |
 | rebuilding\_completed\_ts | string | When the shard transitioned to AUTHORITATIVE\_EMPTY. |
+
+## shard\_authoritative\_status\_spew
+Like shard\_authoritative\_status\_verbose but has even more columns.
+
+|   Column   |   Type   |   Description   |
+|------------|:--------:|-----------------|
+| node\_id | long | Id of the node. |
+| shard | long | Id of the shard. |
+| rebuilding\_version | string | Rebuilding version: the LSN of the last SHARD\_NEEDS\_REBUILD delta from the event log. |
+| authoritative\_status | string | Authoritative status of the shard. |
+| donors\_remaining | string | If authoritative status is UNDERREPLICATION, list of donors that have not finished rebuilding the under-replicated data. |
+| drain | int | Whether the shard is being drained or has been drained. |
+| dirty\_ranges | string | Time ranges where this shard may be missing data.  This happens if the LogDevice process on this storage node crashed before committing data to disk. |
+| rebuilding\_is\_authoritative | int | Whether rebuilding is authoritative.  A non authoritative rebuilding means that too many shards lost data such that all copies of some records may be unavailable.  Some readers may stall when this happens and there are some shards that are still marked as recoverable. |
+| data\_is\_recoverable | int | Indicates whether the shard's data has been marked as unrecoverable using `ldshell mark-unrecoverable`. If all shards in the rebuilding set are marked unrecoverable, shards for which rebuilding completed will transition to AUTHORITATIVE\_EMPTY status even if that rebuilding is non authoritative. Note that if logdeviced is started on a shard whose corresponding disk has been wiped by a remediation, the shard's data will automatically be considered unrecoverable. |
+| source | string | Entity that triggered rebuilding for this shard. |
+| details | string | Reason for rebuilding this shard. |
+| rebuilding\_started\_ts | string | When rebuilding was started. |
+| rebuilding\_completed\_ts | string | When the shard transitioned to AUTHORITATIVE\_EMPTY. |
+| mode | string | Whether the shard participates in its own rebuilding |
+| acked | int | Whether the node acked the rebuilding. (Why would such nodes remain in the rebuilding set at all? No one remembers now.) |
+| ack\_lsn | string | LSN of the SHARD\_ACK\_REBUILT written by this shard. |
+| ack\_version | string | Version of the rebuilding that was acked. |
+| donors\_complete | string |  |
+| donors\_complete\_authoritatively | string |  |
+
+## shard\_authoritative\_status\_verbose
+Like shard\_authoritative\_status but has more columns and prints all the shards contained in the RSM state, including the noisy ones, e.g. nodes that were removed from config. Can be useful for investigating specifics of the event log RSM behavior, but not for much else.
+
+|   Column   |   Type   |   Description   |
+|------------|:--------:|-----------------|
+| node\_id | long | Id of the node. |
+| shard | long | Id of the shard. |
+| rebuilding\_version | string | Rebuilding version: the LSN of the last SHARD\_NEEDS\_REBUILD delta from the event log. |
+| authoritative\_status | string | Authoritative status of the shard. |
+| donors\_remaining | string | If authoritative status is UNDERREPLICATION, list of donors that have not finished rebuilding the under-replicated data. |
+| drain | int | Whether the shard is being drained or has been drained. |
+| dirty\_ranges | string | Time ranges where this shard may be missing data.  This happens if the LogDevice process on this storage node crashed before committing data to disk. |
+| rebuilding\_is\_authoritative | int | Whether rebuilding is authoritative.  A non authoritative rebuilding means that too many shards lost data such that all copies of some records may be unavailable.  Some readers may stall when this happens and there are some shards that are still marked as recoverable. |
+| data\_is\_recoverable | int | Indicates whether the shard's data has been marked as unrecoverable using `ldshell mark-unrecoverable`. If all shards in the rebuilding set are marked unrecoverable, shards for which rebuilding completed will transition to AUTHORITATIVE\_EMPTY status even if that rebuilding is non authoritative. Note that if logdeviced is started on a shard whose corresponding disk has been wiped by a remediation, the shard's data will automatically be considered unrecoverable. |
+| source | string | Entity that triggered rebuilding for this shard. |
+| details | string | Reason for rebuilding this shard. |
+| rebuilding\_started\_ts | string | When rebuilding was started. |
+| rebuilding\_completed\_ts | string | When the shard transitioned to AUTHORITATIVE\_EMPTY. |
+| mode | string | Whether the shard participates in its own rebuilding |
+| acked | int | Whether the node acked the rebuilding. (Why would such nodes remain in the rebuilding set at all? No one remembers now.) |
+| ack\_lsn | string | LSN of the SHARD\_ACK\_REBUILT written by this shard. |
+| ack\_version | string | Version of the rebuilding that was acked. |
 
 ## shard\_rebuildings
 Show debugging information about the ShardRebuilding state machines (see "logdevice/server/rebuilding/ShardRebuildingV1.h").  This state machine is responsible for running all LogRebuilding state machines (see "logs\_rebuilding" table) for all logs in a donor shard.
