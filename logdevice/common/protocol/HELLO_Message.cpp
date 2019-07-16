@@ -141,6 +141,20 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
 
   PrincipalIdentity principal;
 
+  // Some fields of PrincipalIdentity are populated by PrincipalParser,
+  // others - by this function here. Call it after assigning to `principal`, but
+  // before returning or using it.
+  // This seems hacky; PrincipalParser should populate a provided
+  // PrincipalIdentity instead of creating and returning a new one?
+  auto fill_out_client_info_in_principal = [&] {
+    principal.csid = csid;
+    Sockaddr client_sock_addr = Sender::sockaddrOrInvalid(from);
+    std::string client_sock_str = client_sock_addr.valid()
+        ? client_sock_addr.toStringNoPort()
+        : std::string("UNKNOWN");
+    principal.client_address = client_sock_str;
+  };
+
   if (principal_parser != nullptr) {
     bool useAuthenticationData = true;
 
@@ -159,6 +173,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
           // peer provided a node_id but the connection is not from a
           // valid nodeID
           ackhdr.status = E::ACCESS;
+          fill_out_client_info_in_principal();
           return principal;
         }
       }
@@ -189,15 +204,12 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
           // This should never happen. Authentication should not be enabled
           // if the PrincipalParser is of type NONE or MAX
           ld_check(false);
+          fill_out_client_info_in_principal();
           return principal;
       }
     }
-    principal.csid = csid;
-    Sockaddr client_sock_addr = Sender::sockaddrOrInvalid(from);
-    std::string client_sock_str = client_sock_addr.valid()
-        ? client_sock_addr.toStringNoPort()
-        : std::string("UNKNOWN");
-    principal.client_address = client_sock_str;
+
+    fill_out_client_info_in_principal();
 
     if (principal.type == Principal::INVALID) {
       ackhdr.status = E::ACCESS;
