@@ -157,15 +157,16 @@ void EventLoopTaskQueue::haveTasksEventHandler(void* arg, short what) {
 void EventLoopTaskQueue::executeTasks(uint32_t tokens) {
   std::array<uint32_t, kNumberOfPriorities> dequeues_to_execute{0};
   std::array<uint32_t, kNumberOfPriorities> tasks_available{0};
-  uint32_t overflow{0};
+
+  // Assign just the required slots first.
   for (uint32_t i = 0; tokens > 0 && i < dequeues_to_execute.size(); ++i) {
     tasks_available[i] = queues_[i].size();
-    auto dequeues_per_iteration = dequeues_per_iteration_[i] + overflow;
     dequeues_to_execute[i] = std::min(
-        tasks_available[i], std::min(tokens, dequeues_per_iteration_[i]));
+        std::min(tasks_available[i], dequeues_per_iteration_[i]), tokens);
     tokens -= dequeues_to_execute[i];
-    overflow = dequeues_per_iteration - dequeues_to_execute[i];
   }
+
+  // Then, do a final pass to assign all remaining tokens by order of priority.
   for (uint32_t i = 0; tokens > 0; ++i) {
     ld_assert(i < dequeues_to_execute.size());
     auto tasks_remaining = tasks_available[i] - dequeues_to_execute[i];
