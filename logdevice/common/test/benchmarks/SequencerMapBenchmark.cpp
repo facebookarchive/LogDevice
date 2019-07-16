@@ -16,6 +16,7 @@
 #include <folly/Memory.h>
 #include <folly/SharedMutex.h>
 #include <folly/ThreadLocal.h>
+#include <folly/container/F14Map.h>
 #include <gflags/gflags.h>
 #include <google/dense_hash_map>
 
@@ -352,6 +353,49 @@ logid_t* Map::find(const logid_t& k) {
 }
 } // namespace dense_map_of_shared_ptrs
 
+namespace f14_map_of_shared_ptrs {
+class Map {
+  using MapType = folly::F14FastMap<logid_t::raw_type,
+                                    std::shared_ptr<logid_t>,
+                                    Hash64<logid_t::raw_type>>;
+
+ public:
+  Map();
+  int insert(const logid_t& k);
+  int erase(const logid_t& k);
+  logid_t* find(const logid_t& k);
+
+ private:
+  MapType map_;
+  folly::SharedMutex map_mutex_;
+};
+
+Map::Map() {}
+
+int Map::insert(const logid_t& k) {
+  auto logid = std::make_shared<logid_t>(k);
+  std::pair<MapType::iterator, bool> insertion_result;
+
+  folly::SharedMutex::WriteHolder map_lock(map_mutex_);
+  insertion_result = map_.insert(std::make_pair(k.val(), std::move(logid)));
+  return insertion_result.second ? 0 : 1;
+}
+
+int Map::erase(const logid_t& k) {
+  folly::SharedMutex::WriteHolder map_lock(map_mutex_);
+  return map_.erase(k.val_);
+}
+
+logid_t* Map::find(const logid_t& k) {
+  folly::SharedMutex::ReadHolder map_lock(map_mutex_);
+  auto it = map_.find(k.val_);
+  if (it == map_.end()) {
+    return nullptr;
+  }
+  return it->second.get();
+}
+} // namespace f14_map_of_shared_ptrs
+
 template <typename Map>
 void benchInit(Map& m) {
   BENCHMARK_SUSPEND {
@@ -504,6 +548,9 @@ void benchReadsIn10Threads(int n) {
   }                                                               \
   BENCHMARK_RELATIVE(name##_DenseMapOfSharedPtrs, n) {            \
     bench##name<dense_map_of_shared_ptrs::Map>(n);                \
+  }                                                               \
+  BENCHMARK_RELATIVE(name##_F14MapOfSharedPtrs, n) {              \
+    bench##name<f14_map_of_shared_ptrs::Map>(n);                  \
   }                                                               \
   BENCHMARK_DRAW_LINE();
 

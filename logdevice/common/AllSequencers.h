@@ -13,7 +13,7 @@
 
 #include <boost/iterator/iterator_facade.hpp>
 #include <folly/SharedMutex.h>
-#include <google/dense_hash_map>
+#include <folly/container/F14Map.h>
 
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/MetaDataLog.h"
@@ -42,9 +42,9 @@ class Processor;
 
 class AllSequencers {
  public:
-  using SequencerMap = google::dense_hash_map<logid_t::raw_type,
-                                              std::shared_ptr<Sequencer>,
-                                              Hash64<logid_t::raw_type>>;
+  using SequencerMap = folly::F14FastMap<logid_t::raw_type,
+                                         std::shared_ptr<Sequencer>,
+                                         Hash64<logid_t::raw_type>>;
 
   // An object used to access the contents of the map of sequencers.
   class Accessor {

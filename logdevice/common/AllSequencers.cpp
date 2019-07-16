@@ -68,8 +68,6 @@ AllSequencers::AllSequencers(
       processor_(processor) {
   ld_check(settings_.get());
 
-  map_.set_empty_key(LOGID_INVALID.val());
-  map_.set_deleted_key(LOGID_INVALID2.val());
   if (updateable_config_) { // might not be set if not running sequencers
     server_config_subscription_ =
         updateable_config_->updateableServerConfig()->subscribeToUpdates(
