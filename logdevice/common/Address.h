@@ -40,6 +40,10 @@ struct Address {
     return !id_.node_.isNodeID();
   }
 
+  inline bool isNodeAddress() const {
+    return !isClientAddress();
+  }
+
   /**
    * @return true iff this address is either a NodeID, or a valid ClientID
    *         false for ClientID::INVALID.

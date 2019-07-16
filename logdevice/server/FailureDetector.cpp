@@ -1239,9 +1239,16 @@ int FailureDetector::sendGossipMessage(NodeID node,
 void FailureDetector::onGossipMessageSent(Status st,
                                           const Address& to,
                                           uint64_t msg_id) {
+  ld_check(to.isNodeAddress());
+
   if (st != E::OK) {
     // keep track of the number of errors
     STAT_INCR(getStats(), gossips_failed_to_send);
+
+    auto nidx = to.asNodeID().index();
+    if (isAlive(nidx)) {
+      STAT_INCR(getStats(), gossips_failed_to_send_to_alive_nodes);
+    }
   }
 
   if (current_msg_id_ != msg_id || msg_id == 0) {

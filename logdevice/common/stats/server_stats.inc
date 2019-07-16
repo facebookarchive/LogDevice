@@ -980,6 +980,10 @@ STAT_DEFINE(gossips_delayed_pipe, SUM)
 // How many times the failure detector failed to send gossip messages
 STAT_DEFINE(gossips_failed_to_send, SUM)
 
+// How many times the failure detector failed to send gossip messages to an alive node
+STAT_DEFINE(gossips_failed_to_send_to_alive_nodes, SUM)
+
+
 // Total number of nodes expected to be seen (including self)
 STAT_DEFINE(num_nodes, SUM)
 // Effective number of nodes in the cluster, excluding disabled nodes
