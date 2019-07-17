@@ -7,6 +7,7 @@
  */
 #include <folly/Benchmark.h>
 #include <folly/Singleton.h>
+#include <folly/futures/Future.h>
 #include <folly/io/async/EventBase.h>
 
 #include "logdevice/common/EventLoop.h"
@@ -183,6 +184,61 @@ BENCHMARK(RequestPumpFunctionBenchmarkOnEventLoop, n) {
   BENCHMARK_SUSPEND {
     for (auto& i : requestsPerProducer) {
       i.join();
+    }
+    loop.reset();
+  }
+}
+
+BENCHMARK_RELATIVE(RequestPumpFutureBenchmark, n) {
+  std::condition_variable producers_sem;
+  std::mutex producers_sem_mtx;
+  Semaphore sem;
+  std::atomic<int> executed_count{0};
+  std::unique_ptr<EventLoop> loop;
+  constexpr int numProducers = kNumWorkers;
+  auto& inlineExecutor = folly::InlineExecutor::instance();
+  std::array<std::thread, numProducers> producers;
+  BENCHMARK_SUSPEND {
+    // Create and init consumer
+    loop = std::make_unique<EventLoop>();
+    loop->add([&sem]() { sem.post(); });
+    sem.wait();
+    executed_count = 0;
+
+    for (int i = 0; i < producers.size(); ++i) {
+      producers[i] = std::thread(
+          [&](int requestCount) {
+            {
+              std::unique_lock<std::mutex> _(producers_sem_mtx);
+              sem.post();
+              producers_sem.wait(_);
+            }
+            for (int j = 0; j < requestCount; ++j) {
+              folly::Promise<folly::Unit> promise;
+              promise.getSemiFuture()
+                  .via(&inlineExecutor)
+                  .thenValue([&sem, &executed_count, n](folly::Unit&&) {
+                    int count = executed_count.fetch_add(
+                        1, std::memory_order::memory_order_relaxed);
+                    if (count + 1 == n) {
+                      sem.post();
+                    }
+                  });
+              loop->add([p = std::move(promise)]() mutable { p.setValue(); });
+            }
+          },
+          n / numProducers + (i < (n % numProducers)));
+      sem.wait();
+    }
+  }
+  {
+    std::unique_lock<std::mutex> _(producers_sem_mtx);
+    producers_sem.notify_all();
+  }
+  sem.wait();
+  BENCHMARK_SUSPEND {
+    for (auto& p : producers) {
+      p.join();
     }
     loop.reset();
   }
