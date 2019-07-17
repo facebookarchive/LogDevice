@@ -166,7 +166,8 @@ class NodeSetState : public std::enable_shared_from_this<NodeSetState> {
 
   virtual const Settings* getSettings() const;
 
-  virtual const std::shared_ptr<Configuration> getClusterConfig() const;
+  virtual const std::shared_ptr<const NodesConfiguration>
+  getNodesConfiguration() const;
 
   /**
    * Update the not_available_until timestamp.

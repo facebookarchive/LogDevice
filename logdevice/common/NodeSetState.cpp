@@ -199,13 +199,12 @@ bool NodeSetState::shouldClearGrayList() const {
   }
 
   nodeset_ssize_t num_unavailable_nodes = 0;
-  const std::shared_ptr<const Configuration> config = getClusterConfig();
+  const auto& storage_membership =
+      getNodesConfiguration()->getStorageMembership();
   size_t num_storage_nodes = 0;
 
   for (auto& ss : shard_states_) {
-    const ServerConfig::Node* node =
-        config->serverConfig()->getNode(ss.first.node());
-    if (node && node->isReadableStorageNode()) {
+    if (storage_membership->shouldReadFromShard(ss.first)) {
       num_storage_nodes++;
       // The reason for considering other unavailable reasons apart from
       // just SLOW is that in cases where the number of slow nodes is
@@ -398,8 +397,9 @@ const Settings* FOLLY_NULLABLE NodeSetState::getSettings() const {
   return &Worker::onThisThread()->settings();
 }
 
-const std::shared_ptr<Configuration> NodeSetState::getClusterConfig() const {
-  return Worker::onThisThread()->getConfig();
+const std::shared_ptr<const NodesConfiguration>
+NodeSetState::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 void NodeSetState::clearNotAvailableUntil(ShardID shard) {

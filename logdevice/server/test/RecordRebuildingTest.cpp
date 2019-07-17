@@ -252,11 +252,11 @@ class TestRecordRebuildingStore : public RecordRebuildingStore,
   logid_t getLogID() const override {
     return LOG_ID;
   }
-  bool isStorageNodeInConfig(node_index_t n) const override {
-    if (removed_from_config_.count(n)) {
+  bool isStorageShardInConfig(ShardID shard) const override {
+    if (removed_from_config_.count(shard.node())) {
       return false;
     }
-    return n < 100;
+    return shard.node() < 100;
   }
   const Settings& getSettings() const override {
     return settings_;

@@ -567,7 +567,7 @@ class LogRebuilding : public LogRebuildingInterface,
    */
   virtual void activateReadNewBatchTimer();
 
-  virtual std::shared_ptr<Configuration> getConfig() const;
+  virtual std::shared_ptr<UpdateableConfig> getConfig() const;
 
   /**
    * Invalidate the iterators in `iteratorCache_` if they expired.

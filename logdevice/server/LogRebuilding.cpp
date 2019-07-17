@@ -405,7 +405,7 @@ void LogRebuilding::readNewBatch() {
 
 LocalLogStoreReader::ReadContext LogRebuilding::createReadContext() {
   ld_check(!rebuildingSet_->shards.empty());
-  auto cfg = getConfig();
+  auto cfg = getConfig()->get();
 
   ld_check(cur_replication_scheme_);
   ld_check(cur_replication_scheme_->epoch_metadata == *curEpochRange_->second);
@@ -1316,10 +1316,10 @@ void LogRebuilding::timerCallback() {
 
 void LogRebuilding::markNodesInRebuildingSetNotAvailable(
     ReplicationScheme& replication) {
-  auto cfg = getConfig();
+  auto nc = getConfig()->getNodesConfiguration();
 
   for (auto it : rebuildingSet_->shards) {
-    if (!cfg->serverConfig()->getNode(it.first.node())) {
+    if (!nc->isNodeInServiceDiscoveryConfig(it.first.node())) {
       // This node is no longer in the config.
       continue;
     }
@@ -1467,8 +1467,8 @@ ServerInstanceId LogRebuilding::getServerInstanceId() const {
   return Worker::onThisThread()->processor_->getServerInstanceId();
 }
 
-std::shared_ptr<Configuration> LogRebuilding::getConfig() const {
-  return Worker::getConfig();
+std::shared_ptr<UpdateableConfig> LogRebuilding::getConfig() const {
+  return Worker::onThisThread()->getUpdateableConfig();
 }
 
 void LogRebuilding::invalidateIterators() {

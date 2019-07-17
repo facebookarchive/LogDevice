@@ -56,8 +56,10 @@ class MyNodeSetState : public NodeSetState {
     return 0.5;
   }
 
-  const std::shared_ptr<Configuration> getClusterConfig() const override {
-    return config_;
+  const std::shared_ptr<const NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
   }
 
   const Settings* getSettings() const override {

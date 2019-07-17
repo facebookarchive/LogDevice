@@ -57,9 +57,10 @@ node_index_t RecordRebuildingBase::getMyNodeIndex() const {
   return Worker::onThisThread()->processor_->getMyNodeID().index();
 }
 
-bool RecordRebuildingBase::isStorageNodeInConfig(node_index_t n) const {
-  auto node = Worker::getConfig()->serverConfig()->getNode(n);
-  return node != nullptr && node->isReadableStorageNode();
+bool RecordRebuildingBase::isStorageShardInConfig(ShardID shard) const {
+  const auto& storage_membership =
+      Worker::onThisThread()->getNodesConfiguration()->getStorageMembership();
+  return storage_membership->shouldReadFromShard(shard);
 }
 
 const Settings& RecordRebuildingBase::getSettings() const {
@@ -707,7 +708,7 @@ lsn_t RecordRebuildingBase::getRestartVersion() const {
 bool RecordRebuildingBase::checkEveryoneStillInConfig() {
   ld_check(!newCopyset_.empty());
   for (ShardID shard : newCopyset_) {
-    if (!isStorageNodeInConfig(shard.node())) {
+    if (!isStorageShardInConfig(shard)) {
       return false;
     }
   }

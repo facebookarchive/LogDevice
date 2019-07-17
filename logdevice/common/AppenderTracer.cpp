@@ -45,7 +45,7 @@ void AppenderTracer::traceAppend(
     for (auto& rec : recipients) {
       auto shard_id = rec.getShardID();
       recipient_ids.push_back(shard_id.toString());
-      recipient_ips.push_back(logger_->nodeIDToIPAddress(shard_id.asNodeID()));
+      recipient_ips.push_back(logger_->nodeIDToIPAddress(shard_id.node()));
     }
     // We might not have the logs config locally if we run sequencers and
     // appenders on clients in the future.

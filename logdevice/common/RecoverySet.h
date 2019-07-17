@@ -38,12 +38,13 @@ class RecoverySet {
  public:
   /**
    * @param epoch_metadata           metadata of the epoch we're recovering
-   * @param config                   cluster configuration
+   * @param nodes_configuration      cluster configuration
    * @param recovery                 EpochRecovery object that owns this set
    */
-  RecoverySet(const EpochMetaData& epoch_metadata,
-              const std::shared_ptr<ServerConfig>& config,
-              EpochRecovery* recovery);
+  RecoverySet(
+      const EpochMetaData& epoch_metadata,
+      const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
+      EpochRecovery* recovery);
 
   size_t size() const {
     return nodes_.size();

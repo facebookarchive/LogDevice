@@ -40,8 +40,6 @@ void RebuildingTracer::traceRecordRebuild(const logid_t logid,
     std::vector<std::string> target_node_ids;
     std::vector<std::string> target_node_ips;
 
-    auto config = logger_->getConfiguration();
-
     for (auto& rec : rebuilding_set.shards) {
       rebuilding_shards.push_back(rec.first.toString());
     }
@@ -59,14 +57,15 @@ void RebuildingTracer::traceRecordRebuild(const logid_t logid,
         // new node to the copyset
         target_node_ids.push_back(shard);
         // resolve into IP
-        const auto node = config->serverConfig()->getNode(c.node());
-        if (node != nullptr) {
-          target_node_ips.push_back(node->address.toStringNoBrackets());
+        const auto ip = logger_->nodeIDToIPAddress(c.node());
+        if (!ip.empty()) {
+          target_node_ips.push_back(ip);
         }
       }
       new_copyset_ids.push_back(shard);
     }
 
+    auto config = logger_->getConfiguration();
     std::string log_range =
         config->getLogGroupPath(logid).value_or("<UNKNOWN>");
 

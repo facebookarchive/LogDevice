@@ -47,8 +47,9 @@ class TraceLogger {
   }
 
   /** Helpers useful in tracing **/
-  std::string nodeIDToIPAddress(const NodeID& node_id) const {
-    const auto node = cluster_config_->get()->serverConfig()->getNode(node_id);
+  std::string nodeIDToIPAddress(node_index_t idx) const {
+    const auto& node =
+        cluster_config_->getNodesConfiguration()->getNodeServiceDiscovery(idx);
     if (node == nullptr) {
       return std::string();
     }

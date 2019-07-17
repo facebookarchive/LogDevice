@@ -860,8 +860,8 @@ void GET_SEQ_STATE_Message::blacklistNodeInNodeset(
                  log_id_.val(),
                  request_id_.val());
 
-  const std::shared_ptr<ServerConfig> cfg(Worker::getConfig()->serverConfig());
-  if (cfg->getNode(shard.node()) != nullptr) {
+  const auto& nc = Worker::onThisThread()->getNodesConfiguration();
+  if (nc->isNodeInServiceDiscoveryConfig(shard.node())) {
     ld_check(copyset_manager_ != nullptr);
     copyset_manager_->getNodeSetState()->setNotAvailableUntil(
         shard,

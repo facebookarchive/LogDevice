@@ -390,7 +390,7 @@ class RecordRebuildingBase : public RecordRebuildingInterface {
 
   // Can be overridden in tests.
   virtual node_index_t getMyNodeIndex() const;
-  virtual bool isStorageNodeInConfig(node_index_t n) const;
+  virtual bool isStorageShardInConfig(ShardID shard) const;
   virtual const Settings& getSettings() const;
   virtual void activateRetryTimer();
   virtual void resetRetryTimer();

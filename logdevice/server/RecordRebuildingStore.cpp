@@ -239,7 +239,7 @@ void RecordRebuildingStore::buildNewCopysetBase() {
       // belong to the storage set. This can either be because the cluster was
       // shrunk while we were rebuilding data that was stored on the removed
       // nodes (not a good idea...), or because there is a nasty bug somewhere.
-      if (!isStorageNodeInConfig(shard.node())) {
+      if (!isStorageShardInConfig(shard)) {
         RATELIMIT_ERROR(
             std::chrono::seconds(10),
             10,

@@ -66,8 +66,9 @@ class MockLocalLogStoreReadFilter : public LocalLogStoreReadFilter {
   explicit MockLocalLogStoreReadFilter(std::shared_ptr<ServerConfig> config)
       : LocalLogStoreReadFilter(), config_(config) {}
 
-  std::shared_ptr<ServerConfig> getServerConfig() const override {
-    return config_;
+  std::shared_ptr<const NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
   }
 
  private:

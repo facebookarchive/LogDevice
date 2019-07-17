@@ -1054,7 +1054,8 @@ class LocalLogStoreReadFilter : public LocalLogStore::ReadFilter {
 
  protected:
   // Used for local scd filtering.
-  virtual std::shared_ptr<ServerConfig> getServerConfig() const;
+  virtual std::shared_ptr<const NodesConfiguration>
+  getNodesConfiguration() const;
 
  private:
   std::shared_ptr<UpdateableConfig> updateable_config_;

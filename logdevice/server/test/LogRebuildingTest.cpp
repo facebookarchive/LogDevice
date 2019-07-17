@@ -232,8 +232,8 @@ class MockLogRebuilding : public LogRebuilding {
                               ctx.until_lsn_});
   }
 
-  std::shared_ptr<Configuration> getConfig() const override {
-    return config->get();
+  std::shared_ptr<UpdateableConfig> getConfig() const override {
+    return config;
   }
 
   NodeID getMyNodeID() const override {
@@ -274,7 +274,7 @@ class MockLogRebuilding : public LogRebuilding {
     UpdateableSettings<Settings> s;
     return std::make_shared<ReplicationScheme>(getLogID(),
                                                std::move(metadata),
-                                               getConfig()->serverConfig(),
+                                               getConfig()->getServerConfig(),
                                                getMyNodeID(),
                                                nullptr,
                                                *s.get(),
@@ -453,6 +453,9 @@ class LogRebuildingTest : public ::testing::Test {
 
     config->updateableServerConfig()->update(
         ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
+    config->updateableNodesConfiguration()->update(
+        config->getServerConfig()
+            ->getNodesConfigurationFromServerConfigSource());
     config->updateableLogsConfig()->update(std::move(logs_config));
   }
 

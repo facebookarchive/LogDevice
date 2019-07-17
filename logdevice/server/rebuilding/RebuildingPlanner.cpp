@@ -278,19 +278,19 @@ void RebuildingPlanner::onSyncSequencerComplete(
 std::vector<shard_index_t>
 RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
   Worker* worker = Worker::onThisThread();
-  auto cfg = Worker::getConfig();
+  auto nc = worker->getNodesConfiguration();
 
   // First, remove from the storage set any node that's no longer in the config.
   // This may happen if the cluster was shrunk.
   StorageSet shards_ = metadata.shards;
-  shards_.erase(std::remove_if(shards_.begin(),
-                               shards_.end(),
-                               [&](ShardID shard) {
-                                 const auto& node =
-                                     cfg->serverConfig()->getNode(shard.node());
-                                 return !node || !node->isReadableStorageNode();
-                               }),
-                shards_.end());
+  shards_.erase(
+      std::remove_if(shards_.begin(),
+                     shards_.end(),
+                     [&](ShardID shard) {
+                       return !nc->getStorageMembership()->shouldReadFromShard(
+                           shard);
+                     }),
+      shards_.end());
   metadata.setShards(shards_);
   const StorageSet& shards = metadata.shards;
 
@@ -310,9 +310,10 @@ RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
   // Add to `donors` all indices of shards on this node that appear on the
   // storage set for this epoch interval.
   node_index_t nid = worker->processor_->getMyNodeID().index();
-  const auto node = cfg->serverConfig()->getNode(nid);
-  ld_check(node);
-  for (shard_index_t shard = 0; shard < node->getNumShards(); ++shard) {
+  const auto node_storage_config = nc->getNodeStorageAttribute(nid);
+  ld_check(node_storage_config);
+  for (shard_index_t shard = 0; shard < node_storage_config->num_shards;
+       ++shard) {
     ShardID donor = ShardID(nid, shard);
     if (std::find(shards.begin(), shards.end(), donor) != shards.end()) {
       donors.push_back(shard);
@@ -324,14 +325,11 @@ RebuildingPlanner::findDonorShards(EpochMetaData& metadata) const {
 
 bool RebuildingPlanner::rebuildingIsAuthoritative(
     const EpochMetaData& metadata) const {
-  auto cfg = Worker::getConfig()->serverConfig();
-
   // Create a FailureDomainNodeSet where the attribute is whether or not the
   // node is rebuilding in RESTORE mode...
-  FailureDomainNodeSet<bool> f(
-      metadata.shards,
-      *cfg->getNodesConfigurationFromServerConfigSource(),
-      metadata.replication);
+  FailureDomainNodeSet<bool> f(metadata.shards,
+                               *Worker::onThisThread()->getNodesConfiguration(),
+                               metadata.replication);
 
   // ... Set the attribute for each node being rebuilt that is currently
   // unavailable, but may return with intact data later.  This is all nodes
@@ -363,14 +361,11 @@ bool RebuildingPlanner::rebuildingIsAuthoritative(
 
 bool RebuildingPlanner::rebuildingSetTooBig(
     const EpochMetaData& metadata) const {
-  auto cfg = Worker::getConfig()->serverConfig();
-
   // Create a FailureDomainNodeSet where the attribute is whether or not a
   // storage shard can receive stores...
-  FailureDomainNodeSet<bool> f(
-      metadata.shards,
-      *cfg->getNodesConfigurationFromServerConfigSource(),
-      metadata.replication);
+  FailureDomainNodeSet<bool> f(metadata.shards,
+                               *Worker::onThisThread()->getNodesConfiguration(),
+                               metadata.replication);
   for (ShardID s : metadata.shards) {
     bool accepting_stores = true;
 
@@ -399,8 +394,6 @@ void RebuildingPlanner::computePlanForEpochInterval(
   auto it = log_states_.find(logid);
   ld_check(it != log_states_.end());
   LogState& log_state = it->second;
-
-  auto cfg = Worker::getConfig();
 
   auto& shards = metadata->shards;
   auto shard_idx = shards.begin()->shard();

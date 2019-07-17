@@ -17,17 +17,17 @@
 
 namespace facebook { namespace logdevice {
 
-RecoverySet::RecoverySet(const EpochMetaData& epoch_metadata,
-                         const std::shared_ptr<ServerConfig>& config,
-                         EpochRecovery* recovery)
+RecoverySet::RecoverySet(
+    const EpochMetaData& epoch_metadata,
+    const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
+    EpochRecovery* recovery)
     : recovery_(recovery),
-      failure_domain_nodes_(
-          epoch_metadata.shards,
-          *config->getNodesConfigurationFromServerConfigSource(),
-          epoch_metadata.replication) {
+      failure_domain_nodes_(epoch_metadata.shards,
+                            *nodes_configuration,
+                            epoch_metadata.replication) {
   for (const ShardID& shard : epoch_metadata.shards) {
-    const configuration::Node* n = config->getNode(shard.node());
-    if (!n || !n->isReadableStorageNode()) {
+    if (!nodes_configuration->getStorageMembership()->shouldReadFromShard(
+            shard)) {
       continue;
     }
     auto result = nodes_.emplace(std::piecewise_construct,

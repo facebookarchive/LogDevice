@@ -380,8 +380,9 @@ class AppenderTest::MockNodeSetState : public NodeSetState {
     return &test_->settings_;
   }
 
-  const std::shared_ptr<Configuration> getClusterConfig() const override {
-    return test_->config_.get();
+  const std::shared_ptr<const NodesConfiguration>
+  getNodesConfiguration() const override {
+    return test_->config_.getNodesConfiguration();
   }
 
   void postHealthCheckRequest(ShardID /* unused */,

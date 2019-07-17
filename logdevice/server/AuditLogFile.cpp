@@ -78,10 +78,12 @@ void log_trim_movement(ServerProcessor& processor,
 
   std::shared_ptr<Configuration> config = processor.config_->get();
   const std::shared_ptr<ServerConfig>& server_config = config->serverConfig();
+  const auto& service_discovery =
+      processor.config_->getNodesConfiguration()->getServiceDiscovery();
 
   entry.cluster_name = server_config->getClusterName();
-  auto nodeId = processor.getMyNodeID();
-  auto node_config = server_config->getNode(nodeId);
+  auto nodeIdx = processor.getMyNodeID().index();
+  auto node_config = service_discovery->getNodeAttributes(nodeIdx);
   entry.host_address = node_config->address.toStringNoPort();
   std::shared_ptr<configuration::LocalLogsConfig> logs_config =
       config->localLogsConfig();

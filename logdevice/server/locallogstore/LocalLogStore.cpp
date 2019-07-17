@@ -184,9 +184,9 @@ bool LocalLogStoreReadFilter::operator()(logid_t,
 
   if (client_location_) {
     // 1/ Local scd logic
-    auto scfg = getServerConfig();
+    auto nc = getNodesConfiguration();
     auto is_local = [&](int i) {
-      if (auto node = scfg->getNode(copyset[i].node())) {
+      if (auto node = nc->getNodeServiceDiscovery(copyset[i].node())) {
         const folly::Optional<NodeLocation>& location = node->location;
         if (location.hasValue()) {
           if (client_location_->sharesScopeWith(
@@ -293,8 +293,9 @@ void LocalLogStoreReadFilter::applyCopysetReordering(
   }
 }
 
-std::shared_ptr<ServerConfig> LocalLogStoreReadFilter::getServerConfig() const {
-  return updateable_config_->getServerConfig();
+std::shared_ptr<const NodesConfiguration>
+LocalLogStoreReadFilter::getNodesConfiguration() const {
+  return updateable_config_->getNodesConfiguration();
 }
 
 void LocalLogStoreReadFilter::setUpdateableConfig(
