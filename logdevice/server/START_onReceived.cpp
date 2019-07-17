@@ -94,9 +94,7 @@ Message::Disposition START_onReceived(START_Message* msg,
 
   // Check if connection to client ID is still alive by trying to get the socket
   // addr.
-  auto sock_addr = w->sender().getSockaddr(from);
-
-  if (!sock_addr.valid()) {
+  if (w->sender().isClosed(from)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
                    "START message from: disconnected client %s: log_id %" PRIu64

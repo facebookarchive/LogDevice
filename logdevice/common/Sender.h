@@ -497,6 +497,8 @@ class Sender : public SenderBase {
    */
   bool isClosed() const;
 
+  bool isClosed(const Address& addr) const;
+
   /**
    * Check if a working connection to a given node exists. Returns through
    * @param our_name_at_peer the ClientID that the other end can use to send

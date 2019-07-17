@@ -589,9 +589,13 @@ int Sender::registerOnSocketClosed(const Address& addr, SocketCallback& cb) {
       return -1;
     }
     sock = pos->second.get();
+    if (sock->isClosed()) {
+      err = E::NOTFOUND;
+      return -1;
+    }
   } else { // addr is a server address
     sock = findServerSocket(addr.asNodeID().index());
-    if (!sock) {
+    if (!sock || sock->isClosed()) {
       err = E::NOTFOUND;
       return -1;
     }
@@ -754,6 +758,21 @@ bool Sender::isClosed() const {
                  max_pending_work_clientID.toString().c_str(),
                  (void*)max_pending_work_client);
 
+  return false;
+}
+
+bool Sender::isClosed(const Address& addr) const {
+  if (addr.isClientAddress()) {
+    auto pos = impl_->client_sockets_.find(addr.id_.client_);
+    if (pos == impl_->client_sockets_.end() || pos->second->isClosed()) {
+      return true;
+    }
+  } else { // addr is a server address
+    Socket* sock = findServerSocket(addr.asNodeID().index());
+    if (!sock || sock->isClosed()) {
+      return true;
+    }
+  }
   return false;
 }
 
