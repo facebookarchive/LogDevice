@@ -48,12 +48,12 @@ GET_SEQ_STATE_REPLY_Message::deserialize(ProtocolReader& reader) {
   if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_HISTORICAL_METADATA) {
     // TODO(TT15517759): do not need log_id and server config for constructing
     // epoch metadata
-    auto server_config = Worker::onThisThread()->getServerConfig();
+    const auto& nc = Worker::onThisThread()->getNodesConfiguration();
     msg->metadata_map_ =
         EpochMetaDataMap::deserialize(reader,
                                       /*evbuffer_zero_copy=*/false,
                                       header.log_id,
-                                      *server_config);
+                                      *nc);
   }
 
   if (header.flags & GET_SEQ_STATE_REPLY_Header::INCLUDES_TAIL_RECORD) {

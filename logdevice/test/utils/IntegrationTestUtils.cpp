@@ -35,6 +35,8 @@
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/NodeSetSelectorFactory.h"
+#include "logdevice/common/NodesConfigurationPublisher.h"
+#include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/StaticSequencerLocator.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -166,6 +168,12 @@ Cluster::Cluster(std::string root_path,
         config_->getServerConfig()->getInternalLogsConfig());
     config_->updateableLogsConfig()->update(logs_config);
   }
+
+  nodes_configuration_publisher_ =
+      std::make_unique<NodesConfigurationPublisher>(
+          config_,
+          impl_settings->getSettings(),
+          std::make_unique<NoopTraceLogger>(config_, folly::none));
 }
 
 static std::unique_ptr<TemporaryDirectory> create_temporary_root_dir() {
@@ -2468,7 +2476,7 @@ class IntegrationTestFileEpochStore : public FileEpochStore {
  public:
   explicit IntegrationTestFileEpochStore(
       std::string path,
-      const std::shared_ptr<UpdateableServerConfig>& config)
+      const std::shared_ptr<UpdateableNodesConfiguration>& config)
       : FileEpochStore(std::move(path), nullptr, config) {}
 
  protected:
@@ -2492,7 +2500,7 @@ class IntegrationTestFileEpochStore : public FileEpochStore {
 
 std::unique_ptr<EpochStore> Cluster::createEpochStore() {
   return std::make_unique<IntegrationTestFileEpochStore>(
-      epoch_store_path_, getConfig()->updateableServerConfig());
+      epoch_store_path_, getConfig()->updateableNodesConfiguration());
 }
 
 void Cluster::setStartingEpoch(logid_t log_id,

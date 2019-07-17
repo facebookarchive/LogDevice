@@ -116,7 +116,7 @@ void MetaDataLogReader::onDataRecord(std::unique_ptr<DataRecord> record) {
   const std::chrono::milliseconds metadata_read_timestamp =
       record->attrs.timestamp;
   int rv = metadata_read->fromPayload(
-      record->payload, log_id_, *getClusterConfig()->serverConfig());
+      record->payload, log_id_, *getNodesConfiguration());
   if (rv != 0) {
     // we encountered a malformed record, which may indicate potential loss
     // of metadata for any epoch larger than last_read_epoch, set the
@@ -428,6 +428,11 @@ StatsHolder* MetaDataLogReader::getStats() {
 
 std::shared_ptr<Configuration> MetaDataLogReader::getClusterConfig() const {
   return Worker::getConfig();
+}
+
+std::shared_ptr<const NodesConfiguration>
+MetaDataLogReader::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 }} // namespace facebook::logdevice

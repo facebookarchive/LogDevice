@@ -481,7 +481,8 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
       //
       // TODO: handle this better. possibly changing activation sequence so that
       //       sequencer can continue writing to the old epoch in such case?
-      if (!info->validWithConfig(logid, cfg)) {
+      if (!info->validWithConfig(
+              logid, cfg, updateable_config_->getNodesConfiguration())) {
         ld_critical(
             "Activating sequencer for log %lu. However, metadata got "
             "from the epochstore is not compatible with the current "

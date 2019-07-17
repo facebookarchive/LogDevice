@@ -57,6 +57,12 @@ class TestMetaDataLogReader : public MetaDataLogReader {
     return config_;
   }
 
+  std::shared_ptr<const NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->serverConfig()
+        ->getNodesConfigurationFromServerConfigSource();
+  }
+
  public:
   StatsHolder* getStats() override {
     return &stats_;

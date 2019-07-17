@@ -153,12 +153,13 @@ class EpochRecovery {
     MAX
   };
 
-  EpochRecovery(logid_t log_id,
-                epoch_t epoch,
-                const EpochMetaData& epoch_metadata,
-                const std::shared_ptr<Configuration>& config,
-                std::unique_ptr<EpochRecoveryDependencies> deps,
-                bool tail_optimized);
+  EpochRecovery(
+      logid_t log_id,
+      epoch_t epoch,
+      const EpochMetaData& epoch_metadata,
+      const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
+      std::unique_ptr<EpochRecoveryDependencies> deps,
+      bool tail_optimized);
 
   State getState() const {
     return state_;

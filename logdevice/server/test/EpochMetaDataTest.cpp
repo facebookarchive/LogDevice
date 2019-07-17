@@ -175,10 +175,10 @@ TEST_F(EpochMetaDataTest, Payload) {
 
   // now converted it back to a new epoch metadata object
   EpochMetaData info_from_str;
-  int rv =
-      info_from_str.fromPayload(Payload(str_payload.data(), str_payload.size()),
-                                logid_t(1),
-                                *cfg->serverConfig());
+  int rv = info_from_str.fromPayload(
+      Payload(str_payload.data(), str_payload.size()),
+      logid_t(1),
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(info_from_str.isValid());
   EXPECT_TRUE(info_from_str == info);
@@ -186,9 +186,10 @@ TEST_F(EpochMetaDataTest, Payload) {
   // test with payload with not enough size
   str_payload.resize(str_payload.size() - 1);
   EpochMetaData info2;
-  rv = info2.fromPayload(Payload(str_payload.data(), str_payload.size()),
-                         logid_t(1),
-                         *cfg->serverConfig());
+  rv = info2.fromPayload(
+      Payload(str_payload.data(), str_payload.size()),
+      logid_t(1),
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
   EXPECT_EQ(-1, rv);
   EXPECT_EQ(E::BADMSG, err);
   rv =
@@ -203,7 +204,9 @@ TEST_F(EpochMetaDataTest, Payload) {
 
   EXPECT_EQ(info.sizeInPayload(), rv);
   rv = info2.fromPayload(
-      Payload(str_payload.data(), rv), logid_t(1), *cfg->serverConfig());
+      Payload(str_payload.data(), rv),
+      logid_t(1),
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(info2.isValid());
   EXPECT_TRUE(info2 == info);
@@ -304,7 +307,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   {
     EpochMetaData info2;
     int rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(0, rv);
     check(info2, 1);
   }
@@ -316,14 +321,18 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
     memcpy(&str[0], &v2, sizeof(v2));
     EpochMetaData info2;
     int rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(-1, rv);
 
     // Change it back to 1 and check that it's uncorrupted.
     epoch_metadata_version::type v1 = 1;
     memcpy(&str[0], &v1, sizeof(v1));
     rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(0, rv);
   }
 
@@ -346,7 +355,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   {
     EpochMetaData info2;
     int rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(0, rv);
     check(info2, 2);
   }
@@ -358,7 +369,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
     memcpy(&str[0], &v1, sizeof(v1));
     EpochMetaData info2;
     int rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(-1, rv);
   }
 
@@ -376,7 +389,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   {
     EpochMetaData info2;
     int rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(0, rv);
     check(info2, 2, MetaDataLogRecordHeader::HAS_WEIGHTS);
   }
@@ -398,7 +413,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   {
     EpochMetaData info2;
     int rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(0, rv);
     check(info2,
           2,
@@ -431,7 +448,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   {
     EpochMetaData info2;
     int rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(0, rv);
     check(info2,
           2,
@@ -456,7 +475,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   {
     EpochMetaData info2;
     int rv = info2.fromPayload(
-        Payload(str.data(), str.size()), logid_t(1), *cfg->serverConfig());
+        Payload(str.data(), str.size()),
+        logid_t(1),
+        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
     EXPECT_EQ(0, rv);
     check(info2,
           2,
@@ -482,12 +503,13 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
 
   EpochMetaData record_from_buffer;
   NodeID nid_from_buffer;
-  rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(zbuf,
-                                                       rv,
-                                                       &record_from_buffer,
-                                                       logid_t(1),
-                                                       *cfg->serverConfig(),
-                                                       &nid_from_buffer);
+  rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(
+      zbuf,
+      rv,
+      &record_from_buffer,
+      logid_t(1),
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      &nid_from_buffer);
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(zk_record == record_from_buffer);
   EXPECT_TRUE(nid == nid_from_buffer);
@@ -499,12 +521,13 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
       EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, folly::none);
   EXPECT_EQ(expected_size, rv);
 
-  rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(zbuf,
-                                                       rv,
-                                                       &record_from_buffer,
-                                                       logid_t(1),
-                                                       *cfg->serverConfig(),
-                                                       &nid_from_buffer);
+  rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(
+      zbuf,
+      rv,
+      &record_from_buffer,
+      logid_t(1),
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      &nid_from_buffer);
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(zk_record == record_from_buffer);
   EXPECT_FALSE(nid_from_buffer.isNodeID());
@@ -520,12 +543,13 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
 
   // should return E::EMPTY for empty record
   zbuf[0] = '\0';
-  rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(zbuf,
-                                                       32,
-                                                       &record_from_buffer,
-                                                       logid_t(1),
-                                                       *cfg->serverConfig(),
-                                                       &nid_from_buffer);
+  rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(
+      zbuf,
+      32,
+      &record_from_buffer,
+      logid_t(1),
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      &nid_from_buffer);
   EXPECT_EQ(-1, rv);
   EXPECT_EQ(E::EMPTY, err);
 }
@@ -545,12 +569,13 @@ TEST_F(EpochMetaDataTest, ZookeeperEpochStoreCornerCase) {
   int expected_size =
       EpochStoreEpochMetaDataFormat::sizeInLinearBuffer(zk_record, folly::none);
   EXPECT_EQ(expected_size, rv);
-  rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(zbuf,
-                                                       rv,
-                                                       &record_from_buffer,
-                                                       logid_t(1),
-                                                       *cfg->serverConfig(),
-                                                       &nid_from_buffer);
+  rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(
+      zbuf,
+      rv,
+      &record_from_buffer,
+      logid_t(1),
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      &nid_from_buffer);
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(zk_record == record_from_buffer);
   EXPECT_FALSE(nid_from_buffer.isNodeID());
@@ -793,7 +818,10 @@ TEST_F(EpochMetaDataTest, EpochMetaDataMapBasic) {
 
   size_t bytes_read;
   auto deserialized_result = EpochMetaDataMap::deserialize(
-      {buffer, 4096}, &bytes_read, logid, *cfg->serverConfig());
+      {buffer, 4096},
+      &bytes_read,
+      logid,
+      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
 
   ASSERT_NE(nullptr, deserialized_result);
   ASSERT_EQ(written, bytes_read);

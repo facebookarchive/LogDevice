@@ -31,7 +31,7 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
                    std::shared_ptr<EpochMetaData::Updater> updater,
                    MetaDataTracer tracer,
                    EpochStore::WriteNodeID write_node_id,
-                   std::shared_ptr<ServerConfig> cfg,
+                   std::shared_ptr<const NodesConfiguration> cfg,
                    folly::Optional<NodeID> my_node_id)
       : ZookeeperEpochStoreRequest(logid, epoch, std::move(cf), store),
         updater_(updater),
@@ -168,7 +168,7 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
  private:
   std::shared_ptr<EpochMetaData::Updater> updater_;
   // true if the writer's NodeID should be written to the metadata
-  std::shared_ptr<ServerConfig> cfg_;
+  std::shared_ptr<const NodesConfiguration> cfg_;
 
   // epoch metadata read from or written to the epoch store, whichever happened
   // last.

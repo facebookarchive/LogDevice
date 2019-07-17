@@ -46,7 +46,8 @@ void EpochMetaData::setEpochIncrementAt() {
 
 bool EpochMetaData::validWithConfig(
     logid_t log_id,
-    const std::shared_ptr<Configuration>& cfg) const {
+    const std::shared_ptr<Configuration>& cfg,
+    const std::shared_ptr<const NodesConfiguration>& nodes_cfg) const {
   if (!isValid() || log_id == LOGID_INVALID) {
     ld_error("Invalid epoch metadata for log %lu", log_id.val_);
     return false;
@@ -57,11 +58,8 @@ bool EpochMetaData::validWithConfig(
     ld_error("No log config for log %lu", log_id.val_);
     return false;
   }
-  const auto& nodes_configuration =
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
   // check nodeset and replication factor with config
-  if (!configuration::nodes::validStorageSet(
-          nodes_configuration, shards, replication)) {
+  if (!configuration::nodes::validStorageSet(*nodes_cfg, shards, replication)) {
     ld_error("Invalid nodeset for log %lu", log_id.val_);
     return false;
   }
@@ -147,7 +145,7 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
                                 bool /*unused*/,
                                 folly::Optional<size_t> expected_size,
                                 logid_t logid,
-                                const ServerConfig& cfg) {
+                                const NodesConfiguration& cfg) {
   const size_t bytes_read_before_deserialize = reader.bytesRead();
   reader.read(&h.version);
 
@@ -216,8 +214,7 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
     NodeSetIndices nodeset;
     reader.readVector(&nodeset, h.nodeset_size);
     // TODO: use NodesConfiguration natively instead
-    setShards(nodesetToStorageSet(
-        nodeset, logid, *cfg.getNodesConfigurationFromServerConfigSource()));
+    setShards(nodesetToStorageSet(nodeset, logid, cfg));
   }
 
   if (h.flags & MetaDataLogRecordHeader::HAS_WEIGHTS) {
@@ -376,7 +373,7 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
 
 int EpochMetaData::fromPayload(const Payload& payload,
                                logid_t logid,
-                               const ServerConfig& cfg) {
+                               const NodesConfiguration& cfg) {
   ProtocolReader reader({payload.data(), payload.size()},
                         "EpochMetaData",
                         /*unused proto*/ 0);

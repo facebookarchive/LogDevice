@@ -29,9 +29,10 @@
 
 namespace facebook { namespace logdevice {
 
-FileEpochStore::FileEpochStore(std::string path,
-                               Processor* processor,
-                               std::shared_ptr<UpdateableServerConfig> config)
+FileEpochStore::FileEpochStore(
+    std::string path,
+    Processor* processor,
+    std::shared_ptr<UpdateableNodesConfiguration> config)
     : path_(std::move(path)),
       processor_(processor),
       config_(std::move(config)) {
@@ -106,14 +107,14 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
       logid_t log_id,
       std::shared_ptr<EpochMetaData::Updater> updater,
       MetaDataTracer* tracer,
-      std::shared_ptr<ServerConfig> cfg,
+      std::shared_ptr<const NodesConfiguration> nodes_configuration,
       folly::Optional<NodeID> my_node_id = folly::none,
       EpochStore::WriteNodeID write_node_id = EpochStore::WriteNodeID::NO,
       bool return_fetched_value = false)
       : log_id_(log_id),
         meta_updater_(std::move(updater)),
         tracer_(tracer),
-        cfg_(std::move(cfg)),
+        nodes_configuration_(std::move(nodes_configuration)),
         my_node_id_(std::move(my_node_id)),
         write_node_id_(write_node_id),
         return_fetched_value_(return_fetched_value) {
@@ -146,7 +147,8 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
         meta_props_out_->last_writer_node_id.assign(node_id);
       }
       metadata_out = std::make_unique<EpochMetaData>();
-      if (metadata_out->fromPayload(Payload(buf, len), log_id_, *cfg_)) {
+      if (metadata_out->fromPayload(
+              Payload(buf, len), log_id_, *nodes_configuration_)) {
         // err set in fromPayload
         return -1;
       }
@@ -224,7 +226,7 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
   logid_t log_id_;
   std::shared_ptr<EpochMetaData::Updater> meta_updater_;
   MetaDataTracer* tracer_;
-  std::shared_ptr<ServerConfig> cfg_;
+  std::shared_ptr<const NodesConfiguration> nodes_configuration_;
   folly::Optional<NodeID> my_node_id_;
   EpochStore::WriteNodeID write_node_id_;
   // if true, metadata_out_ is assigned with the metadata fetched from the epoch

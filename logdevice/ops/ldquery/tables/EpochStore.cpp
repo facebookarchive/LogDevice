@@ -125,7 +125,7 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
     epoch_store = std::make_shared<FileEpochStore>(
         epoch_store_path,
         &(client_impl->getProcessor()),
-        client_impl->getConfig()->updateableServerConfig());
+        client_impl->getConfig()->updateableNodesConfiguration());
   } else {
     try {
       auto upd_config = client_impl->getConfig();
@@ -138,7 +138,7 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
           config->serverConfig()->getClusterName(),
           &processor,
           upd_config->updateableZookeeperConfig(),
-          upd_config->updateableServerConfig(),
+          upd_config->updateableNodesConfiguration(),
           processor.updateableSettings(),
           zookeeper_client_factory);
     } catch (const ConstructorFailed&) {

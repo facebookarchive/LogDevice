@@ -1551,6 +1551,7 @@ std::shared_ptr<ReplicationScheme>
 LogRebuilding::createReplicationScheme(EpochMetaData metadata,
                                        NodeID sequencer_node_id) {
   auto cfg = Worker::getConfig();
+  const auto& nc = Worker::onThisThread()->getNodesConfiguration();
   auto log_group = cfg->getLogGroupByIDShared(logid_);
   auto& rebuilding_shards = getRebuildingSet().shards;
   auto it = rebuilding_shards.find(getMyShardID());
@@ -1559,7 +1560,7 @@ LogRebuilding::createReplicationScheme(EpochMetaData metadata,
   auto scheme = std::make_shared<ReplicationScheme>(
       logid_,
       std::move(metadata),
-      cfg->serverConfig(),
+      nc,
       getMyNodeID(),
       log_group ? &log_group->attrs() : nullptr,
       Worker::settings(),

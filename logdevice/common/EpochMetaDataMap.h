@@ -153,7 +153,7 @@ class EpochMetaDataMap {
                    bool evbuffer_zero_copy,
                    folly::Optional<size_t> expected_size,
                    logid_t logid,
-                   const ServerConfig& cfg);
+                   const NodesConfiguration& cfg);
 
   const char* name() const {
     return "EpochMetaDataMap";
@@ -186,13 +186,13 @@ class EpochMetaDataMap {
   deserialize(ProtocolReader& reader,
               bool evbuffer_zero_copy,
               logid_t logid,
-              const ServerConfig& cfg);
+              const NodesConfiguration& cfg);
 
   static std::shared_ptr<const EpochMetaDataMap>
   deserialize(Slice buffer,
               size_t* bytes_read,
               logid_t logid,
-              const ServerConfig& cfg);
+              const NodesConfiguration& cfg);
 
   using EpochInterval = std::pair<epoch_t, epoch_t>;
   using EpochMapping = std::pair<EpochInterval, const EpochMetaData&>;

@@ -55,7 +55,7 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
       std::string cluster_name,
       Processor* processor,
       const std::shared_ptr<UpdateableZookeeperConfig>& zk_config,
-      const std::shared_ptr<UpdateableServerConfig>& server_config,
+      const std::shared_ptr<UpdateableNodesConfiguration>& nodes_configuration,
       UpdateableSettings<Settings> settings,
       std::shared_ptr<ZookeeperClientFactory> zkFactory);
 
@@ -143,7 +143,7 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   std::shared_ptr<UpdateableZookeeperConfig> zk_config_;
 
   // Cluster config, used to figure out NodeID
-  std::shared_ptr<UpdateableServerConfig> server_config_;
+  std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_;
 
   // Settings
   UpdateableSettings<Settings> settings_;

@@ -251,6 +251,8 @@ class MetaDataLogReader {
   virtual void stopReading();
   virtual StatsHolder* getStats();
   virtual std::shared_ptr<Configuration> getClusterConfig() const;
+  virtual std::shared_ptr<const NodesConfiguration>
+  getNodesConfiguration() const;
 
  private:
   // data log id whose epoch metadata are to be fetched

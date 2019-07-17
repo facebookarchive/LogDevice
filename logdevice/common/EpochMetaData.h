@@ -209,8 +209,10 @@ class EpochMetaData {
   // check if the metadata is valid with the given cluster configuration @cfg
   // for a particular @logid. This just validates that the log exists in the
   // logs config and that the nodeset is valid with a given nodes config.
-  bool validWithConfig(logid_t logid,
-                       const std::shared_ptr<Configuration>& cfg) const;
+  bool validWithConfig(
+      logid_t logid,
+      const std::shared_ptr<Configuration>& cfg,
+      const std::shared_ptr<const NodesConfiguration>& nodes_cfg) const;
 
   // reset to empty state
   void reset();
@@ -225,7 +227,7 @@ class EpochMetaData {
                    bool evbuffer_zero_copy,
                    folly::Optional<size_t> expected_size,
                    logid_t logid,
-                   const ServerConfig& cfg);
+                   const NodesConfiguration& cfg);
 
   /**
    * Fill the content by reading epoch metadata from a record payload
@@ -239,7 +241,7 @@ class EpochMetaData {
    */
   int fromPayload(const Payload& payload,
                   logid_t logid,
-                  const ServerConfig& cfg);
+                  const NodesConfiguration& cfg);
 
   /**
    * Copy the serialized data into a pre-allocated payload

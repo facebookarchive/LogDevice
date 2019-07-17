@@ -167,7 +167,7 @@ class Digest {
    * @param seal_epoch              seal epoch of the epoch recovery instance,
    *                                used to determine if mutaiton is needed
    *
-   * @param config                  server configuration
+   * @param nodes_configuration     nodes configuration
    *
    * @param options                 options for computing the digest,
    *                                by default:
@@ -178,7 +178,7 @@ class Digest {
          epoch_t epoch,
          const EpochMetaData& epoch_metadata,
          epoch_t seal_epoch,
-         const std::shared_ptr<ServerConfig>& config,
+         const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
          Options options = {false});
 
   /**

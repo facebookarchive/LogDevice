@@ -33,7 +33,7 @@ class FileEpochStore : public EpochStore, boost::noncopyable {
    */
   FileEpochStore(std::string path,
                  Processor* processor,
-                 std::shared_ptr<UpdateableServerConfig> config);
+                 std::shared_ptr<UpdateableNodesConfiguration> config);
 
   ~FileEpochStore() override {}
 
@@ -152,7 +152,7 @@ class FileEpochStore : public EpochStore, boost::noncopyable {
   Processor* processor_;
 
   // Cluster config.
-  std::shared_ptr<UpdateableServerConfig> config_;
+  std::shared_ptr<UpdateableNodesConfiguration> config_;
 
   // Locked in shared mode while a file lock is held. Locked in exclusive mode
   // between pause() and unpause() calls.

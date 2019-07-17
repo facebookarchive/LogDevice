@@ -136,7 +136,7 @@ TEST_F(MetaDataLogsIntegrationTest, WriteMetaDataLog) {
     EXPECT_EQ(*it, r->attrs.lsn);
     EpochMetaData metadata_read;
     int rv = metadata_read.fromPayload(
-        r->payload, logid, *cluster->getConfig()->getServerConfig());
+        r->payload, logid, *cluster->getConfig()->getNodesConfiguration());
     EXPECT_EQ(0, rv);
     EXPECT_EQ(metadata, metadata_read);
     if (++it == lsn_written.cend()) {

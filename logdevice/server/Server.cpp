@@ -852,7 +852,7 @@ bool Server::initSequencers() {
       epoch_store = std::make_unique<FileEpochStore>(
           server_settings_->epoch_store_path,
           processor_.get(),
-          updateable_config_->updateableServerConfig());
+          updateable_config_->updateableNodesConfiguration());
     } catch (const ConstructorFailed&) {
       ld_error(
           "Failed to construct FileEpochStore: %s", error_description(err));
@@ -869,7 +869,7 @@ bool Server::initSequencers() {
           server_config_->getClusterName(),
           processor_.get(),
           updateable_config_->updateableZookeeperConfig(),
-          updateable_config_->updateableServerConfig(),
+          updateable_config_->updateableNodesConfiguration(),
           processor_->updateableSettings(),
           zk_client_factory);
     } catch (const ConstructorFailed&) {

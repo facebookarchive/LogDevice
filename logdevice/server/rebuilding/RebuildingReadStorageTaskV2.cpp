@@ -390,7 +390,8 @@ bool RebuildingReadStorageTaskV2::lookUpEpochMetadata(
   }
 
   if (create_replication_scheme && log_state->currentReplication == nullptr) {
-    auto cfg = getConfig()->get();
+    auto ucfg = getConfig();
+    auto cfg = ucfg->get();
     auto log_group = cfg->getLogGroupByIDShared(log);
     auto& rebuilding_shards = context->rebuildingSet->shards;
     auto it = rebuilding_shards.find(context->myShardID);
@@ -399,7 +400,7 @@ bool RebuildingReadStorageTaskV2::lookUpEpochMetadata(
     log_state->currentReplication = std::make_shared<ReplicationScheme>(
         log,
         *log_state->currentEpochMetadata,
-        cfg->serverConfig(),
+        ucfg->getNodesConfiguration(),
         getMyNodeID(),
         log_group ? &log_group->attrs() : nullptr,
         *getSettings().get(),

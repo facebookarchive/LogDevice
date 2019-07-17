@@ -169,12 +169,12 @@ int MetaDataLogWriter::checkAppenderPayload(Appender* appender,
   if (flags & RECORD_Header::CHECKSUM) {
     checksum_bytes = flags & RECORD_Header::CHECKSUM_64BIT ? 8 : 4;
   }
-  auto cfg = Worker::getConfig();
+  const auto& nc = Worker::onThisThread()->getNodesConfiguration();
   if (metadata.fromPayload(
           Payload(static_cast<const char*>(pl.data()) + checksum_bytes,
                   pl.size() - checksum_bytes),
           getDataLogID(),
-          *cfg->serverConfig())) {
+          *nc)) {
     err = E::BADPAYLOAD;
     return -1;
   }

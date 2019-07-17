@@ -112,6 +112,8 @@ class RebuildingReadStorageTaskTest : public ::testing::Test {
 
     auto cfg = std::make_shared<Configuration>(server_config, logs_config);
     config = std::make_shared<UpdateableConfig>(cfg);
+    config->updateableNodesConfiguration()->update(
+        config->getNodesConfigurationFromServerConfigSource());
 
     // Create local log store (logsdb) and 6 partitions, 15 minutes apart.
     store = std::make_unique<TemporaryPartitionedStore>();

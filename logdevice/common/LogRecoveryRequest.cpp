@@ -489,6 +489,7 @@ int LogRecoveryRequest::createEpochRecoveryMachines(
   ld_check(start <= until);
   ld_check(metadata.isValid());
   auto config = Worker::onThisThread()->getConfig();
+  const auto& nc = Worker::onThisThread()->getNodesConfiguration();
   auto log = config->getLogGroupByIDShared(log_id_);
   if (!log) {
     // config has changed since the time this Sequencer was activated
@@ -512,7 +513,7 @@ int LogRecoveryRequest::createEpochRecoveryMachines(
     epoch_recovery_machines_.emplace_back(log_id_,
                                           epoch_t(e),
                                           metadata,
-                                          config,
+                                          nc,
                                           std::move(erm_deps),
                                           log->attrs().tailOptimized().value());
   }

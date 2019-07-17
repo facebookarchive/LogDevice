@@ -32,7 +32,7 @@ class MockFileEpochStore : public FileEpochStore {
  public:
   explicit MockFileEpochStore(
       std::string path,
-      const std::shared_ptr<UpdateableServerConfig>& config)
+      const std::shared_ptr<UpdateableNodesConfiguration>& config)
       : FileEpochStore(path, nullptr, config) {}
 
  protected:
@@ -64,11 +64,14 @@ class FileEpochStoreTest : public ::testing::Test {
         Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
     ld_check(cfg_in);
     cluster_config_ = std::make_shared<UpdateableConfig>(std::move(cfg_in));
+    cluster_config_->updateableNodesConfiguration()->update(
+        cluster_config_->getNodesConfigurationFromServerConfigSource());
     auto selector = NodeSetSelectorFactory::create(NodeSetSelectorType::RANDOM);
     auto config = cluster_config_->get();
 
     store_ = std::make_unique<MockFileEpochStore>(
-        temp_dir_->path().string(), cluster_config_->updateableServerConfig());
+        temp_dir_->path().string(),
+        cluster_config_->updateableNodesConfiguration());
 
     int rv = store_->provisionMetaDataLogs(
         std::make_shared<CustomEpochMetaDataUpdater>(

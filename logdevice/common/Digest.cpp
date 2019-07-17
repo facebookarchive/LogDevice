@@ -65,17 +65,18 @@ Digest::RecordMetadata::fromRecord(const DataRecordOwnsPayload& record) {
                             : (record.flags_ & RECORD_Header::HOLE ? 0 : 1)};
 }
 
-Digest::Digest(logid_t log_id,
-               epoch_t epoch,
-               const EpochMetaData& epoch_metadata,
-               epoch_t seal_epoch,
-               const std::shared_ptr<ServerConfig>& config,
-               Options options)
+Digest::Digest(
+    logid_t log_id,
+    epoch_t epoch,
+    const EpochMetaData& epoch_metadata,
+    epoch_t seal_epoch,
+    const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
+    Options options)
     : log_id_(log_id),
       epoch_(epoch),
       seal_epoch_(seal_epoch),
       failure_domain_(epoch_metadata.shards,
-                      *config->getNodesConfigurationFromServerConfigSource(),
+                      *nodes_configuration,
                       epoch_metadata.replication),
       options_(options) {
   ld_check(seal_epoch > EPOCH_INVALID);

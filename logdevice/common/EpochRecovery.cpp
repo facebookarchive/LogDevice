@@ -31,12 +31,13 @@ namespace facebook { namespace logdevice {
 
 std::atomic<recovery_id_t::raw_type> EpochRecovery::next_id(1);
 
-EpochRecovery::EpochRecovery(logid_t log_id,
-                             epoch_t epoch,
-                             const EpochMetaData& epoch_metadata,
-                             const std::shared_ptr<Configuration>& config,
-                             std::unique_ptr<EpochRecoveryDependencies> deps,
-                             bool tail_optimized)
+EpochRecovery::EpochRecovery(
+    logid_t log_id,
+    epoch_t epoch,
+    const EpochMetaData& epoch_metadata,
+    const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
+    std::unique_ptr<EpochRecoveryDependencies> deps,
+    bool tail_optimized)
     : log_id_(log_id),
       epoch_(epoch),
       deps_(std::move(deps)),
@@ -46,15 +47,12 @@ EpochRecovery::EpochRecovery(logid_t log_id,
       last_restart_timestamp_(creation_timestamp_),
       tail_optimized_(tail_optimized),
       state_(State::SEAL_OR_INACTIVE),
-      recovery_set_(
-          epoch_metadata,
-          config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-          this),
+      recovery_set_(epoch_metadata, nodes_configuration, this),
       digest_(log_id,
               epoch,
               epoch_metadata,
               deps_->getSealEpoch(),
-              config->serverConfig(),
+              nodes_configuration,
               {// write bridge record even for empty epoch if
                // settings allow _and_ log id is not a metadata log
                !MetaDataLog::isMetaDataLog(log_id_) &&

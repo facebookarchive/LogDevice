@@ -272,14 +272,15 @@ class MockLogRebuilding : public LogRebuilding {
   createReplicationScheme(EpochMetaData metadata,
                           NodeID sequencer_node_id) override {
     UpdateableSettings<Settings> s;
-    return std::make_shared<ReplicationScheme>(getLogID(),
-                                               std::move(metadata),
-                                               getConfig()->getServerConfig(),
-                                               getMyNodeID(),
-                                               nullptr,
-                                               *s.get(),
-                                               /*relocate_local_records*/ false,
-                                               sequencer_node_id);
+    return std::make_shared<ReplicationScheme>(
+        getLogID(),
+        std::move(metadata),
+        getConfig()->getNodesConfiguration(),
+        getMyNodeID(),
+        nullptr,
+        *s.get(),
+        /*relocate_local_records*/ false,
+        sequencer_node_id);
   }
 
   std::unique_ptr<RecordRebuildingStore> createRecordRebuildingStore(

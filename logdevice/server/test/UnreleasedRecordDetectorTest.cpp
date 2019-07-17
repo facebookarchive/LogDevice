@@ -259,7 +259,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
 
   // initialize and provision the epoch store
   auto epoch_store = std::make_unique<FileEpochStore>(
-      temp_dir_path, processor_.get(), config_->updateableServerConfig());
+      temp_dir_path, processor_.get(), config_->updateableNodesConfiguration());
   std::shared_ptr<NodeSetSelector> selector =
       NodeSetSelectorFactory::create(NodeSetSelectorType::SELECT_ALL);
   auto log_store_factory = [this](node_index_t nid) {
@@ -274,7 +274,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
   ASSERT_EQ(0, rv);
 
   epoch_store = std::make_unique<FileEpochStore>(
-      temp_dir_path, processor_.get(), config_->updateableServerConfig());
+      temp_dir_path, processor_.get(), config_->updateableNodesConfiguration());
 
   processor_->allSequencers().setEpochStore(std::move(epoch_store));
   ld_notify("FileEpochStore created and initialized in directory %s.",

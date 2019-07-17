@@ -255,7 +255,11 @@ void NodeSetTest::writeMetaDataLog() {
         [expected, &sem, this, log](std::unique_ptr<DataRecord>& record) {
           EpochMetaData info;
           int rv = info.fromPayload(
-              record->payload, log, *cluster_->getConfig()->getServerConfig());
+              record->payload,
+              log,
+              *cluster_->getConfig()
+                   ->getServerConfig()
+                   ->getNodesConfigurationFromServerConfigSource());
           EXPECT_EQ(0, rv);
           EXPECT_EQ(info.h.epoch, info.h.effective_since);
           if (info.h.epoch == expected) {

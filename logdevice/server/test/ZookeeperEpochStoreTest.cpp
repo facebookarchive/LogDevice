@@ -67,7 +67,7 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
         TEST_CLUSTER,
         processor.get(),
         config->updateableZookeeperConfig(),
-        config->updateableServerConfig(),
+        config->updateableNodesConfiguration(),
         processor->updateableSettings(),
         zookeeper_client_factory);
 

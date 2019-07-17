@@ -62,14 +62,15 @@ struct ReplicationScheme {
 
   ReplicationScheme() {} // only used in tests
 
-  ReplicationScheme(logid_t logid,
-                    EpochMetaData _epoch_metadata,
-                    const std::shared_ptr<ServerConfig>& cfg,
-                    folly::Optional<NodeID> my_node_id,
-                    const logsconfig::LogAttributes* log_attrs,
-                    const Settings& settings,
-                    bool relocate,
-                    NodeID sequencer_node)
+  ReplicationScheme(
+      logid_t logid,
+      EpochMetaData _epoch_metadata,
+      const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
+      folly::Optional<NodeID> my_node_id,
+      const logsconfig::LogAttributes* log_attrs,
+      const Settings& settings,
+      bool relocate,
+      NodeID sequencer_node)
       : epoch_metadata(std::move(_epoch_metadata))
         // not excluding zero-weight nodes
         ,
@@ -84,15 +85,14 @@ struct ReplicationScheme {
     // different donors would select the same copyset for the same block.
     XorShift128PRNG init_rng(folly::hash::twang_mix64(logid.val_),
                              folly::hash::twang_mix64(logid.val_ + 1));
-    copysetSelector = CopySetSelectorFactory::create(
-        logid,
-        epoch_metadata,
-        nodeset_state,
-        cfg->getNodesConfigurationFromServerConfigSource(),
-        my_node_id,
-        log_attrs,
-        settings,
-        init_rng);
+    copysetSelector = CopySetSelectorFactory::create(logid,
+                                                     epoch_metadata,
+                                                     nodeset_state,
+                                                     nodes_configuration,
+                                                     my_node_id,
+                                                     log_attrs,
+                                                     settings,
+                                                     init_rng);
   }
 };
 

@@ -33,13 +33,13 @@ ZookeeperEpochStore::ZookeeperEpochStore(
     std::string cluster_name,
     Processor* processor,
     const std::shared_ptr<UpdateableZookeeperConfig>& zk_config,
-    const std::shared_ptr<UpdateableServerConfig>& server_config,
+    const std::shared_ptr<UpdateableNodesConfiguration>& nodes_configuration,
     UpdateableSettings<Settings> settings,
     std::shared_ptr<ZookeeperClientFactory> zkFactory)
     : processor_(processor),
       cluster_name_(cluster_name),
       zk_config_(zk_config),
-      server_config_(server_config),
+      nodes_configuration_(nodes_configuration),
       settings_(settings),
       shutting_down_(std::make_shared<std::atomic<bool>>(false)),
       zkFactory_(zkFactory) {
@@ -483,7 +483,7 @@ int ZookeeperEpochStore::createOrUpdateMetaData(
                            std::move(updater),
                            std::move(tracer),
                            write_node_id,
-                           server_config_->get(),
+                           nodes_configuration_->get(),
                            processor_->getOptionalMyNodeID())));
 }
 

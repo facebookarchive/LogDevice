@@ -20,7 +20,7 @@ int fromLinearBuffer(const char* buf,
                      size_t size,
                      EpochMetaData* metadata,
                      logid_t logid,
-                     const ServerConfig& cfg,
+                     const NodesConfiguration& cfg,
                      NodeID* nid_out) {
   if (!buf || !metadata || size > BUFFER_LEN_MAX) {
     err = E::INVALID_PARAM;

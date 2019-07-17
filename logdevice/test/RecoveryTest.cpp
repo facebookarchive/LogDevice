@@ -748,7 +748,7 @@ RecoveryTest::buildDigest(epoch_t epoch,
       EpochMetaData(
           shards, ReplicationProperty(replication, sync_replication_scope)),
       expect_seal_epoch,
-      config->serverConfig(),
+      config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
       Digest::Options({bridge_empty_epoch_}));
 
   for (ShardID shard : shards) {

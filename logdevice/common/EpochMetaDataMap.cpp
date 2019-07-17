@@ -229,7 +229,7 @@ void EpochMetaDataMap::deserialize(ProtocolReader& reader,
                                    bool /*unused*/,
                                    folly::Optional<size_t> /*unused*/,
                                    logid_t /*unused*/,
-                                   const ServerConfig& /*unused*/) {
+                                   const NodesConfiguration& /*unused*/) {
   // not supported for immutable object, see docblock in .h file
   reader.setError(E::INTERNAL);
   ld_check(false);
@@ -241,7 +241,7 @@ std::shared_ptr<const EpochMetaDataMap>
 EpochMetaDataMap::deserialize(ProtocolReader& reader,
                               bool /*unused*/,
                               logid_t logid,
-                              const ServerConfig& cfg) {
+                              const NodesConfiguration& cfg) {
 #define CHECK_READER()  \
   if (reader.error()) { \
     err = E::BADMSG;    \
@@ -287,7 +287,7 @@ std::shared_ptr<const EpochMetaDataMap>
 EpochMetaDataMap::deserialize(Slice buffer,
                               size_t* bytes_read,
                               logid_t logid,
-                              const ServerConfig& cfg) {
+                              const NodesConfiguration& cfg) {
   ProtocolReader reader(buffer, "EpochMetaDataMap", 0);
   auto map = deserialize(reader, false, logid, cfg);
   if (map == nullptr) {

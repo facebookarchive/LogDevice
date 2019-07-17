@@ -85,6 +85,7 @@ class Client;
 class EpochStore;
 class FileConfigSource;
 class ShardedLocalLogStore;
+class NodesConfigurationPublisher;
 
 namespace test {
 struct ServerInfo;
@@ -1193,6 +1194,7 @@ class Cluster {
   bool enable_ncm_ = true;
   bool one_config_per_node_ = false;
   std::shared_ptr<UpdateableConfig> config_;
+  std::unique_ptr<NodesConfigurationPublisher> nodes_configuration_publisher_;
   FileConfigSource* config_source_;
   std::unique_ptr<ClientSettings> client_settings_;
   // ordered map for convenience

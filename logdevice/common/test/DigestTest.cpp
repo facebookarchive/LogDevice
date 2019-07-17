@@ -79,13 +79,13 @@ class DigestTest : public ::testing::Test {
 
   void setUp() {
     ld_check(config_ != nullptr);
-    digest_ =
-        std::make_unique<Digest>(TEST_LOG,
-                                 TEST_EPOCH,
-                                 EpochMetaData(nodeset_, replication_),
-                                 seal_epoch_,
-                                 config_,
-                                 Digest::Options({bridge_for_empty_epoch_}));
+    digest_ = std::make_unique<Digest>(
+        TEST_LOG,
+        TEST_EPOCH,
+        EpochMetaData(nodeset_, replication_),
+        seal_epoch_,
+        config_->getNodesConfigurationFromServerConfigSource(),
+        Digest::Options({bridge_for_empty_epoch_}));
   }
 
  public:

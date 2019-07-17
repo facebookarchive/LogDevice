@@ -112,8 +112,8 @@ class EpochRecoveryTest : public ::testing::Test {
   void initConfig();
   void setUp();
 
-  std::shared_ptr<Configuration> getConfig() const {
-    return updateable_config_->get();
+  std::shared_ptr<const NodesConfiguration> getNodesConfiguration() const {
+    return updateable_config_->getNodesConfiguration();
   }
 
   void checkRecoveryState(ERMState expect_state);
@@ -319,6 +319,8 @@ void EpochRecoveryTest::initConfig() {
 
   updateable_config_->updateableServerConfig()->update(
       ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
+  updateable_config_->updateableNodesConfiguration()->update(
+      updateable_config_->getNodesConfigurationFromServerConfigSource());
   updateable_config_->updateableLogsConfig()->update(std::move(logs_config));
 }
 
@@ -328,8 +330,12 @@ void EpochRecoveryTest::setUp() {
 
   const EpochMetaData metadata(storage_set_, rep_);
   auto deps = std::make_unique<MockEpochRecoveryDependencies>(this);
-  erm_ = std::make_unique<EpochRecovery>(
-      LOG_ID, epoch_, metadata, getConfig(), std::move(deps), tail_optimized_);
+  erm_ = std::make_unique<EpochRecovery>(LOG_ID,
+                                         epoch_,
+                                         metadata,
+                                         getNodesConfiguration(),
+                                         std::move(deps),
+                                         tail_optimized_);
 }
 
 void EpochRecoveryTest::checkRecoveryState(ERMState expected_state) {
