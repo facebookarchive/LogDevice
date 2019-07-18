@@ -640,9 +640,6 @@ bool WeightedCopySetSelector::checkAvailabilityAndBlacklist(
     StoreChainLink* out_chain_links,
     bool* out_chain) const {
   ld_check(out_biased);
-  if (out_chain) {
-    *out_chain = true;
-  }
   bool ok = true;
   for (size_t i = 0; i < copyset_size; ++i) {
     StoreChainLink destination;

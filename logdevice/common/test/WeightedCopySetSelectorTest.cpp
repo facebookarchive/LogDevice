@@ -166,6 +166,9 @@ class WeightedCopySetSelectorTest : public ::testing::Test {
   // Used for checking validity of generated copysets.
   std::unique_ptr<FailureDomainNodeSet<size_t>> replication_checker_;
   size_t replication_checker_counter_ = 0;
+
+  // If true, we'll pass `*chain_out = false` to select().
+  bool test_disabling_chain_ = false;
 };
 
 } // namespace
@@ -282,7 +285,7 @@ WeightedCopySetSelectorTest::select(std::vector<ShardID>& out,
                                     WeightedCopySetSelector& selector) {
   std::vector<StoreChainLink> cs(replication_.getReplicationFactor());
   copyset_size_t cs_size;
-  bool chain;
+  bool chain = !test_disabling_chain_;
 
   auto result = selector.select(0, cs.data(), &cs_size, &chain, nullptr, rng_);
 
@@ -297,7 +300,7 @@ WeightedCopySetSelectorTest::select(std::vector<ShardID>& out,
 
   // Fill `out`, check that all nodes are available, check `chain`.
   out.clear();
-  bool expect_chain = true;
+  bool expect_chain = !test_disabling_chain_;
   for (StoreChainLink cl : cs) {
     ShardID shard = cl.destination;
     auto status = deps_.getNodeStatus(shard.asNodeID());
@@ -895,6 +898,15 @@ TEST_F(WeightedCopySetSelectorTest, NotEnoughLocalNodes) {
   auto& selector = getSelector(
       LOG_ID, /* sequencer_node */ -1, /* my_node */ 1, /* locality */ true);
 
+  std::vector<ShardID> cs;
+  EXPECT_EQ(CopySetSelector::Result::SUCCESS, select(cs, selector));
+}
+
+TEST_F(WeightedCopySetSelectorTest, DisablingChainSending) {
+  test_disabling_chain_ = true;
+  addNodes("rg.dc.cl.ro.rk0", {1, 1, 1, 1, 1});
+  replication_ = ReplicationProperty({{S::NODE, 3}});
+  auto& selector = getSelector(LOG_ID);
   std::vector<ShardID> cs;
   EXPECT_EQ(CopySetSelector::Result::SUCCESS, select(cs, selector));
 }
