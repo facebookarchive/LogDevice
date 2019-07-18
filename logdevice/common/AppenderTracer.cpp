@@ -14,6 +14,7 @@
 #include "logdevice/common/RecipientSet.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SampledTracer.h"
+#include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/types_internal.h"
 
@@ -80,6 +81,7 @@ void AppenderTracer::traceAppend(
     sample->addIntValue("waves", waves);
     sample->addNormalValue("client_status", client_status);
     sample->addNormalValue("internal_status", internal_status);
+    sample->addNormalValue("thread_name", ThreadID::getName());
     return sample;
   };
 
