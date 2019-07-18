@@ -2031,8 +2031,9 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &sequencer_batching,
        "false",
        nullptr, // no validation
-       "Accumulate appends from clients and batch them together to "
-       "create fewer records in the system",
+       "Accumulate appends from clients and batch them together to create "
+       "fewer records in the system. This setting is only used when the log "
+       "group doesn't override it",
        SERVER,
        SettingsCategory::Batching);
   init("sequencer-batching-time-trigger",
@@ -2040,30 +2041,32 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "1s",
        nullptr, // no validation
        "Sequencer batching (if used) flushes buffered appends for a log when "
-       "the "
-       "oldest buffered append is this old.",
-       SERVER | REQUIRES_RESTART /* used in SequencerBatching ctor */,
+       "the oldest buffered append is this old. When enabled, this gets "
+       "applied to the first new batch. This setting is only used when the log "
+       "group doesn't override it",
+       SERVER,
        SettingsCategory::Batching);
   init("sequencer-batching-size-trigger",
        &sequencer_batching_size_trigger,
        "-1",
        parse_validate_lower_bound<ssize_t>(-1),
        "Sequencer batching (if used) flushes buffered appends for a log when "
-       "the "
-       "total amount of buffered uncompressed data reaches this many bytes (if "
-       "positive).",
-       SERVER | REQUIRES_RESTART /* used in SequencerBatching ctor */,
+       "the total amount of buffered uncompressed data reaches this many bytes "
+       "(if positive). When enabled, this gets applied to the first new batch. "
+       "This setting is only used when the log group doesn't override it",
+       SERVER,
        SettingsCategory::Batching);
-  init(
-      "sequencer-batching-compression",
-      &sequencer_batching_compression,
-      "zstd",
-      parse_compression,
-      "Compression setting for sequencer batching (if used). It can be "
-      "'none' for no compression; 'zstd' for ZSTD; 'lz4' for LZ4; or lz4_hc for"
-      " LZ4 High Compression. The default is ZSTD.",
-      SERVER | REQUIRES_RESTART /* used in SequencerBatching ctor */,
-      SettingsCategory::Batching);
+  init("sequencer-batching-compression",
+       &sequencer_batching_compression,
+       "zstd",
+       parse_compression,
+       "Compression setting for sequencer batching (if used). It can be 'none' "
+       "for no compression; 'zstd' for ZSTD; 'lz4' for LZ4; or lz4_hc for LZ4 "
+       "High Compression. The default is ZSTD. When enabled, this gets applied "
+       "to the first new batch. This setting is only used when the log group "
+       "doesn't override it",
+       SERVER,
+       SettingsCategory::Batching);
   init(
       "sequencer-batching-passthru-threshold",
       &sequencer_batching_passthru_threshold,
