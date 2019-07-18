@@ -68,8 +68,7 @@ CommandListener::ConnectionState::~ConnectionState() {
 }
 
 void CommandListener::acceptCallback(evutil_socket_t sock,
-                                     struct sockaddr* addr,
-                                     int len) {
+                                     const folly::SocketAddress& addr) {
   struct bufferevent* bev = LD_EV(bufferevent_socket_new)(
       loop_->getEventBase(), sock, BEV_OPT_CLOSE_ON_FREE);
 
@@ -114,8 +113,7 @@ void CommandListener::acceptCallback(evutil_socket_t sock,
 #endif
 
   const conn_id_t id = next_conn_id_++;
-  auto state =
-      std::make_unique<ConnectionState>(this, id, bev, Sockaddr(addr, len));
+  auto state = std::make_unique<ConnectionState>(this, id, bev, Sockaddr(addr));
 
   ld_debug("Accepted connection from %s (id %zu, fd %d)",
            state->address_.toString().c_str(),

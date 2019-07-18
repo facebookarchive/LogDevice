@@ -55,11 +55,10 @@ ConnectionListener::listenerTypeNames() {
 }
 
 void ConnectionListener::acceptCallback(evutil_socket_t sock,
-                                        struct sockaddr* addr,
-                                        int len) {
+                                        const folly::SocketAddress& addr) {
   ld_check(processor_ != nullptr);
   ServerProcessor* processor = checked_downcast<ServerProcessor*>(processor_);
-  Sockaddr sockaddr(addr, len);
+  Sockaddr sockaddr(addr);
 
   // Check if accepting this connection pushed us over the limit.  Since there's
   // only one ConnectionListener thread, and this is called soon after accept(),

@@ -41,8 +41,7 @@ class CommandListener : public Listener {
    * Called by libevent when there is a new connection.
    */
   void acceptCallback(evutil_socket_t sock,
-                      struct sockaddr* addr,
-                      int len) override;
+                      const folly::SocketAddress& addr) override;
 
  private:
   typedef std::vector<std::string> cmd_args_t;

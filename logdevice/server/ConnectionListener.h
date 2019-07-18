@@ -54,8 +54,7 @@ class ConnectionListener : public Listener {
    * assigns a ClientID then hands the socket off to a worker thread.
    */
   void acceptCallback(evutil_socket_t sock,
-                      struct sockaddr* addr,
-                      int len) override;
+                      const folly::SocketAddress& addr) override;
 
  private:
   ResourceBudget& connection_backlog_budget_;

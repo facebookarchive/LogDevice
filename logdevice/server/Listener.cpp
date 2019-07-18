@@ -182,7 +182,10 @@ void Listener::staticAcceptCallback(struct evconnlistener* /*listener*/,
                                     int len,
                                     void* arg) {
   auto arg_listener = reinterpret_cast<Listener*>(arg);
-  arg_listener->acceptCallback(sock, addr, len);
+  folly::SocketAddress socketAddress;
+  ld_check(addr);
+  socketAddress.setFromSockaddr(addr, len);
+  arg_listener->acceptCallback(sock, socketAddress);
 }
 
 bool Listener::setupEvConnListeners() {

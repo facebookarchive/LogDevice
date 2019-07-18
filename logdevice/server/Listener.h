@@ -14,6 +14,7 @@
 
 #include <boost/variant.hpp>
 #include <folly/Executor.h>
+#include <folly/SocketAddress.h>
 #include <folly/futures/Future.h>
 #include <folly/futures/SharedPromise.h>
 
@@ -93,8 +94,7 @@ class Listener {
    * Triggered by libevent when there is a new incoming connection.
    */
   virtual void acceptCallback(evutil_socket_t sock,
-                              struct sockaddr* addr,
-                              int len) = 0;
+                              const folly::SocketAddress& addr) = 0;
 
   /* Returns true if we're listening on an SSL port */
   bool isSSL() const {
