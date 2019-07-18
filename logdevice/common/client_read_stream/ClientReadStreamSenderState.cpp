@@ -92,11 +92,10 @@ void ClientReadStreamSenderState::startedTimerCallback() {
 void ClientReadStreamSenderState::reconnectTimerCallback() {
   onConnectionAttemptFailed();
 
-  auto config = client_read_stream_->getConfig()->get();
-  const Configuration::Node* node =
-      config->serverConfig()->getNode(shard_id_.node());
+  const auto& nodes_configuration =
+      client_read_stream_->getConfig()->getNodesConfiguration();
 
-  if (node == nullptr) {
+  if (!nodes_configuration->isNodeInServiceDiscoveryConfig(shard_id_.node())) {
     // This shouldn't happen unless the cluster was shrunk.
     setConnectionState(ConnectionState::PERSISTENT_ERROR);
     return;

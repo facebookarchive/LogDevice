@@ -225,7 +225,6 @@ class ClientReadStreamScd : public boost::noncopyable {
    * @return true if a rewind was scheduled
    */
   bool updateStorageShardsSet(const StorageSet& storage_set,
-                              const std::shared_ptr<ServerConfig>& cfg,
                               const ReplicationProperty& replication);
 
   /**

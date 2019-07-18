@@ -2657,8 +2657,8 @@ void ClientReadStream::updateCurrentReadSet() {
   // the failure domain information for gap detection
   const ReplicationProperty replication = current_metadata_->replication;
 
-  std::shared_ptr<Configuration> config = config_->get();
-  auto const& nodes = config->serverConfig()->getNodes();
+  const auto& nodes_configuration = config_->getNodesConfiguration();
+  const auto& storage_membership = nodes_configuration->getStorageMembership();
 
   // find nodes from storage_set_states_ that are:
   // (1) no longer in the nodeset of epoch metadata
@@ -2666,10 +2666,9 @@ void ClientReadStream::updateCurrentReadSet() {
   for (auto it = storage_set_states_.begin();
        it != storage_set_states_.end();) {
     const ShardID shard = it->first;
-    const node_index_t nid = it->first.node();
 
-    if (next_nodeset.find(shard) == next_nodeset.end() || !nodes.count(nid) ||
-        !nodes.at(nid).isReadableStorageNode()) {
+    if (next_nodeset.find(shard) == next_nodeset.end() ||
+        !storage_membership->shouldReadFromShard(shard)) {
       // Node is no longer present in the current storage set, or has been
       // removed from the config or reconfigured to not be a storage shard.
 
@@ -2702,18 +2701,13 @@ void ClientReadStream::updateCurrentReadSet() {
   // (2) present as valid storage shards in current config
   std::vector<std::reference_wrapper<SenderState>> added_shards;
   for (ShardID shard_id : new_shards) {
-    auto it = nodes.find(shard_id.node());
-    if (it == nodes.end()) {
-      // node is not in the cluster config. This may indicate that the
+    if (!storage_membership->shouldReadFromShard(shard_id)) {
+      // Either:
+      //    1- node is not in the cluster config. This may indicate that the
       // cluster was shrunk but we are reading in epochs that are written
       // before the cluster was shrunk. It is likely dataloss gaps will appear
       // in this epoch.
-      continue;
-    }
-
-    if (!it->second.isReadableStorageNode() || it->second.getNumShards() <= 0) {
-      // Not a storage node, or it's not currently readable.
-      // Ignore.
+      //    2- Not a storage node, or it's not currently readable. Ignore.
       continue;
     }
 
@@ -2735,13 +2729,9 @@ void ClientReadStream::updateCurrentReadSet() {
   // new read set and the gap state for each shards in the new read set.
   // Do the same thing to the connection failure domain.
   gap_failure_domain_ = std::make_unique<GapFailureDomain>(
-      read_set,
-      *config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      replication);
+      read_set, *nodes_configuration, replication);
   healthy_node_set_ = std::make_unique<HealthyNodeSet>(
-      read_set,
-      *config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      replication);
+      read_set, *nodes_configuration, replication);
 
   ld_check(healthy_node_set_->numShards() == storage_set_states_.size());
   ld_check(gap_failure_domain_->numShards() == storage_set_states_.size());
@@ -2774,7 +2764,7 @@ void ClientReadStream::updateCurrentReadSet() {
   // If SCD is active, updating the storage shards set may cause us to rewind.
   // If that's the case, return early as the rewind will cause the new shards to
   // be sent a START message.
-  scd_->updateStorageShardsSet(read_set, config->serverConfig(), replication);
+  scd_->updateStorageShardsSet(read_set, replication);
 
   // Apply authoritative status from event log. In particular, for a newly
   // created ClientReadStream this does the initial propagation of

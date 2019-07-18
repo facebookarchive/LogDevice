@@ -530,7 +530,6 @@ void ClientReadStreamScd::rewindWithOutliers(ShardSet outliers,
 
 bool ClientReadStreamScd::updateStorageShardsSet(
     const StorageSet& storage_set,
-    const std::shared_ptr<ServerConfig>& cfg,
     const ReplicationProperty& replication) {
   configureOutlierDetector();
 
