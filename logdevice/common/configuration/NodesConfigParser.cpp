@@ -149,12 +149,6 @@ bool parseNodes(const folly::dynamic& clusterMap,
     return false;
   }
 
-  if (res.empty()) {
-    ld_error("Node config is empty");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
   // TODO(T15517759): At this point we expect all production tiers to have the
   // same number of shards on each storage node... because rebuilding has not
   // been modified to support heterogeneous hardware. Until this gets
