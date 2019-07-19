@@ -297,13 +297,16 @@ STAT_DEFINE(graceful_reactivation_result_deferred, SUM)
 // how many graceful reactivation completion procedure is started
 STAT_DEFINE(graceful_reactivation_completion_started, SUM)
 
-// How many times a sequencer scheduled to check whether a reactivation or
-// epoch metadata update is needed. The difference between this and the next
-// stat is the number of outstanding checks and reactivations.
-STAT_DEFINE(background_sequencer_reactivations_scheduled, SUM)
-// How many times such check was performed. If a check said that reactivation is
-// needed, this is bumped when reactivation completes.
-STAT_DEFINE(background_sequencer_reactivations_completed, SUM)
+// How many times a job is enqueued to check whether a reactivation or
+// epoch metadata update is needed. When the actual reactivation occurs
+// then a different stat is bumped.
+STAT_DEFINE(background_sequencer_reactivation_checks_scheduled, SUM)
+// How many times such check was performed.
+STAT_DEFINE(background_sequencer_reactivation_checks_completed, SUM)
+
+// The check for sequencer reactivation resulted in no operations
+// necessary
+STAT_DEFINE(sequencer_reactivations_noop, SUM)
 
 // Number of times that sequencer reactivations were delayed because there were
 // non-substantial reconfigurations.
@@ -311,6 +314,10 @@ STAT_DEFINE(sequencer_reactivations_delayed, SUM)
 // Number of times that delayed reactivations completed after the delay. This
 // should match the previous stat.
 STAT_DEFINE(sequencer_reactivations_delay_completed, SUM)
+
+// Number of times a sequencer reactivation check recommended delaying
+// but there was an already active timer that could be re-used.
+STAT_DEFINE(sequencer_reactivations_delay_timer_reused, SUM)
 
 // How many sequencers we reactivated in order to update epoch metadata
 // (nodeset, replication factor etc).

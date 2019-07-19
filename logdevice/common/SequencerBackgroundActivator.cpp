@@ -170,6 +170,7 @@ SequencerBackgroundActivator::postponeSequencerReactivation(logid_t logid) {
   // then we can piggy-back on it if we have non-urgent
   // changes to the config.
   if (state.reactivation_delay_timer.isActive()) {
+    WORKER_STAT_INCR(sequencer_reactivations_delay_timer_reused);
     return ProcessLogDecision::POSTPONED;
   }
 
@@ -178,7 +179,7 @@ SequencerBackgroundActivator::postponeSequencerReactivation(logid_t logid) {
   auto max = Worker::settings().sequencer_reactivation_delay_secs.hi.count();
   std::chrono::seconds delay_secs(folly::Random::rand32(min, max));
   auto cb = [self = this, log_id = logid]() {
-    self->bumpCompletedDelayStat();
+    WORKER_STAT_INCR(sequencer_reactivations_delay_completed);
     LogState& cur_state = self->logs_[log_id];
     cur_state.reactivation_delay_timer.cancel();
     self->schedule({log_id}, true /* queued_by_alarm_callback */);
@@ -193,7 +194,7 @@ SequencerBackgroundActivator::postponeSequencerReactivation(logid_t logid) {
 
   state.reactivation_delay_timer.assign(cb);
   state.reactivation_delay_timer.activate(delay_secs);
-  bumpDelayedStat();
+  WORKER_STAT_INCR(sequencer_reactivations_delayed);
   return ProcessLogDecision::POSTPONED;
 }
 
@@ -530,6 +531,7 @@ SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
   switch (decision) {
     case ReactivationDecision::NOOP:
       // No changes. Nothing to do.
+      WORKER_STAT_INCR(sequencer_reactivations_noop);
       err = E::UPTODATE;
       return ProcessLogDecision::NOOP;
     case ReactivationDecision::UPDATE_METADATA:
@@ -544,6 +546,9 @@ SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
           !state.queued_by_alarm_callback) {
         return postponeSequencerReactivation(logid);
       }
+      // Switch off this flag so that the next enqueue doesn't go through
+      // immediately.
+      state.queued_by_alarm_callback = false;
       FOLLY_FALLTHROUGH;
     case ReactivationDecision::REACTIVATE:
       // We need reactivation to be performed now. Either because we have an
@@ -698,18 +703,11 @@ void SequencerBackgroundActivator::deactivateQueueProcessingTimer() {
 }
 
 void SequencerBackgroundActivator::bumpScheduledStat(uint64_t val) {
-  WORKER_STAT_ADD(background_sequencer_reactivations_scheduled, val);
+  WORKER_STAT_ADD(background_sequencer_reactivation_checks_scheduled, val);
 }
 
 void SequencerBackgroundActivator::bumpCompletedStat(uint64_t val) {
-  WORKER_STAT_ADD(background_sequencer_reactivations_completed, val);
-}
-
-void SequencerBackgroundActivator::bumpDelayedStat(uint64_t val) {
-  WORKER_STAT_ADD(sequencer_reactivations_delayed, val);
-}
-void SequencerBackgroundActivator::bumpCompletedDelayStat(uint64_t val) {
-  WORKER_STAT_ADD(sequencer_reactivations_delay_completed, val);
+  WORKER_STAT_ADD(background_sequencer_reactivation_checks_completed, val);
 }
 
 namespace {

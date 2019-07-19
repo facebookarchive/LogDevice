@@ -41,6 +41,7 @@ struct SeqReactivationStats {
   uint64_t completed = 0;
   uint64_t delayed = 0;
   uint64_t delayCompleted = 0;
+  uint64_t reactivations = 0;
 
   bool statsMatch() {
     return ((scheduled == completed) && (delayed == delayCompleted));
@@ -139,6 +140,15 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationTest) {
   stop_sem.wait();
 }
 
+// Sequencer activation may be performed immediately or postponed
+// based on the information that is changing. Changes to important
+// information like a logs config parameters need to be updated
+// immediately while a change in the nodeset due to changes to
+// the storage state can be applied after a delay.
+//
+// Test that the sequencer reactivation occurs immediately if one
+// of the sequencer options like repl factor changes, even though
+// sequencer-reactivation-delay-secs is set to a high value.
 TEST_F(SequencerIntegrationTest,
        SequencerReactivationReplFactorChangeDelayTest) {
   Configuration::Nodes nodes;
@@ -232,13 +242,15 @@ TEST_F(SequencerIntegrationTest,
     for (const auto& it : nodes) {
       auto nodeStats = cluster->getNode(it.first).stats();
       stats.scheduled +=
-          nodeStats["background_sequencer_reactivations_scheduled"];
+          nodeStats["background_sequencer_reactivation_checks_scheduled"];
       stats.completed +=
-          nodeStats["background_sequencer_reactivations_completed"];
+          nodeStats["background_sequencer_reactivation_checks_completed"];
 
       stats.delayed += nodeStats["sequencer_reactivations_delayed"];
       stats.delayCompleted +=
           nodeStats["sequencer_reactivations_delay_completed"];
+      stats.reactivations +=
+          nodeStats["sequencer_reactivations_for_metadata_update"];
     }
     return stats;
   };
@@ -247,12 +259,13 @@ TEST_F(SequencerIntegrationTest,
   wait_until("stats match up", [&]() {
     auto stats = get_stats();
     EXPECT_GT(stats.scheduled, 0);
-    ld_info("Scheduled reactivations: scheduled: %lu, completed: %lu, "
-            "delayed: %lu, delayCompleted: %lu",
+    ld_info("reactivations: scheduled: %lu, completed: %lu, "
+            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
             stats.completed,
             stats.delayed,
-            stats.delayCompleted);
+            stats.delayCompleted,
+            stats.reactivations);
     return stats.statsMatch();
   });
 
@@ -276,7 +289,7 @@ TEST_F(SequencerIntegrationTest,
 // the storage state can be applied after a delay.
 //
 // Test that the sequencer reactivation occurs immediately if one
-// of the sequencer options like the window size changes evenn though
+// of the sequencer options like the window size changes, even though
 // sequencer-reactivation-delay-secs is set to a high value.
 TEST_F(SequencerIntegrationTest, WinSizeChangeDelayTest) {
   Configuration::Nodes nodes;
@@ -368,13 +381,15 @@ TEST_F(SequencerIntegrationTest, WinSizeChangeDelayTest) {
     for (const auto& it : nodes) {
       auto nodeStats = cluster->getNode(it.first).stats();
       stats.scheduled +=
-          nodeStats["background_sequencer_reactivations_scheduled"];
+          nodeStats["background_sequencer_reactivation_checks_scheduled"];
       stats.completed +=
-          nodeStats["background_sequencer_reactivations_completed"];
+          nodeStats["background_sequencer_reactivation_checks_completed"];
 
       stats.delayed += nodeStats["sequencer_reactivations_delayed"];
       stats.delayCompleted +=
           nodeStats["sequencer_reactivations_delay_completed"];
+      stats.reactivations +=
+          nodeStats["sequencer_reactivations_for_metadata_update"];
     }
     return stats;
   };
@@ -383,12 +398,13 @@ TEST_F(SequencerIntegrationTest, WinSizeChangeDelayTest) {
   wait_until("stats match up", [&]() {
     auto stats = get_stats();
     EXPECT_GT(stats.scheduled, 0);
-    ld_info("Scheduled reactivations: scheduled: %lu, completed: %lu, delayed: "
-            "%lu, delayCompleted: %lu",
+    ld_info("reactivations: scheduled: %lu, completed: %lu, "
+            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
             stats.completed,
             stats.delayed,
-            stats.delayCompleted);
+            stats.delayCompleted,
+            stats.reactivations);
     return stats.statsMatch();
   });
 
@@ -479,13 +495,15 @@ TEST_F(SequencerIntegrationTest, StorageStateChangeDelayTest) {
     for (const auto& it : nodes) {
       auto nodeStats = cluster->getNode(it.first).stats();
       stats.scheduled +=
-          nodeStats["background_sequencer_reactivations_scheduled"];
+          nodeStats["background_sequencer_reactivation_checks_scheduled"];
       stats.completed +=
-          nodeStats["background_sequencer_reactivations_completed"];
+          nodeStats["background_sequencer_reactivation_checks_completed"];
 
       stats.delayed += nodeStats["sequencer_reactivations_delayed"];
       stats.delayCompleted +=
           nodeStats["sequencer_reactivations_delay_completed"];
+      stats.reactivations +=
+          nodeStats["sequencer_reactivations_for_metadata_update"];
     }
     return stats;
   };
@@ -501,39 +519,47 @@ TEST_F(SequencerIntegrationTest, StorageStateChangeDelayTest) {
     }
   }
 
+  ld_info("Set the weight of N%hu to 0.", to_disable);
   auto start = RecordTimestamp::now().toSeconds();
   cluster->updateNodeAttributes(
       to_disable, configuration::StorageState::DISABLED, 1);
   cluster->waitForConfigUpdate();
   cluster->waitForRecovery();
-  ld_info("Set the weight of N%hu to 0.", to_disable);
 
   // Wait until the scheduled activations are completed
   wait_until("background activations completed", [&]() {
     auto stats = get_stats();
     EXPECT_GT(stats.scheduled, 0);
-    ld_info("Scheduled reactivations: scheduled: %lu, completed: %lu, "
-            "delayed: %lu, delayCompleted: %lu",
+    ld_info("reactivations: scheduled: %lu, completed: %lu, "
+            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
             stats.completed,
             stats.delayed,
-            stats.delayCompleted);
+            stats.delayCompleted,
+            stats.reactivations);
     return stats.statsMatch();
   });
 
   // We are done processing all the scheduled activations so those that need to
-  // be postponed must also be sceduled by now.
+  // be postponed must also be scheduled by now.
   wait_until("Delayed activations completed", [&]() {
     auto stats = get_stats();
     EXPECT_GT(stats.delayed, 0);
-    ld_info("Scheduled reactivations: scheduled: %lu, completed: %lu, "
-            "delayed: %lu, delayCompleted: %lu",
+    ld_info("reactivations: scheduled: %lu, completed: %lu, "
+            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
             stats.completed,
             stats.delayed,
-            stats.delayCompleted);
+            stats.delayCompleted,
+            stats.reactivations);
     return stats.statsMatch();
   });
+
+  // The delayed reactivatins must result in actual reactivations
+  auto stats = get_stats();
+  uint64_t activations_after_state_change =
+      stats.reactivations - initial_activations;
+  EXPECT_GE(activations_after_state_change, stats.delayCompleted);
 
   // Check that reactivations completed after waiting for the specified delay in
   // the settings.
@@ -613,13 +639,15 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
     for (size_t nodeId = 0; nodeId < num_nodes; nodeId++) {
       auto nodeStats = cluster->getNode(nodeId).stats();
       stats.scheduled +=
-          nodeStats["background_sequencer_reactivations_scheduled"];
+          nodeStats["background_sequencer_reactivation_checks_scheduled"];
       stats.completed +=
-          nodeStats["background_sequencer_reactivations_completed"];
+          nodeStats["background_sequencer_reactivation_checks_completed"];
 
       stats.delayed += nodeStats["sequencer_reactivations_delayed"];
       stats.delayCompleted +=
           nodeStats["sequencer_reactivations_delay_completed"];
+      stats.reactivations +=
+          nodeStats["sequencer_reactivations_for_metadata_update"];
     }
     return stats;
   };
@@ -627,12 +655,13 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   // Wait until all the scheduled activations are completed
   wait_until("background activations completed", [&]() {
     auto stats = get_stats();
-    ld_info("Scheduled reactivations: scheduled: %lu, completed: %lu, "
-            "delayed: %lu, delayCompleted: %lu",
+    ld_info("reactivations: scheduled: %lu, completed: %lu, "
+            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
             stats.completed,
             stats.delayed,
-            stats.delayCompleted);
+            stats.delayCompleted,
+            stats.reactivations);
     return stats.statsMatch();
   });
 
@@ -656,12 +685,13 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   wait_until("background activations completed", [&]() {
     auto latest_stats = get_stats();
     EXPECT_GT(latest_stats.scheduled, 0);
-    ld_info("Scheduled reactivations: scheduled: %lu, completed: %lu, "
-            "delayed: %lu, delayCompleted: %lu",
-            latest_stats.scheduled,
-            latest_stats.completed,
-            latest_stats.delayed,
-            latest_stats.delayCompleted);
+    ld_info("reactivations: scheduled: %lu, completed: %lu, "
+            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
+            stats.scheduled,
+            stats.completed,
+            stats.delayed,
+            stats.delayCompleted,
+            stats.reactivations);
     return latest_stats.statsMatch();
   });
 
@@ -670,14 +700,21 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   wait_until("Delayed activations completed", [&]() {
     auto latest_stats = get_stats();
     EXPECT_GT(latest_stats.delayed, 0);
-    ld_info("Scheduled reactivations: scheduled: %lu, completed: %lu, "
-            "delayed: %lu, delayCompleted: %lu",
-            latest_stats.scheduled,
-            latest_stats.completed,
-            latest_stats.delayed,
-            latest_stats.delayCompleted);
+    ld_info("reactivations: scheduled: %lu, completed: %lu, "
+            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
+            stats.scheduled,
+            stats.completed,
+            stats.delayed,
+            stats.delayCompleted,
+            stats.reactivations);
     return latest_stats.statsMatch();
   });
+
+  // The delayed reactivations must result in actual reactivations
+  stats = get_stats();
+  uint64_t activations_after_size_change =
+      stats.reactivations - initial_activations;
+  EXPECT_GE(activations_after_size_change, stats.delayCompleted);
 
   // Check that reactivations completed after waiting for the specified delay in
   // the settings.
@@ -840,13 +877,15 @@ TEST_F(SequencerIntegrationTest, ConfigParamsAndStorageStateChangeDelayTest) {
     for (const auto& it : nodes) {
       auto nodeStats = cluster->getNode(it.first).stats();
       stats.scheduled +=
-          nodeStats["background_sequencer_reactivations_scheduled"];
+          nodeStats["background_sequencer_reactivation_checks_scheduled"];
       stats.completed +=
-          nodeStats["background_sequencer_reactivations_completed"];
+          nodeStats["background_sequencer_reactivation_checks_completed"];
 
       stats.delayed += nodeStats["sequencer_reactivations_delayed"];
       stats.delayCompleted +=
           nodeStats["sequencer_reactivations_delay_completed"];
+      stats.reactivations +=
+          nodeStats["sequencer_reactivations_for_metadata_update"];
     }
     return stats;
   };
@@ -855,12 +894,13 @@ TEST_F(SequencerIntegrationTest, ConfigParamsAndStorageStateChangeDelayTest) {
   wait_until("background activations completed", [&]() {
     auto stats = get_stats();
     EXPECT_GT(stats.scheduled, 0);
-    ld_info("Scheduled reactivations: scheduled: %lu, completed: %lu, "
-            "delayed: %lu, delayCompleted: %lu",
+    ld_info("reactivations: scheduled: %lu, completed: %lu, "
+            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
             stats.completed,
             stats.delayed,
-            stats.delayCompleted);
+            stats.delayCompleted,
+            stats.reactivations);
     return stats.statsMatch();
   });
 
@@ -1854,8 +1894,8 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioning) {
     std::pair<uint64_t, uint64_t> res{0, 0};
     for (const auto& it : nodes) {
       auto stats = cluster->getNode(it.first).stats();
-      res.first += stats["background_sequencer_reactivations_scheduled"];
-      res.second += stats["background_sequencer_reactivations_completed"];
+      res.first += stats["background_sequencer_reactivation_checks_scheduled"];
+      res.second += stats["background_sequencer_reactivation_checks_completed"];
     }
     return res;
   };
