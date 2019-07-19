@@ -44,7 +44,6 @@ struct GOSSIP_Node {
 class GOSSIP_Message : public Message {
  public:
   using node_list_t = std::vector<GOSSIP_Node>;
-  using node_id_list_t = std::vector<size_t>;
   using gossip_list_t = std::vector<uint32_t>;
   using gossip_ts_t = std::vector<std::chrono::milliseconds>;
   using failover_list_t = std::vector<std::chrono::milliseconds>;

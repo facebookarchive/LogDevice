@@ -22,7 +22,7 @@ enum ProtocolVersion : uint16_t {
   // backward compatible with - 1
   PROTOCOL_VERSION_LOWER_BOUND = 91,
 
-  // GOSSIP_Message includes node_id_list_ to deliver hashmap
+  // GOSSIP_Message includes node_list_ to deliver hashmap
   HASHMAP_SUPPORT_IN_GOSSIP, // = 92
 
   // Adds an optional request ID to CONFIG_FETCH & CONFIG_CHANGED messages
