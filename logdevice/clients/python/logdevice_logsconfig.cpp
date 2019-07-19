@@ -291,6 +291,14 @@ dict LogAttributes_to_dict(const LogAttributes& attrs) {
                                       SEQUENCER_BATCHING_SIZE_TRIGGER,
                                       output);
 
+  add_log_attribute<std::chrono::milliseconds, object>(
+      attrs.sequencerBatchingTimeTrigger(),
+      [](auto attr) {
+        return attr.value().count() ? object(attr.value().count()) : object();
+      },
+      SEQUENCER_BATCHING_TIME_TRIGGER,
+      output);
+
   add_log_attribute<Compression, std::string>(
       attrs.sequencerBatchingCompression(),
       [](auto attr) { return compressionToString(attr.value()); },
@@ -483,6 +491,16 @@ LogAttributes dict_to_LogAttributes(const dict& attrs) {
           value, SEQUENCER_BATCHING_PASSTHRU_THRESHOLD);
       log_attributes =
           log_attributes.with_sequencerBatchingPassthruThreshold(v);
+
+    } else if (key_string == SEQUENCER_BATCHING_TIME_TRIGGER) {
+      if (value.is_none()) {
+        log_attributes = log_attributes.with_sequencerBatchingTimeTrigger(
+            std::chrono::milliseconds(0));
+      } else {
+        int v = convert_or_throw<int>(value, SEQUENCER_BATCHING_TIME_TRIGGER);
+        log_attributes = log_attributes.with_sequencerBatchingTimeTrigger(
+            std::chrono::milliseconds(v));
+      }
     } else if (key_string == SYNC_REPLICATION_SCOPE) {
       std::string v = extract_string(value, SYNC_REPLICATION_SCOPE);
       NodeLocationScope scope = parse_location_scope_or_throw(v);

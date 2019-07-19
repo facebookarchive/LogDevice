@@ -257,6 +257,16 @@ _attributes = [
         ),
     ),
     argument(
+        "sequencer_batching_time_trigger",
+        type=int,
+        description=dedent(
+            """
+                Sequencer batching (if used) will flush the buffered appends if
+                the oldest buffered append is this old (in milliseconds)
+            """
+        ),
+    ),
+    argument(
         "extra_attributes",
         type=typing.Mapping[str, str],
         aliases=["extras"],
