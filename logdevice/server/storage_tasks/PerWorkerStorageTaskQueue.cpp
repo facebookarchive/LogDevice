@@ -68,11 +68,14 @@ Status PerWorkerStorageTaskQueue::acceptingWrites() const {
 bool PerWorkerStorageTaskQueue::isWriteExempt(WriteStorageTask* write,
                                               Status status) const {
   if (status == E::NOSPC) {
-    // Allow writes into metadata logs even though local log store crossed the
-    // used disk space threshold. This is important because in order to update
-    // nodesets, we have to write into metadata logs; if a node storing both
-    // data and metadata logs is full, we might not be able to remove it from
-    // some nodesets unless we can write to metadata logs.
+    // Allow writes to metadata logs and internal logs even though local log
+    // store crossed the used disk space threshold. This is important because in
+    // order to update nodesets, we have to write into metadata logs; if a node
+    // storing both data and metadata logs is full, we might not be able to
+    // remove it from some nodesets unless we can write to metadata logs.
+    // Another example is to recover the system from a bad stat we may need to
+    // write events to the internal log, which would not be possible if the
+    // system is full.
     size_t num_write_ops = write->getNumWriteOps();
     folly::small_vector<const WriteOp*, 16> write_ops(num_write_ops);
     size_t write_ops_written =
@@ -81,7 +84,8 @@ bool PerWorkerStorageTaskQueue::isWriteExempt(WriteStorageTask* write,
     for (const WriteOp* op : write_ops) {
       auto record_op = dynamic_cast<const RecordWriteOp*>(op);
       if (record_op != nullptr &&
-          MetaDataLog::isMetaDataLog(record_op->log_id)) {
+          (MetaDataLog::isMetaDataLog(record_op->log_id) ||
+           configuration::InternalLogs::isInternal(record_op->log_id))) {
         return true;
       }
     }

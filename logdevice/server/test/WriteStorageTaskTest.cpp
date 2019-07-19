@@ -255,9 +255,10 @@ TEST(WriteStorageTaskTest, MetadataLogNOSPC) {
           .setShardedStorageThreadPool(&sharded_storage_thread_pool);
   auto processor = std::move(processor_builder).build();
 
-  std::vector<std::string> data(2);
+  std::vector<std::string> data(3);
   for (size_t i = 0; i < data.size(); ++i) {
-    std::array<ShardID, 2> cs = {ShardID(12, 0), ShardID(11, 0)};
+    std::array<ShardID, 3> cs = {
+        ShardID(12, 0), ShardID(11, 0), ShardID(10, 0)};
     LocalLogStoreRecordFormat::formRecordHeader(
         i,
         esn_t(0),
@@ -271,10 +272,12 @@ TEST(WriteStorageTaskTest, MetadataLogNOSPC) {
 
   const logid_t log_1 = logid_t(1);
   const logid_t log_2 = MetaDataLog::metaDataLogID(log_1);
+  const logid_t log_3 = logid_t(USER_LOGID_MAX.val_ + 100);
 
   std::vector<PutWriteOp> write_ops{
       PutWriteOp{log_1, 1, Slice(data[0].data(), data[0].size())},
       PutWriteOp{log_2, 1, Slice(data[1].data(), data[1].size())},
+      PutWriteOp{log_3, 1, Slice(data[2].data(), data[2].size())},
   };
 
   std::vector<const WriteOp*> ops;
@@ -282,8 +285,8 @@ TEST(WriteStorageTaskTest, MetadataLogNOSPC) {
     ops.push_back(&x);
   }
 
-  // Write to the metadata log should make it through.
-  std::vector<Status> expected = {E::NOSPC, E::OK};
+  // Writes to the metadata and internal log should make it through.
+  std::vector<Status> expected = {E::NOSPC, E::OK, E::OK};
 
   std::unique_ptr<Request> req =
       std::make_unique<TestWriteRequest>(std::move(ops), std::move(expected));

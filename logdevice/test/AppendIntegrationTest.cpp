@@ -699,7 +699,7 @@ TEST_F(AppendIntegrationTest, InternalLogAppendersMemoryLimitTest) {
       LSN_INVALID, IntegrationTestUtils::markShardUndrained(*client, 0, 0));
 }
 
-TEST_F(AppendIntegrationTest, HandleNOSPC) {
+TEST_F(AppendIntegrationTest, HandleNOSPCData) {
   // creating a storage node that cannot accept writes
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--free-disk-space-threshold",
@@ -727,7 +727,7 @@ TEST_F(AppendIntegrationTest, HandleNOSPC) {
 
     EXPECT_EQ(LSN_INVALID, lsn);
     if (i == 0) {
-      // we expect the first record to failed because of timeout
+      // we expect the first record to fail because of timeout
       EXPECT_EQ(E::TIMEDOUT, err);
     } else {
       // we expect other records to fail immediately with E::NOSPC, possibly
@@ -740,6 +740,75 @@ TEST_F(AppendIntegrationTest, HandleNOSPC) {
   std::map<std::string, int64_t> stats = cluster->getNode(0).stats();
   EXPECT_GT(stats["append_rejected_nospace"], 0);
   EXPECT_EQ(1, stats["node_out_of_space_received"]);
+}
+
+TEST_F(AppendIntegrationTest, HandleNOSPCMetaAndInternal) {
+  // creating a storage node that cannot accept writes
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--free-disk-space-threshold",
+                               "0.999999",
+                               IntegrationTestUtils::ParamScope::STORAGE_NODE)
+                     .setParam("--nospace-retry-interval",
+                               "120s",
+                               IntegrationTestUtils::ParamScope::SEQUENCER)
+                     .doPreProvisionEpochMetaData() // to avoid counting NOSPC
+                                                    // replies to the sequencer
+                     .create(1);
+  std::shared_ptr<Client> client_base =
+      cluster->createClient(std::chrono::seconds(1));
+
+  auto client = std::dynamic_pointer_cast<ClientImpl>(client_base);
+  client->allowWriteMetaDataLog();
+  client->allowWriteInternalLog();
+
+  const logid_t logid(1);
+  const logid_t metadata_logid = MetaDataLog::metaDataLogID(logid);
+  const size_t num_records = 5;
+
+  EpochMetaData buf(StorageSet{ShardID(1, 0)},
+                    ReplicationProperty({{NodeLocationScope::NODE, 1}}),
+                    epoch_t(3),
+                    epoch_t(2));
+  ASSERT_TRUE(buf.isValid());
+  std::string metadata = buf.toStringPayload();
+
+  auto do_write = [&]() {
+    lsn_t record_lsn;
+    // retry until the write can complete
+    wait_until([&]() {
+      lsn_t lsn = client->appendSync(
+          metadata_logid, Payload(metadata.data(), metadata.size()));
+      if (lsn == LSN_INVALID) {
+        // expect E::SEQNOBUFS when there is a write in-flight
+        EXPECT_EQ(E::SEQNOBUFS, err);
+        return false;
+      }
+      record_lsn = lsn;
+      return true;
+    });
+    return record_lsn;
+  };
+
+  // sleep for 1 second to ensure the monitor thread disallows writes
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+
+  for (int i = 0; i < num_records; ++i) {
+    // First write to the metadata log which should succeed.
+    lsn_t lsn = do_write();
+    ASSERT_NE(LSN_INVALID, lsn);
+
+    // And then to the internal log which should also succeed.
+    std::string internalData("internal data" + std::to_string(i));
+    lsn = client->appendSync(configuration::InternalLogs::CONFIG_LOG_DELTAS,
+                             Payload(internalData.data(), internalData.size()));
+    EXPECT_NE(LSN_INVALID, lsn);
+  }
+
+  // verify the stats
+  std::map<std::string, int64_t> stats = cluster->getNode(0).stats();
+  EXPECT_EQ(stats["append_rejected_nospace"], 0);
+  EXPECT_EQ(stats["node_out_of_space_received"], 0);
 }
 
 // When a node is replaced, we should restore write availability eventually
