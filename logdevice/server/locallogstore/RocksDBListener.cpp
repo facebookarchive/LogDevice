@@ -222,7 +222,7 @@ void RocksDBTablePropertiesCollector::BlockAdd(
   if (blockCompressedBytesSlow) {
     STAT_ADD(stats_, sampled_blocks_raw_bytes_slow, blockRawBytes);
     STAT_ADD(
-        stats_, sampled_blocks_compressed_bytes_fast, blockCompressedBytesSlow);
+        stats_, sampled_blocks_compressed_bytes_slow, blockCompressedBytesSlow);
   }
 
   if (blockRawBytes >= 1024 * 1024) {
