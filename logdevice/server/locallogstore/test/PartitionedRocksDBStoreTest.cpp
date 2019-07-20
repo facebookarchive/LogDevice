@@ -6328,6 +6328,7 @@ TEST_F(PartitionedRocksDBStoreTest, IterateOnDirtyPartitions) {
   LocalLogStore::ReadOptions read_options("IterateOnDirtyPartitions");
   for (auto lsn_kv : lsn_to_partition) {
     lsn_t lsn = lsn_kv.first;
+    SCOPED_TRACE(lsn);
     auto it = store_->read(logid, read_options);
     it->seek(lsn);
     EXPECT_EQ(IteratorState::AT_RECORD, it->state());
@@ -6353,13 +6354,27 @@ TEST_F(PartitionedRocksDBStoreTest, IterateOnDirtyPartitions) {
   // space to see if a record may have been missed.
   for (auto lsn_kv : lsn_to_partition) {
     lsn_t lsn = lsn_kv.first;
-    auto it = store_->read(logid, read_options);
-    lsn_t prev_lsn = lsn - 1;
-    if (firstLsnInPartition(lsn_to_partition, lsn) &&
-        !lsn_to_partition.count(prev_lsn)) {
-      it->seek(prev_lsn);
-      EXPECT_TRUE(it->accessedUnderReplicatedRegion());
+    partition_id_t cur_partition = lsn_kv.second;
+    auto kv_it = lsn_to_partition.find(lsn);
+    ld_check(kv_it != lsn_to_partition.end());
+    partition_id_t prev_partition = ID0 + 1;
+
+    if (kv_it != lsn_to_partition.begin()) {
+      --kv_it;
+      prev_partition = kv_it->second;
+      if (prev_partition == cur_partition || kv_it->first == lsn - 1) {
+        continue;
+      }
     }
+
+    bool saw_underreplicated = false;
+    for (partition_id_t i = prev_partition; i <= cur_partition; ++i) {
+      saw_underreplicated |= under_replicated_partitions.count(i);
+    }
+
+    auto it = store_->read(logid, read_options);
+    it->seek(lsn - 1);
+    EXPECT_EQ(saw_underreplicated, it->accessedUnderReplicatedRegion());
   }
 
   // If an initial seek doesn't mark the iterator as under-replicated,
@@ -6371,15 +6386,17 @@ TEST_F(PartitionedRocksDBStoreTest, IterateOnDirtyPartitions) {
     if (it->accessedUnderReplicatedRegion()) {
       continue;
     }
+
+    bool saw_underreplicated = false;
     partition_id_t prev_partition = lsn_kv.second;
     while (it->state() == IteratorState::AT_RECORD) {
       lsn_t lsn = it->getLSN();
       partition_id_t cur_partition = lsn_to_partition[lsn];
-      for (; prev_partition != cur_partition; ++prev_partition) {
-        if (under_replicated_partitions.count(prev_partition)) {
-          ASSERT_TRUE(it->accessedUnderReplicatedRegion());
-        }
+      for (; prev_partition <= cur_partition; ++prev_partition) {
+        saw_underreplicated |=
+            under_replicated_partitions.count(prev_partition);
       }
+      ASSERT_EQ(saw_underreplicated, it->accessedUnderReplicatedRegion());
       it->next();
     }
   }
@@ -6420,16 +6437,14 @@ TEST_F(PartitionedRocksDBStoreTest, IterateOnDirtyPartitions) {
     EXPECT_TRUE(it->accessedUnderReplicatedRegion());
   }
 
-  // Seeking to an LSN that is before the beginning of the first record
-  // in a fully-replicated partition will indicate underreplicateion
-  // if there are any under-replicated partitions before the partition
-  // of the returned record. This is the positive test.
+  // Seeking to an LSN between two fully-replicated partitions, with no
+  // underreplicated partitions between them, should report no underreplication.
   {
     auto it = store_->read(logid, read_options);
     it->seek(lsn_t(19));
     EXPECT_EQ(it->state(), IteratorState::AT_RECORD);
     EXPECT_EQ(it->getLSN(), lsn_t(20));
-    EXPECT_TRUE(it->accessedUnderReplicatedRegion());
+    EXPECT_FALSE(it->accessedUnderReplicatedRegion());
   }
 }
 
@@ -6493,6 +6508,7 @@ TEST_F(PartitionedRocksDBStoreTest, ReverseIterateOnDirtyPartitions) {
   LocalLogStore::ReadOptions read_options("ReverseIterateOnDirtyPartitions");
   for (auto lsn_kv : lsn_to_partition) {
     lsn_t lsn = lsn_kv.first;
+    SCOPED_TRACE(lsn);
     auto it = store_->read(logid, read_options);
     it->seekForPrev(lsn);
     EXPECT_EQ(it->state(), IteratorState::AT_RECORD);
@@ -6658,6 +6674,21 @@ TEST_F(PartitionedRocksDBStoreTest, IterateAtEndOnDirtyPartitions) {
       EXPECT_FALSE(it->accessedUnderReplicatedRegion());
       it->next();
     }
+    EXPECT_FALSE(it->accessedUnderReplicatedRegion());
+  }
+
+  // Seeking above the last record shouldn't report under-replication if no
+  // partitions above last record's partition are under-replicated.
+  {
+    auto it = store_->read(logid, read_options);
+    auto lsn_kv = lsn_to_partition.rbegin();
+    lsn_t lsn = lsn_kv->first + 1;
+    lsn_t start_partition = lsn_kv->second;
+    // Must not have under-replicated partitions after our stop point.
+    ASSERT_GT(start_partition, *under_replicated_partitions.rbegin());
+    EXPECT_EQ(under_replicated_partitions.count(start_partition), 0);
+    it->seek(lsn);
+    EXPECT_EQ(IteratorState::AT_END, it->state());
     EXPECT_FALSE(it->accessedUnderReplicatedRegion());
   }
 
@@ -10333,4 +10364,40 @@ TEST_F(PartitionedRocksDBStoreTest, FlushBlockPolicyTest) {
   write_and_flush();
   stats = stats_.aggregate();
   EXPECT_EQ(4, stats.sst_record_blocks_written);
+}
+
+class PassAllReadFilter : public LocalLogStore::ReadFilter {
+ public:
+  bool operator()(logid_t,
+                  lsn_t,
+                  const ShardID*,
+                  const copyset_size_t,
+                  const csi_flags_t,
+                  RecordTimestamp,
+                  RecordTimestamp) override {
+    return true;
+  }
+};
+
+TEST_F(PartitionedRocksDBStoreTest,
+       SeekBetweenPartitionsTouchesOnlyOnePartition) {
+  put({TestRecord(logid_t(1), 10)});
+  store_->createPartition();
+  put({TestRecord(logid_t(1), 20)});
+
+  auto it = store_->read(logid_t(1),
+                         LocalLogStore::ReadOptions(
+                             "PartitionedRocksDBStoreTest."
+                             "SeekBetweenPartitionsTouchesOnlyOnePartition"));
+  PassAllReadFilter filter;
+  LocalLogStore::ReadStats stats;
+
+  it->seek(15, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(1, stats.seen_logsdb_partitions);
+
+  stats.seen_logsdb_partitions = 0;
+  it->seek(25, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(0, stats.seen_logsdb_partitions);
 }

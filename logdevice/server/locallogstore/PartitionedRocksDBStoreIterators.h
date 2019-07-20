@@ -21,7 +21,7 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
 
   IteratorState state() const override;
   bool accessedUnderReplicatedRegion() const override {
-    return accessed_underreplicated_region;
+    return accessed_underreplicated_region_;
   }
 
   void prev() override;
@@ -59,23 +59,6 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
   }
 
  private:
-  enum class Operation { SEEK, SEEK_FOR_PREV, NEXT, PREV };
-
-  static std::string toString(Operation op) {
-    switch (op) {
-      case Operation::SEEK:
-        return "SEEK";
-      case Operation::SEEK_FOR_PREV:
-        return "SEEK_FOR_PREV";
-      case Operation::NEXT:
-        return "NEXT";
-      case Operation::PREV:
-        return "PREV";
-      default:
-        return "UNKNOWN";
-    }
-  }
-
   struct PartitionInfo {
     PartitionPtr partition_;
     // Smallest LSN for this log contained in this partition,
@@ -107,7 +90,7 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
   //    or is folly::none or !Valid() or !status().ok(),
   //  * current_ describes a partition, or is nullptr,
   //  * data_iterator_ points into a partition, or is nullptr.
-  // A few methods are used for getting these 3 things in sync with each other.
+  // A few methods are used for keeping these 3 things in sync with each other.
   // The iterator can be in one of two modes:
   //  - Latest partition fast path: meta_iterator_ is unset,
   //    current_ equal to latest_.
@@ -139,7 +122,7 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
 
   // Called when we find that the log is empty. Frees both iterators and both
   // partition pointers (current_ and latest_), and updates
-  // accessed_underreplicated_region.
+  // accessed_underreplicated_region_.
   void handleEmptyLog();
 
   // Updates latest_ and oldest_partition_id_.
@@ -167,10 +150,13 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
   // If filtering args are set, data_iterator_ may be nullptr. This indicates
   // that the current_ partition was filtered out, and we need to skip to the
   // next non-filtered one.
+  // If skip_current is true, the current partition and data_iterator_ won't
+  // be considered, and we'll move on to the next partition right away.
   void moveUntilValid(bool forward,
                       lsn_t current_lsn,
                       ReadFilter* filter = nullptr,
-                      ReadStats* stats = nullptr);
+                      ReadStats* stats = nullptr,
+                      bool skip_current = false);
 
   void seekToPartitionBeforeOrAfter(lsn_t lsn,
                                     partition_id_t partition_id,
@@ -180,12 +166,12 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
   // with invalid value. Assumes that the key is valid.
   void checkDirectoryValue() const;
 
-  // Recompute accessd_underreplicated_region based on an iterator operation
-  // that has accessed partitions within [start, end].
+  // Sets accessed_underreplicated_region_ to true if any partition
+  // in [start, end] is underreplicated.
+  // `start.partition_ == nullptr` means -infinity.
+  // `  end.partition_ == nullptr` means +infinity.
   void checkAccessedUnderReplicatedRegion(PartitionInfo start,
-                                          PartitionInfo end,
-                                          Operation op,
-                                          lsn_t seek_lsn = LSN_INVALID);
+                                          PartitionInfo end);
 
   // Gets time range of current_.partition_ and calls
   // filter.shouldProcessTimeRange() with it.
@@ -201,10 +187,7 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
   // Whoever changes current_ is responsible for deleting data_iterator_ if
   // current_.partition_ changes.
   //
-  // current_->partition_ is non-null for any log that has records
-  // regardless or iterator state/position.
-  //
-  // If current_->partition is non-null, data_iterator_ is non-null too.  There
+  // If current_->partition is non-null, data_iterator_ is non-null too. There
   // is one exception: if ReadFilter::shouldProcessTimeRange() returned false,
   // data_iterator_ will be null, but current_->partition_ will point to the
   // partition that got filtered out. This discrepancy is always reconciled by
@@ -242,7 +225,7 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
   // signaling that the current log strand is fully-replicated in the case
   // where a seek would have stayed in the same, under-replicated, partition
   // if records had not been lost.
-  bool accessed_underreplicated_region = false;
+  bool accessed_underreplicated_region_ = false;
 };
 
 class PartitionedRocksDBStore::PartitionedAllLogsIterator

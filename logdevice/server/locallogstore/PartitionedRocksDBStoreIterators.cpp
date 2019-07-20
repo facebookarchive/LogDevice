@@ -168,135 +168,88 @@ void PartitionedRocksDBStore::Iterator::checkDirectoryValue() const {
 
 void PartitionedRocksDBStore::Iterator::checkAccessedUnderReplicatedRegion(
     PartitionInfo start,
-    PartitionInfo end,
-    Operation op,
-    lsn_t seek_lsn) {
-  ld_spew("pstart: %s, pend: %s, op: %s, seek_lsn %s",
+    PartitionInfo end) {
+  ld_spew("pstart: %s, pend: %s",
           logdevice::toString(start).c_str(),
-          logdevice::toString(end).c_str(),
-          toString(op).c_str(),
-          lsn_to_string(seek_lsn).c_str());
+          logdevice::toString(end).c_str());
 
   if (!pstore_->isUnderReplicated()) {
     ld_spew("FALSE: Nothing under-replicated");
-    accessed_underreplicated_region = false;
+    accessed_underreplicated_region_ = false;
     return;
   }
 
-  if (accessed_underreplicated_region) {
+  if (accessed_underreplicated_region_) {
     // We've already touched an under-replicated region.
     // No point in checking again.
     ld_spew("TRUE: already under-replicated");
     return;
   }
 
-  // Three cases are handled differently:
-  //  1. Seek/SeekForPrev.
-  //  2. Next/Prev that went out of bounds.
-  //  3. Next/Prev that ended up on a record.
-
-  // 1.
-  if (op == Operation::SEEK || op == Operation::SEEK_FOR_PREV) {
-    ld_check_eq(start.partition_, end.partition_);
-    ld_check(op == Operation::SEEK || op == Operation::SEEK_FOR_PREV);
-
-    if (!end.partition_) {
-      // Seek didn't find any records.
-      // Assume under replication anywhere in the store applies to this seek.
-      ld_spew("TRUE: seek didn't find any records");
-      accessed_underreplicated_region = true;
-      return;
-    }
-
-    if (end.partition_->isUnderReplicated()) {
-      // Landed in an under-replicated partition.
-      ld_spew("TRUE: landed in under-replicated partition");
-      accessed_underreplicated_region = true;
-      return;
-    }
-
-    // On initial seek, if we land in a fully-replicated partition
-    // the outcome of the operation may still have been impacted by
-    // under replication of partitions outside the current partition.
-    // For seek operations, if the min_lsn of this partition is <= to
-    // the initial seek point, we haven't skipped over any potentially
-    // missing records. For seekForPrev() operations, if the max_lsn of
-    // the partition is >= to the initial seek point, again we can assume
-    // no records have been missed.  Otherwise, be extremely conservative
-    // and assume that an under-replicated partitions before or after
-    // (depending on seek direction) the current partition may have lost
-    // records that would have yielded a more accurate seek result.
-    switch (op) {
-      case Operation::SEEK:
-        if (end.min_lsn_ > seek_lsn &&
-            pstore_->min_under_replicated_partition_ < end.partition_->id_) {
-          ld_spew("SEEK: true");
-          accessed_underreplicated_region = true;
-          return;
-        }
-        ld_spew("SEEK: false");
-        break;
-      case Operation::SEEK_FOR_PREV:
-        if (end.max_lsn_ < seek_lsn &&
-            pstore_->max_under_replicated_partition_ > end.partition_->id_) {
-          ld_spew("SEEK_FOR_PREV: true");
-          accessed_underreplicated_region = true;
-          return;
-        }
-        ld_spew("SEEK_FOR_PREV: false");
-        break;
-      default:
-        ld_check(false);
-    }
-
+  if (!start.partition_ && !end.partition_) {
+    ld_spew("TRUE: range [-inf, +inf]");
+    accessed_underreplicated_region_ = true;
     return;
   }
 
-  ld_check(start.partition_);
-
-  // 2.
-  if (state() == IteratorState::AT_END || !end.partition_) {
-    // If the iterator is at the end of the log, any under-replicated
-    // partition beyond where the iterator started could have lost records.
-    if (op == Operation::NEXT) {
-      if (start.partition_->id_ <= pstore_->max_under_replicated_partition_) {
-        ld_spew("AT_END NEXT: true");
-        accessed_underreplicated_region = true;
-        return;
-      }
-      ld_spew("AT_END NEXT: false");
-    } else if (op == Operation::PREV) {
-      if (end.partition_->id_ >= pstore_->min_under_replicated_partition_) {
-        accessed_underreplicated_region = true;
-        ld_spew("AT_END PREV: true");
-        return;
-      }
-      ld_spew("AT_END PREV: false");
-    } else {
-      ld_check(false);
-    }
+  if (!start.partition_) {
+    // [-inf, end]
+    accessed_underreplicated_region_ =
+        end.partition_->id_ >= pstore_->min_under_replicated_partition_.load(
+                                   std::memory_order_relaxed);
+    ld_spew("%s: [-inf, %lu]",
+            accessed_underreplicated_region_ ? "TRUE" : "FALSE",
+            end.partition_->id_);
     return;
   }
 
-  // 3.
+  if (!end.partition_) {
+    // [start, +inf]
+    accessed_underreplicated_region_ =
+        start.partition_->id_ <= pstore_->max_under_replicated_partition_.load(
+                                     std::memory_order_relaxed);
+    ld_spew("%s: [%lu, +inf]",
+            accessed_underreplicated_region_ ? "TRUE" : "FALSE",
+            start.partition_->id_);
+    return;
+  }
+
   partition_id_t low = start.partition_->id_;
   partition_id_t high = end.partition_->id_;
-  if (low > high) {
-    ld_check(op == Operation::PREV);
-    std::swap(low, high);
-  }
+  ld_check(high >= low);
 
   // Constrain range to known under-replicated space.
   low = std::max(
       low,
       pstore_->min_under_replicated_partition_.load(std::memory_order_relaxed));
-  high = 1 +
-      std::min(high - 1,
-               pstore_->max_under_replicated_partition_.load(
-                   std::memory_order_relaxed));
+  high = std::min(
+      high,
+      pstore_->max_under_replicated_partition_.load(std::memory_order_relaxed));
 
-  if (low >= high) {
+  if (low > high) {
     ld_spew("SCAN: false (empty range)");
+    return;
+  }
+
+  // Small optimization: for `start` and `end` partitions, don't look up the
+  // PartitionPtr in partitions list, and use the readily available partition_
+  // instead.
+  if (low == start.partition_->id_ && start.partition_->isUnderReplicated()) {
+    ld_spew("TRUE: low");
+    accessed_underreplicated_region_ = true;
+    return;
+  }
+  if (high == end.partition_->id_ && high != start.partition_->id_ &&
+      end.partition_->isUnderReplicated()) {
+    ld_spew("TRUE: high");
+    accessed_underreplicated_region_ = true;
+    return;
+  }
+  ++low;
+  --high;
+
+  if (low > high) {
+    ld_spew("SCAN: false (empty reduced range)");
     return;
   }
 
@@ -304,11 +257,12 @@ void PartitionedRocksDBStore::Iterator::checkAccessedUnderReplicatedRegion(
   for (partition_id_t i = low; i <= high; ++i) {
     PartitionPtr p = partitions->get(i);
     if (p && p->isUnderReplicated()) {
-      accessed_underreplicated_region = true;
+      accessed_underreplicated_region_ = true;
       ld_spew("SCAN: true");
-      break;
+      return;
     }
   }
+
   ld_spew("SCAN: false");
 }
 
@@ -371,7 +325,7 @@ void PartitionedRocksDBStore::Iterator::updatePartitionRange() {
 
 void PartitionedRocksDBStore::Iterator::handleEmptyLog() {
   // Assume under replication anywhere in the store applies to this log too.
-  accessed_underreplicated_region |= pstore_->isUnderReplicated();
+  accessed_underreplicated_region_ |= pstore_->isUnderReplicated();
   // Destruction order matters (CF handle should outlive iterator).
   data_iterator_.reset();
   current_.clear();
@@ -383,7 +337,8 @@ void PartitionedRocksDBStore::Iterator::handleEmptyLog() {
 void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
                                                        lsn_t current_lsn,
                                                        ReadFilter* filter,
-                                                       ReadStats* it_stats) {
+                                                       ReadStats* it_stats,
+                                                       bool skip_current) {
   if (filter || it_stats) {
     // Filtering args are only compatible with moving forward
     ld_check(forward);
@@ -418,9 +373,8 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
   SCOPE_EXIT {
     ld_check(state_ != IteratorState::MAX);
     if (data_iterator_ == nullptr && current_.partition_ != nullptr) {
-      // All partitions got filtered out by ReadFilter.
+      // All partitions got filtered out or skipped.
       ld_check_eq(state_, IteratorState::AT_END);
-      ld_check(filter);
       current_.clear();
     }
   };
@@ -430,7 +384,7 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
   while (true) {
     // See if we're already in a good state.
 
-    if (data_iterator_) {
+    if (data_iterator_ && !skip_current) {
       IteratorState s = data_iterator_->state();
       if (s == IteratorState::AT_RECORD || s == IteratorState::LIMIT_REACHED) {
         if (!atOrphanedRecord()) {
@@ -444,6 +398,8 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
         return;
       }
     }
+
+    skip_current = false;
 
     // Need to move to the next/prev partition. See if there's nowhere to move.
 
@@ -591,7 +547,7 @@ void PartitionedRocksDBStore::Iterator::seek(lsn_t lsn,
   trackSeek(lsn, 0);
 
   // Reset sticky state on seeks.
-  accessed_underreplicated_region = false;
+  accessed_underreplicated_region_ = false;
 
   updatePartitionRange();
   if (!latest_.partition_) {
@@ -628,19 +584,52 @@ void PartitionedRocksDBStore::Iterator::seek(lsn_t lsn,
     }
   }
 
-  setDataIteratorFromCurrent(filter);
-
-  if (data_iterator_) {
-    if (filter) {
-      ld_check(stats);
-      ++stats->seen_logsdb_partitions;
-      assertDataIteratorHasCorrectTimeRange();
-    }
-    data_iterator_->seek(lsn, filter, stats);
+  PartitionInfo start = current_; // for underreplicated region detection
+  if (lsn < current_.min_lsn_) {
+    // We're seeking to LSN before the first partition for this log.
+    // Underreplication anywhere below that partition should flag this seek as
+    // having accessed underreplicated region.
+    start.clear();
   }
-  moveUntilValid(true, lsn, filter, stats);
-  checkAccessedUnderReplicatedRegion(current_, current_, Operation::SEEK, lsn);
-  ld_check(state() != IteratorState::LIMIT_REACHED ||
+
+  bool above_end = lsn > current_.max_lsn_;
+
+  if (!above_end) {
+    setDataIteratorFromCurrent(filter);
+
+    if (data_iterator_) {
+      if (filter) {
+        ld_check(stats);
+        ++stats->seen_logsdb_partitions;
+        assertDataIteratorHasCorrectTimeRange();
+      }
+
+      data_iterator_->seek(lsn, filter, stats);
+    }
+  } else {
+    // If we're seeking to LSN above max_lsn_ in current partition, don't bother
+    // creating/seeking data_iterator_. Instead tell moveUntilValid() to skip
+    // to the next partition.
+    // We could achieve the same by doing data_iterator_.reset() here, but we
+    // don't want to destroy data_iterator_ in the common case of seeking to
+    // just above the last record: data_iterator_ may be useful for the next
+    // seek, after more records are written.
+  }
+
+  moveUntilValid(true, lsn, filter, stats, /* skip_current */ above_end);
+
+  // Check if we accessed underreplicated region.
+  IteratorState s = state();
+  PartitionInfo end;
+  if (s == IteratorState::AT_RECORD || s == IteratorState::LIMIT_REACHED) {
+    end = current_;
+  } else {
+    // We reached the right end of partition sequence, so leave `end` null,
+    // meaning +infinity. current_ may have been left non-null as an
+    // optimization to make next seek cheaper.
+  }
+  checkAccessedUnderReplicatedRegion(start, end);
+  ld_check(s != IteratorState::LIMIT_REACHED ||
            (stats && stats->readLimitReached()));
 }
 
@@ -649,7 +638,7 @@ void PartitionedRocksDBStore::Iterator::seekForPrev(lsn_t lsn) {
   trackSeek(lsn, 0);
 
   // Reset sticky state on seeks.
-  accessed_underreplicated_region = false;
+  accessed_underreplicated_region_ = false;
 
   updatePartitionRange();
   if (!latest_.partition_) {
@@ -673,7 +662,7 @@ void PartitionedRocksDBStore::Iterator::seekForPrev(lsn_t lsn) {
                     IteratorState::ERROR,
                     IteratorState::WOULDBLOCK}));
       checkAccessedUnderReplicatedRegion(
-          current_, current_, Operation::SEEK_FOR_PREV, lsn);
+          current_, lsn <= current_.max_lsn_ ? current_ : PartitionInfo());
       state_ = s;
       return;
     } else {
@@ -693,17 +682,37 @@ void PartitionedRocksDBStore::Iterator::seekForPrev(lsn_t lsn) {
   setDataIteratorFromCurrent();
   ld_check(data_iterator_ != nullptr);
 
+  PartitionInfo start;
+  if (lsn <= current_.max_lsn_) {
+    start = current_;
+  } else {
+    // Leave start = nullptr to use partition range [current_, +infinity]
+    // for underreplicated region detection. We could find a better upper bound
+    // by looking at the next directory entry, but it's probably not worth the
+    // effort because (a) seekForPrev() is rarely used, (b) current users of
+    // seekForPrev() don't even care about underreplicated regions, (c) most
+    // iterator activity happens above any underreplicated partitions, so there
+    // are usually no underreplicated partitions in [current_, +infinity]
+    // anyway.
+  }
+
   lsn_t max_valid_lsn = std::min(lsn, current_.max_lsn_);
   data_iterator_->seekForPrev(max_valid_lsn);
   moveUntilValid(false, max_valid_lsn);
+
   checkAccessedUnderReplicatedRegion(
-      current_, current_, Operation::SEEK_FOR_PREV, lsn);
+      state() == IteratorState::AT_RECORD ? current_ : PartitionInfo(), start);
 }
 
 void PartitionedRocksDBStore::Iterator::next(ReadFilter* filter,
                                              ReadStats* stats) {
   SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(), "p:next");
   ld_check_eq(state(), IteratorState::AT_RECORD);
+
+  // Note: it's important to not call updatePartitionRange() here. If data
+  // iterator is in latest partition, and meta iterator is unset, we don't
+  // want to update latest_ and discover that data iterator is not in latest_
+  // anymore - then we would have to create meta iterator.
 
   PartitionInfo start = current_;
   lsn_t current_lsn = data_iterator_->getLSN();
@@ -712,9 +721,15 @@ void PartitionedRocksDBStore::Iterator::next(ReadFilter* filter,
   }
   data_iterator_->next(filter, stats);
   moveUntilValid(true, std::min(current_lsn, LSN_MAX - 1) + 1, filter, stats);
-  ld_check(state() != IteratorState::LIMIT_REACHED ||
+
+  IteratorState s = state();
+  PartitionInfo end;
+  if (s == IteratorState::AT_RECORD || s == IteratorState::LIMIT_REACHED) {
+    end = current_;
+  }
+  checkAccessedUnderReplicatedRegion(start, end);
+  ld_check(s != IteratorState::LIMIT_REACHED ||
            (stats && stats->readLimitReached()));
-  checkAccessedUnderReplicatedRegion(start, current_, Operation::NEXT);
 }
 
 void PartitionedRocksDBStore::Iterator::prev() {
@@ -725,7 +740,9 @@ void PartitionedRocksDBStore::Iterator::prev() {
   lsn_t current_lsn = data_iterator_->getLSN();
   data_iterator_->prev();
   moveUntilValid(false, std::max(1ul, current_lsn) - 1);
-  checkAccessedUnderReplicatedRegion(start, current_, Operation::PREV);
+
+  checkAccessedUnderReplicatedRegion(
+      state() == IteratorState::AT_RECORD ? current_ : PartitionInfo(), start);
 }
 
 IteratorState PartitionedRocksDBStore::Iterator::state() const {
