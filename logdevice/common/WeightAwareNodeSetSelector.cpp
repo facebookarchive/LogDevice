@@ -285,9 +285,7 @@ NodeSetSelector::Result WeightAwareNodeSetSelector::getStorageSet(
   // Check that we have enough nodes and domains to satisfy the replication
   // requirement.
   if (!configuration::nodes::validStorageSet(
-          *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-          res.storage_set,
-          replication_property)) {
+          nodes_configuration, res.storage_set, replication_property)) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     5,
                     "Not enough storage nodes to select nodeset for log %lu, "
