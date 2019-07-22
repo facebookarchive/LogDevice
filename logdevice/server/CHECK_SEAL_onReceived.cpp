@@ -80,7 +80,7 @@ Message::Disposition CHECK_SEAL_onReceived(CHECK_SEAL_Message* msg,
   ServerWorker* w = ServerWorker::onThisThread();
   ServerProcessor* processor = w->processor_;
 
-  const shard_size_t n_shards = w->getServerConfig()->getNumShards();
+  const shard_size_t n_shards = w->getNodesConfiguration()->getNumShards();
   shard_index_t shard = header.shard;
   ld_check(shard != -1);
 

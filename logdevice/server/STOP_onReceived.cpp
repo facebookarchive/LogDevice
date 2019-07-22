@@ -32,7 +32,7 @@ Message::Disposition STOP_onReceived(STOP_Message* msg, const Address& from) {
     return Message::Disposition::NORMAL;
   }
 
-  const shard_size_t n_shards = w->getServerConfig()->getNumShards();
+  const shard_size_t n_shards = w->getNodesConfiguration()->getNumShards();
   shard_index_t shard_idx = header.shard;
   if (shard_idx >= n_shards) {
     RATELIMIT_ERROR(std::chrono::seconds(10),

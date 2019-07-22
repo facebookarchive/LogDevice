@@ -321,12 +321,16 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     // return false;
   }
 
-  if (new_nodes_config->getNumShards() != server_config.getNumShards()) {
-    ld_error("Nodes config num of shards mismatch after conversion! original: "
-             "%u, new: %u.",
-             server_config.getNumShards(),
-             new_nodes_config->getNumShards());
-    return false;
+  {
+    auto old_num_shards = server_config.getNodesConfig().calculateNumShards();
+    if (new_nodes_config->getNumShards() != old_num_shards) {
+      ld_error(
+          "Nodes config num of shards mismatch after conversion! original: "
+          "%u, new: %u.",
+          old_num_shards,
+          new_nodes_config->getNumShards());
+      return false;
+    }
   }
 
   if (new_nodes_config->getMaxNodeIndex() != server_config.getMaxNodeIdx()) {

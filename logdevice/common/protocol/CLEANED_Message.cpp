@@ -101,7 +101,7 @@ Message::Disposition CLEANED_Message::onReceived(const Address& from) {
 
   ld_check(recovery->getLogID() == header_.log_id);
 
-  const shard_size_t n_shards = w->getServerConfig()->getNumShards();
+  const shard_size_t n_shards = w->getNodesConfiguration()->getNumShards();
   shard_index_t shard = header_.shard;
   ld_check(shard != -1);
 

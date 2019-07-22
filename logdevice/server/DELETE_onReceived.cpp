@@ -25,10 +25,9 @@ Message::Disposition DELETE_onReceived(DELETE_Message* msg,
   const DELETE_Header& header = msg->getHeader();
 
   ServerWorker* worker = ServerWorker::onThisThread();
-  auto scfg = worker->getServerConfig();
   shard_index_t shard_idx = header.shard;
   ld_check(shard_idx != -1);
-  const shard_size_t n_shards = scfg->getNumShards();
+  const shard_size_t n_shards = worker->getNodesConfiguration()->getNumShards();
 
   if (shard_idx >= n_shards) {
     RATELIMIT_ERROR(std::chrono::seconds(10),

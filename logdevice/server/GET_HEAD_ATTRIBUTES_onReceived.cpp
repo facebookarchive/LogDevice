@@ -155,10 +155,9 @@ GET_HEAD_ATTRIBUTES_onReceived(GET_HEAD_ATTRIBUTES_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
-  auto scfg = worker->getServerConfig();
   ShardedStorageThreadPool* sstp = processor->sharded_storage_thread_pool_;
 
-  const shard_size_t n_shards = scfg->getNumShards();
+  const shard_size_t n_shards = worker->getNodesConfiguration()->getNumShards();
   shard_index_t shard_idx = header.shard;
   if (shard_idx >= n_shards) {
     RATELIMIT_ERROR(std::chrono::seconds(10),

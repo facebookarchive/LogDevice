@@ -151,7 +151,7 @@ Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
   ServerWorker* w = ServerWorker::onThisThread();
   ServerProcessor* const processor = w->processor_;
 
-  const shard_size_t n_shards = w->getServerConfig()->getNumShards();
+  const shard_size_t n_shards = w->getNodesConfiguration()->getNumShards();
   shard_index_t shard = msg->header_.shard;
   if (shard >= n_shards) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
@@ -233,7 +233,7 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
 
   const RELEASE_Header& header = msg->getHeader();
 
-  const shard_size_t n_shards = w->getServerConfig()->getNumShards();
+  const shard_size_t n_shards = w->getNodesConfiguration()->getNumShards();
   shard_index_t shard = header.shard;
   ld_check(shard != -1);
 

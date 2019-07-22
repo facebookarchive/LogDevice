@@ -34,17 +34,12 @@ class NodesConfig {
   void setNodes(Nodes nodes) {
     nodes_ = std::move(nodes);
     calculateHash();
-    calculateNumShards();
   }
   const Nodes& getNodes() const {
     return nodes_;
   }
   uint64_t getStorageNodeHash() const {
     return hash_;
-  }
-  // TODO(T15517759): remove when Flexible Log Sharding is fully implemented.
-  shard_size_t getNumShards() const {
-    return num_shards_;
   }
 
   ////////////////////// New NodesConfiguration ///////////////////////
@@ -81,25 +76,27 @@ class NodesConfig {
   // `hash_`
   void calculateHash();
 
-  // TODO(T15517759): remove when Flexible Log Sharding is fully implemented.
-  void calculateNumShards();
-
-  Nodes nodes_;
-
-  uint64_t hash_{0};
-
+  // NOTE: Only used for consistency checks in NodesConfiguration.
+  // NodesConfiguration::getNumShards() is what you're looking for.
+  //
   // TODO(T15517759): NodesConfigParser currently verifies that all nodes in the
   // config have the same amount of shards, which is also stored here. This
   // member as well as the check in NodesConfigParser will be removed when the
   // Flexible Log Sharding project is fully implemented.
   // In the mean time, this member is used by state machines that need to
   // convert node_index_t values to ShardID values.
-  shard_size_t num_shards_{0};
+  shard_size_t calculateNumShards() const;
+
+  Nodes nodes_;
+
+  uint64_t hash_{0};
 
   // NOTE: NodesConfig is the current nodes config data structure in use, which
   // will be replaced by nodesConfiguration_ in the future. nodesConfiguration_
   // is the new format, and it co-exists with current representation.
   std::shared_ptr<const nodes::NodesConfiguration> nodes_configuration_;
+
+  friend class nodes::NodesConfigLegacyConverter;
 };
 
 }}} // namespace facebook::logdevice::configuration

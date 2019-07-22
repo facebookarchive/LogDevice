@@ -52,7 +52,7 @@ Message::Disposition CHECK_SEAL_REPLY_Message::onReceived(const Address& from) {
           error_name(header_.status));
 
   Worker* w = Worker::onThisThread();
-  const shard_size_t n_shards = w->getServerConfig()->getNumShards();
+  const shard_size_t n_shards = w->getNodesConfiguration()->getNumShards();
   shard_index_t shard = header_.shard;
   ld_check(shard != -1);
   if (shard >= n_shards) {

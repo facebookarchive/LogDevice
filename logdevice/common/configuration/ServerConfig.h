@@ -158,13 +158,6 @@ class ServerConfig {
     return nodesConfig_.getNodes();
   }
 
-  // Return the number of shards in storage nodes of that cluster or zero if
-  // there are no storage nodes.
-  // TODO(T15517759): remove when Flexible Log Sharding is fully implemented.
-  shard_size_t getNumShards() const {
-    return nodesConfig_.getNumShards();
-  }
-
   /**
    * Gets nodes config hash.
    */

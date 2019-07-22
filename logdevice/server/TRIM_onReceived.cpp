@@ -206,9 +206,7 @@ Message::Disposition TRIM_onReceived(TRIM_Message* msg,
 
   const TRIM_Header& header = msg->getHeader();
   ServerWorker* worker = ServerWorker::onThisThread();
-
-  auto scfg = worker->getServerConfig();
-  const shard_size_t n_shards = scfg->getNumShards();
+  const shard_size_t n_shards = worker->getNodesConfiguration()->getNumShards();
   shard_index_t shard_idx = header.shard;
   if (shard_idx >= n_shards) {
     RATELIMIT_ERROR(std::chrono::seconds(10),

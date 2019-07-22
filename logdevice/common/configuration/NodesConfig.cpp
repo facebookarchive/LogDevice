@@ -73,16 +73,16 @@ void NodesConfig::calculateHash() {
 }
 
 // TODO(T15517759): remove when Flexible Log Sharding is fully implemented.
-void NodesConfig::calculateNumShards() {
-  num_shards_ = 0;
+shard_size_t NodesConfig::calculateNumShards() const {
   for (const auto& it : nodes_) {
     if (!it.second.isReadableStorageNode()) {
       continue;
     }
     ld_check(it.second.getNumShards() > 0);
-    num_shards_ = it.second.getNumShards();
+    return it.second.getNumShards();
     break; // The other storage nodes have the same amount of shards.
   }
+  return 0;
 }
 
 bool NodesConfig::generateNodesConfiguration(

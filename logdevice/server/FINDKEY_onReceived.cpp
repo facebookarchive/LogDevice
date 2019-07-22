@@ -138,9 +138,8 @@ FINDKEY_onReceived(FINDKEY_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
-  auto scfg = worker->getServerConfig();
   shard_index_t shard_idx = msg->header_.shard;
-  const shard_size_t n_shards = scfg->getNumShards();
+  const shard_size_t n_shards = worker->getNodesConfiguration()->getNumShards();
   if (shard_idx >= n_shards) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
