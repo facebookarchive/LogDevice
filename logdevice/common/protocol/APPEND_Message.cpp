@@ -36,7 +36,24 @@ namespace facebook { namespace logdevice {
 void APPEND_Message::serialize(ProtocolWriter& writer) const {
   ld_check(payload_.valid());
 
-  writer.write(header_);
+  // Only write the header without any flags corresponding to stream writer if
+  // protocol does not support it.
+
+  // Checking some conditions on stream requests.
+  // STREAM_RESUME -> STREAM_REQUEST.
+  // STREAM_REQUEST <-> stream_request_id is valid.
+  if (header_.flags & APPEND_Header::STREAM_RESUME) {
+    ld_check((header_.flags & APPEND_Header::STREAM_REQUEST) > 0);
+  }
+  ld_check_eq((header_.flags & APPEND_Header::STREAM_REQUEST) > 0,
+              stream_request_id_valid(stream_request_id_));
+  APPEND_Header proto_supported_header(header_);
+  if (writer.proto() < Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+    proto_supported_header.flags &=
+        ~(APPEND_Header::STREAM_REQUEST | APPEND_Header::STREAM_RESUME);
+  }
+  writer.write(proto_supported_header);
+
   if (header_.flags & APPEND_Header::LSN_BEFORE_REDIRECT) {
     writer.write(lsn_before_redirect_);
   }
@@ -74,6 +91,13 @@ void APPEND_Message::serialize(ProtocolWriter& writer) const {
       writer.writeLengthPrefixedVector(e2e_tracing_context_);
     } else {
       writer.writeLengthPrefixedVector(std::string(""));
+    }
+  }
+
+  // Inserting stream request information just before checksum and payload.
+  if (writer.proto() >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+    if (header_.flags & APPEND_Header::STREAM_REQUEST) {
+      writer.write(&stream_request_id_, sizeof(stream_request_id_t));
     }
   }
 
@@ -183,6 +207,13 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
     reader.readLengthPrefixedVector(&tracing_info);
   }
 
+  stream_request_id_t stream_request_id = STREAM_REQUEST_ID_INVALID;
+  if (reader.proto() >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+    if (header.flags & APPEND_Header::STREAM_REQUEST) {
+      reader.read(&stream_request_id);
+    }
+  }
+
   size_t payload_size = reader.bytesRemaining();
   ld_check(payload_size < Message::MAX_LEN);
   PayloadHolder ph = PayloadHolder::deserialize(
@@ -195,7 +226,8 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
                               lsn_before_redirect,
                               std::move(attrs),
                               std::move(ph),
-                              std::move(tracing_info));
+                              std::move(tracing_info),
+                              stream_request_id);
   });
 }
 

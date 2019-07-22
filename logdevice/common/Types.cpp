@@ -40,4 +40,8 @@ bool operator<(const NodeID& a, const NodeID& b) {
   return a.val_ < b.val_;
 }
 
+bool stream_request_id_valid(stream_request_id_t stream_rqid) {
+  return !((stream_rqid.id == STREAM_REQUEST_ID_INVALID.id) &&
+           (stream_rqid.seq_num == STREAM_REQUEST_ID_INVALID.seq_num));
+}
 }} // namespace facebook::logdevice

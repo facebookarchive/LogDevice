@@ -40,6 +40,8 @@ enum ProtocolVersion : uint16_t {
 
   IS_LOG_EMPTY_IN_GSS_REPLY, // = 97
 
+  STREAM_WRITER_SUPPORT, // = 98
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
@@ -58,6 +60,8 @@ static_assert(RID_IN_CONFIG_MESSAGES == 93, "");
 static_assert(WAVE_IN_MUTATED == 94, "");
 static_assert(TRIM_POINT_IN_SEALED == 95, "");
 static_assert(GSS_32BIT_FLAG == 96, "");
+static_assert(IS_LOG_EMPTY_IN_GSS_REPLY == 97, "");
+static_assert(STREAM_WRITER_SUPPORT == 98, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;

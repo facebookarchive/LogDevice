@@ -29,11 +29,11 @@ struct APPEND_Header {
 
   // The highest epoch number seen by this client for this log so far.
   // If this APPEND somehow gets routed to a Sequencer whose epoch number
-  // is smaller than .seen, the Sequencer must checks EpochStore for the
+  // is smaller than .seen, the Sequencer must check EpochStore for the
   // current epoch number and fail the request with Status::PREEMPTED.
   // This field is currently unused (always set to EPOCH_INVALID). When
   // we migrate to a gossip-based failure detector we will use this field
-  // to guarantee that LSNs assigned to consequitive records appended to
+  // to guarantee that LSNs assigned to consecutive records appended to
   // the same log by the same client thread always increase monotonically.
   epoch_t seen;
 
@@ -72,6 +72,11 @@ struct APPEND_Header {
   static constexpr APPEND_flags_t CUSTOM_COUNTERS = 1u << 10; // 1024
 
   static constexpr APPEND_flags_t E2E_TRACING_ON = 1u << 11; // 2048
+  // Append request belongs to a stream.
+  static constexpr APPEND_flags_t STREAM_REQUEST = 1u << 12; // 4096
+  // Used by stream writer to denote that the append message is next in
+  // stream and can be accepted unconditionally by a sequencer.
+  static constexpr APPEND_flags_t STREAM_RESUME = 1u << 13; // 8192
 
   static constexpr APPEND_flags_t FORCE = NO_REDIRECT | REACTIVATE_IF_PREEMPTED;
 } __attribute__((__packed__));
@@ -89,6 +94,20 @@ class APPEND_Message : public Message {
         attrs_(std::move(attrs)),
         payload_(std::move(payload)),
         e2e_tracing_context_(std::move(e2e_tracing_context)) {}
+
+  APPEND_Message(const APPEND_Header& header,
+                 lsn_t lsn_before_redirect,
+                 AppendAttributes attrs,
+                 PayloadHolder payload,
+                 std::string e2e_tracing_context,
+                 stream_request_id_t stream_request_id)
+      : Message(MessageType::APPEND, TrafficClass::APPEND),
+        header_(header),
+        lsn_before_redirect_(lsn_before_redirect),
+        attrs_(std::move(attrs)),
+        payload_(std::move(payload)),
+        e2e_tracing_context_(std::move(e2e_tracing_context)),
+        stream_request_id_(stream_request_id) {}
 
   APPEND_Message(APPEND_Message&&) = delete;
   APPEND_Message(const APPEND_Message&) = delete;
@@ -135,6 +154,9 @@ class APPEND_Message : public Message {
 
   // Need a serialization of the tracing information gathered so far
   std::string e2e_tracing_context_;
+
+  // Stream request id
+  stream_request_id_t stream_request_id_ = STREAM_REQUEST_ID_INVALID;
 
   friend class ChecksumTest;
   friend class MessageSerializationTest;

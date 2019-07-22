@@ -178,7 +178,14 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(m.header_.logid, m2.header_.logid);
     ASSERT_EQ(m.header_.seen, m2.header_.seen);
     ASSERT_EQ(m.header_.timeout_ms, m2.header_.timeout_ms);
-    ASSERT_EQ(m.header_.flags, m2.header_.flags);
+    if (proto >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+      ASSERT_EQ(m.header_.flags, m2.header_.flags);
+    } else {
+      APPEND_flags_t flag1 = m.header_.flags, flag2 = m2.header_.flags;
+      flag1 &= ~(APPEND_Header::STREAM_REQUEST | APPEND_Header::STREAM_RESUME);
+      flag2 &= ~(APPEND_Header::STREAM_REQUEST | APPEND_Header::STREAM_RESUME);
+      ASSERT_EQ(flag1, flag2);
+    }
     ASSERT_EQ(m.attrs_.optional_keys, m2.attrs_.optional_keys);
     ASSERT_EQ(m.attrs_.counters.hasValue(), m2.attrs_.counters.hasValue());
     if (m.attrs_.counters.hasValue()) {
@@ -189,7 +196,10 @@ class MessageSerializationTest : public ::testing::Test {
         ASSERT_EQ(counter.second, map[counter.first]);
       }
     }
-
+    if (proto >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+      ASSERT_EQ(m.stream_request_id_.id, m2.stream_request_id_.id);
+      ASSERT_EQ(m.stream_request_id_.seq_num, m2.stream_request_id_.seq_num);
+    }
     ASSERT_EQ(m.e2e_tracing_context_, m2.e2e_tracing_context_);
     ASSERT_EQ(getPayload(m.payload_), getPayload(m2.payload_));
   }
@@ -836,6 +846,47 @@ TEST_F(MessageSerializationTest, APPEND) {
                      attrs,
                      PayloadHolder(strdup("hello"), 5),
                      "TRACING_INFORMATION");
+    auto check = [&](const APPEND_Message& m2, uint16_t proto) {
+      checkAPPEND(m, m2, proto);
+    };
+    DO_TEST(m,
+            check,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
+            Compatibility::MAX_PROTOCOL_SUPPORTED,
+            expected_fn,
+            deserializer);
+  }
+  {
+    h.flags |= APPEND_Header::STREAM_REQUEST;
+    stream_request_id_t stream_req_id = {
+        stream_id_t(1UL), stream_seq_num_t(1UL)};
+    APPEND_Message m(h,
+                     LSN_INVALID,
+                     attrs,
+                     PayloadHolder(strdup("hello"), 5),
+                     "TRACING_INFORMATION",
+                     stream_req_id);
+    auto check = [&](const APPEND_Message& m2, uint16_t proto) {
+      checkAPPEND(m, m2, proto);
+    };
+    DO_TEST(m,
+            check,
+            Compatibility::MIN_PROTOCOL_SUPPORTED,
+            Compatibility::MAX_PROTOCOL_SUPPORTED,
+            expected_fn,
+            deserializer);
+  }
+  {
+    h.flags |= APPEND_Header::STREAM_REQUEST;
+    h.flags |= APPEND_Header::STREAM_RESUME;
+    stream_request_id_t stream_req_id = {
+        stream_id_t(1UL), stream_seq_num_t(1UL)};
+    APPEND_Message m(h,
+                     LSN_INVALID,
+                     attrs,
+                     PayloadHolder(strdup("hello"), 5),
+                     "TRACING_INFORMATION",
+                     stream_req_id);
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
     };

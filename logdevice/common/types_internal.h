@@ -198,6 +198,23 @@ LOGDEVICE_STRONG_TYPEDEF(uint64_t, request_id_t);
 constexpr request_id_t REQUEST_ID_INVALID(0);
 
 /**
+ * Type used to identify a logdevice stream request. A stream request id is a
+ * 128 bit unsigned integer, composed of a stream id and sequence number. The
+ * stream id must be positive.
+ */
+LOGDEVICE_STRONG_TYPEDEF(uint64_t, stream_id_t);
+LOGDEVICE_STRONG_TYPEDEF(uint64_t, stream_seq_num_t);
+struct stream_request_id_t {
+  stream_id_t id;
+  stream_seq_num_t seq_num;
+};
+constexpr stream_id_t STREAM_ID_INVALID(0UL);
+constexpr stream_request_id_t STREAM_REQUEST_ID_INVALID = {
+    STREAM_ID_INVALID,
+    stream_seq_num_t(0UL)};
+bool stream_request_id_valid(stream_request_id_t stream_id);
+
+/**
  * Type used to identify a run of LogRebuilding state machine.
  * TODO (#24665001): In rebuilding v2 it's used to identiy chunks rather than
  * logs. Rename to chunk_rebuilding_id_t.
