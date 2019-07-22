@@ -15,13 +15,30 @@ namespace facebook {
     namespace ldquery {
       namespace tables {
 
+enum class RecordQueryMode : bool {
+  CSI = true,
+  DATA = false
+};
+
+template <RecordQueryMode mode>
 class Record : public AdminCommandTable {
  public:
   explicit Record(std::shared_ptr<Context> ctx) : AdminCommandTable(ctx) {}
   static std::string getName() {
-    return "record";
+    if (mode == RecordQueryMode::CSI) {
+      return "record_csi";
+    } else {
+      return "record";
+    }
   }
   std::string getDescription() override {
+    std::string additional_info = "";
+    if (mode == RecordQueryMode::CSI) {
+      additional_info = " This table is different from the record table in the "
+        "sense that it only queries the copyset index and therefore can be "
+        "more efficient. It can be used to check for divergence between the "
+        "data and copyset index.";
+    }
     return "This table allows fetching information about individual record "
            "copies in the cluster.  The user must provide query constraints on "
            "the \"log_id\" and \"lsn\" columns.  This table can be useful to "
@@ -29,7 +46,7 @@ class Record : public AdminCommandTable {
            "metadata.  Do not use it to serve production use cases as this "
            "query runs very inneficiently (it bypasses the normal read "
            "protocol and instead performs a point query on all storage nodes "
-           "in the cluster).";
+           "in the cluster)." + additional_info;
   }
   TableColumns getFetchableColumns() const override {
     return {
@@ -88,10 +105,15 @@ class Record : public AdminCommandTable {
                          "WHERE statement to filter by LSN");
     }
 
-    auto str = folly::format("info record {} {} {} --table --json\n",
+    std::string additional_option = "";
+    if (mode == RecordQueryMode::CSI) {
+      additional_option = " --csi";
+    }
+    auto str = folly::format("info record {} {} {} {} --table --json\n",
                              std::to_string(logid.val_),
                              lsn_to_string(range.first),
-                             lsn_to_string(range.second))
+                             lsn_to_string(range.second),
+                             additional_option)
                    .str();
     return str;
   }

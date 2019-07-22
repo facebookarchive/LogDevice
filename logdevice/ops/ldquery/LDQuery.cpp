@@ -169,7 +169,8 @@ LDQuery::LDQuery(std::string config_path,
   table_registry_.registerTable<tables::Partitions>(ctx_);
   table_registry_.registerTable<tables::Purges>(ctx_);
   table_registry_.registerTable<tables::Readers>(ctx_);
-  table_registry_.registerTable<tables::Record>(ctx_);
+  table_registry_.registerTable<tables::Record<tables::RecordQueryMode::CSI>>(ctx_);
+  table_registry_.registerTable<tables::Record<tables::RecordQueryMode::DATA>>(ctx_);
   table_registry_.registerTable<tables::RecordCache>(ctx_);
   table_registry_.registerTable<tables::Recoveries>(ctx_);
   table_registry_.registerTable<tables::Sequencers>(ctx_);

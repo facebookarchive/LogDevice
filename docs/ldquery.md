@@ -478,6 +478,26 @@ Dumps debugging information about the EpochRecordCache entries in each storage s
 | tail\_record\_lsn | long | LSN of the tail record of this epoch. |
 | tail\_record\_ts | long | Timestamp of the tail record of this epoch. |
 
+## record\_csi
+This table allows fetching information about individual record copies in the cluster.  The user must provide query constraints on the "log\_id" and "lsn" columns.  This table can be useful to introspect where copies of a record are stored and see their metadata.  Do not use it to serve production use cases as this query runs very inneficiently (it bypasses the normal read protocol and instead performs a point query on all storage nodes in the cluster). This table is different from the record table in the sense that it only queries the copyset index and therefore can be more efficient. It can be used to check for divergence between the data and copyset index.
+
+|   Column   |   Type   |   Description   |
+|------------|:--------:|-----------------|
+| node\_id | int | Node ID this row is for. |
+| log\_id | log_id | ID of the log this record is for. |
+| lsn | lsn | Sequence number of the record. |
+| shard | int | ID of the shard that holds this record copy. |
+| wave | int | If "is\_written\_by\_recovery" is 0, contains the wave of that record. |
+| recovery\_epoch | int | If "is\_written\_by\_recovery" is 1, contains the "sequencer epoch" of the log recovery. |
+| timestamp | string | Timestamp in milliseconds of the record. |
+| last\_known\_good | int | Highest ESN in this record's epoch such that at the time this messagewas originally sent by a sequencer all records with this and lower ESNs in this epoch were known to the sequencer to be fully stored on R nodes. |
+| copyset | string | Copyset of the record. |
+| flags | string | Flags for that record.  See "logdevice/common/LocalLogStoreRecordFormat.h" to see the list of flags. |
+| offset\_within\_epoch | string | Amount of data written to that record within the epoch. |
+| optional\_keys | string | Optional keys provided by the user.  See "AppendAttributes" in "logdevice/include/Record.h". |
+| is\_written\_by\_recovery | bool | Whether this record was replicated by the Log Recovery. |
+| payload | string | Payload in hex format. |
+
 ## recoveries
 Dumps debugging information about currently running Log Recovery procedures.  See "logdevice/common/LogRecoveryRequest.h" and "logdevice/common/EpochRecovery.h".
 
