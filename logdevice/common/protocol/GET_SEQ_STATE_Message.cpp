@@ -436,7 +436,7 @@ Message::Disposition GET_SEQ_STATE_Message::onReceived(Address const& from) {
   }
 
   // GET_SEQ_STATE_Message will be destroyed automatically by
-  // onSequencerNodeFound or ownership transfered by checkSeals
+  // onSequencerNodeFound or ownership transferred by checkSeals
   return Disposition::KEEP;
 }
 
@@ -468,19 +468,36 @@ void GET_SEQ_STATE_Message::onSequencerNodeFound(Status status,
     std::shared_ptr<Sequencer> sequencer = nullptr;
     sequencer = seqmap.findSequencer(datalog_id);
     if (sequencer) {
+      epoch_t cur_epoch = sequencer->getCurrentEpoch();
       auto state = sequencer->getState();
       switch (state) {
         case Sequencer::State::UNAVAILABLE:
           break;
         case Sequencer::State::PREEMPTED:
-          // even if the sequencer is already preempted, we still perform
-          // check seals since the preemptor it got may not be up-to-date.
-          // attempt to figureout the latest sequencer to send more accurate
-          // redirects
+          if (cur_epoch == EPOCH_INVALID) {
+            NodeID preempted_by = sequencer->checkIfPreempted(cur_epoch);
+            auto st = preempted_by.isNodeID() ? E::REDIRECTED : E::AGAIN;
+            RATELIMIT_INFO(
+                std::chrono::seconds(10),
+                5,
+                "Sequencer for log:%lu is in PREEMPTED state and cur_epoch is "
+                "INVALID, this means that the sequencer failed  epoch store "
+                "conditional update during first time activation. "
+                "(st:%s, preempted_by: %s)",
+                datalog_id.val_,
+                error_description(st),
+                preempted_by.toString().c_str());
+            sendReply(from, reply_hdr, st, preempted_by);
+            return;
+          }
+
+          // In all other cases, we still perform check seals since the
+          // preemptor a sequencer got may not be up-to-date. Attempt to
+          // figureout the latest sequencer to send more accurate redirects
           /* BOOST_FALLTHROUGH */
         case Sequencer::State::ACTIVE:
           if (checkSeals(from, sequencer) == Disposition::KEEP) {
-            // ownership is transfered to CheckSealsRequest
+            // ownership is transferred to CheckSealsRequest
             msg.release();
             return;
           }
