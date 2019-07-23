@@ -11,79 +11,51 @@
 #include <folly/Random.h>
 
 namespace facebook { namespace logdevice {
-namespace {
-template <class Iterator>
-void advanceIfNodeIsExcluded(NodeID& exclude, Iterator& it) {
-  if (exclude.isNodeID() && it->first == exclude.index()) {
-    ++it;
-  }
-}
 
-NodeID selectNodeIdHelper(const configuration::Nodes& nodes, NodeID exclude) {
-  NodeID new_node;
-
-  // Pick a random node from nodes, excluding `exclude`.
-  size_t count = nodes.size();
-  ld_check(count >= 1);
-  if (exclude.isNodeID() && nodes.count(exclude.index())) {
-    --count;
-  } else {
-    exclude = NodeID();
-  }
-
-  if (count == 0) {
-    // can't change node_id because the excluded node_id is the only one
-    new_node = exclude;
-  } else {
-    size_t offset = folly::Random::rand32() % count;
-    auto it = nodes.begin();
-    // Advance iterator `offset` times.
-    for (size_t i = 0; i < offset; ++i) {
-      ld_check(it != nodes.end());
-
-      advanceIfNodeIsExcluded(exclude, it);
-      ld_check(it != nodes.end());
-      ++it;
-    }
-    advanceIfNodeIsExcluded(exclude, it);
-
-    ld_check(it != nodes.end());
-    new_node = NodeID(it->first, it->second.generation);
-  }
-  return new_node;
-}
-} // namespace
-
-NodeID RandomNodeSelector::getAliveNode(const ServerConfig& cfg,
-                                        ClusterState* cluster_state,
-                                        NodeID exclude) {
-  if (cluster_state == nullptr) {
-    return getNode(cfg, exclude);
-  }
-
-  configuration::Nodes alive_nodes;
-  for (const auto& node : cfg.getNodes()) {
-    if (cluster_state->isNodeAlive(node.first)) {
-      alive_nodes.emplace(node.first, node.second);
-    }
-  }
-  if (alive_nodes.size() == 0) {
-    ld_check(cfg.getNodes().size() > 0);
-    const size_t offset = folly::Random::rand32() % cfg.getNodes().size();
-    const auto node = std::next(cfg.getNodes().begin(), offset);
-    return NodeID(node->first, node->second.generation);
-  }
-  return selectNodeIdHelper(alive_nodes, exclude);
-}
-
-NodeID RandomNodeSelector::getNode(const ServerConfig& cfg, NodeID exclude) {
-  const auto& nodes = cfg.getNodes();
-  return selectNodeIdHelper(nodes, exclude);
-}
-
-namespace {
+namespace random_node_select_detail {
 
 using NodeSourceSet = RandomNodeSelector::NodeSourceSet;
+
+node_index_t getNodeIndex(const node_index_t& idx) {
+  return idx;
+}
+
+// override for map type of (node_index_t, attribute) pair
+template <typename MapValue>
+node_index_t getNodeIndex(const MapValue& pair) {
+  return pair.first;
+}
+
+template <typename USA, typename USB>
+USA unorderedSetIntersection(const USA& A, const USB& B) {
+  USA result;
+  for (auto it = A.begin(); it != A.end(); ++it) {
+    node_index_t n = getNodeIndex(*it);
+    if (B.count(n) > 0) {
+      result.insert(n);
+    }
+  }
+  return result;
+}
+
+template <typename CandidatesSet>
+std::vector<node_index_t> filterCandidates(const CandidatesSet& candidates,
+                                           const NodeSourceSet& existing,
+                                           const NodeSourceSet& blacklist,
+                                           const NodeSourceSet& graylist,
+                                           ClusterState* cluster_state_filter) {
+  std::vector<node_index_t> filtered_candidates;
+  for (auto it = candidates.begin(); it != candidates.end(); ++it) {
+    node_index_t n = getNodeIndex(*it);
+    if (existing.count(n) == 0 && blacklist.count(n) == 0 &&
+        graylist.count(n) == 0 &&
+        (cluster_state_filter == nullptr ||
+         cluster_state_filter->isNodeAlive(n))) {
+      filtered_candidates.push_back(n);
+    }
+  }
+  return filtered_candidates;
+}
 
 // randomly pick n nodes from candidates and insert them to @param out. if
 // candidates does not have n nodes, pick all of them.
@@ -104,45 +76,16 @@ size_t randomlySelectNodes(std::vector<node_index_t> candidates,
   return n;
 }
 
-std::vector<node_index_t> filterCandidates(const NodeSourceSet& candidates,
-                                           const NodeSourceSet& existing,
-                                           const NodeSourceSet& blacklist,
-                                           const NodeSourceSet& graylist,
-                                           ClusterState* cluster_state_filter) {
-  std::vector<node_index_t> filtered_candidates;
-  for (const auto n : candidates) {
-    if (existing.count(n) == 0 && blacklist.count(n) == 0 &&
-        graylist.count(n) == 0 &&
-        (cluster_state_filter == nullptr ||
-         cluster_state_filter->isNodeAlive(n))) {
-      filtered_candidates.push_back(n);
-    }
-  }
-  return filtered_candidates;
-}
-
-template <typename US>
-US unorderedSetIntersection(const US& A, const US& B) {
-  US result;
-  for (const auto n : A) {
-    if (B.count(n) > 0) {
-      result.insert(n);
-    }
-  }
-  return result;
-}
-
-} // namespace
-
-/*static*/
-RandomNodeSelector::NodeSourceSet
-RandomNodeSelector::select(const NodeSourceSet& candidates,
-                           const NodeSourceSet& existing,
-                           const NodeSourceSet& blacklist,
-                           const NodeSourceSet& graylist,
-                           size_t num_required,
-                           size_t num_extras,
-                           ClusterState* cluster_state_filter) {
+// @type CandidateSet              an iteratable map/set container type whose
+//                                 key is of node_index_t type
+template <typename CandidatesSet>
+RandomNodeSelector::NodeSourceSet select(const CandidatesSet& candidates,
+                                         const NodeSourceSet& existing,
+                                         const NodeSourceSet& blacklist,
+                                         const NodeSourceSet& graylist,
+                                         size_t num_required,
+                                         size_t num_extras,
+                                         ClusterState* cluster_state_filter) {
   NodeSourceSet result;
   std::vector<node_index_t> filtered_candidates = filterCandidates(
       candidates, existing, blacklist, graylist, cluster_state_filter);
@@ -171,6 +114,62 @@ RandomNodeSelector::select(const NodeSourceSet& candidates,
 
   ld_check(result.size() <= target);
   return result;
+}
+
+} // namespace random_node_select_detail
+
+/*static*/
+RandomNodeSelector::NodeSourceSet
+RandomNodeSelector::select(const NodeSourceSet& candidates,
+                           const NodeSourceSet& existing,
+                           const NodeSourceSet& blacklist,
+                           const NodeSourceSet& graylist,
+                           size_t num_required,
+                           size_t num_extras,
+                           ClusterState* cluster_state_filter) {
+  return random_node_select_detail::select(candidates,
+                                           existing,
+                                           blacklist,
+                                           graylist,
+                                           num_required,
+                                           num_extras,
+                                           cluster_state_filter);
+}
+
+/*static*/
+NodeID RandomNodeSelector::getAliveNode(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    ClusterState* filter,
+    NodeID exclude) {
+  NodeSourceSet graylist;
+  if (exclude.isNodeID()) {
+    // use `exclude' as the graylist so that it's less favourable than the rest
+    // of the cluster
+    graylist.insert(exclude.index());
+  }
+
+  auto result_set = random_node_select_detail::select(
+      /*candidates*/ *nodes_configuration.getServiceDiscovery(),
+      /*existing*/ {},
+      /*blacklist*/ {},
+      /*graylist*/ std::move(graylist),
+      /*num_required*/ 1,
+      /*num_extras*/ 0,
+      /*cluster_state_filter*/ filter);
+
+  if (result_set.empty()) {
+    return NodeID();
+  }
+
+  ld_check(result_set.size() == 1);
+  return nodes_configuration.getNodeID(*result_set.begin());
+}
+
+/*static*/
+NodeID RandomNodeSelector::getNode(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    NodeID exclude) {
+  return getAliveNode(nodes_configuration, nullptr, exclude);
 }
 
 }} // namespace facebook::logdevice

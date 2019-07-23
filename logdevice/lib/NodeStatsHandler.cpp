@@ -207,8 +207,10 @@ bool NodeStatsHandler::hasValidNodeSet() const {
 }
 
 NodeID NodeStatsHandler::findDestinationNode() const {
-  const auto cfg = Worker::onThisThread()->getServerConfig();
-  const auto new_destination = RandomNodeSelector::getNode(*cfg, destination_);
+  const auto& node_configuration =
+      Worker::onThisThread()->getNodesConfiguration();
+  const auto new_destination =
+      RandomNodeSelector::getNode(*node_configuration, destination_);
 
   return new_destination;
 }

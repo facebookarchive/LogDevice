@@ -117,7 +117,9 @@ class GetLogInfoRequest : public Request {
   // hasn't been hit yet.
   void attemptTargetNodeChange();
 
-  virtual std::shared_ptr<Configuration> getConfig() const;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const;
+
   virtual int reloadConfig();
   virtual void createTimers();
   virtual void activateTargetNodeChangeTimer();

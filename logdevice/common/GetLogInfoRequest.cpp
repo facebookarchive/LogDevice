@@ -55,7 +55,7 @@ void GetLogInfoRequest::changeTargetNode(std::unique_lock<std::mutex>& lock) {
   ld_check(lock.owns_lock() && lock.mutex() == &shared_state_->mutex_);
 
   // Generating new node ID - selecting a random node
-  const auto config = getConfig()->serverConfig();
+  const auto& nodes_configuration = getNodesConfiguration();
   NodeID exclude = shared_state_->node_id_;
 
   const auto* worker = Worker::onThisThread(false);
@@ -63,8 +63,8 @@ void GetLogInfoRequest::changeTargetNode(std::unique_lock<std::mutex>& lock) {
   if (worker != nullptr) {
     cluster_state = worker->getClusterState();
   }
-  const auto new_node =
-      RandomNodeSelector::getAliveNode(*config, cluster_state, exclude);
+  const auto new_node = RandomNodeSelector::getAliveNode(
+      *nodes_configuration, cluster_state, exclude);
   shared_state_->node_id_ = new_node;
   shared_state_->socket_callback_->deactivate();
   ld_info("Changing GetLogInfoRequest target node to %s",
@@ -232,8 +232,9 @@ void GetLogInfoRequest::onClientTimeout() {
   attemptTargetNodeChange();
 }
 
-std::shared_ptr<Configuration> GetLogInfoRequest::getConfig() const {
-  return Worker::onThisThread()->getConfig();
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+GetLogInfoRequest::getNodesConfiguration() const {
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 int GetLogInfoRequest::reloadConfig() {

@@ -28,7 +28,9 @@ TEST(RandomNodeSelector, OneNode) {
   auto nodes = server_config->getNodes();
   auto node_id = NodeID(nodes.begin()->first, nodes.begin()->second.generation);
 
-  EXPECT_EQ(node_id, RandomNodeSelector::getNode(*server_config));
+  EXPECT_EQ(node_id,
+            RandomNodeSelector::getNode(
+                *server_config->getNodesConfigurationFromServerConfigSource()));
 }
 
 TEST(RandomNodeSelector, ExcludeNode) {
@@ -42,7 +44,10 @@ TEST(RandomNodeSelector, ExcludeNode) {
   auto node =
       NodeID((++nodes.begin())->first, (++nodes.begin())->second.generation);
 
-  EXPECT_EQ(node, RandomNodeSelector::getNode(*server_config, exclude));
+  EXPECT_EQ(node,
+            RandomNodeSelector::getNode(
+                *server_config->getNodesConfigurationFromServerConfigSource(),
+                exclude));
 }
 
 TEST(RandomNodeSelector, DontExcludeSingleNode) {
@@ -56,7 +61,10 @@ TEST(RandomNodeSelector, DontExcludeSingleNode) {
   auto exclude = NodeID(nodes.begin()->first, nodes.begin()->second.generation);
   auto node = exclude;
 
-  EXPECT_EQ(node, RandomNodeSelector::getNode(*server_config, exclude));
+  EXPECT_EQ(node,
+            RandomNodeSelector::getNode(
+                *server_config->getNodesConfigurationFromServerConfigSource(),
+                exclude));
 }
 
 struct SelectionParams {

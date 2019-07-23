@@ -11,33 +11,11 @@
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/NodeID.h"
-#include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 namespace facebook { namespace logdevice {
 class RandomNodeSelector {
  public:
-  /**
-   * @params cfg      The server config, used to get the nodes
-   * @params exclude  Exclude this node. If exclude is the _only_ node in the
-   *                  config, it will still be chosen
-   * @returns Returns a random node among the nodes in the config, excluding
-   *          exclude if there are other options
-   */
-  static NodeID getNode(const ServerConfig& cfg, NodeID exclude = NodeID());
-
-  /**
-   * @params cfg      The server config, used to get the nodes
-   * @params filter   Select only from alive nodes according to cluster state,
-   *                  if null calls getNode.
-   * @params exclude  Exclude this node. If exclude is the _only_ node in the
-   *                  config, it will still be chosen
-   * @returns         Returns a random node among the alive nodes in the config,
-   *                  if there is no alive node, picks first.
-   */
-  static NodeID getAliveNode(const ServerConfig& cfg,
-                             ClusterState* filter,
-                             NodeID exclude);
-
   using NodeSourceSet = folly::F14FastSet<node_index_t>;
 
   /**
@@ -55,5 +33,33 @@ class RandomNodeSelector {
                               size_t num_required,
                               size_t num_extras,
                               ClusterState* cluster_state_filter = nullptr);
+
+  /**
+   * @params nodes_configuration      The server nodes config, used to get
+   *                                  the nodes
+   * @params exclude  Exclude this node. If exclude is the _only_ node in the
+   *                  config, it will still be chosen
+   * @returns Returns a random node among the nodes in the config, excluding
+   *          exclude if there are other options
+   */
+  static NodeID
+  getNode(const configuration::nodes::NodesConfiguration& nodes_configuration,
+          NodeID exclude = NodeID());
+
+  /**
+   * @params nodes_configuration      The server nodes config, used to get
+   *                                  the nodes
+   * @params filter   Select only from alive nodes according to cluster state,
+   *                  if null acts as getNode().
+   * @params exclude  Exclude this node. If exclude is the _only_ node in the
+   *                  config, it will still be chosen
+   * @returns         Returns a random node among the alive nodes in the config,
+   *                  if there is no alive node, picks first.
+   */
+  static NodeID getAliveNode(
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      ClusterState* filter,
+      NodeID exclude = NodeID());
 };
+
 }} // namespace facebook::logdevice

@@ -70,6 +70,10 @@ class NodeAttributesConfig {
     return node_states_.count(node) > 0;
   }
 
+  size_t count(node_index_t node) const {
+    return node_states_.count(node);
+  }
+
   bool isEmpty() const {
     return node_states_.empty();
   }

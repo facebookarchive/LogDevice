@@ -112,8 +112,9 @@ class MockGetLogInfoRequest : public GetLogInfoRequest {
   }
 
  protected: // mock stuff that communicates externally
-  std::shared_ptr<Configuration> getConfig() const override {
-    return config_;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override {
+    return config_->getNodesConfigurationFromServerConfigSource();
   }
 
   int reloadConfig() override {
