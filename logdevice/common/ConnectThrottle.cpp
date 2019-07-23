@@ -9,9 +9,7 @@
 
 #include <algorithm>
 
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 
@@ -34,24 +32,21 @@ void ConnectThrottle::connectSucceeded() {
 
 void ConnectThrottle::connectFailed() {
   current_delay_ = current_delay_.count() == 0
-      ? getSettings().connect_throttle.initial_delay
-      : current_delay_ * getSettings().connect_throttle.multiplier;
-  current_delay_ =
-      std::min(current_delay_, getSettings().connect_throttle.max_delay);
+      ? backoff_settings_.initial_delay
+      : current_delay_ * backoff_settings_.multiplier;
+  current_delay_ = std::min(current_delay_, backoff_settings_.max_delay);
 
-  down_until_ = now() + current_delay_;
+  auto time_now = now();
+
+  down_until_ = time_now + current_delay_;
 
   ld_debug("at %ld. set down_until_ to %lu, current_delay_ to %ld",
-           to_ms(now()),
+           to_ms(time_now),
            to_ms(down_until_),
            current_delay_.count());
 }
 
 bool ConnectThrottle::mayConnect() const {
   return now() > down_until_;
-}
-
-const Settings& ConnectThrottle::getSettings() {
-  return socket_->getSettings();
 }
 }} // namespace facebook::logdevice

@@ -175,18 +175,15 @@ std::atomic<bool> SlowRequest::stall{true};
 
 class MockConnectThrottle : public ConnectThrottle {
  public:
-  explicit MockConnectThrottle(const Settings& settings)
-      : ConnectThrottle(nullptr),
-        current_(std::chrono::steady_clock::now()),
-        settings_(settings) {}
+  explicit MockConnectThrottle(
+      chrono_expbackoff_t<std::chrono::milliseconds> backoff_settings)
+      : ConnectThrottle(std::move(backoff_settings)),
+        current_(std::chrono::steady_clock::now()) {}
 
   std::chrono::steady_clock::time_point now() const override {
     return current_;
   }
 
-  const Settings& getSettings() override {
-    return settings_;
-  }
   // simulate passing of time
   template <typename Duration>
   void sleep(const Duration& duration) {
@@ -194,7 +191,6 @@ class MockConnectThrottle : public ConnectThrottle {
   }
 
   std::chrono::steady_clock::time_point current_;
-  const Settings& settings_;
 };
 
 /**
@@ -205,7 +201,7 @@ TEST(MessagingTest, ConnectThrottle) {
   Settings settings = create_default_settings<Settings>();
   settings.connect_throttle =
       chrono_expbackoff_t<std::chrono::milliseconds>(1, 10000, 2u);
-  MockConnectThrottle ct(settings);
+  MockConnectThrottle ct(settings.connect_throttle);
 
   dbg::currentLevel = dbg::Level::DEBUG;
 

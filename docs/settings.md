@@ -194,7 +194,7 @@ sidebar_label: Settings
 | checksumming-blacklisted-messages | Used to control what messages shouldn't be checksummed at the protocol layer |  | requires&nbsp;restart, **experimental** |
 | checksumming-enabled | A switch to turn on/off checksumming for all LogDevice protocol messages. If false: no checksumming is done, If true: checksumming-blacklisted-messages is consulted. | false | **experimental** |
 | command-conn-limit | Maximum number of concurrent admin connections | 32 | server&nbsp;only |
-| connect-throttle | timeout after it which two nodes retry to connect when they loose a a connection. Used in ConnectThrottle to ensure we don't retry too  often. | 1ms..10s |  |
+| connect-throttle | timeout after it which two nodes retry to connect when they loose a a connection. Used in ConnectThrottle to ensure we don't retry too  often. Needs restart to load the new values. | 1ms..10s | requires&nbsp;restart |
 | connect-timeout | connection timeout when establishing a TCP connection to a node | 100ms |  |
 | connect-timeout-retry-multiplier | Multiplier that is applied to the connect timeout after every failed connection attempt | 3 |  |
 | connection-backlog | (server-only setting) Maximum number of incoming connections that have been accepted by listener (have an open FD) but have not been processed by workers (made logdevice protocol handshake). | 2000 | server&nbsp;only |

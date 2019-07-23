@@ -839,8 +839,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        validate_nonnegative<ssize_t>(),
        "timeout after it which two nodes retry to connect when they loose a "
        "a connection. Used in ConnectThrottle to ensure we don't retry too  "
-       "often.",
-       SERVER | CLIENT,
+       "often. Needs restart to load the new values.",
+       SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Network);
   init("disable-chain-sending",
        &disable_chain_sending,
@@ -1407,7 +1407,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &enable_is_log_empty_v2,
        "false",
        nullptr,
-       "When enabled, the V2 implementation will be used to process all isLogEmpty requests.",
+       "When enabled, the V2 implementation will be used to process all "
+       "isLogEmpty requests.",
        CLIENT,
        SettingsCategory::Core);
   init(

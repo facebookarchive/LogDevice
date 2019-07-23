@@ -9,10 +9,10 @@
 
 #include <chrono>
 
+#include "logdevice/common/util.h"
+
 namespace facebook { namespace logdevice {
 
-class Socket;
-struct Settings;
 /**
  * @file   a ConnectThrottle object counts successful and failed attempts
  *         to connect to a destination, and calculates a deadline that a Socket
@@ -23,10 +23,11 @@ struct Settings;
 
 class ConnectThrottle {
  public:
-  explicit ConnectThrottle(Socket* input_socket)
-      : current_delay_(std::chrono::milliseconds::zero()),
-        down_until_(std::chrono::steady_clock::time_point::min()),
-        socket_(input_socket) {}
+  explicit ConnectThrottle(
+      chrono_expbackoff_t<std::chrono::milliseconds> backoff_settings)
+      : backoff_settings_(std::move(backoff_settings)),
+        current_delay_(std::chrono::milliseconds::zero()),
+        down_until_(std::chrono::steady_clock::time_point::min()) {}
 
   /**
    * Advise the object whether a connection attempt succeeded or failed.
@@ -52,9 +53,8 @@ class ConnectThrottle {
     return std::chrono::steady_clock::now();
   }
 
-  virtual const Settings& getSettings();
-
  private:
+  chrono_expbackoff_t<std::chrono::milliseconds> backoff_settings_;
   std::chrono::milliseconds current_delay_; // last delay between reconnection
 
   // reject connection attempts until std::chrono::steady_clock is
@@ -63,8 +63,6 @@ class ConnectThrottle {
   // increases the amount of downtime from the initial value of
   // INITIAL_DOWNTIME up to a cap of MAX_DOWNTIME milliseconds.
   std::chrono::steady_clock::time_point down_until_;
-
-  Socket* socket_;
 };
 
 }} // namespace facebook::logdevice
