@@ -159,13 +159,6 @@ class ServerConfig {
   }
 
   /**
-   * Gets nodes config hash.
-   */
-  uint64_t getStorageNodesConfigHash() const {
-    return nodesConfig_.getStorageNodeHash();
-  }
-
-  /**
    * Returns the maximum key in getNodes().
    */
   size_t getMaxNodeIdx() const {

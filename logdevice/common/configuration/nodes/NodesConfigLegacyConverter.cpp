@@ -307,18 +307,21 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
       server_config.getNodesConfigurationFromServerConfigSource();
   ld_check(new_nodes_config != nullptr);
 
-  if (new_nodes_config->getStorageNodesHash() !=
-      server_config.getStorageNodesConfigHash()) {
-    ld_info("(expected) Nodes config hash mismatch after conversion. original: "
-            "%lx, new: %lx.",
-            server_config.getStorageNodesConfigHash(),
-            new_nodes_config->getStorageNodesHash());
+  {
+    auto old_hash = server_config.getNodesConfig().calculateHash();
+    if (new_nodes_config->getStorageNodesHash() != old_hash) {
+      ld_info(
+          "(expected) Nodes config hash mismatch after conversion. original: "
+          "%lx, new: %lx.",
+          old_hash,
+          new_nodes_config->getStorageNodesHash());
 
-    // TODO T33035439: NodesConfiguration uses a new way to compute storage node
-    // hash so this is expected. We should unify how storage is computed in the
-    // future.
+      // TODO T33035439: NodesConfiguration uses a new way to compute storage
+      // node hash so this is expected. We should unify how storage is computed
+      // in the future.
 
-    // return false;
+      // return false;
+    }
   }
 
   {

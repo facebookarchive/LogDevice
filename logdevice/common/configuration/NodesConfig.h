@@ -33,15 +33,10 @@ class NodesConfig {
 
   void setNodes(Nodes nodes) {
     nodes_ = std::move(nodes);
-    calculateHash();
   }
   const Nodes& getNodes() const {
     return nodes_;
   }
-  uint64_t getStorageNodeHash() const {
-    return hash_;
-  }
-
   ////////////////////// New NodesConfiguration ///////////////////////
 
   bool hasNodesConfiguration() const {
@@ -71,10 +66,13 @@ class NodesConfig {
   folly::dynamic toJson() const;
 
  private:
+  // NOTE: Only used for consistency checks in NodesConfiguration.
+  // NodesConfiguration::getStorageNodesHash() is what you're looking for.
+  //
   // calculates a hash of storage-relevant attributes of nodes: for all nodes,
   // hashes their node_ids, weights, num_shards and locations and stores it in
   // `hash_`
-  void calculateHash();
+  uint64_t calculateHash() const;
 
   // NOTE: Only used for consistency checks in NodesConfiguration.
   // NodesConfiguration::getNumShards() is what you're looking for.
@@ -88,8 +86,6 @@ class NodesConfig {
   shard_size_t calculateNumShards() const;
 
   Nodes nodes_;
-
-  uint64_t hash_{0};
 
   // NOTE: NodesConfig is the current nodes config data structure in use, which
   // will be replaced by nodesConfiguration_ in the future. nodesConfiguration_

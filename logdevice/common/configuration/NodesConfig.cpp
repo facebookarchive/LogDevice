@@ -15,7 +15,7 @@
 
 namespace facebook { namespace logdevice { namespace configuration {
 
-void NodesConfig::calculateHash() {
+uint64_t NodesConfig::calculateHash() const {
   static_assert(sizeof(node_index_t) == 2,
                 "node_index_t size has changed, "
                 "this will cause a recalculation of "
@@ -68,7 +68,7 @@ void NodesConfig::calculateHash() {
     append(location_str.c_str(), location_str.size() + 1);
   }
   const uint64_t SEED = 0x9a6bf3f8ebcd8cdfL; // random
-  hash_ = folly::hash::SpookyHashV2::Hash64(
+  return folly::hash::SpookyHashV2::Hash64(
       hashable_string.data(), hashable_string.size(), SEED);
 }
 

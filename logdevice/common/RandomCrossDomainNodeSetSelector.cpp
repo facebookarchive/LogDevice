@@ -241,7 +241,7 @@ NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
 
   res.signature = hash_tuple({7671706570762175929ul,
                               seed,
-                              cfg->serverConfig()->getStorageNodesConfigHash(),
+                              nodes_configuration.getStorageNodesHash(),
                               target_nodeset_size});
   if (prev != nullptr && prev->nodeset_params.signature == res.signature &&
       prev->replication == replication_property) {

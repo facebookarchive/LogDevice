@@ -254,7 +254,8 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
     if (extra_flags & MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE) {
       auto config =
           Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
-      EXPECT_EQ(config->serverConfig()->getStorageNodesConfigHash(),
+      EXPECT_EQ(config->getNodesConfigurationFromServerConfigSource()
+                    ->getStorageNodesHash(),
                 info2.nodeset_params.signature);
     } else {
       EXPECT_EQ(0, info2.nodeset_params.signature);
@@ -426,7 +427,8 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   // config hash
   auto config =
       Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
-  uint64_t cfg_hash = config->serverConfig()->getStorageNodesConfigHash();
+  uint64_t cfg_hash = config->getNodesConfigurationFromServerConfigSource()
+                          ->getStorageNodesHash();
 
   // In real code signature usually isn't equal to storage nodes config hash.
   // Instead it's produced by NodeSetSelector and depends on nodeset selector
@@ -435,7 +437,7 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   // change.
   info.nodeset_params.signature = cfg_hash;
   ld_check(info.isValid());
-  std::string hash_string = "6214F5912227DA6A"; // if you changed the test
+  std::string hash_string = "D6E09254769F9FFF"; // if you changed the test
                                                 // config, update this hash
 
   str = info.toStringPayload();
