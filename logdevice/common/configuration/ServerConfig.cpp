@@ -214,7 +214,10 @@ ServerConfig::ServerConfig(std::string cluster_name,
   // sequencersConfig_ needs consecutive node indexes, see comment in
   // SequencersConfig.h.
   // Pad with zero-weight invalid nodes if there are gaps in numbering.
-  size_t max_node = getMaxNodeIdx();
+  //
+  // Still using the DEPRECATED getMaxNodeIdx intentionally as we need the
+  // legacy NodesConfig in here.
+  size_t max_node = nodesConfig_.getMaxNodeIdx_DEPRECATED();
   sequencersConfig_.nodes.resize(max_node + 1);
   sequencersConfig_.weights.resize(max_node + 1);
 

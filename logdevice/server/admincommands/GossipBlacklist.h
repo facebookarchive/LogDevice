@@ -49,10 +49,12 @@ class GossipBlacklist : public AdminCommand {
         break;
       }
 
-      auto conf = server_->getParameters()->getUpdateableConfig()->get();
+      auto nodes_conf = server_->getParameters()
+                            ->getUpdateableConfig()
+                            ->getNodesConfiguration();
 
       node_index_t lo = 0;
-      node_index_t hi = conf->serverConfig()->getMaxNodeIdx();
+      node_index_t hi = nodes_conf->getMaxNodeIndex();
 
       if (node_idx_ != node_index_t(-1)) {
         if (node_idx_ > hi) {

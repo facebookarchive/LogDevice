@@ -336,12 +336,17 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     }
   }
 
-  if (new_nodes_config->getMaxNodeIndex() != server_config.getMaxNodeIdx()) {
-    ld_error("Nodes config max node index mismatch after conversion! original: "
-             "%lu, new: %u.",
-             server_config.getMaxNodeIdx(),
-             new_nodes_config->getMaxNodeIndex());
-    return false;
+  {
+    auto old_max_idx =
+        server_config.getNodesConfig().getMaxNodeIdx_DEPRECATED();
+    if (new_nodes_config->getMaxNodeIndex() != old_max_idx) {
+      ld_error(
+          "Nodes config max node index mismatch after conversion! original: "
+          "%lu, new: %u.",
+          old_max_idx,
+          new_nodes_config->getMaxNodeIndex());
+      return false;
+    }
   }
 
   if (new_nodes_config->addr_to_index_ != server_config.getAddrToIndex()) {

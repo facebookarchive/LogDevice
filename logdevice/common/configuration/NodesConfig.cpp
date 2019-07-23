@@ -15,6 +15,17 @@
 
 namespace facebook { namespace logdevice { namespace configuration {
 
+/**
+ * Returns the maximum key in getNodes().
+ */
+size_t NodesConfig::getMaxNodeIdx_DEPRECATED() const {
+  size_t r = 0;
+  for (const auto& it : getNodes()) {
+    r = std::max(r, (size_t)it.first);
+  }
+  return r;
+}
+
 uint64_t NodesConfig::calculateHash() const {
   static_assert(sizeof(node_index_t) == 2,
                 "node_index_t size has changed, "

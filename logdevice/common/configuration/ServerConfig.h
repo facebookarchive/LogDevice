@@ -159,17 +159,6 @@ class ServerConfig {
   }
 
   /**
-   * Returns the maximum key in getNodes().
-   */
-  size_t getMaxNodeIdx() const {
-    size_t r = 0;
-    for (const auto& it : nodesConfig_.getNodes()) {
-      r = std::max(r, (size_t)it.first);
-    }
-    return r;
-  }
-
-  /**
    * Returns a description of sequencer nodes in the cluster.
    * NOTE: being DEPRECATED. Use NodesConfiguration::getSequencersConfig()
    * instead.

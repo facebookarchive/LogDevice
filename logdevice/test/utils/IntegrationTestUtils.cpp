@@ -826,7 +826,7 @@ int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
 
 int Cluster::expand(int nnodes, bool start) {
   std::vector<node_index_t> new_indices;
-  node_index_t first = config_->get()->serverConfig()->getMaxNodeIdx() + 1;
+  node_index_t first = config_->getNodesConfiguration()->getMaxNodeIndex() + 1;
   for (int i = 0; i < nnodes; ++i) {
     new_indices.push_back(first + i);
   }

@@ -340,7 +340,7 @@ void NodeStatsController::sendCollectStatsMessage()
 }
 
 size_t NodeStatsController::getMaxNodeIndex() const {
-  return Worker::onThisThread()->getServerConfig()->getMaxNodeIdx();
+  return Worker::onThisThread()->getNodesConfiguration()->getMaxNodeIndex();
 }
 
 std::chrono::milliseconds NodeStatsController::getRetentionTime() const {

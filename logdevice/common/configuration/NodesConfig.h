@@ -65,6 +65,14 @@ class NodesConfig {
 
   folly::dynamic toJson() const;
 
+  /**
+   * NOTE: Only used for consistency checks in NodesConfiguration.
+   * NodesConfiguration::getMaxNodeIndex() is what you're looking for.
+   *
+   * Returns the maximum key in getNodes().
+   */
+  size_t getMaxNodeIdx_DEPRECATED() const;
+
  private:
   // NOTE: Only used for consistency checks in NodesConfiguration.
   // NodesConfiguration::getStorageNodesHash() is what you're looking for.

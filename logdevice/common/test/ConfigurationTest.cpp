@@ -952,7 +952,9 @@ TEST(ConfigurationTest, SequencerWeights) {
 
     std::vector<SequencerNodeAttributes> got;
     const auto& nodes = config->serverConfig()->getNodes();
-    for (short i = 0; i <= config->serverConfig()->getMaxNodeIdx(); i++) {
+    for (short i = 0; i <= config->getNodesConfigurationFromServerConfigSource()
+                               ->getMaxNodeIndex();
+         i++) {
       node_index_t idx{i};
       if (nodes.find(idx) == nodes.end()) {
         continue;

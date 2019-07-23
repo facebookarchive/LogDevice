@@ -40,14 +40,12 @@ GET_CLUSTER_STATE_Message::onReceived(const Address& from) {
     status = E::NOTSUPPORTED;
   } else {
     auto my_node_id = Worker::onThisThread()->processor_->getMyNodeID();
-    auto config = Worker::getConfig();
-
     if (!cs->isNodeAlive(my_node_id.index())) {
       RATELIMIT_INFO(
           std::chrono::seconds(5), 1, "Failure detector is not ready");
       status = E::NOTREADY;
     } else {
-      size_t count = config->serverConfig()->getMaxNodeIdx() + 1;
+      size_t count = w->getNodesConfiguration()->getMaxNodeIndex() + 1;
       nodes_state.resize(count);
 
       for (node_index_t i = 0; i < count; i++) {
