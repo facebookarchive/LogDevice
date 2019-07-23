@@ -35,6 +35,8 @@ struct CONFIG_CHANGED_Header {
     CALLBACK = 2,
   };
 
+  static std::string actionToString(Action);
+
   CONFIG_CHANGED_Header() = default;
 
   explicit CONFIG_CHANGED_Header(Status status) : status(status) {}

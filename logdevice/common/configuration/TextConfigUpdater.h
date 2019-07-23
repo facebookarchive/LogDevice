@@ -34,8 +34,7 @@ class TextConfigUpdater;
  * @file Orchestrates config fetching and parsing, allowing config contents to
  * be fetched from various sources.
  */
-class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
-                              public configuration::ConfigUpdater {
+class TextConfigUpdaterImpl {
  public:
   /**
    * if  target_logs_config is nullptr we will assume that this updates does not
@@ -91,7 +90,7 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
    *
    * @returns 0 on success, -1 on failure
    */
-  int fetchFromSource() override;
+  int fetchFromSource();
 
   /**
    * Waits for the initial `load()' to complete.
@@ -119,7 +118,7 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
   void onAsyncGet(ConfigSource* source,
                   const std::string& path,
                   Status status,
-                  ConfigSource::Output config) override;
+                  ConfigSource::Output config);
 
   /**
    * Forces the construction and publishing of a new Configuration object
@@ -127,7 +126,7 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
    * This is used by the RemoteLogsConfig machinery to invoke configs
    * subscription callbacks and invalidate possibly stale caches.
    */
-  void invalidateConfig() override {
+  void invalidateConfig() {
     update(/*force_reload_logsconfig=*/true);
   }
 
@@ -145,8 +144,8 @@ class TextConfigUpdaterImpl : public ConfigSource::AsyncCallback,
   UpdateableSettings<Settings> updateable_settings_;
   StatsHolder* stats_;
 
-  // no config at the beginning considered as not valid config state
-  bool isRecentConfigValid_ = false;
+  // Used for updating a stat counter.
+  bool isRecentConfigValid_ = true;
 
   // Reference to initial_config_sem_ defined in TextConfigUpdater
   Semaphore& initial_config_sem_;

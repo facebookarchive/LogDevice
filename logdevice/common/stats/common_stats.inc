@@ -73,7 +73,7 @@ STAT_DEFINE(nodes_configuration_polling_failed, SUM)
 // Set to 1 once the node received valid config. It also resets to 0 if a bad
 // config is received, so this is really the validity of the most recent config
 // received.
-STAT_DEFINE(last_config_invalid, MAX)
+STAT_DEFINE(last_config_invalid, SUM)
 // Config update rejected by a hook
 STAT_DEFINE(config_update_invalid, SUM)
 

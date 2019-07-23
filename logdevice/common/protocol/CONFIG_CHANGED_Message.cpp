@@ -167,18 +167,31 @@ MessageReadResult CONFIG_CHANGED_Message::deserialize(ProtocolReader& reader) {
       [&] { return new CONFIG_CHANGED_Message(hdr, config_str); });
 }
 
+std::string CONFIG_CHANGED_Header::actionToString(Action a) {
+  switch (a) {
+    case Action::RELOAD:
+      return "RELOAD";
+    case Action::UPDATE:
+      return "UPDATE";
+    case Action::CALLBACK:
+      return "CALLBACK";
+  }
+  return "(unknown)";
+}
+
 Message::Disposition CONFIG_CHANGED_Message::onReceived(const Address& from) {
-  RATELIMIT_LEVEL(
-      // If it's a CALLBACK message, it means that we asked for it before. So
-      // not really interesting to log. So let's log it as DEBUG instead of
-      // INFO.
-      header_.action == CONFIG_CHANGED_Header::Action::CALLBACK
-          ? dbg::Level::DEBUG
-          : dbg::Level::INFO,
-      std::chrono::seconds(10),
-      10,
-      "CONFIG_CHANGED received from %s",
-      Sender::describeConnection(from).c_str());
+  // If it's a CALLBACK message, it means that we asked for it before. So
+  // not really interesting to log.
+  if (header_.action != CONFIG_CHANGED_Header::Action::CALLBACK) {
+    RATELIMIT_INFO(
+        std::chrono::seconds(10),
+        10,
+        "CONFIG_CHANGED received from %s, action %s, version %u, status %s",
+        Sender::describeConnection(from).c_str(),
+        CONFIG_CHANGED_Header::actionToString(header_.action).c_str(),
+        header_.getServerConfigVersion().val(),
+        error_name(header_.status));
+  }
 
   switch (header_.action) {
     case CONFIG_CHANGED_Header::Action::CALLBACK:

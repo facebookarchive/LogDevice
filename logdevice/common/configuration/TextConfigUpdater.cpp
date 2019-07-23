@@ -341,9 +341,10 @@ void TextConfigUpdaterImpl::setRecentConfigValidity(bool state) {
 
   isRecentConfigValid_ = state;
   if (isRecentConfigValid_) {
-    STAT_SET(stats_, last_config_invalid, 0);
+    // Can't use STAT_SET() because we can be called from different threads.
+    STAT_DECR(stats_, last_config_invalid);
   } else {
-    STAT_SET(stats_, last_config_invalid, 1);
+    STAT_INCR(stats_, last_config_invalid);
   }
 }
 

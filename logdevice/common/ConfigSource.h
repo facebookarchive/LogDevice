@@ -59,7 +59,7 @@ class ConfigSource {
    * contents change.
    *
    * If the config is immediately available, place its contents into
-   * `contents_out' and return E::OK.  If the source wishes to provide a
+   * `out' and return E::OK.  If the source wishes to provide a
    * specific hash (e.g. a source control hash) for the config, it can also
    * populate `hash_out'.
    *
