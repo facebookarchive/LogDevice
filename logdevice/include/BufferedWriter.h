@@ -58,6 +58,7 @@ namespace facebook { namespace logdevice {
  */
 
 class BufferedWriterImpl;
+class BufferedWriterAppendSink;
 
 class BufferedWriter {
  public:
@@ -218,8 +219,20 @@ class BufferedWriter {
    * communication (with LogDevice library threads) and may block if those
    * threads are busy.  BufferedWriter instances are meant to be long-lived
    * (and clients will typically use just one).
+   *
+   * Uses client as sink for sending buffered appends.
    */
   static std::unique_ptr<BufferedWriter> create(std::shared_ptr<Client> client,
+                                                AppendCallback* callback,
+                                                Options options = Options());
+
+  /**
+   * Creates a BufferedWriter for the 'client' and sends buffered appends to
+   * 'sink'. Note that'sink' must outlive BufferedWriter. Not ready for use yet.
+   * Incomplete experimental feature.
+   */
+  static std::unique_ptr<BufferedWriter> create(std::shared_ptr<Client> client,
+                                                BufferedWriterAppendSink* sink,
                                                 AppendCallback* callback,
                                                 Options options = Options());
 

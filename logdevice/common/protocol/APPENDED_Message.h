@@ -16,7 +16,6 @@
 
 namespace facebook { namespace logdevice {
 
-
 using APPENDED_flags_t = uint16_t;
 
 struct APPENDED_Header {
@@ -50,7 +49,7 @@ struct APPENDED_Header {
   //                metadata log), or
   //                payload contained BufferedWriter blob which could not be
   //                decoded
-  // E::ACCESS      Client does not have the requried permissions
+  // E::ACCESS      Client does not have the required permissions
   //
   //      Starting with Compatibility::APPENDED_NOTINSERVERCONFIG_STATUS
   //

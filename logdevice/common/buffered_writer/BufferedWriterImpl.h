@@ -17,6 +17,7 @@
 #include "logdevice/include/types.h"
 
 class BufferedWriterTest;
+class StreamWriterTest;
 
 namespace facebook { namespace logdevice {
 
@@ -349,5 +350,6 @@ class BufferedWriterImpl : public BufferedWriter {
   char FB_ANONYMOUS_VARIABLE(padding)[128 - sizeof(std::atomic<int64_t>)];
 
   friend class ::BufferedWriterTest;
+  friend class ::StreamWriterTest;
 };
 }} // namespace facebook::logdevice

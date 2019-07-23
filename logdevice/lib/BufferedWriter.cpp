@@ -9,6 +9,7 @@
 
 #include <folly/Memory.h>
 
+#include "logdevice/common/StreamWriterAppendSink.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/util.h"
 #include "logdevice/lib/ClientImpl.h"
@@ -19,6 +20,16 @@ using LogOptions = BufferedWriter::LogOptions;
 
 std::unique_ptr<BufferedWriter>
 BufferedWriter::create(std::shared_ptr<Client> client,
+                       AppendCallback* callback,
+                       Options options) {
+  ClientImpl* client_impl = checked_downcast<ClientImpl*>(client.get());
+  return create(
+      client, client_impl /* as BufferedWriterAppendSink */, callback, options);
+}
+
+std::unique_ptr<BufferedWriter>
+BufferedWriter::create(std::shared_ptr<Client> client,
+                       BufferedWriterAppendSink* sink,
                        AppendCallback* callback,
                        Options options) {
   ClientImpl* client_impl = checked_downcast<ClientImpl*>(client.get());
@@ -37,8 +48,7 @@ BufferedWriter::create(std::shared_ptr<Client> client,
       callback,
       get_log_options,
       memory_limit_mb,
-      client_impl // implements BufferedWriterImpl::AppendSink
-  );
+      sink);
   buffered_writer->pinClient(client);
   return std::move(buffered_writer);
 }
