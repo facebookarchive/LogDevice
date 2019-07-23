@@ -78,6 +78,11 @@ size_t RocksDBCache::GetUsage(Handle* handle) const {
 size_t RocksDBCache::GetPinnedUsage() const {
   return cache_->GetPinnedUsage();
 }
+#ifdef LOGDEVICE_ROCKSDB_HAS_CACHE_GET_CHARGE
+size_t RocksDBCache::GetCharge(Handle* handle) const {
+  return cache_->GetCharge(handle);
+}
+#endif
 void RocksDBCache::DisownData() {
   cache_->DisownData();
 }

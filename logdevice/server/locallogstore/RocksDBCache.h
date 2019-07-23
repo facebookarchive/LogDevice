@@ -43,6 +43,9 @@ class RocksDBCache : public rocksdb::Cache {
   size_t GetUsage() const override;
   size_t GetUsage(Handle* handle) const override;
   size_t GetPinnedUsage() const override;
+#ifdef LOGDEVICE_ROCKSDB_HAS_CACHE_GET_CHARGE
+  size_t GetCharge(Handle* handle) const override;
+#endif
   void DisownData() override;
   void ApplyToAllCacheEntries(void (*callback)(void*, size_t),
                               bool thread_safe) override;
