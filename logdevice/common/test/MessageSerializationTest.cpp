@@ -182,8 +182,10 @@ class MessageSerializationTest : public ::testing::Test {
       ASSERT_EQ(m.header_.flags, m2.header_.flags);
     } else {
       APPEND_flags_t flag1 = m.header_.flags, flag2 = m2.header_.flags;
-      flag1 &= ~(APPEND_Header::STREAM_REQUEST | APPEND_Header::STREAM_RESUME);
-      flag2 &= ~(APPEND_Header::STREAM_REQUEST | APPEND_Header::STREAM_RESUME);
+      flag1 &= ~(APPEND_Header::WRITE_STREAM_REQUEST |
+                 APPEND_Header::WRITE_STREAM_RESUME);
+      flag2 &= ~(APPEND_Header::WRITE_STREAM_REQUEST |
+                 APPEND_Header::WRITE_STREAM_RESUME);
       ASSERT_EQ(flag1, flag2);
     }
     ASSERT_EQ(m.attrs_.optional_keys, m2.attrs_.optional_keys);
@@ -197,8 +199,9 @@ class MessageSerializationTest : public ::testing::Test {
       }
     }
     if (proto >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
-      ASSERT_EQ(m.stream_request_id_.id, m2.stream_request_id_.id);
-      ASSERT_EQ(m.stream_request_id_.seq_num, m2.stream_request_id_.seq_num);
+      ASSERT_EQ(m.write_stream_request_id_.id, m2.write_stream_request_id_.id);
+      ASSERT_EQ(m.write_stream_request_id_.seq_num,
+                m2.write_stream_request_id_.seq_num);
     }
     ASSERT_EQ(m.e2e_tracing_context_, m2.e2e_tracing_context_);
     ASSERT_EQ(getPayload(m.payload_), getPayload(m2.payload_));
@@ -857,9 +860,9 @@ TEST_F(MessageSerializationTest, APPEND) {
             deserializer);
   }
   {
-    h.flags |= APPEND_Header::STREAM_REQUEST;
-    stream_request_id_t stream_req_id = {
-        stream_id_t(1UL), stream_seq_num_t(1UL)};
+    h.flags |= APPEND_Header::WRITE_STREAM_REQUEST;
+    write_stream_request_id_t stream_req_id = {
+        write_stream_id_t(1UL), write_stream_seq_num_t(1UL)};
     APPEND_Message m(h,
                      LSN_INVALID,
                      attrs,
@@ -877,10 +880,10 @@ TEST_F(MessageSerializationTest, APPEND) {
             deserializer);
   }
   {
-    h.flags |= APPEND_Header::STREAM_REQUEST;
-    h.flags |= APPEND_Header::STREAM_RESUME;
-    stream_request_id_t stream_req_id = {
-        stream_id_t(1UL), stream_seq_num_t(1UL)};
+    h.flags |= APPEND_Header::WRITE_STREAM_REQUEST;
+    h.flags |= APPEND_Header::WRITE_STREAM_RESUME;
+    write_stream_request_id_t stream_req_id = {
+        write_stream_id_t(1UL), write_stream_seq_num_t(1UL)};
     APPEND_Message m(h,
                      LSN_INVALID,
                      attrs,

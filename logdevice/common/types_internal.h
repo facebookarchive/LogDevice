@@ -202,17 +202,17 @@ constexpr request_id_t REQUEST_ID_INVALID(0);
  * 128 bit unsigned integer, composed of a stream id and sequence number. The
  * stream id must be positive.
  */
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, stream_id_t);
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, stream_seq_num_t);
-struct stream_request_id_t {
-  stream_id_t id;
-  stream_seq_num_t seq_num;
+LOGDEVICE_STRONG_TYPEDEF(uint64_t, write_stream_id_t);
+LOGDEVICE_STRONG_TYPEDEF(uint64_t, write_stream_seq_num_t);
+struct write_stream_request_id_t {
+  write_stream_id_t id;
+  write_stream_seq_num_t seq_num;
 };
-constexpr stream_id_t STREAM_ID_INVALID(0UL);
-constexpr stream_request_id_t STREAM_REQUEST_ID_INVALID = {
-    STREAM_ID_INVALID,
-    stream_seq_num_t(0UL)};
-bool stream_request_id_valid(stream_request_id_t stream_id);
+constexpr write_stream_id_t WRITE_STREAM_ID_INVALID(0UL);
+constexpr write_stream_request_id_t WRITE_STREAM_REQUEST_ID_INVALID = {
+    WRITE_STREAM_ID_INVALID,
+    write_stream_seq_num_t(0UL)};
+bool write_stream_request_id_valid(write_stream_request_id_t req_id);
 
 /**
  * Type used to identify a run of LogRebuilding state machine.

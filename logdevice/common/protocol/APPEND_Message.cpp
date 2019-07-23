@@ -40,20 +40,19 @@ void APPEND_Message::serialize(ProtocolWriter& writer) const {
   // protocol does not support it.
 
   // Checking some conditions on stream requests.
-  // STREAM_RESUME -> STREAM_REQUEST.
-  // STREAM_REQUEST <-> stream_request_id is valid.
-  if (header_.flags & APPEND_Header::STREAM_RESUME) {
-    ld_check((header_.flags & APPEND_Header::STREAM_REQUEST) > 0);
+  // WRITE_STREAM_RESUME -> WRITE_STREAM_REQUEST.
+  // WRITE_STREAM_REQUEST <-> write_stream_request_id is valid.
+  if (header_.flags & APPEND_Header::WRITE_STREAM_RESUME) {
+    ld_check((header_.flags & APPEND_Header::WRITE_STREAM_REQUEST) > 0);
   }
-  ld_check_eq((header_.flags & APPEND_Header::STREAM_REQUEST) > 0,
-              stream_request_id_valid(stream_request_id_));
+  ld_check_eq((header_.flags & APPEND_Header::WRITE_STREAM_REQUEST) > 0,
+              write_stream_request_id_valid(write_stream_request_id_));
   APPEND_Header proto_supported_header(header_);
   if (writer.proto() < Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
-    proto_supported_header.flags &=
-        ~(APPEND_Header::STREAM_REQUEST | APPEND_Header::STREAM_RESUME);
+    proto_supported_header.flags &= ~(APPEND_Header::WRITE_STREAM_REQUEST |
+                                      APPEND_Header::WRITE_STREAM_RESUME);
   }
   writer.write(proto_supported_header);
-
   if (header_.flags & APPEND_Header::LSN_BEFORE_REDIRECT) {
     writer.write(lsn_before_redirect_);
   }
@@ -96,8 +95,9 @@ void APPEND_Message::serialize(ProtocolWriter& writer) const {
 
   // Inserting stream request information just before checksum and payload.
   if (writer.proto() >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
-    if (header_.flags & APPEND_Header::STREAM_REQUEST) {
-      writer.write(&stream_request_id_, sizeof(stream_request_id_t));
+    if (header_.flags & APPEND_Header::WRITE_STREAM_REQUEST) {
+      writer.write(
+          &write_stream_request_id_, sizeof(write_stream_request_id_t));
     }
   }
 
@@ -207,10 +207,10 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
     reader.readLengthPrefixedVector(&tracing_info);
   }
 
-  stream_request_id_t stream_request_id = STREAM_REQUEST_ID_INVALID;
+  write_stream_request_id_t req_id = WRITE_STREAM_REQUEST_ID_INVALID;
   if (reader.proto() >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
-    if (header.flags & APPEND_Header::STREAM_REQUEST) {
-      reader.read(&stream_request_id);
+    if (header.flags & APPEND_Header::WRITE_STREAM_REQUEST) {
+      reader.read(&req_id);
     }
   }
 
@@ -227,7 +227,7 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
                               std::move(attrs),
                               std::move(ph),
                               std::move(tracing_info),
-                              stream_request_id);
+                              req_id);
   });
 }
 
