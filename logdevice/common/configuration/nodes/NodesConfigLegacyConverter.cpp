@@ -349,14 +349,6 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     }
   }
 
-  if (new_nodes_config->addr_to_index_ != server_config.getAddrToIndex()) {
-    ld_error("Nodes config addr to index mismatch after conversion! original: "
-             "%s, new: %s.",
-             toString(server_config.getAddrToIndex()).c_str(),
-             toString(new_nodes_config->addr_to_index_).c_str());
-    return false;
-  }
-
   if (new_nodes_config->getSequencersConfig() !=
       server_config.getSequencers_DEPRECATED()) {
     ld_error(

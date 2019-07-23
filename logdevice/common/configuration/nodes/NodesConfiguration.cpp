@@ -403,17 +403,6 @@ void NodesConfiguration::recomputeConfigMetadata() {
   num_shards_ = computeNumShards();
   max_node_index_ = computeMaxNodeIndex();
   sequencer_locator_config_ = computeSequencersConfig();
-
-  addr_to_index_.clear();
-
-  auto add_addr_index = [this](const auto& membership) {
-    for (const auto n : membership) {
-      const auto& serv_disc = getServiceDiscovery()->nodeAttributesAt(n);
-      addr_to_index_.insert(std::make_pair(serv_disc.address, n));
-    }
-  };
-  add_addr_index(*getSequencerMembership());
-  add_addr_index(*getStorageMembership());
 }
 
 std::shared_ptr<const NodesConfiguration>
@@ -483,7 +472,6 @@ bool NodesConfiguration::equalWithTimestampAndVersionIgnored(
       compare_obj_ptrs(storage_config_, rhs.storage_config_) &&
       compare_obj_ptrs(metadata_logs_rep_, rhs.metadata_logs_rep_) &&
       storage_hash_ == rhs.storage_hash_ && num_shards_ == rhs.num_shards_ &&
-      addr_to_index_ == rhs.addr_to_index_ &&
       last_maintenance_ == rhs.last_maintenance_ &&
       last_change_context_ == rhs.last_change_context_;
 }

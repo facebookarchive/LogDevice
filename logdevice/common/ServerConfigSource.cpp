@@ -130,9 +130,15 @@ bool ServerConfigSource::fetch(const std::string& host) {
     return false;
   }
   NodeID node_id;
-  int rv =
-      processor_->config_->getServerConfig()->getNodeID(sock_addr, &node_id);
-  if (rv != 0) {
+
+  for (const auto& [idx, node] :
+       *config_->getNodesConfiguration()->getServiceDiscovery()) {
+    if (node.address == sock_addr) {
+      node_id = config_->getNodesConfiguration()->getNodeID(idx);
+      break;
+    }
+  }
+  if (!node_id.isNodeID()) {
     ld_error("Could not find node %s in config", sock_addr.toString().c_str());
     return false;
   }
@@ -140,7 +146,7 @@ bool ServerConfigSource::fetch(const std::string& host) {
   std::unique_ptr<Request> fetch_request =
       std::make_unique<ConfigurationFetchRequest>(
           node_id, ConfigurationFetchRequest::ConfigType::MAIN_CONFIG);
-  rv = processor_->postRequest(fetch_request);
+  int rv = processor_->postRequest(fetch_request);
   if (rv != 0) {
     ld_error("Unable to request config from server");
     return false;

@@ -200,17 +200,6 @@ class ServerConfig {
   }
 
   /**
-   * Looks up the NodeID by its address.
-   *
-   * @param address   address of the node
-   * @param node_id   NodeID to update if address is found in the config
-   *
-   * @return Returns 0 on success. Otherwise, returns -1 with err set to
-   *         NOTFOUND.
-   */
-  int getNodeID(const Sockaddr& address, NodeID* node_id) const;
-
-  /**
    * Looks up the sampling percentage for a certain tracer in the config
    *
    * @return Returns sampling percentage when an override has been found,
@@ -469,11 +458,6 @@ class ServerConfig {
   folly::dynamic toJson(const LogsConfig* with_logs = nullptr,
                         const ZookeeperConfig* with_zk = nullptr) const;
 
-  const std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash>&
-  getAddrToIndex() const {
-    return addrToIndex_;
-  }
-
  private:
   //
   // Allow only one way of constructing that the factories use.  Delete copy
@@ -536,8 +520,6 @@ class ServerConfig {
   configuration::InternalLogs internalLogs_;
 
   std::string ns_delimiter_;
-  // mapping from address to the index in the nodes vector
-  std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> addrToIndex_;
 
   // version of this config
   config_version_t version_{1};

@@ -564,35 +564,6 @@ TEST(ConfigurationTest, LookupNodeByID) {
   EXPECT_EQ(4, node->getWritableStorageCapacity());
 }
 
-TEST(ConfigurationTest, LookupNodeByAddress) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
-  ASSERT_NE(config, nullptr);
-
-  NodeID node_id;
-
-  ASSERT_EQ(config->serverConfig()->getNodeID(
-                Sockaddr("127.0.0.1", "4444"), &node_id),
-            0);
-  EXPECT_EQ(node_id.index(), 0);
-  EXPECT_EQ(node_id.generation(), 3);
-
-  ASSERT_EQ(
-      config->serverConfig()->getNodeID(Sockaddr("::1", "6666"), &node_id), 0);
-  EXPECT_EQ(node_id.index(), 1);
-  EXPECT_EQ(node_id.generation(), 6);
-
-  ASSERT_EQ(
-      config->serverConfig()->getNodeID(Sockaddr("::1", "6669"), &node_id), 0);
-  EXPECT_EQ(node_id.index(), 5);
-  EXPECT_EQ(node_id.generation(), 2);
-
-  ASSERT_EQ(
-      config->serverConfig()->getNodeID(Sockaddr("::1", "6668"), &node_id), 0);
-  EXPECT_EQ(node_id.index(), 42);
-  EXPECT_EQ(node_id.generation(), 5);
-}
-
 TEST(ConfigurationTest, SSLNodeToNode) {
   std::shared_ptr<Configuration> config(
       Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));

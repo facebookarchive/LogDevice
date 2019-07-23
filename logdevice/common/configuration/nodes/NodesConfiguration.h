@@ -269,10 +269,6 @@ class NodesConfiguration {
   // sequencer locator / routing / placement logic and get rid of this field
   SequencersConfig sequencer_locator_config_;
 
-  // mapping from node address to the index
-  // TODO(T33035439): get rid of this on config sync revamp
-  std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> addr_to_index_{};
-
   // Unix timestamp in milliseconds.
   uint64_t last_change_timestamp_{0};
 
@@ -285,8 +281,8 @@ class NodesConfiguration {
   node_index_t computeMaxNodeIndex() const;
   SequencersConfig computeSequencersConfig() const;
 
-  // recompute configuration metadata (e.g., storage_hash_, num_shards_, and
-  // addr_to_index_) from each sub-configuration, note that version, timestamp,
+  // recompute configuration metadata (e.g., storage_hash_ and num_shards_)
+  // from each sub-configuration, note that version, timestamp,
   // etc are not reset in this function
   void recomputeConfigMetadata();
 

@@ -225,9 +225,6 @@ ServerConfig::ServerConfig(std::string cluster_name,
     node_index_t i = it.first;
     const auto& node = it.second;
 
-    auto insert_result = addrToIndex_.insert(std::make_pair(node.address, i));
-    ld_check(insert_result.second);
-
     if (node.isSequencingEnabled()) {
       sequencersConfig_.nodes[i] = NodeID(i, node.generation);
       sequencersConfig_.weights[i] = node.getSequencerWeight();
@@ -274,21 +271,6 @@ const ServerConfig::Node* ServerConfig::getNode(const NodeID& id) const {
 
   // Found it!
   return node;
-}
-
-int ServerConfig::getNodeID(const Sockaddr& address, NodeID* node) const {
-  auto it = addrToIndex_.find(address);
-  if (it == addrToIndex_.end()) {
-    err = E::NOTFOUND;
-    return -1;
-  }
-
-  node_index_t index = it->second;
-  ld_check(nodesConfig_.getNodes().at(index).address == address);
-
-  ld_check(node != nullptr);
-  *node = NodeID(index, nodesConfig_.getNodes().at(index).generation);
-  return 0;
 }
 
 std::shared_ptr<const Principal>
