@@ -159,12 +159,15 @@ void RebuildingReadStorageTaskV2::execute() {
 
   switch (iterator->state()) {
     case IteratorState::AT_RECORD:
-      // Resume reading where previous storage task left off.
+      // Previous storage task stopped at a record.
+      break;
+    case IteratorState::LIMIT_REACHED:
+      // Previous storage task reached a limit. Tell it to resume where it
+      // left off, but with the refreshed limit.
+      iterator->next(context->filter.get(), &read_stats);
       break;
     case IteratorState::AT_END:
-    case IteratorState::LIMIT_REACHED:
-      // Newly created or invalidated iterator, or reached limit and need to
-      // reseek.
+      // Newly created or invalidated iterator.
       iterator->seek(
           *context->nextLocation, context->filter.get(), &read_stats);
       break;

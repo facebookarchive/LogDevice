@@ -58,7 +58,8 @@ enum class IteratorState {
   // Filtered operation hit some limit in ReadStats (e.g. max LSN,
   // read byte limit or execution time limit) before finding a record passing
   // the filter. getLSN() is the LSN at which the search stopped.
-  // To continue the search (after renewing the limits), seek to that LSN.
+  // To continue the search (after renewing the limits), either seek to that LSN
+  // or just call next().
   // Note that ReadStats::last_read is _not_ always equal
   // to {getLogID(), getLSN()}.
   LIMIT_REACHED,
@@ -190,7 +191,7 @@ class LocalLogStore : boost::noncopyable {
 
     // Moving
 
-    // Requires: state() == AT_RECORD.
+    // Requires: state() == AT_RECORD or LIMIT_REACHED.
     virtual void next(ReadFilter* filter = nullptr,
                       ReadStats* stats = nullptr) = 0;
     virtual void prev() = 0;

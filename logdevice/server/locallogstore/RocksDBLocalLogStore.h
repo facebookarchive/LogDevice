@@ -222,8 +222,29 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
 
     // state() returns this.
     IteratorState state_;
-    // if state_ == LIMIT_REACHED, getLocation() returns this.
-    Location limit_reached_at_ = Location::end();
+
+    // If state_ == LIMIT_REACHED, LimitReachedState contains information
+    // needed to continue the search from where we left off.
+    struct LimitReachedState {
+      // getLocation() returns this.
+      Location location = Location::end();
+      // True if csi_iterator_/data_iterator_ is valid and positioned just below
+      // `current`. This means we don't need to re-seek that iterator.
+      bool csi_near = false;
+      bool data_near = false;
+
+      bool valid() const {
+        return !location.at_end;
+      }
+
+      void clear() {
+        location = Location::end();
+        csi_near = false;
+        data_near = false;
+      }
+    };
+
+    LimitReachedState limit_reached_;
   };
 
   // A simple wrapper around CSIWrapper with log_id = none.

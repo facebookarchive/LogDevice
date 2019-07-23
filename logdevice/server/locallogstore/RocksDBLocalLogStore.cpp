@@ -475,8 +475,8 @@ IteratorState RocksDBLocalLogStore::CSIWrapper::state() const {
 
 Location RocksDBLocalLogStore::CSIWrapper::getLocation() const {
   if (state_ == IteratorState::LIMIT_REACHED) {
-    ld_check(!limit_reached_at_.at_end);
-    return limit_reached_at_;
+    ld_check(limit_reached_.valid());
+    return limit_reached_.location;
   }
   ld_check_eq(state_, IteratorState::AT_RECORD);
   if (data_iterator_ != nullptr) {
@@ -534,7 +534,17 @@ void RocksDBLocalLogStore::CSIWrapper::seek(logid_t log,
                                             ReadStats* stats) {
   SCOPED_IO_TRACING_CONTEXT_FROM_ITERATOR(
       this, filter ? "seek(filtered)" : "seek");
-  moveTo(Location(log, lsn), Direction::FORWARD, false, filter, stats);
+  // Note: if state_ == LIMIT_REACHED, and we're seeking to exactly where the
+  // limit was reached, we could set near=true to tell moveTo() to resume
+  // where the last operation left off and avoid the initial seeks.
+  // But we choose not to do that, and effectively force seek() to always start
+  // by seeking csi iterator. This prevents csi iterator from pinning an old
+  // memtable indefinitely.
+  moveTo(Location(log, lsn),
+         Direction::FORWARD,
+         /* near */ false,
+         filter,
+         stats);
   trackSeek(lsn, 0);
 }
 
@@ -558,9 +568,14 @@ void RocksDBLocalLogStore::CSIWrapper::seekForPrev(lsn_t lsn) {
 
 void RocksDBLocalLogStore::CSIWrapper::next(ReadFilter* filter,
                                             ReadStats* stats) {
+  ld_check_in(
+      state_, ({IteratorState::AT_RECORD, IteratorState::LIMIT_REACHED}));
   SCOPED_IO_TRACING_CONTEXT_FROM_ITERATOR(
       this, filter ? "next(filtered)" : "next");
-  moveTo(getLocation().advance(Direction::FORWARD, log_id_),
+  Location loc = state_ == IteratorState::LIMIT_REACHED
+      ? limit_reached_.location
+      : getLocation().advance(Direction::FORWARD, log_id_);
+  moveTo(loc,
          Direction::FORWARD,
          /* near */ true,
          filter,
@@ -721,7 +736,8 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
   //    filter, we're done.
 
   if (near) {
-    ld_check_eq(state_, IteratorState::AT_RECORD);
+    ld_check_in(
+        state_, ({IteratorState::AT_RECORD, IteratorState::LIMIT_REACHED}));
   }
 
   // Candidate LSN to which we want to move both iterators and see if it's
@@ -742,6 +758,15 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
   bool csi_near = near;
   bool data_near = near;
 
+  if (near && state_ == IteratorState::LIMIT_REACHED) {
+    // We're continuing from where previous moveTo() reached limit and stopped.
+    // Unpack its state.
+    ld_check(limit_reached_.valid());
+    ld_check(current == limit_reached_.location);
+    csi_near = limit_reached_.csi_near;
+    data_near = limit_reached_.data_near;
+  }
+
   // True if `current` has been filtered out, based on either CSI or data.
   bool current_is_filtered_out = false;
 
@@ -758,7 +783,7 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
 
   // Assigned right before return.
   state_ = IteratorState::MAX;
-  limit_reached_at_ = Location::end();
+  limit_reached_.clear();
 
   SCOPE_EXIT {
     ld_check(state_ != IteratorState::MAX);
@@ -784,18 +809,26 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
       }
     } else if (state_ == IteratorState::LIMIT_REACHED) {
       ld_check(stats && stats->readLimitReached());
-      ld_check(!limit_reached_at_.at_end);
+      ld_check(limit_reached_.valid());
     }
 
     // To prevent data_iterator_ from pinning a memtable indefinitely,
     // each CSIWrapper seek should either seek or release data_iterator_.
-    if (!near && !data_iterator_good && data_iterator_ != nullptr) {
+    if (!near && !data_iterator_good && !data_near &&
+        data_iterator_ != nullptr) {
       // There's a chance that data_iterator_ hasn't been seeked. Release it.
       data_iterator_->releaseIterator();
     } else {
-      // Note that data_iterator_good == true means that data_iterator_
+      // Note that data_iterator_good || data_near means that data_iterator_
       // has been seeked, even if state_ ended up not AT_RECORD.
     }
+  };
+
+  auto limit_reached = [&] {
+    state_ = IteratorState::LIMIT_REACHED;
+    limit_reached_.location = current;
+    limit_reached_.csi_near = csi_iterator_good || csi_near;
+    limit_reached_.data_near = data_iterator_good || data_near;
   };
 
   while (true) {
@@ -818,8 +851,7 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
       //    aligned with partition boundaries, and this check prevents us from
       //    creating iterators in the partition we're not interested in.
       if (current != target || (!near && stats->hardLimitReached())) {
-        state_ = IteratorState::LIMIT_REACHED;
-        limit_reached_at_ = current;
+        limit_reached();
         return;
       }
     }
@@ -853,8 +885,7 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
             csi_iterator_->getCurrentEntrySize(), csi_loc.log_id, csi_loc.lsn);
         // Don't run filter if CSI iterator is above max LSN.
         if (stats->hardLimitReached()) {
-          limit_reached_at_ = csi_loc;
-          state_ = IteratorState::LIMIT_REACHED;
+          limit_reached();
           return;
         }
       }
@@ -940,8 +971,7 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
         // If csi_iterator_good, we already did this check above, no need
         // to check again.
         if (!UNLIKELY(csi_iterator_good) && stats->hardLimitReached()) {
-          limit_reached_at_ = data_loc;
-          state_ = IteratorState::LIMIT_REACHED;
+          limit_reached();
           return;
         }
       }

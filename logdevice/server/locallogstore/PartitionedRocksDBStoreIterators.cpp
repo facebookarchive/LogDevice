@@ -508,7 +508,7 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
       //    immediately, which is often the case in rebuilding), it'll report
       //    the seek lsn as getLSN() at which it stopped. If we filter out lots
       //    of records in previous partitions and then seek to a small lsn in
-      //    this partition, our getLSN() will be small, i.e. and all the
+      //    this partition, our getLSN() will be small, and all the
       //    filtering progress will be lost.
       //  * If this partition for some reason has records with lsn smaller than
       //    in previous partitions (which should be impossible currently),
@@ -707,7 +707,9 @@ void PartitionedRocksDBStore::Iterator::seekForPrev(lsn_t lsn) {
 void PartitionedRocksDBStore::Iterator::next(ReadFilter* filter,
                                              ReadStats* stats) {
   SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(), "p:next");
-  ld_check_eq(state(), IteratorState::AT_RECORD);
+
+  IteratorState s = state();
+  ld_check_in(s, ({IteratorState::AT_RECORD, IteratorState::LIMIT_REACHED}));
 
   // Note: it's important to not call updatePartitionRange() here. If data
   // iterator is in latest partition, and meta iterator is unset, we don't
@@ -720,9 +722,13 @@ void PartitionedRocksDBStore::Iterator::next(ReadFilter* filter,
     assertDataIteratorHasCorrectTimeRange();
   }
   data_iterator_->next(filter, stats);
-  moveUntilValid(true, std::min(current_lsn, LSN_MAX - 1) + 1, filter, stats);
 
-  IteratorState s = state();
+  lsn_t next_lsn = s == IteratorState::LIMIT_REACHED
+      ? current_lsn
+      : std::min(current_lsn, LSN_MAX - 1) + 1;
+  moveUntilValid(true, next_lsn, filter, stats);
+
+  s = state();
   PartitionInfo end;
   if (s == IteratorState::AT_RECORD || s == IteratorState::LIMIT_REACHED) {
     end = current_;
@@ -980,7 +986,8 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::next(
     ReadFilter* filter,
     ReadStats* stats) {
   SCOPED_IO_TRACING_CONTEXT(pstore_->getIOTracing(), "all-it:next");
-  ld_assert_eq(state(), IteratorState::AT_RECORD);
+  ld_check_in(
+      state(), ({IteratorState::AT_RECORD, IteratorState::LIMIT_REACHED}));
   if (filter_using_directory_) {
     ld_check(filter != nullptr);
     ld_check(stats != nullptr);

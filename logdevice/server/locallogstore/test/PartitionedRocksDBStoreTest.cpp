@@ -8202,8 +8202,8 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   limit_reached_location = it->getLocation();
   // Read limit = infinity.
   stats.max_bytes_to_read = std::numeric_limits<size_t>::max();
-  it->seek(*limit_reached_location, &filter, &stats);
-  EXPECT_EQ(std::vector<C>({C::timeRange(310, 310)}), filter.history);
+  it->next(&filter, &stats);
+  EXPECT_EQ(std::vector<C>({}), filter.history);
   filter.history.clear();
   ASSERT_EQ(IteratorState::AT_END, it->state());
 
@@ -8494,16 +8494,13 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   filter.history.clear();
   // Read limit = infinity.
   stats.max_bytes_to_read = std::numeric_limits<size_t>::max();
-  it->seek(*it->getLocation(), &filter, &stats);
+  it->next(&filter, &stats);
   EXPECT_EQ(IteratorState::AT_RECORD, it->state());
   EXPECT_EQ(log2, it->getLogID());
   EXPECT_EQ(300, it->getLSN());
-  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
-                            C::recordRange(log2, 200, 300),
-                            C::call(23),
-                            C::call(23, true),
-                            IF_DEBUG(C::call(23))}),
-            filter.history);
+  EXPECT_EQ(
+      std::vector<C>({C::call(23), C::call(23, true), IF_DEBUG(C::call(23))}),
+      filter.history);
   filter.history.clear();
   it->next(&filter, &stats);
   EXPECT_EQ(IteratorState::AT_END, it->state());
