@@ -414,12 +414,18 @@ class Sender : public SenderBase {
    * onto the on_close_ callback list of that Socket, to be called when
    * the Socket is closed. See sendMessage() docblock above for important
    * notes and restrictions.
-   *
+   * In case of server socket or outgoing socket the on closed callback is
+   * registered even if socket is closed. This is safe as the same socket
+   * instance will be recycled to make the outgoing connection. Hence, it is
+   * guaranteed for onclose callback to be called. In case of incoming socket a
+   * closed socket is erased and the instance is deleted hence registering
+   * callback on closed socket is not allowed.
    * @return 0 on success, -1 if callback could not be installed. Sets err
    *         to NOTFOUND if addr does not identify a Socket managed by this
-   *                     Sender
-   *            INVALID_PARAM  if cb is already on some callback list
-   *                           (debug build asserts)
+   *                     Sender. NOTFOUND is set also if
+   *                     the incoming socket was already closed.
+   * INVALID_PARAM  if cb is already on
+   * some callback list (debug build asserts)
    */
   int registerOnSocketClosed(const Address& addr, SocketCallback& cb);
 

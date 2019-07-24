@@ -595,7 +595,7 @@ int Sender::registerOnSocketClosed(const Address& addr, SocketCallback& cb) {
     }
   } else { // addr is a server address
     sock = findServerSocket(addr.asNodeID().index());
-    if (!sock || sock->isClosed()) {
+    if (!sock) {
       err = E::NOTFOUND;
       return -1;
     }
