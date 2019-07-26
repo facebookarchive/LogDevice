@@ -107,11 +107,11 @@ void persistRecordCaches(shard_index_t shard_idx,
     auto buffer = std::make_unique<uint8_t[]>(size);
     ssize_t linear_size = record_cache->toLinearBuffer(
         reinterpret_cast<char*>(buffer.get()), size);
-    ld_check(size == linear_size);
     if (linear_size == -1) {
       ld_error("Failed to linearize RecordCache on shard %d", shard_idx);
       return -1;
     }
+    ld_check(size == linear_size);
 
     // Add serialized representation to batch. If the batch's size now exceeds
     // the batch limit, write it and start a new one.
