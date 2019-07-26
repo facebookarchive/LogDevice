@@ -413,10 +413,14 @@ folly::Optional<int64_t> ClientReadersFlowTracer::estimateTimeLag() const {
     auto tail_ts = latest_tail_info_->timestamp;
     int64_t last_in_record_ts = owner_->last_in_record_ts_.count();
 
-    if (last_in_record_ts > 0) {
-      return std::max(tail_ts - last_in_record_ts, (int64_t)0);
-    } else if (tail_lsn < owner_->next_lsn_to_deliver_) {
+    if (tail_lsn < owner_->next_lsn_to_deliver_) {
+      /* If we are at tail, we should report that we have no lag to avoid
+       * reporting a reader that is at tail as lagging. This is our last resort
+       * for readers that are racing the trim point and might miss the record
+       * that was last appended. */
       return 0;
+    } else if (last_in_record_ts > 0) {
+      return std::max(tail_ts - last_in_record_ts, static_cast<int64_t>(0));
     }
   }
   return folly::none;
@@ -429,15 +433,17 @@ folly::Optional<int64_t> ClientReadersFlowTracer::estimateByteLag() const {
         latest_tail_info_->offsets.getCounter(BYTE_OFFSET);
     int64_t acc_byte_offset =
         owner_->accumulated_offsets_.getCounter(BYTE_OFFSET);
-    if (acc_byte_offset != BYTE_OFFSET_INVALID &&
-        tail_byte_offset != BYTE_OFFSET_INVALID) {
+
+    if (tail_lsn < owner_->next_lsn_to_deliver_) {
+      // see comment in estimateTimeLag()
+      return 0;
+    } else if (acc_byte_offset != BYTE_OFFSET_INVALID &&
+               tail_byte_offset != BYTE_OFFSET_INVALID) {
       if (tail_byte_offset >= acc_byte_offset) {
         return tail_byte_offset - acc_byte_offset;
       } else {
         return 0;
       }
-    } else if (tail_lsn < owner_->next_lsn_to_deliver_) {
-      return 0;
     }
   }
   return folly::none;
