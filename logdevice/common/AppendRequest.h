@@ -311,13 +311,50 @@ class AppendRequest : public AppendRequestBase,
   // to be invoked.
   virtual void sendAppendMessage();
 
- private:
+  // creates the append message to be sent on the network.
+  virtual std::unique_ptr<APPEND_Message> createAppendMessage();
+
+  // Returns the set of flags that included in APPEND messages.
+  virtual APPEND_flags_t getAppendFlags();
+
+  /*
+   * Including protected accessors to expose read/write access to private fields
+   * from child class (mainly StreamAppendRequest). In cases where copy
+   * constructors are disabled, the fields are made protected. Once we have a
+   * prototype for stream appends, we should re-examine this.
+   */
+
+  lsn_t getPreviousLsn() const {
+    return previous_lsn_;
+  }
+
+  const AppendAttributes& getAppendAttributes() const {
+    return attrs_;
+  }
+
+  std::chrono::milliseconds getTimeout() const {
+    return timeout_;
+  }
+
+  bool isTraced() const {
+    return is_traced_;
+  }
+
+  const std::string& getTracingContext() const {
+    return tracing_context_;
+  }
+
+  SequencerRouter::flags_t getSequencerRouterFlags() const {
+    return sequencer_router_flags_;
+  }
+
   // This field contains the target log id, request creation time, and
   // payload supplied by a client. It is passed back to the client through
   // append_callback_t when the request completes. This field is used only if
   // this AppendRequest object was constructed on a client thread.
   DataRecord record_;
 
+ private:
   // Request creation time.  Latency is reported (for successful appends) from
   // this point up to just before we invoke the client callback.
   const std::chrono::steady_clock::time_point creation_time_;
@@ -429,9 +466,6 @@ class AppendRequest : public AppendRequestBase,
   // append may or may not have reached the sequencer and succeeded, but in any
   // case the response did not come back in time.
   void onTimeout();
-
-  // Returns the set of flags that included in APPEND messages.
-  APPEND_flags_t getAppendFlags();
 
   // Converts internal error codes into those exposed to the client.
   Status translateInternalError(Status status);

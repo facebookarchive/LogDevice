@@ -358,40 +358,28 @@ void AppendRequest::onProbeReply(const APPEND_PROBE_REPLY_Header& reply,
   }
 }
 
-void AppendRequest::sendAppendMessage() {
-  const NodeID dest = sequencer_node_;
-  const SequencerRouter::flags_t flags = sequencer_router_flags_;
+std::unique_ptr<APPEND_Message> AppendRequest::createAppendMessage() {
   APPEND_flags_t append_flags = getAppendFlags();
-  if (flags & SequencerRouter::REDIRECT_CYCLE) {
-    // `dest' is part of a redirection cycle. Include the NO_REDIRECT flags to
-    // break it.
-    append_flags |= APPEND_Header::NO_REDIRECT;
-  }
-  if (flags & SequencerRouter::PREEMPTED) {
-    // `dest' is known to be preempted for the epoch this record belongs to.
-    // By setting this flag we're asking the node to reactivate the sequencer
-    // regardless.
-    append_flags |= APPEND_Header::REACTIVATE_IF_PREEMPTED;
-  }
-  if (!attrs_.optional_keys.empty()) {
-    append_flags |= APPEND_Header::CUSTOM_KEY;
-  }
-  if (attrs_.counters.hasValue()) {
-    append_flags |= APPEND_Header::CUSTOM_COUNTERS;
-  }
-  if (previous_lsn_ != LSN_INVALID) {
-    append_flags |= APPEND_Header::LSN_BEFORE_REDIRECT;
-  }
-  if (is_traced_) {
-    append_flags |= APPEND_Header::E2E_TRACING_ON;
-  }
-
   APPEND_Header header = {
       id_,
       record_.logid,
       getSeenEpoch(record_.logid),
       uint32_t(std::min<decltype(timeout_)::rep>(timeout_.count(), UINT_MAX)),
       append_flags};
+
+  return std::make_unique<APPEND_Message>(
+      header,
+      previous_lsn_,
+      // The key and payload may point into user-owned memory or be backed by a
+      // std::string contained in this class.  Do not transfer ownership to
+      // APPEND_Message.
+      attrs_,
+      PayloadHolder(record_.payload, PayloadHolder::UNOWNED),
+      tracing_context_);
+}
+
+void AppendRequest::sendAppendMessage() {
+  const NodeID dest = sequencer_node_;
 
   // The tracing span associated with this request
   // Should be instantiated if this request is traced
@@ -419,15 +407,7 @@ void AppendRequest::sendAppendMessage() {
     tracing_context_ = in_stream.str();
   }
 
-  auto msg = std::make_unique<APPEND_Message>(
-      header,
-      previous_lsn_,
-      // The key and payload may point into user-owned memory or be backed by a
-      // std::string contained in this class.  Do not transfer ownership to
-      // APPEND_Message.
-      attrs_,
-      PayloadHolder(record_.payload, PayloadHolder::UNOWNED),
-      tracing_context_);
+  auto msg = createAppendMessage();
 
   // make sure that on_socket_close_ is not active in case we're resending this
   // message
@@ -821,14 +801,36 @@ void AppendRequest::resetServerSocketConnectThrottle(NodeID node_id) {
 }
 
 APPEND_flags_t AppendRequest::getAppendFlags() {
-  APPEND_flags_t flags = 0;
+  APPEND_flags_t append_flags = 0;
 
-  flags |= appendFlagsForChecksum(getSettings().checksum_bits);
+  append_flags |= appendFlagsForChecksum(getSettings().checksum_bits);
   if (buffered_writer_blob_flag_) {
-    flags |= APPEND_Header::BUFFERED_WRITER_BLOB;
+    append_flags |= APPEND_Header::BUFFERED_WRITER_BLOB;
   }
-
-  return flags;
+  if (sequencer_router_flags_ & SequencerRouter::REDIRECT_CYCLE) {
+    // `sequencer_node_' is part of a redirection cycle. Include the NO_REDIRECT
+    // flags to break it.
+    append_flags |= APPEND_Header::NO_REDIRECT;
+  }
+  if (sequencer_router_flags_ & SequencerRouter::PREEMPTED) {
+    // `sequencer_node_' is known to be preempted for the epoch this record
+    // belongs to. By setting this flag we're asking the node to reactivate the
+    // sequencer regardless.
+    append_flags |= APPEND_Header::REACTIVATE_IF_PREEMPTED;
+  }
+  if (!attrs_.optional_keys.empty()) {
+    append_flags |= APPEND_Header::CUSTOM_KEY;
+  }
+  if (attrs_.counters.hasValue()) {
+    append_flags |= APPEND_Header::CUSTOM_COUNTERS;
+  }
+  if (previous_lsn_ != LSN_INVALID) {
+    append_flags |= APPEND_Header::LSN_BEFORE_REDIRECT;
+  }
+  if (is_traced_) {
+    append_flags |= APPEND_Header::E2E_TRACING_ON;
+  }
+  return append_flags;
 }
 
 const Settings& AppendRequest::getSettings() const {
