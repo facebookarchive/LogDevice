@@ -6,19 +6,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/libevent/LibEventDeps.h"
+#include "logdevice/common/libevent/EvBase.h"
 
 #include <event2/event.h>
+#include <folly/ScopeGuard.h>
 
 #include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {
 
-static_assert(static_cast<int>(LibEventDeps::Priorities::MAX_PRIORITIES) ==
+thread_local EvBase* EvBase::running_base_{nullptr};
+
+static_assert(static_cast<int>(EvBase::Priorities::MAX_PRIORITIES) ==
                   EVENT_MAX_PRIORITIES,
-              "Adjust LibEventDeps::Priorities::MAX_PRIORITIES to match "
+              "Adjust EvBase::Priorities::MAX_PRIORITIES to match "
               "LibEvent EVENT_MAX_PRIORITIES");
-LibEventDeps::Status LibEventDeps::init(int num_priorities) {
+EvBase::Status EvBase::init(int num_priorities) {
   if (base_) {
     return Status::ALREADY_INITIALIZED;
   }
@@ -27,11 +30,11 @@ LibEventDeps::Status LibEventDeps::init(int num_priorities) {
     return Status::INVALID_PRIORITY;
   }
   base_ = std::unique_ptr<event_base, std::function<void(event_base*)>>(
-      LD_EV(event_base_new)(), LibEventDeps::deleter);
+      LD_EV(event_base_new)(), EvBase::deleter);
   if (!base_) {
     return Status::NO_MEM;
   }
-  if (LD_EV(event_base_priority_init)(base_.get(), num_priorities) != 0) {
+  if (LD_EV(event_base_priority_init)(getRawBase(), num_priorities) != 0) {
     base_.reset(nullptr);
     return Status::INTERNAL_ERROR;
   }
@@ -39,16 +42,20 @@ LibEventDeps::Status LibEventDeps::init(int num_priorities) {
   return Status::OK;
 }
 
-LibEventDeps::Status LibEventDeps::free() {
+EvBase::Status EvBase::free() {
   base_.reset(nullptr);
   return Status::OK;
 }
 
-LibEventDeps::Status LibEventDeps::loop() {
+EvBase::Status EvBase::loop() {
   if (!base_) {
     return Status::NOT_INITIALIZED;
   }
-  int rv = LD_EV(event_base_loop)(base_.get(), 0);
+  running_base_ = this;
+  SCOPE_EXIT {
+    running_base_ = nullptr;
+  };
+  int rv = LD_EV(event_base_loop)(getRawBase(), 0);
   Status res;
   switch (rv) {
     case 0:
@@ -60,11 +67,15 @@ LibEventDeps::Status LibEventDeps::loop() {
   }
   return res;
 }
-LibEventDeps::Status LibEventDeps::loopOnce() {
+EvBase::Status EvBase::loopOnce() {
   if (!base_) {
     return Status::NOT_INITIALIZED;
   }
-  int rv = LD_EV(event_base_loop)(base_.get(), EVLOOP_ONCE | EVLOOP_NONBLOCK);
+  running_base_ = this;
+  SCOPE_EXIT {
+    running_base_ = nullptr;
+  };
+  int rv = LD_EV(event_base_loop)(getRawBase(), EVLOOP_ONCE | EVLOOP_NONBLOCK);
   Status res;
   switch (rv) {
     case 0:
@@ -76,12 +87,26 @@ LibEventDeps::Status LibEventDeps::loopOnce() {
   }
   return res;
 }
+EvBase::Status EvBase::terminateLoop() {
+  if (LD_EV(event_base_loopbreak)(getRawBase())) {
+    return Status::INTERNAL_ERROR;
+  }
+  return Status::OK;
+}
 
-event_base* LibEventDeps::getBaseDEPRECATED() {
+event_base* EvBase::getRawBaseDEPRECATED() {
+  return getRawBase();
+}
+
+event_base* EvBase::getRawBase() {
   return base_.get();
 }
 
-void LibEventDeps::deleter(event_base* base) {
+EvBase* EvBase::getRunningBase() {
+  return running_base_;
+}
+
+void EvBase::deleter(event_base* base) {
   if (!base) {
     return;
   }

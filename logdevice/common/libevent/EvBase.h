@@ -20,7 +20,7 @@ struct event_base;
 
 namespace facebook { namespace logdevice {
 
-class LibEventDeps {
+class EvBase {
  public:
   enum class Status {
     OK,
@@ -38,10 +38,10 @@ class LibEventDeps {
     NUM_PRIORITIES,
     MAX_PRIORITIES = 256
   };
-  LibEventDeps() {}
-  LibEventDeps(const LibEventDeps&) = delete;
-  LibEventDeps& operator=(const LibEventDeps&) = delete;
-  virtual ~LibEventDeps() {}
+  EvBase() {}
+  EvBase(const EvBase&) = delete;
+  EvBase& operator=(const EvBase&) = delete;
+  virtual ~EvBase() {}
 
   virtual Status
   init(int num_priorities = static_cast<int>(Priorities::NUM_PRIORITIES));
@@ -49,13 +49,17 @@ class LibEventDeps {
 
   virtual Status loop();
   virtual Status loopOnce();
+  virtual Status terminateLoop();
 
   /**
    * This is a function only used to slowly transition all use cases
    */
-  virtual event_base* getBaseDEPRECATED();
+  virtual event_base* getRawBaseDEPRECATED();
 
  protected:
+  virtual event_base* getRawBase();
+  static EvBase* getRunningBase();
+  static thread_local EvBase* running_base_;
   static void deleter(event_base*);
   std::unique_ptr<event_base, std::function<void(event_base*)>> base_{nullptr,
                                                                       deleter};
