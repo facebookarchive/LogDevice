@@ -23,8 +23,8 @@
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/ZeroCopyPayload.h"
+#include "logdevice/common/libevent/EvBase.h"
 
-struct event_base;
 struct event;
 
 namespace facebook { namespace logdevice {
@@ -67,8 +67,12 @@ class EventLoop : public folly::Executor {
   EventLoop& operator=(const EventLoop&) = delete;
   EventLoop& operator=(EventLoop&&) = delete;
 
-  struct event_base* getEventBase() {
-    return base_.get();
+  event_base* getEventBase() {
+    return base_->getRawBaseDEPRECATED();
+  }
+
+  EvBase& getEvBase() {
+    return *base_;
   }
 
   /// Enqueue a function to executed by this executor. This and all
@@ -142,10 +146,9 @@ class EventLoop : public folly::Executor {
   static const int NUM_PRIORITIES = PRIORITY_LOW + 1;
 
  private:
-  // libevent 2.x event_base that runs the loop. We use a unique_ptr with a
-  // deleter and make base_ first data member of this class to make sure it
-  // is deleted after all of the events in it.
-  std::unique_ptr<event_base, std::function<void(event_base*)>> base_;
+  // libevent 2.x event_base that runs the loop. We make base_ first data member
+  // of this class to make sure it is deleted after all of the events in it.
+  std::unique_ptr<EvBase> base_;
 
  public:
   // total number of event handlers that libevent has called so far
@@ -195,7 +198,7 @@ class EventLoop : public folly::Executor {
   // executing this event. This indicates how long it takes to service a active
   // event on eventloop
   static void delayCheckCallback(void* arg, short);
-  struct event* scheduled_event_;
+  event* scheduled_event_;
   std::chrono::steady_clock::time_point scheduled_event_start_time_{
       std::chrono::steady_clock::time_point::min()};
 

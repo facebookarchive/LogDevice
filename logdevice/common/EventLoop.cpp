@@ -30,36 +30,28 @@ namespace facebook { namespace logdevice {
 
 thread_local EventLoop* EventLoop::thisThreadLoop_{nullptr};
 
-static struct event_base* createEventBase() {
-  int rv;
-  struct event_base* base = LD_EV(event_base_new)();
-
-  if (!base) {
-    ld_error("Failed to create an event base for an EventLoop thread");
-    err = E::NOMEM;
-    return nullptr;
+static std::unique_ptr<EvBase> createEventBase() {
+  std::unique_ptr<EvBase> result;
+  auto base = std::make_unique<EvBase>();
+  auto rv = base->init();
+  switch (rv) {
+    case EvBase::Status::NO_MEM:
+      ld_error("Failed to create an event base for an EventLoop thread");
+      err = E::NOMEM;
+      break;
+    case EvBase::Status::INVALID_PRIORITY:
+      ld_error("failed to initialize eventbase priorities");
+      err = E::SYSLIMIT;
+      break;
+    case EvBase::Status::OK:
+      result = std::move(base);
+      break;
+    default:
+      ld_error("Internal error when initializing EvBase");
+      err = E::INTERNAL;
+      break;
   }
-
-  rv = LD_EV(event_base_priority_init)(base, EventLoop::NUM_PRIORITIES);
-  if (rv != 0) { // unlikely
-    ld_error("event_base_priority_init() failed");
-    err = E::SYSLIMIT;
-    LD_EV(event_base_free)(base);
-    return nullptr;
-  }
-
-  return base;
-}
-
-static void deleteEventBase(struct event_base* base) {
-  if (base) {
-    // libevent-2.1 does not destroy bufferevents when bufferevent_free() is
-    // called.  Instead it schedules a callback to be run at the next
-    // iteration of event loop.  Run that iteration now.
-    LD_EV(event_base_loop)(base, EVLOOP_ONCE | EVLOOP_NONBLOCK);
-
-    LD_EV(event_base_free)(base);
-  }
+  return result;
 }
 
 EventLoop::EventLoop(
@@ -145,24 +137,22 @@ E EventLoop::init(
   tid_ = syscall(__NR_gettid);
   ThreadID::set(thread_type_, thread_name_);
 
-  base_ = std::unique_ptr<event_base, std::function<void(event_base*)>>(
-      createEventBase(), deleteEventBase);
+  base_ = std::unique_ptr<EvBase>(createEventBase());
   if (!base_) {
     return err;
   }
   scheduled_event_ = LD_EV(event_new)(
-      base_.get(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
+      getEventBase(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
   if (!scheduled_event_) {
     return E::INTERNAL;
   }
   common_timeouts_ =
-      std::make_unique<TimeoutMap>(base_.get(), kMaxFastTimeouts);
+      std::make_unique<TimeoutMap>(getEventBase(), kMaxFastTimeouts);
   task_queue_ = std::make_unique<EventLoopTaskQueue>(
-      base_.get(), request_pump_capacity, requests_per_iteration);
+      getEventBase(), request_pump_capacity, requests_per_iteration);
   task_queue_->setCloseEventLoopOnShutdown();
   return E::OK;
 }
-
 void EventLoop::run() {
   EventLoop::thisThreadLoop_ = this; // save in a thread-local
 
@@ -174,11 +164,10 @@ void EventLoop::run() {
 
   // this runs until we get destroyed or shutdown is called on
   // EventLoopTaskQueue
-  int rv = LD_EV(event_base_loop)(base_.get(), 0);
-  if (rv != 0) {
-    ld_error("event_base_loop() exited abnormally with return value %d.", rv);
+  auto status = base_->loop();
+  if (status != EvBase::Status::OK) {
+    ld_error("EvBase::loop() exited abnormally");
   }
-  ld_check_ge(rv, 0);
   LD_EV(event_free)(scheduled_event_);
   // the thread on which this EventLoop ran terminates here
 }
