@@ -118,6 +118,8 @@ class AllClientReadStreams : public ShardAuthoritativeStatusSubscriber {
    */
   void forEachStream(std::function<void(ClientReadStream& read_stream)> cb);
 
+  void sampleAllReadStreamsDegubInfoToScuba() const;
+
  private:
   // Actual container
   std::unordered_map<read_stream_id_t,

@@ -753,6 +753,49 @@ class ClientReadStream : boost::noncopyable {
 
   bool isStreamStuckFor(std::chrono::milliseconds time);
 
+  struct ClientReadStreamDebugInfo {
+    explicit ClientReadStreamDebugInfo(const read_stream_id_t stream_id_)
+        : stream_id(stream_id_) {}
+
+    logid_t log_id;
+    const read_stream_id_t stream_id;
+    /* Next lsn to deliver */
+    lsn_t next_lsn;
+    lsn_t window_high;
+    lsn_t until_lsn;
+    /* Read set size */
+    uint64_t set_size;
+    /* Gap end outside window */
+    lsn_t gap_end;
+    lsn_t trim_point;
+    std::string gap_shards_next_lsn;
+    std::string unavailable_shards;
+    /* Connection health */
+    folly::Optional<std::string> health;
+    /* Redelivery In-progress */
+    bool redelivery;
+    filter_version_t::raw_type filter_version;
+    std::string shards_down;
+    std::string shards_slow;
+    folly::Optional<int64_t> bytes_lagged;
+    folly::Optional<int64_t> timestamp_lagged;
+    folly::Optional<std::chrono::milliseconds> last_lagging;
+    folly::Optional<std::chrono::milliseconds> last_stuck;
+    folly::Optional<std::string> last_report;
+    folly::Optional<std::string> last_tail_info;
+    folly::Optional<std::string> lag_record;
+  };
+
+  /**
+   * @return ClientReadStreamDebugInfo with all the data for debug
+   */
+  ClientReadStreamDebugInfo getClientReadStreamDebugInfo() const;
+
+  /**
+   * sample the ClientReadStreamDebugInfo
+   */
+  void sampleDebugInfo(const ClientReadStreamDebugInfo&) const;
+
  private:
   /**
    * @return True if there are records we can ship right now to the application,

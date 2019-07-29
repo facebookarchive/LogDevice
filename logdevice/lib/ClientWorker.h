@@ -56,6 +56,8 @@ class ClientWorker : public Worker {
    */
   NodeStatsMessageCallback* nodeStatsMessageCallback() const;
 
+  void sampleAllReadStreamsDegubInfoToScuba() const;
+
   void setupWorker() override;
 
  private:
@@ -64,5 +66,7 @@ class ClientWorker : public Worker {
   std::unique_ptr<ClientWorkerImpl> impl_;
 
   std::unique_ptr<MessageDispatch> createMessageDispatch() override;
+
+  std::unique_ptr<Timer> sample_read_streams_timer_;
 };
 }} // namespace facebook::logdevice

@@ -283,7 +283,9 @@ std::string ClientReadStream::getDebugInfoStr() const {
   return res;
 }
 
-void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
+ClientReadStream::ClientReadStreamDebugInfo
+ClientReadStream::getClientReadStreamDebugInfo() const {
+  ClientReadStream::ClientReadStreamDebugInfo info(id_);
   std::string shards_down = "ALL_SEND_ALL";
   std::string shards_slow = "ALL_SEND_ALL";
   if (scd_ && scd_->isActive()) {
@@ -291,42 +293,135 @@ void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
     shards_slow = toString(scd_->getShardsSlow());
   }
 
-  table.next()
-      .set<0>(log_id_)
-      .set<1>(id_)
-      .set<2>(next_lsn_to_deliver_)
-      .set<3>(window_high_)
-      .set<4>(until_lsn_)
-      .set<5>(readSetSize())
-      .set<6>(gap_end_outside_window_)
-      .set<7>(trim_point_)
-      .set<8>(senderStatePretty())
-      .set<9>(unavailableShardsPretty())
-      .set<11>(redelivery_timer_ ? redelivery_timer_->isActive() : false)
-      .set<12>(filter_version_.val())
-      .set<13>(shards_down)
-      .set<14>(shards_slow);
-
+  info.log_id = log_id_;
+  info.next_lsn = next_lsn_to_deliver_;
+  info.window_high = window_high_;
+  info.until_lsn = until_lsn_;
+  info.set_size = readSetSize();
+  info.gap_end = gap_end_outside_window_;
+  info.trim_point = trim_point_;
+  info.gap_shards_next_lsn = senderStatePretty();
+  info.unavailable_shards = unavailableShardsPretty();
+  info.redelivery = redelivery_timer_ ? redelivery_timer_->isActive() : false;
+  info.filter_version = filter_version_.val();
+  info.shards_down = shards_down;
+  info.shards_slow = shards_slow;
   if (healthy_node_set_ && last_epoch_with_metadata_ != EPOCH_INVALID) {
-    table.set<10>(getStorageSetHealthStatusPretty());
+    info.health = getStorageSetHealthStatusPretty();
   }
 
   if (readers_flow_tracer_) {
     auto last_bytes_lagged = readers_flow_tracer_->estimateByteLag();
     if (last_bytes_lagged.has_value()) {
-      table.set<15>(last_bytes_lagged.value());
+      info.bytes_lagged = last_bytes_lagged;
     }
     auto last_timestamp_lagged = readers_flow_tracer_->estimateTimeLag();
     if (last_timestamp_lagged.has_value()) {
-      table.set<16>(last_timestamp_lagged.value());
+      info.timestamp_lagged = last_timestamp_lagged;
     }
-    table.set<17>(
-        to_msec((readers_flow_tracer_->last_time_lagging_.time_since_epoch())));
-    table.set<18>(
-        to_msec((readers_flow_tracer_->last_time_stuck_.time_since_epoch())));
-    table.set<19>(readers_flow_tracer_->lastReportedStatePretty());
-    table.set<20>(readers_flow_tracer_->lastTailInfoPretty());
-    table.set<21>(readers_flow_tracer_->timeLagRecordPretty());
+    info.last_lagging =
+        to_msec((readers_flow_tracer_->last_time_lagging_.time_since_epoch()));
+    info.last_stuck =
+        to_msec((readers_flow_tracer_->last_time_stuck_.time_since_epoch()));
+    info.last_report = readers_flow_tracer_->lastReportedStatePretty();
+    info.last_tail_info = readers_flow_tracer_->lastTailInfoPretty();
+    info.lag_record = readers_flow_tracer_->timeLagRecordPretty();
+  }
+  return info;
+}
+
+void ClientReadStream::sampleDebugInfo(
+    const ClientReadStream::ClientReadStreamDebugInfo& info) const {
+  if (!deps_->getSettings().enable_all_read_streams_sampling) {
+    return;
+  }
+  auto sample = std::make_unique<TraceSample>();
+  sample->addNormalValue("thread_name", ThreadID::getName());
+  sample->addIntValue("log_id", info.log_id.val());
+  sample->addIntValue("stream_id", info.stream_id.val());
+  sample->addIntValue("next_lsn", info.next_lsn);
+  sample->addIntValue("window_high", info.window_high);
+  sample->addIntValue("until_lsn", info.until_lsn);
+  sample->addIntValue("set_size", info.set_size);
+  sample->addIntValue("gap_end", info.gap_end);
+  sample->addIntValue("trim_point", info.trim_point);
+  sample->addNormalValue("gap_shards_next_lsn", info.gap_shards_next_lsn);
+  sample->addNormalValue("unavailable_shards", info.unavailable_shards);
+  sample->addIntValue("redelivery", info.redelivery);
+  sample->addIntValue("filter_version", info.filter_version);
+  sample->addNormalValue("shards_down", info.shards_down);
+  sample->addNormalValue("shards_slow", info.shards_slow);
+  if (info.health.has_value()) {
+    sample->addNormalValue("health", info.health.value());
+  }
+  if (info.bytes_lagged.has_value()) {
+    sample->addIntValue("bytes_lagged", info.bytes_lagged.value());
+  }
+  if (info.timestamp_lagged.has_value()) {
+    sample->addIntValue("timestamp_lagged", info.timestamp_lagged.value());
+  }
+  if (info.last_lagging.has_value()) {
+    sample->addIntValue("last_lagging", info.last_lagging.value().count());
+  }
+  if (info.last_stuck.has_value()) {
+    sample->addIntValue("last_stuck", info.last_stuck.value().count());
+  }
+  if (info.last_report.has_value()) {
+    sample->addNormalValue("last_report", info.last_report.value());
+  }
+  if (info.last_tail_info.has_value()) {
+    sample->addNormalValue("last_tail_info", info.last_tail_info.value());
+  }
+  if (info.lag_record.has_value()) {
+    sample->addNormalValue("lag_record", info.lag_record.value());
+  }
+
+  Worker::onThisThread()->getTraceLogger()->pushSample(
+      "all_read_streams", 0, std::move(sample));
+  return;
+}
+
+void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
+  auto info = getClientReadStreamDebugInfo();
+  table.next()
+      .set<0>(info.log_id)
+      .set<1>(info.stream_id)
+      .set<2>(info.next_lsn)
+      .set<3>(info.window_high)
+      .set<4>(info.until_lsn)
+      .set<5>(info.set_size)
+      .set<6>(info.gap_end)
+      .set<7>(info.trim_point)
+      .set<8>(info.gap_shards_next_lsn)
+      .set<9>(info.unavailable_shards)
+      .set<11>(info.redelivery)
+      .set<12>(info.filter_version)
+      .set<13>(info.shards_down)
+      .set<14>(info.shards_slow);
+
+  if (info.health.has_value()) {
+    table.set<10>(info.health.value());
+  }
+  if (info.bytes_lagged.has_value()) {
+    table.set<15>(info.bytes_lagged.value());
+  }
+  if (info.timestamp_lagged.has_value()) {
+    table.set<16>(info.timestamp_lagged.value());
+  }
+  if (info.last_lagging.has_value()) {
+    table.set<17>(info.last_lagging.value());
+  }
+  if (info.last_stuck.has_value()) {
+    table.set<18>(info.last_stuck.value());
+  }
+  if (info.last_report.has_value()) {
+    table.set<19>(info.last_report.value());
+  }
+  if (info.last_tail_info.has_value()) {
+    table.set<20>(info.last_tail_info.value());
+  }
+  if (info.lag_record.has_value()) {
+    table.set<21>(info.lag_record.value());
   }
 }
 

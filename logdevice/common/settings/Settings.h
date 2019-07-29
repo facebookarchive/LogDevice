@@ -1299,6 +1299,9 @@ struct Settings : public SettingsBundle {
   // enforcing permissions on the given message types if supported.
   std::unordered_set<MessageType> require_permission_message_types;
 
+  bool enable_all_read_streams_sampling;
+  std::chrono::milliseconds all_read_streams_rate;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

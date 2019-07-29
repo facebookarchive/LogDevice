@@ -3200,5 +3200,22 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "messages of all types except WINDOW and RELEASE.",
        SERVER,
        SettingsCategory::Security);
+
+  init("enable-all-read-streams-sampling",
+       &enable_all_read_streams_sampling,
+       "false",
+       nullptr, // no validation
+       "Enables sampling of debug info from client's all read "
+       "streams.",
+       CLIENT,
+       SettingsCategory::ReadPath);
+
+  init("all-read-streams-rate",
+       &all_read_streams_rate,
+       "100ms",
+       validate_positive<ssize_t>(),
+       "Rate of sampling all client read streams debug info to Scuba",
+       CLIENT,
+       SettingsCategory::ReadPath);
 }
 }} // namespace facebook::logdevice
