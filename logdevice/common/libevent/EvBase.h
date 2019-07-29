@@ -63,5 +63,7 @@ class EvBase {
   static void deleter(event_base*);
   std::unique_ptr<event_base, std::function<void(event_base*)>> base_{nullptr,
                                                                       deleter};
+
+  friend class Event;
 };
 }} // namespace facebook::logdevice
