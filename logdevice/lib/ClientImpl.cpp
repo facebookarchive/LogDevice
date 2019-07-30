@@ -73,30 +73,6 @@ using NodesConfigurationManager =
     configuration::nodes::NodesConfigurationManager;
 using NCSType = configuration::nodes::NodesConfigurationStoreFactory::NCSType;
 
-class ClientBridgeImpl : public ClientBridge {
- public:
-  explicit ClientBridgeImpl(ClientImpl* parent) : parent_(parent) {}
-
-  const std::shared_ptr<TraceLogger> getTraceLogger() const override {
-    return parent_->getTraceLogger();
-  }
-
-  const std::shared_ptr<opentracing::Tracer> getOTTracer() const override {
-    return parent_->getOTTracer();
-  }
-
-  bool hasWriteToken(const std::string& required) const override {
-    return parent_->hasWriteToken(required);
-  }
-
-  bool shouldE2ETrace() const override {
-    return parent_->shouldE2ETrace();
-  }
-
- private:
-  ClientImpl* parent_;
-};
-
 // Implementing the member function of Client inside ClientImpl.cpp sounds
 // confusing, but this is not an error. This is for the purpose of moving
 // the indirection of calling ClientImpl::create in Client::create.
@@ -2203,12 +2179,6 @@ int ClientImpl::getHeadAttributes(logid_t logid,
 bool ClientImpl::checkAppend(logid_t logid,
                              size_t payload_size,
                              bool allow_extra) {
-  size_t max_size = getMaxPayloadSize();
-  if (allow_extra) {
-    max_size += MAX_PAYLOAD_EXTRA_SIZE;
-  }
-  ld_check(getMaxPayloadSize() <= MAX_PAYLOAD_SIZE_PUBLIC);
-  ld_check(max_size <= MAX_PAYLOAD_SIZE_INTERNAL);
   if (logid == LOGID_INVALID) {
     err = E::INVALID_PARAM;
     return false;
@@ -2223,12 +2193,8 @@ bool ClientImpl::checkAppend(logid_t logid,
     return false;
   }
 
-  if (payload_size > max_size) {
-    err = E::TOOBIG;
-    return false;
-  }
-
-  return true;
+  return AppendRequest::checkPayloadSize(
+      payload_size, getMaxPayloadSize(), allow_extra);
 }
 
 void ClientImpl::allowWriteMetaDataLog() {

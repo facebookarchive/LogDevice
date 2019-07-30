@@ -15,6 +15,7 @@
 #include "logdevice/common/StreamWriterAppendSink.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientImpl.h"
+#include "logdevice/lib/ClientProcessor.h"
 #include "logdevice/test/BufferedWriterTestUtils.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
@@ -32,7 +33,12 @@ TEST_F(StreamWriterIntegrationTest, SimpleAppendTest) {
   auto client = cluster->createClient();
   TestCallback cb;
   ClientImpl* client_impl = checked_downcast<ClientImpl*>(client.get());
-  auto stream_sink = std::make_unique<StreamWriterAppendSink>(client_impl);
+  std::shared_ptr<Processor> processor =
+      std::static_pointer_cast<Processor>(client_impl->getProcessorPtr());
+  std::unique_ptr<ClientBridge> bridge =
+      std::make_unique<ClientBridgeImpl>(client_impl);
+  auto stream_sink = std::make_unique<StreamWriterAppendSink>(
+      client_impl->getProcessorPtr(), bridge.get(), client_impl->getTimeout());
   auto writer = BufferedWriter::create(client, stream_sink.get(), &cb);
   const logid_t LOG_ID(1);
 

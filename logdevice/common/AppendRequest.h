@@ -245,6 +245,12 @@ class AppendRequest : public AppendRequestBase,
     return e2e_tracer_ == nullptr ? false : true;
   }
 
+  // Checks if the payload size is within bounds. If not, sets err to E::TOOBIG
+  // and returns false.
+  static bool checkPayloadSize(size_t payload_size,
+                               size_t max_payload_size,
+                               bool allow_extra);
+
   // see on_socket_close_ below
   class SocketClosedCallback : public SocketCallback {
    public:
@@ -481,6 +487,7 @@ class AppendRequest : public AppendRequestBase,
   bool shouldAddAppendFail(Status status);
 
   friend class AppendRequestTest;
+  friend class TestStreamWriterAppendSink;
 };
 
 }} // namespace facebook::logdevice

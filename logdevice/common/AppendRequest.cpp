@@ -800,6 +800,22 @@ void AppendRequest::resetServerSocketConnectThrottle(NodeID node_id) {
   Worker::onThisThread()->sender().resetServerSocketConnectThrottle(node_id);
 }
 
+bool AppendRequest::checkPayloadSize(size_t payload_size,
+                                     size_t max_payload_size,
+                                     bool allow_extra) {
+  size_t max_size = max_payload_size;
+  if (allow_extra) {
+    max_size += MAX_PAYLOAD_EXTRA_SIZE;
+  }
+  ld_check(max_payload_size <= MAX_PAYLOAD_SIZE_PUBLIC);
+  ld_check(max_size <= MAX_PAYLOAD_SIZE_INTERNAL);
+  if (payload_size > max_size) {
+    err = E::TOOBIG;
+    return false;
+  }
+  return true;
+}
+
 APPEND_flags_t AppendRequest::getAppendFlags() {
   APPEND_flags_t append_flags = 0;
 

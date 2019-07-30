@@ -15,79 +15,47 @@
 
 using namespace facebook::logdevice;
 
-namespace {
+namespace facebook { namespace logdevice {
 /* Intercepts all messages and stores them in memory. */
-class TestAppendSink : public BufferedWriterAppendSink {
+class TestStreamWriterAppendSink : public StreamWriterAppendSink {
  public:
-  struct TestAppendBufferedRequest {
-    logid_t logid;
-    Payload payload;
-    AppendRequestCallback callback;
-  };
-  using RequestsSet =
-      std::unordered_map<std::string, TestAppendBufferedRequest>;
+  TestStreamWriterAppendSink()
+      : StreamWriterAppendSink(std::shared_ptr<Processor>(nullptr),
+                               nullptr,
+                               std::chrono::milliseconds(10000)) {}
 
-  bool checkAppend(logid_t, size_t, bool) override {
-    return true;
+  static Payload createPayload(std::string key, std::string op_type) {
+    std::string* payload_string = new std::string();
+    (*payload_string) += key;
+    (*payload_string) += ":";
+    (*payload_string) += op_type;
+    return Payload((void*)payload_string->c_str(), payload_string->length());
   }
 
-  Status canSendToWorker() override {
-    return E::OK;
-  }
-
-  void onBytesSentToWorker(ssize_t) override {}
-
-  void onBytesFreedByWorker(size_t) override {}
-
-  std::pair<Status, NodeID>
-  appendBuffered(logid_t logid,
-                 const BufferedWriter::AppendCallback::ContextSet&,
-                 AppendAttributes,
-                 const Payload& payload,
-                 AppendRequestCallback callback,
-                 worker_id_t,
-                 int) override {
-    std::string test_option, data;
-    folly::split(':', payload.toString(), test_option, data);
-
-    if (test_option == "DO_NOT_ACCEPT") {
-      return std::make_pair(E::CONNFAILED, NodeID());
-    }
-
-    if (test_option == "ACCEPT") {
-      accept_requests[data] = {logid, payload, callback};
-    } else if (test_option == "REJECT_ONCE") {
-      if (reject_requests.count(data) == 0) {
-        reject_requests[data] = {logid, payload, callback};
-      } else {
-        accept_requests[data] = {logid, payload, callback};
-      }
-    } else {
-      ADD_FAILURE();
-    }
-    return std::make_pair(E::OK, NodeID());
+  static void parsePayload(Payload payload,
+                           std::string& key,
+                           std::string& op_type) {
+    folly::split(':', payload.toString(), key, op_type);
   }
 
   void processTestRequests() {
-    for (auto& keyValue : accept_requests) {
-      TestAppendBufferedRequest& request = keyValue.second;
-      DataRecord record(request.logid, request.payload, current_lsn++);
-      request.callback(E::OK, record, NodeID());
+    for (auto& kv : accept_requests) {
+      auto& val = kv.second;
+      val->callback_(E::OK, val->record_);
     }
     accept_requests.clear();
 
     // first collect all callbacks so that we do not violate iterator stability.
     // A reject callback should call appendBuffered again and it writes into
     // accept_requests -- doing this to avoid issues may be in future.
-    std::vector<TestAppendBufferedRequest> reject_requests_cache;
-    for (auto& keyValue : reject_requests) {
-      TestAppendBufferedRequest& request = keyValue.second;
-      reject_requests_cache.push_back(request);
+    std::vector<std::unique_ptr<StreamAppendRequest>> reject_requests_cache;
+    for (auto& kv : reject_requests) {
+      auto& val = kv.second;
+      reject_requests_cache.push_back(std::move(val));
     }
 
-    for (auto& request : reject_requests_cache) {
-      DataRecord record(request.logid, request.payload, LSN_INVALID);
-      request.callback(E::CONNFAILED, record, NodeID());
+    for (auto& val : reject_requests_cache) {
+      val->callback_(E::OK, val->record_);
     }
     reject_requests.clear();
 
@@ -97,65 +65,89 @@ class TestAppendSink : public BufferedWriterAppendSink {
     }
   }
 
+  write_stream_seq_num_t getMaxAckedSequenceNum(logid_t logid) {
+    auto stream = getStream(logid);
+    return stream->max_acked_seq_num_;
+  }
+
+ protected:
+  void postAppend(std::unique_ptr<StreamAppendRequest> req_append) override {
+    req_append->setFailedToPost();
+    std::string key, op_type;
+    parsePayload(req_append->record_.payload, key, op_type);
+    if (op_type == "ACCEPT") {
+      accept_requests[key] = std::move(req_append);
+    } else if (op_type == "REJECT_ONCE") {
+      if (reject_requests.find(key) == reject_requests.end()) {
+        reject_requests[key] = std::move(req_append);
+      } else {
+        accept_requests[key] = std::move(req_append);
+      }
+    } else {
+      ADD_FAILURE();
+    }
+  }
+
+  size_t getMaxPayloadSize() noexcept override {
+    return MAX_PAYLOAD_SIZE_PUBLIC;
+  }
+
+  std::chrono::milliseconds getAppendRetryTimeout() noexcept override {
+    return std::chrono::milliseconds(10000);
+  }
+
  private:
-  RequestsSet accept_requests;
-  RequestsSet reject_requests;
-  lsn_t current_lsn = 0;
+  std::unordered_map<std::string, std::unique_ptr<StreamAppendRequest>>
+      accept_requests;
+  std::unordered_map<std::string, std::unique_ptr<StreamAppendRequest>>
+      reject_requests;
 };
 
-} // namespace
+}} // namespace facebook::logdevice
 
 class StreamWriterAppendSinkTest : public ::testing::Test {
  public:
   void SetUp() override {
-    test_sink_ = std::make_unique<TestAppendSink>();
-    stream_sink_ = std::make_unique<StreamWriterAppendSink>(test_sink_.get());
-  }
-  void TearDown() override {
-    stream_sink_.reset();
-    test_sink_.reset();
+    test_sink_ = std::make_unique<TestStreamWriterAppendSink>();
   }
 
  protected:
-  std::unique_ptr<TestAppendSink> test_sink_;
-  std::unique_ptr<StreamWriterAppendSink> stream_sink_;
+  std::unique_ptr<TestStreamWriterAppendSink> test_sink_;
 
   worker_id_t target_worker_ = (worker_id_t)0;
 
-  void singleAppend(std::string payload_string,
+  void singleAppend(std::string key,
+                    std::string op_type,
                     Status expected_status,
-                    int expected_num_msgs);
+                    int expected_num_msgs,
+                    uint64_t expected_max_seq_num);
   std::pair<Status, NodeID>
   appendHelper(logid_t logid,
-               std::string payload_string,
+               std::string key,
+               std::string op_type,
                StreamWriterAppendSink::AppendRequestCallback callback);
 };
 
 std::pair<Status, NodeID> StreamWriterAppendSinkTest::appendHelper(
     logid_t logid,
-    std::string payload_string,
+    std::string key,
+    std::string op_type,
     StreamWriterAppendSink::AppendRequestCallback callback) {
-  // create payload
-  char* payload_c_string = new char[payload_string.length() + 1];
-  strncpy(payload_c_string, payload_string.c_str(), payload_string.length());
-  payload_c_string[payload_string.length()] = '\0';
-  Payload* payload =
-      new Payload((void*)payload_c_string, payload_string.length() + 1);
-
-  // issue appendBuffered call
-  return stream_sink_->appendBuffered(
+  return test_sink_->appendBuffered(
       logid,                                        /* not used */
       BufferedWriter::AppendCallback::ContextSet(), /* not used */
       AppendAttributes(),                           /* not used */
-      *payload,
+      TestStreamWriterAppendSink::createPayload(key, op_type),
       callback,
       target_worker_, /* not used */
       0 /* not used */);
 }
 
-void StreamWriterAppendSinkTest::singleAppend(std::string payload_string,
+void StreamWriterAppendSinkTest::singleAppend(std::string key,
+                                              std::string op_type,
                                               Status expected_status,
-                                              int expected_num_msgs) {
+                                              int expected_num_msgs,
+                                              uint64_t expected_max_seq_num) {
   int num_msg_received = 0;
   auto callback = [&num_msg_received](
                       Status status, const DataRecord&, NodeID) {
@@ -164,23 +156,21 @@ void StreamWriterAppendSinkTest::singleAppend(std::string payload_string,
   };
 
   logid_t logid(1UL);
-  auto result = appendHelper(logid, payload_string, callback);
+  auto result = appendHelper(logid, key, op_type, callback);
 
   ASSERT_EQ(expected_status, result.first);
   test_sink_->processTestRequests();
   ASSERT_EQ(expected_num_msgs, num_msg_received);
-}
-
-TEST_F(StreamWriterAppendSinkTest, DoNotAcceptRequest) {
-  singleAppend("DO_NOT_ACCEPT:a", Status::CONNFAILED, 0);
+  ASSERT_EQ(
+      expected_max_seq_num, test_sink_->getMaxAckedSequenceNum(logid).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, AcceptRequest) {
-  singleAppend("ACCEPT:a", Status::OK, 1);
+  singleAppend("a", "ACCEPT", Status::OK, 1, 1UL);
 }
 
 TEST_F(StreamWriterAppendSinkTest, RejectRequest) {
-  singleAppend("REJECT_ONCE:a", Status::OK, 1);
+  singleAppend("a", "REJECT_ONCE", Status::OK, 1, 1UL);
 }
 
 TEST_F(StreamWriterAppendSinkTest, MultipleRequests) {
@@ -192,19 +182,20 @@ TEST_F(StreamWriterAppendSinkTest, MultipleRequests) {
   };
 
   logid_t logid(1UL);
-  auto result = appendHelper(logid, "ACCEPT:a", callback);
+  auto result = appendHelper(logid, "a", "ACCEPT", callback);
   ASSERT_EQ(Status::OK, result.first);
-  result = appendHelper(logid, "DO_NOT_ACCEPT:b", callback);
-  ASSERT_EQ(Status::CONNFAILED, result.first);
-  result = appendHelper(logid, "REJECT_ONCE:c", callback);
+  result = appendHelper(logid, "b", "ACCEPT", callback);
   ASSERT_EQ(Status::OK, result.first);
-  result = appendHelper(logid, "REJECT_ONCE:b", callback);
+  result = appendHelper(logid, "c", "REJECT_ONCE", callback);
   ASSERT_EQ(Status::OK, result.first);
-  result = appendHelper(logid, "ACCEPT:d", callback);
+  result = appendHelper(logid, "d", "REJECT_ONCE", callback);
+  ASSERT_EQ(Status::OK, result.first);
+  result = appendHelper(logid, "e", "ACCEPT", callback);
   ASSERT_EQ(Status::OK, result.first);
 
   test_sink_->processTestRequests();
-  ASSERT_EQ(4, num_msg_received);
+  ASSERT_EQ(5, num_msg_received);
+  ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, MultipleLogs) {
@@ -223,18 +214,20 @@ TEST_F(StreamWriterAppendSinkTest, MultipleLogs) {
         }
       };
 
-  auto result = appendHelper(logid1, "ACCEPT:a", callback);
+  auto result = appendHelper(logid1, "a", "ACCEPT", callback);
   ASSERT_EQ(Status::OK, result.first);
-  result = appendHelper(logid1, "DO_NOT_ACCEPT:b", callback);
-  ASSERT_EQ(Status::CONNFAILED, result.first);
-  result = appendHelper(logid1, "REJECT_ONCE:c", callback);
+  result = appendHelper(logid1, "b", "ACCEPT", callback);
   ASSERT_EQ(Status::OK, result.first);
-  result = appendHelper(logid2, "REJECT_ONCE:b", callback);
+  result = appendHelper(logid1, "c", "REJECT_ONCE", callback);
   ASSERT_EQ(Status::OK, result.first);
-  result = appendHelper(logid2, "ACCEPT:d", callback);
+  result = appendHelper(logid2, "d", "REJECT_ONCE", callback);
+  ASSERT_EQ(Status::OK, result.first);
+  result = appendHelper(logid2, "e", "ACCEPT", callback);
   ASSERT_EQ(Status::OK, result.first);
 
   test_sink_->processTestRequests();
-  ASSERT_EQ(2, num_msg_received_log1);
+  ASSERT_EQ(3, num_msg_received_log1);
   ASSERT_EQ(2, num_msg_received_log2);
+  ASSERT_EQ(3UL, test_sink_->getMaxAckedSequenceNum(logid1).val());
+  ASSERT_EQ(2UL, test_sink_->getMaxAckedSequenceNum(logid2).val());
 }

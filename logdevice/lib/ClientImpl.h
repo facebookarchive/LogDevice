@@ -18,6 +18,7 @@
 #include <folly/SharedMutex.h>
 #include <opentracing/tracer.h>
 
+#include "logdevice/common/ClientBridge.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/configuration/LogsConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -539,6 +540,30 @@ class ClientImpl : public Client,
 
   // OpenTracing tracer for client operations (append)
   std::shared_ptr<opentracing::Tracer> ottracer_;
+};
+
+class ClientBridgeImpl : public ClientBridge {
+ public:
+  explicit ClientBridgeImpl(ClientImpl* parent) : parent_(parent) {}
+
+  const std::shared_ptr<TraceLogger> getTraceLogger() const override {
+    return parent_->getTraceLogger();
+  }
+
+  const std::shared_ptr<opentracing::Tracer> getOTTracer() const override {
+    return parent_->getOTTracer();
+  }
+
+  bool hasWriteToken(const std::string& required) const override {
+    return parent_->hasWriteToken(required);
+  }
+
+  bool shouldE2ETrace() const override {
+    return parent_->shouldE2ETrace();
+  }
+
+ private:
+  ClientImpl* parent_;
 };
 
 }} // namespace facebook::logdevice
