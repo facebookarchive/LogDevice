@@ -27,8 +27,9 @@ struct LogTreeInfo {
 }
 
 struct TolerableFailureDomain {
-  1: string domain,
+  1: string domain_legacy (deprecated),
   2: i32 count,
+  3: common.LocationScope domain,
 }
 
 // Response of getReplicationInfo()
@@ -38,11 +39,7 @@ struct ReplicationInfo {
    * thrift does not support u64.
    */
   1: string version,
-  /**
-   * What is the most restrictive replication policy in
-   * The entire LogTree
-   */
-  2: map<string, i32> narrowest_replication,
+  2: map<string, i32> narrowest_replication_legacy (deprecated),
   /**
    * What is the smallest replication for a record in the
    * entire LogTree
@@ -53,6 +50,11 @@ struct ReplicationInfo {
    * in theory without losing read/write availability.
    */
   4: TolerableFailureDomain tolerable_failure_domains,
+  /**
+   * What is the most restrictive replication policy in
+   * The entire LogTree
+   */
+  5: map<common.LocationScope, i32> narrowest_replication,
 }
 
 /**
