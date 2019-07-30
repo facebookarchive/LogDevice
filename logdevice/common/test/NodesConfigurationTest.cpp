@@ -422,6 +422,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
     // with service discovery and attributes, membership addition
     // should be successful
     NodesConfiguration::Update update = addNewNodeUpdate(*config);
+    VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);
     EXPECT_TRUE(new_config->getStorageConfig()->getMembership()->hasNode(17));

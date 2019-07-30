@@ -16,12 +16,10 @@ namespace nodes {
 std::deque<node_index_t>
 NodeIndicesAllocator::allocate(const ServiceDiscoveryConfig& svc,
                                size_t num_ids) const {
-  node_index_t max_idx;
   folly::F14FastSet<node_index_t> current_indices;
   current_indices.reserve(svc.numNodes());
   for (const auto& sd : svc) {
     current_indices.insert(sd.first);
-    max_idx = std::max(max_idx, sd.first);
   }
 
   std::deque<node_index_t> ret;

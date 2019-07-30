@@ -248,9 +248,9 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
 
 configuration::nodes::NodesConfiguration::Update
 addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing) {
-  static short new_node_idx = 17;
+  node_index_t new_node_idx = std::max(17, existing.getMaxNodeIndex() + 1);
   return addNewNodeUpdate(
-      existing, {new_node_idx++, both_role, "aa.bb.cc.dd.ee", 0.0, 1, false});
+      existing, {new_node_idx, both_role, "aa.bb.cc.dd.ee", 0.0, 1, false});
 }
 
 NodesConfiguration::Update
