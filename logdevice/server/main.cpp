@@ -412,7 +412,8 @@ int main(int argc, const char** argv) {
                                                 settings,
                                                 rocksdb_settings,
                                                 admin_server_settings,
-                                                plugin_registry);
+                                                plugin_registry,
+                                                signal_shutdown);
   } catch (const ConstructorFailed&) {
     return 1;
   }
@@ -430,7 +431,7 @@ int main(int argc, const char** argv) {
           params->getNumDBShards(),
           params.get()->getStats());
 
-  Server server(params.get(), signal_shutdown);
+  Server server(params.get());
 
   // We get here only if all subsystems initialized successfully.
   // Otherwsie Server constructor calls _exit(1).

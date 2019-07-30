@@ -69,7 +69,8 @@ class ServerParameters {
       UpdateableSettings<Settings> processor_settings,
       UpdateableSettings<RocksDBSettings> rocksdb_settings,
       UpdateableSettings<AdminServerSettings> admin_server_settings,
-      std::shared_ptr<PluginRegistry> plugin_registry);
+      std::shared_ptr<PluginRegistry> plugin_registry,
+      std::function<void()> stop_handler);
   ~ServerParameters();
 
   ServerParameters(const ServerParameters& rhs) = delete;
@@ -87,6 +88,7 @@ class ServerParameters {
   std::shared_ptr<TraceLogger> getTraceLogger();
   const std::shared_ptr<LocalLogFile>& getAuditLog();
   StatsHolder* getStats();
+  void requestStop();
   std::shared_ptr<PluginRegistry> getPluginRegistry() const {
     return plugin_registry_;
   }
@@ -153,14 +155,20 @@ class ServerParameters {
   std::list<ConfigSubscriptionHandle> server_config_subscriptions_;
   std::list<ConfigSubscriptionHandle> logs_config_subscriptions_;
   std::list<UpdateableServerConfig::HookHandle> server_config_hook_handles_;
+  std::list<UpdateableNodesConfiguration::HookHandle>
+      nodes_configuration_hook_handles_;
+
+  std::function<void()> stop_handler_;
 
   // Sets Settings::max_{accepted,client}_connections based on the fd limit,
   // number of reserved fds, as well as the number of nodes in the cluster.
   bool setConnectionLimits();
 
+  // NodesConfiguration Hooks
+  bool shutdownIfMyNodeIdChanged(const NodesConfiguration& config);
+  bool isSameMyNodeID(const NodesConfiguration& config);
+
   // Server Config Hooks
-  bool rejectIfMyNodeIdChanged(ServerConfig& config);
-  bool updateMyNodeId(ServerConfig& config);
   bool updateServerOrigin(ServerConfig& config);
   bool updateConfigSettings(ServerConfig& config);
 
@@ -179,7 +187,7 @@ class Server {
  public:
   // The constructor calls _exit(EXIT_FAILURE) if any subsystem fails to
   // initialize.
-  Server(ServerParameters* params, std::function<void()> stop_handler);
+  explicit Server(ServerParameters* params);
 
   // Shuts down the server.
   // If graceful shutdown times out, does _exit(EXIT_FAILURE);
@@ -242,7 +250,6 @@ class Server {
 
  private:
   ServerParameters* params_;
-  std::function<void()> stop_handler_;
 
   std::chrono::system_clock::time_point start_time_;
 

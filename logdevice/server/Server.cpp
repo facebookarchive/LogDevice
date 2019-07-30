@@ -89,25 +89,39 @@ static void bumpErrorCounter(dbg::Level level) {
   ld_check(false);
 }
 
-bool ServerParameters::rejectIfMyNodeIdChanged(ServerConfig& config) {
+bool ServerParameters::shutdownIfMyNodeIdChanged(
+    const NodesConfiguration& config) {
   if (!my_node_id_.has_value()) {
     return true;
   }
-
-  const auto& nodes_configuration =
-      config.getNodesConfigurationFromServerConfigSource();
-  ld_check(nodes_configuration);
-  ld_check(my_node_id_finder_);
-
-  auto node_id = my_node_id_finder_->calculate(*nodes_configuration);
-  if (!node_id.hasValue()) {
-    ld_error("Couldn't find my node index in config. Rejecting config.");
+  if (!isSameMyNodeID(config)) {
+    // If some other node took over our NodeID let's shutdown gracefully.
+    // TODO: Assert same service discovery attributes as well
+    ld_critical("MyNodeID is not the same anymore. Rejecting config.");
+    if (server_settings_->shutdown_on_my_node_id_mismatch) {
+      ld_critical("--shutdown-on-my-node-id-mismatch is set, gracefully "
+                  "shutting down.");
+      requestStop();
+    }
     return false;
   }
-  if (my_node_id_.value().index() != node_id->index()) {
-    ld_error("My node index changed from %d to %d. Rejecting config.",
-             (int)my_node_id_.value().index(),
-             (int)node_id->index());
+  return true;
+}
+
+bool ServerParameters::isSameMyNodeID(const NodesConfiguration& config) {
+  ld_check(my_node_id_.hasValue());
+
+  ld_check(my_node_id_finder_);
+
+  auto node_id = my_node_id_finder_->calculate(config);
+  if (!node_id.hasValue()) {
+    ld_error("Couldn't find my node index in config.");
+    return false;
+  }
+  if (my_node_id_.value() != node_id.value()) {
+    ld_error("My node ID changed from %s to %s.",
+             my_node_id_->toString().c_str(),
+             node_id->toString().c_str());
 
     return false;
   }
@@ -144,9 +158,7 @@ bool ServerParameters::updateConfigSettings(ServerConfig& config) {
 }
 
 bool ServerParameters::onServerConfigUpdate(ServerConfig& config) {
-  // Order of the invocation matters.
-  return rejectIfMyNodeIdChanged(config) && updateServerOrigin(config) &&
-      updateConfigSettings(config);
+  return updateServerOrigin(config) && updateConfigSettings(config);
 }
 
 bool ServerParameters::setConnectionLimits() {
@@ -240,7 +252,8 @@ ServerParameters::ServerParameters(
     UpdateableSettings<Settings> processor_settings,
     UpdateableSettings<RocksDBSettings> rocksdb_settings,
     UpdateableSettings<AdminServerSettings> admin_server_settings,
-    std::shared_ptr<PluginRegistry> plugin_registry)
+    std::shared_ptr<PluginRegistry> plugin_registry,
+    std::function<void()> stop_handler)
     : plugin_registry_(std::move(plugin_registry)),
       server_stats_(StatsParams().setIsServer(true)),
       settings_updater_(std::move(settings_updater)),
@@ -250,7 +263,10 @@ ServerParameters::ServerParameters(
       gossip_settings_(std::move(gossip_settings)),
       processor_settings_(std::move(processor_settings)),
       rocksdb_settings_(std::move(rocksdb_settings)),
-      admin_server_settings_(std::move(admin_server_settings)) {
+      admin_server_settings_(std::move(admin_server_settings)),
+      stop_handler_(std::move(stop_handler)) {
+  ld_check(stop_handler_);
+
   // Note: this won't work well if there are multiple Server instances in the
   // same process: only one of them will get its error counter bumped. Also,
   // there's a data race if the following two lines are run from multiple
@@ -278,6 +294,11 @@ ServerParameters::ServerParameters(
       std::bind(&ServerParameters::onServerConfigUpdate,
                 this,
                 std::placeholders::_1)));
+  nodes_configuration_hook_handles_.push_back(
+      updateable_config_->updateableNodesConfiguration()->addHook(
+          std::bind(&ServerParameters::shutdownIfMyNodeIdChanged,
+                    this,
+                    std::placeholders::_1)));
 
   {
     ConfigInit config_init(
@@ -468,9 +489,12 @@ StatsHolder* ServerParameters::getStats() {
   return &server_stats_;
 }
 
-Server::Server(ServerParameters* params, std::function<void()> stop_handler)
+void ServerParameters::requestStop() {
+  stop_handler_();
+}
+
+Server::Server(ServerParameters* params)
     : params_(params),
-      stop_handler_(stop_handler),
       server_settings_(params_->getServerSettings()),
       updateable_config_(params_->getUpdateableConfig()),
       server_config_(updateable_config_->getServerConfig()),
@@ -478,7 +502,6 @@ Server::Server(ServerParameters* params, std::function<void()> stop_handler)
       conn_budget_backlog_(server_settings_->connection_backlog),
       conn_budget_backlog_unlimited_(std::numeric_limits<uint64_t>::max()) {
   ld_check(params_);
-  ld_check(stop_handler_);
   start_time_ = std::chrono::system_clock::now();
 
   if (!(initListeners() && initStore() && initProcessor() &&
@@ -1188,7 +1211,7 @@ bool Server::startListening() {
 }
 
 void Server::requestStop() {
-  stop_handler_();
+  params_->requestStop();
 }
 
 void Server::gracefulShutdown() {

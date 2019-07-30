@@ -376,6 +376,14 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::Network)
 
+    ("shutdown-on-my-node-id-mismatch",
+     &shutdown_on_my_node_id_mismatch,
+     "true",
+     nullptr,
+     "Gracefully shutdown whenever the server's NodeID changes",
+     SERVER,
+     SettingsCategory::Configuration)
+
     ;
   // clang-format on
 

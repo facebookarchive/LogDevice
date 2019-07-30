@@ -77,6 +77,8 @@ struct ServerSettings : public SettingsBundle {
   // All changes to Trim points are stored in this log.
   std::string audit_log;
 
+  bool shutdown_on_my_node_id_mismatch;
+
   // (server-only setting) Maximum number of incoming connections that have been
   // accepted by listener (have an open FD) but have not been processed by
   // workers (made logdevice protocol handshake)
