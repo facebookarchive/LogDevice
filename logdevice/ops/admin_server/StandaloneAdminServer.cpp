@@ -167,18 +167,9 @@ void StandaloneAdminServer::initNodesConfiguration() {
     return;
   }
 
-  // AdminServer should use a ZK based NodesConfigurationStore.
-  auto params = NodesConfigurationStoreFactory::Params();
-  params.type = NodesConfigurationStoreFactory::NCSType::Zookeeper;
-  params.zk_client_factory =
-      plugin_registry_->getSinglePlugin<ZookeeperClientFactory>(
-          PluginType::ZOOKEEPER_CLIENT_FACTORY);
-  params.zk_config = updateable_config_->getZookeeperConfig();
-  params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
-      params.type, updateable_config_->getServerConfig()->getClusterName());
-
-  auto store = NodesConfigurationStoreFactory::create(std::move(params));
-  NodesConfigurationInit config_init(std::move(store), settings_);
+  NodesConfigurationInit config_init(buildNodesConfigurationStore(), settings_);
+  // The store used by the standalone admin server shouldn't require a
+  // procoessor. It's either a ZK NCS or a FileBasedNCS.
   auto success = config_init.initWithoutProcessor(
       updateable_config_->updateableNCMNodesConfiguration());
   if (!success) {
@@ -225,21 +216,11 @@ void StandaloneAdminServer::initNodesConfigurationManager() {
   auto initial_nc = updateable_config_->getNodesConfigurationFromNCMSource();
   ld_check(initial_nc);
 
-  // TODO: get NCS from NodesConfigurationInit instead
-  auto params = NodesConfigurationStoreFactory::Params();
-  params.type = NodesConfigurationStoreFactory::NCSType::Zookeeper;
-  params.zk_client_factory =
-      plugin_registry_->getSinglePlugin<ZookeeperClientFactory>(
-          PluginType::ZOOKEEPER_CLIENT_FACTORY);
-  params.zk_config = updateable_config_->getZookeeperConfig();
-  params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
-      params.type, updateable_config_->getServerConfig()->getClusterName());
-  auto store = NodesConfigurationStoreFactory::create(std::move(params));
-
   auto ncm = NodesConfigurationManagerFactory::create(
       NodesConfigurationManager::OperationMode::forTooling(),
       processor_.get(),
-      std::move(store));
+      // TODO: get NCS from NodesConfigurationInit instead
+      buildNodesConfigurationStore());
   if (ncm == nullptr) {
     ld_critical("Unable to create NodesConfigurationManager during server "
                 "creation!");
@@ -502,6 +483,19 @@ bool StandaloneAdminServer::allNodesHaveName(const NodesConfiguration& config) {
     }
   }
   return true;
+}
+
+// Builds an an admin client based NodesConfigurationStore
+std::unique_ptr<configuration::nodes::NodesConfigurationStore>
+StandaloneAdminServer::buildNodesConfigurationStore() {
+  using namespace configuration::nodes;
+  // AdminServer should use an admin compatible NCS
+  settings_updater_->setInternalSetting("admin-client-capabilities", "true");
+  return NodesConfigurationStoreFactory::create(
+      *updateable_config_->get(),
+      *settings_.get(),
+      plugin_registry_->getSinglePlugin<ZookeeperClientFactory>(
+          PluginType::ZOOKEEPER_CLIENT_FACTORY));
 }
 
 void StandaloneAdminServer::waitForShutdown() {

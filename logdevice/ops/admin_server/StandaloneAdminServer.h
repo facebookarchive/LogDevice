@@ -34,6 +34,10 @@ class MaintenanceManager;
 class ClusterMaintenanceStateMachine;
 } // namespace maintenance
 
+namespace configuration { namespace nodes {
+class NodesConfigurationStore;
+}} // namespace configuration::nodes
+
 namespace admin {
 
 // Exception that can be thrown in start();
@@ -110,6 +114,10 @@ class StandaloneAdminServer {
   // existence of names and config synchronization was poisoning the config.
   // TODO(T44427489): Remove when the `name` is required everywhere.
   bool allNodesHaveName(const NodesConfiguration& config);
+
+  // Builds an an admin client based NodesConfigurationStore
+  std::unique_ptr<configuration::nodes::NodesConfigurationStore>
+  buildNodesConfigurationStore();
 };
 } // namespace admin
 }} // namespace facebook::logdevice
