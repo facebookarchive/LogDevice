@@ -22,7 +22,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "Send per-node stats into the cluster with this period. Currently only "
        "30s of stats is tracked on the clients, so a value above 30s will "
        "not have any effect.",
-       CLIENT | EXPERIMENTAL,
+       CLIENT,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-send-retry-delay",
        &node_stats_send_retry_delay,
@@ -30,8 +30,8 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        validate_nonnegative<ssize_t>(),
        "When sending per-node stats into the cluster, and the message failed, "
        "wait this much before retrying.",
-       CLIENT | REQUIRES_RESTART /* Used when initializing NodeStatsHandler */
-           | EXPERIMENTAL,       /* (during worker thread start) */
+       CLIENT | REQUIRES_RESTART, /* Used when initializing NodeStatsHandler */
+                                  /* (during worker thread start) */
        SettingsCategory::SequencerBoycotting);
   init("node-stats-timeout-delay",
        &node_stats_timeout_delay,
@@ -39,14 +39,14 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        validate_positive<ssize_t>(),
        "Wait this long for an acknowledgement that the sent node stats "
        "message was received before sending the stats to another node",
-       CLIENT | EXPERIMENTAL,
+       CLIENT,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-retention-on-nodes",
        &node_stats_retention_on_nodes,
        "300s", // 5m
        validate_positive<ssize_t>(),
        "Save node stats sent from the clients on the nodes for this duration",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-controller-aggregation-period",
        &node_stats_controller_aggregation_period,
@@ -54,7 +54,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        validate_positive<ssize_t>(),
        "The period at which the controller nodes requests stats from all nodes "
        "in the cluster. Should be smaller than node-stats-retention-on-nodes",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-controller-response-timeout",
        &node_stats_controller_response_timeout,
@@ -62,7 +62,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        validate_positive<ssize_t>(),
        "A controller node waits this long between requesting stats from the "
        "other nodes, and aggregating the received stats",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-max-boycott-count",
        &node_stats_max_boycott_count,
@@ -71,15 +71,15 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "How many nodes may be boycotted. 0 will in addition to not allowing "
        "any nodes to be boycotted, it also ensures no nodes become controller "
        "nodes",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-duration",
        &node_stats_boycott_duration,
-       "0s",
+       "30min",
        validate_nonnegative<ssize_t>(),
        "How long a boycott should be active for. 0 will ensure that boycotts "
        "has no effect, but controller nodes will still report outliers",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-grace-period",
        &node_stats_boycott_grace_period,
@@ -87,7 +87,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        validate_nonnegative<ssize_t>(),
        "If a node is an consecutively deemed an outlier for this amount of "
        "time, allow it to be boycotted",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-sensitivity",
        &node_stats_boycott_sensitivity,
@@ -95,7 +95,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        validate_nonnegative<double>(),
        "If node-stats-boycott-sensitivity is set to e.g. 0.05, then nodes with "
        "a success ratio at or above 95% will not be boycotted",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-required-std-from-mean",
        &node_stats_boycott_required_std_from_mean,
@@ -104,7 +104,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "A node has to have a success ratio lower than (mean - X * STD) to be "
        "considered an outlier. X being the value of "
        "node-stats-boycott-required-std-from-mean",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-relative-margin",
        &node_stats_boycott_relative_margin,
@@ -115,14 +115,14 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "While node-stats-boycott-sensitivity is an absolute threshold, this "
        "setting defines a sensitivity threshold relative to the average of all "
        "success ratios. Only used if node-stats-boycott-use-rmsd is true",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-controller-check-period",
        &node_stats_controller_check_period,
        "60s",
        validate_positive<ssize_t>(),
        "A node will check if it's a controller or not with the given period",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-send-worst-client-count",
        &node_stats_send_worst_client_count,
@@ -134,7 +134,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "`node-stats-send-worst-client-count` worst values reported by clients "
        "per node will be sent separately to the controller, which can then "
        "take a decision if the writer is functioning correctly or not.",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-required-client-count",
        &node_stats_boycott_required_client_count,
@@ -142,7 +142,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        validate_positive<ssize_t>(),
        "Require at least values from this many clients before a boycott may "
        "occur",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-remove-worst-percentage",
        &node_stats_remove_worst_percentage,
@@ -150,14 +150,14 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        validate_range<double>(0.0, 1.0),
        "Will throw away the worst X\% of values reported by clients, to a "
        "maximum of node-count * node-stats-send-worst-client-count",
-       SERVER | EXPERIMENTAL,
+       SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-use-rmsd",
        &node_stats_boycott_use_rmsd,
-       "false",
+       "true",
        nullptr, // no validation
-       "(experimental) Use a new outlier detection algorithm",
-       SERVER | EXPERIMENTAL,
+       "Use a new outlier detection algorithm",
+       SERVER,
        SettingsCategory::SequencerBoycotting);
 
   init(
