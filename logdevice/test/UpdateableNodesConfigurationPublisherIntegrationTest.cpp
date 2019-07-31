@@ -143,7 +143,7 @@ TEST_F(NodesConfigurationPublisherIntegrationTest, Publish) {
   }
 
   {
-    // Switcing the source of truth to the NCM should trigger a config publish.
+    // Switching the source of truth to the NCM should trigger a config publish.
     auto notified = do_and_wait_for_notification(
         [&]() {
           client_->settings().set(

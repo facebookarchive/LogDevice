@@ -46,6 +46,7 @@ class NodesConfigurationTracer : SampledTracer {
     // the sample will be logged.
     folly::Function<std::string()> nc_update_gen_{};
     Source source_{Source::UNKNOWN};
+    folly::dynamic timestamps_ = folly::dynamic::object();
   };
 
   explicit NodesConfigurationTracer(std::shared_ptr<TraceLogger> logger);

@@ -29,7 +29,6 @@ void UpdateRequestData::onDestruction() {
     // TODO: log errors separately
     return;
   }
-  // TODO: log timestamps, log outliers separately
   NodesConfigurationTracer::Sample sample;
   sample.nc_update_gen_ = [updates = std::move(update_)]() mutable {
     return logdevice::toString(std::move(updates));
@@ -37,6 +36,7 @@ void UpdateRequestData::onDestruction() {
   // Note that nc is the published nc only if status is OK
   sample.published_nc_ = std::move(nc_);
   sample.source_ = NodesConfigurationTracer::Source::NCM_UPDATE;
+  sample.timestamps_ = std::move(timestamps_);
   tracer_.trace(std::move(sample));
 }
 
@@ -45,7 +45,6 @@ void OverwriteRequestData::onDestruction() {
     // TODO: log errors separately
     return;
   }
-  // TODO: log timestamps, log outliers separately
   NodesConfigurationTracer::Sample sample;
   sample.nc_update_gen_ = [configuration = nc_]() mutable {
     // TODO: we don't have NodesConfiguration::toString(), so we use
@@ -56,6 +55,7 @@ void OverwriteRequestData::onDestruction() {
   // Note that nc is the published nc only if status is OK
   sample.published_nc_ = std::move(nc_);
   sample.source_ = NodesConfigurationTracer::Source::NCM_OVERWRITE;
+  sample.timestamps_ = std::move(timestamps_);
   tracer_.trace(std::move(sample));
 }
 

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <folly/Random.h>
+#include <folly/dynamic.h>
 
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
@@ -42,13 +43,13 @@ struct NCMRequestData {
   void addTimestamp(folly::StringPiece key,
                     SystemTimestamp ts = SystemTimestamp::now()) {
     // We shouldn't overwrite timestamps
-    ld_assert(!timestamps_.contains(key));
-    timestamps_[key] = ts;
+    ld_assert(timestamps_.find(key) == timestamps_.items().end());
+    timestamps_[key] = ts.toMilliseconds().count();
   }
 
   NodesConfigurationTracer tracer_;
   Status status_{Status::UNKNOWN};
-  folly::F14FastMap<std::string, SystemTimestamp> timestamps_{};
+  folly::dynamic timestamps_ = folly::dynamic::object();
 };
 
 struct UpdateRequestData : public NCMRequestData {

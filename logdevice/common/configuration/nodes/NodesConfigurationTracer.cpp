@@ -9,6 +9,8 @@
 
 #include <memory>
 
+#include <folly/json.h>
+
 #include "logdevice/common/SampledTracer.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/debug.h"
@@ -80,6 +82,8 @@ void NodesConfigurationTracer::trace(NodesConfigurationTracer::Sample sample) {
     trace_sample->addIntValue(
         "sample_time_ms",
         static_cast<int64_t>(sample_time.toMilliseconds().count()));
+    trace_sample->addNormalValue(
+        "timestamps", folly::toJson(sample.timestamps_));
 
     return trace_sample;
   };
