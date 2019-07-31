@@ -17,6 +17,7 @@
 #include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RebuildingTypes.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
@@ -535,7 +536,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
     // The timer is only activated when disable-data-log-rebuilt
     // setting is set. The SHARD_IS_REBUILT message is sent when the timer
     // fires.
-    std::unique_ptr<LibeventTimer> shardIsRebuiltDelayTimer{nullptr};
+    Timer shardIsRebuiltDelayTimer;
   };
 
   bool shuttingDown_{false};

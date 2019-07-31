@@ -2553,7 +2553,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
           .apply(commonSetup())
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
-          .setParam("--max-random-delay-shard-is-rebuilt-message", "2")
+          .setParam("--shard-is-rebuilt-msg-delay", "0s..2s")
           .setParam("--rebuilding-restarts-grace-period", "1ms")
           .setLogGroupName("test-log-group")
           .setLogAttributes(log_attrs)
@@ -2666,7 +2666,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
           .apply(commonSetup())
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
-          .setParam("--max-random-delay-shard-is-rebuilt-message", "2")
+          .setParam("--shard-is-rebuilt-msg-delay", "0s..2s")
           .setLogGroupName("test-log-group")
           .setLogAttributes(log_attrs)
           .setEventLogAttributes(event_log_attrs)
@@ -2752,7 +2752,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
           .apply(commonSetup())
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--disable-data-log-rebuilding", "true")
-          .setParam("--max-random-delay-shard-is-rebuilt-message", "2")
+          .setParam("--shard-is-rebuilt-msg-delay", "0s..2s")
           .setLogGroupName("test-log-group")
           .setLogAttributes(log_attrs)
           .setEventLogAttributes(event_log_attrs)
@@ -2851,7 +2851,7 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
           // they expire by retention, or are explicitly cleared by this
           // test.
           .setParam("--disable-data-log-rebuilding")
-          .setParam("--max-random-delay-shard-is-rebuilt-message", "2")
+          .setParam("--shard-is-rebuilt-msg-delay", "0s..2s")
           // Use only a single shard so that partition creation/flushing
           // commands can be unambiguously targetted.
           .setNumDBShards(1)

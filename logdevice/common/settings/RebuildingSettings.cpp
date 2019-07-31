@@ -341,15 +341,14 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "interferes with the primary workload.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::Rebuilding);
-  init("max-random-delay-shard-is-rebuilt-message",
-       &max_random_delay_shard_is_rebuilt_message,
-       "300",
-       nullptr,
-       "If disable-data-log-rebuilding is enabled then after the data "
-       "expires the SHARD_IS_REBULT messages may arrive at exactly the same "
-       "time from all the hosts overwhelming thread 0 processing those "
-       "messages. The messages will be delayed by a random time in seconds "
-       "between 0 and the value specified here. 0 means no delay. NOTE: "
+  init("shard-is-rebuilt-msg-delay",
+       &shard_is_rebuilt_msg_delay,
+       "5s..300s",
+       validate_nonnegative<ssize_t>(),
+       "In large clusters SHARD_IS_REBULT messages can arrive in a thundering "
+       "herd overwhelming thread 0 processing those messages. The messages "
+       "will be delayed by a random time in seconds between the min and the "
+       "max value specified in the range above. 0 means no delay. NOTE: "
        "changing this value only applies to upcoming rebuildings, if you want "
        "to apply it to ongoing rebuildings, you'll need to restart the node.",
        SERVER,
