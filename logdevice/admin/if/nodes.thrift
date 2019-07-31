@@ -128,6 +128,13 @@ enum MaintenanceStatus {
    * transition.
    */
   AWAITING_NODES_CONFIG_TRANSITION = 9,
+
+  /**
+   * MaintenanceManager observed a new node that needs to be enabled, but the
+   * Node is still in the PROVISIONING state, so the MaintenanceManager is
+   * waiting for the node to mark itself as PROVISIONED.
+   */
+  AWAITING_NODE_PROVISIONING = 10,
 }
 
 /**

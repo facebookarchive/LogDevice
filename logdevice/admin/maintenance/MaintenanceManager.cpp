@@ -496,9 +496,13 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
     if (storageState.value() == membership::StorageState::READ_WRITE) {
       return ShardOperationalState::ENABLED;
     } else {
-      // This does not necessarily mean we have an active workflow
-      // right now but one will be created if this state holds
-      return ShardOperationalState::ENABLING;
+      if (storageState.value() == membership::StorageState::PROVISIONING) {
+        return ShardOperationalState::PROVISIONING;
+      } else {
+        // This does not necessarily mean we have an active workflow
+        // right now but one will be created if this state holds
+        return ShardOperationalState::ENABLING;
+      }
     }
   }
 
@@ -936,6 +940,10 @@ void MaintenanceManager::processShardWorkflowResult(
              toString(shard).c_str(),
              apache::thrift::util::enumNameSafe(s).c_str());
     switch (s) {
+      case MaintenanceStatus::AWAITING_NODE_PROVISIONING:
+        // We don't want PROVISIONING shards to block safety check runs because
+        // it may take forever. So let's not set the has_shards_to_enable_ flag.
+        break;
       case MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES:
       case MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION:
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:

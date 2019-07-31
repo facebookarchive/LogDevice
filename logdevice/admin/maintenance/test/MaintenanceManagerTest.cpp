@@ -736,6 +736,7 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTestWithSafetyCheckFailures) {
   init();
   node_index_t node = 18;
   addNewNode(node);
+  overrideStorageState({{ShardID(18, 0), membership::StorageState::NONE}});
   regenerateClusterMaintenanceWrapper();
 
   EXPECT_CALL(*maintenance_manager_, runShardWorkflows())
@@ -1043,6 +1044,87 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTestWithSafetyCheckFailures) {
   verifyMaintenanceStatus(N2S0, MaintenanceStatus::COMPLETED);
   verifyMaintenanceStatus(N9S0, MaintenanceStatus::COMPLETED);
   verifyMaintenanceStatus(N18S0, MaintenanceStatus::COMPLETED);
+}
+
+TEST_F(MaintenanceManagerTest, TestProvisioningNode) {
+  init();
+  node_index_t node = 18;
+  addNewNode(node);
+  regenerateClusterMaintenanceWrapper();
+
+  EXPECT_CALL(*maintenance_manager_, runShardWorkflows())
+      .WillRepeatedly(Invoke([this]() { return getShardWorkflowResult(); }));
+  EXPECT_CALL(*maintenance_manager_, runSequencerWorkflows())
+      .WillRepeatedly(
+          Invoke([this]() { return getSequencerWorkflowResult(); }));
+  EXPECT_CALL(
+      *maintenance_manager_, getExpectedStorageStateTransition(::testing::_))
+      .WillRepeatedly(Invoke([this](ShardID shard) {
+        return expected_storage_state_transition_[shard];
+      }));
+
+  auto N9S0 = ShardID(9, 0);
+  auto N18S0 = ShardID(18, 0);
+
+  safety_check_shards_.push_back(N9S0);
+  setShardWorkflowResult({
+      {N9S0,
+       {MaintenanceStatus::AWAITING_SAFETY_CHECK,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_NODE_PROVISIONING,
+        membership::StorageStateTransition::Count /* doesn't matter */}},
+  });
+  setSequencerWorkflowResult(SeqWfResult());
+
+  verifyMMStatus(MaintenanceManager::MMStatus::STARTING);
+  // deliver ClusterMaintenanceState Update
+  maintenance_manager_->onClusterMaintenanceStateUpdate(cms_, lsn_t(1));
+  // deliver EventLogRebuildingSet Update
+  maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
+  runExecutor();
+
+  // Provisioning nodes shouldn't block safety checks
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_SAFETY_CHECK_RESULTS);
+  verifyShardOperationalState(N18S0, ShardOperationalState::PROVISIONING);
+
+  // Let's derive the N9S0 maintenance to completion
+  setShardWorkflowResult({
+      {N9S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_NODE_PROVISIONING,
+        membership::StorageStateTransition::Count /* doesn't matter */}},
+  });
+  fulfillSafetyCheckPromise();
+  runExecutor();
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+  applyNCUpdate();
+  fulfillNCPromise(E::OK, nodes_config_);
+  runExecutor();
+
+  // N9S0 maintenance is complete, there's nothing MM can do about N18S0
+  // other waiting for a state change.
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+
+  // Simulate N18S0 marking itself as provisioned
+  setShardWorkflowResult({
+      {N9S0,
+       {MaintenanceStatus::COMPLETED,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {N18S0,
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::ENABLING_READ}},
+  });
+  nodes_config_ = nodes_config_->applyUpdate(
+      NodesConfigurationTestUtil::markAllShardProvisionedUpdate(
+          *nodes_config_));
+  maintenance_manager_->onNodesConfigurationUpdated();
+  runExecutor();
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+
+  // The MM continues normally from here enabling the node.
 }
 
 }}} // namespace facebook::logdevice::maintenance

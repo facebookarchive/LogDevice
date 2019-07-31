@@ -127,9 +127,14 @@ TEST_F(ShardWorkflowTest, SimpleMayDisappear) {
 TEST_F(ShardWorkflowTest, SimpleEnable) {
   init();
   wf->addTargetOpState({ShardOperationalState::ENABLED});
-  auto f = wf->run(membership::StorageState::NONE,
+  auto f = wf->run(membership::StorageState::PROVISIONING,
                    ShardDataHealth::EMPTY,
                    RebuildingMode::RESTORE);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODE_PROVISIONING);
+  f = wf->run(membership::StorageState::NONE,
+              ShardDataHealth::EMPTY,
+              RebuildingMode::RESTORE);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),

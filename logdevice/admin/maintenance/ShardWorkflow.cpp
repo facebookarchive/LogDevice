@@ -199,6 +199,9 @@ void ShardWorkflow::computeMaintenanceStatusForEnable() {
   ld_check(target_op_state_.count(ShardOperationalState::ENABLED));
 
   switch (current_storage_state_) {
+    case membership::StorageState::PROVISIONING:
+      updateStatus(MaintenanceStatus::AWAITING_NODE_PROVISIONING);
+      break;
     case membership::StorageState::NONE:
       expected_storage_state_transition_ =
           membership::StorageStateTransition::ENABLING_READ;
