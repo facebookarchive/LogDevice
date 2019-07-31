@@ -613,6 +613,8 @@ class MaintenanceManager : public SerialWorkContext {
   // or not.
   bool isMaintenanceMarkedUnsafe(const GroupID& id) const;
 
+  bool isBootstrappingCluster() const;
+
   friend class MaintenanceManagerTest;
 };
 

@@ -308,7 +308,7 @@ void MaintenanceManagerTest::verifyShardOperationalState(
   auto f = maintenance_manager_->getShardOperationalState(shard);
   runExecutor();
   ASSERT_TRUE(f.hasValue());
-  EXPECT_EQ(f.value(), expectedResult);
+  EXPECT_EQ(expectedResult, f.value());
 }
 
 void MaintenanceManagerTest::verifyStorageState(
@@ -318,7 +318,7 @@ void MaintenanceManagerTest::verifyStorageState(
   runExecutor();
   ASSERT_TRUE(f.hasValue());
   ASSERT_TRUE(f.value().hasValue());
-  EXPECT_EQ(f.value().value(), state);
+  EXPECT_EQ(state, f.value().value());
 }
 
 void MaintenanceManagerTest::verifyMMStatus(
@@ -1127,4 +1127,62 @@ TEST_F(MaintenanceManagerTest, TestProvisioningNode) {
   // The MM continues normally from here enabling the node.
 }
 
+TEST_F(MaintenanceManagerTest, TestBootstrappingFlag) {
+  init();
+
+  // Let's start with an empty provisioning NC.
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  nodes_config_ = nodes_config_->applyUpdate(
+      NodesConfigurationTestUtil::initialAddShardsUpdate({18}));
+  ld_check(nodes_config_);
+  nodes_config_ = nodes_config_->applyUpdate(
+      NodesConfigurationTestUtil::markAllShardProvisionedUpdate(
+          *nodes_config_));
+  ld_check(nodes_config_);
+
+  ASSERT_TRUE(nodes_config_->getSequencerMembership()->isBootstrapping());
+  ASSERT_TRUE(nodes_config_->getStorageMembership()->isBootstrapping());
+  regenerateClusterMaintenanceWrapper();
+
+  EXPECT_CALL(*maintenance_manager_, runShardWorkflows())
+      .WillRepeatedly(Invoke([this]() { return getShardWorkflowResult(); }));
+  EXPECT_CALL(*maintenance_manager_, runSequencerWorkflows())
+      .WillRepeatedly(
+          Invoke([this]() { return getSequencerWorkflowResult(); }));
+  EXPECT_CALL(
+      *maintenance_manager_, getExpectedStorageStateTransition(::testing::_))
+      .WillRepeatedly(Invoke([this](ShardID shard) {
+        return expected_storage_state_transition_[shard];
+      }));
+
+  auto N18S0 = ShardID(18, 0);
+  setShardWorkflowResult(
+      {{N18S0,
+        {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+         membership::StorageStateTransition::ENABLING_READ}}});
+
+  verifyMMStatus(MaintenanceManager::MMStatus::STARTING);
+
+  // deliver ClusterMaintenanceState Update
+  maintenance_manager_->onClusterMaintenanceStateUpdate(cms_, lsn_t(1));
+  // deliver EventLogRebuildingSet Update
+  maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
+  runExecutor();
+
+  // Although we have a node that's ready to get enabled, MM should still wait
+  // for the cluster to stop bootstrapping.
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE);
+
+  nodes_config_ = nodes_config_->applyUpdate(
+      NodesConfigurationTestUtil::finalizeBootstrappingUpdate(*nodes_config_));
+  ASSERT_NE(nullptr, nodes_config_);
+  maintenance_manager_->onNodesConfigurationUpdated();
+  runExecutor();
+
+  // After removing the bootsrapping flag, the MM should start enabling
+  // the node.
+  verifyMMStatus(MaintenanceManager::MMStatus::AWAITING_NODES_CONFIG_UPDATE);
+
+  // The MM continues normally from here enabling the node.
+}
 }}} // namespace facebook::logdevice::maintenance

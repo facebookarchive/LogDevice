@@ -805,6 +805,16 @@ void MaintenanceManager::evaluate() {
     nodes_config_ = deps_->getNodesConfiguration();
   }
 
+  if (isBootstrappingCluster()) {
+    ld_info("The cluster is still bootstrapping, nothing to do but wait. Will "
+            "run when next state change occurs or periodic evaluation timer "
+            "expires");
+    status_ = MMStatus::AWAITING_STATE_CHANGE;
+    ld_info("Updated MaintenanceManager status to AWAITING_STATE_CHANGE");
+    activateReevaluationTimer();
+    return;
+  }
+
   updateClientMaintenanceStateWrapper();
 
   // Create all required workflows
@@ -1456,4 +1466,13 @@ bool MaintenanceManager::isTargetAchieved(ShardOperationalState current,
 bool MaintenanceManager::isMaintenanceMarkedUnsafe(const GroupID& id) const {
   return unsafe_groups_.count(id) > 0;
 }
+
+bool MaintenanceManager::isBootstrappingCluster() const {
+  const auto& storage_membership = nodes_config_->getStorageMembership();
+  const auto& sequencer_membership = nodes_config_->getSequencerMembership();
+
+  return storage_membership->isBootstrapping() ||
+      sequencer_membership->isBootstrapping();
+}
+
 }}} // namespace facebook::logdevice::maintenance
