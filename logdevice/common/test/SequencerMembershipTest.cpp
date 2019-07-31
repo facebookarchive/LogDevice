@@ -250,6 +250,34 @@ TEST_F(SequencerMembershipTest, InvalidTransitions) {
   ASSERT_EQ(E::VERSION_MISMATCH, err);
   ASSERT_MEMBERSHIP_NODES(m, 1);
   checkCodecSerialization(m);
+
+  {
+    // Try to finalize bootstrapping on a non bootstrapping membership
+    SequencerMembership m2{};
+    SequencerMembership::Update up{m2.getVersion()};
+    up.finalizeBootstrapping();
+    ASSERT_EQ(0, m2.applyUpdate(up, &m2));
+
+    up = SequencerMembership::Update{m2.getVersion()};
+    up.finalizeBootstrapping();
+    ASSERT_EQ(-1, m2.applyUpdate(up, &m2));
+    ASSERT_EQ(E::ALREADY, err);
+  }
+}
+
+TEST_F(SequencerMembershipTest, FinalizeBootstrapping) {
+  SequencerMembership m{};
+  ASSERT_EQ(MembershipVersion::EMPTY_VERSION, m.getVersion());
+  EXPECT_TRUE(m.isBootstrapping());
+  checkCodecSerialization(m);
+  SequencerMembership::Update update{m.getVersion()};
+  update.finalizeBootstrapping();
+  int rv = m.applyUpdate(update, &m);
+  EXPECT_EQ(0, rv);
+  EXPECT_FALSE(m.isBootstrapping());
+  EXPECT_EQ(MembershipVersion::Type{MembershipVersion::EMPTY_VERSION.val() + 1},
+            m.getVersion());
+  checkCodecSerialization(m);
 }
 
 //////////  Testing the flatbuffers Codec ////////////////

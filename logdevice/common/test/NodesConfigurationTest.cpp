@@ -114,8 +114,10 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     EXPECT_EQ(DUMMY_MAINTENANCE, result->active_maintenance);
     // newly provisioned shards should be in rw state
     EXPECT_EQ(StorageState::READ_WRITE, result->storage_state);
+
     EXPECT_EQ(StorageStateFlags::NONE, result->flags);
-    EXPECT_EQ(config->getVersion(), result->since_version);
+    // Account for the version bump of finalizing the bootstrapping.
+    EXPECT_EQ(config->getVersion().val() - 1, result->since_version.val());
   }
 
   // test iterating membership nodes
@@ -149,7 +151,7 @@ TEST_F(NodesConfigurationTest, TestMembershipVersionConsistencyValidation) {
   config = config->applyUpdate(addNewNodeUpdate(*config));
   ASSERT_NE(nullptr, config);
 
-  ASSERT_EQ(5, config->getStorageMembership()->getVersion().val());
+  ASSERT_EQ(6, config->getStorageMembership()->getVersion().val());
   ASSERT_TRUE(config->validate());
 
   auto c = const_cast<NodesConfiguration*>(config.get());

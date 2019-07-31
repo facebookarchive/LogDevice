@@ -138,9 +138,6 @@ int ShardState::transition(const ShardState& current_state,
     case StorageStateTransition::BOOTSTRAP_ENABLE_METADATA_SHARD: {
       // provisioning new shards for the newly created cluster
 
-      // TODO(mbassem): Restrict the usage of those transitions to
-      // bootstrapping clusters.
-
       ld_check(current_state.storage_state == StorageState::NONE);
       ld_check(target_shard_state.storage_state == StorageState::READ_WRITE);
       target_flags = StorageStateFlags::NONE;
@@ -341,7 +338,9 @@ int ShardState::transition(const ShardState& current_state,
 }
 
 bool StorageMembership::Update::isValid() const {
-  return !shard_updates.empty() &&
+  // An update is valid if it modifies at least a single shard or changes the
+  // the bootstrapping status of the membership
+  return (!shard_updates.empty() || finalize_bootstrapping) &&
       std::all_of(shard_updates.cbegin(),
                   shard_updates.cend(),
                   [](const auto& kv) { return kv.second.isValid(); });
@@ -504,6 +503,17 @@ int StorageMembership::applyUpdate(const Membership::Update& membership_update,
       }
     }
 
+    if (isBootstrappingShard(shard_update.transition) && !bootstrapping_) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      5,
+                      "Cannnot apply a bootstrapping enable update in a non "
+                      "bootstrapping cluster. bootstrapping: %d Update: %s",
+                      bootstrapping_,
+                      update.toString().c_str());
+      err = E::INVALID_PARAM;
+      return -1;
+    }
+
     ShardState target_shard_state;
     int rv = ShardState::transition(*current_shard_state,
                                     shard_update,
@@ -531,6 +541,21 @@ int StorageMembership::applyUpdate(const Membership::Update& membership_update,
       ld_check(target_shard_state.isValid());
       target_membership_state.setShardState(shard, target_shard_state);
     }
+  }
+  if (update.finalize_bootstrapping) {
+    if (!bootstrapping_) {
+      RATELIMIT_ERROR(
+          std::chrono::seconds(10),
+          5,
+          "Cannnot apply membership update as it's trying to finalize "
+          "bootstrapping for a cluster that's not bootstrapping already."
+          "version: %s, update: %s.",
+          membership::toString(version_).c_str(),
+          update.toString().c_str());
+      err = E::ALREADY;
+      return -1;
+    }
+    target_membership_state.bootstrapping_ = false;
   }
 
   if (new_storage_membership_out != nullptr) {
@@ -721,6 +746,7 @@ std::vector<node_index_t> StorageMembership::getMetaDataNodeIndices() const {
 
 bool StorageMembership::operator==(const StorageMembership& rhs) const {
   return version_ == rhs.getVersion() && node_states_ == rhs.node_states_ &&
+      bootstrapping_ == rhs.bootstrapping_ &&
       metadata_shards_ == rhs.metadata_shards_;
 }
 

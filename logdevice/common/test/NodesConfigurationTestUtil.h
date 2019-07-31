@@ -58,6 +58,11 @@ configuration::nodes::NodesConfiguration::Update markAllShardProvisionedUpdate(
 configuration::nodes::NodesConfiguration::Update bootstrapEnableAllShardsUpdate(
     const configuration::nodes::NodesConfiguration& existing);
 
+// Create an NC::Update to unset the bootstrapping flag in both sequencer and
+// storage memberhip.
+configuration::nodes::NodesConfiguration::Update finalizeBootstrappingUpdate(
+    const configuration::nodes::NodesConfiguration& existing);
+
 // provision a specific LD nodes config with:
 // 1) nodes N1, N2, N7, N9, N11, N13
 // 2) N1 and N7 have sequencer role; N1, N2, N9, N11, N13 have storage role;

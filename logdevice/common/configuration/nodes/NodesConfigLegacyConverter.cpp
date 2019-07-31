@@ -179,7 +179,9 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
 
   // setting all membership versions to `version'
   seq_mem->version_ = membership::MembershipVersion::Type(version.val());
+  seq_mem->bootstrapping_ = false;
   storage_mem->version_ = membership::MembershipVersion::Type(version.val());
+  storage_mem->bootstrapping_ = false;
 
   std::unordered_set<node_index_t> meta_nodes(
       meta_config.metadata_nodes.begin(), meta_config.metadata_nodes.end());
@@ -295,6 +297,18 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
   if (converted_nodes_config == nullptr) {
     return false;
   }
+
+  if (converted_nodes_config->getStorageMembership()->isBootstrapping() ||
+      converted_nodes_config->getSequencerMembership()->isBootstrapping()) {
+    ld_error(
+        "NodesConfiguration converted from the legacy NodesConfig should not "
+        "have the bootstrapping flag set. Got: sequencer_boostrapping: "
+        "%d, storage_bootstrapping: %d",
+        converted_nodes_config->getSequencerMembership()->isBootstrapping(),
+        converted_nodes_config->getStorageMembership()->isBootstrapping());
+    return false;
+  }
+
   auto convert_end_time = std::chrono::steady_clock::now();
 
   ld_info("Convertion to the new format took %lu usec for config with cluster "

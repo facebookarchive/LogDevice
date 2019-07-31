@@ -67,6 +67,7 @@ thrift::StorageMembership MembershipThriftConverter::toThrift(
   membership.set_proto_version(CURRENT_PROTO_VERSION);
   membership.set_membership_version(storage_membership.getVersion().val());
   membership.set_node_states(std::move(node_states));
+  membership.set_bootstrapping(storage_membership.bootstrapping_);
   membership.set_metadata_shards(std::move(metadata_shards));
 
   return membership;
@@ -121,6 +122,7 @@ std::shared_ptr<StorageMembership> MembershipThriftConverter::fromThrift(
     result->metadata_shards_.insert(
         ShardID(meta_shard.node_idx, meta_shard.shard_idx));
   }
+  result->bootstrapping_ = storage_membership.get_bootstrapping();
 
   if (!result->validate()) {
     err = E::BADMSG;
@@ -146,6 +148,7 @@ thrift::SequencerMembership MembershipThriftConverter::toThrift(
   membership.set_proto_version(CURRENT_PROTO_VERSION);
   membership.set_membership_version(sequencer_membership.getVersion().val());
   membership.set_node_states(std::move(node_states));
+  membership.set_bootstrapping(sequencer_membership.bootstrapping_);
   return membership;
 }
 
@@ -179,6 +182,7 @@ std::shared_ptr<SequencerMembership> MembershipThriftConverter::fromThrift(
         node_state.second.active_maintenance};
     result->setNodeState(node, {sequencer_enabled, weight, active_maintenance});
   }
+  result->bootstrapping_ = sequencer_membership.get_bootstrapping();
 
   if (!result->validate()) {
     err = E::BADMSG;

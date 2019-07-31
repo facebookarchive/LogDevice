@@ -63,7 +63,9 @@ bool SequencerNodeState::isValid() const {
 }
 
 bool SequencerMembership::Update::isValid() const {
-  return !node_updates.empty() &&
+  // An update is valid if it modifies at least a single shard or changes the
+  // the bootstrapping status of the membership
+  return (!node_updates.empty() || finalize_bootstrapping) &&
       std::all_of(node_updates.cbegin(),
                   node_updates.cend(),
                   [](const auto& kv) { return kv.second.isValid(); });
@@ -222,6 +224,22 @@ int SequencerMembership::applyUpdate(
     }
   }
 
+  if (update.finalize_bootstrapping) {
+    if (!bootstrapping_) {
+      RATELIMIT_ERROR(
+          std::chrono::seconds(10),
+          5,
+          "Cannnot apply membership update as it's trying to finalize "
+          "bootstrapping for a cluster that's not bootstrapping already."
+          "version: %s, update: %s.",
+          membership::toString(version_).c_str(),
+          update.toString().c_str());
+      err = E::ALREADY;
+      return -1;
+    }
+    target_membership_state.bootstrapping_ = false;
+  }
+
   if (new_sequencer_membership_out != nullptr) {
     *new_sequencer_membership_out = target_membership_state;
   }
@@ -282,7 +300,8 @@ bool SequencerMembership::isSequencerEnabledFlagSet(node_index_t node) const {
 }
 
 bool SequencerMembership::operator==(const SequencerMembership& rhs) const {
-  return version_ == rhs.getVersion() && node_states_ == rhs.node_states_;
+  return version_ == rhs.getVersion() && node_states_ == rhs.node_states_ &&
+      bootstrapping_ == rhs.bootstrapping_;
 }
 
 std::shared_ptr<const SequencerMembership>

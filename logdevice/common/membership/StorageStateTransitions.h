@@ -132,6 +132,11 @@ constexpr bool isAddingNewShard(StorageStateTransition transition) {
       transition == StorageStateTransition::ADD_EMPTY_METADATA_SHARD;
 }
 
+constexpr bool isBootstrappingShard(StorageStateTransition transition) {
+  return transition == StorageStateTransition::BOOTSTRAP_ENABLE_SHARD ||
+      transition == StorageStateTransition::BOOTSTRAP_ENABLE_METADATA_SHARD;
+}
+
 using StateTransitionCondition = uint64_t;
 
 namespace Condition {

@@ -97,6 +97,22 @@ bootstrapEnableAllShardsUpdate(const NodesConfiguration& nc) {
   return update;
 }
 
+configuration::nodes::NodesConfiguration::Update
+finalizeBootstrappingUpdate(const NodesConfiguration& nc) {
+  NodesConfiguration::Update update{};
+  update.storage_config_update = std::make_unique<StorageConfig::Update>();
+  update.storage_config_update->membership_update =
+      std::make_unique<StorageMembership::Update>(
+          nc.getStorageMembership()->getVersion());
+  update.storage_config_update->membership_update->finalizeBootstrapping();
+  update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
+  update.sequencer_config_update->membership_update =
+      std::make_unique<SequencerMembership::Update>(
+          nc.getSequencerMembership()->getVersion());
+  update.sequencer_config_update->membership_update->finalizeBootstrapping();
+  return update;
+}
+
 std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
     configuration::nodes::NodesConfiguration::Update provision_update) {
   auto config = std::make_shared<const NodesConfiguration>();
@@ -105,6 +121,8 @@ std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
   config = config->applyUpdate(markAllShardProvisionedUpdate(*config));
   ld_assert(config != nullptr);
   config = config->applyUpdate(bootstrapEnableAllShardsUpdate(*config));
+  ld_assert(config != nullptr);
+  config = config->applyUpdate(finalizeBootstrappingUpdate(*config));
   ld_assert(config != nullptr);
   VLOG(1) << "config: " << NodesConfigurationCodec::debugJsonString(*config);
   return config;

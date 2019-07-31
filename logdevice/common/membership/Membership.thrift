@@ -58,6 +58,7 @@ struct StorageMembership {
   2: u64 membership_version;
   3: StorageNodeState node_states;
   4: list<ShardID> metadata_shards;
+  5: bool bootstrapping;
 }
 
 ////////////////// Sequencer Membership ////////////////
@@ -72,4 +73,5 @@ struct SequencerMembership {
   1: u32 proto_version;
   2: u64 membership_version;
   3: map<node_idx, SequencerNodeState> node_states;
+  4: bool bootstrapping;
 }

@@ -33,6 +33,13 @@ class Membership {
     virtual MembershipType getType() const = 0;
     virtual std::string toString() const = 0;
     virtual ~Update() {}
+
+    // Unset the bootsrapping flag in the membership when applying the update.
+    void finalizeBootstrapping() {
+      finalize_bootstrapping = true;
+    }
+
+    bool finalize_bootstrapping{false};
   };
 
   explicit Membership(MembershipVersion::Type version) : version_(version) {}
@@ -84,8 +91,18 @@ class Membership {
     return version_;
   }
 
+  bool isBootstrapping() const {
+    return bootstrapping_;
+  }
+
  protected:
   MembershipVersion::Type version_{MembershipVersion::EMPTY_VERSION};
+
+  // If this flag is set, it means that this cluster is still new and being
+  // bootstrapped. Maintenance manager won't enable the sequencers/shards as
+  // long as this flag is set. Some special NCM transitions are only allowed
+  // while this flag is set.
+  bool bootstrapping_{true};
 
   friend class configuration::nodes::NodesConfigLegacyConverter;
   friend class MembershipThriftConverter;

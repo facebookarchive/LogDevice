@@ -450,7 +450,7 @@ TEST_F(StorageMembershipTest, InvalidTransitions) {
       (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
        Condition::NO_SELF_REPORT_MISSING_DATA));
 
-  // try to apply an invalid update
+  // No-op updates are invalid
   auto update_invalid = mark_as_provisioned;
   update_invalid.shard_updates.clear();
   ASSERT_FALSE(update_invalid.isValid());
@@ -504,6 +504,19 @@ TEST_F(StorageMembershipTest, InvalidTransitions) {
   ASSERT_EQ(E::SOURCE_STATE_MISMATCH, err);
 
   checkCodecSerialization(m);
+
+  {
+    // Try to finalize bootstrapping on a non bootstrapping membership
+    StorageMembership m2{};
+    StorageMembership::Update up{m2.getVersion()};
+    up.finalizeBootstrapping();
+    ASSERT_EQ(0, m2.applyUpdate(up, &m2));
+
+    up = StorageMembership::Update{m2.getVersion()};
+    up.finalizeBootstrapping();
+    ASSERT_EQ(-1, m2.applyUpdate(up, &m2));
+    ASSERT_EQ(E::ALREADY, err);
+  }
 }
 
 // test that the force flag can override condition checks
@@ -925,8 +938,83 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
   checkCodecSerialization(m);
 }
 
+TEST_F(StorageMembershipTest, FinalizeBootstrapping) {
+  StorageMembership m{};
+  ASSERT_EQ(MembershipVersion::EMPTY_VERSION, m.getVersion());
+  EXPECT_TRUE(m.isBootstrapping());
+  checkCodecSerialization(m);
+  StorageMembership::Update update{m.getVersion()};
+  update.finalizeBootstrapping();
+  int rv = m.applyUpdate(update, &m);
+  EXPECT_EQ(0, rv);
+  EXPECT_FALSE(m.isBootstrapping());
+  EXPECT_EQ(MembershipVersion::Type{MembershipVersion::EMPTY_VERSION.val() + 1},
+            m.getVersion());
+  checkCodecSerialization(m);
+}
+
 TEST_F(StorageMembershipTest, InvalidBootstrapUpdate) {
-  // TODO(mbassem) Add tests for the bootstrapping check
+  StorageMembership m{};
+  ASSERT_TRUE(m.isBootstrapping());
+  int rv;
+
+  rv = m.applyUpdate(genUpdateShards({N1, N2},
+                                     EMPTY_VERSION.val(),
+                                     StorageStateTransition::ADD_EMPTY_SHARD,
+                                     Condition::NONE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateShards(
+          {N1, N2},
+          1,
+          StorageStateTransition::MARK_SHARD_PROVISIONED,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA)),
+      &m);
+  ASSERT_EQ(0, rv);
+
+  auto update = genUpdateOneShard(
+      N1,
+      2,
+      StorageStateTransition::BOOTSTRAP_ENABLE_SHARD,
+      (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+       Condition::NO_SELF_REPORT_MISSING_DATA |
+       Condition::LOCAL_STORE_WRITABLE));
+  // Finalize bootstrapping
+  update.finalizeBootstrapping();
+
+  rv = m.applyUpdate(update, &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::READ_WRITE,
+                     MetaDataStorageState::NONE,
+                     StorageStateFlags::NONE,
+                     3);
+  ASSERT_FALSE(m.isBootstrapping());
+
+  // Further BOOTSTRAP_ENABLE_SHARD will fail
+  rv = m.applyUpdate(
+      genUpdateOneShard(
+          N2,
+          3,
+          StorageStateTransition::BOOTSTRAP_ENABLE_SHARD,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA |
+           Condition::LOCAL_STORE_WRITABLE)),
+      &m);
+  ASSERT_NE(0, rv);
+  ASSERT_EQ(E::INVALID_PARAM, err);
+
+  // We can still add nodes though
+  rv = m.applyUpdate(
+      genUpdateOneShard(
+          N3, 3, StorageStateTransition::ADD_EMPTY_SHARD, Condition::NONE),
+      &m);
+  ASSERT_EQ(0, rv);
+
+  ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3);
 }
 
 TEST_F(StorageMembershipTest, BoostrapTransition) {
