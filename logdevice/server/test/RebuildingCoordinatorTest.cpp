@@ -563,6 +563,8 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     settings.max_batch_bytes = 100;
     settings.max_records_in_flight = 100;
     settings.use_legacy_log_to_shard_mapping_in_rebuilding = false;
+    settings.shard_is_rebuilt_msg_delay = {
+        std::chrono::seconds(0), std::chrono::seconds(0)};
 
     // Clean up possible leftovers from previous test run.
     received.clear();

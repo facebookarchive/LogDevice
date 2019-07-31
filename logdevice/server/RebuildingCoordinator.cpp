@@ -451,27 +451,37 @@ void RebuildingCoordinator::onShardRebuildingComplete(uint32_t shard_idx) {
       RecordTimestamp(shard_state.rebuilding_started_ts) +
       shard_state.max_rebuild_by_retention_backlog;
 
+  auto delay_ms = std::chrono::milliseconds::zero();
   if (maxBacklogTS > now) {
-    std::chrono::milliseconds delay_ms = maxBacklogTS - now;
-    // Stagger the SHARD_IS_REBUILT messages with a random delay
-    std::chrono::seconds rand_delay(folly::Random::rand32(
-        0, rebuildingSettings_->max_random_delay_shard_is_rebuilt_message));
-    delay_ms += rand_delay;
     // Planning stage requested a delay.
     ld_check(rebuildingSettings_->disable_data_log_rebuilding);
     ld_check(shard_state.rebuilding_started_ts.count());
-    ld_check(!shard_state.shardIsRebuiltDelayTimer->isActive());
+    delay_ms = maxBacklogTS - now;
+  }
 
-    ld_info("Planning requested a delay until %s for shard %u, "
+  // Stagger the messages only if the setting is enabled
+  const auto& delay = rebuildingSettings_->shard_is_rebuilt_msg_delay;
+  if (delay.hi.count()) {
+    std::chrono::seconds rand_delay(
+        folly::Random::rand32(delay.lo.count(), delay.hi.count()));
+    delay_ms += rand_delay;
+  }
+
+  if (delay_ms.count()) {
+    ld_check(!shard_state.shardIsRebuiltDelayTimer.isActive());
+
+    maxBacklogTS += delay_ms;
+    ld_info("%srequested a delay until %s for shard %u, "
             "before declaring the shard as rebuilt. Delaying "
             "SHARD_IS_REBUILT message by %ld ms",
+            maxBacklogTS > now ? "delaying for retention: planning "
+                               : "delaying to stagger: ",
             maxBacklogTS.toString().c_str(),
             shard_idx,
             delay_ms.count());
 
-    shard_state.shardIsRebuiltDelayTimer->activate(delay_ms);
+    shard_state.shardIsRebuiltDelayTimer.activate(delay_ms);
   } else {
-    // Immediately notify shard as rebuilt.
     notifyShardRebuiltCB(shard_idx);
   }
 }
@@ -494,7 +504,7 @@ void RebuildingCoordinator::notifyShardRebuiltCB(uint32_t shard_idx) {
   shard_state.max_rebuild_by_retention_backlog =
       std::chrono::milliseconds::zero();
   shard_state.rebuilding_started_ts = std::chrono::milliseconds::zero();
-  shard_state.shardIsRebuiltDelayTimer.reset();
+  shard_state.shardIsRebuiltDelayTimer.cancel();
 }
 
 void RebuildingCoordinator::trySlideGlobalWindow(
@@ -730,17 +740,22 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
   shard_state.progressStat.assign(
       getStats(), &PerShardStats::rebuilding_progress_ppm, shard_idx, 0);
 
-  // Install a delay timer to support the feature to skip rebuilding data logs.
-  // If the setting is enabled, the timer just delays the SHARD_IS_REBUILT
-  // message until after all the data on this shard has expired.
+  // Install a delay timer to support the feature to skip rebuilding data logs
+  // as well as to stagger sending SHARD_IS_REBUILT messages. If the
+  // disable_data_log_rebuilding setting is enabled, the timer just delays the
+  // SHARD_IS_REBUILT message until after all the data on this shard has
+  // expired. In addition the timer is used to delay sending the messages by a
+  // random time period in the range specified in the setting
+  // shard_is_rebuilt_msg_delay.
   auto cb = [self = this, shard = shard_idx]() {
     self->notifyShardRebuiltCB(shard);
   };
 
-  if (rebuildingSettings_->disable_data_log_rebuilding) {
-    shard_state.shardIsRebuiltDelayTimer = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(), cb);
+  if (rebuildingSettings_->disable_data_log_rebuilding ||
+      rebuildingSettings_->shard_is_rebuilt_msg_delay.hi.count()) {
+    shard_state.shardIsRebuiltDelayTimer.assign(cb);
   }
+
   if (shard_state.rebuildingSetContainsMyself) {
     // Increment rebuilding_set_contains_myself stat.
     shard_state.rebuildingSetContainsMyselfStat.assign(
@@ -1025,7 +1040,7 @@ void RebuildingCoordinator::abortShardRebuilding(uint32_t shard_idx) {
   shard_state.max_rebuild_by_retention_backlog =
       std::chrono::milliseconds::zero();
   shard_state.rebuilding_started_ts = std::chrono::milliseconds::zero();
-  shard_state.shardIsRebuiltDelayTimer.reset();
+  shard_state.shardIsRebuiltDelayTimer.cancel();
 }
 
 void RebuildingCoordinator::onShardMarkUnrecoverable(

@@ -1061,6 +1061,8 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         // Disable rebuilding by default in tests, the test framework
         // (`waitUntilRebuilt' etc) is not ready for it: #14697277
         {"--disable-rebuilding", ParamValue{"true"}},
+        // Disable the random delay for SHARD_IS_REBUILT messages
+        {"--shard-is-rebuilt-msg-delay", ParamValue{"0s..0s"}},
         // TODO(T22614431): remove this option once it's been enabled
         // everywhere.
         {"--allow-conditional-rebuilding-restarts", ParamValue{"true"}},
