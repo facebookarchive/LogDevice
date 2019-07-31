@@ -199,13 +199,6 @@ std::shared_ptr<const NodesConfiguration> NodesConfiguration::applyUpdate(
     return nullptr;
   }
 
-  if (version_ == MembershipVersion::EMPTY_VERSION && !update.hasAllUpdates()) {
-    // the first version update to nodes configuration must provision all four
-    // sub-configs
-    err = E::INVALID_PARAM;
-    return nullptr;
-  }
-
   ld_assert(validate());
 
   // 0) make a copy of the current configuration
