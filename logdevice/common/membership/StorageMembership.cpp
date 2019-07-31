@@ -142,13 +142,13 @@ int ShardState::transition(const ShardState& current_state,
       ld_check(target_shard_state.storage_state == StorageState::READ_WRITE);
       target_flags = StorageStateFlags::NONE;
 
-      // Either the shard was added as a metadata shard or not. It can't be
+      // The shard is either a metadata shard or not. It can't be
       // INVALID because it's already in the config and it can't be PROMOTING
       // because PROMOTING requires a RW shard.
       ld_check(current_state.metadata_state == MetaDataStorageState::NONE ||
                current_state.metadata_state == MetaDataStorageState::METADATA);
 
-      // If it was added as a metadata shard, let's respect that. Even if the
+      // If it's a metadata shard, let's respect that. Even if the
       // transition is BOOTSTRAP_ENABLE_SHARD.
       target_metadata_state = update.transition ==
                   StorageStateTransition::BOOTSTRAP_ENABLE_METADATA_SHARD ||
@@ -157,14 +157,10 @@ int ShardState::transition(const ShardState& current_state,
           : MetaDataStorageState::NONE;
     } break;
 
-    case StorageStateTransition::ADD_EMPTY_SHARD:
-    case StorageStateTransition::ADD_EMPTY_METADATA_SHARD: {
+    case StorageStateTransition::ADD_EMPTY_SHARD: {
       ld_check(target_shard_state.storage_state == StorageState::PROVISIONING);
       target_flags = StorageStateFlags::NONE;
-      target_metadata_state =
-          (update.transition == StorageStateTransition::ADD_EMPTY_METADATA_SHARD
-               ? MetaDataStorageState::METADATA
-               : MetaDataStorageState::NONE);
+      target_metadata_state = MetaDataStorageState::NONE;
     } break;
 
     case StorageStateTransition::DISABLING_WRITE: {

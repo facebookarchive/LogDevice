@@ -23,12 +23,6 @@ enum class StorageStateTransition : uint8_t {
   // transition: INVALID -> PROVISIONING
   ADD_EMPTY_SHARD = 0,
 
-  // same as above, except that the storage shard can store metadata besides
-  // regular data
-  // TODO(mbassem): To be remvoed.
-  // transition: INVALID -> PROVISIONING
-  ADD_EMPTY_METADATA_SHARD,
-
   // remove an empty shard of NONE/PROVISIONING state from the storage
   // membership
   // transition: NONE/PROVISIONING -> INVALID
@@ -120,16 +114,15 @@ enum class StorageStateTransition : uint8_t {
   Count
 };
 
-static_assert(static_cast<size_t>(StorageStateTransition::Count) == 21,
-              "There are 21 state transitions in the design spec.");
+static_assert(static_cast<size_t>(StorageStateTransition::Count) == 20,
+              "There are 20 state transitions in the design spec.");
 
 /**
  * return    true if the transition is adding a new shard which is not part of
  *           the current membership
  */
 constexpr bool isAddingNewShard(StorageStateTransition transition) {
-  return transition == StorageStateTransition::ADD_EMPTY_SHARD ||
-      transition == StorageStateTransition::ADD_EMPTY_METADATA_SHARD;
+  return transition == StorageStateTransition::ADD_EMPTY_SHARD;
 }
 
 constexpr bool isBootstrappingShard(StorageStateTransition transition) {
@@ -246,9 +239,6 @@ static constexpr std::array<
         // ADD_EMPTY_SHARD
         _t(StorageState::INVALID, StorageState::PROVISIONING, Condition::NONE),
 
-        // ADD_EMPTY_METADATA_SHARD
-        _t(StorageState::INVALID, StorageState::PROVISIONING, Condition::NONE),
-
         // REMOVE_EMPTY_SHARD
         _t(StorageState::INVALID, StorageState::INVALID, Condition::NONE),
 
@@ -348,8 +338,8 @@ static constexpr std::array<
 
 #undef _t
 
-static_assert(TransitionTable.size() == 21,
-              "There are 21 state transitions in the design spec.");
+static_assert(TransitionTable.size() == 20,
+              "There are 20 state transitions in the design spec.");
 
 //// utility functions for accessing the transition table
 

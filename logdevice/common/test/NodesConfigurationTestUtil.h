@@ -42,7 +42,8 @@ initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
                            {NodeLocationScope::NODE, 2}});
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
-    configuration::nodes::NodesConfiguration::Update provision_update);
+    configuration::nodes::NodesConfiguration::Update provision_update,
+    std::unordered_set<ShardID> metadata_shards);
 
 configuration::nodes::NodesConfiguration::Update
 addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
@@ -56,7 +57,8 @@ configuration::nodes::NodesConfiguration::Update markAllShardProvisionedUpdate(
 // Create an NC::Update to transition all NONE shards to RW by applying a
 // BOOTSTRAP_ENABLE_SHARD transition.
 configuration::nodes::NodesConfiguration::Update bootstrapEnableAllShardsUpdate(
-    const configuration::nodes::NodesConfiguration& existing);
+    const configuration::nodes::NodesConfiguration& existing,
+    std::unordered_set<ShardID> metadata_shards = {});
 
 // Create an NC::Update to unset the bootstrapping flag in both sequencer and
 // storage memberhip.
@@ -73,7 +75,8 @@ std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes();
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
-provisionNodes(std::vector<node_index_t> node_idxs);
+provisionNodes(std::vector<node_index_t> node_idxs,
+               std::unordered_set<ShardID> metadata_shards = {});
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes(std::vector<NodeTemplate> nodes,

@@ -62,7 +62,6 @@ toString(StorageStateTransition transition) {
     return #_s;
 
     GEN_STR(ADD_EMPTY_SHARD)
-    GEN_STR(ADD_EMPTY_METADATA_SHARD)
     GEN_STR(REMOVE_EMPTY_SHARD)
     GEN_STR(ENABLING_READ)
     GEN_STR(COMMIT_READ_ENABLED)
@@ -89,8 +88,8 @@ toString(StorageStateTransition transition) {
   return "internal error";
 }
 
-static_assert(static_cast<size_t>(StorageStateTransition::Count) == 21,
-              "There are 21 state transitions in the design spec.");
+static_assert(static_cast<size_t>(StorageStateTransition::Count) == 20,
+              "There are 20 state transitions in the design spec.");
 
 inline constexpr folly::StringPiece
 toString(SequencerMembershipTransition transition) {

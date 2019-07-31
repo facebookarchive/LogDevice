@@ -71,7 +71,8 @@ markAllShardProvisionedUpdate(const NodesConfiguration& nc) {
 }
 
 configuration::nodes::NodesConfiguration::Update
-bootstrapEnableAllShardsUpdate(const NodesConfiguration& nc) {
+bootstrapEnableAllShardsUpdate(const NodesConfiguration& nc,
+                               std::unordered_set<ShardID> metadata_shards) {
   // BOOTSTRAP_ENABLE_SHARDS transaction
   NodesConfiguration::Update update{};
   update.storage_config_update = std::make_unique<StorageConfig::Update>();
@@ -84,9 +85,12 @@ bootstrapEnableAllShardsUpdate(const NodesConfiguration& nc) {
       if (state.storage_state != StorageState::NONE) {
         continue;
       }
+      auto shard = ShardID(nid, shard_idx);
       update.storage_config_update->membership_update->addShard(
-          ShardID(nid, shard_idx),
-          {StorageStateTransition::BOOTSTRAP_ENABLE_SHARD,
+          shard,
+          {metadata_shards.find(shard) == metadata_shards.end()
+               ? StorageStateTransition::BOOTSTRAP_ENABLE_SHARD
+               : StorageStateTransition::BOOTSTRAP_ENABLE_METADATA_SHARD,
            (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
             Condition::NO_SELF_REPORT_MISSING_DATA |
             Condition::LOCAL_STORE_WRITABLE),
@@ -114,13 +118,15 @@ finalizeBootstrappingUpdate(const NodesConfiguration& nc) {
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
-    configuration::nodes::NodesConfiguration::Update provision_update) {
+    configuration::nodes::NodesConfiguration::Update provision_update,
+    std::unordered_set<ShardID> metadata_shards) {
   auto config = std::make_shared<const NodesConfiguration>();
   config = config->applyUpdate(std::move(provision_update));
   ld_assert(config != nullptr);
   config = config->applyUpdate(markAllShardProvisionedUpdate(*config));
   ld_assert(config != nullptr);
-  config = config->applyUpdate(bootstrapEnableAllShardsUpdate(*config));
+  config = config->applyUpdate(
+      bootstrapEnableAllShardsUpdate(*config, std::move(metadata_shards)));
   ld_assert(config != nullptr);
   config = config->applyUpdate(finalizeBootstrappingUpdate(*config));
   ld_assert(config != nullptr);
@@ -130,19 +136,29 @@ std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes() {
-  return provisionNodes(initialAddShardsUpdate());
+  return provisionNodes(
+      initialAddShardsUpdate(), {ShardID(2, 0), ShardID(9, 0)});
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
-provisionNodes(std::vector<node_index_t> node_idxs) {
-  return provisionNodes(initialAddShardsUpdate(std::move(node_idxs)));
+provisionNodes(std::vector<node_index_t> node_idxs,
+               std::unordered_set<ShardID> metadata_shards) {
+  return provisionNodes(
+      initialAddShardsUpdate(std::move(node_idxs)), std::move(metadata_shards));
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes(std::vector<NodeTemplate> nodes,
                ReplicationProperty metadata_rep) {
+  std::unordered_set<ShardID> metadata_shards;
+  for (const auto& node : nodes) {
+    for (int i = 0; i < node.num_shards; i++) {
+      metadata_shards.insert(ShardID(node.id, i));
+    }
+  }
   return provisionNodes(
-      initialAddShardsUpdate(std::move(nodes), std::move(metadata_rep)));
+      initialAddShardsUpdate(std::move(nodes), std::move(metadata_rep)),
+      std::move(metadata_shards));
 }
 
 NodesConfiguration::Update
@@ -200,9 +216,7 @@ initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
       for (int s = 0; s < node.num_shards; ++s) {
         update.storage_config_update->membership_update->addShard(
             ShardID(node.id, s),
-            {node.metadata_node
-                 ? StorageStateTransition::ADD_EMPTY_METADATA_SHARD
-                 : StorageStateTransition::ADD_EMPTY_SHARD,
+            {StorageStateTransition::ADD_EMPTY_SHARD,
              Condition::NONE,
              DUMMY_MAINTENANCE,
              /* state_override = */ folly::none});
@@ -241,7 +255,7 @@ initialAddShardsUpdate(std::vector<node_index_t> node_idxs) {
                      "aa.bb.cc.dd.ee",
                      1.0,
                      /* num_shard=*/1,
-                     false});
+                     /*metadata_node=*/false /* doesn't matter */});
   }
   return initialAddShardsUpdate(
       std::move(nodes), ReplicationProperty{{NodeLocationScope::RACK, 2}});
@@ -261,7 +275,7 @@ NodesConfiguration::Update initialAddShardsUpdate() {
                      n % 2 == 0 ? "aa.bb.cc.dd.ee" : "aa.bb.cc.dd.ff",
                      n == 1 ? 1.0 : 7.0,
                      /*num_shards=*/1,
-                     n == 2 || n == 9 ? true : false});
+                     /*metadata_node=*/false /* doesn't matter */});
   }
 
   return initialAddShardsUpdate(
@@ -312,8 +326,7 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
     for (int s = 0; s < node.num_shards; ++s) {
       update.storage_config_update->membership_update->addShard(
           ShardID(node.id, s),
-          {node.metadata_node ? StorageStateTransition::ADD_EMPTY_METADATA_SHARD
-                              : StorageStateTransition::ADD_EMPTY_SHARD,
+          {StorageStateTransition::ADD_EMPTY_SHARD,
            Condition::FORCE,
            DUMMY_MAINTENANCE,
            /* state_override = */ folly::none});
@@ -335,7 +348,7 @@ configuration::nodes::NodesConfiguration::Update
 addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing) {
   node_index_t new_node_idx = std::max(17, existing.getMaxNodeIndex() + 1);
   return addNewNodeUpdate(
-      existing, {new_node_idx, both_role, "aa.bb.cc.dd.ee", 0.0, 1, false});
+      existing, {new_node_idx, both_role, "aa.bb.cc.dd.ee", 0.0, 1});
 }
 
 NodesConfiguration::Update

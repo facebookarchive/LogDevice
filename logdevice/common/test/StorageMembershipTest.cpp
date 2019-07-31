@@ -694,17 +694,11 @@ TEST_F(StorageMembershipTest, UNRECOVERABLE) {
 TEST_F(StorageMembershipTest, MetaDataShards) {
   StorageMembership m{};
   int rv;
-  // add two regualr shards N1, N3, and one metadata shard N2
-  auto update =
-      genUpdateOneShard(N2,
-                        EMPTY_VERSION.val(),
-                        StorageStateTransition::ADD_EMPTY_METADATA_SHARD,
-                        Condition::NONE);
-  addShards(&update,
-            {N1, N3},
-            StorageStateTransition::ADD_EMPTY_SHARD,
-            Condition::NONE);
-  rv = m.applyUpdate(update, &m);
+  rv = m.applyUpdate(genUpdateShards({N1, N2, N3},
+                                     EMPTY_VERSION.val(),
+                                     StorageStateTransition::ADD_EMPTY_SHARD,
+                                     Condition::NONE),
+                     &m);
   ASSERT_EQ(0, rv);
   rv = m.applyUpdate(
       genUpdateShards(
@@ -725,7 +719,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
   ASSERT_SHARD_STATE(m,
                      N2,
                      StorageState::NONE,
-                     MetaDataStorageState::METADATA,
+                     MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      2);
   ASSERT_SHARD_STATE(m,
@@ -734,7 +728,6 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      2);
-  CHECK_METADATA_SHARDS(m, N2);
 
   // transition N1 and N2 to RW, and N3 to RO
   rv = m.applyUpdate(genUpdateShards({N1, N2, N3},
@@ -772,7 +765,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
   ASSERT_SHARD_STATE(m,
                      N2,
                      StorageState::READ_WRITE,
-                     MetaDataStorageState::METADATA,
+                     MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      5);
   ASSERT_SHARD_STATE(m,
@@ -781,18 +774,6 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      4);
-  CHECK_METADATA_SHARDS(m, N2);
-
-  // try promoting N2 to a metadata shard would fail as N2 is already a
-  // metadata shard
-  rv = m.applyUpdate(
-      genUpdateOneShard(N2,
-                        5,
-                        StorageStateTransition::PROMOTING_METADATA_SHARD,
-                        Condition::NONE),
-      &m);
-  ASSERT_EQ(-1, rv);
-  ASSERT_EQ(E::SOURCE_STATE_MISMATCH, err);
 
   // try promoting N3 to become a metadata shard would fail as N3 is not in RW
   rv = m.applyUpdate(
@@ -803,7 +784,6 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
       &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::SOURCE_STATE_MISMATCH, err);
-  CHECK_METADATA_SHARDS(m, N2);
 
   // promoting N1 to a metadata shard
   rv = m.applyUpdate(
@@ -819,7 +799,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      MetaDataStorageState::PROMOTING,
                      StorageStateFlags::NONE,
                      6);
-  CHECK_METADATA_SHARDS(m, N1, N2);
+  CHECK_METADATA_SHARDS(m, N1);
 
   // commit the promotion
   rv = m.applyUpdate(
@@ -835,7 +815,19 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      MetaDataStorageState::METADATA,
                      StorageStateFlags::NONE,
                      7);
-  CHECK_METADATA_SHARDS(m, N1, N2);
+  CHECK_METADATA_SHARDS(m, N1);
+
+  // try promoting N1 again to a metadata shard would fail as N1 is already a
+  // metadata shard
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        7,
+                        StorageStateTransition::PROMOTING_METADATA_SHARD,
+                        Condition::NONE),
+      &m);
+  ASSERT_EQ(-1, rv);
+  ASSERT_EQ(E::SOURCE_STATE_MISMATCH, err);
+
   // now enable writes on N3 and promoting it to be metadata shard
   rv = m.applyUpdate(genUpdateShards({N3},
                                      7,
@@ -856,7 +848,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      MetaDataStorageState::PROMOTING,
                      StorageStateFlags::NONE,
                      9);
-  CHECK_METADATA_SHARDS(m, N1, N2, N3);
+  CHECK_METADATA_SHARDS(m, N1, N3);
 
   // disabling writes for N3, it will automatically cancel the promotion
   rv = m.applyUpdate(genUpdateOneShard(N3,
@@ -872,7 +864,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      10);
-  CHECK_METADATA_SHARDS(m, N1, N2);
+  CHECK_METADATA_SHARDS(m, N1);
 
   // disabling writes for N1, as N1 is a metadata shard, it requires additional
   // conditions
@@ -884,7 +876,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::CONDITION_MISMATCH, err);
-  CHECK_METADATA_SHARDS(m, N1, N2);
+  CHECK_METADATA_SHARDS(m, N1);
 
   // add the required conditions and it should succeed
   rv = m.applyUpdate(
@@ -903,7 +895,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      MetaDataStorageState::METADATA,
                      StorageStateFlags::NONE,
                      11);
-  CHECK_METADATA_SHARDS(m, N1, N2);
+  CHECK_METADATA_SHARDS(m, N1);
 
   // perform data migration and transition N1 to be NONE, it should preserve
   // its metadata status
@@ -1017,7 +1009,7 @@ TEST_F(StorageMembershipTest, InvalidBootstrapUpdate) {
   ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3);
 }
 
-TEST_F(StorageMembershipTest, BoostrapTransition) {
+TEST_F(StorageMembershipTest, BootstrapTransition) {
   StorageMembership m{};
   int rv;
 
@@ -1087,19 +1079,17 @@ TEST_F(StorageMembershipTest, BoostrapTransition) {
 
   // can still add shard
   rv = m.applyUpdate(
-      genUpdateOneShard(N7,
-                        3,
-                        StorageStateTransition::ADD_EMPTY_METADATA_SHARD,
-                        Condition::FORCE),
+      genUpdateOneShard(
+          N7, 3, StorageStateTransition::ADD_EMPTY_SHARD, Condition::FORCE),
       &m);
   ASSERT_EQ(0, rv);
   ASSERT_SHARD_STATE(m,
                      N7,
                      StorageState::PROVISIONING,
-                     MetaDataStorageState::METADATA,
+                     MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      4);
-  CHECK_METADATA_SHARDS(m, N3, N7);
+  CHECK_METADATA_SHARDS(m, N3);
   ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3, 4, 7);
   checkCodecSerialization(m);
 }
@@ -1108,16 +1098,11 @@ TEST_F(StorageMembershipTest, BootstrapRespectsMetadata) {
   StorageMembership m{};
   int rv;
 
-  auto update = genUpdateShards({N1},
-                                EMPTY_VERSION.val(),
-                                StorageStateTransition::ADD_EMPTY_SHARD,
-                                Condition::NONE);
-  addShards(&update,
-            {N2},
-            StorageStateTransition::ADD_EMPTY_METADATA_SHARD,
-            Condition::NONE);
-
-  rv = m.applyUpdate(update, &m);
+  rv = m.applyUpdate(genUpdateShards({N1, N2},
+                                     EMPTY_VERSION.val(),
+                                     StorageStateTransition::ADD_EMPTY_SHARD,
+                                     Condition::NONE),
+                     &m);
   ASSERT_EQ(0, rv);
 
   rv = m.applyUpdate(
@@ -1130,12 +1115,24 @@ TEST_F(StorageMembershipTest, BootstrapRespectsMetadata) {
       &m);
   ASSERT_EQ(0, rv);
 
+  // Let's simulate a NONE shard that's a metadata shard. In reality this could
+  // happen if a node went to RW, promoted to a METADATA and then got drained.
+  rv = m.applyUpdate(genUpdateOneShard(N2,
+                                       2,
+                                       StorageStateTransition::OVERRIDE_STATE,
+                                       Condition::FORCE,
+                                       {{StorageState::NONE,
+                                         StorageStateFlags::NONE,
+                                         MetaDataStorageState::METADATA}}),
+                     &m);
+  ASSERT_EQ(0, rv);
+
   // BOOTSTRAP_ENABLE_SHARD should respect if the shard was added as a metadata
   // shard or not.
   rv = m.applyUpdate(
       genUpdateShards(
           {N1, N2},
-          2,
+          3,
           StorageStateTransition::BOOTSTRAP_ENABLE_SHARD,
           (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
            Condition::NO_SELF_REPORT_MISSING_DATA |
@@ -1147,13 +1144,13 @@ TEST_F(StorageMembershipTest, BootstrapRespectsMetadata) {
                      StorageState::READ_WRITE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     3);
+                     4);
   ASSERT_SHARD_STATE(m,
                      N2,
                      StorageState::READ_WRITE,
                      MetaDataStorageState::METADATA,
                      StorageStateFlags::NONE,
-                     3);
+                     4);
 }
 
 ///////////  Testing the flatbuffers Codec //////////////////
@@ -1168,14 +1165,10 @@ TEST_F(StorageMembershipTest, CodecBasic) {
   StorageMembership m{};
   int rv;
 
-  auto update = genUpdateShards({N1, N3, N5, N6, N7, N8, N9, N10},
+  auto update = genUpdateShards({N1, N2, N3, N5, N6, N7, N8, N9, N10},
                                 EMPTY_VERSION.val(),
                                 StorageStateTransition::ADD_EMPTY_SHARD,
                                 Condition::NONE);
-  addShards(&update,
-            {N2},
-            StorageStateTransition::ADD_EMPTY_METADATA_SHARD,
-            Condition::NONE);
   rv = m.applyUpdate(update, &m);
   ASSERT_EQ(0, rv);
 
@@ -1247,7 +1240,7 @@ TEST_F(StorageMembershipTest, CodecBasic) {
                         Condition::NONE),
       &m);
   ASSERT_EQ(0, rv);
-  CHECK_METADATA_SHARDS(m, N1, N2, N3, N8, N9);
+  CHECK_METADATA_SHARDS(m, N1, N3, N8, N9);
   checkCodecSerialization(m);
 }
 
