@@ -89,7 +89,7 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     ASSERT_TRUE(seq_membership->hasNode(n));
     auto result = seq_membership->getNodeState(n);
     EXPECT_TRUE(result.hasValue());
-    EXPECT_EQ(MaintenanceID::MAINTENANCE_PROVISION, result->active_maintenance);
+    EXPECT_EQ(DUMMY_MAINTENANCE, result->active_maintenance);
     EXPECT_EQ(n == 1 ? 1.0 : 7.0, result->getConfiguredWeight());
   }
 
@@ -111,11 +111,11 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     ASSERT_TRUE(storage_membership->hasNode(n));
     auto result = storage_membership->getShardState(ShardID(n, 0));
     EXPECT_TRUE(result.hasValue());
-    EXPECT_EQ(MaintenanceID::MAINTENANCE_PROVISION, result->active_maintenance);
+    EXPECT_EQ(DUMMY_MAINTENANCE, result->active_maintenance);
     // newly provisioned shards should be in rw state
     EXPECT_EQ(StorageState::READ_WRITE, result->storage_state);
     EXPECT_EQ(StorageStateFlags::NONE, result->flags);
-    EXPECT_EQ(MembershipVersion::MIN_VERSION, result->since_version);
+    EXPECT_EQ(config->getVersion(), result->since_version);
   }
 
   // test iterating membership nodes
@@ -149,7 +149,7 @@ TEST_F(NodesConfigurationTest, TestMembershipVersionConsistencyValidation) {
   config = config->applyUpdate(addNewNodeUpdate(*config));
   ASSERT_NE(nullptr, config);
 
-  ASSERT_EQ(3, config->getStorageMembership()->getVersion().val());
+  ASSERT_EQ(5, config->getStorageMembership()->getVersion().val());
   ASSERT_TRUE(config->validate());
 
   auto c = const_cast<NodesConfiguration*>(config.get());
@@ -329,7 +329,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
         std::make_unique<SequencerConfig::Update>();
     update.sequencer_config_update->membership_update =
         std::make_unique<SequencerMembership::Update>(
-            MembershipVersion::MIN_VERSION);
+            config->getSequencerMembership()->getVersion());
     update.sequencer_config_update->membership_update->addNode(
         7,
         {SequencerMembershipTransition::REMOVE_NODE,
@@ -381,7 +381,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
     update.storage_config_update = std::make_unique<StorageConfig::Update>();
     update.storage_config_update->membership_update =
         std::make_unique<StorageMembership::Update>(
-            MembershipVersion::MIN_VERSION);
+            config->getStorageMembership()->getVersion());
     update.storage_config_update->membership_update->addShard(
         ShardID(17, 0),
         {StorageStateTransition::ADD_EMPTY_SHARD,
@@ -407,7 +407,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
     update.storage_config_update = std::make_unique<StorageConfig::Update>();
     update.storage_config_update->membership_update =
         std::make_unique<StorageMembership::Update>(
-            MembershipVersion::MIN_VERSION);
+            config->getStorageMembership()->getVersion());
     update.storage_config_update->membership_update->addShard(
         ShardID(17, 0),
         {StorageStateTransition::ADD_EMPTY_SHARD,
@@ -442,7 +442,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
     update.storage_config_update = std::make_unique<StorageConfig::Update>();
     update.storage_config_update->membership_update =
         std::make_unique<StorageMembership::Update>(
-            MembershipVersion::MIN_VERSION);
+            config->getStorageMembership()->getVersion());
     update.storage_config_update->attributes_update =
         std::make_unique<StorageAttributeConfig::Update>();
     update.storage_config_update->membership_update->addShard(
@@ -471,7 +471,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
         std::make_unique<SequencerConfig::Update>();
     update.sequencer_config_update->membership_update =
         std::make_unique<SequencerMembership::Update>(
-            MembershipVersion::MIN_VERSION);
+            config->getSequencerMembership()->getVersion());
     update.sequencer_config_update->attributes_update =
         std::make_unique<SequencerAttributeConfig::Update>();
 
@@ -480,7 +480,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
         {SequencerMembershipTransition::ADD_NODE,
          true,
          1.0,
-         MaintenanceID::MAINTENANCE_PROVISION});
+         DUMMY_MAINTENANCE});
 
     update.sequencer_config_update->attributes_update->addNode(
         2,

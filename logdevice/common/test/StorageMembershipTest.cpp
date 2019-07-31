@@ -48,9 +48,7 @@ class StorageMembershipTest : public ::testing::Test {
       StateTransitionCondition conditions,
       folly::Optional<StateOverride> state_override = folly::none) {
     StorageMembership::Update res{MembershipVersion::Type(base_ver)};
-    MaintenanceID::Type maintenance =
-        (isProvisionShard(transition) ? MAINTENANCE_PROVISION
-                                      : DUMMY_MAINTENANCE);
+    MaintenanceID::Type maintenance = DUMMY_MAINTENANCE;
     int rv = res.addShard(
         shard, {transition, conditions, maintenance, state_override});
     EXPECT_EQ(0, rv);
@@ -65,9 +63,7 @@ class StorageMembershipTest : public ::testing::Test {
             StateTransitionCondition conditions,
             folly::Optional<StateOverride> state_override = folly::none) {
     ld_check(update != nullptr);
-    MaintenanceID::Type maintenance =
-        (isProvisionShard(transition) ? MAINTENANCE_PROVISION
-                                      : DUMMY_MAINTENANCE);
+    MaintenanceID::Type maintenance = DUMMY_MAINTENANCE;
     for (auto shard : shards) {
       int rv = update->addShard(
           shard, {transition, conditions, maintenance, state_override});
@@ -183,10 +179,12 @@ TEST_F(StorageMembershipTest, ShardLifeCycle) {
   ASSERT_EQ(1, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
-                     StorageState::NONE,
+                     StorageState::PROVISIONING,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      1);
+  ASSERT_FALSE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
 
   // add another empty shard N2, N1's state should stay intact
   rv = m.applyUpdate(
@@ -198,20 +196,41 @@ TEST_F(StorageMembershipTest, ShardLifeCycle) {
   ASSERT_EQ(2, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
-                     StorageState::NONE,
+                     StorageState::PROVISIONING,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      1);
   ASSERT_SHARD_STATE(m,
                      N2,
-                     StorageState::NONE,
+                     StorageState::PROVISIONING,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      2);
 
+  // Mark shard provisioned
+  rv = m.applyUpdate(
+      genUpdateOneShard(
+          N1,
+          2,
+          StorageStateTransition::MARK_SHARD_PROVISIONED,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA)),
+      &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(2, m.numNodes());
+  ASSERT_EQ(3, m.getVersion().val());
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::NONE,
+                     MetaDataStorageState::NONE,
+                     StorageStateFlags::NONE,
+                     3);
+  ASSERT_FALSE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
+
   // enabling read
   rv = m.applyUpdate(genUpdateOneShard(N1,
-                                       2,
+                                       3,
                                        StorageStateTransition::ENABLING_READ,
                                        (Condition::EMPTY_SHARD |
                                         Condition::LOCAL_STORE_READABLE |
@@ -220,72 +239,60 @@ TEST_F(StorageMembershipTest, ShardLifeCycle) {
                      &m);
 
   ASSERT_EQ(0, rv);
-  ASSERT_EQ(3, m.getVersion().val());
+  ASSERT_EQ(4, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
                      StorageState::NONE_TO_RO,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     3);
+                     4);
+  ASSERT_TRUE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
 
   // commit read enabled
   rv = m.applyUpdate(
       genUpdateOneShard(N1,
-                        3,
+                        4,
                         StorageStateTransition::COMMIT_READ_ENABLED,
                         Condition::COPYSET_CONFIRMATION),
       &m);
 
   ASSERT_EQ(0, rv);
-  ASSERT_EQ(4, m.getVersion().val());
+  ASSERT_EQ(5, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
                      StorageState::READ_ONLY,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     4);
+                     5);
+  ASSERT_TRUE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
 
   // enable write
   rv = m.applyUpdate(genUpdateOneShard(N1,
-                                       4,
+                                       5,
                                        StorageStateTransition::ENABLE_WRITE,
                                        Condition::LOCAL_STORE_WRITABLE),
-                     &m);
-
-  ASSERT_EQ(0, rv);
-  ASSERT_EQ(5, m.getVersion().val());
-  ASSERT_SHARD_STATE(m,
-                     N1,
-                     StorageState::READ_WRITE,
-                     MetaDataStorageState::NONE,
-                     StorageStateFlags::NONE,
-                     5);
-
-  // disable write
-  rv = m.applyUpdate(genUpdateOneShard(N1,
-                                       5,
-                                       StorageStateTransition::DISABLING_WRITE,
-                                       (Condition::WRITE_AVAILABILITY_CHECK |
-                                        Condition::CAPACITY_CHECK)),
                      &m);
 
   ASSERT_EQ(0, rv);
   ASSERT_EQ(6, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
-                     StorageState::RW_TO_RO,
+                     StorageState::READ_WRITE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      6);
+  ASSERT_TRUE(m.shouldReadFromShard(N1));
+  ASSERT_TRUE(m.canWriteToShard(N1));
 
-  // mark the shard N1 as UNRECOVERABLE
-  rv = m.applyUpdate(
-      genUpdateOneShard(N1,
-                        6,
-                        StorageStateTransition::MARK_SHARD_UNRECOVERABLE,
-                        (Condition::SELF_AWARE_MISSING_DATA |
-                         Condition::CANNOT_ACCEPT_WRITES)),
-      &m);
+  // disable write
+  rv = m.applyUpdate(genUpdateOneShard(N1,
+                                       6,
+                                       StorageStateTransition::DISABLING_WRITE,
+                                       (Condition::WRITE_AVAILABILITY_CHECK |
+                                        Condition::CAPACITY_CHECK)),
+                     &m);
 
   ASSERT_EQ(0, rv);
   ASSERT_EQ(7, m.getVersion().val());
@@ -293,79 +300,118 @@ TEST_F(StorageMembershipTest, ShardLifeCycle) {
                      N1,
                      StorageState::RW_TO_RO,
                      MetaDataStorageState::NONE,
-                     StorageStateFlags::UNRECOVERABLE,
+                     StorageStateFlags::NONE,
                      7);
 
-  // commit write disabled
+  ASSERT_TRUE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
+
+  // mark the shard N1 as UNRECOVERABLE
   rv = m.applyUpdate(
       genUpdateOneShard(N1,
                         7,
-                        StorageStateTransition::COMMIT_WRITE_DISABLED,
-                        Condition::FMAJORITY_CONFIRMATION),
+                        StorageStateTransition::MARK_SHARD_UNRECOVERABLE,
+                        (Condition::SELF_AWARE_MISSING_DATA |
+                         Condition::CANNOT_ACCEPT_WRITES)),
       &m);
 
   ASSERT_EQ(0, rv);
   ASSERT_EQ(8, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
-                     StorageState::READ_ONLY,
+                     StorageState::RW_TO_RO,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::UNRECOVERABLE,
                      8);
+  ASSERT_TRUE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
 
-  // start data migration
+  // commit write disabled
   rv = m.applyUpdate(
       genUpdateOneShard(N1,
                         8,
-                        StorageStateTransition::START_DATA_MIGRATION,
-                        Condition::CAPACITY_CHECK),
+                        StorageStateTransition::COMMIT_WRITE_DISABLED,
+                        Condition::FMAJORITY_CONFIRMATION),
       &m);
 
   ASSERT_EQ(0, rv);
   ASSERT_EQ(9, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
-                     StorageState::DATA_MIGRATION,
+                     StorageState::READ_ONLY,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::UNRECOVERABLE,
                      9);
+  ASSERT_TRUE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
+
+  // start data migration
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        9,
+                        StorageStateTransition::START_DATA_MIGRATION,
+                        Condition::CAPACITY_CHECK),
+      &m);
+
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(10, m.getVersion().val());
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::DATA_MIGRATION,
+                     MetaDataStorageState::NONE,
+                     StorageStateFlags::UNRECOVERABLE,
+                     10);
+  ASSERT_TRUE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
 
   // data migration completed
   rv = m.applyUpdate(
       genUpdateOneShard(N1,
-                        9,
+                        10,
                         StorageStateTransition::DATA_MIGRATION_COMPLETED,
                         Condition::DATA_MIGRATION_COMPLETE),
       &m);
 
   ASSERT_EQ(0, rv);
-  ASSERT_EQ(10, m.getVersion().val());
+  ASSERT_EQ(11, m.getVersion().val());
   // UNRECOVERABLE flags are removed
   ASSERT_SHARD_STATE(m,
                      N1,
                      StorageState::NONE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     10);
+                     11);
+  ASSERT_FALSE(m.shouldReadFromShard(N1));
+  ASSERT_FALSE(m.canWriteToShard(N1));
 
   // remove empty shard N1
   rv = m.applyUpdate(
       genUpdateOneShard(
-          N1, 10, StorageStateTransition::REMOVE_EMPTY_SHARD, Condition::NONE),
+          N1, 11, StorageStateTransition::REMOVE_EMPTY_SHARD, Condition::NONE),
       &m);
 
   ASSERT_EQ(0, rv);
-  ASSERT_EQ(11, m.getVersion().val());
+  ASSERT_EQ(12, m.getVersion().val());
   ASSERT_NO_SHARD(m, N1);
   // N2 should stay intact
   ASSERT_EQ(1, m.numNodes());
   ASSERT_SHARD_STATE(m,
                      N2,
-                     StorageState::NONE,
+                     StorageState::PROVISIONING,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      2);
-  ASSERT_MEMBERSHIP_NODES(m, 2);
+
+  // Remove provisioning shard
+  rv = m.applyUpdate(
+      genUpdateOneShard(
+          N2, 12, StorageStateTransition::REMOVE_EMPTY_SHARD, Condition::NONE),
+      &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(13, m.getVersion().val());
+  ASSERT_NO_SHARD(m, N2);
+  ASSERT_EQ(0, m.numNodes());
+
   checkCodecSerialization(m);
 }
 
@@ -397,16 +443,15 @@ TEST_F(StorageMembershipTest, InvalidTransitions) {
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::EXISTS, err);
 
-  auto enable_read = genUpdateOneShard(
+  auto mark_as_provisioned = genUpdateOneShard(
       N1,
       1,
-      StorageStateTransition::ENABLING_READ,
+      StorageStateTransition::MARK_SHARD_PROVISIONED,
       (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
-       Condition::NO_SELF_REPORT_MISSING_DATA |
-       Condition::CAUGHT_UP_LOCAL_CONFIG));
+       Condition::NO_SELF_REPORT_MISSING_DATA));
 
   // try to apply an invalid update
-  auto update_invalid = enable_read;
+  auto update_invalid = mark_as_provisioned;
   update_invalid.shard_updates.clear();
   ASSERT_FALSE(update_invalid.isValid());
   rv = m.applyUpdate(update_invalid, &m);
@@ -414,17 +459,17 @@ TEST_F(StorageMembershipTest, InvalidTransitions) {
   ASSERT_EQ(E::INVALID_PARAM, err);
 
   // try to apply an update with wrong base version
-  auto wrong_base = enable_read;
+  auto wrong_base = mark_as_provisioned;
   wrong_base.base_version = MembershipVersion::Type{2};
   rv = m.applyUpdate(wrong_base, &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::VERSION_MISMATCH, err);
 
   // try to apply an update with insufficient conditions
-  auto wrong_conditions = enable_read;
+  auto wrong_conditions = mark_as_provisioned;
   // remove one condition
   wrong_conditions.shard_updates[N1].conditions &=
-      (~Condition::NO_SELF_REPORT_MISSING_DATA);
+      (~Condition::LOCAL_STORE_READABLE);
   rv = m.applyUpdate(wrong_conditions, &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::CONDITION_MISMATCH, err);
@@ -438,6 +483,26 @@ TEST_F(StorageMembershipTest, InvalidTransitions) {
                      &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::SOURCE_STATE_MISMATCH, err);
+
+  // REMOVE_NODE shouldn't work with non-empty shards
+  // Let's move N1 to RW and test that.
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        1,
+                        StorageStateTransition::OVERRIDE_STATE,
+                        Condition::FORCE,
+                        {StateOverride{StorageState::READ_WRITE,
+                                       StorageStateFlags::NONE,
+                                       MetaDataStorageState::NONE}}),
+      &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(
+          N1, 2, StorageStateTransition::REMOVE_EMPTY_SHARD, Condition::NONE),
+      &m);
+  ASSERT_EQ(-1, rv);
+  ASSERT_EQ(E::SOURCE_STATE_MISMATCH, err);
+
   checkCodecSerialization(m);
 }
 
@@ -452,27 +517,28 @@ TEST_F(StorageMembershipTest, ForceFlag) {
                                        Condition::NONE),
                      &m);
   ASSERT_EQ(0, rv);
-  // enabling read will fail with insufficient conditions given
-  rv = m.applyUpdate(genUpdateOneShard(N1,
-                                       1,
-                                       StorageStateTransition::ENABLING_READ,
-                                       (Condition::EMPTY_SHARD |
-                                        Condition::LOCAL_STORE_READABLE |
-                                        Condition::CAUGHT_UP_LOCAL_CONFIG)),
-                     &m);
+  // marking as provisioned will fail with insufficient conditions given
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        1,
+                        StorageStateTransition::MARK_SHARD_PROVISIONED,
+                        Condition::NONE),
+      &m);
   ASSERT_EQ(-1, rv);
   ASSERT_EQ(E::CONDITION_MISMATCH, err);
 
   // However, adding the FORCE flag will make the transition bypass condition
   // checks
   rv = m.applyUpdate(
-      genUpdateOneShard(
-          N1, 1, StorageStateTransition::ENABLING_READ, Condition::FORCE),
+      genUpdateOneShard(N1,
+                        1,
+                        StorageStateTransition::MARK_SHARD_PROVISIONED,
+                        Condition::FORCE),
       &m);
   ASSERT_EQ(0, rv);
   ASSERT_SHARD_STATE(m,
                      N1,
-                     StorageState::NONE_TO_RO,
+                     StorageState::NONE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      2);
@@ -492,7 +558,7 @@ TEST_F(StorageMembershipTest, StateOverride) {
   ASSERT_EQ(1, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
-                     StorageState::NONE,
+                     StorageState::PROVISIONING,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
                      1);
@@ -546,18 +612,26 @@ TEST_F(StorageMembershipTest, UNRECOVERABLE) {
                                        StorageStateTransition::ADD_EMPTY_SHARD,
                                        Condition::NONE),
                      &m);
+  rv = m.applyUpdate(
+      genUpdateOneShard(
+          N1,
+          1,
+          StorageStateTransition::MARK_SHARD_PROVISIONED,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA)),
+      &m);
   ASSERT_EQ(0, rv);
   ASSERT_SHARD_STATE(m,
                      N1,
                      StorageState::NONE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     1);
+                     2);
 
   // marking shard as unrecoverable in NONE will be a no-op
   rv = m.applyUpdate(
       genUpdateOneShard(N1,
-                        1,
+                        2,
                         StorageStateTransition::MARK_SHARD_UNRECOVERABLE,
                         (Condition::SELF_AWARE_MISSING_DATA |
                          Condition::CANNOT_ACCEPT_WRITES)),
@@ -567,11 +641,11 @@ TEST_F(StorageMembershipTest, UNRECOVERABLE) {
                      StorageState::NONE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     2);
+                     3);
 
   // enabling read
   rv = m.applyUpdate(genUpdateOneShard(N1,
-                                       2,
+                                       3,
                                        StorageStateTransition::ENABLING_READ,
                                        (Condition::EMPTY_SHARD |
                                         Condition::LOCAL_STORE_READABLE |
@@ -584,12 +658,12 @@ TEST_F(StorageMembershipTest, UNRECOVERABLE) {
                      StorageState::NONE_TO_RO,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     3);
+                     4);
 
   // marking the shard as unrecoverable will transition it back to NONE
   rv = m.applyUpdate(
       genUpdateOneShard(N1,
-                        3,
+                        4,
                         StorageStateTransition::MARK_SHARD_UNRECOVERABLE,
                         (Condition::SELF_AWARE_MISSING_DATA |
                          Condition::CANNOT_ACCEPT_WRITES)),
@@ -599,7 +673,7 @@ TEST_F(StorageMembershipTest, UNRECOVERABLE) {
                      StorageState::NONE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     4);
+                     5);
   checkCodecSerialization(m);
 }
 
@@ -619,30 +693,39 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
             Condition::NONE);
   rv = m.applyUpdate(update, &m);
   ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateShards(
+          {N1, N2, N3},
+          1,
+          StorageStateTransition::MARK_SHARD_PROVISIONED,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA)),
+      &m);
+  ASSERT_EQ(0, rv);
   ASSERT_EQ(3, m.numNodes());
   ASSERT_SHARD_STATE(m,
                      N1,
                      StorageState::NONE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     1);
+                     2);
   ASSERT_SHARD_STATE(m,
                      N2,
                      StorageState::NONE,
                      MetaDataStorageState::METADATA,
                      StorageStateFlags::NONE,
-                     1);
+                     2);
   ASSERT_SHARD_STATE(m,
                      N3,
                      StorageState::NONE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     1);
+                     2);
   CHECK_METADATA_SHARDS(m, N2);
 
   // transition N1 and N2 to RW, and N3 to RO
   rv = m.applyUpdate(genUpdateShards({N1, N2, N3},
-                                     MIN_VERSION.val(),
+                                     2,
                                      StorageStateTransition::ENABLING_READ,
                                      (Condition::EMPTY_SHARD |
                                       Condition::LOCAL_STORE_READABLE |
@@ -653,45 +736,45 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
   ASSERT_EQ(0, rv);
   rv =
       m.applyUpdate(genUpdateShards({N1, N2, N3},
-                                    2,
+                                    3,
                                     StorageStateTransition::COMMIT_READ_ENABLED,
                                     Condition::COPYSET_CONFIRMATION),
                     &m);
 
   ASSERT_EQ(0, rv);
   rv = m.applyUpdate(genUpdateShards({N1, N2},
-                                     3,
+                                     4,
                                      StorageStateTransition::ENABLE_WRITE,
                                      Condition::LOCAL_STORE_WRITABLE),
                      &m);
 
   ASSERT_EQ(0, rv);
-  ASSERT_EQ(4, m.getVersion().val());
+  ASSERT_EQ(5, m.getVersion().val());
   ASSERT_SHARD_STATE(m,
                      N1,
                      StorageState::READ_WRITE,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     4);
+                     5);
   ASSERT_SHARD_STATE(m,
                      N2,
                      StorageState::READ_WRITE,
                      MetaDataStorageState::METADATA,
                      StorageStateFlags::NONE,
-                     4);
+                     5);
   ASSERT_SHARD_STATE(m,
                      N3,
                      StorageState::READ_ONLY,
                      MetaDataStorageState::NONE,
                      StorageStateFlags::NONE,
-                     3);
+                     4);
   CHECK_METADATA_SHARDS(m, N2);
 
   // try promoting N2 to a metadata shard would fail as N2 is already a
   // metadata shard
   rv = m.applyUpdate(
       genUpdateOneShard(N2,
-                        4,
+                        5,
                         StorageStateTransition::PROMOTING_METADATA_SHARD,
                         Condition::NONE),
       &m);
@@ -701,7 +784,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
   // try promoting N3 to become a metadata shard would fail as N3 is not in RW
   rv = m.applyUpdate(
       genUpdateOneShard(N3,
-                        4,
+                        5,
                         StorageStateTransition::PROMOTING_METADATA_SHARD,
                         Condition::NONE),
       &m);
@@ -712,7 +795,7 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
   // promoting N1 to a metadata shard
   rv = m.applyUpdate(
       genUpdateOneShard(N1,
-                        4,
+                        5,
                         StorageStateTransition::PROMOTING_METADATA_SHARD,
                         Condition::NONE),
       &m);
@@ -721,308 +804,11 @@ TEST_F(StorageMembershipTest, MetaDataShards) {
                      N1,
                      StorageState::READ_WRITE,
                      MetaDataStorageState::PROMOTING,
-                     StorageStateFlags::NONE,
-                     5);
-  CHECK_METADATA_SHARDS(m, N1, N2);
-
-  // commit the promotion
-  rv = m.applyUpdate(
-      genUpdateOneShard(N1,
-                        5,
-                        StorageStateTransition::COMMIT_PROMOTION_METADATA_SHARD,
-                        Condition::COPYSET_CONFIRMATION),
-      &m);
-  ASSERT_EQ(0, rv);
-  ASSERT_SHARD_STATE(m,
-                     N1,
-                     StorageState::READ_WRITE,
-                     MetaDataStorageState::METADATA,
                      StorageStateFlags::NONE,
                      6);
   CHECK_METADATA_SHARDS(m, N1, N2);
-  // now enable writes on N3 and promoting it to be metadata shard
-  rv = m.applyUpdate(genUpdateShards({N3},
-                                     6,
-                                     StorageStateTransition::ENABLE_WRITE,
-                                     Condition::LOCAL_STORE_WRITABLE),
-                     &m);
-  ASSERT_EQ(0, rv);
-  rv = m.applyUpdate(
-      genUpdateOneShard(N3,
-                        7,
-                        StorageStateTransition::PROMOTING_METADATA_SHARD,
-                        Condition::NONE),
-      &m);
-  ASSERT_EQ(0, rv);
-  ASSERT_SHARD_STATE(m,
-                     N3,
-                     StorageState::READ_WRITE,
-                     MetaDataStorageState::PROMOTING,
-                     StorageStateFlags::NONE,
-                     8);
-  CHECK_METADATA_SHARDS(m, N1, N2, N3);
 
-  // disabling writes for N3, it will automatically cancel the promotion
-  rv = m.applyUpdate(genUpdateOneShard(N3,
-                                       8,
-                                       StorageStateTransition::DISABLING_WRITE,
-                                       (Condition::WRITE_AVAILABILITY_CHECK |
-                                        Condition::CAPACITY_CHECK)),
-                     &m);
-  ASSERT_EQ(0, rv);
-  ASSERT_SHARD_STATE(m,
-                     N3,
-                     StorageState::RW_TO_RO,
-                     MetaDataStorageState::NONE,
-                     StorageStateFlags::NONE,
-                     9);
-  CHECK_METADATA_SHARDS(m, N1, N2);
-
-  // disabling writes for N1, as N1 is a metadata shard, it requires additional
-  // conditions
-  rv = m.applyUpdate(genUpdateOneShard(N1,
-                                       9,
-                                       StorageStateTransition::DISABLING_WRITE,
-                                       (Condition::WRITE_AVAILABILITY_CHECK |
-                                        Condition::CAPACITY_CHECK)),
-                     &m);
-  ASSERT_EQ(-1, rv);
-  ASSERT_EQ(E::CONDITION_MISMATCH, err);
-  CHECK_METADATA_SHARDS(m, N1, N2);
-
-  // add the required conditions and it should succeed
-  rv = m.applyUpdate(
-      genUpdateOneShard(
-          N1,
-          9,
-          StorageStateTransition::DISABLING_WRITE,
-          (Condition::WRITE_AVAILABILITY_CHECK | Condition::CAPACITY_CHECK |
-           Condition::METADATA_WRITE_AVAILABILITY_CHECK |
-           Condition::METADATA_CAPACITY_CHECK)),
-      &m);
-  ASSERT_EQ(0, rv);
-  ASSERT_SHARD_STATE(m,
-                     N1,
-                     StorageState::RW_TO_RO,
-                     MetaDataStorageState::METADATA,
-                     StorageStateFlags::NONE,
-                     10);
-  CHECK_METADATA_SHARDS(m, N1, N2);
-
-  // perform data migration and transition N1 to be NONE, it should preserve
-  // its metadata status
-  rv = m.applyUpdate(
-      genUpdateOneShard(N1,
-                        10,
-                        StorageStateTransition::COMMIT_WRITE_DISABLED,
-                        (Condition::FMAJORITY_CONFIRMATION)),
-      &m);
-  ASSERT_EQ(0, rv);
-  rv = m.applyUpdate(
-      genUpdateOneShard(N1,
-                        11,
-                        StorageStateTransition::START_DATA_MIGRATION,
-                        Condition::CAPACITY_CHECK),
-      &m);
-  ASSERT_EQ(0, rv);
-  rv = m.applyUpdate(
-      genUpdateOneShard(N1,
-                        12,
-                        StorageStateTransition::DATA_MIGRATION_COMPLETED,
-                        Condition::DATA_MIGRATION_COMPLETE),
-      &m);
-  ASSERT_EQ(0, rv);
-  ASSERT_SHARD_STATE(m,
-                     N1,
-                     StorageState::NONE,
-                     MetaDataStorageState::METADATA,
-                     StorageStateFlags::NONE,
-                     13);
-  ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3);
-  checkCodecSerialization(m);
-}
-
-TEST_F(StorageMembershipTest, InvalidProvisionUpdate) {
-  // invalid provision update with wrong maintenance ID
-  ShardState::Update invalid1{StorageStateTransition::PROVISION_SHARD,
-                              Condition::NONE,
-                              MAINTENANCE_NONE};
-
-  ASSERT_FALSE(invalid1.isValid());
-  ShardState::Update invalid2{StorageStateTransition::PROVISION_METADATA_SHARD,
-                              Condition::NONE,
-                              MaintenanceID::Type(50)};
-  ASSERT_FALSE(invalid2.isValid());
-
-  StorageMembership m{};
-  // add one shard so that membership is not empty anymore
-  int rv =
-      m.applyUpdate(genUpdateOneShard(N1,
-                                      EMPTY_VERSION.val(),
-                                      StorageStateTransition::ADD_EMPTY_SHARD,
-                                      Condition::NONE),
-                    &m);
-  ASSERT_EQ(0, rv);
-  ASSERT_EQ(1, m.numNodes());
-  ASSERT_EQ(1, m.getVersion().val());
-
-  // further provision transitions should fail because of the
-  // base version check
-
-  // add another empty shard N2, N1's state should stay intact
-  rv = m.applyUpdate(
-      genUpdateOneShard(
-          N2, 1, StorageStateTransition::PROVISION_SHARD, Condition::FORCE),
-      &m);
-  ASSERT_EQ(-1, rv);
-  ASSERT_EQ(E::VERSION_MISMATCH, err);
-
-  rv = m.applyUpdate(
-      genUpdateOneShard(N2,
-                        1,
-                        StorageStateTransition::PROVISION_METADATA_SHARD,
-                        Condition::FORCE),
-      &m);
-  ASSERT_EQ(-1, rv);
-  ASSERT_EQ(E::VERSION_MISMATCH, err);
-  checkCodecSerialization(m);
-}
-
-TEST_F(StorageMembershipTest, ProvisionTransition) {
-  StorageMembership m{};
-  int rv;
-  // provision m with three regular shard N1, N2, N4 and one metadata shard N3
-  auto update = genUpdateShards(
-      {N1, N2, N4},
-      EMPTY_VERSION.val(),
-      StorageStateTransition::PROVISION_SHARD,
-      (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
-       Condition::NO_SELF_REPORT_MISSING_DATA |
-       Condition::LOCAL_STORE_WRITABLE));
-
-  addShards(&update,
-            {N3},
-            StorageStateTransition::PROVISION_METADATA_SHARD,
-            (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
-             Condition::NO_SELF_REPORT_MISSING_DATA |
-             Condition::LOCAL_STORE_WRITABLE));
-  rv = m.applyUpdate(update, &m);
-  ASSERT_EQ(0, rv);
-  ASSERT_EQ(4, m.numNodes());
-  ASSERT_SHARD_STATE_FULL(m,
-                          N1,
-                          StorageState::READ_WRITE,
-                          MetaDataStorageState::NONE,
-                          StorageStateFlags::NONE,
-                          1,
-                          MAINTENANCE_PROVISION);
-  ASSERT_SHARD_STATE_FULL(m,
-                          N2,
-                          StorageState::READ_WRITE,
-                          MetaDataStorageState::NONE,
-                          StorageStateFlags::NONE,
-                          1,
-                          MAINTENANCE_PROVISION);
-  ASSERT_SHARD_STATE_FULL(m,
-                          N3,
-                          StorageState::READ_WRITE,
-                          MetaDataStorageState::METADATA,
-                          StorageStateFlags::NONE,
-                          1,
-                          MAINTENANCE_PROVISION);
-  ASSERT_SHARD_STATE_FULL(m,
-                          N4,
-                          StorageState::READ_WRITE,
-                          MetaDataStorageState::NONE,
-                          StorageStateFlags::NONE,
-                          1,
-                          MAINTENANCE_PROVISION);
-  CHECK_METADATA_SHARDS(m, N3);
-
-  // further provision should fail
-  rv = m.applyUpdate(
-      genUpdateOneShard(N7,
-                        1,
-                        StorageStateTransition::PROVISION_METADATA_SHARD,
-                        Condition::FORCE),
-      &m);
-  ASSERT_EQ(-1, rv);
-  ASSERT_EQ(E::VERSION_MISMATCH, err);
-
-  // but can still add shard
-  rv = m.applyUpdate(
-      genUpdateOneShard(N7,
-                        1,
-                        StorageStateTransition::ADD_EMPTY_METADATA_SHARD,
-                        Condition::FORCE),
-      &m);
-  ASSERT_EQ(0, rv);
-  ASSERT_SHARD_STATE(m,
-                     N7,
-                     StorageState::NONE,
-                     MetaDataStorageState::METADATA,
-                     StorageStateFlags::NONE,
-                     2);
-  CHECK_METADATA_SHARDS(m, N3, N7);
-  ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3, 4, 7);
-  checkCodecSerialization(m);
-}
-
-///////////  Testing the flatbuffers Codec //////////////////
-
-TEST_F(StorageMembershipTest, CodecEmptyMembership) {
-  // serialize and deserialize an empty membership
-  StorageMembership m{};
-  checkCodecSerialization(m);
-}
-
-TEST_F(StorageMembershipTest, CodecBasic) {
-  StorageMembership m{};
-  int rv;
-  auto update = genUpdateShards({N5, N6, N7},
-                                EMPTY_VERSION.val(),
-                                StorageStateTransition::PROVISION_SHARD,
-                                Condition::FORCE);
-  addShards(&update,
-            {N8, N9},
-            StorageStateTransition::PROVISION_METADATA_SHARD,
-            Condition::FORCE);
-  rv = m.applyUpdate(update, &m);
-  ASSERT_EQ(0, rv);
-  auto update2 = genUpdateOneShard(
-      N2, 1, StorageStateTransition::ADD_EMPTY_METADATA_SHARD, Condition::NONE);
-  addShards(&update2,
-            {N1, N3},
-            StorageStateTransition::ADD_EMPTY_SHARD,
-            Condition::NONE);
-  rv = m.applyUpdate(update2, &m);
-  ASSERT_EQ(0, rv);
-  rv = m.applyUpdate(genUpdateShards({N1, N2, N3},
-                                     2,
-                                     StorageStateTransition::ENABLING_READ,
-                                     Condition::FORCE),
-                     &m);
-  ASSERT_EQ(0, rv);
-  rv =
-      m.applyUpdate(genUpdateShards({N1, N2, N3},
-                                    3,
-                                    StorageStateTransition::COMMIT_READ_ENABLED,
-                                    Condition::COPYSET_CONFIRMATION),
-                    &m);
-  ASSERT_EQ(0, rv);
-  rv = m.applyUpdate(genUpdateShards({N1, N2},
-                                     4,
-                                     StorageStateTransition::ENABLE_WRITE,
-                                     Condition::LOCAL_STORE_WRITABLE),
-                     &m);
-  ASSERT_EQ(0, rv);
-  rv = m.applyUpdate(
-      genUpdateOneShard(N1,
-                        5,
-                        StorageStateTransition::PROMOTING_METADATA_SHARD,
-                        Condition::NONE),
-      &m);
-  ASSERT_EQ(0, rv);
+  // commit the promotion
   rv = m.applyUpdate(
       genUpdateOneShard(N1,
                         6,
@@ -1030,6 +816,14 @@ TEST_F(StorageMembershipTest, CodecBasic) {
                         Condition::COPYSET_CONFIRMATION),
       &m);
   ASSERT_EQ(0, rv);
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::READ_WRITE,
+                     MetaDataStorageState::METADATA,
+                     StorageStateFlags::NONE,
+                     7);
+  CHECK_METADATA_SHARDS(m, N1, N2);
+  // now enable writes on N3 and promoting it to be metadata shard
   rv = m.applyUpdate(genUpdateShards({N3},
                                      7,
                                      StorageStateTransition::ENABLE_WRITE,
@@ -1043,10 +837,330 @@ TEST_F(StorageMembershipTest, CodecBasic) {
                         Condition::NONE),
       &m);
   ASSERT_EQ(0, rv);
-  CHECK_METADATA_SHARDS(m, N1, N2, N3, N8, N9);
+  ASSERT_SHARD_STATE(m,
+                     N3,
+                     StorageState::READ_WRITE,
+                     MetaDataStorageState::PROMOTING,
+                     StorageStateFlags::NONE,
+                     9);
+  CHECK_METADATA_SHARDS(m, N1, N2, N3);
+
+  // disabling writes for N3, it will automatically cancel the promotion
+  rv = m.applyUpdate(genUpdateOneShard(N3,
+                                       9,
+                                       StorageStateTransition::DISABLING_WRITE,
+                                       (Condition::WRITE_AVAILABILITY_CHECK |
+                                        Condition::CAPACITY_CHECK)),
+                     &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_SHARD_STATE(m,
+                     N3,
+                     StorageState::RW_TO_RO,
+                     MetaDataStorageState::NONE,
+                     StorageStateFlags::NONE,
+                     10);
+  CHECK_METADATA_SHARDS(m, N1, N2);
+
+  // disabling writes for N1, as N1 is a metadata shard, it requires additional
+  // conditions
+  rv = m.applyUpdate(genUpdateOneShard(N1,
+                                       10,
+                                       StorageStateTransition::DISABLING_WRITE,
+                                       (Condition::WRITE_AVAILABILITY_CHECK |
+                                        Condition::CAPACITY_CHECK)),
+                     &m);
+  ASSERT_EQ(-1, rv);
+  ASSERT_EQ(E::CONDITION_MISMATCH, err);
+  CHECK_METADATA_SHARDS(m, N1, N2);
+
+  // add the required conditions and it should succeed
+  rv = m.applyUpdate(
+      genUpdateOneShard(
+          N1,
+          10,
+          StorageStateTransition::DISABLING_WRITE,
+          (Condition::WRITE_AVAILABILITY_CHECK | Condition::CAPACITY_CHECK |
+           Condition::METADATA_WRITE_AVAILABILITY_CHECK |
+           Condition::METADATA_CAPACITY_CHECK)),
+      &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::RW_TO_RO,
+                     MetaDataStorageState::METADATA,
+                     StorageStateFlags::NONE,
+                     11);
+  CHECK_METADATA_SHARDS(m, N1, N2);
+
+  // perform data migration and transition N1 to be NONE, it should preserve
+  // its metadata status
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        11,
+                        StorageStateTransition::COMMIT_WRITE_DISABLED,
+                        (Condition::FMAJORITY_CONFIRMATION)),
+      &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        12,
+                        StorageStateTransition::START_DATA_MIGRATION,
+                        Condition::CAPACITY_CHECK),
+      &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        13,
+                        StorageStateTransition::DATA_MIGRATION_COMPLETED,
+                        Condition::DATA_MIGRATION_COMPLETE),
+      &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::NONE,
+                     MetaDataStorageState::METADATA,
+                     StorageStateFlags::NONE,
+                     14);
+  ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3);
   checkCodecSerialization(m);
 }
 
-// TODO: test getting writer's and reader's view?
+TEST_F(StorageMembershipTest, InvalidBootstrapUpdate) {
+  // TODO(mbassem) Add tests for the bootstrapping check
+}
+
+TEST_F(StorageMembershipTest, BoostrapTransition) {
+  StorageMembership m{};
+  int rv;
+
+  rv = m.applyUpdate(genUpdateShards({N1, N2, N3, N4},
+                                     EMPTY_VERSION.val(),
+                                     StorageStateTransition::ADD_EMPTY_SHARD,
+                                     Condition::NONE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateShards(
+          {N1, N2, N3, N4},
+          1,
+          StorageStateTransition::MARK_SHARD_PROVISIONED,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA)),
+      &m);
+  ASSERT_EQ(0, rv);
+
+  // provision m with three regular shard N1, N2, N4 and one metadata shard N3
+  auto update = genUpdateShards(
+      {N1, N2, N4},
+      2,
+      StorageStateTransition::BOOTSTRAP_ENABLE_SHARD,
+      (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+       Condition::NO_SELF_REPORT_MISSING_DATA |
+       Condition::LOCAL_STORE_WRITABLE));
+
+  addShards(&update,
+            {N3},
+            StorageStateTransition::BOOTSTRAP_ENABLE_METADATA_SHARD,
+            (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+             Condition::NO_SELF_REPORT_MISSING_DATA |
+             Condition::LOCAL_STORE_WRITABLE));
+  rv = m.applyUpdate(update, &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(4, m.numNodes());
+  ASSERT_SHARD_STATE_FULL(m,
+                          N1,
+                          StorageState::READ_WRITE,
+                          MetaDataStorageState::NONE,
+                          StorageStateFlags::NONE,
+                          3,
+                          DUMMY_MAINTENANCE);
+  ASSERT_SHARD_STATE_FULL(m,
+                          N2,
+                          StorageState::READ_WRITE,
+                          MetaDataStorageState::NONE,
+                          StorageStateFlags::NONE,
+                          3,
+                          DUMMY_MAINTENANCE);
+  ASSERT_SHARD_STATE_FULL(m,
+                          N3,
+                          StorageState::READ_WRITE,
+                          MetaDataStorageState::METADATA,
+                          StorageStateFlags::NONE,
+                          3,
+                          DUMMY_MAINTENANCE);
+  ASSERT_SHARD_STATE_FULL(m,
+                          N4,
+                          StorageState::READ_WRITE,
+                          MetaDataStorageState::NONE,
+                          StorageStateFlags::NONE,
+                          3,
+                          DUMMY_MAINTENANCE);
+  CHECK_METADATA_SHARDS(m, N3);
+
+  // can still add shard
+  rv = m.applyUpdate(
+      genUpdateOneShard(N7,
+                        3,
+                        StorageStateTransition::ADD_EMPTY_METADATA_SHARD,
+                        Condition::FORCE),
+      &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_SHARD_STATE(m,
+                     N7,
+                     StorageState::PROVISIONING,
+                     MetaDataStorageState::METADATA,
+                     StorageStateFlags::NONE,
+                     4);
+  CHECK_METADATA_SHARDS(m, N3, N7);
+  ASSERT_MEMBERSHIP_NODES(m, 1, 2, 3, 4, 7);
+  checkCodecSerialization(m);
+}
+
+TEST_F(StorageMembershipTest, BootstrapRespectsMetadata) {
+  StorageMembership m{};
+  int rv;
+
+  auto update = genUpdateShards({N1},
+                                EMPTY_VERSION.val(),
+                                StorageStateTransition::ADD_EMPTY_SHARD,
+                                Condition::NONE);
+  addShards(&update,
+            {N2},
+            StorageStateTransition::ADD_EMPTY_METADATA_SHARD,
+            Condition::NONE);
+
+  rv = m.applyUpdate(update, &m);
+  ASSERT_EQ(0, rv);
+
+  rv = m.applyUpdate(
+      genUpdateShards(
+          {N1, N2},
+          1,
+          StorageStateTransition::MARK_SHARD_PROVISIONED,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA)),
+      &m);
+  ASSERT_EQ(0, rv);
+
+  // BOOTSTRAP_ENABLE_SHARD should respect if the shard was added as a metadata
+  // shard or not.
+  rv = m.applyUpdate(
+      genUpdateShards(
+          {N1, N2},
+          2,
+          StorageStateTransition::BOOTSTRAP_ENABLE_SHARD,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA |
+           Condition::LOCAL_STORE_WRITABLE)),
+      &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::READ_WRITE,
+                     MetaDataStorageState::NONE,
+                     StorageStateFlags::NONE,
+                     3);
+  ASSERT_SHARD_STATE(m,
+                     N2,
+                     StorageState::READ_WRITE,
+                     MetaDataStorageState::METADATA,
+                     StorageStateFlags::NONE,
+                     3);
+}
+
+///////////  Testing the flatbuffers Codec //////////////////
+
+TEST_F(StorageMembershipTest, CodecEmptyMembership) {
+  // serialize and deserialize an empty membership
+  StorageMembership m{};
+  checkCodecSerialization(m);
+}
+
+TEST_F(StorageMembershipTest, CodecBasic) {
+  StorageMembership m{};
+  int rv;
+
+  auto update = genUpdateShards({N1, N3, N5, N6, N7, N8, N9, N10},
+                                EMPTY_VERSION.val(),
+                                StorageStateTransition::ADD_EMPTY_SHARD,
+                                Condition::NONE);
+  addShards(&update,
+            {N2},
+            StorageStateTransition::ADD_EMPTY_METADATA_SHARD,
+            Condition::NONE);
+  rv = m.applyUpdate(update, &m);
+  ASSERT_EQ(0, rv);
+
+  rv = m.applyUpdate(
+      genUpdateShards(
+          {N1, N2, N3, N5, N6, N7, N8, N9},
+          1,
+          StorageStateTransition::MARK_SHARD_PROVISIONED,
+          (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+           Condition::NO_SELF_REPORT_MISSING_DATA)),
+      &m);
+  ASSERT_EQ(0, rv);
+
+  update = genUpdateShards({N5, N6, N7},
+                           2,
+                           StorageStateTransition::BOOTSTRAP_ENABLE_SHARD,
+                           Condition::FORCE);
+  addShards(&update,
+            {N8, N9},
+            StorageStateTransition::BOOTSTRAP_ENABLE_METADATA_SHARD,
+            Condition::FORCE);
+  rv = m.applyUpdate(update, &m);
+
+  ASSERT_EQ(0, rv);
+
+  rv = m.applyUpdate(genUpdateShards({N1, N2, N3},
+                                     3,
+                                     StorageStateTransition::ENABLING_READ,
+                                     Condition::FORCE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  rv =
+      m.applyUpdate(genUpdateShards({N1, N2, N3},
+                                    4,
+                                    StorageStateTransition::COMMIT_READ_ENABLED,
+                                    Condition::COPYSET_CONFIRMATION),
+                    &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(genUpdateShards({N1, N2},
+                                     5,
+                                     StorageStateTransition::ENABLE_WRITE,
+                                     Condition::LOCAL_STORE_WRITABLE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        6,
+                        StorageStateTransition::PROMOTING_METADATA_SHARD,
+                        Condition::NONE),
+      &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(N1,
+                        7,
+                        StorageStateTransition::COMMIT_PROMOTION_METADATA_SHARD,
+                        Condition::COPYSET_CONFIRMATION),
+      &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(genUpdateShards({N3},
+                                     8,
+                                     StorageStateTransition::ENABLE_WRITE,
+                                     Condition::LOCAL_STORE_WRITABLE),
+                     &m);
+  ASSERT_EQ(0, rv);
+  rv = m.applyUpdate(
+      genUpdateOneShard(N3,
+                        9,
+                        StorageStateTransition::PROMOTING_METADATA_SHARD,
+                        Condition::NONE),
+      &m);
+  ASSERT_EQ(0, rv);
+  CHECK_METADATA_SHARDS(m, N1, N2, N3, N8, N9);
+  checkCodecSerialization(m);
+}
 
 } // namespace

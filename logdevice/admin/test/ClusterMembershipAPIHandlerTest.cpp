@@ -278,53 +278,6 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestInvalidAddNodesRequest) {
   }
 }
 
-TEST_F(ClusterMemebershipAPIIntegrationTest, TestNewNodeEnableWorkflow) {
-  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  auto admin_client = cluster_->getNode(0).createAdminClient();
-
-  {
-    // Add a new node
-    thrift::AddNodesRequest req = buildAddNodesRequest({10});
-    thrift::AddNodesResponse resp;
-    admin_client->sync_addNodes(resp, req);
-    EXPECT_EQ(1, resp.added_nodes.size());
-  }
-
-  thrift::NodesStateResponse node_states;
-
-  wait_until("Wait until the newly added node is enabled", [&]() {
-    thrift::NodesFilter filter;
-    filter.set_node(mkNodeID(node_index_t(10)));
-
-    thrift::NodesStateRequest req;
-    req.set_filter(filter);
-
-    admin_client->sync_getNodesState(node_states, req);
-    if (node_states.states.size() == 0) {
-      return false;
-    }
-    const auto& state = node_states.states[0];
-    ld_assert_eq(10, state.node_index);
-    ld_assert(state.shard_states_ref().has_value());
-    ld_assert_eq(2, state.shard_states_ref().value().size());
-    ld_assert(state.sequencer_state_ref().has_value());
-
-    auto seq_state = state.sequencer_state_ref().value();
-    auto shard_states = state.shard_states_ref().value();
-
-    ld_info("Got state: seq=%d, storage=[{%d, %d]",
-            static_cast<int32_t>(seq_state.state),
-            static_cast<int32_t>(shard_states[0].storage_state),
-            static_cast<int32_t>(shard_states[1].storage_state));
-
-    return seq_state.state == thrift::SequencingState::ENABLED &&
-        shard_states[0].storage_state ==
-        membership::thrift::StorageState::READ_WRITE &&
-        shard_states[1].storage_state ==
-        membership::thrift::StorageState::READ_WRITE;
-  });
-}
-
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
   auto admin_client = cluster_->getNode(0).createAdminClient();

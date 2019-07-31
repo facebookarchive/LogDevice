@@ -44,8 +44,91 @@ NodeServiceDiscovery genDiscovery(node_index_t n,
                               roles};
 }
 
+configuration::nodes::NodesConfiguration::Update
+markAllShardProvisionedUpdate(const NodesConfiguration& nc) {
+  // MARK_SHARD_PROVISIONED transaction
+  NodesConfiguration::Update update{};
+  update.storage_config_update = std::make_unique<StorageConfig::Update>();
+  update.storage_config_update->membership_update =
+      std::make_unique<StorageMembership::Update>(
+          nc.getStorageMembership()->getVersion());
+  const auto& storage = nc.getStorageMembership();
+  for (const auto nid : *storage) {
+    for (const auto& [shard_idx, state] : storage->getShardStates(nid)) {
+      if (state.storage_state != StorageState::PROVISIONING) {
+        continue;
+      }
+      update.storage_config_update->membership_update->addShard(
+          ShardID(nid, shard_idx),
+          {StorageStateTransition::MARK_SHARD_PROVISIONED,
+           (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+            Condition::NO_SELF_REPORT_MISSING_DATA),
+           DUMMY_MAINTENANCE,
+           /* state_override = */ folly::none});
+    }
+  }
+  return update;
+}
+
+configuration::nodes::NodesConfiguration::Update
+bootstrapEnableAllShardsUpdate(const NodesConfiguration& nc) {
+  // BOOTSTRAP_ENABLE_SHARDS transaction
+  NodesConfiguration::Update update{};
+  update.storage_config_update = std::make_unique<StorageConfig::Update>();
+  update.storage_config_update->membership_update =
+      std::make_unique<StorageMembership::Update>(
+          nc.getStorageMembership()->getVersion());
+  const auto& storage = nc.getStorageMembership();
+  for (const auto nid : *storage) {
+    for (const auto& [shard_idx, state] : storage->getShardStates(nid)) {
+      if (state.storage_state != StorageState::NONE) {
+        continue;
+      }
+      update.storage_config_update->membership_update->addShard(
+          ShardID(nid, shard_idx),
+          {StorageStateTransition::BOOTSTRAP_ENABLE_SHARD,
+           (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+            Condition::NO_SELF_REPORT_MISSING_DATA |
+            Condition::LOCAL_STORE_WRITABLE),
+           DUMMY_MAINTENANCE,
+           /* state_override = */ folly::none});
+    }
+  }
+  return update;
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
+    configuration::nodes::NodesConfiguration::Update provision_update) {
+  auto config = std::make_shared<const NodesConfiguration>();
+  config = config->applyUpdate(std::move(provision_update));
+  ld_assert(config != nullptr);
+  config = config->applyUpdate(markAllShardProvisionedUpdate(*config));
+  ld_assert(config != nullptr);
+  config = config->applyUpdate(bootstrapEnableAllShardsUpdate(*config));
+  ld_assert(config != nullptr);
+  VLOG(1) << "config: " << NodesConfigurationCodec::debugJsonString(*config);
+  return config;
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+provisionNodes() {
+  return provisionNodes(initialAddShardsUpdate());
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+provisionNodes(std::vector<node_index_t> node_idxs) {
+  return provisionNodes(initialAddShardsUpdate(std::move(node_idxs)));
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+provisionNodes(std::vector<NodeTemplate> nodes,
+               ReplicationProperty metadata_rep) {
+  return provisionNodes(
+      initialAddShardsUpdate(std::move(nodes), std::move(metadata_rep)));
+}
+
 NodesConfiguration::Update
-initialProvisionUpdate(std::vector<NodeTemplate> nodes,
+initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
                        ReplicationProperty metadata_rep) {
   NodesConfiguration::Update update{};
 
@@ -77,7 +160,7 @@ initialProvisionUpdate(std::vector<NodeTemplate> nodes,
           {SequencerMembershipTransition::ADD_NODE,
            true,
            node.sequencer_weight,
-           MaintenanceID::MAINTENANCE_PROVISION});
+           DUMMY_MAINTENANCE});
 
       update.sequencer_config_update->attributes_update->addNode(
           node.id,
@@ -100,12 +183,10 @@ initialProvisionUpdate(std::vector<NodeTemplate> nodes,
         update.storage_config_update->membership_update->addShard(
             ShardID(node.id, s),
             {node.metadata_node
-                 ? StorageStateTransition::PROVISION_METADATA_SHARD
-                 : StorageStateTransition::PROVISION_SHARD,
-             (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
-              Condition::NO_SELF_REPORT_MISSING_DATA |
-              Condition::LOCAL_STORE_WRITABLE),
-             MaintenanceID::MAINTENANCE_PROVISION,
+                 ? StorageStateTransition::ADD_EMPTY_METADATA_SHARD
+                 : StorageStateTransition::ADD_EMPTY_SHARD,
+             Condition::NONE,
+             DUMMY_MAINTENANCE,
              /* state_override = */ folly::none});
       }
       update.storage_config_update->attributes_update->addNode(
@@ -126,24 +207,15 @@ initialProvisionUpdate(std::vector<NodeTemplate> nodes,
   update.metadata_logs_rep_update->replication = metadata_rep;
 
   // 5. fill other update metadata
-  update.maintenance = MaintenanceID::MAINTENANCE_PROVISION;
+  update.maintenance = DUMMY_MAINTENANCE;
   update.context = "initial provision";
 
   VLOG(1) << "update: " << update.toString();
   return update;
 }
 
-std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
-    configuration::nodes::NodesConfiguration::Update provision_update) {
-  auto config = std::make_shared<const NodesConfiguration>();
-  auto new_config = config->applyUpdate(std::move(provision_update));
-  ld_assert(new_config != nullptr);
-  VLOG(1) << "config: " << NodesConfigurationCodec::debugJsonString(*config);
-  return new_config;
-}
-
 NodesConfiguration::Update
-initialProvisionUpdate(std::vector<node_index_t> node_idxs) {
+initialAddShardsUpdate(std::vector<node_index_t> node_idxs) {
   std::vector<NodeTemplate> nodes;
   for (auto nid : node_idxs) {
     nodes.push_back({nid,
@@ -153,11 +225,11 @@ initialProvisionUpdate(std::vector<node_index_t> node_idxs) {
                      /* num_shard=*/1,
                      false});
   }
-  return initialProvisionUpdate(
+  return initialAddShardsUpdate(
       std::move(nodes), ReplicationProperty{{NodeLocationScope::RACK, 2}});
 }
 
-NodesConfiguration::Update initialProvisionUpdate() {
+NodesConfiguration::Update initialAddShardsUpdate() {
   std::vector<NodeTemplate> nodes;
   std::map<node_index_t, RoleSet> role_map = {{1, both_role},
                                               {2, storage_role},
@@ -174,13 +246,8 @@ NodesConfiguration::Update initialProvisionUpdate() {
                      n == 2 || n == 9 ? true : false});
   }
 
-  return initialProvisionUpdate(
+  return initialAddShardsUpdate(
       std::move(nodes), ReplicationProperty{{NodeLocationScope::RACK, 2}});
-}
-
-std::shared_ptr<const configuration::nodes::NodesConfiguration>
-provisionNodes() {
-  return provisionNodes(initialProvisionUpdate());
 }
 
 configuration::nodes::NodesConfiguration::Update
@@ -290,5 +357,4 @@ disablingWriteUpdate(membership::MembershipVersion::Type base_version) {
   VLOG(1) << "update: " << update.toString();
   return update;
 }
-
 }}} // namespace facebook::logdevice::NodesConfigurationTestUtil

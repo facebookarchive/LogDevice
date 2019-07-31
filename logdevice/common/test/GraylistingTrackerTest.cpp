@@ -111,8 +111,7 @@ class MockGraylistingTracker : public GraylistingTracker {
   }
 
   void reComputeNodesConfiguraton() {
-    nodes_configuration_ = NodesConfigurationTestUtil::provisionNodes(
-        NodesConfigurationTestUtil::initialProvisionUpdate(nodes_));
+    nodes_configuration_ = NodesConfigurationTestUtil::provisionNodes(nodes_);
   }
 
  private:

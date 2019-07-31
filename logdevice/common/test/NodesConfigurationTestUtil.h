@@ -34,10 +34,10 @@ genDiscovery(node_index_t n,
              std::string location);
 
 configuration::nodes::NodesConfiguration::Update
-initialProvisionUpdate(std::vector<node_index_t> node_idxs);
+initialAddShardsUpdate(std::vector<node_index_t> node_idxs);
 
 configuration::nodes::NodesConfiguration::Update
-initialProvisionUpdate(std::vector<NodeTemplate> nodes,
+initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
                        ReplicationProperty metadata_rep = ReplicationProperty{
                            {NodeLocationScope::NODE, 2}});
 
@@ -48,14 +48,32 @@ configuration::nodes::NodesConfiguration::Update
 addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
                  NodeTemplate node);
 
+// Create an NC::Update to transition all PROVISIONING shards to NONE by
+// applying a MARK_SHARD_PROVISIONED transition.
+configuration::nodes::NodesConfiguration::Update markAllShardProvisionedUpdate(
+    const configuration::nodes::NodesConfiguration& existing);
+
+// Create an NC::Update to transition all NONE shards to RW by applying a
+// BOOTSTRAP_ENABLE_SHARD transition.
+configuration::nodes::NodesConfiguration::Update bootstrapEnableAllShardsUpdate(
+    const configuration::nodes::NodesConfiguration& existing);
+
 // provision a specific LD nodes config with:
 // 1) nodes N1, N2, N7, N9, N11, N13
 // 2) N1 and N7 have sequencer role; N1, N2, N9, N11, N13 have storage role;
 // 3) N2 and N9 are metadata storage nodes, metadata logs replicaton is
 //    (rack, 2)
-configuration::nodes::NodesConfiguration::Update initialProvisionUpdate();
+configuration::nodes::NodesConfiguration::Update initialAddShardsUpdate();
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes();
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+provisionNodes(std::vector<node_index_t> node_idxs);
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+provisionNodes(std::vector<NodeTemplate> nodes,
+               ReplicationProperty metadata_rep = ReplicationProperty{
+                   {NodeLocationScope::NODE, 2}});
 
 // provision new nodes N17
 configuration::nodes::NodesConfiguration::Update

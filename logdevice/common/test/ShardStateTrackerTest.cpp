@@ -83,6 +83,16 @@ TEST(ShardStateTrackerTest, basic) {
     EXPECT_FALSE(update_opt.hasValue());
   }
 
+  nc2 = nc2->applyUpdate(markAllShardProvisionedUpdate(*nc2));
+  ASSERT_TRUE(nc2->validate());
+  ts2 = nc2->getLastChangeTimestamp();
+  t.onNewConfig(nc2);
+  {
+    // nc2 has no shards in intermediary states
+    auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
+    EXPECT_FALSE(update_opt.hasValue());
+  }
+
   auto nc3 = nc2->applyUpdate(enablingReadUpdate(nc2->getVersion()));
   ASSERT_TRUE(nc3->validate());
   auto ts3 = nc3->getLastChangeTimestamp();

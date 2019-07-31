@@ -53,8 +53,7 @@ class NodeStatsControllerLocatorTest : public Test {
           *location_str,
       });
     }
-    auto nc = std::make_shared<const NodesConfiguration>();
-    nc = nc->applyUpdate(initialProvisionUpdate(std::move(templates)));
+    auto nc = provisionNodes(std::move(templates));
     ld_check(nc != nullptr);
 
     return nc;

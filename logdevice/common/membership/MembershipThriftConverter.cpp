@@ -21,6 +21,9 @@ static_assert(static_cast<uint32_t>(thrift::StorageState::NONE) ==
 static_assert(static_cast<uint32_t>(thrift::StorageState::INVALID) ==
                   static_cast<uint32_t>(StorageState::INVALID),
               "");
+static_assert(static_cast<uint32_t>(thrift::StorageState::PROVISIONING) ==
+                  static_cast<uint32_t>(StorageState::PROVISIONING),
+              "");
 static_assert(static_cast<uint32_t>(thrift::MetaDataStorageState::NONE) ==
                   static_cast<uint32_t>(MetaDataStorageState::NONE),
               "");

@@ -37,7 +37,7 @@ TEST_F(ClusterStateTest, GetFirstNodeShouldLookIntoConfig) {
   std::vector<node_index_t> node_idxs(nnodes);
   std::iota(node_idxs.begin(), node_idxs.end(), 0);
 
-  auto config = provisionNodes(initialProvisionUpdate(node_idxs));
+  auto config = provisionNodes(node_idxs);
   ASSERT_TRUE(config->validate());
 
   auto cs = makeOne(*config);
@@ -45,7 +45,7 @@ TEST_F(ClusterStateTest, GetFirstNodeShouldLookIntoConfig) {
 
   // config2 will now start from node 1
   std::iota(node_idxs.begin(), node_idxs.end(), 1);
-  auto config2 = provisionNodes(initialProvisionUpdate(node_idxs));
+  auto config2 = provisionNodes(node_idxs);
   ASSERT_TRUE(config2->validate());
 
   cs->updateNodesInConfig(*config2->getServiceDiscovery());

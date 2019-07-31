@@ -20,16 +20,18 @@ namespace facebook { namespace logdevice { namespace membership {
 enum class StorageStateTransition : uint8_t {
 
   // add an empty shard to the storage membership with NONE state
-  // transition: INVALID -> NONE
+  // transition: INVALID -> PROVISIONING
   ADD_EMPTY_SHARD = 0,
 
   // same as above, except that the storage shard can store metadata besides
   // regular data
-  // transition: INVALID -> NONE
+  // TODO(mbassem): To be remvoed.
+  // transition: INVALID -> PROVISIONING
   ADD_EMPTY_METADATA_SHARD,
 
-  // remove an empty shard of NONE state from the storage membership
-  // transition: NONE -> INVALID
+  // remove an empty shard of NONE/PROVISIONING state from the storage
+  // membership
+  // transition: NONE/PROVISIONING -> INVALID
   REMOVE_EMPTY_SHARD,
 
   // enabling reading on an empty shard in NONE state
@@ -91,20 +93,24 @@ enum class StorageStateTransition : uint8_t {
   // doc block in StorageStateFlags::UNRECOVRABLE
   MARK_SHARD_UNRECOVERABLE,
 
+  // Transitions the shard out of the PROVISIONING state to NONE. Refer to the
+  // PROVISIONING state documentation for more info.
+  // transition: PROVISIONING -> NONE
+  MARK_SHARD_PROVISIONED,
+
   // convenience transition for creating the cluster for the first time.
-  // Directly
-  // transform the shard to READ_WRITE state. Requires the base membership
-  // version
-  // to be EMPTY_VERSION
-  // transition: INVALID -> READ_WRITE
-  PROVISION_SHARD,
+  // Only applicable if the cluster is still bootstrapping.
+  // transform the shard to READ_WRITE state.
+  // transition: NONE -> READ_WRITE
+  BOOTSTRAP_ENABLE_SHARD,
 
   // same as above, except that the storage shard is a metadata shard. The
   // metadata
-  // storage state is also directly transitioned into METADATA.
-  // transition: INVALID -> READ_WRITE
+  // Only applicable if the cluster is still bootstrapping.
+  // metadata state is also directly transitioned into METADATA.
+  // transition: NONE -> READ_WRITE
   // metadata storage state: NONE -> METADATA
-  PROVISION_METADATA_SHARD,
+  BOOTSTRAP_ENABLE_METADATA_SHARD,
 
   // force to override the storage state of a shard to the provided target
   // state, should only be used in emergency; always require the FORCE condition
@@ -114,8 +120,8 @@ enum class StorageStateTransition : uint8_t {
   Count
 };
 
-static_assert(static_cast<size_t>(StorageStateTransition::Count) == 20,
-              "There are 20 state transitions in the design spec.");
+static_assert(static_cast<size_t>(StorageStateTransition::Count) == 21,
+              "There are 21 state transitions in the design spec.");
 
 /**
  * return    true if the transition is adding a new shard which is not part of
@@ -123,14 +129,7 @@ static_assert(static_cast<size_t>(StorageStateTransition::Count) == 20,
  */
 constexpr bool isAddingNewShard(StorageStateTransition transition) {
   return transition == StorageStateTransition::ADD_EMPTY_SHARD ||
-      transition == StorageStateTransition::ADD_EMPTY_METADATA_SHARD ||
-      transition == StorageStateTransition::PROVISION_SHARD ||
-      transition == StorageStateTransition::PROVISION_METADATA_SHARD;
-}
-
-constexpr bool isProvisionShard(StorageStateTransition transition) {
-  return transition == StorageStateTransition::PROVISION_SHARD ||
-      transition == StorageStateTransition::PROVISION_METADATA_SHARD;
+      transition == StorageStateTransition::ADD_EMPTY_METADATA_SHARD;
 }
 
 using StateTransitionCondition = uint64_t;
@@ -240,13 +239,13 @@ static constexpr std::array<
     TransitionTable{{
 
         // ADD_EMPTY_SHARD
-        _t(StorageState::INVALID, StorageState::NONE, Condition::NONE),
+        _t(StorageState::INVALID, StorageState::PROVISIONING, Condition::NONE),
 
         // ADD_EMPTY_METADATA_SHARD
-        _t(StorageState::INVALID, StorageState::NONE, Condition::NONE),
+        _t(StorageState::INVALID, StorageState::PROVISIONING, Condition::NONE),
 
         // REMOVE_EMPTY_SHARD
-        _t(StorageState::NONE, StorageState::INVALID, Condition::NONE),
+        _t(StorageState::INVALID, StorageState::INVALID, Condition::NONE),
 
         // ENABLING_READ
         _t(StorageState::NONE,
@@ -315,15 +314,21 @@ static constexpr std::array<
            (Condition::SELF_AWARE_MISSING_DATA |
             Condition::CANNOT_ACCEPT_WRITES)),
 
-        // PROVISION_SHARD
-        _t(StorageState::INVALID,
+        // MARK_SHARD_PROVISIONED
+        _t(StorageState::PROVISIONING,
+           StorageState::NONE,
+           (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+            Condition::NO_SELF_REPORT_MISSING_DATA)),
+
+        // BOOTSTRAP_ENABLE_SHARD
+        _t(StorageState::NONE,
            StorageState::READ_WRITE,
            (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
             Condition::NO_SELF_REPORT_MISSING_DATA |
             Condition::LOCAL_STORE_WRITABLE)),
 
-        // PROVISION_METADATA_SHARD
-        _t(StorageState::INVALID,
+        // BOOTSTRAP_ENABLE_METADATA_SHARD
+        _t(StorageState::NONE,
            StorageState::READ_WRITE,
            (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
             Condition::NO_SELF_REPORT_MISSING_DATA |
@@ -338,8 +343,8 @@ static constexpr std::array<
 
 #undef _t
 
-static_assert(TransitionTable.size() == 20,
-              "There are 20 state transitions in the design spec.");
+static_assert(TransitionTable.size() == 21,
+              "There are 21 state transitions in the design spec.");
 
 //// utility functions for accessing the transition table
 

@@ -26,6 +26,7 @@ enum StorageState  {
   READ_WRITE = 3,
   RW_TO_RO = 4,
   DATA_MIGRATION = 5,
+  PROVISIONING = 7,
   INVALID = 6,
 }
 

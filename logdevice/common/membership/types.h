@@ -31,9 +31,6 @@ namespace MaintenanceID {
 LOGDEVICE_STRONG_TYPEDEF(uint64_t, Type);
 
 constexpr Type MAINTENANCE_NONE{0};
-// the very first maintenance operation that creates the new cluster
-constexpr Type MAINTENANCE_PROVISION{1};
-
 } // namespace MaintenanceID
 
 // there should be one membership type for each NodeRole

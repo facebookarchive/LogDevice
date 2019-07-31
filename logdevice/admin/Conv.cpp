@@ -79,6 +79,7 @@ template <>
 thrift::ShardStorageState
 toThrift(const membership::StorageState& storage_state) {
   switch (storage_state) {
+    case membership::StorageState::PROVISIONING:
     case membership::StorageState::NONE:
     case membership::StorageState::NONE_TO_RO:
       return thrift::ShardStorageState::DISABLED;

@@ -58,7 +58,22 @@ enum class StorageState : uint8_t {
   // should read from: yes
   DATA_MIGRATION,
 
-  INVALID
+  INVALID,
+
+  // This indicates that the shard is newly added and it didn't yet ack
+  // the health of its underlying storage. Newly added shards for the first time
+  // start in this state and are treated exactly the same as a NONE state.
+  // Once the shard transitions out of this state, it can't go back to it.
+  //
+  // The provisioning that the shard needs to do before marking itself as
+  // provisioned is to check that:
+  //   1. It's underlying local storate is readable.
+  //   2. It persistently stored the metadata indicating the shard is not
+  //      missing any data (i.e., RebuildingCompleteMetadata).
+  //   3. The local store must be empty.
+  // can write to: no
+  // should read: no
+  PROVISIONING
 };
 
 /**

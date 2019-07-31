@@ -63,15 +63,20 @@ makeDummyNodesConfiguration(MembershipVersion::Type version) {
   return config;
 }
 
-void waitTillNCMReceives(const NodesConfigurationManager& ncm,
+bool waitTillNCMReceives(const NodesConfigurationManager& ncm,
                          MembershipVersion::Type new_version) {
+  auto start_time = std::chrono::steady_clock::now();
   // TODO: better testing after offering a subscription API
-  while (ncm.getConfig() == nullptr ||
-         ncm.getConfig()->getVersion() != new_version) {
+  while ((ncm.getConfig() == nullptr ||
+          ncm.getConfig()->getVersion() != new_version) &&
+         // Wait for at most 10 seconds
+         std::chrono::steady_clock::now() - start_time <=
+             std::chrono::seconds(10)) {
     /* sleep override */ std::this_thread::sleep_for(200ms);
   }
   auto p = ncm.getConfig();
   EXPECT_EQ(new_version, p->getVersion());
+  return new_version == p->getVersion();
 }
 } // namespace
 
@@ -130,8 +135,8 @@ class NodesConfigurationManagerTest : public ::testing::Test {
                 /* cb = */ {});
   }
 
-  void waitTillNCMReceives(MembershipVersion::Type new_version) const {
-    ::waitTillNCMReceives(*ncm_, new_version);
+  bool waitTillNCMReceives(MembershipVersion::Type new_version) const {
+    return ::waitTillNCMReceives(*ncm_, new_version);
   }
 
   std::unique_ptr<StatsHolder> stats_;
@@ -161,7 +166,7 @@ TEST_F(NodesConfigurationManagerTest, basic) {
 TEST_F(NodesConfigurationManagerTest, update) {
   waitTillNCMReceives(MembershipVersion::EMPTY_VERSION);
   {
-    auto update = initialProvisionUpdate();
+    auto update = initialAddShardsUpdate();
     ncm_->update(std::move(update),
                  [](Status status, std::shared_ptr<const NodesConfiguration>) {
                    ASSERT_EQ(Status::OK, status);
@@ -188,29 +193,32 @@ TEST_F(NodesConfigurationManagerTest, update) {
 
 TEST_F(NodesConfigurationManagerTest, trackState) {
   {
-    auto update = initialProvisionUpdate();
-    ncm_->update(std::move(update),
+    ncm_->update(initialAddShardsUpdate(),
                  [](Status status, std::shared_ptr<const NodesConfiguration>) {
                    ASSERT_EQ(Status::OK, status);
                  });
-    waitTillNCMReceives(MembershipVersion::MIN_VERSION);
+    waitTillNCMReceives(MembershipVersion::Type{1});
     ncm_->update(addNewNodeUpdate(*ncm_->getConfig()),
                  [](Status status, std::shared_ptr<const NodesConfiguration>) {
                    ASSERT_EQ(Status::OK, status);
                  });
-    auto enabling_read_base_version =
-        MembershipVersion::Type{MembershipVersion::MIN_VERSION.val() + 1};
-    waitTillNCMReceives(enabling_read_base_version);
+    waitTillNCMReceives(MembershipVersion::Type{2});
+    ncm_->update(markAllShardProvisionedUpdate(*ncm_->getConfig()),
+                 [](Status status, std::shared_ptr<const NodesConfiguration>) {
+                   ASSERT_EQ(Status::OK, status);
+                 });
+    waitTillNCMReceives(MembershipVersion::Type{3});
 
     ncm_->update(
-        enablingReadUpdate(enabling_read_base_version),
+        enablingReadUpdate(
+            ncm_->getConfig()->getStorageMembership()->getVersion()),
         [](Status status, std::shared_ptr<const NodesConfiguration> nc) {
           ASSERT_EQ(Status::OK, status);
           ASSERT_NE(nullptr, nc);
         });
-    auto final_version =
-        MembershipVersion::Type{enabling_read_base_version.val() + 2};
-    waitTillNCMReceives(final_version);
+    // Two version bumps to account for NONE -> NONE_TO_RO, and then
+    // NONE_TO_RO to RO
+    waitTillNCMReceives(MembershipVersion::Type{5});
   }
   {
     auto nc = ncm_->getConfig();
@@ -482,7 +490,7 @@ class NodesConfigurationManagerTest2 : public ::testing::Test {
     file_ncs_ = createNCS();
 
     // provision initial config in FileBasedNCS
-    init_version_ = membership::MembershipVersion::Type{kVersion.val() - 1};
+    init_version_ = membership::MembershipVersion::Type{kVersion.val() - 2};
     auto nc = provisionNodes()->withVersion(init_version_);
     ASSERT_TRUE(nc->validate());
     auto serialized = NodesConfigurationCodec::serialize(*nc);
@@ -577,13 +585,21 @@ TEST_F(NodesConfigurationManagerTest2, race) {
   // | N17 transitions to READ_ONLY (by NCM's ShardStateTracker)
   // v
   // final_version
-  auto nc = ncm1_->getConfig();
-  EXPECT_EQ(init_version_, nc->getVersion());
+  EXPECT_EQ(init_version_, ncm1_->getConfig()->getVersion());
   {
     // add N17
-    auto update = addNewNodeUpdate(*nc);
     ncm1_->update(
-        std::move(update),
+        addNewNodeUpdate(*ncm1_->getConfig()),
+        [](Status status, std::shared_ptr<const NodesConfiguration> new_nc) {
+          EXPECT_EQ(Status::OK, status);
+          EXPECT_EQ(kVersion.val() - 1, new_nc->getVersion().val());
+        });
+    waitTillNCMReceives(
+        *ncm1_, membership::MembershipVersion::Type{kVersion.val() - 1});
+
+    // Mark as provisioned
+    ncm1_->update(
+        markAllShardProvisionedUpdate(*ncm1_->getConfig()),
         [](Status status, std::shared_ptr<const NodesConfiguration> new_nc) {
           EXPECT_EQ(Status::OK, status);
           EXPECT_EQ(kVersion, new_nc->getVersion());

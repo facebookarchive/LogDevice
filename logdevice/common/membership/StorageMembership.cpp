@@ -39,15 +39,6 @@ bool ShardState::Update::isValid() const {
     return false;
   }
 
-  if (isProvisionShard(transition) && maintenance != MAINTENANCE_PROVISION) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    5,
-                    "Maintencance version must be MAINTENANCE_PROVISION "
-                    "for a provisioning update. Update: %s.",
-                    toString().c_str());
-    return false;
-  }
-
   if (transition == StorageStateTransition::OVERRIDE_STATE &&
       !state_override.hasValue()) {
     RATELIMIT_ERROR(
@@ -105,7 +96,7 @@ int ShardState::transition(const ShardState& current_state,
   }
 
   if (!isAddingNewShard(update.transition) && !current_state.isValid()) {
-    // current source state must be valid except for the four transitions that
+    // current source state must be valid except for the two transitions that
     // add a new shard
     err = E::INVALID_PARAM;
     return -1;
@@ -143,37 +134,35 @@ int ShardState::transition(const ShardState& current_state,
   StorageStateFlags::Type target_flags = current_state.flags;
   MetaDataStorageState target_metadata_state = current_state.metadata_state;
   switch (update.transition) {
-    case StorageStateTransition::PROVISION_SHARD:
-    case StorageStateTransition::PROVISION_METADATA_SHARD: {
+    case StorageStateTransition::BOOTSTRAP_ENABLE_SHARD:
+    case StorageStateTransition::BOOTSTRAP_ENABLE_METADATA_SHARD: {
       // provisioning new shards for the newly created cluster
 
-      if (new_since_version != MIN_VERSION) {
-        // perform version check leveraging that new_since_version ==
-        // base_version + 1
-        RATELIMIT_ERROR(
-            std::chrono::seconds(10),
-            5,
-            "Cannnot apply a provisioning shard update with base version "
-            "other than EMPTY_VERSION %s. Update: %s, "
-            "New since version: %s.",
-            membership::toString(EMPTY_VERSION).c_str(),
-            update.toString().c_str(),
-            membership::toString(new_since_version).c_str());
-        err = E::VERSION_MISMATCH;
-        return -1;
-      }
+      // TODO(mbassem): Restrict the usage of those transitions to
+      // bootstrapping clusters.
 
+      ld_check(current_state.storage_state == StorageState::NONE);
       ld_check(target_shard_state.storage_state == StorageState::READ_WRITE);
       target_flags = StorageStateFlags::NONE;
-      target_metadata_state =
-          (update.transition == StorageStateTransition::PROVISION_METADATA_SHARD
-               ? MetaDataStorageState::METADATA
-               : MetaDataStorageState::NONE);
+
+      // Either the shard was added as a metadata shard or not. It can't be
+      // INVALID because it's already in the config and it can't be PROMOTING
+      // because PROMOTING requires a RW shard.
+      ld_check(current_state.metadata_state == MetaDataStorageState::NONE ||
+               current_state.metadata_state == MetaDataStorageState::METADATA);
+
+      // If it was added as a metadata shard, let's respect that. Even if the
+      // transition is BOOTSTRAP_ENABLE_SHARD.
+      target_metadata_state = update.transition ==
+                  StorageStateTransition::BOOTSTRAP_ENABLE_METADATA_SHARD ||
+              current_state.metadata_state == MetaDataStorageState::METADATA
+          ? MetaDataStorageState::METADATA
+          : MetaDataStorageState::NONE;
     } break;
 
     case StorageStateTransition::ADD_EMPTY_SHARD:
     case StorageStateTransition::ADD_EMPTY_METADATA_SHARD: {
-      ld_check(target_shard_state.storage_state == StorageState::NONE);
+      ld_check(target_shard_state.storage_state == StorageState::PROVISIONING);
       target_flags = StorageStateFlags::NONE;
       target_metadata_state =
           (update.transition == StorageStateTransition::ADD_EMPTY_METADATA_SHARD
@@ -262,6 +251,11 @@ int ShardState::transition(const ShardState& current_state,
       // state, marking it as UNRECOVERABLE should automatically abort the
       // none->ro transition and make the shard transition back to NONE
       switch (current_state.storage_state) {
+        case StorageState::PROVISIONING:
+          ld_check(target_shard_state.storage_state ==
+                   StorageState::PROVISIONING);
+          // for storage state PROVISIONING this operation is a no-op
+          break;
         case StorageState::NONE:
           ld_check(target_shard_state.storage_state == StorageState::NONE);
           // for storage state NONE this operation is a no-op
@@ -304,8 +298,15 @@ int ShardState::transition(const ShardState& current_state,
       target_flags = state_override.flags;
       target_metadata_state = state_override.metadata_state;
     } break;
-
     case StorageStateTransition::REMOVE_EMPTY_SHARD:
+      if (current_state.storage_state != StorageState::PROVISIONING &&
+          current_state.storage_state != StorageState::NONE) {
+        err = E::SOURCE_STATE_MISMATCH;
+        return -1;
+      }
+      break;
+
+    case StorageStateTransition::MARK_SHARD_PROVISIONED:
     case StorageStateTransition::ENABLING_READ:
     case StorageStateTransition::COMMIT_READ_ENABLED:
     case StorageStateTransition::ENABLE_WRITE:

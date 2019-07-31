@@ -116,6 +116,8 @@ toShardOperationalState(membership::StorageState storage_state,
       return thrift::ShardOperationalState::INVALID;
     case membership::StorageState::NONE:
       return thrift::ShardOperationalState::DRAINED;
+    case membership::StorageState::PROVISIONING:
+      return thrift::ShardOperationalState::PROVISIONING;
     case membership::StorageState::NONE_TO_RO:
     case membership::StorageState::RW_TO_RO:
     case membership::StorageState::DATA_MIGRATION:

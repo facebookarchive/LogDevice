@@ -41,6 +41,7 @@ membership::StorageState NodesConfigLegacyConverter::fromLegacyStorageState(
 configuration::StorageState
 NodesConfigLegacyConverter::toLegacyStorageState(membership::StorageState ss) {
   switch (ss) {
+    case membership::StorageState::PROVISIONING:
     case membership::StorageState::NONE:
       return configuration::StorageState::DISABLED;
     case membership::StorageState::NONE_TO_RO:

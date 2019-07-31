@@ -32,6 +32,8 @@ inline constexpr folly::StringPiece toString(StorageState state) {
       return "rw2ro";
     case StorageState::DATA_MIGRATION:
       return "dm";
+    case StorageState::PROVISIONING:
+      return "prv";
     case StorageState::INVALID:
       return "invalid";
   }
@@ -76,8 +78,9 @@ toString(StorageStateTransition transition) {
     GEN_STR(COMMIT_PROMOTION_METADATA_SHARD)
     GEN_STR(ABORT_PROMOTING_METADATA_SHARD)
     GEN_STR(MARK_SHARD_UNRECOVERABLE)
-    GEN_STR(PROVISION_SHARD)
-    GEN_STR(PROVISION_METADATA_SHARD)
+    GEN_STR(MARK_SHARD_PROVISIONED)
+    GEN_STR(BOOTSTRAP_ENABLE_SHARD)
+    GEN_STR(BOOTSTRAP_ENABLE_METADATA_SHARD)
     GEN_STR(OVERRIDE_STATE)
 #undef GEN_STR
     case StorageStateTransition::Count:
@@ -86,8 +89,8 @@ toString(StorageStateTransition transition) {
   return "internal error";
 }
 
-static_assert(static_cast<size_t>(StorageStateTransition::Count) == 20,
-              "There are 20 state transitions in the design spec.");
+static_assert(static_cast<size_t>(StorageStateTransition::Count) == 21,
+              "There are 21 state transitions in the design spec.");
 
 inline constexpr folly::StringPiece
 toString(SequencerMembershipTransition transition) {
