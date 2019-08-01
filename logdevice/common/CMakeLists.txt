@@ -14,12 +14,14 @@ REMOVE_MATCHES_FROM_LISTS(files hfiles
     "/test/"
 )
 
+add_subdirectory(configuration/utils)
 add_subdirectory(configuration/nodes)
 add_subdirectory(membership)
 
 add_library(common STATIC ${hfiles} ${files})
 add_dependencies(common folly flatbuffers OpenTracing)
 add_dependencies(common NodesConfiguration-cpp2-target)
+add_dependencies(common ConfigurationCodec-cpp2-target)
 
 set_target_properties(common
   PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -27,6 +29,7 @@ set_target_properties(common
 target_link_libraries(common
   Membership-cpp2
   NodesConfiguration-cpp2
+  ConfigurationCodec-cpp2
   ${LOGDEVICE_EXTERNAL_DEPS}
 )
 
