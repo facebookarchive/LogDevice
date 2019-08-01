@@ -6,17 +6,20 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+
 import asyncio
 import operator
 from collections import Counter
 from typing import Tuple
 from unittest import TestCase
 
+from ldops.cluster import get_cluster_view
+from ldops.maintenance import apply_maintenance
 from ldops.testutil.async_test import async_test
 from ldops.testutil.mock_admin_api import MockAdminAPI, gen_SocketAddress
 from ldops.types.node_view import NodeView
 from ldops.types.socket_address import SocketAddress
-from logdevice.admin.common.types import NodeID, Role, SocketAddressFamily
+from logdevice.admin.common.types import NodeID, Role, ShardID, SocketAddressFamily
 from logdevice.admin.maintenance.types import MaintenanceDefinition, MaintenancesFilter
 from logdevice.admin.nodes.types import (
     NodeConfig,
@@ -31,16 +34,30 @@ class TestNodeView(TestCase):
     async def test_smoke(self):
         ni = 0
         async with MockAdminAPI() as client:
-            nodes_config_resp = await client.getNodesConfig(
-                NodesFilter(node=NodeID(node_index=ni))
+            cv = await get_cluster_view(client)
+            maintenances_resp = await apply_maintenance(
+                client=client,
+                shards=[
+                    ShardID(
+                        node=cv.get_node_view_by_node_index(0).node_id, shard_index=1
+                    )
+                ],
+                sequencer_nodes=[cv.get_node_view_by_node_index(0).node_id],
             )
-            nodes_state_resp = await client.getNodesState(
-                NodesStateRequest(filter=NodesFilter(node=NodeID(node_index=ni)))
+            (
+                nodes_config_resp,
+                nodes_state_resp,
+                maintenances_resp,
+            ) = await asyncio.gather(
+                client.getNodesConfig(NodesFilter(node=NodeID(node_index=ni))),
+                client.getNodesState(
+                    NodesStateRequest(filter=NodesFilter(node=NodeID(node_index=ni)))
+                ),
+                client.getMaintenances(MaintenancesFilter()),
             )
-            maintenances_resp = await client.getMaintenances(MaintenancesFilter())
 
-        nc = nodes_config_resp.nodes[0]
-        ns = nodes_state_resp.states[0]
+        nc = [n for n in nodes_config_resp.nodes if n.node_index == ni][0]
+        ns = [n for n in nodes_state_resp.states if n.node_index == ni][0]
         mnt_ids = set()
         for mnt in maintenances_resp.maintenances:
             for s in mnt.shards:
@@ -139,17 +156,17 @@ class TestNodeView(TestCase):
             self.assertEqual(nv.num_shards, nc.storage.num_shards)
             self.assertEqual(nv.shard_states, ns.shard_states)
 
-            self.assertListEqual(
-                nv.shards_data_health, [s.data_health for s in ns.shard_states]
+            self.assertTupleEqual(
+                nv.shards_data_health, tuple(s.data_health for s in ns.shard_states)
             )
             self.assertEqual(
                 nv.shards_data_health_count,
                 Counter(s.data_health for s in ns.shard_states),
             )
 
-            self.assertListEqual(
+            self.assertTupleEqual(
                 nv.shards_current_storage_state,
-                [s.current_storage_state for s in ns.shard_states],
+                tuple(s.current_storage_state for s in ns.shard_states),
             )
 
             self.assertEqual(
@@ -157,9 +174,9 @@ class TestNodeView(TestCase):
                 Counter(s.current_storage_state for s in ns.shard_states),
             )
 
-            self.assertListEqual(
+            self.assertTupleEqual(
                 nv.shards_current_operational_state,
-                [s.current_operational_state for s in ns.shard_states],
+                tuple(s.current_operational_state for s in ns.shard_states),
             )
 
             self.assertEqual(
@@ -167,9 +184,9 @@ class TestNodeView(TestCase):
                 Counter(s.current_operational_state for s in ns.shard_states),
             )
 
-            self.assertListEqual(
+            self.assertTupleEqual(
                 nv.shards_membership_storage_state,
-                [s.storage_state for s in ns.shard_states],
+                tuple(s.storage_state for s in ns.shard_states),
             )
 
             self.assertEqual(
@@ -177,19 +194,37 @@ class TestNodeView(TestCase):
                 Counter(s.storage_state for s in ns.shard_states),
             )
 
-            self.assertListEqual(
-                nv.shards_metadata_state, [s.metadata_state for s in ns.shard_states]
+            self.assertTupleEqual(
+                nv.shards_metadata_state,
+                tuple(s.metadata_state for s in ns.shard_states),
             )
 
             self.assertEqual(
                 nv.shards_metadata_state_count,
                 Counter(s.metadata_state for s in ns.shard_states),
             )
+
+            self.assertEqual(
+                nv.shards_maintenance_status,
+                tuple(
+                    s.maintenance.status if s.maintenance else None
+                    for s in ns.shard_states
+                ),
+            )
+
+            self.assertEqual(
+                nv.shards_maintenance_status_count,
+                Counter(
+                    tuple(
+                        s.maintenance.status for s in ns.shard_states if s.maintenance
+                    )
+                ),
+            )
         else:
             self.assertIsNone(nv.storage_config)
             self.assertIsNone(nv.storage_weight)
             self.assertIsNone(nv.num_shards)
-            self.assertEqual(nv.shard_states, [])
+            self.assertTupleEqual(nv.shard_states, ())
 
     @async_test
     async def test_mismatch(self):

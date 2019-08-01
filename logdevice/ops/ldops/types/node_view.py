@@ -6,10 +6,11 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+
+import collections
 import os.path
-from collections import Counter
 from dataclasses import dataclass
-from typing import AbstractSet, List, Mapping, Optional, Sequence, Tuple
+from typing import AbstractSet, Counter, Mapping, Optional, Tuple
 
 from ldops.types.socket_address import SocketAddress
 from logdevice.admin.common.types import (
@@ -20,6 +21,7 @@ from logdevice.admin.common.types import (
 )
 from logdevice.admin.maintenance.types import MaintenanceDefinition
 from logdevice.admin.nodes.types import (
+    MaintenanceStatus,
     NodeConfig,
     NodeState,
     SequencerConfig,
@@ -158,50 +160,60 @@ class NodeView:
             return None
 
     @property
-    def shard_states(self) -> Sequence[ShardState]:
+    def shard_states(self) -> Tuple[ShardState, ...]:
         if self.node_state.shard_states is None:
-            return []
+            return ()
         else:
-            return self.node_state.shard_states
+            return tuple(self.node_state.shard_states)
 
     @property
-    def shards_data_health(self) -> List[ShardDataHealth]:
-        return [s.data_health for s in self.shard_states]
+    def shards_data_health(self) -> Tuple[ShardDataHealth, ...]:
+        return tuple(s.data_health for s in self.shard_states)
 
     @property
-    def shards_data_health_count(self) -> Mapping[ShardDataHealth, int]:
-        return Counter(self.shards_data_health)
+    def shards_data_health_count(self) -> Counter[ShardDataHealth]:
+        return collections.Counter(self.shards_data_health)
 
     @property
-    def shards_current_storage_state(self) -> List[ShardStorageState]:
-        return [s.current_storage_state for s in self.shard_states]
+    def shards_current_storage_state(self) -> Tuple[ShardStorageState, ...]:
+        return tuple(s.current_storage_state for s in self.shard_states)
 
     @property
-    def shards_current_storage_state_count(self) -> Mapping[ShardStorageState, int]:
-        return Counter(self.shards_current_storage_state)
+    def shards_current_storage_state_count(self) -> Counter[ShardStorageState]:
+        return collections.Counter(self.shards_current_storage_state)
 
     @property
-    def shards_current_operational_state(self) -> List[ShardOperationalState]:
-        return [s.current_operational_state for s in self.shard_states]
+    def shards_current_operational_state(self) -> Tuple[ShardOperationalState, ...]:
+        return tuple(s.current_operational_state for s in self.shard_states)
 
     @property
-    def shards_current_operational_state_count(
-        self
-    ) -> Mapping[ShardOperationalState, int]:
-        return Counter(self.shards_current_operational_state)
+    def shards_current_operational_state_count(self) -> Counter[ShardOperationalState]:
+        return collections.Counter(self.shards_current_operational_state)
 
     @property
-    def shards_membership_storage_state(self) -> List[StorageState]:
-        return [s.storage_state for s in self.shard_states]
+    def shards_membership_storage_state(self) -> Tuple[StorageState, ...]:
+        return tuple(s.storage_state for s in self.shard_states)
 
     @property
-    def shards_membership_storage_state_count(self) -> Mapping[StorageState, int]:
-        return Counter(self.shards_membership_storage_state)
+    def shards_membership_storage_state_count(self) -> Counter[StorageState]:
+        return collections.Counter(self.shards_membership_storage_state)
 
     @property
-    def shards_metadata_state(self) -> List[MetaDataStorageState]:
-        return [s.metadata_state for s in self.shard_states]
+    def shards_maintenance_status(self) -> Tuple[Optional[MaintenanceStatus], ...]:
+        return tuple(
+            s.maintenance.status if s.maintenance else None for s in self.shard_states
+        )
 
     @property
-    def shards_metadata_state_count(self) -> Mapping[MetaDataStorageState, int]:
-        return Counter(self.shards_metadata_state)
+    def shards_maintenance_status_count(self) -> Counter[MaintenanceStatus]:
+        return collections.Counter(
+            sms for sms in self.shards_maintenance_status if sms is not None
+        )
+
+    @property
+    def shards_metadata_state(self) -> Tuple[MetaDataStorageState, ...]:
+        return tuple(s.metadata_state for s in self.shard_states)
+
+    @property
+    def shards_metadata_state_count(self) -> Counter[MetaDataStorageState]:
+        return collections.Counter(self.shards_metadata_state)
