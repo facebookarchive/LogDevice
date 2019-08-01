@@ -6,17 +6,18 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+
 import asyncio
 import operator
 from typing import Dict, List, Tuple
 from unittest import TestCase
 
 from ldops.cluster import get_cluster_view
+from ldops.exceptions import NodeNotFoundError
 from ldops.maintenance import apply_maintenance
 from ldops.testutil.async_test import async_test
 from ldops.testutil.mock_admin_api import MockAdminAPI, gen_word
 from ldops.types.cluster_view import ClusterView
-from ldops.types.node import Node
 from ldops.types.node_view import NodeView
 from logdevice.admin.common.types import ShardID
 from logdevice.admin.maintenance.types import MaintenanceDefinition, MaintenancesFilter
@@ -48,7 +49,7 @@ class TestClusterView(TestCase):
                 client.getNodesState(NodesStateRequest()),
                 client.getMaintenances(MaintenancesFilter()),
             )
-        self._validate(cv, nc_resp.nodes, ns_resp.states, mnts_resp.maintenances)
+        self._validate(cv, nc_resp.nodes, ns_resp.states, tuple(mnts_resp.maintenances))
 
     def _validate(
         self,
@@ -104,34 +105,36 @@ class TestClusterView(TestCase):
             nn = ni_to_nc[ni].name
             nc = ni_to_nc[ni]
             ns = ni_to_ns[ni]
-            mnts = tuple(ni_to_mnts[ni])
+            node_mnts = tuple(ni_to_mnts[ni])
             nv = NodeView(
-                node_config=ni_to_nc[ni], node_state=ni_to_ns[ni], maintenances=mnts
+                node_config=ni_to_nc[ni],
+                node_state=ni_to_ns[ni],
+                maintenances=node_mnts,
             )
 
             self.assertEqual(cv.get_node_view_by_node_index(ni), nv)
             self.assertEqual(cv.get_node_name_by_node_index(ni), nn)
             self.assertEqual(cv.get_node_config_by_node_index(ni), nc)
             self.assertEqual(cv.get_node_state_by_node_index(ni), ns)
-            self.assertEqual(cv.get_maintenances_by_node_index(ni), mnts)
+            self.assertEqual(cv.get_node_maintenances_by_node_index(ni), node_mnts)
 
             self.assertEqual(cv.get_node_view_by_node_name(nn), nv)
             self.assertEqual(cv.get_node_index_by_node_name(nn), ni)
             self.assertEqual(cv.get_node_config_by_node_name(nn), nc)
             self.assertEqual(cv.get_node_state_by_node_name(nn), ns)
-            self.assertEqual(cv.get_maintenances_by_node_name(nn), mnts)
+            self.assertEqual(cv.get_node_maintenances_by_node_name(nn), node_mnts)
 
             self.assertEqual(cv.get_node_view(node_name=nn), nv)
             self.assertEqual(cv.get_node_index(node_name=nn), ni)
             self.assertEqual(cv.get_node_config(node_name=nn), nc)
             self.assertEqual(cv.get_node_state(node_name=nn), ns)
-            self.assertEqual(cv.get_maintenances(node_name=nn), mnts)
+            self.assertEqual(cv.get_node_maintenances(node_name=nn), node_mnts)
 
             self.assertEqual(cv.get_node_view(node_index=ni), nv)
             self.assertEqual(cv.get_node_name(node_index=ni), nn)
             self.assertEqual(cv.get_node_config(node_index=ni), nc)
             self.assertEqual(cv.get_node_state(node_index=ni), ns)
-            self.assertEqual(cv.get_maintenances(node_index=ni), mnts)
+            self.assertEqual(cv.get_node_maintenances(node_index=ni), node_mnts)
 
         with self.assertRaises(ValueError):
             cv.get_node_view(None, None)
@@ -143,7 +146,7 @@ class TestClusterView(TestCase):
             cv.get_node_state(None, None)
 
         with self.assertRaises(ValueError):
-            cv.get_maintenances(None, None)
+            cv.get_node_maintenances(None, None)
 
         # mismatch node_index and node_name
         if len(nis) > 1:
@@ -159,14 +162,14 @@ class TestClusterView(TestCase):
                 cv.get_node_state(ni, nn)
 
             with self.assertRaises(ValueError):
-                cv.get_maintenances(ni, nn)
+                cv.get_node_maintenances(ni, nn)
 
         # non-existent node_index
-        with self.assertRaises(KeyError):
+        with self.assertRaises(NodeNotFoundError):
             cv.get_node_view(node_index=max(nis) + 1)
 
         # non-existent node_name
-        with self.assertRaises(KeyError):
+        with self.assertRaises(NodeNotFoundError):
             nns = {nc.name for nc in ncs}
             while True:
                 nn = gen_word()
@@ -177,3 +180,31 @@ class TestClusterView(TestCase):
         for mnt in mnts:
             assert mnt.group_id is not None
             self.assertEqual(cv.get_maintenance_by_id(mnt.group_id), mnt)
+            self.assertTupleEqual(
+                cv.get_node_indexes_by_maintenance_id(mnt.group_id),
+                tuple(
+                    sorted(
+                        set(
+                            {
+                                n.node_index
+                                for n in mnt.sequencer_nodes
+                                if n.node_index is not None
+                            }
+                        ).union(
+                            {
+                                s.node.node_index
+                                for s in mnt.shards
+                                if s.node.node_index is not None
+                            }
+                        )
+                    )
+                ),
+            )
+            self.assertEqual(
+                mnt.group_id, cv.get_maintenance_view_by_id(mnt.group_id).group_id
+            )
+
+        self.assertListEqual(
+            list(sorted(m.group_id for m in mnts)),
+            list(sorted(mv.group_id for mv in cv.get_all_maintenance_views())),
+        )
