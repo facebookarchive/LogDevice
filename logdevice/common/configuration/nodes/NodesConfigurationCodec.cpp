@@ -7,25 +7,14 @@
  */
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 
-#include <zstd.h>
-
-#include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/MembershipThriftConverter.h"
-#include "logdevice/common/protocol/ProtocolReader.h"
-#include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/include/Err.h"
-#include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
-
-using apache::thrift::BinarySerializer;
-
-constexpr NodesConfigurationCodec::ProtocolVersion
-    NodesConfigurationCodec::CURRENT_PROTO_VERSION;
 
 //////////////////////// NodeServiceDiscovery //////////////////////////////
 
@@ -264,16 +253,15 @@ thrift::MetaDataLogsReplication NodesConfigurationThriftConverter::toThrift(
 /* static */
 std::shared_ptr<MetaDataLogsReplication>
 NodesConfigurationThriftConverter::fromThrift(
-    const thrift::MetaDataLogsReplication& flat_buffer_config) {
+    const thrift::MetaDataLogsReplication& thrift_config) {
   auto result = std::make_shared<MetaDataLogsReplication>();
   std::vector<ReplicationProperty::ScopeReplication> scopes;
-  for (const auto& scope : flat_buffer_config.replication.scopes) {
+  for (const auto& scope : thrift_config.replication.scopes) {
     scopes.emplace_back(static_cast<NodeLocationScope>(scope.scope),
                         static_cast<int>(scope.replication_factor));
   }
 
-  result->version_ =
-      membership::MembershipVersion::Type(flat_buffer_config.version);
+  result->version_ = membership::MembershipVersion::Type(thrift_config.version);
 
   // allow empty scopes here (which is
   // prohibited in
@@ -372,166 +360,6 @@ NodesConfigurationThriftConverter::fromThrift(
   }
 
   return result;
-}
-
-/*static*/
-void NodesConfigurationCodec::serialize(const NodesConfiguration& nodes_config,
-                                        ProtocolWriter& writer,
-                                        SerializeOptions options) {
-  std::string thrift_str = ThriftCodec::serialize<BinarySerializer>(
-      NodesConfigurationThriftConverter::toThrift(nodes_config));
-  auto data_blob = Slice::fromString(thrift_str);
-
-  std::unique_ptr<uint8_t[]> buffer;
-  if (options.compression) {
-    size_t compressed_size_upperbound = ZSTD_compressBound(data_blob.size);
-    buffer = std::make_unique<uint8_t[]>(compressed_size_upperbound);
-    size_t compressed_size =
-        ZSTD_compress(buffer.get(),               // dst
-                      compressed_size_upperbound, // dstCapacity
-                      data_blob.data,             // src
-                      data_blob.size,             // srcSize
-                      /*compressionLevel=*/5);    // level
-
-    if (ZSTD_isError(compressed_size)) {
-      ld_error(
-          "ZSTD_compress() failed: %s", ZSTD_getErrorName(compressed_size));
-      writer.setError(E::INVALID_PARAM);
-      return;
-    }
-    ld_debug("original size is %zu, compressed size %zu",
-             data_blob.size,
-             compressed_size);
-    ld_check(compressed_size <= compressed_size_upperbound);
-    // revise the data_blob to point to the
-    // compressed blob instead
-    data_blob = Slice{buffer.get(), compressed_size};
-  }
-
-  thrift::NodesConfigurationHeader wrapper_header{};
-  wrapper_header.set_proto_version(CURRENT_PROTO_VERSION);
-  wrapper_header.set_config_version(nodes_config.getVersion().val());
-  wrapper_header.set_is_compressed(options.compression);
-
-  thrift::NodesConfigurationWrapper wrapper{};
-  wrapper.set_header(std::move(wrapper_header));
-  // TODO get rid of this copy
-  wrapper.set_serialized_config(std::string(data_blob.ptr(), data_blob.size));
-
-  writer.writeVector(ThriftCodec::serialize<BinarySerializer>(wrapper));
-}
-
-/* static */ std::string NodesConfigurationCodec::debugJsonString(
-    const NodesConfiguration& nodes_config) {
-  return ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(
-      NodesConfigurationThriftConverter::toThrift(nodes_config));
-}
-
-/*static*/
-std::shared_ptr<const NodesConfiguration>
-NodesConfigurationCodec::deserialize(Slice wrapper_blob) {
-  auto wrapper_ptr =
-      ThriftCodec::deserialize<BinarySerializer,
-                               thrift::NodesConfigurationWrapper>(wrapper_blob);
-  if (wrapper_ptr == nullptr) {
-    err = E::BADMSG;
-    return nullptr;
-  }
-
-  if (wrapper_ptr->header.proto_version > CURRENT_PROTO_VERSION) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(10),
-        5,
-        "Received codec protocol version %u is larger than current "
-        "codec protocol version %u. There might be incompatible data, "
-        "aborting deserialization",
-        wrapper_ptr->header.proto_version,
-        CURRENT_PROTO_VERSION);
-    err = E::NOTSUPPORTED;
-    return nullptr;
-  }
-
-  std::unique_ptr<uint8_t[]> buffer;
-  const auto& serialized_config = wrapper_ptr->serialized_config;
-  auto data_blob = Slice::fromString(serialized_config);
-
-  if (wrapper_ptr->header.is_compressed) {
-    size_t uncompressed_size =
-        ZSTD_getDecompressedSize(data_blob.data, data_blob.size);
-    if (uncompressed_size == 0) {
-      RATELIMIT_ERROR(
-          std::chrono::seconds(5), 1, "ZSTD_getDecompressedSize() failed!");
-      err = E::BADMSG;
-      return nullptr;
-    }
-    buffer = std::make_unique<uint8_t[]>(uncompressed_size);
-    uncompressed_size = ZSTD_decompress(buffer.get(),      // dst
-                                        uncompressed_size, // dstCapacity
-                                        data_blob.data,    // src
-                                        data_blob.size);   // compressedSize
-    if (ZSTD_isError(uncompressed_size)) {
-      RATELIMIT_ERROR(std::chrono::seconds(5),
-                      1,
-                      "ZSTD_decompress() failed: %s",
-                      ZSTD_getErrorName(uncompressed_size));
-      err = E::BADMSG;
-      return nullptr;
-    }
-    // revise the data_blob to point to the uncompressed data
-    data_blob = Slice{buffer.get(), uncompressed_size};
-  }
-
-  auto config_ptr =
-      ThriftCodec::deserialize<BinarySerializer, thrift::NodesConfiguration>(
-          data_blob);
-  if (config_ptr == nullptr) {
-    err = E::BADMSG;
-    return nullptr;
-  }
-  return NodesConfigurationThriftConverter::fromThrift(*config_ptr);
-}
-
-/*static*/
-std::string
-NodesConfigurationCodec::serialize(const NodesConfiguration& nodes_config,
-                                   SerializeOptions options) {
-  std::string result;
-  ProtocolWriter w(&result, "NodesConfiguraton", 0);
-  serialize(nodes_config, w, options);
-  if (w.error()) {
-    err = w.status();
-    return "";
-  }
-  return result;
-}
-
-/*static*/
-std::shared_ptr<const NodesConfiguration>
-NodesConfigurationCodec::deserialize(folly::StringPiece buf) {
-  return deserialize(Slice(buf.data(), buf.size()));
-}
-
-/*static*/
-folly::Optional<membership::MembershipVersion::Type>
-NodesConfigurationCodec::extractConfigVersion(
-    folly::StringPiece serialized_data) {
-  if (serialized_data.empty()) {
-    return folly::none;
-  }
-  // TODO consider using thrift frozen for this wrapper to avoid deserializing
-  // the whole struct to get the version.
-  auto wrapper_ptr =
-      ThriftCodec::deserialize<BinarySerializer,
-                               thrift::NodesConfigurationWrapper>(
-          Slice{serialized_data.data(), serialized_data.size()});
-  if (wrapper_ptr == nullptr) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(5), 1, "Failed to extract configuration version");
-    return folly::none;
-  }
-
-  return membership::MembershipVersion::Type(
-      wrapper_ptr->header.config_version);
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

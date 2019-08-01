@@ -85,14 +85,3 @@ struct NodesConfiguration {
   8: u64 last_maintenance;
   9: string last_context;
 }
-
-struct NodesConfigurationHeader {
-  1: u32 proto_version;
-  2: u64 config_version;
-  3: bool is_compressed;
-}
-
-struct NodesConfigurationWrapper {
-  1: NodesConfigurationHeader header;
-  2: binary serialized_config;
-}
