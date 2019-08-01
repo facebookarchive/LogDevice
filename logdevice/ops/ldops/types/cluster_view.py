@@ -6,9 +6,12 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+
 from dataclasses import dataclass
 from typing import Collection, Dict, Generator, List, Optional, Tuple
 
+from ldops.exceptions import NodeNotFoundError
+from ldops.types.maintenance_view import MaintenanceView
 from ldops.types.node_view import NodeView
 from logdevice.admin.maintenance.types import MaintenanceDefinition
 from logdevice.admin.nodes.types import NodeConfig, NodeState
@@ -24,14 +27,24 @@ class ClusterView:
         self._node_indexes_tuple: Optional[Tuple[int, ...]] = None
         self._node_index_to_node_config_dict: Optional[Dict[int, NodeConfig]] = None
         self._node_index_to_node_state_dict: Optional[Dict[int, NodeState]] = None
+        self._node_index_to_maintenance_ids_dict: Optional[
+            Dict[int, Tuple[str, ...]]
+        ] = None
         self._node_index_to_maintenances_dict: Optional[
             Dict[int, Tuple[MaintenanceDefinition, ...]]
         ] = None
         self._node_index_to_node_view_dict: Optional[Dict[int, NodeView]] = None
         self._node_name_to_node_view_dict: Optional[Dict[str, NodeView]] = None
+
         self._maintenance_ids_tuple: Optional[Tuple[str, ...]] = None
         self._maintenance_id_to_maintenance_dict: Optional[
             Dict[str, MaintenanceDefinition]
+        ] = None
+        self._maintenance_id_to_node_indexes_dict: Optional[
+            Dict[str, Tuple[int, ...]]
+        ] = None
+        self._maintenance_id_to_maintenance_view_dict: Optional[
+            Dict[str, MaintenanceView]
         ] = None
 
     @property
@@ -63,6 +76,33 @@ class ClusterView:
         return self._node_index_to_node_state_dict
 
     @property
+    def _node_index_to_maintenance_ids(self) -> Dict[int, Tuple[str, ...]]:
+        if self._node_index_to_maintenance_ids_dict is None:
+            ni_to_mnt_ids: Dict[int, List[str]] = {ni: [] for ni in self._node_indexes}
+            for mnt in self.maintenances:
+                nis = set(
+                    {
+                        n.node_index
+                        for n in mnt.sequencer_nodes
+                        if n.node_index is not None
+                    }
+                ).union(
+                    {
+                        s.node.node_index
+                        for s in mnt.shards
+                        if s.node.node_index is not None
+                    }
+                )
+                for ni in nis:
+                    if mnt.group_id is not None:
+                        ni_to_mnt_ids[ni].append(mnt.group_id)
+
+            self._node_index_to_maintenance_ids_dict = {
+                ni: tuple(sorted(mnt_ids)) for ni, mnt_ids in ni_to_mnt_ids.items()
+            }
+        return self._node_index_to_maintenance_ids_dict
+
+    @property
     def _maintenance_ids(self) -> Tuple[str, ...]:
         if self._maintenance_ids_tuple is None:
             self._maintenance_ids_tuple = tuple(
@@ -79,28 +119,57 @@ class ClusterView:
         return self._maintenance_id_to_maintenance_dict
 
     @property
+    def _maintenance_id_to_node_indexes(self) -> Dict[str, Tuple[int, ...]]:
+        if self._maintenance_id_to_node_indexes_dict is None:
+            self._maintenance_id_to_node_indexes_dict = {
+                mnt.group_id: tuple(
+                    sorted(
+                        set(
+                            {
+                                n.node_index
+                                for n in mnt.sequencer_nodes
+                                if n.node_index is not None
+                            }
+                        ).union(
+                            {
+                                s.node.node_index
+                                for s in mnt.shards
+                                if s.node.node_index is not None
+                            }
+                        )
+                    )
+                )
+                for mnt in self.maintenances
+                if mnt.group_id is not None
+            }
+        return self._maintenance_id_to_node_indexes_dict
+
+    @property
+    def _maintenance_id_to_maintenance_view(self) -> Dict[str, MaintenanceView]:
+        if self._maintenance_id_to_maintenance_view_dict is None:
+            self._maintenance_id_to_maintenance_view_dict = {
+                mnt_id: MaintenanceView(
+                    maintenance=self._maintenance_id_to_maintenance[mnt_id],
+                    node_index_to_node_view={
+                        ni: self._node_index_to_node_view[ni]
+                        for ni in self._maintenance_id_to_node_indexes[mnt_id]
+                    },
+                )
+                for mnt_id in self._maintenance_ids
+            }
+        return self._maintenance_id_to_maintenance_view_dict
+
+    @property
     def _node_index_to_maintenances(
         self
     ) -> Dict[int, Tuple[MaintenanceDefinition, ...]]:
         if self._node_index_to_maintenances_dict is None:
-            ni_to_mnts: Dict[int, List[MaintenanceDefinition]] = {
-                ni: [] for ni in self._node_indexes
-            }
-
-            # Iterating through IDs because we'll get ordered maintenances for nodes
-            for mnt_id in self._maintenance_ids:
-                mnt = self._maintenance_id_to_maintenance[mnt_id]
-                nis = set()
-                for s in mnt.shards:
-                    assert s.node.node_index is not None
-                    nis.add(s.node.node_index)
-                for n in mnt.sequencer_nodes:
-                    assert n.node_index is not None
-                    nis.add(n.node_index)
-                for ni in nis:
-                    ni_to_mnts[ni].append(mnt)
             self._node_index_to_maintenances_dict = {
-                ni: tuple(mnts) for ni, mnts in ni_to_mnts.items()
+                ni: tuple(
+                    self._maintenance_id_to_maintenance[mnt_id]
+                    for mnt_id in self._node_index_to_maintenance_ids[ni]
+                )
+                for ni in self._node_indexes
             }
         return self._node_index_to_maintenances_dict
 
@@ -144,9 +213,18 @@ class ClusterView:
             for mnt_id in self.get_all_maintenance_ids()
         )
 
+    def get_all_maintenance_views(self) -> Generator[MaintenanceView, None, None]:
+        return (
+            self.get_maintenance_view_by_id(mnt_id)
+            for mnt_id in self.get_all_maintenance_ids()
+        )
+
     # By node_index
     def get_node_view_by_node_index(self, node_index: int) -> NodeView:
-        return self._node_index_to_node_view[node_index]
+        node_view = self._node_index_to_node_view.get(node_index, None)
+        if node_view is None:
+            raise NodeNotFoundError(f"node_index={node_index}")
+        return node_view
 
     def get_node_name_by_node_index(self, node_index: int) -> str:
         return self.get_node_view(node_index=node_index).node_name
@@ -157,14 +235,17 @@ class ClusterView:
     def get_node_state_by_node_index(self, node_index: int) -> NodeState:
         return self.get_node_view(node_index=node_index).node_state
 
-    def get_maintenances_by_node_index(
+    def get_node_maintenances_by_node_index(
         self, node_index: int
     ) -> Tuple[MaintenanceDefinition, ...]:
         return self.get_node_view(node_index=node_index).maintenances
 
     # By node_name
     def get_node_view_by_node_name(self, node_name: str) -> NodeView:
-        return self._node_name_to_node_view[node_name]
+        node_view = self._node_name_to_node_view.get(node_name, None)
+        if node_view is None:
+            raise NodeNotFoundError(f"node_name={node_name}")
+        return node_view
 
     def get_node_index_by_node_name(self, node_name: str) -> int:
         return self.get_node_view(node_name=node_name).node_index
@@ -175,7 +256,7 @@ class ClusterView:
     def get_node_state_by_node_name(self, node_name: str) -> NodeState:
         return self.get_node_view(node_name=node_name).node_state
 
-    def get_maintenances_by_node_name(
+    def get_node_maintenances_by_node_name(
         self, node_name: str
     ) -> Tuple[MaintenanceDefinition, ...]:
         return self.get_node_view(node_name=node_name).maintenances
@@ -229,7 +310,7 @@ class ClusterView:
     ) -> NodeState:
         return self.get_node_view(node_index=node_index, node_name=node_name).node_state
 
-    def get_maintenances(
+    def get_node_maintenances(
         self, node_index: Optional[int] = None, node_name: Optional[str] = None
     ) -> Tuple[MaintenanceDefinition, ...]:
         return self.get_node_view(
@@ -239,3 +320,11 @@ class ClusterView:
     # Maintenances
     def get_maintenance_by_id(self, maintenance_id: str) -> MaintenanceDefinition:
         return self._maintenance_id_to_maintenance[maintenance_id]
+
+    def get_maintenance_view_by_id(self, maintenance_id: str) -> MaintenanceView:
+        return self._maintenance_id_to_maintenance_view[maintenance_id]
+
+    def get_node_indexes_by_maintenance_id(
+        self, maintenance_id: str
+    ) -> Tuple[int, ...]:
+        return self._maintenance_id_to_node_indexes[maintenance_id]
