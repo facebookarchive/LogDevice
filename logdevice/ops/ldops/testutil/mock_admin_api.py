@@ -37,10 +37,12 @@ from logdevice.admin.nodes.types import (
     NodesStateResponse,
     NodeState,
     SequencerConfig,
+    SequencerMaintenanceProgress,
     SequencerState,
     SequencingState,
     ServiceState,
     ShardDataHealth,
+    ShardMaintenanceProgress,
     ShardOperationalState,
     ShardState,
     ShardStorageState,
@@ -260,6 +262,58 @@ class MockAdminAPI:
 
     def _gen_maintenances(self):
         self._maintenances_by_id = {}
+
+    def _set_shard_current_operational_state(
+        self, shard: ShardID, target_state: ShardOperationalState
+    ):
+        assert shard.node.node_index is not None
+        nc = self._nc_by_node_index[shard.node.node_index]
+        ns = self._ns_by_node_index[shard.node.node_index]
+        shard_states = []
+        for shard_index, shard_state in enumerate(ns.shard_states):
+            if shard.shard_index == shard_index:
+                shard_states.append(shard_state(current_operational_state=target_state))
+            else:
+                shard_states.append(shard_state)
+        new_ns = ns(shard_states=shard_states)
+        self._ns_by_node_index[shard.node.node_index] = new_ns
+        self._ns_by_name[nc.name] = new_ns
+
+    def _set_shard_maintenance_progress(
+        self, shard: ShardID, maintenance_progress: ShardMaintenanceProgress
+    ):
+        assert shard.node.node_index is not None
+        nc = self._nc_by_node_index[shard.node.node_index]
+        ns = self._ns_by_node_index[shard.node.node_index]
+        shard_states = []
+        for shard_index, shard_state in enumerate(ns.shard_states):
+            if shard.shard_index == shard_index:
+                shard_states.append(shard_state(maintenance=maintenance_progress))
+            else:
+                shard_states.append(shard_state)
+        new_ns = ns(shard_states=shard_states)
+        self._ns_by_node_index[shard.node.node_index] = new_ns
+        self._ns_by_name[nc.name] = new_ns
+
+    def _set_sequencing_state(self, node_id: NodeID, target_state: SequencingState):
+        assert node_id.node_index is not None
+        nc = self._nc_by_node_index[node_id.node_index]
+        ns = self._ns_by_node_index[node_id.node_index]
+        new_ns = ns(sequencer_state=ns.sequencer_state(state=target_state))
+        self._ns_by_node_index[node_id.node_index] = new_ns
+        self._ns_by_name[nc.name] = new_ns
+
+    def _set_sequencer_maintenance_progress(
+        self, node_id: NodeID, maintenance_progress: SequencerMaintenanceProgress
+    ):
+        assert node_id.node_index is not None
+        nc = self._nc_by_node_index[node_id.node_index]
+        ns = self._ns_by_node_index[node_id.node_index]
+        new_ns = ns(
+            sequencer_state=ns.sequencer_state(maintenance=maintenance_progress)
+        )
+        self._ns_by_node_index[node_id.node_index] = new_ns
+        self._ns_by_name[nc.name] = new_ns
 
     async def __aexit__(self, exc_type, exc, tb):
         pass
