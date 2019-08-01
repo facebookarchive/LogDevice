@@ -78,12 +78,15 @@ void RebuildingReadStorageTaskV2::execute() {
   // execution time limit.
   read_stats.read_start_time = start_time;
 
+  size_t prev_block_bytes_read = iterator->getIOBytesUnnormalized();
   size_t records_in_result = 0;
   size_t bytes_in_result = 0;
 
   SCOPE_EXIT {
     context->bytesRead =
         read_stats.read_record_bytes + read_stats.read_csi_bytes;
+    size_t block_bytes_read =
+        iterator->getIOBytesUnnormalized() - prev_block_bytes_read;
 
     if (context->persistentError || context->reachedEnd) {
       context->iterator.reset();
@@ -115,6 +118,10 @@ void RebuildingReadStorageTaskV2::execute() {
                          read_streams_num_csi_bytes_read_rebuilding,
                          shard,
                          read_stats.read_csi_bytes);
+      PER_SHARD_STAT_ADD(stats,
+                         read_streams_block_bytes_read_rebuilding,
+                         shard,
+                         block_bytes_read);
       STAT_ADD(stats,
                read_streams_num_records_filtered_rebuilding,
                read_stats.filtered_records);
@@ -137,7 +144,8 @@ void RebuildingReadStorageTaskV2::execute() {
           std::chrono::seconds(10),
           1,
           "Rebuilding has read a batch of records in %.3fs. Got %lu records "
-          "(%lu bytes) in %lu chunks. Skipped %lu records (SCD: %lu, ND: %lu, "
+          "(%lu bytes) in %lu chunks, read %lu bytes of rocksdb blocks. "
+          "Skipped %lu records (SCD: %lu, ND: %lu, "
           "DRAINED: %lu, TS: %lu, EPOCH: %lu; LATE: %lu).",
           std::chrono::duration_cast<std::chrono::duration<double>>(end_time -
                                                                     start_time)
@@ -145,6 +153,7 @@ void RebuildingReadStorageTaskV2::execute() {
           records_in_result,
           bytes_in_result,
           result_.size(),
+          block_bytes_read,
           tot_skipped,
           context->filter->nRecordsSCDFiltered,
           context->filter->nRecordsNotDirtyFiltered,
@@ -303,9 +312,10 @@ void RebuildingReadStorageTaskV2::execute() {
       break;
     case IteratorState::AT_END:
       context->reachedEnd = true;
-      context->iterator.reset();
       context->nextLocation.reset();
       context->progress = 1;
+      // context->iterator will be destroyed in the SCOPE_EXIT above, after
+      // pulling stats out of it one last time.
       break;
     case IteratorState::WOULDBLOCK:
     case IteratorState::MAX:
