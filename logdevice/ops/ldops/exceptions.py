@@ -29,3 +29,21 @@ class NodeNotFoundError(LDOpsError):
     """
 
     pass
+
+
+class NodeIsNotASequencerError(LDOpsError):
+    """
+    Raised when node which is not a sequencer was used in a context
+    expecting that it is a sequencer
+    """
+
+    pass
+
+
+class NodeIsNotAStorageError(LDOpsError):
+    """
+    Raised when node which is not a storage is used in a context
+    expectit that it is a storage
+    """
+
+    pass
