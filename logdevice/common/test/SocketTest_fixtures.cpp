@@ -273,6 +273,10 @@ TestSocketDependencies::getResourceToken(size_t payload_size) {
   return owner_->incoming_message_bytes_limit_.acquireToken(payload_size);
 }
 
+int TestSocketDependencies::setSoMark(int /*fd*/, uint32_t /*so_mark*/) {
+  return 0;
+}
+
 //
 
 int SocketTest::getDscp() {

@@ -1053,11 +1053,23 @@ void Socket::setDSCP(uint8_t dscp) {
   // DSCP is used for external traffic shaping. Allow the connection to
   // continue to operate, but warn about the failure.
   if (rc != 0) {
-    RATELIMIT_WARNING(std::chrono::seconds(1),
-                      10,
-                      "DSCP(0x%x) configuration failed: %s",
-                      dscp,
-                      strerror(errno));
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    10,
+                    "DSCP(0x%x) configuration failed: %s",
+                    dscp,
+                    strerror(errno));
+  }
+}
+
+void Socket::setSoMark(uint32_t so_mark) {
+  const int rc = deps_->setSoMark(fd_, so_mark);
+
+  if (rc != 0) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    10,
+                    "SO_MARK(0x%x) configuration failed: %s",
+                    so_mark,
+                    strerror(errno));
   }
 }
 
@@ -3023,6 +3035,10 @@ int SocketDependencies::setDSCP(int fd,
       break;
   }
   return rv;
+}
+
+int SocketDependencies::setSoMark(int fd, uint32_t so_mark) {
+  return setsockopt(fd, SOL_SOCKET, SO_MARK, &so_mark, sizeof(so_mark));
 }
 
 ResourceBudget& SocketDependencies::getConnBudgetExternal() {

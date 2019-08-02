@@ -127,6 +127,7 @@ class TestSocketDependencies : public SocketDependencies {
   virtual void onStartedRunning(RunContext context) override;
   virtual void onStoppedRunning(RunContext prev_context) override;
   ResourceBudget::Token getResourceToken(size_t payload_size) override;
+  virtual int setSoMark(int fd, uint32_t so_mark) override;
 
   NodeID getDestinationNodeID();
 

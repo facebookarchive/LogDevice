@@ -337,6 +337,12 @@ class Socket : public TrafficShappingSocket {
   void setDSCP(uint8_t dscp);
 
   /**
+   * Set the mark for each packet sent through this socket. Setting this option
+   * requires the CAP_NET_ADMIN capability.
+   */
+  void setSoMark(uint32_t so_mark);
+
+  /**
    * @return true iff close() has been called on the socket, or if it is
    *         a server socket that has never been connected
    */
@@ -1202,6 +1208,7 @@ class SocketDependencies {
   virtual int setDSCP(int fd,
                       sa_family_t sa_family,
                       const uint8_t default_dscp);
+  virtual int setSoMark(int fd, uint32_t so_mark);
   virtual ResourceBudget& getConnBudgetExternal();
   virtual std::string getClusterName();
   virtual ServerInstanceId getServerInstanceId();
