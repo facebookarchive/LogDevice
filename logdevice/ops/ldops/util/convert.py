@@ -66,10 +66,7 @@ def to_storage_state(raw_state: str) -> ShardStorageState:
     normal_state = raw_state.upper().replace("-", "_")
     if not normal_state:
         raise ValueError(f"Cannot parse empty storage-state")
-    ret = ShardStorageState.__members__.get(normal_state)
-    if ret is None:
-        raise ValueError(f"Cannot parse storage-state '{raw_state}'")
-    return ret
+    return ShardStorageState[normal_state]
 
 
 def to_replication(
@@ -84,9 +81,6 @@ def to_replication(
     res: Dict[LocationScope, int] = {}
     for scope, value in raw_repl.items():
         normalized_scope = scope.upper()
-        replication_scope = LocationScope.__members__.get(normalized_scope)
-        if replication_scope is None:
-            raise ValueError(f"Unknown location scope '{scope}'")
-        res[replication_scope] = value
+        res[LocationScope[normalized_scope]] = value
 
     return ReplicationProperty(res)

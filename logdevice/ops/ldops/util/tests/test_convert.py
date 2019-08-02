@@ -49,7 +49,7 @@ class ConvertTestCase(TestCase):
 
         # An invalid storage state
         invalid_input = "Potatoes"
-        with self.assertRaises(ValueError):
+        with self.assertRaises(KeyError):
             convert.to_storage_state(invalid_input)
 
         # An valid lower/upper storage state
@@ -83,7 +83,7 @@ class ConvertTestCase(TestCase):
 
         # None is returned as none
         invalid_input1 = {"invalid": 3, "Rack": 4}
-        with self.assertRaises(ValueError):
+        with self.assertRaises(KeyError):
             convert.to_replication(invalid_input1)
 
         valid_input = {"node": 3, "Rack": 4}

@@ -153,7 +153,7 @@ async def apply_maintenance(
     ttl: Optional[timedelta] = None,
     user: Optional[str] = None,
     reason: Optional[str] = None,
-    extras: Mapping[str, str] = None,
+    extras: Optional[Mapping[str, str]] = None,
     skip_safety_checks: Optional[bool] = False,
     allow_passive_drains: Optional[bool] = False,
 ) -> Collection[MaintenanceDefinition]:

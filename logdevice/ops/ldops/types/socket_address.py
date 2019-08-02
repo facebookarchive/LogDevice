@@ -86,9 +86,9 @@ class SocketAddress:
         Convenience helper which does resolving and returns instance
         """
         socket_address: SocketAddress
-        info: List[Tuple[int, int, int, str, Tuple[Any, ...]]] = socket.getaddrinfo(
-            host, port
-        )
+        info: List[  # type: ignore
+            Tuple[socket.AddressFamily, socket.SocketKind, int, str, Tuple[Any, ...]]
+        ] = socket.getaddrinfo(host, port)
         return cls.from_ip_port(random.choice(info)[4][0], port)
 
     @classmethod
