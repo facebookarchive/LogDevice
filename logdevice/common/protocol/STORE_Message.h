@@ -18,6 +18,7 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/CopySet.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/PayloadHolder.h"
@@ -31,24 +32,6 @@
 #include "logdevice/include/Record.h"
 
 namespace facebook { namespace logdevice {
-
-// a StoreChainLink describes one link in a message delivery chain
-struct StoreChainLink {
-  // Shard to which a STORE is to be delivered.
-  ShardID destination;
-
-  // id of the "client" connection on the destination node whose remote end
-  // (from the point of view of that node) is the sender of this message.
-  // The destination server uses this ClientID to send a reply to the message
-  // directly to the sender.
-  ClientID origin;
-
-  bool operator==(const StoreChainLink& other) const {
-    return destination == other.destination && origin == other.origin;
-  }
-
-  std::string toString() const;
-};
 
 struct STORE_Header {
   RecordID rid; // unique ID of record being stored, includes log id and LSN

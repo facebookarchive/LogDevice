@@ -11,7 +11,6 @@
 #include <cstring>
 
 #include "logdevice/common/PayloadHolder.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"

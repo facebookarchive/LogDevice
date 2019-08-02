@@ -9,12 +9,32 @@
 
 #include <folly/small_vector.h>
 
+#include "logdevice/common/ClientID.h"
 #include "logdevice/common/ShardID.h"
-#include "logdevice/common/protocol/STORE_Message.h"
 
 namespace facebook { namespace logdevice {
 
 constexpr size_t COPYSET_INLINE_DEFAULT = 6;
+
+// a StoreChainLink describes one link in a message delivery chain
+struct StoreChainLink {
+  // Shard to which a STORE is to be delivered.
+  ShardID destination;
+
+  // id of the "client" connection on the destination node whose remote end
+  // (from the point of view of that node) is the sender of this message.
+  // The destination server uses this ClientID to send a reply to the message
+  // directly to the sender.
+  ClientID origin;
+
+  bool operator==(const StoreChainLink& other) const {
+    return destination == other.destination && origin == other.origin;
+  }
+
+  std::string toString() const {
+    return destination.toString() + origin.toString();
+  }
+};
 
 /**
  * In-memory representation of a copyset. Uses a folly::small_vector with a
