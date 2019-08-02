@@ -7,7 +7,7 @@
 # LICENSE file in the root directory of this source tree.
 
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Collection, Dict, Generator, List, Optional, Tuple
 
 from ldops.exceptions import NodeNotFoundError
@@ -23,29 +23,39 @@ class ClusterView:
     nodes_state: Collection[NodeState]
     maintenances: Collection[MaintenanceDefinition]
 
-    def __post_init__(self) -> None:
-        self._node_indexes_tuple: Optional[Tuple[int, ...]] = None
-        self._node_index_to_node_config_dict: Optional[Dict[int, NodeConfig]] = None
-        self._node_index_to_node_state_dict: Optional[Dict[int, NodeState]] = None
-        self._node_index_to_maintenance_ids_dict: Optional[
-            Dict[int, Tuple[str, ...]]
-        ] = None
-        self._node_index_to_maintenances_dict: Optional[
-            Dict[int, Tuple[MaintenanceDefinition, ...]]
-        ] = None
-        self._node_index_to_node_view_dict: Optional[Dict[int, NodeView]] = None
-        self._node_name_to_node_view_dict: Optional[Dict[str, NodeView]] = None
-
-        self._maintenance_ids_tuple: Optional[Tuple[str, ...]] = None
-        self._maintenance_id_to_maintenance_dict: Optional[
-            Dict[str, MaintenanceDefinition]
-        ] = None
-        self._maintenance_id_to_node_indexes_dict: Optional[
-            Dict[str, Tuple[int, ...]]
-        ] = None
-        self._maintenance_id_to_maintenance_view_dict: Optional[
-            Dict[str, MaintenanceView]
-        ] = None
+    _node_indexes_tuple: Optional[Tuple[int, ...]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _node_index_to_node_config_dict: Optional[Dict[int, NodeConfig]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _node_index_to_node_state_dict: Optional[Dict[int, NodeState]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _node_index_to_maintenance_ids_dict: Optional[Dict[int, Tuple[str, ...]]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _node_index_to_maintenances_dict: Optional[
+        Dict[int, Tuple[MaintenanceDefinition, ...]]
+    ] = field(default=None, init=False, repr=False, compare=False)
+    _node_index_to_node_view_dict: Optional[Dict[int, NodeView]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _node_name_to_node_view_dict: Optional[Dict[str, NodeView]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _maintenance_ids_tuple: Optional[Tuple[str, ...]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _maintenance_id_to_maintenance_dict: Optional[
+        Dict[str, MaintenanceDefinition]
+    ] = field(default=None, init=False, repr=False, compare=False)
+    _maintenance_id_to_node_indexes_dict: Optional[Dict[str, Tuple[int, ...]]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    _maintenance_id_to_maintenance_view_dict: Optional[
+        Dict[str, MaintenanceView]
+    ] = field(default=None, init=False, repr=False, compare=False)
 
     @property
     def _node_indexes(self) -> Tuple[int, ...]:

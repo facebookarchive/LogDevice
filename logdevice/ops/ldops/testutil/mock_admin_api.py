@@ -121,6 +121,14 @@ class MockAdminAPI:
         self.disaggregated = disaggregated
         self.distribute_across = distribute_across
         self.num_distribute_across = num_distribute_across
+
+        self.available_locations = {}
+        self._nc_by_node_index = {}
+        self._ns_by_node_index = {}
+        self._nc_version = 0
+        self._ns_version = 0
+        self._maintenances_by_id = {}
+
         self._gen_done = False
 
     def _gen_locations(self):
@@ -342,7 +350,11 @@ class MockAdminAPI:
             ncs = [nc for nc in ncs if filter.role in nc.roles]
 
         if filter.location is not None:
-            ncs = [nc for nc in ncs if nc.location.startswith(filter.location)]
+            ncs = [
+                nc
+                for nc in ncs
+                if nc.location is not None and nc.location.startswith(filter.location)
+            ]
 
         return ncs
 
@@ -456,4 +468,4 @@ class MockAdminAPI:
         for mnt in mnts:
             del self._maintenances_by_id[mnt.group_id]
 
-        return MaintenanceDefinitionResponse(maintenances=mnts)
+        return RemoveMaintenancesResponse(maintenances=mnts)
