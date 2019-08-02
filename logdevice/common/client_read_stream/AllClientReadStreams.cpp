@@ -147,7 +147,7 @@ void AllClientReadStreams::getReadStreamsDebugInfo(
   }
 }
 
-void AllClientReadStreams::sampleAllReadStreamsDegubInfoToScuba() const {
+void AllClientReadStreams::sampleAllReadStreamsDegubInfo() const {
   for (const auto& stream : streams_) {
     if (stream.second) {
       stream.second->sampleDebugInfo(

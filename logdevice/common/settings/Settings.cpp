@@ -3214,7 +3214,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &all_read_streams_rate,
        "100ms",
        validate_positive<ssize_t>(),
-       "Rate of sampling all client read streams debug info to Scuba",
+       "Rate of sampling all client read streams debug info",
        CLIENT,
        SettingsCategory::ReadPath);
 }
