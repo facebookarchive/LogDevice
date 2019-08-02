@@ -7,9 +7,6 @@
  */
 #include "logdevice/common/TailRecord.h"
 
-#include "logdevice/common/Processor.h"
-#include "logdevice/common/Worker.h"
-
 namespace facebook { namespace logdevice {
 
 TailRecord::TailRecord(const TailRecordHeader& header_in,

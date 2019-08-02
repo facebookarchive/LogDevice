@@ -13,6 +13,7 @@
 #include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/server/EpochRecordCache.h"

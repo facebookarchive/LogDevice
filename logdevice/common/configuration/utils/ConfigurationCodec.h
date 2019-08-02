@@ -14,18 +14,12 @@
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/configuration/utils/gen-cpp2/ConfigurationCodec_types.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/include/Err.h"
 #include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 
-namespace facebook { namespace logdevice {
-
-class ProtocolWriter;
-class ProtocolReader;
-
-namespace configuration {
+namespace facebook { namespace logdevice { namespace configuration {
 
 /**
  * @file ConfigurationCodec is the template class that provides a thrift-based
@@ -111,8 +105,7 @@ class ConfigurationCodec {
                 "");
 };
 
-} // namespace configuration
-}} // namespace facebook::logdevice
+}}} // namespace facebook::logdevice::configuration
 
 #define LOGDEVICE_CONFIGURATION_CODEC_H_
 #include "logdevice/common/configuration/utils/ConfigurationCodec-inl.h"

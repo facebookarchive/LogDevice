@@ -17,6 +17,7 @@
 
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/CopySet.h"
+#include "logdevice/common/OffsetMap.h"
 #include "logdevice/common/RandomAccessQueue.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"

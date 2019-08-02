@@ -470,10 +470,6 @@ void STORE_Message::setBlockStartingLSN(lsn_t lsn) {
   }
 }
 
-std::string StoreChainLink::toString() const {
-  return destination.toString() + origin.toString();
-}
-
 std::string STORE_Message::flagsToString(STORE_flags_t flags) {
   std::string s;
 
