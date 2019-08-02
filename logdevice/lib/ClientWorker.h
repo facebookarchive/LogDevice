@@ -56,7 +56,7 @@ class ClientWorker : public Worker {
    */
   NodeStatsMessageCallback* nodeStatsMessageCallback() const;
 
-  void sampleAllReadStreamsDegubInfoToScuba() const;
+  void sampleAllReadStreamsDegubInfo() const;
 
   void setupWorker() override;
 
