@@ -8,6 +8,8 @@
 #include "logdevice/server/rebuilding/ShardRebuildingV2.h"
 
 #include "logdevice/common/AdminCommandTable.h"
+#include "logdevice/common/MetaDataLog.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 
@@ -188,20 +190,39 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
   const size_t max_bytes_in_flight =
       rebuildingSettings_->max_record_bytes_in_flight;
 
+  auto is_log_exempted_from_window = [&](logid_t log) {
+    // Don't use timestamp window (both local and global) for metadata/internal
+    // logs. As far as global window is concerned, these records all have
+    // timestamp negative infinity. This is needed because we rebuild all
+    // internal logs before any data logs, and their timestamps are all over the
+    // place, while global window needs timestamps to approximately increase.
+    // It's ok to not use timestamp window for internal logs because they're not
+    // stored in partitions, so storage nodes don't care how spread out their
+    // timestamps are.
+    return MetaDataLog::isMetaDataLog(log) ||
+        configuration::InternalLogs::isInternal(log);
+  };
+
   auto record_rebuildings_are_too_spread_out = [&] {
-    const std::chrono::milliseconds local_window =
+    if (chunkRebuildings_.empty()) {
+      return false;
+    }
+    if (is_log_exempted_from_window(readBuffer_.front()->address.log)) {
+      return false;
+    }
+    // Note that chunkRebuildings_.begin() might be exempted from window,
+    // but that's ok.
+    return readBuffer_.front()->oldestTimestamp -
+        chunkRebuildings_.begin()->first.oldestTimestamp >
         rebuildingSettings_->local_window;
-    return !chunkRebuildings_.empty() &&
-        readBuffer_.front()->oldestTimestamp -
-            chunkRebuildings_.begin()->first.oldestTimestamp >
-        local_window;
   };
 
   while (!readBuffer_.empty() &&
          chunkRebuildingRecordsInFlight_ < max_records_in_flight &&
          chunkRebuildingBytesInFlight_ < max_bytes_in_flight &&
          !record_rebuildings_are_too_spread_out()) {
-    if (readBuffer_.front()->oldestTimestamp > globalWindowEnd_) {
+    if (!is_log_exempted_from_window(readBuffer_.front()->address.log) &&
+        readBuffer_.front()->oldestTimestamp > globalWindowEnd_) {
       break;
     }
 
@@ -235,13 +256,21 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
   // Find the oldest timestamp of a chunk that we're going to rebuild but
   // haven't rebuilt yet, and publish this timestamp for other donors to slide
   // global window based on it.
-  RecordTimestamp oldest_timestamp;
+  RecordTimestamp oldest_timestamp = RecordTimestamp::min();
   if (!chunkRebuildings_.empty()) {
     // If there are some records in flight, use the oldest one.
-    oldest_timestamp = chunkRebuildings_.begin()->first.oldestTimestamp;
+    if (!is_log_exempted_from_window(
+            chunkRebuildings_.begin()->second.address.log)) {
+      oldest_timestamp = chunkRebuildings_.begin()->first.oldestTimestamp;
+    } else {
+      // We're still rebuilding internal logs, leave oldest_timestamp at
+      // negative infinity.
+    }
   } else if (!readBuffer_.empty()) {
     // If there are some records in buffer, use the first one.
-    oldest_timestamp = readBuffer_.front()->oldestTimestamp;
+    if (!is_log_exempted_from_window(readBuffer_.front()->address.log)) {
+      oldest_timestamp = readBuffer_.front()->oldestTimestamp;
+    }
   } else {
     // Otherwise, either we're just starting, or we're filtering everything we
     // read. In the latter case it's useful to report the approximate progress
@@ -352,7 +381,7 @@ void ShardRebuildingV2::noteRebuildingSettingsChanged() {
 void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
   // Some measure of how far we have progressed, in terms of record timestamps.
   // TODO (#24665001):
-  //   This doesn't match the current column name is "local_window_end".
+  //   This doesn't match the current column name "local_window_end".
   //   When rebuilding v2 becomes the default, rename the column.
   if (!chunkRebuildings_.empty()) {
     table.set<4>(

@@ -190,6 +190,7 @@ class ShardRebuildingTest : public ::testing::Test {
 const RecordTimestamp BASE_TIME =
     RecordTimestamp(std::chrono::milliseconds(946713600000));
 const std::chrono::milliseconds MINUTE = std::chrono::minutes(1);
+const std::chrono::milliseconds HOUR = std::chrono::hours(1);
 
 // We use raw pointer here because unique_ptr doesn't work in initializer lists
 // (initializer lists don't support rvalue references for some reason).
@@ -444,6 +445,69 @@ TEST_F(ShardRebuildingTest, TestStallRebuilding) {
   EXPECT_FALSE(reb.completed);
   ASSERT_EQ(0, reb.chunkRebuildings.size());
   ASSERT_EQ(0, reb.donorProgress.size());
+}
+
+// Check that internal logs and metadata logs don't affect global window and are
+// not affected by it.
+TEST_F(ShardRebuildingTest, WindowsAndInternalLogs) {
+  rebuildingSettingsUpdater_.setFromCLI({{"rebuilding-local-window", "30min"}});
+
+  MockedShardRebuilding reb(rebuildingSettings_);
+  reb.simulateAdvanceGlobalWindow(BASE_TIME - HOUR);
+  reb.start({});
+  EXPECT_TRUE(reb.taskInFlight);
+  EXPECT_EQ(0, reb.chunkRebuildings.size());
+  EXPECT_EQ(0, reb.donorProgress.size());
+
+  // Internal log chunk. Should start despite global window not being advanced,
+  // and shouldn't report donor progress.
+  reb.simulateReadTaskDone(
+      {makeChunk(configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS,
+                 10,
+                 10,
+                 10,
+                 BASE_TIME)});
+  EXPECT_TRUE(reb.taskInFlight);
+  EXPECT_EQ(1, reb.chunkRebuildings.size());
+  EXPECT_EQ(0, reb.donorProgress.size());
+
+  // Internal log chunk with very big timestamp, then data log chunks.
+  // Should start the internal log chunk despite local and global window,
+  // but don't start the data log chunk. Should report data log's timestamp as
+  // progress.
+  reb.simulateReadTaskDone(
+      {makeChunk(MetaDataLog::metaDataLogID(logid_t(1)),
+                 300,
+                 300,
+                 10,
+                 BASE_TIME + HOUR * 100),
+       makeChunk(logid_t(1), 100, 100, 10, BASE_TIME + MINUTE),
+       makeChunk(logid_t(1), 200, 200, 10, BASE_TIME + HOUR)});
+  EXPECT_TRUE(reb.taskInFlight);
+  EXPECT_EQ(2, reb.chunkRebuildings.size());
+  EXPECT_EQ(0, reb.donorProgress.size());
+
+  // Move global window. One data log chunk should start, the second one
+  // shouldn't, because of big timestamp difference.
+  reb.simulateAdvanceGlobalWindow(BASE_TIME + MINUTE * 45);
+  EXPECT_EQ(3, reb.chunkRebuildings.size());
+  EXPECT_EQ(0, reb.donorProgress.size());
+
+  // Internal log chunk done. The data chunk now has the smallest timestamp
+  // among the in-flight chunks, so it's reported as progress.
+  reb.simulateChunkRebuildingDone(0);
+  EXPECT_EQ(2, reb.chunkRebuildings.size());
+  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE);
+
+  // Data log chunk done. Now we're waiting for global window.
+  reb.simulateChunkRebuildingDone(1);
+  EXPECT_EQ(1, reb.chunkRebuildings.size());
+  EXPECT_EQ(0, reb.donorProgress.size());
+
+  // Started the second data chunk, reported donor progress.
+  reb.simulateAdvanceGlobalWindow(BASE_TIME + HOUR * 2);
+  EXPECT_EQ(2, reb.chunkRebuildings.size());
+  EXPECT_DONOR_PROGRESS(BASE_TIME + HOUR);
 }
 
 // TODO: getDebugInfo()
