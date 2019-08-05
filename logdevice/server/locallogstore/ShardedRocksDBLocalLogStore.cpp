@@ -308,7 +308,7 @@ ShardedRocksDBLocalLogStore::~ShardedRocksDBLocalLogStore() {
     threads.emplace_back([this, i]() {
       ThreadID::set(
           ThreadID::Type::UTILITY, folly::sformat("ld:stop-rocks{}", i));
-      ld_debug("Destroying RocksDB shard %zd", i);
+      ld_info("Destroying RocksDB shard %zd", i);
       shards_[i].reset();
       ld_info("Destroyed RocksDB shard %zd", i);
     });
