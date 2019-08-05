@@ -18,7 +18,7 @@ class EvBaseMock : public EvBase {
   MOCK_METHOD1(init_mock, Status(int));
   virtual Status init(int num_priorities = static_cast<int>(
                           Priorities::NUM_PRIORITIES)) override {
-    init_mock(num_priorities);
+    return init_mock(num_priorities);
   }
   MOCK_METHOD0(free, Status(void));
 

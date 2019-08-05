@@ -9,11 +9,12 @@
 
 #include <chrono>
 #include <ctime>
+#include <ctype.h>
 #include <functional>
 
 #include <folly/container/F14Map.h>
 
-struct event_base;
+#include "logdevice/common/libevent/EvTimer.h"
 
 namespace facebook { namespace logdevice {
 
@@ -48,7 +49,7 @@ class MicrosecondsHash {
 
 class TimeoutMap {
  public:
-  TimeoutMap(struct event_base* base, int max_size);
+  explicit TimeoutMap(uint32_t max_size);
 
   /**
    * Converts the timeout in microseconds to a struct timeval to be used as a
@@ -61,20 +62,15 @@ class TimeoutMap {
    *           entries, add an entry and return a new timer queue id. If the
    *           map is full return nullptr.
    */
-  const struct timeval* get(std::chrono::microseconds timeout);
+  const timeval* get(std::chrono::microseconds timeout);
 
  private:
-  const struct timeval* add(std::chrono::microseconds timeout);
-  folly::F14FastMap<std::chrono::microseconds,
-                    const struct timeval*,
-                    MicrosecondsHash>
+  const timeval* add(std::chrono::microseconds timeout);
+  folly::F14FastMap<std::chrono::microseconds, const timeval*, MicrosecondsHash>
       map_;
 
-  // event base for which we are generating timeout queue identifiers
-  struct event_base* base_;
-
   // maximum number of entries we can have in map_
-  const int max_size_;
+  const uint32_t max_size_;
 };
 
 }} // namespace facebook::logdevice

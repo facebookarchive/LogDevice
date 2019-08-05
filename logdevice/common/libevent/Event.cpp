@@ -18,13 +18,9 @@ Event::Event(Callback callback, Events events, int fd, EvBase* base)
   if (!base) {
     return;
   }
-  event_ = std::unique_ptr<event, std::function<void(event*)>>(
-      LD_EV(event_new)(base->getRawBase(),
-                       fd_,
-                       static_cast<short>(events),
-                       Event::evCallback,
-                       this),
-      Event::deleter);
+
+  event_ = LD_EV(event_new)(
+      base->getRawBase(), fd_, events, Event::evCallback, this);
 }
 
 Event::operator bool() const {
@@ -32,7 +28,7 @@ Event::operator bool() const {
 }
 
 event* Event::getRawEventDeprecated() {
-  return event_.get();
+  return event_;
 }
 
 void Event::evCallback(int, short, void* arg) {
@@ -40,8 +36,8 @@ void Event::evCallback(int, short, void* arg) {
   event->callback_();
 }
 
-void Event::deleter(event* ev) {
-  LD_EV(event_free)(ev);
+Event::~Event() {
+  LD_EV(event_free)(event_);
 }
 
 }} // namespace facebook::logdevice

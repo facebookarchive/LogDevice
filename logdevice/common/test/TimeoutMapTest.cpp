@@ -8,21 +8,27 @@
 #include "logdevice/common/TimeoutMap.h"
 
 #include <event2/event.h>
-#include <folly/ScopeGuard.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/libevent/compat.h"
+#include "logdevice/common/libevent/test/EvBaseMock.h"
 
 using namespace facebook::logdevice;
+using namespace testing;
 
 #define TIMEOUT_MAP_SIZE 10
 
 TEST(TimeoutMap, Correctness) {
-  event_base* base = LD_EV(event_base_new)();
-  SCOPE_EXIT {
-    LD_EV(event_base_free)(base);
-  };
-  TimeoutMap tm(base, TIMEOUT_MAP_SIZE);
+  auto base_fake = LD_EV(event_base_new)();
+  EvBaseMock base;
+  base.init();
+  base.setAsRunningBase();
+
+  EXPECT_CALL(base, getRawBase())
+      .Times(Exactly(TIMEOUT_MAP_SIZE))
+      .WillRepeatedly(Return(base_fake));
+
+  TimeoutMap tm(TIMEOUT_MAP_SIZE);
   std::vector<std::pair<int, const timeval*>> timers;
   for (int i = 0; i < TIMEOUT_MAP_SIZE; ++i) {
     const timeval* tqid = tm.get(std::chrono::milliseconds(i));
@@ -37,4 +43,6 @@ TEST(TimeoutMap, Correctness) {
 
   const timeval* tmo = tm.get(std::chrono::milliseconds(TIMEOUT_MAP_SIZE));
   ASSERT_EQ(nullptr, tmo);
+
+  LD_EV(event_base_free)(base_fake);
 }

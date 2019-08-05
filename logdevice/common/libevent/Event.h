@@ -18,7 +18,7 @@ namespace facebook { namespace logdevice {
 class Event {
  public:
   using Callback = folly::Function<void()>;
-  enum class Events {
+  enum Events {
     USER_ACTIVATED = 0,
     READ = 0x02,
     PERSIST = 0x10,
@@ -30,11 +30,12 @@ class Event {
                  EvBase* base = EvBase::getRunningBase());
   operator bool() const;
   event* getRawEventDeprecated();
+  ~Event();
 
  private:
   static void evCallback(int fd, short what, void* arg);
   static void deleter(event* ev);
-  std::unique_ptr<event, std::function<void(event*)>> event_{nullptr, deleter};
+  event* event_{nullptr};
   Callback callback_;
   int fd_;
 };

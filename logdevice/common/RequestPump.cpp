@@ -25,7 +25,7 @@ namespace facebook { namespace logdevice {
 using namespace std::literals;
 
 RequestPump::RequestPump(
-    struct event_base* base,
+    EvBase& base,
     size_t capacity,
     const std::array<uint32_t, kNumberOfPriorities>& dequeues_per_iteration)
     : EventLoopTaskQueue(base, capacity, dequeues_per_iteration) {}

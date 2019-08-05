@@ -7,8 +7,7 @@
  */
 #pragma once
 #include "logdevice/common/EventLoopTaskQueue.h"
-
-struct event_base;
+#include "logdevice/common/libevent/EvBase.h"
 
 namespace facebook { namespace logdevice {
 
@@ -38,7 +37,7 @@ class RequestPump : public EventLoopTaskQueue {
    * @throws ConstructorFailed on error
    */
   RequestPump(
-      struct event_base* base,
+      EvBase& base,
       size_t capacity,
       const std::array<uint32_t, kNumberOfPriorities>& requests_per_iteration);
 
