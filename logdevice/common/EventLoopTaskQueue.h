@@ -16,9 +16,8 @@
 #include <folly/io/async/Request.h>
 
 #include "logdevice/common/LifoEventSem.h"
-
-struct event;
-struct event_base;
+#include "logdevice/common/libevent/EvBase.h"
+#include "logdevice/common/libevent/Event.h"
 
 namespace facebook { namespace logdevice {
 using Func = folly::Function<void()>;
@@ -61,7 +60,7 @@ class EventLoopTaskQueue {
    * @throws ConstructorFailed on error
    */
   EventLoopTaskQueue(
-      struct event_base* base,
+      EvBase& base,
       size_t capacity,
       const std::array<uint32_t, kNumberOfPriorities>& dequeues_per_iteration);
 
@@ -130,6 +129,8 @@ class EventLoopTaskQueue {
   }
 
  private:
+  EvBase& base_;
+
   class Task {
    public:
     explicit Task(Func func, std::shared_ptr<folly::RequestContext> ctx)
@@ -168,15 +169,14 @@ class EventLoopTaskQueue {
   size_t capacity_;
 
   // Triggers when `queue' is not empty
-  struct event* tasks_pending_event_;
+  std::unique_ptr<Event> tasks_pending_event_;
 
   bool close_event_loop_on_shutdown_{false};
   // Indicates shutdown() was called (EventLoop is asynchronously
   // processing the shutdown)
   std::atomic<bool> shutdown_signaled_{false};
 
-  // Callback registered with event base. Indicates pending events on the queue.
-  static void haveTasksEventHandler(void* self, short what);
+  void haveTasksEventHandler();
 
   // Invoked by haveTasksEventHandle to dequeue tasks from the queue.
   void executeTasks(uint32_t num_tasks_to_dequeue);

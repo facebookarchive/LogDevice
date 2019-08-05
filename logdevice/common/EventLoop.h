@@ -24,8 +24,7 @@
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/ZeroCopyPayload.h"
 #include "logdevice/common/libevent/EvBase.h"
-
-struct event;
+#include "logdevice/common/libevent/Event.h"
 
 namespace facebook { namespace logdevice {
 
@@ -124,7 +123,7 @@ class EventLoop : public folly::Executor {
   // event_base_init_common_timeout() and actually containing timer queue
   // ids for this thread's event_base.
   TimeoutMap& commonTimeouts() {
-    return *common_timeouts_;
+    return common_timeouts_;
   }
 
   // Convenience function so callers of commonTimeouts().get() don't need
@@ -197,8 +196,8 @@ class EventLoop : public folly::Executor {
   // Every 1s schedules a zero timeout event and notes delays in
   // executing this event. This indicates how long it takes to service a active
   // event on eventloop
-  static void delayCheckCallback(void* arg, short);
-  event* scheduled_event_;
+  void delayCheckCallback();
+  std::unique_ptr<Event> scheduled_event_;
   std::chrono::steady_clock::time_point scheduled_event_start_time_{
       std::chrono::steady_clock::time_point::min()};
 
@@ -210,7 +209,7 @@ class EventLoop : public folly::Executor {
   BatchedBufferDisposer<ZeroCopyPayload> disposer_;
 
   // TimeoutMap to cache common timeouts.
-  std::unique_ptr<TimeoutMap> common_timeouts_;
+  TimeoutMap common_timeouts_{kMaxFastTimeouts};
 
   // True indicates eventloop honors the priority with used in
   // EventLoop::addWithPriority. If false EventLoop will override the priority

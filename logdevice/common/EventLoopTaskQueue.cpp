@@ -24,23 +24,18 @@ constexpr std::array<int8_t, EventLoopTaskQueue::kNumberOfPriorities>
     EventLoopTaskQueue::kLookupTable;
 
 EventLoopTaskQueue::EventLoopTaskQueue(
-    struct event_base* base,
+    EvBase& base,
     size_t capacity,
     const std::array<uint32_t, kNumberOfPriorities>& dequeues_per_iteration)
-    : capacity_(capacity) {
+    : base_(base), capacity_(capacity) {
   setDequeuesPerIteration(dequeues_per_iteration);
 
-  if (!base) {
-    // err shoud be set by the function that tried to create base
-    throw ConstructorFailed();
-  }
-
   sem_waiter_ = sem_.beginAsyncWait();
-  tasks_pending_event_ = LD_EV(event_new)(base,
-                                          sem_waiter_->fd(),
-                                          EV_READ | EV_PERSIST,
-                                          EventHandler<haveTasksEventHandler>,
-                                          this);
+  tasks_pending_event_ =
+      std::make_unique<Event>([this]() { haveTasksEventHandler(); },
+                              Event::Events::READ_PERSIST,
+                              sem_waiter_->fd(),
+                              &base);
 
   if (!tasks_pending_event_) { // unlikely
     ld_error("Failed to create 'task pipe is readable' event for "
@@ -49,16 +44,12 @@ EventLoopTaskQueue::EventLoopTaskQueue(
     throw ConstructorFailed();
   }
 
-#if LIBEVENT_VERSION_NUMBER >= 0x02010000
-  ld_assert(LD_EV(event_get_priority)(tasks_pending_event_) ==
-            EventLoop::PRIORITY_NORMAL);
-#endif
-
-  int rv = LD_EV(event_add)(tasks_pending_event_, nullptr);
+  int rv =
+      LD_EV(event_add)(tasks_pending_event_->getRawEventDeprecated(), nullptr);
   if (rv != 0) { // unlikely
     ld_error("Failed to add 'task pipe is readable' event to event base");
     ld_check(false);
-    LD_EV(event_free)(tasks_pending_event_);
+    tasks_pending_event_.reset();
     err = E::INTERNAL;
     throw ConstructorFailed();
   }
@@ -74,13 +65,7 @@ EventLoopTaskQueue::~EventLoopTaskQueue() {
   } else {
     // Otherwise, we may have gone through the async shutdown sequence or not.
     shutdown();
-    if (tasks_pending_event_ != nullptr) {
-      // If not, presumably the event loop shared ownership of the pump.  To
-      // be in the destructor the event loop must have destructed itself so
-      // it's safe to delete the event now.
-      LD_EV(event_free)(tasks_pending_event_);
-      tasks_pending_event_ = nullptr;
-    }
+    tasks_pending_event_.reset();
   }
 }
 
@@ -119,35 +104,28 @@ int EventLoopTaskQueue::addWithPriority(Func func, int8_t priority) {
   return 0;
 }
 
-void EventLoopTaskQueue::haveTasksEventHandler(void* arg, short what) {
-  EventLoopTaskQueue* self = static_cast<EventLoopTaskQueue*>(arg);
-  if (!(what & EV_READ)) {
-    ld_error("Got an unexpected event on task queue: what=%d", what);
-    ld_check(false);
-  }
-  ld_check(self->sem_waiter_);
+void EventLoopTaskQueue::haveTasksEventHandler() {
+  ld_check(sem_waiter_);
   try {
-    auto cb = [self](uint32_t n) { self->executeTasks(n); };
+    auto cb = [this](uint32_t n) { executeTasks(n); };
     // processBatch() decrements the semaphore by some amount and calls our
     // callback with the amount.  We're guaranteed to have at least that many
     // items in the UMPSCQueue, because the producer pushes into the queue
     // first then increments the semaphore.
-    self->sem_waiter_->processBatch(cb, self->total_dequeues_per_iteration_);
+    sem_waiter_->processBatch(cb, total_dequeues_per_iteration_);
   } catch (const folly::ShutdownSemError&) {
-    struct event_base* base = LD_EV(event_get_base)(self->tasks_pending_event_);
     // First delete the event since the fd is about to go away
-    ld_check(self->tasks_pending_event_);
-    LD_EV(event_free)(self->tasks_pending_event_);
-    self->tasks_pending_event_ = nullptr;
+    ld_check(tasks_pending_event_);
 
+    tasks_pending_event_.reset();
     // Destroy the AsyncWaiter, which also closes the fd
-    self->sem_waiter_.reset();
+    sem_waiter_.reset();
 
     // If requested, instruct the event loop to stop
-    if (self->close_event_loop_on_shutdown_) {
-      int rv = LD_EV(event_base_loopbreak)(base);
-      if (UNLIKELY(rv != 0)) {
-        ld_error("FATAL: event_base_loopbreak() failed");
+    if (close_event_loop_on_shutdown_) {
+      auto status = base_.terminateLoop();
+      if (UNLIKELY(status != EvBase::Status::OK)) {
+        ld_error("FATAL: EvBase::terminateLoop() failed");
         ld_check(false);
       }
     }

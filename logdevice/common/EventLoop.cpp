@@ -37,18 +37,18 @@ static std::unique_ptr<EvBase> createEventBase() {
   switch (rv) {
     case EvBase::Status::NO_MEM:
       ld_error("Failed to create an event base for an EventLoop thread");
-      err = E::NOMEM;
+      err = Status::NOMEM;
       break;
     case EvBase::Status::INVALID_PRIORITY:
       ld_error("failed to initialize eventbase priorities");
-      err = E::SYSLIMIT;
+      err = Status::SYSLIMIT;
       break;
     case EvBase::Status::OK:
       result = std::move(base);
       break;
     default:
       ld_error("Internal error when initializing EvBase");
-      err = E::INTERNAL;
+      err = Status::INTERNAL;
       break;
   }
   return result;
@@ -66,7 +66,7 @@ EventLoop::EventLoop(
       disposer_(this),
       priority_queues_enabled_(enable_priority_queues) {
   Semaphore initialized;
-  Status init_result{E::INTERNAL};
+  Status init_result{Status::INTERNAL};
   thread_ = std::thread([request_pump_capacity,
                          &requests_per_iteration,
                          &init_result,
@@ -75,12 +75,12 @@ EventLoop::EventLoop(
     auto res = init_result =
         init(request_pump_capacity, requests_per_iteration);
     initialized.post();
-    if (res == E::OK) {
+    if (res == Status::OK) {
       run();
     }
   });
   initialized.wait();
-  if (init_result != E::OK) {
+  if (init_result != Status::OK) {
     err = init_result;
     thread_.join();
     throw ConstructorFailed();
@@ -111,26 +111,26 @@ void EventLoop::addWithPriority(folly::Function<void()> func, int8_t priority) {
       priority_queues_enabled_ ? priority : folly::Executor::HI_PRI);
 }
 
-void EventLoop::delayCheckCallback(void* arg, short) {
-  EventLoop* self = (EventLoop*)arg;
+void EventLoop::delayCheckCallback() {
   using namespace std::chrono;
   using namespace std::chrono_literals;
   auto now = steady_clock::now();
-  if (self->scheduled_event_start_time_ != steady_clock::time_point::min()) {
-    evtimer_add(self->scheduled_event_, self->getCommonTimeout(1s));
-    if (now > self->scheduled_event_start_time_) {
-      auto diff = now - self->scheduled_event_start_time_;
+  if (scheduled_event_start_time_ != steady_clock::time_point::min()) {
+    evtimer_add(
+        scheduled_event_->getRawEventDeprecated(), getCommonTimeout(1s));
+    if (now > scheduled_event_start_time_) {
+      auto diff = now - scheduled_event_start_time_;
       uint64_t cur_delay = duration_cast<microseconds>(diff).count();
-      self->delay_us_.fetch_add(cur_delay, std::memory_order_relaxed);
+      delay_us_.fetch_add(cur_delay, std::memory_order_relaxed);
     }
-    self->scheduled_event_start_time_ = steady_clock::time_point::min();
+    scheduled_event_start_time_ = steady_clock::time_point::min();
   } else {
-    evtimer_add(self->scheduled_event_, self->getZeroTimeout());
-    self->scheduled_event_start_time_ = now;
+    evtimer_add(scheduled_event_->getRawEventDeprecated(), getZeroTimeout());
+    scheduled_event_start_time_ = now;
   }
 }
 
-E EventLoop::init(
+Status EventLoop::init(
     size_t request_pump_capacity,
     const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
         requests_per_iteration) {
@@ -141,34 +141,42 @@ E EventLoop::init(
   if (!base_) {
     return err;
   }
-  scheduled_event_ = LD_EV(event_new)(
-      getEventBase(), -1, 0, EventHandler<EventLoop::delayCheckCallback>, this);
-  if (!scheduled_event_) {
-    return E::INTERNAL;
-  }
-  common_timeouts_ =
-      std::make_unique<TimeoutMap>(getEventBase(), kMaxFastTimeouts);
+
   task_queue_ = std::make_unique<EventLoopTaskQueue>(
-      getEventBase(), request_pump_capacity, requests_per_iteration);
+      *base_, request_pump_capacity, requests_per_iteration);
   task_queue_->setCloseEventLoopOnShutdown();
-  return E::OK;
+
+  // This is the first task on event loop, so we are setting thisThreadLoop_
+  // here.
+  task_queue_->add([this]() {
+    EventLoop::thisThreadLoop_ = this; // save in a thread-local
+
+    scheduled_event_ =
+        std::make_unique<Event>([this]() { delayCheckCallback(); });
+    if (!scheduled_event_) {
+      return;
+    }
+
+    // Initiate runs to detect eventloop delays.
+    using namespace std::chrono_literals;
+    evtimer_add(
+        scheduled_event_->getRawEventDeprecated(), getCommonTimeout(1s));
+  });
+  base_->loopOnce();
+  if (!scheduled_event_) {
+    return Status::INTERNAL;
+  }
+  return Status::OK;
 }
+
 void EventLoop::run() {
-  EventLoop::thisThreadLoop_ = this; // save in a thread-local
-
-  // Initiate runs to detect eventloop delays.
-  using namespace std::chrono_literals;
-  delay_us_.store(0);
-  scheduled_event_start_time_ = std::chrono::steady_clock::time_point::min();
-  evtimer_add(scheduled_event_, getCommonTimeout(1s));
-
   // this runs until we get destroyed or shutdown is called on
   // EventLoopTaskQueue
   auto status = base_->loop();
   if (status != EvBase::Status::OK) {
     ld_error("EvBase::loop() exited abnormally");
   }
-  LD_EV(event_free)(scheduled_event_);
+  scheduled_event_.reset();
   // the thread on which this EventLoop ran terminates here
 }
 

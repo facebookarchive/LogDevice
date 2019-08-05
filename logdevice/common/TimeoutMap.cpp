@@ -7,35 +7,22 @@
  */
 #include "logdevice/common/TimeoutMap.h"
 
-#include <event2/event.h>
-
-#include "logdevice/common/checks.h"
-#include "logdevice/common/libevent/compat.h"
-
 namespace facebook { namespace logdevice {
 
-TimeoutMap::TimeoutMap(struct event_base* base, int max_size)
-    : base_(base), max_size_(max_size) {
-  ld_check(base);
-  ld_check(max_size >= 0);
-}
+TimeoutMap::TimeoutMap(uint32_t max_size) : max_size_(max_size) {}
 
-const struct timeval* TimeoutMap::add(std::chrono::microseconds timeout) {
-  if (map_.size() >= static_cast<unsigned>(max_size_))
+const timeval* TimeoutMap::add(std::chrono::microseconds timeout) {
+  if (map_.size() >= max_size_) {
     return nullptr;
-
-  struct timeval tv_buf;
-  tv_buf.tv_sec = timeout.count() / 1000000;
-  tv_buf.tv_usec = timeout.count() % 1000000;
-  const struct timeval* timer_queue_id =
-      LD_EV(event_base_init_common_timeout)(base_, &tv_buf);
+  }
+  const timeval* timer_queue_id = EvTimer::getCommonTimeout(timeout);
   if (timer_queue_id) {
     map_.insert(std::make_pair(timeout, timer_queue_id));
   }
   return timer_queue_id;
 }
 
-const struct timeval* TimeoutMap::get(std::chrono::microseconds timeout) {
+const timeval* TimeoutMap::get(std::chrono::microseconds timeout) {
   const auto pos = map_.find(timeout);
 
   if (pos != map_.end()) {
