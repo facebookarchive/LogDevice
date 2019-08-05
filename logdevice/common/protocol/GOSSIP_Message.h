@@ -75,13 +75,9 @@ class GOSSIP_Message : public Message {
   NodeID gossip_node_;
   GOSSIP_flags_t flags_;
 
-  // See FailureDetector.h for the description of these fields.
-  gossip_list_t gossip_list_;
   std::chrono::milliseconds instance_id_;
   // Used to measure delays on receiving side
   std::chrono::milliseconds sent_time_;
-  gossip_ts_t gossip_ts_;
-  failover_list_t failover_list_;
 
   // the amount of boycotts in the list
   uint8_t num_boycotts_;
@@ -121,12 +117,6 @@ class GOSSIP_Message : public Message {
   static const GOSSIP_flags_t HAS_STARTING_LIST_FLAG = 1 << 4;
 
  private:
-  // helper method that writes the compact representation of the suspect matrix
-  // to the given evbuffer
-  void writeSuspectMatrix(ProtocolWriter& writer) const;
-  // reads the suspect matrix into suspect_matrix_
-  void readSuspectMatrix(ProtocolReader& reader);
-
   // flattens the matrices and then writes them
   void writeBoycottList(ProtocolWriter& writer) const;
   // reads the flattened matrices and un-flattens them

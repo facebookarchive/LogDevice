@@ -343,7 +343,7 @@ class FailureDetector {
 
   bool isValidInstanceId(std::chrono::milliseconds id, node_index_t idx);
 
-  // Detects which nodes are down based on the data in gossip_list_
+  // Detects which nodes are down based on the data in Node::gossip_
   void detectFailures(node_index_t self, size_t n);
 
   // Executes a state transition and updates the dead list; `dead' is used to
@@ -404,7 +404,7 @@ class FailureDetector {
   // Domain isolation checker for detecting isolation of the local domain
   std::unique_ptr<DomainIsolationChecker> isolation_checker_;
 
-  // Protects access to failover_list_ and nodes_. No contention is expected on
+  // Protects access to Node::failover_ and nodes_. No contention is expected on
   // this lock since it's only ever used from a gossip thread and an admin
   // thread when dumping the state of the failure detector.
   mutable std::mutex mutex_;
@@ -437,7 +437,7 @@ class FailureDetector {
   size_t effective_cluster_size_{0};
 
   // keep track of the time of the last gossip tick, which is when
-  // the tick counters in gossip_list_ were last updated
+  // the tick counters in Node::gossip_ were last updated
   SteadyTimestamp last_gossip_tick_time_{SteadyTimestamp::min()};
 
   // save pointer to the timer so we can explicitly trigger it to force retries

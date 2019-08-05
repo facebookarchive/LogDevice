@@ -369,7 +369,7 @@ TEST(FailureDetector, Failover) {
 
   detectors[0]->failover();
   gossip_round(detectors[0], detectors[1]);
-  // another round is needed to update gossip_list_
+  // another round is needed to update gossip_
   gossip_round(detectors[0], detectors[1]);
 
   EXPECT_TRUE(detectors[0]->isAlive(node_index_t(0)));

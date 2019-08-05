@@ -102,9 +102,7 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
         writer.write(node.index());
       }
     }
-  }
-  if (writer.proto() >=
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
+  } else {
     writer.writeVector(node_list_);
   }
 }

@@ -403,7 +403,7 @@ void FailureDetector::gossip() {
   node.is_node_starting_ = !isLogsConfigLoaded();
   // Don't trigger other nodes' state transition until we receive min number
   // of gossips. The GCS reply is not same as a regular gossip, and therefore
-  // doesn't contain gossip_list_ values. The default values of gossip_list_
+  // doesn't contain Node::gossip_ values. The default values of Node::gossip_
   // mean that this node has never heard from other cluster nodes, which
   // translates to DEAD state.
   // It is possible that a GCS reply can move a node to ALIVE
@@ -667,8 +667,6 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
   // by taking the minimum.
   const bool has_failover_list =
       msg.flags_ & GOSSIP_Message::HAS_FAILOVER_LIST_FLAG;
-  folly::small_vector<size_t, 64> to_update;
-
   const bool has_starting_list =
       msg.flags_ & GOSSIP_Message::HAS_STARTING_LIST_FLAG;
 
@@ -726,15 +724,11 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
           // TODO: figure out what to do for compat
           nodes_[id].is_node_starting_ = node.is_node_starting_;
         }
-        to_update.push_back(id);
       }
       continue;
     }
 
-    if (update_min(nodes_[id].gossip_, node.gossip_) ||
-        id == msg.gossip_node_.index()) {
-      to_update.push_back(id);
-    }
+    update_min(nodes_[id].gossip_, node.gossip_);
     if (has_starting_list) {
       nodes_[id].is_node_starting_ =
           nodes_[id].is_node_starting_ && node.is_node_starting_;
@@ -833,7 +827,7 @@ void FailureDetector::dumpFDState() {
   const dbg::Level level = isTracingOn() ? dbg::Level::INFO : dbg::Level::SPEW;
   ld_log(
       level, "Failure Detector status for all nodes: %s", status_str.c_str());
-  // TODO: add dump of gossip_list_, gossip_ts_, and failover_list_
+  // TODO: add dump of Node::gossip_, Node::gossip_ts_, and Node::failover_
 }
 
 void FailureDetector::cancelTimers() {
@@ -848,15 +842,6 @@ void FailureDetector::shutdown() {
 }
 
 void FailureDetector::dumpGossipMessage(const GOSSIP_Message& msg) {
-  ld_info("Gossip List from %s [%s]",
-          msg.gossip_node_.toString().c_str(),
-          dumpGossipList(msg.gossip_list_).c_str());
-  ld_info("Instance id list from %s [%s]",
-          msg.gossip_node_.toString().c_str(),
-          dumpInstanceList(msg.gossip_ts_).c_str());
-  ld_info("Failover List from %s [%s]",
-          msg.gossip_node_.toString().c_str(),
-          dumpInstanceList(msg.failover_list_).c_str());
   ld_info(
       "Flags from %s 0x%x", msg.gossip_node_.toString().c_str(), msg.flags_);
 }
