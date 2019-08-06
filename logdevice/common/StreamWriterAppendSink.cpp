@@ -20,6 +20,50 @@ StreamWriterAppendSink::StreamWriterAppendSink(
       append_retry_timeout_(append_retry_timeout),
       holder_(this) {}
 
+StreamWriterAppendSink::~StreamWriterAppendSink() {
+  if (!processor_) {
+    // processor_ can be nullptr only in tests.
+    return;
+  }
+
+  // Must not be on a worker otherwise CancelInflightAppendsRequest posted on
+  // that worker will not be executed ever and will enter a deadlock.
+  ld_check(!Worker::onThisThread(false));
+
+  // Close the sink atomically to prevent new appends while being destroyed.
+  if (shutting_down_.exchange(true)) {
+    // already called
+    return;
+  }
+
+  ld_info("Shutting down StreamWriterAppendSink.");
+
+  // Post requests to cancel all inflight requests before dying.
+
+  Semaphore blocking_sem;
+  const int nworkers = processor_->getWorkerCount(WorkerType::GENERAL);
+  for (worker_id_t widx(0); widx.val_ < nworkers; ++widx.val_) {
+    std::unique_ptr<Request> req =
+        std::make_unique<CancelInflightAppendsRequest>(streams_, widx);
+    req->setClientBlockedSemaphore(&blocking_sem);
+    int rv = processor_->postWithRetrying(req);
+    ld_check(rv == 0);
+  }
+
+  for (int i = 0; i < nworkers; ++i) {
+    blocking_sem.wait();
+  }
+
+  // An alternate implementation that seems easier is to post a cancel request
+  // for each stream on its target_worker. However that may violate correctness
+  // if appendBuffered and shutdown are called concurrently. For instance, we
+  // may post such a request for stream 1, 2 and 3 with target workers 1, 2
+  // and 3. Meanwhile worker 4 for stream 4 can post a new StreamAppendRequest.
+  // Note `shutting_down` flag does not prevent this. In the current
+  // implementation, however, this does not happen since all appendBuffered
+  // callers are detroyed before shutdown is called.
+}
+
 bool StreamWriterAppendSink::checkAppend(logid_t logid,
                                          size_t payload_size,
                                          bool allow_extra) {
@@ -29,8 +73,8 @@ bool StreamWriterAppendSink::checkAppend(logid_t logid,
     return false;
   }
 
-  // Check if payload size is within bounds. Also sets err to E::TOOBIG if size
-  // is too big.
+  // Check if payload size is within bounds. Also sets err to E::TOOBIG if
+  // size is too big.
   return AppendRequest::checkPayloadSize(
       payload_size, getMaxPayloadSize(), allow_extra);
 }
@@ -68,6 +112,11 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
     AppendRequestCallback callback,
     worker_id_t target_worker,
     int checksum_bits) {
+  // appendBuffered callers will be destroyed before shutting down begins. So
+  // there should be no calls to appendBuffered after shutting_down_ flag is
+  // set.
+  ld_check(!shutting_down_.load());
+
   // We don't expect BufferedWriter to prepend the checksum in a client
   // context.  Instead it will be prepended by
   // APPEND_Message::serialize() as with normal appends.
@@ -97,7 +146,8 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
   // Increment stream sequence number.
   increment_seq_num(stream->next_seq_num_);
 
-  // Create appropriate request state in inflight map before sending async call.
+  // Create appropriate request state in inflight map before sending async
+  // call.
   auto result = stream->inflight_stream_requests_.emplace(
       std::piecewise_construct,
       // Sequence number as key
@@ -114,9 +164,11 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
   ld_check(result.second);
 
   // Create append request.
-  auto req = createAppendRequest(stream, result.first->second);
+  auto& req_state = result.first->second;
+  auto req = createAppendRequest(stream, req_state);
   req->setTargetWorker(target_worker);
   req->setBufferedWriterBlobFlag();
+  req_state.inflight_request = req.get();
   postAppend(std::move(req));
   return std::make_pair(E::OK, NodeID());
 }
@@ -180,6 +232,7 @@ void StreamWriterAppendSink::onCallback(Stream* stream,
     auto req = createAppendRequest(stream, req_state);
     req->setTargetWorker(req_state.target_worker);
     req->setBufferedWriterBlobFlag();
+    req_state.inflight_request = req.get();
     postAppend(std::move(req));
   }
 }
@@ -206,5 +259,4 @@ void StreamWriterAppendSink::postAppend(
                 (std::uint16_t)err);
   }
 }
-
 }} // namespace facebook::logdevice

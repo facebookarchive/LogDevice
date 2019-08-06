@@ -35,6 +35,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
     write_stream_request_id_t stream_req_id;
     // Status of the last invocation, if failed.
     Status last_status;
+    StreamAppendRequest* inflight_request;
 
     StreamAppendRequestState(
         logid_t _logid,
@@ -53,7 +54,8 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
           target_worker(_target_worker),
           checksum_bits(_checksum_bits),
           stream_req_id(_stream_req_id),
-          last_status(Status::UNKNOWN) {}
+          last_status(Status::UNKNOWN),
+          inflight_request(nullptr) {}
   };
   using StreamRequestsMap = folly::F14NodeMap<write_stream_seq_num_t,
                                               StreamAppendRequestState,
@@ -105,6 +107,37 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   };
   using StreamsMap = folly::ConcurrentHashMap<logid_t, std::unique_ptr<Stream>>;
 
+  // Cancels inflight append requests that were posted to a particular worker.
+  class CancelInflightAppendsRequest : public Request {
+   public:
+    CancelInflightAppendsRequest(StreamsMap& streams, worker_id_t worker)
+        : Request(RequestType::STREAM_WRITER_CANCEL_INFLIGHT_APPENDS),
+          worker_(worker),
+          streams_(streams) {}
+
+    int getThreadAffinity(int /*nthreads*/) override {
+      return worker_.val();
+    }
+
+    Execution execute() override {
+      for (auto& stream_value : streams_) {
+        auto& stream = stream_value.second;
+        if (stream->target_worker_ == worker_) {
+          for (auto& req_state_value : stream->inflight_stream_requests_) {
+            auto& req_state = req_state_value.second;
+            auto req = req_state.inflight_request;
+            ld_check(req); // there must be a non-null inflight request.
+            req->cancel();
+          }
+        }
+      }
+      return Execution::COMPLETE;
+    }
+
+   private:
+    worker_id_t worker_;
+    StreamsMap& streams_;
+  };
   /**
    * Creates a stream writer append sink that posts StreamAppendRequests to
    * the processor. The client bridge exposes some functions belonging to the
@@ -115,6 +148,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   StreamWriterAppendSink(std::shared_ptr<Processor> processor,
                          ClientBridge* bridge,
                          std::chrono::milliseconds append_retry_timeout);
+  virtual ~StreamWriterAppendSink() override;
 
   bool checkAppend(logid_t logid,
                    size_t payload_size,
@@ -177,6 +211,9 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   // Weak reference holder to prevent an append request from calling back after
   // StreamWriterAppendSink has been destroyed.
   WeakRefHolder<StreamWriterAppendSink> holder_;
+
+  // Denotes if the sink has been closed for any new appendBuffered requests.
+  std::atomic<bool> shutting_down_{false};
 };
 
 }} // namespace facebook::logdevice

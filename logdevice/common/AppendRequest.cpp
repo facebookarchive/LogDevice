@@ -172,7 +172,11 @@ AppendRequest::~AppendRequest() {
     request_execution_span_->Finish();
   }
 
-  callback_(client_status, record_);
+  if (is_active_) {
+    // Call back only when the request is active. If not, it has been cancelled
+    // and no one is expecting the callback.
+    callback_(client_status, record_);
+  }
 }
 
 Request::Execution AppendRequest::execute() {

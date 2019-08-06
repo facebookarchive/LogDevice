@@ -245,6 +245,11 @@ class AppendRequest : public AppendRequestBase,
     return e2e_tracer_ == nullptr ? false : true;
   }
 
+  void cancel() {
+    is_active_ = false;
+    destroyWithStatus(E::ABORTED);
+  }
+
   // Checks if the payload size is within bounds. If not, sets err to E::TOOBIG
   // and returns false.
   static bool checkPayloadSize(size_t payload_size,
@@ -279,6 +284,9 @@ class AppendRequest : public AppendRequestBase,
   // Did this AppendRequest fail to get posted to a Worker?  If so, we should
   // not invoke the callback.
   bool failed_to_post_ = false;
+
+  // Set to false to cancel the callback and destroy with status E::ABORTED.
+  bool is_active_ = true;
 
   // status code to pass to callback_ when request is destroyed
   Status status_;
