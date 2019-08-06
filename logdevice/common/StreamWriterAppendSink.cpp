@@ -129,26 +129,26 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
   }
 
   // obtain the stream using logid
-  auto stream = getStream(logid);
+  auto& stream = *(getStream(logid));
   // each stream is associated with a target_worker. once assigned we cannot
   // change it, ever, to ensure epoch monotonicity.
-  if (stream->target_worker_ == WORKER_ID_INVALID) {
-    stream->target_worker_ = target_worker;
+  if (stream.target_worker_ == WORKER_ID_INVALID) {
+    stream.target_worker_ = target_worker;
   }
   // for safety, do an ld_check
-  ld_check(stream->target_worker_ == target_worker);
+  ld_check(stream.target_worker_ == target_worker);
 
   // stream request id for the append request. once the request is posted
   // successfully this cannot change forever.
   write_stream_request_id_t stream_req_id = {
-      stream->stream_id_, stream->next_seq_num_};
+      stream.stream_id_, stream.next_seq_num_};
 
   // Increment stream sequence number.
-  increment_seq_num(stream->next_seq_num_);
+  increment_seq_num(stream.next_seq_num_);
 
   // Create appropriate request state in inflight map before sending async
   // call.
-  auto result = stream->inflight_stream_requests_.emplace(
+  auto result = stream.inflight_stream_requests_.emplace(
       std::piecewise_construct,
       // Sequence number as key
       std::forward_as_tuple(stream_req_id.seq_num),
@@ -162,24 +162,16 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
                             checksum_bits,
                             stream_req_id));
   ld_check(result.second);
-
-  // Create append request.
-  auto& req_state = result.first->second;
-  auto req = createAppendRequest(stream, req_state);
-  req->setTargetWorker(target_worker);
-  req->setBufferedWriterBlobFlag();
-  req_state.inflight_request = req.get();
-  postAppend(std::move(req));
+  postAppend(stream, result.first->second);
   return std::make_pair(E::OK, NodeID());
 }
 
 std::unique_ptr<StreamAppendRequest>
 StreamWriterAppendSink::createAppendRequest(
-    Stream* stream,
-    const StreamWriterAppendSink::StreamAppendRequestState& req_state,
-    bool stream_resume) {
+    Stream& stream,
+    const StreamWriterAppendSink::StreamAppendRequestState& req_state) {
   auto sink_ref = holder_.ref();
-  auto stream_ref = stream->holder_.ref();
+  auto stream_ref = stream.holder_.ref();
   auto stream_reqid = req_state.stream_req_id;
   auto wrapped_callback = [sink_ref, stream_ref, stream_reqid](
                               Status status, const DataRecord& record) {
@@ -196,7 +188,7 @@ StreamWriterAppendSink::createAppendRequest(
     }
     auto sink = sink_ref.get();
     auto stream = stream_ref.get();
-    sink->onCallback(stream, stream_reqid, status, record);
+    sink->onCallback(*stream, stream_reqid, status, record);
   };
   return std::make_unique<StreamAppendRequest>(
       bridge_,
@@ -206,34 +198,36 @@ StreamWriterAppendSink::createAppendRequest(
       getAppendRetryTimeout(),
       wrapped_callback,
       req_state.stream_req_id,
-      stream_resume);
+      req_state.stream_req_id.seq_num ==
+          next_seq_num(stream.max_acked_seq_num_));
 }
 
-void StreamWriterAppendSink::onCallback(Stream* stream,
+void StreamWriterAppendSink::onCallback(Stream& stream,
                                         write_stream_request_id_t stream_reqid,
                                         Status status,
                                         const DataRecord& record) {
-  auto it = stream->inflight_stream_requests_.find(stream_reqid.seq_num);
-  ld_check(it != stream->inflight_stream_requests_.end());
+  auto it = stream.inflight_stream_requests_.find(stream_reqid.seq_num);
+  ld_check(it != stream.inflight_stream_requests_.end());
   auto& req_state = it->second;
 
   // Update epoch by default. Must be done based on status (subsequent diffs).
-  stream->updateSeenEpoch(getSeenEpoch(stream->target_worker_, stream->logid_));
+  stream.updateSeenEpoch(getSeenEpoch(stream.target_worker_, stream.logid_));
 
   if (status == Status::OK) {
     // Update max acked seq num, callback and erase.
-    stream->max_acked_seq_num_ =
-        std::max(stream_reqid.seq_num, stream->max_acked_seq_num_);
+    stream.max_acked_seq_num_ =
+        std::max(stream_reqid.seq_num, stream.max_acked_seq_num_);
     req_state.callback(status, record, NodeID());
-    stream->inflight_stream_requests_.erase(it);
+    stream.inflight_stream_requests_.erase(it);
   } else {
-    // Update last status and post another request.
+    // Update last status, inflight_request.
     req_state.last_status = status;
-    auto req = createAppendRequest(stream, req_state);
-    req->setTargetWorker(req_state.target_worker);
-    req->setBufferedWriterBlobFlag();
-    req_state.inflight_request = req.get();
-    postAppend(std::move(req));
+    req_state.inflight_request = nullptr;
+    // Activate the retry_timer to post another request in the future.
+    if (!req_state.retry_timer) {
+      req_state.retry_timer = createBackoffTimer(stream, req_state);
+    }
+    req_state.retry_timer->activate();
   }
 }
 
@@ -247,11 +241,28 @@ epoch_t StreamWriterAppendSink::getSeenEpoch(worker_id_t worker_id,
   return it != map.end() ? it->second : EPOCH_INVALID;
 }
 
-void StreamWriterAppendSink::postAppend(
-    std::unique_ptr<StreamAppendRequest> req_append) {
-  ld_check(req_append != nullptr);
+std::unique_ptr<BackoffTimer> StreamWriterAppendSink::createBackoffTimer(
+    Stream& stream,
+    StreamAppendRequestState& req_state) {
+  auto wrapped_callback = [this, &stream, &req_state]() {
+    postAppend(stream, req_state);
+  };
+  std::unique_ptr<BackoffTimer> retry_timer =
+      std::make_unique<ExponentialBackoffTimer>(
+          wrapped_callback, expbackoff_settings_);
+  return retry_timer;
+}
 
+void StreamWriterAppendSink::postAppend(Stream& stream,
+                                        StreamAppendRequestState& req_state) {
+  auto req_append = createAppendRequest(stream, req_state);
+  ld_check_ne(stream.target_worker_, WORKER_ID_INVALID);
+  req_append->setTargetWorker(stream.target_worker_);
+  req_append->setBufferedWriterBlobFlag();
   req_append->setAppendProbeController(&processor_->appendProbeController());
+  // Store pointer to request in inflight_request before posting.
+  ld_check(!req_state.inflight_request);
+  req_state.inflight_request = req_append.get();
   std::unique_ptr<Request> req(std::move(req_append));
   int rv = processor_->postImportant(req);
   if (rv) {

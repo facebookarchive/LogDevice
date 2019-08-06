@@ -119,5 +119,7 @@ class StreamAppendRequest : public AppendRequest {
   // denotes if the request is the first in the stream for the epoch. This value
   // is used to set APPEND_Header::STREAM_RESUME flag on the append message.
   bool stream_resume_;
+
+  friend class TestStreamWriterAppendSink;
 };
 }} // namespace facebook::logdevice

@@ -35,7 +35,20 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
     write_stream_request_id_t stream_req_id;
     // Status of the last invocation, if failed.
     Status last_status;
+    // StreamAppendRequest that is currently inflight. Value is nullptr
+    // when no such request is inflight which happens in two scenarios:
+    // 1. Before the first request.
+    // 2. All previously posted requests have called back and we have scheduled
+    // to post a new request.
     StreamAppendRequest* inflight_request;
+    // Retry timer used to post failed append requests. We use
+    // ExponentialBackoffTimer for this purpose.  Created on demand since we
+    // expect most requests to succeed in first attempt. This is not
+    // thread-safe. The callback sent to retry_timer is executed on the same
+    // thread as `appendBuffered` was invoked from, which is also the same
+    // thread on which `onCallback` is called after the `AppendRequest` has been
+    // processed.
+    std::unique_ptr<BackoffTimer> retry_timer;
 
     StreamAppendRequestState(
         logid_t _logid,
@@ -55,7 +68,8 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
           checksum_bits(_checksum_bits),
           stream_req_id(_stream_req_id),
           last_status(Status::UNKNOWN),
-          inflight_request(nullptr) {}
+          inflight_request(nullptr),
+          retry_timer(nullptr) {}
   };
   using StreamRequestsMap = folly::F14NodeMap<write_stream_seq_num_t,
                                               StreamAppendRequestState,
@@ -163,14 +177,14 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
                  worker_id_t target_worker,
                  int checksum_bits) override;
 
-  void onCallback(Stream* stream,
+  void onCallback(Stream& stream,
                   write_stream_request_id_t stream_reqid,
                   Status status,
                   const DataRecord& record);
 
  protected:
   // can override in tests
-  virtual void postAppend(std::unique_ptr<StreamAppendRequest> req_append);
+  virtual void postAppend(Stream& stream, StreamAppendRequestState& req_state);
 
   virtual size_t getMaxPayloadSize() noexcept;
 
@@ -182,14 +196,19 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   // AppendRequest is being destroyed.
   virtual epoch_t getSeenEpoch(worker_id_t worker_id, logid_t logid);
 
+  // Creates an exponential backoff timer with a callback that invokes
+  // postAppend on stream and req_state. Overrided in test to create
+  // MockSyncBackoffTimer.
+  virtual std::unique_ptr<BackoffTimer>
+  createBackoffTimer(Stream& stream, StreamAppendRequestState& req_state);
+
   Stream* getStream(logid_t log_id);
 
- private:
-  std::unique_ptr<StreamAppendRequest> createAppendRequest(
-      Stream* stream,
-      const StreamWriterAppendSink::StreamAppendRequestState& req_state,
-      bool stream_resume = false);
+  std::unique_ptr<StreamAppendRequest>
+  createAppendRequest(Stream& stream,
+                      const StreamAppendRequestState& req_state);
 
+ private:
   // Processor to which append requests are posted.
   std::shared_ptr<Processor> processor_;
 
@@ -214,6 +233,10 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
 
   // Denotes if the sink has been closed for any new appendBuffered requests.
   std::atomic<bool> shutting_down_{false};
+
+  // Settings for the exponential backoff retry timer that is used to retry
+  // failed stream append requests.
+  chrono_expbackoff_t<std::chrono::milliseconds> expbackoff_settings_;
 };
 
 }} // namespace facebook::logdevice

@@ -14,18 +14,27 @@
 namespace facebook { namespace logdevice {
 
 /**
- * @file No-op implementation of BackoffTimer interface.
+ * @file Mock implementation of BackoffTimer interface. If trigger_on_activate_
+ * is true, callback is invoked directly inside activate(). Else, activate() is
+ * a No-op. Be careful when using this since callback is invoked synchronously
+ * inside activate(). For scenarios that require to mock async firing, use the
+ * version with trigger_on_activate = false and mock by explicitly calling
+ * trigger().
  */
 
 class MockBackoffTimer : public BackoffTimer {
  public:
   using BackoffTimer::Duration;
-  MockBackoffTimer() noexcept = default;
+  MockBackoffTimer(bool trigger_on_activate = false)
+      : trigger_on_activate_(trigger_on_activate) {}
   void setCallback(std::function<void()> callback) override {
     callback_ = std::move(callback);
   }
   void activate() override {
     active_ = true;
+    if (trigger_on_activate_) {
+      callback_();
+    }
   }
   void reset() override {
     active_ = false;
@@ -53,6 +62,7 @@ class MockBackoffTimer : public BackoffTimer {
  private:
   std::function<void()> callback_;
   bool active_ = false;
+  const bool trigger_on_activate_;
 };
 
 }} // namespace facebook::logdevice
