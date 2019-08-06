@@ -179,7 +179,8 @@ TEST_F(NodesConfigurationManagerTest, update) {
   waitTillNCMReceives(kVersion);
   {
     // add new node
-    NodesConfiguration::Update update = addNewNodeUpdate(*provisioned_config);
+    NodesConfiguration::Update update =
+        addNewNodeUpdate(*provisioned_config, 17);
     ncm_->update(
         std::move(update),
         [](Status status,
@@ -198,7 +199,7 @@ TEST_F(NodesConfigurationManagerTest, trackState) {
                    ASSERT_EQ(Status::OK, status);
                  });
     waitTillNCMReceives(MembershipVersion::Type{1});
-    ncm_->update(addNewNodeUpdate(*ncm_->getConfig()),
+    ncm_->update(addNewNodeUpdate(*ncm_->getConfig(), 17),
                  [](Status status, std::shared_ptr<const NodesConfiguration>) {
                    ASSERT_EQ(Status::OK, status);
                  });
@@ -589,7 +590,7 @@ TEST_F(NodesConfigurationManagerTest2, race) {
   {
     // add N17
     ncm1_->update(
-        addNewNodeUpdate(*ncm1_->getConfig()),
+        addNewNodeUpdate(*ncm1_->getConfig(), 17),
         [](Status status, std::shared_ptr<const NodesConfiguration> new_nc) {
           EXPECT_EQ(Status::OK, status);
           EXPECT_EQ(kVersion.val() - 1, new_nc->getVersion().val());

@@ -167,7 +167,7 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
 
   // Added new node to config and ensure an updated config
   // results in regeneration of index definition
-  config = config->applyUpdate(addNewNodeUpdate(*config));
+  config = config->applyUpdate(addNewNodeUpdate(*config, 17));
   wrapper.updateNodesConfiguration(config);
   EXPECT_TRUE(config->getStorageConfig()->getMembership()->hasNode(17));
   ASSERT_EQ(

@@ -83,9 +83,10 @@ provisionNodes(std::vector<NodeTemplate> nodes,
                ReplicationProperty metadata_rep = ReplicationProperty{
                    {NodeLocationScope::NODE, 2}});
 
-// provision new nodes N17
+// provision a new node
 configuration::nodes::NodesConfiguration::Update
-addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing);
+addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
+                 node_index_t new_node_idx);
 
 // NOTE: the base_version below should be storage membership versions
 // inside the NC instead of the NC versions.

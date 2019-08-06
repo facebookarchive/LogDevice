@@ -73,7 +73,7 @@ TEST(ShardStateTrackerTest, basic) {
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
-  auto nc2 = nc->applyUpdate(addNewNodeUpdate(*nc));
+  auto nc2 = nc->applyUpdate(addNewNodeUpdate(*nc, 17));
   ASSERT_TRUE(nc2->validate());
   auto ts2 = nc2->getLastChangeTimestamp();
   t.onNewConfig(nc2);

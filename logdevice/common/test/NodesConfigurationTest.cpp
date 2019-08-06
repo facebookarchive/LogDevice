@@ -145,10 +145,10 @@ TEST_F(NodesConfigurationTest, TestMembershipVersionConsistencyValidation) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
 
-  config = config->applyUpdate(addNewNodeUpdate(*config));
+  config = config->applyUpdate(addNewNodeUpdate(*config, 17));
   ASSERT_NE(nullptr, config);
 
-  config = config->applyUpdate(addNewNodeUpdate(*config));
+  config = config->applyUpdate(addNewNodeUpdate(*config, 18));
   ASSERT_NE(nullptr, config);
 
   ASSERT_EQ(6, config->getStorageMembership()->getVersion().val());
@@ -423,7 +423,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
   {
     // with service discovery and attributes, membership addition
     // should be successful
-    NodesConfiguration::Update update = addNewNodeUpdate(*config);
+    NodesConfiguration::Update update = addNewNodeUpdate(*config, 17);
     VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);

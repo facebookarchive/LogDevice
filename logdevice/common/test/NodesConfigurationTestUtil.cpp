@@ -345,8 +345,11 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
 }
 
 configuration::nodes::NodesConfiguration::Update
-addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing) {
-  node_index_t new_node_idx = std::max(17, existing.getMaxNodeIndex() + 1);
+addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
+                 node_index_t new_node_idx) {
+  // We don't check whether the existing NC has the new node already since this
+  // is something a user could do and we'd want to test for. In that case, when
+  // the user tries to apply / propose the update, they'll get an error.
   return addNewNodeUpdate(
       existing, {new_node_idx, both_role, "aa.bb.cc.dd.ee", 0.0, 1});
 }
