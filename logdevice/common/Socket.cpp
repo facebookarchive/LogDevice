@@ -411,7 +411,7 @@ struct bufferevent* Socket::newBufferevent(int sfd,
 
   if (isSSL()) {
     ld_check(!ssl_context_);
-    ssl_context_ = deps_->getSSLContext(ssl_state, null_ciphers_only_);
+    ssl_context_ = deps_->getSSLContext(ssl_state);
   }
 
   struct bufferevent* bev = deps_->buffereventSocketNew(
@@ -2480,11 +2480,6 @@ X509* Socket::getPeerCert() const {
   return SSL_get_peer_certificate(ctx);
 }
 
-void Socket::limitCiphersToENULL() {
-  ld_check(isSSL());
-  null_ciphers_only_ = true;
-}
-
 bool Socket::slowInDraining() {
   if (!handshaken_ || sendq_.size() == 0) {
     return false;
@@ -2547,8 +2542,7 @@ size_t SocketDependencies::getBytesPending() const {
 }
 
 std::shared_ptr<SSLContext>
-SocketDependencies::getSSLContext(bufferevent_ssl_state ssl_state,
-                                  bool null_ciphers_only) const {
+SocketDependencies::getSSLContext(bufferevent_ssl_state ssl_state) const {
   // Servers are required to have a certificate so that the client can verify
   // them. If clients specify that they want to include their certificate, then
   // the server will also authenticate the client certificates.
@@ -2556,7 +2550,7 @@ SocketDependencies::getSSLContext(bufferevent_ssl_state ssl_state,
   bool ssl_accepting = ssl_state == BUFFEREVENT_SSL_ACCEPTING;
 
   return Worker::onThisThread()->sslFetcher().getSSLContext(
-      loadCert, ssl_accepting, null_ciphers_only);
+      loadCert, ssl_accepting);
 }
 
 bool SocketDependencies::shuttingDown() const {

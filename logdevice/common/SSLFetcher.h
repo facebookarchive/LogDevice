@@ -42,18 +42,13 @@ class SSLFetcher {
    *                          loaded into the SSLContext.
    * @param ssl_accepting     Defines whether the SSLContext is for accepting or
    *                          connecting side of the socket.
-   * @param null_ciphers_only This parameter is only used if ssl_accepting is
-   *                          false. If set to true the ciphers are limited to
-   *                          eNULL ciphers.
    *
    * @return                  a pointer to the created SSLContext or a null
    *                          pointer if the certificate could not be loaded.
    */
   std::shared_ptr<folly::SSLContext> getSSLContext(bool loadCert,
-                                                   bool ssl_accepting,
-                                                   bool null_ciphers_only) {
-    if (!context_ ||
-        requireContextUpdate(loadCert, ssl_accepting, null_ciphers_only)) {
+                                                   bool ssl_accepting) {
+    if (!context_ || requireContextUpdate(loadCert, ssl_accepting)) {
       try {
         context_.reset(new folly::SSLContext());
         context_->loadTrustedCertificates(ca_path_.c_str());
@@ -67,8 +62,8 @@ class SSLFetcher {
         // The node that accepts the connection must present all valid ciphers
         // that the connecting socket can use. Since we want to separate
         // encryption and authentication, we include eNULL ciphers in the
-        // list of valid ciphers. It is up to the connecting socket to limit
-        // the list of valid ciphers to enable or disable encryption.
+        // list of valid ciphers [DEPRECATED]. It is up to the connecting socket
+        // to limit the list of valid ciphers to enable or disable encryption.
         std::string null_ciphers = "eNULL";
 #if FOLLY_OPENSSL_IS_110
         null_ciphers += ":@SECLEVEL=0";
@@ -76,9 +71,6 @@ class SSLFetcher {
         if (ssl_accepting) {
           context_->ciphers("ALL:!COMPLEMENTOFDEFAULT:" + null_ciphers +
                             ":@STRENGTH");
-        } else if (null_ciphers_only) {
-          ld_info("Creating SSL context using eNULL ciphers");
-          context_->ciphers(null_ciphers);
         } else {
           context_->ciphers("ALL:!COMPLEMENTOFDEFAULT:!eNULL:@STRENGTH");
         }
@@ -121,7 +113,6 @@ class SSLFetcher {
 
   std::shared_ptr<folly::SSLContext> context_;
   std::chrono::time_point<std::chrono::steady_clock> last_loaded_;
-  bool last_null_cipher_only_ = false;
   bool last_accepting_state_ = false;
   bool last_load_cert_ = false;
 
@@ -131,17 +122,13 @@ class SSLFetcher {
 
   // a context update is required when refresh_interval_ has passed or when any
   // of the input information is changed
-  bool requireContextUpdate(bool loadCert,
-                            bool ssl_accepting,
-                            bool null_ciphers_only) {
+  bool requireContextUpdate(bool loadCert, bool ssl_accepting) {
     auto now = std::chrono::steady_clock::now();
     bool update = now - last_loaded_ > refresh_interval_ ||
-        loadCert != last_load_cert_ || ssl_accepting != last_accepting_state_ ||
-        null_ciphers_only != last_null_cipher_only_;
+        loadCert != last_load_cert_ || ssl_accepting != last_accepting_state_;
 
     if (update) {
       last_loaded_ = now;
-      last_null_cipher_only_ = null_ciphers_only;
       last_accepting_state_ = ssl_accepting;
       last_load_cert_ = loadCert;
     }

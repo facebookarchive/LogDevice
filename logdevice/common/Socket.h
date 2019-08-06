@@ -494,12 +494,6 @@ class Socket : public TrafficShappingSocket {
    */
   X509* getPeerCert() const;
 
-  /**
-   * Sets the cipher the the socket will use. This should only be called
-   * if the socket is SSL enabled.
-   */
-  void limitCiphersToENULL();
-
   void setPeerShuttingDown() {
     peer_shuttingdown_ = true;
   }
@@ -966,9 +960,6 @@ class Socket : public TrafficShappingSocket {
   // Indicates whether this is an SSL socket
   ConnectionType conntype_{ConnectionType::PLAIN};
 
-  // Defines if the socket will be encrypted. Only used if conntype_ is SSL
-  bool null_ciphers_only_ = false;
-
   // The SSL context. We have to hold it alive as long as the SSL* object which
   // we submit to bufferevent_openssl_new() is in use
   std::shared_ptr<folly::SSLContext> ssl_context_;
@@ -1138,7 +1129,7 @@ class SocketDependencies {
   virtual size_t getBytesPending() const;
 
   virtual std::shared_ptr<folly::SSLContext>
-  getSSLContext(bufferevent_ssl_state, bool) const;
+      getSSLContext(bufferevent_ssl_state) const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID nid,
