@@ -46,6 +46,18 @@ getLoggableVersion(const std::shared_ptr<const NodesConfiguration>& nc) {
   auto v = nc ? nc->getVersion() : membership::MembershipVersion::EMPTY_VERSION;
   return static_cast<int64_t>(v.val());
 }
+
+bool compareNCPtrsWithTimestampIgnored(
+    const std::shared_ptr<const NodesConfiguration>& l,
+    const std::shared_ptr<const NodesConfiguration>& r) {
+  if (!l && !r) {
+    return true;
+  }
+  if (!l || !r) {
+    return false;
+  }
+  return l->equalWithTimestampIgnored(*r);
+}
 } // namespace
 
 void NodesConfigurationTracer::trace(NodesConfigurationTracer::Sample sample) {
@@ -60,8 +72,9 @@ void NodesConfigurationTracer::trace(NodesConfigurationTracer::Sample sample) {
         "ncm_nc_version", getLoggableVersion(sample.ncm_nc_));
     trace_sample->addIntValue(
         "using_ncm_nc", static_cast<int64_t>(sample.using_ncm_nc_));
-    trace_sample->addIntValue(
-        "is_same", compare_obj_ptrs(sample.server_config_nc_, sample.ncm_nc_));
+    trace_sample->addIntValue("is_same",
+                              compareNCPtrsWithTimestampIgnored(
+                                  sample.server_config_nc_, sample.ncm_nc_));
     if (sample.nc_update_gen_) {
       trace_sample->addNormalValue("nc_update", sample.nc_update_gen_());
     }
