@@ -8,6 +8,7 @@
 
 #include "logdevice/common/NodesConfigurationPublisher.h"
 
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationTracer.h"
 
 namespace facebook { namespace logdevice {
@@ -74,6 +75,13 @@ void NodesConfigurationPublisher::publish() {
       sample.published_nc_ = std::move(nodes_configuration_to_publish);
       sample.source_ =
           configuration::nodes::NodesConfigurationTracer::Source::NC_PUBLISHER;
+      sample.nc_update_gen_ = [configuration = sample.published_nc_]() mutable {
+        // TODO: we don't have NodesConfiguration::toString(), so we use
+        // the debug JSON string instead. This could likely be more
+        // efficient.
+        return configuration::nodes::NodesConfigurationCodec::debugJsonString(
+            *configuration);
+      };
       tracer_.trace(std::move(sample));
     }
   }
