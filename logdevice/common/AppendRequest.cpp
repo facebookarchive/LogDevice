@@ -19,6 +19,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SequencerLocator.h"
+#include "logdevice/common/StreamAppendRequest.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
@@ -565,6 +566,7 @@ void AppendRequest::onReplyReceived(const APPENDED_Header& reply,
     case E::CANCELLED:
     case E::NOSEQUENCER:
     case E::NOTINSERVERCONFIG:
+    case E::WRITE_STREAM_BROKEN:
       // Append was either successful or not, but in any case we reached the
       // right node (didn't get redirected)
       break;
@@ -633,6 +635,21 @@ void AppendRequest::onReplyReceived(const APPENDED_Header& reply,
                       (from.valid() ? Sender::describeConnection(from).c_str()
                                     : "[LOCAL SEQUENCER]"),
                       static_cast<uint64_t>(record_.logid));
+      break;
+    case E::WRITE_STREAM_UNKNOWN:
+      // Sequencer has not accepted any request in this write stream prior to
+      // this. We will retry the append request with
+      // APPEND_Header::WRITE_STREAM_RESUME bit set (currently done using
+      // callbacks).
+      dd_assert(lsn_to_esn(reply.lsn) == ESN_INVALID,
+                "Sequencer must return lsn = (epoch, ESN_INVALID) with "
+                "E::WRITE_STREAM_UKNOWN as per the protocol.");
+      ld_check(dynamic_cast<StreamAppendRequest*>(this));
+      // This prevents any request sent after this to not be accepted
+      // by epochs less than the sequencer we have located.
+      // Effectively this 'seals' all epochs before the located epoch for
+      // requests from this client.
+      updateSeenEpoch(record_.logid, lsn_to_epoch(reply.lsn));
       break;
     default:
       RATELIMIT_ERROR(std::chrono::seconds(1),

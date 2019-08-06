@@ -44,4 +44,13 @@ bool write_stream_request_id_valid(write_stream_request_id_t req_id) {
   return !((req_id.id == WRITE_STREAM_REQUEST_ID_INVALID.id) &&
            (req_id.seq_num == WRITE_STREAM_REQUEST_ID_INVALID.seq_num));
 }
+
+write_stream_seq_num_t next_seq_num(write_stream_seq_num_t seq_num) {
+  return write_stream_seq_num_t(seq_num.val() + 1);
+}
+
+void increment_seq_num(write_stream_seq_num_t& seq_num) {
+  ++seq_num.val_;
+}
+
 }} // namespace facebook::logdevice
