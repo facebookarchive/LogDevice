@@ -945,12 +945,6 @@ Socket* Sender::initServerSocket(NodeID nid,
 
       auto res = impl_->server_sockets_.emplace(nid.index(), std::move(sock));
       it = res.first;
-
-      if (use_ssl && !cross_boundary) {
-        // If the connection does not cross the ssl boundary, limit the ciphers
-        // to eNULL ciphers to reduce overhead.
-        it->second->limitCiphersToENULL();
-      }
     } catch (ConstructorFailed&) {
       if (err == E::NOTINCONFIG || err == E::NOSSLCONFIG) {
         return nullptr;

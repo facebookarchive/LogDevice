@@ -419,7 +419,7 @@ bool CommandListener::upgradeToSSL(ConnectionState* state) {
   // clear existing callback from original bufferevent
   LD_EV(bufferevent_setcb)(state->bev_, nullptr, nullptr, nullptr, nullptr);
 
-  auto ctx = ssl_fetcher_.getSSLContext(true, true, false);
+  auto ctx = ssl_fetcher_.getSSLContext(true, true);
   if (!ctx) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     2,
