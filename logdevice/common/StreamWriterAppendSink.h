@@ -60,6 +60,9 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
                                               write_stream_seq_num_t::Hash>;
 
   struct Stream {
+    // log id corresponding to the stream
+    logid_t logid_;
+    // write stream id
     write_stream_id_t stream_id_;
     // Internal map of inflight stream requests from the stream writer.
     StreamRequestsMap inflight_stream_requests_;
@@ -67,16 +70,38 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
     write_stream_seq_num_t next_seq_num_;
     // Maximum sequence number that has been acked by any sequencer.
     write_stream_seq_num_t max_acked_seq_num_;
-    // Weak ref holder for Stream
+    // All requests in a stream must be posted on the same target worker.
+    worker_id_t target_worker_;
+    // Latest seen epoch by the write stream - it maybe used to determine how to
+    // react on a WRITE_STREAM_UNKNOWN status. For instance, if we get
+    // stream unknown status from a stale sequencer, we may want to retry just
+    // the request to reach the latest sequencer. On the other hand, if a newer
+    // sequencer says stream unknown, we have to retry all requests from
+    // (max_acked_seq_num_ + 1). Currently, we do not use this.
+    epoch_t seen_epoch_;
+    // Weak reference holder for stream object that is used by callback to check
+    // if it can safely execute.
     WeakRefHolder<Stream> holder_;
-    explicit Stream(
-        write_stream_id_t stream_id,
-        write_stream_seq_num_t next_seq_num = write_stream_seq_num_t(1UL))
-        : stream_id_(stream_id),
+    Stream(logid_t logid,
+           write_stream_id_t stream_id,
+           write_stream_seq_num_t next_seq_num = write_stream_seq_num_t(1UL))
+        : logid_(logid),
+          stream_id_(stream_id),
           inflight_stream_requests_(),
           next_seq_num_(next_seq_num),
-          max_acked_seq_num_(write_stream_seq_num_t(0UL)),
+          max_acked_seq_num_(WRITE_STREAM_SEQ_NUM_INVALID),
+          target_worker_(WORKER_ID_INVALID),
+          seen_epoch_(EPOCH_INVALID),
           holder_(this) {}
+
+    // Updates the seen epoch for the stream and returns true if updated.
+    bool updateSeenEpoch(epoch_t epoch) {
+      if (epoch != EPOCH_INVALID && epoch > seen_epoch_) {
+        seen_epoch_ = epoch;
+        return true;
+      }
+      return false;
+    }
   };
   using StreamsMap = folly::ConcurrentHashMap<logid_t, std::unique_ptr<Stream>>;
 
@@ -104,10 +129,10 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
                  worker_id_t target_worker,
                  int checksum_bits) override;
 
-  static append_callback_t
-  createRetryCallback(StreamWriterAppendSink* sink,
-                      Stream* stream,
-                      write_stream_request_id_t stream_reqid);
+  void onCallback(Stream* stream,
+                  write_stream_request_id_t stream_reqid,
+                  Status status,
+                  const DataRecord& record);
 
  protected:
   // can override in tests
@@ -116,6 +141,12 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   virtual size_t getMaxPayloadSize() noexcept;
 
   virtual std::chrono::milliseconds getAppendRetryTimeout() noexcept;
+
+  // Obtain the seen_epoch for log from specified worker. This MUST be called
+  // from within the corresponding worker for thread safety. Currently it is
+  // called by the callback that is executed by the worker when
+  // AppendRequest is being destroyed.
+  virtual epoch_t getSeenEpoch(worker_id_t worker_id, logid_t logid);
 
   Stream* getStream(logid_t log_id);
 

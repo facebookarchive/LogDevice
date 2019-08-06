@@ -209,10 +209,13 @@ struct write_stream_request_id_t {
   write_stream_seq_num_t seq_num;
 };
 constexpr write_stream_id_t WRITE_STREAM_ID_INVALID(0UL);
+constexpr write_stream_seq_num_t WRITE_STREAM_SEQ_NUM_INVALID(0UL);
 constexpr write_stream_request_id_t WRITE_STREAM_REQUEST_ID_INVALID = {
     WRITE_STREAM_ID_INVALID,
-    write_stream_seq_num_t(0UL)};
+    WRITE_STREAM_SEQ_NUM_INVALID};
 bool write_stream_request_id_valid(write_stream_request_id_t req_id);
+write_stream_seq_num_t next_seq_num(write_stream_seq_num_t seq_num);
+void increment_seq_num(write_stream_seq_num_t& seq_num);
 
 /**
  * Type used to identify a run of LogRebuilding state machine.

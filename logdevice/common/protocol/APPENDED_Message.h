@@ -21,6 +21,8 @@ using APPENDED_flags_t = uint16_t;
 struct APPENDED_Header {
   request_id_t rqid; // echoed request id from the corresponding APPEND
   lsn_t lsn;         // on success, the LSN that was assigned to record
+                     // on E::WRITE_STREAM_UNKNOWN, lsn contains the epoch at
+                     // the sequencer and esn_t is ESN_INVALID.
                      // on success, the timestamp that was assigned to record
   RecordTimestamp timestamp;
 
@@ -55,7 +57,13 @@ struct APPENDED_Header {
   //
   // E::NOTINSERVERCONFIG  the logid is not in the configuration of the
   //                       sequencer node
-
+  // E::WRITE_STREAM_UNKNOWN  Write stream is not known by the sequencer and the
+  //                          APPEND_Message does not have the
+  //                          APPEND_Header::WRITE_STREAM_RESUME bit set.
+  // E::WRITE_STREAM_BROKEN Sequencer is expecting a stream append request with
+  //                        a smaller sequence number. Currently sequencer does
+  //                        not specify what it expects. Maybe useful in the
+  //                        future to optimize retries.
   NodeID redirect; // when status is PREEMPTED, indicates which sequencer
                    // should receive appends for the log
 
