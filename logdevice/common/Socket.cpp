@@ -877,8 +877,6 @@ void Socket::onConnected() {
   // we are handshaken and we know the protocol that will be used for
   // communicating with the other end.
   ld_check(!serializeq_.empty());
-  auto& first_envelope = serializeq_.front();
-  ld_check(dynamic_cast<const HELLO_Message*>(&first_envelope.message()));
   flushNextInSerializeQueue();
 }
 
@@ -1647,74 +1645,7 @@ void Socket::sendHello() {
   // HELLO should be the first message to be sent on this socket.
   ld_check(getBytesPending() == 0);
 
-  uint16_t max_protocol = getSettings().max_protocol;
-  ld_check(max_protocol >= Compatibility::MIN_PROTOCOL_SUPPORTED);
-  ld_check(max_protocol <= Compatibility::MAX_PROTOCOL_SUPPORTED);
-  HELLO_Header hdr{Compatibility::MIN_PROTOCOL_SUPPORTED,
-                   max_protocol,
-                   0,
-                   request_id_t(0),
-                   {}};
-  NodeID source_node_id, destination_node_id;
-  std::string cluster_name, extra_build_info, client_location;
-
-  // If this is a LogDevice server, include its NodeID in the HELLO
-  // message.
-  if (getSettings().server) {
-    hdr.flags |= HELLO_Header::SOURCE_NODE;
-    source_node_id = deps_->getMyNodeID();
-  } else {
-    // if this is a client, include build information
-    hdr.flags |= HELLO_Header::BUILD_INFO;
-    extra_build_info = deps_->getClientBuildInfo();
-  }
-
-  // If include_destination_on_handshake is set, then include the
-  // destination's NodeID in the HELLO message
-  if (getSettings().include_destination_on_handshake) {
-    hdr.flags |= HELLO_Header::DESTINATION_NODE;
-    destination_node_id = peer_name_.id_.node_;
-  }
-
-  // Only include credentials when needed
-  if (deps_->authenticationEnabled() && deps_->includeHELLOCredentials()) {
-    const std::string& credentials = deps_->getHELLOCredentials();
-    ld_check(credentials.size() < HELLO_Header::CREDS_SIZE_V1);
-
-    // +1 for null terminator
-    std::memcpy(hdr.credentials, credentials.c_str(), credentials.size() + 1);
-  }
-
-  // If include_cluster_name_on_handshake is set then include the cluster
-  // name in the HELLOv2 message
-  if (getSettings().include_cluster_name_on_handshake) {
-    hdr.flags |= HELLO_Header::CLUSTER_NAME;
-    cluster_name = deps_->getClusterName();
-  }
-
-  // If the client location is specified in settings, include it in the HELLOv2
-  // message.
-  auto client_location_opt = getSettings().client_location;
-  if (client_location_opt.hasValue()) {
-    client_location = client_location_opt.value().toString();
-    hdr.flags |= HELLO_Header::CLIENT_LOCATION;
-  }
-
-  const std::string& csid = deps_->getCSID();
-  ld_check(csid.size() < MAX_CSID_SIZE);
-  if (!csid.empty()) {
-    hdr.flags |= HELLO_Header::CSID;
-  }
-
-  std::unique_ptr<Message> hello = std::make_unique<HELLO_Message>(hdr);
-  auto hello_v2 = static_cast<HELLO_Message*>(hello.get());
-  hello_v2->source_node_id_ = source_node_id;
-  hello_v2->destination_node_id_ = destination_node_id;
-  hello_v2->cluster_name_ = cluster_name;
-  hello_v2->csid_ = csid;
-  hello_v2->build_info_ = extra_build_info;
-  hello_v2->client_location_ = client_location;
-
+  auto hello = deps_->createHelloMessage(peer_name_.asNodeID());
   auto envelope = registerMessage(std::move(hello));
   ld_check(envelope);
   releaseMessage(*envelope);
@@ -1723,9 +1654,7 @@ void Socket::sendHello() {
 void Socket::sendShutdown() {
   ld_check(bev_);
 
-  auto serverInstanceId = deps_->getServerInstanceId();
-  SHUTDOWN_Header hdr{E::SHUTDOWN, serverInstanceId};
-  auto shutdown = std::make_unique<SHUTDOWN_Message>(hdr);
+  auto shutdown = deps_->createShutdownMessage(deps_->getServerInstanceId());
   auto envelope = registerMessage(std::move(shutdown));
   // envelope could be null if presend check failed (becasue
   // handshake is not complete) or there was no buffer space. In
@@ -1949,17 +1878,7 @@ int Socket::receiveMessage() {
                min_protohdr_bytes);
       return -1;
     }
-    Message::deserializer_t* deserializer =
-        messageDeserializers[recv_message_ph_.type];
-    if (deserializer == nullptr) {
-      ld_error("PROTOCOL ERROR: got an unknown message type '%c' (%d) from "
-               "peer %s",
-               int(recv_message_ph_.type),
-               int(recv_message_ph_.type),
-               conn_description_.c_str());
-      err = E::BADMSG;
-      return -1;
-    }
+
     if (!handshaken_ && !isHandshakeMessage(recv_message_ph_.type)) {
       ld_error("PROTOCOL ERROR: got a message of type %s on a brand new "
                "connection to/from %s). Expected %s.",
@@ -2078,9 +1997,7 @@ bool Socket::validateReceivedMessage(const Message* msg) const {
 bool Socket::processHandshakeMessage(const Message* msg) {
   switch (msg->type_) {
     case MessageType::ACK: {
-      const ACK_Message* ack = static_cast<const ACK_Message*>(msg);
-      our_name_at_peer_ = ClientID(ack->getHeader().client_idx);
-      proto_ = ack->getHeader().proto;
+      deps_->processACKMessage(msg, &our_name_at_peer_, &proto_);
       connect_throttle_.connectSucceeded();
     } break;
     case MessageType::HELLO:
@@ -2105,9 +2022,7 @@ bool Socket::processHandshakeMessage(const Message* msg) {
         err = E::TOOMANY;
         return false;
       }
-      proto_ =
-          std::min(static_cast<const HELLO_Message*>(msg)->header_.proto_max,
-                   getSettings().max_protocol);
+      proto_ = deps_->processHelloMessage(msg);
       break;
     default:
       ld_check(false); // unreachable.
@@ -2135,8 +2050,6 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
   SCOPE_EXIT {
     deps_->onStoppedRunning(run_context);
   };
-
-  ld_check(messageDeserializers[ph.type]);
 
   size_t protocol_bytes_already_read =
       ProtocolHeader::bytesNeeded(ph.type, proto_);
@@ -2174,7 +2087,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
 
   // 2. read and parse message body.
 
-  std::unique_ptr<Message> msg = messageDeserializers[ph.type](reader).msg;
+  std::unique_ptr<Message> msg = deps_->deserialize(ph, reader);
 
   if (!msg) {
     switch (err) {
@@ -2811,7 +2724,7 @@ void executeOnWorker(Worker* worker,
             worker->sender().closeSocket(from, err);
             break;
           case Message::Disposition::KEEP:
-            // Ownership transfered.
+            // Ownership transferred.
             msg.release();
             break;
           case Message::Disposition::NORMAL:
@@ -3095,5 +3008,112 @@ void SocketDependencies::onStoppedRunning(RunContext prev_context) {
 ResourceBudget::Token
 SocketDependencies::getResourceToken(size_t payload_size) {
   return processor_->getIncomingMessageToken(payload_size);
+}
+
+std::unique_ptr<Message>
+SocketDependencies::createHelloMessage(NodeID destNodeID) {
+  uint16_t max_protocol = getSettings().max_protocol;
+  ld_check(max_protocol >= Compatibility::MIN_PROTOCOL_SUPPORTED);
+  ld_check(max_protocol <= Compatibility::MAX_PROTOCOL_SUPPORTED);
+  HELLO_Header hdr{Compatibility::MIN_PROTOCOL_SUPPORTED,
+                   max_protocol,
+                   0,
+                   request_id_t(0),
+                   {}};
+  NodeID source_node_id, destination_node_id;
+  std::string cluster_name, extra_build_info, client_location;
+
+  // If this is a LogDevice server, include its NodeID in the HELLO
+  // message.
+  if (getSettings().server) {
+    hdr.flags |= HELLO_Header::SOURCE_NODE;
+    source_node_id = getMyNodeID();
+  } else {
+    // if this is a client, include build information
+    hdr.flags |= HELLO_Header::BUILD_INFO;
+    extra_build_info = getClientBuildInfo();
+  }
+
+  // If include_destination_on_handshake is set, then include the
+  // destination's NodeID in the HELLO message
+  if (getSettings().include_destination_on_handshake) {
+    hdr.flags |= HELLO_Header::DESTINATION_NODE;
+    destination_node_id = destNodeID;
+  }
+
+  // Only include credentials when needed
+  if (authenticationEnabled() && includeHELLOCredentials()) {
+    const std::string& credentials = getHELLOCredentials();
+    ld_check(credentials.size() < HELLO_Header::CREDS_SIZE_V1);
+
+    // +1 for null terminator
+    std::memcpy(hdr.credentials, credentials.c_str(), credentials.size() + 1);
+  }
+
+  // If include_cluster_name_on_handshake is set then include the cluster
+  // name in the HELLOv2 message
+  if (getSettings().include_cluster_name_on_handshake) {
+    hdr.flags |= HELLO_Header::CLUSTER_NAME;
+    cluster_name = getClusterName();
+  }
+
+  // If the client location is specified in settings, include it in the HELLOv2
+  // message.
+  auto& client_location_opt = getSettings().client_location;
+  if (client_location_opt.hasValue()) {
+    client_location = client_location_opt.value().toString();
+    hdr.flags |= HELLO_Header::CLIENT_LOCATION;
+  }
+
+  const std::string& csid = getCSID();
+  ld_check(csid.size() < MAX_CSID_SIZE);
+  if (!csid.empty()) {
+    hdr.flags |= HELLO_Header::CSID;
+  }
+
+  std::unique_ptr<Message> hello = std::make_unique<HELLO_Message>(hdr);
+  auto hello_v2 = static_cast<HELLO_Message*>(hello.get());
+  hello_v2->source_node_id_ = source_node_id;
+  hello_v2->destination_node_id_ = destination_node_id;
+  hello_v2->cluster_name_ = cluster_name;
+  hello_v2->csid_ = csid;
+  hello_v2->build_info_ = extra_build_info;
+  hello_v2->client_location_ = client_location;
+
+  return hello;
+}
+
+std::unique_ptr<Message>
+SocketDependencies::createShutdownMessage(uint32_t serverInstanceId) {
+  SHUTDOWN_Header hdr{E::SHUTDOWN, serverInstanceId};
+  return std::make_unique<SHUTDOWN_Message>(hdr);
+}
+
+uint16_t SocketDependencies::processHelloMessage(const Message* msg) {
+  return std::min(static_cast<const HELLO_Message*>(msg)->header_.proto_max,
+                  getSettings().max_protocol);
+}
+
+void SocketDependencies::processACKMessage(const Message* msg,
+                                           ClientID* our_name_at_peer,
+                                           uint16_t* destProto) {
+  const ACK_Message* ack = static_cast<const ACK_Message*>(msg);
+  *our_name_at_peer = ClientID(ack->getHeader().client_idx);
+  *destProto = ack->getHeader().proto;
+}
+
+std::unique_ptr<Message>
+SocketDependencies::deserialize(const ProtocolHeader& ph,
+                                ProtocolReader& reader) {
+  Message::deserializer_t* deserializer = messageDeserializers[ph.type];
+  if (deserializer == nullptr) {
+    ld_error("PROTOCOL ERROR: got an unknown message type '%c' (%d) from "
+             "peer",
+             int(ph.type),
+             int(ph.type));
+    err = E::BADMSG;
+    return nullptr;
+  }
+  return deserializer(reader).msg;
 }
 }} // namespace facebook::logdevice

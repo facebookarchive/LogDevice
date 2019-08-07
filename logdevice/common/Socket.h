@@ -1212,6 +1212,15 @@ class SocketDependencies {
   virtual void onStartedRunning(RunContext context);
   virtual void onStoppedRunning(RunContext prev_context);
   virtual ResourceBudget::Token getResourceToken(size_t payload_size);
+  virtual std::unique_ptr<Message> createHelloMessage(NodeID destNodeID);
+  virtual std::unique_ptr<Message>
+  createShutdownMessage(uint32_t serverInstanceID);
+  virtual uint16_t processHelloMessage(const Message* msg);
+  virtual void processACKMessage(const Message* msg,
+                                 ClientID* our_name_at_peer,
+                                 uint16_t* destProto);
+  virtual std::unique_ptr<Message> deserialize(const ProtocolHeader& ph,
+                                               ProtocolReader& reader);
 
   virtual ~SocketDependencies() {}
 
