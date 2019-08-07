@@ -8,8 +8,8 @@
 
 #include "logdevice/common/Connection.h"
 
+#include "folly/ScopeGuard.h"
 #include "logdevice/common/Socket.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/Message.h"
 
 namespace facebook { namespace logdevice {
@@ -18,16 +18,14 @@ Connection::Connection(NodeID server_name,
                        SocketType type,
                        ConnectionType conntype,
                        FlowGroup& flow_group)
-    : Socket(server_name, type, conntype, flow_group),
-      worker_(Worker::onThisThread(false /* enforce_worker */)) {}
+    : Socket(server_name, type, conntype, flow_group) {}
 
 Connection::Connection(NodeID server_name,
                        SocketType type,
                        ConnectionType conntype,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps)
-    : Socket(server_name, type, conntype, flow_group, std::move(deps)),
-      worker_(Worker::onThisThread(false /* enforce_worker */)) {}
+    : Socket(server_name, type, conntype, flow_group, std::move(deps)) {}
 
 Connection::Connection(int fd,
                        ClientID client_name,
@@ -42,8 +40,7 @@ Connection::Connection(int fd,
              std::move(conn_token),
              type,
              conntype,
-             flow_group),
-      worker_(Worker::onThisThread(false /* enforce_worker */)) {}
+             flow_group) {}
 
 Connection::Connection(int fd,
                        ClientID client_name,
@@ -60,11 +57,10 @@ Connection::Connection(int fd,
              type,
              conntype,
              flow_group,
-             std::move(deps)),
-      worker_(Worker::onThisThread(false /* enforce_worker */)) {}
+             std::move(deps)) {}
 
 Connection::~Connection() {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   // Close the socket here as close accesses Worker::onThisThread(). Do not want
   // to setContext indefinitely as well and call the Socket destructor, this was
   // the best we could do.
@@ -72,53 +68,53 @@ Connection::~Connection() {
 }
 
 void Connection::close(Status reason) {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::close(reason);
 }
 
 void Connection::onConnected() {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::onConnected();
 }
 int Connection::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   return Socket::onReceived(ph, inbuf);
 }
 
 void Connection::onConnectTimeout() {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::onConnectTimeout();
 }
 
 void Connection::onHandshakeTimeout() {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::onHandshakeTimeout();
 }
 
 void Connection::onConnectAttemptTimeout() {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::onConnectAttemptTimeout();
 }
 
 void Connection::onSent(std::unique_ptr<Envelope> e,
                         Status st,
                         Message::CompletionMethod cm) {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::onSent(std::move(e), st, cm);
 }
 
 void Connection::onError(short direction, int socket_errno) {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::onError(direction, socket_errno);
 }
 
 void Connection::onPeerClosed() {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::onPeerClosed();
 }
 
 void Connection::onBytesPassedToTCP(size_t nbytes_drained) {
-  WorkerContextScopeGuard g(worker_);
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   Socket::onBytesPassedToTCP(nbytes_drained);
 }
 

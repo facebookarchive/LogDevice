@@ -579,6 +579,10 @@ class Socket : public TrafficShappingSocket {
    */
   virtual void onBytesPassedToTCP(size_t nbytes_drained);
 
+  SocketDependencies* getDeps() const {
+    return deps_.get();
+  }
+
  private:
   /**
    * This is strictly a delegating constructor. It sets all members
@@ -1221,12 +1225,22 @@ class SocketDependencies {
                                  uint16_t* destProto);
   virtual std::unique_ptr<Message> deserialize(const ProtocolHeader& ph,
                                                ProtocolReader& reader);
+  /**
+   * Setups context to execute SocketCallbacks and other events.
+   * Returns a callback which destroys context once the callback execution
+   * finishes.
+   * The callback can be invoked explicitly when context needs to be destroyed
+   * or can be used to create guard using folly::makeGuard. Check Connection.cpp
+   * for usage.
+   */
+  virtual folly::Func setupContextGuard();
 
   virtual ~SocketDependencies() {}
 
  private:
   Processor* const processor_;
   Sender* sender_;
+  Worker* const worker_;
 };
 
 /**

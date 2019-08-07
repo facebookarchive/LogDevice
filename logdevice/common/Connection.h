@@ -13,9 +13,6 @@
 #include "logdevice/common/Socket.h"
 
 namespace facebook { namespace logdevice {
-
-class Worker;
-
 /**
  * this will we a wrapper around our socket which knows about protocol and
  * serialization
@@ -141,11 +138,6 @@ class Connection : public Socket {
   void onPeerClosed() override;
 
   void onBytesPassedToTCP(size_t nbytes_drained) override;
-
- private:
-  void initializeContext();
-  bool setWorkerContext();
-  Worker* const worker_{nullptr};
 };
 
 }} // namespace facebook::logdevice

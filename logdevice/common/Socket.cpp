@@ -2419,7 +2419,9 @@ bool Socket::slowInDraining() {
 SocketDependencies::SocketDependencies(Processor* processor,
                                        Sender* sender,
                                        const Address& peer_name)
-    : processor_(processor), sender_(sender) {}
+    : processor_(processor),
+      sender_(sender),
+      worker_(Worker::onThisThread(false /*enforce_worker*/)) {}
 
 const Settings& SocketDependencies::getSettings() const {
   return *processor_->settings();
@@ -3115,5 +3117,22 @@ SocketDependencies::deserialize(const ProtocolHeader& ph,
     return nullptr;
   }
   return deserializer(reader).msg;
+}
+
+folly::Func SocketDependencies::setupContextGuard() {
+  // context can be setup multiple times in a recursive call to
+  // setupContextGuard. unset_context logic makes sure that context is set just
+  // once and unset in the same stack frame that it was set.
+  bool unset_context =
+      worker_ && worker_ != Worker::onThisThread(false /*enforce_worker*/);
+  if (unset_context) {
+    Worker::onSet(worker_);
+  }
+
+  return [unset_context] {
+    if (unset_context) {
+      Worker::onUnset();
+    }
+  };
 }
 }} // namespace facebook::logdevice
