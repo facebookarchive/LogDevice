@@ -9,17 +9,12 @@
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/ClientID.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice { namespace admin_command_table {
-
-std::string describeConnection(Address addr) {
-  return Sender::describeConnection(addr);
-}
 
 template <>
 std::string Converter<LSN>::operator()(LSN lsn, bool prettify) {
@@ -76,17 +71,6 @@ std::string Converter<esn_t>::operator()(esn_t esn, bool prettify) {
 template <>
 std::string Converter<logid_t>::operator()(logid_t logid, bool /*prettify*/) {
   return folly::to<std::string>(logid.val_);
-}
-
-template <>
-std::string Converter<ClientID>::operator()(ClientID client,
-                                            bool /*prettify*/) {
-  return describeConnection(Address(client));
-}
-
-template <>
-std::string Converter<Address>::operator()(Address address, bool /*prettify*/) {
-  return describeConnection(address);
 }
 
 template <>

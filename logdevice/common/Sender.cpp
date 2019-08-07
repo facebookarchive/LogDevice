@@ -19,6 +19,7 @@
 #include <folly/small_vector.h>
 
 #include "event2/event.h"
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/Connection.h"
 #include "logdevice/common/ConstructorFailed.h"
@@ -59,6 +60,20 @@ class DisconnectedClientCallback : public SocketCallback {
 };
 
 } // namespace
+
+namespace admin_command_table {
+template <>
+std::string Converter<ClientID>::operator()(ClientID client,
+                                            bool /* prettify */) {
+  return Sender::describeConnection(Address(client));
+}
+
+template <>
+std::string Converter<Address>::operator()(Address address,
+                                           bool /* prettify */) {
+  return Sender::describeConnection(address);
+}
+} // namespace admin_command_table
 
 class SenderImpl {
  public:

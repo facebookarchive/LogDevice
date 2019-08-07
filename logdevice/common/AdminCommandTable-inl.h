@@ -28,8 +28,6 @@
 namespace facebook { namespace logdevice {
 namespace admin_command_table {
 
-std::string describeConnection(Address addr);
-
 template <typename T>
 struct Converter {
   std::string operator()(T data, bool /*prettify*/) {
@@ -42,19 +40,23 @@ struct Converter {
   std::string Converter<T>::operator()(T, bool); \
   extern template std::string Converter<T>::operator()(T, bool);
 
+// Simple converters implemented in AdminCommandTable.cpp
 LOGDEVICE_CONVERTER_DECL(LSN)
 LOGDEVICE_CONVERTER_DECL(BYTE_OFFSET)
 LOGDEVICE_CONVERTER_DECL(epoch_t)
 LOGDEVICE_CONVERTER_DECL(esn_t)
 LOGDEVICE_CONVERTER_DECL(logid_t)
-LOGDEVICE_CONVERTER_DECL(ClientID)
-LOGDEVICE_CONVERTER_DECL(Address)
 LOGDEVICE_CONVERTER_DECL(bool)
 LOGDEVICE_CONVERTER_DECL(std::chrono::microseconds)
 LOGDEVICE_CONVERTER_DECL(std::chrono::milliseconds)
 LOGDEVICE_CONVERTER_DECL(std::chrono::seconds)
 LOGDEVICE_CONVERTER_DECL(Status)
 LOGDEVICE_CONVERTER_DECL(Sockaddr)
+
+// Externally implemented converters declared here. Admin command library can be
+// compiled independent of these.
+LOGDEVICE_CONVERTER_DECL(ClientID)
+LOGDEVICE_CONVERTER_DECL(Address)
 
 #undef LOGDEVICE_CONVERTER_DECL
 
