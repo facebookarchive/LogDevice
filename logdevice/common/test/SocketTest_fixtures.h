@@ -20,6 +20,7 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/Socket.h"
+#include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
@@ -40,7 +41,7 @@ class SocketTest;
 class TestSocketDependencies : public SocketDependencies {
  public:
   explicit TestSocketDependencies(SocketTest* owner)
-      : SocketDependencies(nullptr, nullptr, Address()), owner_(owner) {}
+      : SocketDependencies(nullptr, nullptr), owner_(owner) {}
   virtual const Settings& getSettings() const override;
   virtual StatsHolder* getStats() const override;
   virtual void noteBytesQueued(size_t nbytes) override;

@@ -9,7 +9,7 @@
 #include "logdevice/common/Connection.h"
 
 #include "folly/ScopeGuard.h"
-#include "logdevice/common/Socket.h"
+#include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/protocol/Message.h"
 
 namespace facebook { namespace logdevice {
