@@ -164,6 +164,9 @@ SequencerBackgroundActivator::postponeSequencerReactivation(logid_t logid) {
   queue_.pop();
   state.token.release();
   state.in_queue = false;
+  // Switch off this flag so that the next enqueue doesn't go through
+  // immediately.
+  state.queued_by_alarm_callback = false;
   bumpCompletedStat();
 
   // If we already have an active alarm for this log
@@ -546,9 +549,6 @@ SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
           !state.queued_by_alarm_callback) {
         return postponeSequencerReactivation(logid);
       }
-      // Switch off this flag so that the next enqueue doesn't go through
-      // immediately.
-      state.queued_by_alarm_callback = false;
       FOLLY_FALLTHROUGH;
     case ReactivationDecision::REACTIVATE:
       // We need reactivation to be performed now. Either because we have an
