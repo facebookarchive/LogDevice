@@ -16,9 +16,7 @@
 #include "logdevice/common/FlowGroupDependencies.h"
 #include "logdevice/common/FlowMeter.h"
 #include "logdevice/common/PriorityQueue.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/FlowGroupPolicy.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/protocol/Message.h"
@@ -83,7 +81,7 @@ class FlowGroupsUpdate {
   struct GroupEntry {
     /**
      * OverflowEntries record the bandwidth that cannot be placed
-     * within buckets of a given priority level across all Senders.
+     * within buckets of a given priority level across all shaping containers.
      * Since we don't know where in the update run the overages have
      * occurred, we take the overage from the last update run and try
      * to add it to low buckets during the subsequent run. Any of the
@@ -198,14 +196,12 @@ class FlowGroup {
     return meter_.entries[asInt(p)].level();
   }
 
-  void setScope(Sender* sender, NodeLocationScope s) {
-    // Should only be set once when Sender completes initialization
+  void setScope(NodeLocationScope s) {
+    // Should only be set once when ShapingContainer completes initialization
     // of its array of FlowGroups.
     ld_check(scope_ == NodeLocationScope::ROOT);
     ld_check(s <= NodeLocationScope::ROOT);
     scope_ = s;
-    sender_ = sender;
-
     // The FlowGroups for NODE and ROOT scopes are automatically
     // configured. The configuration of ROOT guarantees that all Sockets
     // can be assigned to a configured FlowGroup even when no FlowGroups
@@ -249,7 +245,7 @@ class FlowGroup {
    * @return  true iff bandwidth should be considered exhausted while
    *               processing the current message
    */
-  bool injectShapingEvent(Priority);
+  bool injectShapingEvent(Priority p, double error_chance);
 
   /**
    * Discard all accumulated capacity from a Meter.
@@ -264,13 +260,13 @@ class FlowGroup {
 
   /** Add a callback to the PriorityQueue for this FlowGroup. */
   void push(BWAvailableCallback& cb, Priority p) {
-    ld_check(onMyWorker());
+    ld_check(deps_->onCorrectInstance());
     ld_check(!cb.active());
     ld_check(p < Priority::NUM_PRIORITIES);
     cb.setAffiliation(this, p);
     priorityq_.push(cb);
 
-    // As soon as a sender resorts to deferring a message, revert
+    // As soon as a ShapingContainer resorts to deferring a message, revert
     // wouldCutInLine() to its normal mode of operation. We can't
     // allow a future bandwidth delivery by the TrafficShaper to
     // cause the callback to inadvertently send a message out of order.
@@ -282,7 +278,7 @@ class FlowGroup {
 
   /** Remove a callback from the PriorityQueue for this FlowGroup. */
   void erase(BWAvailableCallback& cb) {
-    ld_check(onMyWorker());
+    ld_check(deps_->onCorrectInstance());
     priorityq_.erase(cb);
     // Callbacks are removed from the queue prior to being executed.
     // Some depend on the priority being valid during the callback,
@@ -322,11 +318,6 @@ class FlowGroup {
  private:
   friend class RecordRebuildingMockSocket;
   friend class RecordRebuildingAmendMockSocket;
-
-  bool onMyWorker() const {
-    // sender_ is null in unit tests.
-    return (sender_ == nullptr || &Worker::onThisThread()->sender() == sender_);
-  }
 
   /**
    * Return true if allowing a new message to be transmitted at the given
@@ -395,13 +386,6 @@ class FlowGroup {
       priorityq_;
 
   FlowMeter meter_;
-
-  // The Sender that contains this FlowGroup.
-  //
-  // Used to catch unintended foreign thread manipulation of FlowGroups.
-  // All operations on a FlowGroup, with the exception of bandwidth deposits
-  // by the TrafficShaper, must be performed from the Sender's Worker.
-  Sender* sender_ = nullptr;
 
   // The scope of connections being managed by this FlowGroup.
   NodeLocationScope scope_ = NodeLocationScope::ROOT;

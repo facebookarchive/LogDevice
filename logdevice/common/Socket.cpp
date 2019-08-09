@@ -890,12 +890,12 @@ void Socket::onSent(std::unique_ptr<Envelope> e,
 
   if (reason == Status::OK) {
     FLOW_GROUP_MSG_STAT_INCR(
-        Worker::stats(), flow_group_, &e->message(), sent_ok);
+        deps_->getStats(), flow_group_, &e->message(), sent_ok);
     FLOW_GROUP_MSG_STAT_ADD(
-        Worker::stats(), flow_group_, &e->message(), sent_bytes, e->cost());
+        deps_->getStats(), flow_group_, &e->message(), sent_bytes, e->cost());
   } else {
     FLOW_GROUP_MSG_STAT_INCR(
-        Worker::stats(), flow_group_, &e->message(), sent_error);
+        deps_->getStats(), flow_group_, &e->message(), sent_error);
   }
 
   if (!deps_->shuttingDown()) {
@@ -1616,7 +1616,7 @@ void Socket::releaseMessage(Envelope& envelope) {
   std::unique_ptr<Envelope> pending_envelope(&envelope);
   pendingq_.erase(*pending_envelope);
 
-  FLOW_GROUP_MSG_LATENCY_ADD(Worker::stats(), flow_group_, envelope);
+  FLOW_GROUP_MSG_LATENCY_ADD(deps_->getStats(), flow_group_, envelope);
 
   send(std::move(pending_envelope));
 }

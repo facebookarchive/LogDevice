@@ -147,7 +147,8 @@ class SocketTest : public ::testing::Test {
         server_name_(0, 1),
         server_addr_(get_localhost_address_str(), 4440),
         destination_node_id_(client_id_, 1),
-        flow_group_(std::make_unique<NwShapingFlowGroupDeps>(nullptr)) {
+        flow_group_(
+            std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr)) {
     socket_ = std::make_unique<Socket>(
         server_name_,
         SocketType::DATA,

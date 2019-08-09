@@ -11,15 +11,14 @@
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
-
+class Sender;
 /**
  * External dependencies of FlowGroup are isolated into this class for
  * the ease of unit testing.
  */
 class FlowGroupDependencies {
  public:
-  FlowGroupDependencies() {}
-
+  virtual ~FlowGroupDependencies() {}
   // Using C++ "pointer to member" feature to provide a common method
   // for updating FlowGroup and Priority related stats by name.
   // Caller will have to do the following:
@@ -73,12 +72,13 @@ class FlowGroupDependencies {
   virtual void histogram_add_fg_runtime(size_t val) = 0;
   virtual void histogram_add_fg_run_event_loop_delay(size_t val) = 0;
 
-  virtual ~FlowGroupDependencies() {}
+  // Make sure api's are invoked on the right instance of flow group.
+  virtual bool onCorrectInstance() = 0;
 };
 
 class NwShapingFlowGroupDeps : public FlowGroupDependencies {
  public:
-  NwShapingFlowGroupDeps(StatsHolder* stats) : stats_(stats) {}
+  NwShapingFlowGroupDeps(StatsHolder* stats, Sender* sender);
 
   PerFlowGroupStats* statsGet(NodeLocationScope scope) {
     if (!stats_) {
@@ -99,8 +99,16 @@ class NwShapingFlowGroupDeps : public FlowGroupDependencies {
     HISTOGRAM_ADD(stats_, flow_groups_run_event_loop_delay, val);
   }
 
+  bool onCorrectInstance() override;
+
  private:
   StatsHolder* const stats_;
+  // The Sender that contains this FlowGroup.
+  //
+  // Used to catch unintended foreign thread manipulation of FlowGroups.
+  // All operations on a FlowGroup, with the exception of bandwidth deposits
+  // by the TrafficShaper, must be performed from the Sender's Worker.
+  Sender* const sender_{nullptr};
 };
 
 class ReadShapingFlowGroupDeps : public FlowGroupDependencies {
@@ -124,6 +132,10 @@ class ReadShapingFlowGroupDeps : public FlowGroupDependencies {
 
   void histogram_add_fg_run_event_loop_delay(size_t val) {
     HISTOGRAM_ADD(stats_, flow_groups_run_event_loop_delay_rt, val);
+  }
+
+  bool onCorrectInstance() {
+    return true;
   }
 
  private:

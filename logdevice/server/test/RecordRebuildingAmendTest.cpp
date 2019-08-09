@@ -199,7 +199,7 @@ class TestRecordRebuildingAmend : public RecordRebuildingAmend,
           std::forward_as_tuple(
               NodeID(n),
               std::make_unique<FlowGroup>(
-                  std::make_unique<NwShapingFlowGroupDeps>(nullptr))));
+                  std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr))));
     }
     return sockets_.at(n);
   }

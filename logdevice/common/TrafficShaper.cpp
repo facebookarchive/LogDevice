@@ -54,7 +54,7 @@ TrafficShaper::TrafficShaper(Processor* processor, StatsHolder* stats)
   read_io_update_ = std::make_unique<FlowGroupsUpdate>(
       std::set<NodeLocationScope>({NodeLocationScope::NODE}));
 
-  nw_shaping_deps_ = std::make_unique<NwShapingFlowGroupDeps>(stats);
+  nw_shaping_deps_ = std::make_unique<NwShapingFlowGroupDeps>(stats, nullptr);
   read_shaping_deps_ = std::make_unique<ReadShapingFlowGroupDeps>(stats);
 
   if (processor_->getAllWorkersCount() != 0) {

@@ -9,19 +9,12 @@
 
 #include <folly/Random.h>
 
-#include "logdevice/common/Processor.h"
-#include "logdevice/common/Socket.h"
-#include "logdevice/common/Worker.h"
-
 namespace facebook { namespace logdevice {
 
-bool FlowGroup::injectShapingEvent(Priority p) {
-  double chance_percent =
-      Worker::settings().message_error_injection_chance_percent;
-  if (chance_percent != 0 &&
-      Worker::settings().message_error_injection_status == E::CBREGISTERED &&
+bool FlowGroup::injectShapingEvent(Priority p, double error_chance) {
+  if (error_chance != 0 &&
       reordering_allowed_at_priority_ == Priority::INVALID && configured() &&
-      enabled() && folly::Random::randDouble(0, 100.0) <= chance_percent) {
+      enabled() && folly::Random::randDouble(0, 100.0) <= error_chance) {
     // Empty the meter so that all subsequent messages see a shortage
     // until more bandwdith is added.
     resetMeter(p);

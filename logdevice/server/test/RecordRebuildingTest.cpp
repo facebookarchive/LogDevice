@@ -205,7 +205,7 @@ class TestRecordRebuildingStore : public RecordRebuildingStore,
           std::forward_as_tuple(
               NodeID(n, n * 2),
               std::make_unique<FlowGroup>(
-                  std::make_unique<NwShapingFlowGroupDeps>(nullptr))));
+                  std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr))));
     }
     return sockets_.at(n);
   }

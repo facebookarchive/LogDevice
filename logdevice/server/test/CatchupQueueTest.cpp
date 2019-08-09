@@ -110,7 +110,7 @@ class CatchupQueueTest : public ::testing::Test {
       : log_storage_state_map_(1),
         streams_(&log_storage_state_map_, &tasks_),
         flow_group_(std::make_unique<FlowGroup>(
-            std::make_unique<NwShapingFlowGroupDeps>(nullptr))) {
+            std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr))) {
     dbg::assertOnData = true;
 
     // Ensure we have LogStorageState for our log.  Set the last released LSN

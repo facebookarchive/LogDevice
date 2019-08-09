@@ -15,7 +15,6 @@
 #include <folly/lang/Bits.h>
 
 #include "logdevice/common/CostQueue.h"
-#include "logdevice/common/FlowMeter.h"
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/checks.h"
 

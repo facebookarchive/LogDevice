@@ -170,11 +170,11 @@ Sender::Sender(std::shared_ptr<const Settings> settings,
       static_cast<size_t>(NodeLocationScope::ROOT) + 1,
       base,
       tsc,
-      std::make_shared<NwShapingFlowGroupDeps>(stats));
+      std::make_shared<NwShapingFlowGroupDeps>(stats, this));
 
   auto scope = NodeLocationScope::NODE;
   for (auto& fg : nw_shaping_container_->flow_groups_) {
-    fg.setScope(this, scope);
+    fg.setScope(scope);
     scope = NodeLocation::nextGreaterScope(scope);
   }
 }
@@ -500,11 +500,19 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   }
 
   auto lock = nw_shaping_container_->lock();
-  if (!sock.flow_group_.injectShapingEvent(envelope->priority()) &&
-      sock.flow_group_.drain(*envelope)) {
+  auto inject_shaping_event = [&]() -> bool {
+    return Worker::settings().message_error_injection_status ==
+        E::CBREGISTERED &&
+        sock.flow_group_.injectShapingEvent(
+            envelope->priority(),
+            Worker::settings().message_error_injection_chance_percent);
+  };
+
+  if (!inject_shaping_event() && sock.flow_group_.drain(*envelope)) {
     lock.unlock();
     FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, direct_dispatched);
-    // Note: Some errors can only be detected during message serialization.
+    // Note: Some errors can only be detected during message
+    // serialization.
     //       If this occurs just after releaseMessage() and the onSent()
     //       handler for the message responds to the error by queuing
     //       another message, Sender::sendMessage() can be reentered.
@@ -888,8 +896,8 @@ Socket* Sender::initServerSocket(NodeID nid,
     // for DATA connection:
     //     reconnect if the connection is not SSL but should be.
     // for GOSSIP connection:
-    //     reconnect if the connection is not SSL but ssl_on_gossip_port is true
-    //     or the connection is SSL but the ssl_on_gossip_port is false.
+    //     reconnect if the connection is not SSL but ssl_on_gossip_port is
+    //     true or the connection is SSL but the ssl_on_gossip_port is false.
     const bool should_reconnect =
         (sock_type != SocketType::GOSSIP && !it->second->isSSL() &&
          !allow_unencrypted && useSSLWith(nid)) ||
