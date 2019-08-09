@@ -76,7 +76,7 @@ typedef AdminCommandTable<shard_index_t,              /* Shard */
     InfoReadersTable;
 
 typedef AdminCommandTable<std::string, /* State */
-                          Address,     /* Name */
+                          std::string, /* Name */
                           float,       /* Pending (KB) */
                           float,       /* Available (KB) */
                           float,       /* Read (MB) */

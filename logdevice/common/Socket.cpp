@@ -2363,7 +2363,7 @@ void Socket::getDebugInfo(InfoSocketsTable& table) const {
 
   table.next()
       .set<0>(state)
-      .set<1>(peer_name_)
+      .set<1>(deps_->describeConnection(peer_name_))
       .set<2>(getBytesPending() / 1024.0)
       .set<3>(available / 1024.0)
       .set<4>(num_bytes_received_ / 1048576.0)
