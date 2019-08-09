@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyre-strict
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
@@ -28,7 +29,7 @@ class SequencerMaintenanceProgress:
         created_at: datetime,
         last_updated_at: datetime,
         associated_group_ids: Collection[str],
-    ):
+    ) -> None:
         self._underlying = ThriftSequencerMaintenanceProgress(
             status=status,
             target_state=target_state,
@@ -37,6 +38,7 @@ class SequencerMaintenanceProgress:
             associated_group_ids=sorted(list(set(associated_group_ids))),
         )
 
+    # pyre-ignore
     def __getattr__(self, name: str) -> Any:
         return getattr(self._underlying, name)
 

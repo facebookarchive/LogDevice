@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyre-strict
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
@@ -14,7 +15,7 @@ A collection of helpful conversion utility functions
 """
 
 import re
-from typing import Dict, List, Mapping, Optional
+from typing import Dict, List, Mapping, Optional, Pattern
 
 from logdevice.admin.common.types import (
     LocationScope,
@@ -30,7 +31,9 @@ __all__: List[str] = ["to_shard_id", "to_storage_state", "to_replication"]
 # A string representation of a shard or node. Consists of a node ID and an
 # optional shard ID.
 # Examples: N0, N1:S5
-SHARD_PATTERN = re.compile("^N(?P<node_index>[0-9]+)(:S(?P<shard_index>[0-9]+))?$")
+SHARD_PATTERN: Pattern[str] = re.compile(
+    "^N(?P<node_index>[0-9]+)(:S(?P<shard_index>[0-9]+))?$"
+)
 
 
 def to_shard_id(scope: str) -> ShardID:

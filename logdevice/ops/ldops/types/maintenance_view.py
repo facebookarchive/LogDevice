@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyre-strict
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
@@ -9,7 +10,7 @@
 
 import operator
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Collection, Dict, Optional, Tuple
 
 from ldops.exceptions import NodeIsNotASequencerError
 from ldops.types.maintenance_overall_status import MaintenanceOverallStatus
@@ -32,10 +33,11 @@ class MaintenanceView:
         self,
         maintenance: MaintenanceDefinition,
         node_index_to_node_view: Dict[int, NodeView],
-    ):
+    ) -> None:
         self._maintenance = maintenance
         self._node_index_to_node_view = node_index_to_node_view
 
+    # pyre-ignore
     def __getattr__(self, name: str) -> Any:
         return getattr(self._maintenance, name)
 
@@ -95,6 +97,10 @@ class MaintenanceView:
             return self._maintenance.sequencer_target_state
         else:
             return None
+
+    @property
+    def sequencer_nodes(self) -> Collection[NodeID]:
+        return self._maintenance.sequencer_nodes or []
 
     @property
     def ttl(self) -> Optional[timedelta]:

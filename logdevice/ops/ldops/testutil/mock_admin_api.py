@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyre-strict
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
@@ -9,8 +10,9 @@
 import ipaddress
 import random
 import string
+import types
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Type
 
 from ldops.types.cluster import Cluster
 from logdevice.admin.common.types import (
@@ -51,7 +53,7 @@ from logdevice.admin.nodes.types import (
 from logdevice.membership.Membership.types import MetaDataStorageState, StorageState
 
 
-def gen_SocketAddress():
+def gen_SocketAddress() -> SocketAddress:
     return SocketAddress(
         address_family=SocketAddressFamily.INET,
         address=ipaddress.IPv6Address(random.getrandbits(128)).compressed,
@@ -59,7 +61,7 @@ def gen_SocketAddress():
     )
 
 
-def gen_SequencingState():
+def gen_SequencingState() -> SequencingState:
     return random.choice(
         [
             SequencingState.ENABLED,
@@ -70,7 +72,7 @@ def gen_SequencingState():
     )
 
 
-def gen_ShardOperationalState():
+def gen_ShardOperationalState() -> ShardOperationalState:
     return random.choice(
         [
             ShardOperationalState.UNKNOWN,
@@ -86,7 +88,7 @@ def gen_ShardOperationalState():
     )
 
 
-def gen_word(length=None):
+def gen_word(length: Optional[int] = None) -> str:
     if length is None:
         length = random.randint(3, 15)
     VOWELS = "aeiou"
@@ -114,7 +116,7 @@ class MockAdminAPI:
         disaggregated: bool = False,
         distribute_across: LocationScope = LocationScope.ROW,
         num_distribute_across: int = 5,
-    ):
+    ) -> None:
         self.num_storage_nodes = num_storage_nodes
         self.shards_per_storage_node = shards_per_storage_node
         self.num_sequencer_nodes = num_sequencer_nodes
@@ -122,16 +124,20 @@ class MockAdminAPI:
         self.distribute_across = distribute_across
         self.num_distribute_across = num_distribute_across
 
-        self.available_locations = {}
-        self._nc_by_node_index = {}
-        self._ns_by_node_index = {}
+        self.available_locations: Dict[LocationScope, List[str]] = {}
+        self._nc_by_name: Dict[str, NodeConfig] = {}
+        self._ns_by_name: Dict[str, NodeState] = {}
+
+        self._nc_by_node_index: Dict[int, NodeConfig] = {}
+        self._ns_by_node_index: Dict[int, NodeState] = {}
+
         self._nc_version = 0
         self._ns_version = 0
-        self._maintenances_by_id = {}
+        self._maintenances_by_id: Dict[str, MaintenanceDefinition] = {}
 
         self._gen_done = False
 
-    def _gen_locations(self):
+    def _gen_locations(self) -> None:
         available_locations = {}
         for loc_scope in [
             LocationScope.REGION,
@@ -172,13 +178,13 @@ class MockAdminAPI:
             rack=loc[LocationScope.RACK],
         )
 
-    def _gen(self):
+    def _gen(self) -> None:
         self._gen_locations()
         self._gen_nodes()
         self._gen_maintenances()
         self._gen_done = True
 
-    def _gen_nodes(self):
+    def _gen_nodes(self) -> None:
         ts = int(datetime.now().timestamp())
         self._ns_version = ts
         self._nc_version = ts
@@ -268,17 +274,17 @@ class MockAdminAPI:
                 self._ns_by_node_index[node_index] = ns
                 self._ns_by_name[name] = ns
 
-    def _gen_maintenances(self):
+    def _gen_maintenances(self) -> None:
         self._maintenances_by_id = {}
 
     def _set_shard_current_operational_state(
         self, shard: ShardID, target_state: ShardOperationalState
-    ):
+    ) -> None:
         assert shard.node.node_index is not None
         nc = self._nc_by_node_index[shard.node.node_index]
         ns = self._ns_by_node_index[shard.node.node_index]
         shard_states = []
-        for shard_index, shard_state in enumerate(ns.shard_states):
+        for shard_index, shard_state in enumerate(ns.shard_states or []):
             if shard.shard_index == shard_index:
                 shard_states.append(shard_state(current_operational_state=target_state))
             else:
@@ -289,12 +295,12 @@ class MockAdminAPI:
 
     def _set_shard_maintenance_progress(
         self, shard: ShardID, maintenance_progress: ShardMaintenanceProgress
-    ):
+    ) -> None:
         assert shard.node.node_index is not None
         nc = self._nc_by_node_index[shard.node.node_index]
         ns = self._ns_by_node_index[shard.node.node_index]
         shard_states = []
-        for shard_index, shard_state in enumerate(ns.shard_states):
+        for shard_index, shard_state in enumerate(ns.shard_states or []):
             if shard.shard_index == shard_index:
                 shard_states.append(shard_state(maintenance=maintenance_progress))
             else:
@@ -303,30 +309,39 @@ class MockAdminAPI:
         self._ns_by_node_index[shard.node.node_index] = new_ns
         self._ns_by_name[nc.name] = new_ns
 
-    def _set_sequencing_state(self, node_id: NodeID, target_state: SequencingState):
+    def _set_sequencing_state(
+        self, node_id: NodeID, target_state: SequencingState
+    ) -> None:
         assert node_id.node_index is not None
         nc = self._nc_by_node_index[node_id.node_index]
         ns = self._ns_by_node_index[node_id.node_index]
+        assert ns.sequencer_state is not None
         new_ns = ns(sequencer_state=ns.sequencer_state(state=target_state))
         self._ns_by_node_index[node_id.node_index] = new_ns
         self._ns_by_name[nc.name] = new_ns
 
     def _set_sequencer_maintenance_progress(
         self, node_id: NodeID, maintenance_progress: SequencerMaintenanceProgress
-    ):
+    ) -> None:
         assert node_id.node_index is not None
         nc = self._nc_by_node_index[node_id.node_index]
         ns = self._ns_by_node_index[node_id.node_index]
+        assert ns.sequencer_state is not None
         new_ns = ns(
             sequencer_state=ns.sequencer_state(maintenance=maintenance_progress)
         )
         self._ns_by_node_index[node_id.node_index] = new_ns
         self._ns_by_name[nc.name] = new_ns
 
-    async def __aexit__(self, exc_type, exc, tb):
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[Exception]],
+        exc: Optional[Exception],
+        tb: Optional[types.TracebackType],
+    ) -> None:
         pass
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "MockAdminAPI":
         if not self._gen_done:
             self._gen()
         return self
@@ -387,6 +402,7 @@ class MockAdminAPI:
                 # TODO: make it unwrap
                 pass
             else:
+                assert sh.node.node_index is not None
                 nc = self._nc_by_node_index[sh.node.node_index]
                 shards.append(
                     ShardID(
@@ -401,6 +417,7 @@ class MockAdminAPI:
 
         seq_nodes = []
         for n in request.sequencer_nodes:
+            assert n.node_index is not None
             nc = self._nc_by_node_index[n.node_index]
             seq_nodes.append(
                 NodeID(node_index=nc.node_index, name=nc.name, address=nc.data_address)
@@ -426,6 +443,7 @@ class MockAdminAPI:
             else None,
             created_on=1000 * int(datetime.now().timestamp()),
         )
+        assert mnt.group_id is not None
         self._maintenances_by_id[mnt.group_id] = mnt
         return MaintenanceDefinitionResponse(maintenances=[mnt])
 
@@ -466,6 +484,7 @@ class MockAdminAPI:
             raise MaintenanceMatchError()
 
         for mnt in mnts:
+            assert mnt.group_id is not None
             del self._maintenances_by_id[mnt.group_id]
 
         return RemoveMaintenancesResponse(maintenances=mnts)

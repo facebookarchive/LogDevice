@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyre-strict
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
@@ -20,7 +21,7 @@ from logdevice.admin.common.types import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

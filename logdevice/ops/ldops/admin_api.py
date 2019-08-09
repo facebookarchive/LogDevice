@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyre-strict
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
@@ -44,7 +45,7 @@ from logdevice.admin.safety.types import CheckImpactRequest, CheckImpactResponse
 from logdevice.admin.settings.types import SettingsRequest, SettingsResponse
 
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 async def get_nodes_config(

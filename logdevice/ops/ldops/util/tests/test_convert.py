@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyre-strict
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
@@ -18,7 +19,7 @@ from logdevice.admin.nodes.types import ShardStorageState
 
 
 class ConvertTestCase(TestCase):
-    def test_to_shard_id(self):
+    def test_to_shard_id(self) -> None:
         # We cannot accept empty inputs
         input1 = ""
         with self.assertRaises(ValueError):
@@ -41,7 +42,7 @@ class ConvertTestCase(TestCase):
         self.assertEqual(-1, shard.shard_index)
         self.assertEqual(225, shard.node.node_index)
 
-    def test_to_storage_state(self):
+    def test_to_storage_state(self) -> None:
         # We cannot accept empty inputs
         input1 = ""
         with self.assertRaises(ValueError):
@@ -75,7 +76,7 @@ class ConvertTestCase(TestCase):
             ShardStorageState.READ_WRITE, convert.to_storage_state(read_write)
         )
 
-    def test_to_replication(self):
+    def test_to_replication(self) -> None:
         # Empty dicts return empty replication properties
         self.assertEqual(ReplicationProperty(), convert.to_replication({}))
         # None is returned as none

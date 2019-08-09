@@ -130,6 +130,10 @@ class TestMaintenanceView(TestCase):
         maintenance: MaintenanceDefinition,
         node_index_to_node_view: Dict[int, NodeView],
     ) -> None:
+        self.assertEqual(
+            maintenance_view.allow_passive_drains, maintenance.allow_passive_drains
+        )
+
         self.assertListEqual(
             sorted(
                 ni.node_index for ni in maintenance_view.affected_sequencer_node_ids

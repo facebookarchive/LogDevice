@@ -9,6 +9,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import sys
 
+# pyre-fixme[21]: T48485855
 from logdevice.ldquery.internal import ext
 
 
