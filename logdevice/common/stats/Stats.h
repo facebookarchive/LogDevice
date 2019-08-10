@@ -1445,6 +1445,9 @@ class PerShardStatToken {
     }                                                          \
   } while (0)
 
+#define MESSAGE_TYPE_STAT_SUB(stats_struct, type, name, value) \
+  MESSAGE_TYPE_STAT_ADD(stats_struct, type, name, -(value))
+
 #define MESSAGE_TYPE_STAT_INCR(stats_struct, type, name) \
   MESSAGE_TYPE_STAT_ADD(stats_struct, type, name, 1)
 

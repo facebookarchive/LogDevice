@@ -899,7 +899,7 @@ void Socket::onSent(std::unique_ptr<Envelope> e,
   }
 
   if (!deps_->shuttingDown()) {
-    deps_->noteBytesDrained(e->cost());
+    deps_->noteBytesDrained(e->cost(), e->message().type_);
     deps_->onSent(e->moveMessage(), peer_name_, reason, e->birthTime(), cm);
     ld_check(!e->haveMessage());
   }
@@ -1120,7 +1120,10 @@ void Socket::close(Status reason) {
     }
   }
 
+  size_t buffered_bytes = LD_EV(evbuffer_get_length)(deps_->getOutput(bev_));
+
   if (buffered_output_) {
+    buffered_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
     deps_->evtimerDel(&buffered_output_flush_event_);
     LD_EV(evbuffer_free)(buffered_output_);
     buffered_output_ = nullptr;
@@ -1130,9 +1133,11 @@ void Socket::close(Status reason) {
     deps_->buffereventShutDownSSL(bev_);
   }
 
-  if (!deps_->shuttingDown()) {
-    deps_->noteBytesDrained(LD_EV(evbuffer_get_length)(deps_->getOutput(bev_)));
+  if (buffered_bytes != 0 && !deps_->shuttingDown()) {
+    deps_->noteBytesDrained(buffered_bytes,
+                            /* message_type */ folly::none);
   }
+
   deps_->buffereventFree(bev_); // this also closes the TCP socket
   bev_ = nullptr;
 
@@ -1191,6 +1196,7 @@ void Socket::close(Status reason) {
           std::unique_ptr<Envelope> e(&e_ref);
           onSent(std::move(e), reason);
         });
+    ld_check(moved_pendingq.empty());
     // If there are any injected errors they need to be completed before on
     // close callbacks.
     deps_->processDeferredMessageCompletions();
@@ -1430,7 +1436,7 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
   sendq_.push_back(*envelope.release());
   ld_check(!envelope);
 
-  deps_->noteBytesQueued(msglen);
+  deps_->noteBytesQueued(msglen, /* message_type */ folly::none);
   return 0;
 }
 
@@ -1598,7 +1604,7 @@ Envelope* Socket::registerMessage(std::unique_ptr<Message>&& msg) {
   ld_check(!msg);
 
   pendingq_.push(*envelope);
-  deps_->noteBytesQueued(envelope->cost());
+  deps_->noteBytesQueued(envelope->cost(), envelope->message().type_);
 
   return envelope.release();
 }
@@ -1625,7 +1631,7 @@ std::unique_ptr<Message> Socket::discardEnvelope(Envelope& envelope) {
   // This envelope should be in the pendingq_.
   ld_check(envelope.links_.is_linked());
 
-  deps_->noteBytesDrained(envelope.cost());
+  deps_->noteBytesDrained(envelope.cost(), envelope.message().type_);
 
   // Take ownership of the envelope so it is deleted.
   std::unique_ptr<Envelope> pending_envelope(&envelope);
@@ -1731,7 +1737,7 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
     ++num_messages;
   }
 
-  deps_->noteBytesDrained(nbytes);
+  deps_->noteBytesDrained(nbytes, /* message_type */ folly::none);
 
   drain_pos_ = next_drain_pos;
 

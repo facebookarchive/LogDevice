@@ -19,6 +19,10 @@ STAT_DEFINE(message_received, SUM)
 // Number of microseconds that workers spent processing callbacks for this
 // message type.
 STAT_DEFINE(message_worker_usec, SUM)
+// Bytes of messages of this type enqueued in Socket.
+// Including messages waiting for traffic shaping bandwidth, waiting for
+// serialization, waiting to be passed to TCP.
+STAT_DEFINE(message_bytes_pending, SUM)
 
 #undef STAT_DEFINE
 #undef RESETTING_STATS

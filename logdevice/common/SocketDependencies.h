@@ -44,8 +44,8 @@ class SocketDependencies {
   virtual std::shared_ptr<ServerConfig> getServerConfig() const;
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
-  virtual void noteBytesQueued(size_t nbytes);
-  virtual void noteBytesDrained(size_t nbytes);
+  virtual void noteBytesQueued(size_t nbytes, folly::Optional<MessageType>);
+  virtual void noteBytesDrained(size_t nbytes, folly::Optional<MessageType>);
   virtual size_t getBytesPending() const;
 
   virtual std::shared_ptr<folly::SSLContext>

@@ -56,12 +56,16 @@ SocketDependencies::getNodesConfiguration() const {
   return processor_->getNodesConfiguration();
 }
 
-void SocketDependencies::noteBytesQueued(size_t nbytes) {
-  sender_->noteBytesQueued(nbytes);
+void SocketDependencies::noteBytesQueued(
+    size_t nbytes,
+    folly::Optional<MessageType> message_type) {
+  sender_->noteBytesQueued(nbytes, message_type);
 }
 
-void SocketDependencies::noteBytesDrained(size_t nbytes) {
-  sender_->noteBytesDrained(nbytes);
+void SocketDependencies::noteBytesDrained(
+    size_t nbytes,
+    folly::Optional<MessageType> message_type) {
+  sender_->noteBytesDrained(nbytes, message_type);
 }
 
 size_t SocketDependencies::getBytesPending() const {

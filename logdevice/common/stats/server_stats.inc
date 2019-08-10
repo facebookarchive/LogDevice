@@ -1187,10 +1187,12 @@ STAT_DEFINE(num_storage_tasks_fast_time_sensitive, SUM)
 STAT_DEFINE(num_storage_tasks_fast_stallable, SUM)
 STAT_DEFINE(num_storage_tasks_slow, SUM)
 STAT_DEFINE(num_storage_tasks_default, SUM)
-// Total size of evbuffer pending bytes accross all workers
-STAT_DEFINE(evbuffer_total_size, SUM)
-// Max evbuffer size accross all workers
-STAT_DEFINE(evbuffer_max_size, MAX)
+// Total pending bytes in all sockets.
+// Includes messages waiting for traffic shaping bandwidth, waiting for
+// serialization, waiting to be passed to TCP.
+STAT_DEFINE(sockets_bytes_pending_total, SUM)
+// Total pending bytes in all sockets of one worker. Max across worker threads.
+STAT_DEFINE(sockets_bytes_pending_max_worker, MAX)
 // Count of flow groups runs that overran the configured max runtime
 STAT_DEFINE(flow_groups_run_deadline_exceeded, SUM)
 STAT_DEFINE(flow_groups_run_deadline_exceeded_rt, SUM)

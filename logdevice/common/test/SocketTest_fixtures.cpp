@@ -21,11 +21,13 @@ StatsHolder* TestSocketDependencies::getStats() const {
   return nullptr;
 }
 
-void TestSocketDependencies::noteBytesQueued(size_t nbytes) {
+void TestSocketDependencies::noteBytesQueued(size_t nbytes,
+                                             folly::Optional<MessageType>) {
   owner_->bytes_pending_ += nbytes;
 }
 
-void TestSocketDependencies::noteBytesDrained(size_t nbytes) {
+void TestSocketDependencies::noteBytesDrained(size_t nbytes,
+                                              folly::Optional<MessageType>) {
   ASSERT_TRUE(owner_->bytes_pending_ >= nbytes);
   owner_->bytes_pending_ -= nbytes;
 }

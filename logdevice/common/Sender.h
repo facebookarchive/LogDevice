@@ -696,21 +696,30 @@ class Sender : public SenderBase {
                 ConnectionType conntype);
 
   /**
-   * Called by a Socket managed by this Sender when bytes are appended
-   * to the Socket bufferevent's output buffer.
+   * Called by a Socket managed by this Sender when bytes are added to one of
+   * Socket's queues or evbuffers.
+   * If message bytes are added to a queue, @param message_type is the type of
+   * that message. If message is passed to a evbuffer, message_type
+   * is folly::none.
+   * These calls should be matched by noteBytesDrained() calls, such that for
+   * each message_type (including folly::none) the (queued - drained) value
+   * reflects the current in-flight situation.
    *
    * @param nbytes   how many bytes were appended
    */
-  void noteBytesQueued(size_t nbytes);
+  void noteBytesQueued(size_t nbytes,
+                       folly::Optional<MessageType> message_type);
 
   /**
    * Called by a Socket managed by this Sender when some bytes from
    * the Socket bufferevent's output buffer have been drained into the
-   * underlying TCP socket.
+   * underlying TCP socket. @param message_type is treated the same way as in
+   * noteBytesQueued()
    *
    * @param nbytes   how many bytes were sent
    */
-  void noteBytesDrained(size_t nbytes);
+  void noteBytesDrained(size_t nbytes,
+                        folly::Optional<MessageType> message_type);
 
   /**
    * @return   the current total number of bytes in the output evbuffers of

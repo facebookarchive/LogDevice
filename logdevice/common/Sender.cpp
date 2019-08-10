@@ -262,19 +262,31 @@ int Sender::addClient(int fd,
   return 0;
 }
 
-void Sender::noteBytesQueued(size_t nbytes) {
+void Sender::noteBytesQueued(size_t nbytes,
+                             folly::Optional<MessageType> message_type) {
   // nbytes cannot exceed maximum message size
   ld_check(nbytes <= (size_t)Message::MAX_LEN + sizeof(ProtocolHeader));
   bytes_pending_ += nbytes;
-  WORKER_STAT_ADD(evbuffer_total_size, nbytes);
-  WORKER_STAT_ADD(evbuffer_max_size, nbytes);
+  StatsHolder* stats = Worker::stats();
+  STAT_ADD(stats, sockets_bytes_pending_total, nbytes);
+  STAT_ADD(stats, sockets_bytes_pending_max_worker, nbytes);
+  if (message_type.hasValue()) {
+    MESSAGE_TYPE_STAT_ADD(
+        stats, message_type.value(), message_bytes_pending, nbytes);
+  }
 }
 
-void Sender::noteBytesDrained(size_t nbytes) {
+void Sender::noteBytesDrained(size_t nbytes,
+                              folly::Optional<MessageType> message_type) {
   ld_check(bytes_pending_ >= nbytes);
   bytes_pending_ -= nbytes;
-  WORKER_STAT_SUB(evbuffer_total_size, nbytes);
-  WORKER_STAT_SUB(evbuffer_max_size, nbytes);
+  StatsHolder* stats = Worker::stats();
+  STAT_SUB(stats, sockets_bytes_pending_total, nbytes);
+  STAT_SUB(stats, sockets_bytes_pending_max_worker, nbytes);
+  if (message_type.hasValue()) {
+    MESSAGE_TYPE_STAT_SUB(
+        stats, message_type.value(), message_bytes_pending, nbytes);
+  }
 }
 
 ssize_t Sender::getTcpSendBufSizeForClient(ClientID client_id) const {

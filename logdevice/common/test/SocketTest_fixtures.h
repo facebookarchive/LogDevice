@@ -44,8 +44,10 @@ class TestSocketDependencies : public SocketDependencies {
       : SocketDependencies(nullptr, nullptr), owner_(owner) {}
   virtual const Settings& getSettings() const override;
   virtual StatsHolder* getStats() const override;
-  virtual void noteBytesQueued(size_t nbytes) override;
-  virtual void noteBytesDrained(size_t nbytes) override;
+  virtual void noteBytesQueued(size_t nbytes,
+                               folly::Optional<MessageType>) override;
+  virtual void noteBytesDrained(size_t nbytes,
+                                folly::Optional<MessageType>) override;
   virtual size_t getBytesPending() const override;
   virtual std::shared_ptr<folly::SSLContext>
       getSSLContext(bufferevent_ssl_state) const override;
