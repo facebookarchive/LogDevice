@@ -124,7 +124,12 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
 
   ld_check(!payload_ || payload_->valid());
 
-  writer.write(header_);
+  // TODO: Handle protocol mismatch between peers for write stream support.
+  STORE_Header proto_supported_header(header_);
+  if (writer.proto() < Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+    proto_supported_header.flags &= ~STORE_Header::WRITE_STREAM;
+  }
+  writer.write(proto_supported_header);
 
   if (header_.flags & STORE_Header::RECOVERY) {
     writer.write(extra_.recovery_id);
@@ -499,6 +504,7 @@ std::string STORE_Message::flagsToString(STORE_flags_t flags) {
   FLAG(BRIDGE)
   FLAG(EPOCH_BEGIN)
   FLAG(DRAINED)
+  FLAG(WRITE_STREAM)
 
 #undef FLAG
 

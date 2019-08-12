@@ -193,6 +193,10 @@ Slice formRecordHeader(const STORE_Header& store_header,
     flags |= FLAG_WRITTEN_BY_REBUILDING;
   }
 
+  if (store_header.flags & STORE_Header::WRITE_STREAM) {
+    flags |= FLAG_WRITE_STREAM;
+  }
+
   if (!optional_keys.empty()) {
     flags |= FLAG_CUSTOM_KEY;
     flags |= FLAG_OPTIONAL_KEYS;
@@ -980,6 +984,7 @@ std::string flagsToString(flags_t flags) {
   FLAG(DRAINED)
   FLAG(SHARD_ID)
   FLAG(OFFSET_MAP)
+  FLAG(WRITE_STREAM)
 
 #undef FLAG
 

@@ -130,7 +130,14 @@ class MessageSerializationTest : public ::testing::Test {
     ASSERT_EQ(sent.header_.nsync, recv.header_.nsync);
     ASSERT_EQ(sent.header_.copyset_offset, recv.header_.copyset_offset);
     ASSERT_EQ(sent.header_.copyset_size, recv.header_.copyset_size);
-    ASSERT_EQ(sent.header_.flags, recv.header_.flags);
+    if (proto >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+      ASSERT_EQ(sent.header_.flags, recv.header_.flags);
+    } else {
+      APPEND_flags_t flag1 = sent.header_.flags, flag2 = recv.header_.flags;
+      flag1 &= ~STORE_Header::WRITE_STREAM;
+      flag2 &= ~STORE_Header::WRITE_STREAM;
+      ASSERT_EQ(flag1, flag2);
+    }
     ASSERT_EQ(sent.header_.timeout_ms, recv.header_.timeout_ms);
     ASSERT_EQ(sent.header_.sequencer_node_id, recv.header_.sequencer_node_id);
     ASSERT_EQ(sent.extra_.recovery_id, recv.extra_.recovery_id);
@@ -399,6 +406,9 @@ struct TestStoreMessageFactory {
 
   std::string serialized(uint16_t proto) const {
     auto flags = header_.flags;
+    if (proto < Compatibility::STREAM_WRITER_SUPPORT) {
+      flags &= ~STORE_Header::WRITE_STREAM;
+    }
     std::string rv = "CE0465BE038BE5C5E25152C7813ABC0F" // rid
                      "8EEC9DDEBF2549EB"                 // timestamp
                      "BBB8ECEB"                         // last_known_good
@@ -615,6 +625,23 @@ TEST_F(MessageSerializationTest, STORE_WithE2ETracingContext) {
   factory.setE2ETracingContext("abcdefgh",
                                "0800000000000000"
                                "6162636465666768");
+
+  STORE_Message m = factory.message();
+  auto check = [&](const STORE_Message& m2, uint16_t proto) {
+    checkSTORE(m, m2, proto);
+  };
+  DO_TEST(m,
+          check,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::MAX_PROTOCOL_SUPPORTED,
+          std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
+          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+}
+
+TEST_F(MessageSerializationTest, STORE_WithWriteStreamFlagSet) {
+  TestStoreMessageFactory factory;
+
+  factory.setFlags(STORE_Header::WRITE_STREAM);
 
   STORE_Message m = factory.message();
   auto check = [&](const STORE_Message& m2, uint16_t proto) {

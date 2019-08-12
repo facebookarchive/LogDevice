@@ -117,6 +117,9 @@ const flags_t FLAG_SHARD_ID = 1u << 20; //=1048576
 // Indicates if record contains OffsetMap.
 const flags_t FLAG_OFFSET_MAP = 1u << 21; //=2097152
 
+// Indicates if the record belongs to a write stream.
+const flags_t FLAG_WRITE_STREAM = 1u << 22; //=4194304
+
 // Please update flagsToString() when adding new flags.
 
 // Flags that indicate that the record in question is a pseudorecord, and can

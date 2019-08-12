@@ -17,7 +17,7 @@ using namespace facebook::logdevice;
 
 class LocalLogStoreRecordFormatTest
     : public ::testing::TestWithParam<
-          std::tuple<bool, bool, bool, bool, bool, bool>> {
+          std::tuple<bool, bool, bool, bool, bool, bool, bool>> {
  public:
   LocalLogStoreRecordFormatTest() {
     dbg::assertOnData = true;
@@ -37,7 +37,7 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
   const bool written_by_rebuilding = std::get<3>(GetParam());
   const bool shard_id_in_copyset = std::get<4>(GetParam());
   bool enable_offset_map = std::get<5>(GetParam());
-
+  const bool set_write_stream = std::get<6>(GetParam());
   STORE_Header header;
   header.rid = rid;
   header.timestamp = timestamp.count();
@@ -68,6 +68,10 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
     header.flags |= STORE_Header::HOLE;
   }
 
+  if (set_write_stream) {
+    header.flags |= STORE_Header::WRITE_STREAM;
+  }
+
   header.copyset_size = 2;
   OffsetMap om;
   om.setCounter(BYTE_OFFSET, 34);
@@ -89,10 +93,12 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
   Slice header_blob = LocalLogStoreRecordFormat::formRecordHeader(
       header, copyset, &buf, shard_id_in_copyset, optional_keys, extra);
 
+  // TODO: Avoid hard-coding the expected blob size calculation.
   size_t blob_size = 8 + 4 + 1 +
       4
-      // varints encoded flags
-      + 2
+      // varints encoded flags: enable_offset_map or set_write_stream makes the
+      // encoding 3 bytes instead of 2.
+      + ((enable_offset_map || set_write_stream) ? 3 : 2)
       // 8 bytes for offset within epoch
       + (enable_offset && !enable_offset_map ? 8 : 0)
       // 2 for optional_keys blob + 2 for optional_keys size + (1 for key type
@@ -103,9 +109,7 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
       + 1 + 2 * (shard_id_in_copyset ? sizeof(ShardID) : sizeof(node_index_t)) +
       ((enable_offset && enable_offset_map)
            ? extra.offsets_within_epoch.sizeInLinearBuffer()
-           : 0)
-      // FLAG_OFFSET_MAP causes the `flag` varint to use one more byte
-      + (enable_offset_map ? 1 : 0);
+           : 0);
 
   ASSERT_EQ(blob_size, header_blob.size);
 
@@ -158,7 +162,8 @@ TEST_P(LocalLogStoreRecordFormatTest, RoundTrip) {
            : 0) |
       LocalLogStoreRecordFormat::FLAG_CUSTOM_KEY |
       LocalLogStoreRecordFormat::FLAG_OPTIONAL_KEYS |
-      (enable_offset_map ? LocalLogStoreRecordFormat::FLAG_OFFSET_MAP : 0);
+      (enable_offset_map ? LocalLogStoreRecordFormat::FLAG_OFFSET_MAP : 0) |
+      (set_write_stream ? LocalLogStoreRecordFormat::FLAG_WRITE_STREAM : 0);
   ASSERT_EQ(expected_flags, flags);
   ASSERT_EQ(2, copyset_size_read);
   ASSERT_EQ("data", payload_read.toString());
@@ -205,6 +210,7 @@ TEST_P(LocalLogStoreRecordFormatTest, CSIRoundTrip) {
   const bool is_hole = std::get<2>(GetParam());
   const bool written_by_rebuilding = std::get<3>(GetParam());
   const bool shard_id_in_copyset = std::get<4>(GetParam());
+  const bool set_write_stream = std::get<5>(GetParam());
 
   STORE_Header header;
   header.rid = rid;
@@ -220,6 +226,10 @@ TEST_P(LocalLogStoreRecordFormatTest, CSIRoundTrip) {
 
   if (written_by_rebuilding) {
     header.flags |= STORE_Header::REBUILDING;
+  }
+
+  if (set_write_stream) {
+    header.flags |= STORE_Header::WRITE_STREAM;
   }
 
   header.copyset_size = 2;
@@ -266,7 +276,8 @@ TEST_P(LocalLogStoreRecordFormatTest, CSIRoundTrip) {
       (shard_id_in_copyset ? LocalLogStoreRecordFormat::CSI_FLAG_SHARD_ID : 0) |
       (written_by_rebuilding
            ? LocalLogStoreRecordFormat::CSI_FLAG_WRITTEN_BY_REBUILDING
-           : 0);
+           : 0) |
+      (set_write_stream ? LocalLogStoreRecordFormat::FLAG_WRITE_STREAM : 0);
   ASSERT_EQ(expected_flags, flags);
   ASSERT_EQ(2, copyset_read.size());
   ASSERT_EQ(rec_1, copyset_read[0]);
@@ -276,6 +287,7 @@ TEST_P(LocalLogStoreRecordFormatTest, CSIRoundTrip) {
 INSTANTIATE_TEST_CASE_P(LocalLogStoreRecordFormatTest,
                         LocalLogStoreRecordFormatTest,
                         ::testing::Combine(::testing::Bool(),
+                                           ::testing::Bool(),
                                            ::testing::Bool(),
                                            ::testing::Bool(),
                                            ::testing::Bool(),
