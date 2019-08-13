@@ -337,8 +337,7 @@ void PartitionedRocksDBStore::Iterator::handleEmptyLog() {
 void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
                                                        lsn_t current_lsn,
                                                        ReadFilter* filter,
-                                                       ReadStats* it_stats,
-                                                       bool skip_current) {
+                                                       ReadStats* it_stats) {
   if (filter || it_stats) {
     // Filtering args are only compatible with moving forward
     ld_check(forward);
@@ -384,7 +383,7 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
   while (true) {
     // See if we're already in a good state.
 
-    if (data_iterator_ && !skip_current) {
+    if (data_iterator_) {
       IteratorState s = data_iterator_->state();
       if (s == IteratorState::AT_RECORD || s == IteratorState::LIMIT_REACHED) {
         if (!atOrphanedRecord()) {
@@ -398,8 +397,6 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
         return;
       }
     }
-
-    skip_current = false;
 
     // Need to move to the next/prev partition. See if there's nowhere to move.
 
@@ -543,6 +540,10 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
 void PartitionedRocksDBStore::Iterator::seek(lsn_t lsn,
                                              ReadFilter* filter,
                                              ReadStats* stats) {
+  // Note: if data_iterator_ is not null at the start of this method, all code
+  // paths must either seek or destroy this pre-existing data_iterator_.
+  // Otherwise it may pin memtables indefinitely.
+
   SCOPED_IO_TRACING_CONTEXT(store_->getIOTracing(), "p:seek");
   trackSeek(lsn, 0);
 
@@ -607,16 +608,22 @@ void PartitionedRocksDBStore::Iterator::seek(lsn_t lsn,
       data_iterator_->seek(lsn, filter, stats);
     }
   } else {
-    // If we're seeking to LSN above max_lsn_ in current partition, don't bother
-    // creating/seeking data_iterator_. Instead tell moveUntilValid() to skip
-    // to the next partition.
-    // We could achieve the same by doing data_iterator_.reset() here, but we
-    // don't want to destroy data_iterator_ in the common case of seeking to
-    // just above the last record: data_iterator_ may be useful for the next
-    // seek, after more records are written.
+    // We're seeking to LSN above max_lsn_ in current partition.
+    // Reset data_iterator_. This will make moveUntilValid() skip to next
+    // partition without having to uselessly seek data_iterator_ in current
+    // partition. More subtly but importantly, this will also unpin memtables
+    // in case the seek target LSN is above the last LSN in the log.
+    //
+    // TODO (#T45309029): Consider not resetting it in the common case of
+    // seeking to just above the last record: data_iterator_ may be useful for
+    // the next seek, after more records are written. This requires solving the
+    // problem of pinned memtables first. Note that currently we can't Refresh()
+    // the data iterator like we do with meta_iterator_ above because rocksdb's
+    // tailing iterators don't support Refresh() yet.
+    data_iterator_.reset();
   }
 
-  moveUntilValid(true, lsn, filter, stats, /* skip_current */ above_end);
+  moveUntilValid(true, lsn, filter, stats);
 
   // Check if we accessed underreplicated region.
   IteratorState s = state();
