@@ -270,7 +270,7 @@ void RocksDBLogStoreBase::throttleIOIfNeeded(WriteBufStats buf_stats,
 
   if (prev_state != new_state) {
     std::string s = folly::sformat(
-        "Shard {}: trottling transitioned from {} to {} after {:.3f}s. "
+        "Shard {}: throttling transitioned from {} to {} after {:.3f}s. "
         "Memtables active: {:.3f} MB, flushing: {:.3f} MB, pinned: {:.3f} MB.",
         getShardIdx(),
         state_to_str(prev_state),

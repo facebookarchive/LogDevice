@@ -155,8 +155,7 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
   void moveUntilValid(bool forward,
                       lsn_t current_lsn,
                       ReadFilter* filter = nullptr,
-                      ReadStats* stats = nullptr,
-                      bool skip_current = false);
+                      ReadStats* stats = nullptr);
 
   void seekToPartitionBeforeOrAfter(lsn_t lsn,
                                     partition_id_t partition_id,
