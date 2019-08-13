@@ -293,6 +293,7 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
     shards_slow = toString(scd_->getShardsSlow());
   }
 
+  info.csid = deps_->getClientSessionID();
   info.log_id = log_id_;
   info.next_lsn = next_lsn_to_deliver_;
   info.window_high = window_high_;
@@ -337,6 +338,7 @@ void ClientReadStream::sampleDebugInfo(
   }
   auto sample = std::make_unique<TraceSample>();
   sample->addNormalValue("thread_name", ThreadID::getName());
+  sample->addNormalValue("csid", info.csid);
   sample->addIntValue("log_id", info.log_id.val());
   sample->addIntValue("stream_id", info.stream_id.val());
   sample->addIntValue("next_lsn", info.next_lsn);

@@ -75,9 +75,9 @@ static size_t calculate_queue_capacity(size_t max_logs,
 ReaderImpl::ReaderImpl(size_t max_logs,
                        ssize_t buffer_size,
                        Processor* processor,
+                       std::string csid,
                        EpochMetaDataCache* epoch_metadata_cache,
-                       std::shared_ptr<Client> client_shared,
-                       std::string csid)
+                       std::shared_ptr<Client> client_shared)
     : // Extract settings and delegate to protected constructor
       ReaderImpl(max_logs,
                  processor,

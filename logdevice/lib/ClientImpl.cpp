@@ -534,6 +534,7 @@ std::unique_ptr<Reader> ClientImpl::createReader(size_t max_logs,
   return std::make_unique<ReaderImpl>(max_logs,
                                       buffer_size,
                                       processor_.get(),
+                                      getClientSessionID(),
                                       getEpochMetaDataCache(),
                                       shared_from_this());
 }

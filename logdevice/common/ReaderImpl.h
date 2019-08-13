@@ -63,9 +63,9 @@ class ReaderImpl : public Reader {
   ReaderImpl(size_t max_logs,
              ssize_t buffer_size,
              Processor* processor,
+             std::string csid,
              EpochMetaDataCache* epoch_metadata_cache = nullptr,
-             std::shared_ptr<Client> client = {},
-             std::string csid = "");
+             std::shared_ptr<Client> client = {});
   ~ReaderImpl() override;
 
   // Makes read() not report most gaps (except those at the end of a log).

@@ -759,6 +759,8 @@ class ClientReadStream : boost::noncopyable {
 
     logid_t log_id;
     const read_stream_id_t stream_id;
+    /* Client session ID */
+    std::string csid;
     /* Next lsn to deliver */
     lsn_t next_lsn;
     lsn_t window_high;
