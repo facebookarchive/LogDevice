@@ -29,7 +29,7 @@ service AdminAPI extends fb303.FacebookService {
    * object.
    */
   nodes.NodesConfigResponse getNodesConfig(1: nodes.NodesFilter filter) throws
-      (1: exceptions.NodeNotReady notready);
+      (1: exceptions.NodeNotReady notready) (cpp.coroutine);
 
   /**
    * Gets the state object for all nodes that matches the supplied NodesFilter.
@@ -40,7 +40,7 @@ service AdminAPI extends fb303.FacebookService {
    * not throw NodeNotReady exception but we will return partial data.
    */
    nodes.NodesStateResponse getNodesState(1: nodes.NodesStateRequest request) throws
-      (1: exceptions.NodeNotReady notready);
+      (1: exceptions.NodeNotReady notready) (cpp.coroutine);
 
   /**
    * Add new nodes to the cluster. The request should contain the spec of each
@@ -60,7 +60,7 @@ service AdminAPI extends fb303.FacebookService {
       (1: exceptions.NodeNotReady notready,
        2: cluster_membership.ClusterMembershipOperationFailed failed_op,
        3: exceptions.NodesConfigurationManagerError ncm_error,
-       4: exceptions.NotSupported not_supported);
+       4: exceptions.NotSupported not_supported) (cpp.coroutine);
 
   /**
    * Update service discovery information of some cluster nodes. The passed
@@ -83,7 +83,7 @@ service AdminAPI extends fb303.FacebookService {
       (1: exceptions.NodeNotReady notready,
        2: cluster_membership.ClusterMembershipOperationFailed failed_op,
        3: exceptions.NodesConfigurationManagerError ncm_error,
-       4: exceptions.NotSupported not_supported);
+       4: exceptions.NotSupported not_supported) (cpp.coroutine);
 
   /**
    * Removes the nodes matching the passed list of NodeFilters from the
@@ -105,7 +105,7 @@ service AdminAPI extends fb303.FacebookService {
       (1: exceptions.NodeNotReady notready,
        2: cluster_membership.ClusterMembershipOperationFailed failed_op,
        3: exceptions.NodesConfigurationManagerError ncm_error,
-       4: exceptions.NotSupported not_supported);
+       4: exceptions.NotSupported not_supported) (cpp.coroutine);
 
   /**
    * Lists the maintenance by group-ids. This returns maintenances from the
@@ -118,7 +118,7 @@ service AdminAPI extends fb303.FacebookService {
       (1: exceptions.NodeNotReady notready,
        3: exceptions.InvalidRequest invalid_request,
        4: exceptions.OperationError error,
-       5: exceptions.NotSupported not_supported);
+       5: exceptions.NotSupported not_supported) (cpp.coroutine);
 
   /**
    * Perform a maintenance on one or more nodes/shards declaratively. The
@@ -147,7 +147,7 @@ service AdminAPI extends fb303.FacebookService {
        2: exceptions.InvalidRequest invalid_request,
        3: exceptions.MaintenanceClash clash,
        4: exceptions.OperationError operation_error,
-       5: exceptions.NotSupported not_supported);
+       5: exceptions.NotSupported not_supported) (cpp.coroutine);
 
   /**
    * Cancels a maintenance that has been scheduled or executed on one or more
@@ -167,7 +167,7 @@ service AdminAPI extends fb303.FacebookService {
        2: exceptions.InvalidRequest invalid_request,
        3: exceptions.OperationError operation_error,
        4: exceptions.NotSupported not_supported,
-       5: exceptions.MaintenanceMatchError not_found);
+       5: exceptions.MaintenanceMatchError not_found) (cpp.coroutine);
 
   /**
    * Call this if rebuilding is currently blocked because we have too many
@@ -182,7 +182,7 @@ service AdminAPI extends fb303.FacebookService {
     (1: exceptions.NodeNotReady notready,
      2: exceptions.InvalidRequest invalid_request,
      3: exceptions.OperationError operation_error,
-     4: exceptions.NotSupported not_supported);
+     4: exceptions.NotSupported not_supported) (cpp.coroutine);
 
   /**
    * Validates whether it's safe to perform a storage-state change on one or
@@ -193,16 +193,16 @@ service AdminAPI extends fb303.FacebookService {
       (1: exceptions.NodeNotReady notready,
        2: exceptions.OperationError error,
        3: exceptions.InvalidRequest invalid_request,
-       4: exceptions.NotSupported notsupported);
+       4: exceptions.NotSupported notsupported) (cpp.coroutine);
 
   // *** LogTree specific APIs
-  logtree.LogTreeInfo getLogTreeInfo();
-  logtree.ReplicationInfo getReplicationInfo();
+  logtree.LogTreeInfo getLogTreeInfo() (cpp.corotuine);
+  logtree.ReplicationInfo getReplicationInfo() (cpp.coroutine);
 
   /**
    * Get information about all or some of the settings
    */
-  settings.SettingsResponse getSettings(1: settings.SettingsRequest request);
+  settings.SettingsResponse getSettings(1: settings.SettingsRequest request) (cpp.coroutine);
 
   /**
    * Force the server to take new snapshot of the LogsTree state in memory. The
@@ -215,13 +215,13 @@ service AdminAPI extends fb303.FacebookService {
   void takeLogTreeSnapshot(1: common.unsigned64 min_version) throws
       (1: exceptions.StaleVersion stale,
        2: exceptions.NodeNotReady notready,
-       3: exceptions.NotSupported notsupported);
+       3: exceptions.NotSupported notsupported) (cpp.coroutine);
 
   /**
    * Get Log Group Throughput
    */
   logtree.LogGroupThroughputResponse getLogGroupThroughput(
-                                1: logtree.LogGroupThroughputRequest request);
+                                1: logtree.LogGroupThroughputRequest request) (cpp.coroutine);
 
   /**
    * Get Log Group custom counters
@@ -229,5 +229,5 @@ service AdminAPI extends fb303.FacebookService {
   logtree.LogGroupCustomCountersResponse getLogGroupCustomCounters(
     1: logtree.LogGroupCustomCountersRequest request) throws
     (1: exceptions.NotSupported notsupported,
-     2: exceptions.InvalidRequest invalid_request);
+     2: exceptions.InvalidRequest invalid_request) (cpp.coroutine);
 }
