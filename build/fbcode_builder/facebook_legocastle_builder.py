@@ -92,19 +92,35 @@ esac
         return shell_comment(comment)
 
     def _render_impl(self, actions):
-        next_workdir = None
+        # This exists to transfer the current working directory to the next
+        # step, since Legocastle doesn't remember it.  Although this is
+        # potentially quadratic, we have to replay ALL workdir calls from
+        # the previous step because these might contain variable expansions,
+        # making it impossible to distinguish relative directories from
+        # absolute. Consider this step:
+        #     [
+        #         builder.fb_github_project_workdir('foo/bar')
+        #         ...
+        #         builder.workdir('baz')  # Now should be at foo/bar/baz
+        #     ]
+        #
+        # If we just replayed the last workdir('baz'), we would not end up
+        # in '<github_prefix>/foo/bar/baz', but rather in `<unknown>/baz`.
+        next_step_workdirs = []
         shipit_projects = []
         build_steps = []
         for action in recursively_flatten_list(actions):
             if isinstance(action, LegocastleFBCheckout):
-                next_workdir = ShellQuoted(
+                # This is guaranteed to be absolute, so drop the unnecessary
+                # history.
+                next_step_workdirs = [ShellQuoted(
                     '"$(hg root)/"{d}',
                 ).format(
                     d=path_join(
                         self.option('shipit_project_dir'),
                         action.project_and_path
                     ),
-                )
+                )]
                 shipit_projects.append(
                     action.project_and_path.split('/', 1)[0]
                 )
@@ -139,16 +155,12 @@ case "$OSTYPE" in
 esac
 """)
                 )
-                if next_workdir is not None:
-                    pre_actions.append(self.workdir(next_workdir))
+                pre_actions.extend(self.workdir(w) for w in next_step_workdirs)
 
-                next_workdir = None
                 shell_steps = []
                 for a in itertools.chain(pre_actions, action.actions):
                     if isinstance(a, LegocastleWorkdir):
-                        # Pass the last working directory to the next step,
-                        # since Legocastle doesn't remember it.
-                        next_workdir = a.dir
+                        next_step_workdirs.append(a.dir)
                         shell_steps.append(
                             ShellQuoted(
                                 # Don't evaluate {d} twice.
