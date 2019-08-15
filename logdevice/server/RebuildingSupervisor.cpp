@@ -76,6 +76,19 @@ void RebuildingSupervisor::init() {
   };
   clusterStateSubscription_ = cs->subscribeToUpdates(cb);
 
+  current_grace_period_ =
+      rebuildingSettings_->self_initiated_rebuilding_grace_period;
+  // Subscribe to rebuilding settings changes
+  auto settings_cb = [ticket = callbackHelper_.ticket()]() {
+    ticket.postCallbackRequest([=](RebuildingSupervisor* p) {
+      if (p) {
+        p->onRebuildingSettingsChanged();
+      }
+    });
+  };
+  rebuildingSettingsSubscription_ =
+      rebuildingSettings_.subscribeToUpdates(std::move(settings_cb));
+
   for (const auto& kv : *nodes_configuration->getServiceDiscovery()) {
     auto nid = kv.first;
     if (!cs->isNodeAlive(nid) && nid != myNodeId_.index()) {
@@ -172,7 +185,7 @@ void RebuildingSupervisor::addForRebuilding(
       trigger.expiry_ = now + timeout;
       trigger.shards_.insert(shard_idx.value());
     } else {
-      timeout = rebuildingSettings_->self_initiated_rebuilding_grace_period;
+      timeout = current_grace_period_;
       trigger.expiry_ = now + timeout;
       for (int shard = 0; shard < nodes_configuration->getNumShards(node_id);
            ++shard) {
@@ -341,9 +354,7 @@ void RebuildingSupervisor::triggerRebuilding() {
 
     case Decision::POSTPONE: {
       // cannot trigger rebuilding now. retry later
-      auto timeout =
-          rebuildingSettings_->self_initiated_rebuilding_grace_period;
-      trigger.expiry_ = SystemTimestamp::now() + timeout;
+      trigger.expiry_ = SystemTimestamp::now() + current_grace_period_;
       triggers_.update(trigger);
       scheduleNextRun();
       break;
@@ -695,8 +706,7 @@ RebuildingSupervisor::adjustRebuildingThrottle() {
     }
 
     auto now = SystemTimestamp::now();
-    auto deadline = throttling_exit_time_ +
-        rebuildingSettings_->self_initiated_rebuilding_grace_period;
+    auto deadline = throttling_exit_time_ + current_grace_period_;
     if (now < deadline) {
       // make sure we wait at least one grace period after exiting throttling
       // before starting triggering rebuildings again.
@@ -756,6 +766,20 @@ bool RebuildingSupervisor::canTriggerShardRebuilding(
   }
 
   return !trigger.shards_.empty();
+}
+
+void RebuildingSupervisor::onRebuildingSettingsChanged() {
+  auto old_val = current_grace_period_;
+  auto new_val = rebuildingSettings_->self_initiated_rebuilding_grace_period;
+  if (old_val != new_val) {
+    triggers_.apply([=](RebuildingTrigger& trigger) {
+      trigger.expiry_ += new_val;
+      trigger.expiry_ -= old_val;
+      return true;
+    });
+    current_grace_period_ = new_val;
+    scheduleNextRun();
+  }
 }
 
 void RebuildingSupervisor::RebuildingTriggerQueue::dumpDebugInfo() const {
@@ -860,5 +884,19 @@ RebuildingSupervisor::RebuildingTriggerQueue::getById(
 
 size_t RebuildingSupervisor::RebuildingTriggerQueue::size() const {
   return queue_.size();
+}
+
+size_t RebuildingSupervisor::RebuildingTriggerQueue::apply(
+    folly::Function<bool(RebuildingTrigger&)> cb) {
+  size_t cnt = 0;
+  auto& index = queue_.get<BY_NODE_ID>();
+  for (auto it = index.begin(); it != index.end(); ++it) {
+    RebuildingTrigger trigger = *it;
+    if (cb(trigger)) {
+      queue_.replace(it, trigger);
+      ++cnt;
+    }
+  }
+  return cnt;
 }
 }} // namespace facebook::logdevice

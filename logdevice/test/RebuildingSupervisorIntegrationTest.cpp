@@ -144,6 +144,91 @@ TEST_F(RebuildingSupervisorIntegrationTest, BasicFD) {
   expect_rebuildings({{4, 0}, {4, 1}}, cluster.get());
 }
 
+TEST_F(RebuildingSupervisorIntegrationTest,
+       RebuildingSettingsUpdatedFromConfig) {
+  // Replication factor is 2 by default.
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .enableSelfInitiatedRebuilding("20min")
+                     .setParam("--event-log-grace-period", "1ms")
+                     .setParam("--disable-event-log-trimming", "true")
+                     .useHashBasedSequencerAssignment()
+                     .setNumDBShards(2)
+                     .deferStart()
+                     .create(5);
+
+  cluster->start({0, 1, 2, 3});
+
+  ld_info("Waiting for rebuilding of N4 to be scheduled");
+  wait_until("rebuilding scheduled", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    auto n1 = tmp_stats["shard_rebuilding_scheduled"];
+    auto n2 = tmp_stats["shard_rebuilding_not_triggered_nodealive"];
+    return n1 == 8 && n2 == 6;
+  });
+
+  // rebuilding will be initiated in 20min
+  // update config to set self-initiate-rebuilding-grace-period to 1s
+  auto config = cluster->getConfig()->getServerConfig();
+
+  ServerConfig::SettingsConfig new_settings = config->getServerSettingsConfig();
+
+  new_settings["self-initiated-rebuilding-grace-period"] = "1s";
+  std::shared_ptr<ServerConfig> new_config = ServerConfig::fromDataTest(
+      config->getClusterName(),
+      configuration::NodesConfig(config->getNodes()),
+      config->getMetaDataLogsConfig(),
+      ServerConfig::PrincipalsConfig(),
+      ServerConfig::SecurityConfig(),
+      ServerConfig::TraceLoggerConfig(),
+      ServerConfig::TrafficShapingConfig(),
+      ServerConfig::ShapingConfig(
+          std::set<NodeLocationScope>{NodeLocationScope::NODE},
+          std::set<NodeLocationScope>{NodeLocationScope::NODE}),
+      new_settings,
+      config->getClientSettingsConfig(),
+      config->getInternalLogsConfig());
+
+  ASSERT_TRUE(new_config != nullptr);
+
+  cluster->writeServerConfig(new_config.get());
+
+  ld_info("Waiting for rebuilding of N4 to be triggered");
+  expect_rebuildings({{4, 0}, {4, 1}}, cluster.get());
+}
+
+TEST_F(RebuildingSupervisorIntegrationTest,
+       RebuildingSettingsUpdatedFromAdminCommand) {
+  // Replication factor is 2 by default.
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .enableSelfInitiatedRebuilding("20min")
+                     .setParam("--event-log-grace-period", "1ms")
+                     .setParam("--disable-event-log-trimming", "true")
+                     .useHashBasedSequencerAssignment()
+                     .setNumDBShards(2)
+                     .deferStart()
+                     .create(5);
+
+  cluster->start({0, 1, 2, 3});
+
+  ld_info("Waiting for rebuilding of N4 to be scheduled");
+  wait_until("rebuilding scheduled", [&]() {
+    // Check N0
+    auto tmp_stats = cluster->getNode(0).stats();
+    auto n1 = tmp_stats["shard_rebuilding_scheduled"];
+    auto n2 = tmp_stats["shard_rebuilding_not_triggered_nodealive"];
+    return n1 == 8 && n2 == 6;
+  });
+
+  // rebuilding will be initiated in 20min
+  // send admin command to set self-initiate-rebuilding-grace-period to 1s
+  cluster->getNode(0).sendCommand(
+      "set self-initiated-rebuilding-grace-period 1s --ttl max");
+
+  ld_info("Waiting for rebuilding of N4 to be triggered");
+  expect_rebuildings({{4, 0}, {4, 1}}, cluster.get());
+}
+
 // This test simulates the shutdown and removal of many nodes, then verifies
 // that this doesn't casue the rebuilding trigger queue to fill up, preventing
 // rebuildings to be triggered.

@@ -16,6 +16,7 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index_container.hpp>
 
+#include "folly/Function.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/ClusterState.h"
@@ -162,6 +163,11 @@ class RebuildingSupervisor {
    */
   void onNodeStateChanged(node_index_t node_id, ClusterState::NodeState state);
 
+  /**
+   * Callback for rebuilding settings subscription
+   */
+  void onRebuildingSettingsChanged();
+
   enum class Decision {
     // trigger should be executed immediately
     EXECUTE = 0,
@@ -286,8 +292,11 @@ class RebuildingSupervisor {
     void clear();
     // prints representation of all triggers
     void dumpDebugInfo() const;
-    // retrusn number of the triggers in the queue
+    // returns number of the triggers in the queue
     size_t size() const;
+    // executes provided callback on all triggers. leaves items unchanged if
+    // the callback returns false. returns number of items updated.
+    size_t apply(folly::Function<bool(RebuildingTrigger&)> cb);
 
    private:
     // internal enum to explicitly name indexes of the multi_index_container
@@ -345,6 +354,10 @@ class RebuildingSupervisor {
   SystemTimestamp throttling_exit_time_;
 
   WorkerCallbackHelper<RebuildingSupervisor> callbackHelper_;
+
+  std::chrono::seconds current_grace_period_;
+  UpdateableSettings<RebuildingSettings>::SubscriptionHandle
+      rebuildingSettingsSubscription_;
 
   // Posts a request to runs the function on the worker on which
   // RebuildingSupervisor lives. If RebuildingSupervisor was destroyed by the
