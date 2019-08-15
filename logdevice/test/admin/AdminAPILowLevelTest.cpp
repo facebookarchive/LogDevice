@@ -100,13 +100,10 @@ TEST_F(AdminAPILowLevelTest, LogTreeReplicationInfo) {
   ASSERT_EQ(2, info.get_smallest_replication_factor());
   std::map<thrift::LocationScope, int32_t> narrowest_expected{
       {thrift::LocationScope::NODE, 2}};
-  std::map<std::string, int32_t> narrowest_expected_legacy{{"NODE", 2}};
   ASSERT_EQ(narrowest_expected, info.get_narrowest_replication());
-  ASSERT_EQ(narrowest_expected_legacy, info.get_narrowest_replication_legacy());
   auto tolerable_failure_domains = info.get_tolerable_failure_domains();
   ASSERT_EQ(
       thrift::LocationScope::NODE, tolerable_failure_domains.get_domain());
-  ASSERT_EQ("NODE", tolerable_failure_domains.get_domain_legacy());
   ASSERT_EQ(1, tolerable_failure_domains.get_count());
 
   LogTreeInfo logtree;

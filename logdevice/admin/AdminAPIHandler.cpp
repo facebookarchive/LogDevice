@@ -93,22 +93,16 @@ void AdminAPIHandler::getReplicationInfo(thrift::ReplicationInfo& response) {
   ReplicationProperty repl = logsconfig->getNarrowestReplication();
   // create the narrowest replication property json
   std::map<thrift::LocationScope, int32_t> narrowest_replication;
-  std::map<std::string, int32_t> narrowest_replication_legacy;
   for (auto item : repl.getDistinctReplicationFactors()) {
     narrowest_replication[toThrift<thrift::LocationScope>(item.first)] =
         item.second;
-    narrowest_replication_legacy[NodeLocation::scopeNames()[item.first]] =
-        item.second;
   }
   response.set_narrowest_replication(std::move(narrowest_replication));
-  response.set_narrowest_replication_legacy(
-      std::move(narrowest_replication_legacy));
 
   thrift::TolerableFailureDomain tfd;
 
   const auto biggest_replication_scope = repl.getBiggestReplicationScope();
   tfd.set_domain(toThrift<thrift::LocationScope>(biggest_replication_scope));
-  tfd.set_domain_legacy(NodeLocation::scopeNames()[biggest_replication_scope]);
   tfd.set_count(repl.getReplication(biggest_replication_scope) - 1);
 
   response.set_smallest_replication_factor(repl.getReplicationFactor());
