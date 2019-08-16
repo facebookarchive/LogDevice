@@ -53,9 +53,11 @@ class SocketAddress:
             assert self.address is not None
             # TODO Admin Server uses string comparison for IP addresses
             # on 'compressed' (T45290450)
+            # pyre-fixme[16]: `Optional` has no attribute `compressed`.
             addr = self.address.compressed
         elif self.address_family == SocketAddressFamily.UNIX:
             assert self.path is not None
+            # pyre-fixme[9]: addr has type `str`; used as `Optional[str]`.
             addr = self.path
         else:
             assert False, "unreachable"  # pragma: nocover
@@ -100,6 +102,7 @@ class SocketAddress:
         socket_address: SocketAddress
         if src.address_family == SocketAddressFamily.INET:
             assert src.address is not None
+            # pyre-fixme[6]: Expected `str` for 1st param but got `Optional[str]`.
             socket_address = cls.from_ip_port(src.address, src.port)
         elif src.address_family == SocketAddressFamily.UNIX:
             socket_address = SocketAddress(
@@ -113,6 +116,7 @@ class SocketAddress:
     def __str__(self) -> str:
         if self.address_family == SocketAddressFamily.INET:
             if isinstance(self.address, IPv4Address):
+                # pyre-fixme[16]: `Optional` has no attribute `compressed`.
                 return f"{self.address.compressed}:{self.port}"
             elif isinstance(self.address, IPv6Address):
                 return f"[{self.address.compressed}]:{self.port}"

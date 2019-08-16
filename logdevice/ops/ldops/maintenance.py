@@ -53,6 +53,7 @@ class SafetyError(LDOpsError):
 
     def __str__(self) -> str:
         if self.check_impact_response is not None:
+            # pyre-fixme[16]: `Optional` has no attribute `impact`.
             return f"{self.message}: impact: {self.check_impact_response.impact}"
         else:
             return f"{self.message}"

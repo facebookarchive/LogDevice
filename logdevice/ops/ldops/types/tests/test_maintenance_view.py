@@ -196,7 +196,9 @@ class TestMaintenanceView(TestCase):
         else:
             assert maintenance_view.ttl is not None
             self.assertEqual(
-                maintenance.ttl_seconds, maintenance_view.ttl.total_seconds()
+                maintenance.ttl_seconds,
+                # pyre-fixme[16]: Optional type has no attribute `total_seconds`.
+                maintenance_view.ttl.total_seconds(),
             )
 
         if maintenance.created_on is None:
@@ -204,6 +206,7 @@ class TestMaintenanceView(TestCase):
         else:
             assert maintenance_view.created_on is not None
             self.assertAlmostEqual(
+                # pyre-fixme[16]: Optional type has no attribute `timestamp`.
                 maintenance_view.created_on.timestamp() * 1000,
                 maintenance.created_on,
                 1,
@@ -222,6 +225,7 @@ class TestMaintenanceView(TestCase):
             assert maintenance_view.expires_in is not None
             self.assertAlmostEqual(
                 maintenance_view.expires_in.total_seconds(),
+                # pyre-fixme[16]: Optional type has no attribute `__sub__`.
                 (maintenance_view.expires_on - datetime.now()).total_seconds(),
                 1,
             )
@@ -239,6 +243,7 @@ class TestMaintenanceView(TestCase):
         for shard in maintenance.shards:
             assert shard.node.node_index is not None
             self.assertEqual(
+                # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
                 node_index_to_node_view[shard.node.node_index].shard_states[
                     shard.shard_index
                 ],
@@ -248,6 +253,7 @@ class TestMaintenanceView(TestCase):
         for sn in maintenance.sequencer_nodes:
             assert sn.node_index is not None
             self.assertEqual(
+                # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
                 node_index_to_node_view[sn.node_index].sequencer_state,
                 maintenance_view.get_sequencer_state(sn),
             )

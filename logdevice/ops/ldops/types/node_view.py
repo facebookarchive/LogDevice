@@ -74,6 +74,8 @@ class NodeView:
             assert da.path is not None
             return SocketAddress(
                 address_family=da.address_family,
+                # pyre-fixme[6]: Expected `_PathLike[AnyStr]` for 1st param but got
+                #  `Optional[str]`.
                 path=os.path.join(os.path.dirname(da.path), "socket_admin"),
             )
         elif da.address_family == SocketAddressFamily.INET:
@@ -127,6 +129,7 @@ class NodeView:
     @property
     def sequencer_weight(self) -> Optional[float]:
         if self.sequencer_config is not None:
+            # pyre-fixme[16]: `Optional` has no attribute `weight`.
             return self.sequencer_config.weight
         else:
             return None
@@ -138,6 +141,7 @@ class NodeView:
     @property
     def sequencing_state(self) -> Optional[SequencingState]:
         if self.sequencer_state is not None:
+            # pyre-fixme[16]: `Optional` has no attribute `state`.
             return self.sequencer_state.state
         else:
             return None
@@ -149,6 +153,7 @@ class NodeView:
     @property
     def storage_weight(self) -> Optional[float]:
         if self.storage_config is not None:
+            # pyre-fixme[16]: `Optional` has no attribute `weight`.
             return self.storage_config.weight
         else:
             return None
@@ -156,6 +161,7 @@ class NodeView:
     @property
     def num_shards(self) -> Optional[int]:
         if self.storage_config is not None:
+            # pyre-fixme[16]: `Optional` has no attribute `num_shards`.
             return self.storage_config.num_shards
         else:
             return None
@@ -165,6 +171,8 @@ class NodeView:
         if self.node_state.shard_states is None:
             return ()
         else:
+            # pyre-fixme[6]: Expected `Iterable[_T_co]` for 1st param but got
+            #  `Optional[Sequence[ShardState]]`.
             return tuple(self.node_state.shard_states)
 
     @property
@@ -202,7 +210,9 @@ class NodeView:
     @property
     def shards_maintenance_status(self) -> Tuple[Optional[MaintenanceStatus], ...]:
         return tuple(
-            s.maintenance.status if s.maintenance else None for s in self.shard_states
+            # pyre-fixme[16]: `Optional` has no attribute `status`.
+            s.maintenance.status if s.maintenance else None
+            for s in self.shard_states
         )
 
     @property
