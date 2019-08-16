@@ -80,6 +80,12 @@ class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
     return *this;
   }
 
+  AppenderPrep&
+  setWriteStreamRequestId(write_stream_request_id_t write_stream_rqid) {
+    write_stream_rqid_ = write_stream_rqid;
+    return *this;
+  }
+
   void execute();
 
   // Called directly in tests
@@ -178,6 +184,10 @@ class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
   virtual SequencerLocator& getSequencerLocator();
 
  private:
+  // Write stream request id, if the append belongs to a write stream.
+  write_stream_request_id_t write_stream_rqid_ =
+      WRITE_STREAM_REQUEST_ID_INVALID;
+
   PayloadHolder payload_;
   // TODO factor away
   APPEND_Header header_;

@@ -29,6 +29,7 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
 #include "logdevice/common/stats/Stats.h"
 
@@ -489,7 +490,9 @@ class Appender : public IntrusiveUnorderedMapHook {
    * AppendRequest. If this Appender was created by an AppendRequest
    * directly in the client address space, call a method of that AppendRequest
    * object to inform it of the outcome. In the latter case the call must be
-   * made on the Worker thread running the AppendRequest.
+   * made on the Worker thread running the AppendRequest. In case of an appender
+   * that belongs to a write stream append, the reply is composed and stored
+   * onto stream_append_reply_. This is then sent later during reaping.
    *
    * Note that the request may not have been started yet, because an earlier
    * storage attempt succeeded.
@@ -595,6 +598,45 @@ class Appender : public IntrusiveUnorderedMapHook {
     previous_span_ = std::move(previous_span);
   }
 
+  /** Helper functions for appends that belong to a write stream. */
+
+  // Checks if Appender corresponds to a write stream append.
+  bool isWriteStreamAppend() {
+    return (bool)(passthru_flags_ & STORE_Header::WRITE_STREAM);
+  }
+
+  // Returns a valid write stream id, if appender corresponds to a write
+  // stream append. Else, returns WRITE_STREAM_ID_INVALID.
+  write_stream_id_t getWriteStreamId() {
+    return write_stream_rqid_.id;
+  }
+
+  // Returns a valid write stream sequence number, if appender corresponds to
+  // a write stream append. Else, returns WRITE_STREAM_SEQ_NUM_INVALID.
+  write_stream_seq_num_t getWriteStreamSeqNum() {
+    return write_stream_rqid_.seq_num;
+  }
+
+  // Denotes if the append can create a new write stream or resume an existing
+  // one. Caller must ensure that this is being called on an appender for a
+  // write stream append.
+  bool canResumeWriteStream() {
+    ld_check(isWriteStreamAppend());
+    return can_resume_write_stream_;
+  }
+
+  // Sets the fields required to process a write stream append. Sets
+  // the WRITE_STREAM flag on passthru_flags_ so that the STORE message
+  // generates appropriate log records for write stream appends to differentiate
+  // them from others.
+  void setWriteStreamAppendInfo(write_stream_request_id_t write_stream_rqid,
+                                bool can_resume_write_stream = false) {
+    ld_check(write_stream_request_id_valid(write_stream_rqid));
+    passthru_flags_ |= STORE_Header::WRITE_STREAM;
+    write_stream_rqid_ = write_stream_rqid;
+    can_resume_write_stream_ = can_resume_write_stream;
+  }
+
  protected:
   // protected: members are for use by test subclasses. This class is not
   // intended to be subclassed other than for testing.
@@ -670,6 +712,10 @@ class Appender : public IntrusiveUnorderedMapHook {
  private:
   using ReleaseTypeRaw = std::underlying_type<ReleaseType>::type;
 
+  // Stream request id for the append, if it belongs to a write stream.
+  write_stream_request_id_t write_stream_rqid_ =
+      WRITE_STREAM_REQUEST_ID_INVALID;
+
   // AppenderTracer for tracing append operations
   AppenderTracer tracer_;
   // Worker on whose thread this Appender was created. May be null in tests so
@@ -677,17 +723,21 @@ class Appender : public IntrusiveUnorderedMapHook {
   // tests can override them.
   Worker* created_on_;
 
-  // Use this field to assert that we do not call retire() twice.
-  bool retired_ = false;
-
   // Size in bytes of Appender + payload.
   size_t full_appender_size_;
 
-  // Keep track if this Appender was started (start() was called).
-  bool started_ = false;
-
   // Backlog duration (in seconds) configured for this log (used for tracing)
   folly::Optional<std::chrono::seconds> backlog_duration_;
+
+  // Denotes if the stream append request can start a new write stream or
+  // continue a broken one.
+  bool can_resume_write_stream_ = false;
+
+  // Use this field to assert that we do not call retire() twice.
+  bool retired_ = false;
+
+  // Keep track if this Appender was started (start() was called).
+  bool started_ = false;
 
   // Indicate if we already successfully sent `replication_` copies of the
   // record during the current wave or a previous wave, and sent the APPENDED
@@ -831,13 +881,18 @@ class Appender : public IntrusiveUnorderedMapHook {
   std::vector<HeldReply> held_store_replies_;
 
   // Used by deleteIfDone to determine when it is safe to delete ourselves.
-  // It is safe to delete ourselves when both:
+  // It is safe to delete ourselves when:
   // - We were reaped (onReaped() called);
   // - We completed the state machine and unlinked ourselves from
   //   Worker::activeAppenders(). (onComplete() called)
+  // - We replied back to the client or internal append request that created the
+  //   Appender. For normal appends this happens before onComplete is called.
+  //   But in case of stream appends, reply is delayed ~ either sent or
+  //   scheduled to be sent during reaping.
   std::atomic_uchar state_{0};
   static const uint8_t FINISH = 1u << 0u;
   static const uint8_t REAPED = 1u << 1u;
+  static const uint8_t REPLIED = 1u << 2u;
 
   // OpenTracing tracer object used in distributed e2e tracing
   std::shared_ptr<opentracing::Tracer> e2e_tracer_;
@@ -878,13 +933,21 @@ class Appender : public IntrusiveUnorderedMapHook {
   virtual void onReaped();
 
   /**
-   * Called by onComplete() and onReaped(). Delete this Appender once both have
-   * called it. This uses the `state_` atomic to handle that logic
-   * while onComplete() and onReaped() may be called on a different thread.
+   * Called by onComplete() and onReaped() and inside sendReply(). Delete this
+   * Appender once all of them have called it. This uses the `state_` atomic to
+   * handle that logic while onComplete(), sendReply() and onReaped() may be
+   * called on different threads.
    *
-   * @param flag set to FINISH or REAPED depending on the caller.
+   * @param flag set to FINISH, REAPED or REPLIED depending on the caller.
+   * @returns true if deleted, false otherwise.
    */
-  void deleteIfDone(uint8_t flag);
+  bool deleteIfDone(uint8_t flag);
+
+  /**
+   * Atomically checks whether the given flag is set. Mainly used to determine
+   * if and when to send a reply for write stream appends.
+   */
+  bool isDone(uint8_t flag);
 
   /**
    * Called when we managed to store a copy on a recipient.
@@ -1037,6 +1100,30 @@ class Appender : public IntrusiveUnorderedMapHook {
   virtual int registerOnSocketClosed(NodeID nid, SocketCallback& cb);
   virtual void replyToAppendRequest(APPENDED_Header& replyhdr);
   virtual void schedulePeriodicReleases();
+
+  // Request that is used to send an E::OK reply back to a client on the worker
+  // it received the append message on. Used in onReaped().
+  class SendReplyRequest : public Request {
+   public:
+    SendReplyRequest(worker_id_t worker, Appender* appender)
+        : worker_(worker), appender_(appender) {
+      ld_check(appender_);
+      ld_check(appender_->isWriteStreamAppend());
+    }
+
+    Execution execute() override {
+      appender_->sendReply(appender_->store_hdr_.rid.lsn(), E::OK);
+      return Execution::COMPLETE;
+    }
+
+    int getThreadAffinity(int) override {
+      return worker_.val();
+    }
+
+   private:
+    worker_id_t worker_;
+    Appender* appender_;
+  };
 
   // check if the appender is the one of the appenders that the sequencer
   // would like to drain during graceful reactivation/migration

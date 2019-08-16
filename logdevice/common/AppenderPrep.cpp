@@ -449,6 +449,11 @@ std::unique_ptr<Appender> AppenderPrep::constructAppender() {
                                  e2e_tracer_);
   appender->setAppendMessageCount(append_message_count_);
   appender->setAcceptableEpoch(acceptable_epoch_);
+  if (header_.flags & APPEND_Header::WRITE_STREAM_REQUEST) {
+    appender->setWriteStreamAppendInfo(
+        write_stream_rqid_,
+        (bool)(header_.flags & APPEND_Header::WRITE_STREAM_RESUME));
+  }
   return appender;
 }
 

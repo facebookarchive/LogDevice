@@ -283,6 +283,9 @@ Message::Disposition APPEND_Message::onReceived(const Address& from) {
                                 std::move(attrs_),
                                 std::move(e2e_tracer),
                                 std::move(append_message_receive_span));
+  if (header_.flags & APPEND_Header::WRITE_STREAM_REQUEST) {
+    append_prep->setWriteStreamRequestId(write_stream_request_id_);
+  }
   append_prep->execute();
 
   return Disposition::NORMAL;

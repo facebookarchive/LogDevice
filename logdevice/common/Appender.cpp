@@ -947,11 +947,24 @@ void Appender::Disposer::operator()(Appender* a) {
 void Appender::sendReply(lsn_t lsn, Status status, NodeID redirect) {
   CHECK_WORKER_THREAD();
 
+  if (started() && isWriteStreamAppend() && status == E::OK) {
+    ld_check_eq(lsn, store_hdr_.rid.lsn());
+    if (!isDone(REAPED)) {
+      // defer the OK reply for a stream append until reaping is done.
+      return;
+    }
+  }
+
+  // We are ready to send a reply. Always invoke deleteIfDone when exiting.
+  SCOPE_EXIT {
+    deleteIfDone(REPLIED);
+  };
+
   if (lsn == LSN_INVALID) {
     ld_check(status != E::OK);
   } else {
     if (started()) {
-      ld_check(lsn == store_hdr_.rid.lsn());
+      ld_check_eq(lsn, store_hdr_.rid.lsn());
     }
     store_hdr_.rid = RecordID(lsn, log_id_);
   }
@@ -2085,11 +2098,11 @@ void Appender::sendReleases(const ShardID* dests,
   }
 }
 
-void Appender::deleteIfDone(uint8_t flag) {
-  ld_check(flag == FINISH || flag == REAPED);
+bool Appender::deleteIfDone(uint8_t flag) {
+  ld_check_in(flag, ({FINISH, REAPED, REPLIED}));
   ld_check(!(state_ & flag));
 
-  const uint8_t desired = FINISH | REAPED;
+  const uint8_t desired = FINISH | REAPED | REPLIED;
   uint8_t prev = state_.fetch_or(flag);
   uint8_t next = prev | flag;
   ld_check(prev != next);
@@ -2098,13 +2111,19 @@ void Appender::deleteIfDone(uint8_t flag) {
   // to delete ourselves. Note: not checking if prev != desired here because
   // each flag can be set by only one thread only.
   if (next != desired) {
-    return;
+    return false;
   }
 
   // onComplete() should have unlinked this Appender.
   ld_check(!is_linked());
 
   delete this;
+  return true;
+}
+
+bool Appender::isDone(uint8_t flag) {
+  ld_check_in(flag, ({FINISH, REAPED, REPLIED}));
+  return (state_.load() & flag);
 }
 
 void Appender::onComplete(bool linked) {
@@ -2133,6 +2152,7 @@ void Appender::onComplete(bool linked) {
 }
 
 void Appender::onReaped() {
+  ld_check(!isDone(REAPED));
   auto release_type = static_cast<ReleaseType>(release_type_.load());
   lsn_t lsn = getLSN();
   epoch_t last_released_epoch;
@@ -2215,10 +2235,30 @@ void Appender::onReaped() {
     schedulePeriodicReleases();
   }
 
-  // If onComplete was already called, this will cause this Appender to be
-  // deleted. Otherwise, the Appender will be deleted once onComplete() is
-  // called.
-  deleteIfDone(REAPED);
+  bool need_to_reply = isWriteStreamAppend() && !isDone(REPLIED);
+  bool deleted = deleteIfDone(REAPED);
+
+  if (need_to_reply) {
+    ld_check(!deleted);
+
+    // If we have not replied before reaping, we have deferred an E::OK reply so
+    // that we can reply during reaping to ensure FIFO order.
+    if (!created_on_ || Worker::onThisThread() == created_on_) {
+      // sendReply must be called after deleteIfDone(REAPED) since it checks if
+      // the slot has been reaped before sending a reply back to the client to
+      // ensure FIFO order, if it has not already sent a reply before reaping.
+      sendReply(store_hdr_.rid.lsn(), E::OK);
+    } else {
+      // We can freely pass 'this' since we know it will not be destroyed until
+      // FINISHED, REAPED and REPLIED flags are set.
+      std::unique_ptr<Request> req =
+          std::make_unique<SendReplyRequest>(created_on_->idx_, this);
+      int rv = Worker::onThisThread()->processor_->postWithRetrying(req);
+      // Can't get E::SHUTDOWN since sequencer waits for all Appenders to
+      // complete before stopping Processor.
+      ld_check(!rv);
+    }
+  }
 }
 
 void Appender::checkWorkerThread() {

@@ -178,7 +178,7 @@ class AppenderTest : public ::testing::Test {
   void updateConfig();
 
   // Start the Appender.
-  void start();
+  void start(bool stream_message = false);
 
   void startWithMockE2ETracer(std::shared_ptr<opentracing::Tracer>);
 
@@ -705,9 +705,15 @@ class AppenderTest::MockAppender : public Appender {
                                // not used by the test
 };
 
-void AppenderTest::start() {
+void AppenderTest::start(bool stream_message) {
   // Appender will delete itself when reaped.
   appender_ = new MockAppender(this, std::chrono::seconds{1}, request_id_t{1});
+  if (stream_message) {
+    write_stream_id_t stream_id(1UL);
+    write_stream_seq_num_t seq_num(1UL);
+    write_stream_request_id_t rqid = {stream_id, seq_num};
+    appender_->setWriteStreamAppendInfo(rqid, true);
+  }
   appender_->start(nullptr, LSN);
 }
 
@@ -1020,6 +1026,22 @@ TEST_F(AppenderTest, Simple) {
   ASSERT_TRUE(retired_);
   CHECK_DELETE_MSG(N2S0, N4S0);
   Appender::Reaper()(appender_);
+  CHECK_RELEASE_MSG(N0S0, N1S0, N3S0);
+}
+
+TEST_F(AppenderTest, SimpleStream) {
+  updateConfig();
+  first_candidate_idx_ = 0;
+  start(true);
+  CHECK_STORE_MSG(1, N4S0);
+  CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 1, N0S0, N1S0, N2S0, N3S0);
+  CHECK_NO_STORE_MSG();
+  ON_STORED_SENT(E::OK, 1, N0S0, N1S0, N3S0);
+  ASSERT_TRUE(retired_);
+  CHECK_DELETE_MSG(N2S0, N4S0);
+  ASSERT_FALSE(reply_.hasValue());
+  Appender::Reaper()(appender_);
+  CHECK_APPENDED(E::OK);
   CHECK_RELEASE_MSG(N0S0, N1S0, N3S0);
 }
 
