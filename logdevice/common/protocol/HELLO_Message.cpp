@@ -174,6 +174,12 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
           // valid nodeID
           ackhdr.status = E::ACCESS;
           fill_out_client_info_in_principal();
+          RATELIMIT_ERROR(std::chrono::seconds(5),
+                          1,
+                          "ACCESS ERROR: Got a HELLO message from %s "
+                          "with an invalid node ID (%s).",
+                          Sender::describeConnection(from).c_str(),
+                          peer_nid.toString().c_str());
           return principal;
         }
       }
@@ -213,21 +219,23 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
 
     if (principal.type == Principal::INVALID) {
       ackhdr.status = E::ACCESS;
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      3,
-                      "ACCESS ERROR: Got a HELLO message with an invalid "
-                      "authentication data that could not be parsed.");
+      RATELIMIT_ERROR(std::chrono::seconds(5),
+                      1,
+                      "ACCESS ERROR: Got a HELLO message from %s with "
+                      "invalid authentication data that could not be parsed.",
+                      Sender::describeConnection(from).c_str());
       return principal;
     }
 
     // we will reject when we require a credential, and one is not supplied
     if (!Worker::getConfig()->serverConfig()->allowUnauthenticated() &&
         principal.type == Principal::UNAUTHENTICATED) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      3,
-                      "ACESS ERROR: Got a HELLO message with out "
+      RATELIMIT_ERROR(std::chrono::seconds(5),
+                      1,
+                      "ACCESS ERROR: Got a HELLO message from %s without "
                       "authentication data when cluster requries "
-                      "authentication.");
+                      "authentication.",
+                      Sender::describeConnection(from).c_str());
       ackhdr.status = E::ACCESS;
       return principal;
     }
