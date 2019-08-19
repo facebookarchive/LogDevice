@@ -11,19 +11,21 @@
 
 #include <folly/Memory.h>
 
-#include "logdevice/common/NodeSetSelector.h"
+#include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelector.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 
 /**
- * @file A NodeSetSelector thats select all shards in the cluster config.
- * This NodeSetSelector is used for testing Flexible Log Sharding and should not
- * be used in production.
+ * @file A trivial NodeSetSelector thats select all nodes in the cluster
+ *       config. Can be used to simulate behavior of the orginal logdevice
+ *       that does not have nodeset support. Requires nodeSetSize in Log
+ *       configuration not set.
  */
 
-class SelectAllShardsNodeSetSelector : public NodeSetSelector {
+class SelectAllNodeSetSelector : public NodeSetSelector {
  public:
   Result getStorageSet(
       logid_t log_id,
@@ -43,7 +45,7 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
     }
     if (logcfg->attrs().nodeSetSize().value().hasValue()) {
       ld_error("nodeSetSize property set for log %lu, unable to select all "
-               "shards",
+               "nodes",
                log_id.val_);
       res.decision = Decision::FAILED;
       return res;
@@ -53,11 +55,11 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
     for (const auto node : *membership) {
       if ((!options || !options->exclude_nodes.count(node))) {
         auto num_shards = nodes_configuration.getNumShards(node);
-        for (shard_index_t s = 0; s < num_shards; ++s) {
-          ShardID shard(node, s);
-          if (membership->shouldReadFromShard(shard)) {
-            res.storage_set.push_back(shard);
-          }
+        ld_check(num_shards > 0);
+        shard_index_t shard_idx = getLegacyShardIndexForLog(log_id, num_shards);
+        ShardID shard(node, shard_idx);
+        if (membership->shouldReadFromShard(shard)) {
+          res.storage_set.push_back(shard);
         }
       }
     }

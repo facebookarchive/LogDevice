@@ -8,9 +8,9 @@
 #include "logdevice/common/EpochMetaDataUpdater.h"
 
 #include "logdevice/common/MetaDataTracer.h"
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/lib/ClientProcessor.h"
 
 namespace facebook { namespace logdevice {

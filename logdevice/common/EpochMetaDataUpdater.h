@@ -11,9 +11,9 @@
 #include <unordered_set>
 
 #include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/NodeSetSelector.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelector.h"
 
 namespace facebook { namespace logdevice {
 

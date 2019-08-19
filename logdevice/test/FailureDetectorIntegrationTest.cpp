@@ -16,11 +16,11 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/hash.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Client.h"
@@ -572,19 +572,7 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
     cluster->waitUntilGossip(/* alive */ true, idx);
   }
 
-  wait_until("Nobody is starting", [&]() {
-    for (node_index_t n = 0; n < num_nodes; ++n) {
-      auto res = cluster->getNode(n).gossipStarting();
-      for (node_index_t nid = 0; nid < num_nodes; ++nid) {
-        auto key = folly::to<std::string>("N", nid);
-        if (res.find(key) != res.end() && res[key]) {
-          return false;
-        }
-      }
-    }
-    return true;
-  });
-
+  cluster->waitUntilStartupComplete();
   cluster->waitForRecovery();
 
   /* create client */

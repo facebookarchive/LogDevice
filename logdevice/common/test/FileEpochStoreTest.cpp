@@ -14,8 +14,8 @@
 
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/MetaDataLog.h"
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
 

@@ -17,11 +17,11 @@
 #include <logdevice/common/StickyCopySetManager.h>
 
 #include "logdevice/common/CopySetSelectorFactory.h"
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/test/CopySetSelectorTestUtil.h"
 #include "logdevice/common/test/NodeSetStateTest.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"

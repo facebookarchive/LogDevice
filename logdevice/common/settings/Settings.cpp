@@ -2256,6 +2256,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "snapshot it.",
       SERVER,
       SettingsCategory::Configuration);
+  init("test-hold-logsconfig-in-starting-state",
+       &test_hold_logsconfig_in_starting,
+       "false",
+       nullptr,
+       "Prevents LogsConfigStateMachine from being started. Used for testing "
+       "only.",
+       SERVER,
+       SettingsCategory::Testing);
   init("client-config-fetch-allowed",
        &client_config_fetch_allowed,
        "true",

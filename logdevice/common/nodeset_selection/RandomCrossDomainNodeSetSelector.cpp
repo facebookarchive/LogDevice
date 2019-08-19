@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/RandomCrossDomainNodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/RandomCrossDomainNodeSetSelector.h"
 
 #include <algorithm>
 #include <chrono>

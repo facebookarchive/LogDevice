@@ -12,9 +12,9 @@
 #include "logdevice/common/EpochSequencer.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/MetaDataLogWriter.h"
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 
 namespace facebook { namespace logdevice {
 using UpdateResult = EpochMetaData::UpdateResult;

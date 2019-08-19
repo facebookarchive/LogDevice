@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "logdevice/common/NodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelector.h"
 
 namespace facebook { namespace logdevice {
 

@@ -34,7 +34,7 @@
 #include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
-#include "logdevice/common/NodeSetSelectorFactory.h"
+#include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Sockaddr.h"
@@ -48,6 +48,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/plugin/SequencerLocatorFactory.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -2848,6 +2849,37 @@ int Cluster::waitUntilGossip(bool alive,
   return 0;
 }
 
+int Cluster::waitUntilStartupComplete(
+    folly::Optional<std::set<uint64_t>> nodes,
+    std::chrono::steady_clock::time_point deadline) {
+  if (!nodes.hasValue()) {
+    nodes = std::set<uint64_t>();
+    for (const auto& [nid, _] : getNodes()) {
+      nodes.value().insert(nid);
+    }
+  }
+
+  for (auto n : nodes.value()) {
+    int res = getNode(n).waitUntilAvailable(deadline);
+    if (res != 0) {
+      return res;
+    }
+  }
+
+  return wait_until("Nobody is starting", [&]() {
+    for (const auto& [n, _] : getNodes()) {
+      auto res = getNode(n).gossipStarting();
+      for (auto nid : nodes.value()) {
+        auto key = folly::to<std::string>("N", nid);
+        if (res.find(key) != res.end() && res[key]) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+}
+
 int Cluster::checkConsistency(argv_t additional_args) {
   folly::Subprocess::Options options;
   options.parentDeathSignal(SIGKILL); // kill children if test process dies
@@ -3216,4 +3248,53 @@ int dump_file_to_stderr(const char* path) {
   std::fclose(fp);
   return 0;
 }
+
+class ManualNodeSetSelector : public NodeSetSelector {
+ public:
+  ManualNodeSetSelector(std::set<node_index_t> node_indices, size_t num_shards)
+      : node_indices_{std::move(node_indices)}, num_db_shards_(num_shards) {}
+
+  Result getStorageSet(
+      logid_t log_id,
+      const Configuration* cfg,
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      nodeset_size_t /* ignored */,
+      uint64_t /* ignored */,
+      const EpochMetaData* prev,
+      const Options* /* ignored */
+      ) override {
+    Result res;
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        cfg->getLogGroupByIDShared(log_id);
+    if (!logcfg) {
+      res.decision = Decision::FAILED;
+      return res;
+    }
+
+    for (const auto nid : node_indices_) {
+      shard_index_t sidx = getLegacyShardIndexForLog(log_id, num_db_shards_);
+      ShardID sid{nid, sidx};
+      res.storage_set.push_back(sid);
+    }
+
+    std::sort(res.storage_set.begin(), res.storage_set.end());
+    res.decision = (prev && prev->shards == res.storage_set)
+        ? Decision::KEEP
+        : Decision::NEEDS_CHANGE;
+    return res;
+  }
+
+ private:
+  std::set<node_index_t> node_indices_;
+  size_t num_db_shards_;
+};
+
+int Cluster::provisionEpochMetadataWithShardIDs(
+    std::set<node_index_t> node_indices,
+    bool allow_existing_metadata) {
+  auto selector = std::make_shared<ManualNodeSetSelector>(
+      std::move(node_indices), num_db_shards_);
+  return provisionEpochMetaData(std::move(selector), allow_existing_metadata);
+}
+
 }}} // namespace facebook::logdevice::IntegrationTestUtils
