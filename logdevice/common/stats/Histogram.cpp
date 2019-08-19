@@ -697,7 +697,7 @@ void CompactHistogram::subtract(const HistogramInterface& other_if) {
   for (size_t i = 0; i < buckets_.size(); ++i) {
     uint64_t x = other.buckets_[i].load(std::memory_order_relaxed);
     uint64_t prev = buckets_[i].fetch_sub(x, std::memory_order_relaxed);
-    if (!dd_assert(x >= prev,
+    if (!dd_assert(x <= prev,
                    "Histogram subtraction overflowed. Bucket %lu, this: [%s] "
                    "(half-updated), right operand: [%s]",
                    i,
