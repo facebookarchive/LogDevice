@@ -131,7 +131,8 @@ const flags_t PSEUDORECORD_MASK =
 // here, in STORE_Message and in RECORD_Message.
 const flags_t FLAG_MASK = FLAG_CHECKSUM | FLAG_CHECKSUM_64BIT |
     FLAG_CHECKSUM_PARITY | FLAG_HOLE | FLAG_BUFFERED_WRITER_BLOB |
-    FLAG_WRITTEN_BY_RECOVERY | FLAG_BRIDGE | FLAG_EPOCH_BEGIN | FLAG_DRAINED;
+    FLAG_WRITTEN_BY_RECOVERY | FLAG_BRIDGE | FLAG_EPOCH_BEGIN | FLAG_DRAINED |
+    FLAG_WRITE_STREAM;
 
 static_assert(FLAG_CHECKSUM == RECORD_Header::CHECKSUM &&
                   FLAG_CHECKSUM_64BIT == RECORD_Header::CHECKSUM_64BIT &&
@@ -143,7 +144,8 @@ static_assert(FLAG_CHECKSUM == RECORD_Header::CHECKSUM &&
                       RECORD_Header::WRITTEN_BY_RECOVERY &&
                   FLAG_BRIDGE == RECORD_Header::BRIDGE &&
                   FLAG_EPOCH_BEGIN == RECORD_Header::EPOCH_BEGIN &&
-                  FLAG_DRAINED == RECORD_Header::DRAINED,
+                  FLAG_DRAINED == RECORD_Header::DRAINED &&
+                  FLAG_WRITE_STREAM == RECORD_Header::WRITE_STREAM,
               "Flag constants don't match");
 
 static_assert(FLAG_CHECKSUM == STORE_Header::CHECKSUM &&
@@ -154,7 +156,8 @@ static_assert(FLAG_CHECKSUM == STORE_Header::CHECKSUM &&
                       STORE_Header::BUFFERED_WRITER_BLOB &&
                   FLAG_BRIDGE == STORE_Header::BRIDGE &&
                   FLAG_EPOCH_BEGIN == STORE_Header::EPOCH_BEGIN &&
-                  FLAG_DRAINED == STORE_Header::DRAINED,
+                  FLAG_DRAINED == STORE_Header::DRAINED &&
+                  FLAG_WRITE_STREAM == STORE_Header::WRITE_STREAM,
               "Flag constants don't match");
 
 using csi_flags_t = uint8_t;

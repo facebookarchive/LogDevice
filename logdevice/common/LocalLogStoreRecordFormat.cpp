@@ -193,9 +193,9 @@ Slice formRecordHeader(const STORE_Header& store_header,
     flags |= FLAG_WRITTEN_BY_REBUILDING;
   }
 
-  if (store_header.flags & STORE_Header::WRITE_STREAM) {
-    flags |= FLAG_WRITE_STREAM;
-  }
+  // Should have been transferred through FLAG_MASK
+  ld_check_eq(store_header.flags & STORE_Header::WRITE_STREAM,
+              flags & LocalLogStoreRecordFormat::FLAG_WRITE_STREAM);
 
   if (!optional_keys.empty()) {
     flags |= FLAG_CUSTOM_KEY;

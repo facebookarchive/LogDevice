@@ -56,7 +56,12 @@ RECORD_Message::~RECORD_Message() {
 }
 
 void RECORD_Message::serialize(ProtocolWriter& writer) const {
-  writer.write(header_);
+  // TODO: Handle protocol mismatch between peers for write stream support.
+  RECORD_Header proto_supported_header(header_);
+  if (writer.proto() < Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+    proto_supported_header.flags &= ~RECORD_Header::WRITE_STREAM;
+  }
+  writer.write(proto_supported_header);
 
   // Note: this method needs to be kept at least approximately in sync with
   // expectedSize().
@@ -359,6 +364,7 @@ std::string RECORD_Message::flagsToString(RECORD_flags_t flags) {
   FLAG(EPOCH_BEGIN)
   FLAG(UNDER_REPLICATED_REGION)
   FLAG(DRAINED)
+  FLAG(WRITE_STREAM)
 
 #undef FLAG
 

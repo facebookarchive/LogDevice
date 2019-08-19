@@ -164,8 +164,10 @@ struct STORE_Header {
   //       be set on a STORE. Used for asserts.
   static const STORE_flags_t DRAINED = 1u << 19; //=524288
 
-  // used to denote that the log record belongs to a write stream.
-  static const STORE_flags_t WRITE_STREAM = 1u << 20; //=1048576
+  // used to denote that the log record belongs to a write stream. Flag value
+  // must match that of LocalLogStoreRecordFormat::FLAG_WRITE_STREAM and
+  // RECORD_Header::WRITE_STREAM
+  static const STORE_flags_t WRITE_STREAM = 1u << 22; //=4194304
 
   // Please update STORE_Message::flagsToString() when adding flags.
 } __attribute__((__packed__));

@@ -35,6 +35,10 @@ create_record(logid_t logid,
     flags |= RECORD_Header::BRIDGE;
   }
 
+  if (type == RecordType::WRITE_STREAM) {
+    flags |= RECORD_Header::WRITE_STREAM;
+  }
+
   if (offsets_within_epoch.isValid()) {
     flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
   }

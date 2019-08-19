@@ -216,12 +216,17 @@ class MessageSerializationTest : public ::testing::Test {
 
   void checkRECORD(const RECORD_Message& m,
                    const RECORD_Message& m2,
-                   uint16_t /*proto*/) {
+                   uint16_t proto) {
     ASSERT_EQ(m.header_.log_id, m2.header_.log_id);
     ASSERT_EQ(m.header_.read_stream_id, m2.header_.read_stream_id);
     ASSERT_EQ(m.header_.lsn, m2.header_.lsn);
     ASSERT_EQ(m.header_.timestamp, m2.header_.timestamp);
-    ASSERT_EQ(m.header_.flags, m2.header_.flags);
+    if (proto >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
+      ASSERT_EQ(m.header_.flags, m2.header_.flags);
+    } else {
+      ASSERT_EQ(m.header_.flags & ~RECORD_Header::WRITE_STREAM,
+                m2.header_.flags & ~RECORD_Header::WRITE_STREAM);
+    }
 
     ASSERT_EQ(getPayload(m.payload_), getPayload(m2.payload_));
 
@@ -969,6 +974,62 @@ TEST_F(MessageSerializationTest, RECORD) {
     return "ADCDC109386DAEB1425FA4E1402B82F8B066A8C8973993E7E75FF64680896CDA1"
            "10300000000DA30740BE50A27DB02531D00008702000001F60400000000000000"
            "01F60A00000000000000707265766564";
+  };
+
+  DO_TEST(m,
+          check,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::MAX_PROTOCOL_SUPPORTED,
+          expected_fn,
+          deserializer);
+}
+
+TEST_F(MessageSerializationTest, RECORD_WithWriteStream) {
+  RECORD_Header h = {
+      logid_t(0xb1ae6d3809c1cdad),
+      read_stream_id_t(0xf8822b40e1a45f42),
+      0xe7933997c8a866b0,
+      0xda6c898046f65fe7,
+      RECORD_Header::CHECKSUM_PARITY | RECORD_Header::INCLUDES_EXTRA_METADATA |
+          RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH |
+          RECORD_Header::INCLUDE_BYTE_OFFSET | RECORD_Header::WRITE_STREAM,
+  };
+  OffsetMap offsets_within_epoch;
+  offsets_within_epoch.setCounter(BYTE_OFFSET, 4);
+  ExtraMetadata reb = {{
+                           esn_t(0x0b7430da),
+                           0xdb270ae5,
+                           2,
+                       },
+                       {ShardID(0x1d53, 0), ShardID(0x0287, 0)},
+                       std::move(offsets_within_epoch)};
+  std::string payload = "preved";
+  OffsetMap byte_offsets;
+  byte_offsets.setCounter(BYTE_OFFSET, 10);
+  RECORD_Message m(h,
+                   TrafficClass::REBUILD,
+                   Payload(payload.data(), payload.size()).dup(),
+                   std::make_unique<ExtraMetadata>(reb),
+                   RECORD_Message::Source::LOCAL_LOG_STORE,
+                   std::move(byte_offsets));
+  auto check = [&](const RECORD_Message& m2, uint16_t proto) {
+    checkRECORD(m, m2, proto);
+  };
+
+  auto deserializer = [](ProtocolReader& reader) {
+    return RECORD_Message::deserialize(reader);
+  };
+
+  auto expected_fn = [](uint16_t proto) {
+    if (proto < Compatibility::STREAM_WRITER_SUPPORT) {
+      return "ADCDC109386DAEB1425FA4E1402B82F8B066A8C8973993E7E75FF64680896CDA1"
+             "10300000000DA30740BE50A27DB02531D00008702000001F60400000000000000"
+             "01F60A00000000000000707265766564";
+    } else {
+      return "ADCDC109386DAEB1425FA4E1402B82F8B066A8C8973993E7E75FF64680896CDA1"
+             "10340000000DA30740BE50A27DB02531D00008702000001F60400000000000000"
+             "01F60A00000000000000707265766564";
+    }
   };
 
   DO_TEST(m,

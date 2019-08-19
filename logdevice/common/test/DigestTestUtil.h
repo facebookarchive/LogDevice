@@ -42,7 +42,9 @@ enum RecordType {
   // hole plug stored by epoch recovery
   HOLE,
   // bridge record, a special hole plug stored by epoch recovery
-  BRIDGE
+  BRIDGE,
+  // write stream record, sets the WRITE_STREAM_RECORD flag
+  WRITE_STREAM
 };
 
 // TODO 11866467: support for specifying copyset

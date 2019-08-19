@@ -96,6 +96,11 @@ class TestRecord {
     return *this;
   }
 
+  TestRecord& flagWriteStream() {
+    flags_ |= LocalLogStoreRecordFormat::FLAG_WRITE_STREAM;
+    return *this;
+  }
+
   TestRecord& writtenByRecovery(epoch_t recovery_epoch) {
     flags_ |= LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY;
     wave_ = (uint32_t)recovery_epoch.val_;

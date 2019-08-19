@@ -580,6 +580,113 @@ TEST_F(DigestTest, BridgeRecord) {
   EXPECT_EQ(4, nentries);
 }
 
+// Test a scenario where the digest does not contain *any* record for a
+// particular esn. This is considered a hole and hence all stream reacords that
+// occur after this must be marked as a hole.
+TEST_F(DigestTest, WriteStreamRecoveryWithHole) {
+  nodeset_ = {N0, N1, N2, N3};
+  seal_epoch_ = epoch_t(2);
+  lng_ = esn_t(1);
+  setUp();
+
+  onRecord(N0, 2, RecordType::NORMAL, 2);
+  onRecord(N1, 2, RecordType::NORMAL, 3);
+  onRecord(N1, 3, RecordType::WRITE_STREAM, 7);
+  onRecord(N3, 3, RecordType::WRITE_STREAM, 4);
+  onRecord(N1, 4, RecordType::WRITE_STREAM, 6);
+  onRecord(N2, 4, RecordType::WRITE_STREAM, 7);
+  onRecord(N1, 6, RecordType::WRITE_STREAM, 6);
+  onRecord(N3, 6, RecordType::WRITE_STREAM, 6);
+  onRecord(N1, 8, RecordType::NORMAL, 6);
+  onRecord(N3, 8, RecordType::NORMAL, 9);
+
+  digest_->applyWriteStreamHoles(lng_);
+  for (auto& it : *digest_) {
+    auto& entry = it.second;
+    switch (it.first.val_) {
+      case 2:
+      case 3:
+      case 4:
+      case 8:
+        ASSERT_FALSE(entry.isHolePlug());
+        break;
+      case 6:
+        ASSERT_TRUE(entry.isHolePlug());
+        break;
+      default:
+        ADD_FAILURE();
+    }
+  }
+}
+
+// Test a scenario in which digest contains two records both stored by recovery,
+// one is a stream record, other a hole. However, since the hole has a higher
+// seal number it prevails. Overall it is declared a hole. Even in this case,
+// stream records that follow the hole must be replaced with holes.
+TEST_F(DigestTest, WriteStreamRecoveryWithHolePlug) {
+  nodeset_ = {N0, N1, N2, N3};
+  seal_epoch_ = epoch_t(2);
+  lng_ = esn_t(1);
+  setUp();
+
+  onRecord(N0, 2, RecordType::NORMAL, 2);
+  onRecord(N1, 2, RecordType::NORMAL, 3);
+  onRecord(N1, 3, RecordType::WRITE_STREAM, 7);
+  onRecord(N3, 3, RecordType::WRITE_STREAM, 4);
+  onRecord(N1, 4, RecordType::WRITE_STREAM, 6);
+  onRecord(N2, 4, RecordType::HOLE, 7);
+  onRecord(N1, 5, RecordType::WRITE_STREAM, 6);
+  onRecord(N3, 5, RecordType::WRITE_STREAM, 6);
+  onRecord(N1, 8, RecordType::NORMAL, 6);
+  onRecord(N3, 8, RecordType::NORMAL, 9);
+
+  digest_->applyWriteStreamHoles(lng_);
+  for (auto& it : *digest_) {
+    auto& entry = it.second;
+    switch (it.first.val_) {
+      case 2:
+      case 3:
+      case 8:
+        ASSERT_FALSE(entry.isHolePlug());
+        break;
+      case 4:
+      case 5:
+        ASSERT_TRUE(entry.isHolePlug());
+        break;
+      default:
+        ADD_FAILURE();
+    }
+  }
+}
+
+// Test a scenario in which a hole stored by a smaller epoch recovery is
+// resolved by a higher epoch write stream record and hence we declare that to
+// be not a hole. In this case, any stream record that occurs later in the
+// continuous prefix must be left as is.
+TEST_F(DigestTest, WriteStreamRecoveryWithResolvedHole) {
+  nodeset_ = {N0, N1, N2, N3};
+  seal_epoch_ = epoch_t(2);
+  lng_ = esn_t(1);
+  setUp();
+
+  onRecord(N0, 2, RecordType::NORMAL, 2);
+  onRecord(N1, 2, RecordType::NORMAL, 3);
+  onRecord(N1, 3, RecordType::WRITE_STREAM, 7);
+  onRecord(N3, 3, RecordType::WRITE_STREAM, 4);
+  onRecord(N1, 4, RecordType::WRITE_STREAM, 8);
+  onRecord(N2, 4, RecordType::HOLE, 6);
+  onRecord(N1, 5, RecordType::WRITE_STREAM, 6);
+  onRecord(N3, 5, RecordType::WRITE_STREAM, 6);
+  onRecord(N1, 6, RecordType::NORMAL, 6);
+  onRecord(N3, 6, RecordType::NORMAL, 9);
+
+  digest_->applyWriteStreamHoles(lng_);
+  for (auto& it : *digest_) {
+    auto& entry = it.second;
+    ASSERT_FALSE(entry.isHolePlug());
+  }
+}
+
 // do not plug bridge record for empty epoch
 TEST_F(DigestTest, BridgeRecordEmptyEpoch1) {
   nodeset_ = {N0, N1, N2, N3};

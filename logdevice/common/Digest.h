@@ -137,6 +137,10 @@ class Digest {
       return record && (record->flags_ & RECORD_Header::BRIDGE);
     }
 
+    bool isWriteStreamRecord() {
+      return record && (record->flags_ & RECORD_Header::WRITE_STREAM);
+    }
+
     const Payload& getPayload() const {
       ld_check(!isHolePlug() && record != nullptr);
       return record->payload;
@@ -241,6 +245,13 @@ class Digest {
    *                            (last non-hole record) in the digest
    */
   esn_t applyBridgeRecords(esn_t last_known_good, esn_t* tail_record_out);
+
+  /*
+   * Scans through the records in the digest and marks write stream records
+   * after the first ESN hole in the epoch as holes. This must be performed
+   * before computing bridge and tail records.
+   */
+  void applyWriteStreamHoles(esn_t last_known_good);
 
   /**
    * since some records might be recognized as holes during recovery, we need

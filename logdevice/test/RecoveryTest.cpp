@@ -82,7 +82,7 @@ class RecoveryTest : public ::testing::TestWithParam<PopulateRecordCache> {
   typedef std::tuple<GapType, lsn_t, lsn_t> gap_record_t;
 
   // initializes a Cluster object with the desired log config
-  void init();
+  void init(bool can_tail_optimize = true);
 
   using PerEpochReleaseMap = std::map<epoch_t, std::pair<esn_t, OffsetMap>>;
 
@@ -286,11 +286,15 @@ static lsn_t lsn(int epoch, int esn) {
   return compose_lsn(epoch_t(epoch), esn_t(esn));
 }
 
-void RecoveryTest::init() {
+void RecoveryTest::init(bool can_tail_optimize) {
   ld_check(replication_ <= nodes_);
 
   // randomly choose if the log is tail optimized or not
-  tail_optimized_ = (folly::Random::rand64(2) == 0);
+  if (can_tail_optimize) {
+    tail_optimized_ = (folly::Random::rand64(2) == 0);
+  } else {
+    tail_optimized_ = false;
+  }
 
   ld_info("Log %lu tail optimized: %s.",
           LOG_ID.val_,
@@ -299,6 +303,7 @@ void RecoveryTest::init() {
   cache_deps_ = std::make_unique<MockRecordCacheDependencies>(this);
   populate_record_cache_ = GetParam();
 
+  populate_record_cache_ = PopulateRecordCache::YES;
   if (populate_record_cache_ == PopulateRecordCache::NO) {
     // do not use record cache at all if we don't populate data
     use_record_cache_ = false;
@@ -4057,3 +4062,132 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithDrainingNodes) {
 }
 
 } // namespace
+
+TEST_P(RecoveryTest, BasicWriteStream) {
+  nodes_ = 4;
+  replication_ = 3;
+  extra_ = 0;
+
+  init();
+
+  const copyset_t copyset = {N1, N2, N3};
+
+  // EpochRecovery instance is running with seal epoch of 7.
+  // Storage nodes contain the following records (x, x_w or x(e)),
+  // plugs o(e) and bridge b(e).
+  // x(e), o(e), and b(e) mean that the record is written by recovery with seal
+  // epoch of e, x means that the record was written by the sequencer with wave
+  // 1, while x_w means that the record was written by the sequencer with wave
+  // w. x, o or b can be prefixed with s to denote that the record also belongs
+  // to a write stream:
+  //
+  //      (1,1) (1, 2)  (1, 3)  (1,4)   (1,5)   (1,6)
+  // ------------------------------------------------
+  // #1  |  x   sx(6)   o(6)    sx(6)   x(6)
+  // #2  |  x           o(6)    sx(6)           b(6)
+  // #3  |  x   sx(5)   sx(5)   sx(5)   b(5)
+  //
+  // expected outcome:
+  // (1,1)  no mutation: since its esn == lng
+  // (1,2)  sx(7): store N1, N2, and N3
+  // (1,3)  o(7): amend N1, N2 and overwrite N3
+  // (1,4)  o(7): overwrite N1, N2 and N3 as a hole
+  // (1,5)  x(7): amend N1, store N3, overwrite N3
+  // (1,6)  b(7): store N1, N2, N3, bridge record for epoch 1
+
+  prepopulateData(node_index_t(1),
+                  {TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(1)),
+                   TestRecord(LOG_ID, lsn(1, 2), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(2))
+                       .writtenByRecovery(6)
+                       .flagWriteStream(),
+                   TestRecord(LOG_ID, lsn(1, 3), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(4))
+                       .writtenByRecovery(6)
+                       .hole(),
+                   TestRecord(LOG_ID, lsn(1, 4), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(4))
+                       .writtenByRecovery(6)
+                       .flagWriteStream(),
+                   TestRecord(LOG_ID, lsn(1, 5), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(4))
+                       .writtenByRecovery(6)});
+
+  prepopulateData(node_index_t(2),
+                  {TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(1)),
+                   TestRecord(LOG_ID, lsn(1, 3), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(3))
+                       .writtenByRecovery(6)
+                       .hole(),
+                   TestRecord(LOG_ID, lsn(1, 4), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(5))
+                       .writtenByRecovery(6)
+                       .flagWriteStream(),
+                   TestRecord(LOG_ID, lsn(1, 6), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(5))
+                       .writtenByRecovery(6)
+                       .bridge()});
+
+  prepopulateData(node_index_t(3),
+                  {TestRecord(LOG_ID, lsn(1, 1), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(1)),
+                   TestRecord(LOG_ID, lsn(1, 2), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(2))
+                       .writtenByRecovery(5)
+                       .flagWriteStream(),
+                   TestRecord(LOG_ID, lsn(1, 3), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(3))
+                       .writtenByRecovery(5)
+                       .flagWriteStream(),
+                   TestRecord(LOG_ID, lsn(1, 4), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(4))
+                       .writtenByRecovery(5)
+                       .flagWriteStream(),
+                   TestRecord(LOG_ID, lsn(1, 5), ESN_INVALID)
+                       .copyset(copyset)
+                       .timestamp(std::chrono::milliseconds(5))
+                       .writtenByRecovery(5)
+                       .bridge()});
+
+  // latest epoch of store is 4, soft seal 3
+  populateSoftSeals(epoch_t(3));
+
+  cluster_->setStartingEpoch(LOG_ID, epoch_t(8));
+  const epoch_t seal_epoch = epoch_t(7); // recovery seals epoch up to 2
+
+  ASSERT_EQ(0, cluster_->start());
+
+  read(lsn(1, 1), lsn(1, 6));
+  EXPECT_EQ(std::vector<lsn_t>({lsn(1, 1), lsn(1, 2), lsn(1, 5)}), records_);
+
+  EXPECT_EQ(std::vector<gap_record_t>({
+                gap_record_t(GapType::HOLE, lsn(1, 3), lsn(1, 3)),
+                gap_record_t(GapType::HOLE, lsn(1, 4), lsn(1, 4)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 6), lsn(1, 6)),
+            }),
+            gaps_);
+
+  expectAuthoritativeOnly();
+  cluster_->stop();
+
+  verifyDigest(*buildDigest(epoch_t(1), esn_t(1), seal_epoch),
+               std::vector<esn_t>({esn_t(2), esn_t(5)}), // records
+               std::vector<esn_t>({esn_t(3), esn_t(4)}), // plugs
+               std::vector<esn_t>({esn_t(6)})            // bridge
+  );
+}

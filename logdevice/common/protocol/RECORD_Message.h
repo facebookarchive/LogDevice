@@ -94,6 +94,11 @@ struct RECORD_Header {
   // this flag is clear, the copyset should include "my node id".
   static const RECORD_flags_t DRAINED = 1u << 19; //=524288
 
+  // denotes that record belongs to a write stream. Used mainly during recovery.
+  // Flag value must match that of LocalLogStoreRecordFormat::FLAG_WRITE_STREAM
+  // and STORE_Header::WRITE_STREAM
+  static const RECORD_flags_t WRITE_STREAM = 1u << 22; // 4194304
+
   // Please update RECORD_Message::flagsToString() when adding flags.
 
 } __attribute__((__packed__));

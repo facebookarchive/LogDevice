@@ -410,6 +410,20 @@ mockRecord(lsn_t lsn,
                        std::move(offsets));
 }
 
+std::unique_ptr<DataRecordOwnsPayload>
+mockWriteStreamRecord(lsn_t lsn,
+                      uint64_t ts,
+                      size_t payload_size = 128,
+                      OffsetMap offsets = OffsetMap()) {
+  return create_record(EpochRecoveryTest::LOG_ID,
+                       lsn,
+                       RecordType::WRITE_STREAM,
+                       1,
+                       std::chrono::milliseconds(ts),
+                       payload_size,
+                       std::move(offsets));
+}
+
 std::unique_ptr<DataRecordOwnsPayload> mockRecord(lsn_t lsn,
                                                   RecordType type,
                                                   uint32_t wave_or_seal_epoch,
@@ -548,6 +562,298 @@ TEST_F(EpochRecoveryTest, Basic) {
   ASSERT_EQ(E::OK, result_.st);
   ASSERT_TRUE(lce_tail_.sameContent(result_.tail));
 }
+
+#define SEND_RECORD(nid, esn) \
+  erm_->onDigestRecord(       \
+      N##nid, read_stream_id_t(nid), mockRecord(lsn(epoch_, esn), 9));
+
+#define SEND_STREAM_RECORD(nid, esn)          \
+  erm_->onDigestRecord(N##nid,                \
+                       read_stream_id_t(nid), \
+                       mockWriteStreamRecord(lsn(epoch_, esn), 9));
+
+#define SEND_RECORD_GAP(nid, start_esn, end_esn)    \
+  erm_->onDigestGap(N##nid,                         \
+                    mockGap(N##nid,                 \
+                            lsn(epoch_, start_esn), \
+                            lsn(epoch_, end_esn),   \
+                            read_stream_id_t(nid)));
+
+// a very basic scenario:
+// - NodeSet {N1, N2, N3}, replication 2
+// - esns 1, 2, 4 were fully replicated on N1 with LNG == 2 and esns 1, 2, 3, 4
+// on N2 with local LNG == 2
+// - esns 1 and 3 are stream records and 2 and 4 are normal records.
+// - N3 is not available and does not participated in recovery
+// - epoch recovery will simply plug a bridge record in esn_t(5) to N1 and N2
+// and m4 esn_t(4) the tail record.
+TEST_F(EpochRecoveryTest, BasicWriteStream) {
+  setUp();
+  OffsetMap om;
+  om.setCounter(BYTE_OFFSET, 19);
+  erm_->onSealed(N1, esn_t(2), esn_t(4), om, folly::none);
+  erm_->onSealed(N2, esn_t(2), esn_t(4), om, folly::none);
+  erm_->activate(prev_tail_);
+  ASSERT_EQ(esn_t(2), erm_->getDigestStart());
+  ASSERT_EQ(esn_t(2), erm_->getLastKnownGood());
+
+  erm_->onMessageSent(N1, MessageType::START, E::OK, read_stream_id_t(1));
+  erm_->onMessageSent(N2, MessageType::START, E::OK, read_stream_id_t(2));
+  erm_->onDigestStreamStarted(N1, read_stream_id_t(1), lsn(epoch_, 1), E::OK);
+  erm_->onDigestStreamStarted(N2, read_stream_id_t(2), lsn(epoch_, 1), E::OK);
+  SEND_STREAM_RECORD(1, 1);
+  SEND_STREAM_RECORD(2, 1);
+  SEND_STREAM_RECORD(1, 2);
+  SEND_STREAM_RECORD(2, 2);
+  SEND_RECORD_GAP(1, 3, 3);
+  SEND_STREAM_RECORD(2, 3);
+  SEND_RECORD(1, 4);
+  SEND_RECORD(2, 4);
+  SEND_RECORD_GAP(1, 5, ESN_MAX.val_);
+  SEND_RECORD_GAP(2, 5, ESN_MAX.val_);
+
+  ASSERT_TRUE(erm_->getGracePeriodTimer()->isActive());
+  static_cast<MockTimer*>(erm_->getGracePeriodTimer())->trigger();
+
+  ASSERT_EQ(2, erm_->mutationSetSize());
+  ASSERT_EQ(3, erm_->getMutators().size());
+
+  {
+    const auto& mutator = *erm_->getMutators().at(esn_t(3));
+    ASSERT_EQ(1, mutator.getAmendSet().size());
+    ASSERT_TRUE(mutator.getConflictSet().empty());
+    ASSERT_TRUE(mutator.getStoreHeader().flags &
+                STORE_Header::WRITTEN_BY_RECOVERY);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::WRITE_STREAM);
+    ASSERT_FALSE(mutator.getStoreHeader().flags & STORE_Header::HOLE);
+  }
+
+  {
+    const auto& mutator = *erm_->getMutators().at(esn_t(4));
+    ASSERT_EQ(2, mutator.getAmendSet().size());
+    ASSERT_TRUE(mutator.getConflictSet().empty());
+    ASSERT_TRUE(mutator.getStoreHeader().flags &
+                STORE_Header::WRITTEN_BY_RECOVERY);
+    ASSERT_FALSE(mutator.getStoreHeader().flags & STORE_Header::HOLE);
+    ASSERT_FALSE(mutator.getStoreHeader().flags & STORE_Header::WRITE_STREAM);
+  }
+
+  {
+    const auto& mutator = *erm_->getMutators().at(esn_t(5));
+    ASSERT_TRUE(mutator.getAmendSet().empty());
+    ASSERT_TRUE(mutator.getConflictSet().empty());
+    ASSERT_TRUE(mutator.getStoreHeader().flags &
+                STORE_Header::WRITTEN_BY_RECOVERY);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::HOLE);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::BRIDGE);
+  }
+
+  // mutator is done
+  erm_->onMutationComplete(esn_t(3), E::OK, ShardID());
+  erm_->onMutationComplete(esn_t(4), E::OK, ShardID());
+  erm_->onMutationComplete(esn_t(5), E::OK, ShardID());
+  ASSERT_EQ(0, erm_->getMutators().size());
+
+  // CLEAN messages should be sent to N1, N2
+  erm_->onMessageSent(N1, MessageType::CLEAN, E::OK);
+  erm_->onMessageSent(N2, MessageType::CLEAN, E::OK);
+  erm_->onCleaned(N2, E::OK, Seal());
+  erm_->onCleaned(N1, E::OK, Seal());
+
+  // check tail record
+  ASSERT_TRUE(lce_tail_.isValid());
+  ASSERT_EQ(lsn(epoch_, 4), lce_tail_.header.lsn);
+  ASSERT_EQ(9, lce_tail_.header.timestamp);
+  ASSERT_FALSE(lce_tail_.containOffsetWithinEpoch());
+  OffsetMap offsets_to_add;
+  offsets_to_add.setCounter(BYTE_OFFSET, 19);
+  OffsetMap expected_offsets =
+      OffsetMap::mergeOffsets(prev_tail_.offsets_map_, offsets_to_add);
+  ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
+
+  // reply from epoch store
+  erm_->onLastCleanEpochUpdated(E::OK, epoch_, lce_tail_);
+
+  // epoch recovery should get finished
+  ASSERT_TRUE(finished_);
+  ASSERT_EQ(E::OK, result_.st);
+  ASSERT_TRUE(lce_tail_.sameContent(result_.tail));
+}
+
+// - NodeSet {N1, N2, N3}, replication 2
+// - esns 1, 2, 4 were fully replicated on both N1 and N2 and all are stream
+// records.
+// - N3 is not available and does not participated in recovery
+// - epoch recovery will declare esn_t(2) as tail record, esn_t(3) as bridge,
+// hole and plug hole at esn_t(4).
+TEST_F(EpochRecoveryTest, WriteStreamMissingRecord) {
+  setUp();
+  OffsetMap om;
+  om.setCounter(BYTE_OFFSET, 19);
+  erm_->onSealed(N1, esn_t(2), esn_t(4), om, folly::none);
+  erm_->onSealed(N2, esn_t(2), esn_t(4), om, folly::none);
+  erm_->activate(prev_tail_);
+  ASSERT_TRUE(erm_->isActive());
+  ASSERT_EQ(esn_t(2), erm_->getDigestStart());
+  ASSERT_EQ(esn_t(2), erm_->getLastKnownGood());
+
+  erm_->onMessageSent(N1, MessageType::START, E::OK, read_stream_id_t(1));
+  erm_->onMessageSent(N2, MessageType::START, E::OK, read_stream_id_t(2));
+  erm_->onDigestStreamStarted(N1, read_stream_id_t(1), lsn(epoch_, 1), E::OK);
+  erm_->onDigestStreamStarted(N2, read_stream_id_t(2), lsn(epoch_, 1), E::OK);
+  SEND_STREAM_RECORD(1, 1);
+  SEND_STREAM_RECORD(2, 1);
+  SEND_STREAM_RECORD(1, 2);
+  SEND_STREAM_RECORD(2, 2);
+  SEND_RECORD_GAP(1, 3, 3);
+  SEND_RECORD_GAP(2, 3, 3);
+  SEND_STREAM_RECORD(1, 4);
+  SEND_STREAM_RECORD(2, 4);
+  SEND_RECORD_GAP(1, 5, ESN_MAX.val_);
+  SEND_RECORD_GAP(2, 5, ESN_MAX.val_);
+
+  ASSERT_TRUE(erm_->getGracePeriodTimer()->isActive());
+  static_cast<MockTimer*>(erm_->getGracePeriodTimer())->trigger();
+
+  ASSERT_EQ(2, erm_->mutationSetSize());
+  ASSERT_EQ(2, erm_->getMutators().size());
+
+  {
+    const auto& mutator = *erm_->getMutators().at(esn_t(3));
+    ASSERT_TRUE(mutator.getConflictSet().empty());
+    ASSERT_TRUE(mutator.getAmendSet().empty());
+    ASSERT_TRUE(mutator.getStoreHeader().flags &
+                STORE_Header::WRITTEN_BY_RECOVERY);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::HOLE);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::BRIDGE);
+  }
+
+  {
+    const auto& mutator = *erm_->getMutators().at(esn_t(4));
+    ASSERT_TRUE(mutator.getAmendSet().empty());
+    ASSERT_EQ(std::set<ShardID>({N1, N2}), mutator.getConflictSet());
+    ASSERT_TRUE(mutator.getStoreHeader().flags &
+                STORE_Header::WRITTEN_BY_RECOVERY);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::HOLE);
+  }
+
+  // mutator is done
+  erm_->onMutationComplete(esn_t(3), E::OK, ShardID());
+  erm_->onMutationComplete(esn_t(4), E::OK, ShardID());
+  ASSERT_EQ(0, erm_->getMutators().size());
+  erm_->onMessageSent(N1, MessageType::CLEAN, E::OK);
+  erm_->onMessageSent(N2, MessageType::CLEAN, E::OK);
+  erm_->onCleaned(N2, E::OK, Seal());
+  erm_->onCleaned(N1, E::OK, Seal());
+
+  ASSERT_TRUE(lce_tail_.isValid());
+  ASSERT_EQ(lsn(epoch_, 2), lce_tail_.header.lsn);
+  ASSERT_EQ(9, lce_tail_.header.timestamp);
+  ASSERT_FALSE(lce_tail_.containOffsetWithinEpoch());
+
+  OffsetMap offsets_to_add;
+  offsets_to_add.setCounter(BYTE_OFFSET, 19);
+  OffsetMap expected_offsets =
+      OffsetMap::mergeOffsets(prev_tail_.offsets_map_, offsets_to_add);
+  ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
+
+  erm_->onLastCleanEpochUpdated(E::OK, epoch_, lce_tail_);
+  ASSERT_TRUE(finished_);
+  ASSERT_EQ(E::OK, result_.st);
+  ASSERT_TRUE(lce_tail_.sameContent(result_.tail));
+} // namespace
+
+// - NodeSet {N1, N2, N3}, replication 2
+// - esns 1, 2, 4 were fully replicated on both N1 and N2 and 1, 2 are stream
+// records, while 4 is a normal record.
+// - N3 is not available and does not participated in recovery
+// - epoch recovery will declare esn_t(4) as tail record, esn_t(5) as bridge.
+TEST_F(EpochRecoveryTest, WriteStreamNormalRecordAfterHole) {
+  setUp();
+  OffsetMap om;
+  om.setCounter(BYTE_OFFSET, 19);
+  erm_->onSealed(N1, esn_t(2), esn_t(4), om, folly::none);
+  erm_->onSealed(N2, esn_t(2), esn_t(4), om, folly::none);
+  erm_->activate(prev_tail_);
+  ASSERT_TRUE(erm_->isActive());
+  ASSERT_EQ(esn_t(2), erm_->getDigestStart());
+  ASSERT_EQ(esn_t(2), erm_->getLastKnownGood());
+
+  erm_->onMessageSent(N1, MessageType::START, E::OK, read_stream_id_t(1));
+  erm_->onMessageSent(N2, MessageType::START, E::OK, read_stream_id_t(2));
+  erm_->onDigestStreamStarted(N1, read_stream_id_t(1), lsn(epoch_, 1), E::OK);
+  erm_->onDigestStreamStarted(N2, read_stream_id_t(2), lsn(epoch_, 1), E::OK);
+  SEND_STREAM_RECORD(1, 1);
+  SEND_STREAM_RECORD(2, 1);
+  SEND_STREAM_RECORD(1, 2);
+  SEND_STREAM_RECORD(2, 2);
+  SEND_RECORD_GAP(1, 3, 3);
+  SEND_RECORD_GAP(2, 3, 3);
+  SEND_RECORD(1, 4);
+  SEND_RECORD(2, 4);
+  SEND_RECORD_GAP(1, 5, ESN_MAX.val_);
+  SEND_RECORD_GAP(2, 5, ESN_MAX.val_);
+
+  ASSERT_TRUE(erm_->getGracePeriodTimer()->isActive());
+  static_cast<MockTimer*>(erm_->getGracePeriodTimer())->trigger();
+
+  ASSERT_EQ(2, erm_->mutationSetSize());
+  ASSERT_EQ(3, erm_->getMutators().size());
+
+  {
+    const auto& mutator = *erm_->getMutators().at(esn_t(3));
+    ASSERT_TRUE(mutator.getConflictSet().empty());
+    ASSERT_TRUE(mutator.getAmendSet().empty());
+    ASSERT_TRUE(mutator.getStoreHeader().flags &
+                STORE_Header::WRITTEN_BY_RECOVERY);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::HOLE);
+  }
+
+  {
+    const auto& mutator = *erm_->getMutators().at(esn_t(4));
+    ASSERT_TRUE(mutator.getConflictSet().empty());
+    ASSERT_EQ(2, mutator.getAmendSet().size());
+    ASSERT_TRUE(mutator.getStoreHeader().flags &
+                STORE_Header::WRITTEN_BY_RECOVERY);
+    ASSERT_FALSE(mutator.getStoreHeader().flags & STORE_Header::HOLE);
+  }
+
+  {
+    const auto& mutator = *erm_->getMutators().at(esn_t(5));
+    ASSERT_TRUE(mutator.getConflictSet().empty());
+    ASSERT_TRUE(mutator.getAmendSet().empty());
+    ASSERT_TRUE(mutator.getStoreHeader().flags &
+                STORE_Header::WRITTEN_BY_RECOVERY);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::HOLE);
+    ASSERT_TRUE(mutator.getStoreHeader().flags & STORE_Header::BRIDGE);
+  }
+
+  // mutator is done
+  erm_->onMutationComplete(esn_t(3), E::OK, ShardID());
+  erm_->onMutationComplete(esn_t(4), E::OK, ShardID());
+  erm_->onMutationComplete(esn_t(5), E::OK, ShardID());
+  ASSERT_EQ(0, erm_->getMutators().size());
+  erm_->onMessageSent(N1, MessageType::CLEAN, E::OK);
+  erm_->onMessageSent(N2, MessageType::CLEAN, E::OK);
+  erm_->onCleaned(N2, E::OK, Seal());
+  erm_->onCleaned(N1, E::OK, Seal());
+
+  ASSERT_TRUE(lce_tail_.isValid());
+  ASSERT_EQ(lsn(epoch_, 4), lce_tail_.header.lsn);
+  ASSERT_EQ(9, lce_tail_.header.timestamp);
+  ASSERT_FALSE(lce_tail_.containOffsetWithinEpoch());
+
+  OffsetMap offsets_to_add;
+  offsets_to_add.setCounter(BYTE_OFFSET, 19);
+  OffsetMap expected_offsets =
+      OffsetMap::mergeOffsets(prev_tail_.offsets_map_, offsets_to_add);
+  ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
+
+  erm_->onLastCleanEpochUpdated(E::OK, epoch_, lce_tail_);
+  ASSERT_TRUE(finished_);
+  ASSERT_EQ(E::OK, result_.st);
+  ASSERT_TRUE(lce_tail_.sameContent(result_.tail));
+} // namespace
 
 // similar to the basic test, but node changes authoritative status
 // causing state machine to be restarted

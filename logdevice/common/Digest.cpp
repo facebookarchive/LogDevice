@@ -122,9 +122,13 @@ bool Digest::needsMutation(Entry& entry,
       successfully_stored->insert(kv.first);
     } else if ((kv.second.flags ^ metadata_highest.flags) &
                RECORD_Header::HOLE) {
-      // the record sent by this node has a different hole/record property
-      // from the highest precedence metadata in the digest, consider it
-      // to be a conflict copy whose payload needs to be replaced
+      // there are two cases in which we want to plug holes. One when
+      // the record belongs to a write stream, since we know that this occurs
+      // after LNG or when the record sent by this node has a different
+      // hole/record property from the highest precedence metadata in the
+      // digest, consider it to be a conflict copy whose payload needs to be
+      // replaced. In the former case, HOLE flag would have been set by
+      // applyWriteStreamRecovery() invoked before performing epoch mutations.
       conflict_copies->insert(kv.first);
     } else {
       // otherwise, epoch recovery just needs to amend the record metadata but
@@ -297,6 +301,49 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
   return bridge;
 }
 
+void Digest::applyWriteStreamHoles(esn_t last_known_good) {
+  if (empty()) {
+    return;
+  }
+  Digest::iterator it = begin();
+  auto cur_esn = static_cast<uint64_t>(last_known_good.val_ + 1);
+  auto end_esn = static_cast<uint64_t>(getLastEsn().val_);
+  auto first_hole_esn = ESN_MAX.val_;
+  while (cur_esn <= end_esn) {
+    ld_check(cur_esn <= ESN_MAX.val_);
+    esn_t cur = esn_t(static_cast<esn_t::raw_type>(cur_esn));
+    if (it == end() || it->first > cur) {
+      // No one reported anything for this ESN, a hole!
+      if (cur_esn < first_hole_esn) {
+        first_hole_esn = cur_esn;
+      }
+      ++cur_esn;
+    } else if (it->first == cur) {
+      Digest::Entry& dentry = it->second;
+      ld_check(dentry.record != nullptr);
+      if (dentry.isHolePlug() && cur_esn < first_hole_esn) {
+        // Highest metadata says this ESN is a hole, it will be declared a hole.
+        first_hole_esn = cur_esn;
+      }
+
+      if (dentry.isWriteStreamRecord() && cur_esn > first_hole_esn) {
+        // Marking HOLE flag will send appropriate overwriting messages to all
+        // nodes that disagree with dentry. Refer EpochRecovery::mutateEpoch()
+        // and Digest::needsMutations() for how this happens.
+        dentry.record->flags_ |= RECORD_Header::HOLE;
+        ld_check(dentry.isHolePlug());
+      }
+
+      ++it;
+      ++cur_esn;
+    } else { // it->first < cur
+      ld_check(it->first <= last_known_good);
+      // Skip until LNG.
+      ++it;
+    }
+  }
+}
+
 int Digest::recomputeOffsetsWithinEpoch(
     esn_t last_known_good,
     folly::Optional<OffsetMap> offsets_within_epoch) {
@@ -314,8 +361,8 @@ int Digest::recomputeOffsetsWithinEpoch(
     offsets_within_epoch = std::move(om);
   }
 
-  // if offsets_within_epoch is not given, figure out offsets_within_epoch from
-  // digest entries
+  // if offsets_within_epoch is not given, figure out offsets_within_epoch
+  // from digest entries
   if (!offsets_within_epoch.hasValue()) {
     ld_check(last_known_good >= digest_start_esn_);
     auto iter = entries_.find(last_known_good);
@@ -340,8 +387,8 @@ int Digest::recomputeOffsetsWithinEpoch(
     }
 
   } else {
-    // if offsets_within_epoch is given, in this case last_known_good should be
-    // exactly digest_start_esn_.val_ - 1
+    // if offsets_within_epoch is given, in this case last_known_good should
+    // be exactly digest_start_esn_.val_ - 1
     ld_check(last_known_good.val_ == digest_start_esn_.val_ - 1);
   }
 
@@ -392,11 +439,11 @@ void Digest::removeNodeIf(std::function<bool(ShardID shard)> should_remove) {
     for (auto nit = node_info.begin(); nit != node_info.end();) {
       if (should_remove(nit->first)) {
         // Note that here we removed a node but did not update Entry::record.
-        // If the node removed is the only one that sent us the highest record,
-        // then we have a stale record. But this is still fine, as the record
-        // was still an authentic record written by logdevice and the consensus
-        // result should not change if the esn was previously acknowledged to
-        // the client.
+        // If the node removed is the only one that sent us the highest
+        // record, then we have a stale record. But this is still fine, as the
+        // record was still an authentic record written by logdevice and the
+        // consensus result should not change if the esn was previously
+        // acknowledged to the client.
         nit = node_info.erase(nit);
       } else {
         ++nit;

@@ -492,7 +492,16 @@ bool EpochRecovery::startMutations() {
   // for purging to delete records on nodes not included in the mutation set.
   digest_.filter(mutation_set);
 
-  // 3) finalize the digest by
+  // 3) Apply write stream recovery
+  // Only those ESNs that are part of a continuous prefix must be recovered
+  // since only those are ACKed back to the client and there is no way to
+  // guarantee that one of the hole does not belong to a write stream. So, we
+  // mark all write stream records that occur after the first hole in the epoch
+  // as a hole. Since we mark holes before bridge and tail record computation,
+  // these values are computed as per their definition.
+  digest_.applyWriteStreamHoles(lng_);
+
+  // 4) finalize the digest by
   //    a. applying bridge record received and compute the bridge esn for the
   //       epoch. The tail record of the epoch is also determined.
   //    b. recompute offsets within the epoch
@@ -868,6 +877,8 @@ bool EpochRecovery::mutateEpoch(const std::set<ShardID>& mutation_set,
         // this is a normal record, can never be a hole or bridge
         ld_check(!(mutation_flags & STORE_Header::HOLE));
         ld_check(!(mutation_flags & STORE_Header::BRIDGE));
+        mutation_flags |=
+            dentry.isWriteStreamRecord() ? STORE_Header::WRITE_STREAM : 0;
         payload = dentry.getPayload();
 
         // note that with failure domain requirements, existing copyset size may
