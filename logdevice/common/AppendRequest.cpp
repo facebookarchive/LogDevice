@@ -571,6 +571,7 @@ void AppendRequest::onReplyReceived(const APPENDED_Header& reply,
     case E::NOSEQUENCER:
     case E::NOTINSERVERCONFIG:
     case E::WRITE_STREAM_BROKEN:
+    case E::WRITE_STREAM_IGNORED:
       // Append was either successful or not, but in any case we reached the
       // right node (didn't get redirected)
       break;

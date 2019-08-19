@@ -80,6 +80,51 @@ EpochSequencerImmutableOptions::EpochSequencerImmutableOptions(
   esn_max = esn_t(~esn_t::raw_type(0) >> (ESN_T_BITS - settings.esn_bits));
 }
 
+lsn_t EpochSequencer::assignLsnForWriteStream(Appender* appender) {
+  auto stream_id = appender->getWriteStreamId();
+  auto seq_num = appender->getWriteStreamSeqNum();
+  auto it = write_streams_.find(stream_id);
+  lsn_t lsn = LSN_INVALID;
+  if (it == write_streams_.end()) {
+    // We do not know about the write stream
+    if (appender->canResumeWriteStream()) {
+      lsn = window_.grow(appender);
+      if (lsn != LSN_INVALID) {
+        // LSN alloc succeeded, insert sequence number into the map.
+        // It is okay if we fail to insert our seq num (say n1) due to
+        // concurrency with another Appender that is trying to insert its own
+        // seq num (say n2). Since n2 can also resume the write stream, this is
+        // the same case as when we receive n2 after n1. We can skip insertion
+        // and go on anyway.
+        write_streams_.insert(
+            stream_id, std::make_unique<WriteStreamState>(seq_num));
+      }
+    } else {
+      // Can't process without resume write stream bit.
+      err = E::WRITE_STREAM_UNKNOWN;
+    }
+  } else {
+    std::lock_guard<std::mutex> lock(it->second->mutex);
+    auto expected_seq_num = next_seq_num(it->second->last_accepted_seq_num);
+    if (appender->canResumeWriteStream() || (seq_num == expected_seq_num)) {
+      lsn = window_.grow(appender);
+      if (lsn != LSN_INVALID) {
+        // LSN alloc succeeded, update sequence number. So, we either insert
+        // the (n+1)th message or a completely random seq num that the client
+        // has directed us to (by setting WRITE_STREAM_RESUME bit).
+        it->second->last_accepted_seq_num.val_ = seq_num.val();
+      }
+    } else if (seq_num < expected_seq_num) {
+      // We do not have to process this. Ignore.
+      err = E::WRITE_STREAM_IGNORED;
+    } else if (seq_num > expected_seq_num) {
+      // We cannot process this now. How sad!
+      err = E::WRITE_STREAM_BROKEN;
+    }
+  }
+  return lsn;
+}
+
 RunAppenderStatus EpochSequencer::runAppender(Appender* appender) {
   if (!appender || appender->started()) {
     ld_check(false);
@@ -93,7 +138,10 @@ RunAppenderStatus EpochSequencer::runAppender(Appender* appender) {
     return RunAppenderStatus::ERROR_DELETE;
   }
 
-  lsn_t lsn = window_.grow(appender);
+  lsn_t lsn = appender->isWriteStreamAppend()
+      ? assignLsnForWriteStream(appender)
+      : window_.grow(appender);
+
   if (lsn == LSN_INVALID) {
     // 1. window full;
     // 2. no more LSN available to issue;
@@ -101,7 +149,15 @@ RunAppenderStatus EpochSequencer::runAppender(Appender* appender) {
     //    state transition and window growth is _not_ atomic. The window
     //    can be disabled while the state of EpochSequencer is still in
     //    ACTIVE
-    ld_check(err == E::NOBUFS || err == E::TOOBIG || err == E::DISABLED);
+    // 4. error due to write stream LSN allotment logic. Refer
+    //    assignLsnForWriteStream().
+    ld_check_in(err,
+                ({E::NOBUFS,
+                  E::TOOBIG,
+                  E::DISABLED,
+                  E::WRITE_STREAM_BROKEN,
+                  E::WRITE_STREAM_IGNORED,
+                  E::WRITE_STREAM_UNKNOWN}));
     return RunAppenderStatus::ERROR_DELETE;
   }
 

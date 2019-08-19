@@ -784,6 +784,35 @@ RunAppenderStatus AppenderPrep::append(std::shared_ptr<Sequencer>& sequencer,
 
   ld_check(err != E::OK);
   switch (err) {
+    case E::WRITE_STREAM_UNKNOWN:
+      STAT_INCR(stats(), appender_write_stream_unknown);
+      ld_spew(
+          "APPEND request from %s failed for log %lu because it belongs to an "
+          "unknown write stream with id %lu ",
+          Sender::describeConnection(from_).c_str(),
+          header_.logid.val_,
+          write_stream_rqid_.id.val_);
+      break;
+    case E::WRITE_STREAM_IGNORED:
+      STAT_INCR(stats(), appender_write_stream_ignored);
+      ld_spew(
+          "APPEND request from %s failed for write stream %lu belonging to log "
+          "%lu because the sequence number %lu is smaller than expected",
+          Sender::describeConnection(from_).c_str(),
+          write_stream_rqid_.id.val_,
+          header_.logid.val_,
+          write_stream_rqid_.seq_num.val_);
+      break;
+    case E::WRITE_STREAM_BROKEN:
+      STAT_INCR(stats(), appender_write_stream_broken);
+      ld_spew(
+          "APPEND request from %s failed for write stream %lu belonging to log "
+          "%lu because the sequence number %lu is larger than expected",
+          Sender::describeConnection(from_).c_str(),
+          write_stream_rqid_.id.val_,
+          header_.logid.val_,
+          write_stream_rqid_.seq_num.val_);
+      break;
     case E::BADPAYLOAD:
       ld_check(MetaDataLog::isMetaDataLog(header_.logid));
       RATELIMIT_ERROR(std::chrono::seconds(1),

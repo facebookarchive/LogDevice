@@ -146,4 +146,5 @@ ERROR_CODE(MAINTENANCE_CLASH, 600, "Maintenance clashes with an existing one")
 // Write Stream errors
 ERROR_CODE(WRITE_STREAM_UNKNOWN, 700, "write stream id is not known")
 ERROR_CODE(WRITE_STREAM_BROKEN, 701, "append request not the next expected in the writer stream")
+ERROR_CODE(WRITE_STREAM_IGNORED, 702, "append request has been ignored")
 #undef ERROR_CODE

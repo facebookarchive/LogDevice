@@ -13,6 +13,7 @@
 #include <mutex>
 
 #include <folly/concurrency/AtomicSharedPtr.h>
+#include <folly/concurrency/ConcurrentHashMap.h>
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochMetaData.h"
@@ -60,6 +61,16 @@ struct EpochSequencerImmutableOptions {
 
 class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
  public:
+  struct WriteStreamState {
+    std::mutex mutex;
+    write_stream_seq_num_t last_accepted_seq_num;
+    explicit WriteStreamState(write_stream_seq_num_t _last_accepted_seq_num)
+        : last_accepted_seq_num(_last_accepted_seq_num) {}
+  };
+  using WriteStreamsMap =
+      folly::ConcurrentHashMap<write_stream_id_t,
+                               std::unique_ptr<WriteStreamState>,
+                               write_stream_id_t::Hash>;
   /**
    * An EpochSequencer object can be in one of the following four states.
    *
@@ -402,6 +413,10 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
   virtual void schedulePeriodicReleases();
 
  protected:
+  // Atomically assigns LSN for write stream appends along with updating the
+  // last_accepted_seq_num in the internal map.
+  lsn_t assignLsnForWriteStream(Appender* append);
+
   // notify parent sequencer that draining for this epoch is completed and
   // all records in the epoch are fully stored
   virtual void noteDrainingCompleted(Status drain_status);
@@ -491,6 +506,11 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
   // updated atomically. nullptr if no records are fully replicated yet for
   // the epoch
   folly::atomic_shared_ptr<TailRecord> tail_record_;
+
+  // A concurrent hash map of write stream id to last accepted sequence number
+  // in the corresponding write streams, along with a per-stream mutex that is
+  // used to allot LSNs and update sequence numbers transactionally.
+  WriteStreamsMap write_streams_;
 
   // return true if the epoch is quiescent, i.e., last_reaped_ advanced to
   // draining_target_

@@ -482,6 +482,12 @@ STAT_DEFINE(appender_draining_soft_preempted, SUM)
 // number of times that an Appender is started at the beginning of its epoch
 // with EPOCH_BEGIN flag in its STORE header
 STAT_DEFINE(appender_epoch_begin, SUM)
+// number of messages that were rejected with write stream unknown error message
+STAT_DEFINE(appender_write_stream_unknown, SUM)
+// number of messages that were rejected with write stream broken error message
+STAT_DEFINE(appender_write_stream_broken, SUM)
+// number of messages that were rejected with write stream ignored error message
+STAT_DEFINE(appender_write_stream_ignored, SUM)
 
 // two important stats above, but exclusively for metadata log appends
 STAT_DEFINE(metadata_log_appender_wave_timedout, SUM)

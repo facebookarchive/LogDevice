@@ -92,6 +92,9 @@ class EpochSequencerTest : public ::testing::Test {
     std::atomic<size_t> appender_failed_disabled{0};
     std::atomic<size_t> appender_failed_toobig{0};
     std::atomic<size_t> appender_failed_nosequencer{0};
+    std::atomic<size_t> appender_failed_writestream_unknown{0};
+    std::atomic<size_t> appender_failed_writestream_broken{0};
+    std::atomic<size_t> appender_failed_writestream_ignored{0};
 
     std::atomic<size_t> epoch_drained{0};
   };
@@ -99,6 +102,22 @@ class EpochSequencerTest : public ::testing::Test {
   TestStats stats;
 
   void setUp();
+  void testWriteStreamAppendAccept(int stream_id,
+                                   int seq_num,
+                                   int expected_esn,
+                                   bool stream_resume = false) {
+    testWriteStreamAppend(
+        stream_id, seq_num, stream_resume, expected_esn, E::OK);
+  }
+  void testWriteStreamAppendFail(int stream_id, int seq_num, E expected_err) {
+    testWriteStreamAppend(stream_id, seq_num, false, -1, expected_err);
+  }
+
+  void testWriteStreamAppend(int stream_id,
+                             int seq_num,
+                             bool stream_resume,
+                             int expected_esn,
+                             E expected_err);
   std::shared_ptr<EpochSequencer> createEpochSequencer(epoch_t epoch = EPOCH);
   MockAppender* createAppender(bool not_retire = false);
   void checkStats();
@@ -166,6 +185,15 @@ class MockEpochSequencer : public EpochSequencer {
           break;
         case E::NOSEQUENCER:
           ++test_->stats.appender_failed_nosequencer;
+          break;
+        case E::WRITE_STREAM_UNKNOWN:
+          ++test_->stats.appender_failed_writestream_unknown;
+          break;
+        case E::WRITE_STREAM_BROKEN:
+          ++test_->stats.appender_failed_writestream_broken;
+          break;
+        case E::WRITE_STREAM_IGNORED:
+          ++test_->stats.appender_failed_writestream_ignored;
           break;
         default:
           ld_check(false);
@@ -489,7 +517,10 @@ void EpochSequencerTest::checkStats() {
   ASSERT_EQ(stats.epoch_created, stats.epoch_destroyed);
   const size_t total_appenders = stats.appender_success +
       stats.appender_failed_nobuf + stats.appender_failed_disabled +
-      stats.appender_failed_toobig + stats.appender_failed_nosequencer;
+      stats.appender_failed_toobig + stats.appender_failed_nosequencer +
+      stats.appender_failed_writestream_unknown +
+      stats.appender_failed_writestream_broken +
+      stats.appender_failed_writestream_ignored;
   ASSERT_EQ(stats.appender_created, total_appenders);
 }
 
@@ -595,6 +626,65 @@ TEST_F(EpochSequencerTest, BasicAppend) {
   run_on_worker(processor_.get(), /*worker_id=*/0, test);
   // both Appender and EpochSequencer should be properly destroyed when Worker
   // is destroyed
+}
+
+void EpochSequencerTest::testWriteStreamAppend(int stream_id,
+                                               int seq_num,
+                                               bool stream_resume,
+                                               int expected_esn,
+                                               E expected_err) {
+  run_on_worker(processor_.get(), /*worker_id=*/0, [&]() {
+    err = E::OK;
+    EXPECT_EQ(EpochSequencer::State::ACTIVE, es_->getState());
+    MockAppender* appender = createAppender(/*not_retire=*/true);
+    write_stream_request_id_t reqid = {
+        write_stream_id_t(stream_id), write_stream_seq_num_t(seq_num)};
+    appender->setWriteStreamAppendInfo(reqid, stream_resume);
+
+    auto status = es_->runAppender(appender);
+    lsn_t appender_lsn = appender->getLSN();
+
+    if (err == E::OK) {
+      EXPECT_EQ(RunAppenderStatus::SUCCESS_KEEP, status);
+    } else {
+      EXPECT_EQ(RunAppenderStatus::ERROR_DELETE, status);
+      delete appender;
+    }
+    EXPECT_EQ(expected_err, err);
+    lsn_t lsn = LSN_INVALID;
+    if (expected_esn != -1) {
+      lsn = compose_lsn(EPOCH, esn_t(expected_esn));
+    }
+    EXPECT_EQ(lsn, appender_lsn);
+    EXPECT_EQ(EpochSequencer::State::ACTIVE, es_->getState());
+    return 0;
+  });
+}
+
+TEST_F(EpochSequencerTest, WriteStreamAppends) {
+  setUp();
+  // Sending first stream message without stream resume bit.
+  testWriteStreamAppendFail(1, 1, E::WRITE_STREAM_UNKNOWN);
+  // Send first message with stream resume bit, establish stream.
+  testWriteStreamAppendAccept(1, 1, 1, true);
+  // Send subsequent messages on stream.
+  testWriteStreamAppendAccept(1, 2, 2);
+  testWriteStreamAppendAccept(1, 3, 3);
+  testWriteStreamAppendAccept(1, 4, 4);
+  // One message left out, sequencer should say stream broken.
+  testWriteStreamAppendFail(1, 6, E::WRITE_STREAM_BROKEN);
+  // Send a message with lots left out, but with resume bit set.
+  testWriteStreamAppendAccept(1, 9, 5, true);
+  // Send an earlier message, it is ignored.
+  testWriteStreamAppendFail(1, 5, E::WRITE_STREAM_IGNORED);
+  // Send the same earlier message with resume bit set, should be accepted.
+  testWriteStreamAppendAccept(1, 5, 6, true);
+  // Send a message that is one more than a previously accepted seq num.
+  testWriteStreamAppendFail(1, 10, E::WRITE_STREAM_BROKEN);
+  // Continue current alive stream.
+  testWriteStreamAppendAccept(1, 6, 7);
+  // Try a different write stream id.
+  testWriteStreamAppendFail(2, 1, E::WRITE_STREAM_UNKNOWN);
 }
 
 TEST_F(EpochSequencerTest, RetireMultipleAppends) {

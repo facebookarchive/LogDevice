@@ -186,7 +186,14 @@ class Appender : public IntrusiveUnorderedMapHook {
    * @return true iff start() has been successfully called on this appender
    */
   bool started() {
-    return started_;
+    return started_.load(std::memory_order_relaxed);
+  }
+
+  /*
+   * Sets the value of 'started_' to 'value'
+   */
+  void setStarted(bool value) {
+    started_.store(value, std::memory_order_relaxed);
   }
 
   /**
@@ -737,7 +744,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   bool retired_ = false;
 
   // Keep track if this Appender was started (start() was called).
-  bool started_ = false;
+  std::atomic<bool> started_{false};
 
   // Indicate if we already successfully sent `replication_` copies of the
   // record during the current wave or a previous wave, and sent the APPENDED

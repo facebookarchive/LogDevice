@@ -648,7 +648,7 @@ int Appender::sendWave() {
   size_t append_size = (size_t)payload_->size();
   CopySetManager::AppendContext append_ctx{append_size, getLSN()};
 
-  ld_check(started_);
+  ld_check(started());
   ld_check(recipients_.getReplication() >= 1);
   ld_check(recipients_.getReplication() <= COPYSET_SIZE_MAX);
 
@@ -770,7 +770,7 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
   }
 
   csm_state_ = copyset_manager_->createState();
-  started_ = true;
+  setStarted(true);
 
   bool tail_optimized = false;
   if (logcfg != nullptr) {
@@ -796,7 +796,7 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
   if (rv < 0 && err != E::NOBUFS) {
     ld_check(err == E::SYSLIMIT); // in release mode this may also be INTERNAL
     epoch_sequencer_.reset();     // we failed to start
-    started_ = false;
+    setStarted(false);
     return -1;
   }
 
@@ -1090,6 +1090,12 @@ void Appender::sendError(Status reason) {
   Status client_code;
 
   switch (reason) {
+    case E::WRITE_STREAM_UNKNOWN:
+    case E::WRITE_STREAM_BROKEN:
+    case E::WRITE_STREAM_IGNORED:
+      // Right now, just pass on the errors directly to client.
+      client_code = reason;
+      break;
     case E::BADPAYLOAD:
       client_code = E::BADPAYLOAD;
       break;
