@@ -457,6 +457,92 @@ TEST(StatsTest, StatsParamsUpdateAcrossThread) {
   thread.join();
 }
 
+// Test that looks for race conditions in how StatsHolder handles thread
+// destruction (dead_stats_).
+// Create and destroy lots of threads that increment a stat. In another thread
+// keep polling the stat and check that it doesn't decrease. Do random sleeps
+// everywhere to try to hit different interleavings of threads executions.
+TEST(StatsTest, ThreadDestructionStressTest) {
+  StatsHolder holder(StatsParams().setIsServer(false));
+
+  // Body of a short-living thread that increments the stat.
+  auto stat_bumping_thread_func = [&holder] {
+    if (folly::Random::rand32() % 2) {
+      /* sleep override */
+      std::this_thread::sleep_for(
+          std::chrono::microseconds(folly::Random::rand32() % 2000));
+    }
+    STAT_INCR(&holder, post_request_total);
+    if (folly::Random::rand32() % 2) {
+      /* sleep override */
+      std::this_thread::sleep_for(
+          std::chrono::microseconds(folly::Random::rand32() % 2000));
+    }
+  };
+
+  std::atomic<bool> shutdown{false};
+  std::atomic<uint64_t> threads_spawned{0};
+
+  // Thread that keeps polling the stat and checks that it doesn't decrease.
+  std::thread monitoring_thread([&] {
+    int64_t prev = 0;
+    while (!shutdown.load()) {
+      if (folly::Random::rand32() % 2) {
+        /* sleep override */
+        std::this_thread::sleep_for(
+            std::chrono::microseconds(folly::Random::rand32() % 2000));
+      }
+      int64_t cur = holder.aggregate().post_request_total;
+      EXPECT_GE(cur, prev);
+      EXPECT_LE(cur, threads_spawned.load()); // load after reading the stat
+
+      prev = cur;
+    }
+  });
+
+  std::thread thread_spawning_thread([&] {
+    std::vector<std::thread> ts(100);
+    while (!shutdown.load()) {
+      if (folly::Random::rand32() % 2) {
+        /* sleep override */
+        std::this_thread::sleep_for(
+            std::chrono::microseconds(folly::Random::rand32() % 2000));
+      }
+
+      threads_spawned.fetch_add(1); // increment before starting the thread
+      size_t i = folly::Random::rand32() % ts.size();
+      std::thread& t = ts[i];
+      if (t.joinable()) {
+        t.join();
+      }
+      t = std::thread(stat_bumping_thread_func);
+    }
+
+    for (std::thread& t : ts) {
+      if (t.joinable()) {
+        t.join();
+      }
+    }
+  });
+
+  // Let it run for 5 seconds or 2000 threads spawned, whichever happens later.
+  // The sleeps are such that we spawn 2000 threads per second on average.
+
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+
+  while (threads_spawned.load() < 2000) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  shutdown.store(true);
+  thread_spawning_thread.join();
+  EXPECT_EQ(threads_spawned.load(), holder.aggregate().post_request_total);
+  monitoring_thread.join();
+
+  ld_info("Spawned %lu threads", threads_spawned.load());
+}
+
 /**
  * Creates two maps where the key is a NodeID and the value is the sum of the
  * appends on that node. The maps are called append_success and append_fail.
