@@ -697,11 +697,13 @@ void CompactHistogram::subtract(const HistogramInterface& other_if) {
   for (size_t i = 0; i < buckets_.size(); ++i) {
     uint64_t x = other.buckets_[i].load(std::memory_order_relaxed);
     uint64_t prev = buckets_[i].fetch_sub(x, std::memory_order_relaxed);
-    if (prev < x) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      2,
-                      "Got negative value when subtracting histograms.");
-      // Not trying to correct it.
+    if (!dd_assert(x >= prev,
+                   "Histogram subtraction overflowed. Bucket %lu, this: [%s] "
+                   "(half-updated), right operand: [%s]",
+                   i,
+                   toShortString().c_str(),
+                   other.toShortString().c_str())) {
+      buckets_[i].store(0, std::memory_order_relaxed);
     }
   }
 }
@@ -718,8 +720,21 @@ void CompactHistogram::estimatePercentiles(const double* percentiles,
   int64_t sum = 0;
   for (size_t i = 0; i < buckets_.size(); ++i) {
     uint64_t x = buckets_[i].load(std::memory_order_relaxed);
-    buckets[i] = x;
+
+    // Check for overflow.
+    if (!dd_assert(x <= std::numeric_limits<uint64_t>::max() - count,
+                   "Histogram total count overflowed: %s",
+                   toShortString().c_str())) {
+      // Zero out the bucket that overflows the count.
+      // Of course, it'll produce incorrect percentiles, but at least we won't
+      // crash and won't have to worry about overflows in the rest of this
+      // function.
+      x = 0;
+    }
+
     count += x;
+    buckets[i] = x;
+    // Don't care that much about overflowing sum because it's exported as is.
     sum += x << i;
   }
   if (count_out) {
