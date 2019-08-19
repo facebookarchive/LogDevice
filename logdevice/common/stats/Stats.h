@@ -1039,11 +1039,43 @@ class StatsHolder {
   struct Tag;
 
   // Stats aggregated for all destroyed threads.
-  mutable std::mutex dead_stats_mutex_;
   Stats dead_stats_;
 
   // Stats for running threads.
-  folly::ThreadLocalPtr<StatsWrapper, Tag> thread_stats_;
+  //
+  // We use AccessModeStrict to prevent race conditions around dead_stats_;
+  // full explanation below.
+  //
+  // folly::ThreadLocal contains the list of thread-local instances. The list is
+  // accessible through accessAllThreads(). There's a mutex protecting the
+  // list. accessAllThreads() locks the mutex for the duration of the iteration.
+  // When a new thread is added or an existing thread exits, it locks the mutex
+  // and adds/removes itself to/from the list.
+  //
+  // In strict mode, when a thread is exiting, destructor of the thread-local
+  // instance (~StatsWrapper() in our case) is called while the mutex is still
+  // locked. In non-strict mode, the mutex is unlocked before calling the
+  // destructor.
+  //
+  // Using non-strict mode here would cause the following race conditions:
+  //  1. Thread A is exiting; it locks the mutex, removes itself from the list,
+  //     unlocks the mutes, then hesitates for a bit; ~StatsHolder() runs and
+  //     returns, unsetting `owner` on all threads except A (which is already
+  //     removed from the list); StatsHolder is deallocated; then A proceeds to
+  //     call ~StatsWrapper(), which tries to access the destroyed StatsHolder.
+  //     (And there's also the trivial data race on the `owner` field itself.)
+  //  2. Thread A is exiting; it removes itself from the list and hesitates for
+  //     a bit; the stats from A are neither in thread_stats_ nor in
+  //     dead_stats_; StatsHolder::aggregate() runs and doesn't see A's stats;
+  //     then A proceeds to update dead_stats_, and the next aggregate() call
+  //     sees A's stats again.
+  //
+  // In strict mode, folly::ThreadLocal's mutex effectively protects both
+  // thread_stats_'s list of threads and dead_stats_ together, so in
+  // aggregate()'s view each thread's stats are accounted once: either in
+  // dead_stats_ or in thread_stats_.
+  folly::ThreadLocalPtr<StatsWrapper, Tag, folly::AccessModeStrict>
+      thread_stats_;
 };
 
 struct StatsHolder::StatsWrapper {
@@ -1055,7 +1087,6 @@ struct StatsHolder::StatsWrapper {
 
   ~StatsWrapper() {
     if (owner) {
-      std::lock_guard<std::mutex> lock(owner->dead_stats_mutex_);
       owner->dead_stats_.aggregateForDestroyedThread(stats);
     }
   }
@@ -1072,10 +1103,11 @@ Stats& StatsHolder::get() {
 
 template <typename Func>
 void StatsHolder::runForEach(const Func& func) {
-  for (auto& x : thread_stats_.accessAllThreads()) {
+  auto accessor = thread_stats_.accessAllThreads();
+  func(dead_stats_);
+  for (auto& x : accessor) {
     func(x.stats);
   }
-  func(dead_stats_);
 }
 
 /**

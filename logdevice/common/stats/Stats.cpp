@@ -868,12 +868,11 @@ Stats StatsHolder::aggregate() const {
   Stats result(&params_);
 
   {
-    std::lock_guard<std::mutex> lock(dead_stats_mutex_);
+    auto accessor = thread_stats_.accessAllThreads();
     result.aggregate(dead_stats_);
-  }
-
-  for (const auto& x : thread_stats_.accessAllThreads()) {
-    result.aggregate(x.stats);
+    for (const auto& x : accessor) {
+      result.aggregate(x.stats);
+    }
   }
 
   result.deriveStats();
@@ -882,10 +881,11 @@ Stats StatsHolder::aggregate() const {
 }
 
 void StatsHolder::reset() {
-  for (auto& x : thread_stats_.accessAllThreads()) {
+  auto accessor = thread_stats_.accessAllThreads();
+  dead_stats_.reset();
+  for (auto& x : accessor) {
     x.stats.reset();
   }
-  dead_stats_.reset();
 }
 
 StatsHolder::~StatsHolder() {
