@@ -70,8 +70,8 @@ BENCHMARK(WorkerBenchmarkpostImportantv2, n) {
   std::atomic<int> pending{kPosts * request_count};
   std::vector<std::unique_ptr<Request>> requests;
   Settings settings = create_default_settings<Settings>();
-  std::shared_ptr<Processor> processor;
   StatsHolder stats{StatsParams().setIsServer(true)};
+  std::shared_ptr<Processor> processor;
 
   BENCHMARK_SUSPEND {
     settings.num_workers = kNumWorkers;
@@ -97,8 +97,8 @@ BENCHMARK(WorkerBenchmarkPostRequestv2, n) {
   std::atomic<int> pending{kPosts * request_count};
   std::vector<std::unique_ptr<Request>> requests;
   Settings settings = create_default_settings<Settings>();
-  std::shared_ptr<Processor> processor;
   StatsHolder stats{StatsParams().setIsServer(true)};
+  std::shared_ptr<Processor> processor;
 
   BENCHMARK_SUSPEND {
     settings.num_workers = kNumWorkers;
