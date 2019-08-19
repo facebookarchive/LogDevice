@@ -12,7 +12,7 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/EpochMetaData.h"
-#include "logdevice/common/NodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelector.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {

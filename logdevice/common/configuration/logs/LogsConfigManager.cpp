@@ -101,7 +101,7 @@ void LogsConfigManager::onSettingsUpdated() {
         cancelPublishTimer();
         activatePublishTimer();
       }
-    } else {
+    } else if (!testRequestsHoldInStartingState()) {
       start();
     }
   } else {

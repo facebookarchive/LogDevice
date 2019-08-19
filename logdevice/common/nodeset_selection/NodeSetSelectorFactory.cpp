@@ -5,14 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/NodeSetSelectorFactory.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 
 #include "logdevice/common/LegacyLogToShard.h"
-#include "logdevice/common/RandomCrossDomainNodeSetSelector.h"
-#include "logdevice/common/RandomNodeSetSelector.h"
-#include "logdevice/common/SelectAllNodeSetSelector.h"
-#include "logdevice/common/SelectAllShardsNodeSetSelector.h"
-#include "logdevice/common/WeightAwareNodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/PickCurrentNodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/RandomCrossDomainNodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/RandomNodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/SelectAllNodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/SelectAllShardsNodeSetSelector.h"
+#include "logdevice/common/nodeset_selection/WeightAwareNodeSetSelector.h"
 
 namespace facebook { namespace logdevice {
 
@@ -34,6 +35,8 @@ NodeSetSelectorFactory::create(NodeSetSelectorType type) {
       return std::make_unique<SelectAllNodeSetSelector>();
     case NodeSetSelectorType::SELECT_ALL_SHARDS:
       return std::make_unique<SelectAllShardsNodeSetSelector>();
+    case NodeSetSelectorType::PICK_CURRENT_NODESET:
+      return std::make_unique<PickCurrentNodeSetSelector>();
     case NodeSetSelectorType::RANDOM:
       return std::make_unique<RandomNodeSetSelector>(getLegacyShardIndexForLog);
     case NodeSetSelectorType::RANDOM_CROSSDOMAIN:

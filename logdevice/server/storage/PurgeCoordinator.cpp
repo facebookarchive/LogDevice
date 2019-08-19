@@ -480,8 +480,7 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
 
 bool PurgeCoordinator::logExistsInConfig() {
   ServerWorker* w = ServerWorker::onThisThread();
-  return w->getLogsConfig()->isFullyLoaded() &&
-      w->getLogsConfig()->logExists(log_id_);
+  return w->getLogsConfig()->logExists(log_id_);
 }
 
 std::pair<Status, Seal>

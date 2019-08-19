@@ -14,10 +14,10 @@
 #include <gtest/gtest.h>
 #include <logdevice/common/toString.h>
 
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/nodes/utils.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/common/util.h"
 

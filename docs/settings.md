@@ -562,6 +562,7 @@ sidebar_label: Settings
 | test-bypass-recovery | If set, sequencers will not automatically run recovery upon activation. Recovery can be started using the 'startrecovery' admin command.  Note that last released lsn won't get advanced without recovery. | false | requires&nbsp;restart, server&nbsp;only |
 | test-do-not-pick-in-copysets | Copyset selectors won't pick these nodes. Comma-separated list of node indexes, e.g. '1,2,3'. Used in tests. |  | server&nbsp;only |
 | test-get-cluster-state-recipients | Force get-cluster-state recipients as a comma-separated list of node ids |  | client&nbsp;only |
+| test-hold-logsconfig-in-starting-state | Prevents LogsConfigStateMachine from being started. Used for testing only. | false | server&nbsp;only |
 | test-reject-hello | if set to the name of an error code, reject all HELLOs with the specified error code. Currently supported values are ACCESS and PROTONOSUPPORT. Used for testing. | OK | requires&nbsp;restart, server&nbsp;only |
 | test-sequencer-corrupt-stores | Simulates bad hardware flipping a bit in the payload of a STORE message. | false | server&nbsp;only |
 | test-stall-rebuilding | Makes rebuilding pretend to start but not make any actual progress. Used in tests. | false | server&nbsp;only |

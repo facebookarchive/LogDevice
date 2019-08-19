@@ -9,10 +9,10 @@
 
 #include <vector>
 
-#include "logdevice/common/NodeSetSelectorType.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/EpochMetaDataVersion.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorType.h"
 #include "logdevice/include/LogAttributes.h"
 
 namespace facebook { namespace logdevice { namespace logsconfig {

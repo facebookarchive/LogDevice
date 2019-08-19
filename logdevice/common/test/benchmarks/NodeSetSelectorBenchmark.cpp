@@ -8,9 +8,9 @@
 #include <folly/Benchmark.h>
 #include <folly/Singleton.h>
 
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 
 namespace facebook { namespace logdevice {
 

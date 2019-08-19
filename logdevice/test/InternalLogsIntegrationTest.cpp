@@ -209,3 +209,92 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
   seq.waitUntilStarted();
   seq.waitUntilLogsConfigSynced(tail_lsn);
 }
+
+/**
+ * The following test checks that if we add new nodes to a cluster and
+ * immediately write LogsConfig snapshot to those nodes, we don't get stuck in
+ * STARTING state and thus are unable to finish recoveries.
+ */
+TEST_F(InternalLogsIntegrationTest,
+       ShouldBeAbleToFinishRecoveriesAfterExpands) {
+  const std::set<node_index_t> FIRST_NODES = {0, 1, 2};
+  const std::set<node_index_t> STUCK_NODES = {3, 4, 5};
+
+  const auto NUM_FIRST_NODES = 3;
+  const auto NUM_STUCK_NODES = 3;
+  const auto NNODES = NUM_FIRST_NODES + NUM_STUCK_NODES;
+
+  Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
+      /*nodeset=*/{0, 1, 2}, /*replication=*/1, NodeLocationScope::NODE);
+  meta_config.sequencers_write_metadata_logs = false;
+  meta_config.sequencers_provision_epoch_store = false;
+  meta_config.nodeset_selector_type = NodeSetSelectorType::PICK_CURRENT_NODESET;
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .useHashBasedSequencerAssignment()
+                     .setMetaDataLogsConfig(meta_config)
+                     .allowExistingMetaData()
+                     .setInternalLogsReplicationFactor(1)
+                     .enableLogsConfigManager()
+                     .setNumDBShards(1)
+                     .deferStart()
+                     .create(NNODES);
+
+  ASSERT_EQ(0, cluster->provisionEpochMetadataWithShardIDs({0, 1, 2}));
+
+  for (auto nid : FIRST_NODES) {
+    cluster->getNode(nid).start();
+  }
+  cluster->waitUntilStartupComplete(
+      std::set<uint64_t>(FIRST_NODES.begin(), FIRST_NODES.end()));
+
+  client = cluster->createIndependentClient(DEFAULT_TEST_TIMEOUT);
+
+  /* Write something to logs config */
+  auto dir = client->makeDirectorySync("/ipsum_dolor_sit_amet", true);
+
+  /* we will now provision epoch metadata to be */
+  cluster->stop();
+
+  ASSERT_EQ(0, cluster->provisionEpochMetadataWithShardIDs(STUCK_NODES));
+
+  for (auto nid : FIRST_NODES) {
+    cluster->getNode(nid).start();
+  }
+  for (auto nid : STUCK_NODES) {
+    auto& node = cluster->getNode(nid);
+    node.setParam("--test-hold-logsconfig-in-starting-state", "true");
+    node.start();
+  }
+  cluster->waitUntilAllAvailable();
+
+  cluster->waitForMetaDataLogWrites();
+  cluster->waitForRecovery();
+
+  // wait for node 0 to have logsconfig available
+  cluster->waitUntilStartupComplete(std::set<uint64_t>{0});
+
+  /* Take a Logsconfig snapshot that should go to one of the nodes stuck in
+   * starting state. */
+  auto result =
+      cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
+  ASSERT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+
+  /* Let's ensure that should be stuck is stuck */
+  auto is_starting = cluster->getNode(0).gossipStarting();
+  for (auto nid : STUCK_NODES) {
+    auto nids = "N" + std::to_string(nid);
+    ld_info("%s %lu", nids.c_str(), is_starting.count(nids));
+    ASSERT_TRUE(is_starting.count(nids) && is_starting[nids]);
+  }
+
+  /* Now we set Logsconfig unstuck and we expect nodes to eventually move out of
+   * starting state. */
+  for (auto nid : STUCK_NODES) {
+    cluster->getNode(nid).updateSetting(
+        "test-hold-logsconfig-in-starting-state", "false");
+  }
+
+  /* now we should move out of the STARTING state and finish recoveries */
+  cluster->waitUntilStartupComplete();
+  cluster->waitForRecovery();
+}

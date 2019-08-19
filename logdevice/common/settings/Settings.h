@@ -1260,6 +1260,7 @@ struct Settings : public SettingsBundle {
   bool rsm_include_read_pointer_in_snapshot;
   std::chrono::milliseconds eventlog_snapshotting_period;
   std::chrono::milliseconds logsconfig_snapshotting_period;
+  bool test_hold_logsconfig_in_starting;
 
   // polling interval for fetching trim point from historical node set
   std::chrono::seconds get_trimpoint_interval;

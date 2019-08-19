@@ -14,6 +14,7 @@ namespace facebook { namespace logdevice {
 
 enum class NodeSetSelectorType : uint8_t {
   INVALID = 0,
+  PICK_CURRENT_NODESET,
   SELECT_ALL,
   SELECT_ALL_SHARDS,
   RANDOM,
@@ -34,6 +35,8 @@ NodeSetSelectorTypeFromString(const std::string& str) {
     return NodeSetSelectorType::SELECT_ALL;
   } else if (str == "select-all-shards") {
     return NodeSetSelectorType::SELECT_ALL_SHARDS;
+  } else if (str == "pick-current-nodeset") {
+    return NodeSetSelectorType::PICK_CURRENT_NODESET;
   } else if (str == "random") {
     return NodeSetSelectorType::RANDOM;
   } else if (str == "random-crossdomain") {
@@ -58,6 +61,8 @@ NodeSetSelectorTypeFromString(const std::string& str) {
 // configuration)
 inline std::string NodeSetSelectorTypeToString(NodeSetSelectorType t) {
   switch (t) {
+    case NodeSetSelectorType::PICK_CURRENT_NODESET:
+      return "pick-current-nodeset";
     case NodeSetSelectorType::SELECT_ALL:
       return "select-all";
     case NodeSetSelectorType::SELECT_ALL_SHARDS:

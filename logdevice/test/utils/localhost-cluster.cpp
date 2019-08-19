@@ -15,10 +15,10 @@
 #include <folly/Format.h>
 #include <folly/Singleton.h>
 
-#include "logdevice/common/NodeSetSelectorFactory.h"
 #include "logdevice/common/commandline_util.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
 using namespace facebook::logdevice;

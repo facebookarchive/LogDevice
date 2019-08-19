@@ -924,6 +924,17 @@ class Cluster {
       bool allow_existing_metadata = false);
 
   /**
+   * Like `provisionEpochMetaData`, but asks for an specific set of shard
+   * indices to be used. Also needs to be called when storage nodes are not
+   * started.
+   *
+   * @param shard_indices            set of shard indices to use.
+   * @allow_existing_metadata        see `provisionEpochMetaData`
+   */
+  int provisionEpochMetadataWithShardIDs(std::set<node_index_t> node_indices,
+                                         bool allow_existing_metadata = true);
+
+  /**
    * Converts the server config into a nodes configuration and writes it to
    * disk via a FileBasedNodesConfigurationStore.
    * @param server_config                  the server config to convert
@@ -994,6 +1005,16 @@ class Cluster {
                       std::set<uint64_t> nodesToSkip = {},
                       std::chrono::steady_clock::time_point deadline =
                           std::chrono::steady_clock::time_point::max());
+
+  /**
+   * Waits until nodes specified in the parameter `nodes` are alive and fully
+   * started (i.e. not in starting state). If `nodes` is folly::none,
+   * all nodes in the cluster will be checked.
+   */
+  int waitUntilStartupComplete(
+      folly::Optional<std::set<uint64_t>> nodes = folly::none,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
 
   /**
    * Same as ClusterFactory::setParam(). Only affects future logdeviced
