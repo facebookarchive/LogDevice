@@ -217,6 +217,10 @@ void Processor::init() {
       this,
       *getNodesConfiguration()->getServiceDiscovery());
 
+  // might be used by the Workers' subcomponents so init before them.
+  security_info_ =
+      std::make_unique<UpdateableSecurityInfo>(this, settings_->server);
+
   for (int i = 0; i < numOfWorkerTypes(); i++) {
     WorkerType worker_type = workerTypeByIndex(i);
     auto count = getWorkerCount(worker_type);
@@ -228,9 +232,6 @@ void Processor::init() {
 
   impl_->allSequencers_ =
       std::make_unique<AllSequencers>(this, config_, settings_);
-
-  security_info_ =
-      std::make_unique<UpdateableSecurityInfo>(this, settings_->server);
 
   if (settings_->server) {
     traffic_shaper_ = std::make_unique<TrafficShaper>(this, stats_);
