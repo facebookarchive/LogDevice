@@ -73,8 +73,8 @@ SequencerBatching::SequencerBatching(Processor* processor)
                        nullptr, // BufferedWriter::AppendCallback
                        &get_log_options,
                        -1,   // infinite memory limit
-                       this) // BufferedWriterAppendSink
-{
+                       this, // BufferedWriterAppendSink
+                       processor_->stats_) {
   buffered_writer_.prependChecksums();
   buffered_writer_.setCallbackInternal(this);
 }

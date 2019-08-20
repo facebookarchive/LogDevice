@@ -22,13 +22,16 @@ void BufferedWriterShard::append(AppendChunk chunk, bool atomic) {
     // BufferedWriter()::shutDown().
     BufferedWriterImpl::AppendCallbackInternal* cb = parent_->getCallback();
 
+    int64_t payload_bytes = 0;
     for (auto& append : chunk) {
       BufferedWriter::AppendCallback::ContextSet appends;
+      payload_bytes += append.payload.size();
       appends.emplace_back(
           std::move(append.context), std::move(append.payload));
       cb->onFailureInternal(
           append.log_id, std::move(appends), E::SHUTDOWN, NodeID());
     }
+    parent_->releaseMemory(payload_bytes);
 
     RATELIMIT_ERROR(
         std::chrono::seconds(10), 1, "Append received after shutdown.");
@@ -72,12 +75,12 @@ void BufferedWriterShard::flushAll() {
   while (!flushable_logs_.empty()) {
     BufferedWriterSingleLog* log = &flushable_logs_.front();
     STAT_INCR(stats, buffered_writer_manual_flush);
-    log->flush();
+    log->flushAll();
     // The log we just flushed should no longer be flushable and so no longer
     // on the list.  This ensures the loop will terminate.
     if (!flushable_logs_.empty()) {
       ld_check(log != &flushable_logs_.front());
-      ld_assert(log != &flushable_logs_.back());
+      ld_check(log != &flushable_logs_.back());
     }
   }
 }

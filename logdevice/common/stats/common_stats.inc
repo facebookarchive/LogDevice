@@ -130,6 +130,10 @@ STAT_DEFINE(buffered_writer_manual_flush, SUM)
 STAT_DEFINE(buffered_writer_max_payload_flush, SUM)
 STAT_DEFINE(buffered_writer_time_trigger_flush, SUM)
 STAT_DEFINE(buffered_writer_size_trigger_flush, SUM)
+STAT_DEFINE(buffered_writer_retries, SUM)
+STAT_DEFINE(buffered_writer_batches_failed, SUM)
+STAT_DEFINE(buffered_writer_batches_succeeded, SUM)
+STAT_DEFINE(buffered_writer_bytes_in_flight, SUM)
 
 // No. of times a recipient got a Message payload where the checksum
 // in the ProtocolHeader does not match the checksum computed on the recipient

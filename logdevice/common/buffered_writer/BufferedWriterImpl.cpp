@@ -106,12 +106,16 @@ BufferedWriterImpl::BufferedWriterImpl(ProcessorProxy* processor_proxy,
                                        AppendCallback* client_cb,
                                        GetLogOptionsFunc get_log_options,
                                        int32_t memory_limit_mb,
-                                       BufferedWriterAppendSink* append_sink)
+                                       BufferedWriterAppendSink* append_sink,
+                                       StatsHolder* stats)
     : processor_proxy_(processor_proxy),
       client_callback_wrapped_(client_cb),
       callback_(&client_callback_wrapped_),
-      memory_limit_mb_(memory_limit_mb),
-      append_sink_(append_sink) {
+      memory_limit_bytes_(memory_limit_mb < 0
+                              ? -1
+                              : (static_cast<int64_t>(memory_limit_mb) << 20)),
+      append_sink_(append_sink),
+      stats_(stats) {
   // Calculate a salt for hashing.  The first portion is a random constant.
   // The second is a Processor-wide counter; different BufferedWriter
   // instances attached to the same Processor will map logs to Workers
@@ -120,8 +124,8 @@ BufferedWriterImpl::BufferedWriterImpl(ProcessorProxy* processor_proxy,
   hash_salt_ = 0xb390c4e7a94009f2L ^ processor()->issueBufferedWriterID().val_;
 
   // Initialize memory budgeting
-  if (memory_limit_mb >= 0) {
-    memory_available_.store(int64_t(memory_limit_mb) << 20);
+  if (memory_limit_bytes_ >= 0) {
+    memory_available_.store(memory_limit_bytes_);
   }
 
   const int nworkers = processor()->getWorkerCount(WorkerType::GENERAL);
@@ -217,6 +221,11 @@ class DestroyShardRequest : public PerShardRequest {
 
 BufferedWriterImpl::~BufferedWriterImpl() {
   shutDown();
+
+  // Check for leaks in memory accounting.
+  if (memory_limit_bytes_ >= 0) {
+    ld_check_eq(memory_limit_bytes_, memory_available_.load());
+  }
 }
 
 template <typename RequestClass>
@@ -330,12 +339,12 @@ class BufferedAppendRequest : public Request {
 
 // Helper function shared by two append()s so that it's a single logging
 // callsite
-static void log_memory_limit_exceeded(int memory_limit_mb) {
+static void log_memory_limit_exceeded(int memory_limit_bytes) {
   RATELIMIT_ERROR(std::chrono::seconds(10),
                   1,
                   "Rejecting write(s) that would exceed client-configured "
-                  "memory limit of %d MB",
-                  memory_limit_mb);
+                  "memory limit of %.3f MiB",
+                  1. * memory_limit_bytes / (1ul << 20));
 }
 
 int BufferedWriterImpl::append(logid_t log_id,
@@ -351,21 +360,25 @@ int BufferedWriterImpl::append(logid_t log_id,
     return -1;
   }
 
-  if (acquireMemory(payload.size()) != 0) {
-    log_memory_limit_exceeded(memory_limit_mb_);
-    err = E::NOBUFS;
-    return -1;
-  }
-
-  // Post a BufferedAppendRequest to the appropriate Worker.
-  int shard_idx = mapLogToShardIndex(log_id);
-
   Status shard_status = append_sink_->canSendToWorker();
   if (shard_status != E::OK) {
     err = shard_status;
     return -1;
   }
+
   size_t payload_size = payload.size();
+
+  if (acquireMemory(payload_size) != 0) {
+    log_memory_limit_exceeded(memory_limit_bytes_);
+    err = E::NOBUFS;
+    return -1;
+  }
+
+  auto release_memory_on_fail =
+      folly::makeGuard([this, payload_size] { releaseMemory(payload_size); });
+
+  // Post a BufferedAppendRequest to the appropriate Worker.
+  int shard_idx = mapLogToShardIndex(log_id);
 
   BufferedWriterShard::AppendChunk chunk;
   chunk.emplace_back(
@@ -377,7 +390,10 @@ int BufferedWriterImpl::append(logid_t log_id,
                                               /* atomic */ false);
   append_sink_->onBytesSentToWorker(payload_size);
   int rv = processor()->postRequest(req);
-  if (rv != 0) {
+  if (rv == 0) {
+    // BufferedWriterSingleLog will release memory budget after append is done.
+    release_memory_on_fail.dismiss();
+  } else {
     // Failed to queue the append.  Return the payload to the caller.
     append_sink_->onBytesSentToWorker(-payload_size);
     BufferedAppendRequest* rawreq =
@@ -417,13 +433,9 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
       err = E::INVALID_PARAM;
       return -1;
     }
-  }
 
-  if (memory_limit_mb_ >= 0) {
-    // Check if we have enough memory for these writes
-    if (acquireMemory(payload_bytes) != 0) {
-      log_memory_limit_exceeded(memory_limit_mb_);
-      err = E::NOBUFS;
+    if (!append_sink_->checkAppend(log_id, append.payload.size(), false)) {
+      err = E::TOOBIG;
       return -1;
     }
   }
@@ -434,17 +446,21 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
     return -1;
   }
 
+  // Check if we have enough memory for these writes
+  if (acquireMemory(payload_bytes) != 0) {
+    log_memory_limit_exceeded(memory_limit_bytes_);
+    err = E::NOBUFS;
+    return -1;
+  }
+
+  auto release_memory_on_fail =
+      folly::makeGuard([this, payload_bytes] { releaseMemory(payload_bytes); });
+
   BufferedWriterShard::AppendChunk chunks;
   int shard = mapLogToShardIndex(log_id);
   size_t append_sizes = 0;
 
-  for (size_t i = 0; i < input_appends.size(); ++i) {
-    auto& append = input_appends[i];
-    if (!append_sink_->checkAppend(log_id, append.payload.size(), false)) {
-      err = E::TOOBIG;
-      return -1;
-    }
-
+  for (Append& append : input_appends) {
     append_sizes += append.payload.size();
     chunks.emplace_back(std::move(append));
   }
@@ -463,6 +479,7 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
     return -1;
   }
 
+  release_memory_on_fail.dismiss();
   return 0;
 }
 
@@ -478,18 +495,6 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
 
   if (shutting_down_.load()) {
     return std::vector<Status>(input_appends.size(), E::SHUTDOWN);
-  }
-
-  if (memory_limit_mb_ >= 0) {
-    // Check if we have enough memory for these writes
-    int64_t payload_bytes = 0;
-    for (auto& append : input_appends) {
-      payload_bytes += append.payload.size();
-    }
-    if (acquireMemory(payload_bytes) != 0) {
-      log_memory_limit_exceeded(memory_limit_mb_);
-      return std::vector<Status>(input_appends.size(), E::NOBUFS);
-    }
   }
 
   std::vector<Status> result(input_appends.size());
@@ -530,11 +535,20 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
       chunk_status[i] = E::OK;
       continue;
     }
+
+    // Check if we have enough memory.
+    int64_t shard_bytes = shard_append_sizes[i];
+    if (acquireMemory(shard_bytes) != 0) {
+      log_memory_limit_exceeded(memory_limit_bytes_);
+      chunk_status[i] = E::NOBUFS;
+      continue;
+    }
+
     // Post a BufferedAppendRequest to process this shard's chunk on the
     // appropriate Worker.
     std::unique_ptr<Request> req = std::make_unique<BufferedAppendRequest>(
         worker_id_t(i), shards_[i], std::move(chunks[i]), atomic);
-    append_sink_->onBytesSentToWorker(shard_append_sizes[i]);
+    append_sink_->onBytesSentToWorker(shard_bytes);
     int rv = processor()->postRequest(req);
     if (rv == 0) {
       chunk_status[i] = E::OK;
@@ -542,11 +556,13 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
       // Failure!  Take the chunk back so that we can restore payloads in the
       // input vector for all affected appends.
       chunk_status[i] = err;
+      ld_check(chunk_status[i] != E::OK);
       BufferedAppendRequest* rawreq =
           static_cast<BufferedAppendRequest*>(req.get());
       chunks[i] = rawreq->releaseChunk();
-      // rewinding the counter
-      append_sink_->onBytesSentToWorker(-shard_append_sizes[i]);
+      // Rewinding the counters.
+      append_sink_->onBytesSentToWorker(-shard_bytes);
+      releaseMemory(shard_bytes);
     }
   }
 

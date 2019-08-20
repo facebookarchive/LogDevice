@@ -421,9 +421,15 @@ class ClientImpl : public Client,
   }
 
   // verifies that arguments to append() are valid; sets err
+  bool checkAppendImpl(logid_t logid,
+                       size_t payload_size,
+                       bool allow_extra,
+                       bool ignore_payload_soft_limit);
   bool checkAppend(logid_t logid,
                    size_t payload_size,
-                   bool allow_extra = false) override;
+                   bool allow_extra = false) override {
+    return checkAppendImpl(logid, payload_size, allow_extra, false);
+  }
 
   bool hasWriteToken(const std::string& required) const {
     folly::SharedMutex::ReadHolder guard(write_tokens_mutex_);

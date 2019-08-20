@@ -48,7 +48,8 @@ BufferedWriter::create(std::shared_ptr<Client> client,
       callback,
       get_log_options,
       memory_limit_mb,
-      sink);
+      sink,
+      client_impl->stats());
   buffered_writer->pinClient(client);
   return std::move(buffered_writer);
 }

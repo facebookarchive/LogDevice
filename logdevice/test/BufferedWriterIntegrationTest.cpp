@@ -274,3 +274,60 @@ TEST_F(BufferedWriterIntegrationTest, ReaderSingleBatch) {
     ASSERT_EQ(GapType::BRIDGE, gap.type);
   }
 }
+
+TEST_F(BufferedWriterIntegrationTest, MemoryLimit) {
+  auto cluster = IntegrationTestUtils::ClusterFactory().create(1);
+
+  // Use small append timeout. The test will need to hit it.
+  auto client = cluster->createClient(std::chrono::seconds(5));
+
+  // Memory limit = 1 MB. Effective limit on in-flight appends is half that,
+  // because BufferedWriter keeps two copies of each payload.
+  TestCallback cb;
+  BufferedWriter::Options opts;
+  opts.memory_limit_mb = 1;
+  opts.mode = BufferedWriter::Options::Mode::ONE_AT_A_TIME;
+  opts.compression = Compression::NONE;
+  auto writer = BufferedWriter::create(client, &cb, opts);
+
+  // Make appends get stuck and time out.
+  cluster->getNode(0).updateSetting("test-do-not-pick-in-copysets", "0");
+
+  // Append 3 x 150 KB records. They'll get stuck.
+  ld_info("appending (1)");
+  for (int i = 0; i < 3; ++i) {
+    SCOPED_TRACE(std::to_string(i));
+    ASSERT_EQ(
+        0, writer->append(logid_t(1), std::string(150000, 'a'), NULL_CONTEXT))
+        << err;
+    writer->flushAll();
+  }
+
+  // Should be over memory limit.
+  ASSERT_EQ(
+      -1, writer->append(logid_t(1), std::string(150000, 'b'), NULL_CONTEXT));
+  EXPECT_EQ(E::NOBUFS, err);
+
+  // Wait for append to time out. All 3 appends should fail at once.
+  ld_info("waiting for append callback (1)");
+  for (int i = 0; i < 3; ++i) {
+    cb.sem.wait();
+  }
+  EXPECT_EQ(0, cb.payloads_succeeded.size());
+
+  // Unstick the sequencer.
+  ld_info("updating setting");
+  cluster->getNode(0).unsetSetting("test-do-not-pick-in-copysets");
+
+  // Append one big payload and make sure it gets through.
+  ld_info("appending (2)");
+  ASSERT_EQ(
+      0, writer->append(logid_t(1), std::string(450000, 'c'), NULL_CONTEXT))
+      << err;
+  writer->flushAll();
+
+  // Wait for append to succeed.
+  ld_info("waiting for append callback (2)");
+  cb.sem.wait();
+  EXPECT_EQ(1, cb.payloads_succeeded.size());
+}

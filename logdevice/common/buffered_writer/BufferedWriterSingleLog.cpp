@@ -78,12 +78,8 @@ void BufferedWriterSingleLog::append(AppendChunk chunk) {
     blocked_appends_->push_back(std::move(chunk));
     blocked_appends_.observe();
     // The new append can be flushed; need to inform parent
-    parent_->setFlushable(*this, isFlushable());
-    // Ensure that the time trigger (if configured) is active.  Even if the
-    // currently-inflight batch does not finish by when the timer fires, the
-    // flush() call from the timer will mark all blocked appends for flushing
-    // ASAP.
-    activateTimeTrigger();
+    flushableMayHaveChanged();
+    ld_check(is_flushable_);
   }
 }
 
@@ -104,12 +100,12 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
   if (haveBuildingBatch() &&
       batches_->back()->blob_bytes_total + blob_bytes_added >
           max_payload_size) {
-    // These records would take us over the payload size limit.  Flush the
+    // These records would take us over the payload size limit. Flush the
     // already buffered records first, then we will create a new batch for
     // these records.
     StatsHolder* stats{parent_->parent_->processor()->stats_};
     STAT_INCR(stats, buffered_writer_max_payload_flush);
-    flush();
+    flushBuildingBatch();
     ld_check(!haveBuildingBatch());
   }
 
@@ -136,10 +132,10 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
         // since the batch size is unknown until we flush the batch.
         folly::kMaxVarintLength64;
     batches_->push_back(std::move(batch));
-    // Intentionally setting state after pushing to make sure isFlushable()
+    // Intentionally setting state after pushing to make sure is_flushable_
     // becomes true *during* the setBatchState() call
     setBatchState(*batches_->back(), Batch::State::BUILDING);
-    ld_check(isFlushable());
+    ld_check(is_flushable_);
 
     batches_.observe();
     activateTimeTrigger();
@@ -197,7 +193,7 @@ void BufferedWriterSingleLog::flushMeMaybe(bool defer_client_size_trigger) {
   if (batch.blob_bytes_total >= max_payload_size) {
     ld_check(batch.blob_bytes_total <= MAX_PAYLOAD_SIZE_INTERNAL);
     STAT_INCR(w->getStats(), buffered_writer_max_payload_flush);
-    flush();
+    flushBuildingBatch();
     return;
   }
 
@@ -206,41 +202,36 @@ void BufferedWriterSingleLog::flushMeMaybe(bool defer_client_size_trigger) {
   if (!defer_client_size_trigger && options_.size_trigger >= 0 &&
       batch.payload_bytes_total >= options_.size_trigger) {
     STAT_INCR(w->getStats(), buffered_writer_size_trigger_flush);
-    flush();
+    flushBuildingBatch();
     return;
   }
 }
 
-void BufferedWriterSingleLog::flush() {
-  // Parent shouldn't have called us from flushAll() if we're not flushable,
-  // internal methods ensure we're flushable
-  ld_check(isFlushable());
-  // Make sure to let parent know whether this log is flushable or not. It could
-  // still be flushable if we flushed a batch (e.g. because of reaching the size
-  // threshold) and have blocked appenders that are not deferred.
-  SCOPE_EXIT {
-    parent_->setFlushable(*this, isFlushable());
-  };
-
-  if (!haveBuildingBatch()) {
-    // No batch in BUILDING state, nothing to send to servers
-
-    // In the ONE_AT_A_TIME mode, there may be appends blocked because there
-    // is a batch currently inflight.  But this flush() call is supposed to
-    // flush them.  Defer the flush; record the count so that these appends
-    // get flushed as soon as the currently inflight batch comes back.
-    blocked_appends_flush_deferred_count_ = blocked_appends_->size();
-
-    return;
-  }
-
-  if (time_trigger_timer_) {
-    time_trigger_timer_->cancel();
-  }
+void BufferedWriterSingleLog::flushBuildingBatch() {
+  ld_check(is_flushable_);
+  ld_check(haveBuildingBatch());
   sendBatch(*batches_->back());
 }
 
-bool BufferedWriterSingleLog::isFlushable() const {
+void BufferedWriterSingleLog::flushAll() {
+  ld_check(is_flushable_);
+
+  if (haveBuildingBatch()) {
+    flushBuildingBatch();
+  }
+
+  // In the ONE_AT_A_TIME mode, there may be appends blocked because there
+  // is a batch currently inflight.  But this flushAll() call is supposed to
+  // flush them.  Defer the flush; record the count so that these appends
+  // get flushed as soon as the currently inflight batch comes back.
+  blocked_appends_flush_deferred_count_ = blocked_appends_->size();
+
+  flushableMayHaveChanged();
+  ld_check(!is_flushable_);
+}
+
+bool BufferedWriterSingleLog::calculateIsFlushable() const {
+  ld_check_le(blocked_appends_flush_deferred_count_, blocked_appends_->size());
   return haveBuildingBatch() ||
       blocked_appends_flush_deferred_count_ < blocked_appends_->size();
 }
@@ -248,6 +239,23 @@ bool BufferedWriterSingleLog::isFlushable() const {
 bool BufferedWriterSingleLog::haveBuildingBatch() const {
   return !batches_->empty() &&
       batches_->back()->state == Batch::State::BUILDING;
+}
+
+void BufferedWriterSingleLog::flushableMayHaveChanged() {
+  bool new_flushable = calculateIsFlushable();
+  if (new_flushable == is_flushable_) {
+    return;
+  }
+
+  is_flushable_ = new_flushable;
+  parent_->setFlushable(*this, is_flushable_);
+  if (is_flushable_) {
+    // If we're flushable for enough time continuously, do the flush.
+    // Note that this applies both to BUILDING batch and to blocked_appends_.
+    activateTimeTrigger();
+  } else if (time_trigger_timer_) {
+    time_trigger_timer_->cancel();
+  }
 }
 
 struct AppendRequestCallbackImpl {
@@ -371,6 +379,12 @@ void BufferedWriterSingleLog::onAppendReply(Batch& batch,
     return;
   }
 
+  if (status == E::OK) {
+    WORKER_STAT_INCR(buffered_writer_batches_succeeded);
+  } else {
+    WORKER_STAT_INCR(buffered_writer_batches_failed);
+  }
+
   invokeCallbacks(batch, status, dr_batch, redirect);
   finishBatch(batch);
   reap();
@@ -382,7 +396,9 @@ void BufferedWriterSingleLog::onAppendReply(Batch& batch,
       unblockAppends();
     } else {
       // Batch failed (exhausted all retries), also fail any blocked appends to
-      // preserve ordering.
+      // preserve ordering. This is only a best-effort measure; it's inherently
+      // racy since more appends may be in flight (e.g. queued
+      // BufferedAppendRequest, or user append() calls from another thread).
       dropBlockedAppends(status, redirect);
     }
   }
@@ -439,8 +455,10 @@ void BufferedWriterSingleLog::unblockAppends() {
 
   // Despite `flush_at_end == true`, the log may not be flushable if the last
   // call to `appendImpl()` above has flushed the last batch
-  if (flush_at_end && isFlushable()) {
-    flush();
+  if (flush_at_end && haveBuildingBatch()) {
+    flushBuildingBatch();
+  } else {
+    flushableMayHaveChanged();
   }
 }
 
@@ -448,11 +466,13 @@ void BufferedWriterSingleLog::dropBlockedAppends(Status status,
                                                  NodeID redirect) {
   BufferedWriterImpl::AppendCallbackInternal* cb =
       parent_->parent_->getCallback();
+  int64_t payload_bytes = 0;
   for (auto& chunk : *blocked_appends_) {
     std::vector<std::pair<BufferedWriter::AppendCallback::Context, std::string>>
         context_set;
     for (auto& append : chunk) {
       std::string& payload = append.payload;
+      payload_bytes += payload.size();
       BufferedWriter::AppendCallback::Context& context = append.context;
       context_set.emplace_back(std::move(context), std::move(payload));
     }
@@ -461,6 +481,10 @@ void BufferedWriterSingleLog::dropBlockedAppends(Status status,
   blocked_appends_->clear();
   blocked_appends_.compact();
   blocked_appends_flush_deferred_count_ = 0;
+  // Return the memory budget
+  parent_->parent_->releaseMemory(payload_bytes);
+
+  flushableMayHaveChanged();
 }
 
 void BufferedWriterSingleLog::activateTimeTrigger() {
@@ -472,7 +496,7 @@ void BufferedWriterSingleLog::activateTimeTrigger() {
     time_trigger_timer_ = std::make_unique<Timer>([this] {
       StatsHolder* stats{parent_->parent_->processor()->stats_};
       STAT_INCR(stats, buffered_writer_time_trigger_flush);
-      flush();
+      flushAll();
     });
   }
   if (!time_trigger_timer_->isActive()) {
@@ -519,6 +543,7 @@ int BufferedWriterSingleLog::scheduleRetry(Batch& batch,
   ++batch.retry_count;
   ld_spew(
       "scheduling retry in %ld ms", batch.retry_timer->getNextDelay().count());
+  WORKER_STAT_INCR(buffered_writer_retries);
   batch.retry_timer->activate();
   return 0;
 }
@@ -554,7 +579,7 @@ void BufferedWriterSingleLog::finishBatch(Batch& batch) {
 
 void BufferedWriterSingleLog::setBatchState(Batch& batch, Batch::State state) {
   batch.state = state;
-  parent_->setFlushable(*this, isFlushable());
+  flushableMayHaveChanged();
 }
 
 int BufferedWriterSingleLog::checksumBits() const {

@@ -354,8 +354,20 @@ std::pair<Status, NodeID> ClientImpl::appendBuffered(
   // APPEND_Message::serialize() as with normal appends.
   ld_check(checksum_bits == 0);
 
-  if (!checkAppend(logid, payload.size(), true)) {
-    return std::make_pair(E::OK, NodeID());
+  // Check that log ID is good. Don't check payload size since the limit may
+  // have changed at runtime.
+  if (!checkAppendImpl(logid,
+                       payload.size(),
+                       /* allow_extra */ true,
+                       /* ignore_payload_soft_limit */ true)) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    1,
+                    "Invalid batch from buffered writer (%s). This should be "
+                    "impossible, please investigate.",
+                    error_name(err));
+    ld_check(false);
+    ld_check(err != E::OK);
+    return std::make_pair(err, NodeID());
   }
 
   // BufferedWriter's AppendRequestCallback takes the redirect NodeID for
@@ -2177,9 +2189,10 @@ int ClientImpl::getHeadAttributes(logid_t logid,
   return processor_->postRequest(req);
 }
 
-bool ClientImpl::checkAppend(logid_t logid,
-                             size_t payload_size,
-                             bool allow_extra) {
+bool ClientImpl::checkAppendImpl(logid_t logid,
+                                 size_t payload_size,
+                                 bool allow_extra,
+                                 bool ignore_payload_soft_limit) {
   if (logid == LOGID_INVALID) {
     err = E::INVALID_PARAM;
     return false;
@@ -2195,7 +2208,9 @@ bool ClientImpl::checkAppend(logid_t logid,
   }
 
   return AppendRequest::checkPayloadSize(
-      payload_size, getMaxPayloadSize(), allow_extra);
+      payload_size,
+      ignore_payload_soft_limit ? MAX_PAYLOAD_SIZE_PUBLIC : getMaxPayloadSize(),
+      allow_extra);
 }
 
 void ClientImpl::allowWriteMetaDataLog() {

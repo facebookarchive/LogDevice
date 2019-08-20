@@ -12,6 +12,7 @@
 
 #include <folly/Preprocessor.h>
 
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/BufferedWriter.h"
 #include "logdevice/include/types.h"
@@ -36,6 +37,12 @@ class BufferedWriterAppendSink {
   using AppendRequestCallback =
       std::function<void(Status, const DataRecord&, NodeID)>;
 
+  /**
+   * Check if a *pre-batching* append is good: valid log ID, payload not too
+   * big, etc.
+   * Doesn't apply to post-batching records - they're allowed to exceed soft
+   * size limit sometimes, e.g. if the limit was decreased during batching.
+   */
   virtual bool checkAppend(logid_t logid,
                            size_t payload_size,
                            bool allow_extra) = 0;
@@ -207,7 +214,8 @@ class BufferedWriterImpl : public BufferedWriter {
                      AppendCallback*,
                      std::function<BufferedWriter::LogOptions(logid_t)>,
                      int32_t,
-                     BufferedWriterAppendSink*);
+                     BufferedWriterAppendSink*,
+                     StatsHolder* stats);
   ~BufferedWriterImpl() override;
 
   void setCallbackInternal(AppendCallbackInternal* cb) {
@@ -230,8 +238,8 @@ class BufferedWriterImpl : public BufferedWriter {
   // This allows calls to be batched, which reduces contention on the
   // std::atomic.
   int acquireMemory(int64_t payload_bytes) {
-    if (memory_limit_mb_ >= 0) {
-      const int64_t nbytes = memoryForPayloadBytes(payload_bytes);
+    const int64_t nbytes = memoryForPayloadBytes(payload_bytes);
+    if (memory_limit_bytes_ >= 0) {
       auto prev = memory_available_.load();
       do {
         if (prev < nbytes) {
@@ -239,11 +247,15 @@ class BufferedWriterImpl : public BufferedWriter {
         }
       } while (!memory_available_.compare_exchange_weak(prev, prev - nbytes));
     }
+    STAT_ADD(stats_, buffered_writer_bytes_in_flight, nbytes);
     return 0;
   }
   void releaseMemory(int64_t payload_bytes) {
-    if (memory_limit_mb_ >= 0) {
-      memory_available_ += memoryForPayloadBytes(payload_bytes);
+    const int64_t nbytes = memoryForPayloadBytes(payload_bytes);
+    STAT_SUB(stats_, buffered_writer_bytes_in_flight, nbytes);
+    if (memory_limit_bytes_ >= 0) {
+      int64_t new_available = (memory_available_ += nbytes);
+      ld_check_le(new_available, memory_limit_bytes_);
     }
   }
 
@@ -315,6 +327,8 @@ class BufferedWriterImpl : public BufferedWriter {
     // Budget 2x the payload size; 1x for the original std::string which we
     // keep around, and another 1x in the blob sent to LogDevice (which we
     // keep around for any retries).
+    // Note that this function must be linear, i.e. payload_bytes * const,
+    // because we're calling it for batches as well as for individual payloads.
     return 2 * payload_bytes;
   }
 
@@ -331,8 +345,9 @@ class BufferedWriterImpl : public BufferedWriter {
   const std::unique_ptr<ProcessorProxy> processor_proxy_;
   AppendCallbackInternal client_callback_wrapped_;
   AppendCallbackInternal* callback_;
-  int32_t memory_limit_mb_;
+  int64_t memory_limit_bytes_;
   BufferedWriterAppendSink* const append_sink_;
+  StatsHolder* stats_;
   std::atomic<bool> shutting_down_{false};
   WaitableCounter num_background_tasks_;
   uint64_t hash_salt_;

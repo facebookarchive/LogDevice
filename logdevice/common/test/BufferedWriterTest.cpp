@@ -301,6 +301,11 @@ class BufferedWriterTest : public ::testing::Test {
     initProcessor(create_default_settings<Settings>());
   }
 
+  void TearDown() override {
+    // Check for links in memory accounting.
+    EXPECT_EQ(0, stats_.aggregate().buffered_writer_bytes_in_flight);
+  }
+
   // This can be called again by tests to supply settings
   void initProcessor(Settings settings) {
     sink_.reset();
@@ -319,7 +324,8 @@ class BufferedWriterTest : public ::testing::Test {
         cb,
         [opts](logid_t) -> BufferedWriter::LogOptions { return opts; },
         opts.memory_limit_mb,
-        sink_.get());
+        sink_.get(),
+        &stats_);
   }
 
   int64_t getMemoryAvailable(BufferedWriterImpl& writer) const {
@@ -334,6 +340,7 @@ class BufferedWriterTest : public ::testing::Test {
   void bigPayloadFlushesTest(size_t);
 
  protected:
+  StatsHolder stats_{StatsParams()};
   std::shared_ptr<Processor> processor_;
   std::unique_ptr<TestAppendSink> sink_;
 
@@ -715,10 +722,12 @@ TEST_F(BufferedWriterTest, MemoryLimit) {
             select_log(), std::string(pay), NULL_CONTEXT, std::move(attrs)));
       }
       std::vector<Status> rv = writer->append(std::move(v));
-      if (rv == std::vector<Status>(v.size(), E::OK)) {
-        buffered += BATCH_SIZE;
-      } else {
-        ASSERT_EQ(std::vector<Status>(v.size(), E::NOBUFS), rv);
+      for (Status s : rv) {
+        if (s == E::OK) {
+          ++buffered;
+        } else {
+          ASSERT_EQ(E::NOBUFS, s);
+        }
       }
     }
   }
@@ -732,6 +741,7 @@ TEST_F(BufferedWriterTest, MemoryLimit) {
   ASSERT_GT(buffered, 480);
   ASSERT_LT(buffered, 520);
   ASSERT_LT(getMemoryAvailable(*writer), 2 * pay.size());
+  EXPECT_GT(stats_.aggregate().buffered_writer_bytes_in_flight, 0);
 
   // Now flush all writes, wait for them to complete, and verify that the
   // memory available counter goes back up to 1 MB.

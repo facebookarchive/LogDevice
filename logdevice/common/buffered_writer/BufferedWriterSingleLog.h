@@ -136,9 +136,11 @@ class BufferedWriterSingleLog {
   void append(AppendChunk chunk);
 
   /**
-   * Sends any buffered appends.
+   * Sends current batch and requests all blocked appends
+   * (in ONE_AT_A_TIME mode) to be flushed as soon as the in-flight batch
+   * completes.
    */
-  void flush();
+  void flushAll();
 
   /**
    * Called when an APPEND comes back from LogDevice.
@@ -223,8 +225,11 @@ class BufferedWriterSingleLog {
   // ONE_AT_A_TIME mode because there is a batch already inflight.  In that
   // case the public append() then adds the chunk to `blocked_appends_'.
   int appendImpl(AppendChunk& chunk, bool defer_size_trigger);
+  // Sends current batch. haveBuildingBatch() must be true.
+  void flushBuildingBatch();
   // Checks if the batch that is currently building has met any of the
   // criteria for automatic flushing, and flushes if so.
+  // haveBuildingBatch() must be true.
   void flushMeMaybe(bool defer_client_size_trigger);
   // Sends the batch to LogDevice
   void sendBatch(Batch&);
@@ -255,12 +260,18 @@ class BufferedWriterSingleLog {
                        Status,
                        const DataRecord& dr_batch,
                        NodeID redirect);
-  // Does a flush() call have anything to do?
-  bool isFlushable() const;
+  // Checks if flush() has anything to do.
+  bool calculateIsFlushable() const;
+  // Assigns is_flushable_, notifies parent, starts/stops time trigger timer.
+  // Call whenever the value of calculateIsFlushable() may have changed.
+  // Specifically, call when changing batch state (setBatchState() does it),
+  // and when modifying blocked_appends_ or
+  // blocked_appends_flush_deferred_count_.
+  void flushableMayHaveChanged();
   // Is there a batch in the BUILDING state?
   bool haveBuildingBatch() const;
   // Sets a Batch's state.  Changes to Batch states can alter the result of
-  // isFlushable(), need to inform the parent.
+  // is_flushable_, need to inform the parent.
   void setBatchState(Batch&, Batch::State);
 
   // How many checksum bits to prepend to every payload, if
@@ -302,6 +313,9 @@ class BufferedWriterSingleLog {
   // constructed on the Processor's BackgroundThread, while later ones are
   // finished and ready to send.
   uint64_t next_batch_to_send_ = 0;
+
+  // Does a flush() call have anything to do?
+  bool is_flushable_ = false;
 };
 
 }} // namespace facebook::logdevice
