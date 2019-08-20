@@ -1664,25 +1664,30 @@ ClientReadStream::checkFMajority(bool grace_period_expired) const {
     }
   }
 
-  // If SCD is active, and if the user allows issuing gap while in SCD mode,
-  // issue a gap if we have a complete majority, ie all fully authoritative
-  // nodes chimed in. Note that when we issue gaps while in SCD, we may miss
-  // some records that are underreplicated because of a bug or have inconsistent
-  // copysets. This is tracked in T16277257. Issuing gaps while in SCD mode may
-  // still be desirable for use cases that are constrained in network bandwidth
-  // and can't afford to do too many rewinds in ALL SEND ALL mode when there is
-  // data loss.
   if (scd_->isActive()) {
+    // If SCD is active, and if the user allows issuing gap while in SCD mode,
+    // issue a gap if either:
+    //  - we have a complete majority, i.e. all fully authoritative nodes
+    //    chimed in, or
+    //  - we have an incomplete majority, and everyone outside this majority is
+    //    in SCD filtered out list.
+    // Note that when we issue gaps while in SCD, we may miss some records that
+    // are underreplicated because of a bug or have inconsistent copysets.
+    // This is tracked in T16277257. Issuing gaps while in SCD mode may
+    // still be desirable for use cases that are constrained in network
+    // bandwidth and can't afford to do too many rewinds in ALL SEND ALL mode
+    // when there is data loss.
     if (deps_->getSettings().read_stream_guaranteed_delivery_efficiency &&
+        scd_->getUnderReplicatedShardsNotBlacklisted() == 0 &&
         (fmajority_result == FmajorityResult::NON_AUTHORITATIVE ||
-         fmajority_result == FmajorityResult::AUTHORITATIVE_COMPLETE) &&
-        scd_->getUnderReplicatedShardsNotBlacklisted() == 0) {
-      // We've heard from all shards and no one had a record for current LSN
+         fmajority_result == FmajorityResult::AUTHORITATIVE_COMPLETE ||
+         (fmajority_result == FmajorityResult::AUTHORITATIVE_INCOMPLETE &&
+          scd_->everyoneSentGapOrIsFilteredOut()))) {
+      // We've heard from enough shards and no one had a record for current LSN
       // that would pass SCD filter. Normally we would rewind to all send all
       // mode in this situation, in case the record is underreplicated or has
-      // inconsistent copyset. But in
-      // read_stream_guaranteed_delivery_efficiency we just ship the gap
-      // because rewinds are slow.
+      // inconsistent copyset. But in read_stream_guaranteed_delivery_efficiency
+      // we just ship the gap because rewinds put a lot of load on the cluster.
       return ProgressDecision::ISSUE_GAP;
     }
     return ProgressDecision::WAIT;

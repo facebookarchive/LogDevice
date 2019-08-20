@@ -1648,6 +1648,104 @@ TEST_P(ReadingIntegrationTest, UnderreplicatedRegion) {
   ld_info("Done.");
 }
 
+TEST_P(ReadingIntegrationTest, GuaranteedEfficiencyWithNodeDown) {
+  // N0 is sequencer-only. Storage nodes N1, N2, N3. Replication factor 3.
+  auto cluster = clusterFactory()
+                     .setLogAttributes(logsconfig::DefaultLogAttributes()
+                                           .with_scdEnabled(true)
+                                           .with_replicationFactor(3))
+                     // Give each record a randomly shuffled copyset to hit all
+                     // permutations.
+                     .setParam("--enable-sticky-copysets", "false")
+                     .setNumDBShards(1)
+                     .create(4);
+
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  int rv = client_settings->set(
+      "read-stream-guaranteed-delivery-efficiency", "true");
+  ASSERT_EQ(0, rv) << err;
+  auto client = cluster->createClient(
+      getDefaultTestTimeout(), std::move(client_settings));
+
+  // We need at least one record to have a specific order of nodes in the
+  // copyset. Each appended record gets a randomly shuffled copyset. Append 100
+  // records to cover all 6 permutations with high probability.
+  const int NRECORDS = 100;
+  std::vector<lsn_t> lsns;
+  ld_info("Writing.");
+  for (int i = 0; i < NRECORDS; ++i) {
+    std::string payload = "pikachu" + std::to_string(i);
+    lsn_t lsn =
+        client->appendSync(logid_t(1), Payload(payload.data(), payload.size()));
+    ASSERT_NE(LSN_INVALID, lsn);
+    if (i) {
+      EXPECT_GT(lsn, lsns.back());
+    }
+    lsns.push_back(lsn);
+  }
+
+  // Stop N1, wipe N2 to simulate silent underreplication.
+  cluster->getNode(1).shutdown();
+  cluster->getNode(2).shutdown();
+  cluster->getNode(2).wipeShard(0);
+  cluster->start({2});
+
+  // Read everything back. Records are underreplicated but an f-majority of
+  // nodes are available. The stream should report some data loss but shouldn't
+  // rewind to all-send-all. Check that all records are either delivered or are
+  // covered by DATALOSS gaps; this may not be the case at epoch boundaries
+  // (there may be silent data loss at epoch end if bridge record is missing),
+  // but in this test everything should be in the same epoch.
+  ld_info("Reading.");
+  auto reader = client->createReader(1);
+  reader->startReading(logid_t(1), lsns.at(0), lsns.back());
+  int i = 0;
+  int records_lost = 0;
+  while (i < NRECORDS) {
+    ASSERT_TRUE(reader->isReadingAny());
+    std::vector<std::unique_ptr<DataRecord>> recs;
+    GapRecord gap;
+    ssize_t n = reader->read(10, &recs, &gap);
+    if (n >= 0) {
+      ASSERT_EQ(n, recs.size());
+
+      for (size_t j = 0; j < n; ++j) {
+        EXPECT_EQ(lsns.at(i), recs.at(j)->attrs.lsn);
+        EXPECT_EQ(
+            "pikachu" + std::to_string(i), recs.at(j)->payload.toString());
+        ++i;
+      }
+    } else {
+      ASSERT_EQ(E::GAP, err);
+      if (gap.type == GapType::DATALOSS ||
+          // TODO (#51843124): Currently data loss at beginning of epoch is
+          // incorrectly delivered as BRIDGE gap instead of DATALOSS.
+          (gap.type == GapType::BRIDGE && i == 0)) {
+        while (i < NRECORDS && lsns.at(i) <= gap.hi) {
+          ++i;
+          ++records_lost;
+        }
+      } else {
+        ASSERT_TRUE(gap.type == GapType::BRIDGE || gap.type == GapType::HOLE);
+      }
+    }
+  }
+  ASSERT_FALSE(reader->isReadingAny());
+  EXPECT_GT(records_lost, 0);
+  EXPECT_LT(records_lost, NRECORDS);
+
+  Stats s = dynamic_cast<ClientImpl*>(client.get())->stats()->aggregate();
+  EXPECT_EQ(NRECORDS - records_lost, s.records_delivered_scd);
+  EXPECT_EQ(0, s.records_delivered_noscd);
+  // Rewind only to blacklist N1.
+  EXPECT_EQ(1, s.scd_shard_down_added);
+  EXPECT_EQ(0, s.scd_shard_slow_added);
+  EXPECT_EQ(1, s.rewind_scheduled);
+  EXPECT_EQ(1, s.rewind_done);
+  EXPECT_EQ(0, s.scd_shard_underreplicated_region_entered);
+  EXPECT_EQ(0, s.scd_shard_underreplicated_region_promoted);
+}
+
 INSTANTIATE_TEST_CASE_P(ReadingIntegrationTest,
                         ReadingIntegrationTest,
                         ::testing::Values(false, true));
