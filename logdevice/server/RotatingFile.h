@@ -52,11 +52,12 @@ class RotatingFile : private boost::noncopyable {
   /**
    * Reopens the file with same parameters as last open call and exits
    * immediately. All operations in progress on the old file descriptor will
-   * finish before closing it.
-   *
+   * finish before closing it. Leaves the error code from the open() syscall
+   * in errno.
    */
   int reopen();
   ssize_t write(const void* buf, size_t count);
+  std::string path();
 
  protected:
   /**
