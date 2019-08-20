@@ -84,23 +84,61 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SettingsCategory::AdminAPI)
 
     ("maintenance-log-snapshotting",
-      &maintenance_log_snapshotting,
-      "false",
-      nullptr,
-      "Allow the maintenance log to be snapshotted onto a snapshot log. This "
-      "requires the maintenance log group to contain two logs, the first one "
-      "being the snapshot log and the second one being the delta log.",
-      SERVER,
-      SettingsCategory::AdminAPI)
+     &maintenance_log_snapshotting,
+     "false",
+     nullptr,
+     "Allow the maintenance log to be snapshotted onto a snapshot log. This "
+     "requires the maintenance log group to contain two logs, the first one "
+     "being the snapshot log and the second one being the delta log.",
+     SERVER,
+     SettingsCategory::AdminAPI)
 
     ("maintenance-log-snapshotting-period",
-      &maintenance_log_snapshotting_period,
-      "1h",
-      validate_positive<ssize_t>(),
-      "Controls time based snapshotting. New maintenancelog snapshot will be "
-      "created after this period if there are new deltas",
-      SERVER,
-      SettingsCategory::AdminAPI)
+     &maintenance_log_snapshotting_period,
+     "1h",
+     validate_positive<ssize_t>(),
+     "Controls time based snapshotting. New maintenancelog snapshot will be "
+     "created after this period if there are new deltas",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
+    ("maintenance-log-max-delta-records",
+     &maintenance_log_max_delta_records,
+     "100",
+     nullptr,
+     "How many delta records to keep in the maintenance log before we "
+     "snapshot it.",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
+    ("maintenance-log-max-delta-bytes",
+     &maintenance_log_max_delta_bytes,
+     "10485760",
+     parse_nonnegative<ssize_t>(),
+     "How many bytes of deltas to keep in the maintenance log before "
+     "we snapshot it.",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
+    ("maintenance-log-retention",
+     &maintenance_log_retention,
+     "14d",
+     nullptr,
+     "How long to keep a history of snapshots and deltas for "
+     "the maintenance log. "
+     "Unused if the event log has never been snapshotted or "
+     "if maintenance log "
+     "trimming is disabled with disable-maintenance-log-trimming.",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
+    ("disable-maintenance-log-trimming",
+     &disable_maintenance_log_trimming,
+     "false",
+     nullptr,
+     "Disable trimming of the maintenance log",
+     SERVER,
+     SettingsCategory::AdminAPI)
 
     ("read-metadata-from-sequencers", &read_metadata_from_sequencers, "true",
      nullptr,

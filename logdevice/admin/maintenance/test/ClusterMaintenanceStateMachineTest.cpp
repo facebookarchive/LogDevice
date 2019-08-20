@@ -32,6 +32,14 @@ class ClusterMaintenanceStateMachineTest : public ::testing::Test {
   void init(int n);
   int applyMaintenances(std::vector<thrift::MaintenanceDefinition> defs);
   int removeMaintenance(thrift::RemoveMaintenancesRequest req);
+  int serializeState(const ClusterMaintenanceState& state,
+                     void* buf,
+                     size_t buf_size);
+  std::unique_ptr<ClusterMaintenanceState>
+  deserializeState(Payload payload,
+                   lsn_t version,
+                   std::chrono::milliseconds timestamp);
+
   thrift::MaintenanceDefinition
   getMaintenanceDefinition(thrift::MaintenanceGroupID group);
   std::unique_ptr<thrift::ClusterMaintenanceState> cluster_state_;
@@ -94,6 +102,21 @@ ClusterMaintenanceStateMachineTest::getMaintenanceDefinition(
     }
   }
   return result;
+}
+
+int ClusterMaintenanceStateMachineTest::serializeState(
+    const ClusterMaintenanceState& state,
+    void* buf,
+    size_t buf_size) {
+  return sm_->serializeState(state, buf, buf_size);
+}
+
+std::unique_ptr<ClusterMaintenanceState>
+ClusterMaintenanceStateMachineTest::deserializeState(
+    Payload payload,
+    lsn_t version,
+    std::chrono::milliseconds timestamp) {
+  return sm_->deserializeState(payload, version, timestamp);
 }
 
 TEST_F(ClusterMaintenanceStateMachineTest, BasicApplyAndRemoval) {
@@ -326,6 +349,146 @@ TEST_F(ClusterMaintenanceStateMachineTest, ApplyFailures) {
   ASSERT_EQ(-1, applyMaintenances({def2}));
   ASSERT_EQ(E::MAINTENANCE_CLASH, err);
   EXPECT_EQ(cluster_state_->get_version(), prev);
+}
+
+TEST_F(ClusterMaintenanceStateMachineTest, SnapshotSerde) {
+  init(5);
+
+  // Automation wants N0S1 and N2S1 set to MAY_DISAPPEAR
+  auto def = MaintenanceDefinition();
+  def.set_user("Automation");
+  // N0S1, N2S1
+  def.set_shards({shard[0], shard[4]});
+  def.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  // A single group
+  def.set_group(true);
+  def.set_group_id("N0S1N2S1");
+  ASSERT_EQ(0, applyMaintenances({def}));
+  ASSERT_EQ(getMaintenanceDefinition("N0S1N2S1"), def);
+  auto prev = cluster_state_->get_version();
+
+  def = MaintenanceDefinition();
+  def.set_user("Automation");
+  // N1, N4
+  def.set_sequencer_nodes({node[1], node[4]});
+  def.set_sequencer_target_state(SequencingState::DISABLED);
+  def.set_group_id("N1N4Seq");
+  ASSERT_EQ(0, applyMaintenances({def}));
+  ASSERT_EQ(getMaintenanceDefinition("N1N4Seq"), def);
+  prev = cluster_state_->get_version();
+
+  // Oncall wants N0S1 set to DRAINED
+  def = MaintenanceDefinition();
+  def.set_user("Oncall");
+  // N0S1
+  def.set_shards({shard[0]});
+  def.set_shard_target_state(ShardOperationalState::DRAINED);
+  // A single group
+  def.set_group(true);
+  def.set_group_id("N0S1");
+  ASSERT_EQ(0, applyMaintenances({def}));
+  ASSERT_EQ(getMaintenanceDefinition("N0S1"), def);
+  prev = cluster_state_->get_version();
+
+  // Automation wants N1S1 and N3S1 set to MAY_DISAPPEAR
+  def = MaintenanceDefinition();
+  def.set_user("Automation");
+  // N1S1, N3S1
+  def.set_shards({shard[2], shard[6]});
+  def.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  // A single group
+  def.set_group(true);
+  def.set_group_id("N1S1N3S1");
+  ASSERT_EQ(0, applyMaintenances({def}));
+  EXPECT_EQ(cluster_state_->get_version(), prev + 1);
+  ASSERT_EQ(getMaintenanceDefinition("N1S1N3S1"), def);
+  prev = cluster_state_->get_version();
+
+  // Serialize the state
+  size_t len = serializeState(*cluster_state_, nullptr, 0);
+  ld_info("Estimated size:%lu", len);
+  void* serializedState = malloc(len);
+  int rv = serializeState(*cluster_state_, serializedState, len);
+  EXPECT_EQ(rv, len);
+
+  // desrialize the state
+  auto deserializedState = deserializeState(
+      Payload(serializedState, len), prev, std::chrono::milliseconds(0));
+  EXPECT_NE(deserializedState, nullptr);
+  EXPECT_EQ(*deserializedState, *cluster_state_);
+  free(serializedState);
+
+  // Try to remove all nonexistent maintenances, that should return NOTFOUND
+  thrift::MaintenancesFilter filter1;
+  filter1.set_group_ids({"NonExistantGroup"});
+  thrift::RemoveMaintenancesRequest req;
+  req.set_filter(std::move(filter1));
+  ASSERT_EQ(-1, removeMaintenance(req));
+  ASSERT_EQ(E::NOTFOUND, err);
+  // Since this is not really removing anything, we shouldn't bump the
+  // maintenance state version.
+  EXPECT_EQ(cluster_state_->get_version(), prev);
+
+  thrift::MaintenanceDefinition empty;
+  // Try removing valid group ids along with invalid one, that will remove the
+  // valid one successfully and the non-existent will be ignored.
+  filter1.set_group_ids({"N1S1N3S1", "NonExistantGroup"});
+  req.set_filter(std::move(filter1));
+  ASSERT_EQ(0, removeMaintenance(req));
+  EXPECT_EQ(cluster_state_->get_version(), prev + 1);
+  ASSERT_EQ(getMaintenanceDefinition("N1S1N3S1"), empty);
+  prev = cluster_state_->get_version();
+
+  // Now Automation wants to remove the previously applied
+  // maintenance for N0S1N2S1
+  thrift::MaintenancesFilter filter2;
+  thrift::RemoveMaintenancesRequest req2;
+  filter2.set_group_ids({"N0S1N2S1"});
+  filter2.set_user("Automation");
+  req2.set_filter(std::move(filter2));
+  req2.set_user("Automation");
+  removeMaintenance(req2);
+  EXPECT_EQ(cluster_state_->get_version(), prev + 1);
+
+  // Check the original group to see if N0S1N2S1 has been removed
+  // And this should not affect Oncall's maintenance for N0S1
+  def = getMaintenanceDefinition("N0S1N2S1");
+  ASSERT_EQ(getMaintenanceDefinition("N0S1N2S1"), empty);
+  def = getMaintenanceDefinition("N0S1");
+  auto shards = def.get_shards();
+  EXPECT_EQ(shards.size(), 1);
+  EXPECT_EQ(shards[0], shard[0]);
+
+  // None of these removal should have affected
+  // N1S1N3S1, N1N4Seq
+  def = getMaintenanceDefinition("N1N4Seq");
+  ASSERT_NE(getMaintenanceDefinition("N1N4Seq"), empty);
+
+  // Serialize the state
+  len = serializeState(*cluster_state_, nullptr, 0);
+  serializedState = malloc(len);
+  rv = serializeState(*cluster_state_, serializedState, len);
+  EXPECT_EQ(rv, len);
+
+  // desrialize the state
+  deserializedState = deserializeState(
+      Payload(serializedState, len), prev, std::chrono::milliseconds(0));
+  EXPECT_EQ(*deserializedState, *cluster_state_);
+  free(serializedState);
+
+  // Remove all maintenances for user Automation
+  thrift::MaintenancesFilter filter3;
+  thrift::RemoveMaintenancesRequest req3;
+  filter3.set_user("Automation");
+  req3.set_filter(std::move(filter3));
+  req3.set_user("Automation");
+  removeMaintenance(req3);
+
+  // N1S1N3S1, N1N4Seq should now be gone
+  def = getMaintenanceDefinition("N1S1N3S1");
+  ASSERT_EQ(getMaintenanceDefinition("N1S1N3S1"), empty);
+  def = getMaintenanceDefinition("N1N4Seq");
+  ASSERT_EQ(getMaintenanceDefinition("N1N4Seq"), empty);
 }
 
 }}} // namespace facebook::logdevice::maintenance

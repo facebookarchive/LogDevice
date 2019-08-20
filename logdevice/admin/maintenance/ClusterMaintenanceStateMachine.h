@@ -10,6 +10,7 @@
 #include "logdevice/admin/maintenance/gen-cpp2/MaintenanceDelta_types.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine.h"
+#include "logdevice/common/replicated_state_machine/TrimRSMRetryHandler.h"
 
 /**
  * ClusterMaintenanceState is the state maintained by this replicated state
@@ -94,7 +95,10 @@ class ClusterMaintenanceStateMachine
  private:
   // Will be set to true when we finish replaying the state machine.
   bool is_fully_loaded_{false};
+
   std::unique_ptr<SubscriptionHandle> update_handle_;
+
+  std::unique_ptr<TrimRSMRetryHandler> trim_retry_handler_;
 
   /**
    * The callback that gets called on every time we publish a new state
@@ -132,6 +136,14 @@ class ClusterMaintenanceStateMachine
   // Snapshot creation completion callback. On success, also issue a request to
   // trim the RSM if possible.
   void onSnapshotCreated(Status st, size_t snapshotSize) override;
+
+  virtual void trim();
+  /**
+   * Trim the delta log when it is not paired with the snapshot log
+   *
+   * @param lsn LSN up to which to trim
+   */
+  virtual void trimNotSnapshotted(lsn_t lsn);
 
   UpdateableSettings<AdminServerSettings> settings_;
 

@@ -14,6 +14,7 @@
 #include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/ThriftCodec.h"
+#include "logdevice/common/TrimRequest.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 
 namespace facebook { namespace logdevice {
@@ -45,11 +46,23 @@ void ClusterMaintenanceStateMachine::start() {
 }
 
 void ClusterMaintenanceStateMachine::onUpdate(
-    const ClusterMaintenanceState& /* unused */,
+    const ClusterMaintenanceState& state,
     const MaintenanceDelta* /* unused */,
-    lsn_t /* unused */) {
-  // TODO: Implement snapshotting logic here
+    lsn_t version) {
   is_fully_loaded_ = true;
+  if (snapshot_log_id_ == LOGID_INVALID) {
+    // When not using snapshotting, we need to trim the delta log when there
+    // are no pending maintenances
+    if (state.get_maintenances().empty()) {
+      trimNotSnapshotted(version);
+    }
+  } else {
+    // When using snapshotting, well... we create a snapshot when the delta log
+    // grows too big.
+    if (shouldCreateSnapshot()) {
+      snapshot(nullptr);
+    }
+  }
 }
 
 std::unique_ptr<ClusterMaintenanceState>
@@ -149,16 +162,30 @@ int ClusterMaintenanceStateMachine::serializeState(
     const ClusterMaintenanceState& state,
     void* buf,
     size_t buf_size) {
-  // TODO: Implemetation
-  return 0;
+  auto serializedState =
+      ThriftCodec::serialize<apache::thrift::BinarySerializer>(state);
+  if (buf != nullptr) {
+    ld_check(buf_size >= serializedState.size());
+    memcpy(buf, serializedState.data(), serializedState.size());
+  }
+  return serializedState.size();
 }
 
 bool ClusterMaintenanceStateMachine::shouldCreateSnapshot() const {
-  return false;
+  // Create a snapshot if:
+  // 1. we are not already snapshotting;
+  // 2. Maintenance log snapshotting is enabled in the settings;
+  // 3. We reached the limits in delta log size as configured in settings.
+  return canSnapshot() &&
+      (numDeltaRecordsSinceLastSnapshot() >
+           settings_->maintenance_log_max_delta_records ||
+       numBytesSinceLastSnapshot() >
+           settings_->maintenance_log_max_delta_bytes);
 }
 
 bool ClusterMaintenanceStateMachine::canSnapshot() const {
-  return false;
+  return !snapshot_in_flight_ && settings_->maintenance_log_snapshotting &&
+      snapshot_log_id_ != LOGID_INVALID;
 }
 
 bool ClusterMaintenanceStateMachine::shouldTrim() const {
@@ -167,12 +194,63 @@ bool ClusterMaintenanceStateMachine::shouldTrim() const {
 
 void ClusterMaintenanceStateMachine::onSnapshotCreated(Status st,
                                                        size_t snapshotSize) {
+  if (st == E::OK) {
+    ld_info("Successfully created a snapshot");
+    WORKER_STAT_SET(maintenance_log_snapshot_size, snapshotSize);
+    if (shouldTrim()) {
+      trim();
+    }
+  } else {
+    ld_error("Could not create a snapshot: %s", error_name(st));
+    // We'll try again next time we receive a delta.
+    WORKER_STAT_INCR(maintenance_log_snapshotting_errors);
+  }
   return;
 }
 
 void ClusterMaintenanceStateMachine::snapshot(
     std::function<void(Status st)> cb) {
+  ld_info("Creating a snapshot of MaintenanceLog");
+  Base::snapshot(cb);
   return;
+}
+
+void ClusterMaintenanceStateMachine::trim() {
+  if (!trim_retry_handler_) {
+    trim_retry_handler_ = std::make_unique<TrimRSMRetryHandler>(
+        delta_log_id_, snapshot_log_id_, rsm_type_);
+  }
+  trim_retry_handler_->trim(settings_->maintenance_log_retention);
+  return;
+}
+
+void ClusterMaintenanceStateMachine::trimNotSnapshotted(lsn_t lsn) {
+  // This should not be called on a snapshotted event log.
+  ld_check(snapshot_log_id_ == LOGID_INVALID);
+
+  if (settings_->disable_maintenance_log_trimming) {
+    return;
+  }
+
+  ld_info("Trimming maintenance log up to lsn %s", lsn_to_string(lsn).c_str());
+
+  auto on_trimmed = [lsn](Status status) {
+    if (status != E::OK) {
+      ld_error("Could not trim event log: %s (%s)",
+               error_name(status),
+               error_description(status));
+    } else {
+      ld_info("Successfully Trimmed maintenance log up to lsn %s",
+              lsn_to_string(lsn).c_str());
+    }
+  };
+
+  auto trimreq = std::make_unique<TrimRequest>(
+      nullptr, delta_log_id_, lsn, std::chrono::seconds(10), on_trimmed);
+  trimreq->bypassWriteTokenCheck();
+
+  std::unique_ptr<Request> req(std::move(trimreq));
+  Worker::onThisThread()->processor_->postWithRetrying(req);
 }
 
 Request::Execution StartClusterMaintenanceStateMachineRequest::execute() {

@@ -1118,6 +1118,12 @@ STAT_DEFINE(eventlog_snapshotting_errors, SUM)
 // Size of the event log snapshot
 STAT_DEFINE(eventlog_snapshot_size, MAX)
 
+// Size of the maintenance log snapshot
+STAT_DEFINE(maintenance_log_snapshot_size, MAX)
+
+// Maintenance log RSM snapshotting errors
+STAT_DEFINE(maintenance_log_snapshotting_errors, SUM)
+
 STAT_DEFINE(metadata_log_nodeset_selection_failed, SUM)
 
 // Server message handler
