@@ -112,6 +112,10 @@ class MaintenanceManagerDependencies {
     return admin_settings_.get();
   }
 
+  virtual StatsHolder* getStats() const {
+    return Worker::stats();
+  }
+
  private:
   // Handle to processor for getting the NodesConfig
   Processor* processor_;
@@ -308,6 +312,9 @@ class MaintenanceManager : public SerialWorkContext {
   ShardWorkflow* FOLLY_NULLABLE getActiveShardWorkflow(ShardID shard) const;
   SequencerWorkflow* FOLLY_NULLABLE
   getActiveSequencerWorkflow(node_index_t node) const;
+  // A timer that schedules work periodically to check if metadata nodeset
+  // needs to be adjusted and if yes, requests membership update
+  std::unique_ptr<Timer> metadata_nodeset_monitor_timer_;
 
  private:
   std::unique_ptr<MaintenanceManagerDependencies> deps_;
@@ -541,6 +548,10 @@ class MaintenanceManager : public SerialWorkContext {
   // and updates the status of workflows accordingly
   void processSafetyCheckResult(SafetyCheckScheduler::Result result);
 
+  // A helper method to request a NC update if metadata nodeset
+  // needs to be updated
+  void updateMetadataNodesetIfRequired();
+
   // Indicates the current status of this MaintenanceManager
   MMStatus status_{MMStatus::NOT_STARTED};
 
@@ -571,6 +582,13 @@ class MaintenanceManager : public SerialWorkContext {
   // what is in processor until `evaluate` called again
   std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes_config_;
 
+  virtual std::unique_ptr<Timer>
+  createMetadataNodesetMonitorTimer(std::function<void()> cb);
+
+  virtual void activateMetadataNodesetMonitorTimer();
+
+  virtual void cancelMetadataNodesetMonitorTimer();
+
   // Latest safety check results
   // Updated every time `evaluate` is called
   folly::F14NodeMap<GroupID, Impact> unsafe_groups_;
@@ -583,6 +601,8 @@ class MaintenanceManager : public SerialWorkContext {
   // metadata has now been trimmed but there is no new state change
   // to trigger the re-evaluation)
   std::unique_ptr<Timer> reevaluation_timer_;
+
+  bool metadata_nodeset_update_in_flight_{false};
 
   virtual void activateReevaluationTimer();
 

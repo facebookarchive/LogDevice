@@ -14,6 +14,7 @@ sidebar_label: Settings
 | enable-safety-check-periodic-metadata-update | Safety check to update its metadata cache periodically | false | server&nbsp;only |
 | maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | false | server&nbsp;only |
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
+| maintenance-manager-metadata-nodeset-update-period | The period of how often to check if metadata nodeset update is required | 2min | server&nbsp;only |
 | maintenance-manager-reevaluation-timeout | Timeout after which a new run is scheduled in MaintenanceManager. Used for periodic reevaluation of the state in the absence of any state changes | 2min | server&nbsp;only |
 | read-metadata-from-sequencers | Safety checker to read the metadata of logs directly from sequencers. | true | server&nbsp;only |
 | safety-check-failure-sample-size | The number of sample epochs returned by the Maintenance API for each maintenance if safety check blocks the operation. | 10 | server&nbsp;only |

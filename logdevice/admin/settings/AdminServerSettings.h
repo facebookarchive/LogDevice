@@ -50,6 +50,10 @@ struct AdminServerSettings : public SettingsBundle {
   // MaintenanceManager
   std::chrono::milliseconds maintenance_manager_reevaluation_timeout;
 
+  // How often to check if Metadata Nodeset needs to be updated
+  std::chrono::milliseconds maintenance_manager_metadata_nodeset_update_period;
+  ;
+
  private:
   // Only UpdateableSettings can create this bundle.
   AdminServerSettings() {}

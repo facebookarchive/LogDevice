@@ -132,6 +132,20 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::AdminAPI)
 
+    ("maintenance-manager-metadata-nodeset-update-period",
+     &maintenance_manager_metadata_nodeset_update_period,
+     "2min",
+     [](std::chrono::milliseconds val) -> void {
+       if (val.count() <= 0) {
+         throw boost::program_options::error(
+           "maintenance-manager-metadata-nodeset-update-period must be positive"
+         );
+       }
+     },
+     "The period of how often to check if metadata nodeset update is required",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
     ("enable-safety-check-periodic-metadata-update",
      &enable_safety_check_periodic_metadata_update,
      "false",

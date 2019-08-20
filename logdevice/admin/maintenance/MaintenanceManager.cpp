@@ -8,10 +8,13 @@
 
 #include "logdevice/admin/maintenance/MaintenanceManager.h"
 
+#include <iterator>
+
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/Conv.h"
+#include "logdevice/admin/MetadataNodesetSelector.h"
 #include "logdevice/admin/maintenance/APIUtils.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
@@ -236,9 +239,36 @@ void MaintenanceManager::startInternal() {
   nodes_config_ = deps_->getNodesConfiguration();
   // Invalid promise
   shutdown_promise_ = folly::Promise<folly::Unit>::makeEmpty();
+  metadata_nodeset_monitor_timer_ = createMetadataNodesetMonitorTimer([this]() {
+    if (!shouldStopProcessing()) {
+      updateMetadataNodesetIfRequired();
+      activateMetadataNodesetMonitorTimer();
+    }
+  });
   ld_info("Starting Maintenance Manager");
   status_ = MMStatus::STARTING;
   ld_info("Updated MaintenanceManager status to STARTING");
+}
+
+std::unique_ptr<Timer> MaintenanceManager::createMetadataNodesetMonitorTimer(
+    std::function<void()> cb) {
+  ld_check(!metadata_nodeset_monitor_timer_);
+  return std::make_unique<Timer>(cb);
+}
+
+void MaintenanceManager::activateMetadataNodesetMonitorTimer() {
+  ld_check(metadata_nodeset_monitor_timer_);
+  if (!metadata_nodeset_monitor_timer_->isActive()) {
+    metadata_nodeset_monitor_timer_->activate(
+        deps_->settings()->maintenance_manager_metadata_nodeset_update_period);
+    ld_debug("Periodic metadata nodeset monitor timer activated");
+  }
+}
+
+void MaintenanceManager::cancelMetadataNodesetMonitorTimer() {
+  if (metadata_nodeset_monitor_timer_) {
+    metadata_nodeset_monitor_timer_->cancel();
+  }
 }
 
 void MaintenanceManager::activateReevaluationTimer() {
@@ -271,6 +301,7 @@ folly::SemiFuture<folly::Unit> MaintenanceManager::stop() {
 void MaintenanceManager::stopInternal() {
   deps_->stopSubscription();
   cancelReevaluationTimer();
+  cancelMetadataNodesetMonitorTimer();
   if (status_ == MMStatus::STARTING ||
       status_ == MMStatus::AWAITING_STATE_CHANGE) {
     // We are waiting for a subscription callback to happen or
@@ -296,6 +327,9 @@ void MaintenanceManager::scheduleRun() {
     ld_info("Initial state available: last_cms_version:%s, last_ers_version:%s",
             lsn_to_string(last_cms_version_).c_str(),
             lsn_to_string(last_ers_version_).c_str());
+    // Given that we have an initial state, we can start monotoring the
+    // metadata nodeset if any update is required
+    activateMetadataNodesetMonitorTimer();
     evaluate();
   } else if (status_ == MMStatus::AWAITING_STATE_CHANGE) {
     evaluate();
@@ -1117,6 +1151,91 @@ MaintenanceManager::augmentWithProgressInfo(
         }
         return input;
       });
+}
+
+void MaintenanceManager::updateMetadataNodesetIfRequired() {
+  if (metadata_nodeset_update_in_flight_) {
+    RATELIMIT_INFO(
+        std::chrono::seconds(1),
+        1,
+        "Metadata Nodeset update is in flight. Not performing another check");
+    return;
+  }
+
+  auto result = MetadataNodeSetSelector::getNodeSet(
+      nodes_config_, {} /*no nodes to exclude explicitly*/);
+
+  if (result.hasError()) {
+    ld_error("Metatadata log NodeSet selection failed");
+    STAT_INCR(deps_->getStats(), metadata_log_nodeset_selection_failed);
+    return;
+  }
+
+  ld_check(result.hasValue());
+  auto current_nodeset =
+      nodes_config_->getStorageMembership()->getMetaDataNodeSet();
+  std::vector<node_index_t> nodes_to_promote;
+  std::set_difference(
+      result.value().begin(),
+      result.value().end(),
+      current_nodeset.begin(),
+      current_nodeset.end(),
+      std::inserter(nodes_to_promote, nodes_to_promote.begin()));
+
+  ld_spew("Metadata nodeset selector result::%s, current metadata nodeset:%s",
+          toString(result.value()).c_str(),
+          toString(current_nodeset).c_str());
+
+  if (nodes_to_promote.empty()) {
+    ld_debug("No change in metadata log nodeset required");
+    return;
+  }
+
+  auto storage_membership_update =
+      std::make_unique<membership::StorageMembership::Update>(
+          nodes_config_->getStorageMembership()->getVersion());
+
+  for (auto nid : nodes_to_promote) {
+    auto shard_states =
+        nodes_config_->getStorageMembership()->getShardStates(nid);
+    for (const auto& kv : shard_states) {
+      ShardID shard = ShardID(nid, kv.first);
+      if (!nodes_config_->getStorageMembership()->canWriteToShard(shard)) {
+        ld_critical(
+            "MetadataNodesetSelector returned a node that is not writable to "
+            "be promoted to "
+            "a METADATA. ShardID:%s, Current storage membership version:%s",
+            toString(shard).c_str(),
+            toString(nodes_config_->getStorageMembership()->getVersion())
+                .c_str());
+        return;
+      }
+      // We should only be prmoting non-metadata shards to metadata. If a shard
+      // of a node was already a metadata, it should not be in the
+      // nodes_to_promote
+      ld_check(kv.second.metadata_state !=
+               membership::MetaDataStorageState::METADATA);
+      membership::ShardState::Update shard_state_update;
+      shard_state_update.transition =
+          membership::StorageStateTransition::PROMOTING_METADATA_SHARD;
+      shard_state_update.conditions =
+          getCondition(shard, shard_state_update.transition);
+      auto rv = storage_membership_update->addShard(shard, shard_state_update);
+      ld_check(rv == 0);
+    }
+  }
+
+  std::unique_ptr<configuration::nodes::StorageConfig::Update>
+      storage_config_update =
+          std::make_unique<configuration::nodes::StorageConfig::Update>();
+  storage_config_update->membership_update =
+      std::move(storage_membership_update);
+
+  metadata_nodeset_update_in_flight_ = true;
+  std::move(deps_->postNodesConfigurationUpdate(
+                std::move(storage_config_update), nullptr))
+      .via(this)
+      .thenValue([&](auto&&) { metadata_nodeset_update_in_flight_ = false; });
 }
 
 folly::SemiFuture<NCUpdateResult>

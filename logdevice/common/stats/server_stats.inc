@@ -1118,6 +1118,8 @@ STAT_DEFINE(eventlog_snapshotting_errors, SUM)
 // Size of the event log snapshot
 STAT_DEFINE(eventlog_snapshot_size, MAX)
 
+STAT_DEFINE(metadata_log_nodeset_selection_failed, SUM)
+
 // Server message handler
 // skip permission
 STAT_DEFINE(server_message_dispatch_skip_permission, SUM)
