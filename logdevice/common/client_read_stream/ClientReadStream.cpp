@@ -1526,7 +1526,7 @@ void ClientReadStream::findGapsAndRecords(bool grace_period_expired,
   }
 
   if (scd_->isActive()) {
-    scd_->checkNeedsFailoverToAllSendAll();
+    scd_->checkNeedsRewindIfEveryoneSentGapOrIsFilteredOut();
   }
 }
 
@@ -1673,25 +1673,17 @@ ClientReadStream::checkFMajority(bool grace_period_expired) const {
   // and can't afford to do too many rewinds in ALL SEND ALL mode when there is
   // data loss.
   if (scd_->isActive()) {
-    if (fmajority_result == FmajorityResult::NON_AUTHORITATIVE ||
-        fmajority_result == FmajorityResult::AUTHORITATIVE_COMPLETE) {
-      if (scd_->getUnderReplicatedShardsNotBlacklisted() != 0) {
-        // Some nodes reported underreplication, but we optimistically didn't
-        // add them to known down list, in hopes that we'll get through the
-        // underreplicated region without encountering gaps. Now we didn
-        // encounter a gap and have to add the underreplicated shards to known
-        // down list and rewind.
-        return ProgressDecision::ADD_TO_KNOWN_DOWN_AND_REWIND;
-      }
-      if (deps_->getSettings().read_stream_guaranteed_delivery_efficiency) {
-        // We've heard from all shards and no one had a record for current LSN
-        // that would pass SCD filter. Normally we would rewind to all send all
-        // mode in this situation, in case the record is underreplicated or has
-        // inconsistent copyset. But in
-        // read_stream_guaranteed_delivery_efficiency we just ship the gap
-        // because rewinds are slow.
-        return ProgressDecision::ISSUE_GAP;
-      }
+    if (deps_->getSettings().read_stream_guaranteed_delivery_efficiency &&
+        (fmajority_result == FmajorityResult::NON_AUTHORITATIVE ||
+         fmajority_result == FmajorityResult::AUTHORITATIVE_COMPLETE) &&
+        scd_->getUnderReplicatedShardsNotBlacklisted() == 0) {
+      // We've heard from all shards and no one had a record for current LSN
+      // that would pass SCD filter. Normally we would rewind to all send all
+      // mode in this situation, in case the record is underreplicated or has
+      // inconsistent copyset. But in
+      // read_stream_guaranteed_delivery_efficiency we just ship the gap
+      // because rewinds are slow.
+      return ProgressDecision::ISSUE_GAP;
     }
     return ProgressDecision::WAIT;
   }
@@ -1743,11 +1735,6 @@ int ClientReadStream::detectGap(bool grace_period_expired) {
 
   if (decision == ProgressDecision::WAIT) {
     // Not enough shards chimed in, we should wait.
-    return -1;
-  }
-
-  if (decision == ProgressDecision::ADD_TO_KNOWN_DOWN_AND_REWIND) {
-    promoteUnderreplicatedShardsToKnownDown();
     return -1;
   }
 
@@ -1890,28 +1877,6 @@ bool ClientReadStream::shouldRewindWhenDataLoss() {
     }
   }
   return false;
-}
-
-void ClientReadStream::promoteUnderreplicatedShardsToKnownDown() {
-  bool added = false;
-  for (auto& it : storage_set_states_) {
-    SenderState& state = it.second;
-    if (state.getGapState() == GapState::UNDER_REPLICATED &&
-        !state.should_blacklist_as_under_replicated) {
-      WORKER_STAT_INCR(scd_shard_underreplicated_region_promoted);
-      state.should_blacklist_as_under_replicated = true;
-      added |= scd_->addToShardsDownAndScheduleRewind(
-          state.getShardID(),
-          RewindReason::UNDER_REPLICATED_REGION,
-          folly::sformat("{} added to known down list because it has an "
-                         "under replicated region",
-                         state.getShardID().toString()));
-      ;
-    }
-  }
-  ld_check(added);
-
-  checkConsistency();
 }
 
 int ClientReadStream::handleGap(lsn_t gap_lsn) {
@@ -3095,9 +3060,6 @@ int ClientReadStream::handleRecord(RecordState* rstate,
         }
         break;
       }
-      case ADD_TO_KNOWN_DOWN_AND_REWIND:
-        promoteUnderreplicatedShardsToKnownDown();
-        return -1;
       default:
         ld_check(false);
     }

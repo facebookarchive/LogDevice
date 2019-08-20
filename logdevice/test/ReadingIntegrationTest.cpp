@@ -1433,6 +1433,221 @@ TEST_P(ReadingIntegrationTest,
   EXPECT_EQ(num_records_read, 2) << "Unexpected number of records read";
 }
 
+TEST_P(ReadingIntegrationTest, UnderreplicatedRegion) {
+  // N0 is sequencer-only. Storage nodes N1, N2, N3. Replication factor 3.
+  auto cluster =
+      clusterFactory()
+          .setLogAttributes(logsconfig::DefaultLogAttributes()
+                                .with_scdEnabled(true)
+                                .with_replicationFactor(3))
+          // We won't actually rebuild anything, but disable-rebuilding=false is
+          // required for the dirtiness-related admin commands.
+          .setParam("--disable-rebuilding", "false")
+          // When we mark shards dirty, we want them to stay dirty rather than
+          // being quickly rebuilt and marked clean again.
+          .setParam("--test-stall-rebuilding", "true")
+          // Give each record a randomly shuffled copyset to hit all
+          // permutations.
+          .setParam("--enable-sticky-copysets", "false")
+          .setNumDBShards(1)
+          .create(4);
+  auto client = cluster->createClient();
+
+  // We need at least one record to have a specific order of nodes in the
+  // copyset. Each appended record gets a randomly shuffled copyset. Append 100
+  // records to cover all 6 permutations with high probability.
+  const int NRECORDS = 100;
+  std::vector<lsn_t> lsns;
+  ld_info("Writing.");
+  while (lsns.size() < NRECORDS) {
+    std::string payload = "pikachu" + std::to_string(lsns.size());
+    lsn_t lsn =
+        client->appendSync(logid_t(1), Payload(payload.data(), payload.size()));
+    ASSERT_NE(LSN_INVALID, lsn);
+    if (!lsns.empty()) {
+      EXPECT_GT(lsn, lsns.back());
+      if (lsn > lsns.back() + 1) {
+        ld_info("Got nonconsecutive LSNs for consecutive appends: %s and %s",
+                lsn_to_string(lsns.back()).c_str(),
+                lsn_to_string(lsn).c_str());
+
+        // Got records in different epochs.
+        // TODO (#52751852):
+        //   Currently a bug in ClientReadStream makes it always rewind to
+        //   ALL_SEND_ALL when switching to a new epoch. This breaks this test.
+        //   To work around it, we append until we get all NRECORDS records in
+        //   the same epoch. After it's fixed, remove the next line.
+        lsns.clear();
+      }
+    }
+    if (lsns.empty()) {
+      ld_info("First lsn: %s", lsn_to_string(lsn).c_str());
+    }
+    lsns.push_back(lsn);
+  }
+
+  auto fetch_stats = [&]() -> Stats {
+    return dynamic_cast<ClientImpl*>(client.get())->stats()->aggregate();
+  };
+  auto reset_stats = [&] {
+    dynamic_cast<ClientImpl*>(client.get())->stats()->reset();
+  };
+  // Checks if the output of admin command "rebuilding write_checkpoint" or
+  // "rebuilding mark_dirty" seems to indicate success.
+  auto command_ok = [](std::string output) {
+    // These admin commands output a few lines of human-readable things like
+    // "Clearing dirty ranges and writting checkpoint for shard %u...",
+    // followed by two lines "Done." and "END".
+    const std::string expected = "Done.\r\nEND\r\n";
+    return output.size() >= expected.size() &&
+        output.substr(output.size() - expected.size()) == expected;
+  };
+
+  auto read_everything = [&] {
+    auto reader = client->createReader(1);
+    reader->startReading(logid_t(1), lsns.at(0), lsns.back());
+    int i = 0;
+    while (i < NRECORDS) {
+      ASSERT_TRUE(reader->isReadingAny());
+      std::vector<std::unique_ptr<DataRecord>> recs;
+      GapRecord gap;
+      ssize_t n = reader->read(10, &recs, &gap);
+      if (n >= 0) {
+        ASSERT_EQ(n, recs.size());
+        for (size_t j = 0; j < n; ++j) {
+          EXPECT_EQ(lsns.at(i), recs.at(j)->attrs.lsn);
+          // TODO (#52751852): When gapless reading is fixed, remove the `if`
+          //                   and do the EXPECT_EQ unconditionally.
+          if (i != 0) {
+            EXPECT_EQ(
+                "pikachu" + std::to_string(i), recs.at(j)->payload.toString());
+          }
+          ++i;
+        }
+      } else {
+        ASSERT_EQ(E::GAP, err);
+        ASSERT_NE(gap.type, GapType::DATALOSS);
+        ASSERT_TRUE(gap.type == GapType::BRIDGE || gap.type == GapType::HOLE);
+      }
+    }
+    ASSERT_FALSE(reader->isReadingAny());
+  };
+
+  // Make sure we can read everything back.
+  ld_info("Reading (1).");
+  read_everything();
+  Stats s = fetch_stats();
+  EXPECT_EQ(NRECORDS, s.records_delivered_scd);
+  EXPECT_EQ(0, s.records_delivered_noscd);
+  EXPECT_EQ(0, s.scd_shard_underreplicated_region_entered);
+  EXPECT_EQ(0, s.scd_shard_underreplicated_region_promoted);
+  EXPECT_EQ(0, s.scd_shard_down_added);
+  EXPECT_EQ(0, s.scd_shard_slow_added);
+  EXPECT_EQ(0, s.rewind_scheduled);
+  EXPECT_EQ(0, s.rewind_scheduled);
+  EXPECT_EQ(0, s.rewind_done);
+  reset_stats();
+
+  // Mark everything on N1 as underreplicated region. This simulates losing
+  // unrelated memtables (i.e. for different logs) in a crash.
+  ld_info("Dirtiying N1.");
+  std::string out = cluster->getNode(1).sendCommand(
+      "rebuilding mark_dirty --time-from=-inf --time-to=+inf");
+  EXPECT_TRUE(command_ok(out)) << out;
+
+  // Read and check that there were no rewinds since no relevant record copies
+  // are actually lost.
+  ld_info("Reading (2).");
+  read_everything();
+  s = fetch_stats();
+  EXPECT_EQ(NRECORDS, s.records_delivered_scd);
+  EXPECT_EQ(0, s.records_delivered_noscd);
+  // Each gap is counted as separate underreplicated region, so there are much
+  // more than one.
+  EXPECT_GE(s.scd_shard_underreplicated_region_entered, 1);
+  EXPECT_EQ(0, s.scd_shard_underreplicated_region_promoted);
+  EXPECT_EQ(0, s.scd_shard_down_added);
+  EXPECT_EQ(0, s.scd_shard_slow_added);
+  EXPECT_EQ(0, s.rewind_scheduled);
+  EXPECT_EQ(0, s.rewind_done);
+  reset_stats();
+
+  // Stop another node and check that we still read everything without
+  // blacklisting the underreplicated node, but with one rewind to blacklist the
+  // down node.
+  ld_info("Stopping N2.");
+  cluster->getNode(2).shutdown();
+
+  ld_info("Reading (3).");
+  read_everything();
+  s = fetch_stats();
+  EXPECT_EQ(NRECORDS, s.records_delivered_scd);
+  EXPECT_EQ(0, s.records_delivered_noscd);
+  EXPECT_GE(s.scd_shard_underreplicated_region_entered, 1);
+  EXPECT_EQ(0, s.scd_shard_underreplicated_region_promoted);
+  EXPECT_EQ(1, s.scd_shard_down_added);
+  EXPECT_EQ(0, s.scd_shard_slow_added);
+  EXPECT_EQ(1, s.rewind_scheduled);
+  EXPECT_EQ(1, s.rewind_done);
+  reset_stats();
+
+  // Start N2 again.
+  ld_info("Starting N2.");
+  cluster->start({2});
+  // Create a new client to reset its connections, cluster state cache and
+  // whatnot.
+  client.reset();
+  client = cluster->createClient();
+
+  // Simulate N1 losing all records and turning into one big unrerreplicated
+  // region (but not a full-node rebuilding!).
+  ld_info("Wiping and dirtying N1.");
+  cluster->getNode(1).shutdown();
+  cluster->getNode(1).wipeShard(0);
+  cluster->start({1});
+  out = cluster->getNode(1).sendCommand("rebuilding write_checkpoint");
+  EXPECT_TRUE(command_ok(out)) << out;
+  out = cluster->getNode(1).sendCommand(
+      "rebuilding mark_dirty --time-from=-inf --time-to=+inf");
+  EXPECT_TRUE(command_ok(out)) << out;
+
+  // This time we should actually rewind, but only once, and stay in scd mode.
+  ld_info("Reading (4).");
+  read_everything();
+  s = fetch_stats();
+  EXPECT_EQ(NRECORDS, s.records_delivered_scd);
+  EXPECT_EQ(0, s.records_delivered_noscd);
+  EXPECT_EQ(1, s.scd_shard_underreplicated_region_entered);
+  EXPECT_EQ(1, s.scd_shard_underreplicated_region_promoted);
+  EXPECT_EQ(1, s.scd_shard_down_added);
+  EXPECT_EQ(0, s.scd_shard_slow_added);
+  EXPECT_EQ(1, s.rewind_scheduled);
+  EXPECT_EQ(1, s.rewind_done);
+  reset_stats();
+
+  // Stop N2. Now reader will do two rewinds: one to blacklist N2, one to
+  // promote N1 to blacklist.
+  ld_info("Stopping N2 again.");
+  cluster->getNode(2).shutdown();
+
+  ld_info("Reading (5).");
+  read_everything();
+  s = fetch_stats();
+  EXPECT_EQ(NRECORDS, s.records_delivered_scd);
+  EXPECT_EQ(0, s.records_delivered_noscd);
+  // We may or may not get UNDER_REPLICATED gap for N1 before the first rewind.
+  EXPECT_GE(s.scd_shard_underreplicated_region_entered, 1);
+  EXPECT_LE(s.scd_shard_underreplicated_region_entered, 2);
+  EXPECT_EQ(1, s.scd_shard_underreplicated_region_promoted);
+  EXPECT_EQ(2, s.scd_shard_down_added);
+  EXPECT_EQ(0, s.scd_shard_slow_added);
+  EXPECT_EQ(2, s.rewind_scheduled);
+  EXPECT_EQ(2, s.rewind_done);
+  reset_stats();
+
+  ld_info("Done.");
+}
+
 INSTANTIATE_TEST_CASE_P(ReadingIntegrationTest,
                         ReadingIntegrationTest,
                         ::testing::Values(false, true));

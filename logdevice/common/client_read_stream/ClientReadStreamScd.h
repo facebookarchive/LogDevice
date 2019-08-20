@@ -52,10 +52,10 @@ enum class RewindReason : uint8_t;
  *       There are different failover and recovery scenarios that we handle:
  *
  *       1. Immediate failover to ALL_SEND_ALL due to missing records.
- *          checkNeedsFailoverToAllSendAll() is the method that verifies if
- *          there is a reason to immediately switch to ALL_SEND_ALL mode. This
- *          function is called each time a gap or record is received.
- *          If at some point the number of shards that can't send
+ *          checkNeedsRewindIfEveryoneSentGapOrIsFilteredOut() is the method
+ *          that verifies if there is a reason to immediately switch to
+ *          ALL_SEND_ALL mode. This function is called each time a gap or record
+ *          is received. If at some point the number of shards that can't send
  *          next_lsn_to_deliver_ is measured to be equal to readSetSize(), we do
  *          the failover because this means that the storage shard that is
  *          supposed to send next_lsn_to_deliver_ does not have it or thinks
@@ -172,9 +172,16 @@ class ClientReadStreamScd : public boost::noncopyable {
                             std::string reason_str);
 
   /**
+   * Add shards with GapState::UNDER_REPLICATED to scd known down list and
+   * schedule rewind.
+   */
+  void promoteUnderreplicatedShardsToKnownDown();
+
+  /**
    * When in SCD mode, check how many shards do not have the next record to be
    * shipped. If this number is equal to the number of shards we are reading
-   * from, failover to all send all mode.
+   * from, either fail over to all send all mode or promote underreplicated
+   * shards to known down list and rewind.
    *
    * Called when:
    * - the cluster is shrunk (@see noteShardsRemovedFromConfig);
@@ -183,7 +190,7 @@ class ClientReadStreamScd : public boost::noncopyable {
    *
    * @return true If we failed over to all send all mode, false otherwise.
    */
-  bool checkNeedsFailoverToAllSendAll();
+  bool checkNeedsRewindIfEveryoneSentGapOrIsFilteredOut();
 
   /**
    * Check if the given shard was in the shards down list and has been sending
@@ -279,6 +286,13 @@ class ClientReadStreamScd : public boost::noncopyable {
   nodeset_size_t getUnderReplicatedShardsNotBlacklisted() const {
     return under_replicated_shards_not_blacklisted_;
   }
+
+  /**
+   * Returns true if each sender is either in filtered out list (down or slow),
+   * or in GapState::GAP, or in GapState::UNDER_REPLICATED.
+   * In such situation we usually want to rewind or ship a data loss gap.
+   */
+  bool everyoneSentGapOrIsFilteredOut() const;
 
  private:
   // ClientReadStream that owns us.

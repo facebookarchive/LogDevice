@@ -2793,8 +2793,6 @@ TEST_P(ClientReadStreamTest, ScdFailoverToAllSendAll2) {
   onDataRecord(N3, mockRecord(lsn(1, 5)));
   onDataRecord(N3, mockRecord(lsn(1, 6)));
   ASSERT_RECV(lsn(1, 1), lsn(1, 2), lsn(1, 3));
-  // N0 is in known down but it starts coming back and sends a record anyway.
-  onDataRecord(N0, mockRecord(lsn(1, 8)));
 
   // N0, N1 are in the known down list, N3 sent a gap. However, N2 still has not
   // sent a gap and may still be able to send lsn 4. We should not yet failover

@@ -18,6 +18,8 @@
 
 namespace facebook { namespace logdevice {
 
+using GapState = ClientReadStreamSenderState::GapState;
+
 ClientReadStreamScd::ClientReadStreamScd(ClientReadStream* owner, Mode mode)
     : owner_(owner),
       mode_(mode),
@@ -411,17 +413,27 @@ void ClientReadStreamScd::scheduleRewindToMode(Mode mode,
   owner_->scheduleRewind(reason, std::move(reason_str));
 }
 
-bool ClientReadStreamScd::checkNeedsFailoverToAllSendAll() {
+bool ClientReadStreamScd::everyoneSentGapOrIsFilteredOut() const {
+  const size_t gap_shards_total = owner_->numShardsInState(GapState::GAP) +
+      owner_->numShardsInState(GapState::UNDER_REPLICATED) +
+      getFilteredOut().size() - gap_shards_filtered_out_;
+
+  ld_check(gap_shards_total <= owner_->readSetSize());
+  return gap_shards_total >= owner_->readSetSize();
+}
+
+bool ClientReadStreamScd::checkNeedsRewindIfEveryoneSentGapOrIsFilteredOut() {
   ld_check(isActive());
   if (owner_->done()) {
     return false;
   }
 
-  if (scheduledTransitionTo(Mode::ALL_SEND_ALL)) {
+  if (owner_->rewindScheduled()) {
     return false;
   }
 
-  if (owner_->deps_->getSettings().read_stream_guaranteed_delivery_efficiency) {
+  if (owner_->deps_->getSettings().read_stream_guaranteed_delivery_efficiency &&
+      under_replicated_shards_not_blacklisted_ == 0) {
     // When read_stream_guaranteed_delivery_efficiency setting is in use, don't
     // failover to ALL_SEND_ALL mode here.
     return false;
@@ -446,36 +458,58 @@ bool ClientReadStreamScd::checkNeedsFailoverToAllSendAll() {
   // the filtered_out_ list and numShardsInState(*).
   // Note that it is expected that all shards in EMPTY or REBUILDING state are
   // in filtered_out_.
-  using GapState = ClientReadStreamSenderState::GapState;
-  const size_t gap_shards_total = owner_->numShardsInState(GapState::GAP) +
-      owner_->numShardsInState(GapState::UNDER_REPLICATED) +
-      getFilteredOut().size() - gap_shards_filtered_out_;
 
-  ld_check(gap_shards_total <= owner_->readSetSize());
-  if (gap_shards_total >= owner_->readSetSize() &&
-      under_replicated_shards_not_blacklisted_ == 0) {
-    // All shards reported that they don't have the next record or are in the
-    // filtered out list. Failover to all send all mode.
-    // Note that some shards might have been filtered out because they were
-    // slow, so we could first rewind in SCD mode with the slow shards list
-    // cleared and only afterwards failover to ALL_SEND_ALL if we are still
-    // not making progress. However doing this requires more bookkeeping, and
-    // this is a possible optimization to consider in the future..
-    std::string reason =
-        folly::format(
-            "All storage shards are either in the filtered out list or "
-            "sent a gap/record with lsn > next_lsn_to_deliver_. "
-            "Shards down list = {}. Shards slow list = {}. {}",
-            toString(getShardsDown()).c_str(),
-            toString(getShardsSlow()).c_str(),
-            owner_->getDebugInfoStr().c_str())
-            .str();
-    scheduleRewindToMode(
-        Mode::ALL_SEND_ALL, RewindReason::ALL_SHARDS_DOWN, reason);
+  if (everyoneSentGapOrIsFilteredOut()) {
+    // All shards are either in filtered out list or reported that they don't
+    // have the next record. We probably won't be able to make progress without
+    // a rewind, so let's rewind.
+    if (under_replicated_shards_not_blacklisted_ != 0) {
+      // Some of the non-filtered-out shards said they may have lost the record
+      // (GapState::UNDER_REPLICATED). Add them to filtered out list and rewind.
+      promoteUnderreplicatedShardsToKnownDown();
+    } else {
+      // Failover to all send all mode.
+      // Note that some shards might have been filtered out because they were
+      // slow, so we could first rewind in SCD mode with the slow shards list
+      // cleared and only afterwards failover to ALL_SEND_ALL if we are still
+      // not making progress. However doing this requires more bookkeeping, and
+      // this is a possible optimization to consider in the future..
+      std::string reason =
+          folly::format(
+              "All storage shards are either in the filtered out list or "
+              "sent a gap/record with lsn > next_lsn_to_deliver_. "
+              "Shards down list = {}. Shards slow list = {}. {}",
+              toString(getShardsDown()).c_str(),
+              toString(getShardsSlow()).c_str(),
+              owner_->getDebugInfoStr().c_str())
+              .str();
+      scheduleRewindToMode(
+          Mode::ALL_SEND_ALL, RewindReason::ALL_SHARDS_DOWN, reason);
+    }
     return true;
   }
 
   return false;
+}
+
+void ClientReadStreamScd::promoteUnderreplicatedShardsToKnownDown() {
+  ld_check(under_replicated_shards_not_blacklisted_ > 0);
+  bool added = false;
+  for (auto& it : owner_->storage_set_states_) {
+    ClientReadStreamSenderState& state = it.second;
+    if (state.getGapState() == GapState::UNDER_REPLICATED &&
+        !state.should_blacklist_as_under_replicated) {
+      WORKER_STAT_INCR(scd_shard_underreplicated_region_promoted);
+      state.should_blacklist_as_under_replicated = true;
+      added |= addToShardsDownAndScheduleRewind(
+          state.getShardID(),
+          RewindReason::UNDER_REPLICATED_REGION,
+          folly::sformat("{} added to known down list because it has an "
+                         "under replicated region",
+                         state.getShardID().toString()));
+    }
+  }
+  ld_check(added);
 }
 
 void ClientReadStreamScd::scheduleRewindIfShardBackUp(
@@ -605,7 +639,7 @@ bool ClientReadStreamScd::maybeRewindAfterShardsUpdated(bool shards_changed) {
   // ClientReadStream updated the nodes in GAP and UNDER_REPLICATED gap states.
   // If the conditions needed to switch to all send all mode are now held,
   // switch now.
-  if (checkNeedsFailoverToAllSendAll()) {
+  if (checkNeedsRewindIfEveryoneSentGapOrIsFilteredOut()) {
     return true;
   }
 
@@ -645,7 +679,6 @@ bool ClientReadStreamScd::addToShardsDownAndScheduleRewind(
 void ClientReadStreamScd::onSenderGapStateChanged(
     ClientReadStreamSenderState& state,
     ClientReadStreamSenderState::GapState prev_gap_state) {
-  using GapState = ClientReadStreamSenderState::GapState;
   if (state.blacklist_state ==
       ClientReadStreamSenderState::BlacklistState::NONE) {
     bool was_ur = prev_gap_state == GapState::UNDER_REPLICATED;

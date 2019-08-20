@@ -854,8 +854,6 @@ class ClientReadStream : boost::noncopyable {
                            // underreplicated data.
     ISSUE_GAP,             // We heard from enough shards, we can make a
                            // decision to issue a gap.
-    ADD_TO_KNOWN_DOWN_AND_REWIND // Blacklist shards that reported
-                                 // underreplication and rewind.
   };
 
   /**
@@ -1025,12 +1023,6 @@ class ClientReadStream : boost::noncopyable {
    * an f-majority of storage shards to not send a record.
    */
   bool shouldRewindWhenDataLoss();
-
-  /**
-   * Add shards with GapState::UNDER_REPLICATED to scd known down list and
-   * schedule rewind.
-   */
-  void promoteUnderreplicatedShardsToKnownDown();
 
   /**
    * Called when a gap [next_lsn_to_deliver_, gap_lsn) is detected. This method
