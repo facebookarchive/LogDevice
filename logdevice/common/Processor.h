@@ -453,7 +453,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   std::shared_ptr<Configuration> getConfig();
 
-  std::shared_ptr<UpdateableConfig> config_;
+  const std::shared_ptr<UpdateableConfig> config_;
 
   /**
    * Get resource token for a message coming into the system. If the token is

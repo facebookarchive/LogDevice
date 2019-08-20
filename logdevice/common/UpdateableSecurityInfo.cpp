@@ -115,7 +115,8 @@ void UpdateableSecurityInfo::dumpSecurityInfo() const {
 
 std::shared_ptr<PermissionChecker>
 UpdateableSecurityInfo::getPermissionChecker() {
-  if (getSecurityConfig().permissionCheckingEnabled()) {
+  auto cfg = processor_->config_->get();
+  if (cfg->serverConfig()->getSecurityConfig().permissionCheckingEnabled()) {
     return permission_checker_.get();
   } else {
     return nullptr;
@@ -124,12 +125,6 @@ UpdateableSecurityInfo::getPermissionChecker() {
 
 std::shared_ptr<PrincipalParser> UpdateableSecurityInfo::getPrincipalParser() {
   return principal_parser_.get();
-}
-
-const configuration::SecurityConfig&
-UpdateableSecurityInfo::getSecurityConfig() {
-  auto config = processor_->config_->get();
-  return config->serverConfig()->getSecurityConfig();
 }
 
 }} // namespace facebook::logdevice

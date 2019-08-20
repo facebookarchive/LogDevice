@@ -52,8 +52,6 @@ class UpdateableSecurityInfo {
 
   // comes last to ensure unsubscription before rest of destruction
   ConfigSubscriptionHandle config_update_sub_;
-
-  const configuration::SecurityConfig& getSecurityConfig();
 };
 
 }} // namespace facebook::logdevice
