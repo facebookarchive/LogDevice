@@ -25,13 +25,15 @@
 
 namespace facebook { namespace logdevice {
 
-ServerReadStream::ServerReadStream(read_stream_id_t id,
+ServerReadStream::ServerReadStream(const std::string& csid,
+                                   read_stream_id_t id,
                                    ClientID client_id,
                                    logid_t log_id,
                                    shard_index_t shard,
                                    StatsHolder* stats,
                                    std::shared_ptr<std::string> log_group_path)
-    : id_(id),
+    : csid_(csid),
+      id_(id),
       client_id_(client_id),
       log_id_(log_id),
       shard_(shard),
@@ -249,7 +251,9 @@ void ServerReadStream::getDebugInfo(InfoReadersTable& table) const {
       .set<10>(isCatchingUp())
       .set<11>(isPastWindow())
       .set<12>(known_down)
-      .set<13>(filter_version_.val());
+      .set<13>(filter_version_.val())
+      .set<23>(csid_)
+      .set<24>(id_.val());
 
   if (last_released_lsn.hasValue()) {
     table.set<9>(last_released_lsn.value());

@@ -74,6 +74,7 @@ std::pair<ServerReadStream*, bool>
 AllServerReadStreams::insertOrGet(ClientID client_id,
                                   logid_t log_id,
                                   shard_index_t shard,
+                                  const std::string& csid,
                                   read_stream_id_t read_stream_id) {
   std::shared_ptr<std::string> log_group_path;
   if (processor_) { // can be null in tests
@@ -82,7 +83,7 @@ AllServerReadStreams::insertOrGet(ClientID client_id,
     }
   }
   const auto insert_result = streams_.emplace(
-      read_stream_id, client_id, log_id, shard, stats_, log_group_path);
+      csid, read_stream_id, client_id, log_id, shard, stats_, log_group_path);
 
   if (insert_result.second) {
     // We actually inserted ...

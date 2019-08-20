@@ -437,6 +437,8 @@ Tracks all ServerReadStreams. A ServerReadStream is a stream of records sent by 
 | last\_enqueue\_time | time | Timestamp of when this ServerReadStream was last enqueued for processing. |
 | last\_batch\_started\_time | time | Timestamp of the last time we started reading a batch of records for this read stream. |
 | storage\_task\_in\_flight | int | True if there is currently a storage task running on a slow storage thread for reading a batch of records. |
+| csid | string | Client Session ID |
+| rsid | string | Read stream ID |
 
 ## record
 This table allows fetching information about individual record copies in the cluster.  The user must provide query constraints on the "log\_id" and "lsn" columns.  This table can be useful to introspect where copies of a record are stored and see their metadata.  Do not use it to serve production use cases as this query runs very inneficiently (it bypasses the normal read protocol and instead performs a point query on all storage nodes in the cluster).

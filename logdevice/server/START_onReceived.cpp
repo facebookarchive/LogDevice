@@ -343,8 +343,12 @@ Message::Disposition START_onReceived(START_Message* msg,
     }
   }
 
-  auto insert_result = w->serverReadStreams().insertOrGet(
-      from.id_.client_, header.log_id, shard_idx, header.read_stream_id);
+  auto insert_result =
+      w->serverReadStreams().insertOrGet(from.id_.client_,
+                                         header.log_id,
+                                         shard_idx,
+                                         *w->sender().getCSID(from),
+                                         header.read_stream_id);
   ServerReadStream* stream = insert_result.first;
   if (stream == nullptr) {
     // Failing to create a ServerReadStream means the server's data structures

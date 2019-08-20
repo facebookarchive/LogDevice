@@ -121,6 +121,7 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
   insertOrGet(ClientID client_id,
               logid_t log_id,
               shard_index_t shard,
+              const std::string& csid,
               read_stream_id_t read_stream_id);
 
   /**

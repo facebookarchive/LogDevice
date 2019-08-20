@@ -115,6 +115,8 @@ class Readers : public AdminCommandTable {
          DataType::INTEGER,
          "True if there is currently a storage task running on a slow storage "
          "thread for reading a batch of records."},
+        {"csid", DataType::TEXT, "Client Session ID"},
+        {"rsid", DataType::TEXT, "Read stream ID"},
     };
   }
   std::string getCommandToSend(QueryContext& ctx) const override {

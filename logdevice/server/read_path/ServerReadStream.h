@@ -43,11 +43,12 @@ class EpochRecordCacheEntry;
 // Useful macro that can be used for debugging a stream's lifetime when
 // in debug loglevel.
 #define stream_ld_debug(_stream_, _name_, ...)                               \
-  ld_debug(_name_ " - client_id=%s, id=%lu, log_id=%lu, "                    \
+  ld_debug(_name_ " - client_id=%s, csid=%s, id=%lu, log_id=%lu, "           \
                   "read_ptr=%s, window_high=%s, until_lsn=%s, version=%lu, " \
                   "digest=%s, traffic_class=%s",                             \
            ##__VA_ARGS__,                                                    \
            (_stream_).client_id_.toString().c_str(),                         \
+           (_stream_).csid_.c_str(),                                         \
            (_stream_).id_.val_,                                              \
            (_stream_).log_id_.val_,                                          \
            lsn_to_string((_stream_).getReadPtr().lsn).c_str(),               \
@@ -69,7 +70,8 @@ LOGDEVICE_STRONG_TYPEDEF(uint64_t, server_read_stream_version_t);
 
 class ServerReadStream : boost::noncopyable {
  public:
-  ServerReadStream(read_stream_id_t id,
+  ServerReadStream(const std::string& csid_,
+                   read_stream_id_t id,
                    ClientID client_id,
                    logid_t log_id,
                    shard_index_t shard,
@@ -252,6 +254,9 @@ class ServerReadStream : boost::noncopyable {
     auto& flow_group = read_container.getFlowGroup(NodeLocationScope::NODE);
     return flow_group.level(getReadPriority());
   }
+
+  // Client session ID
+  std::string csid_;
 
   // Id of this read stream.
   read_stream_id_t id_;

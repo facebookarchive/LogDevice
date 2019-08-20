@@ -71,7 +71,9 @@ typedef AdminCommandTable<shard_index_t,              /* Shard */
                           uint64_t, /* Version */
                           bool,     /* Throttled? */
                           int64_t,  /* milliseconds elapsed since throttled */
-                          int64_t   /* Read shaping - current meter level */
+                          int64_t,  /* Read shaping - current meter level */
+                          std::string,               /* Client Session ID */
+                          read_stream_id_t::raw_type /* Read stream ID*/
                           >
     InfoReadersTable;
 

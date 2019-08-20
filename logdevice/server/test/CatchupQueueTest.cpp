@@ -166,7 +166,7 @@ class CatchupQueueTest : public ::testing::Test {
 
   ServerReadStream& createStream(read_stream_id_t id) {
     auto insert_result =
-        streams_.insertOrGet(client_id_, log_id_, SHARD_IDX, id);
+        streams_.insertOrGet(client_id_, log_id_, SHARD_IDX, csid_, id);
     ld_check(insert_result.second);
     ServerReadStream* stream = insert_result.first;
     stream->setTrafficClass(TrafficClass::READ_TAIL);
@@ -300,6 +300,7 @@ class CatchupQueueTest : public ::testing::Test {
   InterceptedTasks tasks_;
   TestAllServerReadStreams streams_;
   const ClientID client_id_{9999};
+  const std::string csid_{""};
   const logid_t log_id_{1};
   BWAvailableCallback* callback_{nullptr};
   InterceptedMessages messages_;

@@ -89,14 +89,15 @@ TEST(AllServerReadStreamsTest, Subscriptions) {
 
   const ClientID c1(111), c2(112);
   const logid_t log1(222), log2(223);
+  const std::string csid("");
 
   // Have a client start reading, check that we subscribed
-  streams.insertOrGet(c1, log1, SHARD_IDX, read_stream_id_t(1));
+  streams.insertOrGet(c1, log1, SHARD_IDX, csid, read_stream_id_t(1));
   ASSERT_TRUE(map.get(log1, SHARD_IDX).isWorkerSubscribed(worker_id));
 
   // Have another client start and stop reading the same log, should still be
   // subscribed
-  streams.insertOrGet(c2, log1, SHARD_IDX, read_stream_id_t(1));
+  streams.insertOrGet(c2, log1, SHARD_IDX, csid, read_stream_id_t(1));
   ASSERT_TRUE(map.get(log1, SHARD_IDX).isWorkerSubscribed(worker_id));
   streams.erase(c2, log1, read_stream_id_t(1), SHARD_IDX);
   ASSERT_TRUE(map.get(log1, SHARD_IDX).isWorkerSubscribed(worker_id));
@@ -106,9 +107,9 @@ TEST(AllServerReadStreamsTest, Subscriptions) {
   ASSERT_FALSE(map.get(log1, SHARD_IDX).isWorkerSubscribed(worker_id));
 
   // Have c2 subscribe to both logs, c1 to one
-  streams.insertOrGet(c2, log1, SHARD_IDX, read_stream_id_t(2));
-  streams.insertOrGet(c2, log2, SHARD_IDX, read_stream_id_t(2));
-  streams.insertOrGet(c1, log2, SHARD_IDX, read_stream_id_t(2));
+  streams.insertOrGet(c2, log1, SHARD_IDX, csid, read_stream_id_t(2));
+  streams.insertOrGet(c2, log2, SHARD_IDX, csid, read_stream_id_t(2));
+  streams.insertOrGet(c1, log2, SHARD_IDX, csid, read_stream_id_t(2));
   // Now have c2 disconnect
   streams.eraseAllForClient(c2);
   // Should still be subscribed to log2
@@ -133,22 +134,31 @@ TEST(AllServerReadStreamsTest, Capacity) {
   const logid_t log_id(1);
   const read_stream_id_t rs1(1), rs2(2);
   const ClientID c1(111), c2(222), c3(333);
+  const std::string csid("");
 
-  ASSERT_NE(streams.insertOrGet(c1, log_id, SHARD_IDX, rs1).first, nullptr);
-  ASSERT_NE(streams.insertOrGet(c1, log_id, SHARD_IDX, rs2).first, nullptr);
-  ASSERT_NE(streams.insertOrGet(c2, log_id, SHARD_IDX, rs1).first, nullptr);
-  ASSERT_NE(streams.insertOrGet(c2, log_id, SHARD_IDX, rs2).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c1, log_id, SHARD_IDX, csid, rs1).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c1, log_id, SHARD_IDX, csid, rs2).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c2, log_id, SHARD_IDX, csid, rs1).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c2, log_id, SHARD_IDX, csid, rs2).first, nullptr);
 
   // We are at capacity now, insert should fail
-  ASSERT_EQ(streams.insertOrGet(c3, log_id, SHARD_IDX, rs1).first, nullptr);
+  ASSERT_EQ(
+      streams.insertOrGet(c3, log_id, SHARD_IDX, csid, rs1).first, nullptr);
 
   // But a lookup of an existing stream should succeed
-  ASSERT_NE(streams.insertOrGet(c2, log_id, SHARD_IDX, rs2).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c2, log_id, SHARD_IDX, csid, rs2).first, nullptr);
 
   // If one of the clients disconnects, inserting should succeed again
   streams.eraseAllForClient(c1);
-  ASSERT_NE(streams.insertOrGet(c3, log_id, SHARD_IDX, rs1).first, nullptr);
-  ASSERT_NE(streams.insertOrGet(c3, log_id, SHARD_IDX, rs2).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c3, log_id, SHARD_IDX, csid, rs1).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c3, log_id, SHARD_IDX, csid, rs2).first, nullptr);
 
   streams.clear();
 }
@@ -178,9 +188,12 @@ TEST(AllServerReadStreams, OnReleaseUseAfterFree) {
   const logid_t LOG_ID(1);
   const read_stream_id_t rs1(1), rs2(2);
   const ClientID c1(111);
+  const std::string csid("");
 
-  ASSERT_NE(streams.insertOrGet(c1, LOG_ID, SHARD_IDX, rs1).first, nullptr);
-  ASSERT_NE(streams.insertOrGet(c1, LOG_ID, SHARD_IDX, rs2).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c1, LOG_ID, SHARD_IDX, csid, rs1).first, nullptr);
+  ASSERT_NE(
+      streams.insertOrGet(c1, LOG_ID, SHARD_IDX, csid, rs2).first, nullptr);
 
   // boom!
   streams.onRelease(RecordID(LSN_MAX, LOG_ID), SHARD_IDX, false);
@@ -202,17 +215,18 @@ TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
   const logid_t log_id(1);
   const read_stream_id_t rs1(1);
   const ClientID c1(111), c2(222), c3(333), c4(444), c5(555);
+  const std::string csid("");
 
   // create 3 read streams.
-  auto stream1 = streams.insertOrGet(c1, log_id, SHARD_IDX, rs1).first;
+  auto stream1 = streams.insertOrGet(c1, log_id, SHARD_IDX, csid, rs1).first;
   ASSERT_NE(stream1, nullptr);
-  auto stream2 = streams.insertOrGet(c2, log_id, SHARD_IDX, rs1).first;
+  auto stream2 = streams.insertOrGet(c2, log_id, SHARD_IDX, csid, rs1).first;
   ASSERT_NE(stream2, nullptr);
-  auto stream3 = streams.insertOrGet(c3, log_id, SHARD_IDX, rs1).first;
+  auto stream3 = streams.insertOrGet(c3, log_id, SHARD_IDX, csid, rs1).first;
   ASSERT_NE(stream3, nullptr);
-  auto stream4 = streams.insertOrGet(c4, log_id, SHARD_IDX, rs1).first;
+  auto stream4 = streams.insertOrGet(c4, log_id, SHARD_IDX, csid, rs1).first;
   ASSERT_NE(stream4, nullptr);
-  auto stream5 = streams.insertOrGet(c5, log_id, SHARD_IDX, rs1).first;
+  auto stream5 = streams.insertOrGet(c5, log_id, SHARD_IDX, csid, rs1).first;
   ASSERT_NE(stream5, nullptr);
 
   auto createTask = [&](ClientID /*client*/,
