@@ -358,9 +358,9 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
 
   auto update_counter_for_state = [](State state, int increment) {
     if (state == State::STUCK) {
-      WORKER_STAT_ADD(client.read_streams_stuck, increment);
+      WORKER_STAT_ADD(read_streams_stuck, increment);
     } else if (state == State::LAGGING) {
-      WORKER_STAT_ADD(client.read_streams_lagging, increment);
+      WORKER_STAT_ADD(read_streams_lagging, increment);
     } else {
       /* ignore */
     }

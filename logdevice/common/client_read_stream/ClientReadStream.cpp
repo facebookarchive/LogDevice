@@ -84,7 +84,7 @@ static size_t actual_buffer_size(size_t requested_size,
   return size;
 }
 
-// Helper method to bump the right `client.gap_*' stat after delivering a gap
+// Helper method to bump the right `gap_*' stat after delivering a gap
 static void bumpGapStat(logid_t, StatsHolder*, GapType);
 
 void ClientReadStreamRecordState::reset() {
@@ -481,8 +481,8 @@ void ClientReadStream::start() {
   // The first stat counts read streams that are alive, second one counts
   // read stream creation events (i.e. it's not decremented when
   // ClientReadStream is destroyed).
-  WORKER_STAT_INCR(client.num_read_streams);
-  WORKER_STAT_INCR(client.client_read_streams_created);
+  WORKER_STAT_INCR(num_read_streams);
+  WORKER_STAT_INCR(client_read_streams_created);
 
   // getLogByIDAsync might be synchronously called for LocalLogsConfig and
   // read stream can get destroyed in startContinuation. so make sure to not
@@ -767,6 +767,7 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
     if (scd_->isActive()) {
       scd_->addToShardsDownAndScheduleRewind(
           state.getShardID(),
+          RewindReason::REBUILDING,
           folly::format("{} added to known down list because it sent STARTED "
                         "with E::REBUILDING",
                         state.getShardID().toString())
@@ -815,6 +816,7 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
         // when the node finishes rebuilding.
         scd_->addToShardsDownAndScheduleRewind(
             state.getShardID(),
+            RewindReason::REBUILDING,
             folly::format("{} added to known down list because it sent STARTED "
                           "with E::REBUILDING",
                           state.getShardID().toString())
@@ -855,6 +857,7 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
         // known down list.
         scd_->addToShardsDownAndScheduleRewind(
             state.getShardID(),
+            RewindReason::STARTED_FAILED,
             folly::format("{} added to known down list because it sent STARTED "
                           "with E::FAILED",
                           state.getShardID().toString())
@@ -926,19 +929,19 @@ void ClientReadStream::onDataRecord(
 
   if (MetaDataLog::isMetaDataLog(log_id_)) {
     if (wait_for_all_copies_) {
-      WORKER_STAT_INCR(client.metadata_log_records_received_wait_for_all);
+      WORKER_STAT_INCR(metadata_log_records_received_wait_for_all);
     } else {
-      WORKER_STAT_INCR(client.metadata_log_records_received);
+      WORKER_STAT_INCR(metadata_log_records_received);
     }
   } else {
     if (wait_for_all_copies_) {
-      WORKER_STAT_INCR(client.records_received_wait_for_all);
+      WORKER_STAT_INCR(records_received_wait_for_all);
     } else {
-      WORKER_STAT_INCR(client.records_received);
+      WORKER_STAT_INCR(records_received);
       if (scd_ && scd_->isActive()) {
-        WORKER_STAT_INCR(client.records_received_scd);
+        WORKER_STAT_INCR(records_received_scd);
       } else {
-        WORKER_STAT_INCR(client.records_received_noscd);
+        WORKER_STAT_INCR(records_received_noscd);
       }
     }
   }
@@ -1220,6 +1223,7 @@ void ClientReadStream::onGap(ShardID shard, const GAP_Message& msg) {
     // rewind, so let's rewind right away instead of waiting for gap detection.
     if (scd_->addToShardsDownAndScheduleRewind(
             sender_state.getShardID(),
+            RewindReason::CHECKSUM_FAIL,
             folly::sformat("{} added to known down list because it checksum "
                            "error for lsn {}",
                            sender_state.getShardID().toString(),
@@ -1894,9 +1898,11 @@ void ClientReadStream::promoteUnderreplicatedShardsToKnownDown() {
     SenderState& state = it.second;
     if (state.getGapState() == GapState::UNDER_REPLICATED &&
         !state.should_blacklist_as_under_replicated) {
+      WORKER_STAT_INCR(scd_shard_underreplicated_region_promoted);
       state.should_blacklist_as_under_replicated = true;
       added |= scd_->addToShardsDownAndScheduleRewind(
           state.getShardID(),
+          RewindReason::UNDER_REPLICATED_REGION,
           folly::sformat("{} added to known down list because it has an "
                          "under replicated region",
                          state.getShardID().toString()));
@@ -1929,11 +1935,11 @@ int ClientReadStream::handleGap(lsn_t gap_lsn) {
                       lsn_to_string(gap_lsn).c_str(),
                       log_id_.val_,
                       getDebugInfoStr().c_str());
+    WORKER_STAT_INCR(rewind_scheduled_when_dataloss);
     rewind(folly::format("DATALOSS [{}, {}]",
                          lsn_to_string(next_lsn_to_deliver_).c_str(),
                          lsn_to_string(gap_lsn).c_str())
                .str());
-    WORKER_STAT_INCR(client.read_streams_rewinds_when_dataloss);
     return 0;
   }
 
@@ -2025,12 +2031,14 @@ void ClientReadStream::updateScdStatusContinuation(
                  log_id_.val(),
                  id_.val());
         scd_->scheduleRewindToMode(ClientReadStreamScd::Mode::LOCAL_SCD,
+                                   RewindReason::NODESET_OR_CONFIG_CHANGE,
                                    "Switching to LOCAL_SCD: config changed");
       } else {
         ld_debug(
             "Switching to scd for log:%lu, id:%lu", log_id_.val(), id_.val());
-        scd_->scheduleRewindToMode(
-            ClientReadStreamScd::Mode::SCD, "Switching to SCD: config changed");
+        scd_->scheduleRewindToMode(ClientReadStreamScd::Mode::SCD,
+                                   RewindReason::NODESET_OR_CONFIG_CHANGE,
+                                   "Switching to SCD: config changed");
       }
     }
   } else {
@@ -2043,6 +2051,7 @@ void ClientReadStream::updateScdStatusContinuation(
                log_id_.val(),
                id_.val());
       scd_->scheduleRewindToMode(ClientReadStreamScd::Mode::ALL_SEND_ALL,
+                                 RewindReason::NODESET_OR_CONFIG_CHANGE,
                                  "Switching to ALL_SEND_ALL: config changed");
     }
   }
@@ -2179,6 +2188,7 @@ void ClientReadStream::applyShardStatus(const char* context,
         status != AuthoritativeStatus::FULLY_AUTHORITATIVE &&
         scd_->addToShardsDownAndScheduleRewind(
             state.getShardID(),
+            RewindReason::SHARD_NOT_AUTHORITATIVE,
             folly::format("{} added to known down list because it is not "
                           "fully authoritative",
                           state.getShardID().toString())
@@ -2192,7 +2202,8 @@ void ClientReadStream::applyShardStatus(const char* context,
     // transitioned to being empty. In that case, we must rewind in order to
     // read the records that may have been rebuilt onto other nodes
     if (status == AuthoritativeStatus::AUTHORITATIVE_EMPTY) {
-      scheduleRewind(folly::format("{} transitioned from {} to {} "
+      scheduleRewind(RewindReason::SHARD_BECAME_AUTHORITATIVE_EMPTY,
+                     folly::format("{} transitioned from {} to {} "
                                    "(context: {})",
                                    state.getShardID().toString().c_str(),
                                    toString(prev_status).c_str(),
@@ -2345,7 +2356,7 @@ int ClientReadStream::updateCurrentMetaData(
                "that the metadata log is not properly provisioned. Retry "
                "reading the metadata log after a timeout...",
                log_id_.val_);
-      WORKER_STAT_INCR(client.metadata_log_error_NOTFOUND);
+      WORKER_STAT_INCR(metadata_log_error_NOTFOUND);
     } else {
       ld_error("Unable to read metadata log for log %lu: %s. Will retry "
                "after a timeout",
@@ -3339,25 +3350,25 @@ int ClientReadStream::deliverRecord(
     }
     if (MetaDataLog::isMetaDataLog(log_id_)) {
       if (wait_for_all_copies_) {
-        WORKER_STAT_INCR(client.metadata_log_records_delivered_wait_for_all);
+        WORKER_STAT_INCR(metadata_log_records_delivered_wait_for_all);
       } else {
-        WORKER_STAT_INCR(client.metadata_log_records_delivered);
+        WORKER_STAT_INCR(metadata_log_records_delivered);
       }
-      WORKER_STAT_ADD(client.metadata_log_bytes_delivered,
+      WORKER_STAT_ADD(metadata_log_bytes_delivered,
                       payload_size_map.getCounter(BYTE_OFFSET));
     } else {
       if (wait_for_all_copies_) {
-        WORKER_STAT_INCR(client.records_delivered_wait_for_all);
+        WORKER_STAT_INCR(records_delivered_wait_for_all);
       } else {
-        WORKER_STAT_INCR(client.records_delivered);
+        WORKER_STAT_INCR(records_delivered);
         if (scd_ && scd_->isActive()) {
-          WORKER_STAT_INCR(client.records_delivered_scd);
+          WORKER_STAT_INCR(records_delivered_scd);
         } else {
-          WORKER_STAT_INCR(client.records_delivered_noscd);
+          WORKER_STAT_INCR(records_delivered_noscd);
         }
       }
       WORKER_STAT_ADD(
-          client.bytes_delivered, payload_size_map.getCounter(BYTE_OFFSET));
+          bytes_delivered, payload_size_map.getCounter(BYTE_OFFSET));
     }
     num_records_delivered_++;
     num_bytes_delivered_ += payload_size_map.getCounter(BYTE_OFFSET);
@@ -3368,7 +3379,7 @@ int ClientReadStream::deliverRecord(
     }
   } else {
     if (!MetaDataLog::isMetaDataLog(log_id_)) {
-      WORKER_STAT_INCR(client.records_redelivery_attempted);
+      WORKER_STAT_INCR(records_redelivery_attempted);
     }
   }
   adjustRedeliveryTimer(success);
@@ -3424,7 +3435,7 @@ int ClientReadStream::deliverGap(GapType type, lsn_t lo, lsn_t hi) {
     last_delivered_lsn_ = gap.hi;
   } else {
     if (!MetaDataLog::isMetaDataLog(log_id_)) {
-      WORKER_STAT_INCR(client.gaps_redelivery_attempted);
+      WORKER_STAT_INCR(gaps_redelivery_attempted);
     }
   }
   adjustRedeliveryTimer(success);
@@ -3445,8 +3456,7 @@ int ClientReadStream::deliverGap(GapType type, lsn_t lo, lsn_t hi) {
         current_metadata_->replication.toString());
     epoch_t epoch = lsn_to_epoch(lo);
     if (epoch == lsn_to_epoch(hi)) {
-      WORKER_STAT_ADD(
-          client.records_lost, lsn_to_esn(hi).val_ - lsn_to_esn(lo).val_);
+      WORKER_STAT_ADD(records_lost, lsn_to_esn(hi).val_ - lsn_to_esn(lo).val_);
     }
   }
   return success ? 0 : -1;
@@ -3743,12 +3753,14 @@ bool ClientReadStream::slideSenderWindows() {
                log_id_.val(),
                id_.val());
       scd_->scheduleRewindToMode(ClientReadStreamScd::Mode::LOCAL_SCD,
+                                 RewindReason::WINDOW,
                                  "Switching to LOCAL_SCD: sliding window");
     } else {
       ld_debug(
           "Switching to scd for log:%lu, id:%lu", log_id_.val(), id_.val());
-      scd_->scheduleRewindToMode(
-          ClientReadStreamScd::Mode::SCD, "Switching to SCD: sliding window");
+      scd_->scheduleRewindToMode(ClientReadStreamScd::Mode::SCD,
+                                 RewindReason::WINDOW,
+                                 "Switching to SCD: sliding window");
     }
   }
 
@@ -3851,7 +3863,7 @@ void ClientReadStream::updateLastReleased(lsn_t last_released_lsn) {
 
 ClientReadStream::~ClientReadStream() {
   if (started_) {
-    WORKER_STAT_DECR(client.num_read_streams);
+    WORKER_STAT_DECR(num_read_streams);
   }
 
   // Not safe to destroy while executing a callback
@@ -3932,6 +3944,7 @@ void ClientReadStream::onConnectionFailure(SenderState& state, Status st) {
   if (!scd_->isActive() || st == E::SSLREQUIRED ||
       !scd_->addToShardsDownAndScheduleRewind(
           state.getShardID(),
+          RewindReason::CONNECTION_FAILURE,
           folly::format("{} added to known down list because we cannot connect "
                         "to it, error {}",
                         state.getShardID().toString(),
@@ -4002,7 +4015,8 @@ void ClientReadStream::handleStartPROTONOSUPPORT(ShardID shard_id) {
     // Schedule a rewind in a separate libevent event. That rewind will use an
     // older protocol.
     coordinated_proto_ = proto.value();
-    scheduleRewind(folly::format("{} sent STARTED with E::PROTONOSUPPORT "
+    scheduleRewind(RewindReason::NODESET_OR_CONFIG_CHANGE,
+                   folly::format("{} sent STARTED with E::PROTONOSUPPORT "
                                  "({} < {})",
                                  shard_id.toString().c_str(),
                                  proto.value(),
@@ -4023,9 +4037,63 @@ void ClientReadStream::handleStartPROTONOSUPPORT(ShardID shard_id) {
   }
 }
 
-void ClientReadStream::scheduleRewind(std::string reason) {
-  ld_check(!reason.empty());
-  rewind_scheduler_->schedule(nullptr, std::move(reason));
+void ClientReadStream::scheduleRewind(RewindReason reason,
+                                      std::string reason_str) {
+  ld_check(!reason_str.empty());
+  rewind_scheduler_->schedule(nullptr, std::move(reason_str));
+
+  if (!rewind_imminent_) {
+    WORKER_STAT_INCR(rewind_scheduled);
+
+    switch (reason) {
+      case RewindReason::NODESET_OR_CONFIG_CHANGE:
+        WORKER_STAT_INCR(rewind_scheduled_nodeset_or_config_change);
+        break;
+      case RewindReason::SCD_TIMEOUT:
+        WORKER_STAT_INCR(rewind_scheduled_scd_timeout);
+        break;
+      case RewindReason::SCD_ALL_SEND_ALL_TIMEOUT:
+        WORKER_STAT_INCR(rewind_scheduled_scd_all_send_all_timeout);
+        break;
+      case RewindReason::ALL_SHARDS_DOWN:
+        WORKER_STAT_INCR(rewind_scheduled_all_shards_down);
+        break;
+      case RewindReason::SHARD_UP:
+        WORKER_STAT_INCR(rewind_scheduled_shard_up);
+        break;
+      case RewindReason::OUTLIERS_CHANGED:
+        WORKER_STAT_INCR(rewind_scheduled_outliers_changed);
+        break;
+      case RewindReason::REBUILDING:
+        WORKER_STAT_INCR(rewind_scheduled_rebuilding);
+        break;
+      case RewindReason::STARTED_FAILED:
+        WORKER_STAT_INCR(rewind_scheduled_started_failed);
+        break;
+      case RewindReason::CHECKSUM_FAIL:
+        WORKER_STAT_INCR(rewind_scheduled_checksum_fail);
+        break;
+      case RewindReason::UNDER_REPLICATED_REGION:
+        WORKER_STAT_INCR(rewind_scheduled_under_replicated_region);
+        break;
+      case RewindReason::SHARD_NOT_AUTHORITATIVE:
+        WORKER_STAT_INCR(rewind_scheduled_shard_not_authoritative);
+        break;
+      case RewindReason::SHARD_BECAME_AUTHORITATIVE_EMPTY:
+        WORKER_STAT_INCR(rewind_scheduled_shard_became_authoritative_empty);
+        break;
+      case RewindReason::WINDOW:
+        WORKER_STAT_INCR(rewind_scheduled_window);
+        break;
+      case RewindReason::CONNECTION_FAILURE:
+        WORKER_STAT_INCR(rewind_scheduled_connection_failure);
+        break;
+    }
+  } else {
+    // Don't update stats, but still call rewind_scheduler_->schedule() above
+    // to make sure any rewind_scheduler_->isScheduled() checks get the
+    // correct result. (I'm not really sure if this is important.)
+  }
 }
 
 void ClientReadStream::rewind(std::string reason) {
@@ -4069,6 +4137,11 @@ void ClientReadStream::rewind(std::string reason) {
 
   bool was_in_all_send_all = !scd_ || !scd_->isActive();
 
+  rewind_imminent_ = true;
+  SCOPE_EXIT {
+    ld_check(!rewind_imminent_);
+  };
+
   if (scd_) {
     // This function may transition us between SCD and ALL_SEND_ALL mode and/or
     // change the filtered out list.
@@ -4097,6 +4170,7 @@ void ClientReadStream::rewind(std::string reason) {
           conn_state == ConnectionState::PERSISTENT_ERROR) {
         scd_->addToShardsDownAndScheduleRewind(
             state.getShardID(),
+            RewindReason::CONNECTION_FAILURE,
             folly::sformat("{} re-added to known down list because we couldn't "
                            "connect to it",
                            state.getShardID().toString()));
@@ -4109,6 +4183,7 @@ void ClientReadStream::rewind(std::string reason) {
           AuthoritativeStatus::FULLY_AUTHORITATIVE) {
         scd_->addToShardsDownAndScheduleRewind(
             state.getShardID(),
+            RewindReason::SHARD_NOT_AUTHORITATIVE,
             folly::sformat("{} re-added to known down list because it's not "
                            "fully authoritative",
                            state.getShardID().toString()));
@@ -4118,6 +4193,7 @@ void ClientReadStream::rewind(std::string reason) {
       if (state.should_blacklist_as_under_replicated) {
         scd_->addToShardsDownAndScheduleRewind(
             state.getShardID(),
+            RewindReason::UNDER_REPLICATED_REGION,
             folly::sformat("{} re-added to known down list because it has an "
                            "under replicated region",
                            state.getShardID().toString()));
@@ -4141,7 +4217,7 @@ void ClientReadStream::rewind(std::string reason) {
     applyShardStatus("rewind", &it.second, /* try_make_progress */ false);
   }
 
-  // Apply scheduled SCD changes *again* after because the code above could
+  // Apply scheduled SCD changes *again* because the code above could
   // schedule adding more shards to known down list on next rewind.
   // Since we're doing a rewind already, just pick up those changes now and
   // cancel the scheduled rewind.
@@ -4149,6 +4225,7 @@ void ClientReadStream::rewind(std::string reason) {
     scd_->applyScheduledChanges();
   }
   rewind_scheduler_->cancel();
+  rewind_imminent_ = false;
 
   if (scd_ && scd_->isActive()) {
     for (const auto& shard_id : scd_->getShardsSlow()) {
@@ -4161,6 +4238,8 @@ void ClientReadStream::rewind(std::string reason) {
     }
   }
 
+  WORKER_STAT_INCR(rewind_done);
+
   if (scd_ && scd_->isActive()) {
     RATELIMIT_INFO(
         std::chrono::seconds(1),
@@ -4172,6 +4251,12 @@ void ClientReadStream::rewind(std::string reason) {
         lsn_to_string(next_lsn_to_deliver_).c_str(),
         current_metadata_ ? current_metadata_->h.effective_since.val() : 0u,
         reason.c_str());
+
+    if (was_in_all_send_all) {
+      WORKER_STAT_INCR(rewound_asa_to_scd);
+    } else {
+      WORKER_STAT_INCR(rewound_scd_to_scd);
+    }
   } else {
     RATELIMIT_INFO(
         std::chrono::seconds(1),
@@ -4184,6 +4269,11 @@ void ClientReadStream::rewind(std::string reason) {
         lsn_to_string(next_lsn_to_deliver_).c_str(),
         current_metadata_ ? current_metadata_->h.effective_since.val() : 0u,
         reason.c_str());
+    if (was_in_all_send_all) {
+      WORKER_STAT_INCR(rewound_asa_to_asa);
+    } else {
+      WORKER_STAT_INCR(rewound_scd_to_asa);
+    }
   }
   RATELIMIT_INFO(std::chrono::seconds(10),
                  1,
@@ -4639,13 +4729,13 @@ ClientReadStreamDependencies::getOurNameAtPeer(node_index_t node_index) const {
 void bumpGapStat(logid_t logid, StatsHolder* stats, GapType gap_type) {
   const bool metadata_log = MetaDataLog::isMetaDataLog(logid);
   switch (gap_type) {
-#define HANDLE_TYPE(type)                               \
-  case GapType::type:                                   \
-    if (metadata_log) {                                 \
-      STAT_INCR(stats, client.metadata_log_gap_##type); \
-    } else {                                            \
-      STAT_INCR(stats, client.gap_##type);              \
-    }                                                   \
+#define HANDLE_TYPE(type)                        \
+  case GapType::type:                            \
+    if (metadata_log) {                          \
+      STAT_INCR(stats, metadata_log_gap_##type); \
+    } else {                                     \
+      STAT_INCR(stats, gap_##type);              \
+    }                                            \
     break;
 
     HANDLE_TYPE(UNKNOWN)

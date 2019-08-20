@@ -86,13 +86,13 @@ class Rebuilding : public AdminCommand {
     if (action_ == "mark_dirty" || action_ == "mark_clean") {
       if (!time_from_.hasValue() || !time_to_.hasValue()) {
         out_.printf("Error: --time-from and --time-to arguments are mandatory "
-                    "with the \"%s\" action.",
+                    "with the \"%s\" action.\r\n",
                     action_.c_str());
         return;
       }
       if (time_from_.value() >= time_to_.value()) {
         out_.printf("Error: --time-from (%s) has to be earlier than "
-                    "--time-to (%s)",
+                    "--time-to (%s).\r\n",
                     time_from_.value().toString().c_str(),
                     time_to_.value().toString().c_str());
         return;
@@ -172,7 +172,7 @@ class Rebuilding : public AdminCommand {
     if (!partitioned_store) {
       out_.printf(
           "Error: this command is only supported by PartitionedRocksDBStore, "
-          "and the store type on shard %u is different",
+          "and the store type on shard %u is different.\r\n",
           shard_idx);
       return;
     }

@@ -58,7 +58,9 @@ void ClientReadStreamScd::configureOutlierDetector() {
                    1,
                    "Disabling outlier detector for log %lu",
                    owner_->log_id_.val_);
-    rewindWithOutliers(ShardSet{}, "outlier detector disabled");
+    rewindWithOutliers(ShardSet{},
+                       RewindReason::NODESET_OR_CONFIG_CHANGE,
+                       "outlier detector disabled");
     outlier_detector_.reset();
     return;
   }
@@ -97,6 +99,7 @@ void ClientReadStreamScd::configureOutlierDetector() {
         settings.reader_slow_shards_detection_settings);
     rewindWithOutliers(
         outlier_detector_->getCurrentOutliers(),
+        RewindReason::NODESET_OR_CONFIG_CHANGE,
         folly::format("outlier detector switched to {} mode",
                       state == Settings::ReaderSlowShardDetectionState::ENABLED
                           ? "enabled"
@@ -203,7 +206,8 @@ bool ClientReadStreamScd::shardsDownFailoverTimerCallback(
     for (ShardID shard : down) {
       filtered_out_.deferredAddShardDown(shard);
     }
-    owner_->scheduleRewind(folly::format("shards down list changed: {} added",
+    owner_->scheduleRewind(RewindReason::SCD_TIMEOUT,
+                           folly::format("shards down list changed: {} added",
                                          toString(down).c_str())
                                .str());
   }
@@ -237,8 +241,9 @@ bool ClientReadStreamScd::allSendAllFailoverTimerCallback(
                    toString(getShardsDown()).c_str(),
                    toString(getShardsSlow()).c_str(),
                    owner_->getDebugInfoStr().c_str());
-    scheduleRewindToMode(
-        Mode::ALL_SEND_ALL, "Failing over to ALL_SEND_ALL: timeout");
+    scheduleRewindToMode(Mode::ALL_SEND_ALL,
+                         RewindReason::SCD_ALL_SEND_ALL_TIMEOUT,
+                         "Failing over to ALL_SEND_ALL: timeout");
     return false;
   }
   return true;
@@ -289,6 +294,8 @@ bool ClientReadStreamScd::FilteredOut::deferredAddShardDown(ShardID shard) {
   }
 
   new_shards_slow_.erase(shard);
+
+  WORKER_STAT_INCR(scd_shard_down_added);
   return true;
 }
 
@@ -301,6 +308,13 @@ bool ClientReadStreamScd::FilteredOut::deferredChangeShardsSlow(
   if (new_shards_slow_ == outliers) {
     return false;
   }
+
+  int64_t num_added = 0;
+  for (ShardID shard : outliers) {
+    num_added += !new_shards_slow_.count(shard);
+  }
+  WORKER_STAT_ADD(scd_shard_slow_added, num_added);
+
   new_shards_slow_ = std::move(outliers);
   return true;
 }
@@ -349,6 +363,7 @@ void ClientReadStreamScd::applyScheduledChanges() {
       }
 
       scheduleRewindToMode(Mode::ALL_SEND_ALL,
+                           RewindReason::ALL_SHARDS_DOWN,
                            "Failing over to ALL_SEND_ALL: all shards in shards "
                            "down list");
     } else {
@@ -379,7 +394,9 @@ void ClientReadStreamScd::applyScheduledChanges() {
   scheduled_mode_transition_.clear();
 }
 
-void ClientReadStreamScd::scheduleRewindToMode(Mode mode, std::string reason) {
+void ClientReadStreamScd::scheduleRewindToMode(Mode mode,
+                                               RewindReason reason,
+                                               std::string reason_str) {
   ld_check(!owner_->done());
 
   if (mode == Mode::ALL_SEND_ALL) {
@@ -391,7 +408,7 @@ void ClientReadStreamScd::scheduleRewindToMode(Mode mode, std::string reason) {
   }
 
   scheduled_mode_transition_ = mode;
-  owner_->scheduleRewind(std::move(reason));
+  owner_->scheduleRewind(reason, std::move(reason_str));
 }
 
 bool ClientReadStreamScd::checkNeedsFailoverToAllSendAll() {
@@ -453,7 +470,8 @@ bool ClientReadStreamScd::checkNeedsFailoverToAllSendAll() {
             toString(getShardsSlow()).c_str(),
             owner_->getDebugInfoStr().c_str())
             .str();
-    scheduleRewindToMode(Mode::ALL_SEND_ALL, reason);
+    scheduleRewindToMode(
+        Mode::ALL_SEND_ALL, RewindReason::ALL_SHARDS_DOWN, reason);
     return true;
   }
 
@@ -473,6 +491,7 @@ void ClientReadStreamScd::scheduleRewindIfShardBackUp(
           "%s started delivering records or exited an under replicated region",
           state.getShardID().toString().c_str());
       owner_->scheduleRewind(
+          RewindReason::SHARD_UP,
           folly::format("{} no longer down", state.getShardID().toString())
               .str());
     }
@@ -500,11 +519,13 @@ void ClientReadStreamScd::onOutliersChanged(ShardSet outliers,
         reason.c_str());
     return;
   }
-  rewindWithOutliers(std::move(outliers), std::move(reason));
+  rewindWithOutliers(
+      std::move(outliers), RewindReason::OUTLIERS_CHANGED, std::move(reason));
 }
 
 void ClientReadStreamScd::rewindWithOutliers(ShardSet outliers,
-                                             std::string reason) {
+                                             RewindReason reason,
+                                             std::string reason_str) {
   if (mode_ == Mode::ALL_SEND_ALL) {
     RATELIMIT_INFO(
         std::chrono::seconds(10),
@@ -513,17 +534,18 @@ void ClientReadStreamScd::rewindWithOutliers(ShardSet outliers,
         "outliers (reason: %s). Not rewinding as we are in ALL_SEND_ALL mode.",
         owner_->log_id_.val_,
         toString(outliers).c_str(),
-        reason.c_str());
+        reason_str.c_str());
     return;
   }
   ld_check(isActive());
 
   if (filtered_out_.deferredChangeShardsSlow(outliers)) {
     owner_->scheduleRewind(
+        reason,
         folly::format("Changing the outliers list from {} to {}: {}",
                       toString(getShardsSlow()).c_str(),
                       toString(outliers).c_str(),
-                      reason.c_str())
+                      reason_str.c_str())
             .str());
   }
 }
@@ -551,8 +573,8 @@ bool ClientReadStreamScd::updateStorageShardsSet(
       did_remove_shards = true;
     }
   }
-  auto new_shards_slow_sopy = filtered_out_.getNewShardsSlow();
-  for (const auto& shard : new_shards_slow_sopy) {
+  auto new_shards_slow_copy = filtered_out_.getNewShardsSlow();
+  for (const auto& shard : new_shards_slow_copy) {
     if (owner_->storage_set_states_.count(shard) == 0) {
       filtered_out_.eraseShard(shard);
     }
@@ -589,7 +611,8 @@ bool ClientReadStreamScd::maybeRewindAfterShardsUpdated(bool shards_changed) {
 
   // If filtered_out_ changed, schedule a rewind.
   if (shards_changed) {
-    owner_->scheduleRewind("Shards removed from config");
+    owner_->scheduleRewind(
+        RewindReason::NODESET_OR_CONFIG_CHANGE, "Shards removed from config");
     return true;
   }
 
@@ -598,7 +621,8 @@ bool ClientReadStreamScd::maybeRewindAfterShardsUpdated(bool shards_changed) {
 
 bool ClientReadStreamScd::addToShardsDownAndScheduleRewind(
     const ShardID& shard_id,
-    std::string reason) {
+    RewindReason reason,
+    std::string reason_str) {
   ld_check(isActive());
   if (std::find(filtered_out_.getShardsDown().begin(),
                 filtered_out_.getShardsDown().end(),
@@ -613,7 +637,7 @@ bool ClientReadStreamScd::addToShardsDownAndScheduleRewind(
     return true;
   }
 
-  owner_->scheduleRewind(reason);
+  owner_->scheduleRewind(reason, reason_str);
 
   return true;
 }
@@ -628,6 +652,7 @@ void ClientReadStreamScd::onSenderGapStateChanged(
     bool is_ur = state.getGapState() == GapState::UNDER_REPLICATED;
     if (is_ur && !was_ur) {
       ++under_replicated_shards_not_blacklisted_;
+      WORKER_STAT_INCR(scd_shard_underreplicated_region_entered);
     } else if (!is_ur && was_ur) {
       ld_check(under_replicated_shards_not_blacklisted_ > 0);
       --under_replicated_shards_not_blacklisted_;

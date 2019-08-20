@@ -243,6 +243,100 @@ STAT_DEFINE(severe_errors, SUM)
 // number of attempts to record error messages at severety INFO,NOTE,WARNING
 STAT_DEFINE(production_notices, SUM)
 
+// Read path stats
+STAT_DEFINE(records_lost, SUM)
+STAT_DEFINE(records_received, SUM)
+STAT_DEFINE(records_received_wait_for_all, SUM)
+STAT_DEFINE(records_received_scd, SUM)
+STAT_DEFINE(records_received_noscd, SUM)
+STAT_DEFINE(records_delivered, SUM)
+STAT_DEFINE(records_delivered_wait_for_all, SUM)
+STAT_DEFINE(records_delivered_scd, SUM)
+STAT_DEFINE(records_delivered_noscd, SUM)
+STAT_DEFINE(bytes_delivered, SUM)
+STAT_DEFINE(gap_UNKNOWN, SUM)
+STAT_DEFINE(gap_BRIDGE, SUM)
+STAT_DEFINE(gap_HOLE, SUM)
+STAT_DEFINE(gap_DATALOSS, SUM)
+STAT_DEFINE(gap_TRIM, SUM)
+STAT_DEFINE(gap_ACCESS, SUM)
+STAT_DEFINE(gap_NOTINCONFIG, SUM)
+STAT_DEFINE(gap_FILTERED_OUT, SUM)
+// Number of read streams currently existing.
+// Doesn't include streams that have been destroyed.
+STAT_DEFINE(num_read_streams, SUM)
+STAT_DEFINE(read_streams_healthy, SUM)
+STAT_DEFINE(read_streams_non_authoritative, SUM)
+STAT_DEFINE(read_streams_stalled, SUM)
+
+// Separate new metrics for read streams that are considered stuck/lagging. Not
+// related to read_streams_stalled, read_streams_healthy and
+// read_streams_non_authoritative.  (experimental)
+STAT_DEFINE(read_streams_stuck, SUM)
+STAT_DEFINE(read_streams_lagging, SUM)
+
+// Number of read streams creation events.
+// Includes streams that have been destroyed.
+STAT_DEFINE(client_read_streams_created, SUM)
+
+STAT_DEFINE(records_redelivery_attempted, SUM)
+STAT_DEFINE(gaps_redelivery_attempted, SUM)
+
+// Separate reading stats for metadata logs.
+STAT_DEFINE(metadata_log_records_received, SUM)
+STAT_DEFINE(metadata_log_records_received_wait_for_all, SUM)
+STAT_DEFINE(metadata_log_records_delivered, SUM)
+STAT_DEFINE(metadata_log_records_delivered_wait_for_all, SUM)
+STAT_DEFINE(metadata_log_bytes_delivered, SUM)
+STAT_DEFINE(metadata_log_gap_UNKNOWN, SUM)
+STAT_DEFINE(metadata_log_gap_BRIDGE, SUM)
+STAT_DEFINE(metadata_log_gap_HOLE, SUM)
+STAT_DEFINE(metadata_log_gap_DATALOSS, SUM)
+STAT_DEFINE(metadata_log_gap_TRIM, SUM)
+STAT_DEFINE(metadata_log_gap_ACCESS, SUM)
+STAT_DEFINE(metadata_log_gap_NOTINCONFIG, SUM)
+STAT_DEFINE(metadata_log_gap_FILTERED_OUT, SUM)
+STAT_DEFINE(metadata_log_error_NOTFOUND, SUM)
+
+// Stats about client read stream rewinds and single copy delivery.
+
+// Updates to lists of known down nodes.
+STAT_DEFINE(scd_shard_down_added, SUM)
+STAT_DEFINE(scd_shard_slow_added, SUM)
+STAT_DEFINE(scd_shard_underreplicated_region_entered, SUM)
+STAT_DEFINE(scd_shard_underreplicated_region_promoted, SUM)
+
+// Number of rewinds scheduled for various reasons. Note that a scheduled
+// rewind may end up not executing, or multiple scheduled rewinds may be merged
+// into one, so make sure to check the "rewound_*" counters too.
+STAT_DEFINE(rewind_scheduled, SUM) // all reasons
+STAT_DEFINE(rewind_scheduled_nodeset_or_config_change, SUM)
+STAT_DEFINE(rewind_scheduled_scd_timeout, SUM)
+STAT_DEFINE(rewind_scheduled_scd_all_send_all_timeout, SUM)
+STAT_DEFINE(rewind_scheduled_all_shards_down, SUM)
+STAT_DEFINE(rewind_scheduled_shard_up, SUM)
+STAT_DEFINE(rewind_scheduled_outliers_changed, SUM)
+STAT_DEFINE(rewind_scheduled_rebuilding, SUM)
+STAT_DEFINE(rewind_scheduled_started_failed, SUM)
+STAT_DEFINE(rewind_scheduled_checksum_fail, SUM)
+STAT_DEFINE(rewind_scheduled_under_replicated_region, SUM)
+STAT_DEFINE(rewind_scheduled_shard_not_authoritative, SUM)
+STAT_DEFINE(rewind_scheduled_shard_became_authoritative_empty, SUM)
+STAT_DEFINE(rewind_scheduled_window, SUM)
+STAT_DEFINE(rewind_scheduled_connection_failure, SUM)
+// This type of rewind doesn't actually get scheduled, it's executed directly,
+// and it's not in RewindReason enum.
+// But let's use the same name format as the stats above.
+STAT_DEFINE(rewind_scheduled_when_dataloss, SUM)
+
+// Number of rewinds actually done.
+// "asa" = all-send-all
+STAT_DEFINE(rewind_done, SUM) // all modes
+STAT_DEFINE(rewound_scd_to_scd, SUM)
+STAT_DEFINE(rewound_scd_to_asa, SUM)
+STAT_DEFINE(rewound_asa_to_scd, SUM)
+STAT_DEFINE(rewound_asa_to_asa, SUM)
+
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'
  * admin command.

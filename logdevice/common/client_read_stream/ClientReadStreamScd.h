@@ -22,6 +22,7 @@
 namespace facebook { namespace logdevice {
 
 class Timer;
+enum class RewindReason : uint8_t;
 
 /**
  * @file Contains the logic of the Single Copy Delivery (SCD) optimization
@@ -166,7 +167,9 @@ class ClientReadStreamScd : public boost::noncopyable {
    * Schedule a rewind to the given mode.
    * This function asserts that the current mode is not the requested mode.
    */
-  void scheduleRewindToMode(Mode mode, std::string reason);
+  void scheduleRewindToMode(Mode mode,
+                            RewindReason reason,
+                            std::string reason_str);
 
   /**
    * When in SCD mode, check how many shards do not have the next record to be
@@ -251,7 +254,9 @@ class ClientReadStreamScd : public boost::noncopyable {
    * @return True if the rewind was scheduled (or if there is already a rewind
    * scheduled), or False if the given shard is already in the shards down list.
    */
-  bool addToShardsDownAndScheduleRewind(const ShardID&, std::string reason);
+  bool addToShardsDownAndScheduleRewind(const ShardID&,
+                                        RewindReason reason,
+                                        std::string reason_str);
 
   /**
    * Called when ClientReadStream changed the GapState of a sender.
@@ -448,7 +453,9 @@ class ClientReadStreamScd : public boost::noncopyable {
   void onOutliersChanged(ShardSet outliers, std::string reason);
   // Blacklist a set of outliers according to SCD rules. No-op if this read
   // stream is in ALL_SEND_ALL mode.
-  void rewindWithOutliers(ShardSet outliers, std::string reason);
+  void rewindWithOutliers(ShardSet outliers,
+                          RewindReason reason,
+                          std::string reason_str);
 
   // Utility method to get from client settings whether the detection of slow
   // shards is enabled.

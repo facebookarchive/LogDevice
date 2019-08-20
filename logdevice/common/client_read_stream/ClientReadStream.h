@@ -53,6 +53,24 @@ class UpdateableConfig;
 enum class AuthoritativeStatus : uint8_t;
 enum class ClientReadStreamBufferType : uint8_t;
 
+// All possible causes of stream rewinds. There's a stat for each one.
+enum class RewindReason : uint8_t {
+  NODESET_OR_CONFIG_CHANGE,
+  SCD_TIMEOUT,
+  SCD_ALL_SEND_ALL_TIMEOUT,
+  ALL_SHARDS_DOWN,
+  SHARD_UP,
+  OUTLIERS_CHANGED,
+  REBUILDING,
+  STARTED_FAILED,
+  CHECKSUM_FAIL,
+  UNDER_REPLICATED_REGION,
+  SHARD_NOT_AUTHORITATIVE,
+  SHARD_BECAME_AUTHORITATIVE_EMPTY,
+  WINDOW,
+  CONNECTION_FAILURE,
+};
+
 /**
  * @file State and logic for a read stream for a single log from a client's
  *       perspective.  Manages incoming streams of records from different
@@ -1221,7 +1239,7 @@ class ClientReadStream : boost::noncopyable {
   /**
    * Schedule a rewind of this stream.
    */
-  void scheduleRewind(std::string reason);
+  void scheduleRewind(RewindReason reason, std::string reason_str);
 
   /**
    * @return true if a rewind has been scheduled.
@@ -1233,6 +1251,9 @@ class ClientReadStream : boost::noncopyable {
   /**
    * Clear buffer_ and ask storage nodes to rewind to next_lsn_to_deliver_
    * by sending them a new START message.
+   * The `reason` string may be a concatenation of multiple (human-readable)
+   * reasons if we're rewinding for multiple reasons at once, e.g. a few
+   * shards were added to down list in quick succession.
    */
   void rewind(std::string reason);
 
@@ -1548,6 +1569,11 @@ class ClientReadStream : boost::noncopyable {
   // this variable to catch errors like indirectly deleting this object in a
   // callback.
   bool inside_callback_ = false;
+
+  // If `true`, there's an ongoing rewind, and any rewinds scheduled now will
+  // be unscheduled and merged into the current rewind instead. This flag
+  // is used to avoid updating rewind-scheduling stats in this situation.
+  bool rewind_imminent_ = false;
 
   // When the clientReadStream receives a STARTED_Message with an E::ACCESS
   // error from any storage shard in the current readset, permission_denied_ is

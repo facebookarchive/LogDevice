@@ -50,13 +50,13 @@ void ClientReadStreamConnectionHealth::bumpHealthStat(FmajorityResult health,
   switch (health) {
     case FmajorityResult::AUTHORITATIVE_COMPLETE:
     case FmajorityResult::AUTHORITATIVE_INCOMPLETE:
-      WORKER_STAT_ADD(client.read_streams_healthy, d);
+      WORKER_STAT_ADD(read_streams_healthy, d);
       break;
     case FmajorityResult::NON_AUTHORITATIVE:
-      WORKER_STAT_ADD(client.read_streams_non_authoritative, d);
+      WORKER_STAT_ADD(read_streams_non_authoritative, d);
       break;
     case FmajorityResult::NONE:
-      WORKER_STAT_ADD(client.read_streams_stalled, d);
+      WORKER_STAT_ADD(read_streams_stalled, d);
       break;
   }
 }

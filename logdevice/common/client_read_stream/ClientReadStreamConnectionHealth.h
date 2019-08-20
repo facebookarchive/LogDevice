@@ -24,12 +24,12 @@
  *
  * Finally, this bumps various counters that the operator can use to alert when
  * readers do not have a good connection:
- *   - client.read_streams_healthy: number of read streams that have a healthy
+ *   - read_streams_healthy: number of read streams that have a healthy
  *     connection to enough shards in the read set;
- *   - client.read_streams_non_authoritative: number of read streams that are
+ *   - read_streams_non_authoritative: number of read streams that are
  *      not stalled but may see dataloss because too many shards lost data and
  *      the data is not recoverable;
- *   - client.read_streams_stalled: number of read streams that are stalled
+ *   - read_streams_stalled: number of read streams that are stalled
  *     because they don't have a healthy connection to a f-majority of shards in
  *     the read set.
  *

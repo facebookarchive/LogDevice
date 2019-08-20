@@ -58,66 +58,6 @@ STAT_DEFINE(append_probes_bytes_saved, SUM)
 // (stat mainly for tests)
 STAT_DEFINE(append_probes_bytes_unsent_probe_send_error, SUM)
 
-// Read path stats
-STAT_DEFINE(records_lost, SUM)
-STAT_DEFINE(records_received, SUM)
-STAT_DEFINE(records_received_wait_for_all, SUM)
-STAT_DEFINE(records_received_scd, SUM)
-STAT_DEFINE(records_received_noscd, SUM)
-STAT_DEFINE(records_delivered, SUM)
-STAT_DEFINE(records_delivered_wait_for_all, SUM)
-STAT_DEFINE(records_delivered_scd, SUM)
-STAT_DEFINE(records_delivered_noscd, SUM)
-STAT_DEFINE(bytes_delivered, SUM)
-STAT_DEFINE(gap_UNKNOWN, SUM)
-STAT_DEFINE(gap_BRIDGE, SUM)
-STAT_DEFINE(gap_HOLE, SUM)
-STAT_DEFINE(gap_DATALOSS, SUM)
-STAT_DEFINE(gap_TRIM, SUM)
-STAT_DEFINE(gap_ACCESS, SUM)
-STAT_DEFINE(gap_NOTINCONFIG, SUM)
-STAT_DEFINE(gap_FILTERED_OUT, SUM)
-// Number of read streams currently existing.
-// Doesn't include streams that have been destroyed.
-STAT_DEFINE(num_read_streams, SUM)
-STAT_DEFINE(read_streams_healthy, SUM)
-STAT_DEFINE(read_streams_non_authoritative, SUM)
-STAT_DEFINE(read_streams_stalled, SUM)
-
-// How many times a ClientReadStream rewound upon determining a dataloss gap.
-// This rewind is here to mitigate potential issues leading to a storage shard
-// skipping a record.
-STAT_DEFINE(read_streams_rewinds_when_dataloss, SUM)
-
-// Separate new metrics for read streams that are considered stuck/lagging. Not
-// related to read_streams_stalled, read_streams_healthy and
-// read_streams_non_authoritative.  (experimental)
-STAT_DEFINE(read_streams_stuck, SUM)
-STAT_DEFINE(read_streams_lagging, SUM)
-
-// Number of read streams creation events.
-// Includes streams that have been destroyed.
-STAT_DEFINE(client_read_streams_created, SUM)
-
-STAT_DEFINE(records_redelivery_attempted, SUM)
-STAT_DEFINE(gaps_redelivery_attempted, SUM)
-
-// separate reading stats for metadata logs
-STAT_DEFINE(metadata_log_records_received, SUM)
-STAT_DEFINE(metadata_log_records_received_wait_for_all, SUM)
-STAT_DEFINE(metadata_log_records_delivered, SUM)
-STAT_DEFINE(metadata_log_records_delivered_wait_for_all, SUM)
-STAT_DEFINE(metadata_log_bytes_delivered, SUM)
-STAT_DEFINE(metadata_log_gap_UNKNOWN, SUM)
-STAT_DEFINE(metadata_log_gap_BRIDGE, SUM)
-STAT_DEFINE(metadata_log_gap_HOLE, SUM)
-STAT_DEFINE(metadata_log_gap_DATALOSS, SUM)
-STAT_DEFINE(metadata_log_gap_TRIM, SUM)
-STAT_DEFINE(metadata_log_gap_ACCESS, SUM)
-STAT_DEFINE(metadata_log_gap_NOTINCONFIG, SUM)
-STAT_DEFINE(metadata_log_gap_FILTERED_OUT, SUM)
-STAT_DEFINE(metadata_log_error_NOTFOUND, SUM)
-
 // GetClusterStateRequest stats
 STAT_DEFINE(get_cluster_state_started, SUM)
 STAT_DEFINE(get_cluster_state_errors, SUM)
