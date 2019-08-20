@@ -20,6 +20,11 @@ int LocalLogFile::open(const std::string& path) {
 }
 
 void LocalLogFile::reopen() {
-  file_.reopen();
+  int err = file_.reopen();
+  if (err == -1) {
+    ld_error("Could not re-open local log file %s: %s",
+             file_.path().c_str(),
+             ::strerror(errno));
+  }
 }
 }} // namespace facebook::logdevice

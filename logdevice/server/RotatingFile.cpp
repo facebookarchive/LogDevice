@@ -62,4 +62,8 @@ ssize_t RotatingFile::write_(int fd, const void* buf, size_t count) {
   return ::write(fd, buf, count);
 }
 
+std::string RotatingFile::path() {
+  return path_;
+}
+
 }} // namespace facebook::logdevice
