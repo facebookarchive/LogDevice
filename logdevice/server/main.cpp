@@ -184,30 +184,41 @@ possibly_lock_mem(UpdateableSettings<ServerSettings> server_settings) {
  * command line.
  */
 static void drop_root(UpdateableSettings<ServerSettings> server_settings) {
+  auto settings = server_settings.get();
+
   if (getuid() == 0 || geteuid() == 0) {
-    if (server_settings->user.empty()) {
+    if (settings->user.empty()) {
       ld_warning("Running under root, but no --user command line option "
                  "specified. Will keep running as root");
       return;
     }
 
-    struct passwd* pw = getpwnam(server_settings->user.c_str());
+    const char* user = settings->user.c_str();
+    struct passwd* pw = getpwnam(settings->user.c_str());
     if (pw == nullptr) {
-      ld_error("Cannot find user \"%s\" to switch to",
-               server_settings->user.c_str());
+      ld_error("Cannot find user \"%s\" to switch to", user);
       exit(1);
     }
 
+    // chown() any rotating log files that we created while still root
+    // For now, this is just the audit log
+    if (!settings->audit_log.empty()) {
+      const char* audit_log = settings->audit_log.c_str();
+      if (chown(audit_log, pw->pw_uid, pw->pw_gid) < 0) {
+        ld_error("Failed to chown the file %s to user %s", audit_log, user);
+        exit(1);
+      }
+    }
+
     if (setgid(pw->pw_gid) < 0 || setuid(pw->pw_uid) < 0) {
-      ld_error("Failed to assume identity of user %s",
-               server_settings->user.c_str());
+      ld_error("Failed to assume identity of user %s", user);
       exit(1);
     }
 #ifdef __linux__
     /* re-enable coredumps after setuid() */
     prctl(PR_SET_DUMPABLE, 1);
 #endif
-  } else if (!server_settings->user.empty()) {
+  } else if (!settings->user.empty()) {
     ld_error("Specified --user on the command line but did not start as root");
     exit(1);
   }
