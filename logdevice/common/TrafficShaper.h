@@ -46,6 +46,10 @@ class TrafficShaper {
   }
 
  private:
+  // Maximum number of the main loop iteration we can do holding the mutex.
+  // The value was picked experimentally using integration tests.
+  static constexpr uint32_t kMaxDispatchesInARow = 256;
+
   class RunFlowGroupsRequest;
   class RunFlowGroupsRequestReadIO;
 

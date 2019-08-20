@@ -128,35 +128,43 @@ void TrafficShaper::mainLoop() {
   ThreadID::set(ThreadID::Type::UTILITY, "ld:tshaper");
 
   auto next_run = std::chrono::steady_clock::now();
-  std::unique_lock<std::mutex> cv_lock(mainLoopWaitMutex_);
   while (!mainLoopStop_.load()) {
-    HISTOGRAM_ADD(stats_, traffic_shaper_bw_dispatch, usec_since(next_run));
-    bool timed_sleep_nw = dispatchUpdateNw();
-    bool timed_sleep_readio = dispatchUpdateReadIO();
-    auto now = std::chrono::steady_clock::now();
-    next_run += updateInterval_;
-    if (now < next_run) {
-      if (timed_sleep_nw || timed_sleep_readio) {
-        mainLoopWaitCondition_.wait_for(cv_lock, next_run - now);
+    uint32_t in_a_row = 0;
+    // Make sure we release the lock once in a while.
+    // Without it, we've seen the main loop starving
+    // other threads in a heavily utilized systems.
+    std::unique_lock<std::mutex> cv_lock(mainLoopWaitMutex_);
+    while (in_a_row < kMaxDispatchesInARow && !mainLoopStop_.load()) {
+      HISTOGRAM_ADD(stats_, traffic_shaper_bw_dispatch, usec_since(next_run));
+      bool timed_sleep_nw = dispatchUpdateNw();
+      bool timed_sleep_readio = dispatchUpdateReadIO();
+      auto now = std::chrono::steady_clock::now();
+      next_run += updateInterval_;
+      if (now < next_run) {
+        if (timed_sleep_nw || timed_sleep_readio) {
+          mainLoopWaitCondition_.wait_for(cv_lock, next_run - now);
+        } else {
+          mainLoopWaitCondition_.wait(cv_lock);
+          // Don't record a long dispatch delay since we purposely slept
+          // for an indeterminate amount of time (e.g. until a configuration
+          // change occurred).
+          next_run = std::chrono::steady_clock::now();
+        }
       } else {
-        mainLoopWaitCondition_.wait(cv_lock);
-        // Don't record a long dispatch delay since we purposely slept
-        // for an indeterminate amount of time (e.g. until a configuration
-        // change occurred).
-        next_run = std::chrono::steady_clock::now();
+        // We are running late. Dispatch the next quantum immediately.
+        // next_run isn't updated since we want any bandwidth credits we
+        // should have accumulated to be distributed to Senders. The
+        // maximum burst setting should still prevent network overloading.
       }
-    } else {
-      // We are running late. Dispatch the next quantum immediately.
-      // next_run isn't updated since we want any bandwidth credits we
-      // should have accumulated to be distributed to Senders. The
-      // maximum burst setting should still prevent network overloading.
-    }
 
-    if (now > next_limits_publication_) {
-      auto config = processor_->config_->updateableServerConfig()->get();
-      updateStats(&config->getTrafficShapingConfig(), nw_shaping_deps_.get());
-      updateStats(&config->getReadIOShapingConfig(), read_shaping_deps_.get());
-      next_limits_publication_ = now + limits_update_interval_;
+      if (now > next_limits_publication_) {
+        auto config = processor_->config_->updateableServerConfig()->get();
+        updateStats(&config->getTrafficShapingConfig(), nw_shaping_deps_.get());
+        updateStats(
+            &config->getReadIOShapingConfig(), read_shaping_deps_.get());
+        next_limits_publication_ = now + limits_update_interval_;
+      }
+      ++in_a_row;
     }
   }
 }
