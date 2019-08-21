@@ -333,7 +333,9 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
 
 void ClientReadStream::sampleDebugInfo(
     const ClientReadStream::ClientReadStreamDebugInfo& info) const {
-  if (!deps_->getSettings().enable_all_read_streams_sampling) {
+  if (deps_->getSettings().all_read_streams_sampling_allowed_csid !=
+          info.csid ||
+      info.csid == "") {
     return;
   }
   auto sample = std::make_unique<TraceSample>();

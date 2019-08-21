@@ -285,6 +285,8 @@ ClientImpl::ClientImpl(std::string cluster_name,
 
   settings_subscription_handle_ =
       settings.subscribeToUpdates([this] { this->updateStatsSettings(); });
+
+  ld_info("Client created with Client Session id=%s", csid_.c_str());
 }
 
 ClientImpl::~ClientImpl() {

@@ -46,7 +46,8 @@ std::unique_ptr<MessageDispatch> ClientWorker::createMessageDispatch() {
 
 void ClientWorker::sampleAllReadStreamsDegubInfo() const {
   clientReadStreams().sampleAllReadStreamsDegubInfo();
-  sample_read_streams_timer_->activate(settings().all_read_streams_rate);
+  sample_read_streams_timer_->activate(
+      settings().all_read_streams_sampling_rate);
 }
 
 void ClientWorker::setupWorker() {

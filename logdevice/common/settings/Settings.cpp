@@ -3209,17 +3209,17 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::Security);
 
-  init("enable-all-read-streams-sampling",
-       &enable_all_read_streams_sampling,
-       "false",
+  init("all-read-streams-sampling-allowed-csid",
+       &all_read_streams_sampling_allowed_csid,
+       "",
        nullptr, // no validation
-       "Enables sampling of debug info from client's all read "
-       "streams.",
+       "Enable all read streams sampling for client with specified Client "
+       "Session ID. If value empty then sampling disabled for all clients.",
        CLIENT,
        SettingsCategory::ReadPath);
 
-  init("all-read-streams-rate",
-       &all_read_streams_rate,
+  init("all-read-streams-sampling-rate",
+       &all_read_streams_sampling_rate,
        "100ms",
        validate_positive<ssize_t>(),
        "Rate of sampling all client read streams debug info",

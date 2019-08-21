@@ -234,7 +234,8 @@ sidebar_label: Settings
 ## Read path
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
-| all-read-streams-rate | Rate of sampling all client read streams debug info | 100ms | client&nbsp;only |
+| all-read-streams-sampling-allowed-csid | Enable all read streams sampling for client with specified Client Session ID. If value empty then sampling disabled for all clients. |  | client&nbsp;only |
+| all-read-streams-sampling-rate | Rate of sampling all client read streams debug info | 100ms | client&nbsp;only |
 | authoritative-status-overrides | Force the given authoritative statuses for the given shards. Comma-separated list of overrides, each override of form 'N<node>S<shard>:<status>' or 'N<node>S<shard1>-<shard2>:<status>'. E.g. 'N7:S0-15:UNDERREPLICATION,N8:S2:UNDERREPLICATION' will set status of shards 0-15 of node 7 and shard 2 of node 8 to UNDERREPLICATION. This is useful for recovering from situations where internal logs or metadata logs are unreadable because too many nodes are unavailable or lost their data. In such situation, use this setting to temporarily override the state of shards that are unavailable (not running logdeviced) to UNDERREPLICATION, then, optionally, write SHARD\_UNRECOVERABLE events for the same shards to event log. |  | server&nbsp;only |
 | client-epoch-metadata-cache-size | maximum number of entries in the client-side epoch metadata cache. Set it to 0 to disable the epoch metadata cache. | 50000 | requires&nbsp;restart, client&nbsp;only |
 | client-initial-redelivery-delay | Initial delay to use when reader application rejects a record or gap | 1s |  |
@@ -243,7 +244,6 @@ sidebar_label: Settings
 | client-read-buffer-size | number of records to buffer per read stream in the client object while reading. If this setting is changed on-the-fly, the change will only apply to new reader instances | 512 |  |
 | client-read-flow-control-threshold | threshold (relative to buffer size) at which the client broadcasts window update messages (less means more often) | 0.7 |  |
 | data-log-gap-grace-period | When non-zero, replaces gap-grace-period for data logs. | 0ms |  |
-| enable-all-read-streams-sampling | Enables sampling of debug info from client's all read streams. | false | client&nbsp;only |
 | enable-read-throttling | Throttle Disk I/O due to log read streams | false | server&nbsp;only |
 | gap-grace-period | gap detection grace period for all logs, including data logs, metadata logs, and internal state machine logs. Millisecond granularity. Can be 0. | 100ms |  |
 | grace-counter-limit | Maximum number of consecutive grace periods a storage node may fail to send a record or gap (if in all read all mode) before it is considered disgraced and client read streams no longer wait for it. If all nodes are disgraced or in GAP state, a gap record is issued. May be 0. Set to -1 to disable grace counters and use simpler logic: no disgraced nodes, issue gap record as soon as grace period expires. | 2 |  |
