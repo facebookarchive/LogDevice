@@ -493,7 +493,9 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   client_settings["event-log-snapshotting"] = "false";
   server_settings["event-log-snapshotting"] = "false";
 
-  if (!no_ssl_address_) {
+  if (no_ssl_address_) {
+    client_settings["ssl-load-client-cert"] = "false";
+  } else {
     client_settings["ssl-ca-path"] =
         TEST_SSL_FILE("logdevice_test_valid_ca.cert");
   }
