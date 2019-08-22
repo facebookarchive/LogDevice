@@ -35,6 +35,18 @@ class VersionedConfigStore {
   using write_callback_t =
       folly::Function<void(Status, version_t, std::string)>;
 
+  /*
+   *  @param folly::Optional<std::string>
+   *         The current value in the config store.
+   *         If there is no current value for the key, then folly::none
+   *  @return std::pair<Status, folly::Optional<std::string>
+   *         <Status,Value> after mutation. If Status::OK, mutation will
+   *         continue with the update using the returned value, else value
+   *         will be ignored.
+   */
+  using mutation_callback_t = folly::Function<std::pair<Status, std::string>(
+      folly::Optional<std::string>)>;
+
   // Function that VersionedConfigStore could call on stored values to
   // extract the corresponding membership version. If value is invalid, the
   // function should return folly::none.
@@ -45,7 +57,10 @@ class VersionedConfigStore {
   using extract_version_fn =
       folly::Function<folly::Optional<version_t>(folly::StringPiece) const>;
 
-  explicit VersionedConfigStore() {}
+  VersionedConfigStore() = delete;
+  explicit VersionedConfigStore(extract_version_fn fn)
+      : extract_fn_(std::move(fn)) {}
+
   virtual ~VersionedConfigStore() {}
 
   /*
@@ -149,7 +164,84 @@ class VersionedConfigStore {
   virtual void updateConfig(std::string key,
                             std::string value,
                             folly::Optional<version_t> base_version,
-                            write_callback_t cb = {}) = 0;
+                            write_callback_t cb = {});
+
+  /*
+   * Read-Modify-Write a configuration value using a given key.
+   * @brief
+   *   On read:
+   *      - If value is read or key not found, mutation callback will be called
+   *        with folly::Optional<std::string> for value.
+   *        If the key is not found., mutation callback will be called with
+   *        folly::none
+   *      - If there is any error during the read, write_callback cb will be
+   *        invoked with the error.
+   *   Mutation callback.
+   *       - Mutation callback is used to read the current value and return
+   *         the new value to be written for a given key and status.
+   *       - Mutation callback should return with status,value to continue
+   *         to the write phaste.
+   *       - If the status returned is OK, the new value will be written to the
+   *         store. Else, the write_callback wb will be invoked with the
+   *         returned status and value.
+   *         The value will be ignored if status != Status::OK
+   *   Write callback.
+   *     Write callback is the final callback for the readModifyWriteUpdate
+   *     api. All errors for this api should be handled by the user as part
+   *     this callback.
+   *      Error path:
+   *        - Write callback with the error will be called during
+   *          read/mutate/write path. The errors returned by mutation cb
+   *          will be propagated to write callback.
+   *      Success:
+   *        - On success, cb will be invoked with the version of the newly
+   *          written config. The version of new value to be written should be
+   *          greater than the version of the read value.
+   *
+   * @param key: key of the config
+   * @param mcb:
+   *     mcb callback :
+   *   	 callback std::pair<Status,std::string>(folly::Optional<std::string>)
+   *   	 will be invoked with
+   *   	     - Current value if it exists in config. Else, folly::none
+   *   	 mcb should return std::pair<Status, std::string> ==>
+   *   	     Status: Status of the mutator function. If OK, the associated
+   *   	     std::string (value) will be updated in the config. Else, cb with
+   *   	     status will be invoked with the status and value returned by
+   *         mutator function.
+   *   	     Value (std::string): Value to be updated in config.
+   *         The mutator function is allowed to return the following status.
+   *            - Status::OK, Status::VERSION_MISMATCH and Status::SHUTDOWN.
+   * @param cb:
+   *  Write callback.
+   *     Write callback is the final callback for the readModifyWriteUpdate
+   *     api. All errors for this api should be handled by the user as part
+   *     this callback.
+   *      Error path:
+   *        - Write callback will the error will be called during
+   *          read/mutate/write path. The errors propagated from mutation cb
+   *          will be propagated to write callback.
+   *   callback void(Status, version_t, std::string value) that will be invoked
+   *   if the status is one of:
+   *     OK
+   *     NOTFOUND // only possible when base_version.hasValue()
+   *     VERSION_MISMATCH
+   *     ACCESS
+   *     AGAIN
+   *     BADMSG // see implementation notes below
+   *     INVALID_PARAM // see implementation notes below
+   *     INVALID_CONFIG // see implementation notes below
+   *     SHUTDOWN
+   *   If status is OK, cb will be invoked with the version of the newly written
+   *   config. If status is VERSION_MISMATCH, cb will be invoked with the
+   *   version that caused the mismatch as well as the existing config, if
+   *   available (i.e., always check in the callback whether version is
+   *   EMPTY_VERSION). Otherwise, the version and value parameter(s) are
+   *   meaningless (default-constructed).
+   */
+  virtual void readModifyWriteConfig(std::string key,
+                                     mutation_callback_t mcb,
+                                     write_callback_t cb = {}) = 0;
 
   /*
    * Synchronous updateConfig
@@ -200,6 +292,9 @@ class VersionedConfigStore {
   virtual void shutdown() = 0;
 
   // TODO: add subscription API
+
+ protected:
+  extract_version_fn extract_fn_;
 };
 
 }} // namespace facebook::logdevice

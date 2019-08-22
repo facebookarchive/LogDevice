@@ -133,6 +133,11 @@ void ServerBasedNodesConfigurationStore::getLatestConfig(
   throw std::runtime_error("unsupported");
 }
 
+void ServerBasedNodesConfigurationStore::readModifyWriteConfig(
+    mutation_callback_t /* mutation callback */,
+    write_callback_t /* callback */) {
+  throw std::runtime_error("unsupported");
+}
 void ServerBasedNodesConfigurationStore::updateConfig(
     std::string /* value */,
     folly::Optional<version_t> /* base_version */,

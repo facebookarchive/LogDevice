@@ -25,8 +25,8 @@ namespace facebook { namespace logdevice {
 FileBasedVersionedConfigStore::FileBasedVersionedConfigStore(
     std::string root_path,
     extract_version_fn f)
-    : root_path_(std::move(root_path)),
-      extract_fn_(std::move(f)),
+    : VersionedConfigStore(std::move(f)),
+      root_path_(std::move(root_path)),
       task_queue_(QUEUE_SIZE) {
   // start task threads
   for (auto i = 0; i < NUM_THREADS; ++i) {
@@ -144,6 +144,7 @@ void FileBasedVersionedConfigStore::getConfigImpl(
 void FileBasedVersionedConfigStore::updateConfigImpl(
     std::string key,
     std::string value,
+    version_t new_version,
     folly::Optional<version_t> base_version,
     write_callback_t cb) {
   if (shutdown_signaled_.load()) {
@@ -155,14 +156,6 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
     cb(E::INVALID_PARAM, {}, "");
     return;
   }
-
-  auto opt = (extract_fn_)(value);
-  if (!opt) {
-    cb(E::INVALID_PARAM, {}, "");
-    return;
-  }
-
-  version_t new_version = opt.value();
 
   folly::File lock_file;
   try {
@@ -278,24 +271,70 @@ void FileBasedVersionedConfigStore::getLatestConfig(std::string key,
   getConfig(std::move(key), std::move(cb));
 }
 
-void FileBasedVersionedConfigStore::updateConfig(
+void FileBasedVersionedConfigStore::readModifyWriteConfig(
     std::string key,
-    std::string value,
-    folly::Optional<version_t> base_version,
+    mutation_callback_t mcb,
     write_callback_t cb) {
   if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, {}, "");
     return;
   }
 
+  std::string current_value;
+  auto status = getConfigSync(key, &current_value);
+  if (status != E::OK && status != E::NOTFOUND) {
+    cb(status, version_t{}, "");
+    return;
+  }
+
+  folly::Optional<version_t> cur_ver = folly::none;
+  if (status == E::OK) {
+    auto curr_version_opt = extract_fn_(current_value);
+    if (!curr_version_opt) {
+      cb(E::BADMSG, version_t{}, "");
+      return;
+    }
+    cur_ver = curr_version_opt.value();
+  }
+
+  auto status_value =
+      (mcb)((status == E::NOTFOUND)
+                ? folly::none
+                : folly::Optional<std::string>(std::move(current_value)));
+  auto& write_value = status_value.second;
+  if (status_value.first != E::OK) {
+    cb(status_value.first, version_t{}, std::move(write_value));
+    return;
+  }
+
+  auto opt = (extract_fn_)(write_value);
+  if (!opt) {
+    cb(E::INVALID_PARAM, {}, "");
+    return;
+  }
+  version_t new_version = opt.value();
+
+  // TODO: Add stricter enforcement of monotonic increment of version.
+  if (cur_ver.hasValue() && new_version.val() <= cur_ver.value().val()) {
+    RATELIMIT_WARNING(std::chrono::seconds(10),
+                      5,
+                      "Config value's version is not monitonically increasing"
+                      "key: \"%s\". prev version: \"%lu\". version: \"%lu\"",
+                      key.c_str(),
+                      cur_ver.value().val(),
+                      new_version.val());
+  }
+
   bool success =
       task_queue_.writeIfNotFull([this,
                                   key = std::move(key),
-                                  value = std::move(value),
-                                  base_version = std::move(base_version),
+                                  value = std::move(write_value),
+                                  base_version = std::move(cur_ver),
+                                  new_version = std::move(new_version),
                                   cb = std::move(cb)]() mutable {
         updateConfigImpl(std::move(key),
                          std::move(value),
+                         std::move(new_version),
                          std::move(base_version),
                          std::move(cb));
       });

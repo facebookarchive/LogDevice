@@ -33,6 +33,13 @@ class MockNodesConfigurationStore : public NodesConfigurationStore {
   }
   MOCK_CONST_METHOD1(getLatestConfig_, void(value_callback_t& cb));
 
+  void readModifyWriteConfig(mutation_callback_t mcb, write_callback_t cb) {
+    readModifyWriteConfig_(std::move(mcb), std::move(cb));
+  }
+
+  MOCK_METHOD2(readModifyWriteConfig_,
+               void(mutation_callback_t mcb, write_callback_t cb));
+
   void updateConfig(std::string value,
                     folly::Optional<version_t> base_version,
                     write_callback_t cb) {

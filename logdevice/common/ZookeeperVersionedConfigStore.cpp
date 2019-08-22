@@ -34,7 +34,7 @@ void ZookeeperVersionedConfigStore::getConfig(
   ld_assert(locked_ptr && !*locked_ptr);
 
   ZookeeperClientBase::data_callback_t completion =
-      [cb = std::move(callback), extract_fn = extract_fn_, base_version, key](
+      [this, cb = std::move(callback), base_version, key](
           int rc, std::string value, zk::Stat) mutable {
         Status status = ZookeeperClientBase::toStatus(rc);
         if (status != Status::OK) {
@@ -43,7 +43,7 @@ void ZookeeperVersionedConfigStore::getConfig(
         }
 
         if (base_version.hasValue()) {
-          auto current_version_opt = (*extract_fn)(value);
+          auto current_version_opt = extract_fn_(value);
           if (!current_version_opt) {
             RATELIMIT_WARNING(
                 std::chrono::seconds(10),
@@ -105,35 +105,23 @@ void ZookeeperVersionedConfigStore::getLatestConfig(
   zk_->sync(std::move(sync_cb));
 }
 
-void ZookeeperVersionedConfigStore::updateConfig(
+void ZookeeperVersionedConfigStore::readModifyWriteConfig(
     std::string key,
-    std::string value,
-    folly::Optional<version_t> base_version,
-    write_callback_t callback) {
+    mutation_callback_t mcb,
+    write_callback_t cb) {
   auto locked_ptr = shutdown_completed_.tryRLock();
   if (shutdownSignaled()) {
-    callback(E::SHUTDOWN, version_t{}, "");
+    cb(E::SHUTDOWN, version_t{}, "");
     return;
   }
   ld_assert(locked_ptr && !*locked_ptr);
 
-  auto opt = (*extract_fn_)(value);
-  if (!opt) {
-    err = E::INVALID_PARAM;
-    callback(E::INVALID_PARAM, version_t{}, "");
-    return;
-  }
-  version_t new_version = opt.value();
-
   // naive implementation of read-modify-write
   ZookeeperClientBase::data_callback_t read_cb =
       [this,
-       extract_fn = extract_fn_,
        key,
-       write_value = std::move(value),
-       base_version,
-       new_version,
-       write_callback = std::move(callback)](
+       mutation_callback = std::move(mcb),
+       write_callback = std::move(cb)](
           int rc, std::string current_value, zk::Stat zk_stat) mutable {
         auto locked_p = this->shutdown_completed_.tryRLock();
         // (1) try acquiring rlock failed || (2) shutdown_completed == true
@@ -145,31 +133,63 @@ void ZookeeperVersionedConfigStore::updateConfig(
           return;
         }
 
-        bool should_create_znode = (rc == ZNONODE) && !base_version.hasValue();
-        if (rc != ZOK && !should_create_znode) {
-          write_callback(ZookeeperClientBase::toStatus(rc), {}, "");
+        if (rc != ZNONODE && rc != ZOK) {
+          write_callback(ZookeeperClientBase::toStatus(rc), version_t{}, "");
+          return;
+        }
+        folly::Optional<version_t> cur_opt = folly::none;
+        if (rc != ZNONODE) {
+          cur_opt = extract_fn_(current_value);
+          if (!cur_opt) {
+            RATELIMIT_WARNING(
+                std::chrono::seconds(10),
+                5,
+                "Failed to extract version from value read from "
+                "ZookeeperVersionedConfigurationStore. key: \"%s\"",
+                key.c_str());
+          }
+        }
+        auto status_value = mutation_callback(
+            (rc == ZNONODE)
+                ? folly::none
+                : folly::Optional<std::string>(std::move(current_value)));
+        auto& write_value = status_value.second;
+
+        if (status_value.first != E::OK) {
+          write_callback(
+              status_value.first, version_t{}, std::move(write_value));
           return;
         }
 
-        if (!should_create_znode) {
-          auto current_version_opt = (*extract_fn)(current_value);
-          if (!current_version_opt) {
-            RATELIMIT_WARNING(std::chrono::seconds(10),
-                              5,
-                              "Failed to extract version from value read from "
-                              "ZookeeperNodesConfigurationStore. key: \"%s\"",
-                              key.c_str());
-            write_callback(Status::BADMSG, {}, "");
-            return;
-          }
-          version_t current_version = current_version_opt.value();
-          if (base_version.hasValue() && base_version != current_version) {
-            // version conditional update failed, invoke the callback with the
-            // version and value that are more recent
-            write_callback(Status::VERSION_MISMATCH,
-                           current_version,
-                           std::move(current_value));
-            return;
+        folly::Optional<version_t> opt = folly::none;
+        opt = extract_fn_(write_value);
+        if (!opt) {
+          RATELIMIT_WARNING(std::chrono::seconds(10),
+                            5,
+                            "Failed to extract version from value provided for "
+                            " key: \"%s\"",
+                            key.c_str());
+          err = E::INVALID_PARAM;
+          write_callback(E::INVALID_PARAM, version_t{}, "");
+          return;
+        }
+        version_t new_version = opt.value();
+
+        if (rc != ZNONODE) {
+          if (cur_opt) {
+            version_t cur_version = cur_opt.value();
+            if (new_version.val() <= cur_version.val()) {
+              // TODO: Add stricter enforcement of monotonic increment of
+              // version.
+              RATELIMIT_WARNING(
+                  std::chrono::seconds(10),
+                  5,
+                  "Config value's version is not monitonically increasing"
+                  "key: \"%s\". prev version: \"%lu\". version: \"%lu\"",
+                  key.c_str(),
+                  cur_version.val(),
+                  new_version.val());
+            }
           }
 
           ZookeeperClientBase::stat_callback_t completion =

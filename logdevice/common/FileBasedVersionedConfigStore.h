@@ -33,16 +33,14 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
                  folly::Optional<version_t> base_version = {}) const override;
   void getLatestConfig(std::string key, value_callback_t cb) const override;
 
-  void updateConfig(std::string key,
-                    std::string value,
-                    folly::Optional<version_t> base_version,
-                    write_callback_t cb = {}) override;
+  void readModifyWriteConfig(std::string key,
+                             mutation_callback_t mcb,
+                             write_callback_t cb = {}) override;
 
   void shutdown() override;
 
  private:
   const std::string root_path_;
-  extract_version_fn extract_fn_;
 
   // task thread for async tasks
   std::atomic<bool> shutdown_signaled_{false};
@@ -57,6 +55,7 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
                      folly::Optional<version_t> base_version) const;
   void updateConfigImpl(std::string key,
                         std::string value,
+                        version_t version,
                         folly::Optional<version_t> base_version,
                         write_callback_t cb);
 

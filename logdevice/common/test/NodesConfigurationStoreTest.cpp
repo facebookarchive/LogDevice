@@ -27,6 +27,7 @@ using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration;
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership;
+using mutation_callback_t = FileBasedVersionedConfigStore::mutation_callback_t;
 
 using version_t = NodesConfigurationStore::version_t;
 
@@ -67,7 +68,24 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
   folly::Baton<> b;
   std::string value_out{};
 
+  // TODO: Add tests for empty value configuration.(T52914072)
+
   if (initialWrite) {
+    // Read modify write using readModifyWriteConfig : CANCEL after initial
+    // read.
+    auto mutation_func = [](folly::Optional<std::string> current_value)
+        -> std::pair<Status, std::string> {
+      EXPECT_EQ(current_value, folly::none);
+      return std::make_pair(Status::CANCELLED, "");
+    };
+    store->readModifyWriteConfig(
+        mutation_func,
+        [&b](Status status, version_t /* version */, std::string /* value */) {
+          EXPECT_EQ(Status::CANCELLED, status);
+          b.post();
+        });
+    checkAndResetBaton(b);
+
     // no config stored yet
     store->getConfig([&b](Status status, std::string) {
       EXPECT_EQ(Status::NOTFOUND, status);
@@ -162,6 +180,53 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
               TestEntry::fromSerialized(std::move(value)));
     b.post();
   });
+  checkAndResetBaton(b);
+
+  // Test Read-Modify-Write using readModifyWriteConfig.
+  curr_version = next_version;
+  next_version.val_ = curr_version.val_ + 1;
+  auto mutation_func =
+      [curr_version, next_version](folly::Optional<std::string> current_value) {
+        EXPECT_EQ(TestEntry(curr_version, "foo789"),
+                  TestEntry::fromSerialized(*current_value));
+        return std::make_pair(
+            Status::OK, TestEntry(next_version, "foo890").serialize());
+      };
+
+  store->readModifyWriteConfig(
+      mutation_func,
+      [&b, next_version](
+          Status status, version_t version, std::string /* value */) {
+        EXPECT_EQ(Status::OK, status);
+        EXPECT_EQ(next_version, version);
+        b.post();
+      });
+  checkAndResetBaton(b);
+
+  store->getLatestConfig([&b, next_version](Status status, std::string value) {
+    EXPECT_EQ(Status::OK, status);
+    EXPECT_EQ(TestEntry(next_version, "foo890"),
+              TestEntry::fromSerialized(std::move(value)));
+    b.post();
+  });
+  checkAndResetBaton(b);
+
+  curr_version = next_version;
+  // Read modify write : Cancel after read.
+  auto mutation_func2 =
+      [curr_version](folly::Optional<std::string> current_value)
+      -> std::pair<Status, std::string> {
+    EXPECT_EQ(TestEntry(curr_version, "foo890"),
+              TestEntry::fromSerialized(*current_value));
+    return std::make_pair(Status::CANCELLED, "");
+  };
+
+  store->readModifyWriteConfig(
+      mutation_func2,
+      [&b](Status status, version_t /* version */, std::string /* value */) {
+        EXPECT_EQ(Status::CANCELLED, status);
+        b.post();
+      });
   checkAndResetBaton(b);
 }
 

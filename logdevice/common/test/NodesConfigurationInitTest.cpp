@@ -81,6 +81,11 @@ class TimeControlledNCS : public NodesConfigurationStore {
     return E::INTERNAL;
   }
 
+  void readModifyWriteConfig(mutation_callback_t /* mutation callback */,
+                             write_callback_t /* callback */) override {
+    ld_check(false);
+  }
+
   void updateConfig(std::string,
                     folly::Optional<version_t>,
                     write_callback_t) override {

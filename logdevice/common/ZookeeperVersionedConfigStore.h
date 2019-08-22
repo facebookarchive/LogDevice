@@ -23,8 +23,7 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
   explicit ZookeeperVersionedConfigStore(
       extract_version_fn extract_fn,
       std::unique_ptr<ZookeeperClientBase> zk)
-      : extract_fn_(
-            std::make_shared<extract_version_fn>(std::move(extract_fn))),
+      : VersionedConfigStore(std::move(extract_fn)),
         zk_(std::move(zk)),
         shutdown_signaled_(false),
         shutdown_completed_(false) {
@@ -47,10 +46,9 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
   // then the actual read.
   void getLatestConfig(std::string key, value_callback_t cb) const override;
 
-  void updateConfig(std::string key,
-                    std::string value,
-                    folly::Optional<version_t> base_version,
-                    write_callback_t cb = {}) override;
+  void readModifyWriteConfig(std::string key,
+                             mutation_callback_t mcb,
+                             write_callback_t cb = {}) override;
 
   // IMPORTANT: assumes shutdown is called from a different thread from ZK
   // client's EventBase / thread.
@@ -58,7 +56,6 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
   bool shutdownSignaled() const;
 
  private:
-  const std::shared_ptr<const extract_version_fn> extract_fn_;
   std::unique_ptr<ZookeeperClientBase> zk_;
 
   std::atomic<bool> shutdown_signaled_;

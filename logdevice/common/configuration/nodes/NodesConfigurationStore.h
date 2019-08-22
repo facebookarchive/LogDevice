@@ -30,6 +30,7 @@ class NodesConfigurationStore {
   using version_t = VersionedConfigStore::version_t;
   using value_callback_t = VersionedConfigStore::value_callback_t;
   using write_callback_t = VersionedConfigStore::write_callback_t;
+  using mutation_callback_t = VersionedConfigStore::mutation_callback_t;
   using extract_version_fn = VersionedConfigStore::extract_version_fn;
 
   virtual ~NodesConfigurationStore() = default;
@@ -46,6 +47,10 @@ class NodesConfigurationStore {
 
   // Read the documentation of VersionedConfigStore::getLatestConfig.
   virtual void getLatestConfig(value_callback_t cb) const = 0;
+
+  // Read the documentation of VersionedConfigStore::readModifyWriteConfig.
+  virtual void readModifyWriteConfig(mutation_callback_t mcb,
+                                     write_callback_t cb = {}) = 0;
 
   // Read the documentation of VersionedConfigStore::updateConfig.
   virtual void updateConfig(std::string value,
@@ -91,6 +96,11 @@ class VersionedNodesConfigurationStore : public NodesConfigurationStore {
 
   virtual void getLatestConfig(value_callback_t cb) const override {
     store_->getLatestConfig(path_, std::move(cb));
+  }
+
+  virtual void readModifyWriteConfig(mutation_callback_t mcb,
+                                     write_callback_t cb = {}) {
+    store_->readModifyWriteConfig(path_, std::move(mcb), std::move(cb));
   }
 
   virtual void updateConfig(std::string value,

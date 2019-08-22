@@ -16,7 +16,8 @@ namespace facebook { namespace logdevice {
 class InMemVersionedConfigStore : public VersionedConfigStore {
  public:
   explicit InMemVersionedConfigStore(extract_version_fn f)
-      : configs_(), extract_fn_(std::move(f)) {}
+      : VersionedConfigStore(std::move(f)), configs_() {}
+
   void getConfig(std::string key,
                  value_callback_t cb,
                  folly::Optional<version_t> base_version = {}) const override;
@@ -28,10 +29,9 @@ class InMemVersionedConfigStore : public VersionedConfigStore {
 
   void getLatestConfig(std::string key, value_callback_t cb) const override;
 
-  void updateConfig(std::string key,
-                    std::string value,
-                    folly::Optional<version_t> base_version,
-                    write_callback_t cb = {}) override;
+  virtual void readModifyWriteConfig(std::string key,
+                                     mutation_callback_t mcb,
+                                     write_callback_t cb = {}) override;
 
   Status updateConfigSync(std::string key,
                           std::string value,
@@ -45,7 +45,6 @@ class InMemVersionedConfigStore : public VersionedConfigStore {
   // TODO: switch to a more efficient map; avoid copying mapped_type; more
   // granular synchronization.
   folly::Synchronized<std::unordered_map<std::string, std::string>> configs_;
-  extract_version_fn extract_fn_;
 };
 
 struct TestEntry {

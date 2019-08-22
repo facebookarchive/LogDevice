@@ -8,6 +8,7 @@
 
 #include "logdevice/common/test/InMemVersionedConfigStore.h"
 
+#include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
@@ -58,15 +59,37 @@ void InMemVersionedConfigStore::getLatestConfig(std::string key,
   getConfig(std::move(key), std::move(cb));
 }
 
-void InMemVersionedConfigStore::updateConfig(
-    std::string key,
-    std::string value,
-    folly::Optional<version_t> base_version,
-    write_callback_t cb) {
+void InMemVersionedConfigStore::readModifyWriteConfig(std::string key,
+                                                      mutation_callback_t mcb,
+                                                      write_callback_t cb) {
+  std::string current_value;
+  auto status = getConfigSync(key, &current_value);
+  if (status != E::OK && status != E::NOTFOUND) {
+    cb(status, version_t{}, "");
+    return;
+  }
+  folly::Optional<version_t> cur_ver = folly::none;
+  if (status == E::OK) {
+    auto curr_version_opt = extract_fn_(current_value);
+    if (!curr_version_opt) {
+      cb(E::BADMSG, version_t{}, "");
+      return;
+    }
+    cur_ver = curr_version_opt.value();
+  }
+  auto status_value = (mcb)((status == E::NOTFOUND)
+                                ? folly::none
+                                : folly::Optional<std::string>(current_value));
+  auto& write_value = status_value.second;
+  if (status_value.first != E::OK) {
+    cb(status_value.first, version_t{}, std::move(write_value));
+    return;
+  }
+
   version_t version;
   std::string value_out;
-  Status status = updateConfigSync(
-      std::move(key), std::move(value), base_version, &version, &value_out);
+  status = updateConfigSync(
+      std::move(key), std::move(write_value), cur_ver, &version, &value_out);
 
   cb(status, version, std::move(value_out));
 }
@@ -100,6 +123,18 @@ Status InMemVersionedConfigStore::updateConfigSync(
       return Status::INVALID_PARAM;
     }
     version_t curr_version = curr_version_opt.value();
+
+    // TODO: Add stricter enforcement of monotonic increment of version.
+    if (value_version.val() <= curr_version.val()) {
+      RATELIMIT_WARNING(std::chrono::seconds(10),
+                        5,
+                        "Config value's version is not monitonically increasing"
+                        "key: \"%s\". prev version: \"%lu\". version: \"%lu\"",
+                        key.c_str(),
+                        curr_version.val(),
+                        value_version.val());
+    }
+
     if (base_version && curr_version != base_version) {
       // conditional update version mismatch
       // TODO: set err accordingly

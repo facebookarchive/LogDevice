@@ -47,6 +47,11 @@ class ServerBasedNodesConfigurationStore : public NodesConfigurationStore {
 
   // This is a read only NodesConfigStore. Updates are not supported.
   // It will unconditionally throw a runtime_error.
+  virtual void readModifyWriteConfig(mutation_callback_t mcb,
+                                     write_callback_t cb = {}) override;
+
+  // This is a read only NodesConfigStore. Updates are not supported.
+  // It will unconditionally throw a runtime_error.
   void updateConfig(std::string value,
                     folly::Optional<version_t> base_version,
                     write_callback_t cb = {}) override;
