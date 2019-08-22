@@ -44,7 +44,7 @@ class InfoRecordStorageTask : public StorageTask {
                                  lsn_t lsn_end,
                                  size_t payload_max_len,
                                  Semaphore& sem,
-                                 folly::Synchronized<EvbufferTextOutput*>& out,
+                                 folly::Synchronized<folly::io::Appender*>& out,
                                  InfoRecordTable& table,
                                  bool print_table,
                                  size_t max_records,
@@ -191,7 +191,7 @@ class InfoRecordStorageTask : public StorageTask {
   const lsn_t lsn_start_, lsn_end_;
   const size_t payload_max_len_, max_records_;
   Semaphore& sem_;
-  folly::Synchronized<EvbufferTextOutput*>& out_;
+  folly::Synchronized<folly::io::Appender*>& out_;
   InfoRecordTable& table_;
   const bool print_table_;
   const bool csi_only_;
@@ -204,7 +204,7 @@ class InfoRecordRequest : public Request {
                              lsn_t lsn_end,
                              size_t payload_max_len,
                              Semaphore& sem,
-                             folly::Synchronized<EvbufferTextOutput*>& out,
+                             folly::Synchronized<folly::io::Appender*>& out,
                              InfoRecordTable& table,
                              bool print_table,
                              size_t max_records,
@@ -250,7 +250,7 @@ class InfoRecordRequest : public Request {
   const lsn_t lsn_start_, lsn_end_;
   const size_t payload_max_len_, max_records_;
   Semaphore& sem_;
-  folly::Synchronized<EvbufferTextOutput*>& out_;
+  folly::Synchronized<folly::io::Appender*>& out_;
   InfoRecordTable& table_;
   const bool print_table_;
   const bool csi_only_;
@@ -337,7 +337,7 @@ class InfoRecord : public AdminCommand {
 
     // Several storage threads may want to write to the evbuffer. Wrap it with a
     // folly::Synchronized to protect concurrent writes.
-    folly::Synchronized<EvbufferTextOutput*> out_ptr(&out_);
+    folly::Synchronized<folly::io::Appender*> out_ptr(&out_);
 
     InfoRecordTable table(!json_,
                           "Log ID",

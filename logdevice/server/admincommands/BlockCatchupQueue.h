@@ -68,8 +68,9 @@ class BlockCatchupQueue : public AdminCommand {
     // If this is a production build, require passing --force.
     if (!folly::kIsDebug) {
       if (!force_) {
-        out_.write("Production build. Command disabled. "
-                   "Use --force to proceed anyway.\r\n");
+        out_.printf("%s",
+                    "Production build. Command disabled. "
+                    "Use --force to proceed anyway.\r\n");
         return;
       }
     }

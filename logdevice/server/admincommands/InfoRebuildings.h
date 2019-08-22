@@ -36,7 +36,7 @@ class InfoRebuildingShards : public AdminCommand {
     runImpl(json_, server_, out_);
   }
 
-  static void runImpl(bool json, Server* server, EvbufferTextOutput& out) {
+  static void runImpl(bool json, Server* server, folly::io::Appender& out) {
     InfoRebuildingShardsTable table(!json,
                                     "Shard id",                     // 0
                                     "Rebuilding set",               // 1
@@ -96,7 +96,7 @@ class InfoRebuildingLogs : public AdminCommand {
     runImpl(json_, server_, out_);
   }
 
-  static void runImpl(bool json, Server* server, EvbufferTextOutput& out) {
+  static void runImpl(bool json, Server* server, folly::io::Appender& out) {
     InfoRebuildingLogsTable table(!json,
                                   "Log id",                    // 0
                                   "Shard",                     // 1

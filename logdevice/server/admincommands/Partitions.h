@@ -19,7 +19,7 @@ namespace facebook { namespace logdevice { namespace commands {
 namespace {
 PartitionedRocksDBStore* getStore(Server* server,
                                   shard_index_t shard,
-                                  EvbufferTextOutput& out) {
+                                  folly::io::Appender& out) {
   if (!server->getProcessor()->runningOnStorageNode()) {
     out.printf("Error: not storage node\r\n");
     return nullptr;

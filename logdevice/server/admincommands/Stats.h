@@ -17,12 +17,12 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 inline void printStats(const Stats& stats,
-                       EvbufferTextOutput& out,
+                       folly::io::Appender& out,
                        bool include_log_groups,
                        const char* key_prefix = "") {
   class Callbacks : public Stats::EnumerationCallbacks {
    public:
-    Callbacks(EvbufferTextOutput& out,
+    Callbacks(folly::io::Appender& out,
               const char* key_prefix,
               bool include_log_groups)
         : out_(out),
@@ -141,7 +141,7 @@ inline void printStats(const Stats& stats,
                    const HistogramInterface& /*hist*/) override {}
 
    private:
-    EvbufferTextOutput& out_;
+    folly::io::Appender& out_;
     const char* keyPrefix_;
     bool includeLogGroups_;
   };
@@ -222,7 +222,7 @@ class StatsWorker : public AdminCommand {
 
   // Print only the few stats that are interesting per-worker.
   static void printOnlyUsefulStats(const logdevice::Stats& stats,
-                                   EvbufferTextOutput& out,
+                                   folly::io::Appender& out,
                                    const char* key_prefix = "") {
     out.printf("STAT %sworker_requests_executed %" PRId64 "\r\n",
                key_prefix,

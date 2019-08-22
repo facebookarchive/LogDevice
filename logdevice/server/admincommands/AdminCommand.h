@@ -11,8 +11,9 @@
 #include <functional>
 
 #include <boost/program_options.hpp>
+#include <folly/io/Cursor.h>
+#include <folly/io/IOBuf.h>
 
-#include "logdevice/common/libevent/EvbufferTextOutput.h"
 #include "logdevice/server/Server.h"
 
 struct evbuffer;
@@ -46,14 +47,16 @@ class AdminCommand {
   void setServer(Server* server) {
     server_ = server;
   }
-  void setOutput(struct evbuffer* output) {
-    out_ = EvbufferTextOutput(output);
+  void setOutput(folly::IOBuf* output) {
+    out_ = folly::io::Appender(output, kGrowthValue);
   }
 
  protected:
+  constexpr static size_t kGrowthValue = 100;
   Server* server_;
   const RestrictionLevel restrictionLevel_;
-  EvbufferTextOutput out_;
+  folly::IOBuf buf_;
+  folly::io::Appender out_{&buf_, kGrowthValue};
 };
 
 }} // namespace facebook::logdevice

@@ -23,18 +23,18 @@ static bool groupPassesThreshold(const OneGroupResults& results,
                      [threshold](RateType rate) { return rate >= threshold; });
 }
 
-static void printOne(EvbufferTextOutput& out,
+static void printOne(folly::io::Appender& out,
                      folly::StringPiece group_name,
                      const OneGroupResults& results) {
   out.printf("STAT ");
-  out.write(group_name.data(), group_name.size());
+  out.printf("%s", group_name.toString().c_str());
   for (auto result : results) {
     out.printf(" %ld", int64_t(result));
   }
   out.printf("\r\n");
 }
 
-static void reportAll(EvbufferTextOutput& out,
+static void reportAll(folly::io::Appender& out,
                       const AggregateMap& agg,
                       int64_t threshold) {
   for (const auto& entry : agg) {
@@ -45,7 +45,7 @@ static void reportAll(EvbufferTextOutput& out,
   }
 }
 
-static void reportTop(EvbufferTextOutput& out,
+static void reportTop(folly::io::Appender& out,
                       const AggregateMap& agg,
                       int64_t threshold,
                       uint32_t top) {

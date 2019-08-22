@@ -46,7 +46,7 @@ class InfoConfig : public AdminCommand {
     } else if (hash_only_) {
       hash(*config);
     } else {
-      out_.write(config->toString());
+      out_.printf("%s", config->toString().c_str());
       out_.printf("\r\n");
     }
   }
@@ -111,7 +111,7 @@ class InfoConfig : public AdminCommand {
       combined_hash += included_config_metadata.hash;
     }
 
-    out_.write(combined_hash);
+    out_.printf("%s", combined_hash.c_str());
     out_.printf("\r\n");
   }
 };

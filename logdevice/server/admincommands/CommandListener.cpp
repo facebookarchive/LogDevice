@@ -14,6 +14,7 @@
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <folly/String.h>
+#include <folly/io/IOBuf.h>
 #include <rocksdb/statistics.h>
 
 #include "event2/bufferevent.h"
@@ -361,7 +362,6 @@ void CommandListener::processCommand(struct bufferevent* bev,
   }
 
   command->setServer(server_);
-  command->setOutput(output);
 
   boost::program_options::options_description options;
   boost::program_options::positional_options_description positional;
@@ -395,14 +395,15 @@ void CommandListener::processCommand(struct bufferevent* bev,
     return;
   }
 
-  struct evbuffer* tmp = LD_EV(evbuffer_new());
-  command->setOutput(tmp);
+  folly::IOBuf buffer;
+  command->setOutput(&buffer);
   command->run();
 
-  LD_EV(evbuffer_add_printf)(tmp, "END\r\n");
-  size_t output_size = LD_EV(evbuffer_get_length)(tmp);
-  LD_EV(evbuffer_add_buffer(output, tmp));
-  LD_EV(evbuffer_free(tmp));
+  folly::io::Appender appender(&buffer, 100);
+  appender.printf("END\r\n");
+  auto byte_range = buffer.coalesce();
+
+  LD_EV(evbuffer_add(output, byte_range.data(), byte_range.size()));
 
   auto duration = std::chrono::steady_clock::now() - start_time;
   ld_log(duration > std::chrono::milliseconds(50) ? dbg::Level::INFO
@@ -411,7 +412,7 @@ void CommandListener::processCommand(struct bufferevent* bev,
          state->address_.toString().c_str(),
          std::chrono::duration_cast<std::chrono::duration<double>>(duration)
              .count(),
-         output_size,
+         byte_range.size(),
          sanitize_string(command_line).c_str());
 }
 

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <folly/Optional.h>
+#include <folly/io/Cursor.h>
 
 #include "logdevice/common/AdminCommandTable-fwd.h"
 
@@ -48,8 +49,6 @@
  */
 
 namespace facebook { namespace logdevice {
-
-class EvbufferTextOutput;
 
 template <typename... Args>
 class AdminCommandTable {
@@ -141,11 +140,11 @@ class AdminCommandTable {
    * @param max_col_ Only print the first `max_col_` columns. If not provided,
    *                 print all the columns.
    */
-  void print(EvbufferTextOutput& output,
+  void print(folly::io::Appender& output,
              std::size_t max_col_ = numCols()) const;
 
   void printRowVertically(unsigned int row,
-                          EvbufferTextOutput& output,
+                          folly::io::Appender& output,
                           std::size_t max_col_ = numCols()) const;
 
   /**
@@ -155,7 +154,7 @@ class AdminCommandTable {
    * @param max_col_ Only print the first `max_col_` columns. If not provided,
    *                 print all the columns.
    */
-  void printJson(EvbufferTextOutput& output,
+  void printJson(folly::io::Appender& output,
                  std::size_t max_col_ = numCols()) const;
 
   std::string toString(bool json = false, size_t max_col_ = numCols()) const;

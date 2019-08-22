@@ -18,10 +18,11 @@
 
 #include <folly/Conv.h>
 #include <folly/dynamic.h>
+#include <folly/io/Cursor.h>
+#include <folly/io/IOBuf.h>
 #include <folly/json.h>
 
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/libevent/EvbufferTextOutput.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
 
@@ -143,7 +144,7 @@ size_t AdminCommandTable<Args...>::numRows() const {
 }
 
 template <typename... Args>
-void AdminCommandTable<Args...>::print(EvbufferTextOutput& output,
+void AdminCommandTable<Args...>::print(folly::io::Appender& output,
                                        std::size_t max_col_) const {
   unsigned int max_col = std::min(max_col_, numCols());
 
@@ -151,14 +152,14 @@ void AdminCommandTable<Args...>::print(EvbufferTextOutput& output,
   for (int i = 0; i < max_col; ++i) {
     output.printf("%*s", -int(widths_[i] + 2), names_[i].c_str());
   }
-  output.write("\r\n");
+  output.printf("%s", "\r\n");
 
   // Print a seperation
   size_t total_width =
       std::accumulate(widths_.begin(), widths_.begin() + max_col, 0);
   total_width += max_col * 2;
-  output.write(std::string(total_width, '-'));
-  output.write("\r\n");
+  output.printf("%s", std::string(total_width, '-').c_str());
+  output.printf("%s", "\r\n");
 
   // Print the rows.
   for (int j = 0; j < rows_.size(); ++j) {
@@ -166,7 +167,7 @@ void AdminCommandTable<Args...>::print(EvbufferTextOutput& output,
       std::string data = rows_[j][i].hasValue() ? rows_[j][i].value() : "";
       output.printf("%*s", -int(widths_[i] + 2), data.c_str());
     }
-    output.write("\r\n");
+    output.printf("%s", "\r\n");
   }
 }
 
@@ -178,14 +179,14 @@ void AdminCommandTable<Args...>::print(EvbufferTextOutput& output,
 template <typename... Args>
 void AdminCommandTable<Args...>::printRowVertically(
     unsigned int row,
-    EvbufferTextOutput& output,
+    folly::io::Appender& output,
     std::size_t max_col_) const {
   unsigned int max_col = std::min(max_col_, numCols());
 
   unsigned int max_width = *(std::max_element(widths_.begin(), widths_.end()));
 
   if (row >= rows_.size()) {
-    output.write("NO DATA\r\n");
+    output.printf("%s", "NO DATA\r\n");
     return;
   }
 
@@ -195,11 +196,11 @@ void AdminCommandTable<Args...>::printRowVertically(
     output.printf(
         "%*s : %s\r\n", -int(max_width + 2), names_[i].c_str(), data.c_str());
   }
-  output.write("\r\n");
+  output.printf("%s", "\r\n");
 }
 
 template <typename... Args>
-void AdminCommandTable<Args...>::printJson(EvbufferTextOutput& output,
+void AdminCommandTable<Args...>::printJson(folly::io::Appender& output,
                                            std::size_t max_col_) const {
   unsigned int max_col = std::min(max_col_, numCols());
 
@@ -222,22 +223,19 @@ void AdminCommandTable<Args...>::printJson(EvbufferTextOutput& output,
 
   auto serialized =
       folly::json::serialize(object, folly::json::serialization_opts());
-  output.write(serialized);
-  output.write("\r\n");
+  output.printf("%s", serialized.c_str());
+  output.printf("%s", "\r\n");
 }
 
 template <typename... Args>
 std::string AdminCommandTable<Args...>::toString(bool json,
                                                  size_t max_col_) const {
-  struct evbuffer* evbuf = LD_EV(evbuffer_new)();
-  EvbufferTextOutput wrapper(evbuf);
+  folly::IOBuf buffer;
+  constexpr static size_t kGrowth = 1024;
+  folly::io::Appender wrapper(&buffer, kGrowth);
   json ? printJson(wrapper, max_col_) : print(wrapper, max_col_);
-  const size_t len = LD_EV(evbuffer_get_length)(evbuf);
-  std::string data(len, '\0');
-  LD_EV(evbuffer_copyout)(evbuf, &data[0], len);
-  LD_EV(evbuffer_free)(evbuf);
-
-  return data;
+  auto byte_range = buffer.coalesce();
+  return byte_range.toString();
 }
 
 }} // namespace facebook::logdevice

@@ -26,15 +26,15 @@ extern "C" void malloc_stats_print(void (*)(void*, const char*),
 namespace facebook { namespace logdevice { namespace commands {
 
 inline void jemalloc_message(void* cbopaque, const char* p) {
-  EvbufferTextOutput* out = (EvbufferTextOutput*)cbopaque;
-  out->write(p);
+  folly::io::Appender* out = (folly::io::Appender*)cbopaque;
+  out->printf("%s", p);
 }
 
-inline void statsJemallocPrint(EvbufferTextOutput& out, const char* opt) {
+inline void statsJemallocPrint(folly::io::Appender& out, const char* opt) {
   if (malloc_stats_print != nullptr) {
     malloc_stats_print(jemalloc_message, &out, opt);
   } else {
-    out.write("FAILED\r\n");
+    out.printf("%s", "FAILED\r\n");
   }
 }
 

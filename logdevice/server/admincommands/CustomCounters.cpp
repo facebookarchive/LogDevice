@@ -90,7 +90,7 @@ static AggregateMap doAggregate(StatsHolder* stats,
   return output;
 }
 
-static void printOne(EvbufferTextOutput& out,
+static void printOne(folly::io::Appender& out,
                      folly::StringPiece group_name,
                      const OneGroupResults& results,
                      const std::vector<uint16_t>& keys_filter) {
@@ -117,7 +117,7 @@ static void printOne(EvbufferTextOutput& out,
     }
   }
   if (output) {
-    out.write(group_output.str());
+    out.printf("%s", group_output.str().c_str());
   }
 }
 

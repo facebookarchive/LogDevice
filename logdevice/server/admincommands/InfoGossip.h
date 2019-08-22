@@ -47,8 +47,8 @@ class InfoGossip : public AdminCommand {
   void printJson() {
     auto serialized = folly::json::serialize(
         composeJson(), folly::json::serialization_opts());
-    out_.write(serialized);
-    out_.write("\r\n");
+    out_.printf("%s", serialized.c_str());
+    out_.printf("\r\n");
   }
 
   folly::dynamic composeJson() {
