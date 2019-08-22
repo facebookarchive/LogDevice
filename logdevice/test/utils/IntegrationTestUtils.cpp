@@ -731,7 +731,9 @@ ClusterFactory::createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster) {
       attrs);
 }
 
-int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
+int Cluster::expand(std::vector<node_index_t> new_indices,
+                    bool start_nodes,
+                    bool bump_config_version) {
   // TODO: make it work with one config per nodes.
   ld_check(!one_config_per_node_);
   Configuration::Nodes nodes = config_->get()->serverConfig()->getNodes();
@@ -809,6 +811,11 @@ int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
   auto config = config_->get();
   auto new_server_config =
       config->serverConfig()->withNodes(std::move(nodes_config));
+
+  if (bump_config_version) {
+    new_server_config = new_server_config->withIncrementedVersion();
+  }
+
   int rv = writeConfig(new_server_config.get(), config->logsConfig().get());
   if (rv != 0) {
     return -1;
@@ -827,13 +834,13 @@ int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
   return start(new_indices);
 }
 
-int Cluster::expand(int nnodes, bool start) {
+int Cluster::expand(int nnodes, bool start, bool bump_config_version) {
   std::vector<node_index_t> new_indices;
   node_index_t first = config_->getNodesConfiguration()->getMaxNodeIndex() + 1;
   for (int i = 0; i < nnodes; ++i) {
     new_indices.push_back(first + i);
   }
-  return expand(new_indices, start);
+  return expand(new_indices, start, bump_config_version);
 }
 
 int Cluster::shrink(std::vector<node_index_t> indices) {
@@ -877,8 +884,10 @@ int Cluster::shrink(std::vector<node_index_t> indices) {
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
   auto config = config_->get();
-  auto new_server_config =
-      config->serverConfig()->withNodes(std::move(nodes_config));
+  auto new_server_config = config->serverConfig()
+                               ->withNodes(std::move(nodes_config))
+                               ->withIncrementedVersion();
+
   int rv = writeConfig(new_server_config.get(), config->logsConfig().get());
   if (rv != 0) {
     return -1;
@@ -1189,7 +1198,9 @@ void Cluster::partition(std::vector<std::set<int>> partitions) {
 
     Configuration::NodesConfig nodes_config(std::move(nodes));
     auto old_config = config_->get();
-    Configuration config(old_config->serverConfig()->withNodes(nodes_config),
+    Configuration config(old_config->serverConfig()
+                             ->withNodes(nodes_config)
+                             ->withIncrementedVersion(),
                          old_config->logsConfig());
     for (auto i : p) {
       // replace config file of all the nodes within that partition.
@@ -2621,7 +2632,9 @@ int Cluster::replace(node_index_t index, bool defer_start) {
     Configuration::NodesConfig nodes_config(std::move(nodes));
     auto config = config_->get();
     std::shared_ptr<ServerConfig> new_server_config =
-        config->serverConfig()->withNodes(std::move(nodes_config));
+        config->serverConfig()
+            ->withNodes(std::move(nodes_config))
+            ->withIncrementedVersion();
 
     // Update config on disk so that other nodes become aware of the swap as
     // soon as possible

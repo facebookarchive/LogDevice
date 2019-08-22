@@ -849,16 +849,9 @@ TEST_F(ConfigIntegrationTest, ExpandWithVersionUpdate) {
   std::string old_hash =
       client_config->get()->serverConfig()->getMainConfigMetadata().hash;
 
-  // Remove a node from the nodes field in the client config
+  // add a node from the nodes field in the client config; expand()
+  // bumps config version so that the update is propagated to the client.
   cluster->expand(1);
-
-  // Bump config version so that the update is propagated to the client.
-  // It would probably make sense for expand() to do it instead.
-  cluster->writeServerConfig(cluster->getConfig()
-                                 ->getServerConfig()
-                                 ->withVersion(config_version_t(2))
-                                 .get());
-  cluster->waitForConfigUpdate();
 
   // Get the updated cluster configuration
   cluster_config = cluster->getConfig()->get();
@@ -1050,7 +1043,7 @@ TEST_F(ConfigIntegrationTest, ExpandWithoutVersionUpdate) {
   ASSERT_TRUE((bool)client);
 
   // Expand the cluster by one node without updating the config version
-  cluster->expand(1);
+  cluster->expand(1, /*start*/ true, /*bump_config_versiion*/ false);
   cluster->waitForConfigUpdate();
 
   // Make an appendSync() call. Configs should not be synchronized after
@@ -1166,7 +1159,7 @@ TEST_F(ConfigIntegrationTest, Stats) {
 
   // test #2: change config without updating version. expect
   // config_update_hash_mismatch and updated_config to be incremented.
-  cluster->expand(1);
+  cluster->expand(1, /*start*/ true, /*bump_config_versiion*/ false);
   cluster->waitForConfigUpdate();
 
   auto stats2 = cluster->getNode(0).stats();
@@ -1182,20 +1175,14 @@ TEST_F(ConfigIntegrationTest, Stats) {
   // to be incremented
   cluster->expand(1);
 
-  cluster->writeServerConfig(cluster->getConfig()
-                                 ->getServerConfig()
-                                 ->withVersion(config_version_t(2))
-                                 .get());
-  cluster->waitForConfigUpdate();
-
   auto stats3 = cluster->getNode(0).stats();
   EXPECT_LE(stats2["config_update_same_version"],
             stats3["config_update_same_version"]);
-  EXPECT_EQ(stats2["config_update_hash_mismatch"] + 1,
+  EXPECT_EQ(stats2["config_update_hash_mismatch"],
             stats3["config_update_hash_mismatch"]);
   EXPECT_EQ(
       stats2["config_update_old_version"], stats3["config_update_old_version"]);
-  EXPECT_EQ((stats2["updated_config"] + 2), stats3["updated_config"]);
+  EXPECT_EQ((stats2["updated_config"] + 1), stats3["updated_config"]);
 
   // test #4: change config with older version. expect
   // config_update_old_version to be incremented

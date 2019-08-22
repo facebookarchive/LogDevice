@@ -786,14 +786,16 @@ class Cluster {
    * Expand the cluster by adding nodes with the given indices.
    * @return 0 on success, -1 on error.
    */
-  int expand(std::vector<node_index_t> new_indices, bool start = true);
+  int expand(std::vector<node_index_t> new_indices,
+             bool start = true,
+             bool bump_config_version = true);
 
   /**
    * Expand the cluster by adding `nnodes` with consecutive indices after the
    * highest existing one.
    * @return 0 on success, -1 on error.
    */
-  int expand(int nnodes, bool start = true);
+  int expand(int nnodes, bool start = true, bool bump_config_version = true);
 
   /**
    * Shrink the cluster by removing the given nodes.
