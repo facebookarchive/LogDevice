@@ -45,9 +45,7 @@ class SocketCallback;
 class SocketImpl;
 class SocketProxy;
 class StatsHolder;
-class Worker;
-class Sender;
-class Processor;
+struct Settings;
 
 /**
  * @file  a Socket is an endpoint of a connection that can send and
@@ -126,14 +124,6 @@ class Socket : public TrafficShappingSocket {
    *     NOTINCONFIG     server_name does not appear in cluster config
    *     INTERNAL        failed to initialize a libevent timer (unlikely)
    */
-  explicit Socket(NodeID server_name,
-                  SocketType type,
-                  ConnectionType conntype,
-                  FlowGroup& flow_group);
-
-  /**
-   * Used for tests.
-   */
   Socket(NodeID server_name,
          SocketType type,
          ConnectionType conntype,
@@ -163,17 +153,6 @@ class Socket : public TrafficShappingSocket {
    *     NOMEM           a libevent function could not allocate memory
    *     INTERNAL        failed to set fd non-blocking (unlikely) or failed to
    *                     initialize a libevent timer (unlikely).
-   */
-  Socket(int fd,
-         ClientID client_name,
-         const Sockaddr& client_addr,
-         ResourceBudget::Token conn_token,
-         SocketType type,
-         ConnectionType conntype,
-         FlowGroup& flow_group);
-
-  /**
-   * Used for tests.
    */
   Socket(int fd,
          ClientID client_name,
@@ -707,7 +686,7 @@ class Socket : public TrafficShappingSocket {
   void flushNextInSerializeQueue();
 
   /**
-   * Flush serializeq_ by writting all the messages it contains to the output
+   * Flush serializeq_ by writing all the messages it contains to the output
    * buffer.
    * Called by receiveMessage() once we are handshaken.
    */

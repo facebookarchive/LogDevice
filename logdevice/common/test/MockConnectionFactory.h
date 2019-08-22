@@ -20,13 +20,15 @@
 namespace facebook { namespace logdevice {
 
 struct MockConnectionFactory : public IConnectionFactory {
-  MOCK_CONST_METHOD4(createConnection,
-                     std::unique_ptr<Connection>(NodeID node_id,
-                                                 SocketType type,
-                                                 ConnectionType connection_type,
-                                                 FlowGroup& flow_group));
+  MOCK_CONST_METHOD5(
+      createConnection,
+      std::unique_ptr<Connection>(NodeID node_id,
+                                  SocketType type,
+                                  ConnectionType connection_type,
+                                  FlowGroup& flow_group,
+                                  std::unique_ptr<SocketDependencies> deps));
 
-  MOCK_CONST_METHOD7(
+  MOCK_CONST_METHOD8(
       createConnection,
       std::unique_ptr<Connection>(int fd,
                                   ClientID client_name,
@@ -34,6 +36,7 @@ struct MockConnectionFactory : public IConnectionFactory {
                                   ResourceBudget::Token connection_token,
                                   SocketType type,
                                   ConnectionType connection_type,
-                                  FlowGroup& flow_group));
+                                  FlowGroup& flow_group,
+                                  std::unique_ptr<SocketDependencies> deps));
 };
 }} // namespace facebook::logdevice

@@ -23,38 +23,21 @@
 #include "event2/event.h"
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/BWAvailableCallback.h"
-#include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/FlowGroup.h"
-#include "logdevice/common/PrincipalParser.h"
-#include "logdevice/common/Processor.h"
 #include "logdevice/common/ResourceBudget.h"
-#include "logdevice/common/SSLFetcher.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
-#include "logdevice/common/UpdateableSecurityInfo.h"
-#include "logdevice/common/Worker.h"
-#include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
-#include "logdevice/common/plugin/PluginRegistry.h"
-#include "logdevice/common/protocol/ACK_Message.h"
 #include "logdevice/common/protocol/Compatibility.h"
-#include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/protocol/Message.h"
-#include "logdevice/common/protocol/MessageDeserializers.h"
-#include "logdevice/common/protocol/MessageDispatch.h"
-#include "logdevice/common/protocol/MessageTracer.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/protocol/ProtocolHeader.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
-#include "logdevice/common/protocol/SHUTDOWN_Message.h"
 #include "logdevice/common/settings/Settings.h"
-#include "logdevice/common/stats/Histogram.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
 
@@ -102,35 +85,6 @@ getTimeDiff(std::chrono::steady_clock::time_point& start_time) {
   auto diff = std::chrono::steady_clock::now() - start_time;
   return std::chrono::duration_cast<std::chrono::milliseconds>(diff);
 }
-
-Socket::Socket(NodeID server_name,
-               SocketType type,
-               ConnectionType conntype,
-               FlowGroup& flow_group)
-    : Socket(server_name,
-             type,
-             conntype,
-             flow_group,
-             std::make_unique<SocketDependencies>(
-                 Worker::onThisThread()->processor_,
-                 &Worker::onThisThread()->sender())) {}
-Socket::Socket(int fd,
-               ClientID client_name,
-               const Sockaddr& client_addr,
-               ResourceBudget::Token conn_token,
-               SocketType type,
-               ConnectionType conntype,
-               FlowGroup& flow_group)
-    : Socket(fd,
-             client_name,
-             client_addr,
-             std::move(conn_token),
-             type,
-             conntype,
-             flow_group,
-             std::make_unique<SocketDependencies>(
-                 Worker::onThisThread()->processor_,
-                 &Worker::onThisThread()->sender())) {}
 
 Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
                Address peer_name,

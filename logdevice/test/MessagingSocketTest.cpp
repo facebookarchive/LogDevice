@@ -22,6 +22,7 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketCallback.h"
+#include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/ACK_Message.h"
@@ -73,8 +74,13 @@ struct SocketConnectRequest : public Request {
     }
 
     try {
-      Connection s(
-          badNodeID, SocketType::DATA, ConnectionType::PLAIN, flow_group);
+      Connection s(badNodeID,
+                   SocketType::DATA,
+                   ConnectionType::PLAIN,
+                   flow_group,
+                   std::make_unique<SocketDependencies>(
+                       Worker::onThisThread()->processor_,
+                       &Worker::onThisThread()->sender()));
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
     }
@@ -85,8 +91,14 @@ struct SocketConnectRequest : public Request {
     constructor_failed = false;
 
     try {
-      SocketConnectRequest::sock = new Connection(
-          firstNodeID, SocketType::DATA, ConnectionType::PLAIN, flow_group);
+      SocketConnectRequest::sock =
+          new Connection(firstNodeID,
+                         SocketType::DATA,
+                         ConnectionType::PLAIN,
+                         flow_group,
+                         std::make_unique<SocketDependencies>(
+                             Worker::onThisThread()->processor_,
+                             &Worker::onThisThread()->sender()));
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
     }

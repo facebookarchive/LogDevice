@@ -17,30 +17,9 @@ namespace facebook { namespace logdevice {
 Connection::Connection(NodeID server_name,
                        SocketType type,
                        ConnectionType conntype,
-                       FlowGroup& flow_group)
-    : Socket(server_name, type, conntype, flow_group) {}
-
-Connection::Connection(NodeID server_name,
-                       SocketType type,
-                       ConnectionType conntype,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps)
     : Socket(server_name, type, conntype, flow_group, std::move(deps)) {}
-
-Connection::Connection(int fd,
-                       ClientID client_name,
-                       const Sockaddr& client_addr,
-                       ResourceBudget::Token conn_token,
-                       SocketType type,
-                       ConnectionType conntype,
-                       FlowGroup& flow_group)
-    : Socket(fd,
-             client_name,
-             client_addr,
-             std::move(conn_token),
-             type,
-             conntype,
-             flow_group) {}
 
 Connection::Connection(int fd,
                        ClientID client_name,

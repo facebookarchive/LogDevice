@@ -16,6 +16,7 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/Socket.h"
+#include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/SocketTypes.h"
 
 namespace facebook { namespace logdevice {
@@ -33,7 +34,8 @@ class IConnectionFactory {
   createConnection(NodeID node_id,
                    SocketType type,
                    ConnectionType connection_type,
-                   FlowGroup& flow_group) const = 0;
+                   FlowGroup& flow_group,
+                   std::unique_ptr<SocketDependencies> deps) const = 0;
 
   virtual std::unique_ptr<Connection>
   createConnection(int fd,
@@ -42,7 +44,8 @@ class IConnectionFactory {
                    ResourceBudget::Token connection_token,
                    SocketType type,
                    ConnectionType conntype,
-                   FlowGroup& flow_group) const = 0;
+                   FlowGroup& flow_group,
+                   std::unique_ptr<SocketDependencies> deps) const = 0;
 
   virtual ~IConnectionFactory() = default;
 
@@ -57,9 +60,10 @@ class ConnectionFactory : public IConnectionFactory {
   createConnection(NodeID node_id,
                    SocketType type,
                    ConnectionType connection_type,
-                   FlowGroup& flow_group) const override {
+                   FlowGroup& flow_group,
+                   std::unique_ptr<SocketDependencies> deps) const override {
     return std::make_unique<Connection>(
-        node_id, type, connection_type, flow_group);
+        node_id, type, connection_type, flow_group, std::move(deps));
   }
 
   std::unique_ptr<Connection>
@@ -69,14 +73,16 @@ class ConnectionFactory : public IConnectionFactory {
                    ResourceBudget::Token connection_token,
                    SocketType type,
                    ConnectionType connection_type,
-                   FlowGroup& flow_group) const override {
+                   FlowGroup& flow_group,
+                   std::unique_ptr<SocketDependencies> deps) const override {
     return std::make_unique<Connection>(fd,
                                         client_name,
                                         client_address,
                                         std::move(connection_token),
                                         type,
                                         connection_type,
-                                        flow_group);
+                                        flow_group,
+                                        std::move(deps));
   }
 };
 

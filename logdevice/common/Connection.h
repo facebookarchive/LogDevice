@@ -7,7 +7,6 @@
  */
 
 #pragma once
-#include "folly/io/async/Request.h"
 #include "logdevice/common/Address.h"
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/Socket.h"
@@ -27,6 +26,10 @@ class Connection : public Socket {
    * @param type            type of socket
    * @param flow_group      traffic shaping state shared between sockets
    *                        with the same bandwidth constraints.
+   * @params deps           SocketDependencies provides a way to callback into
+   *                        higher layers and provides notification mechanism.
+   *                        It depends on dependencies for stuff like Stats and
+   *                        config and other data.
    *
    * @return  on success, a new fully constructed Connection is returned. It is
    *          expected that the Connection will be registered with the Worker's
@@ -37,14 +40,6 @@ class Connection : public Socket {
    *                     asserts)
    *     NOTINCONFIG     server_name does not appear in cluster config
    *     INTERNAL        failed to initialize a libevent timer (unlikely)
-   */
-  explicit Connection(NodeID server_name,
-                      SocketType type,
-                      ConnectionType conntype,
-                      FlowGroup& flow_group);
-
-  /**
-   * Used for tests.
    */
   Connection(NodeID server_name,
              SocketType type,
@@ -66,6 +61,10 @@ class Connection : public Socket {
    * @param type        type of socket
    * @param flow_group  traffic shaping state shared between sockets
    *                    with the same bandwidth constraints.
+   * @params deps       SocketDependencies provides a way to callback into
+   *                    higher layers and provides notification mechanism.
+   *                    It depends on dependencies for stuff like Stats and
+   *                    config and other data.
    *
    * @return  on success, a new fully constructed Connection is returned. On
    *          failure throws ConstructorFailed and sets err to:
@@ -75,17 +74,6 @@ class Connection : public Socket {
    *     NOMEM           a libevent function could not allocate memory
    *     INTERNAL        failed to set fd non-blocking (unlikely) or failed to
    *                     initialize a libevent timer (unlikely).
-   */
-  Connection(int fd,
-             ClientID client_name,
-             const Sockaddr& client_addr,
-             ResourceBudget::Token conn_token,
-             SocketType type,
-             ConnectionType conntype,
-             FlowGroup& flow_group);
-
-  /**
-   * Used for tests.
    */
   Connection(int fd,
              ClientID client_name,

@@ -30,6 +30,7 @@
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
@@ -223,13 +224,16 @@ int Sender::addClient(int fd,
 
     auto& flow_group = nw_shaping_container_->selectFlowGroup(flow_group_scope);
 
-    auto socket = connection_factory_->createConnection(fd,
-                                                        client_name,
-                                                        client_addr,
-                                                        std::move(conn_token),
-                                                        type,
-                                                        conntype,
-                                                        flow_group);
+    auto socket = connection_factory_->createConnection(
+        fd,
+        client_name,
+        client_addr,
+        std::move(conn_token),
+        type,
+        conntype,
+        flow_group,
+        std::make_unique<SocketDependencies>(
+            Worker::onThisThread()->processor_, this));
 
     auto res = impl_->client_sockets_.emplace(client_name, std::move(socket));
 
@@ -972,11 +976,13 @@ Socket* Sender::initServerSocket(NodeID nid,
         }
       }
 
-      auto sock = std::make_unique<Connection>(
+      auto sock = connection_factory_->createConnection(
           nid,
           sock_type,
           use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
-          flow_group);
+          flow_group,
+          std::make_unique<SocketDependencies>(
+              Worker::onThisThread()->processor_, this));
 
       auto res = impl_->server_sockets_.emplace(nid.index(), std::move(sock));
       it = res.first;
