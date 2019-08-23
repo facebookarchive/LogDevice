@@ -86,6 +86,15 @@ class Envelope : public BWAvailableCallback {
     return usec_since(birth_time_);
   }
 
+  // Microseconds since queued for send.
+  int64_t enqTime() const {
+    return usec_since(enq_time_);
+  }
+
+  void enqTime(std::chrono::steady_clock::time_point time) {
+    enq_time_ = time;
+  }
+
   SteadyTimestamp birthTime() const {
     return birth_time_;
   }
@@ -100,6 +109,7 @@ class Envelope : public BWAvailableCallback {
  private:
   Socket& sock_;
   std::unique_ptr<Message> msg_;
+  std::chrono::steady_clock::time_point enq_time_;
 
   // offset of the first byte after this Envelope's Message in the logical
   // stream of bytes written into the output evbuffer of the Socket whose send
