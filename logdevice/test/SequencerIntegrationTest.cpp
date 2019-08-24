@@ -865,7 +865,9 @@ TEST_F(SequencerIntegrationTest, ConfigParamsAndStorageStateChangeDelayTest) {
   auto start = RecordTimestamp::now().toSeconds();
   Configuration::NodesConfig new_nodes_config(std::move(tmp_nodes));
   std::shared_ptr<ServerConfig> new_server_config =
-      full_config->serverConfig()->withNodes(std::move(new_nodes_config));
+      full_config->serverConfig()
+          ->withNodes(std::move(new_nodes_config))
+          ->withIncrementedVersion();
   cluster->writeConfig(new_server_config.get(), logs_config_changed.get());
 
   cluster->waitForConfigUpdate();

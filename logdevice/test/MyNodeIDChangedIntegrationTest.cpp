@@ -35,6 +35,7 @@ TEST(MyNodeIDChangedIntegrationTest, TestShutdown) {
                                  {3, std::move(nodes[3])}};
   cluster->writeConfig(config->serverConfig()
                            ->withNodes(configuration::NodesConfig(new_nodes))
+                           ->withIncrementedVersion()
                            .get(),
                        nullptr,
                        false);

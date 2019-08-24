@@ -53,6 +53,8 @@ void MaintenanceManagerTest::init() {
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
           .setNodes(nodes)
+          .setNodesConfigurationSourceOfTruth(
+              IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .enableSelfInitiatedRebuilding("1s")
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--disable-event-log-trimming", "true")
@@ -60,8 +62,6 @@ void MaintenanceManagerTest::init() {
           .setParam("--min-gossips-for-stable-state", "0")
           .setParam("--enable-cluster-maintenance-state-machine", "true")
           .setParam("--enable-nodes-configuration-manager", "true")
-          .setParam(
-              "--use-nodes-configuration-manager-nodes-configuration", "true")
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")
@@ -264,14 +264,14 @@ TEST_F(MaintenanceManagerTest, Snapshotting) {
           .setNumLogs(1)
           .setNodes(nodes)
           .enableSelfInitiatedRebuilding("1s")
+          .setNodesConfigurationSourceOfTruth(
+              IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setParam("--min-gossips-for-stable-state", "0")
           .setParam("--enable-cluster-maintenance-state-machine", "true")
           .setParam("--enable-nodes-configuration-manager", "true")
-          .setParam(
-              "--use-nodes-configuration-manager-nodes-configuration", "true")
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")
@@ -425,6 +425,8 @@ TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
           .setNumLogs(1)
           .setNodes(nodes)
           .enableSelfInitiatedRebuilding("1s")
+          .setNodesConfigurationSourceOfTruth(
+              IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .setParam("--rebuild-store-durability", "async_write")
           .setParam("--append-store-durability", "memory")
           .setParam("--rebuilding-restarts-grace-period", "10s")
@@ -441,8 +443,6 @@ TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
           .setParam("--min-gossips-for-stable-state", "0")
           .setParam("--enable-cluster-maintenance-state-machine", "true")
           .setParam("--enable-nodes-configuration-manager", "true")
-          .setParam(
-              "--use-nodes-configuration-manager-nodes-configuration", "true")
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")

@@ -79,7 +79,9 @@ TEST_F(NodeConfigChangeTest, ChangeDataIP) {
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
   // create a new config with the modified node config
-  Configuration config(current_config->serverConfig()->withNodes(nodes_config),
+  Configuration config(current_config->serverConfig()
+                           ->withNodes(nodes_config)
+                           ->withIncrementedVersion(),
                        current_config->logsConfig());
   // Write it out to the logdevice.conf file
   cluster->writeConfig(config);

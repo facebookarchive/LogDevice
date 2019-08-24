@@ -34,6 +34,8 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
         IntegrationTestUtils::ClusterFactory()
             .useHashBasedSequencerAssignment()
             .enableSelfInitiatedRebuilding("1s")
+            .setNodesConfigurationSourceOfTruth(
+                IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
             .setParam("--event-log-grace-period", "1ms")
             .setParam("--disable-event-log-trimming", "true")
             .setParam("--enable-nodes-configuration-manager",
@@ -41,9 +43,6 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
                       IntegrationTestUtils::ParamScope::ALL)
             .setParam("--nodes-configuration-manager-store-polling-interval",
                       "1s",
-                      IntegrationTestUtils::ParamScope::ALL)
-            .setParam("--use-nodes-configuration-manager-nodes-configuration",
-                      "true",
                       IntegrationTestUtils::ParamScope::ALL)
             .setParam("--nodes-configuration-manager-intermediary-shard-state-"
                       "timeout",

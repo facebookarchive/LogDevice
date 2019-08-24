@@ -68,11 +68,10 @@ TEST_F(NCMIntegrationTest, ToolingClientBasic) {
   // use 1s NCM polling interval to get the update faster
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
+          .setNodesConfigurationSourceOfTruth(
+              IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .setParam("--nodes-configuration-manager-store-polling-interval",
                     "1s",
-                    IntegrationTestUtils::ParamScope::ALL)
-          .setParam("--use-nodes-configuration-manager-nodes-configuration",
-                    "true",
                     IntegrationTestUtils::ParamScope::ALL)
           .setParam("--fd-limit", "9999", IntegrationTestUtils::ParamScope::ALL)
           .setParam("--num-reserved-fds",
@@ -127,11 +126,11 @@ TEST_F(NCMIntegrationTest, ToolingClientBasic) {
 TEST_F(NCMIntegrationTest, InRollout) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
+          .setNodesConfigurationSourceOfTruth(
+              IntegrationTestUtils::NodesConfigurationSourceOfTruth::
+                  SERVER_CONFIG)
           .setParam("--nodes-configuration-manager-store-polling-interval",
                     "1s",
-                    IntegrationTestUtils::ParamScope::ALL)
-          .setParam("--use-nodes-configuration-manager-nodes-configuration",
-                    "false",
                     IntegrationTestUtils::ParamScope::ALL)
           .setParam("--fd-limit", "9999", IntegrationTestUtils::ParamScope::ALL)
           .setParam("--num-reserved-fds",

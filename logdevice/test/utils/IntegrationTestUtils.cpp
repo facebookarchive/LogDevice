@@ -112,7 +112,8 @@ Cluster::Cluster(std::string root_path,
                  bool one_config_per_node,
                  dbg::Level default_log_level,
                  bool write_logs_config_file_separately,
-                 bool sync_server_config_to_nodes_configuration)
+                 bool sync_server_config_to_nodes_configuration,
+                 NodesConfigurationSourceOfTruth nodes_configuration_sot)
     : root_path_(std::move(root_path)),
       root_pin_(std::move(root_pin)),
       config_path_(std::move(config_path)),
@@ -121,6 +122,7 @@ Cluster::Cluster(std::string root_path,
       server_binary_(std::move(server_binary)),
       cluster_name_(std::move(cluster_name)),
       enable_logsconfig_manager_(enable_logsconfig_manager),
+      nodes_configuration_sot_(nodes_configuration_sot),
       one_config_per_node_(one_config_per_node),
       default_log_level_(default_log_level),
       write_logs_config_file_separately_(write_logs_config_file_separately),
@@ -626,6 +628,20 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
     }
   }
 
+  if (!nodes_configuration_sot_.hasValue()) {
+    // sot setting not provided. randomize the source of truth of NC.
+    nodes_configuration_sot_.assign(
+        folly::Random::rand64(2) == 0
+            ? NodesConfigurationSourceOfTruth::NCM
+            : NodesConfigurationSourceOfTruth::SERVER_CONFIG);
+  }
+
+  ld_check(nodes_configuration_sot_.hasValue());
+  ld_info(
+      "Using %s as source of truth for NodesConfiguration.",
+      nodes_configuration_sot_.value() == NodesConfigurationSourceOfTruth::NCM
+          ? "NCM"
+          : "SERVER_CONFIG");
   ld_info("Cluster created with data in %s", root_path.c_str());
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
@@ -654,7 +670,8 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
                   one_config_per_node_,
                   default_log_level_,
                   write_logs_config_file_separately_,
-                  sync_server_config_to_nodes_configuration_));
+                  sync_server_config_to_nodes_configuration_,
+                  nodes_configuration_sot_.value()));
   if (use_tcp_) {
     cluster->use_tcp_ = true;
   }
@@ -1087,6 +1104,7 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         {"--ignore-cluster-marker", ParamValue{"true"}},
         {"--rocksdb-auto-create-shards", ParamValue{"true"}},
         {"--num-workers", ParamValue{"5"}},
+        {"--nodes-configuration-manager-store-polling-interval", ParamValue{"100ms"}},
         {"--enable-maintenance-manager",
           ParamValue{i == maintenance_manager_node_?"true" : "false"}},
       }
@@ -1129,8 +1147,24 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
       ["--enable-logsconfig-manager"] = ParamValue{"false"};
   }
 
-  default_param_map[ParamScope::ALL]["--enable-nodes-configuration-manager"] = (
-      enable_ncm_ ? ParamValue{"true"} : ParamValue{"false"});
+  // always enable NCM
+  default_param_map[ParamScope::ALL]["--enable-nodes-configuration-manager"]
+    = ParamValue{"true"};
+
+  switch (nodes_configuration_sot_) {
+    case NodesConfigurationSourceOfTruth::NCM:
+      default_param_map[ParamScope::ALL][
+          "--enable-nodes-configuration-manager"] = ParamValue{"true"};
+      default_param_map[ParamScope::ALL][
+          "--use-nodes-configuration-manager-nodes-configuration"]
+        = ParamValue{"true"};
+      break;
+    case NodesConfigurationSourceOfTruth::SERVER_CONFIG:
+      default_param_map[ParamScope::ALL][
+          "--use-nodes-configuration-manager-nodes-configuration"]
+        = ParamValue{"false"};
+      break;
+  }
 
   if (!no_ssl_address_) {
     default_param_map[ParamScope::ALL]["--ssl-ca-path"] =
@@ -1179,6 +1213,10 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
 void Cluster::partition(std::vector<std::set<int>> partitions) {
   // one_config_per_node_ is required
   ld_check(one_config_per_node_);
+  // TODO T52924503: current only ServerConfig source of truth is
+  // supported.
+  ld_check(getNodesConfigurationSourceOfTruth() ==
+           NodesConfigurationSourceOfTruth::SERVER_CONFIG);
 
   // for every node in a partition, update the address of nodes outside
   // the partition to a non-existent unix socket. this effectively create a

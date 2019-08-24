@@ -130,6 +130,8 @@ class ParamSpec {
 // nodes in the cluster
 enum class RocksDBType : uint8_t { SINGLE, PARTITIONED };
 
+enum class NodesConfigurationSourceOfTruth { NCM, SERVER_CONFIG };
+
 /**
  * Configures a cluster and creates it.
  */
@@ -342,6 +344,12 @@ class ClusterFactory {
     return *this;
   }
 
+  ClusterFactory&
+  setNodesConfigurationSourceOfTruth(NodesConfigurationSourceOfTruth sot) {
+    nodes_configuration_sot_ = sot;
+    return *this;
+  }
+
   /**
    * By default, epoch store metadata is provisioned and metadata logs are
    * written by sequencers. If this method is called, sequencers will be
@@ -364,9 +372,15 @@ class ClusterFactory {
    * Note: expand/shrink/replace and maybe some other functionalities are not
    * compatible with this setting yet.
    *
+   * TODO T52924503: currently oneConfigPerNode() is not compatible with
+   * NodesConfiguration with NCM source-of-truth. We will add test utilities to
+   * simulate config divergence in NCM.
    */
   ClusterFactory& oneConfigPerNode() {
     one_config_per_node_ = true;
+
+    setNodesConfigurationSourceOfTruth(
+        NodesConfigurationSourceOfTruth::SERVER_CONFIG);
     return *this;
   }
 
@@ -590,7 +604,6 @@ class ClusterFactory {
   folly::Optional<Configuration::Nodes> node_configs_;
   folly::Optional<Configuration::MetaDataLogsConfig> meta_config_;
   bool enable_logsconfig_manager_ = false;
-  bool enable_ncm_ = true;
   bool one_config_per_node_{false};
 
   configuration::InternalLogs internal_logs_;
@@ -660,6 +673,9 @@ class ClusterFactory {
   // If set to true, logs are assumed to be spread across all sequencer nodes.
   // Otherwise, all appends are sent to the first node in the cluster.
   bool hash_based_sequencer_assignment_{false};
+
+  // if unset, use a random choice between the two sources
+  folly::Optional<NodesConfigurationSourceOfTruth> nodes_configuration_sot_;
 
   // The node designated to run a instance of MaintenanceManager
   node_index_t maintenance_manager_node_ = -1;
@@ -1146,6 +1162,10 @@ class Cluster {
     node_replacement_counters_ = std::move(counters);
   }
 
+  NodesConfigurationSourceOfTruth getNodesConfigurationSourceOfTruth() const {
+    return nodes_configuration_sot_;
+  }
+
   // require @param node must exist in the cluster
   bool hasStorageRole(node_index_t node) const;
 
@@ -1162,7 +1182,8 @@ class Cluster {
           bool one_config_per_node,
           dbg::Level default_log_level,
           bool write_logs_config_file_separately,
-          bool sync_server_config_to_nodes_configuration);
+          bool sync_server_config_to_nodes_configuration,
+          NodesConfigurationSourceOfTruth nodes_configuration_sot);
 
   // Directory where to store the data for a node (logs, db, sockets).
   static std::string getNodeDataPath(const std::string& root,
@@ -1214,7 +1235,8 @@ class Cluster {
   std::string server_binary_;
   std::string cluster_name_;
   bool enable_logsconfig_manager_ = false;
-  bool enable_ncm_ = true;
+  const NodesConfigurationSourceOfTruth nodes_configuration_sot_;
+
   bool one_config_per_node_ = false;
   std::shared_ptr<UpdateableConfig> config_;
   std::unique_ptr<NodesConfigurationPublisher> nodes_configuration_publisher_;

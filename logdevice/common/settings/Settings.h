@@ -1178,7 +1178,7 @@ struct Settings : public SettingsBundle {
 
   // Polling interval of NodesConfigurationManager to NodesConfigurationStore
   // to read NodesConfiguration
-  std::chrono::seconds nodes_configuration_manager_store_polling_interval;
+  std::chrono::milliseconds nodes_configuration_manager_store_polling_interval;
 
   // Timeout for proposing the transition for a shard from an intermediary state
   // to its 'destination' state

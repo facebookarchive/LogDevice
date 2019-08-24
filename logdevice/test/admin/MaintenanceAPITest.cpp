@@ -81,6 +81,8 @@ void MaintenanceAPITest::init() {
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
           .setNodes(nodes)
+          .setNodesConfigurationSourceOfTruth(
+              IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .enableSelfInitiatedRebuilding("1s")
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--enable-safety-check-periodic-metadata-update", "true")
@@ -89,8 +91,6 @@ void MaintenanceAPITest::init() {
           .setParam("--min-gossips-for-stable-state", "0")
           .setParam("--enable-cluster-maintenance-state-machine", "true")
           .setParam("--enable-nodes-configuration-manager", "true")
-          .setParam(
-              "--use-nodes-configuration-manager-nodes-configuration", "true")
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")
