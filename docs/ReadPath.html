@@ -1,0 +1,232 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Read path · LogDevice</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="One of the design principles for LogDevice is to maximize record placement options so as to increase write availability and handle spikes in the write rate. LogDevice uses non-deterministic record placement: each individual record may potentially be stored on any storage node in the cluster.  "/><meta name="docsearch:language" content="en"/><meta property="og:title" content="Read path · LogDevice"/><meta property="og:type" content="website"/><meta property="og:url" content="https://logdevice.io/index.html"/><meta property="og:description" content="One of the design principles for LogDevice is to maximize record placement options so as to increase write availability and handle spikes in the write rate. LogDevice uses non-deterministic record placement: each individual record may potentially be stored on any storage node in the cluster.  "/><meta property="og:image" content="https://logdevice.io/img/logdevice_og.png"/><meta name="twitter:card" content="summary"/><meta name="twitter:image" content="https://logdevice.io/img/logdevice.png"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><link rel="alternate" type="application/atom+xml" href="https://logdevice.io/blog/atom.xml" title="LogDevice Blog ATOM Feed"/><link rel="alternate" type="application/rss+xml" href="https://logdevice.io/blog/feed.xml" title="LogDevice Blog RSS Feed"/><script>
+              (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+              (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+              m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+              })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+              ga('create', 'UA-137238014-1', 'auto');
+              ga('send', 'pageview');
+            </script><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/help.html" target="_self">Support</a></li><li class=""><a href="https://github.com/facebookincubator/LogDevice" target="_self">GitHub</a></li><li class=""><a href="/blog/" target="_self">Blog</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Concepts</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Getting started<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/Overview.html">Overview</a></li><li class="navListItem"><a class="navItem" href="/docs/LocalCluster.html">Quickstart</a></li><li class="navListItem"><a class="navItem" href="/docs/Concepts.html">Architecture</a></li><li class="navListItem"><a class="navItem" href="/docs/Installation.html">Build LogDevice</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Configuration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/FirstCluster.html">Creating your first cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/Config.html">Cluster configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/Settings.html">Settings</a></li><li class="navListItem"><a class="navItem" href="/docs/Logs.html">Log configuration</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Administration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/LDShell.html">LogDevice Shell</a></li><li class="navListItem"><a class="navItem" href="/docs/LDQuery.html">LDQuery</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Concepts<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/Writepath.html">Write path</a></li><li class="navListItem navListItemActive"><a class="navItem" href="/docs/ReadPath.html">Read path</a></li><li class="navListItem"><a class="navItem" href="/docs/Terminology.html">Terminology</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Designs<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/FailureDetection.html">Failure detection</a></li><li class="navListItem"><a class="navItem" href="/docs/Replication.html">Log replication configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/Recovery.html">Recovery after the failure of a sequencer</a></li><li class="navListItem"><a class="navItem" href="/docs/TrafficShaping.html">Traffic shaping</a></li><li class="navListItem"><a class="navItem" href="/docs/Rebuilding.html">Rebuilding</a></li><li class="navListItem"><a class="navItem" href="/docs/LogsDB.html">LogsDB</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">API<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/API_Introduction.html">Client library API</a></li><li class="navListItem"><a class="navItem" href="/docs/API_Doxygen.html">Reference</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Extending LogDevice<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/WritingPlugins.html">Writing plugins</a></li></ul></div></div></section></div><script>
+            var coll = document.getElementsByClassName('collapsible');
+            var checkActiveCategory = true;
+            for (var i = 0; i < coll.length; i++) {
+              var links = coll[i].nextElementSibling.getElementsByTagName('*');
+              if (checkActiveCategory){
+                for (var j = 0; j < links.length; j++) {
+                  if (links[j].classList.contains('navListItemActive')){
+                    coll[i].nextElementSibling.classList.toggle('hide');
+                    coll[i].childNodes[1].classList.toggle('rotate');
+                    checkActiveCategory = false;
+                    break;
+                  }
+                }
+              }
+
+              coll[i].addEventListener('click', function() {
+                var arrow = this.childNodes[1];
+                arrow.classList.toggle('rotate');
+                var content = this.nextElementSibling;
+                content.classList.toggle('hide');
+              });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              var headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                var el = event.target;
+                while(el !== headings){
+                  if (el.tagName === 'A') {
+                    document.body.classList.remove('tocActive');
+                    break;
+                  } else{
+                    el = el.parentNode;
+                  }
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 class="postHeaderTitle">Read path</h1></header><article><div><span><p>One of the design principles for LogDevice is to maximize record placement options so as to increase write availability and handle spikes in the write rate. LogDevice uses non-deterministic record placement: each individual record may potentially be stored on any storage node in the cluster.</p>
+<p>All of these placement options optimize for writing, but they complicate the read path for LogDevice. Client readers need to efficiently find and obtain the copies, and then deliver the records to the application in the correct order.</p>
+<p>Both read availability and efficiency are important to LogDevice. Let's discuss how reads work, and how we make sure data is delivered reliably and efficiently.</p>
+<p>This page has a number of topics:</p>
+<ul>
+<li><a href="#overview">Overview</a> — a review of a few of the components involved in the read path.</li>
+<li><a href="#how-reads-happen">How reads happen</a> —  how the client reads records.</li>
+<li><a href="#gap-detection">Gap detection</a> — what happens if the sequence numbers of the records are not continuous.</li>
+<li><a href="#optimizations">Optimizations</a> — ways to make reads faster.</li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="overview"></a><a href="#overview" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Overview</h2>
+<p>LogDevice client readers connect directly to the storage nodes. Records are sent from the storage node to the client in stateful streams.</p>
+<p><img src="/docs/assets/readpath/read_overview.png" alt="read overview"></p>
+<h3><a class="anchor" aria-hidden="true" id="read-api"></a><a href="#read-api" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Read API</h3>
+<p>Although the client itself is complex, the API that you use to read records in sequential streams from your application is fairly straightforward.</p>
+<ul>
+<li>startReading (log id, from log sequence number (LSN), until LSN = MAX)  — non-prescriptive reading</li>
+<li>read (count, records_out, gap_out) — records_out vector, gap_out vector is returned</li>
+</ul>
+<p>You can learn more about <a href="/docs/API_Introduction.html">how to use the reading API here.</a></p>
+<h3><a class="anchor" aria-hidden="true" id="copyset"></a><a href="#copyset" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Copyset</h3>
+<p>The copyset is the set of storage nodes on which the copies of a particular record are stored. The copyset for each record is included in the header along with the log id, LSN, and timestamp when the record is written.</p>
+<p>The copyset may be mutated:</p>
+<ul>
+<li>By the sequencer at write time, if a node fails to write a record.</li>
+<li>By the rebuilding process.</li>
+</ul>
+<h3><a class="anchor" aria-hidden="true" id="metadata-log"></a><a href="#metadata-log" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Metadata log</h3>
+<p>Every log has an associated metadata log that contains the history of all epochs and their associated metadata for the log. While the epoch store contains only the current nodeset and replication properties for a log, the metadata log contains ranges of epochs, and for each range, the nodeset and the replication factor.  The metadata log is small and only changes when the nodeset or replication properties are updated, which doesn't happen very often. Metadata logs are kept on storage nodes, and are replicated and otherwise treated as regular logs.</p>
+<h2><a class="anchor" aria-hidden="true" id="how-reads-happen"></a><a href="#how-reads-happen" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>How reads happen</h2>
+<p>The client reader gets the nodeset, which is the set of storage nodes that contain the data, and the replication property of the log from the metadata log. It opens a socket to each of the nodes and initiates a streaming protocol by sending it the <em>start</em> and <em>until</em> sequence numbers it wishes to read. Usually all of those nodes have records to deliver.</p>
+<p><img src="/docs/assets/readpath/read_start.png" alt="read start"></p>
+<p>As discussed in <a href="/docs/Writepath.html">Write path</a>, storage nodes only deliver records that have been released by the sequencer, i.e., those with LSNs less than or equal to the last known good pointer.</p>
+<p>Each server starts sending the records they have for the requested log ids. There is an implicit guarantee that each node sends its records in order.</p>
+<p><img src="/docs/assets/readpath/records_send.png" alt="records send"></p>
+<p>The client adds the records that it receives from the storage nodes to a buffer of configurable size. The buffer is used as a sliding window for these purposes:</p>
+<ul>
+<li><strong>Flow control.</strong> Each slot represents a sequence number of a record that the client is waiting for. As the client receives the records, the window is slid. The client sends updates to the storage nodes with the new boundaries of the window so that they send more records.</li>
+<li><strong>Re-ordering</strong>. Because storage nodes send records at different paces, the reader may receive them out of order. If the first record received is for the second row of the buffer, the reader does not deliver it to the application. Instead, it waits for the record for the first row. When that arrives, both the record for the first and second row are delivered and the buffer is rotated so that the third row becomes the next record to deliver.</li>
+<li><strong>De-duplication</strong>. When <em>Single-Copy-Delivery (SCD)</em> is not active, all copies of each record are sent to the client reader. The reader drops copies that it already has. More on <em>SCD</em> in a later section.</li>
+</ul>
+<p><img src="/docs/assets/readpath/read_sliding_window.png" alt="read sliding window"></p>
+<p>The table represents a client's window with 5 slots and nodes (<code>N1</code>..<code>N5</code>).</p>
+<ol>
+<li>The client asks the storage nodes to send records with sequence numbers 42 to 46.</li>
+<li>As shown in the table, the client received all of the records up to sequence number 44. It delivers one copy of record 42 to 44, in order, to the application.</li>
+<li>The client slides the window so that the first row is for sequence number 45. It sends the storage nodes a window update message asking for sequence numbers 45 to 49.</li>
+</ol>
+<h2><a class="anchor" aria-hidden="true" id="gap-detection"></a><a href="#gap-detection" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Gap detection</h2>
+<p>Most of the time, the stream of records received by the reader is made of continuous sequence numbers, but it's not always the case. Sometimes the reader needs to decide whether it must stall and wait for more record copies to be delivered to it by the nodes in the nodeset, or if it can correctly report a record as irretrievably lost and continue deliver subsequent records. This is encapsulated in the gap detection algorithm.</p>
+<h3><a class="anchor" aria-hidden="true" id="gap-detection-algorithm"></a><a href="#gap-detection-algorithm" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Gap detection algorithm</h3>
+<p>First, let's review the concept of f-majority, because this concept helps the client determine whether or not data is unavailable. The f-majority can be defined as a set of nodes that intersects every possible copyset. By definition, the complement of the f-majority cannot contain a copy set. Therefore, if the client has responses from an f-majority of nodes in the nodeset, it has enough information to say whether or not data is available for a particular record.</p>
+<p>If the client hears from <strong><em>|nodeset|-R+1</em></strong> nodes, where R is the replication factor, that’s an f-majority. The formula applies to all replication domains. The formula for rack replication is <strong><em>|num_racks|-Rrack+1</em></strong>. If the replication factor across racks is 2 and there are 5 racks, if the client has heard from all of the nodes on 4 racks, it has f-majority. You have f-majority if you have f-majority for any one replication domain.</p>
+<p>The gap detection algorithm says that a record for an LSN is considered non-existent if it’s not replicated according to replication constraints. If <strong><em>|nodeset|-R+1</em></strong> storage nodes tell the reader that they never had a copy for that sequence number, there is no point in asking more storage nodes because there aren't enough of them in the nodeset to replicate the record.</p>
+<p>If the client receives records that are larger than the &quot;oldest&quot; LSN that it's waiting for, and there is an f-majority of nodes responding for that LSN, the client declares that record as lost, issues a DATALOSS gap, and moves on. If the client has received older records and does not have an f-majority response, it stalls because it can't definitively say whether or not the record it's waiting for is available from the nodes.</p>
+<p>In this example, where R is 3, and the nodeset size is 5, the reader is stalled because it has not received a copy for sequence number 52 and less than 3 nodes have said they don't have the record. There could still be a copy replicated on N1, N2, or N4.</p>
+<p><img src="assets/readpath/read_path_table_twonodes.png" height="360" /></p>
+<p>If N1 sends a record with sequence number 54, the client can deduce that N1 does not have sequence number 52 (remember that records are delivered in order by the node). That's enough to conclude there must not be a record for that sequence number. The client issues a DATALOSS for 52 and rotates the buffer so that 53 is the lowest number.</p>
+<p><img src="assets/readpath/read_path_table_3nodes.png" height="360" /></p>
+<h3><a class="anchor" aria-hidden="true" id="authoritative-status"></a><a href="#authoritative-status" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Authoritative Status</h3>
+<p>Authoritativeness is an extension to f-majority. It considers the <em>effective nodeset</em> of the epoch, taking into account the state of each node in the cluster. For example, the effective nodeset doesn't include nodes that are empty because they have been drained or rebuilt or failed.</p>
+<p>Each node has an Authoritative Status that's recorded in the internal event log. Status values are:</p>
+<ul>
+<li>Fully Authoritative: This is the normal state for a node: it has data and should be considered for f-majority.</li>
+<li>Underreplicated (<code>UNDERREPLICATION</code>): The node is marked unrecoverable in the event log. The data on that node is not coming back. A node is not marked in this way just because it goes down. Its disks are marked unrecoverable only once the node comes back up with disks that have been wiped or replaced, or when the admin manually marks the disk as unrecoverable (ldshell <code>mark-unrecoverable</code> command).</li>
+<li>Authoritative Empty: The node was down and the records have been copied elsewhere. In production clusters, we always have some storage nodes that are <code>AUTHORITATIVE_EMPTY</code> because they are waiting for faulty hardware to be replaced or because they have been drained (and their data relocated onto other nodes) for later decommissioning.</li>
+<li>Unavailable: The node is down.</li>
+</ul>
+<p>Once we consider authoritativeness, the gap detection algorithm changes a bit. A data loss gap can be issued if:</p>
+<ul>
+<li>An f-majority of <code>FULLY_AUTHORITATIVE</code> nodes said they don't have the record, OR</li>
+<li>We don't have an f-majority but all nodes that are <code>FULLY_AUTHORITATIVE</code> said they don't have the record. For example, if all the storage nodes that the reader is not able to talk to are marked <code>UNDERREPLICATION</code>, the reader is allowed to issue a gap even though it does not have an f-majority.</li>
+</ul>
+<p>For example, consider a nodeset with 7 nodes (<code>N1</code>..<code>N7</code>) and one of them, <code>N5</code>, is down. Rebuilding occurs, and everything that was stored on <code>N5</code> is replicated onto other nodes in the nodeset. In this case:</p>
+<ul>
+<li>We can treat <code>N5</code> as if it was never in the nodeset. The effective nodeset only contains 6 nodes.</li>
+<li>We mark <code>N5</code> <code>AUTHORITATIVE_EMPTY</code>.</li>
+<li>During rebuilding, all of the copysets are updated for all the copies of each record that was housed on <code>N5</code>. <code>N5</code> is removed from the copyset and the new location of the replica is added.</li>
+</ul>
+<h3><a class="anchor" aria-hidden="true" id="gaps-sent-by-storage-nodes"></a><a href="#gaps-sent-by-storage-nodes" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Gaps sent by storage nodes</h3>
+<p>The discussion so far assumes that storage nodes only send records. However, a storage node can send a gap message that explicitly indicates that it does not have records for a range of sequence numbers. Some of the cases when this happens:</p>
+<ul>
+<li>The storage node caught up to the tail of the log.</li>
+<li>The next record to read is outside of the sliding window.</li>
+<li>The next record could not be read in the current batch, and the storage node has to perform another read. A batch is a unit of reads performed by a storage node. The storage node “closes a batch” by sending an explicit gap message.</li>
+</ul>
+<p>Knowing that storage nodes also send gap messages, the rule for issuing a data loss gap to the application can be updated again. The client can issue a data loss gap if:</p>
+<ul>
+<li>An f-majority of <code>FULLY_AUTHORITATIVE</code> nodes sent a record or gap with a higher sequence number, OR</li>
+<li>It doesn't have an f-majority but all nodes that are <code>FULLY_AUTHORITATIVE</code> sent a record or gap with a higher sequence number.</li>
+</ul>
+<h3><a class="anchor" aria-hidden="true" id="reporting-gaps-to-the-application"></a><a href="#reporting-gaps-to-the-application" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Reporting gaps to the application</h3>
+<p>The gap message issued by a storage node to the client reader is a <code>NO_RECORDS</code> gap. If an f-majority of nodes send a <code>NO_RECORDS</code> gap, the reader issues a <code>DATALOSS</code> gap to the application.</p>
+<p>The client reader reports both benign gaps and data loss to the application through the <code>gap_out</code> parameter of the read API. Benign gaps include bridge records and hole plugs:</p>
+<ul>
+<li>The bridge record is written at the end of every epoch.</li>
+<li>The hole plug is written by the recovery process to indicate that there is no data for this LSN, and the writer did not get an ACK for it.</li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="optimizations"></a><a href="#optimizations" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Optimizations</h2>
+<p>We have added some optimizations to the read path to increase efficiency. These include compression, sticky copysets, copyset indices, and single copy delivery.</p>
+<h3><a class="anchor" aria-hidden="true" id="compression"></a><a href="#compression" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Compression</h3>
+<p>Payload data is compressed using zstd compression. The client expands the payload before passing it to the application.</p>
+<h3><a class="anchor" aria-hidden="true" id="sticky-copysets"></a><a href="#sticky-copysets" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Sticky copysets</h3>
+<p>In order to improve batching, the sequencer may continue to use the same copyset for a large number of consecutive records in the log, as long as the writes on the copyset successfully complete. This technique is called sticky copysets. It effectively groups records on storage nodes in large variable size blocks.</p>
+<p>For more about sticky copysets, see <a href="/docs/Writepath.html">Write path</a>.</p>
+<h3><a class="anchor" aria-hidden="true" id="copyset-index"></a><a href="#copyset-index" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Copyset index</h3>
+<p>As another optimization, each storage node maintains a copyset index that contains the LSN of each record stored on the node and its copyset. The index is updated as new records arrive and old records are trimmed.</p>
+<p>The storage nodes leverage the copyset index to efficiently filter each record. When the index is combined with sticky copysets, where same copyset is used for multi-megabyte blocks of consecutive records, efficiency goes way up: the filtering decision applies to a whole block which is either read and delivered, or skipped.</p>
+<h3><a class="anchor" aria-hidden="true" id="single-copy-delivery"></a><a href="#single-copy-delivery" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Single copy delivery</h3>
+<p>To avoid reading and sending each record multiple times, single copy delivery (SCD) provides a consistent way of selecting one node in the copyset to read and deliver a copy of each record.</p>
+<p>Every storage node that has a copy of a record also has its copyset, so it knows which other nodes also have that copy. Each storage node in the copyset deterministically shuffles the copyset of each record using a seed that is sent by the client. Only the storage node that appears first in that shuffled copyset sends a copy.</p>
+<p>There are a couple of variations:</p>
+<ul>
+<li>Local SCD (experimental-only feature). The client sends its location, and then only one node from the same region supplies the record.</li>
+<li>If shuffle mode is turned off, then the first node in the copyset sends the record.</li>
+<li>Fixed seed. This option means all readers are served any given record by the same node. This increases read performance if you have multiple clients reading around the same spot in the log.</li>
+</ul>
+<p>SCD is set via the <code>scd-enabled</code> log attribute. Local SCD is set via the <code>local-scd-enabled</code> log attribute. See <a href="/docs/Logs.html">Log configuration</a>.</p>
+<p>For the other two modes, see <code>scd-copyset-reordering-max</code> in <a href="/docs/Settings.html">Configuration settings</a>.</p>
+<h4><a class="anchor" aria-hidden="true" id="known-down-list"></a><a href="#known-down-list" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Known down list</h4>
+<p>Clients start reading from a storage node by sending a <code>START</code> message to the nodes in the nodeset. In this message, the flag <code>SINGLE_COPY_DELIVERY</code> defines if the created read stream uses SCD. If the flag is set, the <code>START</code> message also contains a list of nodes — the &quot;known down list&quot; — that are considered down by the client.</p>
+<p>The storage nodes take the copyset for the record, remove any entries from the known down list, and then apply the shuffle algorithm to figure out which node should send the next record.</p>
+<p>Usually a storage node is added to the known down list because the client couldn't connect to it or initiate the streaming protocol because the node is down or underreplicated. If a node has lost its data or can't deliver records for some other reason, it'll tell the client during the handshake.</p>
+<p>If a node sees itself in the known down list, and it's able to send records, it sends them as if it wasn't in the list. Each time the client slides the window, it checks to see if any of the nodes in the known down list have sent records. If so, the client removes them from the list and rewinds the stream.</p>
+<h4><a class="anchor" aria-hidden="true" id="rewind"></a><a href="#rewind" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Rewind</h4>
+<p>A stream is &quot;rewound&quot; if the client decides to send another <code>START</code> with a start_lsn smaller or equal to the read pointer of that stream. The client rewinds the stream when it modifies the known down list or when it switches between SCD and non-SCD mode.</p>
+<h4><a class="anchor" aria-hidden="true" id="all-send-all-non-scd-mode"></a><a href="#all-send-all-non-scd-mode" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>All Send All (non-SCD) mode</h4>
+<p>If a client detects a gap while reading in SCD mode, then it:</p>
+<ul>
+<li>Drops everything in the current buffer.</li>
+<li>Adds the sending node to the known down list.</li>
+<li>Broadcasts the <code>START</code> message to all the nodes in the nodeset with <code>ALL_SEND_ALL</code>. This turns SCD off and tells all nodes with copies of the requested records to send them.</li>
+</ul>
+<p>Performing a rewind causes read amplification, but because nodes don't fail often, in practice it doesn't affect overall performance. As long as no more than R-1 nodes are unavailable, read availability is guaranteed.</p>
+<p>The next time the client slides the window, it switches back to SCD mode.</p>
+<p>By default, the client never delivers a data loss gap to the application while in SCD mode. Each time there is a possible data loss, it switches to all send all mode.</p>
+<p>Related settings:</p>
+<ul>
+<li>To turn off the default SCD rewind behavior, use <code>read-stream-guaranteed-delivery-efficiency</code>. It tends to deliver gaps more aggressively to avoid rewinds in SCD.</li>
+</ul>
+<h4><a class="anchor" aria-hidden="true" id="scd-greylisting-detecting-slow-shards"></a><a href="#scd-greylisting-detecting-slow-shards" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>SCD greylisting (detecting slow shards)</h4>
+<p>Although the read path, as described thus far, is very resilient to node failures (server crashed, power loss, disk failed, loss of network connectivity), it's less resilient to «grey» failures, i.e., nodes running in a degraded state. When single copy delivery is enabled, there's nothing to prevent the slowest node in the log's nodeset being the one sending out the records.</p>
+<p>So we added a failure detector to the client to make it resilient to grey failures.</p>
+<p>The failure detector keeps track of how long it takes for each storage node to complete the client's read window. The client slides the window when the read pointer is past X% of the current window, where X is defined by the setting <code>client-read-flow-control-threshold</code>. As nodes complete windows, the latency samples are added to a bucketed time series and a moving average per node is calculated.</p>
+<p>Nodes that are observed to be much slower than their peers are put in the known down list. They are reinstated after a probation period and measured again. Depending on their performance, they are re-added to the known down list for either increasingly longer or shorter time periods.</p>
+<p>Related settings:</p>
+<ul>
+<li><code>reader-slow-shards-detection</code> - turn the failure detector on or off</li>
+</ul>
+</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/Writepath.html"><span class="arrow-prev">← </span><span>Write path</span></a><a class="docs-next button" href="/docs/Terminology.html"><span>Terminology</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#overview">Overview</a><ul class="toc-headings"><li><a href="#read-api">Read API</a></li><li><a href="#copyset">Copyset</a></li><li><a href="#metadata-log">Metadata log</a></li></ul></li><li><a href="#how-reads-happen">How reads happen</a></li><li><a href="#gap-detection">Gap detection</a><ul class="toc-headings"><li><a href="#gap-detection-algorithm">Gap detection algorithm</a></li><li><a href="#authoritative-status">Authoritative Status</a></li><li><a href="#gaps-sent-by-storage-nodes">Gaps sent by storage nodes</a></li><li><a href="#reporting-gaps-to-the-application">Reporting gaps to the application</a></li></ul></li><li><a href="#optimizations">Optimizations</a><ul class="toc-headings"><li><a href="#compression">Compression</a></li><li><a href="#sticky-copysets">Sticky copysets</a></li><li><a href="#copyset-index">Copyset index</a></li><li><a href="#single-copy-delivery">Single copy delivery</a></li></ul></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2019 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+                document.addEventListener('keyup', function(e) {
+                  if (e.target !== document.body) {
+                    return;
+                  }
+                  // keyCode for '/' (slash)
+                  if (e.keyCode === 191) {
+                    const search = document.getElementById('search_input_react');
+                    search && search.focus();
+                  }
+                });
+              </script><script>
+              var search = docsearch({
+                
+                apiKey: 'f0ece773627cb7003a57c0edd6ec7dd8',
+                indexName: 'logdevice',
+                inputSelector: '#search_input_react'
+              });
+            </script></body></html>

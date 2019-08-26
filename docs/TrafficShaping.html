@@ -1,0 +1,384 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Traffic shaping · LogDevice</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="LogDevice can differentiate its outbound network traffic into multiple classes with distinct priorities, minimum guaranteed bandwidth allocations, and bandwidth caps. It can throttle the traffic of one class while another class gets more bandwidth. This ensures that events such as rebuilding don&#x27;t affect write availability."/><meta name="docsearch:language" content="en"/><meta property="og:title" content="Traffic shaping · LogDevice"/><meta property="og:type" content="website"/><meta property="og:url" content="https://logdevice.io/index.html"/><meta property="og:description" content="LogDevice can differentiate its outbound network traffic into multiple classes with distinct priorities, minimum guaranteed bandwidth allocations, and bandwidth caps. It can throttle the traffic of one class while another class gets more bandwidth. This ensures that events such as rebuilding don&#x27;t affect write availability."/><meta property="og:image" content="https://logdevice.io/img/logdevice_og.png"/><meta name="twitter:card" content="summary"/><meta name="twitter:image" content="https://logdevice.io/img/logdevice.png"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><link rel="alternate" type="application/atom+xml" href="https://logdevice.io/blog/atom.xml" title="LogDevice Blog ATOM Feed"/><link rel="alternate" type="application/rss+xml" href="https://logdevice.io/blog/feed.xml" title="LogDevice Blog RSS Feed"/><script>
+              (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+              (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+              m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+              })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+              ga('create', 'UA-137238014-1', 'auto');
+              ga('send', 'pageview');
+            </script><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/help.html" target="_self">Support</a></li><li class=""><a href="https://github.com/facebookincubator/LogDevice" target="_self">GitHub</a></li><li class=""><a href="/blog/" target="_self">Blog</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Designs</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Getting started<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/Overview.html">Overview</a></li><li class="navListItem"><a class="navItem" href="/docs/LocalCluster.html">Quickstart</a></li><li class="navListItem"><a class="navItem" href="/docs/Concepts.html">Architecture</a></li><li class="navListItem"><a class="navItem" href="/docs/Installation.html">Build LogDevice</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Configuration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/FirstCluster.html">Creating your first cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/Config.html">Cluster configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/Settings.html">Settings</a></li><li class="navListItem"><a class="navItem" href="/docs/Logs.html">Log configuration</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Administration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/LDShell.html">LogDevice Shell</a></li><li class="navListItem"><a class="navItem" href="/docs/LDQuery.html">LDQuery</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Concepts<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/Writepath.html">Write path</a></li><li class="navListItem"><a class="navItem" href="/docs/ReadPath.html">Read path</a></li><li class="navListItem"><a class="navItem" href="/docs/Terminology.html">Terminology</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Designs<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/FailureDetection.html">Failure detection</a></li><li class="navListItem"><a class="navItem" href="/docs/Replication.html">Log replication configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/Recovery.html">Recovery after the failure of a sequencer</a></li><li class="navListItem navListItemActive"><a class="navItem" href="/docs/TrafficShaping.html">Traffic shaping</a></li><li class="navListItem"><a class="navItem" href="/docs/Rebuilding.html">Rebuilding</a></li><li class="navListItem"><a class="navItem" href="/docs/LogsDB.html">LogsDB</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">API<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/API_Introduction.html">Client library API</a></li><li class="navListItem"><a class="navItem" href="/docs/API_Doxygen.html">Reference</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Extending LogDevice<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/WritingPlugins.html">Writing plugins</a></li></ul></div></div></section></div><script>
+            var coll = document.getElementsByClassName('collapsible');
+            var checkActiveCategory = true;
+            for (var i = 0; i < coll.length; i++) {
+              var links = coll[i].nextElementSibling.getElementsByTagName('*');
+              if (checkActiveCategory){
+                for (var j = 0; j < links.length; j++) {
+                  if (links[j].classList.contains('navListItemActive')){
+                    coll[i].nextElementSibling.classList.toggle('hide');
+                    coll[i].childNodes[1].classList.toggle('rotate');
+                    checkActiveCategory = false;
+                    break;
+                  }
+                }
+              }
+
+              coll[i].addEventListener('click', function() {
+                var arrow = this.childNodes[1];
+                arrow.classList.toggle('rotate');
+                var content = this.nextElementSibling;
+                content.classList.toggle('hide');
+              });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              var headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                var el = event.target;
+                while(el !== headings){
+                  if (el.tagName === 'A') {
+                    document.body.classList.remove('tocActive');
+                    break;
+                  } else{
+                    el = el.parentNode;
+                  }
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 class="postHeaderTitle">Traffic shaping</h1></header><article><div><span><p>LogDevice can differentiate its outbound network traffic into multiple classes with distinct priorities, minimum guaranteed bandwidth allocations, and bandwidth caps. It can throttle the traffic of one class while another class gets more bandwidth. This ensures that events such as rebuilding don't affect write availability.</p>
+<p>Traffic shaping is a modified version of the <a href="https://en.wikipedia.org/wiki/Token_bucket">token bucket algorithm</a>. Each traffic class is configured with a bucket which represents the maximum network bandwidth that it can use. Every 1 ms, each class is given its deposit of tokens. If the bucket overflows, then the excess is offered to other members of the same class. After the next interval, if that amount has not been consumed, it goes to another bucket called the priority queue.</p>
+<h2><a class="anchor" aria-hidden="true" id="how-traffic-shaping-works"></a><a href="#how-traffic-shaping-works" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>How traffic shaping works</h2>
+<p><img src="assets/traffic_shaping/Logdevice_bandwidth_bucket.jpg" style="float:right;width:400px;"  /></p>
+<p>Each traffic priority level is assigned a bucket, or allocation, of transmission credits measured in bytes. The buckets are sized so that a burst of traffic will not overwhelm the buffering capacity of the network (e.g. in a top-of-rack or cluster switch). As messages are sent, the level in the bucket decreases.</p>
+<p>Because of the way that LogDevice shards work across threads, there is one instance of a traffic class's bucket for each shard. These are called traffic class members in this document.</p>
+<p>Each time the traffic shaper runs (every 1ms), it deposits the guaranteed bandwidth credits for each traffic class in its bucket. A bucket cannot be filled beyond its capacity so that the configured burst size is honored. If a bucket fills completely, the excess credits are made available to other class members during the next time interval. After that, if there are still excess credits, they are added to a bucket called the priority queue.</p>
+<p><img src="assets/traffic_shaping/Logdevice_priorityq_last_overflow.jpg" style="float:right;width:200px;"  /></p>
+<p>The priority queue represents network bandwidth that is not allocated to any class. Each time slice, the priority queue bucket credits are distributed, in priority order, to the classes that have not filled their buckets. If the priority queue bucket overflows, those credits are discarded.</p>
+<p>For more details on the design, see
+<a href="#traffic-shaping-design">Traffic Shaping Design</a> below.</p>
+<h2><a class="anchor" aria-hidden="true" id="categorizing-traffic"></a><a href="#categorizing-traffic" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Categorizing traffic</h2>
+<p>Traffic is classified by the higher level operation that generates the traffic. A client request to add new records to a log is a different class than appends needed to re-replicate data after a failure in a cluster.</p>
+<p>Traffic classes are listed below with their meanings. These classes are also used for network traffic stats reported via LogDevice's admin interface.</p>
+<table>
+<thead>
+<tr><th>TRAFFIC_CLASS</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>APPEND</td><td>Adding new records.</td></tr>
+<tr><td>FAILURE_DETECTOR</td><td>Node failure detection.</td></tr>
+<tr><td>HANDSHAKE</td><td>Connection negotiation.</td></tr>
+<tr><td>TRIM</td><td>Explicitly culling old records.</td></tr>
+<tr><td>READ_TAIL</td><td>Reading from in-core log data or marked as a high-priority reader.</td></tr>
+<tr><td>RSM</td><td>Reading or writing Replicated State Machine (RSM) logs.</td></tr>
+<tr><td>TRIM</td><td>Explicitly culling old records.</td></tr>
+<tr><td>READ_BACKLOG</td><td>Reading from disk or explicitly marked as a low-priority reader.</td></tr>
+<tr><td>REBUILD</td><td>Reading or writing a record to restore its replication factor after a failure.</td></tr>
+<tr><td>RECOVERY</td><td>Sequencer recovery and purging of unclean epochs.</td></tr>
+</tbody>
+</table>
+<h2><a class="anchor" aria-hidden="true" id="traffic-priorities"></a><a href="#traffic-priorities" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Traffic priorities</h2>
+<p><img src="assets/traffic_shaping/Logdevice_flowgroup.jpg" style="float:right;width:400px;"  /></p>
+<p>Each traffic class is assigned a single transmission priority. Using the same traffic class for all messages related to a single higher level operation guarantees that these messages are dispatched in FIFO order.</p>
+<p>LogDevice maps traffic class to priority as follows:</p>
+<table>
+<thead>
+<tr><th>PRIORITY</th><th>Description</th><th>TRAFFIC_CLASS</th></tr>
+</thead>
+<tbody>
+<tr><td>MAX</td><td>Highest possible priority. Use rarely, such as when a client's priority isn't yet known, or for operations whose completion blocks read or write availability.</td><td>HANDSHAKE, FAILURE_DETECTOR, RECOVERY, RSM</td></tr>
+<tr><td>CLIENT_HIGH</td><td>Realtime client priority.</td><td>APPEND, TRIM</td></tr>
+<tr><td>CLIENT_NORMAL</td><td>Default client priority.</td><td>READ_TAIL</td></tr>
+<tr><td>CLIENT_LOW</td><td>Best effort client priority (such as a batch backlog reader).</td><td>READ_BACKLOG</td></tr>
+<tr><td>BACKGROUND</td><td>Operations that should have minimal impact on response times to normal client traffic.</td><td>REBUILD</td></tr>
+<tr><td>IDLE</td><td>Only run if nothing else can. Reserved, not currently used.</td><td></td></tr>
+</tbody>
+</table>
+<p>LogDevice is optimized for write availability. So, for example:</p>
+<ul>
+<li>Recovery reads must be performed at high priority. In order to recover from a sequencer failure, LogDevice must read the last portion of a log before new writes can be processed for that log.</li>
+<li>Rebuilding reads intended to restore the replication factor for a log after a drive or node failure are less important. They shouldn't interfere with the SLA for client writes and most client reads.</li>
+</ul>
+<h2><a class="anchor" aria-hidden="true" id="configuration"></a><a href="#configuration" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Configuration</h2>
+<p>Configure traffic shaping via the optional <code>traffic_shaping</code> section in the cluster configuration file.</p>
+<p>For each traffic class, you can assign, on the basis of location scope (node, rack, or region) and priority, the following values:</p>
+<ul>
+<li>minimum guaranteed bytes per second.</li>
+<li>maximum bytes per second.</li>
+<li>maximum burst bytes.</li>
+</ul>
+<p><img src="/docs/assets/traffic_shaping/traffic_shaping_graphics.png" alt=""></p>
+<p>The top level of  <code>traffic_shaping</code> supports two fields:</p>
+<ul>
+<li><p><code>default_read_traffic_class</code></p>
+<ul>
+<li>This traffic class is assigned to all client readers by default. To override this, add an entry for the client in the <code>principals</code> section.</li>
+</ul></li>
+<li><p><code>scopes</code></p>
+<ul>
+<li>Each element of <code>scopes</code> can be individually enabled or disabled.</li>
+<li><code>node</code> refers to communication within the node, such as a sequencer storing to itself. Typically this is not controlled by traffic shaping.</li>
+<li>An optional array of <code>meters</code> set the bandwidth allocations at each priority level. If a <code>meter</code> is absent, the capacity and bandwidth allocation for the scope default to zero.</li>
+<li>Each scope is a flow group that uses the same set of allocations or buckets.</li>
+</ul></li>
+</ul>
+<p>Sample <code>traffic_shaping</code> configuration:</p>
+<pre><code class="hljs">  <span class="hljs-string">"traffic_shaping"</span>: {
+    <span class="hljs-string">"default_read_traffic_class"</span>: <span class="hljs-string">"READ_TAIL"</span>,
+    <span class="hljs-string">"scopes"</span>: [
+      {
+        <span class="hljs-string">"name"</span>: <span class="hljs-string">"NODE"</span>,
+        <span class="hljs-string">"shaping_enabled"</span>: <span class="hljs-literal">false</span>
+      },
+      {
+        <span class="hljs-string">"name"</span>: <span class="hljs-string">"RACK"</span>,
+        <span class="hljs-string">"shaping_enabled"</span>: <span class="hljs-literal">false</span>
+      },
+      {
+        <span class="hljs-string">"name"</span>: <span class="hljs-string">"REGION"</span>,
+        <span class="hljs-string">"shaping_enabled"</span>: <span class="hljs-literal">true</span>,
+        <span class="hljs-string">"meters"</span>: [
+          {
+            <span class="hljs-string">"name"</span>: <span class="hljs-string">"PRIORITY_QUEUE"</span>,
+            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">58000</span>,
+            <span class="hljs-string">"max_bytes_per_second"</span>: <span class="hljs-number">75000</span>,
+            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">5800</span>
+          },
+          {
+            <span class="hljs-string">"name"</span>: <span class="hljs-string">"MAX"</span>,
+            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">2000</span>,
+            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">200</span>
+          },
+          {
+            <span class="hljs-string">"name"</span>: <span class="hljs-string">"CLIENT_HIGH"</span>,
+            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">100000</span>,
+            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">10000</span>
+          },
+          {
+            <span class="hljs-string">"name"</span>: <span class="hljs-string">"CLIENT_NORMAL"</span>,
+            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">50000</span>,
+            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">5000</span>
+          },
+          {
+            <span class="hljs-string">"name"</span>: <span class="hljs-string">"CLIENT_LOW"</span>,
+            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">25000</span>,
+            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">2500</span>
+          },
+          {
+            <span class="hljs-string">"name"</span>: <span class="hljs-string">"BACKGROUND"</span>,
+            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">25000</span>,
+            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">2000</span>
+          },
+        ],
+      }
+   ],
+  },
+</code></pre>
+<p>The <code>principals</code> sections lets you assign client readers to different traffic classes, thus affecting their relative priorities.</p>
+<pre><code class="hljs">  <span class="hljs-string">"principals"</span>: [
+    {
+      <span class="hljs-string">"name"</span>: <span class="hljs-string">"tailer"</span>,
+      <span class="hljs-string">"max_read_traffic_class"</span>: <span class="hljs-string">"READ_TAIL"</span>
+    },
+    {
+      <span class="hljs-string">"name"</span>: <span class="hljs-string">"batch_reader"</span>,
+      <span class="hljs-string">"max_read_traffic_class"</span>: <span class="hljs-string">"READ_BACKLOG"</span>,
+    }
+</code></pre>
+<p>The client identifies its name (e.g., &quot;tailer&quot; or  &quot;batch_reader&quot;) when it creates the client object: it either passes an SSL certificate that contains the principal, or it passes the name string to the client object.</p>
+<h3><a class="anchor" aria-hidden="true" id="choosing-bandwidth-values"></a><a href="#choosing-bandwidth-values" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Choosing bandwidth values</h3>
+<p>Set the minimum required bandwidth at each priority level to the number needed to meet a given SLA when in a degraded state (e.g., when only 3 top-of-rack egress ports are functioning). Additional bandwidth that can be consumed when the cluster is optimal should be added to the PRIORITY_QUEUE bucket. Then, during a sustained outage, you only need to scale back the PRIORITY_QUEUE values, via a config update, in order to adjust for the degraded network capacity.</p>
+<p>All settings should be in terms of output for a single node in a cluster.</p>
+<p>The total configured burst size of the system is the sum of capacities of all buckets, including the priority queue bucket.</p>
+<h3><a class="anchor" aria-hidden="true" id="tuning-or-making-temporary-config-changes"></a><a href="#tuning-or-making-temporary-config-changes" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Tuning or making temporary config changes</h3>
+<p>When tuning traffic shaping, it is often convenient to limit experiments to just a single node. The easiest way to do this is via the admin interface on the node.</p>
+<p>Any changes made via the admin interface will be overwritten the next time the node receives a configuration update, even if that update doesn't change the traffic shaping section from the values in the last update.</p>
+<pre><code class="hljs">% traffic_shaping --help
+Options error: unrecognised option <span class="hljs-string">'--help'</span>
+USAGE traffic_shaping [--default_read_traffic_class=NAME][--scope=NAME|ALL [--enable|--disable] [--priority=NAME|ALL [--mbps=&lt;<span class="hljs-keyword">double</span>&gt;] [--max_burst_mb=&lt;<span class="hljs-keyword">double</span>&gt;]]]
+END
+
+% traffic_shaping --default_read_traffic_class=READ_TAIL
+traffic_shaping::default_read_traffic_class READ_BACKLOG =&gt; READ_TAIL
+END
+
+% traffic_shaping --scope=REGION --disable
+traffic_shaping::REGION enabled =&gt; disabled
+END
+
+% traffic_shaping --scope=REGION --priority=ALL --mbps=<span class="hljs-number">100</span>
+traffic_shaping::REGION::MAX::mbps <span class="hljs-number">2.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping::REGION::CLIENT_HIGH::mbps <span class="hljs-number">100.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping::REGION::CLIENT_NORMAL::mbps <span class="hljs-number">50.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping::REGION::CLIENT_LOW::mbps <span class="hljs-number">25.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping::REGION::BACKGROUND::mbps <span class="hljs-number">25.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping::REGION::IDLE::mbps <span class="hljs-number">0.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping::REGION::PRIORITY_QUEUE::mbps <span class="hljs-number">58.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+END
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="statistics"></a><a href="#statistics" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Statistics</h2>
+<p>Several statistics track the behavior of traffic shaping. You can see their definitions in these files:</p>
+<ul>
+<li>/logdevice/common/stats/per_flow_group_stats.inc</li>
+<li>/logdevice/common/stats/per_traffic_class_stats.inc</li>
+<li>/logdevice/common/stats/per_msg_priority_stats.inc</li>
+<li>/logdevice/common/stats/per_message_type_stats.inc</li>
+</ul>
+<p>These are visible through the admin interface:</p>
+<pre><code class="hljs">% nc -U  <span class="hljs-regexp">/dev/</span>shm<span class="hljs-regexp">/tmp/</span>cluster<span class="hljs-regexp">/N0\:1/</span>socket_command
+info stats2
+</code></pre>
+<p>or</p>
+<pre><code class="hljs">% echo stats2 |nc ::<span class="hljs-number">1</span> <span class="hljs-number">5440</span> |grep flow_group
+
+STAT flow_groups_run_deadline_exceeded <span class="hljs-number">0</span>
+STAT flow_group.direct_dispatched.NODE <span class="hljs-number">66</span>
+STAT flow_group.deferred.NODE <span class="hljs-number">0</span>
+STAT flow_group.discarded.NODE <span class="hljs-number">0</span>
+STAT flow_group.cbregistered.NODE <span class="hljs-number">0</span>
+STAT flow_group.limit.NODE <span class="hljs-number">0</span>
+STAT flow_group.bwdiscarded.NODE <span class="hljs-number">0</span>
+STAT flow_group.sent_ok.NODE <span class="hljs-number">85</span>
+STAT flow_group.sent_bytes.NODE <span class="hljs-number">6009</span>
+...
+</code></pre>
+<p>Histograms showing the latency incurred by traffic shaping are also available:</p>
+<pre><code class="hljs">% stats2 shaping
+
+All Scopes: All Priorities: time_in_queue
+           &lt; <span class="hljs-number">10</span> usec : <span class="hljs-number">648</span>        * P50 P75 P95
+         <span class="hljs-number">10.</span><span class="hljs-number">.20</span> usec : <span class="hljs-number">8</span>          * P99
+END
+
+% stats2 shaping --scope=REGION
+
+Scope REGION: All Priorities: time_in_queue
+           &lt; <span class="hljs-number">10</span> usec : <span class="hljs-number">648</span>        * P50 P75 P95
+         <span class="hljs-number">10.</span><span class="hljs-number">.20</span> usec : <span class="hljs-number">8</span>          * P99
+
+END
+
+% stats2 shaping --scope=REGION --priority=ALL
+
+Scope REGION: Priority MAX: time_in_queue
+           &lt; <span class="hljs-number">10</span> usec : <span class="hljs-number">604</span>        * P50 P75 P95
+         <span class="hljs-number">10.</span><span class="hljs-number">.20</span> usec : <span class="hljs-number">8</span>          * P99
+
+Scope REGION: Priority CLIENT_HIGH: time_in_queue
+Scope REGION: Priority CLIENT_NORMAL: time_in_queue
+           &lt; <span class="hljs-number">10</span> usec : <span class="hljs-number">44</span>         * P50 P75 P95 P99
+
+Scope REGION: Priority CLIENT_LOW: time_in_queue
+Scope REGION: Priority BACKGROUND: time_in_queue
+Scope REGION: Priority IDLE: time_in_queue
+
+END
+
+% stats2 shaping --scope=ALL --priority=ALL --summary
+
+Name           Scope        Priority       Unit  min       p50       p75       p95       p99      p99<span class="hljs-number">.99</span>   max      count   mean
+------------------------------------------------------------------------------------------------------------------------------------
+time_in_queue  NODE         MAX            usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+time_in_queue  NODE         CLIENT_HIGH    usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+time_in_queue  NODE         CLIENT_NORMAL  usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+time_in_queue  NODE         CLIENT_LOW     usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+time_in_queue  NODE         BACKGROUND     usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+time_in_queue  NODE         IDLE           usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+time_in_queue  RACK         MAX            usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+...
+time_in_queue  ROW          MAX            usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+...
+time_in_queue  CLUSTER      MAX            usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+...
+time_in_queue  DATA_CENTER  MAX            usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+...
+time_in_queue  DATA_CENTER  CLIENT_HIGH    usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+...
+time_in_queue  REGION       MAX            usec  <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec    <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span> usec   <span class="hljs-number">0</span>
+...
+time_in_queue  ROOT         MAX            usec  &lt; <span class="hljs-number">0</span> usec  &lt; <span class="hljs-number">0</span> usec  &lt; <span class="hljs-number">0</span> usec  &lt; <span class="hljs-number">0</span> usec  <span class="hljs-number">16</span> usec  <span class="hljs-number">35</span> usec  <span class="hljs-number">90</span> usec  <span class="hljs-number">907309</span>  <span class="hljs-number">3</span> usec
+...
+END
+
+% stats2 shaping --scope=RACK --priority=ALL --summary --json
+
+{<span class="hljs-string">"rows"</span>:[[<span class="hljs-string">"time_in_queue"</span>,<span class="hljs-string">"RACK"</span>,<span class="hljs-string">"MAX"</span>,<span class="hljs-string">"usec"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-literal">null</span>],[<span class="hljs-string">"time_in_queue"</span>,<span class="hljs-string">"RACK"</span>,<span class="hljs-string">"CLIENT_HIGH"</span>,<span class="hljs-string">"usec"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-literal">null</span>],[<span class="hljs-string">"time_in_queue"</span>,<span class="hljs-string">"RACK"</span>,<span class="hljs-string">"CLIENT_NORMAL"</span>,<span class="hljs-string">"usec"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-literal">null</span>],[<span class="hljs-string">"time_in_queue"</span>,<span class="hljs-string">"RACK"</span>,<span class="hljs-string">"CLIENT_LOW"</span>,<span class="hljs-string">"usec"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-literal">null</span>],[<span class="hljs-string">"time_in_queue"</span>,<span class="hljs-string">"RACK"</span>,<span class="hljs-string">"BACKGROUND"</span>,<span class="hljs-string">"usec"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-literal">null</span>],[<span class="hljs-string">"time_in_queue"</span>,<span class="hljs-string">"RACK"</span>,<span class="hljs-string">"IDLE"</span>,<span class="hljs-string">"usec"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-string">"0"</span>,<span class="hljs-literal">null</span>]],<span class="hljs-string">"headers"</span>:[<span class="hljs-string">"Name"</span>,<span class="hljs-string">"Scope"</span>,<span class="hljs-string">"Priority"</span>,<span class="hljs-string">"Unit"</span>,<span class="hljs-string">"min"</span>,<span class="hljs-string">"p50"</span>,<span class="hljs-string">"p75"</span>,<span class="hljs-string">"p95"</span>,<span class="hljs-string">"p99"</span>,<span class="hljs-string">"p99.99"</span>,<span class="hljs-string">"max"</span>,<span class="hljs-string">"count"</span>,<span class="hljs-string">"mean"</span>]}
+
+END
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="traffic-shaping-design"></a><a href="#traffic-shaping-design" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Traffic shaping design</h2>
+<p>LogDevice employs a variation of the token bucket algorithm for metering traffic at a given priority. In LogDevice's case, however, the bucket analogy isn't perfect. Let's look at how the LogDevice scheme is different.</p>
+<h3><a class="anchor" aria-hidden="true" id="really-large-messages"></a><a href="#really-large-messages" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Really large messages</h3>
+<p>The maximum message payload size allowed in the system is 32MB. That limit that will only be reached by applications writing log records of that size. Although this should be extremely rare, the traffic shaping system must still allow these messages to pass, even if they exceed the configured maximum burst size. To make this possible, LogDevice will release the next message for a queue being metered by a bucket so long as any credit remains. A message that is larger than the available credit will cause the level to go negative, deferring future transmissions until the level again becomes positive.</p>
+<h3><a class="anchor" aria-hidden="true" id="shaping-by-priority"></a><a href="#shaping-by-priority" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Shaping by priority</h3>
+<p>Each message priority level has an independently operated and configurable bucket which meters the flow of messages at that priority. The priority level specific buckets are the perfect tool for configuring the minimum guaranteed bandwidth and maximum burst size for traffic types of different importance. In most configurations, for example, rebuild traffic must not degrade the performance of normal client activity, but some amount of rebuild activity must be allowed in order to meet a &quot;restoration of replication factor&quot; SLA. The bandwidth necessary to achieve that SLA can be reserved via appropriate tuning of the REBUILD priority's bucket.</p>
+<h3><a class="anchor" aria-hidden="true" id="the-priority-queue-bucket"></a><a href="#the-priority-queue-bucket" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>The priority queue bucket</h3>
+<p>The token bucket algorithm on its own has limited support for variable workloads. The capacity of the bucket allows the occasional burst of traffic to be tolerated, but what happens during prolonged periods where the bandwidth for a priority level isn't consumed? This is bandwidth that can and should be used for some beneficial purpose.</p>
+<p>LogDevice reclaims this excess capacity and adds it to a special bucket: the priority queue bucket. Same as all other buckets in the system, this bucket has a configurable capacity and refill rate. Unlike the buckets whose overflow feeds into it, when the priority queue bucket overflows, there is no other bucket to catch the discarded credit. This ensures that this &quot;reclamation scheme&quot; doesn't violate the total configured burst size of the system (i.e., the sum of capacities of all buckets, including the priority queue bucket).</p>
+<p>Credits are transferred from the priority queue class to other classes, as needed, in priority order.</p>
+<h2><a class="anchor" aria-hidden="true" id="controlling-memory-consumption"></a><a href="#controlling-memory-consumption" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Controlling memory consumption</h2>
+<p>There are per-worker and per-process limits on the bytes of pending network messages. This limit is enforced above traffic shaping.</p>
+<p>Outbound messages can be deferred for many reasons: a connection may transit a congested hop, a peer may fail leaving a blocked socket until the dropped connection is noticed, or LogDevice may temporarily get &quot;ahead of the network&quot; in processing incoming requests and generating outbound messages. Traffic shaping merely adds another possible reason for messages to be deferred: artificial congestion.</p>
+<h2><a class="anchor" aria-hidden="true" id="applying-traffic-shaping-to-different-resources"></a><a href="#applying-traffic-shaping-to-different-resources" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Applying traffic shaping to different resources</h2>
+<p>Within the LogDevice code base, a collection of buckets, one per priority level plus one for the priority queue, is encapsulated in the FlowMeter class. The combination of a FlowMeter, with the logic for applying configuration and bandwidth updates from the TrafficShaper, makes a FlowGroup.</p>
+<p>FlowGroups are so called because they are shared by connections/traffic flows that contend on the same resource. To put this in more concrete terms and since FlowGroups use the same NodeLocationScope definitions used for describing failure domains, look at the definitions in <code>LogDevice/logdevice/include/node_location_scopes.inc</code>.</p>
+<p>These scopes correlate to the likely domains that have different levels of network bandwidth.</p>
+<ul>
+<li>When a LogDevice sequencer stores data on its local node (i.e., within the NODE scope), network bandwidth isn't consumed at all, so the messages related to this store shouldn't be limited.</li>
+<li>When a transmission is made to a peer within the same rack (i.e., within the RACK scope), transmission should be limited by top-of-rack switch bandwidth.</li>
+<li>Cluster switch bandwidth will become the dominant limiting factor somewhere within the ROW, CLUSTER, DATA_CENTER, and REGION scopes, depending on the switching topology.</li>
+<li>If a cross region hop is necessary for a connection, the bandwidth limits for cross region traffic can be assigned to the ROOT (logical LogDevice Cluster) scope.</li>
+</ul>
+<p>During the establishment of a new connection, LogDevice retrieves information from the cluster configuration and determines the smallest scope that is shared with the peer. This scope information is used to select the FlowGroup that will be used to meter the connection.</p>
+<p>While LogDevice creates a FlowGroup for each of the scopes listed above, not all of them are useful for every traffic shaping configuration. By default, only the NODE and ROOT scopes are available for connection assignment. This simplifies the traffic shaping logic since it can assume there will always be some FlowGroup that applies to each new connection. Additional FlowGroups must be present in the cluster configuration for them to be eligible for assignment.</p>
+<p>Changing the configured status of a FlowGroup requires a restart of the LogDevice daemon because there is currently no mechanism to dynamically reassign connections to a different FlowGroup.</p>
+<p>All FlowGroups default to being disabled. A configured, but disabled FlowGroup will pass all traffic. FlowGroups that are configured can be enabled or disabled dynamically via a configuration update or through the admin interface.</p>
+<h2><a class="anchor" aria-hidden="true" id="fairness-and-independent-workers"></a><a href="#fairness-and-independent-workers" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Fairness and independent workers</h2>
+<p>To avoid contention as much as possible between CPUs, LogDevice employs &quot;worker threads&quot; that operate primarily without reference to global state. The traffic shaping code takes advantage of the existing worker architecture to limit the contention it causes.</p>
+<p>Each logical FlowGroup is sharded into per-worker instances. These instances have their capacity and bandwidth allocations scaled accordingly so that the sum of the FlowGroup instances matches the globally defined limits in the configuration. The only cross worker activity occurs when the TrafficShaper deposits credit in and updates the configuration for each FlowGroup instance. This currently happens at 1KHz when traffic shaping is enabled on any scope. If it is not enabled, the TrafficShaper goes to sleep until a configuration change occurs.</p>
+<p><img src="assets/traffic_shaping/Logdevice_worker_flowgroups.jpg" style="float"  /></p>
+<p>When the TrafficShaper visits each FlowGroup instance to deposit credit, it must take steps to ensure that, if sufficient load exists, all bandwidth allocated to a particular scope/priority is consumed by that scope/priority. It must also work to maintain fairness between the independent workers.</p>
+<p>To see why this is necessary, consider another rebuild example. In this case, only a single connection is requesting reads for a rebuild operation, and this connection falls on worker 0. This one connection should have access to all of the minimum guaranteed bandwidth allocated to rebuilding for the entire machine. Unfortunately, due to sharding of the FlowGroups, it only has 1/nth (with n being the number of workers). This is an extreme case of load imbalance, but a similar issue occurs any time workers have different amounts of work to perform for the same priority level.</p>
+<p>Addressing this issue requires some modification to the &quot;reclamation scheme&quot; introduced in the <a href="#the-priority-queue-bucket">priority queue bucket</a> section. As the TrafficShaper fills buckets with their refill quantum, any overflow is captured in the &quot;current overflow&quot; bucket. This bucket is unique to each scope/priority.</p>
+<p><img src="assets/traffic_shaping/Logdevice_bw_overflow_capture.jpg" style="float"  /></p>
+<p>Once all buckets have been serviced, the excess bandwidth is deposited in a first-fit fashion across buckets for that same scope/priority.</p>
+<p><img src="assets/traffic_shaping/Logdevice_last_overflow_application.jpg" style="float"  /></p>
+<p>Any remaining bandwidth credit is summed across all priorities within a scope and fed on a first-fit basis to the priority queue buckets for that scope. If bandwidth still remains, it is finally discarded.</p>
+<p>To ensure fair distribution of &quot;last overflow&quot; credit amongst the workers, the order in which they are processed is randomized each time TrafficShaper is invoked.</p>
+<h2><a class="anchor" aria-hidden="true" id="future-work"></a><a href="#future-work" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Future work</h2>
+<p>Currently, traffic shaping support uses a static configuration. When faced with an outage that requires a reduction in the total bandwidth expended, the only choice is to push a new config that tunes the cluster lower. Ideally, the traffic shaping logic would be able to detect such an event by seeing a growth in the backlog of messages to send. In response, the excess capacity during normal operations, represented by the settings of the priority queue bucket, would be scaled back until backlog growth stopped.</p>
+</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/Recovery.html"><span class="arrow-prev">← </span><span>Recovery after the failure of a sequencer</span></a><a class="docs-next button" href="/docs/Rebuilding.html"><span>Rebuilding</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#how-traffic-shaping-works">How traffic shaping works</a></li><li><a href="#categorizing-traffic">Categorizing traffic</a></li><li><a href="#traffic-priorities">Traffic priorities</a></li><li><a href="#configuration">Configuration</a><ul class="toc-headings"><li><a href="#choosing-bandwidth-values">Choosing bandwidth values</a></li><li><a href="#tuning-or-making-temporary-config-changes">Tuning or making temporary config changes</a></li></ul></li><li><a href="#statistics">Statistics</a></li><li><a href="#traffic-shaping-design">Traffic shaping design</a><ul class="toc-headings"><li><a href="#really-large-messages">Really large messages</a></li><li><a href="#shaping-by-priority">Shaping by priority</a></li><li><a href="#the-priority-queue-bucket">The priority queue bucket</a></li></ul></li><li><a href="#controlling-memory-consumption">Controlling memory consumption</a></li><li><a href="#applying-traffic-shaping-to-different-resources">Applying traffic shaping to different resources</a></li><li><a href="#fairness-and-independent-workers">Fairness and independent workers</a></li><li><a href="#future-work">Future work</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2019 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+                document.addEventListener('keyup', function(e) {
+                  if (e.target !== document.body) {
+                    return;
+                  }
+                  // keyCode for '/' (slash)
+                  if (e.keyCode === 191) {
+                    const search = document.getElementById('search_input_react');
+                    search && search.focus();
+                  }
+                });
+              </script><script>
+              var search = docsearch({
+                
+                apiKey: 'f0ece773627cb7003a57c0edd6ec7dd8',
+                indexName: 'logdevice',
+                inputSelector: '#search_input_react'
+              });
+            </script></body></html>
