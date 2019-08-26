@@ -67,7 +67,7 @@ _mini-rebuilding._ A rebuilding limited to a specified time range.
 
 _node._ Synonym for server or host. Each node runs an instance of the LogDevice server.
 
-_nodeset._ The set of disks that may have data for an epoch of a log. This is now known as a storage set, but this term is still used throughout LogDevice.
+_nodeset._ The set of disks that may have data for an epoch of a log. This is sometimes called a storage set.
 
 _non-authoritative rebuilding._ If the number of shards that is down is more than the replication factor, it may not be possible to fully re-replicate all of the data records. When this happens, rebuilding is best effort, or non-authoritative. This may cause readers to stall if data is lost because some nodes remain unavailable. This requires a manual operation to unstall the readers and accept the data loss.
 
@@ -104,5 +104,7 @@ _SST (Sorted Sequence Table) file._ Same as L0 file in RocksDB.
 _storage set._ The set of shards that contain all records in an epoch.
 
 _trim._ Delete older records in a log. Trimming can be retention-based, space-based, or on demand.
+
+_trim point._ The trim point is the LSN for each log that says how far it has been trimmed. It's maintained by RocksDB. Records older than the trim point may not be deleted immediately, but they are not served to the client reader.
 
 _wave._ If the appender cannot successfully store a record in a copyset, it picks a new one and tries again. Each attempt is called a wave.

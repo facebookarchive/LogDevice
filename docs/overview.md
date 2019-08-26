@@ -1,9 +1,9 @@
 ---
 id: Overview
-title: LogDevice Overview
+title: Overview
 sidebar_label: Overview
 ---
-***
+
 LogDevice is a *distributed log system*. While a file system stores
 and serves data organized as files, a log system stores and delivers
 data organized as logs. The log can be viewed as a record-oriented,
@@ -51,8 +51,8 @@ After that, try [Creating your first cluster](firstcluster.md), which tells
 you how to configure a fully functional LogDevice cluster on multiple servers.
 
 To learn more about LogDevice, there's an explanation of its
-[concepts and architecture](concepts.md) and an overview of the
-[API](API_Introduction.md).
+[architecture](concepts.md). If you want to write an application that
+interacts with a cluster, see the [Client library API](API_Introduction.md).
 
 The [build guide](installation.md) explains how to obtain the
 source code and build LogDevice components including the logdeviced

@@ -1,7 +1,7 @@
 ---
 id: Concepts
-title: Concepts and architecture
-sidebar_label: Concepts and architecture
+title: Architecture
+sidebar_label: Architecture
 ---
 ***
 
@@ -136,7 +136,7 @@ log for each data log provisioned on the cluster.
 
 Nodesets allow LogDevice clusters to stay efficient as the cluster
 grows by limiting the number of nodes with which the readers of a
-particular log must communicated. Nodes contacted by a reader client
+particular log must communicate. Nodes contacted by a reader client
 deliver record copies to it by pushing them into TCP connections as
 fast as they can. Naturally, the header of each record includes the
 record's sequence number. The LogDevice client library performs the

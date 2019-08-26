@@ -4,7 +4,6 @@
         "Overview",
         "LocalCluster",
         "Concepts",
-        "Terminology",
         "Installation"
     ],
     "Configuration": [
@@ -17,6 +16,19 @@
           "LDShell",
           "LDQuery"
       ],
+      "Concepts": [
+          "Writepath",
+          "ReadPath",
+          "Terminology"
+        ],
+      "Designs": [
+          "FailureDetection",
+          "Replication",
+          "Recovery",
+          "TrafficShaping",
+          "Rebuilding",
+          "LogsDB"
+        ],
       "API": [
           "API_Introduction",
 	        "API_Doxygen"
@@ -24,5 +36,5 @@
       "Extending LogDevice": [
           "WritingPlugins"
       ]
-  }
+    }
 }

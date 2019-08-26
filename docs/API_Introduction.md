@@ -1,6 +1,6 @@
 ---
-title: LogDevice API
-sidebar_label: Introduction
+title: Client library API
+sidebar_label: Client library API
 ---
 ## API basics
 
@@ -44,6 +44,12 @@ client worker thread.
 * The callback function has to complete quickly. If it takes a long time to
 complete, it will block the LogDevice client worker thread, which may delay the
 execution of any other pending requests.
+
+### LSN
+
+The log sequence number, or LSN, is the combination of the *epoch* and the *epoch sequence number*. It is guaranteed to be monotonically increasing.
+
+Each record has an LSN, but it may not be unique, because records that are batched (due to BufferedWriter or sequencer batching) all get the same LSN. For those records, you can use the (LSN, batch_offset) combination to distinguish between them.
 
 ## Writing Records
 

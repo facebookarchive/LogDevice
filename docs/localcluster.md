@@ -1,7 +1,7 @@
 ---
 id: LocalCluster
 title: Run a local cluster in Docker
-sidebar_label: Run a local cluster in Docker
+sidebar_label: Quickstart
 ---
 You can quickly create a local cluster, write to it, and read from it.
 
