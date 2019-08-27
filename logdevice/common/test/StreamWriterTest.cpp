@@ -198,7 +198,7 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
 
   write_stream_seq_num_t getMaxAckedSequenceNum(logid_t logid) {
     auto stream = getStream(logid);
-    return stream->max_acked_seq_num_;
+    return stream->max_prefix_acked_seq_num_;
   }
 
   // Returns the seen_epoch stored in the stream for a particular logid
@@ -487,4 +487,45 @@ TEST_F(StreamWriterAppendSinkTest, MockSequencerMessageDrop) {
   ASSERT_EQ(5, num_msg_received);
   ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
   ASSERT_EQ(5UL, test_sink_->stream_state[epoch][write_stream_id_t(1UL)].val());
+}
+
+// In this test, we specifically test whether the ACKs from stream write  append
+// sink occur in the input order. The first set of messages will cause A, B and
+// E to be accepted (note this is not TEST_SEQUENCER). However, E should not be
+// ACKed before C and D. Only after second round of processTestRequests will C
+// and D be accepted. Checking if the callback order is A, B, C, D, E tests if
+// the ACK for E waits until C and D are also ACKed.
+TEST_F(StreamWriterAppendSinkTest, PrefixAcks) {
+  int num_msg_received = 0;
+  std::queue<std::string> expected_order;
+  expected_order.push("a");
+  expected_order.push("b");
+  expected_order.push("c");
+  expected_order.push("d");
+  expected_order.push("e");
+  auto callback = [&num_msg_received, &expected_order](
+                      Status status, const DataRecord& record, NodeID) {
+    ASSERT_EQ(Status::OK, status);
+    num_msg_received++;
+    TestCommand cmd = TestCommand::parsePayload(record.payload);
+    ASSERT_EQ(cmd.key, expected_order.front());
+    expected_order.pop();
+  };
+
+  logid_t logid(1UL);
+  std::vector<TestCommand> cmds;
+  cmds.push_back(TestCommand::create(ACCEPT, "a"));
+  cmds.push_back(TestCommand::create(ACCEPT, "b"));
+  cmds.push_back(
+      TestCommand::create(REJECT_ONCE, "c").addArg(toString(E::CONNFAILED)));
+  cmds.push_back(
+      TestCommand::create(REJECT_ONCE, "d").addArg(toString(E::CONNFAILED)));
+  cmds.push_back(TestCommand::create(ACCEPT, "e"));
+  for (auto& cmd : cmds) {
+    appendHelper(logid, cmd, callback);
+  }
+
+  test_sink_->processTestRequests();
+  ASSERT_EQ(5, num_msg_received);
+  ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
 }

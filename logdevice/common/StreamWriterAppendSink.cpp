@@ -199,7 +199,7 @@ StreamWriterAppendSink::createAppendRequest(
       wrapped_callback,
       req_state.stream_req_id,
       req_state.stream_req_id.seq_num ==
-          next_seq_num(stream.max_acked_seq_num_));
+          next_seq_num(stream.max_prefix_acked_seq_num_));
 }
 
 void StreamWriterAppendSink::onCallback(Stream& stream,
@@ -213,16 +213,22 @@ void StreamWriterAppendSink::onCallback(Stream& stream,
   // Update epoch by default. Must be done based on status (subsequent diffs).
   stream.updateSeenEpoch(getSeenEpoch(stream.target_worker_, stream.logid_));
 
+  // Update last status, inflight_request.
+  req_state.last_status = status;
+  req_state.inflight_request = nullptr;
+
   if (status == Status::OK) {
-    // Update max acked seq num, callback and erase.
-    stream.max_acked_seq_num_ =
-        std::max(stream_reqid.seq_num, stream.max_acked_seq_num_);
-    req_state.callback(status, record, NodeID());
-    stream.inflight_stream_requests_.erase(it);
+    // Copy record attributes into req_state to create DataRecord for callback.
+    req_state.record_attrs = record.attrs;
+
+    // If seq_num is one more than max_prefix_acked_seq_num, then trigger prefix
+    // callback on the stream. The callback is invoked for the entire prefix of
+    // sequence numbers that have been ACKed so far.
+    if (stream_reqid.seq_num ==
+        next_seq_num(stream.max_prefix_acked_seq_num_)) {
+      stream.triggerPrefixCallbacks();
+    }
   } else {
-    // Update last status, inflight_request.
-    req_state.last_status = status;
-    req_state.inflight_request = nullptr;
     // Activate the retry_timer to post another request in the future.
     if (!req_state.retry_timer) {
       req_state.retry_timer = createBackoffTimer(stream, req_state);

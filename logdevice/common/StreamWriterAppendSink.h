@@ -49,7 +49,10 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
     // thread on which `onCallback` is called after the `AppendRequest` has been
     // processed.
     std::unique_ptr<BackoffTimer> retry_timer;
-
+    // Data record attributes sent by the AppendRequest callback is stored so
+    // that it can be used to create the DataRecord when calling back
+    // BufferedWriter in order.
+    DataRecordAttributes record_attrs;
     StreamAppendRequestState(
         logid_t _logid,
         const BufferedWriter::AppendCallback::ContextSet& _contexts,
@@ -84,8 +87,9 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
     StreamRequestsMap inflight_stream_requests_;
     // Stream sequence number for the next append request. starts from 1.
     write_stream_seq_num_t next_seq_num_;
-    // Maximum sequence number that has been acked by any sequencer.
-    write_stream_seq_num_t max_acked_seq_num_;
+    // Maximum sequence number that has been acked by any sequencer such that
+    // all sequence numbers before that has been ACKed.
+    write_stream_seq_num_t max_prefix_acked_seq_num_;
     // All requests in a stream must be posted on the same target worker.
     worker_id_t target_worker_;
     // Latest seen epoch by the write stream - it maybe used to determine how to
@@ -105,7 +109,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
           stream_id_(stream_id),
           inflight_stream_requests_(),
           next_seq_num_(next_seq_num),
-          max_acked_seq_num_(WRITE_STREAM_SEQ_NUM_INVALID),
+          max_prefix_acked_seq_num_(WRITE_STREAM_SEQ_NUM_INVALID),
           target_worker_(WORKER_ID_INVALID),
           seen_epoch_(EPOCH_INVALID),
           holder_(this) {}
@@ -117,6 +121,31 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
         return true;
       }
       return false;
+    }
+
+    // Calls back requests after max_prefix_acked_seq_num_ that have been ACKed
+    // by the sequencer, in order.
+    void triggerPrefixCallbacks() {
+      while (true) {
+        auto it = inflight_stream_requests_.find(
+            next_seq_num(max_prefix_acked_seq_num_));
+        if (it != inflight_stream_requests_.end() &&
+            it->second.last_status == Status::OK) {
+          // Invoke callback and erase all state corresponding to seq_num.
+          DataRecord record(it->second.logid,
+                            it->second.payload,
+                            it->second.record_attrs.lsn,
+                            it->second.record_attrs.timestamp,
+                            it->second.record_attrs.batch_offset,
+                            it->second.record_attrs.offsets);
+          it->second.callback(Status::OK, record, NodeID());
+          inflight_stream_requests_.erase(it);
+          // Move on to the next sequence number.
+          increment_seq_num(max_prefix_acked_seq_num_);
+        } else {
+          break;
+        }
+      }
     }
   };
   using StreamsMap = folly::ConcurrentHashMap<logid_t, std::unique_ptr<Stream>>;
