@@ -198,8 +198,7 @@ class MockAppenderPrep : public AppenderPrep {
       : AppenderPrep(PayloadHolder()),
         owner_(owner),
         locator_(*this),
-        permission_checker_(std::make_shared<DummyPermissionChecker>(
-            DummyPermissionChecker())) {}
+        permission_checker_(std::make_shared<DummyPermissionChecker>()) {}
 
   void setAlive(std::initializer_list<NodeID> nodes) {
     for (NodeID node : nodes) {

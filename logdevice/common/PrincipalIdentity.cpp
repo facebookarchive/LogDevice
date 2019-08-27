@@ -9,6 +9,10 @@
 
 #include <sstream>
 
+#include <folly/hash/Hash.h>
+
+//#include "logdevice/common/debug.h"
+
 namespace facebook { namespace logdevice {
 
 constexpr const char* PrincipalIdentity::IDENTITY_USER;
@@ -24,13 +28,33 @@ PrincipalIdentity::PrincipalIdentity(
     const std::pair<std::string, std::string>& identity)
     : type(type), primary_identity(identity) {
   identities.push_back(identity);
+  calculateIdentitiesHash();
 }
 
 PrincipalIdentity::PrincipalIdentity(
     const std::string& type,
     const std::pair<std::string, std::string>& identity,
     const std::vector<std::pair<std::string, std::string>>& identities)
-    : type(type), identities(identities), primary_identity(identity) {}
+    : type(type), identities(identities), primary_identity(identity) {
+  calculateIdentitiesHash();
+}
+
+void PrincipalIdentity::calculateIdentitiesHash() {
+  folly::hash::SpookyHashV2 hasher;
+  hasher.Init(0, 0);
+  if (!identities.size()) {
+    hasher.Update(
+        (void*)primary_identity.first.c_str(), primary_identity.first.size());
+    hasher.Update(
+        (void*)primary_identity.second.c_str(), primary_identity.second.size());
+  }
+  for (auto& identity : identities) {
+    hasher.Update((void*)identity.first.c_str(), identity.first.size());
+    hasher.Update((void*)identity.second.c_str(), identity.second.size());
+  }
+  uint64_t h2;
+  hasher.Final(&identities_hash, &h2);
+}
 
 std::string PrincipalIdentity::toString() const {
   std::ostringstream oss;

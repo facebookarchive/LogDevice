@@ -6,15 +6,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
+#include <chrono>
 
 #include "folly/Function.h"
+#include "folly/Optional.h"
+#include "folly/SharedMutex.h"
+#include "folly/container/EvictingCacheMap.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/LogAttributes.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 
+static constexpr int CACHE_MAX_SIZE(10000);
+static constexpr std::chrono::seconds CACHE_TTL_SEC(120);
 /**
  *  Result of permission check. If its permissions are still loading,
  *  and result not yet know, NOTREADY is returned.
@@ -35,9 +42,37 @@ using callback_func_t = folly::Function<void(PermissionCheckStatus)>;
  *       to be performed on a log_id/log_group by a client.
  */
 
+class AclCache {
+ public:
+  struct Value {
+    PermissionCheckStatus status_;
+    std::chrono::steady_clock::time_point time_;
+  };
+
+  folly::Optional<PermissionCheckStatus> lookup(const uint64_t& key);
+
+  void insert(const uint64_t& key, PermissionCheckStatus val);
+
+  uint64_t getCacheKey(const uint64_t& identities_hash,
+                       const std::string& action,
+                       const logsconfig::LogAttributes::ACLList& acl_list);
+
+  AclCache(const int size, const std::chrono::seconds ttl)
+      : cache_(size), ttl_sec_(ttl) {}
+  ~AclCache() {}
+
+ private:
+  folly::EvictingCacheMap<uint64_t, Value> cache_;
+  folly::SharedMutex mutex_;
+  std::chrono::seconds ttl_sec_;
+};
+
 class PermissionChecker {
  public:
   virtual ~PermissionChecker(){};
+  PermissionChecker() {
+    acl_cache_ = std::make_unique<AclCache>(CACHE_MAX_SIZE, CACHE_TTL_SEC);
+  }
 
   /**
    * Queries the permission store to determine if the provided Principal can
@@ -83,6 +118,18 @@ class PermissionChecker {
     }
     return E::INVALID_PARAM;
   }
+
+  void insertCache(const uint64_t& key, PermissionCheckStatus val) const;
+
+  folly::Optional<PermissionCheckStatus> lookupCache(const uint64_t& key) const;
+
+  uint64_t
+  getCacheKey(const uint64_t& identities_hash,
+              const std::string& action,
+              const logsconfig::LogAttributes::ACLList& acl_list) const;
+
+ private:
+  std::unique_ptr<AclCache> acl_cache_{nullptr};
 };
 
 }} // namespace facebook::logdevice
