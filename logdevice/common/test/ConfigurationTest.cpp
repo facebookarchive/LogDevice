@@ -1321,6 +1321,11 @@ TEST(ConfigurationTest, SecurityAndPermissionInfo) {
             config->serverConfig()->getAuthenticationType());
   ASSERT_EQ(PermissionCheckerType::CONFIG,
             config->serverConfig()->getPermissionCheckerType());
+  ASSERT_EQ(
+      true, config->serverConfig()->getSecurityConfig().aclCacheEnabled());
+  ASSERT_EQ(100, config->serverConfig()->getSecurityConfig().aclCacheMaxSize);
+  ASSERT_EQ(std::chrono::seconds(120),
+            config->serverConfig()->getSecurityConfig().aclCacheTtl);
 
   ASSERT_TRUE(config->logsConfig()->logExists(logid_t(1)));
   const std::shared_ptr<LogsConfig::LogGroupNode> log =

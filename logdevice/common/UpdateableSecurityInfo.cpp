@@ -72,14 +72,30 @@ void UpdateableSecurityInfo::onConfigUpdate() {
     permission_checker_type_new = PermissionCheckerType::NONE;
   }
 
-  if (permission_checker_type_cur != permission_checker_type_new) {
+  auto& securityConfig = server_config->getSecurityConfig();
+  bool updateAclCache = true;
+  // If we enabled/disabled the ACL cache, or changed any of its properties,
+  // we must recreate the permission checker to reflect the changes.
+  if (permission_checker_ptr) {
+    updateAclCache = (securityConfig.enableAclCache !=
+                      permission_checker_ptr->cacheEnabled());
+    if (permission_checker_ptr->cacheEnabled()) {
+      updateAclCache =
+          (updateAclCache ||
+           securityConfig.aclCacheMaxSize !=
+               permission_checker_ptr->cacheSize() ||
+           securityConfig.aclCacheTtl != permission_checker_ptr->cacheTtl());
+    }
+  }
+
+  if (permission_checker_type_cur != permission_checker_type_new ||
+      updateAclCache) {
     ld_info("PermissionChecker is changed");
 
     auto pc_plugin = plugin_registry->getSinglePlugin<PermissionCheckerFactory>(
         PluginType::PERMISSION_CHECKER_FACTORY);
     std::shared_ptr<PermissionChecker> permission_checker = pc_plugin
-        ? (*pc_plugin)(permission_checker_type_new,
-                       server_config->getSecurityConfig().domains)
+        ? (*pc_plugin)(permission_checker_type_new, securityConfig)
         : nullptr;
 
     security_info->permission_checker_.update(permission_checker);

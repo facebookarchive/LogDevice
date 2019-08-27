@@ -8,6 +8,8 @@
 
 #include "logdevice/common/PermissionChecker.h"
 
+#include "logdevice/common/configuration/Configuration.h"
+
 namespace facebook { namespace logdevice {
 
 folly::Optional<PermissionCheckStatus> AclCache::lookup(const uint64_t& key) {
@@ -55,6 +57,7 @@ AclCache::getCacheKey(const uint64_t& identities_hash,
 
 void PermissionChecker::insertCache(const uint64_t& key,
                                     PermissionCheckStatus val) const {
+  ld_check(acl_cache_.get());
   acl_cache_->insert(key, val);
 }
 
@@ -62,12 +65,29 @@ uint64_t PermissionChecker::getCacheKey(
     const uint64_t& identities_hash,
     const std::string& action,
     const logsconfig::LogAttributes::ACLList& acl_list) const {
+  ld_check(acl_cache_.get());
   return acl_cache_->getCacheKey(identities_hash, action, acl_list);
 }
 
 folly::Optional<PermissionCheckStatus>
 PermissionChecker::lookupCache(const uint64_t& key) const {
+  ld_check(acl_cache_.get());
   return acl_cache_->lookup(key);
+}
+
+PermissionChecker::PermissionChecker(
+    const configuration::SecurityConfig& security_cfg) {
+  acl_cache_enabled_ = security_cfg.enableAclCache;
+
+  if (acl_cache_enabled_) {
+    ld_info("Initializing ACL Cache: size = %d, TTL = %ld seconds",
+            security_cfg.aclCacheMaxSize,
+            security_cfg.aclCacheTtl.count());
+    acl_cache_ = std::make_unique<AclCache>(
+        security_cfg.aclCacheMaxSize, security_cfg.aclCacheTtl);
+  } else {
+    ld_info("Not initializing ACL Cache");
+  }
 }
 
 }} // namespace facebook::logdevice

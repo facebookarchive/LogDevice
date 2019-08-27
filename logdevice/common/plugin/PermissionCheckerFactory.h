@@ -38,7 +38,7 @@ class PermissionCheckerFactory : public Plugin {
    */
   virtual std::shared_ptr<PermissionChecker>
   operator()(PermissionCheckerType type,
-             const std::unordered_set<std::string>& domains) = 0;
+             const configuration::SecurityConfig& security_cfg) = 0;
 };
 
 }} // namespace facebook::logdevice

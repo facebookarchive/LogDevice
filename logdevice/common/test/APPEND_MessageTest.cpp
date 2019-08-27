@@ -190,6 +190,10 @@ class DummyPermissionChecker : public PermissionChecker {
   PermissionCheckerType getPermissionCheckerType() const override {
     return PermissionCheckerType::CONFIG;
   }
+
+ public:
+  DummyPermissionChecker()
+      : PermissionChecker(configuration::SecurityConfig()) {}
 };
 
 class MockAppenderPrep : public AppenderPrep {

@@ -10,6 +10,8 @@
 #include <folly/dynamic.h>
 #include <folly/json.h>
 
+#include "logdevice/common/commandline_util_chrono.h"
+
 namespace facebook { namespace logdevice { namespace configuration {
 
 folly::dynamic SecurityConfig::toFollyDynamic() const {
@@ -19,7 +21,10 @@ folly::dynamic SecurityConfig::toFollyDynamic() const {
       "allow_unauthenticated", allowUnauthenticated)(
       "enable_server_ip_authentication", enableServerIpAuthentication)(
       "enable_permission_checking", enablePermissionChecking)(
-      "allow_acl_not_found", allowIfACLNotFound);
+      "allow_acl_not_found", allowIfACLNotFound)(
+      "enable_acl_cache", enableAclCache)(
+      "acl_cache_ttl", format_chrono_string(aclCacheTtl))(
+      "acl_cache_max_size", aclCacheMaxSize);
 
   // This is done even is enablePermissionChecking is false, this enables
   // permission checking to be enabled/disabled without having to remove any

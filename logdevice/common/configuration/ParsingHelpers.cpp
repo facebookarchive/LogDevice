@@ -636,6 +636,43 @@ bool parseSecurityInfo(const folly::dynamic& clusterMap,
     return false;
   }
 
+  success = getBoolFromMap(
+      security_info, "enable_acl_cache", securityConfig.enableAclCache);
+
+  // Not a required field, default value for enableAclCache is false.
+  if (!success && err != E::NOTFOUND) {
+    ld_error("Invalid value of \"enable_acl_cache\" attribute within "
+             "\"security_information\", bool expected");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
+  std::string acl_cache_ttl;
+  success = getStringFromMap(security_info, "acl_cache_ttl", acl_cache_ttl);
+
+  // Not a required field, default value for aclCacheTtl is 180s.
+  if (!success && err != E::NOTFOUND) {
+    ld_error("Invalid value of \"acl_cache_ttl\" attribute within "
+             "\"security_information\", string expected");
+    err = E::INVALID_CONFIG;
+    return false;
+  } else if (success) {
+    parse_chrono_string(acl_cache_ttl, &securityConfig.aclCacheTtl);
+  } else {
+    securityConfig.aclCacheTtl = std::chrono::seconds(180);
+  }
+
+  success = getIntFromMap<int>(
+      security_info, "acl_cache_max_size", securityConfig.aclCacheMaxSize);
+
+  // Not a required field, default value for aclCacheMaxSize is 100000.
+  if (!success && err != E::NOTFOUND) {
+    ld_error("Invalid value of \"acl_cache_max_size\" attribute within "
+             "\"security_information\", int expected");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
   success = getBoolFromMap(security_info,
                            "enable_permission_checking",
                            securityConfig.enablePermissionChecking);

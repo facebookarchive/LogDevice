@@ -19,8 +19,10 @@ namespace facebook { namespace logdevice {
 
 class ConfigPermissionChecker : public PermissionChecker {
  public:
-  explicit ConfigPermissionChecker() : PermissionChecker(){};
-  ~ConfigPermissionChecker() override{};
+  explicit ConfigPermissionChecker(
+      const configuration::SecurityConfig& security_cfg)
+      : PermissionChecker(security_cfg){};
+  ~ConfigPermissionChecker() override {}
 
   /**
    * See PermissionChecker.h

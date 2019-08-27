@@ -84,6 +84,23 @@ struct SecurityConfig {
   bool allowIfACLNotFound = true;
 
   /**
+   * If enabled, results of all permission checks performed by the permision
+   * checker will be cached in the ACL Cache for faster lookups with a TTL
+   * set by aclCacheTtl.
+   */
+  bool enableAclCache = false;
+
+  /**
+   * Defines the TTL for entries in the ACL Cache in seconds.
+   */
+  std::chrono::seconds aclCacheTtl{ 180 };
+
+  /**
+   * Defines the max size for the ACL Cache.
+   */
+  int aclCacheMaxSize = 100000;
+
+  /**
    * Returns whether or not the "permissions" field is allowed in the
    * configuration file. The "permissions" field should only be allowed when
    * PermissionCheckerType is set CONFIG.
@@ -106,6 +123,14 @@ struct SecurityConfig {
    */
   bool permissionCheckingEnabled() const {
     return enablePermissionChecking;
+  }
+
+  /**
+   * Returns whether ACL cache usage is enabled. If enabled results of
+   * permissions checks are cached in the ACL Cache.
+   */
+  bool aclCacheEnabled() const {
+    return enableAclCache;
   }
 
   /**
