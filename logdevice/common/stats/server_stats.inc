@@ -1134,6 +1134,12 @@ STAT_DEFINE(server_message_dispatch_check_permission, SUM)
 // bypass permission
 STAT_DEFINE(server_message_dispatch_bypass_permission, SUM)
 
+// ACL Cache
+// cache misses
+STAT_DEFINE(acl_cache_misses, SUM)
+// cache hits
+STAT_DEFINE(acl_cache_hits, SUM)
+
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'
  * admin command.
