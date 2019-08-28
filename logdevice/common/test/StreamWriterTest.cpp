@@ -489,7 +489,9 @@ TEST_F(StreamWriterAppendSinkTest, MockSequencerMessageDrop) {
   test_sink_->processTestRequests();
   ASSERT_EQ(5, num_msg_received);
   ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
-  ASSERT_EQ(5UL, test_sink_->stream_state[epoch][write_stream_id_t(1UL)].val());
+  ASSERT_EQ(1, test_sink_->stream_state[epoch].size());
+  auto it = test_sink_->stream_state[epoch].begin();
+  ASSERT_EQ(5UL, test_sink_->stream_state[epoch][it->first].val());
 }
 
 // In this test, we specifically test whether the ACKs from stream write  append

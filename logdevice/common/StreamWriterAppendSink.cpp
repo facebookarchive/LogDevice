@@ -85,9 +85,12 @@ StreamWriterAppendSink::Stream*
 StreamWriterAppendSink::getStream(logid_t log_id) {
   auto it = streams_.find(log_id);
   if (it == streams_.end()) {
-    // Using log id as stream id for now. Definitely needs to change soon.
-    // TODO: Make stream id unique for every session, socket, log.
-    write_stream_id_t stream_id(log_id.val());
+    // We assign a random write stream id. Since the id space is large (64 bits)
+    // and uniqueness property for write streams is limited only to individual
+    // logs, we hope that this won't clash across BufferedWriters (even across
+    // clients). Each BufferedWriter object has at most one write stream mapped
+    // to a log.
+    write_stream_id_t stream_id(folly::Random::rand64());
     auto result = streams_.insert(
         std::make_pair(log_id, std::make_unique<Stream>(log_id, stream_id)));
     return result.first->second.get();
