@@ -99,8 +99,6 @@ Public Member Functions</h2></td></tr>
 Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a09c466c0852cd7b8a4c531967aeb8bb1"><td class="memItemLeft" align="right" valign="top">static std::unique_ptr&lt; <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#a09c466c0852cd7b8a4c531967aeb8bb1">create</a> (std::shared_ptr&lt; <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> &gt; client, <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html">AppendCallback</a> *callback, <a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_options.html">Options</a> options=<a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_options.html">Options</a>())</td></tr>
 <tr class="separator:a09c466c0852cd7b8a4c531967aeb8bb1"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:abb2a3f9783c85e678781d25992df6f58"><td class="memItemLeft" align="right" valign="top">static std::unique_ptr&lt; <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#abb2a3f9783c85e678781d25992df6f58">create</a> (std::shared_ptr&lt; <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> &gt; client, BufferedWriterAppendSink *sink, <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html">AppendCallback</a> *callback, <a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_options.html">Options</a> options=<a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_options.html">Options</a>())</td></tr>
-<tr class="separator:abb2a3f9783c85e678781d25992df6f58"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="friends"></a>
 Friends</h2></td></tr>
@@ -173,7 +171,7 @@ class&#160;</td><td class="memItemRight" valign="bottom"><b>BufferedWriterImpl</
         </tr>
       </table>
 </div><div class="memdoc">
-<p>Same as <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">Client::append()</a> except the append may get buffered.</p>
+<p>Same as <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">Client::append()</a> except the append may get buffered. If the call succeeds it is added into a buffer, and finally appended to the log as a batch of appends. Once it has been successfully stored in LogDevice, <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html#aeacea69c608664c841f92ca97994f1be">BufferedWriter::AppendCallback::onSuccess</a> (passed in <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#a09c466c0852cd7b8a4c531967aeb8bb1">create()</a>) is invoked with a ContextSet containing callback_context.</p>
 <p>If the call succeeds (returns 0), the class assumes ownership of the payload. If the call fails, the payload remains in the given std::string. See <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">Client::append</a> for explanation of AppendAttributes </p>
 
 </div>
@@ -199,7 +197,7 @@ class&#160;</td><td class="memItemRight" valign="bottom"><b>BufferedWriterImpl</
 </div>
 </div>
 <a id="a09c466c0852cd7b8a4c531967aeb8bb1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a09c466c0852cd7b8a4c531967aeb8bb1">&#9670;&nbsp;</a></span>create() <span class="overload">[1/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a09c466c0852cd7b8a4c531967aeb8bb1">&#9670;&nbsp;</a></span>create()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -239,55 +237,6 @@ class&#160;</td><td class="memItemRight" valign="bottom"><b>BufferedWriterImpl</
 </div><div class="memdoc">
 <p>Constructing and destructing a <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> involves interthread communication (with LogDevice library threads) and may block if those threads are busy. <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> instances are meant to be long-lived (and clients will typically use just one).</p>
 <p>Uses client as sink for sending buffered appends. </p>
-
-</div>
-</div>
-<a id="abb2a3f9783c85e678781d25992df6f58"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abb2a3f9783c85e678781d25992df6f58">&#9670;&nbsp;</a></span>create() <span class="overload">[2/2]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">static std::unique_ptr&lt;<a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a>&gt; facebook::logdevice::BufferedWriter::create </td>
-          <td>(</td>
-          <td class="paramtype">std::shared_ptr&lt; <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> &gt;&#160;</td>
-          <td class="paramname"><em>client</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">BufferedWriterAppendSink *&#160;</td>
-          <td class="paramname"><em>sink</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html">AppendCallback</a> *&#160;</td>
-          <td class="paramname"><em>callback</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_options.html">Options</a>&#160;</td>
-          <td class="paramname"><em>options</em> = <code><a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_options.html">Options</a>()</code>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">static</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-<p>Creates a <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> for the 'client' and sends buffered appends to 'sink'. Note that'sink' must outlive <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a>. Not ready for use yet. Incomplete experimental feature. </p>
 
 </div>
 </div>

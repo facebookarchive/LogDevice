@@ -138,6 +138,7 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 <p>Called when a batch of records for the same log failed to be appended, and <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> exhausted all retries it was configured to do (if any).</p>
+<p>This function is not applicable in STREAM mode. Failed appends are retried by default and hence no failures are reported back.</p>
 <p>Payload strings (in the ContextSet vector) are no longer needed within <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> so the application is free to steal them. </p>
 
 </div>
@@ -182,6 +183,7 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 <p>Called when a batch of records for the same log failed to be appended, but <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> is planning to retry.</p>
+<p>This function is not applicable in STREAM mode. Failed appends are retried by default and hence no failures are reported back.</p>
 <p>If ALLOW is returned, <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> will proceed to schedule the retry for this batch. If DENY is returned, <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> will not retry and will instead invoke <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html#a90a9c1969fa4ec73e09dac41ae397d59">onFailure()</a> shortly after. </p>
 
 </div>
@@ -226,7 +228,8 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 <p>Called when a batch of records for the same log was successfully appended.</p>
-<p>Payload strings (in the ContextSet vector) are no longer needed within <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> so the application is free to steal them. All of the records share the same LSN and timestamp, available in `attrs'. </p>
+<p>Payload strings (in the ContextSet vector) are no longer needed within <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a> so the application is free to steal them. All of the records share the same LSN and timestamp, available in `attrs'.</p>
+<p>In STREAM mode, append callbacks are done in the same order in which they were accepted by the <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a>. In the event of failures, an append maybe duplicated in the log. STREAM mode guarantees that the 'first' occurrence, among the duplicates, of an append obeys FIFO order. So, the LSNs corresponding to first occurrence of appends increase monotonically. However, LSN reported in 'attrs' correspond to <em>some</em> occurrence, hence they need not increase monotonically. </p>
 
 </div>
 </div>
