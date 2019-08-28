@@ -390,10 +390,23 @@ MaintenanceManager::getNodeStateInternal(
     state.set_daemon_state(
         toThrift<thrift::ServiceState>(cluster_state->getNodeState(node)));
   }
-  state.set_sequencer_state(getSequencerStateInternal(node));
-  if (nodes_config_->getNumShards() > 0) {
+
+  const auto* node_sd = nodes_config_->getNodeServiceDiscovery(node);
+  if (node_sd == nullptr) {
+    return folly::makeUnexpected(E::NOTFOUND);
+  }
+
+  if (node_sd->hasRole(configuration::nodes::NodeRole::SEQUENCER)) {
+    state.set_sequencer_state(getSequencerStateInternal(node));
+  }
+
+  if (node_sd->hasRole(configuration::nodes::NodeRole::STORAGE)) {
     std::vector<thrift::ShardState> vec;
-    for (shard_index_t i = 0; i < nodes_config_->getNumShards(); i++) {
+
+    const auto& storage_attr =
+        nodes_config_->getStorageConfig()->getAttributes()->nodeAttributesAt(
+            node);
+    for (shard_index_t i = 0; i < storage_attr.num_shards; i++) {
       auto s = getShardStateInternal(ShardID(node, i));
       if (s.hasError()) {
         return folly::makeUnexpected(std::move(s.error()));
