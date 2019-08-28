@@ -957,6 +957,7 @@ void Appender::sendReply(lsn_t lsn, Status status, NodeID redirect) {
 
   // We are ready to send a reply. Always invoke deleteIfDone when exiting.
   SCOPE_EXIT {
+    payload_.reset();
     deleteIfDone(REPLIED);
   };
 
@@ -1008,6 +1009,7 @@ void Appender::sendReply(lsn_t lsn, Status status, NodeID redirect) {
       // Bump the per-log-group stats
       if (auto log_path =
               created_on_->getConfiguration()->getLogGroupPath(log_id_)) {
+        ld_check(getPayload());
         LOG_GROUP_TIME_SERIES_ADD(getStats(),
                                   append_out_bytes,
                                   log_path.value(),
@@ -2150,7 +2152,6 @@ void Appender::onComplete(bool linked) {
   csm_state_.reset();
   recipients_.clear();
   copyset_manager_.reset();
-  payload_.reset();
 
   // If onReaped was already called, this will cause this Appender to be
   // deleted. Otherwise, the Appender will be deleted once onReaped() is called.

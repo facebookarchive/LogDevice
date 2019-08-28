@@ -14,11 +14,13 @@ namespace facebook { namespace logdevice {
 StreamWriterAppendSink::StreamWriterAppendSink(
     std::shared_ptr<Processor> processor,
     ClientBridge* bridge,
-    std::chrono::milliseconds append_retry_timeout)
+    std::chrono::milliseconds append_retry_timeout,
+    chrono_expbackoff_t<std::chrono::milliseconds> expbackoff_settings)
     : processor_(processor),
       bridge_(bridge),
       append_retry_timeout_(append_retry_timeout),
-      holder_(this) {}
+      holder_(this),
+      expbackoff_settings_(expbackoff_settings) {}
 
 StreamWriterAppendSink::~StreamWriterAppendSink() {
   if (!processor_) {

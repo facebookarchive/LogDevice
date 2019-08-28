@@ -38,7 +38,11 @@ TEST_F(StreamWriterIntegrationTest, SimpleAppendTest) {
   std::unique_ptr<ClientBridge> bridge =
       std::make_unique<ClientBridgeImpl>(client_impl);
   auto stream_sink = std::make_unique<StreamWriterAppendSink>(
-      client_impl->getProcessorPtr(), bridge.get(), client_impl->getTimeout());
+      client_impl->getProcessorPtr(),
+      bridge.get(),
+      client_impl->getTimeout(),
+      chrono_expbackoff_t<std::chrono::milliseconds>(
+          std::chrono::milliseconds(10), std::chrono::milliseconds(1000)));
   auto writer = BufferedWriter::create(client, stream_sink.get(), &cb);
   const logid_t LOG_ID(1);
 

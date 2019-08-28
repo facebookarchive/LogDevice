@@ -91,7 +91,10 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
   TestStreamWriterAppendSink()
       : StreamWriterAppendSink(std::shared_ptr<Processor>(nullptr),
                                nullptr,
-                               std::chrono::milliseconds(10000)),
+                               std::chrono::milliseconds(10000),
+                               chrono_expbackoff_t<std::chrono::milliseconds>(
+                                   std::chrono::milliseconds(0),
+                                   std::chrono::milliseconds(0))),
         seen_epoch(EPOCH_INVALID) {}
 
   void updateSeenEpoch(epoch_t epoch) {

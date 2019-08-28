@@ -188,9 +188,11 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
    * 'append_retry_timeout' is used to determine when an inflight APPEND request
    * has failed so it they can retried.
    */
-  StreamWriterAppendSink(std::shared_ptr<Processor> processor,
-                         ClientBridge* bridge,
-                         std::chrono::milliseconds append_retry_timeout);
+  StreamWriterAppendSink(
+      std::shared_ptr<Processor> processor,
+      ClientBridge* bridge,
+      std::chrono::milliseconds append_retry_timeout,
+      chrono_expbackoff_t<std::chrono::milliseconds> expbackoff_settings);
   virtual ~StreamWriterAppendSink() override;
 
   bool checkAppend(logid_t logid,
