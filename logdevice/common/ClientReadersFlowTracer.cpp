@@ -302,9 +302,18 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
   /* Should we record this sample?
    * We do this now so time_window computation has a nicer expression. */
   if ((sample_counter_++) % group_size == 0) {
+    int64_t new_time_lag_correction = 0;
+    if (!is_client_reading_) {
+      /* consolidate lag correction on last bucket, and start tracking lag
+       * correction on the new bucket */
+      if (!time_lag_record_.empty()) {
+        time_lag_record_.back().time_lag_correction += cur_ts_lag;
+      }
+      new_time_lag_correction -= cur_ts_lag;
+    }
     time_lag_record_.push_back(
         {.time_lag = cur_ts_lag,
-         .time_lag_correction = 0,
+         .time_lag_correction = new_time_lag_correction,
          .ttl = get_initial_ttl(group_size, num_groups)});
   }
 
@@ -319,7 +328,7 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
 
   bool is_catching_up = cur_ts_lag <= tracer_period_.count() ||
       !time_lag_record_.full() ||
-      cur_ts_lag - time_lag_record_.front().time_lag + correction <=
+      cur_ts_lag - time_lag_record_.front().time_lag - correction <=
           slope_threshold * time_window;
 
   if (is_catching_up) {
