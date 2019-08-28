@@ -713,6 +713,100 @@ TEST(WeightAwareNodeSetSelectorTest, ExcludeFromNodesets) {
                 [&](StorageSet* ss) { EXPECT_EQ(3, ss->size()); });
 }
 
+TEST(WeightAwareNodeSetSelectorTest, InternalLogs) {
+  // The test verifies that nodeset selection for internal logs
+  // adheres to the nodeset size, and doesn't get bloated like data logs.
+  Nodes nodes;
+  // taken from logdevice.scribe.ld.prn-13
+  addNodes(&nodes, 13, 1, "region.dc3.FB|REGION3|MSB_9.00.ab");
+  addNodes(&nodes, 12, 1, "region.dc3.FB|REGION3|MSB_8.00.ab");
+  addNodes(&nodes, 15, 1, "region.dc3.FB|REGION3|MSB_7.00.ab");
+  addNodes(&nodes, 1, 1, "region.dc3.FB|REGION3|MSB_6.00.ab");
+  addNodes(&nodes, 4, 1, "region.dc3.FB|REGION3|MSB_5.00.ab");
+  addNodes(&nodes, 5, 1, "region.dc3.FB|REGION3|MSB_4.00.ab");
+  addNodes(&nodes, 13, 1, "region.dc3.FB|REGION3|MSB_3.00.ab");
+  addNodes(&nodes, 13, 1, "region.dc3.FB|REGION3|MSB_2.00.ab");
+  addNodes(&nodes, 22, 1, "region.dc3.FB|REGION3|MSB_10.00.ab");
+  addNodes(&nodes, 13, 1, "region.dc3.FB|REGION3|MSB_1.00.ab");
+  addNodes(&nodes, 2, 1, "region.dc2.FB|REGION2|MSB_5.01.cd");
+  addNodes(&nodes, 1, 1, "region.dc2.FB|REGION2|MSB_3.01.cd");
+  addNodes(&nodes, 1, 1, "region.dc2.FB|REGION2|MSB_2.01.cd");
+  addNodes(&nodes, 11, 1, "region.dc3.FB|REGION3|MSB_12.00.ab");
+  addNodes(&nodes, 6, 1, "region.dc1.FB|REGION1|MSB_11.00.ab");
+  addNodes(&nodes, 21, 1, "region.dc3.FB|REGION3|MSB_11.01.cd");
+  addNodes(&nodes, 5, 1, "region.dc1.FB|REGION1|MSB_12.01.cd");
+
+  ASSERT_EQ(158, nodes.size());
+  Configuration::NodesConfig nodes_config(std::move(nodes));
+
+  ReplicationProperty replication(
+      {{NodeLocationScope::CLUSTER, 3}, {NodeLocationScope::NODE, 6}});
+  size_t nodeset_size = 20;
+  auto logs_config = std::make_shared<LocalLogsConfig>();
+  logid_t data_log = logid_t(1);
+  std::vector<logid_t> internal_logs{InternalLogs::CONFIG_LOG_SNAPSHOTS,
+                                     InternalLogs::CONFIG_LOG_DELTAS,
+                                     InternalLogs::EVENT_LOG_SNAPSHOTS,
+                                     InternalLogs::EVENT_LOG_DELTAS,
+                                     InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
+                                     InternalLogs::MAINTENANCE_LOG_DELTAS};
+  auto lcfg = logs_config.get();
+  addLog(lcfg, data_log, replication, 0, nodeset_size);
+
+  InternalLogs il;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_nodeSetSize(nodeset_size);
+  log_attrs.set_replicationFactor(replication.getReplicationFactor());
+  log_attrs.set_replicateAcross(replication.getDistinctReplicationFactors());
+  auto log_group_node = il.insert("config_log_snapshots", log_attrs);
+  ASSERT_NE(nullptr, log_group_node);
+  log_group_node = il.insert("config_log_deltas", log_attrs);
+  ASSERT_NE(nullptr, log_group_node);
+  log_group_node = il.insert("event_log_snapshots", log_attrs);
+  ASSERT_NE(nullptr, log_group_node);
+  log_group_node = il.insert("event_log_deltas", log_attrs);
+  ASSERT_NE(nullptr, log_group_node);
+  log_group_node = il.insert("maintenance_log_snapshots", log_attrs);
+  ASSERT_NE(nullptr, log_group_node);
+  log_group_node = il.insert("maintenance_log_deltas", log_attrs);
+  ASSERT_NE(nullptr, log_group_node);
+
+  ShapingConfig shaping_cfg(
+      std::set<NodeLocationScope>{NodeLocationScope::NODE},
+      std::set<NodeLocationScope>{NodeLocationScope::NODE});
+  auto config = std::make_shared<Configuration>(
+      ServerConfig::fromDataTest("nodeset_selector_test",
+                                 std::move(nodes_config),
+                                 MetaDataLogsConfig(),
+                                 PrincipalsConfig(),
+                                 SecurityConfig(),
+                                 TraceLoggerConfig(),
+                                 TrafficShapingConfig(),
+                                 shaping_cfg,
+                                 ServerConfig::SettingsConfig(),
+                                 ServerConfig::SettingsConfig(),
+                                 std::move(il)),
+      std::move(logs_config));
+
+  auto selector =
+      NodeSetSelectorFactory::create(NodeSetSelectorType::WEIGHT_AWARE);
+  verify_result(selector.get(),
+                config,
+                data_log,
+                Decision::NEEDS_CHANGE,
+                [&](StorageSet* ss) {
+                  // data log nodeset size gets bloated
+                  EXPECT_EQ(57, ss->size());
+                });
+  for (auto l : internal_logs) {
+    verify_result(
+        selector.get(), config, l, Decision::NEEDS_CHANGE, [&](StorageSet* ss) {
+          // internal log nodeset size doesn't get bloated
+          EXPECT_EQ(nodeset_size, ss->size());
+        });
+  }
+}
+
 TEST(WeightAwareNodeSetSelectorTest, Basic) {
   basic_test(NodeSetSelectorType::WEIGHT_AWARE_V2);
 }

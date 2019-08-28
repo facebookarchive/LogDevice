@@ -68,6 +68,12 @@ NodeSetSelector::Result WeightAwareNodeSetSelector::getStorageSet(
         replication_factors.back().second - replication_factors[0].second + 1;
   }
 
+  if (configuration::InternalLogs::isInternal(log_id)) {
+    // setting this to 0 means that we don't need to pick nodes from each domain
+    // to generate the nodeset
+    min_nodes_per_domain = 0;
+  }
+
   struct CandidateNode {
     uint64_t shard_id_hash;
     ShardID shard_id;
