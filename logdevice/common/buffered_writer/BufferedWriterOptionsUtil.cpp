@@ -98,6 +98,8 @@ std::string BufferedWriter::LogOptions::modeToString(Mode mode) {
       return "independent";
     case Mode::ONE_AT_A_TIME:
       return "one_at_a_time";
+    case Mode::STREAM:
+      return "stream";
   }
   ld_check(false);
   return "(internal error)";

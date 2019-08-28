@@ -78,6 +78,14 @@ class BufferedWriter {
      * Payload strings (in the ContextSet vector) are no longer needed within
      * BufferedWriter so the application is free to steal them.  All of the
      * records share the same LSN and timestamp, available in `attrs'.
+     *
+     * In STREAM mode, append callbacks are done in the same order in which they
+     * were accepted by the BufferedWriter. In the event of failures, an append
+     * maybe duplicated in the log. STREAM mode guarantees that the 'first'
+     * occurrence, among the duplicates, of an append obeys FIFO order. So, the
+     * LSNs corresponding to first occurrence of appends increase monotonically.
+     * However, LSN reported in 'attrs' correspond to _some_ occurrence, hence
+     * they need not increase monotonically.
      */
     virtual void onSuccess(logid_t /*log_id*/,
                            ContextSet /*contexts_and_payloads*/,
@@ -86,6 +94,9 @@ class BufferedWriter {
      * Called when a batch of records for the same log failed to be appended,
      * and BufferedWriter exhausted all retries it was configured to do (if
      * any).
+     *
+     * This function is not applicable in STREAM mode. Failed appends are
+     * retried by default and hence no failures are reported back.
      *
      * Payload strings (in the ContextSet vector) are no longer needed within
      * BufferedWriter so the application is free to steal them.
@@ -99,6 +110,9 @@ class BufferedWriter {
     /**
      * Called when a batch of records for the same log failed to be appended,
      * but BufferedWriter is planning to retry.
+     *
+     * This function is not applicable in STREAM mode. Failed appends are
+     * retried by default and hence no failures are reported back.
      *
      * If ALLOW is returned, BufferedWriter will proceed to schedule the retry
      * for this batch.  If DENY is returned, BufferedWriter will not retry and
@@ -165,6 +179,25 @@ class BufferedWriter {
       // throughput under certain conditions (extremely high throughput on a
       // single log and/or errors writing to LogDevice).
       ONE_AT_A_TIME,
+
+      // Enables FIFO ordering for appends to a log from the same
+      // BufferedWriter. STREAM mode does not guarantee exactly-once semantics
+      // and hence records maybe duplicated. Precisely, for records r_1, r_2,
+      // ... appended using BufferedWriter::append(), the first occurrence of
+      // record r_i in the read stream is before the first occurrence of
+      // r_{i+1}. In the event of a failure, we recover a continuous prefix
+      // of records accepted by BufferedWriter::append().
+      //
+      // Callbacks to the BufferedWriter happen in order of accepted append
+      // messages. LSN reported back via the callback is not necessarily the
+      // first occurrence of the record and hence need not increase
+      // monotonically. It is not recommended to start reading directly from the
+      // LSN returned, since the reader may encounter gaps. We recommend reading
+      // from the beginning and caching the largest sequence number encountered,
+      // to consume records in FIFO order. We currently do not expose any
+      // sequence number to readers and hence it must be encoded as part of the
+      // payload to support exactly-once FIFO consumption.
+      STREAM,
     };
     Mode mode = Mode::INDEPENDENT;
     // Max number of times to retry (0 for no retrying, negative for
@@ -227,17 +260,11 @@ class BufferedWriter {
                                                 Options options = Options());
 
   /**
-   * Creates a BufferedWriter for the 'client' and sends buffered appends to
-   * 'sink'. Note that'sink' must outlive BufferedWriter. Not ready for use yet.
-   * Incomplete experimental feature.
-   */
-  static std::unique_ptr<BufferedWriter> create(std::shared_ptr<Client> client,
-                                                BufferedWriterAppendSink* sink,
-                                                AppendCallback* callback,
-                                                Options options = Options());
-
-  /**
-   * Same as Client::append() except the append may get buffered.
+   * Same as Client::append() except the append may get buffered. If the call
+   * succeeds it is added into a buffer, and finally appended to the log as a
+   * batch of appends. Once it has been successfully stored in LogDevice,
+   * BufferedWriter::AppendCallback::onSuccess (passed in create()) is invoked
+   * with a ContextSet containing callback_context.
    *
    * If the call succeeds (returns 0), the class assumes ownership of the
    * payload.  If the call fails, the payload remains in the given

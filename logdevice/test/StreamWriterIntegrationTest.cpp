@@ -152,9 +152,6 @@ class StreamWriterIntegrationTest : public IntegrationTestBase {
 
   std::unique_ptr<Cluster> cluster;
   std::shared_ptr<Client> client;
-  std::shared_ptr<Processor> processor;
-  std::unique_ptr<ClientBridge> bridge;
-  std::unique_ptr<StreamWriterAppendSink> stream_sink;
   std::unique_ptr<BufferedWriter> writer;
   FIFOTestCallback callback;
   const logid_t LOG_ID = logid_t(1);
@@ -198,17 +195,11 @@ void StreamWriterIntegrationTest::init(size_t num_nodes,
   }
 
   client = cluster->createClient(std::chrono::seconds(5));
-  ClientImpl* client_impl = checked_downcast<ClientImpl*>(client.get());
-  processor =
-      std::static_pointer_cast<Processor>(client_impl->getProcessorPtr());
-  bridge = std::make_unique<ClientBridgeImpl>(client_impl);
-  stream_sink = std::make_unique<StreamWriterAppendSink>(
-      client_impl->getProcessorPtr(),
-      bridge.get(),
-      client_impl->getTimeout(),
-      chrono_expbackoff_t<std::chrono::milliseconds>(
-          std::chrono::milliseconds(10), std::chrono::milliseconds(1000)));
-  writer = BufferedWriter::create(client, stream_sink.get(), &callback);
+  BufferedWriter::Options options;
+  options.retry_initial_delay = std::chrono::milliseconds(10);
+  options.retry_max_delay = std::chrono::milliseconds(1000);
+  options.mode = BufferedWriter::Options::Mode::STREAM;
+  writer = BufferedWriter::create(client, &callback, options);
 }
 
 void StreamWriterIntegrationTest::verifyRecords() {

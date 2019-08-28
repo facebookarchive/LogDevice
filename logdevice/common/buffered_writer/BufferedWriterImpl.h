@@ -304,6 +304,15 @@ class BufferedWriterImpl : public BufferedWriter {
     prepend_checksums_ = true;
   }
 
+  /*
+   * If called, the BufferedWriterImpl will own append_sink_. So, when
+   * BufferedWriterImpl is destroyed, append_sink_ will also be destroyed.
+   */
+  void ownAppendSink() {
+    ld_check(!own_append_sink_);
+    own_append_sink_.reset(append_sink_);
+  }
+
   bool shouldPrependChecksum() const {
     return prepend_checksums_;
   }
@@ -347,6 +356,8 @@ class BufferedWriterImpl : public BufferedWriter {
   AppendCallbackInternal* callback_;
   int64_t memory_limit_bytes_;
   BufferedWriterAppendSink* const append_sink_;
+  // Contains append_sink_ when ownAppendSink() is invoked.
+  std::unique_ptr<BufferedWriterAppendSink> own_append_sink_;
   StatsHolder* stats_;
   std::atomic<bool> shutting_down_{false};
   WaitableCounter num_background_tasks_;

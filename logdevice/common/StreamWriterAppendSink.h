@@ -190,7 +190,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
    */
   StreamWriterAppendSink(
       std::shared_ptr<Processor> processor,
-      ClientBridge* bridge,
+      std::unique_ptr<ClientBridge> bridge,
       std::chrono::milliseconds append_retry_timeout,
       chrono_expbackoff_t<std::chrono::milliseconds> expbackoff_settings);
   virtual ~StreamWriterAppendSink() override;
@@ -247,7 +247,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   // ClientImpl class such as tracing, write token checking. We do not want to
   // include ClientImpl directly to allow running StreamWriterAppendSink on
   // servers.
-  ClientBridge* bridge_;
+  std::unique_ptr<ClientBridge> bridge_;
 
   // Map from logid_t to stream. A sink can have at most one stream per log.
   StreamsMap streams_;

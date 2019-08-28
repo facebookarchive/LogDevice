@@ -13,6 +13,7 @@
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/util.h"
 #include "logdevice/lib/ClientImpl.h"
+#include "logdevice/lib/ClientProcessor.h"
 
 namespace facebook { namespace logdevice {
 
@@ -20,16 +21,6 @@ using LogOptions = BufferedWriter::LogOptions;
 
 std::unique_ptr<BufferedWriter>
 BufferedWriter::create(std::shared_ptr<Client> client,
-                       AppendCallback* callback,
-                       Options options) {
-  ClientImpl* client_impl = checked_downcast<ClientImpl*>(client.get());
-  return create(
-      client, client_impl /* as BufferedWriterAppendSink */, callback, options);
-}
-
-std::unique_ptr<BufferedWriter>
-BufferedWriter::create(std::shared_ptr<Client> client,
-                       BufferedWriterAppendSink* sink,
                        AppendCallback* callback,
                        Options options) {
   ClientImpl* client_impl = checked_downcast<ClientImpl*>(client.get());
@@ -43,6 +34,17 @@ BufferedWriter::create(std::shared_ptr<Client> client,
     return opts;
   };
 
+  BufferedWriterAppendSink* sink;
+  if (options.mode == BufferedWriter::Options::Mode::STREAM) {
+    sink = new StreamWriterAppendSink(
+        std::static_pointer_cast<Processor>(client_impl->getProcessorPtr()),
+        std::make_unique<ClientBridgeImpl>(client_impl),
+        client_impl->getTimeout(),
+        chrono_expbackoff_t<std::chrono::milliseconds>(
+            options.retry_initial_delay, options.retry_max_delay));
+  } else {
+    sink = (BufferedWriterAppendSink*)client_impl;
+  }
   auto buffered_writer = std::make_unique<BufferedWriterImpl>(
       new ProcessorProxy(&client_impl->getProcessor()),
       callback,
@@ -51,6 +53,9 @@ BufferedWriter::create(std::shared_ptr<Client> client,
       sink,
       client_impl->stats());
   buffered_writer->pinClient(client);
+  if (options.mode == BufferedWriter::Options::Mode::STREAM) {
+    buffered_writer->ownAppendSink();
+  }
   return std::move(buffered_writer);
 }
 
