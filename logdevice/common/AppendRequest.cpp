@@ -476,6 +476,7 @@ void AppendRequest::handleMessageSendError(MessageType type,
     case E::NOTINCONFIG:
     case E::TIMEDOUT: // connection timeout
     case E::CONNFAILED:
+    case E::NOSSLCONFIG:
       // Let noReply() handle these errors
       noReply(st, Address(dest), /* request_sent = */ false);
       return;
@@ -701,6 +702,7 @@ void AppendRequest::noReply(Status st, const Address& to, bool request_sent) {
     case E::ACCESS:
       status_ = st;
       break;
+    case E::NOSSLCONFIG:
     case E::PROTONOSUPPORT:
       ld_check(!request_sent);
       status_ = E::CONNFAILED;

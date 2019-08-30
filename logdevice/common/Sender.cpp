@@ -875,13 +875,10 @@ bool Sender::useSSLWith(NodeID nid,
   cross_boundary = configuration::nodes::getNodeSSL(
       *nodes_, my_location_, nid.index(), diff_level);
 
+  auto server_config = Worker::onThisThread()->getServerConfig();
   // Determine whether we need to use an SSL socket for authentication.
-  // We will use a SSL socket for authentication when the client or server
-  // want to load their certificate.
-  bool authentication = false;
-  if (settings_->ssl_load_client_cert) {
-    authentication = true;
-  }
+  bool authentication =
+      (server_config->getAuthenticationType() == AuthenticationType::SSL);
 
   if (cross_boundary_out) {
     *cross_boundary_out = cross_boundary;
