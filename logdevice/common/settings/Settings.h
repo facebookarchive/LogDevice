@@ -1303,6 +1303,20 @@ struct Settings : public SettingsBundle {
   std::string all_read_streams_sampling_allowed_csid;
   std::chrono::milliseconds all_read_streams_sampling_rate;
 
+  // TODO: Write stream map size is currently per-log and hence it is harder to
+  // pick since the total memory budget depends on number of logs allotted to a
+  // sequencer. We should change this to either a global setting or memory
+  // budget-based parameter.
+
+  // maximum size of the write streams map in EpochSequencer. write streams map
+  // is of type folly::EvictingCacheMap - it evicts items from the map based on
+  // an LRU policy once it exceeds max capacity.
+  size_t write_streams_map_max_capacity;
+  // clear size of write streams map in EpochSequencer. Every time the map has
+  // more than write_streams_map_max_size items in the map, it evicts
+  // write_streams_map_clear_size_ least recently used items from the map.
+  size_t write_streams_map_clear_size;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

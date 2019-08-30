@@ -44,15 +44,21 @@ EpochSequencer::EpochSequencer(
               immutable_options_.window_size,
               immutable_options_.esn_max),
       lng_(compose_lsn(epoch, ESN_INVALID)),
-      last_reaped_(compose_lsn(epoch, ESN_INVALID)) {}
+      last_reaped_(compose_lsn(epoch, ESN_INVALID)),
+      write_streams_(immutable_options_.write_streams_map_max_capacity,
+                     immutable_options_.write_streams_map_clear_size) {}
 
 bool EpochSequencerImmutableOptions::
 operator==(const EpochSequencerImmutableOptions& rhs) {
-  static_assert(sizeof(EpochSequencerImmutableOptions) == 12,
+  static_assert(sizeof(EpochSequencerImmutableOptions) == 32,
                 "Don't forget to update operator==() when adding fields.");
   auto tup = [](const EpochSequencerImmutableOptions& o) {
-    return std::make_tuple(
-        o.extra_copies, o.synced_copies, o.window_size, o.esn_max);
+    return std::make_tuple(o.extra_copies,
+                           o.synced_copies,
+                           o.window_size,
+                           o.esn_max,
+                           o.write_streams_map_max_capacity,
+                           o.write_streams_map_clear_size);
   };
   return tup(*this) == tup(rhs);
 }
@@ -78,41 +84,39 @@ EpochSequencerImmutableOptions::EpochSequencerImmutableOptions(
   ld_check(settings.esn_bits > 0);
   ld_check(settings.esn_bits <= ESN_T_BITS);
   esn_max = esn_t(~esn_t::raw_type(0) >> (ESN_T_BITS - settings.esn_bits));
+  write_streams_map_max_capacity = settings.write_streams_map_max_capacity;
+  write_streams_map_clear_size = settings.write_streams_map_clear_size;
 }
 
 lsn_t EpochSequencer::assignLsnForWriteStream(Appender* appender) {
   auto stream_id = appender->getWriteStreamId();
   auto seq_num = appender->getWriteStreamSeqNum();
+  // Begin critical section.
+  folly::SharedMutex::WriteHolder lock_guard(write_streams_mutex_);
+
+  auto lsn = LSN_INVALID;
   auto it = write_streams_.find(stream_id);
-  lsn_t lsn = LSN_INVALID;
   if (it == write_streams_.end()) {
     // We do not know about the write stream
     if (appender->canResumeWriteStream()) {
       lsn = window_.grow(appender);
       if (lsn != LSN_INVALID) {
         // LSN alloc succeeded, insert sequence number into the map.
-        // It is okay if we fail to insert our seq num (say n1) due to
-        // concurrency with another Appender that is trying to insert its own
-        // seq num (say n2). Since n2 can also resume the write stream, this is
-        // the same case as when we receive n2 after n1. We can skip insertion
-        // and go on anyway.
-        write_streams_.insert(
-            stream_id, std::make_unique<WriteStreamState>(seq_num));
+        write_streams_.insert(stream_id, seq_num);
       }
     } else {
       // Can't process without resume write stream bit.
       err = E::WRITE_STREAM_UNKNOWN;
     }
   } else {
-    std::lock_guard<std::mutex> lock(it->second->mutex);
-    auto expected_seq_num = next_seq_num(it->second->last_accepted_seq_num);
+    auto expected_seq_num = next_seq_num(it->second);
     if (appender->canResumeWriteStream() || (seq_num == expected_seq_num)) {
       lsn = window_.grow(appender);
       if (lsn != LSN_INVALID) {
         // LSN alloc succeeded, update sequence number. So, we either insert
         // the (n+1)th message or a completely random seq num that the client
         // has directed us to (by setting WRITE_STREAM_RESUME bit).
-        it->second->last_accepted_seq_num.val_ = seq_num.val();
+        it->second.val_ = seq_num.val();
       }
     } else if (seq_num < expected_seq_num) {
       // We do not have to process this. Ignore.
@@ -122,6 +126,7 @@ lsn_t EpochSequencer::assignLsnForWriteStream(Appender* appender) {
       err = E::WRITE_STREAM_BROKEN;
     }
   }
+  // End of critical section.
   return lsn;
 }
 

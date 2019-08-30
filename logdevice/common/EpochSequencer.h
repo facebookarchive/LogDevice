@@ -13,7 +13,7 @@
 #include <mutex>
 
 #include <folly/concurrency/AtomicSharedPtr.h>
-#include <folly/concurrency/ConcurrentHashMap.h>
+#include <folly/container/EvictingCacheMap.h>
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/EpochMetaData.h"
@@ -25,7 +25,9 @@
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
-
+using WriteStreamsMap = folly::EvictingCacheMap<write_stream_id_t,
+                                                write_stream_seq_num_t,
+                                                write_stream_id_t::Hash>;
 /**
  * @file  EpochSequencer is responsible for managing sequencing and replication
  *        for a particular epoch of a log.
@@ -48,6 +50,8 @@ struct EpochSequencerImmutableOptions {
   copyset_size_t synced_copies = 0;
   int window_size = SLIDING_WINDOW_MIN_CAPACITY;
   esn_t esn_max = ESN_MAX;
+  size_t write_streams_map_max_capacity = 1000;
+  size_t write_streams_map_clear_size = 100;
 
   EpochSequencerImmutableOptions() = default;
   EpochSequencerImmutableOptions(const logsconfig::LogAttributes& log_attrs,
@@ -61,16 +65,6 @@ struct EpochSequencerImmutableOptions {
 
 class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
  public:
-  struct WriteStreamState {
-    std::mutex mutex;
-    write_stream_seq_num_t last_accepted_seq_num;
-    explicit WriteStreamState(write_stream_seq_num_t _last_accepted_seq_num)
-        : last_accepted_seq_num(_last_accepted_seq_num) {}
-  };
-  using WriteStreamsMap =
-      folly::ConcurrentHashMap<write_stream_id_t,
-                               std::unique_ptr<WriteStreamState>,
-                               write_stream_id_t::Hash>;
   /**
    * An EpochSequencer object can be in one of the following four states.
    *
@@ -327,6 +321,11 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
     return epoch_;
   }
 
+  /* Not thread-safe. Used only in tests. */
+  const WriteStreamsMap& getWriteStreamsMapForTest() const {
+    return write_streams_;
+  }
+
   const EpochSequencerImmutableOptions& getImmutableOptions() const {
     return immutable_options_;
   }
@@ -507,10 +506,13 @@ class EpochSequencer : public std::enable_shared_from_this<EpochSequencer> {
   // the epoch
   folly::atomic_shared_ptr<TailRecord> tail_record_;
 
-  // A concurrent hash map of write stream id to last accepted sequence number
-  // in the corresponding write streams, along with a per-stream mutex that is
-  // used to allot LSNs and update sequence numbers transactionally.
+  // An evicting cache hash map of write stream id to last accepted sequence
+  // number in the corresponding write streams. It is not thread-safe.
   WriteStreamsMap write_streams_;
+
+  // Mutex used to synchronize access to write_streams_ map and allot ESN to
+  // append requests belonging to a write stream transactionally.
+  folly::SharedMutex write_streams_mutex_;
 
   // return true if the epoch is quiescent, i.e., last_reaped_ advanced to
   // draining_target_

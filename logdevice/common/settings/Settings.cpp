@@ -3225,5 +3225,26 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Rate of sampling all client read streams debug info",
        CLIENT,
        SettingsCategory::ReadPath);
+
+  init("write_streams_map_max_capacity",
+       &write_streams_map_max_capacity,
+       "1000",
+       validate_positive<size_t>(),
+       "Maximum capacity of write streams map in each epoch sequencer. Once "
+       "size exceeds write_streams_map_max_capacity, "
+       "write_streams_map_clear_size number of least-recently-used write "
+       "streams are evicted.",
+       SERVER,
+       SettingsCategory::Sequencer);
+
+  init("write_streams_map_clear_size",
+       &write_streams_map_clear_size,
+       "100",
+       validate_range<size_t>(0, write_streams_map_max_capacity),
+       "Clear size for write streams map in each epoch sequencer. Once size "
+       "exceeds write_streams_map_max_capacity, write_streams_map_clear_size "
+       "number of least-recently-used write streams are evicted.",
+       SERVER,
+       SettingsCategory::Sequencer);
 }
 }} // namespace facebook::logdevice

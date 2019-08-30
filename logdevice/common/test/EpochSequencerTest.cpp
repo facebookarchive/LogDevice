@@ -60,6 +60,10 @@ class EpochSequencerTest : public ::testing::Test {
   bool tail_optimized_ = true;
   esn_t esn_max_ = ESN_MAX;
   size_t max_appender_age_ms_ = 3;
+  // Setting evicting cache map size to 75% of window size to test for GC
+  // without hitting NOBUFS.
+  size_t write_streams_map_max_capacity = window_size_ * 3 / 4;
+  size_t write_streams_map_clear_size = window_size_ / 4;
 
   int num_workers_ = 16;
 
@@ -487,6 +491,8 @@ EpochSequencerTest::createEpochSequencer(epoch_t epoch) {
   EpochSequencerImmutableOptions opts;
   opts.window_size = window_size_;
   opts.esn_max = esn_max_;
+  opts.write_streams_map_max_capacity = write_streams_map_max_capacity;
+  opts.write_streams_map_clear_size = write_streams_map_clear_size;
   return std::make_shared<MockEpochSequencer>(this,
                                               LOG_ID,
                                               epoch,
@@ -636,7 +642,7 @@ void EpochSequencerTest::testWriteStreamAppend(int stream_id,
   run_on_worker(processor_.get(), /*worker_id=*/0, [&]() {
     err = E::OK;
     EXPECT_EQ(EpochSequencer::State::ACTIVE, es_->getState());
-    MockAppender* appender = createAppender(/*not_retire=*/true);
+    MockAppender* appender = createAppender();
     write_stream_request_id_t reqid = {
         write_stream_id_t(stream_id), write_stream_seq_num_t(seq_num)};
     appender->setWriteStreamAppendInfo(reqid, stream_resume);
@@ -685,6 +691,26 @@ TEST_F(EpochSequencerTest, WriteStreamAppends) {
   testWriteStreamAppendAccept(1, 6, 7);
   // Try a different write stream id.
   testWriteStreamAppendFail(2, 1, E::WRITE_STREAM_UNKNOWN);
+}
+
+TEST_F(EpochSequencerTest, WriteStreamGarbageCollection) {
+  // Test plan: Add many write streams into epoch sequencer by having different
+  // write_stream_id and setting stream_resume bit. Test if GC is triggered by
+  // the EvictingCacheMap by checking the size of the map.
+
+  // Make sure that we have set write_streams_map_max_capacity to be smaller
+  // than window_size_. O/w this test does not test GC!
+  ld_check_lt(write_streams_map_max_capacity, window_size_);
+  setUp();
+  for (int32_t i = 0; i < window_size_; i++) {
+    testWriteStreamAppendAccept(/* stream_id=*/i,
+                                /* seq_num=*/1,
+                                /* expected_esn=*/(i + 1),
+                                /* stream_resume=*/true);
+    // Assert that the size is always smaller than or equalt to max capacity.
+    ASSERT_LE(es_->getWriteStreamsMapForTest().size(),
+              write_streams_map_max_capacity);
+  }
 }
 
 TEST_F(EpochSequencerTest, RetireMultipleAppends) {
