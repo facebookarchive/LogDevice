@@ -44,6 +44,7 @@ class SequencerLocator {
    *                  E::OK          request completed successfully
    *                  E::NOTFOUND    logid is not known or is not completely
    *                                 provisioned
+   *                  E::NOSEQUENCER could not determine a sequencer node
    *                  E::ACCESS      location service denied access
    *                  E::CONNFAILED  lost connection to location service
    *                                 while waiting for reply, possibly due to

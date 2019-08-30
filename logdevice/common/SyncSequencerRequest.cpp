@@ -264,9 +264,7 @@ void SyncSequencerRequest::onTimeout() {
     case E::FAILED:
     case E::CONNFAILED:
     case E::NOSEQUENCER:
-      break;
     case E::NOTFOUND:
-      res = E::FAILED;
       break;
     case E::UNROUTABLE:
     case E::PROTONOSUPPORT:
@@ -305,9 +303,6 @@ void SyncSequencerRequest::complete(Status status, bool delete_this) {
                 E::ACCESS,
                 E::NOTFOUND,
                 E::INVALID_PARAM}));
-  if (!complete_if_log_not_found_) {
-    ld_check_ne(status, E::NOTFOUND);
-  }
   if (!prevent_metadata_logs_) {
     ld_check_ne(status, E::INVALID_PARAM);
   }

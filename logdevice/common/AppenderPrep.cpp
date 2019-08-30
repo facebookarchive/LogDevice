@@ -208,12 +208,14 @@ void AppenderPrep::onSequencerNodeFound(Status st,
     // detector is running or not.
     seq_node = getMyNodeID();
   } else if (st != E::OK) {
+    auto return_status = st == E::NOTFOUND ? E::NOTFOUND : E::NOSEQUENCER;
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       5,
                       "No sequencer node found for log %lu, failing the "
-                      "append with E::NOSEQUENCER.",
-                      datalog_id.val_);
-    sendError(appender.get(), E::NOSEQUENCER);
+                      "append with %s.",
+                      datalog_id.val(),
+                      error_name(return_status));
+    sendError(appender.get(), return_status);
     return;
   }
 

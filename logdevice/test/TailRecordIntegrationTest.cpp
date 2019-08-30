@@ -31,7 +31,7 @@ namespace {
 // various tests on readLogTail(), getTailAttribute() and tail optimized logs
 class TailRecordIntegrationTest : public IntegrationTestBase {
  public:
-  void init();
+  void init(bool hash_based_sequencer_placement = false);
   std::shared_ptr<ClientImpl> createClient();
   inline void checkTail(std::shared_ptr<ClientImpl>& client,
                         lsn_t lsn,
@@ -49,7 +49,7 @@ class TailRecordIntegrationTest : public IntegrationTestBase {
   std::unique_ptr<IntegrationTestUtils::Cluster> cluster_;
 };
 
-void TailRecordIntegrationTest::init() {
+void TailRecordIntegrationTest::init(bool hash_based_sequencer_placement) {
   static const int cs_bits[3] = {0, 32, 64};
 
   tail_optimized_ = (folly::Random::rand64(2) == 0);
@@ -71,6 +71,9 @@ void TailRecordIntegrationTest::init() {
                      .setParam("--reactivation-limit", "100/1s")
                      // enable byte offsets
                      .setParam("--byte-offsets");
+  if (hash_based_sequencer_placement) {
+    factory.useHashBasedSequencerAssignment();
+  }
 
   cluster_ = factory.create(nodes_);
 
@@ -219,6 +222,24 @@ TEST_F(TailRecordIntegrationTest, SequencerFailOver) {
   cluster_->getNode(0).waitForRecovery(LOG_ID);
   // the tail should still remain the same
   checkTail(client, lsn, timestamp.count(), byte_offset, pl);
+}
+
+// check that non-existent log ID returns NOTFOUND
+TEST_F(TailRecordIntegrationTest, LogNotFound) {
+  init(true);
+  auto client = createClient();
+  cluster_->start();
+  cluster_->waitForRecovery();
+  // Try to fetch log attributes of unknown log
+  auto tail_attribute = client->getTailAttributesSync(logid_t(41));
+  ASSERT_EQ(nullptr, tail_attribute);
+  ASSERT_EQ(E::NOTFOUND, err);
+
+  err = E::OK;
+  // Try to fetch tail LSN of unknown log
+  auto tail_lsn = client->getTailLSNSync(logid_t(41));
+  ASSERT_EQ(LSN_INVALID, tail_lsn);
+  ASSERT_EQ(E::NOTFOUND, err);
 }
 
 // TODO: test empty record payload and large payload cases

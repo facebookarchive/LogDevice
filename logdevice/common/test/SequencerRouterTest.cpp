@@ -282,4 +282,30 @@ TEST_F(SequencerRouterTest, SequencerAffinityTest) {
               std::make_pair(N5, SequencerRouter::flags_t(0)) == next_node_);
 }
 
+// Tests if the log ID is not in config, SequencerRouter returns NOTFOUND
+TEST_F(SequencerRouterTest, LogNotFound) {
+  auto settings = create_default_settings<Settings>();
+
+  // Config with 2 regions each with 1 node
+  // only 3 logs are configured.
+  std::shared_ptr<Configuration> config = Configuration::fromJsonFile(
+      TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf"));
+
+  cluster_state_ = std::make_unique<MockClusterState>(
+      config->serverConfig()->getNodes().size());
+
+  settings.use_sequencer_affinity = true;
+  locator_ = std::make_unique<MockHashBasedSequencerLocator>(
+      UpdateableConfig(config).updateableServerConfig(),
+      cluster_state_.get(),
+      config,
+      settings);
+
+  // log ID 4 doesn't exist
+  auto router = std::make_unique<MockSequencerRouter>(
+      logid_t(4), this, config->serverConfig(), locator_, cluster_state_.get());
+  router->start();
+  EXPECT_EQ(E::NOTFOUND, status_);
+}
+
 }} // namespace facebook::logdevice

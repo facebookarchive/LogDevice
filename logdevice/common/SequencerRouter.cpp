@@ -46,13 +46,15 @@ void SequencerRouter::start() {
       return;
     }
     if (status != E::OK) {
+      auto client_status = status == E::NOTFOUND ? E::NOTFOUND : E::NOSEQUENCER;
       RATELIMIT_ERROR(std::chrono::seconds(1),
                       1,
                       "Error during sequencer lookup for log %lu (%s), "
-                      "reporting NOSEQUENCER.",
+                      "reporting %s.",
                       router->log_id_.val_,
-                      error_name(status));
-      router->onFailure(E::NOSEQUENCER);
+                      error_name(status),
+                      error_name(client_status));
+      router->onFailure(client_status);
       return;
     }
 

@@ -63,6 +63,7 @@ class SequencerRouter {
     // for the log. Status can be one of the following:
     //   CONNFAILED    unable to reach the sequencer node
     //   NOSEQUENCER   failed to determine which node runs the sequencer
+    //   NOTFOUND      log ID doesn't exist
     virtual void onSequencerRoutingFailure(Status status) = 0;
 
     enum class SRRequestType {

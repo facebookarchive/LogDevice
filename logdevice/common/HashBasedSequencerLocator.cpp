@@ -18,25 +18,23 @@ int HashBasedSequencerLocator::locateSequencer(
     logid_t log_id,
     Completion cf,
     const configuration::SequencersConfig* sequencers) {
-  if (!getSettings().use_sequencer_affinity) {
-    locateContinuation(log_id, cf, sequencers, nullptr);
-    return 0;
-  }
   auto config = getConfig();
   WeakRef<HashBasedSequencerLocator> ref = holder_.ref();
   config->getLogGroupByIDAsync(
       log_id,
       [ref, log_id, cf, sequencers](
           const std::shared_ptr<const LogsConfig::LogGroupNode> log_group) {
+        if (log_group == nullptr) {
+          cf(E::NOTFOUND, log_id, NodeID());
+          return;
+        }
+
         // If this SequencerLocator object gets destroyed before the callback is
         // called, trying to call locateContinuation will cause a crash. Using
         // WeakRefHolder to prevent that.
         if (ref) {
           const_cast<HashBasedSequencerLocator*>(ref.get())->locateContinuation(
-              log_id,
-              cf,
-              sequencers,
-              log_group ? &log_group->attrs() : nullptr);
+              log_id, cf, sequencers, &log_group->attrs());
         } else {
           RATELIMIT_WARNING(
               std::chrono::seconds(10),
@@ -58,7 +56,12 @@ void HashBasedSequencerLocator::locateContinuation(
   ld_check(cs);
   NodeID res;
   auto rv = locateSequencer(
-      log_id, nodes_configuration.get(), log_attrs, cs, &res, sequencers);
+      log_id,
+      nodes_configuration.get(),
+      getSettings().use_sequencer_affinity ? log_attrs : nullptr,
+      cs,
+      &res,
+      sequencers);
   if (rv == 0) {
     cf(E::OK, log_id, res);
   } else {
@@ -79,7 +82,7 @@ node_index_t HashBasedSequencerLocator::getPrimarySequencerNode(
   if (rv == 0) {
     return res.index();
   } else {
-    ld_check(err == E::NOTFOUND);
+    ld_check(err == E::NOTFOUND || err == E::NOSEQUENCER);
     return nodes_configuration.getSequencersConfig().nodes[0].index();
   }
 }
@@ -190,7 +193,7 @@ int HashBasedSequencerLocator::locateSequencer(
                       "No available sequencer node for log %lu. "
                       "All sequencer nodes are unavailable.",
                       log_id.val_);
-      err = E::NOTFOUND;
+      err = E::NOSEQUENCER;
       return -1;
     }
 

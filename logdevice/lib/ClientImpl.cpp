@@ -1972,8 +1972,6 @@ int ClientImpl::getTailAttributes(logid_t logid,
     // attributes.
     if (st == E::OK && !tail_attributes) {
       st = E::AGAIN;
-    } else if (!tail_attributes) {
-      st = E::FAILED;
     }
     cb(st, std::move(tail_attributes));
   };

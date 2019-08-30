@@ -108,6 +108,21 @@ TEST_F(GetSeqStateRequestTest, SkipOnTimeout) {
   }
 }
 
+TEST_F(GetSeqStateRequestTest, LogNotFound) {
+  init(4, 1);
+
+  bool callback_called = false;
+  GetSeqStateRequest::Options opts;
+  opts.on_complete = [&](GetSeqStateRequest::Result res) {
+    callback_called = true;
+    EXPECT_EQ(E::NOTFOUND, res.status);
+  };
+  auto req = create(logid_t(2), opts);
+
+  ASSERT_EQ(Request::Execution::CONTINUE, req->execute());
+  ASSERT_TRUE(callback_called);
+}
+
 TEST_F(GetSeqStateRequestTest, Callback) {
   init(4, 1);
   const NodeID seq_node = NodeID(2, 1);
