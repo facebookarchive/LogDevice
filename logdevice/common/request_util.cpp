@@ -43,9 +43,9 @@ bool run_on_worker_nonblocking(Processor* processor,
 
   if (rv != 0) {
     ld_error("post request of type %s on %s failed with error(%s)",
-             error_name(err),
              requestTypeNames[type].c_str(),
-             Worker::getName(worker_type, worker_id).c_str());
+             Worker::getName(worker_type, worker_id).c_str(),
+             error_name(err));
 
     return false;
   }
