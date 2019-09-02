@@ -16,6 +16,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoSyncSequencerRequests : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool json_ = false;
 

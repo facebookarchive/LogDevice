@@ -20,7 +20,7 @@
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/Listener.h"
 #include "logdevice/server/ServerSettings.h"
-#include "logdevice/server/admincommands/AdminCommandFactory.h"
+#include "logdevice/server/admincommands/CommandProcessor.h"
 
 namespace facebook { namespace logdevice {
 
@@ -123,6 +123,8 @@ class CommandListener : public Listener {
 
   // SSL context manager
   SSLFetcher ssl_fetcher_;
+
+  CommandProcessor command_processor_;
 
   KeepAlive loop_;
 };

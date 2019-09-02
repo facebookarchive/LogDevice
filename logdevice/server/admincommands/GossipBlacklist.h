@@ -21,10 +21,11 @@ class GossipBlacklist : public AdminCommand {
   bool blacklist_;
 
  public:
-  explicit GossipBlacklist(
+  GossipBlacklist(
+      folly::io::Appender& output,
       bool blacklist,
       RestrictionLevel restrictionLevel = RestrictionLevel::UNRESTRICTED)
-      : AdminCommand(restrictionLevel), blacklist_(blacklist) {}
+      : AdminCommand(output, restrictionLevel), blacklist_(blacklist) {}
 
   void getOptions(boost::program_options::options_description& opts) override {
     opts.add_options()(

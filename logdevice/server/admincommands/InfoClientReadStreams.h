@@ -19,6 +19,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoClientReadStreams : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool json_ = false;
 

@@ -13,6 +13,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class Stop : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   void run() override {
     ld_info("STOP admin command received");
@@ -22,6 +24,8 @@ class Stop : public AdminCommand {
 };
 
 class FastShutdown : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool enable_;
 

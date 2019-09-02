@@ -20,6 +20,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class StatsThroughput : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   std::string getUsage() override;
 

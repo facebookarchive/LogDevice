@@ -25,7 +25,8 @@ target_link_libraries(logdevice_server_core
   common
   ldclient_static
   logdevice_admin_settings
-  logdevice_admin_maintenance)
+  logdevice_admin_maintenance
+  ${LOGDEVICE_EXTERNAL_DEPS})
 
 set_target_properties(logdevice_server_core
   PROPERTIES

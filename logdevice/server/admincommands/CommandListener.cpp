@@ -10,7 +10,6 @@
 
 #include <pthread.h>
 
-#include <boost/token_functions.hpp>
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <folly/String.h>
@@ -28,19 +27,12 @@
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/server/Server.h"
 #include "logdevice/server/admincommands/AdminCommand.h"
 #include "logdevice/server/read_path/LogStorageState.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
 namespace facebook { namespace logdevice {
-
-std::unique_ptr<AdminCommandFactory> createAdminCommandFactory(bool test_mode) {
-  if (test_mode) {
-    return std::make_unique<TestAdminCommandFactory>();
-  } else {
-    return std::make_unique<AdminCommandFactory>();
-  }
-}
 
 CommandListener::CommandListener(Listener::InterfaceDef iface,
                                  KeepAlive loop,
@@ -48,8 +40,6 @@ CommandListener::CommandListener(Listener::InterfaceDef iface,
     : Listener(std::move(iface), loop),
       server_(server),
       server_settings_(server_->getServerSettings()),
-      command_factory_(
-          createAdminCommandFactory(/*test_mode=*/server_settings_->test_mode)),
       ssl_fetcher_(
           server_->getParameters()->getProcessorSettings()->ssl_cert_path,
           server_->getParameters()->getProcessorSettings()->ssl_key_path,
@@ -57,6 +47,7 @@ CommandListener::CommandListener(Listener::InterfaceDef iface,
           server_->getParameters()
               ->getProcessorSettings()
               ->ssl_cert_refresh_interval),
+      command_processor_(server),
       loop_(loop) {
   ld_check(server_);
 }
@@ -313,107 +304,12 @@ void CommandListener::processCommand(struct bufferevent* bev,
                                      const char* command_line,
                                      const bool is_localhost,
                                      ConnectionState* state) {
-  auto start_time = std::chrono::steady_clock::now();
-  ld_debug("Processing command: %s", sanitize_string(command_line).c_str());
+  auto result = command_processor_.processCommand(
+      command_line, state->address_.getSocketAddress());
 
   struct evbuffer* output = LD_EV(bufferevent_get_output)(bev);
-  std::vector<std::string> args;
-  try {
-    args = boost::program_options::split_unix(command_line);
-  } catch (boost::escaped_list_error& e) {
-    LD_EV(evbuffer_add_printf)
-    (output, "Failed to split: %s\r\nEND\r\n", e.what());
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   2,
-                   "Got bad admin command (split failed) from %s: %s",
-                   state->address_.toString().c_str(),
-                   sanitize_string(command_line).c_str());
-    return;
-  }
-
-  auto command = command_factory_->get(args, output);
-
-  if (!command) {
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   2,
-                   "Got bad admin command (unknown command) from %s: %s",
-                   state->address_.toString().c_str(),
-                   sanitize_string(command_line).c_str());
-    return;
-  }
-
-  // Enforce restriction level of admin command
-  switch (command->getRestrictionLevel()) {
-    case AdminCommand::RestrictionLevel::UNRESTRICTED:
-      break;
-    case AdminCommand::RestrictionLevel::LOCALHOST_ONLY:
-      if (!is_localhost) {
-        LD_EV(evbuffer_add_printf)
-        (output, "Permission denied: command is localhost-only!\r\nEND\r\n");
-        RATELIMIT_INFO(
-            std::chrono::seconds(10),
-            2,
-            "Localhost-only admin command called from non-localhost %s: %s",
-            state->address_.toString().c_str(),
-            sanitize_string(command_line).c_str());
-        return;
-      }
-      break;
-  }
-
-  command->setServer(server_);
-
-  boost::program_options::options_description options;
-  boost::program_options::positional_options_description positional;
-  namespace style = boost::program_options::command_line_style;
-
-  try {
-    command->getOptions(options);
-    command->getPositionalOptions(positional);
-    boost::program_options::variables_map vm;
-    boost::program_options::store(
-        boost::program_options::command_line_parser(args)
-            .options(options)
-            .positional(positional)
-            .style(style::unix_style & ~style::allow_guessing)
-            .run(),
-        vm);
-    boost::program_options::notify(vm);
-  } catch (boost::program_options::error& e) {
-    LD_EV(evbuffer_add_printf)(output, "Options error: %s\r\n", e.what());
-    std::string usage = command->getUsage();
-    if (!usage.empty()) {
-      LD_EV(evbuffer_add_printf)(output, "USAGE %s\r\n", usage.c_str());
-    }
-    LD_EV(evbuffer_add_printf)(output, "END\r\n");
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   2,
-                   "Got bad admin command (bad options: %s) from %s: %s",
-                   e.what(),
-                   state->address_.toString().c_str(),
-                   sanitize_string(command_line).c_str());
-    return;
-  }
-
-  folly::IOBuf buffer;
-  command->setOutput(&buffer);
-  command->run();
-
-  folly::io::Appender appender(&buffer, 100);
-  appender.printf("END\r\n");
-  auto byte_range = buffer.coalesce();
-
-  LD_EV(evbuffer_add(output, byte_range.data(), byte_range.size()));
-
-  auto duration = std::chrono::steady_clock::now() - start_time;
-  ld_log(duration > std::chrono::milliseconds(50) ? dbg::Level::INFO
-                                                  : dbg::Level::DEBUG,
-         "Admin command from %s took %.3f seconds to output %lu bytes: %s",
-         state->address_.toString().c_str(),
-         std::chrono::duration_cast<std::chrono::duration<double>>(duration)
-             .count(),
-         byte_range.size(),
-         sanitize_string(command_line).c_str());
+  auto bytes = result.coalesce();
+  LD_EV(evbuffer_add)(output, bytes.data(), bytes.size());
 }
 
 bool CommandListener::upgradeToSSL(ConnectionState* state) {

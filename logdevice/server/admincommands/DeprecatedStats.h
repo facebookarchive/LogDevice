@@ -18,8 +18,10 @@ class DeprecatedStats : public AdminCommand {
   std::string old_;
   std::string new_;
 
-  DeprecatedStats(const std::string& old, const std::string& n)
-      : old_(old), new_(n) {}
+  DeprecatedStats(folly::io::Appender& output,
+                  const std::string& old,
+                  const std::string& n)
+      : AdminCommand(output), old_(old), new_(n) {}
 
   std::string getUsage() override {
     return "`" + old_ + "` is deprecated, use `" + new_ + "`";

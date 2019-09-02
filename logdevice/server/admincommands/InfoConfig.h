@@ -14,6 +14,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoConfig : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   void getOptions(boost::program_options::options_description& opts) override {
     using namespace boost::program_options;

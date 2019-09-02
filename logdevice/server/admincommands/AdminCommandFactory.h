@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <folly/io/Cursor.h>
+
 #include "logdevice/server/admincommands/CommandSelector.h"
 
 namespace facebook { namespace logdevice {
@@ -23,7 +25,7 @@ class AdminCommandFactory {
   // was used to select command.
   // If there's no matching command returns nullptr and writes error to output.
   std::unique_ptr<AdminCommand> get(std::vector<std::string>& inout_args,
-                                    struct evbuffer* output);
+                                    folly::io::Appender& output);
 
  protected:
   /**

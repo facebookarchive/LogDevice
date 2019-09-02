@@ -23,6 +23,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class StoreTimeoutHistogram : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   using SummaryTable = AdminCommandTable<std::string, // unit
                                          int,         // worker id

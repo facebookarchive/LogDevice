@@ -27,8 +27,9 @@ class ListOrEraseMetadata : public AdminCommand {
   std::vector<PerEpochLogMetadataType> per_epoch_types_;
 
  public:
-  ListOrEraseMetadata(bool erase)
-      : AdminCommand(erase ? RestrictionLevel::LOCALHOST_ONLY
+  ListOrEraseMetadata(folly::io::Appender& output, bool erase)
+      : AdminCommand(output,
+                     erase ? RestrictionLevel::LOCALHOST_ONLY
                            : RestrictionLevel::UNRESTRICTED),
         erase_(erase) {}
 

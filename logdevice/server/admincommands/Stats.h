@@ -151,6 +151,8 @@ inline void printStats(const Stats& stats,
 }
 
 class Stats : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool include_log_groups_;
 
@@ -181,6 +183,8 @@ class Stats : public AdminCommand {
 };
 
 class StatsWorker : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool include_log_groups_;
   bool only_useful_;
@@ -231,6 +235,7 @@ class StatsWorker : public AdminCommand {
 };
 
 class StatsReset : public AdminCommand {
+  using AdminCommand::AdminCommand;
   void run() override {
     if (server_->getParameters()->getStats()) {
       server_->getParameters()->getStats()->reset();

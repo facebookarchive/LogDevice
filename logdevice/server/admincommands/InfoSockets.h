@@ -18,6 +18,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoSockets : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool json_ = false;
 

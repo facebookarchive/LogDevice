@@ -249,7 +249,7 @@ void AdminCommandFactory::deprecated(const char* old_prefix,
 
 std::unique_ptr<AdminCommand>
 AdminCommandFactory::get(std::vector<std::string>& inout_args,
-                         struct evbuffer* output) {
+                         folly::io::Appender& output) {
   return selector_.selectCommand(inout_args, output);
 }
 

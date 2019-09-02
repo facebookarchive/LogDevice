@@ -22,10 +22,11 @@ class NewConnections : public AdminCommand {
   bool accept_;
 
  public:
-  explicit NewConnections(
+  NewConnections(
+      folly::io::Appender& output,
       bool accept,
       RestrictionLevel restrictionLevel = RestrictionLevel::UNRESTRICTED)
-      : AdminCommand(restrictionLevel), accept_(accept) {}
+      : AdminCommand(output, restrictionLevel), accept_(accept) {}
 
   std::string getUsage() override {
     return "newconnections accept|reject";

@@ -18,6 +18,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoIterators : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   folly::Optional<logid_t> logid_;
   bool json_ = false;

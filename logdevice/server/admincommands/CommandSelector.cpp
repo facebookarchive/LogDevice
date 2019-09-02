@@ -32,7 +32,7 @@ void CommandSelector::add(const char* prefix, CommandFactory factory) {
 // If there's no matching command returns nullptr and writes error to output.
 std::unique_ptr<AdminCommand>
 CommandSelector::selectCommand(std::vector<std::string>& inout_args,
-                               struct evbuffer* output) {
+                               folly::io::Appender& result) {
   TrieNode* node = &root_;
   size_t pos = 0;
   while (pos < inout_args.size() && node->children.count(inout_args[pos])) {
@@ -46,28 +46,26 @@ CommandSelector::selectCommand(std::vector<std::string>& inout_args,
       inout_args[pos][0] != '-';
 
   if (!node->factory || looks_wrong) {
-    LD_EV(evbuffer_add_printf)
-    (output, "Unsupported command. Did you mean one of these?\r\n");
+    result.printf("Unsupported command. Did you mean one of these?\r\n");
     std::string args_prefix;
     folly::join(' ', inout_args.begin(), inout_args.begin() + pos, args_prefix);
     for (const auto& it : node->children) {
-      LD_EV(evbuffer_add_printf)
-      (output, "%s", (args_prefix + ' ' + it.first).c_str());
+      result.printf("%s %s", args_prefix.c_str(), it.first.c_str());
       if (!it.second->children.empty()) {
         if (it.second->factory) {
-          LD_EV(evbuffer_add_printf)(output, " [...]");
+          result.printf(" [...]");
         } else {
-          LD_EV(evbuffer_add_printf)(output, " ...");
+          result.printf(" ...");
         }
       }
-      LD_EV(evbuffer_add_printf)(output, "\r\n");
+      result.printf("\r\n");
     }
-    LD_EV(evbuffer_add_printf)(output, "END\r\n");
+    result.printf("END\r\n");
     return nullptr;
   }
 
   inout_args.erase(inout_args.begin(), inout_args.begin() + pos);
-  return node->factory();
+  return node->factory(result);
 }
 
 }} // namespace facebook::logdevice

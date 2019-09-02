@@ -16,6 +16,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoSST : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   void run() override {
     if (server_->getProcessor()->runningOnStorageNode()) {

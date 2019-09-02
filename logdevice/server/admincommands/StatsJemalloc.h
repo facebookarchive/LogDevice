@@ -39,6 +39,8 @@ inline void statsJemallocPrint(folly::io::Appender& out, const char* opt) {
 }
 
 class StatsJemalloc : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   void run() override {
     /* Only display general stats:
@@ -51,6 +53,8 @@ class StatsJemalloc : public AdminCommand {
 };
 
 class StatsJemallocFull : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   void run() override {
     statsJemallocPrint(out_, nullptr);
@@ -58,6 +62,8 @@ class StatsJemallocFull : public AdminCommand {
 };
 
 class StatsJemallocProfActive : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   std::string active_;
 
@@ -101,6 +107,8 @@ class StatsJemallocProfActive : public AdminCommand {
 };
 
 class StatsJemallocProfDump : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   void run() override {
     char filename[1024];
@@ -246,8 +254,8 @@ class JemallocGetSet : public AdminCommand {
   }
 
  public:
-  explicit JemallocGetSet(bool set) : set_(set) {}
-
+  explicit JemallocGetSet(folly::io::Appender& output, bool set)
+      : AdminCommand(output), set_(set) {}
   void getOptions(
       boost::program_options::options_description& out_options) override {
     out_options.add_options()(

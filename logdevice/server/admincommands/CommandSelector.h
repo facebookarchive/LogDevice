@@ -12,8 +12,7 @@
 #include <vector>
 
 #include <folly/Memory.h>
-
-struct evbuffer;
+#include <folly/io/Cursor.h>
 
 namespace facebook { namespace logdevice {
 
@@ -25,7 +24,8 @@ class AdminCommand;
 
 class CommandSelector {
  public:
-  typedef std::function<std::unique_ptr<AdminCommand>()> CommandFactory;
+  typedef std::function<std::unique_ptr<AdminCommand>(folly::io::Appender&)>
+      CommandFactory;
 
   CommandSelector() {}
 
@@ -35,15 +35,18 @@ class CommandSelector {
   void add(const char* prefix, Args&&... args) {
     // Capturing parameter packs doesn't work with gcc older than 4.9.
     add(prefix,
-        std::bind(
-            [](Args... a) { return std::make_unique<C>(a...); }, args...));
+        std::bind([](folly::io::Appender& out,
+                     Args... a) { return std::make_unique<C>(out, a...); },
+                  std::placeholders::_1,
+                  std::forward<Args>(args)...));
   }
 
   // Returns matching command and removes from inout_command the prefix that
   // was used to select command.
   // If there's no matching command returns nullptr and writes error to output.
   std::unique_ptr<AdminCommand>
-  selectCommand(std::vector<std::string>& inout_args, struct evbuffer* output);
+  selectCommand(std::vector<std::string>& inout_args,
+                folly::io::Appender& output);
 
  private:
   struct TrieNode {

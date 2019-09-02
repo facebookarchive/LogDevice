@@ -14,6 +14,7 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoRecordCache : public AdminCommand {
+  using AdminCommand::AdminCommand;
   folly::Optional<logid_t> log_id_;
   shard_index_t shard_ = -1;
   bool json_ = false;

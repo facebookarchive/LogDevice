@@ -46,6 +46,7 @@ typedef AdminCommandTable<logid_t,                  // data log id
     InfoSequencersTable;
 
 class InfoSequencers : public AdminCommand {
+  using AdminCommand::AdminCommand;
   logid_t::raw_type logid_{LOGID_INVALID};
   bool json_ = false;
 

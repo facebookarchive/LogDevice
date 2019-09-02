@@ -14,6 +14,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class LogStorageStateCommand : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   folly::Optional<logid_t> logid_;
   shard_index_t shard_ = -1;

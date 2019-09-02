@@ -24,7 +24,8 @@ class PrintLogsDBDirectories : public AdminCommand {
   bool json_ = false;
 
  public:
-  PrintLogsDBDirectories() : AdminCommand(RestrictionLevel::UNRESTRICTED) {}
+  PrintLogsDBDirectories(folly::io::Appender& output)
+      : AdminCommand(output, RestrictionLevel::UNRESTRICTED) {}
 
   void getOptions(
       boost::program_options::options_description& out_options) override {

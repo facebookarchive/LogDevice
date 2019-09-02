@@ -21,6 +21,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoReaders : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   std::string type_;
   folly::Optional<uint64_t> id_;

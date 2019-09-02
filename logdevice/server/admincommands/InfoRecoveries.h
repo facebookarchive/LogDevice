@@ -19,6 +19,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoRecoveries : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   folly::Optional<logid_t> logid_;
   bool json_ = false;

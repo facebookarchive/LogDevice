@@ -15,6 +15,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class BoycottReset : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   node_index_t node_idx_{-1};
 

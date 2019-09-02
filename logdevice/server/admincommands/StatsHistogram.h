@@ -22,6 +22,8 @@ namespace facebook { namespace logdevice { namespace commands {
 
 template <typename... UniqueColTypes>
 class StatsHistogramBase : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  public:
   using Hist = HistogramInterface;
   using HistTuple = std::tuple<std::string, Hist*, UniqueColTypes...>;
@@ -165,6 +167,8 @@ class StatsHistogramBase : public AdminCommand {
 
 using ShardedStatsHistogramBase = StatsHistogramBase</*shard*/ int>;
 class StatsHistogram : public ShardedStatsHistogramBase {
+  using ShardedStatsHistogramBase::ShardedStatsHistogramBase;
+
  public:
   std::string getUsage() override {
     return "stats2 histogram <type>|all [shard] " +
@@ -292,6 +296,8 @@ class StatsHistogram : public ShardedStatsHistogramBase {
 using TrafficShapingHistogramBase =
     StatsHistogramBase<std::string /*scope*/, std::string /*priority*/>;
 class TrafficShapingHistogram : public TrafficShapingHistogramBase {
+  using TrafficShapingHistogramBase::TrafficShapingHistogramBase;
+
  public:
   enum class SelectionType { SINGLE, ALL, MERGE, INVALID };
 

@@ -28,8 +28,9 @@ class AdminCommand {
  public:
   enum class RestrictionLevel { UNRESTRICTED = 0, LOCALHOST_ONLY = 1 };
   explicit AdminCommand(
+      folly::io::Appender& out,
       RestrictionLevel restrictionLevel = RestrictionLevel::UNRESTRICTED)
-      : restrictionLevel_(restrictionLevel) {}
+      : restrictionLevel_(restrictionLevel), out_(out) {}
   virtual ~AdminCommand() {}
   virtual void
   getOptions(boost::program_options::options_description& /*out_options*/) {}
@@ -47,16 +48,11 @@ class AdminCommand {
   void setServer(Server* server) {
     server_ = server;
   }
-  void setOutput(folly::IOBuf* output) {
-    out_ = folly::io::Appender(output, kGrowthValue);
-  }
 
  protected:
-  constexpr static size_t kGrowthValue = 100;
   Server* server_;
   const RestrictionLevel restrictionLevel_;
-  folly::IOBuf buf_;
-  folly::io::Appender out_{&buf_, kGrowthValue};
+  folly::io::Appender& out_;
 };
 
 }} // namespace facebook::logdevice

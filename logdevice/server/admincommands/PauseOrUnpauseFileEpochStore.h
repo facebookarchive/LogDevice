@@ -17,7 +17,8 @@ class PauseOrUnpauseFileEpochStore : public AdminCommand {
   bool pause_;
 
  public:
-  explicit PauseOrUnpauseFileEpochStore(bool pause) : pause_(pause) {}
+  explicit PauseOrUnpauseFileEpochStore(folly::io::Appender& output, bool pause)
+      : AdminCommand(output), pause_(pause) {}
 
   std::string getUsage() override {
     return "This command has a very narrow usage and is used in tests. "

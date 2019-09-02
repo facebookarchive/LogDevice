@@ -257,6 +257,8 @@ class InfoRecordRequest : public Request {
 };
 
 class InfoRecord : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   logid_t::raw_type logid_;
   std::string lsn_start_, lsn_end_;

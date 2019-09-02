@@ -15,6 +15,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoPartitions : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   shard_index_t shard_ = -1;
   bool spew_ = false;

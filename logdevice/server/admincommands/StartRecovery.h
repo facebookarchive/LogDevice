@@ -18,8 +18,9 @@ class StartRecovery : public AdminCommand {
 
  public:
   explicit StartRecovery(
+      folly::io::Appender& output,
       RestrictionLevel restrictionLevel = RestrictionLevel::UNRESTRICTED)
-      : AdminCommand(restrictionLevel) {}
+      : AdminCommand(output, restrictionLevel) {}
 
   void getOptions(boost::program_options::options_description& opts) override {
     opts.add_options()(

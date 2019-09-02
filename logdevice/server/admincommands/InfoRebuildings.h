@@ -18,6 +18,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoRebuildingShards : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool json_ = false;
 
@@ -78,6 +80,8 @@ class InfoRebuildingShards : public AdminCommand {
 };
 
 class InfoRebuildingLogs : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool json_ = false;
 
@@ -147,6 +151,8 @@ class InfoRebuildingLogs : public AdminCommand {
 };
 
 class InfoRebuildingChunks : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool json_ = false;
 
@@ -196,6 +202,8 @@ class InfoRebuildingChunks : public AdminCommand {
 // TODO (#35636262): Migrate ldquery away from it and remove.
 //                   Also get rid of the runImpl()s above.
 class InfoRebuildingsLegacy : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   bool shards_ = false;
   bool json_ = false;

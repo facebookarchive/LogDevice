@@ -22,6 +22,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class RSMWriteSnapShot : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   std::string snapshot_type_;
   Semaphore semaphore_;

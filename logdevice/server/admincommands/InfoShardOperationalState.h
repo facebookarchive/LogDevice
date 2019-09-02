@@ -16,6 +16,8 @@
 namespace facebook { namespace logdevice { namespace commands {
 
 class InfoShardOperationalState : public AdminCommand {
+  using AdminCommand::AdminCommand;
+
  private:
   shard_index_t shard_;
   node_index_t node_;
