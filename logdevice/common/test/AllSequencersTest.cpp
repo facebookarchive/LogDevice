@@ -54,6 +54,8 @@ class AllSequencersTest : public ::testing::Test {
     std::atomic<size_t> log_recoveries{0};
     std::atomic<size_t> draining_completions{0};
     std::atomic<size_t> epoch_store_nonempty_checks{0};
+    std::atomic<size_t> notify_worker_ok{0};
+    std::atomic<size_t> notify_worker_error{0};
   };
 
   // number of times it requests metadata from epoch store
@@ -110,10 +112,6 @@ class MockSequencer : public Sequencer {
 
   ~MockSequencer() override {}
 
-  std::shared_ptr<Configuration> getClusterConfig() const override {
-    return test_->getConfig();
-  }
-
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const {
     return test_->getNodesConfiguration();
@@ -147,6 +145,8 @@ class MockSequencer : public Sequencer {
   void schedulePeriodicReleases() override {}
 
   void startPeriodicReleasesBroadcast() override {}
+
+  void notifySequencerBackgroundActivator(Status) override {}
 
  private:
   AllSequencersTest* const test_;
@@ -211,8 +211,13 @@ class MockAllSequencers : public AllSequencers {
     return &test_->stats_;
   }
 
-  void notifyWorkerActivationCompletion(logid_t /*logid*/,
-                                        Status /*st*/) override {}
+  void notifyWorkerActivationCompletion(logid_t logid, Status st) override {
+    if (st == E::OK) {
+      ++test_->logs_state_.at(logid).notify_worker_ok;
+    } else {
+      ++test_->logs_state_.at(logid).notify_worker_error;
+    }
+  }
 
   void
   startMetadataLogEmptyCheck(logid_t logid,
@@ -502,6 +507,59 @@ TEST_F(AllSequencersTest, ParallelActivations) {
           getLogRecoveries(logid),
           getDrainingCompletions(logid),
           in_progress.load());
+}
+
+TEST_F(AllSequencersTest, NotInConfig) {
+  setUp();
+  logid_t logid(1);
+
+  // Activate sequencer.
+
+  ASSERT_EQ(nullptr, all_seqs_->findSequencer(logid));
+  ASSERT_EQ(0, getMetaDataRequests(logid));
+  int rv = all_seqs_->activateSequencer(
+      logid, "test", [](const Sequencer&) { return true; });
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(1, getMetaDataRequests(logid));
+
+  std::shared_ptr<Sequencer> seq = all_seqs_->findSequencer(logid);
+  ASSERT_NE(nullptr, seq);
+  ASSERT_EQ(Sequencer::State::ACTIVATING, seq->getState());
+
+  all_seqs_->onEpochMetaDataFromEpochStore(
+      E::OK, logid, "test", genMetaData(epoch_t(2)), nullptr);
+  ASSERT_EQ(Sequencer::State::ACTIVE, seq->getState());
+  ASSERT_EQ(1, getLogRecoveries(logid));
+  ASSERT_EQ(epoch_t(2), seq->getCurrentEpoch());
+
+  // Reactivate sequencer and remove the log from config during activation.
+
+  rv = all_seqs_->reactivateSequencer(logid, "test");
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(2, getMetaDataRequests(logid));
+  ASSERT_EQ(Sequencer::State::ACTIVATING, seq->getState());
+
+  {
+    std::shared_ptr<LogsConfig> logs =
+        updateable_config_->updateableLogsConfig()->get();
+    ASSERT_TRUE(logs->isLocal());
+    auto* local = dynamic_cast<configuration::LocalLogsConfig*>(logs.get());
+    ASSERT_FALSE(local == nullptr);
+    ASSERT_TRUE(local->erase("/log"));
+  }
+
+  all_seqs_->onEpochMetaDataFromEpochStore(
+      E::OK, logid, "test", genMetaData(epoch_t(6)), nullptr);
+  EXPECT_EQ(1, logs_state_.at(logid).notify_worker_error.load());
+  EXPECT_EQ(Sequencer::State::ACTIVE, seq->getState());
+  // Didn't reactivate.
+  EXPECT_EQ(epoch_t(2), seq->getCurrentEpoch());
+
+  // In real code, SequencerBackgroundActivator makes this call.
+  seq->noteConfigurationChanged(
+      updateable_config_->get(), getNodesConfiguration(), true);
+
+  EXPECT_EQ(Sequencer::State::UNAVAILABLE, seq->getState());
 }
 
 } // anonymous namespace

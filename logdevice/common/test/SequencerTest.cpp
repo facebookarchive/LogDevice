@@ -269,10 +269,6 @@ class MockSequencer : public Sequencer {
 
   ~MockSequencer() override {}
 
-  std::shared_ptr<Configuration> getClusterConfig() const override {
-    return test_->getConfig();
-  }
-
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
     return test_->getConfig()
@@ -284,6 +280,7 @@ class MockSequencer : public Sequencer {
 
   std::shared_ptr<EpochSequencer>
   createEpochSequencer(epoch_t epoch,
+                       std::shared_ptr<Configuration>,
                        std::unique_ptr<EpochMetaData> metadata) override {
     EpochSequencerImmutableOptions opts;
     opts.window_size = test_->window_size_;

@@ -58,6 +58,7 @@ class MetaSequencer : public Sequencer {
 
   std::shared_ptr<EpochSequencer>
   createEpochSequencer(epoch_t epoch,
+                       std::shared_ptr<Configuration> cfg,
                        std::unique_ptr<EpochMetaData> metadata) override;
 
   // Run recovery on the same worker thread on which it is created

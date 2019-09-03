@@ -184,17 +184,9 @@ ActivateResult Sequencer::completeActivationWithMetaData(
     //    and replacing the sequencer pair in epochs_ so that the newly
     //    created epoch sequencer become the new `current' while the
     //    previous `current' become the new `draining'
-    auto new_epoch_sequencer = createEpochSequencer(epoch, std::move(metadata));
-    if (new_epoch_sequencer == nullptr) {
-      // log_id_ was removed from the config
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      2,
-                      "Failed to activate a sequencer for log %lu and "
-                      "epoch %u but the log is no longer in config.",
-                      log_id_.val_,
-                      epoch.val_);
-      return ActivateResult::FAILED;
-    }
+    auto new_epoch_sequencer =
+        createEpochSequencer(epoch, cfg, std::move(metadata));
+    ld_check(new_epoch_sequencer != nullptr);
 
     metadata_for_provisioning = new_epoch_sequencer->getMetaData();
 
@@ -890,7 +882,7 @@ void Sequencer::onActivationFailed() {
   } else {
     // if the Sequencer has a valid epoch and is not preempted, move
     // it back to ACTIVE state. It is possible that the Sequencer can
-    // still not take new appends because it has run out-of available ESNs.
+    // still not take new appends because it has run out of available ESNs.
     // In such case, the next Appender will still trigger reactivation of the
     // Sequencer.
     next = State::ACTIVE;
@@ -1354,19 +1346,11 @@ void Sequencer::setEpochSequencers(std::shared_ptr<EpochSequencer> current,
 
 std::shared_ptr<EpochSequencer>
 Sequencer::createEpochSequencer(epoch_t epoch,
+                                std::shared_ptr<Configuration> cfg,
                                 std::unique_ptr<EpochMetaData> metadata) {
-  auto cfg = getClusterConfig();
   const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
       cfg->getLogGroupByIDShared(log_id_);
-  if (!logcfg) {
-    RATELIMIT_WARNING(std::chrono::seconds(5),
-                      5,
-                      "Failed to create epoch sequencer of log %lu epoch %u "
-                      "because the log has been removed from the config.",
-                      log_id_.val_,
-                      epoch.val_);
-    return nullptr;
-  }
+  ld_check(logcfg != nullptr);
 
   auto local_settings = settings_.get();
   EpochSequencerImmutableOptions immutable_options(
@@ -1385,10 +1369,6 @@ Sequencer::createEpochSequencer(epoch_t epoch,
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 Sequencer::getNodesConfiguration() const {
   return Worker::onThisThread()->getNodesConfiguration();
-}
-
-std::shared_ptr<Configuration> Sequencer::getClusterConfig() const {
-  return Worker::getConfig();
 }
 
 Processor* Sequencer::getProcessor() const {
@@ -1881,9 +1861,14 @@ void Sequencer::setUnavailable(UnavailabilityReason r) {
 
   // Tell sequencer activator that this sequencer is not activating anymore.
   if (parent_ != nullptr) {
-    SequencerBackgroundActivator::requestNotifyCompletion(
-        parent_->getProcessor(), log_id_, E::ABORTED);
+    notifySequencerBackgroundActivator(E::ABORTED);
   }
+}
+
+void Sequencer::notifySequencerBackgroundActivator(Status st) {
+  ld_check(parent_);
+  SequencerBackgroundActivator::requestNotifyCompletion(
+      parent_->getProcessor(), log_id_, st);
 }
 
 void Sequencer::shutdown() {

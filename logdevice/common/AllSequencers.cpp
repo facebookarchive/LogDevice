@@ -444,16 +444,25 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
     --info->h.epoch.val_;
   }
 
-  std::shared_ptr<Configuration> cfg = updateable_config_->get();
-  ld_check(cfg != nullptr);
-
-  auto settings = settings_.get();
-  ld_check(settings != nullptr);
-
   std::shared_ptr<Sequencer> seq = findSequencer(logid);
   // Sequencers are never removed from Processor.allSequencers() and this
   // function can only be called if a Sequencer for logid was once in the map
   ld_check(seq);
+
+  std::shared_ptr<Configuration> cfg = updateable_config_->get();
+  ld_check(cfg != nullptr);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      cfg->getLogGroupByIDShared(logid);
+  if (!logcfg) {
+    ld_info(
+        "Not activating sequencer for log %lu that was removed from config.",
+        logid.val_);
+    onActivationFailed(logid, E::STALE, seq.get(), /* permanent */ false);
+    return;
+  }
+
+  auto settings = settings_.get();
+  ld_check(settings != nullptr);
 
   epoch_t epoch = info ? info->h.epoch : EPOCH_INVALID;
   bool permanent = false; // on failure, whether it is permanent
@@ -472,7 +481,7 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
       // instead of failing the activation and leaving the sequencer in
       // transient error state, it proceeds with activation with a critial error
       // message. It's likely that the sequencer will not be able to generate
-      // copyset with the metadataa. The reason why we still activate the
+      // copyset with the metadata. The reason why we still activate the
       // sequencer is to prevent incoming appends from keep reactivating the
       // sequencer with still invalid metadata.
       //
@@ -506,6 +515,8 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
                 epoch.val_,
                 metadata_str.c_str(),
                 Sequencer::activateResultToString(result));
+      } else {
+        onActivationFailed(logid, E::FAILED, seq.get(), /* permanent */ false);
       }
 
       finalizeActivation(result, seq.get(), epoch, settings->bypass_recovery);

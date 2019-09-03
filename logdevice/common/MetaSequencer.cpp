@@ -22,6 +22,7 @@ void MetaEpochSequencer::retireAppender(Status st,
 
 std::shared_ptr<EpochSequencer>
 MetaSequencer::createEpochSequencer(epoch_t epoch,
+                                    std::shared_ptr<Configuration> cfg,
                                     std::unique_ptr<EpochMetaData> metadata) {
   auto epoch_seq =
       std::make_shared<MetaEpochSequencer>(getLogID(),
@@ -30,7 +31,7 @@ MetaSequencer::createEpochSequencer(epoch_t epoch,
                                            EpochSequencerImmutableOptions(),
                                            this);
   epoch_seq->createOrUpdateCopySetManager(
-      getClusterConfig(), getNodesConfiguration(), settings());
+      cfg, getNodesConfiguration(), settings());
   ld_check(epoch_seq->getCopySetManager() != nullptr);
   return epoch_seq;
 }

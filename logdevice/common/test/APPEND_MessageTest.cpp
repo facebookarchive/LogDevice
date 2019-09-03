@@ -60,12 +60,11 @@ class MockSequencer : public Sequencer {
                          UpdateableSettings<Settings> settings)
       : Sequencer(logid, settings, /*stats=*/nullptr), test_(test) {}
 
-  std::shared_ptr<Configuration> getClusterConfig() const override;
-
   void startGetTrimPointRequest() override {}
 
   std::shared_ptr<EpochSequencer>
   createEpochSequencer(epoch_t epoch,
+                       std::shared_ptr<Configuration> cfg,
                        std::unique_ptr<EpochMetaData> metadata) override;
 
   // skip log recovery
@@ -395,12 +394,10 @@ int MockSequencerLocator::locateSequencer(
 }
 
 namespace {
-std::shared_ptr<Configuration> MockSequencer::getClusterConfig() const {
-  return test_->config_;
-}
 
 std::shared_ptr<EpochSequencer>
 MockSequencer::createEpochSequencer(epoch_t epoch,
+                                    std::shared_ptr<Configuration>,
                                     std::unique_ptr<EpochMetaData> metadata) {
   EpochSequencerImmutableOptions opts;
   opts.window_size = 128;

@@ -137,6 +137,7 @@ class LocalLogsConfig : public LogsConfig {
         &internal_logs_, config_tree_.get(), internal_logs_.logsREnd(), true);
   }
 
+  // [Used only for test cases]
   std::shared_ptr<logsconfig::LogGroupNode>
   insert(DirectoryNode* parent,
          const logid_range_t& logid_interval,
@@ -153,6 +154,7 @@ class LocalLogsConfig : public LogsConfig {
   std::shared_ptr<logsconfig::LogGroupNode> insert(logid_t::raw_type logid,
                                                    const std::string& name,
                                                    LogAttributes attrs);
+  // [Used only for test cases]
   // adds a new namespace in the tree
   DirectoryNode* insertNamespace(DirectoryNode* parent,
                                  const std::string& name,
@@ -162,6 +164,10 @@ class LocalLogsConfig : public LogsConfig {
   // replaces a log group node in the config tree
   bool replaceLogGroup(const std::string& path,
                        const LogGroupNode& new_log_group);
+
+  // [Used only for test cases]
+  // Deletes a log group. Returns false if it doesn't exist.
+  bool erase(const std::string& path);
 
   bool isValid(const ServerConfig& server_config) const;
 

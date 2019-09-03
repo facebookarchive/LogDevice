@@ -237,6 +237,21 @@ bool LocalLogsConfig::replaceLogGroup(const std::string& path,
   return ret;
 }
 
+bool LocalLogsConfig::erase(const std::string& path) {
+  ld_check(config_tree_ != nullptr);
+  was_modified_in_place_.store(true);
+  std::string failure_reason;
+  int rv = config_tree_->deleteLogGroup(path, failure_reason);
+  if (rv != 0) {
+    ld_check_eq(err, E::NOTFOUND);
+    ld_info("Failed to erase LogGroup '%s' %s",
+            path.c_str(),
+            failure_reason.c_str());
+    return false;
+  }
+  return true;
+}
+
 std::shared_ptr<logsconfig::LogGroupNode>
 LocalLogsConfig::insert(logid_t::raw_type logid,
                         const std::string& name,

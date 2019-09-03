@@ -201,6 +201,8 @@ class Sequencer {
    * EpochMetaData.
    *
    * @param epoch      the epoch number gotten from the epoch store
+   * @param cfg        snapshot of the config. The logs config must contain this
+   *                   Sequencer's log
    * @param info       EpochMetaData gotten from the epoch store along with
    *                   epoch
    * @return           see ActivateResult
@@ -761,12 +763,13 @@ class Sequencer {
   void deactivateSequencer();
 
  protected:
-  // create an EpochSequencer object for a given _epoch_ with _metadata_ for
-  // replicaiton properties
+  // Create an EpochSequencer object for a given _epoch_ with _metadata_ for
+  // replicaiton properties. The caller must ensure that the log exists in logs
+  // config in `cfg`. Return value is never nullptr.
   virtual std::shared_ptr<EpochSequencer>
-  createEpochSequencer(epoch_t epoch, std::unique_ptr<EpochMetaData> metadata);
-
-  virtual std::shared_ptr<Configuration> getClusterConfig() const;
+  createEpochSequencer(epoch_t epoch,
+                       std::shared_ptr<Configuration> cfg,
+                       std::unique_ptr<EpochMetaData> metadata);
 
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
@@ -779,6 +782,9 @@ class Sequencer {
 
   // read historical metadata from the metadata log
   virtual void getHistoricalMetaData(GetHistoricalMetaDataMode mode);
+
+  // Calls SequencerBackgroundActivator::requestNotifyCompletion()
+  virtual void notifySequencerBackgroundActivator(Status st);
 
  private:
   // EpochSequencers currently maintained by the Sequencer, one for the
