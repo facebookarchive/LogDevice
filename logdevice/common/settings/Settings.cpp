@@ -3226,23 +3226,23 @@ void Settings::defineSettings(SettingEasyInit& init) {
        CLIENT,
        SettingsCategory::ReadPath);
 
-  init("write_streams_map_max_capacity",
+  init("write-streams-map-max-capacity",
        &write_streams_map_max_capacity,
        "1000",
        validate_positive<size_t>(),
        "Maximum capacity of write streams map in each epoch sequencer. Once "
-       "size exceeds write_streams_map_max_capacity, "
-       "write_streams_map_clear_size number of least-recently-used write "
+       "size exceeds write-streams-map-max-capacity, "
+       "write-streams-map-clear-size number of least-recently-used write "
        "streams are evicted.",
        SERVER,
        SettingsCategory::Sequencer);
 
-  init("write_streams_map_clear_size",
+  init("write-streams-map-clear-size",
        &write_streams_map_clear_size,
        "100",
        validate_range<size_t>(0, write_streams_map_max_capacity),
        "Clear size for write streams map in each epoch sequencer. Once size "
-       "exceeds write_streams_map_max_capacity, write_streams_map_clear_size "
+       "exceeds write-streams-map-max-capacity, write-streams-map-clear-size "
        "number of least-recently-used write streams are evicted.",
        SERVER,
        SettingsCategory::Sequencer);

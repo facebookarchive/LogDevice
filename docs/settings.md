@@ -461,8 +461,8 @@ sidebar_label: Settings
 | seq-state-backoff-time | how long to wait before resending a 'get sequencer state' request after a timeout. | 1s..10s |  |
 | seq-state-reply-timeout | how long to wait for a reply to a 'get sequencer state' request before retrying (usually to a different node) | 2s |  |
 | update-metadata-map-interval | Sequencer has a timer for periodically reading metadata logs and refreshing the in memory metadata\_map\_. This setting specifies the interval for this timer | 1h | server&nbsp;only |
-| write\_streams\_map\_clear\_size | Clear size for write streams map in each epoch sequencer. Once size exceeds write\_streams\_map\_max\_capacity, write\_streams\_map\_clear\_size number of least-recently-used write streams are evicted. | 100 | server&nbsp;only |
-| write\_streams\_map\_max\_capacity | Maximum capacity of write streams map in each epoch sequencer. Once size exceeds write\_streams\_map\_max\_capacity, write\_streams\_map\_clear\_size number of least-recently-used write streams are evicted. | 1000 | server&nbsp;only |
+| write-streams-map-clear-size | Clear size for write streams map in each epoch sequencer. Once size exceeds write-streams-map-max-capacity, write-streams-map-clear-size number of least-recently-used write streams are evicted. | 100 | server&nbsp;only |
+| write-streams-map-max-capacity | Maximum capacity of write streams map in each epoch sequencer. Once size exceeds write-streams-map-max-capacity, write-streams-map-clear-size number of least-recently-used write streams are evicted. | 1000 | server&nbsp;only |
 
 ## Sequencer boycotting
 |   Name    |   Description   |  Default  |   Notes   |
