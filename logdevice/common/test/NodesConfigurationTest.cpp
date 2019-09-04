@@ -610,6 +610,40 @@ TEST_F(NodesConfigurationTest, StorageHash) {
   ASSERT_EQ(original_hash, hash2);
 }
 
+TEST_F(NodesConfigurationTest, WritableStorageCapacity) {
+  auto config =
+      provisionNodes(initialAddShardsUpdate(
+                         {{13, both_role, "a.b.c.d.e", 1.0, /*num_shards*/ 2}}),
+                     {ShardID(13, 0), ShardID(13, 1)});
+  ASSERT_TRUE(config->validate());
+
+  // initially N13 has 2 shards of capacity of 256.
+  ASSERT_EQ(256.0, config->getShardWritableStorageCapacity(ShardID(13, 0)));
+  ASSERT_EQ(256.0, config->getShardWritableStorageCapacity(ShardID(13, 1)));
+  ASSERT_EQ(512.0, config->getNodeWritableStorageCapacity(13));
+
+  // change the storage state of an existing shard, verify that node hash
+  // changed
+  NodesConfiguration::Update update{};
+  update.storage_config_update = std::make_unique<StorageConfig::Update>();
+  update.storage_config_update->membership_update =
+      std::make_unique<StorageMembership::Update>(config->getVersion());
+  update.storage_config_update->membership_update->addShard(
+      ShardID{13, 0},
+      {StorageStateTransition::DISABLING_WRITE,
+       Condition::FORCE,
+       DUMMY_MAINTENANCE,
+       /* state_override = */ folly::none});
+
+  auto nc1 = config->applyUpdate(std::move(update));
+  ASSERT_NE(nullptr, nc1);
+
+  // disabling writes of N13:S0
+  ASSERT_EQ(0.0, nc1->getShardWritableStorageCapacity(ShardID(13, 0)));
+  ASSERT_EQ(256.0, nc1->getShardWritableStorageCapacity(ShardID(13, 1)));
+  ASSERT_EQ(256.0, nc1->getNodeWritableStorageCapacity(13));
+}
+
 ///////////// Legacy Format conversion //////////////
 
 TEST_F(NodesConfigurationTest, LegacyConversion1) {
