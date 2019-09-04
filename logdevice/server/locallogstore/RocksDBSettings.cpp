@@ -148,7 +148,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-sst-delete-bytes-per-sec",
        &sst_delete_bytes_per_sec,
-       "0",
+       "100000000",
        nullptr,
        "ratelimit in bytes/sec on deletion of SST files per shard; 0 for "
        "unlimited.",
