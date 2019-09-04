@@ -1157,6 +1157,7 @@ void MaintenanceManager::processShardWorkflowResult(
       case MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION:
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:
       case MaintenanceStatus::AWAITING_DATA_REBUILDING:
+      case MaintenanceStatus::AWAITING_START_DATA_MIGRATION:
       case MaintenanceStatus::RETRY:
         if (active_shard_workflows_[shard].first->getTargetOpStates().count(
                 ShardOperationalState::ENABLED)) {

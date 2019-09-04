@@ -135,6 +135,11 @@ enum MaintenanceStatus {
    * waiting for the node to mark itself as PROVISIONED.
    */
   AWAITING_NODE_PROVISIONING = 10,
+
+  /**
+   * MaintenanceManager is waiting for the event to be written to event log
+   */
+  AWAITING_START_DATA_MIGRATION = 11,
 }
 
 /**

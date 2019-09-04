@@ -126,10 +126,33 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
                        ? MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES
                        : MaintenanceStatus::AWAITING_SAFETY_CHECK);
       break;
+    case membership::StorageState::RW_TO_RO:
+      // if NC is stuck in transitioning state for too long
+      // because too many nodes are down, we should start rebuilding
+      // without waiting for transition to DATA_MIGRATION
+      updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION);
+      if (restore_mode_rebuilding_ && isNcTransitionStuck()) {
+        createRebuildEventIfRequired(RebuildingMode::RESTORE, true /*force*/);
+      }
+      break;
     case membership::StorageState::READ_ONLY:
-      expected_storage_state_transition_ =
-          membership::StorageStateTransition::START_DATA_MIGRATION;
-      updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+      // Trigger rebuilding if one wasn't already triggered
+      createRebuildEventIfRequired(
+          restore_mode_rebuilding_ ? RebuildingMode::RESTORE
+                                   : RebuildingMode::RELOCATE,
+          status_ != MaintenanceStatus::AWAITING_START_DATA_MIGRATION /*force*/);
+      // If a new event was created, lets wait for this to event to be written
+      // to event log
+      if (event_) {
+        updateStatus(MaintenanceStatus::AWAITING_START_DATA_MIGRATION);
+      } else {
+        // If no new event was triggered, the shard is already part of
+        // the rebuilding set. Now make the nodes config transition to
+        // DATA_MIGRATION
+        expected_storage_state_transition_ =
+            membership::StorageStateTransition::START_DATA_MIGRATION;
+        updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+      }
       break;
     case membership::StorageState::DATA_MIGRATION:
       createRebuildEventIfRequired(restore_mode_rebuilding_
@@ -251,8 +274,9 @@ void ShardWorkflow::createAbortEventIfRequired() {
   }
 }
 
-void ShardWorkflow::createRebuildEventIfRequired(RebuildingMode new_mode) {
-  if (current_rebuilding_mode_ != new_mode) {
+void ShardWorkflow::createRebuildEventIfRequired(RebuildingMode new_mode,
+                                                 bool force) {
+  if (force || current_rebuilding_mode_ != new_mode) {
     SHARD_NEEDS_REBUILD_flags_t flag{0};
     if (new_mode == RebuildingMode::RELOCATE) {
       flag = SHARD_NEEDS_REBUILD_Header::DRAIN;
@@ -315,6 +339,15 @@ ShardWorkflow::getExpectedStorageStateTransition() const {
 
 bool ShardWorkflow::allowPassiveDrain() const {
   return allow_passive_drain_;
+}
+
+bool ShardWorkflow::isNcTransitionStuck() const {
+  return SystemTimestamp::now() >
+      (last_updated_at_ +
+       (2 *
+        Worker::onThisThread()
+            ->settings()
+            .nodes_configuration_manager_intermediary_shard_state_timeout));
 }
 
 }}} // namespace facebook::logdevice::maintenance

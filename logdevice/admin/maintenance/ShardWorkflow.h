@@ -166,11 +166,17 @@ class ShardWorkflow {
   void computeMaintenanceStatusForMayDisappear();
   void computeMaintenanceStatusForEnable();
   // Sets event_ to SHARD_NEEDS_REBUILD_Event if the mode is different from
-  // current_rebuilding_mode_
-  void createRebuildEventIfRequired(RebuildingMode mode);
+  // current_rebuilding_mode_. If force argument is true, a new event of `mode`
+  // will be created irrespective of the current_rebuilding_mode_.
+  void createRebuildEventIfRequired(RebuildingMode mode, bool force = false);
   // Sets event_ to SHARD_ABORT_EVENT if this is a full shard
   // rebuilding based on current_data_health_ and current_rebuilding_mode_
   void createAbortEventIfRequired();
+  // Returns true if status_ is AWAITING_NODES_CONFIG_TRANSITION and
+  // it has been atleast
+  // 2 * nodes-configuration-manager-intermediary-shard-state-timeout since
+  // last time the status_ was updated
+  virtual bool isNcTransitionStuck() const;
 };
 
 }}} // namespace facebook::logdevice::maintenance
