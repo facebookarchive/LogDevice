@@ -247,7 +247,7 @@ struct RemoveMaintenancesResponse {
 /**
  * See unblockRebuilding() for documentation.
  */
-struct UnblockRebuildingRequest {
+struct MarkAllShardsUnrecoverableRequest {
   /**
    * This information will be used for auditing purposes
    */
@@ -255,5 +255,9 @@ struct UnblockRebuildingRequest {
   2: string reason,
 }
 
-// TODO: TBD
-struct UnblockRebuildingResponse { }
+struct MarkAllShardsUnrecoverableResponse {
+  // List of Shards that succeeded in being marked as unrecoverable
+  1: common.ShardSet shards_succeeded,
+  // List of shards that failed to be marked as unrecoverable
+  2: common.ShardSet shards_failed,
+}

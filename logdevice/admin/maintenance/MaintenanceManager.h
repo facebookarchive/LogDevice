@@ -34,6 +34,10 @@ using NCUpdateResult = folly::Expected<
     std::shared_ptr<const configuration::nodes::NodesConfiguration>,
     Status>;
 
+using MarkAllShardsUnrecoverableResult =
+    folly::Expected<std::pair<std::vector<ShardID>, std::vector<ShardID>>,
+                    Status>;
+
 using SafetyCheckResult = folly::Expected<SafetyCheckScheduler::Result, Status>;
 using NodeState = thrift::NodeState;
 using ShardState = thrift::ShardState;
@@ -243,6 +247,30 @@ class MaintenanceManager : public SerialWorkContext {
   // Getter that returns a SemiFuture with node's target sequencing state
   folly::SemiFuture<folly::Expected<SequencingState, Status>>
   getSequencerTargetState(node_index_t node_index);
+
+  /**
+   * A function that unconditinally marks all shards whose AuthoritativeStatus
+   * is UNAVAILABLE as unrecoverable.
+   *
+   * @param std::string String identifying the user making the request.
+   * @param std::string String identifying the reason for the request.
+   *
+   * @return folly::SemiFuture<folly::Expected<
+   *         std::pair<std::vector<ShardID>, std::vector<ShardID>>, Status>>
+   *         Returns a semi-future which will have a pair of vectors which
+   *         indicate the shards that have succeeded and failed in being marked
+   *         as unrecoverable.
+   *         Error status can be
+   *            E::NOTREADY if MaintenanceManager is not fully ready yet
+   *            E::EMPTY  if there are no shards that are UNAVAILABLE
+   *            E::FAILED if all shards failed to be marked as unrecoverable
+   *          Note: if request succeeds partially(i.e some shards are marked
+   * successfully while some fail) the overall request itself is considered
+   * successful (i.e error wont be set) but the resultant value vector will be
+   * filled appropriately with succeeded and failed shards
+   */
+  folly::SemiFuture<MarkAllShardsUnrecoverableResult>
+  markAllShardsUnrecoverable(std::string user, std::string reason);
 
   // Callback that gets called when there is a new update from the
   // ClusterMaintenanceStateMachine. Schedules work on this object to
@@ -460,6 +488,12 @@ class MaintenanceManager : public SerialWorkContext {
   // Returns current value of `status_`
   MMStatus getStatusInternal() const;
 
+  // For all the shards that are unavailable in the current
+  // event_log_rebuilding_set_ mark them as unrecoverable in NC
+  // and then write SHARD_UNRECOVERABLE_Event to Event log
+  folly::SemiFuture<MarkAllShardsUnrecoverableResult>
+  markAllShardsUnrecoverableInternal(std::string user, std::string reason);
+
   // Sets `run_evaluate_` to true
   void scheduleRun();
 
@@ -634,6 +668,8 @@ class MaintenanceManager : public SerialWorkContext {
   bool isMaintenanceMarkedUnsafe(const GroupID& id) const;
 
   bool isBootstrappingCluster() const;
+
+  folly::SemiFuture<Status> writeShardUnrecoverable(const ShardID& shard);
 
   friend class MaintenanceManagerTest;
 };

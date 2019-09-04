@@ -31,10 +31,12 @@ class MaintenanceAPIHandler : public virtual AdminAPIHandlerBase {
   semifuture_removeMaintenances(
       std::unique_ptr<thrift::RemoveMaintenancesRequest> request) override;
 
-  // unblock rebuilding (marks shards unrecoverable)
-  virtual folly::SemiFuture<std::unique_ptr<thrift::UnblockRebuildingResponse>>
-  semifuture_unblockRebuilding(
-      std::unique_ptr<thrift::UnblockRebuildingRequest> request) override;
+  // marks shards unrecoverable
+  virtual folly::SemiFuture<
+      std::unique_ptr<thrift::MarkAllShardsUnrecoverableResponse>>
+  semifuture_markAllShardsUnrecoverable(
+      std::unique_ptr<thrift::MarkAllShardsUnrecoverableRequest> request)
+      override;
 
  private:
   using ListMaintenanceDefs =

@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/admin/AdminAPIUtils.h"
+#include "logdevice/admin/Conv.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -74,8 +75,14 @@ void MaintenanceAPITest::init() {
   logsconfig::LogAttributes log_attrs;
   log_attrs.set_replicationFactor(2);
 
+  logsconfig::LogAttributes internal_log_attrs;
+  internal_log_attrs.set_replicationFactor(3);
+  internal_log_attrs.set_extraCopies(0);
+  internal_log_attrs.set_syncedCopies(0);
+  internal_log_attrs.set_maxWritesInFlight(2048);
+
   auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
+      createMetaDataLogsConfig({0, 1, 2, 3, 4}, 3, NodeLocationScope::NODE);
 
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
@@ -84,6 +91,7 @@ void MaintenanceAPITest::init() {
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .enableSelfInitiatedRebuilding("1s")
+          .setParam("--max-node-rebuilding-percentage", "50")
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--enable-safety-check-periodic-metadata-update", "true")
           .setParam("--disable-event-log-trimming", "true")
@@ -100,6 +108,9 @@ void MaintenanceAPITest::init() {
           .setNumDBShards(num_shards)
           .setLogGroupName("test_logrange")
           .setLogAttributes(log_attrs)
+          .setMaintenanceLogAttributes(internal_log_attrs)
+          .setEventLogAttributes(internal_log_attrs)
+          .setConfigLogAttributes(internal_log_attrs)
           .setMetaDataLogsConfig(meta_configs)
           .deferStart()
           .create(num_nodes);
@@ -470,7 +481,7 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
   }
 }
 
-TEST_F(MaintenanceAPITest, getNodeState) {
+TEST_F(MaintenanceAPITest, GetNodeState) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
@@ -523,7 +534,7 @@ TEST_F(MaintenanceAPITest, getNodeState) {
       }
     }
   }
-  // Let's apply a maintenance on node (1)
+
   std::string group_id;
   {
     MaintenanceDefinition maintenance1;
@@ -601,5 +612,144 @@ TEST_F(MaintenanceAPITest, getNodeState) {
     ASSERT_EQ(1, output.size());
     const MaintenanceDefinition& result = output[0];
     ASSERT_EQ(thrift::MaintenanceProgress::COMPLETED, result.get_progress());
+  }
+}
+
+// Enure a non authoritative rebuilding completes and a node is transitioned
+// to NONE after rebuilding is unblocked
+TEST_F(MaintenanceAPITest, unblockRebuilding) {
+  init();
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+
+  wait_until("MaintenanceManager is ready", [&]() {
+    thrift::NodesStateRequest req;
+    thrift::NodesStateResponse resp;
+    // Under stress runs, the initial initialization might take a while, let's
+    // be patient and increase the timeout here.
+    auto rpc_options = apache::thrift::RpcOptions();
+    rpc_options.setTimeout(std::chrono::minutes(1));
+    try {
+      admin_client->sync_getNodesState(rpc_options, resp, req);
+      if (resp.get_states().size() > 0) {
+        const auto& state = resp.get_states()[0];
+        if (ServiceState::ALIVE == state.get_daemon_state()) {
+          return true;
+        }
+      }
+      return false;
+    } catch (thrift::NodeNotReady& e) {
+      return false;
+    }
+  });
+
+  {
+    NodesStateRequest request;
+    NodesStateResponse response;
+    admin_client->sync_getNodesState(response, request);
+    ASSERT_EQ(5, response.get_states().size());
+    for (const auto& state : response.get_states()) {
+      ASSERT_EQ(ServiceState::ALIVE, state.get_daemon_state());
+      const SequencerState& seq_state = state.sequencer_state_ref().value();
+      ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());
+      const auto& shard_states = state.shard_states_ref().value();
+      ASSERT_EQ(2, shard_states.size());
+      for (const auto& shard : shard_states) {
+        ASSERT_EQ(ShardDataHealth::HEALTHY, shard.get_data_health());
+        ASSERT_EQ(thrift::ShardStorageState::READ_WRITE,
+                  shard.get_current_storage_state());
+        ASSERT_EQ(membership::thrift::StorageState::READ_WRITE,
+                  shard.get_storage_state());
+        ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,
+                  shard.get_metadata_state());
+        ASSERT_EQ(ShardOperationalState::ENABLED,
+                  shard.get_current_operational_state());
+      }
+    }
+  }
+  // Let's apply a maintenance on node (1)
+  cluster_->getNode(0).kill();
+  cluster_->getNode(1).kill();
+
+  // Let's wait until the maintenance is applied.
+  {
+    NodesFilter filter;
+    thrift::NodeID node_id;
+    node_id.set_node_index(1);
+    filter.set_node(node_id);
+    NodesStateRequest request;
+    request.set_filter(filter);
+    NodesStateResponse response;
+    wait_until("Rebuilding of node 1 is started", [&]() {
+      try {
+        admin_client->sync_getNodesState(response, request);
+        const auto& state = response.get_states()[0];
+        const auto& shard_states = state.shard_states_ref().value();
+        // We need to wait for all shards to start rebuilding
+        bool all_in_data_migration = true;
+        for (const auto& shard : shard_states) {
+          const auto& shard_data_health = shard.get_data_health();
+          if (shard_data_health != ShardDataHealth::UNAVAILABLE) {
+            all_in_data_migration = false;
+          }
+        }
+        return all_in_data_migration == true;
+      } catch (thrift::NodeNotReady& e) {
+        return false;
+      }
+    });
+  }
+
+  std::vector<thrift::ShardID> expected_shards;
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      expected_shards.push_back(mkShardID(i, j));
+    }
+  }
+
+  MarkAllShardsUnrecoverableRequest request;
+  request.set_user("test");
+  request.set_reason("test");
+  MarkAllShardsUnrecoverableResponse response;
+  admin_client->sync_markAllShardsUnrecoverable(response, request);
+  const auto& shards_succeeded = response.get_shards_succeeded();
+  for (auto shard : expected_shards) {
+    auto it =
+        std::find(shards_succeeded.begin(), shards_succeeded.end(), shard);
+    ld_check(it != shards_succeeded.end());
+  }
+
+  {
+    NodesFilter filter;
+    thrift::NodeID node_id;
+    node_id.set_node_index(1);
+    filter.set_node(node_id);
+    NodesStateRequest request;
+    request.set_filter(filter);
+    NodesStateResponse response;
+    wait_until("Rebuilding of node 1 is completed", [&]() {
+      try {
+        admin_client->sync_getNodesState(response, request);
+        const auto& state = response.get_states()[0];
+        const auto& shard_states = state.shard_states_ref().value();
+        // We need to wait for all shards to finish rebuilding
+        bool all_finished = true;
+        for (const auto& shard : shard_states) {
+          if (shard.maintenance_ref().has_value()) {
+            const auto& maintenance_progress = shard.maintenance_ref().value();
+            if (maintenance_progress.get_status() !=
+                MaintenanceStatus::COMPLETED) {
+              all_finished = false;
+            }
+          }
+        }
+        return all_finished == true;
+      } catch (thrift::NodeNotReady& e) {
+        return false;
+      }
+    });
   }
 }

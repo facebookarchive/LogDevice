@@ -10,6 +10,7 @@
 
 #include <iterator>
 
+#include <folly/MoveWrapper.h>
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "logdevice/admin/AdminAPIUtils.h"
@@ -772,6 +773,157 @@ MaintenanceManager::getLatestSafetyCheckResultInternal(GroupID id) const {
   // TODO: Make it possible to separate SAFE maintenances from ones we haven't
   // test yet.
   return isMaintenanceMarkedUnsafe(id) ? unsafe_groups_.at(id) : Impact();
+}
+
+folly::SemiFuture<MarkAllShardsUnrecoverableResult>
+MaintenanceManager::markAllShardsUnrecoverable(std::string user,
+                                               std::string reason) {
+  auto pf = folly::makePromiseContract<MarkAllShardsUnrecoverableResult>();
+  add([this, user, reason, mpromise = std::move(pf.first)]() mutable {
+    if (!event_log_rebuilding_set_ || !nodes_config_) {
+      mpromise.setValue(folly::makeUnexpected(E::NOTREADY));
+      return;
+    }
+    std::move(markAllShardsUnrecoverableInternal(user, reason))
+        .via(this)
+        .thenValue([promise = std::move(mpromise)](auto&& result) mutable {
+          if (!result.hasError() && result.value().first.empty() &&
+              result.value().second.empty()) {
+            promise.setValue(folly::makeUnexpected(E::EMPTY));
+            return;
+          }
+          promise.setValue(std::move(result));
+          return;
+        });
+  });
+
+  return std::move(pf.second);
+}
+
+// TODO::T48483545 Update the SHARD_UNRECOVERABLE_Event format to include user
+// and reason
+folly::SemiFuture<MarkAllShardsUnrecoverableResult>
+MaintenanceManager::markAllShardsUnrecoverableInternal(std::string /*unused*/,
+                                                       std::string /*unused*/) {
+  ld_check(event_log_rebuilding_set_);
+  ld_check(nodes_config_);
+  auto shardAuthoritativeStatusMap =
+      event_log_rebuilding_set_->toShardStatusMap(*nodes_config_);
+  std::vector<ShardID> shards_to_mark_unrecoverable;
+
+  // Get list of shards to be marked as unrecoverable from event log
+  for (const auto& it_node : shardAuthoritativeStatusMap.getShards()) {
+    for (const auto& it_shard : it_node.second) {
+      if (it_shard.second.auth_status == AuthoritativeStatus::UNAVAILABLE) {
+        ShardID shard(it_node.first, it_shard.first);
+        shards_to_mark_unrecoverable.push_back(shard);
+      }
+    }
+  }
+
+  // From the list above, remove any shard that has been
+  // marked as unrecoverable in NC
+  shards_to_mark_unrecoverable.erase(
+      std::remove_if(shards_to_mark_unrecoverable.begin(),
+                     shards_to_mark_unrecoverable.end(),
+                     [this](ShardID shard) -> bool {
+                       // Return true if shard is already marked unrecoverable
+                       auto shard_state =
+                           nodes_config_->getStorageMembership()->getShardState(
+                               shard);
+                       if (shard_state.hasValue()) {
+                         return shard_state->flags &
+                             membership::StorageStateFlags::UNRECOVERABLE;
+                       }
+                       // Shard is not in nodes config. Return true so that it
+                       // is removed from vector
+                       return true;
+                     }),
+      shards_to_mark_unrecoverable.end());
+
+  // Post a NC update to mark shards unrecoverable.
+  auto storage_membership_update =
+      std::make_unique<membership::StorageMembership::Update>(
+          nodes_config_->getStorageMembership()->getVersion());
+
+  for (auto shard : shards_to_mark_unrecoverable) {
+    auto shard_state =
+        nodes_config_->getStorageMembership()->getShardState(shard);
+    ld_check(shard_state.hasValue());
+    membership::ShardState::Update shard_state_update;
+    shard_state_update.transition =
+        membership::StorageStateTransition::MARK_SHARD_UNRECOVERABLE;
+    shard_state_update.conditions =
+        getCondition(shard, shard_state_update.transition);
+    auto rv = storage_membership_update->addShard(shard, shard_state_update);
+    ld_check(rv == 0);
+  }
+
+  std::unique_ptr<configuration::nodes::StorageConfig::Update>
+      storage_config_update =
+          std::make_unique<configuration::nodes::StorageConfig::Update>();
+  storage_config_update->membership_update =
+      std::move(storage_membership_update);
+
+  return std::move(deps_->postNodesConfigurationUpdate(
+                       std::move(storage_config_update), nullptr))
+      .via(this)
+      .thenValue([this,
+                  shards_to_mark_unrecoverable = std::move(
+                      shards_to_mark_unrecoverable)](auto&& result) mutable
+                 -> folly::SemiFuture<MarkAllShardsUnrecoverableResult> {
+        if (result.hasError()) {
+          return folly::makeUnexpected(result.error());
+        }
+
+        // Now write SHARD_UNRECOVERABLE message to event log
+        std::vector<folly::SemiFuture<Status>> ev_result;
+        for (auto shard : shards_to_mark_unrecoverable) {
+          ev_result.push_back(writeShardUnrecoverable(shard));
+        }
+        return collectAllSemiFuture(ev_result.begin(), ev_result.end())
+            .via(this)
+            .thenValue([shards = std::move(shards_to_mark_unrecoverable)](
+                           std::vector<folly::Try<Status>>&& result) mutable
+                       -> MarkAllShardsUnrecoverableResult {
+              int i = 0, num_failed = 0;
+              std::vector<ShardID> succeeded;
+              std::vector<ShardID> failed;
+              for (auto shard : shards) {
+                ld_check(result[i].hasValue());
+                if (result[i].value() == E::OK) {
+                  succeeded.push_back(shard);
+                } else {
+                  failed.push_back(shard);
+                  num_failed++;
+                }
+                i++;
+              }
+              if (num_failed == shards.size()) {
+                return folly::makeUnexpected(E::FAILED);
+              } else {
+                // Note: We do not return Unexpected if some of the shards
+                // failed while some succeeded
+                return std::make_pair(std::move(succeeded), std::move(failed));
+              }
+            });
+      });
+}
+
+folly::SemiFuture<Status>
+MaintenanceManager::writeShardUnrecoverable(const ShardID& shard) {
+  auto event =
+      std::make_unique<SHARD_UNRECOVERABLE_Event>(SHARD_UNRECOVERABLE_Header{
+          shard.node(), static_cast<uint32_t>(shard.shard())});
+  auto promise_future = folly::makePromiseContract<Status>();
+  auto mpromise = folly::makeMoveWrapper(promise_future.first);
+  getEventLogWriter()->writeToEventLog(
+      std::move(event),
+      [mpromise](
+          Status st, lsn_t /*unused*/, const std::string& /*unused*/) mutable {
+        mpromise->setValue(st);
+      });
+  return std::move(promise_future.second);
 }
 
 void MaintenanceManager::onNodesConfigurationUpdated() {

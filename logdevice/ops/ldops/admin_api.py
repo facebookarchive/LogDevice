@@ -32,8 +32,8 @@ from logdevice.admin.maintenance.types import (
     MaintenancesFilter,
     RemoveMaintenancesRequest,
     RemoveMaintenancesResponse,
-    UnblockRebuildingRequest,
-    UnblockRebuildingResponse,
+    MarkAllShardsUnrecoverableRequest,
+    MarkAllShardsUnrecoverableResponse,
 )
 from logdevice.admin.nodes.types import (
     NodesConfigResponse,
@@ -94,12 +94,12 @@ async def remove_maintenances(
 
 
 async def unblock_rebuilding(
-    client: AdminAPI, req: UnblockRebuildingRequest
-) -> UnblockRebuildingResponse:
+    client: AdminAPI, req: MarkAllShardsUnrecoverableRequest
+) -> MarkAllShardsUnrecoverableResponse:
     """
-    Wrapper for unblockRebuilding() Thrift method
+    Wrapper for MarkAllShardsUnrecoverable() Thrift method
     """
-    return await client.unblockRebuilding(req)
+    return await client.markAllShardsUnrecoverable(req)
 
 
 async def check_impact(

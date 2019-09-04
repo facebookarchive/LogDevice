@@ -177,8 +177,8 @@ service AdminAPI extends fb303.FacebookService {
    * Note that this is a _very_ dangerous operation. You should ONLY use it if
    * you know that you cannot restore the lost shards/nodes by any means.
    */
-  maintenance.UnblockRebuildingResponse unblockRebuilding(1:
-      maintenance.UnblockRebuildingRequest request) throws
+  maintenance.MarkAllShardsUnrecoverableResponse markAllShardsUnrecoverable(1:
+      maintenance.MarkAllShardsUnrecoverableRequest request) throws
     (1: exceptions.NodeNotReady notready,
      2: exceptions.InvalidRequest invalid_request,
      3: exceptions.OperationError operation_error,

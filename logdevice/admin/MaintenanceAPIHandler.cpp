@@ -8,6 +8,7 @@
 
 #include "logdevice/admin/MaintenanceAPIHandler.h"
 
+#include "logdevice/admin/Conv.h"
 #include "logdevice/admin/maintenance/APIUtils.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/admin/maintenance/MaintenanceManager.h"
@@ -314,12 +315,36 @@ MaintenanceAPIHandler::semifuture_removeMaintenances(
           });
 }
 
-// unblock rebuilding (marks shards unrecoverable)
-folly::SemiFuture<std::unique_ptr<UnblockRebuildingResponse>>
-MaintenanceAPIHandler::semifuture_unblockRebuilding(
-    std::unique_ptr<UnblockRebuildingRequest> /*request*/) {
-  // This does not depend on maintenance manager
-  return folly::makeSemiFuture<std::unique_ptr<UnblockRebuildingResponse>>(
-      NotSupported("Not Implemented!"));
+// marks shards unrecoverable
+folly::SemiFuture<std::unique_ptr<MarkAllShardsUnrecoverableResponse>>
+MaintenanceAPIHandler::semifuture_markAllShardsUnrecoverable(
+    std::unique_ptr<MarkAllShardsUnrecoverableRequest> request) {
+  auto failed = failIfMMDisabled();
+  if (failed) {
+    return *failed;
+  }
+  if (request == nullptr) {
+    return InvalidRequest("Cannot accept nullptr/empty "
+                          "MarkAllShardsUnrecoverableRequest");
+  }
+
+  ld_check(maintenance_manager_);
+  return maintenance_manager_
+      ->markAllShardsUnrecoverable(request->get_user(), request->get_reason())
+      .via(this->getThreadManager())
+      .thenValue([](auto&& value) {
+        if (value.hasError()) {
+          MaintenanceError(value.error()).throwThriftException();
+          ld_assert(false);
+        }
+        std::vector<thrift::ShardID> shards_succeeded;
+        std::vector<thrift::ShardID> shards_failed;
+        auto response = std::make_unique<MarkAllShardsUnrecoverableResponse>();
+        response->set_shards_succeeded(
+            toThrift<thrift::ShardID>(value.value().first));
+        response->set_shards_failed(
+            toThrift<thrift::ShardID>(value.value().second));
+        return response;
+      });
 }
 }} // namespace facebook::logdevice
