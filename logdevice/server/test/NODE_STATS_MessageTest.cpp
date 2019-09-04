@@ -15,7 +15,7 @@
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
-#include "logdevice/common/stats/Stats.h"
+#include "logdevice/server/sequencer_boycotting/BoycottingStats.h"
 
 using namespace facebook::logdevice;
 
@@ -33,15 +33,10 @@ class MockNODE_STATS_Message : public NODE_STATS_Message {
     replied_to = to.asClientID();
   }
 
-  StatsHolder* getStats() override {
-    return &(MockNODE_STATS_Message::stats_holder);
-  }
-
   ClientID replied_to = ClientID::INVALID;
 
   // 0 retention time = forever
-  StatsHolder stats_holder{StatsParams{}.setNodeStatsRetentionTimeOnClients(
-      std::chrono::seconds(0))};
+  BoycottingStatsHolder stats_holder{std::chrono::milliseconds(0)};
 };
 
 namespace {
@@ -145,7 +140,7 @@ TEST(NODE_STATS_MessageTest, OnReceivedStoresStats) {
    */
   auto sum_per_node = [&](auto getter_fn) {
     std::unordered_map<NodeID, uint32_t, NodeID::Hash> sum_map;
-    auto buckets = msg.stats_holder.get().per_client_node_stats.rlock()->sum();
+    auto buckets = msg.stats_holder.get()->rlock()->sum();
     for (const auto& bucket : buckets) {
       sum_map[bucket.node_id] += getter_fn(bucket.value);
     }

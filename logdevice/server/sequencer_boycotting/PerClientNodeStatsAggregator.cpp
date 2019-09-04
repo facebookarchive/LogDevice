@@ -7,8 +7,8 @@
  */
 #include "logdevice/server/sequencer_boycotting/PerClientNodeStatsAggregator.h"
 
-#include "logdevice/common/ClientID.h"
-#include "logdevice/common/Worker.h"
+#include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/sequencer_boycotting/BoycottingStats.h"
 
 namespace facebook { namespace logdevice {
 
@@ -101,8 +101,8 @@ PerClientNodeStatsAggregator::getAggregationPeriod() const {
       .sequencer_boycotting.node_stats_controller_aggregation_period;
 }
 
-StatsHolder* PerClientNodeStatsAggregator::getStats() const {
-  return Worker::onThisThread()->stats();
+BoycottingStatsHolder* PerClientNodeStatsAggregator::getStats() const {
+  return ServerWorker::onThisThread()->getBoycottingStats();
 }
 
 unsigned int PerClientNodeStatsAggregator::getWorstClientCount() const {
@@ -121,12 +121,12 @@ PerClientNodeStatsAggregator::fromRawStats(unsigned int period_count) const {
       std::pair<uint32_t,
                 std::vector<PerClientNodeTimeSeriesStats::ClientNodeValue>>>
       period_stats;
-  getStats()->runForEach([&](auto& thread_stats) {
-    thread_stats.per_client_node_stats.wlock()->updateCurrentTime(now);
+
+  getStats()->runForEach([&](auto& pcn_stats) {
+    pcn_stats.wlock()->updateCurrentTime(now);
     for (int period_index = 0; period_index < period_count; ++period_index) {
       const auto& interval = time_intervals[period_index];
-      auto stats = thread_stats.per_client_node_stats.rlock()->sum(
-          interval.first, interval.second);
+      auto stats = pcn_stats.rlock()->sum(interval.first, interval.second);
       period_stats.emplace_back(std::make_pair(period_index, std::move(stats)));
     }
   });

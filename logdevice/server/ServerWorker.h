@@ -113,6 +113,8 @@ class ServerWorker : public Worker {
    */
   NodeStatsControllerCallback* nodeStatsControllerCallback() const;
 
+  BoycottingStatsHolder* getBoycottingStats();
+
  private:
   // Pimpl, contains most of the objects we provide getters for
   friend class ServerWorkerImpl;

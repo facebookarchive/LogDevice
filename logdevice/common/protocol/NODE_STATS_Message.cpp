@@ -17,6 +17,7 @@
 #include "logdevice/common/protocol/NODE_STATS_REPLY_Message.h"
 
 namespace facebook { namespace logdevice {
+
 NODE_STATS_Message::NODE_STATS_Message(const NODE_STATS_Header& header,
                                        std::vector<NodeID> ids,
                                        append_list_t append_successes,
@@ -55,23 +56,10 @@ MessageReadResult NODE_STATS_Message::deserialize(ProtocolReader& reader) {
 }
 
 Message::Disposition NODE_STATS_Message::onReceived(const Address& from) {
-  if (!from.isClientAddress()) {
-    ld_error("got NODE_STATS message from non-client %s",
-             Sender::describeConnection(from).c_str());
-    err = E::PROTO;
-    return Disposition::ERROR;
-  }
-
-  RATELIMIT_DEBUG(std::chrono::seconds{10},
-                  1,
-                  "Received NODE_STATS_MESSAGE from %s",
-                  from.toString().c_str());
-
-  storeReceivedStats(from.asClientID());
-
-  sendReplyMessage(from);
-
-  return Disposition::NORMAL;
+  // should only be called in server/NODE_STATS_onReceived.cpp
+  ld_check(false);
+  err = E::INTERNAL;
+  return Disposition::ERROR;
 }
 
 void NODE_STATS_Message::onSent(Status /*status*/,
@@ -80,34 +68,9 @@ void NODE_STATS_Message::onSent(Status /*status*/,
   std::abort();
 }
 
-void NODE_STATS_Message::storeReceivedStats(ClientID from) {
-  ld_check(ids_.size() == append_successes_.size());
-  ld_check(ids_.size() == append_fails_.size());
-
-  auto stats = getStats();
-
-  for (size_t i = 0; i < ids_.size(); ++i) {
-    if (!dd_assert(ids_[i].isNodeID(),
-                   "Received append data for non-NodeID from client %s",
-                   Worker::onThisThread()
-                       ->sender()
-                       .describeConnection(from)
-                       .c_str())) {
-      continue;
-    }
-
-    PER_CLIENT_NODE_STAT_ADD(
-        stats, from, ids_[i], append_successes_[i], append_fails_[i]);
-  }
-}
-
 void NODE_STATS_Message::sendReplyMessage(const Address& to) {
   NODE_STATS_REPLY_Header header = {header_.msg_id};
   auto msg = std::make_unique<NODE_STATS_REPLY_Message>(header);
   Worker::onThisThread()->sender().sendMessage(std::move(msg), to);
-}
-
-StatsHolder* NODE_STATS_Message::getStats() {
-  return Worker::onThisThread()->stats();
 }
 }} // namespace facebook::logdevice

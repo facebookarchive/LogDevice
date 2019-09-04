@@ -111,6 +111,7 @@ namespace facebook { namespace logdevice {
 class AllClientReadStreams;
 class AppenderBuffer;
 class BufferedWriterShard;
+class BoycottingStatsHolder;
 class ClusterState;
 class Configuration;
 class EpochRecovery;

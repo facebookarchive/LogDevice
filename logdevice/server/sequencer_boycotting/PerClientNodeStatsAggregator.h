@@ -9,15 +9,18 @@
 
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "logdevice/common/BucketedNodeStats.h"
-#include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/ClientID.h"
 
 /**
  * @file Used to aggregate PerClientNodeTimeSeriesStats into time buckets
  */
 
 namespace facebook { namespace logdevice {
+class BoycottingStatsHolder;
+
 class PerClientNodeStatsAggregator {
  protected:
   template <class T>
@@ -50,7 +53,7 @@ class PerClientNodeStatsAggregator {
    */
   virtual unsigned int getWorstClientCount() const;
 
-  virtual StatsHolder* getStats() const;
+  virtual BoycottingStatsHolder* getStats() const;
 
  private:
   /**

@@ -1294,18 +1294,7 @@ void Server::updateStatsSettings() {
   const auto retention_time =
       params_->getProcessorSettings()
           ->sequencer_boycotting.node_stats_retention_on_nodes;
-  auto stats = params_->getStats();
-  auto shared_params = stats->params_.get();
-
-  if (shared_params->node_stats_retention_time_on_nodes != retention_time) {
-    auto params = *shared_params;
-    params.node_stats_retention_time_on_nodes = retention_time;
-
-    stats->params_.update(std::make_shared<StatsParams>(std::move(params)));
-    stats->runForEach([&](auto& stats) {
-      stats.per_client_node_stats.wlock()->updateRetentionTime(retention_time);
-    });
-  }
+  processor_->getBoycottingStats()->updateRetentionTime(retention_time);
 }
 
 Server::~Server() {

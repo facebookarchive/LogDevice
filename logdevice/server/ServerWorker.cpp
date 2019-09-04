@@ -208,6 +208,10 @@ void ServerWorker::setupWorker() {
   }
 }
 
+BoycottingStatsHolder* ServerWorker::getBoycottingStats() {
+  return processor_ ? processor_->getBoycottingStats() : nullptr;
+}
+
 PerWorkerStorageTaskQueue*
 ServerWorker::getStorageTaskQueueForShard(shard_index_t shard) const {
   ld_check(shard >= 0 && shard < storage_task_queues_.size());

@@ -10,9 +10,9 @@
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/protocol/Message.h"
-#include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
+class BoycottingStatsHolder;
 
 /**
  * @file
@@ -61,15 +61,12 @@ class NODE_STATS_Message : public Message {
   append_list_t append_fails_;
 
  protected: // for tests
+  friend Message::Disposition NODE_STATS_onReceived(NODE_STATS_Message* msg,
+                                                    const Address& from);
   // used when deserializing or testing
   NODE_STATS_Message()
       : Message(MessageType::NODE_STATS, TrafficClass::FAILURE_DETECTOR) {}
 
   virtual void sendReplyMessage(const Address& to);
-
-  virtual StatsHolder* getStats();
-
- private:
-  void storeReceivedStats(ClientID from);
 };
 }} // namespace facebook::logdevice

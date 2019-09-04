@@ -18,6 +18,7 @@
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
+#include "logdevice/server/sequencer_boycotting/BoycottingStats.h"
 
 /**
  * @file Subclass of Processor containing state specific to servers, also
@@ -117,12 +118,19 @@ class ServerProcessor : public Processor {
         audit_log_(audit_log),
         server_settings_(std::move(server_settings)),
         gossip_settings_(std::move(gossip_settings)),
-        admin_server_settings_(std::move(admin_server_settings)) {
+        admin_server_settings_(std::move(admin_server_settings)),
+        boycotting_stats_(
+            updateableSettings()
+                ->sequencer_boycotting.node_stats_retention_on_nodes) {
     maybeCreateLogStorageStateMap();
   }
 
   ~ServerProcessor() {}
   std::unique_ptr<FailureDetector> failure_detector_;
+
+  BoycottingStatsHolder* getBoycottingStats() {
+    return &boycotting_stats_;
+  }
 
  private:
   void maybeCreateLogStorageStateMap();
@@ -132,5 +140,8 @@ class ServerProcessor : public Processor {
   UpdateableSettings<GossipSettings> gossip_settings_;
   UpdateableSettings<AdminServerSettings> admin_server_settings_;
   std::unique_ptr<LogStorageStateMap> log_storage_state_map_;
+  // node stats sent from the clients. Keep it in a map to be able to identify
+  // the client who sent it.
+  BoycottingStatsHolder boycotting_stats_;
 };
 }} // namespace facebook::logdevice

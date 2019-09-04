@@ -48,6 +48,7 @@
 #include "logdevice/server/read_path/AllServerReadStreams.h"
 #include "logdevice/server/sequencer_boycotting/NODE_STATS_AGGREGATE_REPLY_onReceived.h"
 #include "logdevice/server/sequencer_boycotting/NODE_STATS_AGGREGATE_onReceived.h"
+#include "logdevice/server/sequencer_boycotting/NODE_STATS_onReceived.h"
 #include "logdevice/server/storage/PurgeCoordinator.h"
 #include "logdevice/server/storage/PurgeUncleanEpochs.h"
 #include "logdevice/server/storage_tasks/ReadStorageTask.h"
@@ -165,6 +166,10 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
     case MessageType::MEMTABLE_FLUSHED:
       return MEMTABLE_FLUSHED_onReceived(
           checked_downcast<MEMTABLE_FLUSHED_Message*>(msg), from);
+
+    case MessageType::NODE_STATS:
+      return NODE_STATS_onReceived(
+          checked_downcast<NODE_STATS_Message*>(msg), from);
 
     case MessageType::NODE_STATS_AGGREGATE:
       return NODE_STATS_AGGREGATE_onReceived(
