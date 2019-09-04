@@ -285,6 +285,14 @@ on_server_settings_changed(UpdateableSettings<ServerSettings> server_settings) {
   set_log_file(server_settings);
 }
 
+static std::string concatenate_arguments(int argc, const char** argv) {
+  std::string arguments;
+  std::for_each(argv + 1, argv + argc, [&](const char* c_str) {
+    arguments += std::string(c_str) + " ";
+  });
+  return arguments;
+}
+
 int main(int argc, const char** argv) {
   logdeviceInit();
 
@@ -390,6 +398,9 @@ int main(int argc, const char** argv) {
   // changes of particular settings that use global variables etc
   auto server_settings_subscription = server_settings.callAndSubscribeToUpdates(
       std::bind(on_server_settings_changed, server_settings));
+
+  std::string arguments = concatenate_arguments(argc, argv);
+  ld_info("Command line arguments: %s", arguments.c_str());
 
   // Now that the logging framework is initialised, log plugin info
   ld_info(
