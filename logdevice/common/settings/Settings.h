@@ -1317,6 +1317,11 @@ struct Settings : public SettingsBundle {
   // write_streams_map_clear_size_ least recently used items from the map.
   size_t write_streams_map_clear_size;
 
+  // maximum amount of time that the request can be delayed
+  // without printing the warning log. After this time, the warning log will be
+  // printed.
+  std::chrono::milliseconds request_queue_warning_time_limit;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

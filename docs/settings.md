@@ -185,6 +185,7 @@ sidebar_label: Settings
 | reader-stalled-grace-period | Amount of time we wait before declaring a reader stalled because we can't read the metadata or data log. When this grace period expires, the client stat "read\_streams\_stalled" is bumped and record to scuba  | 30s |  |
 | reader-stuck-threshold | Amount of time we wait before we report a read stream that is considered stuck. | 121s |  |
 | request-exec-threshold | Request Execution time beyond which it is considered slow, and 'worker\_slow\_requests' stat is bumped | 10ms |  |
+| request-queue-warning-time-limit | Maximum amount of time that the request can be delayed without printing the warning log. After this time, the warning log will be printed | 20ms |  |
 | shadow-client-timeout | Timeout to use for shadow clients. See traffic-shadow-enabled. | 30s | client&nbsp;only |
 | slow-background-task-threshold | Background task execution time beyond which it is considered slow, and we log it | 100ms |  |
 | stats-collection-interval | How often to collect and submit stats upstream.  Set to <=0 to disable collection of stats. | 60s | requires&nbsp;restart |

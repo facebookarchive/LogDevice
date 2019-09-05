@@ -3246,5 +3246,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "number of least-recently-used write streams are evicted.",
        SERVER,
        SettingsCategory::Sequencer);
+
+  init(
+      "request-queue-warning-time-limit",
+      &request_queue_warning_time_limit,
+      "20ms",
+      validate_positive<ssize_t>(),
+      "Maximum amount of time that the request can be delayed without printing "
+      "the warning log. After this time, the warning log will be printed",
+      SERVER | CLIENT,
+      SettingsCategory::Monitoring);
 }
 }} // namespace facebook::logdevice

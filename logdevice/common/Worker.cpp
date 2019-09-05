@@ -1249,7 +1249,7 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
 
   auto queue_time{
       duration_cast<microseconds>(steady_clock::now() - rq->enqueue_time_)};
-  if (queue_time > 20ms) {
+  if (queue_time > settings().request_queue_warning_time_limit) {
     auto priority_to_str = [](int8_t priority) {
       switch (priority) {
         case folly::Executor::LO_PRI:
