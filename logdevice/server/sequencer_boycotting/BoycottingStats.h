@@ -167,13 +167,6 @@ struct PerClientNodeTimeSeriesStats {
    */
   void updateCurrentTime(TimePoint current_time);
 
-  /**
-   * will create a new time series with the updated retention time, and then
-   * transfer all the old values to the new time series.
-   * It's a NOP if the retention time is the same as it was previously
-   */
-  void updateRetentionTime(std::chrono::milliseconds retention_time);
-
   // getters used for testing
   std::chrono::milliseconds retentionTime() const;
 
@@ -185,7 +178,7 @@ struct PerClientNodeTimeSeriesStats {
   std::vector<ClientNodeValue>
   processStats(const TimeSeriesMap<Key, Value, Key::Hash>& total) const;
 
-  std::chrono::milliseconds retention_time_;
+  const std::chrono::milliseconds retention_time_;
 
   std::unique_ptr<TimeSeries> timeseries_;
 };
@@ -214,19 +207,8 @@ class BoycottingStatsHolder final {
     }
   }
 
-  void updateRetentionTime(std::chrono::milliseconds retention) {
-    auto accessor = stats_.accessAllThreads();
-    if (retention_ == retention) { // using accessor's mutex
-      return;
-    }
-    retention_ = retention;
-    for (auto& stats : accessor) {
-      stats.wlock()->updateRetentionTime(retention);
-    }
-  }
-
  private:
-  std::chrono::milliseconds retention_;
+  const std::chrono::milliseconds retention_;
   class Tag {};
   folly::ThreadLocalPtr<Stats, Tag> stats_;
 };

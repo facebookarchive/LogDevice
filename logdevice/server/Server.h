@@ -302,10 +302,6 @@ class Server {
   // gracefulShutdown() was called
   std::atomic<bool> is_shut_down_{false};
 
-  // initSettingsSubscriber()
-  UpdateableSettings<Settings>::SubscriptionHandle
-      settings_subscription_handle_;
-
   // ResourceBudget used to limit the total number of accepted connections
   // which have not been processed by workers. It is the same as looking at the
   // number of incomplete NewConnectionRequest
@@ -330,7 +326,6 @@ class Server {
   bool createAndAttachMaintenanceManager(AdminServer* server);
   bool initUnreleasedRecordDetector();
   bool initLogsConfigManager();
-  bool initSettingsSubscriber();
   bool initAdminServer();
 
   // Calls gracefulShutdown in separate thread and does _exit(EXIT_FAILURE)
@@ -339,8 +334,6 @@ class Server {
 
   bool startCommandListener(std::unique_ptr<Listener>& handle);
   bool startConnectionListener(std::unique_ptr<Listener>& handle);
-
-  void updateStatsSettings();
 };
 
 }} // namespace facebook::logdevice

@@ -487,7 +487,7 @@ sidebar_label: Settings
 | node-stats-controller-response-timeout | A controller node waits this long between requesting stats from the other nodes, and aggregating the received stats | 2s | server&nbsp;only |
 | node-stats-max-boycott-count | How many nodes may be boycotted. 0 will in addition to not allowing any nodes to be boycotted, it also ensures no nodes become controller nodes | 0 | server&nbsp;only |
 | node-stats-remove-worst-percentage | Will throw away the worst X% of values reported by clients, to a maximum of node-count * node-stats-send-worst-client-count | 0.2 | server&nbsp;only |
-| node-stats-retention-on-nodes | Save node stats sent from the clients on the nodes for this duration | 300s | server&nbsp;only |
+| node-stats-retention-on-nodes | Save node stats sent from the clients on the nodes for this duration | 300s | requires&nbsp;restart, server&nbsp;only |
 | node-stats-send-period | Send per-node stats into the cluster with this period. Currently only 30s of stats is tracked on the clients, so a value above 30s will not have any effect. | 15s | client&nbsp;only |
 | node-stats-send-retry-delay | When sending per-node stats into the cluster, and the message failed, wait this much before retrying. | 5ms..1s | requires&nbsp;restart, client&nbsp;only |
 | node-stats-send-worst-client-count | Once a node has aggregated the values sent from writers, there may be some amount of writers that are in a bad state and report 'false' values. By setting this value, the `node-stats-send-worst-client-count` worst values reported by clients per node will be sent separately to the controller, which can then take a decision if the writer is functioning correctly or not. | 20 | server&nbsp;only |

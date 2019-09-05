@@ -107,19 +107,6 @@ static folly::BucketedTimeSeries<T, V> newTimeSeriesWithUpdatedRetentionTime(
   return time_series_new;
 }
 
-void PerClientNodeTimeSeriesStats::updateRetentionTime(
-    std::chrono::milliseconds retention_time) {
-  if (this->retention_time_ == retention_time) {
-    return;
-  }
-
-  this->retention_time_ = retention_time;
-  const auto now = std::chrono::steady_clock::now();
-  auto new_timeseries = std::make_unique<TimeSeries>(
-      newTimeSeriesWithUpdatedRetentionTime(*timeseries_, retention_time, now));
-  timeseries_.swap(new_timeseries);
-}
-
 std::chrono::milliseconds PerClientNodeTimeSeriesStats::retentionTime() const {
   return retention_time_;
 }

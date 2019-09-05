@@ -20,6 +20,7 @@ namespace facebook { namespace logdevice {
 
 class AllCachedDigests;
 class AllServerReadStreams;
+class BoycottingStatsHolder;
 class NodeStatsControllerCallback;
 class PerWorkerStorageTaskQueue;
 class PurgeScheduler;

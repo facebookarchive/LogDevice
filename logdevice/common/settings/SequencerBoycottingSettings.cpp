@@ -46,7 +46,8 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "300s", // 5m
        validate_positive<ssize_t>(),
        "Save node stats sent from the clients on the nodes for this duration",
-       SERVER,
+       SERVER |
+           REQUIRES_RESTART, /* Used when initializing BoycottingStatsHandler */
        SettingsCategory::SequencerBoycotting);
   init("node-stats-controller-aggregation-period",
        &node_stats_controller_aggregation_period,

@@ -509,7 +509,7 @@ Server::Server(ServerParameters* params)
         initSequencerPlacement() && initRebuildingCoordinator() &&
         initClusterMaintenanceStateMachine() && initLogStoreMonitor() &&
         initUnreleasedRecordDetector() && initLogsConfigManager() &&
-        initSettingsSubscriber() && initAdminServer())) {
+        initAdminServer())) {
     _exit(EXIT_FAILURE);
   }
 }
@@ -1138,14 +1138,6 @@ bool Server::initLogsConfigManager() {
       *processor_, true /* is_writable */);
 }
 
-bool Server::initSettingsSubscriber() {
-  auto settings = params_->getProcessorSettings();
-  settings_subscription_handle_ =
-      settings.subscribeToUpdates([&] { updateStatsSettings(); });
-
-  return true;
-}
-
 bool Server::initAdminServer() {
   if (params_->getServerSettings()->admin_enabled) {
     // Figure out the socket address for the admin server.
@@ -1288,13 +1280,6 @@ void Server::rotateLocalLogs() {
   if (audit_log) {
     audit_log->reopen();
   }
-}
-
-void Server::updateStatsSettings() {
-  const auto retention_time =
-      params_->getProcessorSettings()
-          ->sequencer_boycotting.node_stats_retention_on_nodes;
-  processor_->getBoycottingStats()->updateRetentionTime(retention_time);
 }
 
 Server::~Server() {

@@ -197,13 +197,6 @@ TEST(BoycottingStatsTest, PerClientNodeTimeSeries_UpdateAggregationTime) {
   // check initial retention time
   EXPECT_EQ(initial_retention_time, per_client_stats.retentionTime());
   EXPECT_EQ(initial_retention_time, per_client_stats.timeseries()->duration());
-
-  std::chrono::seconds updated_retention_time{50};
-  per_client_stats.updateRetentionTime(updated_retention_time);
-
-  // check update retention time
-  EXPECT_EQ(updated_retention_time, per_client_stats.retentionTime());
-  EXPECT_EQ(updated_retention_time, per_client_stats.timeseries()->duration());
 }
 
 // if latest_timepoint - earliest_timepoint > retention_time
@@ -220,14 +213,6 @@ TEST(BoycottingStatsTest,
   per_client_stats.append(
       client_id, node_id, 1, 1, now - std::chrono::seconds{25});
   per_client_stats.append(client_id, node_id, 1, 1, now);
-
-  // less than latest_timepoint - earliest_timepoint
-  const auto updated_retention_time = std::chrono::seconds{10};
-  per_client_stats.updateRetentionTime(updated_retention_time);
-
-  // check update retention time
-  EXPECT_EQ(updated_retention_time, per_client_stats.retentionTime());
-  EXPECT_EQ(updated_retention_time, per_client_stats.timeseries()->duration());
 }
 
 class MockPerClientNodeStatsAggregator : public PerClientNodeStatsAggregator {
