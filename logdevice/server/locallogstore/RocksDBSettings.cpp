@@ -901,7 +901,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 #ifdef LOGDEVICE_ROCKSDB_HAS_FIRST_KEY_IN_INDEX
   init("rocksdb-first-key-in-index",
        &first_key_in_index_,
-       "true",
+       "false",
        nullptr,
        "If true, rocksdb sst file index will contain first key of each block. "
        "This reduces read amplification but increases index size.",
