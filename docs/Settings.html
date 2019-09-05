@@ -270,6 +270,7 @@
 <tr><td>reader-stalled-grace-period</td><td>Amount of time we wait before declaring a reader stalled because we can't read the metadata or data log. When this grace period expires, the client stat &quot;read_streams_stalled&quot; is bumped and record to scuba</td><td style="text-align:center">30s</td><td></td></tr>
 <tr><td>reader-stuck-threshold</td><td>Amount of time we wait before we report a read stream that is considered stuck.</td><td style="text-align:center">121s</td><td></td></tr>
 <tr><td>request-exec-threshold</td><td>Request Execution time beyond which it is considered slow, and 'worker_slow_requests' stat is bumped</td><td style="text-align:center">10ms</td><td></td></tr>
+<tr><td>request-queue-warning-time-limit</td><td>Maximum amount of time that the request can be delayed without printing the warning log. After this time, the warning log will be printed</td><td style="text-align:center">20ms</td><td></td></tr>
 <tr><td>shadow-client-timeout</td><td>Timeout to use for shadow clients. See traffic-shadow-enabled.</td><td style="text-align:center">30s</td><td>client only</td></tr>
 <tr><td>slow-background-task-threshold</td><td>Background task execution time beyond which it is considered slow, and we log it</td><td style="text-align:center">100ms</td><td></td></tr>
 <tr><td>stats-collection-interval</td><td>How often to collect and submit stats upstream.  Set to &lt;=0 to disable collection of stats.</td><td style="text-align:center">60s</td><td>requires restart</td></tr>
