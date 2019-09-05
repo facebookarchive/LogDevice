@@ -122,11 +122,11 @@ int SenderProxy::sendMessageImpl(std::unique_ptr<Message>&& msg,
 void SenderBase::MessageCompletion::send() {
   auto prev_context = Worker::packRunContext();
   RunContext run_context(msg_->type_);
-  Worker::onStartedRunning(run_context);
-  Worker::onThisThread()->message_dispatch_->onSent(
-      *msg_, status_, destination_, enqueue_time_);
+  const auto w = Worker::onThisThread();
+  w->onStartedRunning(run_context);
+  w->message_dispatch_->onSent(*msg_, status_, destination_, enqueue_time_);
   msg_.reset(); // count destructor as part of message's execution time
-  Worker::onStoppedRunning(run_context);
+  w->onStoppedRunning(run_context);
   Worker::unpackRunContext(prev_context);
 }
 

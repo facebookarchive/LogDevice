@@ -298,10 +298,10 @@ void SocketDependencies::onSent(std::unique_ptr<Message> msg,
       // Sender::send()), similar to how timers do it.
       RunContext run_context(msg->type_);
       auto prev_context = Worker::packRunContext();
-      Worker::onStartedRunning(run_context);
+      onStartedRunning(run_context);
       Worker::onThisThread()->message_dispatch_->onSent(*msg, st, to, t);
       msg.reset(); // count destructor as part of message's execution time
-      Worker::onStoppedRunning(run_context);
+      onStoppedRunning(run_context);
       Worker::unpackRunContext(prev_context);
       break;
     }
@@ -616,11 +616,27 @@ bool SocketDependencies::includeHELLOCredentials() {
 }
 
 void SocketDependencies::onStartedRunning(RunContext context) {
-  Worker::onStartedRunning(context);
+  if (worker_) {
+    worker_->onStartedRunning(context);
+  } else {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Worker not set. New context: %s.",
+                    context.describe().c_str());
+    ld_check(false);
+  }
 }
 
 void SocketDependencies::onStoppedRunning(RunContext prev_context) {
-  Worker::onStoppedRunning(prev_context);
+  if (worker_) {
+    worker_->onStoppedRunning(prev_context);
+  } else {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "Worker not set. New context: %s.",
+                    prev_context.describe().c_str());
+    ld_check(false);
+  }
 }
 
 ResourceBudget::Token

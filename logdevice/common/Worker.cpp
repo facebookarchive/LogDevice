@@ -934,14 +934,12 @@ ClusterState* Worker::getClusterState() {
 }
 
 void Worker::onStoppedRunning(RunContext prev_context) {
-  Worker* w = Worker::onThisThread();
-  ld_check(w);
   std::chrono::steady_clock::time_point start_time;
-  start_time = w->currentlyRunningStart_;
+  start_time = currentlyRunningStart_;
 
   setCurrentlyRunningContext(RunContext(), prev_context);
 
-  auto end_time = w->currentlyRunningStart_;
+  auto end_time = currentlyRunningStart_;
   // Bumping the counters
   if (end_time - start_time >= settings().request_execution_delay_threshold) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
@@ -1012,20 +1010,9 @@ void Worker::deactivateIsolationTimer() {
 
 void Worker::setCurrentlyRunningContext(RunContext new_context,
                                         RunContext prev_context) {
-  Worker* w = Worker::onThisThread(false);
-  if (!w) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    10,
-                    "Attempting to set worker context while not on a worker. "
-                    "New context: %s, expected context: %s.",
-                    new_context.describe().c_str(),
-                    prev_context.describe().c_str());
-    ld_check(false);
-    return;
-  }
-  ld_check(w->currentlyRunning_ == prev_context);
-  w->currentlyRunning_ = new_context;
-  w->currentlyRunningStart_ = std::chrono::steady_clock::now();
+  ld_check(currentlyRunning_ == prev_context);
+  currentlyRunning_ = new_context;
+  currentlyRunningStart_ = std::chrono::steady_clock::now();
 }
 
 std::unique_ptr<MessageDispatch> Worker::createMessageDispatch() {
@@ -1270,7 +1257,7 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
                       priority_to_str(priority));
   }
 
-  Worker::onStartedRunning(run_context);
+  onStartedRunning(run_context);
 
   // rq should not be accessed after execute, as it may have been deleted.
   Request::Execution status = rq->execute();
@@ -1284,7 +1271,7 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
       break;
   }
 
-  Worker::onStoppedRunning(run_context);
+  onStoppedRunning(run_context);
   WORKER_STAT_INCR(worker_requests_executed);
 }
 

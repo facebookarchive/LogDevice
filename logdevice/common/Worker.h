@@ -714,11 +714,11 @@ class Worker : public WorkContext {
 
   // Sets currently running request. Verifies that we are on a worker and that
   // the current context is NONE
-  static void onStartedRunning(RunContext new_context);
+  void onStartedRunning(RunContext new_context);
 
   // Resets the currently running context to NONE and bumps counters for
   // prev_context
-  static void onStoppedRunning(RunContext prev_context);
+  void onStoppedRunning(RunContext prev_context);
 
   // Packs the current RunContext and returns it along with how long it ran for,
   // sets the current RunContext to NONE
@@ -805,8 +805,8 @@ class Worker : public WorkContext {
   void initializeSubscriptions();
 
   // Helper used by onStartedRunning() and onStoppedRunning()
-  static void setCurrentlyRunningContext(RunContext new_context,
-                                         RunContext prev_context);
+  void setCurrentlyRunningContext(RunContext new_context,
+                                  RunContext prev_context);
 
   // Subclasses can override to create a MessageDispatch subclass during
   // initialisation

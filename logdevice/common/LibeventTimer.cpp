@@ -123,9 +123,9 @@ void LibeventTimer::libeventCallback(void* instance, short) {
   self->active_ = false;
   if (self->worker_) {
     WorkerContextScopeGuard g(self->worker_);
-    Worker::onStartedRunning(run_context);
+    self->worker_->onStartedRunning(run_context);
     self->callback_();
-    Worker::onStoppedRunning(run_context);
+    self->worker_->onStoppedRunning(run_context);
   } else {
     self->callback_();
   }

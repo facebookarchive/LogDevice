@@ -102,7 +102,17 @@ void RequestPump::processRequest(std::unique_ptr<Request>& req) {
 
   RunContext run_context = req->getRunContext();
 
+  Worker* w = nullptr;
   if (on_worker_thread) {
+    w = Worker::onThisThread();
+    if (!w) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      10,
+                      "Attempting to get worker instance while not on a worker"
+                      " thread.");
+      ld_check(false);
+    }
+
     auto queue_time{
         duration_cast<microseconds>(steady_clock::now() - req->enqueue_time_)};
     HISTOGRAM_ADD(Worker::stats(), requests_queue_latency, queue_time.count());
@@ -115,7 +125,9 @@ void RequestPump::processRequest(std::unique_ptr<Request>& req) {
                         req->id_.val());
     }
 
-    Worker::onStartedRunning(run_context);
+    if (w) {
+      w->onStartedRunning(run_context);
+    }
   }
 
   // req should not be accessed after execute, as it may have been deleted.
@@ -132,7 +144,9 @@ void RequestPump::processRequest(std::unique_ptr<Request>& req) {
   }
 
   if (on_worker_thread) {
-    Worker::onStoppedRunning(run_context);
+    if (w) {
+      w->onStoppedRunning(run_context);
+    }
     WORKER_STAT_INCR(worker_requests_executed);
   }
 }
