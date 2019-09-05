@@ -60,6 +60,7 @@ static const std::set<std::string> config_recognized_keys = {
     "security_information",
     "server_settings",
     "trace-logger",
+    "trace_logger",
     "traffic_shaping",
     "read_throttling",
     "version",

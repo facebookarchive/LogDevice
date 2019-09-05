@@ -1923,3 +1923,15 @@ TEST(ConfigurationTest, StorageCapacityVsWeight) {
     ASSERT_EQ(config, nullptr);
   }
 }
+
+TEST(ConfigurationTest, AlternativeTraceConfigSection) {
+  std::shared_ptr<Configuration> config(
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("valid_trace_logger.conf")));
+  ASSERT_NE(config, nullptr);
+
+  ASSERT_TRUE(
+      config->serverConfig()->getTracerSamplePercentage("appender").hasValue());
+
+  ASSERT_EQ(
+      15.4, *config->serverConfig()->getTracerSamplePercentage("appender"));
+}

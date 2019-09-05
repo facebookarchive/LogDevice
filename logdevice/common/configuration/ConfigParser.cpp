@@ -33,11 +33,22 @@ static bool parseMetaDataLogNodes(const folly::dynamic& nodes,
                                   MetaDataLogsConfig& output);
 bool parseTraceLogger(const folly::dynamic& clusterMap,
                       TraceLoggerConfig& output) {
-  auto iter = clusterMap.find("trace-logger");
-  if (iter == clusterMap.items().end()) {
+  auto iter_legacy = clusterMap.find("trace-logger");
+  auto iter_well_formed = clusterMap.find("trace_logger");
+
+  if (iter_legacy == clusterMap.items().end() &&
+      iter_well_formed == clusterMap.items().end()) {
     return true; // trace-logger is optional and have defaults
+  } else if (iter_legacy != clusterMap.items().end() &&
+             iter_well_formed != clusterMap.items().end()) {
+    ld_error("\"trace-logger\" and \"trace_logger\" cannot be used combined");
+    err = E::INVALID_CONFIG;
+    return false;
   }
-  const folly::dynamic& tracerSection = iter->second;
+
+  const folly::dynamic& tracerSection = iter_legacy != clusterMap.items().end()
+      ? iter_legacy->second
+      : iter_well_formed->second;
   if (!tracerSection.isObject()) {
     ld_error("\"trace-logger\" entry is not a JSON object");
     err = E::INVALID_CONFIG;
@@ -49,7 +60,7 @@ bool parseTraceLogger(const folly::dynamic& clusterMap,
     output.default_sampling = def_iter->second.asDouble();
   }
 
-  iter = tracerSection.find("tracers");
+  auto iter = tracerSection.find("tracers");
   if (iter == clusterMap.items().end()) {
     return true; // trace-logger.tracers is optional and have defaults
   }
