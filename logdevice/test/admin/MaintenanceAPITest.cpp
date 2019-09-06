@@ -12,6 +12,7 @@
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/Conv.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
+#include "logdevice/common/ShardID.h"
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Client.h"
@@ -23,7 +24,6 @@
 using namespace ::testing;
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
-using namespace facebook::logdevice::thrift;
 
 #define LOG_ID logid_t(1)
 
@@ -43,8 +43,8 @@ TEST_F(MaintenanceAPITestDisabled, NotSupported) {
   auto& node = cluster->getNode(0);
   auto admin_client = node.createAdminClient();
 
-  MaintenanceDefinitionResponse response;
-  MaintenancesFilter filter;
+  thrift::MaintenanceDefinitionResponse response;
+  thrift::MaintenancesFilter filter;
   ASSERT_THROW(admin_client->sync_getMaintenances(response, filter),
                thrift::NotSupported);
 }
@@ -86,7 +86,7 @@ void MaintenanceAPITest::init() {
 
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
-          .setNumLogs(1)
+          .setNumLogs(100)
           .setNodes(nodes)
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
@@ -122,19 +122,19 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesInvalid1) {
   auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
   // Invalid maintenance
   {
-    MaintenanceDefinition def;
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinition def;
+    thrift::MaintenanceDefinitionResponse resp;
     ASSERT_THROW(
         admin_client->sync_applyMaintenance(resp, def), thrift::InvalidRequest);
   }
   {
-    MaintenanceDefinition def;
+    thrift::MaintenanceDefinition def;
     thrift::ShardSet shards;
     shards.push_back(mkShardID(1, -1));
     def.set_shards(shards);
     def.set_shard_target_state(ShardOperationalState::DRAINED);
 
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinitionResponse resp;
     ASSERT_THROW(
         // Will fail since user is not set for this maintenance
         admin_client->sync_applyMaintenance(resp, def),
@@ -142,12 +142,12 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesInvalid1) {
   }
   // Apply maintenance for a sequencer NodeID that is unset.
   {
-    MaintenanceDefinition def;
+    thrift::MaintenanceDefinition def;
     def.set_user("my-user");
     def.set_sequencer_nodes({thrift::NodeID()});
     def.set_sequencer_target_state(SequencingState::DISABLED);
 
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinitionResponse resp;
     ASSERT_THROW(
         // Will fail since sequencers have empty NodeID
         admin_client->sync_applyMaintenance(resp, def),
@@ -155,7 +155,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesInvalid1) {
   }
   // Apply maintenance for a ShardID that has only the shard part set.
   {
-    MaintenanceDefinition def;
+    thrift::MaintenanceDefinition def;
     def.set_user("my-user");
     thrift::NodeID node; // has nothing set.
     thrift::ShardID shard;
@@ -164,7 +164,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesInvalid1) {
     def.set_shards({shard});
     def.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
 
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinitionResponse resp;
     ASSERT_THROW(
         // Will fail since sequencers have empty NodeID
         admin_client->sync_applyMaintenance(resp, def),
@@ -182,7 +182,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
   std::string created_id;
   int64_t created_on;
   {
-    MaintenanceDefinition request;
+    thrift::MaintenanceDefinition request;
     request.set_user("bunny");
     request.set_shard_target_state(ShardOperationalState::DRAINED);
     // expands to all shards of node 1
@@ -194,11 +194,11 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
     request.set_group(false);
     // We expect this to be expanded into 1 maintenance group since everything
     // fits nicely into a single node.
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinitionResponse resp;
     admin_client->sync_applyMaintenance(resp, request);
     auto output = resp.get_maintenances();
     ASSERT_EQ(1, output.size());
-    const MaintenanceDefinition& result = output[0];
+    const thrift::MaintenanceDefinition& result = output[0];
     ASSERT_EQ("bunny", result.get_user());
     ASSERT_TRUE(result.group_id_ref().has_value());
     created_id = result.group_id_ref().value();
@@ -218,12 +218,12 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
   }
   {
     // Validate via getMaintenances
-    MaintenancesFilter fltr;
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenancesFilter fltr;
+    thrift::MaintenanceDefinitionResponse resp;
     admin_client->sync_getMaintenances(resp, fltr);
     auto output = resp.get_maintenances();
     ASSERT_EQ(1, output.size());
-    const MaintenanceDefinition& result = output[0];
+    const thrift::MaintenanceDefinition& result = output[0];
     ASSERT_EQ("bunny", result.get_user());
     ASSERT_TRUE(result.group_id_ref().has_value());
     ASSERT_EQ(created_id, result.group_id_ref().value());
@@ -248,7 +248,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
   // Let's create another maintenance at which one will match with the existing.
   std::string created_id2;
   {
-    MaintenanceDefinition request;
+    thrift::MaintenanceDefinition request;
     // Needs to be the same user for us to match an existing maintenance.
     request.set_user("bunny");
     request.set_shard_target_state(ShardOperationalState::DRAINED);
@@ -262,7 +262,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
     // We expect to get two maintenances back:
     //  - An existing maintenance with the group_id (created_id) for node (1)
     //  - A new maintenance for node (2)
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinitionResponse resp;
     admin_client->sync_applyMaintenance(resp, request);
     auto output = resp.get_maintenances();
     ASSERT_EQ(2, output.size());
@@ -295,8 +295,8 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
   }
   {
     // Validate via getMaintenances
-    MaintenancesFilter fltr;
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenancesFilter fltr;
+    thrift::MaintenanceDefinitionResponse resp;
     admin_client->sync_getMaintenances(resp, fltr);
     auto output = resp.get_maintenances();
     ASSERT_EQ(2, output.size());
@@ -310,7 +310,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
     // CLASH -- let's create a maintenance with the same user that overlap with
     // existing one but not identical.
     //
-    MaintenanceDefinition request;
+    thrift::MaintenanceDefinition request;
     // Needs to be the same user for us to match an existing maintenance.
     request.set_user("bunny");
     request.set_shard_target_state(ShardOperationalState::DRAINED);
@@ -321,7 +321,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
     // This will make this maintenance clash with existing ones since there is
     // no single group that match such maintenance.
     request.set_group(true);
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinitionResponse resp;
     ASSERT_THROW(admin_client->sync_applyMaintenance(resp, request),
                  thrift::MaintenanceClash);
   }
@@ -337,7 +337,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
 
   // Creating an impossible maintenance, draining all shards in all nodes must
   // fail by safety checker.
-  MaintenanceDefinition request;
+  thrift::MaintenanceDefinition request;
   // Needs to be the same user for us to match an existing maintenance.
   request.set_user("dummy");
   request.set_shard_target_state(ShardOperationalState::DRAINED);
@@ -349,7 +349,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
   request.set_sequencer_nodes({mkNodeID(1), mkNodeID(2)});
   request.set_sequencer_target_state(SequencingState::DISABLED);
   request.set_group(true);
-  MaintenanceDefinitionResponse resp;
+  thrift::MaintenanceDefinitionResponse resp;
   admin_client->sync_applyMaintenance(resp, request);
   ASSERT_EQ(1, resp.get_maintenances().size());
   wait_until("MaintenanceManager runs the workflow", [&]() {
@@ -378,8 +378,8 @@ TEST_F(MaintenanceAPITest, RemoveMaintenancesInvalid) {
   // Wait until the RSM has replayed
   cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
   // We simply can't delete with an empty filter;
-  RemoveMaintenancesRequest request;
-  RemoveMaintenancesResponse resp;
+  thrift::RemoveMaintenancesRequest request;
+  thrift::RemoveMaintenancesResponse resp;
   ASSERT_THROW(admin_client->sync_removeMaintenances(resp, request),
                thrift::InvalidRequest);
 }
@@ -394,7 +394,7 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
   std::string created_id;
   std::vector<std::string> bunny_group_ids;
   {
-    MaintenanceDefinition request;
+    thrift::MaintenanceDefinition request;
     request.set_user("bunny");
     request.set_shard_target_state(ShardOperationalState::DRAINED);
     // expands to all shards of node 1
@@ -404,7 +404,7 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
     // to validate we correctly respect the attributes
     request.set_group(false);
     // We expect this to be expanded into 3 maintenance groups
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinitionResponse resp;
     admin_client->sync_applyMaintenance(resp, request);
     auto output = resp.get_maintenances();
     ASSERT_EQ(3, output.size());
@@ -416,7 +416,7 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
   // 4 after this)
   std::string fourth_group;
   {
-    MaintenanceDefinition request;
+    thrift::MaintenanceDefinition request;
     request.set_user("dummy");
     request.set_shard_target_state(ShardOperationalState::DRAINED);
     // expands to all shards of node 1
@@ -425,7 +425,7 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
     request.set_sequencer_target_state(SequencingState::DISABLED);
     // to validate we correctly respect the attributes
     request.set_group(true);
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenanceDefinitionResponse resp;
     admin_client->sync_applyMaintenance(resp, request);
     auto output = resp.get_maintenances();
     ASSERT_EQ(1, output.size());
@@ -433,21 +433,21 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
   }
   // Let's remove by a group_id. We will remove one of bunny's maintenances.
   {
-    RemoveMaintenancesRequest request;
-    MaintenancesFilter fltr;
+    thrift::RemoveMaintenancesRequest request;
+    thrift::MaintenancesFilter fltr;
     auto group_to_remove = bunny_group_ids.back();
     bunny_group_ids.pop_back();
     fltr.set_group_ids({group_to_remove});
     request.set_filter(fltr);
 
-    RemoveMaintenancesResponse resp;
+    thrift::RemoveMaintenancesResponse resp;
     admin_client->sync_removeMaintenances(resp, request);
     auto output = resp.get_maintenances();
     ASSERT_EQ(1, output.size());
     ASSERT_EQ(group_to_remove, output[0].group_id_ref().value());
     // validate by getMaintenances.
     thrift::MaintenancesFilter req;
-    MaintenanceDefinitionResponse response;
+    thrift::MaintenanceDefinitionResponse response;
     admin_client->sync_getMaintenances(response, req);
     ASSERT_EQ(3, response.get_maintenances().size());
     for (const auto& def : response.get_maintenances()) {
@@ -456,11 +456,11 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
   }
   // Let's remove all bunny's maintenances.
   {
-    RemoveMaintenancesRequest request;
-    MaintenancesFilter fltr;
+    thrift::RemoveMaintenancesRequest request;
+    thrift::MaintenancesFilter fltr;
     fltr.set_user("bunny");
     request.set_filter(fltr);
-    RemoveMaintenancesResponse resp;
+    thrift::RemoveMaintenancesResponse resp;
     admin_client->sync_removeMaintenances(resp, request);
     auto output = resp.get_maintenances();
     // two maintenance still belong to this user.
@@ -473,7 +473,7 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
   {
     // validate by getMaintenances.
     thrift::MaintenancesFilter req;
-    MaintenanceDefinitionResponse response;
+    thrift::MaintenanceDefinitionResponse response;
     admin_client->sync_getMaintenances(response, req);
     ASSERT_EQ(1, response.get_maintenances().size());
     ASSERT_EQ(
@@ -500,7 +500,7 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
       admin_client->sync_getNodesState(rpc_options, resp, req);
       if (resp.get_states().size() > 0) {
         const auto& state = resp.get_states()[0];
-        if (ServiceState::ALIVE == state.get_daemon_state()) {
+        if (thrift::ServiceState::ALIVE == state.get_daemon_state()) {
           return true;
         }
       }
@@ -511,13 +511,14 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
   });
 
   {
-    NodesStateRequest request;
-    NodesStateResponse response;
+    thrift::NodesStateRequest request;
+    thrift::NodesStateResponse response;
     admin_client->sync_getNodesState(response, request);
     ASSERT_EQ(5, response.get_states().size());
     for (const auto& state : response.get_states()) {
-      ASSERT_EQ(ServiceState::ALIVE, state.get_daemon_state());
-      const SequencerState& seq_state = state.sequencer_state_ref().value();
+      ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
+      const thrift::SequencerState& seq_state =
+          state.sequencer_state_ref().value();
       ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());
       const auto& shard_states = state.shard_states_ref().value();
       ASSERT_EQ(2, shard_states.size());
@@ -537,27 +538,27 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
 
   std::string group_id;
   {
-    MaintenanceDefinition maintenance1;
+    thrift::MaintenanceDefinition maintenance1;
     maintenance1.set_user("dummy");
     maintenance1.set_shard_target_state(ShardOperationalState::DRAINED);
     // expands to all shards of node 1
     maintenance1.set_shards({mkShardID(1, -1)});
     maintenance1.set_sequencer_nodes({mkNodeID(1)});
     maintenance1.set_sequencer_target_state(SequencingState::DISABLED);
-    MaintenanceDefinitionResponse created;
+    thrift::MaintenanceDefinitionResponse created;
     admin_client->sync_applyMaintenance(created, maintenance1);
     ASSERT_EQ(1, created.get_maintenances().size());
     group_id = created.get_maintenances()[0].group_id_ref().value();
   }
   // Let's wait until the maintenance is applied.
   {
-    NodesFilter filter;
+    thrift::NodesFilter filter;
     thrift::NodeID node_id;
     node_id.set_node_index(1);
     filter.set_node(node_id);
-    NodesStateRequest request;
+    thrift::NodesStateRequest request;
     request.set_filter(filter);
-    NodesStateResponse response;
+    thrift::NodesStateResponse response;
     wait_until("DRAIN of node 1 is complete", [&]() {
       try {
         admin_client->sync_getNodesState(response, request);
@@ -582,7 +583,7 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
     });
     ASSERT_EQ(1, response.get_states().size());
     const auto& state = response.get_states()[0];
-    ASSERT_EQ(ServiceState::ALIVE, state.get_daemon_state());
+    ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
     const auto& shard_states = state.shard_states_ref().value();
     ASSERT_EQ(2, shard_states.size());
     for (const auto& shard : shard_states) {
@@ -605,18 +606,17 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
       ASSERT_THAT(maintenance_progress.get_associated_group_ids(),
                   UnorderedElementsAre(group_id));
     }
-    MaintenancesFilter fltr;
-    MaintenanceDefinitionResponse resp;
+    thrift::MaintenancesFilter fltr;
+    thrift::MaintenanceDefinitionResponse resp;
     admin_client->sync_getMaintenances(resp, fltr);
     auto output = resp.get_maintenances();
     ASSERT_EQ(1, output.size());
-    const MaintenanceDefinition& result = output[0];
+    const thrift::MaintenanceDefinition& result = output[0];
     ASSERT_EQ(thrift::MaintenanceProgress::COMPLETED, result.get_progress());
   }
 }
 
 // Enure a non authoritative rebuilding completes and a node is transitioned
-// to NONE after rebuilding is unblocked
 TEST_F(MaintenanceAPITest, unblockRebuilding) {
   init();
   cluster_->start();
@@ -636,7 +636,7 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
       admin_client->sync_getNodesState(rpc_options, resp, req);
       if (resp.get_states().size() > 0) {
         const auto& state = resp.get_states()[0];
-        if (ServiceState::ALIVE == state.get_daemon_state()) {
+        if (thrift::ServiceState::ALIVE == state.get_daemon_state()) {
           return true;
         }
       }
@@ -647,13 +647,14 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
   });
 
   {
-    NodesStateRequest request;
-    NodesStateResponse response;
+    thrift::NodesStateRequest request;
+    thrift::NodesStateResponse response;
     admin_client->sync_getNodesState(response, request);
     ASSERT_EQ(5, response.get_states().size());
     for (const auto& state : response.get_states()) {
-      ASSERT_EQ(ServiceState::ALIVE, state.get_daemon_state());
-      const SequencerState& seq_state = state.sequencer_state_ref().value();
+      ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
+      const thrift::SequencerState& seq_state =
+          state.sequencer_state_ref().value();
       ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());
       const auto& shard_states = state.shard_states_ref().value();
       ASSERT_EQ(2, shard_states.size());
@@ -670,86 +671,38 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
       }
     }
   }
-  // Let's apply a maintenance on node (1)
+
+  // Write some records
+  ld_info("Creating client");
+  auto client = cluster_->createClient();
+  ld_info("Writing records");
+  for (int i = 1; i <= 1000; ++i) {
+    std::string data("data" + std::to_string(i));
+    lsn_t lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
+    ASSERT_NE(LSN_INVALID, lsn);
+  }
+
+  // Let's apply a maintenance
   cluster_->getNode(0).kill();
   cluster_->getNode(1).kill();
 
-  // Let's wait until the maintenance is applied.
-  {
-    NodesFilter filter;
-    thrift::NodeID node_id;
-    node_id.set_node_index(1);
-    filter.set_node(node_id);
-    NodesStateRequest request;
-    request.set_filter(filter);
-    NodesStateResponse response;
-    wait_until("Rebuilding of node 1 is started", [&]() {
-      try {
-        admin_client->sync_getNodesState(response, request);
-        const auto& state = response.get_states()[0];
-        const auto& shard_states = state.shard_states_ref().value();
-        // We need to wait for all shards to start rebuilding
-        bool all_in_data_migration = true;
-        for (const auto& shard : shard_states) {
-          const auto& shard_data_health = shard.get_data_health();
-          if (shard_data_health != ShardDataHealth::UNAVAILABLE) {
-            all_in_data_migration = false;
-          }
-        }
-        return all_in_data_migration == true;
-      } catch (thrift::NodeNotReady& e) {
-        return false;
-      }
-    });
-  }
-
-  std::vector<thrift::ShardID> expected_shards;
+  StorageSet expected_shards;
   for (int i = 0; i < 2; i++) {
     for (int j = 0; j < 2; j++) {
-      expected_shards.push_back(mkShardID(i, j));
+      expected_shards.push_back(ShardID(i, j));
     }
   }
 
-  MarkAllShardsUnrecoverableRequest request;
+  // Let's wait until the maintenance is applied.
+  IntegrationTestUtils::waitUntilShardsHaveEventLogState(
+      client, expected_shards, AuthoritativeStatus::UNAVAILABLE, true);
+
+  thrift::MarkAllShardsUnrecoverableRequest request;
   request.set_user("test");
   request.set_reason("test");
-  MarkAllShardsUnrecoverableResponse response;
+  thrift::MarkAllShardsUnrecoverableResponse response;
   admin_client->sync_markAllShardsUnrecoverable(response, request);
-  const auto& shards_succeeded = response.get_shards_succeeded();
-  for (auto shard : expected_shards) {
-    auto it =
-        std::find(shards_succeeded.begin(), shards_succeeded.end(), shard);
-    ld_check(it != shards_succeeded.end());
-  }
 
-  {
-    NodesFilter filter;
-    thrift::NodeID node_id;
-    node_id.set_node_index(1);
-    filter.set_node(node_id);
-    NodesStateRequest request;
-    request.set_filter(filter);
-    NodesStateResponse response;
-    wait_until("Rebuilding of node 1 is completed", [&]() {
-      try {
-        admin_client->sync_getNodesState(response, request);
-        const auto& state = response.get_states()[0];
-        const auto& shard_states = state.shard_states_ref().value();
-        // We need to wait for all shards to finish rebuilding
-        bool all_finished = true;
-        for (const auto& shard : shard_states) {
-          if (shard.maintenance_ref().has_value()) {
-            const auto& maintenance_progress = shard.maintenance_ref().value();
-            if (maintenance_progress.get_status() !=
-                MaintenanceStatus::COMPLETED) {
-              all_finished = false;
-            }
-          }
-        }
-        return all_finished == true;
-      } catch (thrift::NodeNotReady& e) {
-        return false;
-      }
-    });
-  }
+  IntegrationTestUtils::waitUntilShardsHaveEventLogState(
+      client, expected_shards, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
 }
