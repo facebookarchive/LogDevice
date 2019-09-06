@@ -20,9 +20,10 @@ class StaticLocator : public SequencerLocator {
  public:
   explicit StaticLocator(NodeID dest) : dest_(dest) {}
 
-  int locateSequencer(logid_t log_id,
-                      Completion cf,
-                      const configuration::SequencersConfig*) override {
+  int locateSequencer(
+      logid_t log_id,
+      Completion cf,
+      std::shared_ptr<configuration::SequencersConfig>) override {
     cf(E::OK, log_id, dest_);
     return 0;
   }

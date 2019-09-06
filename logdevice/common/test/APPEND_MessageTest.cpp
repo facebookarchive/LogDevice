@@ -167,10 +167,10 @@ class MockSequencerLocator : public SequencerLocator {
   explicit MockSequencerLocator(MockAppenderPrep& appender_prep)
       : SequencerLocator(), appender_prep_(appender_prep) {}
 
-  int locateSequencer(
-      logid_t logid,
-      Completion cf,
-      const ServerConfig::SequencersConfig* sequencers = nullptr) override;
+  int locateSequencer(logid_t logid,
+                      Completion cf,
+                      std::shared_ptr<ServerConfig::SequencersConfig>
+                          sequencers = nullptr) override;
   bool isAllowedToCache() const override {
     return false;
   }
@@ -383,7 +383,7 @@ class MockAppenderPrep : public AppenderPrep {
 int MockSequencerLocator::locateSequencer(
     logid_t logid,
     Completion cf,
-    const configuration::SequencersConfig*) {
+    std::shared_ptr<configuration::SequencersConfig>) {
   NodeID node_out;
   if (appender_prep_.getSequencerNode(logid, &node_out) == 0) {
     cf(E::OK, logid, node_out);

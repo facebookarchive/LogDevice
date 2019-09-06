@@ -17,12 +17,12 @@ namespace facebook { namespace logdevice {
 int HashBasedSequencerLocator::locateSequencer(
     logid_t log_id,
     Completion cf,
-    const configuration::SequencersConfig* sequencers) {
+    std::shared_ptr<configuration::SequencersConfig> sequencers) {
   auto config = getConfig();
   WeakRef<HashBasedSequencerLocator> ref = holder_.ref();
   config->getLogGroupByIDAsync(
       log_id,
-      [ref, log_id, cf, sequencers](
+      [ref, log_id, cf, sequencers = std::move(sequencers)](
           const std::shared_ptr<const LogsConfig::LogGroupNode> log_group) {
         if (log_group == nullptr) {
           cf(E::NOTFOUND, log_id, NodeID());
@@ -49,7 +49,7 @@ int HashBasedSequencerLocator::locateSequencer(
 void HashBasedSequencerLocator::locateContinuation(
     logid_t log_id,
     Completion cf,
-    const configuration::SequencersConfig* sequencers,
+    std::shared_ptr<configuration::SequencersConfig> sequencers,
     const logsconfig::LogAttributes* log_attrs) {
   auto nodes_configuration = getNodesConfiguration();
   auto cs = getClusterState();
@@ -61,7 +61,7 @@ void HashBasedSequencerLocator::locateContinuation(
       getSettings().use_sequencer_affinity ? log_attrs : nullptr,
       cs,
       &res,
-      sequencers);
+      std::move(sequencers));
   if (rv == 0) {
     cf(E::OK, log_id, res);
   } else {
@@ -93,10 +93,11 @@ int HashBasedSequencerLocator::locateSequencer(
     const logsconfig::LogAttributes* log_attrs,
     ClusterState* cs,
     NodeID* out_sequencer,
-    const configuration::SequencersConfig* sequencers) {
+    std::shared_ptr<configuration::SequencersConfig> sequencersconfig) {
   ld_check(nodes_configuration != nullptr);
   ld_check(out_sequencer != nullptr);
 
+  const configuration::SequencersConfig* sequencers = sequencersconfig.get();
   if (sequencers == nullptr) {
     sequencers = &nodes_configuration->getSequencersConfig();
   }

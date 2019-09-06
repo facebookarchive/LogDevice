@@ -74,7 +74,7 @@ void SequencerRouter::start() {
       // bit so that it can find the correct sequencer for both kinds of logs
       MetaDataLog::dataLogID(log_id_),
       sequencer_located,
-      sequencers_.hasValue() ? &sequencers_.value() : nullptr);
+      sequencers_);
   if (rv != 0) {
     ld_check(err != E::OK);
     sequencer_located(err, log_id_, NodeID());
@@ -504,12 +504,17 @@ void SequencerRouter::sendTo(NodeID dest, flags_t flags) {
 }
 
 bool SequencerRouter::blacklist(NodeID node) {
-  if (!sequencers_.hasValue()) {
+  if (!sequencers_) {
     // make a copy of the sequencer list from the cluster config
-    sequencers_ = getNodesConfiguration()->getSequencersConfig();
+    sequencers_ = std::make_shared<ServerConfig::SequencersConfig>(
+        getNodesConfiguration()->getSequencersConfig());
+  } else {
+    // make a copy of current sequencers to avoid modifying the shared object
+    sequencers_ =
+        std::make_shared<ServerConfig::SequencersConfig>(*sequencers_);
   }
 
-  ServerConfig::SequencersConfig& cfg = sequencers_.value();
+  ServerConfig::SequencersConfig& cfg = *sequencers_;
   ld_check(cfg.weights.size() == cfg.nodes.size());
 
   auto it = std::find(cfg.nodes.begin(), cfg.nodes.end(), node);

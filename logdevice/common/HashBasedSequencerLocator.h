@@ -36,14 +36,15 @@ class HashBasedSequencerLocator : public SequencerLocator {
   int locateSequencer(
       logid_t log_id,
       Completion cf,
-      const ServerConfig::SequencersConfig* sequencers) override;
+      std::shared_ptr<ServerConfig::SequencersConfig> sequencers) override;
 
   // Continuation of the locateSequencer() method after logs config data is
   // received.
-  void locateContinuation(logid_t log_id,
-                          Completion cf,
-                          const ServerConfig::SequencersConfig* sequencers,
-                          const logsconfig::LogAttributes* log_attrs);
+  void
+  locateContinuation(logid_t log_id,
+                     Completion cf,
+                     std::shared_ptr<ServerConfig::SequencersConfig> sequencers,
+                     const logsconfig::LogAttributes* log_attrs);
 
   // Locates sequencer assuming that all nodes are available.
   // Used by nodeset/copyset selector to make Appenders more likely to send
@@ -63,7 +64,7 @@ class HashBasedSequencerLocator : public SequencerLocator {
       const logsconfig::LogAttributes* log_attrs, // if null, no affinity
       ClusterState* cs, // if null, all nodes considered available
       NodeID* out_sequencer,
-      const configuration::SequencersConfig* sequencers = nullptr);
+      std::shared_ptr<configuration::SequencersConfig> sequencers = nullptr);
 
   bool isAllowedToCache() const override;
 

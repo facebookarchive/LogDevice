@@ -172,7 +172,7 @@ class SequencerRouter {
   // Sequencer nodes in the cluster and their weights. Some of them may have
   // weights explicitly set to zero in order to exclude them from the search:
   // these are normally nodes that we weren't able to connect to.
-  folly::Optional<ServerConfig::SequencersConfig> sequencers_;
+  std::shared_ptr<ServerConfig::SequencersConfig> sequencers_{nullptr};
 
   // Set of sequencer nodes that are known to be preempted for the log. A flag,
   // indicating whether a message was resent to the preempted node (see comment

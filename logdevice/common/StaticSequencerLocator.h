@@ -24,9 +24,10 @@ class StaticSequencerLocator : public SequencerLocator {
   explicit StaticSequencerLocator(std::shared_ptr<UpdateableConfig> config)
       : config_(std::move(config)) {}
 
-  int locateSequencer(logid_t logid,
-                      Completion cf,
-                      const configuration::SequencersConfig*) override {
+  int locateSequencer(
+      logid_t logid,
+      Completion cf,
+      std::shared_ptr<configuration::SequencersConfig>) override {
     const auto nodes_configuration = config_->getNodesConfiguration();
     const bool has_node_zero_seq =
         nodes_configuration->getSequencerMembership()->hasNode(0);

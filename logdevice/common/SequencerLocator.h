@@ -81,10 +81,10 @@ class SequencerLocator {
    *                  E::INVALID_PARAM  logid is invalid or cf is empty
    *                  E::INTERNAL    internal error, debug builds assert
    */
-  virtual int locateSequencer(
-      logid_t logid,
-      Completion cf,
-      const configuration::SequencersConfig* sequencers = nullptr) = 0;
+  virtual int locateSequencer(logid_t logid,
+                              Completion cf,
+                              std::shared_ptr<configuration::SequencersConfig>
+                                  sequencers = nullptr) = 0;
 
   /**
    * Can upper layers cache results returned by locateSequencer() and bypass
