@@ -175,9 +175,21 @@ class ServerParameters {
   // The main server config hook that invokes other hooks
   bool onServerConfigUpdate(ServerConfig& config);
 
-  bool initNodesConfiguration();
+  std::unique_ptr<configuration::nodes::NodesConfigurationStore>
+  buildNodesConfigurationStore();
+
+  bool initNodesConfiguration(
+      std::shared_ptr<configuration::nodes::NodesConfigurationStore> store);
 
   bool initMyNodeIDFinder();
+
+  /**
+   * Searches for the node in the NodesConfiguration using the MyNodeIDFinder.
+   * If the node doesn't find itself, it self-registers in the config. If it
+   * does find itself, it makes sure that it's attributes are up to date.
+   */
+  bool registerAndUpdateNodeInfo(
+      std::shared_ptr<configuration::nodes::NodesConfigurationStore> store);
 };
 
 /**

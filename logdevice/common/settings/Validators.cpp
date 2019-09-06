@@ -146,4 +146,11 @@ void validate_port(int port) {
   }
 }
 
+void validate_optional_port(int port) {
+  if (port == 0) {
+    return;
+  }
+  validate_port(port);
+}
+
 }}} // namespace facebook::logdevice::setting_validators

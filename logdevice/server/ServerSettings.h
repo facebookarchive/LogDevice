@@ -15,6 +15,7 @@
 #include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfigSource.h"
+#include "logdevice/common/configuration/nodes/NodeRole.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
@@ -46,7 +47,6 @@ struct ServerSettings : public SettingsBundle {
   bool require_ssl_on_command_port;
   std::string command_unix_socket;
   int ssl_command_port;
-  std::string ssl_command_unix_socket;
   bool admin_enabled;
   int command_conn_limit;
   dbg::Level loglevel;
@@ -63,13 +63,13 @@ struct ServerSettings : public SettingsBundle {
   // Interval between invoking syncs for delayable storage tasks.
   // Ignored when undelayable task is being enqueued.
   std::chrono::milliseconds storage_thread_delaying_sync_interval;
+  std::string server_id;
   int fd_limit;
   bool eagerly_allocate_fdtable;
   int num_reserved_fds;
   bool lock_memory;
   std::string user;
   SequencerOptions sequencer;
-  std::string server_id;
   bool unmap_caches;
   bool disable_event_log_trimming;
   bool ignore_cluster_marker;
@@ -86,8 +86,20 @@ struct ServerSettings : public SettingsBundle {
 
   bool test_mode;
 
-  int deprecated_ssl_port;
-  std::string deprecated_ssl_unix_socket;
+  // Self Registration Specific attributes
+  bool enable_node_self_registration;
+  std::string name;
+  // TODO(mbassem): This is the IP, do we need a better name?
+  std::string address;
+  int ssl_port;
+  std::string ssl_unix_socket;
+  int gossip_port;
+  std::string gossip_unix_socket;
+  configuration::nodes::RoleSet roles;
+  NodeLocation location;
+  double sequencer_weight;
+  double storage_capacity;
+  int num_shards;
 
  private:
   // Only UpdateableSettings can create this bundle to ensure defaults are

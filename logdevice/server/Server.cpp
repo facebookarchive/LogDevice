@@ -29,6 +29,7 @@
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
+#include "logdevice/common/configuration/nodes/NodeIndicesAllocator.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/configuration/nodes/ZookeeperNodesConfigurationStore.h"
@@ -46,6 +47,7 @@
 #include "logdevice/server/LazySequencerPlacement.h"
 #include "logdevice/server/LogStoreMonitor.h"
 #include "logdevice/server/MyNodeIDFinder.h"
+#include "logdevice/server/NodeRegistrationHandler.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
@@ -229,7 +231,9 @@ bool ServerParameters::initMyNodeIDFinder() {
   std::unique_ptr<NodeIDMatcher> id_matcher;
   // TODO(T44427489): When name is enforced in config, we can always use the
   // name to search for ourself in the config.
-  if (!server_settings_->unix_socket.empty()) {
+  if (server_settings_->enable_node_self_registration) {
+    id_matcher = NodeIDMatcher::byName(server_settings_->name);
+  } else if (!server_settings_->unix_socket.empty()) {
     id_matcher = NodeIDMatcher::byUnixSocket(server_settings_->unix_socket);
   } else {
     id_matcher = NodeIDMatcher::byTCPPort(server_settings_->port);
@@ -240,6 +244,57 @@ bool ServerParameters::initMyNodeIDFinder() {
   }
 
   my_node_id_finder_ = std::make_unique<MyNodeIDFinder>(std::move(id_matcher));
+  return true;
+}
+
+bool ServerParameters::registerAndUpdateNodeInfo(
+    std::shared_ptr<NodesConfigurationStore> nodes_configuration_store) {
+  NodeRegistrationHandler handler{*server_settings_.get(),
+                                  updateable_config_->getNodesConfiguration(),
+                                  nodes_configuration_store};
+  // Find our NodeID from the published NodesConfiguration
+  if (auto my_id = my_node_id_finder_->calculate(
+          *updateable_config_->getNodesConfiguration());
+      my_id.hasValue()) {
+    ld_check(my_id->isNodeID());
+    my_node_id_ = std::move(my_id);
+    // TODO(mbassem) check and update self attributes.
+  } else {
+    if (server_settings_->enable_node_self_registration) {
+      ld_check(processor_settings_->enable_nodes_configuration_manager);
+      ld_check(processor_settings_
+                   ->use_nodes_configuration_manager_nodes_configuration);
+      auto result = handler.registerSelf(NodeIndicesAllocator{});
+      if (result.hasError()) {
+        ld_error("Failed to self register: (%s): %s",
+                 error_name(result.error()),
+                 error_description(result.error()));
+        return false;
+      }
+      ld_info("Successfully registered as N%d", *result);
+      // Refetch the NodesConfiguration to detect the modification that we
+      // proposed.
+      initNodesConfiguration(nodes_configuration_store);
+
+      // By now, we're sure that this is index is in config, let's populate
+      // our NodeID.
+      if (!updateable_config_->getNodesConfiguration()
+               ->isNodeInServiceDiscoveryConfig(*result)) {
+        ld_error("Couldn't find myself (N%d) in the config, even after "
+                 "self-registering. It might mean the NodesConfigurationStore "
+                 "returned a stale version. This shouldn't really happen and "
+                 "might indicate a bug somewhere.",
+                 *result);
+        return false;
+      }
+      my_node_id_ =
+          updateable_config_->getNodesConfiguration()->getNodeID(*result);
+    } else {
+      ld_error("Failed to identify my node index in config, and self "
+               "registration is disabled. Can't proceed, will abort.");
+      return false;
+    }
+  }
   return true;
 }
 
@@ -313,8 +368,19 @@ ServerParameters::ServerParameters(
     }
   }
 
+  std::shared_ptr<NodesConfigurationStore> nodes_configuration_store;
+
   if (processor_settings_->enable_nodes_configuration_manager) {
-    if (!initNodesConfiguration()) {
+    nodes_configuration_store = buildNodesConfigurationStore();
+    if (nodes_configuration_store == nullptr) {
+      ld_error("Failed to build a NodesConfigurationStore.");
+      throw ConstructorFailed();
+    }
+  }
+
+  if (processor_settings_->enable_nodes_configuration_manager) {
+    ld_check(nodes_configuration_store);
+    if (!initNodesConfiguration(nodes_configuration_store)) {
       throw ConstructorFailed();
     }
     ld_check(updateable_config_->getNodesConfigurationFromNCMSource() !=
@@ -338,19 +404,10 @@ ServerParameters::ServerParameters(
     throw ConstructorFailed();
   }
 
-  {
-    // Find our NodeID from the published NodesConfiguration
-    ld_check(my_node_id_finder_);
-    const auto& nodes_configuration =
-        updateable_config_->getNodesConfiguration();
-    auto my_id = my_node_id_finder_->calculate(*nodes_configuration);
-    if (!my_id.hasValue()) {
-      ld_error("Failed to identify my node index in config");
-      throw ConstructorFailed();
-    }
-    ld_check(my_id->isNodeID());
-    my_node_id_ = std::move(my_id);
+  if (!registerAndUpdateNodeInfo(nodes_configuration_store)) {
+    throw ConstructorFailed();
   }
+  ld_check(my_node_id_.hasValue());
 
   if (updateable_logs_config->get() == nullptr) {
     // Initialize logdevice with an empty LogsConfig that only contains the
@@ -444,14 +501,19 @@ size_t ServerParameters::getNumDBShards() const {
   return num_db_shards_;
 }
 
-bool ServerParameters::initNodesConfiguration() {
+std::unique_ptr<configuration::nodes::NodesConfigurationStore>
+ServerParameters::buildNodesConfigurationStore() {
   std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
       getPluginRegistry()->getSinglePlugin<ZookeeperClientFactory>(
           PluginType::ZOOKEEPER_CLIENT_FACTORY);
-  auto store = NodesConfigurationStoreFactory::create(
+  return NodesConfigurationStoreFactory::create(
       *updateable_config_->get(),
       *getProcessorSettings().get(),
       std::move(zookeeper_client_factory));
+}
+
+bool ServerParameters::initNodesConfiguration(
+    std::shared_ptr<configuration::nodes::NodesConfigurationStore> store) {
   NodesConfigurationInit config_init(std::move(store), getProcessorSettings());
   return config_init.initWithoutProcessor(
       updateable_config_->updateableNCMNodesConfiguration());

@@ -46,6 +46,7 @@ sidebar_label: Settings
 | client-default-dscp | Use default DSCP to setup to client sockets at Sender.Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4 | 0 | requires&nbsp;restart |
 | config-path | location of the cluster config file to use. Format: [file:]<path-to-config-file> or configerator:<configerator-path> |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | enable-logsconfig-manager | If true, logdeviced will load the logs configuration from the internal replicated storage and will ignore the logs section in the config file. This also enables the remote management API for logs config. | true |  |
+| enable-node-self-registration | If set, the node will register itself in the config if it doesn't find itself there. Otherwise it will crash. This requires --enable-nodes-configuration=true | false | requires&nbsp;restart, **experimental**, server&nbsp;only |
 | enable-nodes-configuration-manager | If set, NodesConfigurationManager and its workflow will be enabled. | false | requires&nbsp;restart |
 | file-config-update-interval | interval at which to poll config file for changes (if reading config from file on disk | 10000ms |  |
 | initial-config-load-timeout | maximum time to wait for initial server configuration until giving up | 15s | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
@@ -223,6 +224,21 @@ sidebar_label: Settings
 | tcp-keep-alive-time | TCP keepalive time. This is the time, in seconds, before the first probe will be sent. If negative the OS default will be used. | -1 |  |
 | tcp-user-timeout | The time in miliseconds that transmitted data may remain unacknowledgedbefore TCP will close the connection. 0 for system default. -1 to disable. default is 5min = 300000 | 300000 |  |
 | use-tcp-keep-alive | Enable TCP keepalive for all connections | true |  |
+
+## Node Registration
+|   Name    |   Description   |  Default  |   Notes   |
+|-----------|-----------------|:---------:|-----------|
+| address | [Only used when node self registration is enabled] The interface address that the server will be listening on for data, gossip, commmand and admin conenctions (unless overridden by unix sockets settings). |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| gossip-port | [Only used when node self registration is enabled] TCP port on which the server listens for gossip connections. A value of zero means that the server will listen for socket on the data port. | 0 | requires&nbsp;restart, server&nbsp;only |
+| gossip-unix-socket | [Only used when node self registration is enabled] Path to the unix domain socket the server will use to listen for gossip connections |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| location | [Only used when node self registration is enabled] The location of the node. Check the documentation of NodeLocation::fromDomainString to understand the format. |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| name | The name that the server will use to self register in the nodes configuration. This is the main identifier that the node uses to join the cluster. At any point of time, all the names in the config are unique. If a node joins with a name that's used by another running node, the new node will preempt the old one. |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| num-shards | [Only used when node self registration is enabled] defines how many storage shards this node will have. Sharding can be useful to distribute the IO load on multiple disks that are managed by the same daemon. | 1 | requires&nbsp;restart, server&nbsp;only |
+| roles | [Only used when node self registration is enabled] Defines whether the node is sequencer node, storage node or both. The roles are comma-separated. e.g. 'sequencer,storage' | sequencer,storage | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| sequencer-weight | [Only used when node self registration is enabled] define a proportional value for the number of sequencers to be placed on the machine | 1 | requires&nbsp;restart, server&nbsp;only |
+| ssl-port | [Only used when node self registration is enabled] TCP port on which the server listens for SSL clients. A value of zero means that the server won't listen for SSL connections. | 0 | requires&nbsp;restart, server&nbsp;only |
+| ssl-unix-socket | [Only used when node self registration is enabled] Path to the unix domain socket the server will use to listen for SSL clients |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| storage-capacity | [Only used when node self registration is enabled] defines a proportional value for the amount of data to be stored compared to other machines. When e.g. total disk size is used as weight for machines with variable disk sizes, the storage will be used proportionally.  | 1 | requires&nbsp;restart, server&nbsp;only |
 
 ## Performance
 |   Name    |   Description   |  Default  |   Notes   |

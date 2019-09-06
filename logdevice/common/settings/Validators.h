@@ -294,5 +294,6 @@ class parse_memory_budget {
 void validate_unix_socket(const std::string& unix_socket);
 
 void validate_port(int port);
+void validate_optional_port(int port);
 
 }}} // namespace facebook::logdevice::setting_validators

@@ -20,6 +20,7 @@ namespace facebook { namespace logdevice {
 // maximum allowed number of storage threads to run
 #define STORAGE_THREADS_MAX 10000
 
+namespace {
 static void validate_storage_threads(const char* name, int value, int min) {
   if (value < min || value > STORAGE_THREADS_MAX) {
     char buf[1024];
@@ -48,6 +49,43 @@ static SequencerOptions validate_sequencers(const std::string& value) {
   }
 }
 
+static configuration::nodes::RoleSet parse_roles(const std::string& value) {
+  std::vector<std::string> role_strs;
+  configuration::nodes::RoleSet roles;
+  folly::split(",", value, role_strs);
+  for (const auto& role : role_strs) {
+    if (role == "sequencer") {
+      roles[static_cast<size_t>(configuration::nodes::NodeRole::SEQUENCER)] =
+          true;
+    } else if (role == "storage") {
+      roles[static_cast<size_t>(configuration::nodes::NodeRole::STORAGE)] =
+          true;
+    } else {
+      throw boost::program_options::error(
+          folly::sformat("Invalid role: {}", role));
+    }
+  }
+  return roles;
+}
+
+static NodeLocation parse_location(const std::string& value) {
+  auto loc = NodeLocation{};
+  if (value.empty()) {
+    return loc;
+  }
+  auto success = loc.fromDomainString(value);
+  if (success != 0) {
+    throw boost::program_options::error(
+        folly::sformat("Invalid location {}: {} {}.",
+                       value,
+                       error_name(err),
+                       error_description(err)));
+  }
+  return loc;
+}
+
+} // namespace
+
 void ServerSettings::defineSettings(SettingEasyInit& init) {
   using namespace SettingFlag;
   using ThreadType = StorageTaskThreadType;
@@ -65,14 +103,6 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "TCP port on which the server listens for non-SSL clients",
      SERVER | REQUIRES_RESTART | CLI_ONLY,
      SettingsCategory::Core)
-
-    ("ssl-unix-socket", &deprecated_ssl_unix_socket, "", nullptr,
-     "Deprecated and ignored.",
-     SERVER | REQUIRES_RESTART | DEPRECATED)
-
-    ("ssl-port", &deprecated_ssl_port, "0", nullptr,
-     "Deprecated and ignored.",
-     SERVER | REQUIRES_RESTART | DEPRECATED)
 
     ("command-unix-socket", &command_unix_socket, "", validate_unix_socket,
      "Path to the unix domain socket the server will use to listen for admin "
@@ -383,6 +413,100 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "Gracefully shutdown whenever the server's NodeID changes",
      SERVER,
      SettingsCategory::Configuration)
+
+    ("enable-node-self-registration", &enable_node_self_registration, "false",
+     nullptr,
+     "If set, the node will register itself in the config if it doesn't find "
+     "itself there. Otherwise it will crash. This requires "
+     "--enable-nodes-configuration=true",
+     SERVER | REQUIRES_RESTART | EXPERIMENTAL,
+     SettingsCategory::Configuration)
+
+    ("name", &name, "",
+     nullptr,
+     "The name that the server will use to self register in the nodes configuration. "
+     "This is the main identifier that the node uses to join the cluster. At "
+     "any point of time, all the names in the config are unique. If a node joins "
+     "with a name that's used by another running node, the new node will preempt "
+     "the old one.",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("address", &address, "",
+     nullptr,
+     "[Only used when node self registration is enabled] The interface address "
+     "that the server will be listening on for data, gossip, commmand and admin"
+     " conenctions (unless overridden by unix sockets"
+     " settings).",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("gossip-unix-socket", &gossip_unix_socket, "", validate_unix_socket,
+     "[Only used when node self registration is enabled] Path to the unix "
+     "domain socket the server will use to listen for "
+     "gossip connections",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("gossip-port", &gossip_port, "0", validate_optional_port,
+     "[Only used when node self registration is enabled] TCP port on which the "
+     "server listens for gossip connections. A value of "
+     "zero means that the server will listen for socket on the data port.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
+
+    ("ssl-unix-socket", &ssl_unix_socket, "", validate_unix_socket,
+     "[Only used when node self registration is enabled] Path to the unix "
+     "domain socket the server will use to listen for SSL clients",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("ssl-port", &ssl_port, "0", validate_optional_port,
+     "[Only used when node self registration is enabled] TCP port on which the "
+     "server listens for SSL clients. A value of zero "
+     "means that the server won't listen for SSL connections.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
+
+    ("roles", &roles, "sequencer,storage",
+     parse_roles,
+     "[Only used when node self registration is enabled] Defines whether the "
+     "node is sequencer node, storage node or both. The roles are "
+     "comma-separated. e.g. 'sequencer,storage'",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("location", &location, "",
+     parse_location,
+     "[Only used when node self registration is enabled] The location of the "
+     "node. Check the documentation of NodeLocation::fromDomainString to "
+     "understand the format.",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("sequencer-weight", &sequencer_weight, "1",
+     validate_positive<double>(),
+     "[Only used when node self registration is enabled] define a proportional "
+     "value for the number of sequencers to be placed on the machine",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
+
+    ("storage-capacity", &storage_capacity, "1",
+     validate_positive<double>(),
+     "[Only used when node self registration is enabled] defines a proportional "
+     "value for the amount of data to be stored compared to other machines. "
+     "When e.g. total disk size is used as weight for machines with variable "
+     "disk sizes, the storage will be used proportionally. ",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
+
+    ("num-shards", &num_shards, "1",
+     validate_positive<int>(),
+     "[Only used when node self registration is enabled] defines how many "
+     "storage shards this node will have. Sharding can be useful to distribute "
+     "the IO load on multiple disks that are managed by the same daemon.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
 
     ;
   // clang-format on
