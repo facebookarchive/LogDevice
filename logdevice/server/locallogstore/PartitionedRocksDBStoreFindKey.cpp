@@ -32,6 +32,10 @@ int PartitionedRocksDBStore::FindKey::execute(lsn_t* lo, lsn_t* hi) {
   *lo_ = LSN_INVALID;
   *hi_ = LSN_MAX;
 
+  if (store_.isLogEmpty(logid_, /* ignore_pseudorecords */ false)) {
+    return 0;
+  }
+
   PartitionPtr p_lo;
   int rv = findPartitionLo(&p_lo);
   if (rv != 0) {

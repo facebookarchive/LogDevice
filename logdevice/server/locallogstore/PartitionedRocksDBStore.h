@@ -463,14 +463,18 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                size_t* out);
 
   /**
-   * Checks whether the given log is empty, meaning it has either no records or
-   * only pseudorecords, such as bridge records and hole plugs.
+   * Checks whether the given log has no records.
+   * If `ignore_pseudorecords` is true, bridge and hole records don't count.
+   * Not exact: in rare cases it may report the log as nonempty when it's
+   * actually empty; in particular, if we previously crashed after writing a
+   * directory entry but before writing the corresponding record.
    *
-   * @param log_id              Log id to check.
-   * @return                    true if any directory entries for the log have
-   *                            only pseudorecords in them.
+   * @param log_id               Log id to check.
+   * @param ignore_pseudorecords If true, consider the log empty if it only
+   *                             contains bridge/hole records
+   * @return                     true if the log is empty
    */
-  bool isLogEmpty(logid_t log_id);
+  bool isLogEmpty(logid_t log_id, bool ignore_pseudorecords) const;
 
   void normalizeTimeRanges(RecordTimeIntervals&) const override;
 

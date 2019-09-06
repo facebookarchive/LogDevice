@@ -2195,6 +2195,11 @@ int PartitionedRocksDBStore::findPartition(RocksDBIterator* it,
                                            PartitionPtr* out_partition) const {
   ld_check(it);
 
+  if (isLogEmpty(log_id, /* ignore_pseudorecords */ false)) {
+    err = E::NOTFOUND;
+    return -1;
+  }
+
   // NOTE: The case of multiple directory entries for the same (log_id, lsn)
   //       pair is handled correctly.
   int rv = seekToLastInDirectory(it, log_id, lsn);
@@ -2376,11 +2381,26 @@ int PartitionedRocksDBStore::dataSize(logid_t log_id,
   return 0;
 }
 
-bool PartitionedRocksDBStore::isLogEmpty(logid_t log_id) {
+bool PartitionedRocksDBStore::isLogEmpty(logid_t log_id,
+                                         bool ignore_pseudorecords) const {
   auto logs_it = logs_.find(log_id.val_);
   if (logs_it == logs_.cend()) {
+    // We haven't even heard about this log before.
     return true;
   }
+
+  if (logs_it->second->latest_partition.latest_partition == PARTITION_INVALID) {
+    // No directory entries for this log.
+    return true;
+  }
+
+  if (!ignore_pseudorecords) {
+    // Got some directory entries, so probably not empty.
+    return false;
+  }
+
+  // Directory is not empty, so we probably have some records. Check if any of
+  // these records count as nonempty.
 
   // Grab logstate mutex
   LogState* log_state = logs_it->second.get();
@@ -5645,6 +5665,11 @@ int PartitionedRocksDBStore::getApproximateTimestamp(
     err = status.IsIncomplete() ? E::WOULDBLOCK : E::LOCAL_LOG_STORE_READ;
     return true;
   };
+
+  if (isLogEmpty(log_id, /* ignore_pseudorecords */ false)) {
+    err = E::NOTFOUND;
+    return -1;
+  }
 
   it.Seek(rocksdb::Slice(
       reinterpret_cast<const char*>(&data_key), sizeof(data_key)));

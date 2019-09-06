@@ -233,6 +233,10 @@ int PartitionedRocksDBStore::FindTime::findPartition(
     }
   };
 
+  if (store_.isLogEmpty(logid_, /* ignore_pseudorecords */ false)) {
+    return 0;
+  }
+
   // First, find the first partition's lsn.
   int rv = store_.seekToLastInDirectory(&it, logid_, LSN_OLDEST);
   if (rv != 0) {

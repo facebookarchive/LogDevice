@@ -171,7 +171,8 @@ IS_LOG_EMPTY_onReceived(IS_LOG_EMPTY_Message* msg,
     // Make sure it's not just pseudorecords, such as bridge records.
     auto partitioned_store = dynamic_cast<PartitionedRocksDBStore*>(&store);
     empty = partitioned_store != nullptr &&
-        partitioned_store->isLogEmpty(header.log_id);
+        partitioned_store->isLogEmpty(
+            header.log_id, /* ignore_pseudorecords */ true);
   }
 
   send_reply(from, header, E::OK, empty);
