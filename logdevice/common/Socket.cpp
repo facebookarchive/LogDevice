@@ -1430,6 +1430,7 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
   next_pos_ += msglen;
   envelope->setDrainPos(next_pos_);
 
+  envelope->enqTime(std::chrono::steady_clock::now());
   sendq_.push_back(*envelope.release());
   ld_check(!envelope);
 
@@ -1773,6 +1774,8 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
     // All bytes of message at cur have been sent into the underlying socket.
     std::unique_ptr<Envelope> e(&sendq_.front());
     sendq_.pop_front();
+    STAT_ADD(
+        deps_->getStats(), sock_total_time_in_messages_written, e->enqTime());
 
     // Messages should be serialized only if we are handshaken_. The only
     // exception is the first message which is a handshake message. HELLO and
@@ -1802,6 +1805,8 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
     ++num_messages_sent_;
     ++num_messages;
   }
+
+  STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, nbytes);
 
   deps_->noteBytesDrained(nbytes);
 
