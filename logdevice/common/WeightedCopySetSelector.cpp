@@ -261,7 +261,7 @@ std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
     // if _shard_ is writable (e.g., in RW state), then use the storage capacity
     // in it's node's storage attributes.
     domain_nodeset_weight[domain] +=
-        nodes_configuration.getWritableStorageCapacity(shard);
+        nodes_configuration.getShardWritableStorageCapacity(shard);
   }
 
   // Target sum of effective weights of nodes in each domain. Without locality,
@@ -276,16 +276,13 @@ std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
     ld_check(node_sd != nullptr);
     NodeLocation location = node_sd->location.value_or(NodeLocation());
     std::string domain = location.getDomain(secondary_replication_scope_, node);
-    const auto* storage_attr =
-        nodes_configuration.getNodeStorageAttribute(node);
-    ld_check(storage_attr != nullptr);
 
     if (domain_nodeset_weight.count(domain) &&
         domain_nodeset_weight.at(domain) != 0.0) {
-      // Note: we do not take into account of the storage state in the
-      // domain multiplier calculation to correctly take into account of
-      // node selection during nodeset calculation
-      domain_target_weight[domain] += storage_attr->capacity;
+      // use the total writable storage capacity of the domain as the
+      // domain target weight
+      domain_target_weight[domain] +=
+          nodes_configuration.getNodeWritableStorageCapacity(node);
     } else {
       // Some positive-weight domain has no positive-weight nodes in nodeset.
       // This is unusual but possible if e.g. a new rack was added to config,
@@ -329,7 +326,7 @@ std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
     // Similarily, use the more granular per-shard storage state in
     // StorageMembership. This is used to prevent the Appender/Sequencer
     // from sending any STORE to any shard that is not RW.
-    double weight = nodes_configuration.getWritableStorageCapacity(shard);
+    double weight = nodes_configuration.getShardWritableStorageCapacity(shard);
     ld_check(weight >= 0);
     if (weight > 0) {
       ld_assert(domain_nodeset_weight.at(secondary_domain) > 0);

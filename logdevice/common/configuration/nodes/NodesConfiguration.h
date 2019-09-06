@@ -115,10 +115,14 @@ class NodesConfiguration {
   // return nullptr if node does not exist or does not have storage role
   const StorageNodeAttribute* getNodeStorageAttribute(node_index_t node) const;
 
-  // helper function to get the storage capcity of a shard's node if the shard
+  // helper function to get the storage capcity of a shard if the shard
   // is writable in the storage membership. return 0 if the shard is not
   // writable.
-  double getWritableStorageCapacity(ShardID shard) const;
+  double getShardWritableStorageCapacity(ShardID shard) const;
+
+  // helper function to get the writable storage capacity of a node which is the
+  // sum of capacity of all writable shards belongs to the node.
+  double getNodeWritableStorageCapacity(node_index_t node) const;
 
   // note: return default generation 1 for nodes not having storage role or
   // node not existed

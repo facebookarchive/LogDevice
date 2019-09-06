@@ -129,8 +129,8 @@ class SequencerNodeAttributes {
 
 struct StorageNodeAttributes {
   /**
-   * A positive value indicating how much store traffic this node will
-   * receive relative to other nodes in the cluster.
+   * A positive value indicating how much store traffic each shard of this node
+   * will receive relative to other shards in the cluster.
    */
   double capacity = 1;
 

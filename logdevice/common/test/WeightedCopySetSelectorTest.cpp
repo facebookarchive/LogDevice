@@ -22,7 +22,7 @@ using NodeStatus = NodeAvailabilityChecker::NodeStatus;
 using S = NodeLocationScope;
 
 const logid_t LOG_ID = logid_t(42);
-const shard_size_t NUM_SHARDS = 1;
+const shard_size_t NUM_SHARDS = 2;
 
 #define N0 ShardID(0, 0)
 #define N1 ShardID(1, 0)
