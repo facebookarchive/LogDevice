@@ -610,4 +610,209 @@ RocksDBLogStoreBase::writeBatch(const rocksdb::WriteOptions& options,
   return status;
 }
 
+// Instrumentation wrapper for iterator operations.
+// Checks some thread-local counters and prints a warning if the operation was
+// way too expensive.
+//
+// Create just before the operation, destroy right after.
+//
+// RocksDB iterators sometimes need to do linear search to skip over
+// deleted/merged/hidden keys. If we're not careful about how we write to
+// rocksdb, iterators may end up doing lots of such linear search.
+// E.g. if you write lots of keys to memtable, then delete all of them, the
+// memtable will still contain all the keys and their deletion markers. If you
+// then seek an iterator to the first of these keys, the iterator will iterate
+// over all these keys and deletion markers before it reaches a non-deleted key
+// or the end. Similarly, if you write, then flush memtable, then delete, then
+// flush again - the writes and deletes will be in different sst files, so
+// iterator will have no way to skip the deleted range without stepping through
+// all the keys; compaction cleans it up.
+//
+// Counters we look at:
+//  - internal_merge_count - how many merge operands were processed.
+//    Can be big if some key either has lots of merges in memtable
+//    (i.e. Merge() was called lots of times for same key since last flush), or
+//    has lots of sst files each having one merge for this key (merges are
+//    collapsed when writing sst file, so each file has at most one merge
+//    operand per key).
+//  - internal_delete_skipped_count - how many deletion tombstones were
+//    processed. Can be big if lots of consecutive keys have been deleted (one
+//    by one, using Delete()), and these deletes are either in memtable or in a
+//    different sst file than the corresponding puts.
+//  - internal_key_skipped_count - how many keys were skipped for other reasons:
+//    (a) key-values that have deletion tombstones (the tombstones are counted
+//    by the other counter, the values deleted by those tombstones are counted
+//    here), (b) overwritten values in memtable (if you do many Put()s for the
+//    same key, memtable will keep all versions, and iterator needs to skip them
+//    to go to the next key; after 8 steps it gives up and does a seek to the
+//    next key), (c) maybe other, smaller, cases.
+//  - recent_skipped_before - how many key-values in memtable were skipped
+//    because they were written after the snapshot iterator was created.
+namespace {
+struct WarnIfTooManySkips {
+  const char* op_name;
+  rocksdb::PerfContext* perf_context;
+  uint64_t merge_before;
+  uint64_t delete_skipped_before;
+  uint64_t key_skipped_before;
+  uint64_t recent_skipped_before;
+
+  explicit WarnIfTooManySkips(const char* op) {
+    op_name = op;
+    perf_context = rocksdb::get_perf_context();
+    merge_before = perf_context->internal_merge_count;
+    delete_skipped_before = perf_context->internal_delete_skipped_count;
+    key_skipped_before = perf_context->internal_key_skipped_count;
+    recent_skipped_before = perf_context->internal_recent_skipped_count;
+  }
+
+  ~WarnIfTooManySkips() {
+    uint64_t merge = perf_context->internal_merge_count - merge_before;
+    uint64_t delete_skipped =
+        perf_context->internal_delete_skipped_count - delete_skipped_before;
+    uint64_t key_skipped =
+        perf_context->internal_key_skipped_count - key_skipped_before;
+    uint64_t recent_skipped =
+        perf_context->internal_recent_skipped_count - recent_skipped_before;
+    if (merge + delete_skipped + key_skipped + recent_skipped > 1000) {
+      RATELIMIT_WARNING(
+          std::chrono::seconds(2),
+          1,
+          "Iterator %s did way too many steps: %lu merge operands, %lu delete "
+          "markers, %lu deleted values, %lu post-snapshot values",
+          op_name,
+          merge,
+          delete_skipped,
+          key_skipped,
+          recent_skipped);
+    }
+  }
+};
+} // namespace
+
+void RocksDBIterator::SeekToFirst() {
+  ld_check(iterator_ != nullptr);
+  valid_checked_ = false;
+  status_checked_ = false;
+
+  {
+    WarnIfTooManySkips("SeekToFirst");
+    iterator_->SeekToFirst();
+  }
+
+  status_ = getRocksdbStatus();
+  store_->enterFailSafeIfFailed(status_.value(), "SeekToFirst()");
+}
+
+void RocksDBIterator::SeekToLast() {
+  ld_check(iterator_ != nullptr);
+  valid_checked_ = false;
+  status_checked_ = false;
+
+  {
+    WarnIfTooManySkips("SeekToLast");
+    iterator_->SeekToLast();
+  }
+
+  status_ = getRocksdbStatus();
+  store_->enterFailSafeIfFailed(status_.value(), "SeekToLast()");
+}
+
+void RocksDBIterator::Seek(const rocksdb::Slice& target) {
+  ld_check(iterator_ != nullptr);
+  valid_checked_ = false;
+  status_checked_ = false;
+
+  {
+    WarnIfTooManySkips("Seek");
+    iterator_->Seek(target);
+  }
+
+  status_ = getRocksdbStatus();
+  store_->enterFailSafeIfFailed(status_.value(), "Seek()");
+}
+
+void RocksDBIterator::SeekForPrev(const rocksdb::Slice& target) {
+  ld_check(iterator_ != nullptr);
+  valid_checked_ = false;
+  status_checked_ = false;
+
+  {
+    WarnIfTooManySkips("SeekForPrev");
+    iterator_->SeekForPrev(target);
+  }
+
+  status_ = getRocksdbStatus();
+  store_->enterFailSafeIfFailed(status_.value(), "SeekForPrev()");
+}
+
+void RocksDBIterator::Next() {
+  ld_check(iterator_ != nullptr);
+  ld_check(valid_checked_);
+  ld_check(status_checked_);
+  valid_checked_ = false;
+  status_checked_ = false;
+
+  {
+    WarnIfTooManySkips("Next");
+    iterator_->Next();
+  }
+
+  status_ = getRocksdbStatus();
+  store_->enterFailSafeIfFailed(status_.value(), "Next()");
+}
+
+void RocksDBIterator::Prev() {
+  ld_check(iterator_ != nullptr);
+  ld_check(valid_checked_);
+  ld_check(status_checked_);
+  valid_checked_ = false;
+  status_checked_ = false;
+
+  {
+    WarnIfTooManySkips("Prev");
+    iterator_->Prev();
+  }
+
+  status_ = getRocksdbStatus();
+  store_->enterFailSafeIfFailed(status_.value(), "Prev()");
+}
+
+void RocksDBIterator::Refresh() {
+  ld_check(iterator_ != nullptr);
+  valid_checked_ = false;
+  status_checked_ = false;
+
+  iterator_->Refresh();
+
+  status_ = getRocksdbStatus();
+  store_->enterFailSafeIfFailed(status_.value(), "Refresh()");
+}
+
+rocksdb::Status RocksDBIterator::getRocksdbStatus() {
+  using IOType = IOFaultInjection::IOType;
+  using DataType = IOFaultInjection::DataType;
+  using FaultType = IOFaultInjection::FaultType;
+
+  rocksdb::Status status;
+  auto* rb_store = static_cast<const RocksDBLogStoreBase*>(store_);
+  auto& io_fault_injection = IOFaultInjection::instance();
+  auto sim_error = io_fault_injection.getInjectedFault(
+      store_->getShardIdx(),
+      IOType::READ,
+      FaultType::IO_ERROR | FaultType::CORRUPTION,
+      DataType::DATA);
+  if (sim_error != FaultType::NONE) {
+    status = RocksDBLogStoreBase::FaultTypeToStatus(sim_error);
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    2,
+                    "Returning injected error '%s' for shard '%s'.",
+                    status.ToString().c_str(),
+                    rb_store->getDBPath().c_str());
+  } else {
+    status = iterator_->status();
+  }
+  return status;
+}
+
 }} // namespace facebook::logdevice

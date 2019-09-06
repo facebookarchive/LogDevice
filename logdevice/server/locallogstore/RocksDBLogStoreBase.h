@@ -673,86 +673,13 @@ class RocksDBIterator {
     return iterator_->Valid();
   }
 
-  void SeekToFirst() {
-    ld_check(iterator_ != nullptr);
-    valid_checked_ = false;
-    status_checked_ = false;
-
-    iterator_->SeekToFirst();
-
-    status_ = getRocksdbStatus();
-    store_->enterFailSafeIfFailed(status_.value(), "SeekToFirst()");
-  }
-
-  void SeekToLast() {
-    ld_check(iterator_ != nullptr);
-    valid_checked_ = false;
-    status_checked_ = false;
-
-    iterator_->SeekToLast();
-
-    status_ = getRocksdbStatus();
-    store_->enterFailSafeIfFailed(status_.value(), "SeekToLast()");
-  }
-
-  void Seek(const rocksdb::Slice& target) {
-    ld_check(iterator_ != nullptr);
-    valid_checked_ = false;
-    status_checked_ = false;
-
-    iterator_->Seek(target);
-
-    status_ = getRocksdbStatus();
-    store_->enterFailSafeIfFailed(status_.value(), "Seek()");
-  }
-
-  void SeekForPrev(const rocksdb::Slice& target) {
-    ld_check(iterator_ != nullptr);
-    valid_checked_ = false;
-    status_checked_ = false;
-
-    iterator_->SeekForPrev(target);
-
-    status_ = getRocksdbStatus();
-    store_->enterFailSafeIfFailed(status_.value(), "SeekForPrev()");
-  }
-
-  void Next() {
-    ld_check(iterator_ != nullptr);
-    ld_check(valid_checked_);
-    ld_check(status_checked_);
-    valid_checked_ = false;
-    status_checked_ = false;
-
-    iterator_->Next();
-
-    status_ = getRocksdbStatus();
-    store_->enterFailSafeIfFailed(status_.value(), "Next()");
-  }
-
-  void Prev() {
-    ld_check(iterator_ != nullptr);
-    ld_check(valid_checked_);
-    ld_check(status_checked_);
-    valid_checked_ = false;
-    status_checked_ = false;
-
-    iterator_->Prev();
-
-    status_ = getRocksdbStatus();
-    store_->enterFailSafeIfFailed(status_.value(), "Prev()");
-  }
-
-  void Refresh() {
-    ld_check(iterator_ != nullptr);
-    valid_checked_ = false;
-    status_checked_ = false;
-
-    iterator_->Refresh();
-
-    status_ = getRocksdbStatus();
-    store_->enterFailSafeIfFailed(status_.value(), "Refresh()");
-  }
+  void SeekToFirst();
+  void SeekToLast();
+  void Seek(const rocksdb::Slice& target);
+  void SeekForPrev(const rocksdb::Slice& target);
+  void Next();
+  void Prev();
+  void Refresh();
 
   rocksdb::Slice key() const {
     ld_check(iterator_ != nullptr);
@@ -790,31 +717,7 @@ class RocksDBIterator {
   }
 
  private:
-  rocksdb::Status getRocksdbStatus() {
-    using IOType = IOFaultInjection::IOType;
-    using DataType = IOFaultInjection::DataType;
-    using FaultType = IOFaultInjection::FaultType;
-
-    rocksdb::Status status;
-    auto* rb_store = static_cast<const RocksDBLogStoreBase*>(store_);
-    auto& io_fault_injection = IOFaultInjection::instance();
-    auto sim_error = io_fault_injection.getInjectedFault(
-        store_->getShardIdx(),
-        IOType::READ,
-        FaultType::IO_ERROR | FaultType::CORRUPTION,
-        DataType::DATA);
-    if (sim_error != FaultType::NONE) {
-      status = RocksDBLogStoreBase::FaultTypeToStatus(sim_error);
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      2,
-                      "Returning injected error '%s' for shard '%s'.",
-                      status.ToString().c_str(),
-                      rb_store->getDBPath().c_str());
-    } else {
-      status = iterator_->status();
-    }
-    return status;
-  }
+  rocksdb::Status getRocksdbStatus();
 
   // The iterator we're wrapping.
   std::unique_ptr<rocksdb::Iterator> iterator_;
