@@ -245,15 +245,40 @@ bool areMaintenancesEquivalent(const MaintenanceDefinition& def1,
     return false;
   }
 
-  if (def1.get_shards() != def2.get_shards()) {
+  if (def1.get_shards().size() != def2.get_shards().size()) {
     return false;
   }
+
+  // Sizes are same. sort and check equivalence
+  thrift::ShardSet def1_shards(
+      def1.get_shards().begin(), def1.get_shards().end());
+  thrift::ShardSet def2_shards(
+      def2.get_shards().begin(), def2.get_shards().end());
+  std::sort(def1_shards.begin(), def1_shards.end());
+  std::sort(def2_shards.begin(), def2_shards.end());
+  if (def1_shards != def2_shards) {
+    return false;
+  }
+
   if (def1.get_shard_target_state() != def2.get_shard_target_state()) {
     return false;
   }
-  if (def1.get_sequencer_nodes() != def2.get_sequencer_nodes()) {
+
+  if (def1.get_sequencer_nodes().size() != def2.get_sequencer_nodes().size()) {
     return false;
   }
+
+  // Size are same. sort and check equivalence
+  std::vector<thrift::NodeID> def1_seq(
+      def1.get_sequencer_nodes().begin(), def1.get_sequencer_nodes().end());
+  std::vector<thrift::NodeID> def2_seq(
+      def2.get_sequencer_nodes().begin(), def2.get_sequencer_nodes().end());
+  std::sort(def1_seq.begin(), def1_seq.end());
+  std::sort(def2_seq.begin(), def2_seq.end());
+  if (def1_seq != def2_seq) {
+    return false;
+  }
+
   if (def1.get_sequencer_target_state() != def2.get_sequencer_target_state()) {
     return false;
   }

@@ -299,8 +299,9 @@ TEST(APIUtilsTest, MaintenanceEquivalence) {
   MaintenanceDefinition def2;
   def2.set_user("bunny");
   def2.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
-  // expands to all shards of node 1
-  def2.set_shards({mkShardID(1, -1), mkShardID(13, -1)});
+  // expands to all shards of node 1. Verify order in vector does not
+  // matter
+  def2.set_shards({mkShardID(13, -1), mkShardID(1, -1)});
   def2.set_sequencer_nodes({mkNodeID(1)});
   def2.set_sequencer_target_state(SequencingState::DISABLED);
   // to validate we correctly respect the attributes
@@ -336,6 +337,24 @@ TEST(APIUtilsTest, MaintenanceEquivalence) {
 
   ASSERT_EQ(folly::none,
             APIUtils::findEquivalentMaintenance(*def2_output, (*output)[0]));
+
+  MaintenanceDefinition def3;
+  def3.set_user("bunny");
+  def3.set_shard_target_state(ShardOperationalState::DRAINED);
+  // expands to all shards of node 1
+  def3.set_shards({mkShardID(1, -1), mkShardID(13, -1)});
+  def3.set_sequencer_nodes({mkNodeID(1), mkNodeID(7)});
+  def3.set_sequencer_target_state(SequencingState::DISABLED);
+  // to validate we correctly respect the attributes
+  def3.set_skip_safety_checks(true);
+  def3.set_group(true);
+  auto def3_output = APIUtils::expandMaintenances(def3, nodes_config);
+  ASSERT_TRUE(def3_output.hasValue());
+  ASSERT_EQ(1, def3_output.value().size());
+  // def1 and def3 are not equivalent because def3 has an extra
+  // sequencer maintenance
+  ASSERT_FALSE(
+      APIUtils::areMaintenancesEquivalent((*output)[0], (*def3_output)[0]));
 }
 
 TEST(APIUtilsTest, MaintenanceFilter) {

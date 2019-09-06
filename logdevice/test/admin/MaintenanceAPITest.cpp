@@ -172,6 +172,79 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesInvalid1) {
   }
 }
 
+TEST_F(MaintenanceAPITest, ApplyMaintenancesValidNoClash) {
+  init();
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  std::string created_id;
+  int64_t created_on;
+  {
+    thrift::MaintenanceDefinition request;
+    request.set_user("bunny");
+    request.set_shard_target_state(ShardOperationalState::DRAINED);
+    // expands to all shards of node 1
+    request.set_shards({mkShardID(1, -1)});
+    request.set_sequencer_nodes({mkNodeID(1)});
+    request.set_sequencer_target_state(SequencingState::DISABLED);
+    // to validate we correctly respect the attributes
+    request.set_skip_safety_checks(true);
+    request.set_group(false);
+    // We expect this to be expanded into 1 maintenance group since everything
+    // fits nicely into a single node.
+    thrift::MaintenanceDefinitionResponse resp;
+    admin_client->sync_applyMaintenance(resp, request);
+    auto output = resp.get_maintenances();
+    ASSERT_EQ(1, output.size());
+    const thrift::MaintenanceDefinition& result = output[0];
+    ASSERT_EQ("bunny", result.get_user());
+    ASSERT_TRUE(result.group_id_ref().has_value());
+    created_id = result.group_id_ref().value();
+    ld_info("Maintenance created: %s", result.group_id_ref().value().c_str());
+    ASSERT_EQ(8, result.group_id_ref().value().size());
+    // We have 2 shards per node.
+    ASSERT_THAT(result.get_shards(),
+                UnorderedElementsAre(mkShardID(1, 0), mkShardID(1, 1)));
+    ASSERT_EQ(ShardOperationalState::DRAINED, result.get_shard_target_state());
+    ASSERT_EQ(SequencingState::DISABLED, result.get_sequencer_target_state());
+    ASSERT_THAT(
+        result.get_sequencer_nodes(), UnorderedElementsAre(mkNodeID(1)));
+    ASSERT_TRUE(result.get_skip_safety_checks());
+    ASSERT_TRUE(result.created_on_ref().has_value());
+    ASSERT_TRUE(result.created_on_ref().value() > 0);
+    created_on = result.created_on_ref().value();
+  }
+  {
+    // Verify that applying the same maintenance does not result in clash
+    thrift::MaintenanceDefinitionResponse resp;
+    admin_client->sync_getMaintenances(resp, thrift::MaintenancesFilter());
+    auto output = resp.get_maintenances();
+    ASSERT_EQ(1, output.size());
+    const MaintenanceDefinition& result = output[0];
+    thrift::MaintenanceDefinition request;
+    request.set_user(result.get_user());
+    request.set_shard_target_state(result.get_shard_target_state());
+    // expands to all shards of node 1
+    request.set_shards(result.get_shards());
+    request.set_sequencer_nodes(result.get_sequencer_nodes());
+    request.set_sequencer_target_state(SequencingState::DISABLED);
+    // to validate we correctly respect the attributes
+    request.set_skip_safety_checks(true);
+    request.set_group(false);
+    // We expect this to be expanded into 1 maintenance group since everything
+    // fits nicely into a single node.
+    thrift::MaintenanceDefinitionResponse resp2;
+    admin_client->sync_applyMaintenance(resp2, request);
+    output = resp2.get_maintenances();
+    ASSERT_EQ(1, output.size());
+    const thrift::MaintenanceDefinition& result2 = output[0];
+    ASSERT_EQ("bunny", result2.get_user());
+    ASSERT_EQ(created_id, result2.group_id_ref().value().c_str());
+  }
+}
+
 TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
   init();
   cluster_->start();
