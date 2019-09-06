@@ -669,16 +669,16 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
                std::to_string(val.count()) + "ms given.");
          }
        },
-       "Metadata column family will be compacted at least this often if it has "
-       "more than one sst file. This is needed to avoid performance issues in "
-       "rare cases. Full scenario: suppose all writes to this node stopped; "
-       "eventually all logs will be fully trimmed, and logsdb directory will "
-       "be emptied by deleting each key; these deletes will usually be flushed "
-       "in sst files different than the ones where the original entries are; "
-       "this makes iterator operations very expensive because merging iterator "
-       "has to skip all these deleted entries in linear time; this is "
-       "especially bad for findTime. If we compact every hour, this badness "
-       "would last for at most an hour.",
+       "Metadata column family will be flushed+compacted at least this often. "
+       "This is needed to mitigate performance issues in rare cases. "
+       "Full scenario: suppose all writes to this node stopped; eventually all "
+       "logs will be fully trimmed, and logsdb directory will be emptied by "
+       "deleting each key; these deletes will usually be flushed in sst files "
+       "different than the ones where the original entries are; this makes "
+       "iterator operations very expensive because merging iterator has to "
+       "skip all these deleted entries in linear time; this is especially bad "
+       "for findTime. If we compact every hour, this badness would last for at "
+       "most an hour.",
        SERVER,
        SettingsCategory::LogsDB);
 

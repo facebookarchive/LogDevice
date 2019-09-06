@@ -5462,8 +5462,7 @@ void PartitionedRocksDBStore::compactMetadataCFIfNeeded() {
   auto period = getSettings()->metadata_compaction_period;
   auto now = currentSteadyTime();
   if (period.count() > 0 &&
-      last_metadata_manual_compaction_time_ < (now - period) &&
-      getNumL0Files(metadata_cf_->get()) > 1) {
+      last_metadata_manual_compaction_time_ < (now - period)) {
     performMetadataCompaction();
   }
 }
