@@ -70,8 +70,7 @@ else()
   find_package(yarpl CONFIG REQUIRED)
   find_package(rsocket CONFIG REQUIRED)
   find_program(THRIFT1 thrift1)
-  find_path(THRIFT_COMPILER_INCLUDE thrift/templates)
-  set(THRIFT_TEMPLATES ${THRIFT_COMPILER_INCLUDE}/thrift/templates)
+  find_path(THRIFT_COMPILER_INCLUDE thrift/lib/cpp2/Thrift.h)
   set(FBTHRIFT_LIBRARIES
     FBThrift::protocol
     FBThrift::thriftprotocol
@@ -82,7 +81,7 @@ else()
     FBThrift::thrift-core
     FBThrift::thriftcpp2
     FBThrift::thrift
- )
+  )
   include(${THRIFT_COMPILER_INCLUDE}/thrift/ThriftLibrary.cmake)
 
   # If we are not building the submodules, replace targets with fake targets so

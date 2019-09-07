@@ -30,7 +30,6 @@ ExternalProject_Add_StepDependencies(fbthrift configure folly wangle
 # The following settings are required by ThriftLibrary.cmake; to create rules
 # for thrift compilation:
 set(THRIFT1 ${BINARY_DIR}/bin/thrift1)
-set(THRIFT_TEMPLATES ${LOGDEVICE_DIR}/external/fbthrift/thrift/compiler/generate/templates)
 # We don't set THRIFTCPP2 because we manage the full thrift dependency
 # externally via LOGDEVICE_EXTERNAL_DEPS
 #set(THRIFTCPP2 ${BINARY_DIR}/lib/libthriftcpp2.a)
