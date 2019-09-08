@@ -9,7 +9,6 @@
 
 #include <unordered_map>
 
-#include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>
 
 #include "logdevice/common/settings/Settings.h"

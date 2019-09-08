@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <tuple>
 
-#include <folly/stats/TimeseriesHistogram-defs.h>
+#include <folly/stats/TimeseriesHistogram.h>
 
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"

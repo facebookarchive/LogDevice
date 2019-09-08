@@ -9,7 +9,6 @@
 
 #include <folly/Optional.h>
 #include <folly/dynamic.h>
-#include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>
 
 #include "logdevice/common/NodeID.h"

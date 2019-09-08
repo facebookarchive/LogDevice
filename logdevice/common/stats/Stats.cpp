@@ -15,9 +15,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <folly/Conv.h>
 #include <folly/Synchronized.h>
-#include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>
-#include <folly/stats/MultiLevelTimeSeries-defs.h>
 #include <folly/stats/MultiLevelTimeSeries.h>
 
 #include "logdevice/common/stats/ClientHistograms.h"

@@ -12,7 +12,6 @@
 #include <folly/Synchronized.h>
 #include <folly/ThreadLocal.h>
 #include <folly/container/F14Map.h>
-#include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>
 
 #include "logdevice/common/ClientID.h"

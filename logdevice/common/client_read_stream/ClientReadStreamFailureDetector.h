@@ -12,7 +12,6 @@
 #include <unordered_map>
 
 #include <folly/Optional.h>
-#include <folly/stats/BucketedTimeSeries-defs.h>
 #include <folly/stats/BucketedTimeSeries.h>
 
 #include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
