@@ -20,10 +20,7 @@ enum ProtocolVersion : uint16_t {
   //
   // Minimum version number of the protocol this version of LogDevice is
   // backward compatible with - 1
-  PROTOCOL_VERSION_LOWER_BOUND = 91,
-
-  // GOSSIP_Message includes node_list_ to deliver hashmap
-  HASHMAP_SUPPORT_IN_GOSSIP, // = 92
+  PROTOCOL_VERSION_LOWER_BOUND = 92,
 
   // Adds an optional request ID to CONFIG_FETCH & CONFIG_CHANGED messages
   RID_IN_CONFIG_MESSAGES, // = 93
@@ -55,7 +52,6 @@ enum ProtocolVersion : uint16_t {
   // NOTE: do not add anything below PROTOCOL_VERSION_UPPER_BOUND
 };
 
-static_assert(HASHMAP_SUPPORT_IN_GOSSIP == 92, "");
 static_assert(RID_IN_CONFIG_MESSAGES == 93, "");
 static_assert(WAVE_IN_MUTATED == 94, "");
 static_assert(TRIM_POINT_IN_SEALED == 95, "");

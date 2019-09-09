@@ -50,61 +50,14 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
   auto flags = flags_;
   node_list_t sorted_node_list;
 
-  if (writer.proto() <
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    // Old nodes expect nodes are fully in order
-    // TODO: If deleting nodes from node_list_ is allowed later, not all node_id
-    // may exist. In that case, dummy nodes need to be inserted in node_list_ to
-    // assure all node_id exist between 0 and max.
-    sorted_node_list = node_list_;
-    std::sort(sorted_node_list.begin(), sorted_node_list.end());
-  }
-
   writer.write((uint16_t)node_list_.size());
   writer.write(gossip_node_);
   writer.write(flags);
-
-  if (writer.proto() <
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    for (auto n : sorted_node_list) {
-      writer.write(n.gossip_);
-    }
-  }
   writer.write(instance_id_);
   writer.write(sent_time_);
-  if (writer.proto() <
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    for (auto n : sorted_node_list) {
-      writer.write(n.gossip_ts_);
-    }
-    if (flags & HAS_FAILOVER_LIST_FLAG) {
-      for (auto n : sorted_node_list) {
-        writer.write(n.failover_);
-      }
-    }
-  }
-
   writeBoycottList(writer);
   writeBoycottDurations(writer);
-
-  if (writer.proto() <
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    if (flags & HAS_STARTING_LIST_FLAG) {
-      // for backward compatibility
-      starting_list_t starting_list;
-      for (auto n : sorted_node_list) {
-        if (n.is_node_starting_) {
-          starting_list.push_back(NodeID(n.node_id_));
-        }
-      }
-      writer.write((uint16_t)starting_list.size());
-      for (auto& node : starting_list) {
-        writer.write(node.index());
-      }
-    }
-  } else {
-    writer.writeVector(node_list_);
-  }
+  writer.writeVector(node_list_);
 }
 
 MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
@@ -115,64 +68,15 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
   failover_list_t failover_list;
   std::unordered_set<node_index_t> is_starting;
   uint16_t num_nodes;
-  uint16_t num_starting;
 
   reader.read(&num_nodes);
   reader.read(&msg->gossip_node_);
   reader.read(&msg->flags_);
-
-  if (reader.proto() <
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    reader.readVector(&gossip_list, num_nodes);
-  }
   reader.read(&msg->instance_id_);
   reader.read(&msg->sent_time_);
-
-  if (reader.proto() <
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    reader.readVector(&gossip_ts, num_nodes);
-    if (reader.ok() && (msg->flags_ & HAS_FAILOVER_LIST_FLAG)) {
-      reader.readVector(&failover_list, num_nodes);
-    } else {
-      // dummy filling for backward compatibility
-      failover_list =
-          failover_list_t(num_nodes, std::chrono::milliseconds::zero());
-    }
-  }
-
   msg->readBoycottList(reader);
   msg->readBoycottDurations(reader);
-
-  if (reader.proto() <
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    if (msg->flags_ & HAS_STARTING_LIST_FLAG) {
-      // for backward compatibility
-      reader.read(&num_starting);
-      for (uint16_t i = 0; i < num_starting; i++) {
-        node_index_t nidx;
-        reader.read(&nidx);
-        is_starting.insert(nidx);
-      }
-    }
-  }
-
-  if (reader.proto() >=
-      Compatibility::ProtocolVersion::HASHMAP_SUPPORT_IN_GOSSIP) {
-    reader.readVector(&msg->node_list_, num_nodes);
-  } else {
-    // In case of protocol before HASHMAP_SUPPORT_IN_GOSSIP,
-    // node_id_ always increases linearly
-    for (node_index_t i = 0; i < num_nodes; i++) {
-      GOSSIP_Node gnode;
-      gnode.node_id_ = i;
-      gnode.gossip_ = gossip_list[i];
-      gnode.gossip_ts_ = gossip_ts[i];
-      gnode.failover_ = failover_list[i];
-      gnode.is_node_starting_ = (is_starting.count(i) > 0) ? true : false;
-      msg->node_list_.push_back(gnode);
-    }
-  }
-
+  reader.readVector(&msg->node_list_, num_nodes);
   return reader.resultMsg(std::move(msg));
 }
 
