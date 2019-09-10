@@ -101,6 +101,7 @@ void UpdateableSecurityInfo::onConfigUpdate() {
     security_info->permission_checker_.update(permission_checker);
   }
 
+  security_info->cluster_node_identity_ = securityConfig.clusterNodeIdentity;
   security_info->dumpSecurityInfo();
 }
 

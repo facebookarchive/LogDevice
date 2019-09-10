@@ -60,6 +60,7 @@ struct PrincipalIdentity {
 
   std::string toString() const;
 
+  bool match(const std::string& idtype, const std::string& identity);
   static bool isValidIdentityType(const std::string& idType);
 };
 

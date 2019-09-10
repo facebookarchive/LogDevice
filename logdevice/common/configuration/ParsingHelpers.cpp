@@ -16,6 +16,7 @@
 #include <folly/dynamic.h>
 #include <folly/json.h>
 
+#include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/PriorityMap.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/commandline_util_chrono.h"
@@ -756,6 +757,26 @@ bool parseSecurityInfo(const folly::dynamic& clusterMap,
                  "domain_list",
                  securityConfig,
                  securityConfig.domains)) {
+    return false;
+  }
+
+  success = getStringFromMap(security_info,
+                             "cluster_node_identity",
+                             securityConfig.clusterNodeIdentity);
+  std::string idType, identity;
+  if (success &&
+      (!folly::split(
+           ':', securityConfig.clusterNodeIdentity, idType, identity) ||
+       !PrincipalIdentity::isValidIdentityType(idType))) {
+    success = false;
+    err = E::INVALID_CONFIG;
+  }
+  // Not a required field, default value is empty
+  if (!success && err != E::NOTFOUND) {
+    ld_error("Invalid value of \"cluster_node_identity\" attribute within "
+             "\"security_information\", string expected of the form "
+             "<idtype>:<identity>");
+    err = E::INVALID_CONFIG;
     return false;
   }
 

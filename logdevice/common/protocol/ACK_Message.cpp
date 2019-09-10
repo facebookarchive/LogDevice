@@ -7,7 +7,10 @@
  */
 #include "logdevice/common/protocol/ACK_Message.h"
 
+#include "logdevice/common/PrincipalParser.h"
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
@@ -57,6 +60,44 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
              hdr.client_idx);
     err = E::BADMSG;
     return Message::Disposition::ERROR;
+  }
+
+  Worker* w = Worker::onThisThread();
+  auto cluster_node_identity =
+      w->processor_->security_info_->getClusterNodeIdentity();
+  auto principal_parser = w->processor_->security_info_->getPrincipalParser();
+
+  // If the authentication type is set to SSL and a cluster node identity is
+  // configured, we verify that the presented certificate contains the required
+  // identity.
+  if (principal_parser && !cluster_node_identity.empty() &&
+      principal_parser->getAuthenticationType() == AuthenticationType::SSL) {
+    std::string idType, identity;
+    if (folly::split(':', cluster_node_identity, idType, identity)) {
+      X509* cert = w->sender().getPeerCert(from);
+      if (cert) {
+        // We only support server authentication for SSL connections. If the
+        // server presents a certificate, we verify that the bundled identity
+        // matches what's configured for cluster nodes. On the other hand,
+        // if a certificate is not associated with the peer, we can assume that
+        // this is because the connection is not SSL (but rather cleartext),
+        // otherwise the SSL handshake would have failed already at this point
+        // since we set SSL_VERIFY_PEER option in the SSL context.
+        // Note we use 1 as size as it is ignored anyway for SSL certficate
+        PrincipalIdentity principal = principal_parser->getPrincipal(cert, 1);
+        X509_free(cert);
+        if (!principal.match(idType, identity)) {
+          RATELIMIT_ERROR(std::chrono::seconds(1),
+                          1,
+                          "Untrusted cluster node identity (%s), expecting %s. "
+                          "Rejecting with E::ACCESS.",
+                          principal.toString().c_str(),
+                          cluster_node_identity.c_str());
+          err = E::ACCESS;
+          return Message::Disposition::ERROR;
+        }
+      }
+    }
   }
 
   return Message::Disposition::NORMAL;

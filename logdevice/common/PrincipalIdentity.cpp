@@ -71,4 +71,14 @@ bool PrincipalIdentity::isValidIdentityType(const std::string& idType) {
       idType == IDENTITY_JOB;
 }
 
+bool PrincipalIdentity::match(const std::string& idtype,
+                              const std::string& identity) {
+  for (const auto& it : identities) {
+    if (it.first == idtype && it.second == identity) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }} // namespace facebook::logdevice

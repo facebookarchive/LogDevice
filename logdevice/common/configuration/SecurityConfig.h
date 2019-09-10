@@ -101,6 +101,12 @@ struct SecurityConfig {
   int aclCacheMaxSize = 100000;
 
   /**
+   * Node identity as a pair of type and value separated by colon. eg:
+   * USER:logdevice. Used by clients to verify server identity.
+   */
+  std::string clusterNodeIdentity;
+
+  /**
    * Returns whether or not the "permissions" field is allowed in the
    * configuration file. The "permissions" field should only be allowed when
    * PermissionCheckerType is set CONFIG.

@@ -23,6 +23,10 @@ class UpdateableSecurityInfo {
 
   std::shared_ptr<PrincipalParser> getPrincipalParser();
 
+  std::string getClusterNodeIdentity() const {
+    return cluster_node_identity_;
+  }
+
   /**
    * Logs current security information that is valid in the running processor.
    */
@@ -49,6 +53,8 @@ class UpdateableSecurityInfo {
   // PrincipalParser owned by the processor used to obtain the principal after
   // authentication
   UpdateableSharedPtr<PrincipalParser> principal_parser_;
+
+  std::string cluster_node_identity_;
 
   // comes last to ensure unsubscription before rest of destruction
   ConfigSubscriptionHandle config_update_sub_;

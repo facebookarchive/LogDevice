@@ -39,6 +39,10 @@ folly::dynamic SecurityConfig::toFollyDynamic() const {
     json_security_info["acl_type"] = aclType;
   }
 
+  if (!clusterNodeIdentity.empty()) {
+    json_security_info["cluster_node_identity"] = clusterNodeIdentity;
+  }
+
   setList(json_security_info, "admin_list", admins);
   setList(json_security_info, "domain_list", domains);
 

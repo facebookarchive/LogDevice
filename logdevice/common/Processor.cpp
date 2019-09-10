@@ -311,6 +311,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       conn_budget_external_(settings_.get()->max_external_connections) {
   ld_check(settings.get());
   num_general_workers_ = settings_->num_workers;
+  security_info_ =
+      std::make_unique<UpdateableSecurityInfo>(this, settings_->server);
 }
 
 Processor::~Processor() {
