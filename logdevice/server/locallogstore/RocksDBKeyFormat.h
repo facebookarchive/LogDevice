@@ -390,6 +390,10 @@ class PartitionDirectoryKey {
     partition_id_big_endian_ = htobe64(partition_id);
   }
 
+  PartitionDirectoryKey() = default;
+  PartitionDirectoryKey(const PartitionDirectoryKey&) = default;
+  PartitionDirectoryKey& operator=(const PartitionDirectoryKey&) = default;
+
   /**
    * Extracts the log ID from a memory segment that is a PartitionDirectoryKey.
    */

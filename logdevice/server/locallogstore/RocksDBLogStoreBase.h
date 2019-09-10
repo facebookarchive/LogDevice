@@ -650,6 +650,10 @@ struct IterateUpperBoundHelper {
  */
 class RocksDBIterator {
  public:
+  // Creates an invalid iterator. Can be move-assigned or destroyed. Calling
+  // any other method will fail an assert.
+  RocksDBIterator() = default;
+
   RocksDBIterator(std::unique_ptr<rocksdb::Iterator> iterator,
                   const rocksdb::ReadOptions& read_options,
                   const RocksDBLogStoreBase* store)

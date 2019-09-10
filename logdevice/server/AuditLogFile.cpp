@@ -99,9 +99,11 @@ void log_trim_movement(ServerProcessor& processor,
 
   auto partitioned_store = dynamic_cast<PartitionedRocksDBStore*>(&store);
   if (partitioned_store) {
-    entry.partition_timestamp =
-        partitioned_store->getPartitionTimestampForLSNIfReadilyAvailable(
-            log_id, trim_lsn);
+    std::chrono::milliseconds ts;
+    if (partitioned_store->getApproximateTimestamp(
+            log_id, trim_lsn, /* allow_blocking_io */ false, &ts) == 0) {
+      entry.partition_timestamp = RecordTimestamp(ts);
+    }
   }
   auditLog->write(entry);
 }

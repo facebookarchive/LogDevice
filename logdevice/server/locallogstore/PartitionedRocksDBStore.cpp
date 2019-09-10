@@ -1305,96 +1305,6 @@ bool PartitionedRocksDBStore::prependPartitionsIfNeeded(
   return !created.empty();
 }
 
-int PartitionedRocksDBStore::seekToLastInDirectory(
-    RocksDBIterator* it,
-    logid_t log_id,
-    lsn_t lsn,
-    logid_t* next_log_out) const {
-  ld_check(it != nullptr);
-  ld_check(it->totalOrderSeek());
-
-  // make sure that `it' first points to a record with a sequence number
-  // that's strictly greater than lsn
-  PartitionDirectoryKey data_key(
-      lsn != LSN_MAX ? log_id : logid_t(log_id.val_ + 1),
-      lsn != LSN_MAX ? lsn + 1 : 0,
-      0);
-
-  auto it_error = [&] {
-    rocksdb::Status status = it->status();
-    if (status.ok()) {
-      return false;
-    }
-    err = status.IsIncomplete() ? E::WOULDBLOCK : E::LOCAL_LOG_STORE_READ;
-    return true;
-  };
-
-  it->Seek(rocksdb::Slice(
-      reinterpret_cast<const char*>(&data_key), sizeof(data_key)));
-  if (it_error()) {
-    return -1;
-  }
-
-  // True if after seeking to data_key we got a record from log log_id.
-  bool has_next_record_for_log = false;
-
-  if (it->Valid()) {
-    rocksdb::Slice key = it->key();
-    if (!PartitionDirectoryKey::valid(key.data(), key.size())) {
-      // moved past the section containing keys of needed type
-      if (next_log_out) {
-        *next_log_out = LOGID_INVALID;
-      }
-    } else {
-      logid_t it_log = PartitionDirectoryKey::getLogID(key.data());
-      lsn_t it_lsn = PartitionDirectoryKey::getLSN(key.data());
-
-      ld_check(it_log > log_id || (it_log == log_id && it_lsn > lsn));
-      if (next_log_out) {
-        *next_log_out = it_log;
-      }
-
-      has_next_record_for_log = it_log == log_id;
-    }
-    it->Prev();
-  } else {
-    it->SeekToLast();
-    if (next_log_out) {
-      *next_log_out = LOGID_INVALID;
-    }
-  }
-
-  if (it_error()) {
-    return -1;
-  }
-
-  // check that we're at the right position after moving one step back
-  if (!it->Valid() ||
-      !PartitionDirectoryKey::valid(it->key().data(), it->key().size()) ||
-      PartitionDirectoryKey::getLogID(it->key().data()) != log_id) {
-    // there's nothing of interest before data_key
-
-    if (!has_next_record_for_log) {
-      err = E::NOTFOUND;
-      return -1;
-    }
-
-    it->Seek(rocksdb::Slice(
-        reinterpret_cast<const char*>(&data_key), sizeof(data_key)));
-    if (it_error()) {
-      return -1;
-    }
-    // has_next_record_for_log=true means that we've seeked iterator to the
-    // exact same key before, and it was Valid. Should be Valid this time too,
-    // since it's a snapshot iterator.
-    ld_check(it->Valid());
-  } else {
-    ld_check(PartitionDirectoryKey::getLSN(it->key().data()) <= lsn);
-  }
-
-  return 0;
-}
-
 bool PartitionedRocksDBStore::finishInterruptedDrops() {
   ld_check(!getSettings()->read_only);
 
@@ -2189,24 +2099,68 @@ PartitionedRocksDBStore::updatePartitionTimestampsIfNeeded(
   return nullptr;
 }
 
-int PartitionedRocksDBStore::findPartition(RocksDBIterator* it,
-                                           logid_t log_id,
-                                           lsn_t lsn,
-                                           PartitionPtr* out_partition) const {
+int PartitionedRocksDBStore::findPartition(
+    RocksDBIterator* it,
+    logid_t log_id,
+    lsn_t lsn,
+    const DirectoryIteratorBounds* bounds,
+    PartitionPtr* out_partition) const {
   ld_check(it);
+  ld_check(bounds);
 
   if (isLogEmpty(log_id, /* ignore_pseudorecords */ false)) {
     err = E::NOTFOUND;
     return -1;
   }
 
-  // NOTE: The case of multiple directory entries for the same (log_id, lsn)
-  //       pair is handled correctly.
-  int rv = seekToLastInDirectory(it, log_id, lsn);
-  if (rv != 0) {
-    ld_check(err == E::NOTFOUND || err == E::WOULDBLOCK ||
-             err == E::LOCAL_LOG_STORE_READ);
+  // Returns false if findPartition() should stop and return -1.
+  auto check_iterator = [&]() -> bool {
+    if (!it->status().ok()) {
+      err =
+          it->status().IsIncomplete() ? E::WOULDBLOCK : E::LOCAL_LOG_STORE_READ;
+      return false;
+    }
+    if (!it->Valid()) {
+      return true;
+    }
+    rocksdb::Slice key = it->key();
+    if (!PartitionDirectoryKey::valid(key.data(), key.size()) ||
+        PartitionDirectoryKey::getLogID(key.data()) != log_id) {
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          10,
+          "Got unexpected rocksdb key: %s for log %lu. Either findPartition() "
+          "was called incorrectly, or rocksdb allowed "
+          "iterator to get outside [iterate_lower_bound, iterate_upper_bound), "
+          "which would be a bug, or the DB contains invalid directory keys, "
+          "which is either a bug or external intervention",
+          hexdump_buf(key.data(), key.size()).c_str(),
+          log_id.val());
+      err = E::FAILED;
+      return false;
+    }
+    return true;
+  };
+
+  PartitionDirectoryKey seek_key(log_id, lsn, PARTITION_MAX);
+  it->SeekForPrev(rocksdb::Slice(
+      reinterpret_cast<const char*>(&seek_key), sizeof(seek_key)));
+  if (!check_iterator()) {
     return -1;
+  }
+
+  if (it->Valid()) {
+    ld_check(PartitionDirectoryKey::getLSN(it->key().data()) <= lsn);
+  } else {
+    it->SeekToFirst();
+    if (!check_iterator()) {
+      return -1;
+    }
+    if (!it->Valid()) {
+      err = E::NOTFOUND;
+      return -1;
+    }
+    ld_check(PartitionDirectoryKey::getLSN(it->key().data()) > lsn);
   }
 
   ld_check(it->Valid());
@@ -2230,20 +2184,10 @@ int PartitionedRocksDBStore::findPartition(RocksDBIterator* it,
             log_id.val_);
 
     it->Next();
-
-    if (!it->status().ok()) {
-      err =
-          it->status().IsIncomplete() ? E::WOULDBLOCK : E::LOCAL_LOG_STORE_READ;
+    if (!check_iterator()) {
       return -1;
     }
     if (!it->Valid()) {
-      err = E::NOTFOUND;
-      return -1;
-    }
-
-    rocksdb::Slice key = it->key();
-    if (!PartitionDirectoryKey::valid(key.data(), key.size()) ||
-        PartitionDirectoryKey::getLogID(key.data()) != log_id) {
       err = E::NOTFOUND;
       return -1;
     }
@@ -2540,6 +2484,48 @@ PartitionedRocksDBStore::createMetadataIterator(bool allow_blocking_io) const {
   auto options = getDefaultReadOptions();
   options.read_tier =
       (allow_blocking_io ? rocksdb::kReadAllTier : rocksdb::kBlockCacheTier);
+
+  return newIterator(options, metadata_cf_->get());
+}
+
+PartitionedRocksDBStore::DirectoryIteratorBounds::DirectoryIteratorBounds(
+    logid_t log) {
+  // Lower bound is inclusive.
+  lower_bound = PartitionDirectoryKey(log, LSN_INVALID, PARTITION_INVALID);
+  // Upper bound is exclusive.
+  upper_bound = PartitionDirectoryKey(log, LSN_MAX, PARTITION_MAX);
+
+  lower_bound_slice = rocksdb::Slice(
+      reinterpret_cast<const char*>(&lower_bound), sizeof(lower_bound));
+  upper_bound_slice = rocksdb::Slice(
+      reinterpret_cast<const char*>(&upper_bound), sizeof(upper_bound));
+}
+
+RocksDBIterator PartitionedRocksDBStore::createDirectoryIteratorForSingleLog(
+    const DirectoryIteratorBounds* log_bounds,
+    bool allow_blocking_io) const {
+  ld_check(metadata_cf_);
+
+  // Note: we could constrain iterator to a single log using total_order_seek =
+  // false, like we do for csi and data iterators. But currently this ruins
+  // performance in metadata column family, because rocksdb disables
+  // max_sequential_skip_in_iterations optimization when total_order_seek =
+  // false. So we use iterate_lower_bound and iterate_upper_bound to get similar
+  // effect.
+  //
+  // The max_sequential_skip_in_iterations optimization is important
+  // when keys are overwritten a lot. LogsDB directory entries can be
+  // overwritten thousands of times, once for each written record.
+  //
+  // This rocksdb limitation is unnecessary and can be removed with a little
+  // work.
+
+  auto options = getDefaultReadOptions();
+  options.read_tier =
+      (allow_blocking_io ? rocksdb::kReadAllTier : rocksdb::kBlockCacheTier);
+
+  options.iterate_lower_bound = &log_bounds->lower_bound_slice;
+  options.iterate_upper_bound = &log_bounds->upper_bound_slice;
 
   return newIterator(options, metadata_cf_->get());
 }
@@ -3564,18 +3550,6 @@ PartitionedRocksDBStore::getPartitionList() const {
 PartitionedRocksDBStore::PartitionPtr
 PartitionedRocksDBStore::getLatestPartition() const {
   return latest_.get();
-}
-
-RecordTimestamp
-PartitionedRocksDBStore::getPartitionTimestampForLSNIfReadilyAvailable(
-    logid_t log_id,
-    lsn_t lsn) const {
-  RocksDBIterator it = createMetadataIterator(false);
-  PartitionPtr out_partition;
-  if (findPartition(&it, log_id, lsn, &out_partition) == 0) {
-    return out_partition->starting_timestamp;
-  }
-  return RecordTimestamp::zero();
 }
 
 int PartitionedRocksDBStore::dropPartitions(

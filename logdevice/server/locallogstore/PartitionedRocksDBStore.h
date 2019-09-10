@@ -562,13 +562,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
 
   PartitionPtr getLatestPartition() const;
 
-  // Tries to find the partition corresponding to the given LSN and return the
-  // starting timestamp of the partition. If the information is not available in
-  // cache, returns zero.
-  RecordTimestamp
-  getPartitionTimestampForLSNIfReadilyAvailable(logid_t log_id,
-                                                lsn_t lsn) const;
-
   // Removes partitions with ids up to oldest_to_keep (exclusive).
   // Updates log trim points so that all dropped records are logically trimmed.
   // Dropping the latest partition is not allowed.
@@ -1434,20 +1427,59 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                      partition_id_t* min_target_partition    // in and out
   );
 
-  // Searches through the directory in order to find the partition a record
-  // with the given sequence number belongs to. The iterator will be moved
-  // to point to the record for this partition.
-  // If couldn't find partition returns -1 and sets err to
+  // Returns an iterator over the metadata column family.
+  RocksDBIterator createMetadataIterator(bool allow_blocking_io = true) const;
+
+  struct DirectoryIteratorBounds {
+    RocksDBKeyFormat::PartitionDirectoryKey lower_bound;
+    RocksDBKeyFormat::PartitionDirectoryKey upper_bound;
+    rocksdb::Slice lower_bound_slice;
+    rocksdb::Slice upper_bound_slice;
+
+    explicit DirectoryIteratorBounds(logid_t log);
+
+    // Can't relocate. The Slice-s have pointers to the keys, and the iterator
+    // has pointers to the slices.
+    DirectoryIteratorBounds(const DirectoryIteratorBounds&) = delete;
+    DirectoryIteratorBounds& operator=(const DirectoryIteratorBounds&) = delete;
+    DirectoryIteratorBounds() = delete;
+  };
+
+  // Returns an iterator over the metadata column family, with lower and upper
+  // bound set to boundaries of the directory of the given log. The iterator
+  // won't see other logs. This is mostly used as an optimization: if lots of
+  // other logs have lots of deleted keys, this iterator won't waste time
+  // skipping over those keys.
+  // The provided DirectoryIteratorBounds must outlive the returned iterator.
+  RocksDBIterator
+  createDirectoryIteratorForSingleLog(const DirectoryIteratorBounds* log_bounds,
+                                      bool allow_blocking_io = true) const;
+
+  // Finds the partition that "corresponds" to the given LSN. The definition
+  // of "corresponds" here is very specific and somewhat unintuitive,
+  // but the Iterator code relies on it.
+  //  - If there are partitions with min_lsn <= `lsn`, returns the highest
+  //    (closest to log's tail) such partition.
+  //    Even if its max_lsn < `lsn` (that's the unintuitive part).
+  //  - If all partitions have min_lsn > `lsn`, returns the first such
+  //    partition, i.e. partition containing the head of the log.
+  //  - If the log is empty, returns NOTFOUND.
+  //
+  // Moves the iterator to the directory entry for the found partition.
+  //
+  // IMPORTANT: The iterator must have lower and upper bound set to restrict it
+  // to a single log. The parameter `iterator_bounds` is unused and only exists
+  // to draw attention to this requirement.
+  //
+  // If couldn't find partition, returns -1 and sets err to:
   //   NOTFOUND             if the log is empty
   //   WOULDBLOCK           if iterator gets into incomplete state
   //   LOCAL_LOG_STORE_READ if iterator gets into error state
   int findPartition(RocksDBIterator* it,
                     logid_t log_id,
                     lsn_t lsn,
+                    const DirectoryIteratorBounds* bounds,
                     PartitionPtr* out_partition) const;
-
-  // Returns an iterator over the metadata column family.
-  RocksDBIterator createMetadataIterator(bool allow_blocking_io = true) const;
 
   // Checks if min and max timestamp for partition need to be updated
   // to include new_timestamp. Adds the needed updates to rocksdb_batch.
@@ -1614,20 +1646,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   void loPriBackgroundThreadRun();
 
   void flushBackgroundThreadRun();
-
-  // A helper function used to position the iterator at the last directory entry
-  // for a given log that's <= lsn. If no such entry exists, iterator will point
-  // to the smallest entry for log_id instead. If next_log_out is not null, it
-  // will be set to the log id of the first entry past `it'.
-  // `it` must have total_order_seek = true.
-  // On error returns -1 and sets err to
-  //   NOTFOUND             if the log is empty
-  //   WOULDBLOCK           if iterator gets into incomplete state
-  //   LOCAL_LOG_STORE_READ if iterator gets into error state
-  int seekToLastInDirectory(RocksDBIterator* it,
-                            logid_t log_id,
-                            lsn_t lsn,
-                            logid_t* next_log_out = nullptr) const;
 
   // Locked when creating/dropping partitions at the beginning of partition
   // list.

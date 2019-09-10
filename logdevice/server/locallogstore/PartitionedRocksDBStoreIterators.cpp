@@ -24,6 +24,7 @@ PartitionedRocksDBStore::Iterator::Iterator(
     const LocalLogStore::ReadOptions& options)
     : LocalLogStore::ReadIterator(pstore),
       log_id_(log_id),
+      meta_iterator_bounds_(log_id),
       pstore_(pstore),
       options_(options) {
   registerTracking(std::string(),
@@ -69,8 +70,11 @@ void PartitionedRocksDBStore::Iterator::setMetaIteratorAndCurrentFromLSN(
   PartitionInfo new_current;
 
   STAT_INCR(pstore_->stats_, logsdb_iterator_dir_seek_needed);
-  int rv = pstore_->findPartition(
-      &*meta_iterator_, log_id_, lsn, &new_current.partition_);
+  int rv = pstore_->findPartition(&*meta_iterator_,
+                                  log_id_,
+                                  lsn,
+                                  &meta_iterator_bounds_,
+                                  &new_current.partition_);
   if (rv != 0) {
     if (err == E::NOTFOUND) {
       handleEmptyLog();
@@ -288,7 +292,8 @@ void PartitionedRocksDBStore::Iterator::createMetaIteratorIfNull() {
     return;
   }
 
-  meta_iterator_ = pstore_->createMetadataIterator(options_.allow_blocking_io);
+  meta_iterator_ = pstore_->createDirectoryIteratorForSingleLog(
+      &meta_iterator_bounds_, options_.allow_blocking_io);
 }
 
 void PartitionedRocksDBStore::Iterator::updatePartitionRange() {

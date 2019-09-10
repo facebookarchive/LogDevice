@@ -224,13 +224,37 @@ int PartitionedRocksDBStore::FindTime::findPartition(
   //     Set lo_ to max_lsn from A.
 
   auto partitions = store_.getPartitionList();
-  RocksDBIterator it = store_.createMetadataIterator(allow_blocking_io_);
+  DirectoryIteratorBounds bounds(logid_);
+  RocksDBIterator it =
+      store_.createDirectoryIteratorForSingleLog(&bounds, allow_blocking_io_);
 
-  auto convert_error = [] {
-    ld_check(err == E::WOULDBLOCK || err == E::LOCAL_LOG_STORE_READ);
-    if (err == E::LOCAL_LOG_STORE_READ) {
-      err = E::FAILED;
+  // If iterator encountered an error, or can't be satisfied from cache, or
+  // encountered a malformed directory entry, this function assigns erro and
+  // returns false. The caller should return -1 in this case.
+  auto check_iterator = [&]() -> bool {
+    if (!it.status().ok()) {
+      err = it.status().IsIncomplete() ? E::WOULDBLOCK : E::FAILED;
+      return false;
     }
+    if (!it.Valid()) {
+      return true;
+    }
+    rocksdb::Slice key = it.key();
+    if (!PartitionDirectoryKey::valid(key.data(), key.size()) ||
+        PartitionDirectoryKey::getLogID(key.data()) != logid_) {
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          10,
+          "Got unexpected rocksdb key: %s for log %lu. Either rocksdb allowed "
+          "iterator to get outside [iterate_lower_bound, iterate_upper_bound), "
+          "which would be a bug, or the DB contains invalid directory keys, "
+          "which is either a bug or external intervention.",
+          hexdump_buf(key.data(), key.size()).c_str(),
+          logid_.val());
+      err = E::FAILED;
+      return false;
+    }
+    return true;
   };
 
   if (store_.isLogEmpty(logid_, /* ignore_pseudorecords */ false)) {
@@ -238,49 +262,30 @@ int PartitionedRocksDBStore::FindTime::findPartition(
   }
 
   // First, find the first partition's lsn.
-  int rv = store_.seekToLastInDirectory(&it, logid_, LSN_OLDEST);
-  if (rv != 0) {
-    if (err == E::NOTFOUND) {
-      // Log is empty.
-      return 0;
-    }
-    convert_error();
+  it.SeekToFirst();
+  if (!check_iterator()) {
     return -1;
   }
-
+  if (!it.Valid()) {
+    // Log is empty.
+    return 0;
+  }
   lsn_t left = PartitionDirectoryKey::getLSN(it.key().data());
 
   // Then, find the last partition's lsn.
-  rv = store_.seekToLastInDirectory(&it, logid_, LSN_MAX);
-  if (rv != 0) {
-    if (err == E::NOTFOUND) {
-      // Log is empty. This is unexpected because the previous seek said that
-      // the log is not empty. Note that we're using a snapshot iterator,
-      // which iterates over an immutable view of directory, so directory
-      // entries can't disappear from under our feet.
-      ld_check(false);
-      return 0;
-    }
-    convert_error();
+  it.SeekToLast();
+  if (!check_iterator()) {
     return -1;
   }
-
+  if (!it.Valid()) {
+    // Log is empty. This is unexpected because the previous seek said that
+    // the log is not empty. Note that we're using a snapshot iterator,
+    // which iterates over an immutable view of directory, so directory
+    // entries can't disappear from under our feet.
+    ld_check(false);
+    return 0;
+  }
   lsn_t right = PartitionDirectoryKey::getLSN(it.key().data());
-
-  // Use this lambda to detect when we reach the end of the PartitionDirectory
-  // for our log.
-  auto at_end = [this, &it]() {
-    ld_check(it.status().ok());
-    if (!it.Valid()) {
-      return true;
-    }
-    rocksdb::Slice key = it.key();
-    if (!PartitionDirectoryKey::valid(key.data(), key.size()) ||
-        PartitionDirectoryKey::getLogID(key.data()) != logid_) {
-      return true;
-    }
-    return false;
-  };
 
   // 1. Binary search.
   //
@@ -313,14 +318,12 @@ int PartitionedRocksDBStore::FindTime::findPartition(
 
     PartitionDirectoryKey key(logid_, mid, 0);
     it.Seek(rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof(key)));
-    rocksdb::Status status = it.status();
-    if (!status.ok()) {
-      err = status.IsIncomplete() ? E::WOULDBLOCK : E::FAILED;
+    if (!check_iterator()) {
       return -1;
     }
     // We should not be at end because we know there is an entry with
     // lsn >= right - 1, and mid < right.
-    if (at_end()) {
+    if (!it.Valid()) {
       RATELIMIT_CRITICAL(
           std::chrono::seconds(10),
           10,
@@ -376,17 +379,15 @@ int PartitionedRocksDBStore::FindTime::findPartition(
   // 2. Figure out what to do with `left_partition` (aka X).
   if (left_partition != nullptr) {
     // Make sure iterator points at `left`.
-    if (at_end() || PartitionDirectoryKey::getLSN(it.key().data()) != left) {
+    if (!it.Valid() || PartitionDirectoryKey::getLSN(it.key().data()) != left) {
       PartitionDirectoryKey key(logid_, left, 0);
       it.Seek(rocksdb::Slice(reinterpret_cast<const char*>(&key), sizeof(key)));
-      rocksdb::Status status = it.status();
-      if (!status.ok()) {
-        err = status.IsIncomplete() ? E::WOULDBLOCK : E::FAILED;
+      if (!check_iterator()) {
         return -1;
       }
       // The binary search has seen a key with min_lsn = `left`, so we should
       // see it too. (Iterator is iterating over a snapshot.)
-      ld_check(!at_end());
+      ld_check(it.Valid());
       ld_check(PartitionDirectoryKey::getLSN(it.key().data()) == left);
     }
     ld_check(PartitionDirectoryKey::getPartition(it.key().data()) ==
@@ -402,30 +403,16 @@ int PartitionedRocksDBStore::FindTime::findPartition(
       *out_partition = left_partition;
       *out_first_lsn = left;
       it.Prev();
-      rocksdb::Status status = it.status();
-      if (!status.ok()) {
-        err = status.IsIncomplete() ? E::WOULDBLOCK : E::FAILED;
+      if (!check_iterator()) {
         return -1;
       }
     }
 
     // Iterator points to A now. Get max_lsn from it.
-    if (!at_end()) {
-      if (PartitionDirectoryValue::valid(
-              it.value().data(), it.value().size())) {
-        *lo_ = std::max(*lo_,
-                        PartitionDirectoryValue::getMaxLSN(
-                            it.value().data(), it.value().size()));
-      } else {
-        RATELIMIT_ERROR(
-            std::chrono::seconds(10),
-            10,
-            "Malformed value in logsdb directory; key: %s, value: %s",
-            hexdump_buf(it.key().data(), it.key().size()).c_str(),
-            hexdump_buf(it.value().data(), it.value().size()).c_str());
-        // Use min_lsn instead of max_lsn.
-        *lo_ = std::max(*lo_, PartitionDirectoryKey::getLSN(it.key().data()));
-      }
+    if (it.Valid()) {
+      *lo_ = std::max(*lo_,
+                      PartitionDirectoryValue::getMaxLSN(
+                          it.value().data(), it.value().size()));
     }
   }
 

@@ -205,6 +205,8 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
 
   const logid_t log_id_;
 
+  DirectoryIteratorBounds meta_iterator_bounds_;
+
   // Metadata iterator (used to read from the directory).
   // Can't use tailing iterator because tailing iterators don't support Prev().
   // This iterator is invalidated each time a partition is created or dropped.
