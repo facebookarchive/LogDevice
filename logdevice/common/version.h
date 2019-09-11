@@ -8,4 +8,4 @@
 #pragma once
 
 // This should be updated when cutting a release branch.
-#define LOGDEVICE_VERSION "99.99.99"
+#define LOGDEVICE_VERSION "2.44.0"
