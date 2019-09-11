@@ -164,7 +164,7 @@ class VersionedConfigStore {
   virtual void updateConfig(std::string key,
                             std::string value,
                             folly::Optional<version_t> base_version,
-                            write_callback_t cb = {});
+                            write_callback_t cb);
 
   /*
    * Read-Modify-Write a configuration value using a given key.
@@ -241,7 +241,7 @@ class VersionedConfigStore {
    */
   virtual void readModifyWriteConfig(std::string key,
                                      mutation_callback_t mcb,
-                                     write_callback_t cb = {}) = 0;
+                                     write_callback_t cb) = 0;
 
   /*
    * Synchronous updateConfig

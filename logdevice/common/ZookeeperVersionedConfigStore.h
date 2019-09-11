@@ -48,7 +48,7 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
 
   void readModifyWriteConfig(std::string key,
                              mutation_callback_t mcb,
-                             write_callback_t cb = {}) override;
+                             write_callback_t cb) override;
 
   // IMPORTANT: assumes shutdown is called from a different thread from ZK
   // client's EventBase / thread.
