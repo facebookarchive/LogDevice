@@ -145,6 +145,7 @@ CONFIG_FETCH_Message::handleLogsConfigRequest(const Address& from) {
 Message::Disposition
 CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
   auto nodes_cfg = getNodesConfiguration();
+  ld_check(nodes_cfg);
 
   CONFIG_CHANGED_Header hdr{
       Status::OK,
@@ -192,8 +193,7 @@ NodeID CONFIG_FETCH_Message::getMyNodeID() const {
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 CONFIG_FETCH_Message::getNodesConfiguration() {
-  // always use the NCM based NC
-  return Worker::onThisThread()->getNodesConfigurationFromNCMSource();
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 int CONFIG_FETCH_Message::sendMessage(
