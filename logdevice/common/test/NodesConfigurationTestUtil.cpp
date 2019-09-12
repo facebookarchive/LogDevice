@@ -24,9 +24,6 @@ constexpr configuration::nodes::NodeServiceDiscovery::RoleSet seq_role{1};
 constexpr configuration::nodes::NodeServiceDiscovery::RoleSet storage_role{2};
 constexpr configuration::nodes::NodeServiceDiscovery::RoleSet both_role{3};
 
-const membership::MaintenanceID::Type DUMMY_MAINTENANCE{2333};
-const membership::MaintenanceID::Type DUMMY_MAINTENANCE2{2334};
-
 NodeServiceDiscovery genDiscovery(node_index_t n,
                                   RoleSet roles,
                                   std::string location) {
@@ -63,7 +60,6 @@ markAllShardProvisionedUpdate(const NodesConfiguration& nc) {
           {StorageStateTransition::MARK_SHARD_PROVISIONED,
            (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
             Condition::NO_SELF_REPORT_MISSING_DATA),
-           DUMMY_MAINTENANCE,
            /* state_override = */ folly::none});
     }
   }
@@ -94,7 +90,6 @@ bootstrapEnableAllShardsUpdate(const NodesConfiguration& nc,
            (Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
             Condition::NO_SELF_REPORT_MISSING_DATA |
             Condition::LOCAL_STORE_WRITABLE),
-           DUMMY_MAINTENANCE,
            /* state_override = */ folly::none});
     }
   }
@@ -193,8 +188,7 @@ initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
           node.id,
           {SequencerMembershipTransition::ADD_NODE,
            true,
-           node.sequencer_weight,
-           DUMMY_MAINTENANCE});
+           node.sequencer_weight});
 
       update.sequencer_config_update->attributes_update->addNode(
           node.id,
@@ -218,7 +212,6 @@ initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
             ShardID(node.id, s),
             {StorageStateTransition::ADD_EMPTY_SHARD,
              Condition::NONE,
-             DUMMY_MAINTENANCE,
              /* state_override = */ folly::none});
       }
       update.storage_config_update->attributes_update->addNode(
@@ -237,10 +230,6 @@ initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
       std::make_unique<MetaDataLogsReplication::Update>(
           MembershipVersion::EMPTY_VERSION);
   update.metadata_logs_rep_update->replication = metadata_rep;
-
-  // 5. fill other update metadata
-  update.maintenance = DUMMY_MAINTENANCE;
-  update.context = "initial provision";
 
   VLOG(1) << "update: " << update.toString();
   return update;
@@ -305,10 +294,7 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
   if (hasRole(node.roles, NodeRole::SEQUENCER)) {
     update.sequencer_config_update->membership_update->addNode(
         node.id,
-        {SequencerMembershipTransition::ADD_NODE,
-         true,
-         node.sequencer_weight,
-         DUMMY_MAINTENANCE});
+        {SequencerMembershipTransition::ADD_NODE, true, node.sequencer_weight});
 
     update.sequencer_config_update->attributes_update->addNode(
         node.id,
@@ -328,7 +314,6 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
           ShardID(node.id, s),
           {StorageStateTransition::ADD_EMPTY_SHARD,
            Condition::FORCE,
-           DUMMY_MAINTENANCE,
            /* state_override = */ folly::none});
     }
     update.storage_config_update->attributes_update->addNode(
@@ -367,7 +352,6 @@ enablingReadUpdate(MembershipVersion::Type base_version) {
        Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
            Condition::NO_SELF_REPORT_MISSING_DATA |
            Condition::CAUGHT_UP_LOCAL_CONFIG,
-       DUMMY_MAINTENANCE2,
        /* state_override = */ folly::none});
   VLOG(1) << "update: " << update.toString();
   return update;
@@ -385,7 +369,6 @@ disablingWriteUpdate(membership::MembershipVersion::Type base_version) {
         ShardID{n, 0},
         {StorageStateTransition::DISABLING_WRITE,
          Condition::WRITE_AVAILABILITY_CHECK | Condition::CAPACITY_CHECK,
-         DUMMY_MAINTENANCE2,
          /* state_override = */ folly::none});
   }
   VLOG(1) << "update: " << update.toString();

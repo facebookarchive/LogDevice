@@ -19,7 +19,6 @@
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::membership;
 using namespace facebook::logdevice::membership::MembershipVersion;
-using namespace facebook::logdevice::membership::MaintenanceID;
 
 namespace {
 
@@ -35,8 +34,6 @@ namespace {
 #define N9 ShardID(9, 1)
 #define N10 ShardID(10, 1)
 
-constexpr MaintenanceID::Type DUMMY_MAINTENANCE{2333};
-
 using StateOverride = ShardState::Update::StateOverride;
 
 class StorageMembershipTest : public ::testing::Test {
@@ -48,9 +45,7 @@ class StorageMembershipTest : public ::testing::Test {
       StateTransitionCondition conditions,
       folly::Optional<StateOverride> state_override = folly::none) {
     StorageMembership::Update res{MembershipVersion::Type(base_ver)};
-    MaintenanceID::Type maintenance = DUMMY_MAINTENANCE;
-    int rv = res.addShard(
-        shard, {transition, conditions, maintenance, state_override});
+    int rv = res.addShard(shard, {transition, conditions, state_override});
     EXPECT_EQ(0, rv);
     return res;
   }
@@ -63,10 +58,9 @@ class StorageMembershipTest : public ::testing::Test {
             StateTransitionCondition conditions,
             folly::Optional<StateOverride> state_override = folly::none) {
     ld_check(update != nullptr);
-    MaintenanceID::Type maintenance = DUMMY_MAINTENANCE;
     for (auto shard : shards) {
-      int rv = update->addShard(
-          shard, {transition, conditions, maintenance, state_override});
+      int rv =
+          update->addShard(shard, {transition, conditions, state_override});
       EXPECT_EQ(0, rv);
     }
   }
@@ -91,32 +85,21 @@ class StorageMembershipTest : public ::testing::Test {
   }
 };
 
-#define ASSERT_SHARD_STATE_FULL(_m,                      \
-                                _shard,                  \
-                                _storage_state,          \
-                                _metadata_state,         \
-                                _flags,                  \
-                                _since_version,          \
-                                _maintenance)            \
-  do {                                                   \
-    auto res = _m.getShardState(_shard);                 \
-    EXPECT_TRUE(res.hasValue());                         \
-    EXPECT_EQ(_storage_state, res->storage_state);       \
-    EXPECT_EQ(_flags, res->flags);                       \
-    EXPECT_EQ(_metadata_state, res->metadata_state);     \
-    EXPECT_EQ(_maintenance, res->active_maintenance);    \
-    EXPECT_EQ(_since_version, res->since_version.val()); \
+#define ASSERT_SHARD_STATE_FULL(                                         \
+    _m, _shard, _storage_state, _metadata_state, _flags, _since_version) \
+  do {                                                                   \
+    auto res = _m.getShardState(_shard);                                 \
+    EXPECT_TRUE(res.hasValue());                                         \
+    EXPECT_EQ(_storage_state, res->storage_state);                       \
+    EXPECT_EQ(_flags, res->flags);                                       \
+    EXPECT_EQ(_metadata_state, res->metadata_state);                     \
+    EXPECT_EQ(_since_version, res->since_version.val());                 \
   } while (0)
 
 #define ASSERT_SHARD_STATE(                                              \
     _m, _shard, _storage_state, _metadata_state, _flags, _since_version) \
-  ASSERT_SHARD_STATE_FULL(_m,                                            \
-                          _shard,                                        \
-                          _storage_state,                                \
-                          _metadata_state,                               \
-                          _flags,                                        \
-                          _since_version,                                \
-                          DUMMY_MAINTENANCE)
+  ASSERT_SHARD_STATE_FULL(                                               \
+      _m, _shard, _storage_state, _metadata_state, _flags, _since_version)
 
 #define ASSERT_NO_SHARD(_m, _shard)      \
   do {                                   \
@@ -1052,29 +1035,25 @@ TEST_F(StorageMembershipTest, BootstrapTransition) {
                           StorageState::READ_WRITE,
                           MetaDataStorageState::NONE,
                           StorageStateFlags::NONE,
-                          3,
-                          DUMMY_MAINTENANCE);
+                          3);
   ASSERT_SHARD_STATE_FULL(m,
                           N2,
                           StorageState::READ_WRITE,
                           MetaDataStorageState::NONE,
                           StorageStateFlags::NONE,
-                          3,
-                          DUMMY_MAINTENANCE);
+                          3);
   ASSERT_SHARD_STATE_FULL(m,
                           N3,
                           StorageState::READ_WRITE,
                           MetaDataStorageState::METADATA,
                           StorageStateFlags::NONE,
-                          3,
-                          DUMMY_MAINTENANCE);
+                          3);
   ASSERT_SHARD_STATE_FULL(m,
                           N4,
                           StorageState::READ_WRITE,
                           MetaDataStorageState::NONE,
                           StorageStateFlags::NONE,
-                          3,
-                          DUMMY_MAINTENANCE);
+                          3);
   CHECK_METADATA_SHARDS(m, N3);
 
   // can still add shard

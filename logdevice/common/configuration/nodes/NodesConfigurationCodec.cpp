@@ -298,8 +298,6 @@ NodesConfigurationThriftConverter::toThrift(const NodesConfiguration& config) {
   conf.set_storage_config(toThrift(*config.storage_config_));
   conf.set_metadata_logs_rep(toThrift(*config.metadata_logs_rep_));
   conf.set_last_timestamp(config.last_change_timestamp_);
-  conf.set_last_maintenance(config.last_maintenance_.val());
-  conf.set_last_context(config.last_change_context_);
   return conf;
 }
 
@@ -342,11 +340,6 @@ NodesConfigurationThriftConverter::fromThrift(
 
   result->version_ = membership::MembershipVersion::Type(thrift_config.version);
   result->last_change_timestamp_ = thrift_config.last_timestamp;
-  result->last_maintenance_ =
-      membership::MaintenanceID::Type(thrift_config.last_maintenance);
-  if (!thrift_config.last_context.empty()) {
-    result->last_change_context_ = thrift_config.last_context;
-  }
 
   // recompute all config metadata
   result->recomputeConfigMetadata();

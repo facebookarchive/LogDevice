@@ -20,14 +20,12 @@ namespace facebook { namespace logdevice { namespace membership {
 
 using facebook::logdevice::toString;
 using namespace MembershipVersion;
-using namespace MaintenanceID;
 
 std::string SequencerNodeState::Update::toString() const {
-  return folly::sformat("[T:{}, E:{}, W:{}, M:{}]",
+  return folly::sformat("[T:{}, E:{}, W:{}]",
                         membership::toString(transition),
                         membership::toString(sequencer_enabled),
-                        membership::toString(weight),
-                        membership::toString(maintenance));
+                        membership::toString(weight));
 }
 
 bool SequencerNodeState::Update::isValid() const {
@@ -52,10 +50,9 @@ bool SequencerNodeState::Update::isValid() const {
 }
 
 std::string SequencerNodeState::toString() const {
-  return folly::sformat("[E:{}, W:{}, M:{}]",
+  return folly::sformat("[E:{}, W:{}]",
                         membership::toString(sequencer_enabled),
-                        membership::toString(weight_),
-                        membership::toString(active_maintenance));
+                        membership::toString(weight_));
 }
 
 bool SequencerNodeState::isValid() const {
@@ -212,10 +209,8 @@ int SequencerMembership::applyUpdate(
         target_membership_state.setNodeState(node, *current_node_state);
         break;
       case SequencerMembershipTransition::ADD_NODE:
-        target_membership_state.setNodeState(node,
-                                             {node_update.sequencer_enabled,
-                                              node_update.weight,
-                                              node_update.maintenance});
+        target_membership_state.setNodeState(
+            node, {node_update.sequencer_enabled, node_update.weight});
         break;
       case SequencerMembershipTransition::Count:
         ld_check(false);

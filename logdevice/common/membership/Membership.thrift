@@ -47,7 +47,7 @@ struct ShardState {
   2: StorageState storage_state;
   3: u32 flags;
   4: MetaDataStorageState metadata_state;
-  5: u64 active_maintenance;
+  // 5: u64 active_maintenance;
   6: u64 since_version;
 }
 
@@ -65,7 +65,7 @@ struct StorageMembership {
 
 struct SequencerNodeState {
   1: double weight;
-  2: u64 active_maintenance;
+  // 2: u64 active_maintenance;
   3: bool sequencer_enabled;
 }
 

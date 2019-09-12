@@ -250,7 +250,7 @@ std::shared_ptr<const NodesConfiguration> NodesConfiguration::applyUpdate(
   }
 
   // 5) bump the config version and updates the configuration metadata
-  new_config->touch(update.context);
+  new_config->touch();
 
   // 6) validate the config but ignoring config metadata. e.g., check if the
   // service discovery is consistent with membership. we will validate the
@@ -261,7 +261,6 @@ std::shared_ptr<const NodesConfiguration> NodesConfiguration::applyUpdate(
 
   // update storage_hash, num_shards and addr_to_index
   new_config->recomputeConfigMetadata();
-  new_config->last_maintenance_ = update.maintenance;
 
   // 7) Finally check the validaity of the new config, for example
   // consistency b/w service discovery, membership and metadata logs
@@ -383,12 +382,11 @@ SequencersConfig NodesConfiguration::computeSequencersConfig() const {
   return result;
 }
 
-void NodesConfiguration::touch(std::string context) {
+void NodesConfiguration::touch() {
   version_ = MembershipVersion::Type(version_.val() + 1);
   last_change_timestamp_ = SystemTimestamp{std::chrono::system_clock::now()}
                                .toMilliseconds()
                                .count();
-  last_change_context_ = std::move(context);
 }
 
 void NodesConfiguration::recomputeConfigMetadata() {
@@ -404,14 +402,13 @@ NodesConfiguration::withIncrementedVersionAndTimestamp(
     folly::Optional<membership::MembershipVersion::Type>
         new_sequencer_membership_version,
     folly::Optional<membership::MembershipVersion::Type>
-        new_storage_membership_version,
-    std::string context) const {
+        new_storage_membership_version) const {
   if (new_nc_version.hasValue() && new_nc_version.value() <= version_) {
     return nullptr;
   }
 
   auto new_config = std::make_shared<NodesConfiguration>(*this);
-  new_config->touch(std::move(context));
+  new_config->touch();
   if (new_nc_version.hasValue()) {
     new_config->setVersion(new_nc_version.value());
   }
@@ -464,9 +461,7 @@ bool NodesConfiguration::equalWithTimestampAndVersionIgnored(
       compare_obj_ptrs(sequencer_config_, rhs.sequencer_config_) &&
       compare_obj_ptrs(storage_config_, rhs.storage_config_) &&
       compare_obj_ptrs(metadata_logs_rep_, rhs.metadata_logs_rep_) &&
-      storage_hash_ == rhs.storage_hash_ && num_shards_ == rhs.num_shards_ &&
-      last_maintenance_ == rhs.last_maintenance_ &&
-      last_change_context_ == rhs.last_change_context_;
+      storage_hash_ == rhs.storage_hash_ && num_shards_ == rhs.num_shards_;
 }
 
 const NodeServiceDiscovery*

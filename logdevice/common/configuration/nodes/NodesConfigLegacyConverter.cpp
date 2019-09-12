@@ -209,9 +209,7 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
 
       bool seq_enabled = node.sequencer_attributes->enabled();
       double seq_w = node.sequencer_attributes->getConfiguredWeight();
-      seq_mem->setNodeState(
-          nid,
-          {seq_enabled, seq_w, membership::MaintenanceID::MAINTENANCE_NONE});
+      seq_mem->setNodeState(nid, {seq_enabled, seq_w});
       seq_attr->setNodeAttributes(nid, {});
     }
 
@@ -235,7 +233,6 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
             {fromLegacyStorageState(node.getStorageState()),
              membership::StorageStateFlags::NONE,
              ms,
-             membership::MaintenanceID::MAINTENANCE_NONE,
              membership::MembershipVersion::Type(version.val())});
       }
 
@@ -274,8 +271,6 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
       std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now().time_since_epoch())
           .count();
-  res->last_maintenance_ = membership::MaintenanceID::MAINTENANCE_NONE;
-  res->last_change_context_ = "";
   res->recomputeConfigMetadata();
 
   if (!res->validate()) {

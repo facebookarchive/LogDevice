@@ -23,7 +23,6 @@ using namespace facebook::logdevice;
 using namespace facebook::logdevice::membership;
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership::MembershipVersion;
-using namespace facebook::logdevice::membership::MaintenanceID;
 using namespace facebook::logdevice::NodesConfigurationTestUtil;
 
 using RoleSet = NodeServiceDiscovery::RoleSet;
@@ -89,7 +88,6 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     ASSERT_TRUE(seq_membership->hasNode(n));
     auto result = seq_membership->getNodeState(n);
     EXPECT_TRUE(result.hasValue());
-    EXPECT_EQ(DUMMY_MAINTENANCE, result->active_maintenance);
     EXPECT_EQ(n == 1 ? 1.0 : 7.0, result->getConfiguredWeight());
   }
 
@@ -111,7 +109,6 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
     ASSERT_TRUE(storage_membership->hasNode(n));
     auto result = storage_membership->getShardState(ShardID(n, 0));
     EXPECT_TRUE(result.hasValue());
-    EXPECT_EQ(DUMMY_MAINTENANCE, result->active_maintenance);
     // newly provisioned shards should be in rw state
     EXPECT_EQ(StorageState::READ_WRITE, result->storage_state);
 
@@ -333,11 +330,7 @@ TEST_F(NodesConfigurationTest, RemovingServiceDiscovery) {
         std::make_unique<SequencerMembership::Update>(
             config->getSequencerMembership()->getVersion());
     update.sequencer_config_update->membership_update->addNode(
-        7,
-        {SequencerMembershipTransition::REMOVE_NODE,
-         false,
-         0.0,
-         DUMMY_MAINTENANCE});
+        7, {SequencerMembershipTransition::REMOVE_NODE, false, 0.0});
     VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_NE(nullptr, new_config);
@@ -386,9 +379,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
             config->getStorageMembership()->getVersion());
     update.storage_config_update->membership_update->addShard(
         ShardID(17, 0),
-        {StorageStateTransition::ADD_EMPTY_SHARD,
-         Condition::FORCE,
-         DUMMY_MAINTENANCE});
+        {StorageStateTransition::ADD_EMPTY_SHARD, Condition::FORCE});
     VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_EQ(nullptr, new_config);
@@ -412,9 +403,7 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
             config->getStorageMembership()->getVersion());
     update.storage_config_update->membership_update->addShard(
         ShardID(17, 0),
-        {StorageStateTransition::ADD_EMPTY_SHARD,
-         Condition::FORCE,
-         DUMMY_MAINTENANCE});
+        {StorageStateTransition::ADD_EMPTY_SHARD, Condition::FORCE});
     VLOG(1) << "update: " << update.toString();
     auto new_config = config->applyUpdate(std::move(update));
     EXPECT_EQ(nullptr, new_config);
@@ -449,9 +438,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
         std::make_unique<StorageAttributeConfig::Update>();
     update.storage_config_update->membership_update->addShard(
         ShardID(7, 0),
-        {StorageStateTransition::ADD_EMPTY_SHARD,
-         Condition::FORCE,
-         DUMMY_MAINTENANCE});
+        {StorageStateTransition::ADD_EMPTY_SHARD, Condition::FORCE});
     update.storage_config_update->attributes_update->addNode(
         7,
         {StorageAttributeConfig::UpdateType::PROVISION,
@@ -478,11 +465,7 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
         std::make_unique<SequencerAttributeConfig::Update>();
 
     update.sequencer_config_update->membership_update->addNode(
-        2,
-        {SequencerMembershipTransition::ADD_NODE,
-         true,
-         1.0,
-         DUMMY_MAINTENANCE});
+        2, {SequencerMembershipTransition::ADD_NODE, true, 1.0});
 
     update.sequencer_config_update->attributes_update->addNode(
         2,
@@ -597,7 +580,6 @@ TEST_F(NodesConfigurationTest, StorageHash) {
         ShardID{n, 0},
         {StorageStateTransition::ABORT_DISABLING_WRITE,
          Condition::FORCE,
-         DUMMY_MAINTENANCE,
          /* state_override = */ folly::none});
   }
 
@@ -632,7 +614,6 @@ TEST_F(NodesConfigurationTest, WritableStorageCapacity) {
       ShardID{13, 0},
       {StorageStateTransition::DISABLING_WRITE,
        Condition::FORCE,
-       DUMMY_MAINTENANCE,
        /* state_override = */ folly::none});
 
   auto nc1 = config->applyUpdate(std::move(update));

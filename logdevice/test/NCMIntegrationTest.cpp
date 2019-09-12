@@ -56,8 +56,7 @@ NodesConfiguration::Update buildSimpleUpdate() {
       0,
       {SequencerMembershipTransition::SET_WEIGHT,
        true /* doesn't matter */,
-       0.6,
-       MaintenanceID::Type(1000)});
+       0.6});
   return update;
 }
 } // namespace

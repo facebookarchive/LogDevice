@@ -53,10 +53,6 @@ class NodesConfiguration {
     std::unique_ptr<MetaDataLogsReplication::Update> metadata_logs_rep_update{
         nullptr};
 
-    membership::MaintenanceID::Type maintenance{
-        membership::MaintenanceID::MAINTENANCE_NONE};
-    std::string context{};
-
     bool isValid() const;
     bool hasAllUpdates() const;
     bool empty() const;
@@ -227,8 +223,7 @@ class NodesConfiguration {
       folly::Optional<membership::MembershipVersion::Type>
           new_sequencer_membership_version = folly::none,
       folly::Optional<membership::MembershipVersion::Type>
-          new_storage_membership_version = folly::none,
-      std::string context = "manual touch") const;
+          new_storage_membership_version = folly::none) const;
 
   std::shared_ptr<const NodesConfiguration>
   withVersion(membership::MembershipVersion::Type version) const;
@@ -276,10 +271,6 @@ class NodesConfiguration {
   // Unix timestamp in milliseconds.
   uint64_t last_change_timestamp_{0};
 
-  membership::MaintenanceID::Type last_maintenance_{
-      membership::MaintenanceID::MAINTENANCE_NONE};
-  std::string last_change_context_{};
-
   uint64_t computeStorageNodesHash() const;
   shard_size_t computeNumShards() const;
   node_index_t computeMaxNodeIndex() const;
@@ -290,8 +281,8 @@ class NodesConfiguration {
   // etc are not reset in this function
   void recomputeConfigMetadata();
 
-  // Increments config version, sets last_change_timestamp_ and context
-  void touch(std::string context);
+  // Increments config version, sets last_change_timestamp_
+  void touch();
 
   friend class NodesConfigLegacyConverter;
   friend class NodesConfigurationThriftConverter;

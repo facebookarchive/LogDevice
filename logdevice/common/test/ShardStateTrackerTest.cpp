@@ -197,7 +197,6 @@ TEST(ShardStateTrackerTest, basic) {
         ShardID{17, 0},
         {StorageStateTransition::OVERRIDE_STATE,
          Condition::FORCE,
-         DUMMY_MAINTENANCE,
          ShardState::Update::StateOverride{StorageState::READ_WRITE,
                                            /* flags = */ {},
                                            MetaDataStorageState::METADATA}});
@@ -205,7 +204,6 @@ TEST(ShardStateTrackerTest, basic) {
         ShardID{11, 0},
         {StorageStateTransition::OVERRIDE_STATE,
          Condition::FORCE,
-         DUMMY_MAINTENANCE,
          ShardState::Update::StateOverride{StorageState::READ_WRITE,
                                            /* flags = */ {},
                                            MetaDataStorageState::PROMOTING}});
@@ -213,7 +211,6 @@ TEST(ShardStateTrackerTest, basic) {
         ShardID{13, 0},
         {StorageStateTransition::OVERRIDE_STATE,
          Condition::FORCE,
-         DUMMY_MAINTENANCE,
          ShardState::Update::StateOverride{StorageState::NONE,
                                            /* flags = */ {},
                                            MetaDataStorageState::NONE}});
@@ -231,7 +228,6 @@ TEST(ShardStateTrackerTest, basic) {
         ShardID{13, 0},
         {StorageStateTransition::REMOVE_EMPTY_SHARD,
          Condition::NONE,
-         DUMMY_MAINTENANCE,
          /* state_override = */ folly::none});
 
     auto nc6 = nc5->applyUpdate(std::move(update2));
@@ -304,7 +300,6 @@ TEST(ShardStateTrackerTest, basic) {
         ShardID{11, 0},
         {StorageStateTransition::OVERRIDE_STATE,
          Condition::FORCE,
-         DUMMY_MAINTENANCE,
          ShardState::Update::StateOverride{StorageState::READ_WRITE,
                                            /* flags = */ {},
                                            MetaDataStorageState::PROMOTING}});

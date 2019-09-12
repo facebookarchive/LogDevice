@@ -45,10 +45,6 @@ struct ShardState {
 
   MetaDataStorageState metadata_state{MetaDataStorageState::INVALID};
 
-  // identifier for the maintenance event that correspond to the
-  // current shard state. Used by the maintenance state machine
-  MaintenanceID::Type active_maintenance{MaintenanceID::MAINTENANCE_NONE};
-
   // storage membership version since which the ShardState is
   // effective for the shard
   MembershipVersion::Type since_version{MembershipVersion::EMPTY_VERSION};
@@ -60,9 +56,6 @@ struct ShardState {
     // collection of condition checks done, provided by the proposor of
     // the update
     StateTransitionCondition conditions{Condition::NONE};
-
-    // identifier for the new maintenance requesting the state transition
-    MaintenanceID::Type maintenance{MaintenanceID::MAINTENANCE_NONE};
 
     // see state_override below
     struct StateOverride {
@@ -85,7 +78,6 @@ struct ShardState {
 
     bool operator==(const Update& rhs) const {
       return transition == rhs.transition && conditions == rhs.conditions &&
-          maintenance == rhs.maintenance &&
           state_override == rhs.state_override;
     }
   };
@@ -99,7 +91,6 @@ struct ShardState {
   bool operator==(const ShardState& rhs) const {
     return storage_state == rhs.storage_state && flags == rhs.flags &&
         metadata_state == rhs.metadata_state &&
-        active_maintenance == rhs.active_maintenance &&
         since_version == rhs.since_version;
   }
 

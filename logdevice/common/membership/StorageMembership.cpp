@@ -20,13 +20,11 @@ namespace facebook { namespace logdevice { namespace membership {
 
 using facebook::logdevice::toString;
 using namespace MembershipVersion;
-using namespace MaintenanceID;
 
 std::string ShardState::Update::toString() const {
-  return folly::sformat("[T:{}, C:{}, M:{}]",
+  return folly::sformat("[T:{}, C:{}]",
                         membership::toString(transition),
-                        Condition::toString(conditions),
-                        membership::toString(maintenance));
+                        Condition::toString(conditions));
 }
 
 bool ShardState::Update::isValid() const {
@@ -77,11 +75,10 @@ bool ShardState::isValid() const {
 }
 
 std::string ShardState::toString() const {
-  return folly::sformat("[S:{}, F:{}, M:{}, A:{}, V:{}]",
+  return folly::sformat("[S:{}, F:{}, M:{}, V:{}]",
                         membership::toString(storage_state),
                         StorageStateFlags::toString(flags),
                         membership::toString(metadata_state),
-                        membership::toString(active_maintenance),
                         membership::toString(since_version));
 }
 
@@ -318,7 +315,6 @@ int ShardState::transition(const ShardState& current_state,
   target_shard_state.flags = target_flags;
   target_shard_state.metadata_state = target_metadata_state;
   target_shard_state.since_version = new_since_version;
-  target_shard_state.active_maintenance = update.maintenance;
 
   if (!target_shard_state.isValid() &&
       update.transition != StorageStateTransition::REMOVE_EMPTY_SHARD) {
@@ -481,7 +477,6 @@ int StorageMembership::applyUpdate(const Membership::Update& membership_update,
       current_shard_state = ShardState{StorageState::INVALID,
                                        StorageStateFlags::NONE,
                                        MetaDataStorageState::NONE,
-                                       MAINTENANCE_NONE,
                                        EMPTY_VERSION};
     } else {
       if (isAddingNewShard(shard_update.transition)) {

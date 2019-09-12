@@ -82,6 +82,6 @@ struct NodesConfiguration {
   5: StorageConfig storage_config;
   6: MetaDataLogsReplication metadata_logs_rep;
   7: u64 last_timestamp;
-  8: u64 last_maintenance;
-  9: string last_context;
+  // 8: u64 last_maintenance;
+  // 9: string last_context;
 }

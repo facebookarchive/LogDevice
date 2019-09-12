@@ -163,8 +163,7 @@ void RemoveNodesHandler::buildNodesConfigurationUpdateForNode(
         node_idx,
         {SequencerMembershipTransition::REMOVE_NODE,
          /* sequencer_enabled= */ false,
-         /* weight= */ 0,
-         /* active_maintenance= */ MaintenanceID::MAINTENANCE_NONE});
+         /* weight= */ 0});
 
     // Sequencer Config
     update.sequencer_config_update->attributes_update->addNode(
@@ -188,9 +187,7 @@ void RemoveNodesHandler::buildNodesConfigurationUpdateForNode(
     for (const auto& shard : shards) {
       update.storage_config_update->membership_update->addShard(
           ShardID(node_idx, shard.first),
-          {StorageStateTransition::REMOVE_EMPTY_SHARD,
-           Condition::NONE,
-           MaintenanceID::MAINTENANCE_NONE});
+          {StorageStateTransition::REMOVE_EMPTY_SHARD, Condition::NONE});
     }
 
     // Storage Attributes Update

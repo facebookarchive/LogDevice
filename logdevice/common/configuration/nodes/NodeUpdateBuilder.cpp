@@ -174,8 +174,7 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::buildAddNodeUpdate(
         ->addNode(node_idx,
                   {SequencerMembershipTransition::ADD_NODE,
                    /* enabled= */ false,
-                   sequencer_weight_.value(),
-                   MaintenanceID::MAINTENANCE_NONE});
+                   sequencer_weight_.value()});
     // Sequencer Config
     createIfNull(update.sequencer_config_update->attributes_update)
         ->addNode(node_idx,
@@ -193,9 +192,7 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::buildAddNodeUpdate(
     for (int shard = 0; shard < num_shards_.value(); shard++) {
       update.storage_config_update->membership_update->addShard(
           ShardID(node_idx, shard),
-          {StorageStateTransition::ADD_EMPTY_SHARD,
-           Condition::NONE,
-           MaintenanceID::MAINTENANCE_NONE});
+          {StorageStateTransition::ADD_EMPTY_SHARD, Condition::NONE});
     }
 
     // Storage Attributes Update
@@ -265,8 +262,7 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::buildUpdateNodeUpdate(
           ->addNode(node_idx,
                     {SequencerMembershipTransition::SET_WEIGHT,
                      /* enabled= */ false /* not used */,
-                     sequencer_weight_.value(),
-                     MaintenanceID::MAINTENANCE_NONE});
+                     sequencer_weight_.value()});
     }
   }
 

@@ -21,11 +21,8 @@
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::membership;
 using namespace facebook::logdevice::membership::MembershipVersion;
-using namespace facebook::logdevice::membership::MaintenanceID;
 
 namespace {
-
-constexpr MaintenanceID::Type DUMMY_MAINTENANCE{2333};
 
 class SequencerMembershipTest : public ::testing::Test {
  public:
@@ -36,8 +33,7 @@ class SequencerMembershipTest : public ::testing::Test {
                    bool enabled,
                    double weight) {
     SequencerMembership::Update res{MembershipVersion::Type(base_ver)};
-    MaintenanceID::Type maintenance = DUMMY_MAINTENANCE;
-    int rv = res.addNode(node, {transition, enabled, weight, maintenance});
+    int rv = res.addNode(node, {transition, enabled, weight});
     EXPECT_EQ(0, rv);
     return res;
   }
@@ -49,10 +45,8 @@ class SequencerMembershipTest : public ::testing::Test {
                        bool enabled,
                        double weight) {
     ld_check(update != nullptr);
-    MaintenanceID::Type maintenance = DUMMY_MAINTENANCE;
     for (auto node : nodes) {
-      int rv =
-          update->addNode(node, {transition, enabled, weight, maintenance});
+      int rv = update->addNode(node, {transition, enabled, weight});
       EXPECT_EQ(0, rv);
     }
   }
@@ -77,13 +71,12 @@ class SequencerMembershipTest : public ::testing::Test {
   }
 };
 
-#define ASSERT_NODE_STATE(_m, _node, _enabled, _weight)    \
-  do {                                                     \
-    auto res = _m.getNodeState((_node));                   \
-    EXPECT_TRUE(res.hasValue());                           \
-    EXPECT_EQ(_enabled, res->sequencer_enabled);           \
-    EXPECT_EQ(_weight, res->getConfiguredWeight());        \
-    EXPECT_EQ(DUMMY_MAINTENANCE, res->active_maintenance); \
+#define ASSERT_NODE_STATE(_m, _node, _enabled, _weight) \
+  do {                                                  \
+    auto res = _m.getNodeState((_node));                \
+    EXPECT_TRUE(res.hasValue());                        \
+    EXPECT_EQ(_enabled, res->sequencer_enabled);        \
+    EXPECT_EQ(_weight, res->getConfiguredWeight());     \
   } while (0)
 
 #define ASSERT_NO_NODE(_m, _node)      \

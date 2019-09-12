@@ -97,7 +97,6 @@ void MetadataNodesetSelectorTest::overrideStorageState(
     membership::ShardState::Update u;
     u.transition = membership::StorageStateTransition::OVERRIDE_STATE;
     u.conditions = membership::Condition::FORCE;
-    u.maintenance = membership::MaintenanceID::Type{123};
     u.state_override = s;
 
     update.storage_config_update->membership_update->addShard(shard, u);

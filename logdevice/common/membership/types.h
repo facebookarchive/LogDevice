@@ -25,14 +25,6 @@ constexpr Type EMPTY_VERSION{0};
 constexpr Type MIN_VERSION{1};
 } // namespace MembershipVersion
 
-// membership changes are usually associated with maintenance events; we use the
-// MaintenanceID type for identifying them
-namespace MaintenanceID {
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, Type);
-
-constexpr Type MAINTENANCE_NONE{0};
-} // namespace MaintenanceID
-
 // there should be one membership type for each NodeRole
 // (defined in common/configuration/Node.h) that requires a membership
 using MembershipType = configuration::nodes::NodeRole;

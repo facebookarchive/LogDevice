@@ -42,12 +42,8 @@ enum class SequencerMembershipTransition : uint8_t {
 
 struct SequencerNodeState {
   SequencerNodeState() {}
-  SequencerNodeState(bool sequencer_enabled,
-                     double weight,
-                     MaintenanceID::Type active_maintenance)
-      : sequencer_enabled{sequencer_enabled},
-        weight_{weight},
-        active_maintenance{active_maintenance} {}
+  SequencerNodeState(bool sequencer_enabled, double weight)
+      : sequencer_enabled{sequencer_enabled}, weight_{weight} {}
   /**
    * Determines if a sequencer is enabled or not. If the sequencer is not
    * enabled, it's similar to giving it a weight of zero. It's done this way
@@ -65,17 +61,12 @@ struct SequencerNodeState {
   double weight_{0.0};
 
  public:
-  // identifier for the maintenance event that correspond to the
-  // current node state. Used by the maintenance state machine
-  MaintenanceID::Type active_maintenance{MaintenanceID::MAINTENANCE_NONE};
-
   std::string toString() const;
 
   bool isValid() const;
 
   bool operator==(const SequencerNodeState& rhs) const {
-    return sequencer_enabled == rhs.sequencer_enabled &&
-        weight_ == rhs.weight_ && active_maintenance == rhs.active_maintenance;
+    return sequencer_enabled == rhs.sequencer_enabled && weight_ == rhs.weight_;
   }
 
   bool operator!=(const SequencerNodeState& rhs) const {
@@ -103,9 +94,6 @@ struct SequencerNodeState {
 
     // set the weight for adding new node or resetting an existing node
     double weight{0.0};
-
-    // identifier for the new maintenance requesting the state transition
-    MaintenanceID::Type maintenance{MaintenanceID::MAINTENANCE_NONE};
 
     bool isValid() const;
     std::string toString() const;

@@ -17,8 +17,6 @@ extern const configuration::nodes::NodeServiceDiscovery::RoleSet seq_role;
 extern const configuration::nodes::NodeServiceDiscovery::RoleSet storage_role;
 extern const configuration::nodes::NodeServiceDiscovery::RoleSet both_role;
 
-extern const membership::MaintenanceID::Type DUMMY_MAINTENANCE;
-
 struct NodeTemplate {
   node_index_t id;
   configuration::nodes::NodeServiceDiscovery::RoleSet roles{both_role};
