@@ -47,6 +47,7 @@ thrift::StorageMembership MembershipThriftConverter::toThrift(
       state.set_metadata_state(static_cast<thrift::MetaDataStorageState>(
           shard_state.metadata_state));
       state.set_since_version(shard_state.since_version.val());
+      state.set_manual_override(shard_state.manual_override);
 
       shard_states.push_back(std::move(state));
     }
@@ -81,7 +82,11 @@ MembershipThriftConverter::fromThrift(const thrift::ShardState& shard_state) {
   MetaDataStorageState metadata_state =
       static_cast<MetaDataStorageState>(shard_state.metadata_state);
   MembershipVersion::Type since_version{shard_state.since_version};
-  return ShardState{storage_state, flags, metadata_state, since_version};
+  return ShardState{storage_state,
+                    flags,
+                    metadata_state,
+                    since_version,
+                    shard_state.get_manual_override()};
 }
 
 /* static */
@@ -137,6 +142,7 @@ thrift::SequencerMembership MembershipThriftConverter::toThrift(
     thrift::SequencerNodeState state;
     state.set_sequencer_enabled(node_kv.second.sequencer_enabled);
     state.set_weight(node_kv.second.getConfiguredWeight());
+    state.set_manual_override(node_kv.second.manual_override);
     node_states.emplace(node_kv.first, std::move(state));
   }
 
@@ -174,7 +180,8 @@ std::shared_ptr<SequencerMembership> MembershipThriftConverter::fromThrift(
     node_index_t node = node_state.first;
     bool sequencer_enabled = node_state.second.sequencer_enabled;
     double weight = node_state.second.weight;
-    result->setNodeState(node, {sequencer_enabled, weight});
+    result->setNodeState(
+        node, {sequencer_enabled, weight, node_state.second.manual_override});
   }
   result->bootstrapping_ = sequencer_membership.get_bootstrapping();
 

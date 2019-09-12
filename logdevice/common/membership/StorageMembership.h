@@ -49,6 +49,10 @@ struct ShardState {
   // effective for the shard
   MembershipVersion::Type since_version{MembershipVersion::EMPTY_VERSION};
 
+  // A flag to determine if this was set by a human operator so that it
+  // gets respected by maintenance manager and doesn't get overridden.
+  bool manual_override{false};
+
   // Describe the update that can apply to the ShardState
   struct Update {
     StorageStateTransition transition{StorageStateTransition::Count};
@@ -63,9 +67,14 @@ struct ShardState {
       StorageStateFlags::Type flags;
       MetaDataStorageState metadata_state;
 
+      // Mark this state override as a manual override so that maintenance
+      // manager doesn't revert it back.
+      bool manual_override{false};
+
       bool operator==(const StateOverride& rhs) const {
         return storage_state == rhs.storage_state && flags == rhs.flags &&
-            metadata_state == rhs.metadata_state;
+            metadata_state == rhs.metadata_state &&
+            manual_override == rhs.manual_override;
       }
     };
 
@@ -91,7 +100,8 @@ struct ShardState {
   bool operator==(const ShardState& rhs) const {
     return storage_state == rhs.storage_state && flags == rhs.flags &&
         metadata_state == rhs.metadata_state &&
-        since_version == rhs.since_version;
+        since_version == rhs.since_version &&
+        manual_override == rhs.manual_override;
   }
 
   /**

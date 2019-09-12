@@ -22,10 +22,11 @@ using facebook::logdevice::toString;
 using namespace MembershipVersion;
 
 std::string SequencerNodeState::Update::toString() const {
-  return folly::sformat("[T:{}, E:{}, W:{}]",
+  return folly::sformat("[T:{}, E:{}, W:{}, O:{}]",
                         membership::toString(transition),
                         membership::toString(sequencer_enabled),
-                        membership::toString(weight));
+                        membership::toString(weight),
+                        membership::toString(manual_override));
 }
 
 bool SequencerNodeState::Update::isValid() const {
@@ -50,9 +51,10 @@ bool SequencerNodeState::Update::isValid() const {
 }
 
 std::string SequencerNodeState::toString() const {
-  return folly::sformat("[E:{}, W:{}]",
+  return folly::sformat("[E:{}, W:{}, O:{}]",
                         membership::toString(sequencer_enabled),
-                        membership::toString(weight_));
+                        membership::toString(weight_),
+                        membership::toString(manual_override));
 }
 
 bool SequencerNodeState::isValid() const {
@@ -206,6 +208,7 @@ int SequencerMembership::applyUpdate(
       case SequencerMembershipTransition::SET_ENABLED_FLAG:
         ld_check(node_exist);
         current_node_state->sequencer_enabled = node_update.sequencer_enabled;
+        current_node_state->manual_override = node_update.manual_override;
         target_membership_state.setNodeState(node, *current_node_state);
         break;
       case SequencerMembershipTransition::ADD_NODE:

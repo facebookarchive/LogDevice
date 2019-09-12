@@ -75,11 +75,12 @@ bool ShardState::isValid() const {
 }
 
 std::string ShardState::toString() const {
-  return folly::sformat("[S:{}, F:{}, M:{}, V:{}]",
+  return folly::sformat("[S:{}, F:{}, M:{}, V:{}, O:{}]",
                         membership::toString(storage_state),
                         StorageStateFlags::toString(flags),
                         membership::toString(metadata_state),
-                        membership::toString(since_version));
+                        membership::toString(since_version),
+                        membership::toString(manual_override));
 }
 
 /* static */
@@ -285,6 +286,7 @@ int ShardState::transition(const ShardState& current_state,
 
       // blindly overwrite the shard state to the target overrid state
       target_shard_state.storage_state = state_override.storage_state;
+      target_shard_state.manual_override = state_override.manual_override;
       target_flags = state_override.flags;
       target_metadata_state = state_override.metadata_state;
     } break;

@@ -595,6 +595,25 @@ TEST_F(StorageMembershipTest, StateOverride) {
                      MetaDataStorageState::METADATA,
                      StorageStateFlags::UNRECOVERABLE,
                      2);
+  ASSERT_FALSE(m.getShardState(N1)->manual_override);
+
+  // apply the override with a manual_override flag
+  st_override.manual_override = true;
+  rv = m.applyUpdate(genUpdateOneShard(N1,
+                                       2,
+                                       StorageStateTransition::OVERRIDE_STATE,
+                                       Condition::FORCE,
+                                       {st_override}),
+                     &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(3, m.getVersion().val());
+  ASSERT_SHARD_STATE(m,
+                     N1,
+                     StorageState::READ_WRITE,
+                     MetaDataStorageState::METADATA,
+                     StorageStateFlags::UNRECOVERABLE,
+                     3);
+  ASSERT_TRUE(m.getShardState(N1)->manual_override);
   checkCodecSerialization(m);
 }
 

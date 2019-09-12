@@ -209,7 +209,8 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
 
       bool seq_enabled = node.sequencer_attributes->enabled();
       double seq_w = node.sequencer_attributes->getConfiguredWeight();
-      seq_mem->setNodeState(nid, {seq_enabled, seq_w});
+      seq_mem->setNodeState(
+          nid, {seq_enabled, seq_w, /*manual_override=*/false});
       seq_attr->setNodeAttributes(nid, {});
     }
 
@@ -233,7 +234,8 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
             {fromLegacyStorageState(node.getStorageState()),
              membership::StorageStateFlags::NONE,
              ms,
-             membership::MembershipVersion::Type(version.val())});
+             membership::MembershipVersion::Type(version.val()),
+             /*manual_override=*/false});
       }
 
       // storage attributes

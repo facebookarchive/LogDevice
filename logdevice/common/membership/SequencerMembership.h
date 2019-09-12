@@ -42,8 +42,12 @@ enum class SequencerMembershipTransition : uint8_t {
 
 struct SequencerNodeState {
   SequencerNodeState() {}
-  SequencerNodeState(bool sequencer_enabled, double weight)
-      : sequencer_enabled{sequencer_enabled}, weight_{weight} {}
+  SequencerNodeState(bool sequencer_enabled,
+                     double weight,
+                     bool manual_override = false)
+      : sequencer_enabled{sequencer_enabled},
+        manual_override{manual_override},
+        weight_{weight} {}
   /**
    * Determines if a sequencer is enabled or not. If the sequencer is not
    * enabled, it's similar to giving it a weight of zero. It's done this way
@@ -51,6 +55,10 @@ struct SequencerNodeState {
    * weight.
    */
   bool sequencer_enabled{false};
+
+  // A flag to determine if this was set by a human operator so that it
+  // gets respected by maintenance manager and doesn't get overridden.
+  bool manual_override{false};
 
  private:
   /**
@@ -66,7 +74,8 @@ struct SequencerNodeState {
   bool isValid() const;
 
   bool operator==(const SequencerNodeState& rhs) const {
-    return sequencer_enabled == rhs.sequencer_enabled && weight_ == rhs.weight_;
+    return sequencer_enabled == rhs.sequencer_enabled &&
+        weight_ == rhs.weight_ && manual_override == rhs.manual_override;
   }
 
   bool operator!=(const SequencerNodeState& rhs) const {
@@ -94,6 +103,9 @@ struct SequencerNodeState {
 
     // set the weight for adding new node or resetting an existing node
     double weight{0.0};
+
+    // Only relevant for SET_ENABLED_FLAG transition
+    bool manual_override{false};
 
     bool isValid() const;
     std::string toString() const;

@@ -31,9 +31,10 @@ class SequencerMembershipTest : public ::testing::Test {
                    uint64_t base_ver,
                    SequencerMembershipTransition transition,
                    bool enabled,
-                   double weight) {
+                   double weight,
+                   bool manual_override = false) {
     SequencerMembership::Update res{MembershipVersion::Type(base_ver)};
-    int rv = res.addNode(node, {transition, enabled, weight});
+    int rv = res.addNode(node, {transition, enabled, weight, manual_override});
     EXPECT_EQ(0, rv);
     return res;
   }
@@ -182,6 +183,23 @@ TEST_F(SequencerMembershipTest, NodeLifeCycle) {
   ASSERT_EQ(6, m.getVersion().val());
   ASSERT_NODE_STATE(m, node_index_t(2), true, 3.2);
   ASSERT_NODE_STATE(m, node_index_t(3), false, 1.2);
+
+  // Mark N2 as a manual override
+  rv = m.applyUpdate(
+      genUpdateOneNode(node_index_t(2),
+                       6,
+                       SequencerMembershipTransition::SET_ENABLED_FLAG,
+                       true,
+                       0 /*doesn't matter*/,
+                       true),
+      &m);
+  ASSERT_EQ(0, rv);
+  ASSERT_EQ(2, m.numNodes());
+  ASSERT_EQ(7, m.getVersion().val());
+  ASSERT_NODE_STATE(m, node_index_t(2), true, 3.2);
+  ASSERT_TRUE(m.getNodeState(node_index_t(2))->manual_override);
+  ASSERT_NODE_STATE(m, node_index_t(3), false, 1.2);
+  ASSERT_FALSE(m.getNodeState(node_index_t(3))->manual_override);
 
   ASSERT_MEMBERSHIP_NODES(m, 2, 3);
   checkCodecSerialization(m);
