@@ -67,7 +67,9 @@ class InfoConfig : public AdminCommand {
 
     table.next()
         .set<0>(main_config_metadata.uri)
-        .set<1>(config.serverConfig()->getServerOrigin().index())
+        .set<1>(config.serverConfig()->getServerOrigin().isNodeID()
+                    ? config.serverConfig()->getServerOrigin().index()
+                    : -1)
         .set<2>(main_config_metadata.hash)
         .set<3>(main_config_metadata.modified_time)
         .set<4>(main_config_metadata.loaded_time);
