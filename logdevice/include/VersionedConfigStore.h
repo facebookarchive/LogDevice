@@ -13,8 +13,8 @@
 #include <folly/Optional.h>
 #include <folly/Synchronized.h>
 
-#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 

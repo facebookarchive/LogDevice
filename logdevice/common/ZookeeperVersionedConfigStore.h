@@ -13,8 +13,8 @@
 #include <folly/Optional.h>
 #include <folly/Synchronized.h>
 
-#include "logdevice/common/VersionedConfigStore.h"
 #include "logdevice/common/ZookeeperClientBase.h"
+#include "logdevice/include/VersionedConfigStore.h"
 
 namespace facebook { namespace logdevice {
 

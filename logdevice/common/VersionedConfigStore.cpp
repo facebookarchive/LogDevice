@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/VersionedConfigStore.h"
+#include "logdevice/include/VersionedConfigStore.h"
 
 #include <chrono>
 
