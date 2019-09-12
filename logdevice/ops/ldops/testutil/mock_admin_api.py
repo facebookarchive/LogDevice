@@ -14,6 +14,7 @@ import types
 from datetime import datetime
 from typing import Dict, List, Optional, Type
 
+from ldops.const import ALL_SHARDS
 from ldops.types.cluster import Cluster
 from logdevice.admin.common.types import (
     LocationScope,
@@ -27,6 +28,7 @@ from logdevice.admin.exceptions.types import MaintenanceMatchError
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MaintenanceDefinitionResponse,
+    MaintenanceProgress,
     MaintenancesFilter,
     RemoveMaintenancesRequest,
     RemoveMaintenancesResponse,
@@ -416,13 +418,14 @@ class MockAdminAPI:
         # TODO: ungroup if group == False
         shards = []
         for sh in request.shards:
-            if sh.shard_index == -1:
-                # TODO: make it unwrap
-                pass
+            if sh.shard_index == ALL_SHARDS:
+                r = range(self.shards_per_storage_node)
             else:
-                assert sh.node.node_index is not None
-                # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
-                nc = self._nc_by_node_index[sh.node.node_index]
+                r = range(sh.shard_index, sh.shard_index + 1)
+
+            assert sh.node.node_index is not None
+            nc = self._nc_by_node_index[sh.node.node_index]  # pyre-ignore
+            for shard_index in r:
                 shards.append(
                     ShardID(
                         node=NodeID(
@@ -430,9 +433,11 @@ class MockAdminAPI:
                             name=nc.name,
                             address=nc.data_address,
                         ),
-                        shard_index=sh.shard_index,
+                        shard_index=shard_index,
                     )
                 )
+
+        shards = tuple(sorted(shards, key=lambda s: (s.node.node_index, s.shard_index)))
 
         seq_nodes = []
         for n in request.sequencer_nodes:
@@ -462,6 +467,7 @@ class MockAdminAPI:
             if request.ttl_seconds
             else None,
             created_on=1000 * int(datetime.now().timestamp()),
+            progress=MaintenanceProgress.IN_PROGRESS,
         )
         assert mnt.group_id is not None
         # pyre-fixme[6]: Expected `str` for 1st param but got `Optional[str]`.

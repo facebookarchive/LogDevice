@@ -19,6 +19,7 @@ from datetime import timedelta
 from typing import Collection, FrozenSet, Mapping, Optional, Set
 
 from ldops import admin_api
+from ldops.const import ALL_SHARDS
 from ldops.exceptions import LDOpsError
 from logdevice.admin.clients import AdminAPI
 from logdevice.admin.common.types import NodeID, ShardID
@@ -64,7 +65,7 @@ def _recombine_shards(shards: Collection[ShardID]) -> Set[ShardID]:
     node_indexes = set()
     single_shards = set()
     for s in shards:
-        if s.shard_index == -1:
+        if s.shard_index == ALL_SHARDS:
             whole_nodes.add(s)
             node_indexes.add(s.node.node_index)
         else:
@@ -92,7 +93,7 @@ async def check_impact(
     shards = set(shards or [])
 
     req_shards: Set[ShardID] = _recombine_shards(
-        shards.union(ShardID(node=n, shard_index=-1) for n in node_ids)
+        shards.union(ShardID(node=n, shard_index=ALL_SHARDS) for n in node_ids)
     )
 
     return await admin_api.check_impact(
@@ -182,7 +183,7 @@ async def apply_maintenance(
     if extras is None:
         extras = {}
 
-    shards = shards.union({ShardID(node=n, shard_index=-1) for n in node_ids})
+    shards = shards.union({ShardID(node=n, shard_index=ALL_SHARDS) for n in node_ids})
     shards = _recombine_shards(shards)
 
     req = MaintenanceDefinition(

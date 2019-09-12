@@ -9,13 +9,20 @@
 
 
 from dataclasses import dataclass, field
-from typing import Collection, Dict, Generator, List, Optional, Tuple
+from typing import Collection, Dict, Generator, List, Optional, Set, Tuple
 
+from ldops.const import ALL_SHARDS
 from ldops.exceptions import NodeNotFoundError
 from ldops.types.maintenance_view import MaintenanceView
 from ldops.types.node_view import NodeView
-from logdevice.admin.maintenance.types import MaintenanceDefinition
-from logdevice.admin.nodes.types import NodeConfig, NodeState
+from logdevice.admin.common.types import NodeID, ShardID
+from logdevice.admin.maintenance.types import MaintenanceDefinition, MaintenanceProgress
+from logdevice.admin.nodes.types import (
+    NodeConfig,
+    NodeState,
+    SequencingState,
+    ShardOperationalState,
+)
 
 
 @dataclass
@@ -240,6 +247,39 @@ class ClusterView:
             for mnt_id in self.get_all_maintenance_ids()
         )
 
+    # Helpers
+    def expand_shards(
+        self,
+        shards: Optional[Collection[ShardID]] = None,
+        node_ids: Optional[Collection[NodeID]] = None,
+    ) -> Tuple[ShardID, ...]:
+        shards = list(shards or [])
+        node_ids = list(node_ids or [])
+        for node_id in node_ids:
+            shards.append(ShardID(node=node_id, shard_index=ALL_SHARDS))
+
+        ret: Set[ShardID] = set()
+        for shard in shards:
+            node_view = self.get_node_view(
+                node_index=shard.node.node_index, node_name=shard.node.name
+            )
+            if shard.shard_index == ALL_SHARDS:
+                r = range(0, node_view.num_shards)
+            else:
+                r = range(shard.shard_index, shard.shard_index + 1)
+
+            for shard_index in r:
+                ret.add(ShardID(node=node_view.node_id, shard_index=shard_index))
+
+        return tuple(
+            sorted(ret, key=lambda shard: (shard.node.node_index, shard.shard_index))
+        )
+
+    def normalize_node_id(self, node_id: NodeID) -> NodeID:
+        return self.get_node_view(
+            node_index=node_id.node_index, node_name=node_id.name
+        ).node_id
+
     # By node_index
     def get_node_view_by_node_index(self, node_index: int) -> NodeView:
         node_view = self._node_index_to_node_view.get(node_index, None)
@@ -338,6 +378,11 @@ class ClusterView:
             node_index=node_index, node_name=node_name
         ).maintenances
 
+    def get_node_id(
+        self, node_index: Optional[int] = None, node_name: Optional[str] = None
+    ) -> NodeID:
+        return self.get_node_view(node_index=node_index, node_name=node_name).node_id
+
     # Maintenances
     def get_maintenance_by_id(self, maintenance_id: str) -> MaintenanceDefinition:
         return self._maintenance_id_to_maintenance[maintenance_id]
@@ -349,3 +394,76 @@ class ClusterView:
         self, maintenance_id: str
     ) -> Tuple[int, ...]:
         return self._maintenance_id_to_node_indexes[maintenance_id]
+
+    def search_maintenances(
+        self,
+        node_ids: Optional[Collection[NodeID]] = None,
+        shards: Optional[Collection[ShardID]] = None,
+        shard_target_state: Optional[ShardOperationalState] = None,
+        sequencer_nodes: Optional[Collection[NodeID]] = None,
+        sequencer_target_state: Optional[SequencingState] = None,
+        user: Optional[str] = None,
+        reason: Optional[str] = None,
+        skip_safety_checks: Optional[bool] = None,
+        force_restore_rebuilding: Optional[bool] = None,
+        allow_passive_drains: Optional[bool] = None,
+        group_id: Optional[str] = None,
+        progress: Optional[MaintenanceProgress] = None,
+    ) -> Tuple[MaintenanceView, ...]:
+        mvs = self.get_all_maintenance_views()
+
+        if node_ids is not None:
+            sequencer_nodes = list(sequencer_nodes or []) + list(node_ids)
+            shards = list(shards or []) + [
+                ShardID(node=node_id, shard_index=ALL_SHARDS) for node_id in node_ids
+            ]
+
+        if shards is not None:
+            search_shards = self.expand_shards(shards)
+            mvs = (mv for mv in mvs if self.expand_shards(mv.shards) == search_shards)
+
+        if shard_target_state is not None:
+            mvs = (mv for mv in mvs if shard_target_state == mv.shard_target_state)
+
+        if sequencer_nodes is not None:
+            normalized_sequencer_node_indexes = tuple(
+                sorted(self.normalize_node_id(n).node_index for n in sequencer_nodes)
+            )
+            mvs = (
+                mv
+                for mv in mvs
+                if normalized_sequencer_node_indexes
+                == mv.affected_sequencer_node_indexes
+            )
+
+        if sequencer_target_state is not None:
+            mvs = (
+                mv for mv in mvs if mv.sequencer_target_state == sequencer_target_state
+            )
+
+        if user is not None:
+            mvs = (mv for mv in mvs if mv.user == user)
+
+        if reason is not None:
+            mvs = (mv for mv in mvs if mv.reason == reason)
+
+        if skip_safety_checks is not None:
+            mvs = (mv for mv in mvs if mv.skip_safety_checks == skip_safety_checks)
+
+        if force_restore_rebuilding is not None:
+            mvs = (
+                mv
+                for mv in mvs
+                if mv.force_restore_rebuilding == force_restore_rebuilding
+            )
+
+        if allow_passive_drains is not None:
+            mvs = (mv for mv in mvs if mv.allow_passive_drains == allow_passive_drains)
+
+        if group_id is not None:
+            mvs = (mv for mv in mvs if mv.group_id == group_id)
+
+        if progress is not None:
+            mvs = (mv for mv in mvs if mv.progress == progress)
+
+        return tuple(mvs)

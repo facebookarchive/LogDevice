@@ -13,6 +13,7 @@ Unit tests for `ldops.util.convert` module.
 
 from unittest import TestCase
 
+from ldops.const import ALL_SHARDS
 from ldops.util import convert
 from logdevice.admin.common.types import LocationScope, ReplicationProperty
 from logdevice.admin.nodes.types import ShardStorageState
@@ -39,7 +40,7 @@ class ConvertTestCase(TestCase):
         # We should parse this as shard_index=-1
         input3 = "N225"
         shard = convert.to_shard_id(input3)
-        self.assertEqual(-1, shard.shard_index)
+        self.assertEqual(ALL_SHARDS, shard.shard_index)
         self.assertEqual(225, shard.node.node_index)
 
     def test_to_storage_state(self) -> None:

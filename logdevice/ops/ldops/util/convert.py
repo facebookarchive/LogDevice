@@ -17,6 +17,7 @@ A collection of helpful conversion utility functions
 import re
 from typing import Dict, List, Mapping, Optional, Pattern
 
+from ldops.const import ALL_SHARDS
 from logdevice.admin.common.types import (
     LocationScope,
     NodeID,
@@ -40,7 +41,7 @@ def to_shard_id(scope: str) -> ShardID:
     """
     A conversion utility that takes a Nx:Sy string and convert it into the
     typed ShardID. The 'Sy' part is optional and if unset the generated
-    ShardID will have a shard_index set to -1
+    ShardID will have a shard_index set to ALL_SHARDS==-1
     """
     scope = scope.upper()
     if not scope:
@@ -51,7 +52,7 @@ def to_shard_id(scope: str) -> ShardID:
         raise ValueError(f"Cannot parse '{scope}'. Invalid format!")
 
     results = match.groupdict()
-    shard_index = -1
+    shard_index = ALL_SHARDS
     if results["shard_index"] is not None:
         shard_index = int(results["shard_index"])
     node_index = int(results["node_index"])

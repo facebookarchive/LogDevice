@@ -13,19 +13,26 @@ from typing import Dict, List, Tuple
 from unittest import TestCase
 
 from ldops.cluster import get_cluster_view
+from ldops.const import ALL_SHARDS
 from ldops.exceptions import NodeNotFoundError
 from ldops.maintenance import apply_maintenance
 from ldops.testutil.async_test import async_test
 from ldops.testutil.mock_admin_api import MockAdminAPI, gen_word
 from ldops.types.cluster_view import ClusterView
 from ldops.types.node_view import NodeView
-from logdevice.admin.common.types import ShardID
-from logdevice.admin.maintenance.types import MaintenanceDefinition, MaintenancesFilter
+from logdevice.admin.common.types import NodeID, ShardID
+from logdevice.admin.maintenance.types import (
+    MaintenanceDefinition,
+    MaintenanceProgress,
+    MaintenancesFilter,
+)
 from logdevice.admin.nodes.types import (
     NodeConfig,
     NodesFilter,
     NodesStateRequest,
     NodeState,
+    SequencingState,
+    ShardOperationalState,
 )
 
 
@@ -42,6 +49,12 @@ class TestClusterView(TestCase):
                     )
                 ],
                 sequencer_nodes=[cv.get_node_view_by_node_index(0).node_id],
+            )
+            await apply_maintenance(
+                client=client,
+                node_ids=[cv.get_node_id(node_index=1)],
+                user="hello",
+                reason="whatever",
             )
             (cv, nc_resp, ns_resp, mnts_resp) = await asyncio.gather(
                 get_cluster_view(client),
@@ -207,4 +220,136 @@ class TestClusterView(TestCase):
         self.assertListEqual(
             list(sorted(m.group_id for m in mnts)),
             list(sorted(mv.group_id for mv in cv.get_all_maintenance_views())),
+        )
+
+        # expand_shards
+        self.assertEqual(
+            cv.expand_shards(
+                shards=[ShardID(node=NodeID(node_index=nis[0]), shard_index=0)]
+            ),
+            (
+                ShardID(
+                    node=NodeID(
+                        node_index=ni_to_nc[nis[0]].node_index,
+                        name=ni_to_nc[nis[0]].name,
+                        address=ni_to_nc[nis[0]].data_address,
+                    ),
+                    shard_index=0,
+                ),
+            ),
+        )
+        self.assertEqual(
+            len(
+                cv.expand_shards(
+                    shards=[
+                        ShardID(node=NodeID(node_index=nis[0]), shard_index=ALL_SHARDS)
+                    ]
+                )
+            ),
+            ni_to_nc[nis[0]].storage.num_shards,
+        )
+        self.assertEqual(
+            len(
+                cv.expand_shards(
+                    shards=[
+                        ShardID(node=NodeID(node_index=nis[0]), shard_index=ALL_SHARDS),
+                        ShardID(node=NodeID(node_index=nis[0]), shard_index=ALL_SHARDS),
+                        ShardID(node=NodeID(node_index=nis[1]), shard_index=ALL_SHARDS),
+                    ]
+                )
+            ),
+            ni_to_nc[nis[0]].storage.num_shards + ni_to_nc[nis[1]].storage.num_shards,
+        )
+        self.assertEqual(
+            len(
+                cv.expand_shards(
+                    shards=[
+                        ShardID(node=NodeID(node_index=nis[0]), shard_index=ALL_SHARDS),
+                        ShardID(node=NodeID(node_index=nis[1]), shard_index=0),
+                    ],
+                    node_ids=[NodeID(node_index=0)],
+                )
+            ),
+            ni_to_nc[nis[0]].storage.num_shards + 1,
+        )
+
+        # normalize_node_id
+        self.assertEqual(
+            cv.normalize_node_id(NodeID(node_index=nis[0])),
+            NodeID(
+                node_index=nis[0],
+                address=ni_to_nc[nis[0]].data_address,
+                name=ni_to_nc[nis[0]].name,
+            ),
+        )
+        self.assertEqual(
+            cv.normalize_node_id(NodeID(name=ni_to_nc[nis[0]].name)),
+            NodeID(
+                node_index=nis[0],
+                address=ni_to_nc[nis[0]].data_address,
+                name=ni_to_nc[nis[0]].name,
+            ),
+        )
+
+        # search_maintenances
+        self.assertEqual(len(cv.search_maintenances()), len(mnts))
+        self.assertEqual(
+            len(cv.search_maintenances(node_ids=[cv.get_node_id(node_index=3)])), 0
+        )
+        self.assertEqual(
+            len(cv.search_maintenances(node_ids=[cv.get_node_id(node_index=1)])), 1
+        )
+        self.assertEqual(
+            len(
+                cv.search_maintenances(
+                    shards=[ShardID(node=cv.get_node_id(node_index=0), shard_index=1)]
+                )
+            ),
+            1,
+        )
+
+        # shard_target_state
+        self.assertEqual(
+            len(
+                cv.search_maintenances(
+                    shard_target_state=ShardOperationalState.MAY_DISAPPEAR
+                )
+            ),
+            2,
+        )
+        self.assertEqual(
+            len(
+                cv.search_maintenances(shard_target_state=ShardOperationalState.DRAINED)
+            ),
+            0,
+        )
+
+        # sequencer_target_state
+        self.assertEqual(
+            len(cv.search_maintenances(sequencer_target_state=SequencingState.ENABLED)),
+            0,
+        )
+        self.assertEqual(
+            len(
+                cv.search_maintenances(sequencer_target_state=SequencingState.DISABLED)
+            ),
+            2,
+        )
+
+        self.assertEqual(len(cv.search_maintenances(user="hello")), 1)
+        self.assertEqual(len(cv.search_maintenances(reason="whatever")), 1)
+
+        self.assertEqual(len(cv.search_maintenances(skip_safety_checks=True)), 0)
+        self.assertEqual(len(cv.search_maintenances(skip_safety_checks=False)), 2)
+
+        self.assertEqual(len(cv.search_maintenances(force_restore_rebuilding=True)), 0)
+        self.assertEqual(len(cv.search_maintenances(force_restore_rebuilding=False)), 2)
+
+        self.assertEqual(len(cv.search_maintenances(allow_passive_drains=True)), 0)
+        self.assertEqual(len(cv.search_maintenances(allow_passive_drains=False)), 2)
+
+        self.assertEqual(len(cv.search_maintenances(group_id=mnts[0].group_id)), 1)
+
+        self.assertEqual(
+            len(cv.search_maintenances(progress=MaintenanceProgress.IN_PROGRESS)), 2
         )
