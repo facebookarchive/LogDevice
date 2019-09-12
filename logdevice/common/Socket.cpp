@@ -958,8 +958,10 @@ void Socket::onConnectTimeout() {
 }
 
 void Socket::onHandshakeTimeout() {
-  ld_warning(
-      "Handshake timeout occurred (peer: %s).", conn_description_.c_str());
+  RATELIMIT_WARNING(std::chrono::seconds(10),
+                    10,
+                    "Handshake timeout occurred (peer: %s).",
+                    conn_description_.c_str());
   onConnectTimeout();
   STAT_INCR(deps_->getStats(), handshake_timeouts);
 }
@@ -985,10 +987,12 @@ void Socket::onConnectAttemptTimeout() {
 
     // Try connecting again.
     if (doConnectAttempt() != 0) {
-      ld_warning("Connect attempt #%lu failed (peer:%s), err=%s",
-                 retries_so_far_ + 1,
-                 conn_description_.c_str(),
-                 error_name(err));
+      RATELIMIT_WARNING(std::chrono::seconds(10),
+                        10,
+                        "Connect attempt #%lu failed (peer:%s), err=%s",
+                        retries_so_far_ + 1,
+                        conn_description_.c_str(),
+                        error_name(err));
       onConnectTimeout();
     } else {
       STAT_INCR(deps_->getStats(), connection_retries);
