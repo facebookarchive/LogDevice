@@ -41,6 +41,12 @@ class NodeRegistrationHandler {
   folly::Expected<node_index_t /* my_node_id */, E>
   registerSelf(configuration::nodes::NodeIndicesAllocator allocator);
 
+  /**
+   * Makes sure that the attributes of the node in the NodesConfiguration
+   * matches the desired attributes in the passed CLI settings.
+   */
+  Status updateSelf(node_index_t my_idx);
+
  private:
   /**
    * Builds a NodeUpdateBuilder from the settings that was passed to the
@@ -54,7 +60,7 @@ class NodeRegistrationHandler {
    * to the NodesConfiguration. Return folly::none if building the update fails.
    */
   folly::Optional<configuration::nodes::NodesConfiguration::Update>
-  buildSelfUpdate(node_index_t my_idx) const;
+  buildSelfUpdate(node_index_t my_idx, bool is_update) const;
 
   /**
    * Applies the NodesConfiguration update to the NodesConfigurationStore.

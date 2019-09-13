@@ -9,7 +9,6 @@
 
 #include <folly/String.h>
 
-#include "logdevice/common/configuration/nodes/NodeUpdateBuilder.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 
 namespace facebook { namespace logdevice {
@@ -32,7 +31,7 @@ NodeRegistrationHandler::registerSelf(NodeIndicesAllocator allocator) {
             my_idx,
             trials);
 
-    auto update = buildSelfUpdate(my_idx);
+    auto update = buildSelfUpdate(my_idx, /* is_update= */ false);
     if (!update.hasValue()) {
       return folly::makeUnexpected(Status::INVALID_ATTRIBUTES);
     }
@@ -47,9 +46,33 @@ NodeRegistrationHandler::registerSelf(NodeIndicesAllocator allocator) {
       // It's a VERSION_MISMATCH. Keep retrying.
     }
   }
-  ld_check(status == Status::VERSION_MISMATCH);
   ld_error("Exhusted all retries. Giving up.");
+  ld_check(status == Status::VERSION_MISMATCH);
   return folly::makeUnexpected(status);
+}
+
+Status NodeRegistrationHandler::updateSelf(node_index_t my_idx) {
+  Status status = Status::OK;
+  for (size_t trials = 0; trials < kMaxNumRetries; trials++) {
+    ld_info("Checking if my attributes as N%d are up to date in the "
+            "NodesConfiguration. Trial #%zu",
+            my_idx,
+            trials);
+    auto update = buildSelfUpdate(my_idx, /* is_update= */ true);
+    if (!update.hasValue()) {
+      return Status::INVALID_ATTRIBUTES;
+    }
+    status = applyUpdate(std::move(update).value());
+
+    if (status != Status::VERSION_MISMATCH) {
+      return status;
+    } else {
+      // It's a VERSION_MISMATCH. Keep retrying.
+    }
+  }
+  ld_error("Exhusted all retries. Giving up.");
+  ld_check(status == Status::VERSION_MISMATCH);
+  return status;
 }
 
 configuration::nodes::NodeUpdateBuilder
@@ -104,18 +127,24 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
 }
 
 folly::Optional<configuration::nodes::NodesConfiguration::Update>
-NodeRegistrationHandler::buildSelfUpdate(node_index_t my_idx) const {
+NodeRegistrationHandler::buildSelfUpdate(node_index_t my_idx,
+                                         bool is_update) const {
+  // The update structure will be filled by the builder.
   NodesConfiguration::Update update;
-  auto result =
-      std::move(updateBuilderFromSettings(my_idx))
-          .buildAddNodeUpdate(
-              update,
-              nodes_configuration_->getSequencerMembership()->getVersion(),
-              nodes_configuration_->getStorageMembership()->getVersion());
-
+  NodeUpdateBuilder::Result result;
+  if (!is_update) {
+    result =
+        std::move(updateBuilderFromSettings(my_idx))
+            .buildAddNodeUpdate(
+                update,
+                nodes_configuration_->getSequencerMembership()->getVersion(),
+                nodes_configuration_->getStorageMembership()->getVersion());
+  } else {
+    result = std::move(updateBuilderFromSettings(my_idx))
+                 .buildUpdateNodeUpdate(update, *nodes_configuration_);
+  }
   if (result.status != Status::OK) {
-    ld_error("Failed building NodesConfiguration update: %s",
-             result.message.c_str());
+    ld_error("Failed building selfUpdate: %s", result.message.c_str());
     return folly::none;
   }
   return update;
@@ -123,6 +152,10 @@ NodeRegistrationHandler::buildSelfUpdate(node_index_t my_idx) const {
 
 Status NodeRegistrationHandler::applyUpdate(
     configuration::nodes::NodesConfiguration::Update update) const {
+  if (update.empty()) {
+    return Status::UPTODATE;
+  }
+
   auto new_config = nodes_configuration_->applyUpdate(std::move(update));
   if (new_config == nullptr) {
     return err;

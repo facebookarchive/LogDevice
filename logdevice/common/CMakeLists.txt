@@ -39,6 +39,9 @@ if(${BUILD_TESTS})
   file(GLOB test_files "${LOGDEVICE_COMMON_DIR}/test/*.cpp")
 
   add_library(common_test_util STATIC
+    "test/InMemNodesConfigurationStore.h"
+    "test/InMemVersionedConfigStore.h"
+    "test/InMemVersionedConfigStore.cpp"
     "test/TestUtil.h"
     "test/TestUtil.cpp"
     "test/NodeSetTestUtil.h"

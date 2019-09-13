@@ -258,9 +258,34 @@ bool ServerParameters::registerAndUpdateNodeInfo(
       my_id.hasValue()) {
     ld_check(my_id->isNodeID());
     my_node_id_ = std::move(my_id);
-    // TODO(mbassem) check and update self attributes.
+
+    if (server_settings_->enable_node_self_registration) {
+      // If self registration is enabled, let's make sure that our attributes
+      // are up to date.
+      Status status = handler.updateSelf(my_node_id_->index());
+      if (status == Status::OK) {
+        ld_info("Successfully updated the NodesConfiguration");
+        // Refetch the NodesConfiguration to detect the modification that we
+        // proposed.
+        initNodesConfiguration(nodes_configuration_store);
+      } else if (status == Status::UPTODATE) {
+        ld_info("No NodesConfiguration update is needed");
+        return true;
+      } else {
+        ld_error("Failed to update my node info: (%s): %s",
+                 error_name(status),
+                 error_description(err));
+        return false;
+      }
+    } else {
+      // Self registration is not enabled. No need to validate the attributes,
+      // we assume that they are correct. We're good to go!
+      return true;
+    }
   } else {
     if (server_settings_->enable_node_self_registration) {
+      // We didn't find ourself in the config, let's register if self
+      // registration is enabled otherwise abort.
       ld_check(processor_settings_->enable_nodes_configuration_manager);
       ld_check(processor_settings_
                    ->use_nodes_configuration_manager_nodes_configuration);
@@ -295,6 +320,13 @@ bool ServerParameters::registerAndUpdateNodeInfo(
       return false;
     }
   }
+  // Let's wait a bit for config propagation to the rest of the cluster so that
+  // they recognize us when we talk to them. It's ok if they don't, that's why
+  // we didn't implement complicated verfication logic in here.
+  //
+  // TODO(T53579322): Harden the startup of the node to avoid crashing when it's
+  // still unknown to the rest of the cluster
+  /* sleep override */ std::this_thread::sleep_for(std::chrono::seconds(5));
   return true;
 }
 
