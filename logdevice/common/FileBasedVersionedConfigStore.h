@@ -13,7 +13,7 @@
 #include <folly/MPMCQueue.h>
 #include <folly/SharedMutex.h>
 
-#include "logdevice/include/VersionedConfigStore.h"
+#include "logdevice/common/VersionedConfigStore.h"
 
 namespace facebook { namespace logdevice {
 

@@ -9,7 +9,7 @@
 
 #include <folly/json.h>
 
-#include "logdevice/include/VersionedConfigStore.h"
+#include "logdevice/common/VersionedConfigStore.h"
 
 namespace facebook { namespace logdevice {
 

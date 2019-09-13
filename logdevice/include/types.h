@@ -24,9 +24,6 @@ namespace facebook { namespace logdevice {
 // Logs are uniquely identified by 64-bit unsigned ints
 LOGDEVICE_STRONG_TYPEDEF(uint64_t, logid_t);
 
-// Used by VersionedConfigStore
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, vcs_config_version_t);
-
 constexpr logid_t LOGID_INVALID(0);
 constexpr logid_t LOGID_INVALID2(~0);
 

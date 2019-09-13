@@ -14,8 +14,8 @@
 #include <folly/Optional.h>
 #include <folly/Synchronized.h>
 
+#include "logdevice/common/VersionedConfigStore.h"
 #include "logdevice/include/Err.h"
-#include "logdevice/include/VersionedConfigStore.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
