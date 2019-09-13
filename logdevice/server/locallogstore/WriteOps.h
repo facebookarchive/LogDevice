@@ -184,11 +184,14 @@ struct PutWriteOp : public RecordWriteOp {
     }
     return std::string("write type: put, log id: ") +
         std::to_string(log_id.val_) + std::string(", lsn: ") +
-        lsn_to_string(lsn) + std::string(", wave: ") + std::to_string(wave) +
-        std::string(", durability: ") + durability_to_string(durability()) +
-        std::string(", is rebuilding: ") + std::to_string(isRebuilding()) +
-        std::string(", timestamp: ") + format_time(timestamp) +
-        std::string(", last known good: ") +
+        lsn_to_string(lsn) +
+        (flags & LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY
+             ? std::string(", seal epoch: ")
+             : std::string(", wave: ")) +
+        std::to_string(wave) + std::string(", durability: ") +
+        durability_to_string(durability()) + std::string(", is rebuilding: ") +
+        std::to_string(isRebuilding()) + std::string(", timestamp: ") +
+        format_time(timestamp) + std::string(", last known good: ") +
         std::to_string(last_known_good.val_) + std::string(", flags: ") +
         LocalLogStoreRecordFormat::flagsToString(flags) +
         std::string(", copyset size: ") + std::to_string(copyset_size) +
