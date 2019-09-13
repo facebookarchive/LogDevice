@@ -18,7 +18,7 @@ namespace facebook { namespace logdevice { namespace maintenance {
 using apache::thrift::util::enumName;
 
 folly::SemiFuture<MaintenanceStatus>
-ShardWorkflow::run(membership::StorageState storage_state,
+ShardWorkflow::run(const membership::ShardState& shard_state,
                    ShardDataHealth data_health,
                    RebuildingMode rebuilding_mode) {
   ld_spew("%s",
@@ -39,7 +39,7 @@ ShardWorkflow::run(membership::StorageState storage_state,
               .str()
               .c_str());
 
-  current_storage_state_ = storage_state;
+  current_storage_state_ = shard_state.storage_state;
   current_data_health_ = data_health;
   current_rebuilding_mode_ = rebuilding_mode;
   event_.reset();
@@ -140,7 +140,8 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
       createRebuildEventIfRequired(
           restore_mode_rebuilding_ ? RebuildingMode::RESTORE
                                    : RebuildingMode::RELOCATE,
-          status_ != MaintenanceStatus::AWAITING_START_DATA_MIGRATION /*force*/);
+          status_ !=
+              MaintenanceStatus::AWAITING_START_DATA_MIGRATION /*force*/);
       // If a new event was created, lets wait for this to event to be written
       // to event log
       if (event_) {

@@ -12,6 +12,7 @@
 #include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/membership/SequencerMembership.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
 /**
@@ -35,7 +36,8 @@ class SequencerWorkflow {
   SequencerWorkflow(const SequencerWorkflow& /* unused */) = delete;
   SequencerWorkflow& operator=(const SequencerWorkflow& /* unused */) = delete;
 
-  folly::SemiFuture<MaintenanceStatus> run(bool is_sequencing_enabled);
+  folly::SemiFuture<MaintenanceStatus>
+  run(const membership::SequencerNodeState& node_state);
 
   // Sets the target_op_state_ to given value
   // Can only be SequencingState::ENABLED or SequencingState::DISABLED

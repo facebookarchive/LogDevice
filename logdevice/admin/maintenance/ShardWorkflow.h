@@ -50,7 +50,7 @@ class ShardWorkflow {
    * Computes the new MaintenanceStatus based on the parameters
    * passed
    *
-   * @param storage_state   The storage state of the shard in NC
+   * @param shard_state     The membership ShardState in NC
    * @param data_health     ShardDataHealth for the shard
    * @param rebuilding_mode RebuildingMode for the shard
    *
@@ -61,7 +61,7 @@ class ShardWorkflow {
    *      of the thread doing the write to EventLog
    */
   folly::SemiFuture<thrift::MaintenanceStatus>
-  run(membership::StorageState storage_state,
+  run(const membership::ShardState& shard_state,
       ShardDataHealth data_health,
       RebuildingMode rebuilding_mode);
 

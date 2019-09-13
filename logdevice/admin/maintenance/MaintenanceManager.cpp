@@ -1605,7 +1605,7 @@ MaintenanceManager::runShardWorkflows() {
     // only for shards in the config
     ld_check(current_storage_state.hasValue());
     shards.push_back(shard_id);
-    futures.push_back(wf->run(current_storage_state->storage_state,
+    futures.push_back(wf->run(current_storage_state.value(),
                               getShardDataHealthInternal(shard_id).value(),
                               getCurrentRebuildingMode(shard_id)));
   }
@@ -1703,7 +1703,10 @@ MaintenanceManager::runSequencerWorkflows() {
     auto node = it.first;
     auto wf = it.second.first.get();
     nodes.push_back(node);
-    futures.push_back(wf->run(isSequencingEnabled(node)));
+    auto node_state =
+        nodes_config_->getSequencerMembership()->getNodeState(node);
+    ld_check(node_state.hasValue());
+    futures.push_back(wf->run(node_state.value()));
   }
   return std::make_pair(std::move(nodes), std::move(futures));
 }

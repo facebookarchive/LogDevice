@@ -18,27 +18,33 @@ using namespace facebook::logdevice::maintenance;
 TEST(SequencerWorkflowTest, EnableSequencer) {
   auto wf = std::make_unique<SequencerWorkflow>(node_index_t(1));
   wf->setTargetOpState(SequencingState::ENABLED);
-  auto future = wf->run(false /*Sequencer currently disabled*/);
+  membership::SequencerNodeState node_state;
+  node_state.sequencer_enabled = false;
+  auto future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
-  future = wf->run(true /*Sequencer now enabled*/);
+  node_state.sequencer_enabled = true;
+  future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
   // Calling run again when target state has already been reached
   // should return same result
-  future = wf->run(true /*Sequencer now enabled*/);
+  future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
 }
 
 TEST(SequencerWorkflowTest, DisableSequencer) {
   auto wf = std::make_unique<SequencerWorkflow>(node_index_t(1));
   wf->setTargetOpState(SequencingState::DISABLED);
-  auto future = wf->run(true /*Sequencer currently enabled*/);
+  membership::SequencerNodeState node_state;
+  node_state.sequencer_enabled = true;
+  auto future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::AWAITING_SAFETY_CHECK);
-  future = wf->run(false /*Sequencer now disabled*/);
+  node_state.sequencer_enabled = false;
+  future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
   // Calling run again when target state has already been reached
   // should return same result
-  future = wf->run(false /*Sequencer now disabled*/);
+  future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
 }
 
@@ -46,13 +52,16 @@ TEST(SequencerWorkflowTest, DisableSequencerSkipSafety) {
   auto wf = std::make_unique<SequencerWorkflow>(node_index_t(1));
   wf->setTargetOpState(SequencingState::DISABLED);
   wf->shouldSkipSafetyCheck(true);
-  auto future = wf->run(true /*Sequencer currently enabled*/);
+  membership::SequencerNodeState node_state;
+  node_state.sequencer_enabled = true;
+  auto future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
-  future = wf->run(false /*Sequencer now disabled*/);
+  node_state.sequencer_enabled = false;
+  future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
   // Calling run again when target state has already been reached
   // should return same result
-  future = wf->run(false /*Sequencer now disabled*/);
+  future = wf->run(node_state);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
 }

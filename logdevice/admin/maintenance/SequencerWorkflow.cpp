@@ -11,9 +11,10 @@
 namespace facebook { namespace logdevice { namespace maintenance {
 
 folly::SemiFuture<MaintenanceStatus>
-SequencerWorkflow::run(bool is_sequencer_enabled) {
-  current_sequencing_state_ = is_sequencer_enabled ? SequencingState::ENABLED
-                                                   : SequencingState::DISABLED;
+SequencerWorkflow::run(const membership::SequencerNodeState& node_state) {
+  current_sequencing_state_ = node_state.sequencer_enabled
+      ? SequencingState::ENABLED
+      : SequencingState::DISABLED;
 
   auto promise_future = folly::makePromiseContract<MaintenanceStatus>();
 
