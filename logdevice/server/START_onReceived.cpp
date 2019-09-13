@@ -97,7 +97,7 @@ Message::Disposition START_onReceived(START_Message* msg,
   if (w->sender().isClosed(from)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
-                   "START message from: disconnected client %s: log_id %" PRIu64
+                   "START message from disconnected client %s: log_id %" PRIu64
                    ", "
                    "read_stream_id %" PRIu64 ", start_lsn %s, "
                    "until_lsn %s, window_high %s, flags = 0x%x.",

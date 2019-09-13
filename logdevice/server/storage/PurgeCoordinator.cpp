@@ -127,6 +127,16 @@ Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
            msg->header_.epoch.val_,
            msg->header_.recovery_id.val_);
 
+  ServerWorker* w = ServerWorker::onThisThread();
+
+  if (w->sender().isClosed(from)) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   1,
+                   "CLEAN message from disconnected client %s",
+                   Sender::describeConnection(from).c_str());
+    return Message::Disposition::NORMAL;
+  }
+
   if (msg->header_.last_known_good > msg->header_.last_digest_esn) {
     ld_error("Got a CLEAN message with last_known_good %u larger than "
              "last_digest_esn %u.",
@@ -148,7 +158,6 @@ Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
     return Message::Disposition::ERROR;
   }
 
-  ServerWorker* w = ServerWorker::onThisThread();
   ServerProcessor* const processor = w->processor_;
 
   const shard_size_t n_shards = w->getNodesConfiguration()->getNumShards();
