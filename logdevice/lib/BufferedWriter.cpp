@@ -30,12 +30,9 @@ BufferedWriter::create(std::shared_ptr<Client> client,
 
   auto memory_limit_mb = options.memory_limit_mb;
 
-  auto get_log_options = [opts = std::move(options)](logid_t) -> LogOptions {
-    return opts;
-  };
-
+  bool is_stream = (options.mode == BufferedWriter::Options::Mode::STREAM);
   BufferedWriterAppendSink* sink;
-  if (options.mode == BufferedWriter::Options::Mode::STREAM) {
+  if (is_stream) {
     sink = new StreamWriterAppendSink(
         std::static_pointer_cast<Processor>(client_impl->getProcessorPtr()),
         std::make_unique<ClientBridgeImpl>(client_impl),
@@ -45,6 +42,9 @@ BufferedWriter::create(std::shared_ptr<Client> client,
   } else {
     sink = (BufferedWriterAppendSink*)client_impl;
   }
+  auto get_log_options = [opts = std::move(options)](logid_t) -> LogOptions {
+    return opts;
+  };
   auto buffered_writer = std::make_unique<BufferedWriterImpl>(
       new ProcessorProxy(&client_impl->getProcessor()),
       callback,
@@ -53,7 +53,7 @@ BufferedWriter::create(std::shared_ptr<Client> client,
       sink,
       client_impl->stats());
   buffered_writer->pinClient(client);
-  if (options.mode == BufferedWriter::Options::Mode::STREAM) {
+  if (is_stream) {
     buffered_writer->ownAppendSink();
   }
   return std::move(buffered_writer);
