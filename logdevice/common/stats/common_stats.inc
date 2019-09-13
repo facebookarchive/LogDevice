@@ -33,6 +33,10 @@ STAT_DEFINE(worker_executed_hi_pri_work, SUM)
 STAT_DEFINE(worker_executed_mid_pri_work, SUM)
 STAT_DEFINE(worker_executed_lo_pri_work, SUM)
 
+// See OverloadDetector
+STAT_DEFINE(num_workers_tracked_by_overload_detector, SUM)
+STAT_DEFINE(num_overloaded_workers, SUM)
+
 // number of MetaDataLogReaders created
 STAT_DEFINE(metadata_log_readers_created, SUM)
 // number of MetaDataLogReaders started
@@ -253,6 +257,7 @@ STAT_DEFINE(production_notices, SUM)
 // Read path stats
 STAT_DEFINE(records_lost, SUM)
 STAT_DEFINE(records_received, SUM)
+STAT_DEFINE(records_received_while_overloaded, SUM)
 STAT_DEFINE(records_received_wait_for_all, SUM)
 STAT_DEFINE(records_received_scd, SUM)
 STAT_DEFINE(records_received_noscd, SUM)
@@ -278,9 +283,11 @@ STAT_DEFINE(read_streams_stalled, SUM)
 
 // Separate new metrics for read streams that are considered stuck/lagging. Not
 // related to read_streams_stalled, read_streams_healthy and
-// read_streams_non_authoritative.  (experimental)
+// read_streams_non_authoritative.
 STAT_DEFINE(read_streams_stuck, SUM)
 STAT_DEFINE(read_streams_lagging, SUM)
+STAT_DEFINE(read_streams_stuck_ignoring_overload, SUM)
+STAT_DEFINE(read_streams_lagging_ignoring_overload, SUM)
 
 // Number of read streams creation events.
 // Includes streams that have been destroyed.

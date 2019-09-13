@@ -16,6 +16,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <openssl/err.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -2229,6 +2230,45 @@ size_t Socket::getTcpSendBufSize() const {
   }
 
   return tcp_sndbuf_cache_.size;
+}
+
+size_t Socket::getTcpRecvBufSize() const {
+  if (!bev_) {
+    return 0;
+  }
+  socklen_t optlen = sizeof(int);
+  size_t out = 0;
+  int fd = LD_EV(bufferevent_getfd)(bev_);
+  int rv = getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &out, &optlen);
+
+  if (rv == 0) {
+    out >>= 1; // Response is double of what it really is.
+  } else {
+    ld_error(
+        "Failed to get rcvbuf size for TCP socket %d: %s", fd, strerror(errno));
+  }
+  return out;
+}
+
+ssize_t Socket::getTcpRecvBufOccupancy() const {
+  if (!bev_) {
+    return -1;
+  }
+  int fd = LD_EV(bufferevent_getfd)(bev_);
+  int ret;
+  int error = ioctl(fd, FIONREAD, &ret);
+  if (error != 0) {
+    ld_error("Failed to get rcvbuf occupancy for TCP socket %d: %s",
+             fd,
+             strerror(error));
+    return -1;
+  } else {
+    return ret;
+  }
+}
+
+uint64_t Socket::getNumBytesReceived() const {
+  return num_bytes_received_;
 }
 
 void Socket::addHandshakeTimeoutEvent() {

@@ -338,6 +338,8 @@ class ClientReadStreamDependencies {
 
   virtual bool hasMemoryPressure() const;
 
+  virtual bool isWorkerOverloaded() const;
+
  private:
   read_stream_id_t read_stream_id_;
   logid_t log_id_;

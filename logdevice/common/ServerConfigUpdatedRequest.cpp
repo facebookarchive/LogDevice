@@ -14,6 +14,7 @@ namespace facebook { namespace logdevice {
 Request::Execution ServerConfigUpdatedRequest::execute() {
   Worker* worker = Worker::onThisThread();
   worker->onServerConfigUpdated();
+
   return Execution::COMPLETE;
 }
 

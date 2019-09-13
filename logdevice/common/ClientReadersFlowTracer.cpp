@@ -18,8 +18,8 @@
 #include "logdevice/common/client_read_stream/ClientReadStream.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamScd.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/network/OverloadDetector.h"
 #include "logdevice/common/stats/Stats.h"
-
 namespace facebook { namespace logdevice {
 
 inline uint16_t get_initial_ttl(size_t group_size, size_t num_groups) {
@@ -28,12 +28,24 @@ inline uint16_t get_initial_ttl(size_t group_size, size_t num_groups) {
 
 ClientReadersFlowTracer::ClientReadersFlowTracer(
     std::shared_ptr<TraceLogger> logger,
-    ClientReadStream* owner)
-    : SampledTracer(std::move(logger)), ref_holder_(this), owner_(owner) {
+    ClientReadStream* owner,
+    bool push_samples,
+    bool ignore_overload)
+    : SampledTracer(std::move(logger)),
+      ref_holder_(this),
+      push_samples_(push_samples),
+      ignore_overload_(ignore_overload),
+      owner_(owner) {
   timer_ = std::make_unique<Timer>([this] { onTimerTriggered(); });
 
   // update settings
   onSettingsUpdated();
+
+  if (!ignore_overload) {
+    // build a version that ignores overload
+    tracer_ignoring_overload_ = std::make_unique<ClientReadersFlowTracer>(
+        logger, owner, /*push_samples=*/false, /*ignore_overload=*/true);
+  }
 }
 
 ClientReadersFlowTracer::~ClientReadersFlowTracer() {
@@ -43,6 +55,9 @@ ClientReadersFlowTracer::~ClientReadersFlowTracer() {
 
 void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
                                               size_t num_records_read) {
+  if (!push_samples_) {
+    return;
+  }
   auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
   auto time_lagging = std::max(msec_since(last_time_lagging_), 0l);
   auto shard_status_version = owner_->deps_->getShardStatus().getVersion();
@@ -135,12 +150,19 @@ void ClientReadersFlowTracer::onSettingsUpdated() {
   if (len != time_lag_record_.capacity()) {
     time_lag_record_.set_capacity(len);
   }
+
+  if (tracer_ignoring_overload_) {
+    tracer_ignoring_overload_->onSettingsUpdated();
+  }
 }
 
 void ClientReadersFlowTracer::onTimerTriggered() {
   // For simplicity, we send out the request for tail attributes on every sample
   // submission.
   sendSyncSequencerRequest();
+
+  updateShouldTrack(); // In case OverloadedDetector::overloaded() response
+                       // changes.
 
   maybeBumpStats();
   traceReaderFlow(owner_->num_bytes_delivered_, owner_->num_records_delivered_);
@@ -237,7 +259,7 @@ void ClientReadersFlowTracer::updateTimeStuck(lsn_t tail_lsn, Status st) {
     maybeBumpStats();
   }
 
-  bool is_stuck = is_client_reading_ &&
+  bool is_stuck = should_track_ &&
       (st != E::OK ||
        owner_->next_lsn_to_deliver_ <= std::min(tail_lsn, owner_->until_lsn_));
 
@@ -281,7 +303,7 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
     --s.ttl;
   }
 
-  if (!is_client_reading_) {
+  if (!should_track_) {
     if (!time_lag_record_.full()) {
       // if we have stale samples, let's go back to not be lagging because the
       // client is purposefully not reading right now.
@@ -303,7 +325,7 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
    * We do this now so time_window computation has a nicer expression. */
   if ((sample_counter_++) % group_size == 0) {
     int64_t new_time_lag_correction = 0;
-    if (!is_client_reading_) {
+    if (!should_track_) {
       /* consolidate lag correction on last bucket, and start tracking lag
        * correction on the new bucket */
       if (!time_lag_record_.empty()) {
@@ -365,11 +387,20 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
     state_to_report = State::HEALTHY;
   }
 
-  auto update_counter_for_state = [](State state, int increment) {
+  auto update_counter_for_state = [ignore_overload = this->ignore_overload_](
+                                      State state, int increment) {
     if (state == State::STUCK) {
-      WORKER_STAT_ADD(read_streams_stuck, increment);
+      if (ignore_overload) {
+        WORKER_STAT_ADD(read_streams_stuck_ignoring_overload, increment);
+      } else {
+        WORKER_STAT_ADD(read_streams_stuck, increment);
+      }
     } else if (state == State::LAGGING) {
-      WORKER_STAT_ADD(read_streams_lagging, increment);
+      if (ignore_overload) {
+        WORKER_STAT_ADD(read_streams_lagging_ignoring_overload, increment);
+      } else {
+        WORKER_STAT_ADD(read_streams_lagging, increment);
+      }
     } else {
       /* ignore */
     }
@@ -459,9 +490,15 @@ folly::Optional<int64_t> ClientReadersFlowTracer::estimateByteLag() const {
   return folly::none;
 }
 
-void ClientReadersFlowTracer::updateIsClientReading() {
-  bool was_client_reading = is_client_reading_;
-  is_client_reading_ =
+void ClientReadersFlowTracer::updateShouldTrack() {
+  bool was_being_tracked = should_track_;
+
+  auto overload_detector = Worker::overloadDetector();
+  const bool overloaded = (overload_detector && !ignore_overload_)
+      ? overload_detector->overloaded()
+      : false;
+
+  should_track_ = !overloaded &&
       !(owner_->redelivery_timer_ && owner_->redelivery_timer_->isActive()) &&
       !owner_->window_update_pending_; // We check window_update_pending_ as a
                                        // best effort attempt to assess if the
@@ -475,13 +512,13 @@ void ClientReadersFlowTracer::updateIsClientReading() {
                                        // next_lsn_to_deliver does not move and
                                        // the redelivery timer is not active.
 
-  /* check if we transitioned to reading */
-  if (was_client_reading && !is_client_reading_) {
+  /* check if we transitioned to tracking */
+  if (was_being_tracked && !should_track_) {
     auto time_lag = estimateTimeLag();
     if (!time_lag_record_.empty() && time_lag.hasValue()) {
       time_lag_record_.back().time_lag_correction -= time_lag.value();
     }
-  } else if (!was_client_reading && is_client_reading_) {
+  } else if (!was_being_tracked && should_track_) {
     auto time_lag = estimateTimeLag();
     if (!time_lag_record_.empty() && time_lag.hasValue()) {
       time_lag_record_.back().time_lag_correction += time_lag.value();
@@ -490,19 +527,31 @@ void ClientReadersFlowTracer::updateIsClientReading() {
 }
 
 void ClientReadersFlowTracer::onRedeliveryTimerInactive() {
-  updateIsClientReading();
+  updateShouldTrack();
+  if (tracer_ignoring_overload_) {
+    tracer_ignoring_overload_->onRedeliveryTimerInactive();
+  }
 }
 
 void ClientReadersFlowTracer::onRedeliveryTimerActive() {
-  updateIsClientReading();
+  updateShouldTrack();
+  if (tracer_ignoring_overload_) {
+    tracer_ignoring_overload_->onRedeliveryTimerActive();
+  }
 }
 
 void ClientReadersFlowTracer::onWindowUpdatePending() {
-  updateIsClientReading();
+  updateShouldTrack();
+  if (tracer_ignoring_overload_) {
+    tracer_ignoring_overload_->onWindowUpdatePending();
+  }
 }
 
 void ClientReadersFlowTracer::onWindowUpdateSent() {
-  updateIsClientReading();
+  updateShouldTrack();
+  if (tracer_ignoring_overload_) {
+    tracer_ignoring_overload_->onWindowUpdateSent();
+  }
 }
 
 }} // namespace facebook::logdevice

@@ -139,6 +139,7 @@ class TraceLogger;
 class UpdateableConfig;
 class WorkerImpl;
 class WorkerTimeoutStats;
+class OverloadDetector;
 
 namespace maintenance {
 class ClusterMaintenanceStateMachine;
@@ -515,6 +516,8 @@ class Worker : public WorkContext {
   // respectively.
   LogIDUniqueQueue& recoveryQueueDataLog() const;
   LogIDUniqueQueue& recoveryQueueMetaDataLog() const;
+
+  static OverloadDetector* overloadDetector();
 
   // EventLogStateMachine only exists on Worker 0 of a server. It provides an
   // interface for listening to updates arriving on the event log.
@@ -898,6 +901,8 @@ class Worker : public WorkContext {
   std::unique_ptr<Timer> cluster_state_polling_;
 
   std::unique_ptr<WorkerTimeoutStats> worker_timeout_stats_;
+
+  std::unique_ptr<OverloadDetector> overload_detector_;
 
   // Counts the number of requests enqueued into the Worker for processing.
   // Used to return NOBUFS when count goes above worker_request_pipe_capacity.

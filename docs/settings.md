@@ -181,6 +181,10 @@ sidebar_label: Settings
 | message-tracing-log-level | For messages that pass the message tracing filters, emit a log line at this level. One of: critical, error, warning, notify, info, debug, spew | info |  |
 | message-tracing-peers | Emit a log line for each sent/received message to/from the specified address(es). Separate different addresses with a comma, prefix unix socket paths with 'unix://'. An empty unix path will match all unix paths |  |  |
 | message-tracing-types | Emit a log line for each sent/received message of the type(s) specified. Separate different types with a comma. 'all' to trace all messages. Prefix the value with '~' to trace all types except the given ones, e.g. '~WINDOW,RELEASE' will trace messages of all types except WINDOW and RELEASE. |  |  |
+| overload-detector-freshness-factor | Multiple of recv windows that need to be read from socket since last sample to consider socket for percentile analysis in OverloadDetector. See overload-detector-percentile. | 1.0 | client&nbsp;only |
+| overload-detector-percentile | Percentile of active connections for which we compare occupancy with overload-detector-threshold to do the final assessment of overload. See overload-detector-freshness-factor. | 99 | client&nbsp;only |
+| overload-detector-period | Sampling period for OverloadDetector | 60s | client&nbsp;only |
+| overload-detector-threshold | Minimum recv-q occupancy to declare socket overloaded (in percent). See overload-detector-percentile. | 80 | client&nbsp;only |
 | publish-single-histogram-stats | If true, single histogram values will be published alongside the rate values. | false |  |
 | reader-lagging-threshold | Amount of time we wait before we report a read stream that is considered lagging. | 2min |  |
 | reader-stalled-grace-period | Amount of time we wait before declaring a reader stalled because we can't read the metadata or data log. When this grace period expires, the client stat "read\_streams\_stalled" is bumped and record to scuba  | 30s |  |

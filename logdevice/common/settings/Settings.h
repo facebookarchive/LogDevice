@@ -1322,6 +1322,12 @@ struct Settings : public SettingsBundle {
   // printed.
   std::chrono::milliseconds request_queue_warning_time_limit;
 
+  // Overload Detector settings
+  size_t overload_detector_threshold;
+  size_t overload_detector_percentile;
+  double overload_detector_freshness_factor;
+  std::chrono::milliseconds overload_detector_period;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

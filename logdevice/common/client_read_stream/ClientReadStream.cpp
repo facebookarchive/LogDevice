@@ -43,6 +43,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
+#include "logdevice/common/network/OverloadDetector.h"
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
 #include "logdevice/common/protocol/STOP_Message.h"
@@ -940,6 +941,9 @@ void ClientReadStream::onDataRecord(
       WORKER_STAT_INCR(records_received_wait_for_all);
     } else {
       WORKER_STAT_INCR(records_received);
+      if (deps_->isWorkerOverloaded()) {
+        WORKER_STAT_INCR(records_received_while_overloaded);
+      }
       if (scd_ && scd_->isActive()) {
         WORKER_STAT_INCR(records_received_scd);
       } else {
@@ -4321,6 +4325,17 @@ ClientReadStreamDependencies::~ClientReadStreamDependencies() {}
 
 bool ClientReadStreamDependencies::hasMemoryPressure() const {
   // TODO(T6159466): implement memory limits/accounting
+  return false;
+}
+
+bool ClientReadStreamDependencies::isWorkerOverloaded() const {
+  auto w = Worker::onThisThread(/*enforce=*/false);
+  if (w) {
+    auto overload_detector = w->overloadDetector();
+    if (overload_detector) {
+      return overload_detector->overloaded();
+    }
+  }
   return false;
 }
 

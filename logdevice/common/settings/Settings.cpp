@@ -3246,7 +3246,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "number of least-recently-used write streams are evicted.",
        SERVER,
        SettingsCategory::Sequencer);
-
   init(
       "request-queue-warning-time-limit",
       &request_queue_warning_time_limit,
@@ -3256,5 +3255,38 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "the warning log. After this time, the warning log will be printed",
       SERVER | CLIENT,
       SettingsCategory::Monitoring);
+  init("overload-detector-threshold",
+       &overload_detector_threshold,
+       "80",
+       nullptr,
+       "Minimum recv-q occupancy to declare socket overloaded (in percent). "
+       "See overload-detector-percentile.",
+       CLIENT,
+       SettingsCategory::Monitoring);
+  init("overload-detector-percentile",
+       &overload_detector_percentile,
+       "99",
+       nullptr,
+       "Percentile of active connections for which we compare occupancy with "
+       "overload-detector-threshold to do the final assessment of overload. "
+       "See overload-detector-freshness-factor.",
+       CLIENT,
+       SettingsCategory::Monitoring);
+  init("overload-detector-freshness-factor",
+       &overload_detector_freshness_factor,
+       "1.0",
+       nullptr,
+       "Multiple of recv windows that need to be read from socket since last "
+       "sample to consider socket for percentile analysis in OverloadDetector. "
+       "See overload-detector-percentile.",
+       CLIENT,
+       SettingsCategory::Monitoring);
+  init("overload-detector-period",
+       &overload_detector_period,
+       "60s",
+       validate_positive<size_t>(),
+       "Sampling period for OverloadDetector",
+       CLIENT,
+       SettingsCategory::Monitoring);
 }
 }} // namespace facebook::logdevice

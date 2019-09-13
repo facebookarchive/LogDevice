@@ -380,6 +380,22 @@ class Socket : public TrafficShappingSocket {
   size_t getTcpSendBufSize() const;
 
   /**
+   * Exposes the tcp recvbuf size that the socket was configured with (or the
+   * OS-provided default if the setting wasn't specified).
+   */
+  virtual size_t getTcpRecvBufSize() const;
+
+  /**
+   * Returns the tcp recvbuf occupancy or -1 in case of error.
+   */
+  virtual ssize_t getTcpRecvBufOccupancy() const;
+
+  /**
+   * Returns total bytes received by socket since it was created.
+   */
+  virtual uint64_t getNumBytesReceived() const;
+
+  /**
    * Checks if this is a server Socket that is currently connected to its
    * destination and that has received an ACK message.
    *
@@ -936,7 +952,6 @@ class Socket : public TrafficShappingSocket {
   size_t num_messages_received_;
 
   // Total number of bytes received since this socket was created.
-  // Used for debugging.
   size_t num_bytes_received_;
 
   // Indicates whether this is an SSL socket

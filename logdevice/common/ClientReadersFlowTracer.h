@@ -63,7 +63,9 @@ class ClientReadersFlowTracer : public SampledTracer {
   };
 
   ClientReadersFlowTracer(std::shared_ptr<TraceLogger> logger,
-                          ClientReadStream* owner);
+                          ClientReadStream* owner,
+                          bool push_samples = true,
+                          bool ignore_overload = false);
   virtual ~ClientReadersFlowTracer();
 
   void traceReaderFlow(size_t num_bytes_read, size_t num_records_read);
@@ -94,7 +96,7 @@ class ClientReadersFlowTracer : public SampledTracer {
                                       std::unique_ptr<LogTailAttributes> attrs);
   void updateTimeStuck(lsn_t tail_lsn, Status st = E::OK);
   void updateTimeLagging(Status st = E::OK);
-  void updateIsClientReading();
+  void updateShouldTrack();
   void maybeBumpStats(bool force_healthy = false);
   double calculateSamplingWeight();
   bool readerIsUnhealthy();
@@ -102,6 +104,14 @@ class ClientReadersFlowTracer : public SampledTracer {
   WeakRefHolder<ClientReadersFlowTracer> ref_holder_;
 
   std::chrono::milliseconds tracer_period_;
+  const bool push_samples_{true};
+  const bool ignore_overload_{false};
+
+  /*
+   * In case we need to ignore overload detection, let's also create a version
+   * of readers flow tracer that ignores overload.
+   */
+  std::unique_ptr<ClientReadersFlowTracer> tracer_ignoring_overload_;
 
   CircularBuffer<Sample> time_lag_record_;
   folly::Optional<TailInfo> latest_tail_info_;
@@ -109,7 +119,7 @@ class ClientReadersFlowTracer : public SampledTracer {
   size_t sample_counter_{0};
   size_t last_num_bytes_read_{0};
   size_t last_num_records_read_{0};
-  bool is_client_reading_{true};
+  bool should_track_{true};
 
   enum class State { HEALTHY, STUCK, LAGGING };
   State last_reported_state_{State::HEALTHY};

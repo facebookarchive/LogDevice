@@ -66,6 +66,7 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
+#include "logdevice/common/network/OverloadDetector.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
 #include "logdevice/common/protocol/MessageTracer.h"
@@ -221,7 +222,9 @@ Worker::Worker(WorkContext::KeepAlive event_loop,
       stats_(stats),
       shutting_down_(false),
       accepting_work_(true),
-      worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()) {}
+      worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()),
+      overload_detector_(std::make_unique<OverloadDetector>(
+          std::make_unique<OverloadDetectorDependencies>())) {}
 
 Worker::~Worker() {
   shutting_down_ = true;
@@ -388,6 +391,12 @@ const Settings& Worker::settings() {
   return *w->immutable_settings_;
 }
 
+OverloadDetector* Worker::overloadDetector() {
+  Worker* w = onThisThread();
+  ld_check(w->overload_detector_);
+  return w->overload_detector_.get();
+}
+
 void Worker::onSettingsUpdated() {
   // If SettingsUpdatedRequest are posted faster than they're processed,
   // each request will pick up multiple settings updates. This would mean
@@ -531,6 +540,9 @@ void Worker::setupWorker() {
   initializeSubscriptions();
 
   clientReadStreams().registerForShardAuthoritativeStatusUpdates();
+  if (overload_detector_) {
+    overload_detector_->start();
+  }
 
   // Start the graylisting tracker
   if (!settings().disable_outlier_based_graylisting) {
@@ -558,6 +570,8 @@ void Worker::finishWorkAndCloseSockets() {
   ld_check(!accepting_work_);
 
   subclassFinishWork();
+
+  overload_detector_.reset();
 
   size_t c = runningSyncSequencerRequests().getList().size();
   if (c) {
