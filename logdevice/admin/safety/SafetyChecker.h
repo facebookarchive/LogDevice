@@ -50,6 +50,7 @@ class SafetyChecker {
               SafetyMargin safety_margin = SafetyMargin(),
               bool check_metadata_logs = true,
               bool check_internal_logs = true,
+              bool check_capacity = true,
               folly::Optional<std::vector<logid_t>> logids_to_check = {});
 
   static std::string
@@ -118,6 +119,8 @@ class SafetyChecker {
       bool check_metadata_logs,
       /* Do we check the interal logs (see InternalLogs.h)? */
       bool check_internal_logs,
+      /* Do we check capacity? */
+      bool check_capacity,
       /*
        * if folly::none we check all logs, if empty vector, we don't check any
        * logs, unless check_metadata_logs and/or check_internal_logs is/are set.

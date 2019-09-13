@@ -115,6 +115,7 @@ TEST_F(AdminAPICheckImpactTest, DisableReads) {
   thrift::CheckImpactResponse response;
   request.set_shards(shards);
   request.set_target_storage_state(thrift::ShardStorageState::DISABLED);
+  request.set_disable_sequencers(false);
   admin_client->sync_checkImpact(response, request);
 
   ASSERT_TRUE(*response.get_internal_logs_affected());

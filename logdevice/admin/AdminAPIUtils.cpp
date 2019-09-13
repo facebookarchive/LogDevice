@@ -389,6 +389,20 @@ ShardSet expandShardSet(
   return output;
 }
 
+folly::F14FastSet<node_index_t> extractSequencerNodeIndicies(
+    const thrift::ShardSet& thrift_shards,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  folly::F14FastSet<node_index_t> output;
+  for (const auto& it : thrift_shards) {
+    auto maybe_idx = findNodeIndex(it.get_node(), nodes_configuration);
+    if (maybe_idx.hasValue() &&
+        nodes_configuration.isSequencerNode(*maybe_idx)) {
+      output.insert(*maybe_idx);
+    }
+  }
+  return output;
+}
+
 bool isNodeIDSet(const thrift::NodeID& id) {
   return (id.address_ref().has_value() || id.node_index_ref().has_value() ||
           id.name_ref().has_value());

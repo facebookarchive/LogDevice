@@ -53,6 +53,13 @@ CheckImpactHandler::semifuture_checkImpact(
 
   ld_info("SHARDS: %s", toString(shards).c_str());
 
+  folly::F14FastSet<node_index_t> sequencers;
+  if (request->disable_sequencers_ref().value_or(true)) {
+    sequencers = extractSequencerNodeIndicies(
+        request->get_shards(), *nodes_configuration);
+    ld_info("SEQUENCERS: %s", toString(shards).c_str());
+  }
+
   StorageState target_storage_state = StorageState::READ_WRITE;
   if (request->get_target_storage_state()) {
     target_storage_state =
@@ -77,11 +84,12 @@ CheckImpactHandler::semifuture_checkImpact(
   return safety_checker_
       ->checkImpact(std::move(status_map),
                     std::move(shards),
-                    {}, // TODO: Support sequencers (T43766732)
+                    std::move(sequencers),
                     target_storage_state,
                     safety_margin,
                     request->check_metadata_logs_ref().value_or(true),
                     request->check_internal_logs_ref().value_or(true),
+                    request->check_capacity_ref().value_or(true),
                     logs_to_check)
       .via(this->getThreadManager())
       .thenValue([](const folly::Expected<Impact, Status>& impact) {

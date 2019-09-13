@@ -666,3 +666,54 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
             impact->result);
   ASSERT_TRUE(impact->internal_logs_affected);
 }
+
+TEST_F(SafetyAPIIntegrationTest, DisableAllSequencers) {
+  const size_t num_nodes = 5;
+  const size_t num_shards = 3;
+
+  Configuration::Nodes nodes;
+
+  for (int i = 0; i < num_nodes; ++i) {
+    nodes[i].generation = 1;
+    nodes[i].addSequencerRole();
+    nodes[i].addStorageRole(num_shards);
+  }
+
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setNodes(nodes)
+                     // switches on gossip
+                     .useHashBasedSequencerAssignment()
+                     .setNumDBShards(num_shards)
+                     .create(num_nodes);
+
+  for (const auto& it : cluster->getNodes()) {
+    node_index_t idx = it.first;
+    cluster->getNode(idx).waitUntilAvailable();
+  }
+
+  std::shared_ptr<Client> client = cluster->createClient();
+  ClientImpl* client_impl = dynamic_cast<ClientImpl*>(client.get());
+
+  SafetyChecker safety_checker(&client_impl->getProcessor());
+  // Get all possible errors.
+  safety_checker.setAbortOnError(false);
+  folly::F14FastSet<node_index_t> seqs;
+
+  for (int i = 0; i < num_nodes; ++i) {
+    seqs.insert(i);
+  }
+
+  ShardAuthoritativeStatusMap shard_status{LSN_INVALID};
+  int rv = cluster->getShardAuthoritativeStatusMap(shard_status);
+  ASSERT_EQ(0, rv);
+
+  // it is unsafe to stop all sequencers
+  folly::Expected<Impact, Status> impact =
+      safety_checker
+          .checkImpact(
+              shard_status, {}, seqs, configuration::StorageState::READ_WRITE)
+          .get();
+  ASSERT_TRUE(impact.hasValue());
+  ld_info("IMPACT: %s", impact->toString().c_str());
+  ASSERT_EQ(Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS, impact->result);
+}

@@ -170,6 +170,7 @@ SafetyCheckScheduler::performSafetyCheck(
       SafetyMargin(),
       /* check_metadata_logs= */ true,
       /* check_internal_logs= */ true,
+      /* check_capacity= */ true,
       /* logids_to_check= */ folly::none);
 }
 

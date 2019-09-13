@@ -448,6 +448,25 @@ std::pair<bool, bool> checkReadWriteAvailablity(
   return std::make_pair(safe_reads, safe_writes);
 }
 
+Impact checkSequencingCapacity(
+    const folly::F14FastSet<node_index_t>& sequencers,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_config,
+    ClusterState* cluster_state,
+    bool require_fully_started) {
+  const auto& seq_mem = nodes_config->getSequencerMembership();
+  const auto& all_seqs = nodes_config->getSequencerNodes();
+  auto num_alive_enabled_nodes =
+      std::count_if(all_seqs.cbegin(), all_seqs.cend(), [&](const auto& seq) {
+        return seq_mem->isSequencingEnabled(seq) && !sequencers.contains(seq) &&
+            isAlive(cluster_state, seq, require_fully_started);
+      });
+  if (num_alive_enabled_nodes == 0) {
+    return Impact(Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS);
+  }
+  return Impact(Impact::ImpactResult::NONE);
+}
+
 bool isAlive(ClusterState* cluster_state,
              node_index_t index,
              bool require_fully_started) {

@@ -86,6 +86,18 @@ std::pair<bool, bool> checkReadWriteAvailablity(
         nodes_config,
     ClusterState* cluster_state,
     bool require_fully_started_nodes);
+/**
+ * Makes sure there will be at least one sequencer that's alive and
+ * ENABLED after disabling the passed *sequencers* nodes.
+ * TODO: This should be a more comprehensive capacity check, but for now it
+ * prevents us from allowing checks that disables all the sequencers.
+ */
+Impact checkSequencingCapacity(
+    const folly::F14FastSet<node_index_t>& sequencers,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_config,
+    ClusterState* cluster_state,
+    bool require_fully_started_nodes);
 
 /**
  * Create modified ReplicationProperty which takes into account Safety Margin.

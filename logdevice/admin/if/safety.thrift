@@ -36,6 +36,12 @@ enum OperationImpact {
    * were they need to establish f-majority on some records.
    */
   READ_AVAILABILITY_LOSS = 3,
+
+  /**
+   * This means that if we perform the operation, we might lose a lot of
+   * sequencers which may impact write availability.
+   */
+  SEQUENCING_CAPACITY_LOSS = 4,
 }
 
 /**
@@ -127,6 +133,7 @@ struct CheckImpactRequest {
   7: optional i32 return_sample_size = 50,
   8: optional bool check_metadata_logs = true,
   9: optional bool check_internal_logs = true,
+  10: optional bool check_capacity = true,
 }
 
 struct CheckImpactResponse {

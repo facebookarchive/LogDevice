@@ -43,11 +43,12 @@ SafetyChecker::~SafetyChecker() {
 folly::SemiFuture<folly::Expected<Impact, Status>> SafetyChecker::checkImpact(
     const ShardAuthoritativeStatusMap& shard_status,
     const ShardSet& shards,
-    folly::F14FastSet<node_index_t> /*sequencers*/,
+    folly::F14FastSet<node_index_t> sequencers,
     StorageState target_storage_state,
     SafetyMargin safety_margin,
     bool check_metadata_logs,
     bool check_internal_logs,
+    bool check_capacity,
     folly::Optional<std::vector<logid_t>> logids_to_check) {
   // If we have metadata use it (and trigger async refresh if needed), if not,
   // refreshMetadata will fetch.
@@ -57,11 +58,12 @@ folly::SemiFuture<folly::Expected<Impact, Status>> SafetyChecker::checkImpact(
     return performSafetyCheck(shard_status,
                               metadata_,
                               shards,
-                              {}, // TODO
+                              sequencers,
                               target_storage_state,
                               safety_margin,
                               check_metadata_logs,
                               check_internal_logs,
+                              check_capacity,
                               std::move(logids_to_check));
   });
 }
@@ -207,6 +209,7 @@ SafetyChecker::performSafetyCheck(
     SafetyMargin safety_margin,
     bool check_metadata_logs,
     bool check_internal_logs,
+    bool check_capacity,
     folly::Optional<std::vector<logid_t>> logids_to_check) {
   auto start_time = std::chrono::steady_clock::now();
   // We are moving the values to ensure lifetime in this async operation. We
@@ -220,6 +223,7 @@ SafetyChecker::performSafetyCheck(
                   safety_margin = std::move(safety_margin),
                   check_metadata_logs,
                   check_internal_logs,
+                  check_capacity,
                   logids_to_check = std::move(logids_to_check),
                   start_time,
                   this](auto&&) mutable
@@ -238,6 +242,27 @@ SafetyChecker::performSafetyCheck(
 
         const auto nodes_config = processor_->getNodesConfiguration();
         ClusterState* cluster_state = processor_->cluster_state_.get();
+
+        // Check impact on capacity
+        Impact capacity_impact;
+        if (check_capacity) {
+          capacity_impact = safety::checkSequencingCapacity(
+              sequencers,
+              nodes_config,
+              cluster_state,
+              /*require_fully_started_nodes=*/true);
+          if (abort_on_error_ &&
+              capacity_impact.result != Impact::ImpactResult::NONE) {
+            // We will not proceed if we will impact capacity and
+            // abort_on_error is set.
+            std::chrono::seconds total_time =
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::steady_clock::now() - start_time);
+            capacity_impact.total_duration = total_time;
+            return folly::makeSemiFuture(
+                folly::Expected<Impact, Status>(capacity_impact));
+          }
+        }
 
         // CheckMetadataLog StorageSet
         Impact metadata_impact;
@@ -374,9 +399,12 @@ SafetyChecker::performSafetyCheck(
           --chunks;
         }
 
-        // Initial impact is the combined result of metadata and internal logs.
+        // Initial impact is the combined result of metadata, internal logs and
+        // capacity.
         folly::Expected<Impact, Status> initial_value = Impact::merge(
             metadata_impact, internal_logs_impact, error_sample_size_);
+        initial_value =
+            Impact::merge(initial_value, capacity_impact, error_sample_size_);
         // Merges results as we get them.
         return folly::unorderedReduce(
                    std::move(futs),

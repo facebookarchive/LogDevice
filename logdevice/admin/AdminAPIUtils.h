@@ -92,6 +92,14 @@ ShardSet expandShardSet(
     bool ignore_missing = false,
     bool ignore_non_storage_nodes = false);
 
+/**
+ * Expands a thrift ShardSet structure into a list of node_indexes. This looks
+ * up the nodes via address if specified in the input.
+ */
+folly::F14FastSet<node_index_t> extractSequencerNodeIndicies(
+    const thrift::ShardSet& thrift_shards,
+    const configuration::nodes::NodesConfiguration& nodes_configuration);
+
 thrift::ShardOperationalState
 toShardOperationalState(membership::StorageState storage_state,
                         const EventLogRebuildingSet::NodeInfo* node_info);

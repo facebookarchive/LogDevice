@@ -44,6 +44,9 @@ std::vector<thrift::OperationImpact> toThrift(const int& impact_result) {
   if (impact_result & Impact::ImpactResult::READ_AVAILABILITY_LOSS) {
     output.push_back(thrift::OperationImpact::READ_AVAILABILITY_LOSS);
   }
+  if (impact_result & Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS) {
+    output.push_back(thrift::OperationImpact::SEQUENCING_CAPACITY_LOSS);
+  }
   return output;
 }
 
