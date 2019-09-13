@@ -140,6 +140,12 @@ enum MaintenanceStatus {
    * MaintenanceManager is waiting for the event to be written to event log
    */
   AWAITING_START_DATA_MIGRATION = 11,
+
+  /**
+   * Maintenance is disabled on this shard/sequencer in NodesConfig and it
+   * it currently blocking the maintenance
+   */
+  BLOCKED_BY_ADMIN_OVERRIDE = 12,
 }
 
 /**

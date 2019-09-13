@@ -1164,6 +1164,19 @@ void MaintenanceManager::processShardWorkflowResult(
           has_shards_to_enable_ = true;
         }
         break;
+      case MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE:
+        // Note: We do not update has_shards_to_enable_ if we have an active
+        // maintenance to enable the shard but it is being blocked by admin
+        // override. This is because evaluate gives priority to "enable"
+        // workflows such that they are allowed to run to completion before
+        // other maintenances are undertaken. Hoewever if enable maintenance is
+        // blocked by override, we do not want to block other maintenances from
+        // happening.
+        RATELIMIT_INFO(std::chrono::seconds(30),
+                       1,
+                       "Maintenance is disabled on shard %s in nodes config.",
+                       toString(shard).c_str());
+        break;
       case MaintenanceStatus::COMPLETED:
         if (active_shard_workflows_[shard].first->getTargetOpStates().count(
                 ShardOperationalState::ENABLED)) {

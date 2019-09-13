@@ -43,7 +43,11 @@ ShardWorkflow::run(const membership::ShardState& shard_state,
   current_data_health_ = data_health;
   current_rebuilding_mode_ = rebuilding_mode;
   event_.reset();
-  computeMaintenanceStatus();
+  if (shard_state.manual_override) {
+    updateStatus(MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE);
+  } else {
+    computeMaintenanceStatus();
+  }
 
   ld_spew("%s",
           folly::format(

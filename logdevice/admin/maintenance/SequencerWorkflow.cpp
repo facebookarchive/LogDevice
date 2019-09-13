@@ -18,7 +18,9 @@ SequencerWorkflow::run(const membership::SequencerNodeState& node_state) {
 
   auto promise_future = folly::makePromiseContract<MaintenanceStatus>();
 
-  if (target_op_state_ == current_sequencing_state_) {
+  if (node_state.manual_override) {
+    promise_future.first.setValue(MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE);
+  } else if (target_op_state_ == current_sequencing_state_) {
     promise_future.first.setValue(MaintenanceStatus::COMPLETED);
   } else {
     if (target_op_state_ == SequencingState::ENABLED || skip_safety_check_) {

@@ -32,6 +32,26 @@ TEST(SequencerWorkflowTest, EnableSequencer) {
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
 }
 
+TEST(SequencerWorkflowTest, ManualOverrideBlocksEnableSequencer) {
+  auto wf = std::make_unique<SequencerWorkflow>(node_index_t(1));
+  wf->setTargetOpState(SequencingState::ENABLED);
+  membership::SequencerNodeState node_state;
+  node_state.sequencer_enabled = false;
+  node_state.manual_override = true;
+  auto future = wf->run(node_state);
+  ASSERT_EQ(
+      std::move(future).get(), MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE);
+
+  node_state.manual_override = false;
+  future = wf->run(node_state);
+  ASSERT_EQ(std::move(future).get(),
+            MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+
+  node_state.sequencer_enabled = true;
+  future = wf->run(node_state);
+  ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
+}
+
 TEST(SequencerWorkflowTest, DisableSequencer) {
   auto wf = std::make_unique<SequencerWorkflow>(node_index_t(1));
   wf->setTargetOpState(SequencingState::DISABLED);

@@ -274,4 +274,27 @@ TEST_F(ShardWorkflowTest, NCStuckInTransitionalState) {
   ASSERT_EQ(std::move(f5).get(), MaintenanceStatus::COMPLETED);
 }
 
+TEST_F(ShardWorkflowTest, ManualOverrideBlocksEnableAfterMaintenace) {
+  init();
+  wf->addTargetOpState({ShardOperationalState::ENABLED});
+  membership::ShardState shard_state;
+  shard_state.storage_state = membership::StorageState::READ_ONLY;
+  shard_state.manual_override = true;
+  auto f =
+      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE);
+
+  shard_state.manual_override = false;
+  f = wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+
+  shard_state.storage_state = membership::StorageState::READ_WRITE;
+  f = wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::COMPLETED);
+  ASSERT_EQ(event, nullptr);
+}
+
 }}} // namespace facebook::logdevice::maintenance
