@@ -26,7 +26,16 @@ spec:
     spec:
       containers:
       - name: logdevice
-        image: "mohamedbassem/logdevice:startup"
+        image: "facebookincubator/logdevice"
+        command: "/usr/local/bin/logdeviced"
+        args: [
+          "--config-path", "",
+          "--enable-node-self-registration",
+          "--address", "$(POD_IP)",
+          "--name", "$(POD_NAME)",
+          "--port", "4440",
+          "--gossip-port", "4441",
+        ]
         ports:
         - containerPort: 4440
         - containerPort: 4441
