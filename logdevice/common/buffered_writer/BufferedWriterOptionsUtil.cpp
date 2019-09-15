@@ -57,7 +57,8 @@ void describeBufferedWriterOptions(options_description& po,
             }
           }),
       "'independent' to write each buffered append independently. "
-      "'one_at_a_time' to write sequentially, avoiding reordering.");
+      "'one_at_a_time' to write sequentially, avoiding reordering."
+      "'stream' to use stream mode, FIFO without one-at-a-time.");
   po.add_options()(
       (prefix + "retry-count").c_str(),
       value<int>(&opts->retry_count)->default_value(opts->retry_count),
@@ -111,6 +112,8 @@ int BufferedWriter::LogOptions::parseMode(const char* str, Mode* out_mode) {
     mode = Mode::INDEPENDENT;
   } else if (!strcmp(str, "one_at_a_time")) {
     mode = Mode::ONE_AT_A_TIME;
+  } else if (!strcmp(str, "stream")) {
+    mode = Mode::STREAM;
   } else {
     return -1;
   }
