@@ -39,7 +39,7 @@ class MicrosecondsHash {
  * commonly used timeout value. These timeout values must be registered in
  * advance by calling event_base_init_common_timeout(). It returns a queue
  * identifier masquarading as a struct timeval. TimeoutMap objects contain a map
- * from std::chrono::millisecond values to such queue identifiers for a specific
+ * from std::chrono::microsecond values to such queue identifiers for a specific
  * event_base. The objective is to reduce the amount of CPU used for timer
  * management in LogDevice.
  *

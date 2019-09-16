@@ -51,5 +51,6 @@ STAT_DEFINE(writer_max_appends_in_flight, MAX)
 STAT_DEFINE(writer_max_append_bytes_in_flight, MAX)
 STAT_DEFINE(writer_target_client_compressibility_1000x, MAX)
 STAT_DEFINE(writer_target_sequencer_compressibility_1000x, MAX)
+STAT_DEFINE(writer_append_timer_slightly_late, SUM)
 
 #undef STAT_DEFINE
