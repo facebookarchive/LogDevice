@@ -67,22 +67,24 @@ void NodesConfigurationPublisher::publish() {
       ld_info("Published a NodesConfiguration with version %ld from %s",
               nodes_configuration_to_publish->getVersion().val(),
               from_ncm ? "NodesConfigurationManager" : "ServerConfig");
-
-      configuration::nodes::NodesConfigurationTracer::Sample sample;
-      sample.ncm_nc_ = std::move(ncm_nc);
-      sample.server_config_nc_ = std::move(server_config_nc);
-      sample.using_ncm_nc_ = from_ncm;
-      sample.published_nc_ = std::move(nodes_configuration_to_publish);
-      sample.source_ =
-          configuration::nodes::NodesConfigurationTracer::Source::NC_PUBLISHER;
-      sample.nc_update_gen_ = [configuration = sample.published_nc_]() mutable {
-        // TODO: we don't have NodesConfiguration::toString(), so we use
-        // the debug JSON string instead. This could likely be more
-        // efficient.
-        return configuration::nodes::NodesConfigurationCodec::debugJsonString(
-            *configuration);
-      };
-      tracer_.trace(std::move(sample));
+      if (settings->server) {
+        configuration::nodes::NodesConfigurationTracer::Sample sample;
+        sample.ncm_nc_ = std::move(ncm_nc);
+        sample.server_config_nc_ = std::move(server_config_nc);
+        sample.using_ncm_nc_ = from_ncm;
+        sample.published_nc_ = std::move(nodes_configuration_to_publish);
+        sample.source_ = configuration::nodes::NodesConfigurationTracer::
+            Source::NC_PUBLISHER;
+        sample.nc_update_gen_ = [configuration =
+                                     sample.published_nc_]() mutable {
+          // TODO: we don't have NodesConfiguration::toString(), so we use
+          // the debug JSON string instead. This could likely be more
+          // efficient.
+          return configuration::nodes::NodesConfigurationCodec::debugJsonString(
+              *configuration);
+        };
+        tracer_.trace(std::move(sample));
+      }
     }
   }
 }
