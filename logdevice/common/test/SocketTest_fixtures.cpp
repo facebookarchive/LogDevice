@@ -36,8 +36,8 @@ size_t TestSocketDependencies::getBytesPending() const {
   return owner_->bytes_pending_;
 }
 
-std::shared_ptr<folly::SSLContext> TestSocketDependencies::getSSLContext(
-    bufferevent_ssl_state /*ssl_state*/) const {
+std::shared_ptr<folly::SSLContext>
+TestSocketDependencies::getSSLContext(bool /* accepting */) const {
   return nullptr;
 }
 

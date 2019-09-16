@@ -49,7 +49,7 @@ class SocketDependencies {
   virtual size_t getBytesPending() const;
 
   virtual std::shared_ptr<folly::SSLContext>
-      getSSLContext(bufferevent_ssl_state) const;
+  getSSLContext(bool accepting) const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID nid,

@@ -365,7 +365,7 @@ struct bufferevent* Socket::newBufferevent(int sfd,
 
   if (isSSL()) {
     ld_check(!ssl_context_);
-    ssl_context_ = deps_->getSSLContext(ssl_state);
+    ssl_context_ = deps_->getSSLContext(ssl_state == BUFFEREVENT_SSL_ACCEPTING);
   }
 
   struct bufferevent* bev = deps_->buffereventSocketNew(
