@@ -44,8 +44,6 @@ void LifoFdBaton<DeterministicAtomic>::wait() noexcept {
 }
 }}} // namespace facebook::logdevice::detail
 
-LIFOSEM_DECLARE_POOL(DeterministicAtomic, 100000)
-
 static void wait(LifoEventSem& sem) {
   // wait is private in LifoEventSem, because it is slow, but it is still
   // useful to test the machinery
