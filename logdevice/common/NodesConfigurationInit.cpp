@@ -87,10 +87,10 @@ bool NodesConfigurationInit::parseAndFetchHostList(
 
   // Determine which ConfigSource to use.
   auto src = ConfigSourceLocationParser::parse(sources, server_seed);
-  if (src.first == nullptr) {
+  if (src.first == sources.end()) {
     return false;
   }
-  auto& source = src.first;
+  auto source = src.first->get();
   auto& path = src.second;
 
   // Prepare the async callback in case the config is not ready immediately.

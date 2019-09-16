@@ -40,13 +40,15 @@ int TextConfigUpdaterImpl::load(
   alternative_logs_config_ = std::move(alternative_logs_config);
   config_parser_options_ = options;
 
-  std::tie(main_config_state_.source, main_config_state_.path) =
+  auto it = sources_.end();
+  std::tie(it, main_config_state_.path) =
       ConfigSourceLocationParser::parse(sources_, location);
-  if (main_config_state_.source == nullptr) {
+  main_config_state_.source = nullptr;
+  if (it == sources_.end()) {
     err = E::INVALID_PARAM;
     return -1;
   }
-
+  main_config_state_.source = it->get();
   return fetchFromSource();
 }
 
@@ -282,7 +284,12 @@ TextConfigUpdaterImpl::parseMaybeRelativeLocation(const std::string& location,
           ConfigSourceLocationParser::kLocationSchemeDelimiter.toString()) !=
       std::string::npos) {
     // Scheme explicitly specified in location, parse as absolute
-    return ConfigSourceLocationParser::parse(sources_, location);
+    ConfigSource* source = nullptr;
+    auto src = ConfigSourceLocationParser::parse(sources_, location);
+    if (src.first != sources_.end()) {
+      source = src.first->get();
+    }
+    return {source, src.second};
   }
 
   std::string full_path;

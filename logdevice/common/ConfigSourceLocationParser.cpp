@@ -15,7 +15,8 @@ namespace facebook { namespace logdevice {
 constexpr folly::StringPiece
     ConfigSourceLocationParser::kLocationSchemeDelimiter;
 
-std::pair<ConfigSource*, std::string> ConfigSourceLocationParser::parse(
+std::pair<std::vector<std::unique_ptr<ConfigSource>>::iterator, std::string>
+ConfigSourceLocationParser::parse(
     std::vector<std::unique_ptr<ConfigSource>>& sources,
     const std::string& location) {
   size_t pos = location.find(kLocationSchemeDelimiter.toString());
@@ -29,11 +30,11 @@ std::pair<ConfigSource*, std::string> ConfigSourceLocationParser::parse(
   }
 
   // Look for an appropriate source
-  for (const auto& source : sources) {
-    for (const auto& source_scheme : source->getSchemes()) {
+  for (auto it = sources.begin(); it != sources.end(); ++it) {
+    for (const auto& source_scheme : (*it)->getSchemes()) {
       if (source_scheme == scheme) {
         // Success!  This source is registered for the location's scheme.
-        return std::make_pair(source.get(), std::move(path));
+        return std::make_pair(it, std::move(path));
       }
     }
   }
@@ -43,7 +44,7 @@ std::pair<ConfigSource*, std::string> ConfigSourceLocationParser::parse(
       "for scheme \"%s\"",
       location.c_str(),
       scheme.c_str());
-  return std::make_pair(nullptr, std::string());
+  return std::make_pair(sources.end(), std::string());
 }
 
 }} // namespace facebook::logdevice

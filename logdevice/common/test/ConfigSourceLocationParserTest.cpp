@@ -20,82 +20,82 @@ TEST(ConfigSourceLocationParserTest, TestAll) {
   sources.push_back(std::make_unique<ZookeeperConfigSource>(
       std::chrono::milliseconds(100), nullptr));
 
-  ConfigSource* source;
   std::string path;
+  auto it = sources.end();
 
   {
-    std::tie(source, path) =
+    std::tie(it, path) =
         ConfigSourceLocationParser::parse(sources, "zk:logdevice/test");
-    ASSERT_NE(nullptr, source);
-    EXPECT_EQ("Zookeeper", source->getName());
+    ASSERT_NE(sources.end(), it);
+    EXPECT_EQ("Zookeeper", (*it)->getName());
     EXPECT_EQ("logdevice/test", path);
   }
 
   {
-    std::tie(source, path) =
+    std::tie(it, path) =
         ConfigSourceLocationParser::parse(sources, "zookeeper:logdevice/test");
-    ASSERT_NE(nullptr, source);
-    EXPECT_EQ("Zookeeper", source->getName());
+    ASSERT_NE(sources.end(), it);
+    EXPECT_EQ("Zookeeper", (*it)->getName());
     EXPECT_EQ("logdevice/test", path);
   }
 
   {
-    std::tie(source, path) =
+    std::tie(it, path) =
         ConfigSourceLocationParser::parse(sources, "file://logdevice/test");
-    ASSERT_NE(nullptr, source);
-    EXPECT_EQ("file", source->getName());
+    ASSERT_NE(sources.end(), it);
+    EXPECT_EQ("file", (*it)->getName());
     EXPECT_EQ("//logdevice/test", path);
   }
 
   {
     // File is the default
-    std::tie(source, path) =
+    std::tie(it, path) =
         ConfigSourceLocationParser::parse(sources, "/logdevice/test");
-    ASSERT_NE(nullptr, source);
-    EXPECT_EQ("file", source->getName());
+    ASSERT_NE(sources.end(), it);
+    EXPECT_EQ("file", (*it)->getName());
     EXPECT_EQ("/logdevice/test", path);
   }
 
   {
-    std::tie(source, path) =
+    std::tie(it, path) =
         ConfigSourceLocationParser::parse(sources, "schema:/logdevice/test");
-    ASSERT_EQ(nullptr, source);
+    ASSERT_EQ(sources.end(), it);
     EXPECT_EQ("", path);
   }
 
   {
-    std::tie(source, path) = ConfigSourceLocationParser::parse(sources, "");
-    ASSERT_NE(nullptr, source);
-    EXPECT_EQ("file", source->getName());
+    std::tie(it, path) = ConfigSourceLocationParser::parse(sources, "");
+    ASSERT_NE(sources.end(), it);
+    EXPECT_EQ("file", (*it)->getName());
     EXPECT_EQ("", path);
   }
 
   {
-    std::tie(source, path) = ConfigSourceLocationParser::parse(sources, "zk");
-    ASSERT_NE(nullptr, source);
-    EXPECT_EQ("file", source->getName());
+    std::tie(it, path) = ConfigSourceLocationParser::parse(sources, "zk");
+    ASSERT_NE(sources.end(), it);
+    EXPECT_EQ("file", (*it)->getName());
     EXPECT_EQ("zk", path);
   }
 
   {
-    std::tie(source, path) = ConfigSourceLocationParser::parse(sources, "zk:");
-    ASSERT_NE(nullptr, source);
-    EXPECT_EQ("Zookeeper", source->getName());
+    std::tie(it, path) = ConfigSourceLocationParser::parse(sources, "zk:");
+    ASSERT_NE(sources.end(), it);
+    EXPECT_EQ("Zookeeper", (*it)->getName());
     EXPECT_EQ("", path);
   }
 
   {
-    std::tie(source, path) =
+    std::tie(it, path) =
         ConfigSourceLocationParser::parse(sources, "zk:{test: test}");
-    ASSERT_NE(nullptr, source);
-    EXPECT_EQ("Zookeeper", source->getName());
+    ASSERT_NE(sources.end(), it);
+    EXPECT_EQ("Zookeeper", (*it)->getName());
     EXPECT_EQ("{test: test}", path);
   }
 
   {
-    std::tie(source, path) =
+    std::tie(it, path) =
         ConfigSourceLocationParser::parse(sources, "10.0.0.1:8080");
-    ASSERT_EQ(nullptr, source);
+    ASSERT_EQ(sources.end(), it);
     EXPECT_EQ("", path);
   }
 }

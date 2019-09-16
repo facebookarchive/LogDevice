@@ -23,7 +23,8 @@ class ConfigSourceLocationParser {
 
   // Parses a location of the form "scheme:path" and finds the appropriate
   // config source from the passed sources. If none is found, returns nullptr.
-  static std::pair<ConfigSource*, std::string>
+  static std::pair<std::vector<std::unique_ptr<ConfigSource>>::iterator,
+                   std::string>
   parse(std::vector<std::unique_ptr<ConfigSource>>& sources,
         const std::string& location);
 };
