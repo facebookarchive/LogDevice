@@ -255,6 +255,7 @@ sidebar_label: Settings
 ## Read path
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
+| all-read-streams-debug-config-path | The config path for sampling all client read streams debug info |  | client&nbsp;only |
 | all-read-streams-sampling-allowed-csid | Enable all read streams sampling for client with specified Client Session ID. If value empty then sampling disabled for all clients. |  | client&nbsp;only |
 | all-read-streams-sampling-rate | Rate of sampling all client read streams debug info | 100ms | client&nbsp;only |
 | authoritative-status-overrides | Force the given authoritative statuses for the given shards. Comma-separated list of overrides, each override of form 'N<node>S<shard>:<status>' or 'N<node>S<shard1>-<shard2>:<status>'. E.g. 'N7:S0-15:UNDERREPLICATION,N8:S2:UNDERREPLICATION' will set status of shards 0-15 of node 7 and shard 2 of node 8 to UNDERREPLICATION. This is useful for recovering from situations where internal logs or metadata logs are unreadable because too many nodes are unavailable or lost their data. In such situation, use this setting to temporarily override the state of shards that are unavailable (not running logdeviced) to UNDERREPLICATION, then, optionally, write SHARD\_UNRECOVERABLE events for the same shards to event log. |  | server&nbsp;only |

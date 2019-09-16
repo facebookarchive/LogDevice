@@ -3226,6 +3226,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        CLIENT,
        SettingsCategory::ReadPath);
 
+  init("all-read-streams-debug-config-path",
+       &all_read_streams_debug_config_path,
+       "",
+       nullptr, // no validation
+       "The config path for sampling all client read streams debug info",
+       CLIENT,
+       SettingsCategory::ReadPath);
+
   init("write-streams-map-max-capacity",
        &write_streams_map_max_capacity,
        "1000",
