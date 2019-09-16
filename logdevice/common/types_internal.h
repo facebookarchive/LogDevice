@@ -355,9 +355,6 @@ constexpr int FIND_TIME_KEY_SIZE = 8;
 // Used for requesting the findKey indexes to be written in RocksDB.
 constexpr char FIND_KEY_INDEX = 'k';
 
-// Used by VersionedConfigStore
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, vcs_config_version_t);
-
 /**
  * Config version used to detect stale configs.
  */
