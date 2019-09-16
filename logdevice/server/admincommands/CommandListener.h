@@ -13,7 +13,11 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "event2/bufferevent.h"
+#include <folly/io/IOBuf.h>
+#include <folly/io/async/AsyncSocket.h>
+#include <folly/io/async/AsyncTransport.h>
+#include <folly/io/async/EventBase.h>
+
 #include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/debug.h"
@@ -29,97 +33,72 @@ namespace facebook { namespace logdevice {
  */
 
 class Server;
+class CommandListener;
+
+class AdminCommandConnection : public folly::AsyncReader::ReadCallback,
+                               public folly::AsyncWriter::WriteCallback {
+ public:
+  AdminCommandConnection(size_t id,
+                         folly::NetworkSocket fd,
+                         CommandListener& listener,
+                         const folly::SocketAddress& addr,
+                         folly::EventBase* evb);
+  void getReadBuffer(void** bufReturn, size_t* lenReturn) override;
+  void readDataAvailable(size_t length) noexcept override;
+  void readEOF() noexcept override;
+  void readErr(const folly::AsyncSocketException& ex) noexcept override;
+  void writeSuccess() noexcept override {}
+  void writeErr(size_t bytesWritten,
+                const folly::AsyncSocketException& ex) noexcept override;
+
+ private:
+  class TLSSensingCallback : public folly::AsyncReader::ReadCallback {
+   public:
+    TLSSensingCallback(AdminCommandConnection& connection,
+                       const folly::NetworkSocket& fd);
+    void getReadBuffer(void** bufReturn, size_t* lenReturn) override;
+    void readDataAvailable(size_t length) noexcept override;
+    void readEOF() noexcept override;
+    void readErr(const folly::AsyncSocketException& ex) noexcept override;
+
+   private:
+    folly::NetworkSocket fd_;
+    AdminCommandConnection& connection_;
+  };
+
+ private:
+  void closeConnectionAndDestroyObject();
+  size_t id_;
+  const folly::SocketAddress addr_;
+  folly::IOBufQueue read_buffer_{folly::IOBufQueue::cacheChainLength()};
+  folly::io::QueueAppender cursor_;
+  CommandListener& listener_;
+  bool destruction_scheduled_{false};
+  folly::AsyncSocket::UniquePtr socket_;
+  std::unique_ptr<TLSSensingCallback> tls_sensing_;
+};
 
 class CommandListener : public Listener {
  public:
+  friend AdminCommandConnection;
   explicit CommandListener(Listener::InterfaceDef iface,
                            KeepAlive loop,
                            Server* server);
 
  protected:
-  /**
-   * Called by libevent when there is a new connection.
-   */
-  void acceptCallback(evutil_socket_t sock,
-                      const folly::SocketAddress& addr) override;
-
- private:
-  typedef std::vector<std::string> cmd_args_t;
-  typedef size_t conn_id_t;
-
-  static constexpr int COMMAND_RCVBUF = 8 * 1024;
-  static constexpr int COMMAND_SNDBUF = 1 * 1024 * 1024;
-
-  enum ConnectionType { UNKNOWN, PLAIN, ENCRYPTED };
-  class ConnectionState {
-   public:
-    ConnectionState(CommandListener* parent,
-                    conn_id_t id,
-                    struct bufferevent* bev,
-                    Sockaddr address)
-        : parent_(parent),
-          id_(id),
-          bev_(bev),
-          close_when_drained_(false),
-          address_(address) {
-      ld_check(bev_ != nullptr);
-    }
-    ~ConnectionState();
-
-    // owning CommandListener object
-    CommandListener* parent_;
-
-    // id of this connection
-    conn_id_t id_;
-
-    // bufferevent associated with the connection
-    struct bufferevent* bev_;
-
-    // flag indicating that the connection should be closed after draining the
-    // output evbuffer
-    bool close_when_drained_;
-
-    // address of the remote end of this connection
-    Sockaddr address_;
-
-    // last command we received from this connection
-    std::string last_command_;
-
-    // indicate whether the connection is over SSL or not
-    ConnectionType type_{UNKNOWN};
-  };
-
-  void init();
-
-  // parse the command and call corresponding handler
-  void processCommand(struct bufferevent* bev,
-                      const char* command,
-                      const bool isLocalhost,
-                      ConnectionState* state);
-
-  // called by libevent when there's some data to be read
-  static void readCallback(struct bufferevent* bev, void* arg);
-
-  // called by libevent when some data has been written to the underlying
-  // socket
-  static void writeCallback(struct bufferevent* bev, void* arg);
-
-  // called by libevent when the connection is established, closed, etc.
-  static void eventCallback(struct bufferevent* bev, short events, void* arg);
-
-  // create an openssl bufferevent to handle that connection
-  bool upgradeToSSL(ConnectionState* state);
+  void connectionAccepted(folly::NetworkSocket sock,
+                          const folly::SocketAddress& addr) noexcept override;
 
   Server* server_;
   UpdateableSettings<ServerSettings> server_settings_;
   std::unique_ptr<AdminCommandFactory> command_factory_;
 
   // id assigned to the next connection
-  conn_id_t next_conn_id_ = 0;
+  size_t next_conn_id_ = 0;
 
   // a map of connections handled by this listener, indexed by their connection
   // ids.
-  std::map<conn_id_t, std::unique_ptr<ConnectionState>> conns_;
+  std::map<size_t, AdminCommandConnection> conns_;
 
   // SSL context manager
   SSLFetcher ssl_fetcher_;

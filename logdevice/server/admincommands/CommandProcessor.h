@@ -33,8 +33,8 @@ class CommandProcessor {
    * @command_line the command to execute.
    * @address is an address of the machine which sent a request.
    */
-  folly::IOBuf processCommand(const char* command_line,
-                              const folly::SocketAddress& address);
+  std::unique_ptr<folly::IOBuf>
+  processCommand(const char* command_line, const folly::SocketAddress& address);
 
  private:
   Server* server_;

@@ -10,26 +10,26 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <variant>
 #include <vector>
 
-#include <boost/variant.hpp>
 #include <folly/Executor.h>
 #include <folly/SocketAddress.h>
 #include <folly/futures/Future.h>
 #include <folly/futures/SharedPromise.h>
+#include <folly/io/async/AsyncServerSocket.h>
+#include <folly/io/async/EventBase.h>
 
-#include "event2/event.h"
-#include "event2/listener.h"
-#include "logdevice/common/EventLoop.h"
+#include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 
 /**
  * An abstract class that wraps evconnlisteners and handles new connections.
  */
-class Listener {
+class Listener : public folly::AsyncServerSocket::AcceptCallback {
  public:
-  using KeepAlive = folly::Executor::KeepAlive<EventLoop>;
+  using KeepAlive = folly::Executor::KeepAlive<folly::EventBase>;
   /**
    * Defines the interface used by this Listener. Can be a TCP port or the path
    * of a unix domain socket.
@@ -41,17 +41,26 @@ class Listener {
         : val_(std::move(path)), ssl_(ssl) {}
 
     bool isPort() const {
-      return val_.which() == 0;
+      return val_.index() == 0;
     }
 
     int port() const {
       ld_check(isPort());
-      return boost::get<int>(val_);
+      return std::get<int>(val_);
     }
 
     const std::string& path() const {
       ld_check(!isPort());
-      return boost::get<std::string>(val_);
+      return std::get<std::string>(val_);
+    }
+
+    void bind(folly::AsyncServerSocket* socket) const {
+      if (isPort()) {
+        socket->bind(port());
+      } else {
+        unlink(path().c_str());
+        socket->bind(folly::SocketAddress::makeFromPath(path()));
+      }
     }
 
     bool isSSL() const {
@@ -70,11 +79,11 @@ class Listener {
     }
 
    private:
-    boost::variant<int, std::string> val_;
+    std::variant<int, std::string> val_;
     bool ssl_;
   };
 
-  explicit Listener(InterfaceDef iface, KeepAlive loop);
+  explicit Listener(const InterfaceDef& iface, KeepAlive loop);
 
   virtual ~Listener();
 
@@ -91,39 +100,32 @@ class Listener {
 
  protected:
   /**
-   * Triggered by libevent when there is a new incoming connection.
+   * [DEPRECATED] Triggered by libevent when there is a new incoming connection.
+   * Please use connectionAccepted instead.
    */
-  virtual void acceptCallback(evutil_socket_t sock,
-                              const folly::SocketAddress& addr) = 0;
+  virtual void acceptCallback(evutil_socket_t /* sock */,
+                              const folly::SocketAddress& /* addr */) {}
 
-  /* Returns true if we're listening on an SSL port */
-  bool isSSL() const {
-    return iface_.isSSL();
-  }
+  void acceptError(const std::exception& ex) noexcept override;
+
+  void
+  connectionAccepted(folly::NetworkSocket fd,
+                     const folly::SocketAddress& clientAddr) noexcept override;
+
+  bool isSSL() const;
 
  private:
-  bool setupEvConnListeners();
+  bool setupAsyncSocket();
 
-  void closeEvConnListeners();
-
+ private:
   // Tcp port or path to unix domain socket we'll use to listen for connections.
-  InterfaceDef iface_;
+  const InterfaceDef iface_;
 
   // EventLoop on which listener is running
   KeepAlive loop_;
 
-  // list of pointers to evconnlistener structs, used to ensure they're properly
-  // released when this object is destroyed
-  typedef std::unique_ptr<evconnlistener, std::function<void(evconnlistener*)>>
-      EvconnListenerUniquePtr;
-  std::vector<EvconnListenerUniquePtr> evconnlisteners_;
-
-  // static wrapper around acceptCallback() that we can pass to libevent
-  static void staticAcceptCallback(struct evconnlistener* listener,
-                                   evutil_socket_t sock,
-                                   struct sockaddr* addr,
-                                   int len,
-                                   void* arg);
+  // Must be accessed only from evenloop thread
+  std::shared_ptr<folly::AsyncServerSocket> socket_;
 };
 
 }} // namespace facebook::logdevice

@@ -10,6 +10,8 @@
 #include <functional>
 #include <memory>
 
+#include <folly/io/async/EventBaseThread.h>
+
 #include "logdevice/common/WorkerType.h"
 
 namespace facebook { namespace logdevice {
@@ -60,10 +62,10 @@ void shutdown_server(
     std::unique_ptr<Listener>& command_listener,
     std::unique_ptr<Listener>& gossip_listener,
     std::unique_ptr<Listener>& ssl_connection_listener,
-    std::unique_ptr<EventLoop>& connection_listener_loop,
-    std::unique_ptr<EventLoop>& command_listener_loop,
-    std::unique_ptr<EventLoop>& gossip_listener_loop,
-    std::unique_ptr<EventLoop>& ssl_connection_listener_loop,
+    std::unique_ptr<folly::EventBaseThread>& connection_listener_loop,
+    std::unique_ptr<folly::EventBaseThread>& command_listener_loop,
+    std::unique_ptr<folly::EventBaseThread>& gossip_listener_loop,
+    std::unique_ptr<folly::EventBaseThread>& ssl_connection_listener_loop,
     std::unique_ptr<LogStoreMonitor>& logstore_monitor,
     std::shared_ptr<ServerProcessor>& processor,
     std::unique_ptr<ShardedStorageThreadPool>& storage_thread_pool,

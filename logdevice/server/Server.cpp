@@ -7,6 +7,8 @@
  */
 #include "logdevice/server/Server.h"
 
+#include <folly/io/async/EventBaseThread.h>
+
 #include "logdevice/admin/SimpleAdminServer.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/common/ConfigInit.h"
@@ -636,25 +638,29 @@ bool Server::initListeners() {
   try {
     auto conn_shared_state =
         std::make_shared<ConnectionListener::SharedState>();
-    connection_listener_loop_ = std::make_unique<EventLoop>(
+
+    connection_listener_loop_ = std::make_unique<folly::EventBaseThread>(
+        true,
+        nullptr,
         ConnectionListener::listenerTypeNames()
-            [ConnectionListener::ListenerType::DATA],
-        ThreadID::Type::UTILITY);
+            [ConnectionListener::ListenerType::DATA]);
+
+    command_listener_loop_ =
+        std::make_unique<folly::EventBaseThread>(true, nullptr, "ld:admin");
+
     connection_listener_ = initListener<ConnectionListener>(
         server_settings_->port,
         server_settings_->unix_socket,
         false,
-        folly::getKeepAliveToken(connection_listener_loop_.get()),
+        folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
         conn_shared_state,
         ConnectionListener::ListenerType::DATA,
         conn_budget_backlog_);
-    command_listener_loop_ =
-        std::make_unique<EventLoop>("ld:admin", ThreadID::Type::UTILITY);
     command_listener_ = initListener<CommandListener>(
         server_settings_->command_port,
         server_settings_->command_unix_socket,
         false,
-        folly::getKeepAliveToken(command_listener_loop_.get()),
+        folly::getKeepAliveToken(command_listener_loop_->getEventBase()),
         this);
 
     auto nodes_configuration = updateable_config_->getNodesConfiguration();
@@ -697,15 +703,18 @@ bool Server::initListeners() {
           // validateSSLCertificatesExist() should output the error
           return false;
         }
-        ssl_connection_listener_loop_ = std::make_unique<EventLoop>(
-            ConnectionListener::listenerTypeNames()
-                [ConnectionListener::ListenerType::DATA_SSL],
-            ThreadID::Type::UTILITY);
+        ssl_connection_listener_loop_ =
+            std::make_unique<folly::EventBaseThread>(
+                true,
+                nullptr,
+                ConnectionListener::listenerTypeNames()
+                    [ConnectionListener::ListenerType::DATA_SSL]);
         ssl_connection_listener_ = initListener<ConnectionListener>(
             ssl_port,
             ssl_unix_socket,
             true,
-            folly::getKeepAliveToken(ssl_connection_listener_loop_.get()),
+            folly::getKeepAliveToken(
+                ssl_connection_listener_loop_->getEventBase()),
             conn_shared_state,
             ConnectionListener::ListenerType::DATA_SSL,
             conn_budget_backlog_);
@@ -735,15 +744,17 @@ bool Server::initListeners() {
           // validateSSLCertificatesExist() should output the error
           return false;
         }
-        gossip_listener_loop_ = std::make_unique<EventLoop>(
+        gossip_listener_loop_ = std::make_unique<folly::EventBaseThread>(
+            true,
+            nullptr,
             ConnectionListener::listenerTypeNames()
-                [ConnectionListener::ListenerType::GOSSIP],
-            ThreadID::Type::UTILITY);
+                [ConnectionListener::ListenerType::GOSSIP]);
+
         gossip_listener_ = initListener<ConnectionListener>(
             gossip_port,
             gossip_unix_socket,
             false,
-            folly::getKeepAliveToken(gossip_listener_loop_.get()),
+            folly::getKeepAliveToken(gossip_listener_loop_->getEventBase()),
             conn_shared_state,
             ConnectionListener::ListenerType::GOSSIP,
             conn_budget_backlog_unlimited_);

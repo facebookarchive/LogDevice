@@ -49,14 +49,14 @@ CommandProcessor::CommandProcessor(Server* server)
       command_factory_(createAdminCommandFactory(
           /*test_mode=*/server_settings_->test_mode)) {}
 
-folly::IOBuf
+std::unique_ptr<folly::IOBuf>
 CommandProcessor::processCommand(const char* command_line,
                                  const folly::SocketAddress& address) {
   auto start_time = std::chrono::steady_clock::now();
   ld_debug("Processing command: %s", sanitize_string(command_line).c_str());
 
-  folly::IOBuf buffer;
-  folly::io::Appender output(&buffer, 1024);
+  auto buffer = std::make_unique<folly::IOBuf>();
+  folly::io::Appender output(buffer.get(), 1024);
   std::vector<std::string> args;
   try {
     args = boost::program_options::split_unix(command_line);
@@ -145,7 +145,7 @@ CommandProcessor::processCommand(const char* command_line,
          address.describe().c_str(),
          std::chrono::duration_cast<std::chrono::duration<double>>(duration)
              .count(),
-         buffer.length(),
+         buffer->length(),
          sanitize_string(command_line).c_str());
   return buffer;
 }

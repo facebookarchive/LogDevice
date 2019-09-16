@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include <folly/io/async/EventBaseThread.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/AllSequencers.h"
@@ -136,7 +137,7 @@ class UnreleasedRecordDetectorTest : public ::testing::Test {
   std::shared_ptr<UpdateableConfig> config_;
   std::shared_ptr<ServerProcessor> processor_;
   ResourceBudget budget_{std::numeric_limits<uint64_t>::max()};
-  std::unique_ptr<EventLoop> connection_listener_loop_;
+  std::unique_ptr<folly::EventBaseThread> connection_listener_loop_;
   std::unique_ptr<ConnectionListener> connection_listener_;
   std::shared_ptr<UnreleasedRecordDetector> detector_;
 };
@@ -244,13 +245,14 @@ void UnreleasedRecordDetectorTest::SetUp() {
   ld_notify("Processor created and initialized.");
 
   // create connection listener
-  connection_listener_loop_ =
-      std::make_unique<EventLoop>(ConnectionListener::listenerTypeNames()
-                                      [ConnectionListener::ListenerType::DATA],
-                                  ThreadID::Type::UTILITY);
+  connection_listener_loop_ = std::make_unique<folly::EventBaseThread>(
+      true,
+      nullptr,
+      ConnectionListener::listenerTypeNames()
+          [ConnectionListener::ListenerType::DATA]);
   connection_listener_ = std::make_unique<ConnectionListener>(
       Listener::InterfaceDef(std::move(socketPath), false),
-      folly::getKeepAliveToken(connection_listener_loop_.get()),
+      folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
       std::make_shared<ConnectionListener::SharedState>(),
       ConnectionListener::ListenerType::DATA,
       budget_);

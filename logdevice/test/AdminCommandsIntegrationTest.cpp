@@ -48,12 +48,6 @@ TEST_F(AdminCommandsIntegrationTest, AdminPortSupportsSSL) {
   EXPECT_EQ("END\r\n",
             response.substr(response.size() - std::min(response.size(), 5ul)));
 
-  auto stats_map = cluster->getNode(0).stats();
-  EXPECT_EQ(0, stats_map["command_port_connection_encrypted"]);
-  EXPECT_EQ(0, stats_map["command_port_connection_failed_ssl_upgrade"]);
-  EXPECT_EQ(0, stats_map["command_port_connection_failed_ssl_required"]);
-  EXPECT_TRUE(stats_map["command_port_connection_plain"] > 0);
-
   // check command over SSL
   response = cluster->getNode(0).sendCommand("info", true);
   EXPECT_FALSE(response.substr(0, strlen("Failed")) == "Failed" ||
@@ -62,13 +56,6 @@ TEST_F(AdminCommandsIntegrationTest, AdminPortSupportsSSL) {
   EXPECT_EQ("END\r\n",
             response.substr(response.size() - std::min(response.size(), 5ul)));
 
-  auto stats_map2 = cluster->getNode(0).stats();
-  EXPECT_EQ(1, stats_map2["command_port_connection_encrypted"]);
-  EXPECT_EQ(0, stats_map2["command_port_connection_failed_ssl_upgrade"]);
-  EXPECT_EQ(0, stats_map2["command_port_connection_failed_ssl_required"]);
-  // Note the +1 is becasue stats() issues an admin command as well.
-  EXPECT_EQ(stats_map["command_port_connection_plain"] + 1,
-            stats_map2["command_port_connection_plain"]);
 }
 
 // Verifies that the logdevice admin port fails SSL if certs re not loaded
@@ -96,21 +83,7 @@ TEST_F(AdminCommandsIntegrationTest, AdminPortSSLErrorNoCerts) {
   EXPECT_EQ("END\r\n",
             response.substr(response.size() - std::min(response.size(), 5ul)));
 
-  auto stats_map = cluster->getNode(0).stats();
-  EXPECT_EQ(0, stats_map["command_port_connection_encrypted"]);
-  EXPECT_EQ(0, stats_map["command_port_connection_failed_ssl_upgrade"]);
-  EXPECT_EQ(0, stats_map["command_port_connection_failed_ssl_required"]);
-  EXPECT_TRUE(stats_map["command_port_connection_plain"] > 0);
-
   // check command over SSL. should fail and return no response
   response = cluster->getNode(0).sendCommand("info", true);
   EXPECT_TRUE(response.empty());
-
-  auto stats_map2 = cluster->getNode(0).stats();
-  EXPECT_EQ(0, stats_map2["command_port_connection_encrypted"]);
-  EXPECT_EQ(1, stats_map2["command_port_connection_failed_ssl_upgrade"]);
-  EXPECT_EQ(0, stats_map2["command_port_connection_failed_ssl_required"]);
-  // Note the +1 is becasue stats() issues an admin command as well.
-  EXPECT_EQ(stats_map["command_port_connection_plain"] + 1,
-            stats_map2["command_port_connection_plain"]);
 }

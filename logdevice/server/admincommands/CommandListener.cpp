@@ -5,21 +5,15 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#define __STDC_FORMAT_MACROS
-#include "logdevice/server/admincommands/CommandListener.h"
-
-#include <pthread.h>
+#include <array>
 
 #include <folly/Memory.h>
-#include <folly/Optional.h>
-#include <folly/String.h>
-#include <folly/io/IOBuf.h>
-#include <rocksdb/statistics.h>
+#include <folly/io/async/AsyncSSLSocket.h>
+#include <folly/io/async/AsyncSocket.h>
+#include <folly/io/async/AsyncTimeout.h>
+#include <folly/io/async/AsyncTransport.h>
+#include <folly/io/async/EventBase.h>
 
-#include "event2/bufferevent.h"
-#include "event2/bufferevent_ssl.h"
-#include "event2/event.h"
-#include "event2/util.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Semaphore.h"
@@ -33,6 +27,69 @@
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
 namespace facebook { namespace logdevice {
+
+constexpr static size_t kBufferAllocationSize = 1024;
+constexpr static size_t kTotalReceiveBuffer = 1024 * 1024;
+
+namespace {
+const uint8_t kSSLHandshakeRecordTag = 0x16;
+} // namespace
+
+AdminCommandConnection::TLSSensingCallback::TLSSensingCallback(
+    AdminCommandConnection& connection,
+    const folly::NetworkSocket& fd)
+    : fd_(fd), connection_(connection) {}
+
+void AdminCommandConnection::TLSSensingCallback::getReadBuffer(
+    void** bufReturn,
+    size_t* lenReturn) {
+  *lenReturn = 0;
+  *bufReturn = nullptr;
+
+  uint8_t byte = 0;
+  auto rv = folly::netops::recv(fd_, &byte, 1, MSG_PEEK);
+  if (rv != 1) {
+    ld_critical("There is no 1 byte in the socket for TLS detection.");
+    connection_.closeConnectionAndDestroyObject();
+  }
+
+  ld_debug("read data is available for peeking");
+  if (byte == kSSLHandshakeRecordTag) {
+    ld_debug("TLS detected");
+    auto ctx = connection_.listener_.ssl_fetcher_.getSSLContext(true, true);
+    if (!ctx) {
+      ld_error("no SSL context, dropping connection");
+      connection_.closeConnectionAndDestroyObject();
+      return;
+    }
+
+    auto ssl_socket = folly::AsyncSSLSocket::UniquePtr(
+        new folly::AsyncSSLSocket(ctx, std::move(connection_.socket_)));
+    ssl_socket->setReadCB(&connection_);
+    ssl_socket->sslAccept(nullptr);
+    connection_.socket_ = std::move(ssl_socket);
+    connection_.tls_sensing_.reset();
+    return;
+  }
+
+  ld_debug("TLS is not detected");
+  connection_.socket_ = folly::AsyncSocket::UniquePtr(
+      new folly::AsyncSocket(std::move(connection_.socket_)));
+  connection_.socket_->setReadCB(&connection_);
+  return;
+}
+
+void AdminCommandConnection::TLSSensingCallback::readDataAvailable(
+    size_t) noexcept {
+  ld_check(false);
+}
+
+void AdminCommandConnection::TLSSensingCallback::readEOF() noexcept {}
+
+void AdminCommandConnection::TLSSensingCallback::readErr(
+    const folly::AsyncSocketException&) noexcept {
+  ld_error("tls sensing read error");
+}
 
 CommandListener::CommandListener(Listener::InterfaceDef iface,
                                  KeepAlive loop,
@@ -52,65 +109,107 @@ CommandListener::CommandListener(Listener::InterfaceDef iface,
   ld_check(server_);
 }
 
-CommandListener::ConnectionState::~ConnectionState() {
-  ld_check(bev_);
-
-  ld_debug("Closing command connection with id %zu", id_);
-  LD_EV(bufferevent_free)(bev_);
+AdminCommandConnection::AdminCommandConnection(size_t id,
+                                               folly::NetworkSocket fd,
+                                               CommandListener& listener,
+                                               const folly::SocketAddress& addr,
+                                               folly::EventBase* evb)
+    : id_(id),
+      addr_(addr),
+      cursor_(&read_buffer_, kBufferAllocationSize),
+      listener_(listener),
+      tls_sensing_(std::make_unique<TLSSensingCallback>(*this, fd)) {
+  socket_ = folly::AsyncSocket::UniquePtr(new folly::AsyncSocket(evb, fd));
+  socket_->setReadCB(tls_sensing_.get());
 }
 
-void CommandListener::acceptCallback(evutil_socket_t sock,
-                                     const folly::SocketAddress& addr) {
-  struct bufferevent* bev = LD_EV(bufferevent_socket_new)(
-      loop_->getEventBase(), sock, BEV_OPT_CLOSE_ON_FREE);
+void AdminCommandConnection::getReadBuffer(void** bufReturn,
+                                           size_t* lenReturn) {
+  cursor_.ensure(kBufferAllocationSize);
+  *bufReturn = cursor_.writableData();
+  *lenReturn = cursor_.length();
+  ld_debug("read data is available, %p %lu",
+           cursor_.writableData(),
+           cursor_.length());
+}
 
-  if (!bev) {
-    ld_error("bufferevent_socket_new() failed. errno=%d (%s)",
-             errno,
-             strerror(errno));
-    LD_EV(evutil_closesocket)(sock);
+void AdminCommandConnection::readDataAvailable(size_t length) noexcept {
+  ld_debug("reading data, %lu", length);
+  if (read_buffer_.chainLength() > kTotalReceiveBuffer) {
+    closeConnectionAndDestroyObject();
     return;
   }
 
-  const int rcvbuf = COMMAND_RCVBUF;
-  const int sndbuf = COMMAND_SNDBUF;
+  cursor_.append(length);
 
-  int rv = setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
-  if (rv != 0) {
-    ld_error("Failed to set rcvbuf size for TCP socket %d to %d: %s",
-             sock,
-             rcvbuf,
-             strerror(errno));
-    LD_EV(bufferevent_free)(bev);
-    LD_EV(evutil_closesocket)(sock);
-    return;
+  folly::io::Cursor last_block(read_buffer_.front());
+  last_block.advanceToEnd();
+  last_block -= length;
+  size_t full_commands = 0;
+  // Checks if we got new endline. (And counts how many new lines we got)
+  // Invariant that there was no endlines before.
+  while (!last_block.isAtEnd()) {
+    full_commands += (last_block.read<char>() == '\n');
   }
 
-  rv = setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
-  if (rv != 0) {
-    ld_error("Failed to set sndbuf size for TCP socket %d to %d: %s",
-             sock,
-             COMMAND_SNDBUF,
-             strerror(errno));
-    LD_EV(bufferevent_free)(bev);
-    LD_EV(evutil_closesocket)(sock);
+  for (int i = 0; i < full_commands; ++i) {
+    folly::io::Cursor read_cursor(read_buffer_.front());
+    std::string command = read_cursor.readTerminatedString('\n');
+    // Trims commands to maintain invariant. (no endlines in the buf).
+    read_buffer_.trimStart(command.size() + 1);
+    if (command.size() > 0 && command.back() == '\r') {
+      command.pop_back();
+    }
+
+    auto result =
+        listener_.command_processor_.processCommand(command.c_str(), addr_);
+    socket_->writeChain(this, std::move(result));
+  }
+}
+
+void AdminCommandConnection::closeConnectionAndDestroyObject() {
+  if (destruction_scheduled_) {
     return;
   }
+  destruction_scheduled_ = true;
+  listener_.loop_->add([this] {
+    ld_debug("Closed connection from %s (id %zu, fd %d)",
+             addr_.describe().c_str(),
+             id_,
+             socket_->getNetworkSocket().toFd());
+    listener_.conns_.erase(id_);
+  });
+}
 
-#if LIBEVENT_VERSION_NUMBER >= 0x02010000
-  // In libevent >= 2.1 we can tweak the amount of data libevent sends to
-  // the TCP stack at once
-  LD_EV(bufferevent_set_max_single_read)(bev, rcvbuf);
-  LD_EV(bufferevent_set_max_single_write)(bev, sndbuf);
-#endif
+void AdminCommandConnection::writeErr(
+    size_t /* bytesWritten */,
+    const folly::AsyncSocketException&) noexcept {
+  ld_error("write error");
+  closeConnectionAndDestroyObject();
+}
 
-  const conn_id_t id = next_conn_id_++;
-  auto state = std::make_unique<ConnectionState>(this, id, bev, Sockaddr(addr));
+void AdminCommandConnection::readErr(
+    const folly::AsyncSocketException&) noexcept {
+  ld_error("read error");
+  closeConnectionAndDestroyObject();
+}
 
+void AdminCommandConnection::readEOF() noexcept {
+  closeConnectionAndDestroyObject();
+}
+
+void CommandListener::connectionAccepted(
+    folly::NetworkSocket sock,
+    const folly::SocketAddress& addr) noexcept {
+  const size_t id = next_conn_id_++;
+  auto res =
+      conns_.emplace(std::piecewise_construct,
+                     std::forward_as_tuple(id),
+                     std::forward_as_tuple(id, sock, *this, addr, loop_.get()));
   ld_debug("Accepted connection from %s (id %zu, fd %d)",
-           state->address_.toString().c_str(),
+           addr.describe().c_str(),
            id,
-           LD_EV(bufferevent_getfd)(bev));
+           sock.toFd());
 
   const size_t conn_limit = server_settings_->command_conn_limit;
   while (conns_.size() >= conn_limit) {
@@ -118,246 +217,7 @@ void CommandListener::acceptCallback(evutil_socket_t sock,
     ld_check(conns_.begin() != conns_.end());
     conns_.erase(conns_.begin());
   }
-
-  auto res = conns_.insert(std::make_pair(id, std::move(state)));
   ld_check(res.second);
-
-  auto& it = res.first->second;
-
-  LD_EV(bufferevent_setcb)
-  (it->bev_,
-   CommandListener::readCallback,
-   CommandListener::writeCallback,
-   CommandListener::eventCallback,
-   it.get());
-  LD_EV(bufferevent_enable)(it->bev_, EV_READ | EV_WRITE);
-}
-
-static std::string peekInEvbuffer(struct evbuffer* input, size_t len) {
-  std::string buf(len, '\0');
-  LD_EV(evbuffer_copyout)(input, &buf[0], buf.size());
-  return buf;
-}
-
-// check whether the packet looks like SSL handshake
-static bool payloadIsSSL(struct evbuffer* input) {
-  const char SSL_HANDSHAKE_RECORD_TAG = 0x16;
-  char c = 0;
-  LD_EV(evbuffer_copyout)(input, &c, 1);
-
-  // Warning: Very weak validation here. We only check the first byte.
-  // That should be good enough for admin commands however, since
-  // we are expecting ascii charaters when in clear text.
-  return c == SSL_HANDSHAKE_RECORD_TAG;
-}
-
-void CommandListener::readCallback(struct bufferevent* bev, void* arg) {
-  ConnectionState* state = reinterpret_cast<ConnectionState*>(arg);
-  ld_check(state && state->bev_ == bev);
-
-  struct evbuffer* input = LD_EV(bufferevent_get_input)(bev);
-  ld_check(input);
-
-  CommandListener* listener = state->parent_;
-  const conn_id_t id = state->id_;
-
-  if (state->type_ == ConnectionType::UNKNOWN) {
-    if (payloadIsSSL(input)) {
-      if (listener->upgradeToSSL(state)) {
-        STAT_INCR(listener->server_->getParameters()->getStats(),
-                  command_port_connection_encrypted);
-      } else {
-        STAT_INCR(listener->server_->getParameters()->getStats(),
-                  command_port_connection_failed_ssl_upgrade);
-        RATELIMIT_ERROR(std::chrono::seconds(10),
-                        2,
-                        "Failed to upgrade admin connection from %s to SSL",
-                        state->address_.toString().c_str());
-        listener->conns_.erase(id);
-      }
-      return;
-    } else {
-      if (listener->server_settings_->require_ssl_on_command_port) {
-        STAT_INCR(listener->server_->getParameters()->getStats(),
-                  command_port_connection_failed_ssl_required);
-        RATELIMIT_ERROR(
-            std::chrono::seconds(10),
-            2,
-            "Received non-encrypted traffic from %s while SSL is required "
-            "on command port",
-            state->address_.toString().c_str());
-        listener->conns_.erase(id);
-        return;
-      }
-      STAT_INCR(listener->server_->getParameters()->getStats(),
-                command_port_connection_plain);
-      state->type_ = ConnectionType::PLAIN;
-    }
-  }
-
-  ld_spew("Reading command from %s", state->address_.toString().c_str());
-
-  const bool is_localhost =
-      state->address_.getSocketAddress().isLoopbackAddress();
-
-  size_t len;
-  char* command;
-
-  while ((command = LD_EV(evbuffer_readln)(input, &len, EVBUFFER_EOL_CRLF))) {
-    state->last_command_ = command;
-    listener->processCommand(bev, command, is_localhost, state);
-    free(command);
-  }
-
-  // we don't have a complete line; close the connection if the buffer size
-  // is over the limit
-  len = LD_EV(evbuffer_get_length)(input);
-  if (len != 0) {
-    ld_spew(
-        "Don't have a complete command from %s yet. Command so far: %s (%lu "
-        "bytes)",
-        state->address_.toString().c_str(),
-        peekInEvbuffer(input, std::min(len, 1500ul)).c_str(),
-        len);
-  }
-  if (len > CommandListener::COMMAND_RCVBUF) {
-    std::string prefix(CommandListener::COMMAND_RCVBUF, '\0');
-    int l = LD_EV(evbuffer_remove)(
-        input, &prefix[0], CommandListener::COMMAND_RCVBUF);
-    ld_check(l == CommandListener::COMMAND_RCVBUF);
-    ld_info("Command too long (at least %lu bytes), closing the connection to "
-            "%s; command starts with: %s",
-            len,
-            state->address_.toString().c_str(),
-            sanitize_string(prefix).c_str());
-    listener->conns_.erase(id);
-  }
-}
-
-void CommandListener::writeCallback(struct bufferevent* bev, void* arg) {
-  ConnectionState* state = reinterpret_cast<ConnectionState*>(arg);
-  ld_check(state && state->bev_ == bev);
-
-  struct evbuffer* out_evbuf = LD_EV(bufferevent_get_output)(bev);
-  ld_check(out_evbuf);
-
-  ld_spew("Write callback called for %s. close_when_drained_: %d, out_evbuf "
-          "length: %lu",
-          state->address_.toString().c_str(),
-          state->close_when_drained_,
-          LD_EV(evbuffer_get_length)(out_evbuf));
-
-  if (state->close_when_drained_ && !LD_EV(evbuffer_get_length)(out_evbuf)) {
-    CommandListener* listener = state->parent_;
-    listener->conns_.erase(state->id_);
-  }
-}
-
-void CommandListener::eventCallback(struct bufferevent* bev,
-                                    short events,
-                                    void* arg) {
-  int sock_errno = errno;
-
-  ConnectionState* state = reinterpret_cast<ConnectionState*>(arg);
-  ld_check(state && state->bev_ == bev);
-
-  CommandListener* listener = state->parent_;
-  const conn_id_t id = state->id_;
-
-  if (events & BEV_EVENT_ERROR) {
-    ld_info("Got an error on command socket %d to %s while %s. errno=%d (%s). "
-            "command: %s",
-            LD_EV(bufferevent_getfd)(bev),
-            state->address_.toString().c_str(),
-            (events & BEV_EVENT_WRITING) ? "writing" : "reading",
-            sock_errno,
-            strerror(sock_errno),
-            sanitize_string(state->last_command_).c_str());
-
-    listener->conns_.erase(id);
-  } else if (events & BEV_EVENT_EOF) {
-    struct evbuffer* out_evbuf = LD_EV(bufferevent_get_output)(bev);
-    ld_check(out_evbuf);
-
-    size_t len = LD_EV(evbuffer_get_length)(out_evbuf);
-
-    ld_spew("Got EOF on command socket %d to %s while %s. errno=%d (%s). "
-            "command: %s",
-            LD_EV(bufferevent_getfd)(bev),
-            state->address_.toString().c_str(),
-            (events & BEV_EVENT_WRITING) ? "writing" : "reading",
-            sock_errno,
-            strerror(sock_errno),
-            sanitize_string(state->last_command_).c_str());
-
-    if (len > 0) {
-      // there's more data that needs to be written, delay closing the
-      // connection
-      state->close_when_drained_ = true;
-    } else {
-      listener->conns_.erase(id);
-    }
-  }
-}
-
-void CommandListener::processCommand(struct bufferevent* bev,
-                                     const char* command_line,
-                                     const bool is_localhost,
-                                     ConnectionState* state) {
-  auto result = command_processor_.processCommand(
-      command_line, state->address_.getSocketAddress());
-
-  struct evbuffer* output = LD_EV(bufferevent_get_output)(bev);
-  auto bytes = result.coalesce();
-  LD_EV(evbuffer_add)(output, bytes.data(), bytes.size());
-}
-
-bool CommandListener::upgradeToSSL(ConnectionState* state) {
-  // clear existing callback from original bufferevent
-  LD_EV(bufferevent_setcb)(state->bev_, nullptr, nullptr, nullptr, nullptr);
-
-  auto ctx = ssl_fetcher_.getSSLContext(true, true);
-  if (!ctx) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    2,
-                    "Invalid SSLContext, can't create SSL socket for client %s",
-                    state->address_.toString().c_str());
-    return false;
-  }
-
-  SSL* ssl = ctx->createSSL();
-  if (!ssl) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    2,
-                    "Null SSL* returned, can't create SSL socket for client %s",
-                    state->address_.toString().c_str());
-    return false;
-  }
-
-  struct bufferevent* bev = nullptr;
-  // wrap original bufferevent in a bufferevent_openssl_filter
-  bev = bufferevent_openssl_filter_new(loop_->getEventBase(),
-                                       state->bev_,
-                                       ssl,
-                                       BUFFEREVENT_SSL_ACCEPTING,
-                                       BEV_OPT_CLOSE_ON_FREE);
-  ld_check(bufferevent_get_openssl_error(bev) == 0);
-#if LIBEVENT_VERSION_NUMBER >= 0x02010100
-  bufferevent_openssl_set_allow_dirty_shutdown(bev, 1);
-#endif
-
-  // replace bufferevent in ConnectionState, set ssl boolean and
-  // set appropriate callbacks
-  state->bev_ = bev;
-  state->type_ = ConnectionType::ENCRYPTED;
-  LD_EV(bufferevent_setcb)
-  (state->bev_,
-   CommandListener::readCallback,
-   CommandListener::writeCallback,
-   CommandListener::eventCallback,
-   state);
-  LD_EV(bufferevent_enable)(state->bev_, EV_READ | EV_WRITE);
-  return true;
 }
 
 }} // namespace facebook::logdevice

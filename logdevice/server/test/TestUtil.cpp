@@ -111,10 +111,10 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
   std::unique_ptr<Listener> command_listener;
   std::unique_ptr<Listener> gossip_listener;
   std::unique_ptr<Listener> ssl_connection_listener;
-  std::unique_ptr<EventLoop> connection_listener_loop;
-  std::unique_ptr<EventLoop> command_listener_loop;
-  std::unique_ptr<EventLoop> gossip_listener_loop;
-  std::unique_ptr<EventLoop> ssl_connection_listener_loop;
+  std::unique_ptr<folly::EventBaseThread> connection_listener_loop;
+  std::unique_ptr<folly::EventBaseThread> command_listener_loop;
+  std::unique_ptr<folly::EventBaseThread> gossip_listener_loop;
+  std::unique_ptr<folly::EventBaseThread> ssl_connection_listener_loop;
   std::unique_ptr<LogStoreMonitor> logstore_monitor;
   std::unique_ptr<ShardedStorageThreadPool> storage_thread_pool;
   std::unique_ptr<ShardedRocksDBLocalLogStore> sharded_store;

@@ -10,6 +10,8 @@
 #include <atomic>
 #include <memory>
 
+#include <folly/io/async/EventBaseThread.h>
+
 #include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/PermissionChecker.h"
@@ -271,10 +273,10 @@ class Server {
   std::shared_ptr<SettingsUpdater> settings_updater_;
 
   // initListeners()
-  std::unique_ptr<EventLoop> connection_listener_loop_;
-  std::unique_ptr<EventLoop> ssl_connection_listener_loop_;
-  std::unique_ptr<EventLoop> command_listener_loop_;
-  std::unique_ptr<EventLoop> gossip_listener_loop_;
+  std::unique_ptr<folly::EventBaseThread> connection_listener_loop_;
+  std::unique_ptr<folly::EventBaseThread> ssl_connection_listener_loop_;
+  std::unique_ptr<folly::EventBaseThread> command_listener_loop_;
+  std::unique_ptr<folly::EventBaseThread> gossip_listener_loop_;
   std::unique_ptr<AdminServer> admin_server_handle_;
   std::unique_ptr<Listener> connection_listener_;
   std::unique_ptr<Listener> ssl_connection_listener_;
