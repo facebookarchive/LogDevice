@@ -216,10 +216,7 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
 
   size_t payload_size = reader.bytesRemaining();
   ld_check(payload_size < Message::MAX_LEN);
-  PayloadHolder ph = PayloadHolder::deserialize(
-      reader,
-      payload_size,
-      /*zero_copy*/ payload_size > max_payload_inline);
+  PayloadHolder ph = PayloadHolder::deserialize(reader, payload_size);
 
   return reader.result([&] {
     return new APPEND_Message(header,

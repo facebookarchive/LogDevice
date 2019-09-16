@@ -228,6 +228,20 @@ void ProtocolReader::readEvbuffer(evbuffer* out, size_t to_read) {
   }
 }
 
+std::unique_ptr<folly::IOBuf> ProtocolReader::readIntoIOBuf(size_t to_read) {
+  auto iobuf = folly::IOBuf::create(to_read);
+  if (ok() && isProtoVersionAllowed()) {
+    readImplCb(to_read, [&] {
+      auto nread = src_->read((void*)iobuf->writableData(), to_read, nread_);
+      if (nread == to_read) {
+        iobuf->append(to_read);
+      }
+      return nread;
+    });
+  }
+  return iobuf;
+}
+
 void ProtocolReader::checkReadableBytes(size_t bytes_to_read) {
   if (bytes_to_read > src_left_) {
     ld_error(

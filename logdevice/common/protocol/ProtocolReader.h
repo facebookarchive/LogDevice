@@ -11,6 +11,8 @@
 #include <type_traits>
 #include <vector>
 
+#include <folly/io/IOBuf.h>
+
 #include "logdevice/common/SerializableData.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/Message.h"
@@ -175,6 +177,7 @@ class ProtocolReader {
    * Wraps evbuffer_remove_buffer() from libevent.
    */
   void readEvbuffer(evbuffer* out, size_t to_read);
+  std::unique_ptr<folly::IOBuf> readIntoIOBuf(size_t to_read);
 
   uint64_t computeChecksum(size_t msglen) {
     return src_ ? src_->computeChecksum(msglen) : 0;

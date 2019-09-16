@@ -16,7 +16,7 @@ TailRecord::TailRecord(const TailRecordHeader& header_in,
       offsets_map_(std::move(offset_map)),
       payload_(hasPayload() ? std::move(payload) : nullptr) {
   // should be a flat payload for this constructor
-  ld_check(payload == nullptr || !payload->isEvbuffer());
+  ld_check(payload == nullptr || !payload->isIOBuffer());
 }
 
 TailRecord::TailRecord(TailRecord&& rhs) noexcept
@@ -140,7 +140,7 @@ void TailRecord::deserialize(ProtocolReader& reader,
         evbuffer_zero_copy = false;
       }
       payload_ = std::make_shared<PayloadHolder>(
-          PayloadHolder::deserialize(reader, payload_size, evbuffer_zero_copy));
+          PayloadHolder::deserialize(reader, payload_size));
       if (payload_ && evbuffer_zero_copy) {
         // linearize the payload
         auto ph_raw = payload_->getPayload();

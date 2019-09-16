@@ -271,10 +271,7 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
   }
 
   const size_t payload_size = reader.bytesRemaining();
-  auto payload = PayloadHolder::deserialize(
-      reader,
-      payload_size,
-      /*zero_copy*/ payload_size > max_payload_inline);
+  auto payload = PayloadHolder::deserialize(reader, payload_size);
 
   auto payload_holder = std::make_shared<PayloadHolder>(std::move(payload));
 

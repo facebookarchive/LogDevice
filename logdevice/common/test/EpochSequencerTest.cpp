@@ -506,11 +506,8 @@ constexpr epoch_t EpochSequencerTest::EPOCH;
 
 PayloadHolder EpochSequencerTest::genPayload(bool evbuffer) {
   if (evbuffer) {
-    struct evbuffer* evbuf = LD_EV(evbuffer_new)();
-    ProtocolWriter writer(MessageType::APPEND, evbuf, 0);
     std::string raw(payload_size_, 'c');
-    writer.write(raw.data(), raw.size());
-    return PayloadHolder(evbuf);
+    return PayloadHolder(folly::IOBuf::copyBuffer(raw));
   }
 
   void* payload_flat = malloc(payload_size_);

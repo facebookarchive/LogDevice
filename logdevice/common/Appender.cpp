@@ -839,7 +839,7 @@ void Appender::prepareTailRecord(bool include_payload) {
   }
 
   // tail optimized logs, include payload in the tail record
-  if (payload_->isEvbuffer()) {
+  if (payload_->isIOBuffer()) {
     // payload is evbuffer backed,
     // 1) linearize the evbuffer if not already done
     auto ph_raw = payload_->getPayload();

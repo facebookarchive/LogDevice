@@ -63,7 +63,6 @@ EventLoop::EventLoop(
         requests_per_iteration)
     : thread_type_(thread_type),
       thread_name_(thread_name),
-      disposer_(this),
       priority_queues_enabled_(enable_priority_queues) {
   Semaphore initialized;
   Status init_result{Status::INTERNAL};
@@ -180,7 +179,4 @@ void EventLoop::run() {
   // the thread on which this EventLoop ran terminates here
 }
 
-void EventLoop::dispose(ZeroCopyPayload* payload) {
-  disposer_.dispose(payload);
-}
 }} // namespace facebook::logdevice
