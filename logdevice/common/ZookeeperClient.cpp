@@ -411,7 +411,7 @@ void ZookeeperClient::create(std::string path,
                        path.data(),
                        /* value = */ data.data(),
                        /* valuelen = */ data.size(),
-                       std::addressof(p->c_acl_vector_),
+                       std::addressof(context->c_acl_vector_),
                        flags,
                        &ZookeeperClient::createCompletion,
                        static_cast<const void*>(context));
