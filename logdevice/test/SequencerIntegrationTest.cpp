@@ -432,8 +432,8 @@ TEST_F(SequencerIntegrationTest, WinSizeChangeDelayTest) {
 // nodes changes.
 TEST_F(SequencerIntegrationTest, StorageStateChangeDelayTest) {
   Configuration::Nodes nodes;
-  size_t num_nodes = 7;
-  // 2 sequencer nodes and 5 storage nodes
+  size_t num_nodes = 9;
+  // 2 sequencer nodes and 7 storage nodes
   for (int i = 0; i < num_nodes; ++i) {
     auto& node = nodes[i];
     node.generation = 1;
@@ -512,7 +512,7 @@ TEST_F(SequencerIntegrationTest, StorageStateChangeDelayTest) {
   // nodeset for the written log.
   std::unordered_map<node_index_t, size_t> stores;
   node_index_t to_disable = 1;
-  for (node_index_t n = 2; n <= 6; ++n) {
+  for (node_index_t n = 2; n < num_nodes; ++n) {
     stores[n] = cluster->getNode(n).stats()["message_received.STORE"];
     if (stores[n] > stores[to_disable]) {
       to_disable = n;
