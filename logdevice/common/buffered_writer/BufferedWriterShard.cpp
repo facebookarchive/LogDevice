@@ -9,6 +9,7 @@
 
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
@@ -31,6 +32,7 @@ void BufferedWriterShard::append(AppendChunk chunk, bool atomic) {
       cb->onFailureInternal(
           append.log_id, std::move(appends), E::SHUTDOWN, NodeID());
     }
+    WORKER_STAT_ADD(buffered_append_failed_shutdown, chunk.size());
     parent_->releaseMemory(payload_bytes);
 
     RATELIMIT_ERROR(

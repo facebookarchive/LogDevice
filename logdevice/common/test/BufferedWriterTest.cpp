@@ -302,14 +302,29 @@ class BufferedWriterTest : public ::testing::Test {
   }
 
   void TearDown() override {
-    // Check for links in memory accounting.
-    EXPECT_EQ(0, stats_.aggregate().buffered_writer_bytes_in_flight);
+    Stats stats = stats_.aggregate();
+    // Check that buffered_appends stat is working at all. This assumes that
+    // each test case makes at least one call to append()/appendAtomic().
+    EXPECT_GT(stats.buffered_appends, 0);
+    // Check for leaks in memory accounting.
+    EXPECT_EQ(0, stats.buffered_writer_bytes_in_flight);
+    // Check that each append is counted exactly once by the success and error
+    // stats.
+    EXPECT_EQ(stats.buffered_appends,
+              stats.buffered_append_success +
+                  stats.buffered_append_failed_post_request +
+                  stats.buffered_append_failed_memory_limit +
+                  stats.buffered_append_failed_invalid_param +
+                  stats.buffered_append_failed_dropped_behind_failed_batch +
+                  stats.buffered_append_failed_actual_append +
+                  stats.buffered_append_failed_shutdown +
+                  stats.buffered_append_failed_other);
   }
 
   // This can be called again by tests to supply settings
   void initProcessor(Settings settings) {
     sink_.reset();
-    processor_ = make_test_processor(settings);
+    processor_ = make_test_processor(settings, /* config */ nullptr, &stats_);
     sink_ = std::make_unique<TestAppendSink>(processor_.get());
   }
 

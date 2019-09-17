@@ -351,18 +351,23 @@ int BufferedWriterImpl::append(logid_t log_id,
                                std::string&& payload,
                                AppendCallback::Context cb_context,
                                AppendAttributes&& attrs) {
+  STAT_INCR(stats_, buffered_appends);
+
   if (shutting_down_.load()) {
     err = E::SHUTDOWN;
+    STAT_INCR(stats_, buffered_append_failed_shutdown);
     return -1;
   }
 
   if (!append_sink_->checkAppend(log_id, payload.size(), false)) {
+    STAT_INCR(stats_, buffered_append_failed_invalid_param);
     return -1;
   }
 
   Status shard_status = append_sink_->canSendToWorker();
   if (shard_status != E::OK) {
     err = shard_status;
+    STAT_INCR(stats_, buffered_append_failed_other);
     return -1;
   }
 
@@ -371,6 +376,7 @@ int BufferedWriterImpl::append(logid_t log_id,
   if (acquireMemory(payload_size) != 0) {
     log_memory_limit_exceeded(memory_limit_bytes_);
     err = E::NOBUFS;
+    STAT_INCR(stats_, buffered_append_failed_memory_limit);
     return -1;
   }
 
@@ -402,12 +408,14 @@ int BufferedWriterImpl::append(logid_t log_id,
     ld_check(chunk.size() == 1);
     payload = std::move(chunk.front().payload);
     attrs = std::move(chunk.front().attrs);
+    STAT_INCR(stats_, buffered_append_failed_post_request);
   }
   return rv;
 }
 
 std::vector<Status>
 BufferedWriterImpl::append(std::vector<Append>&& input_appends) {
+  STAT_ADD(stats_, buffered_appends, input_appends.size());
   return appendImpl(std::move(input_appends), /* atomic */ false);
 }
 
@@ -417,8 +425,11 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
     return 0;
   }
 
+  STAT_ADD(stats_, buffered_appends, input_appends.size());
+
   if (shutting_down_.load()) {
     err = E::SHUTDOWN;
+    STAT_ADD(stats_, buffered_append_failed_shutdown, input_appends.size());
     return -1;
   }
 
@@ -431,11 +442,15 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
               log_id.val_,
               append.log_id.val_);
       err = E::INVALID_PARAM;
+      STAT_ADD(
+          stats_, buffered_append_failed_invalid_param, input_appends.size());
       return -1;
     }
 
     if (!append_sink_->checkAppend(log_id, append.payload.size(), false)) {
       err = E::TOOBIG;
+      STAT_ADD(
+          stats_, buffered_append_failed_invalid_param, input_appends.size());
       return -1;
     }
   }
@@ -443,6 +458,7 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
   auto shard_status = append_sink_->canSendToWorker();
   if (shard_status != Status::OK) {
     err = shard_status;
+    STAT_ADD(stats_, buffered_append_failed_other, input_appends.size());
     return -1;
   }
 
@@ -450,6 +466,7 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
   if (acquireMemory(payload_bytes) != 0) {
     log_memory_limit_exceeded(memory_limit_bytes_);
     err = E::NOBUFS;
+    STAT_ADD(stats_, buffered_append_failed_memory_limit, input_appends.size());
     return -1;
   }
 
@@ -475,6 +492,7 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
     BufferedAppendRequest* rawreq =
         static_cast<BufferedAppendRequest*>(req.get());
     chunks = rawreq->releaseChunk();
+    STAT_ADD(stats_, buffered_append_failed_post_request, input_appends.size());
     // err set by postRequest
     return -1;
   }
@@ -494,6 +512,7 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
   // NOTE: this is O(shards_.size() + input_appends.size()).
 
   if (shutting_down_.load()) {
+    STAT_ADD(stats_, buffered_append_failed_shutdown, input_appends.size());
     return std::vector<Status>(input_appends.size(), E::SHUTDOWN);
   }
 
@@ -509,6 +528,7 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
     if (!append_sink_->checkAppend(log_id, append.payload.size(), false)) {
       shard_idxs.push_back(-1);
       result[i] = E::TOOBIG;
+      STAT_INCR(stats_, buffered_append_failed_invalid_param);
       continue;
     }
     int shard_idx = mapLogToShardIndex(log_id);
@@ -520,6 +540,7 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
     if (shard_status[shard_idx].value() != E::OK) {
       shard_idxs.push_back(-1);
       result[i] = shard_status[shard_idx].value();
+      STAT_INCR(stats_, buffered_append_failed_other);
       continue;
     }
     shard_append_sizes[shard_idx] += append.payload.size();
@@ -531,7 +552,9 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
 
   std::vector<Status> chunk_status(shards_.size());
   for (size_t i = 0; i < shards_.size(); ++i) {
-    if (chunks[i].empty()) {
+    size_t num_appends_in_chunk = chunks.at(i).size();
+
+    if (num_appends_in_chunk == 0) {
       chunk_status[i] = E::OK;
       continue;
     }
@@ -541,6 +564,8 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
     if (acquireMemory(shard_bytes) != 0) {
       log_memory_limit_exceeded(memory_limit_bytes_);
       chunk_status[i] = E::NOBUFS;
+      STAT_ADD(
+          stats_, buffered_append_failed_memory_limit, num_appends_in_chunk);
       continue;
     }
 
@@ -562,6 +587,8 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
       chunks[i] = rawreq->releaseChunk();
       // Rewinding the counters.
       append_sink_->onBytesSentToWorker(-shard_bytes);
+      STAT_ADD(
+          stats_, buffered_append_failed_post_request, num_appends_in_chunk);
       releaseMemory(shard_bytes);
     }
   }
