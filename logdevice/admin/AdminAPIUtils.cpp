@@ -472,4 +472,12 @@ thrift::NodeID mkNodeID(node_index_t node_id) {
   return new_node;
 }
 
+thrift::ShardSet mkShardSet(const ShardSet& shards) {
+  thrift::ShardSet set;
+  for (const auto& shard : shards) {
+    set.push_back(mkShardID(shard));
+  }
+  return set;
+}
+
 }} // namespace facebook::logdevice

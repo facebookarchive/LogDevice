@@ -16,6 +16,7 @@
 #include "logdevice/admin/if/gen-cpp2/cluster_membership_constants.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
+#include "logdevice/common/membership/gen-cpp2/Membership_types.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
@@ -390,4 +391,84 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
                 exception.error_code_ref().value_unchecked());
     }
   }
+}
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  {
+    // Add two nodes with 2 shards each. They will get added as PROVISIONING.
+    thrift::AddNodesResponse resp;
+    admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
+    ASSERT_EQ(2, resp.added_nodes.size());
+
+    wait_until("AdminServer's NC picks the additions", [&]() {
+      thrift::NodesConfigResponse nc;
+      admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
+      return nc.version >= resp.new_nodes_configuration_version;
+    });
+  }
+
+  // Mark all N100 shards, and only N101:S0 as provisioned
+  thrift::MarkShardsAsProvisionedRequest req;
+  req.set_shards({mkShardID(100, -1), mkShardID(101, 0)});
+
+  thrift::MarkShardsAsProvisionedResponse resp;
+
+  /* Retry as long as it's a VERSION_MISMATCH */
+  bool failed = false;
+  for (size_t trials = 0; trials < 10; trials++) {
+    failed = false;
+    try {
+      admin_client->sync_markShardsAsProvisioned(resp, req);
+      break;
+    } catch (const thrift::NodesConfigurationManagerError& ex) {
+      ASSERT_EQ(static_cast<int32_t>(E::VERSION_MISMATCH),
+                ex.error_code_ref().value_unchecked());
+      failed = true;
+    }
+  }
+
+  ASSERT_FALSE(failed);
+  EXPECT_THAT(resp.get_updated_shards(),
+              UnorderedElementsAre(
+                  mkShardID(100, 0), mkShardID(100, 1), mkShardID(101, 0)));
+
+  wait_until("AdminServer's NC picks the updates", [&]() {
+    thrift::NodesConfigResponse nc;
+    admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
+    return nc.version >= resp.new_nodes_configuration_version;
+  });
+
+  auto get_shard_state = [&](const thrift::NodesState& state,
+                             thrift::ShardID shard) {
+    for (const auto& node : state) {
+      if (node.get_node_index() == *shard.get_node().node_index_ref()) {
+        return node.shard_states_ref()
+            ->at(shard.get_shard_index())
+            .get_storage_state();
+      }
+    }
+    return membership::thrift::StorageState::INVALID;
+  };
+
+  thrift::NodesStateRequest state_req;
+  state_req.set_filter(thrift::NodesFilter{});
+
+  thrift::NodesStateResponse nc;
+  admin_client->sync_getNodesState(nc, state_req);
+
+  // MM could have already started enabling the shards after getting out of the
+  // PROVISIONING state. So it's just enough to check that they are not in
+  // PROVISIONING anymore.
+  EXPECT_NE(membership::thrift::StorageState::PROVISIONING,
+            get_shard_state(nc.get_states(), mkShardID(100, 0)));
+  EXPECT_NE(membership::thrift::StorageState::PROVISIONING,
+            get_shard_state(nc.get_states(), mkShardID(100, 1)));
+  EXPECT_NE(membership::thrift::StorageState::PROVISIONING,
+            get_shard_state(nc.get_states(), mkShardID(101, 0)));
+  EXPECT_EQ(membership::thrift::StorageState::PROVISIONING,
+            get_shard_state(nc.get_states(), mkShardID(101, 1)));
 }

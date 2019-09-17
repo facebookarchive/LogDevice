@@ -127,5 +127,6 @@ bool isInNodeIDs(node_index_t node_id,
 thrift::ShardID mkShardID(node_index_t node_id, shard_index_t shard);
 thrift::ShardID mkShardID(const ShardID& shard);
 thrift::NodeID mkNodeID(node_index_t node_id);
+thrift::ShardSet mkShardSet(const ShardSet& shards);
 
 }} // namespace facebook::logdevice

@@ -11,6 +11,7 @@
 #include "logdevice/admin/AdminAPIHandlerBase.h"
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/cluster_membership/AddNodesHandler.h"
+#include "logdevice/admin/cluster_membership/MarkShardsAsProvisionedHandler.h"
 #include "logdevice/admin/cluster_membership/RemoveNodesHandler.h"
 #include "logdevice/admin/cluster_membership/UpdateNodesHandler.h"
 #include "logdevice/common/Processor.h"
@@ -90,6 +91,8 @@ ClusterMembershipAPIHandler::semifuture_addNodes(
               thrift::NodeConfig node_cfg;
               fillNodeConfig(node_cfg, added, *new_cfg);
               resp->added_nodes.push_back(std::move(node_cfg));
+              resp->set_new_nodes_configuration_version(
+                  new_cfg->getVersion().val());
             }
             return std::move(resp);
           });
@@ -125,9 +128,36 @@ ClusterMembershipAPIHandler::semifuture_updateNodes(
               thrift::NodeConfig node_cfg;
               fillNodeConfig(node_cfg, updated, *new_cfg);
               resp->updated_nodes.push_back(std::move(node_cfg));
+              resp->set_new_nodes_configuration_version(
+                  new_cfg->getVersion().val());
             }
             return std::move(resp);
           });
+}
+
+folly::SemiFuture<std::unique_ptr<thrift::MarkShardsAsProvisionedResponse>>
+ClusterMembershipAPIHandler::semifuture_markShardsAsProvisioned(
+    std::unique_ptr<thrift::MarkShardsAsProvisionedRequest> req) {
+  if (auto failed = failIfMMDisabled(); failed) {
+    return *failed;
+  }
+  auto nodes_configuration = processor_->getNodesConfiguration();
+
+  MarkShardsAsProvisionedHandler handler{};
+  auto update_result = handler.buildNodesConfigurationUpdates(
+      req->get_shards(), *nodes_configuration);
+
+  return applyNodesConfigurationUpdates(std::move(update_result.update))
+      .via(this->getThreadManager())
+      .thenValue([shards = std::move(update_result.updated_shards)](
+                     std::shared_ptr<const NodesConfiguration> new_cfg) mutable
+                 -> folly::SemiFuture<
+                     std::unique_ptr<thrift::MarkShardsAsProvisionedResponse>> {
+        auto resp = std::make_unique<thrift::MarkShardsAsProvisionedResponse>();
+        resp->set_updated_shards(mkShardSet(std::move(shards)));
+        resp->set_new_nodes_configuration_version(new_cfg->getVersion().val());
+        return std::move(resp);
+      });
 }
 
 folly::SemiFuture<std::shared_ptr<const NodesConfiguration>>

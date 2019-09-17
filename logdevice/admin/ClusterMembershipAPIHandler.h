@@ -40,6 +40,11 @@ class ClusterMembershipAPIHandler : public virtual AdminAPIHandlerBase {
   semifuture_updateNodes(
       std::unique_ptr<thrift::UpdateNodesRequest> req) override;
 
+  // See admin.thrift for documentation
+  folly::SemiFuture<std::unique_ptr<thrift::MarkShardsAsProvisionedResponse>>
+  semifuture_markShardsAsProvisioned(
+      std::unique_ptr<thrift::MarkShardsAsProvisionedRequest> req) override;
+
  private:
   /**
    * Applies the NodesConfiguration update to the NodesConfigurationManager
