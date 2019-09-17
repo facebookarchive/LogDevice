@@ -380,6 +380,8 @@ enum class DataKeyFormat {
   NEW,
 };
 
+constexpr size_t IOBUF_ALLOCATION_UNIT = 1024;
+
 }} // namespace facebook::logdevice
 
 // Specialization of std::hash for log_rebuilding_id_t

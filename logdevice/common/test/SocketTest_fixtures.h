@@ -217,7 +217,7 @@ class SocketTest : public ::testing::Test {
     std::unique_ptr<Message> msg(raw_msg);
     // Calling msg->serialize() with a null output evbuffer to get the size of
     // the message without the protocol header
-    ProtocolWriter wtmp(msg->type_, nullptr, socket_->proto_);
+    ProtocolWriter wtmp(msg->type_, (folly::IOBuf*)nullptr, socket_->proto_);
     msg->serialize(wtmp);
     auto bodylen = wtmp.result();
     EXPECT_TRUE(bodylen > 0);

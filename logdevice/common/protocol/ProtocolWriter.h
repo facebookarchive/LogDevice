@@ -11,6 +11,8 @@
 #include <type_traits>
 #include <vector>
 
+#include <folly/io/IOBuf.h>
+
 #include "logdevice/common/SerializableData.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/MessageType.h"
@@ -54,14 +56,6 @@ class ProtocolWriter {
     virtual int writeWithoutCopy(const void* src,
                                  size_t nbytes,
                                  size_t nwritten) = 0;
-
-    /**
-     * Write from an evbuffer in @param src into destination.
-     * @return   0 on success, -1 on failure and err will be set. Specifically,
-     *           for destinations that not support evbuffer source, err is set
-     *           to E::NOTSUPPORTED
-     */
-    virtual int writeEvbuffer(evbuffer* src) = 0;
 
     /**
      * @return  a string to identify the buffer destination
@@ -139,14 +133,6 @@ class ProtocolWriter {
     }
     nwritten_ += nbytes;
   }
-
-  /**
-   * Writes data from an evbuffer (for zero-copy writes of larger amounts of
-   * data).
-   *
-   * Wraps evbuffer_add_buffer_reference() from libevent.
-   */
-  void writeEvbuffer(evbuffer* data);
 
   /**
    * Writes data without necessarily copying it.  The Message subclass should
@@ -270,6 +256,9 @@ class ProtocolWriter {
   ProtocolWriter(MessageType type,
                  struct evbuffer* dest, // may be null
                  folly::Optional<uint16_t> proto = folly::none);
+  ProtocolWriter(MessageType tyoe,
+                 folly::IOBuf* iobuf,
+                 folly::Optional<uint16_t> proto);
 
   ProtocolWriter(Slice dest,
                  std::string context,

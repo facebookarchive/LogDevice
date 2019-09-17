@@ -32,5 +32,4 @@ Slice checksum_bytes(Slice blob, int nbits, char* buf_out) {
   }
   return Slice(buf_out, nbits / 8);
 }
-
 }} // namespace facebook::logdevice
