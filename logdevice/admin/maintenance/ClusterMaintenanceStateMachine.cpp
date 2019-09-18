@@ -189,7 +189,10 @@ bool ClusterMaintenanceStateMachine::canSnapshot() const {
 }
 
 bool ClusterMaintenanceStateMachine::shouldTrim() const {
-  return false;
+  // Trim if:
+  // 1. Maintenance log trimming is enabled in the settings;
+  // 2. We are allowed to snapshot.
+  return !settings_->disable_maintenance_log_trimming && canSnapshot();
 }
 
 void ClusterMaintenanceStateMachine::onSnapshotCreated(Status st,
@@ -225,7 +228,7 @@ void ClusterMaintenanceStateMachine::trim() {
 }
 
 void ClusterMaintenanceStateMachine::trimNotSnapshotted(lsn_t lsn) {
-  // This should not be called on a snapshotted event log.
+  // This should not be called on a snapshotted maintenance log.
   ld_check(snapshot_log_id_ == LOGID_INVALID);
 
   if (settings_->disable_maintenance_log_trimming) {

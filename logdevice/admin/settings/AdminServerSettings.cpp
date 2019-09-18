@@ -113,7 +113,7 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
 
     ("maintenance-log-max-delta-bytes",
      &maintenance_log_max_delta_bytes,
-     "10485760",
+     "10485760", // 10MB
      parse_nonnegative<ssize_t>(),
      "How many bytes of deltas to keep in the maintenance log before "
      "we snapshot it.",
@@ -122,7 +122,7 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
 
     ("maintenance-log-retention",
      &maintenance_log_retention,
-     "14d",
+     "0", // do not keep history by default.
      nullptr,
      "How long to keep a history of snapshots and deltas for "
      "the maintenance log. "
