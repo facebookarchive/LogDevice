@@ -130,7 +130,7 @@ class ClientReadersFlowTracer : public SampledTracer {
 
   std::unique_ptr<Timer> timer_;
 
-  const ClientReadStream* owner_;
+  ClientReadStream* const owner_;
   friend class ClientReadStream;
 };
 
