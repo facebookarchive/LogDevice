@@ -21,8 +21,7 @@
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TimeoutMap.h"
-#include "logdevice/common/libevent/EvBase.h"
-#include "logdevice/common/libevent/Event.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 
 namespace facebook { namespace logdevice {
 
@@ -148,9 +147,6 @@ class EventLoop : public folly::Executor {
   // control to libevent
   std::atomic<size_t> event_handlers_completed_{0};
 
-  // Delay in running a default priority event by EventLoo0p
-  std::atomic<uint64_t> delay_us_{0};
-
  protected:
   bool keepAliveAcquire() override {
     num_references_.fetch_add(1, std::memory_order_relaxed);
@@ -183,15 +179,6 @@ class EventLoop : public folly::Executor {
 
   // this is how a thread finds if it's running an EventLoop, and which one
   static thread_local EventLoop* thisThreadLoop_;
-
-  // Constantly repeating event to calculate delay in event loop runs.
-  // Every 1s schedules a zero timeout event and notes delays in
-  // executing this event. This indicates how long it takes to service a active
-  // event on eventloop
-  void delayCheckCallback();
-  std::unique_ptr<Event> scheduled_event_;
-  std::chrono::steady_clock::time_point scheduled_event_start_time_{
-      std::chrono::steady_clock::time_point::min()};
 
   // Counter to keep track of number of work contexts that depend on the
   // eventloop.

@@ -16,8 +16,7 @@
 #include <folly/io/async/Request.h>
 
 #include "logdevice/common/LifoEventSem.h"
-#include "logdevice/common/libevent/EvBase.h"
-#include "logdevice/common/libevent/Event.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 
 namespace facebook { namespace logdevice {
 using Func = folly::Function<void()>;

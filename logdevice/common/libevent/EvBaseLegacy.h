@@ -16,54 +16,41 @@
 #include <functional>
 #include <memory>
 
+#include "logdevice/common/libevent/IEvBase.h"
+
 struct event_base;
 
 namespace facebook { namespace logdevice {
 
-class EvBase {
+class EvBaseLegacy : public IEvBase {
  public:
-  enum class Status {
-    OK,
-    NOT_INITIALIZED,
-    ALREADY_INITIALIZED,
-    ALREADY_RUNNING,
-    INVALID_PRIORITY,
-    INTERNAL_ERROR,
-    NO_MEM,
-  };
-  enum class Priorities {
-    HIGH,
-    NORMAL,
-    LOW,
-    NUM_PRIORITIES,
-    MAX_PRIORITIES = 256
-  };
-  EvBase() {}
-  EvBase(const EvBase&) = delete;
-  EvBase& operator=(const EvBase&) = delete;
-  virtual ~EvBase() {}
+  EvBaseLegacy() {}
+  EvBaseLegacy(const EvBaseLegacy&) = delete;
+  EvBaseLegacy& operator=(const EvBaseLegacy&) = delete;
+  ~EvBaseLegacy() override {}
 
-  virtual Status
-  init(int num_priorities = static_cast<int>(Priorities::NUM_PRIORITIES));
-  virtual Status free();
+  Status init(int num_priorities =
+                  static_cast<int>(Priorities::NUM_PRIORITIES)) override;
+  Status free() override;
 
-  virtual Status loop();
-  virtual Status loopOnce();
-  virtual Status terminateLoop();
+  Status loop() override;
+  Status loopOnce() override;
+  Status terminateLoop() override;
 
   /**
    * This is a function only used to slowly transition all use cases
    */
-  virtual event_base* getRawBaseDEPRECATED();
+  event_base* getRawBaseDEPRECATED() override;
 
  protected:
   virtual event_base* getRawBase();
-  static EvBase* getRunningBase();
-  static thread_local EvBase* running_base_;
+  static EvBaseLegacy* getRunningBase();
+  static thread_local EvBaseLegacy* running_base_;
   static void deleter(event_base*);
   std::unique_ptr<event_base, std::function<void(event_base*)>> base_{nullptr,
                                                                       deleter};
-  friend class EvTimer;
-  friend class Event;
+  friend class EvTimerLegacy;
+  friend class EventLegacy;
 };
+
 }} // namespace facebook::logdevice

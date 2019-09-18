@@ -9,7 +9,7 @@
 
 #include <gmock/gmock.h>
 
-#include "logdevice/common/libevent/EvBase.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 
 namespace facebook { namespace logdevice {
 

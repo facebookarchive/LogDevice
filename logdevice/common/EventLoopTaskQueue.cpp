@@ -31,25 +31,16 @@ EventLoopTaskQueue::EventLoopTaskQueue(
   setDequeuesPerIteration(dequeues_per_iteration);
 
   sem_waiter_ = sem_.beginAsyncWait();
-  tasks_pending_event_ =
-      std::make_unique<Event>([this]() { haveTasksEventHandler(); },
-                              Event::Events::READ_PERSIST,
-                              sem_waiter_->fd(),
-                              &base);
-
-  if (!tasks_pending_event_) { // unlikely
+  try {
+    tasks_pending_event_ =
+        std::make_unique<Event>([this]() { haveTasksEventHandler(); },
+                                Event::Events::READ_PERSIST,
+                                sem_waiter_->fd(),
+                                &base);
+  } catch (const std::exception& e) {
     ld_error("Failed to create 'task pipe is readable' event for "
-             "an event loop");
-    err = E::NOMEM;
-    throw ConstructorFailed();
-  }
-
-  int rv =
-      LD_EV(event_add)(tasks_pending_event_->getRawEventDeprecated(), nullptr);
-  if (rv != 0) { // unlikely
-    ld_error("Failed to add 'task pipe is readable' event to event base");
-    ld_check(false);
-    tasks_pending_event_.reset();
+             "an event loop: %s",
+             e.what());
     err = E::INTERNAL;
     throw ConstructorFailed();
   }

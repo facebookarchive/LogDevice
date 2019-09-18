@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/TimeoutMap.h"
 
+#include "logdevice/common/libevent/LibEventCompatibility.h"
+
 namespace facebook { namespace logdevice {
 
 TimeoutMap::TimeoutMap(uint32_t max_size) : max_size_(max_size) {}

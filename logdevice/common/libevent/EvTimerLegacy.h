@@ -11,7 +11,7 @@
 
 struct timeval;
 namespace facebook { namespace logdevice {
-class EvTimer {
+class EvTimerLegacy {
  public:
   static const timeval* getCommonTimeout(std::chrono::microseconds timeout);
 };

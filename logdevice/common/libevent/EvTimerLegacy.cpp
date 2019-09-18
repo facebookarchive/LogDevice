@@ -6,19 +6,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/libevent/EvTimer.h"
+#include "logdevice/common/libevent/EvTimerLegacy.h"
 
 #include <event2/event.h>
 #include <folly/CppAttributes.h>
 
-#include "logdevice/common/libevent/EvBase.h"
+#include "logdevice/common/libevent/EvBaseLegacy.h"
 #include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {
 
 const timeval* FOLLY_NULLABLE
-EvTimer::getCommonTimeout(std::chrono::microseconds timeout) {
-  auto base = EvBase::getRunningBase();
+EvTimerLegacy::getCommonTimeout(std::chrono::microseconds timeout) {
+  auto base = EvBaseLegacy::getRunningBase();
   if (!base) {
     return nullptr;
   }

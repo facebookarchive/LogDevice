@@ -7,7 +7,7 @@
  */
 #pragma once
 #include "logdevice/common/EventLoopTaskQueue.h"
-#include "logdevice/common/libevent/EvBase.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 
 namespace facebook { namespace logdevice {
 

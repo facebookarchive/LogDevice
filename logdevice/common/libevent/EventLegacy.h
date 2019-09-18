@@ -11,11 +11,12 @@
 
 #include <folly/Function.h>
 
-#include "logdevice/common/libevent/EvBase.h"
+#include "logdevice/common/libevent/EvBaseLegacy.h"
 
 struct event;
 namespace facebook { namespace logdevice {
-class Event {
+
+class EventLegacy {
  public:
   using Callback = folly::Function<void()>;
   enum Events {
@@ -24,13 +25,12 @@ class Event {
     PERSIST = 0x10,
     READ_PERSIST = READ | PERSIST
   };
-  explicit Event(Callback callback,
-                 Events events = Events::USER_ACTIVATED,
-                 int fd = -1,
-                 EvBase* base = EvBase::getRunningBase());
+  explicit EventLegacy(Callback callback,
+                       Events events = Events::USER_ACTIVATED,
+                       int fd = -1,
+                       EvBaseLegacy* base = EvBaseLegacy::getRunningBase());
   operator bool() const;
-  event* getRawEventDeprecated();
-  ~Event();
+  ~EventLegacy();
 
  private:
   static void evCallback(int fd, short what, void* arg);
@@ -39,4 +39,5 @@ class Event {
   Callback callback_;
   int fd_;
 };
+
 }} // namespace facebook::logdevice

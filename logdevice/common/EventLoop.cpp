@@ -110,25 +110,6 @@ void EventLoop::addWithPriority(folly::Function<void()> func, int8_t priority) {
       priority_queues_enabled_ ? priority : folly::Executor::HI_PRI);
 }
 
-void EventLoop::delayCheckCallback() {
-  using namespace std::chrono;
-  using namespace std::chrono_literals;
-  auto now = steady_clock::now();
-  if (scheduled_event_start_time_ != steady_clock::time_point::min()) {
-    evtimer_add(
-        scheduled_event_->getRawEventDeprecated(), getCommonTimeout(1s));
-    if (now > scheduled_event_start_time_) {
-      auto diff = now - scheduled_event_start_time_;
-      uint64_t cur_delay = duration_cast<microseconds>(diff).count();
-      delay_us_.fetch_add(cur_delay, std::memory_order_relaxed);
-    }
-    scheduled_event_start_time_ = steady_clock::time_point::min();
-  } else {
-    evtimer_add(scheduled_event_->getRawEventDeprecated(), getZeroTimeout());
-    scheduled_event_start_time_ = now;
-  }
-}
-
 Status EventLoop::init(
     size_t request_pump_capacity,
     const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
@@ -145,37 +126,17 @@ Status EventLoop::init(
       *base_, request_pump_capacity, requests_per_iteration);
   task_queue_->setCloseEventLoopOnShutdown();
 
-  // This is the first task on event loop, so we are setting thisThreadLoop_
-  // here.
-  task_queue_->add([this]() {
-    EventLoop::thisThreadLoop_ = this; // save in a thread-local
-
-    scheduled_event_ =
-        std::make_unique<Event>([this]() { delayCheckCallback(); });
-    if (!scheduled_event_) {
-      return;
-    }
-
-    // Initiate runs to detect eventloop delays.
-    using namespace std::chrono_literals;
-    evtimer_add(
-        scheduled_event_->getRawEventDeprecated(), getCommonTimeout(1s));
-  });
-  base_->loopOnce();
-  if (!scheduled_event_) {
-    return Status::INTERNAL;
-  }
   return Status::OK;
 }
 
 void EventLoop::run() {
+  EventLoop::thisThreadLoop_ = this; // save in a thread-local
   // this runs until we get destroyed or shutdown is called on
   // EventLoopTaskQueue
   auto status = base_->loop();
   if (status != EvBase::Status::OK) {
     ld_error("EvBase::loop() exited abnormally");
   }
-  scheduled_event_.reset();
   // the thread on which this EventLoop ran terminates here
 }
 
