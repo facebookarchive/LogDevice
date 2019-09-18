@@ -82,7 +82,8 @@ class LogsConfigManager {
     // is enabled we can't enable logsconfig manager.
     if (!settings.server &&
         (settings.on_demand_logs_config ||
-         settings.force_on_demand_logs_config)) {
+         settings.force_on_demand_logs_config ||
+         settings.internal_logs_only_client)) {
       return false;
     }
     return settings.enable_logsconfig_manager;

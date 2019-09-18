@@ -1169,6 +1169,10 @@ struct Settings : public SettingsBundle {
   // Defaults to false, should only be set by traffic shadowing framework
   bool shadow_client;
 
+  // if true, LCM won't be loaded and only internal logs will be present in
+  // the logs config. Only effective on clients. Used by internal tools.
+  bool internal_logs_only_client;
+
   // enable NodesConfigurationManager on clients and servers
   bool enable_nodes_configuration_manager;
 

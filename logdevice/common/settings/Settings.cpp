@@ -2683,6 +2683,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "that may not be necessary for shadow clients.",
        CLIENT | INTERNAL_ONLY);
 
+  init("internal-logs-only-client",
+       &internal_logs_only_client,
+       "false",
+       nullptr, // no validation
+       "if true, LCM won't be loaded and only internal logs will be present in "
+       "the logs config. Only effective on clients. Used by internal tools",
+       CLIENT | INTERNAL_ONLY);
+
   init("real-time-reads-enabled",
        &real_time_reads_enabled,
        "false", // default
