@@ -61,15 +61,19 @@ TEST_F(ShardWorkflowTest, SimpleDrain) {
   wf->shouldSkipSafetyCheck(false);
   membership::ShardState shard_state;
   shard_state.storage_state = membership::StorageState::READ_WRITE;
-  auto result =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  auto result = wf->run(shard_state,
+                        ShardDataHealth::HEALTHY,
+                        RebuildingMode::INVALID,
+                        ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(result).get(), MaintenanceStatus::AWAITING_SAFETY_CHECK);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
             membership::StorageStateTransition::DISABLING_WRITE);
 
   shard_state.storage_state = membership::StorageState::READ_ONLY;
-  result =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  result = wf->run(shard_state,
+                   ShardDataHealth::HEALTHY,
+                   RebuildingMode::INVALID,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(result).get(),
             MaintenanceStatus::AWAITING_START_DATA_MIGRATION);
   ASSERT_NE(event, nullptr);
@@ -84,8 +88,10 @@ TEST_F(ShardWorkflowTest, SimpleDrain) {
             (static_cast<SHARD_NEEDS_REBUILD_Event*>(event.get()))->getType());
   event = nullptr;
 
-  result =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::RELOCATE);
+  result = wf->run(shard_state,
+                   ShardDataHealth::HEALTHY,
+                   RebuildingMode::RELOCATE,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(result).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
@@ -93,17 +99,26 @@ TEST_F(ShardWorkflowTest, SimpleDrain) {
   ASSERT_EQ(event, nullptr);
 
   shard_state.storage_state = membership::StorageState::DATA_MIGRATION;
-  result =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::RELOCATE);
+  result = wf->run(shard_state,
+                   ShardDataHealth::HEALTHY,
+                   RebuildingMode::RELOCATE,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(
       std::move(result).get(), MaintenanceStatus::AWAITING_DATA_REBUILDING);
   ASSERT_EQ(event, nullptr);
 
   folly::SemiFuture<MaintenanceStatus> f3 =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::RELOCATE);
+      wf->run(shard_state,
+              ShardDataHealth::HEALTHY,
+              RebuildingMode::RELOCATE,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(f3).get(), MaintenanceStatus::AWAITING_DATA_REBUILDING);
   folly::SemiFuture<MaintenanceStatus> f4 =
-      wf->run(shard_state, ShardDataHealth::EMPTY, RebuildingMode::RELOCATE);
+      wf->run(shard_state,
+              ShardDataHealth::EMPTY,
+              RebuildingMode::RELOCATE,
+              // DEAD should not prevent the maintenance from moving forward.
+              ClusterStateNodeState::DEAD);
   ASSERT_EQ(
       std::move(f4).get(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
@@ -111,7 +126,10 @@ TEST_F(ShardWorkflowTest, SimpleDrain) {
 
   shard_state.storage_state = membership::StorageState::NONE;
   folly::SemiFuture<MaintenanceStatus> f5 =
-      wf->run(shard_state, ShardDataHealth::EMPTY, RebuildingMode::RELOCATE);
+      wf->run(shard_state,
+              ShardDataHealth::EMPTY,
+              RebuildingMode::RELOCATE,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(f5).get(), MaintenanceStatus::COMPLETED);
 }
 
@@ -121,15 +139,20 @@ TEST_F(ShardWorkflowTest, SimpleMayDisappear) {
   wf->shouldSkipSafetyCheck(false);
   membership::ShardState shard_state;
   shard_state.storage_state = membership::StorageState::READ_WRITE;
-  auto f =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  auto f = wf->run(shard_state,
+                   ShardDataHealth::HEALTHY,
+                   RebuildingMode::INVALID,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_SAFETY_CHECK);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
             membership::StorageStateTransition::DISABLING_WRITE);
 
   shard_state.storage_state = membership::StorageState::READ_ONLY;
-  f = wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  f = wf->run(shard_state,
+              ShardDataHealth::HEALTHY,
+              RebuildingMode::INVALID,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::COMPLETED);
   ASSERT_EQ(event, nullptr);
@@ -140,27 +163,58 @@ TEST_F(ShardWorkflowTest, SimpleEnable) {
   wf->addTargetOpState({ShardOperationalState::ENABLED});
   membership::ShardState shard_state;
   shard_state.storage_state = membership::StorageState::PROVISIONING;
-  auto f =
-      wf->run(shard_state, ShardDataHealth::EMPTY, RebuildingMode::RESTORE);
+  auto f = wf->run(shard_state,
+                   ShardDataHealth::EMPTY,
+                   // As long as the node is not FULLY_STARTED we should be
+                   // waiting for the node to come alive.
+                   RebuildingMode::RESTORE,
+                   ClusterStateNodeState::DEAD);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE);
+
+  f = wf->run(shard_state,
+              ShardDataHealth::EMPTY,
+              RebuildingMode::RESTORE,
+              // STARTING should be enough to do progress.
+              ClusterStateNodeState::STARTING);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODE_PROVISIONING);
 
   shard_state.storage_state = membership::StorageState::NONE;
-  f = wf->run(shard_state, ShardDataHealth::EMPTY, RebuildingMode::RESTORE);
+  // The node is DEAD, we should wait until the node is alive, this test is to
+  // ensure that we will do the same in the different stages of the workflow.
+  f = wf->run(shard_state,
+              ShardDataHealth::EMPTY,
+              RebuildingMode::RESTORE,
+              ClusterStateNodeState::DEAD);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE);
+
+  // Now we are fully started, let's continue
+  f = wf->run(shard_state,
+              ShardDataHealth::EMPTY,
+              RebuildingMode::RESTORE,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
             membership::StorageStateTransition::ENABLING_READ);
 
   shard_state.storage_state = membership::StorageState::READ_ONLY;
-  f = wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  f = wf->run(shard_state,
+              ShardDataHealth::HEALTHY,
+              RebuildingMode::INVALID,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
             membership::StorageStateTransition::ENABLE_WRITE);
 
   shard_state.storage_state = membership::StorageState::READ_WRITE;
-  f = wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  f = wf->run(shard_state,
+              ShardDataHealth::HEALTHY,
+              RebuildingMode::INVALID,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::COMPLETED);
 }
@@ -170,8 +224,10 @@ TEST_F(ShardWorkflowTest, SimpleEnableWithMiniRebuilding) {
   wf->addTargetOpState({ShardOperationalState::ENABLED});
   membership::ShardState shard_state;
   shard_state.storage_state = membership::StorageState::READ_ONLY;
-  auto f = wf->run(
-      shard_state, ShardDataHealth::LOST_REGIONS, RebuildingMode::RESTORE);
+  auto f = wf->run(shard_state,
+                   ShardDataHealth::LOST_REGIONS,
+                   RebuildingMode::RESTORE,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(event, nullptr);
@@ -179,8 +235,10 @@ TEST_F(ShardWorkflowTest, SimpleEnableWithMiniRebuilding) {
             membership::StorageStateTransition::ENABLE_WRITE);
 
   shard_state.storage_state = membership::StorageState::READ_WRITE;
-  f = wf->run(
-      shard_state, ShardDataHealth::LOST_REGIONS, RebuildingMode::RESTORE);
+  f = wf->run(shard_state,
+              ShardDataHealth::LOST_REGIONS,
+              RebuildingMode::RESTORE,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::COMPLETED);
 }
@@ -192,16 +250,20 @@ TEST_F(ShardWorkflowTest, NCStuckInTransitionalState) {
   wf->rebuildInRestoreMode(true);
   membership::ShardState shard_state;
   shard_state.storage_state = membership::StorageState::READ_WRITE;
-  auto result =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  auto result = wf->run(shard_state,
+                        ShardDataHealth::HEALTHY,
+                        RebuildingMode::INVALID,
+                        ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(result).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
             membership::StorageStateTransition::DISABLING_WRITE);
 
   shard_state.storage_state = membership::StorageState::RW_TO_RO;
-  result =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  result = wf->run(shard_state,
+                   ShardDataHealth::HEALTHY,
+                   RebuildingMode::INVALID,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(result).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION);
 
@@ -210,8 +272,10 @@ TEST_F(ShardWorkflowTest, NCStuckInTransitionalState) {
 
   // Say it has been stuck for a while
   nc_stuck_ = true;
-  result =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  result = wf->run(shard_state,
+                   ShardDataHealth::HEALTHY,
+                   RebuildingMode::INVALID,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(result).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION);
 
@@ -230,8 +294,10 @@ TEST_F(ShardWorkflowTest, NCStuckInTransitionalState) {
 
   shard_state.storage_state = membership::StorageState::READ_ONLY;
   // Now NC update goes through. We should write a new event to event log
-  result = wf->run(
-      shard_state, ShardDataHealth::UNAVAILABLE, RebuildingMode::RESTORE);
+  result = wf->run(shard_state,
+                   ShardDataHealth::UNAVAILABLE,
+                   RebuildingMode::RESTORE,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(result).get(),
             MaintenanceStatus::AWAITING_START_DATA_MIGRATION);
   // We should have kicked off rebuilding
@@ -244,33 +310,46 @@ TEST_F(ShardWorkflowTest, NCStuckInTransitionalState) {
   event = nullptr;
 
   // Say event log write goes through
-  result = wf->run(
-      shard_state, ShardDataHealth::UNAVAILABLE, RebuildingMode::RESTORE);
+  result = wf->run(shard_state,
+                   ShardDataHealth::UNAVAILABLE,
+                   RebuildingMode::RESTORE,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(result).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
             membership::StorageStateTransition::START_DATA_MIGRATION);
 
   shard_state.storage_state = membership::StorageState::DATA_MIGRATION;
-  result = wf->run(
-      shard_state, ShardDataHealth::UNAVAILABLE, RebuildingMode::RESTORE);
+  result = wf->run(shard_state,
+                   ShardDataHealth::UNAVAILABLE,
+                   RebuildingMode::RESTORE,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(
       std::move(result).get(), MaintenanceStatus::AWAITING_DATA_REBUILDING);
   // No new event will be created, since we are already rebuilding
   ASSERT_EQ(event, nullptr);
 
-  folly::SemiFuture<MaintenanceStatus> f3 = wf->run(
-      shard_state, ShardDataHealth::UNAVAILABLE, RebuildingMode::RESTORE);
+  folly::SemiFuture<MaintenanceStatus> f3 =
+      wf->run(shard_state,
+              ShardDataHealth::UNAVAILABLE,
+              RebuildingMode::RESTORE,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(f3).get(), MaintenanceStatus::AWAITING_DATA_REBUILDING);
   folly::SemiFuture<MaintenanceStatus> f4 =
-      wf->run(shard_state, ShardDataHealth::EMPTY, RebuildingMode::RESTORE);
+      wf->run(shard_state,
+              ShardDataHealth::EMPTY,
+              RebuildingMode::RESTORE,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(
       std::move(f4).get(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   ASSERT_EQ(wf->getExpectedStorageStateTransition(),
             membership::StorageStateTransition::DATA_MIGRATION_COMPLETED);
   shard_state.storage_state = membership::StorageState::NONE;
   folly::SemiFuture<MaintenanceStatus> f5 =
-      wf->run(shard_state, ShardDataHealth::EMPTY, RebuildingMode::RELOCATE);
+      wf->run(shard_state,
+              ShardDataHealth::EMPTY,
+              RebuildingMode::RELOCATE,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(f5).get(), MaintenanceStatus::COMPLETED);
 }
 
@@ -280,18 +359,26 @@ TEST_F(ShardWorkflowTest, ManualOverrideBlocksEnableAfterMaintenace) {
   membership::ShardState shard_state;
   shard_state.storage_state = membership::StorageState::READ_ONLY;
   shard_state.manual_override = true;
-  auto f =
-      wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  auto f = wf->run(shard_state,
+                   ShardDataHealth::HEALTHY,
+                   RebuildingMode::INVALID,
+                   ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE);
 
   shard_state.manual_override = false;
-  f = wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  f = wf->run(shard_state,
+              ShardDataHealth::HEALTHY,
+              RebuildingMode::INVALID,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
 
   shard_state.storage_state = membership::StorageState::READ_WRITE;
-  f = wf->run(shard_state, ShardDataHealth::HEALTHY, RebuildingMode::INVALID);
+  f = wf->run(shard_state,
+              ShardDataHealth::HEALTHY,
+              RebuildingMode::INVALID,
+              ClusterStateNodeState::FULLY_STARTED);
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::COMPLETED);
   ASSERT_EQ(event, nullptr);

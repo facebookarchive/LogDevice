@@ -1153,6 +1153,15 @@ void MaintenanceManager::processShardWorkflowResult(
         // We don't want PROVISIONING shards to block safety check runs because
         // it may take forever. So let's not set the has_shards_to_enable_ flag.
         break;
+      case MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE:
+        // Even though that we need that this workflow is trying to ENABLE the
+        // shard, we know that we can't enable (blocked) because the node is not
+        // FULLY_STARTED|STARTING. We are not setting has_shards_to_enable_
+        // because of that.
+        ld_info("We should have enabled the shard %s but the node "
+                "is not FULLY_STARTED|STARTING, so we will wait.",
+                toString(shard).c_str());
+        break;
       case MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES:
       case MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION:
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:
@@ -1210,6 +1219,10 @@ void MaintenanceManager::processSequencerWorkflowResult(
              toString(n).c_str(),
              apache::thrift::util::enumNameSafe(s).c_str());
     switch (s) {
+      case MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE:
+        ld_info("We should have enabled the sequencer at node %i but the node "
+                "is not FULLY_STARTED|STARTING, so we will wait.",
+                n);
       case MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES:
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:
         active_sequencer_workflows_[n].second = s;
@@ -1609,18 +1622,36 @@ MaintenanceManager::runShardWorkflows() {
   ld_check(event_log_rebuilding_set_);
   std::vector<ShardID> shards;
   std::vector<folly::SemiFuture<MaintenanceStatus>> futures;
+  ClusterState* cluster_state = nullptr;
+  if (deps_->getProcessor()) {
+    cluster_state = deps_->getProcessor()->cluster_state_.get();
+  }
   for (const auto& it : active_shard_workflows_) {
     auto shard_id = it.first;
     ShardWorkflow* wf = it.second.first.get();
     auto current_storage_state =
         nodes_config_->getStorageMembership()->getShardState(shard_id);
+    // Getting the ClusterStateNodeState for this node, if we don't have gossip
+    // information (no ClusterState) we assume FULLY_STARTED as this is the
+    // safest option to avoid blocking ENABLE(s).
+    ClusterStateNodeState gossip_state = ClusterStateNodeState::FULLY_STARTED;
+    if (cluster_state != nullptr) {
+      gossip_state = cluster_state->getNodeState(shard_id.node());
+    } else {
+      RATELIMIT_INFO(
+          std::chrono::seconds(10),
+          1,
+          "We don't have ClusterState, assumed that node %i is FULLY_STARTED",
+          shard_id.node());
+    }
     // The shard should be in NodesConfig since workflow is created
     // only for shards in the config
     ld_check(current_storage_state.hasValue());
     shards.push_back(shard_id);
     futures.push_back(wf->run(current_storage_state.value(),
                               getShardDataHealthInternal(shard_id).value(),
-                              getCurrentRebuildingMode(shard_id)));
+                              getCurrentRebuildingMode(shard_id),
+                              gossip_state));
   }
   return std::make_pair(std::move(shards), std::move(futures));
 }
@@ -1712,6 +1743,13 @@ std::pair<std::vector<node_index_t>,
 MaintenanceManager::runSequencerWorkflows() {
   std::vector<node_index_t> nodes;
   std::vector<folly::SemiFuture<MaintenanceStatus>> futures;
+  // Getting the ClusterStateNodeState for this node, if we don't have gossip
+  // information (no ClusterState) we assume FULLY_STARTED as this is the
+  // safest option to avoid blocking ENABLE(s).
+  ClusterState* cluster_state = nullptr;
+  if (deps_->getProcessor()) {
+    cluster_state = deps_->getProcessor()->cluster_state_.get();
+  }
   for (const auto& it : active_sequencer_workflows_) {
     auto node = it.first;
     auto wf = it.second.first.get();
@@ -1719,7 +1757,17 @@ MaintenanceManager::runSequencerWorkflows() {
     auto node_state =
         nodes_config_->getSequencerMembership()->getNodeState(node);
     ld_check(node_state.hasValue());
-    futures.push_back(wf->run(node_state.value()));
+    ClusterStateNodeState gossip_state = ClusterStateNodeState::FULLY_STARTED;
+    if (cluster_state != nullptr) {
+      gossip_state = cluster_state->getNodeState(node);
+    } else {
+      RATELIMIT_INFO(
+          std::chrono::seconds(10),
+          1,
+          "We don't have ClusterState, assumed that node %i is FULLY_STARTED",
+          node);
+    }
+    futures.push_back(wf->run(node_state.value(), gossip_state));
   }
   return std::make_pair(std::move(nodes), std::move(futures));
 }

@@ -20,19 +20,22 @@ using apache::thrift::util::enumName;
 folly::SemiFuture<MaintenanceStatus>
 ShardWorkflow::run(const membership::ShardState& shard_state,
                    ShardDataHealth data_health,
-                   RebuildingMode rebuilding_mode) {
+                   RebuildingMode rebuilding_mode,
+                   ClusterStateNodeState node_gossip_state) {
   ld_spew("%s",
           folly::format(
               "State before update:"
               "current_storage_state_:{},"
               "expected_storage_state_transition_:{},"
               "current_rebuilding_mode_:{},"
+              "gossip_state:{},"
               "current_data_health_:{},"
               "status_:{},"
               "event_type:{}",
               membership::toString(current_storage_state_).str(),
               membership::toString(expected_storage_state_transition_).str(),
               toString(current_rebuilding_mode_),
+              ClusterState::getNodeStateString(node_gossip_state),
               apache::thrift::util::enumNameSafe(current_data_health_),
               apache::thrift::util::enumNameSafe(status_),
               (event_) ? toString(event_->getType()) : "nullptr")
@@ -41,6 +44,7 @@ ShardWorkflow::run(const membership::ShardState& shard_state,
 
   current_storage_state_ = shard_state.storage_state;
   current_data_health_ = data_health;
+  gossip_state_ = node_gossip_state;
   current_rebuilding_mode_ = rebuilding_mode;
   event_.reset();
   if (shard_state.manual_override) {
@@ -225,6 +229,15 @@ void ShardWorkflow::computeMaintenanceStatusForMayDisappear() {
 
 void ShardWorkflow::computeMaintenanceStatusForEnable() {
   ld_check(target_op_state_.count(ShardOperationalState::ENABLED));
+  // We require that the node is in FULLY_STARTED|STARTING state before we
+  // proceed with the enable workflow. This ensures that we are not setting the
+  // shards or sequencers to READ_WRITE before the nodes are actually up and
+  // running.
+  if (gossip_state_ != ClusterStateNodeState::FULLY_STARTED &&
+      gossip_state_ != ClusterStateNodeState::STARTING) {
+    updateStatus(MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE);
+    return;
+  }
 
   switch (current_storage_state_) {
     case membership::StorageState::PROVISIONING:

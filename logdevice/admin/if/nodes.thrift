@@ -128,24 +128,25 @@ enum MaintenanceStatus {
    * transition.
    */
   AWAITING_NODES_CONFIG_TRANSITION = 9,
-
   /**
    * MaintenanceManager observed a new node that needs to be enabled, but the
    * Node is still in the PROVISIONING state, so the MaintenanceManager is
    * waiting for the node to mark itself as PROVISIONED.
    */
   AWAITING_NODE_PROVISIONING = 10,
-
   /**
    * MaintenanceManager is waiting for the event to be written to event log
    */
   AWAITING_START_DATA_MIGRATION = 11,
-
   /**
    * Maintenance is disabled on this shard/sequencer in NodesConfig and it
    * it currently blocking the maintenance
    */
   BLOCKED_BY_ADMIN_OVERRIDE = 12,
+  /**
+   * We cannot enable the node unless it's ALIVE (FULLY_STARTED | STARTING)
+   */
+  AWAITING_NODE_TO_BE_ALIVE = 13,
 }
 
 /**
