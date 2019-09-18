@@ -24,8 +24,6 @@
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/server/FailureDetector.h"
-#include "logdevice/server/NewConnectionRequest.h"
-#include "logdevice/server/ServerProcessor.h"
 
 namespace facebook { namespace logdevice {
 
@@ -36,6 +34,7 @@ ConnectionListener::ConnectionListener(
     ListenerType listener_type,
     ResourceBudget& connection_backlog_budget)
     : Listener(std::move(iface), loop),
+      loop_(loop),
       connection_backlog_budget_(connection_backlog_budget),
       shared_state_(shared_state),
       listener_type_(listener_type) {
@@ -54,11 +53,71 @@ ConnectionListener::listenerTypeNames() {
   return listener_names;
 }
 
-void ConnectionListener::acceptCallback(evutil_socket_t sock,
-                                        const folly::SocketAddress& addr) {
+ConnectionType
+ConnectionListener::getConnectionType(folly::NetworkSocket sock) {
+  TLSHeader buf{};
+  ssize_t peeked_bytes =
+      recv(sock.toFd(), &buf, buf.size(), MSG_PEEK | MSG_DONTWAIT);
+  return peeked_bytes >= 3
+      ? isTLSHeader(buf) ? ConnectionType::SSL : ConnectionType::PLAIN
+      : ConnectionType::NONE;
+}
+void ConnectionListener::ReadEventHandler::handlerReady(
+    uint16_t events) noexcept {
+  cancelTimeout();
+  if (events == ReadEventHandler::EventFlags::READ) {
+    ConnectionType conn_type = getConnectionType(sock_);
+    if (conn_type == ConnectionType::NONE) {
+      ld_error("Error peeking header message from client socket");
+      folly::netops::close(sock_);
+      connection_listener_->read_event_handlers_.erase(sock_);
+      return;
+    }
+    connection_request_->setConnectionType(conn_type);
+    std::unique_ptr<Request> request = std::move(connection_request_);
+    int rv;
+    STAT_INCR(processor_.stats_, num_backlog_connections);
+    // The processor will route gossip request because WorkerType is
+    // WorkerType::FAILURE_DETECTOR in that case
+    rv = processor_.postRequest(request);
+
+    if (rv != 0) {
+      STAT_DECR(processor_.stats_, num_backlog_connections);
+      RATELIMIT_ERROR(
+          std::chrono::seconds(1),
+          1,
+          "Error passing accepted connection to %s thread. "
+          "postRequest() reported %s.",
+          listenerTypeNames()[connection_listener_->listener_type_].c_str(),
+          error_description(err));
+      folly::netops::close(sock_);
+      // ~NewConnectionRequest() will also destroy the token, thus releasing the
+      // fd from connection_backlog_budget_.
+    }
+  } else {
+    // Triggered by wrong event
+    ld_error("ReaderEventHandler::handlerReady() triggered by wrong event: %d",
+             events);
+    folly::netops::close(sock_);
+  }
+  connection_listener_->read_event_handlers_.erase(sock_);
+}
+
+void ConnectionListener::ReadEventHandler::timeoutExpired() noexcept {
+  unregisterHandler();
+  ld_error("registerHandler() on file descriptor %d failed to read before "
+           "timeout.",
+           sock_.toFd());
+  folly::netops::close(sock_);
+  connection_listener_->read_event_handlers_.erase(sock_);
+}
+
+void ConnectionListener::connectionAccepted(
+    folly::NetworkSocket fd,
+    const folly::SocketAddress& clientAddr) noexcept {
   ld_check(processor_ != nullptr);
   ServerProcessor* processor = checked_downcast<ServerProcessor*>(processor_);
-  Sockaddr sockaddr(addr);
+  Sockaddr sockaddr(clientAddr);
 
   // Check if accepting this connection pushed us over the limit.  Since there's
   // only one ConnectionListener thread, and this is called soon after accept(),
@@ -71,7 +130,7 @@ void ConnectionListener::acceptCallback(evutil_socket_t sock,
                       "Rejecting a connection from %s because the limit "
                       "has been reached.",
                       sockaddr.toString().c_str());
-    LD_EV(evutil_closesocket)(sock);
+    folly::netops::close(fd);
     return;
   }
   auto conn_backlog_token = connection_backlog_budget_.acquireToken();
@@ -83,7 +142,7 @@ void ConnectionListener::acceptCallback(evutil_socket_t sock,
                       "Rejecting a connection from %s because the burst limit "
                       "has been reached.",
                       sockaddr.toString().c_str());
-    LD_EV(evutil_closesocket)(sock);
+    folly::netops::close(fd);
     return;
   }
   // By default we want the processor to select a worker thread for us.
@@ -98,33 +157,51 @@ void ConnectionListener::acceptCallback(evutil_socket_t sock,
   } else {
     sock_type = SocketType::DATA;
   }
-
-  std::unique_ptr<Request> request = std::make_unique<NewConnectionRequest>(
-      sock,
-      wid,
-      sockaddr,
-      std::move(token),
-      std::move(conn_backlog_token),
-      sock_type,
-      isSSL() ? ConnectionType::SSL : ConnectionType::PLAIN,
-      target_worker_type);
-
-  int rv;
-  STAT_INCR(processor->stats_, num_backlog_connections);
-  // The processor will route gossip request because WorkerType is
-  // WorkerType::FAILURE_DETECTOR in that case
-  rv = processor->postRequest(request);
-
-  if (rv != 0) {
-    STAT_DECR(processor->stats_, num_backlog_connections);
-    ld_error("Error passing accepted connection to %s thread. "
-             "postRequest() reported %s.",
-             listenerTypeNames()[listener_type_].c_str(),
-             error_description(err));
-    LD_EV(evutil_closesocket)(sock);
-    // ~NewConnectionRequest() will also destroy the token, thus releasing the
-    // fd from connection_backlog_budget_.
+  //  Storing relevant info and creating a one time event triggered by a read or
+  //  a timeout.
+  read_event_handlers_.insert(
+      {fd,
+       std::make_unique<ReadEventHandler>(
+           loop_->getEventBase(),
+           fd,
+           *processor,
+           std::make_unique<NewConnectionRequest>(fd.toFd(),
+                                                  wid,
+                                                  sockaddr,
+                                                  std::move(token),
+                                                  std::move(conn_backlog_token),
+                                                  sock_type,
+                                                  ConnectionType::NONE,
+                                                  target_worker_type),
+           this)});
+  auto& ret = read_event_handlers_.at(fd);
+  bool read_reg = ret->registerHandler(ReadEventHandler::EventFlags::READ);
+  if (!read_reg) {
+    ld_error("registerHandler() failed. errno=%d (%s)", errno, strerror(errno));
+    folly::netops::close(fd);
+    read_event_handlers_.erase(fd);
+    return;
   }
-}
+  read_reg = ret->scheduleTimeout(
+      processor->updateableSettings()->handshake_timeout.count());
+  if (!read_reg) {
+    ld_error("scheduleTimeout() failed. errno=%d (%s)", errno, strerror(errno));
+    // Remove added read event.
+    ret->unregisterHandler();
+    folly::netops::close(fd);
+    read_event_handlers_.erase(fd);
+  }
+} // namespace logdevice
 
+folly::SemiFuture<folly::Unit> ConnectionListener::stopAcceptingConnections() {
+  auto res = Listener::stopAcceptingConnections().via(loop_).then(
+      [this](folly::Try<folly::Unit> res) mutable {
+        for (auto const& rli : read_event_handlers_) {
+          folly::netops::close(rli.first);
+        }
+        read_event_handlers_.clear();
+        return res;
+      });
+  return res;
+}
 }} // namespace facebook::logdevice
