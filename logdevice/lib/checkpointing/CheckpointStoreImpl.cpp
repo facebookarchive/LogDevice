@@ -6,9 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/lib/CheckpointStoreImpl.h"
+#include "logdevice/lib/checkpointing/CheckpointStoreImpl.h"
 
 #include <folly/Format.h>
+#include <folly/Optional.h>
 #include <folly/synchronization/Baton.h>
 
 #include "logdevice/common/toString.h"
@@ -42,11 +43,18 @@ void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
                                     logid_t log_id,
                                     lsn_t lsn,
                                     UpdateCallback cb) {
-  vcs_->updateConfig(
-      folly::sformat("{}${}", customer_id, static_cast<uint64_t>(log_id)),
-      toString(lsn),
-      folly::none,
-      std::move(cb));
-}
+  auto mcb = [log_id, lsn](folly::Optional<std::string> value) {
+    Checkpoint value_thrift;
+    if (value.hasValue()) {
+      value_thrift = Serializer::deserialize<Checkpoint>(value.value());
+    }
+    value_thrift.log_lsn_map[static_cast<uint64_t>(log_id)] =
+        static_cast<uint64_t>(lsn);
+    auto serialized_thrift = Serializer::serialize<std::string>(value_thrift);
+    return std::make_pair(Status::OK, std::move(serialized_thrift));
+  };
+
+  vcs_->readModifyWriteConfig(customer_id, std::move(mcb), std::move(cb));
+};
 
 }} // namespace facebook::logdevice

@@ -7,9 +7,12 @@
  */
 #pragma once
 
+#include <thrift/lib/cpp2/protocol/Serializer.h>
+
 #include "logdevice/common/VersionedConfigStore.h"
 #include "logdevice/include/CheckpointStore.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/lib/checkpointing/if/gen-cpp2/Checkpoint_types.h"
 
 namespace facebook { namespace logdevice {
 /*
@@ -18,6 +21,9 @@ namespace facebook { namespace logdevice {
  */
 class CheckpointStoreImpl : public CheckpointStore {
  public:
+  using Serializer = apache::thrift::SimpleJSONSerializer;
+  using Checkpoint = checkpointing::thrift::Checkpoint;
+
   explicit CheckpointStoreImpl(std::unique_ptr<VersionedConfigStore> vcs);
 
   Status updateLSNSync(const std::string& customer_id,
