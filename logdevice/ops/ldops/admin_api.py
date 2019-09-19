@@ -162,11 +162,11 @@ async def remove_maintenances(
     return await client.removeMaintenances(req)
 
 
-async def unblock_rebuilding(
+async def mark_all_shards_unrecoverable(
     client: AdminAPI, req: MarkAllShardsUnrecoverableRequest
 ) -> MarkAllShardsUnrecoverableResponse:
     """
-    Wrapper for MarkAllShardsUnrecoverable() Thrift method
+    Wrapper for markAllShardsUnrecoverable() Thrift method
     """
     return await client.markAllShardsUnrecoverable(req)
 
