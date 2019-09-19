@@ -41,14 +41,6 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
     // 2. All previously posted requests have called back and we have scheduled
     // to post a new request.
     StreamAppendRequest* inflight_request;
-    // Retry timer used to post failed append requests. We use
-    // ExponentialBackoffTimer for this purpose.  Created on demand since we
-    // expect most requests to succeed in first attempt. This is not
-    // thread-safe. The callback sent to retry_timer is executed on the same
-    // thread as `appendBuffered` was invoked from, which is also the same
-    // thread on which `onCallback` is called after the `AppendRequest` has been
-    // processed.
-    std::unique_ptr<BackoffTimer> retry_timer;
     // Data record attributes sent by the AppendRequest callback is stored so
     // that it can be used to create the DataRecord when calling back
     // BufferedWriter in order.
@@ -71,48 +63,99 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
           checksum_bits(_checksum_bits),
           stream_req_id(_stream_req_id),
           last_status(Status::UNKNOWN),
-          inflight_request(nullptr),
-          retry_timer(nullptr) {}
+          inflight_request(nullptr) {}
   };
   using StreamRequestsMap = folly::F14NodeMap<write_stream_seq_num_t,
                                               StreamAppendRequestState,
                                               write_stream_seq_num_t::Hash>;
 
+  // At any given time the window of pending requests looks something like this:
+  //
+  // ? - AppendRequest in flight
+  // o - acked (LSN known)
+  // - - waiting
+  //
+  //  --+---+---+---+---+---+---+---+---+---+---+---+--
+  //    | ? | ? | o | ? | o | o | ? | ? | - | - | - |
+  //  --+---+---+---+---+---+---+---+---+---+---+---+--
+  //  ^                       ^       ^               ^ next_seq_num_
+  //  |                       |       max_inflight_window_seq_num_
+  //  |                       max_acked_seq_num_
+  //  max_prefix_acked_seq_num_
+  //  (lsn_of_max_prefix_acked_seq_num_)
+  //
+  // Invariants:
+  // * Sequence numbers in pending_stream_requests_ form a contiguous range
+  //   [max_prefix_acked_seq_num_ + 1, next_seq_num_ - 1].
+  // * Each sequence number in
+  //   [max_prefix_acked_seq_num_ + 1, max_inflight_window_seq_num_]
+  //   either has an AppendRequest in flight or has already been appended
+  //   successfully (last_status = E::OK, and LSN known).
+  // * Sequence numbers above max_inflight_window_seq_num_ have
+  //   last_status = E::UNKNOWN, no LSN, and no AppendRequest in flight.
+  //   (They might have had append attempts and even successes previously, but
+  //   their results were discarded.)
+  // * The append at max_prefix_acked_seq_num_ + 1 is not complete yet
+  //   (otherwise it would have been evicted from the window already).
+  // * LSNs of acked appends are strictly increasing with increasing sequence
+  //   number. If a newly acked append breaks the monotonicity, we reset some
+  //   acked appends back to unacked state to restore monotonicity.
   struct Stream {
     // log id corresponding to the stream
     logid_t logid_;
     // write stream id
     write_stream_id_t stream_id_;
-    // Internal map of inflight stream requests from the stream writer.
-    StreamRequestsMap inflight_stream_requests_;
+    // Internal map of pending stream requests from the stream writer. Some of
+    // these requests have not been posted, some maybe inflight and some may
+    // have been ACKed but are not part of the continuous prefix.
+    StreamRequestsMap pending_stream_requests_;
     // Stream sequence number for the next append request. starts from 1.
-    write_stream_seq_num_t next_seq_num_;
+    write_stream_seq_num_t next_seq_num_ = WRITE_STREAM_SEQ_NUM_MIN;
     // Maximum sequence number that has been acked by any sequencer such that
     // all sequence numbers before that has been ACKed.
-    write_stream_seq_num_t max_prefix_acked_seq_num_;
+    write_stream_seq_num_t max_prefix_acked_seq_num_ =
+        WRITE_STREAM_SEQ_NUM_INVALID;
+    // LSN for the last message that is part of the ACKed continuous prefix.
+    lsn_t lsn_of_max_prefix_acked_seq_num_ = LSN_INVALID;
+    // Maximum sequence number with an accepted ACK.
+    write_stream_seq_num_t max_acked_seq_num_ = WRITE_STREAM_SEQ_NUM_INVALID;
+    // max_inflight_window_seq_num_ is the maximum seq num in the inflight
+    // window. Inflight window is the sub-sequence of sequence numbers after
+    // max_prefix_acked_seq_num_ that are
+    // (1) either currently inflight and we are expecting a reply from or
+    // (2) those requests that we have already accepted a reply for.
+    write_stream_seq_num_t max_inflight_window_seq_num_ =
+        WRITE_STREAM_SEQ_NUM_INVALID;
     // All requests in a stream must be posted on the same target worker.
-    worker_id_t target_worker_;
+    worker_id_t target_worker_ = WORKER_ID_INVALID;
     // Latest seen epoch by the write stream - it maybe used to determine how to
     // react on a WRITE_STREAM_UNKNOWN status. For instance, if we get
     // stream unknown status from a stale sequencer, we may want to retry just
     // the request to reach the latest sequencer. On the other hand, if a newer
     // sequencer says stream unknown, we have to retry all requests from
     // (max_acked_seq_num_ + 1). Currently, we do not use this.
-    epoch_t seen_epoch_;
+    epoch_t seen_epoch_ = EPOCH_INVALID;
     // Weak reference holder for stream object that is used by callback to check
     // if it can safely execute.
     WeakRefHolder<Stream> holder_;
-    Stream(logid_t logid,
-           write_stream_id_t stream_id,
-           write_stream_seq_num_t next_seq_num = write_stream_seq_num_t(1UL))
+    // Retry timer used to post the earliest pending message in the write
+    // stream. Every time we triggerPrefixCallback() the timer is reset. We use
+    // ExponentialBackoffTimer for this purpose. This is not thread-safe. The
+    // callback sent to retry_timer is executed on the same thread as
+    // `appendBuffered` was invoked from, which is also the same thread on which
+    // `onCallback` is called after the `AppendRequest` has been processed.
+    std::unique_ptr<BackoffTimer> retry_timer_;
+    Stream(logid_t logid, write_stream_id_t stream_id)
         : logid_(logid),
           stream_id_(stream_id),
-          inflight_stream_requests_(),
-          next_seq_num_(next_seq_num),
-          max_prefix_acked_seq_num_(WRITE_STREAM_SEQ_NUM_INVALID),
-          target_worker_(WORKER_ID_INVALID),
-          seen_epoch_(EPOCH_INVALID),
-          holder_(this) {}
+          holder_(this),
+          retry_timer_(nullptr) {}
+
+    // Sets the retry timer for the stream.
+    void setRetryTimer(std::unique_ptr<BackoffTimer> retry_timer) {
+      ld_check(!retry_timer_);
+      retry_timer_ = std::move(retry_timer);
+    }
 
     // Updates the seen epoch for the stream and returns true if updated.
     bool updateSeenEpoch(epoch_t epoch) {
@@ -124,12 +167,14 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
     }
 
     // Calls back requests after max_prefix_acked_seq_num_ that have been ACKed
-    // by the sequencer, in order.
-    void triggerPrefixCallbacks() {
+    // by the sequencer, in order. Returns the number of requests that were
+    // called back.
+    size_t triggerPrefixCallbacks() {
+      size_t num_callbacks = 0;
       while (true) {
-        auto it = inflight_stream_requests_.find(
+        auto it = pending_stream_requests_.find(
             next_seq_num(max_prefix_acked_seq_num_));
-        if (it != inflight_stream_requests_.end() &&
+        if (it != pending_stream_requests_.end() &&
             it->second.last_status == Status::OK) {
           // Invoke callback and erase all state corresponding to seq_num.
           DataRecord record(it->second.logid,
@@ -139,13 +184,26 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
                             it->second.record_attrs.batch_offset,
                             it->second.record_attrs.offsets);
           it->second.callback(Status::OK, record, NodeID());
-          inflight_stream_requests_.erase(it);
+          pending_stream_requests_.erase(it);
           // Move on to the next sequence number.
           increment_seq_num(max_prefix_acked_seq_num_);
+          ld_check(record.attrs.lsn > lsn_of_max_prefix_acked_seq_num_);
+          lsn_of_max_prefix_acked_seq_num_ = record.attrs.lsn;
+          ++num_callbacks;
         } else {
           break;
         }
       }
+
+      if (num_callbacks > 0) {
+        // If we did callback the leftmost message in the window, then we can
+        // reset the retry_timer. It is maybe safe to check that it is indeed
+        // inactive.
+        ld_check(retry_timer_);
+        retry_timer_->reset();
+      }
+
+      return num_callbacks;
     }
   };
   using StreamsMap = folly::ConcurrentHashMap<logid_t, std::unique_ptr<Stream>>;
@@ -166,7 +224,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
       for (auto& stream_value : streams_) {
         auto& stream = stream_value.second;
         if (stream->target_worker_ == worker_) {
-          for (auto& req_state_value : stream->inflight_stream_requests_) {
+          for (auto& req_state_value : stream->pending_stream_requests_) {
             auto& req_state = req_state_value.second;
             auto req = req_state.inflight_request;
             ld_check(req); // there must be a non-null inflight request.
@@ -213,6 +271,11 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
                   Status status,
                   const DataRecord& record);
 
+  // Posts suggested_count number of  stream requests that are ready but not
+  // inflight, that corresponds to the requests after sequence number
+  // stream.max_inflight_window_seq_num_.
+  void postNextReadyRequestsIfExists(Stream& stream, size_t suggested_count);
+
  protected:
   // can override in tests
   virtual void postAppend(Stream& stream, StreamAppendRequestState& req_state);
@@ -228,16 +291,25 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   virtual epoch_t getSeenEpoch(worker_id_t worker_id, logid_t logid);
 
   // Creates an exponential backoff timer with a callback that invokes
-  // postAppend on stream and req_state. Overrided in test to create
-  // MockSyncBackoffTimer.
-  virtual std::unique_ptr<BackoffTimer>
-  createBackoffTimer(Stream& stream, StreamAppendRequestState& req_state);
+  // postNextReadyRequest() on stream with a suggested_count of 1.
+  virtual std::unique_ptr<BackoffTimer> createBackoffTimer(Stream& stream);
 
   Stream* getStream(logid_t log_id);
 
   std::unique_ptr<StreamAppendRequest>
   createAppendRequest(Stream& stream,
                       const StreamAppendRequestState& req_state);
+
+  virtual void resetPreviousAttempts(StreamAppendRequestState& req_state) {
+    if (req_state.inflight_request) {
+      req_state.inflight_request->cancel();
+      req_state.inflight_request = nullptr;
+      req_state.last_status = E::UNKNOWN;
+    } else {
+      req_state.last_status = E::UNKNOWN;
+      req_state.record_attrs.lsn = LSN_INVALID;
+    }
+  }
 
  private:
   // Processor to which append requests are posted.
@@ -268,6 +340,35 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   // Settings for the exponential backoff retry timer that is used to retry
   // failed stream append requests.
   chrono_expbackoff_t<std::chrono::milliseconds> expbackoff_settings_;
+
+  // Checks if the earliest pending request, (also the first one in the inflight
+  // window), which corresponds to sequence number
+  // (stream.max_prefix_acked_seq_num_ + 1) in the stream is in flight. If not,
+  // posts it.
+  void ensureEarliestPendingRequestInflight(Stream& stream);
+
+  // Checks if the LSN monotonicity property is violated by the LSN allotted to
+  // message at seq_num, assigned_lsn. If a message with smaller sequence number
+  // than seq_num has a larger LSN than assigned_lsn, returns false. Else, the
+  // LSN monotonicity property is maintained until seq_num and hence returns
+  // true.
+  bool checkLsnMonotonicityUntil(Stream& stream,
+                                 write_stream_seq_num_t seq_num,
+                                 lsn_t assigned_lsn);
+
+  // Checks if the LSN monotonicity property is violated by any sequence number
+  // strictly after seq_num when seq_num is allotted assigned_lsn. If so,
+  // rewinds the stream until that sequence number to be retried again.
+  void ensureLsnMonotonicityAfter(Stream& stream,
+                                  write_stream_seq_num_t seq_num,
+                                  lsn_t assigned_lsn);
+
+  // Cancel all inflight requests in stream that have a sequence number larger
+  // than or equal to seq_num. For inflight requests, the requests are
+  // abandoned. For already ACKed requests, we forget the ACK.
+  // When we do that seq_num will be the next ready request to be posted, and
+  // max_acked_seq_num will be a sequence number less than seq_num.
+  void rewindStreamUntil(Stream& stream, write_stream_seq_num_t seq_num);
 };
 
 }} // namespace facebook::logdevice

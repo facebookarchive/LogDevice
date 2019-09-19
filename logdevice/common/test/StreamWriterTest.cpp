@@ -83,10 +83,11 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
   using StreamState =
       std::unordered_map<epoch_t, StreamStatePerSequencer, epoch_t::Hash>;
 
-  epoch_t seen_epoch;
+  epoch_t seen_epoch = EPOCH_INVALID;
   MessageLog message_log;
   RequestsQueue incoming_queue;
   StreamState stream_state;
+  std::unordered_set<StreamAppendRequest*> cancelled;
 
   TestStreamWriterAppendSink()
       : StreamWriterAppendSink(std::shared_ptr<Processor>(nullptr),
@@ -94,8 +95,7 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
                                std::chrono::milliseconds(10000),
                                chrono_expbackoff_t<std::chrono::milliseconds>(
                                    std::chrono::milliseconds(0),
-                                   std::chrono::milliseconds(0))),
-        seen_epoch(EPOCH_INVALID) {}
+                                   std::chrono::milliseconds(0))) {}
 
   void updateSeenEpoch(epoch_t epoch) {
     if (epoch != EPOCH_INVALID && epoch > seen_epoch) {
@@ -110,6 +110,14 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
       for (size_t i = 0; i < num_reqs_to_process; i++) {
         auto& req = incoming_queue.front();
         auto& cmd = TestCommand::parsePayload(req->record_.payload);
+        // Check if request was cancelled.
+        auto it = cancelled.find(req.get());
+        if (it != cancelled.end()) {
+          cancelled.erase(it);
+          incoming_queue.pop();
+          continue;
+        }
+
         switch (cmd.type) {
           case DROP: {
             ld_info("Dropping message %s", cmd.key.c_str());
@@ -123,8 +131,8 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
             ld_info("Epoch %u: Accepting message %s",
                     cmd.epoch.val(),
                     cmd.key.c_str());
-            ld_check(message_log[cmd.epoch][cmd.key] == 1);
             updateSeenEpoch(cmd.epoch);
+            req->record_.attrs.lsn = getLsnAtEpoch(cmd.epoch);
             req->callback_(E::OK, req->record_);
             break;
           }
@@ -142,6 +150,7 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
                       cmd.epoch.val(),
                       cmd.key.c_str());
               error_status = E::OK;
+              req->record_.attrs.lsn = getLsnAtEpoch(cmd.epoch);
             }
             updateSeenEpoch(cmd.epoch);
             req->callback_(error_status, req->record_);
@@ -158,6 +167,7 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
               } else {
                 it->second = req->stream_rqid_.seq_num;
               }
+              req->record_.attrs.lsn = getLsnAtEpoch(cmd.epoch);
               error_status = E::OK;
               ld_info("Epoch %u: Resuming write stream %lu at seq# %lu",
                       cmd.epoch.val(),
@@ -172,6 +182,7 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
               } else if (req->stream_rqid_.seq_num <=
                          next_seq_num(it->second)) {
                 increment_seq_num(it->second);
+                req->record_.attrs.lsn = getLsnAtEpoch(cmd.epoch);
                 error_status = E::OK;
                 ld_info("Epoch %u: Accepting message %s with seq# %lu",
                         cmd.epoch.val(),
@@ -223,11 +234,9 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
     doPostAppend(std::move(req_append));
   }
 
-  std::unique_ptr<BackoffTimer>
-  createBackoffTimer(Stream& stream,
-                     StreamAppendRequestState& req_state) override {
-    auto wrapped_callback = [this, &stream, &req_state]() {
-      postAppend(stream, req_state);
+  std::unique_ptr<BackoffTimer> createBackoffTimer(Stream& stream) override {
+    auto wrapped_callback = [this, &stream]() {
+      postNextReadyRequestsIfExists(stream, 1);
     };
     std::unique_ptr<BackoffTimer> retry_timer =
         std::make_unique<MockBackoffTimer>(true);
@@ -265,7 +274,26 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
     return seen_epoch;
   }
 
+  void resetPreviousAttempts(StreamAppendRequestState& req_state) override {
+    if (req_state.inflight_request) {
+      cancelled.insert(req_state.inflight_request);
+      req_state.inflight_request = nullptr;
+      req_state.last_status = E::UNKNOWN;
+    } else {
+      req_state.last_status = E::UNKNOWN;
+      // we are not clearing req_state.record_attrs, but it is fine!
+    }
+  }
+
  private:
+  esn_t last_assigned_esn = ESN_MIN;
+  lsn_t getLsnAtEpoch(epoch_t epoch) {
+    // We allot LSNs such that ESNs are always increasing since some tests
+    // require LSN monotonicity, hopefully the test sends the same cmd.epoch.
+    auto lsn = compose_lsn(epoch, last_assigned_esn);
+    ++last_assigned_esn.val_;
+    return lsn;
+  }
 };
 }} // namespace facebook::logdevice
 
@@ -461,7 +489,7 @@ TEST_F(StreamWriterAppendSinkTest, MockSequencerCorrectStream) {
     appendHelper(logid, cmd, callback);
   }
 
-  test_sink_->processTestRequests(false);
+  test_sink_->processTestRequests();
   ASSERT_EQ(5, num_msg_received);
   ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
 }
@@ -533,4 +561,72 @@ TEST_F(StreamWriterAppendSinkTest, PrefixAcks) {
   test_sink_->processTestRequests();
   ASSERT_EQ(5, num_msg_received);
   ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+}
+
+TEST_F(StreamWriterAppendSinkTest, SmartRetry) {
+  int num_msg_received = 0;
+  auto callback = [&num_msg_received](
+                      Status status, const DataRecord&, NodeID) {
+    ASSERT_EQ(Status::OK, status);
+    num_msg_received++;
+  };
+
+  logid_t logid(1UL);
+  epoch_t epoch(1U);
+  std::vector<TestCommand> cmds;
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "a", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "b", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "c", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "d", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "e", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "f", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "g", epoch));
+  for (auto& cmd : cmds) {
+    appendHelper(logid, cmd, callback);
+  }
+
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(7, num_msg_received);
+  ASSERT_EQ(7UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+}
+
+TEST_F(StreamWriterAppendSinkTest, SmartRetryTimeout) {
+  int num_msg_received = 0;
+  auto callback = [&num_msg_received](
+                      Status status, const DataRecord&, NodeID) {
+    ASSERT_EQ(Status::OK, status);
+    num_msg_received++;
+  };
+
+  logid_t logid(1UL);
+  epoch_t epoch(1U);
+  std::vector<TestCommand> cmds;
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "a", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "b", epoch));
+  cmds.push_back(
+      TestCommand::create(DROP, "c", epoch).addArg(toString(TEST_SEQUENCER)));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "d", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "e", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "f", epoch));
+  cmds.push_back(TestCommand::create(TEST_SEQUENCER, "g", epoch));
+  for (auto& cmd : cmds) {
+    appendHelper(logid, cmd, callback);
+  }
+
+  // "a" and "b" would be ACKed, everything else will fail. "c" would be sent.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(2, num_msg_received);
+  ASSERT_EQ(2UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  // "c" would be ACKed, "d" and "e" would be sent.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(3, num_msg_received);
+  ASSERT_EQ(3UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  // "d", "e" would be ACKed. "f" and "g" would be sent.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(5, num_msg_received);
+  ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  // "f" and "g" will be ACKed.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(7, num_msg_received);
+  ASSERT_EQ(7UL, test_sink_->getMaxAckedSequenceNum(logid).val());
 }
