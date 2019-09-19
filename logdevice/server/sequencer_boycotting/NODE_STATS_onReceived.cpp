@@ -18,7 +18,8 @@
 namespace facebook { namespace logdevice {
 
 Message::Disposition NODE_STATS_onReceived(NODE_STATS_Message* msg,
-                                           const Address& from) {
+                                           const Address& from,
+                                           BoycottingStatsHolder* stats) {
   ld_check(msg);
   if (!from.isClientAddress()) {
     ld_error("got NODE_STATS message from non-client %s",
@@ -34,8 +35,6 @@ Message::Disposition NODE_STATS_onReceived(NODE_STATS_Message* msg,
 
   ld_check(msg->ids_.size() == msg->append_successes_.size());
   ld_check(msg->ids_.size() == msg->append_fails_.size());
-
-  auto stats = ServerWorker::onThisThread()->getBoycottingStats();
   ld_check(stats);
 
   for (size_t i = 0; i < msg->ids_.size(); ++i) {

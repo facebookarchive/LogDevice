@@ -5,8 +5,6 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/protocol/NODE_STATS_Message.h"
-
 #include <folly/stats/BucketedTimeSeries.h>
 #include <gtest/gtest.h>
 
@@ -16,6 +14,7 @@
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/server/sequencer_boycotting/BoycottingStats.h"
+#include "logdevice/server/sequencer_boycotting/NODE_STATS_onReceived.h"
 
 using namespace facebook::logdevice;
 
@@ -94,7 +93,8 @@ TEST(NODE_STATS_MessageTest, OnReceived) {
   ClientID from{123};
   Address from_address(from);
 
-  EXPECT_EQ(Message::Disposition::NORMAL, msg.onReceived(from_address));
+  EXPECT_EQ(Message::Disposition::NORMAL,
+            NODE_STATS_onReceived(&msg, from_address, &msg.stats_holder));
   EXPECT_EQ(msg.replied_to, from);
 }
 
@@ -103,7 +103,8 @@ TEST(NODE_STATS_MessageTest, OnReceivedFromNonClient) {
   NodeID from{123, 1};
   Address from_address(from);
 
-  EXPECT_EQ(Message::Disposition::ERROR, msg.onReceived(from_address));
+  EXPECT_EQ(Message::Disposition::ERROR,
+            NODE_STATS_onReceived(&msg, from_address, &msg.stats_holder));
   // didn't actually reply, still uses the initial value
   EXPECT_EQ(msg.replied_to, ClientID::INVALID);
 }
@@ -127,7 +128,7 @@ TEST(NODE_STATS_MessageTest, OnReceivedStoresStats) {
   ClientID from_client{123};
   Address from_address(from_client);
 
-  msg.onReceived(from_address);
+  NODE_STATS_onReceived(&msg, from_address, &msg.stats_holder);
 
   /**
    * Iterate over all clients and nodes, and sum appends over all time for each

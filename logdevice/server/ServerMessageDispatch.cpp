@@ -169,7 +169,9 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
 
     case MessageType::NODE_STATS:
       return NODE_STATS_onReceived(
-          checked_downcast<NODE_STATS_Message*>(msg), from);
+          checked_downcast<NODE_STATS_Message*>(msg),
+          from,
+          ServerWorker::onThisThread()->getBoycottingStats());
 
     case MessageType::NODE_STATS_AGGREGATE:
       return NODE_STATS_AGGREGATE_onReceived(

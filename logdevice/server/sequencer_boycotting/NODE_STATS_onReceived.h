@@ -10,6 +10,9 @@
 #include "logdevice/common/protocol/NODE_STATS_Message.h"
 
 namespace facebook { namespace logdevice {
+class BoycottingStats;
+
 Message::Disposition NODE_STATS_onReceived(NODE_STATS_Message* msg,
-                                           const Address& from);
+                                           const Address& from,
+                                           BoycottingStatsHolder* stats);
 }} // namespace facebook::logdevice
