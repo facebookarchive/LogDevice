@@ -120,18 +120,6 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::AdminAPI)
 
-    ("maintenance-log-retention",
-     &maintenance_log_retention,
-     "0", // do not keep history by default.
-     nullptr,
-     "How long to keep a history of snapshots and deltas for "
-     "the maintenance log. "
-     "Unused if the event log has never been snapshotted or "
-     "if maintenance log "
-     "trimming is disabled with disable-maintenance-log-trimming.",
-     SERVER,
-     SettingsCategory::AdminAPI)
-
     ("disable-maintenance-log-trimming",
      &disable_maintenance_log_trimming,
      "false",

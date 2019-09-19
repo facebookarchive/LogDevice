@@ -15,7 +15,6 @@ sidebar_label: Settings
 | enable-safety-check-periodic-metadata-update | Safety check to update its metadata cache periodically | false | server&nbsp;only |
 | maintenance-log-max-delta-bytes | How many bytes of deltas to keep in the maintenance log before we snapshot it. | 10485760 | server&nbsp;only |
 | maintenance-log-max-delta-records | How many delta records to keep in the maintenance log before we snapshot it. | 100 | server&nbsp;only |
-| maintenance-log-retention | How long to keep a history of snapshots and deltas for the maintenance log. Unused if the event log has never been snapshotted or if maintenance log trimming is disabled with disable-maintenance-log-trimming. | 0 | server&nbsp;only |
 | maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | false | server&nbsp;only |
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | maintenance-manager-metadata-nodeset-update-period | The period of how often to check if metadata nodeset update is required | 2min | server&nbsp;only |
