@@ -610,9 +610,9 @@ void basic_test(NodeSetSelectorType ns_type) {
                 logid_t(3),
                 Decision::NEEDS_CHANGE,
                 [&](StorageSet* ss) {
-                  EXPECT_EQ(4, keep_only_writable(*ss).size());
-                  EXPECT_GE(ss->size(), 4);
-                  EXPECT_LE(ss->size(), 10);
+                  EXPECT_EQ(7, keep_only_writable(*ss).size());
+                  EXPECT_GE(ss->size(), 7);
+                  EXPECT_LE(ss->size(), 14);
                 });
 
   verify_result(selector.get(),
@@ -1086,4 +1086,51 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
       nullptr);
   EXPECT_EQ(Decision::KEEP, res6.decision);
   EXPECT_EQ(res5.signature, res6.signature);
+}
+
+TEST(WeightAwareNodeSetSelectorTest, InternalLogsConfiguredTooSmall) {
+  Nodes nodes;
+  addNodes(&nodes, 5, 1, "region.dc3.FB|REGION3|MSB_9.00.ab");
+  addNodes(&nodes, 5, 1, "region.dc3.FB|REGION3|MSB_8.00.ab");
+  addNodes(&nodes, 5, 1, "region.dc3.FB|REGION3|MSB_7.00.ab");
+
+  ASSERT_EQ(15, nodes.size());
+  Configuration::NodesConfig nodes_config(std::move(nodes));
+
+  ReplicationProperty replication(
+      {{NodeLocationScope::CLUSTER, 2}, {NodeLocationScope::NODE, 4}});
+  size_t nodeset_size = 3;
+  auto logs_config = std::make_shared<LocalLogsConfig>();
+
+  InternalLogs il;
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_nodeSetSize(nodeset_size);
+  log_attrs.set_replicateAcross(replication.getDistinctReplicationFactors());
+  auto log_group_node = il.insert("event_log_snapshots", log_attrs);
+  ASSERT_NE(nullptr, log_group_node);
+
+  ShapingConfig shaping_cfg(
+      std::set<NodeLocationScope>{NodeLocationScope::NODE},
+      std::set<NodeLocationScope>{NodeLocationScope::NODE});
+  auto config = std::make_shared<Configuration>(
+      ServerConfig::fromDataTest("nodeset_selector_test",
+                                 std::move(nodes_config),
+                                 MetaDataLogsConfig(),
+                                 PrincipalsConfig(),
+                                 SecurityConfig(),
+                                 TraceLoggerConfig(),
+                                 TrafficShapingConfig(),
+                                 shaping_cfg,
+                                 ServerConfig::SettingsConfig(),
+                                 ServerConfig::SettingsConfig(),
+                                 std::move(il)),
+      std::move(logs_config));
+
+  auto selector =
+      NodeSetSelectorFactory::create(NodeSetSelectorType::WEIGHT_AWARE);
+  verify_result(selector.get(),
+                config,
+                InternalLogs::EVENT_LOG_SNAPSHOTS,
+                Decision::NEEDS_CHANGE,
+                [&](StorageSet* ss) { EXPECT_EQ(7, ss->size()); });
 }
