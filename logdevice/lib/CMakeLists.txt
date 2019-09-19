@@ -12,6 +12,8 @@ REMOVE_MATCHES_FROM_LISTS(files hfiles includes
     "/test/"
 )
 
+add_subdirectory(checkpointing/if)
+
 add_library(ldclient SHARED ${hfiles} ${files})
 add_library(ldclient_static STATIC ${hfiles} ${files})
 
@@ -21,10 +23,12 @@ set_target_properties(ldclient ldclient_static
 
 target_link_libraries(ldclient
   common
+  Checkpoint-cpp2
   ${LOGDEVICE_EXTERNAL_DEPS})
 
 target_link_libraries(ldclient_static
   common
+  Checkpoint-cpp2
   ${LOGDEVICE_EXTERNAL_DEPS})
 
 set_target_properties(ldclient_static

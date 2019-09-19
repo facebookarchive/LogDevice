@@ -9,7 +9,7 @@
 
 #include "logdevice/common/FileBasedVersionedConfigStore.h"
 #include "logdevice/common/VersionedConfigStore.h"
-#include "logdevice/lib/CheckpointStoreImpl.h"
+#include "logdevice/lib/checkpointing/CheckpointStoreImpl.h"
 
 namespace facebook { namespace logdevice {
 
