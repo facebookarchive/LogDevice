@@ -415,42 +415,4 @@ void NodeStatsController::getDebugInfo(InfoAppendOutliersTable* table) {
       });
 }
 
-folly::dynamic NodeStatsController::getStateInJson() {
-  folly::dynamic res{folly::dynamic::object()};
-
-  auto getOrInsertMapInMap = [](folly::dynamic& map,
-                                std::string key) -> folly::dynamic& {
-    auto iter = map.find(key);
-    if (iter == map.items().end()) {
-      return map[key] = folly::dynamic::object();
-    }
-    return iter->second;
-  };
-
-  aggregateThroughCallback(
-      [&](node_index_t node_id,
-          AppendOutlierDetector::NodeStats stats,
-          std::chrono::steady_clock::time_point bucket_start) {
-        std::string node_label =
-            std::string("N") + folly::to<std::string>(node_id);
-        auto& node_state = getOrInsertMapInMap(res, node_label);
-        std::string time_bucket_label =
-            folly::to<std::string>(msec_since(bucket_start)) + "ms ago";
-        auto& time_bucket_state =
-            getOrInsertMapInMap(node_state, time_bucket_label);
-        time_bucket_state["fails"] = stats.append_fails;
-        time_bucket_state["successes"] = stats.append_successes;
-      });
-  return res;
-}
-
-void NodeStatsController::traceBoycott(
-    NodeID boycotted_node,
-    std::chrono::system_clock::time_point boycott_start_time,
-    std::chrono::milliseconds boycott_duration) {
-  BoycottTracer tracer(Worker::onThisThread()->getTraceLogger());
-  tracer.traceBoycott(
-      boycotted_node, boycott_start_time, boycott_duration, getStateInJson());
-}
-
 }} // namespace facebook::logdevice

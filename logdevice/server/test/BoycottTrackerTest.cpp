@@ -47,10 +47,10 @@ class MockBoycottTracker : public BoycottTracker {
     return 0ms;
   }
 
-  // not using the tracer in BoycottTracker tests
-  int postRequest(std::unique_ptr<Request>&) override {
-    return 0;
-  }
+  void traceBoycott(
+      NodeID /* boycotted_node */,
+      std::chrono::system_clock::time_point /* start_time */,
+      std::chrono::milliseconds /* boycott_duration */) const override {}
 
   BoycottAdaptiveDuration
   getDefaultBoycottDuration(node_index_t node_idx,

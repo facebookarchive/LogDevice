@@ -160,8 +160,9 @@ class BoycottTracker {
   // reported boycotts. Will keep resets and boycotts that are not yet in effect
   void removeUnusedBoycotts(std::chrono::system_clock::time_point current_time);
 
-  // defers to Processor::postRequest
-  virtual int postRequest(std::unique_ptr<Request>& rq);
+  virtual void traceBoycott(NodeID boycotted_node,
+                            std::chrono::system_clock::time_point start_time,
+                            std::chrono::milliseconds boycott_duration) const;
 
   // set of boycotts that have been reported through gossip
   std::unordered_map<node_index_t, Boycott> reported_boycotts_;

@@ -13,11 +13,11 @@
 #include <queue>
 #include <unordered_set>
 
+#include "logdevice/common/BoycottTracer.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/server/sequencer_boycotting/NodeStatsControllerTraceRequest.h"
 
 namespace facebook { namespace logdevice {
 
@@ -206,15 +206,10 @@ void BoycottTracker::calculateBoycottsByThisNode(
                 cur_outlier.toString().c_str(),
                 boycott.boycott_duration.count());
         WORKER_STAT_INCR(boycotts_by_controller_total);
-        // Posting a request to NodeStatsController to trace the boycotting
-        // information
-        std::unique_ptr<Request> req =
-            std::make_unique<NodeStatsControllerTraceRequest>(
-                cur_outlier,
-                std::chrono::system_clock::time_point(boycott_time),
-                boycott.boycott_duration);
-        this->postRequest(req); // ignoring the return value, since there is
-                                // nothing to do if posting fails
+
+        traceBoycott(cur_outlier,
+                     std::chrono::system_clock::time_point(boycott_time),
+                     boycott.boycott_duration);
       }
     }
 
@@ -314,6 +309,14 @@ bool BoycottTracker::isUsingBoycottAdaptiveDuration() const {
       .sequencer_boycotting.node_stats_boycott_use_adaptive_duration;
 }
 
+void BoycottTracker::traceBoycott(
+    NodeID boycotted_node,
+    std::chrono::system_clock::time_point start_time,
+    std::chrono::milliseconds boycott_duration) const {
+  BoycottTracer tracer(Worker::onThisThread()->getTraceLogger());
+  tracer.traceBoycott(boycotted_node, start_time, boycott_duration);
+}
+
 BoycottAdaptiveDuration BoycottTracker::getDefaultBoycottDuration(
     node_index_t node_idx,
     BoycottAdaptiveDuration::TS now) const {
@@ -349,10 +352,6 @@ std::chrono::milliseconds BoycottTracker::computeAdaptiveDuration(
     boycott_duration.negativeFeedback(computed_duration, current_time);
   }
   return computed_duration;
-}
-
-int BoycottTracker::postRequest(std::unique_ptr<Request>& rq) {
-  return Worker::onThisThread()->processor_->postRequest(rq);
 }
 
 }} // namespace facebook::logdevice

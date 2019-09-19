@@ -71,15 +71,6 @@ class NodeStatsController : public NodeStatsControllerCallback {
    */
   void stop();
 
-  /**
-   * indirectly called by the boycott tracker whenever this node decides
-   * to boycott a sequencer node. Gathers the NodeStatsController state to
-   * log it at the time of the boycott
-   */
-  void traceBoycott(NodeID boycotted_node,
-                    std::chrono::system_clock::time_point boycott_start_time,
-                    std::chrono::milliseconds boycott_duration) override;
-
  protected:
   virtual void activateAggregationTimer();
   virtual void cancelAggregationTimer();
@@ -155,8 +146,6 @@ class NodeStatsController : public NodeStatsControllerCallback {
 
   virtual double removeWorstClientPercentage() const;
   virtual unsigned int getRequiredClientCount() const;
-
-  folly::dynamic getStateInJson();
 
   /**
    * Node indices starts from 0 and increases linearly over the amount of nodes.
