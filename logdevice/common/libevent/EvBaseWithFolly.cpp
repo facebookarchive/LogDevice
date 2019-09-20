@@ -58,4 +58,31 @@ event_base* EvBaseWithFolly::getRawBaseDEPRECATED() {
   return running_base_;
 }
 
+void EvBaseWithFolly::attachTimeoutManager(
+    folly::AsyncTimeout* obj,
+    folly::TimeoutManager::InternalEnum internal) {
+  base_.attachTimeoutManager(obj, internal);
+}
+
+void EvBaseWithFolly::detachTimeoutManager(folly::AsyncTimeout* obj) {
+  base_.detachTimeoutManager(obj);
+}
+
+bool EvBaseWithFolly::scheduleTimeout(
+    folly::AsyncTimeout* obj,
+    folly::TimeoutManager::timeout_type timeout) {
+  return base_.scheduleTimeout(obj, timeout);
+}
+
+void EvBaseWithFolly::cancelTimeout(folly::AsyncTimeout* obj) {
+  base_.cancelTimeout(obj);
+}
+
+void EvBaseWithFolly::bumpHandlingTime() {
+  base_.bumpHandlingTime();
+}
+
+bool EvBaseWithFolly::isInTimeoutManagerThread() {
+  return base_.isInTimeoutManagerThread();
+}
 }} // namespace facebook::logdevice

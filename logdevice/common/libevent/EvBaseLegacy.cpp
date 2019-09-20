@@ -10,6 +10,7 @@
 
 #include <event2/event.h>
 #include <folly/ScopeGuard.h>
+#include <folly/io/async/AsyncTimeout.h>
 
 #include "logdevice/common/libevent/IEvBase.h"
 #include "logdevice/common/libevent/compat.h"
@@ -114,4 +115,23 @@ void EvBaseLegacy::deleter(event_base* base) {
   LD_EV(event_base_free)(base);
 }
 
+void EvBaseLegacy::attachTimeoutManager(
+    folly::AsyncTimeout* /* obj */,
+    folly::TimeoutManager::InternalEnum /* internal*/) {}
+
+void EvBaseLegacy::detachTimeoutManager(folly::AsyncTimeout* /* obj */) {}
+
+bool EvBaseLegacy::scheduleTimeout(
+    folly::AsyncTimeout* /* obj */,
+    folly::TimeoutManager::timeout_type /* timeout */) {
+  return false;
+}
+
+void EvBaseLegacy::cancelTimeout(folly::AsyncTimeout* /* obj */) {}
+
+void EvBaseLegacy::bumpHandlingTime() {}
+
+bool EvBaseLegacy::isInTimeoutManagerThread() {
+  return EvBaseLegacy::getRunningBase() == this;
+}
 }} // namespace facebook::logdevice

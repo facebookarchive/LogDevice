@@ -42,6 +42,21 @@ class EvBaseWithFolly : public IEvBase {
    */
   event_base* getRawBaseDEPRECATED() override;
 
+  void attachTimeoutManager(
+      folly::AsyncTimeout* /* obj */,
+      folly::TimeoutManager::InternalEnum /* internal */) override;
+
+  void detachTimeoutManager(folly::AsyncTimeout* obj) override;
+
+  bool scheduleTimeout(folly::AsyncTimeout* obj,
+                       folly::TimeoutManager::timeout_type timeout) override;
+
+  void cancelTimeout(folly::AsyncTimeout* obj) override;
+
+  void bumpHandlingTime() override;
+
+  bool isInTimeoutManagerThread() override;
+
   friend class EventWithFolly;
   friend class EvTimerWithFolly;
 

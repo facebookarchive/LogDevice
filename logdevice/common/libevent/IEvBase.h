@@ -9,9 +9,11 @@
 
 struct event_base;
 
+#include <folly/io/async/TimeoutManager.h>
+
 namespace facebook { namespace logdevice {
 
-class IEvBase {
+class IEvBase : public folly::TimeoutManager {
  public:
   enum class Status {
     OK,
