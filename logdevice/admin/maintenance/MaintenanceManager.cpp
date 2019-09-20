@@ -1430,6 +1430,7 @@ void MaintenanceManager::updateMetadataNodesetIfRequired() {
       .thenValue([&](auto&&) { metadata_nodeset_update_in_flight_ = false; });
 }
 
+// Schedule NodesConfiguration update for workflows.
 folly::SemiFuture<NCUpdateResult>
 MaintenanceManager::scheduleNodesConfigUpdates() {
   std::unique_ptr<membership::StorageMembership::Update>

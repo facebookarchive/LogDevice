@@ -125,9 +125,20 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
 
   switch (current_storage_state_) {
     case membership::StorageState::NONE:
+      // We have reached the target already, there is no further transitions
+      // needed to declare the shard as DRAINED.
       updateStatus(MaintenanceStatus::COMPLETED);
       break;
+    case membership::StorageState::NONE_TO_RO:
+      // In this case, we seem to have been trying to enable the shard but
+      // decided to drain it again, let's cancel the enable.
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::ABORT_ENABLING_READ;
+      updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+      break;
     case membership::StorageState::READ_WRITE:
+      // The shard is fully enabled, we need to ensure that can disable writes
+      // safely so we will schedule safety check and request to go to RO.
       expected_storage_state_transition_ =
           membership::StorageStateTransition::DISABLING_WRITE;
       updateStatus(skip_safety_check_
@@ -263,6 +274,13 @@ void ShardWorkflow::computeMaintenanceStatusForEnable() {
     case membership::StorageState::READ_WRITE:
       createAbortEventIfRequired();
       updateStatus(MaintenanceStatus::COMPLETED);
+      break;
+    case membership::StorageState::RW_TO_RO:
+      // We can just abort the disable that is happening instead of waiting for
+      // it.
+      expected_storage_state_transition_ =
+          membership::StorageStateTransition::ABORT_DISABLING_WRITE;
+      updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
       break;
     default:
       // Current StorageState is one of the transitional states.
