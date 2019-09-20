@@ -6,8 +6,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
-#include "logdevice/admin/if/gen-cpp2/nodes_constants.h"
 #include "logdevice/common/configuration/nodes/FileBasedNodesConfigurationStore.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
@@ -29,8 +27,6 @@ class NodesConfigurationPublisherIntegrationTest : public IntegrationTestBase {
     // Initialize the cluster
     cluster_ = IntegrationTestUtils::ClusterFactory{}
                    .doNotSyncServerConfigToNodesConfiguration()
-                   .setNodesConfigurationSourceOfTruth(
-                       NodesConfigurationSourceOfTruth::SERVER_CONFIG)
                    .create(5);
 
     // Initialize a NCS pointing to the same data as the cluster to be able
@@ -67,7 +63,7 @@ class NodesConfigurationPublisherIntegrationTest : public IntegrationTestBase {
   std::shared_ptr<Client> client_;
 };
 
-TEST_F(NodesConfigurationPublisherIntegrationTest, ClientPublish) {
+TEST_F(NodesConfigurationPublisherIntegrationTest, Publish) {
   auto client_impl = dynamic_cast<ClientImpl*>(client_.get());
   ASSERT_NE(nullptr, client_impl);
   auto processor = client_impl->getProcessorPtr();
@@ -188,49 +184,4 @@ TEST_F(NodesConfigurationPublisherIntegrationTest, ClientPublish) {
     EXPECT_TRUE(notified);
     EXPECT_EQ(2, processor->getNodesConfiguration()->getVersion().val());
   }
-}
-
-TEST_F(NodesConfigurationPublisherIntegrationTest, ServerPublish) {
-  auto admin_client = cluster_->getNode(0).createAdminClient();
-
-  auto wait_until_version = [&](uint64_t version) {
-    facebook::logdevice::thrift::NodesConfigResponse resp;
-    wait_until(folly::sformat("NC version is: {}", version).c_str(), [&]() {
-      admin_client->sync_getNodesConfig(
-          resp, facebook::logdevice::thrift::NodesFilter{});
-      ld_info("Current version: %ld", resp.version);
-      return resp.version == version;
-    });
-    return resp.version;
-  };
-
-  auto current_nc =
-      cluster_->getConfig()->getNodesConfigurationFromServerConfigSource();
-  EXPECT_EQ(current_nc->getVersion().val(),
-            wait_until_version(current_nc->getVersion().val()));
-
-  // For the correctness of this test, let's make sure that the current NC
-  // version is not equal to our arbitrary number.
-  ASSERT_NE(123, current_nc->getVersion().val());
-
-  // Force the NCM NC to diverge
-  auto new_nc =
-      current_nc->withVersion(membership::MembershipVersion::Type{123});
-  auto serialized = NodesConfigurationCodec::serialize(*new_nc);
-  ASSERT_EQ(
-      Status::OK, ncs_->updateConfigSync(std::move(serialized), folly::none));
-
-  // Switch the source of truth to the NCM NC and make sure that it's what
-  // you get back from querying the server.
-  cluster_->getNode(0).sendCommand(
-      "set use-nodes-configuration-manager-nodes-configuration true --ttl max");
-  EXPECT_EQ(123, wait_until_version(123));
-
-  // Flip the switch back to the server config and make sure you get the old
-  // version back.
-  cluster_->getNode(0).sendCommand(
-      "set use-nodes-configuration-manager-nodes-configuration false --ttl "
-      "max");
-  EXPECT_EQ(current_nc->getVersion().val(),
-            wait_until_version(current_nc->getVersion().val()));
 }
