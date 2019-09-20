@@ -249,17 +249,21 @@ class Alarm {
       return;
     }
 
+    using namespace std::chrono;
+    ld_info("*** START *** monitoring test with timeout %g s",
+            duration_cast<duration<double>>(timeout).count());
+
     bool cancelled;
     {
       std::unique_lock<std::mutex> lock(mutex_);
       cancelled = cv_.wait_for(lock, timeout, [&]() { return cancelled_; });
     }
     if (!cancelled) {
-      using namespace std::chrono;
-      fprintf(stderr,
-              "*** TIMEOUT *** test runtime exceeded %g s limit\n",
-              duration_cast<duration<double>>(timeout).count());
+      ld_error("*** TIMEOUT *** test runtime exceeded %g s limit",
+               duration_cast<duration<double>>(timeout).count());
       std::exit(1);
+    } else {
+      ld_info("*** END *** test completed within timeout");
     }
   }
 
