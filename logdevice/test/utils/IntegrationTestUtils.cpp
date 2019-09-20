@@ -948,18 +948,12 @@ int Cluster::start(std::vector<node_index_t> indices) {
     nodes_.at(i)->start();
   }
 
-  // If using TCP, give the cluster a few seconds to start up before failing
-  // and retrying with a different set of ports.
-  std::chrono::steady_clock::time_point deadline = use_tcp_
-      ? std::chrono::steady_clock::now() + start_timeout_
-      : std::chrono::steady_clock::time_point::max();
-
   for (node_index_t i : indices) {
-    if (nodes_.at(i)->waitUntilStarted(deadline) != 0) {
+    if (nodes_.at(i)->waitUntilStarted() != 0) {
       return -1;
     }
     if (hash_based_sequencer_assignment_ &&
-        nodes_.at(i)->waitUntilAvailable(deadline) != 0) {
+        nodes_.at(i)->waitUntilAvailable() != 0) {
       return -1;
     }
   }

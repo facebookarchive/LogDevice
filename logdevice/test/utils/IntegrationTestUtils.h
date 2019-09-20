@@ -1220,11 +1220,6 @@ class Cluster {
   // How many times to try starting a server
   int outer_tries_ = 2;
 
-  // How long we wait for servers to start.  Only applies when
-  // `use_tcp_' is true as we don't expect flaky startup with Unix domain
-  // sockets.
-  std::chrono::seconds start_timeout_{30};
-
   std::string root_path_;
   // If root_path_ is a temporary directory, this owns it
   std::unique_ptr<folly::test::TemporaryDirectory> root_pin_;
