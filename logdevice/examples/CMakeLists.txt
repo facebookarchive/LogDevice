@@ -52,6 +52,7 @@ add_executable(ld-dev-cluster
 )
 
 target_link_libraries(ld-dev-cluster
+  admin_command_client
   logdevice_server
   ${LOGDEVICE_EXTERNAL_DEPS}
 )

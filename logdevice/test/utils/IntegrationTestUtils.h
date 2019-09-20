@@ -1489,7 +1489,10 @@ class Node {
    * Sends admin command `command' to command port and returns the result.
    * Connect through SSL if requested.
    */
-  std::string sendCommand(const std::string& command, bool ssl = false) const;
+  std::string sendCommand(const std::string& command,
+                          bool ssl = false,
+                          std::chrono::milliseconds command_timeout =
+                              std::chrono::milliseconds(30000)) const;
 
   /**
    * Returns the admin API address for this node

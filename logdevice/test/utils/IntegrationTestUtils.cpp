@@ -1363,10 +1363,15 @@ void Node::wipeShard(uint32_t shard) {
   }
 }
 
-std::string Node::sendCommand(const std::string& command, bool ssl) const {
+std::string Node::sendCommand(const std::string& command,
+                              bool ssl,
+                              std::chrono::milliseconds command_timeout) const {
   std::string error;
-  std::string response = test::nc(
-      addrs_.command_addr_.getSocketAddress(), command + "\r\n", &error, ssl);
+  std::string response = test::nc(addrs_.command_addr_.getSocketAddress(),
+                                  command,
+                                  &error,
+                                  ssl,
+                                  command_timeout);
   if (!error.empty()) {
     ld_debug("Failed to send command: %s", error.c_str());
   }
@@ -1389,7 +1394,7 @@ std::string Node::sendIfaceCommand(const std::string& command,
   folly::SocketAddress iface = addrs_.command_addr_.getSocketAddress();
   iface.setFromIpPort(ifaceAddr, iface.getPort());
   std::string error;
-  std::string response = test::nc(iface, command + "\r\n", &error);
+  std::string response = test::nc(iface, command, &error);
   if (!error.empty()) {
     ld_debug("Failed to send command: %s", error.c_str());
   }
@@ -2074,7 +2079,7 @@ parseJsonAdminCommand(std::string data) {
   std::vector<std::map<std::string, std::string>> res;
   folly::dynamic map;
   try {
-    map = folly::parseJson(data.substr(0, data.rfind("END")));
+    map = folly::parseJson(data);
   } catch (std::runtime_error& e) {
     ld_error("Invalid json: %s", data.c_str());
     return {};
@@ -2146,36 +2151,33 @@ bool Node::injectShardFault(std::string shard,
   }
   cmd += " --force"; // Within tests, it's fine to inject errors on opt builds.
   auto reply = sendCommand(cmd);
-  ld_check(reply == "END\r\n");
+  ld_check(reply.empty());
   return true;
 }
 
 void Node::gossipBlacklist(node_index_t node_id) const {
   auto reply = sendCommand("gossip blacklist " + std::to_string(node_id));
-  ld_check(reply ==
-           "GOSSIP N" + std::to_string(node_id) + " BLACKLISTED\r\nEND\r\n");
+  ld_check(reply == "GOSSIP N" + std::to_string(node_id) + " BLACKLISTED\r\n");
 }
 
 void Node::gossipWhitelist(node_index_t node_id) const {
   auto reply = sendCommand("gossip whitelist " + std::to_string(node_id));
-  ld_check(reply ==
-           "GOSSIP N" + std::to_string(node_id) + " WHITELISTED\r\nEND\r\n");
+  ld_check(reply == "GOSSIP N" + std::to_string(node_id) + " WHITELISTED\r\n");
 }
 
 void Node::newConnections(bool accept) const {
   auto reply = sendCommand(std::string("newconnections ") +
                            (accept ? "accept" : "reject"));
-  ld_check(reply == "END\r\n");
+  ld_check(reply.empty());
 }
 
 void Node::startRecovery(logid_t logid) const {
   auto logid_string = std::to_string(logid.val_);
   auto reply = sendCommand("startrecovery " + logid_string);
-  ld_check_eq(
-      reply,
-      folly::format("Started recovery for logid {}, result success\r\nEND\r\n",
-                    logid_string)
-          .str());
+  ld_check_eq(reply,
+              folly::format("Started recovery for logid {}, result success\r\n",
+                            logid_string)
+                  .str());
 }
 
 std::string Node::upDown(const logid_t logid) const {
@@ -2247,7 +2249,6 @@ std::map<std::string, std::string> Node::gossipInfo() const {
 std::map<std::string, bool> Node::gossipStarting() const {
   std::map<std::string, bool> out;
   auto cmd_result = sendCommand("info gossip --json");
-  cmd_result = cmd_result.substr(0, cmd_result.rfind("END"));
   if (cmd_result == "") {
     return out;
   }
@@ -2763,7 +2764,7 @@ void Cluster::waitForConfigUpdate() {
   ld_check(!one_config_per_node_);
   auto check = [this]() {
     std::shared_ptr<const Configuration> our_config = config_->get();
-    const std::string expected_text = our_config->toString() + "\r\nEND\r\n";
+    const std::string expected_text = our_config->toString() + "\r\n";
     for (auto& it : nodes_) {
       if (it.second && it.second->logdeviced_ && !it.second->stopped_) {
         std::string node_text = it.second->sendCommand("info config");

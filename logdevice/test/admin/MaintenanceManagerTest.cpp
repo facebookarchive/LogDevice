@@ -178,7 +178,7 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
 
   wait_until("ShardOperationalState is DRAINED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
-    const std::string expected_text = "DRAINED\r\nEND\r\n";
+    const std::string expected_text = "DRAINED\r\n";
     return state == expected_text;
   });
 
@@ -199,7 +199,7 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
 
   wait_until("ShardOperationalState is MAY_DISAPPEAR", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
-    const std::string expected_text = "MAY_DISAPPEAR\r\nEND\r\n";
+    const std::string expected_text = "MAY_DISAPPEAR\r\n";
     return state == expected_text;
   });
 
@@ -218,7 +218,7 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
 
   wait_until("ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
-    const std::string expected_text = "ENABLED\r\nEND\r\n";
+    const std::string expected_text = "ENABLED\r\n";
     return state == expected_text;
   });
 
@@ -227,7 +227,7 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
   cluster_->getNode(3).kill();
   wait_until("ShardOperationalState is DRAINED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
-    const std::string expected_text = "DRAINED\r\nEND\r\n";
+    const std::string expected_text = "DRAINED\r\n";
     return state == expected_text;
   });
 
@@ -236,7 +236,7 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
   cluster_->getNode(3).waitUntilAvailable();
   wait_until("ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
-    const std::string expected_text = "ENABLED\r\nEND\r\n";
+    const std::string expected_text = "ENABLED\r\n";
     return state == expected_text;
   });
 }
@@ -318,7 +318,7 @@ TEST_F(MaintenanceManagerTest, Snapshotting) {
 
   wait_until("N3's ShardOperationalState is DRAINED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
-    const std::string expected_text = "DRAINED\r\nEND\r\n";
+    const std::string expected_text = "DRAINED\r\n";
     return state == expected_text;
   });
 
@@ -345,7 +345,7 @@ TEST_F(MaintenanceManagerTest, Snapshotting) {
 
   wait_until("N2's ShardOperationalState is MAY_DISAPPEAR", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 2 0");
-    const std::string expected_text = "MAY_DISAPPEAR\r\nEND\r\n";
+    const std::string expected_text = "MAY_DISAPPEAR\r\n";
     return state == expected_text;
   });
 
@@ -372,7 +372,7 @@ TEST_F(MaintenanceManagerTest, Snapshotting) {
 
   wait_until("N2's ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 2 0");
-    const std::string expected_text = "ENABLED\r\nEND\r\n";
+    const std::string expected_text = "ENABLED\r\n";
     return state == expected_text;
   });
 
@@ -391,7 +391,7 @@ TEST_F(MaintenanceManagerTest, Snapshotting) {
 
   wait_until("N3's ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
-    const std::string expected_text = "ENABLED\r\nEND\r\n";
+    const std::string expected_text = "ENABLED\r\n";
     return state == expected_text;
   });
 }
@@ -480,7 +480,7 @@ TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
 
   wait_until("ShardOperationalState is MIGRATING_DATA", [&]() {
     auto state = cluster_->getNode(3).sendCommand("info shardopstate 1 0");
-    const std::string expected_text = "MIGRATING_DATA\r\nEND\r\n";
+    const std::string expected_text = "MIGRATING_DATA\r\n";
     return state == expected_text;
   });
 
@@ -491,7 +491,7 @@ TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
   cluster_->getNode(1).waitUntilAvailable();
   wait_until("ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(3).sendCommand("info shardopstate 1 0");
-    const std::string expected_text = "ENABLED\r\nEND\r\n";
+    const std::string expected_text = "ENABLED\r\n";
     return state == expected_text;
   });
 

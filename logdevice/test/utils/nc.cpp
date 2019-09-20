@@ -7,111 +7,31 @@
  */
 #include "logdevice/test/utils/nc.h"
 
-#include <folly/io/async/AsyncSSLSocket.h>
-#include <folly/io/async/AsyncSocket.h>
-#include <folly/io/async/EventBase.h>
+#include "logdevice/ops/admin_command_client/AdminCommandClient.h"
 
 namespace facebook { namespace logdevice { namespace test {
 
 std::string nc(const folly::SocketAddress& addr,
                const std::string& input,
                std::string* out_error,
-               bool ssl) {
-  struct Callback : folly::AsyncSocket::ConnectCallback,
-                    folly::AsyncSocket::WriteCallback,
-                    folly::AsyncSocket::ReadCallback {
-    folly::EventBase* base_;
-    const std::string& input_;
-    folly::SocketAddress addr_;
-    std::shared_ptr<folly::AsyncSocket> socket_;
-    std::string error;
-    char buf_[8192];
-    std::string out;
-    bool done{false};
+               bool ssl,
+               std::chrono::milliseconds command_timeout,
+               std::chrono::milliseconds connect_timeout) {
+  AdminCommandClient adminclient;
+  AdminCommandClient::RequestResponses rr;
+  rr.reserve(1);
+  rr.emplace_back(addr,
+                  input,
+                  ssl ? AdminCommandClient::ConnectionType::ENCRYPTED
+                      : AdminCommandClient::ConnectionType::PLAIN);
 
-    explicit Callback(folly::EventBase* base,
-                      const folly::SocketAddress& addr,
-                      const std::string& input,
-                      bool ssl)
-        : base_(base), input_(input), addr_(addr), socket_() {
-      if (ssl) {
-        auto sslContext = std::make_shared<folly::SSLContext>();
-        socket_ = folly::AsyncSSLSocket::newSocket(sslContext, base);
-      } else {
-        socket_ = folly::AsyncSocket::newSocket(base);
-      }
-    }
+  adminclient.send(rr, command_timeout, connect_timeout);
 
-    void start() {
-      socket_->connect(this, addr_);
-    }
-
-    void complete() {
-      socket_->setReadCB(nullptr);
-      socket_->close();
-      done = true;
-    }
-    void handleError(const folly::AsyncSocketException& ex) {
-      if (error.empty()) {
-        error = ex.what();
-      }
-      complete();
-    }
-
-    // ConnectCallback.
-    void connectSuccess() noexcept override {
-      socket_->write(this, input_.data(), input_.size());
-      socket_->setReadCB(this);
-    }
-
-    void connectErr(const folly::AsyncSocketException& ex) noexcept override {
-      handleError(ex);
-    }
-
-    // WriteCallback.
-    void writeSuccess() noexcept override {}
-    void writeErr(size_t /* bytesWritten */,
-                  const folly::AsyncSocketException& ex) noexcept override {
-      handleError(ex);
-    }
-
-    // ReadCallback.
-    void getReadBuffer(void** bufReturn, size_t* lenReturn) override {
-      *bufReturn = buf_;
-      *lenReturn = sizeof(buf_);
-    }
-    void readDataAvailable(size_t len) noexcept override {
-      out.append(buf_, len);
-      std::string end_marker("END\r\n");
-      if (out.size() >= end_marker.size() &&
-          out.compare(out.size() - end_marker.size(),
-                      end_marker.size(),
-                      end_marker) == 0) {
-        complete();
-      }
-    }
-    void readEOF() noexcept override {
-      complete();
-    }
-    void readErr(const folly::AsyncSocketException& ex) noexcept override {
-      handleError(ex);
-    }
-  };
-
-  folly::EventBase base;
-
-  Callback cb(&base, addr, input, ssl);
-  cb.start();
-
-  do {
-    base.loopOnce();
-  } while (!cb.done);
-
-  if (out_error) {
-    *out_error = cb.error;
+  if (out_error && !rr[0].success) {
+    *out_error = rr[0].failure_reason;
   }
 
-  return cb.error.empty() ? cb.out : "";
+  return rr[0].success ? rr[0].response : "";
 }
 
 }}} // namespace facebook::logdevice::test

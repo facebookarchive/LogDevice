@@ -121,9 +121,6 @@ class GraylistingTrackerIntegrationTest : public IntegrationTestBase {
   getGraylistedNodesPerWorker(node_index_t from) {
     auto resp = cluster->getNode(from).sendCommand("info graylist --json");
 
-    // Remove the trailing \r\nEND\r\n
-    resp.erase(resp.end() - 7, resp.end());
-
     ld_info("%s", resp.c_str());
 
     auto rows = folly::parseJson(resp)["rows"];

@@ -2201,8 +2201,6 @@ TEST_F(SequencerIntegrationTest, DISABLED_SilentDuplicatesBasic) {
           .sendCommand(("set --ttl=3600s test-do-not-pick-in-copysets " +
                         std::to_string(sequencer_idx2))
                            .c_str());
-  EXPECT_EQ("END\r\n",
-            response.substr(response.size() - std::min(response.size(), 5ul)));
   EXPECT_FALSE(response.substr(0, strlen("Failed")) == "Failed" ||
                response.substr(0, strlen("Error")) == "Error");
 

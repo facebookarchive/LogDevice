@@ -45,16 +45,12 @@ TEST_F(AdminCommandsIntegrationTest, AdminPortSupportsSSL) {
   EXPECT_FALSE(response.substr(0, strlen("Failed")) == "Failed" ||
                response.substr(0, strlen("Error")) == "Error");
   EXPECT_EQ("PID", response.substr(0, 3));
-  EXPECT_EQ("END\r\n",
-            response.substr(response.size() - std::min(response.size(), 5ul)));
 
   // check command over SSL
   response = cluster->getNode(0).sendCommand("info", true);
   EXPECT_FALSE(response.substr(0, strlen("Failed")) == "Failed" ||
                response.substr(0, strlen("Error")) == "Error");
   EXPECT_EQ("PID", response.substr(0, 3));
-  EXPECT_EQ("END\r\n",
-            response.substr(response.size() - std::min(response.size(), 5ul)));
 
 }
 
@@ -80,8 +76,6 @@ TEST_F(AdminCommandsIntegrationTest, AdminPortSSLErrorNoCerts) {
   EXPECT_FALSE(response.substr(0, strlen("Failed")) == "Failed" ||
                response.substr(0, strlen("Error")) == "Error");
   EXPECT_EQ("PID", response.substr(0, 3));
-  EXPECT_EQ("END\r\n",
-            response.substr(response.size() - std::min(response.size(), 5ul)));
 
   // check command over SSL. should fail and return no response
   response = cluster->getNode(0).sendCommand("info", true);

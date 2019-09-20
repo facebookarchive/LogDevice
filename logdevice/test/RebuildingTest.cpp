@@ -2930,7 +2930,7 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
             .str();
     ld_info("Sending command %s", cmd_str.c_str());
     std::string response = node1.sendCommand(cmd_str);
-    ASSERT_EQ(response, "Done.\r\nEND\r\n");
+    ASSERT_EQ(response, "Done.\r\n");
   };
 
   auto start_time = [](auto partition) {

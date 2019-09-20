@@ -1057,7 +1057,7 @@ TEST_P(ReadingIntegrationTest, PurgingStuck) {
   // Inject IO errors in N3 so it won't complete purging.
   std::string res = cluster->getNode(3).sendCommand(
       "inject shard_fault all metadata all io_error");
-  ASSERT_EQ("END\r\n", res);
+  ASSERT_TRUE(res.empty());
 
   // Restart the sequencer.
   cluster->getSequencerNode().kill();
@@ -1498,7 +1498,7 @@ TEST_P(ReadingIntegrationTest, UnderreplicatedRegion) {
     // These admin commands output a few lines of human-readable things like
     // "Clearing dirty ranges and writting checkpoint for shard %u...",
     // followed by two lines "Done." and "END".
-    const std::string expected = "Done.\r\nEND\r\n";
+    const std::string expected = "Done.\r\n";
     return output.size() >= expected.size() &&
         output.substr(output.size() - expected.size()) == expected;
   };

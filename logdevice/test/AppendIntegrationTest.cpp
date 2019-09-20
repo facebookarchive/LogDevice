@@ -949,9 +949,7 @@ TEST_F(AppendIntegrationTest, WriteLsnAfterTrimPoint) {
     cmd = folly::sformat(
         "info record {} {} {} --json  --table", 2, old_lsn, old_lsn);
     response = cluster->getNode(0).sendCommand(cmd, false);
-    // even with --json, there are some trailing chars that need to be clipped
-    EXPECT_GT(response.size(), 7);
-    auto json = folly::parseJson(response.substr(0, response.size() - 7));
+    auto json = folly::parseJson(response);
     // sanity check (this is a dict with rows and headers keys)
     EXPECT_EQ(2, json.size());
 
@@ -989,7 +987,7 @@ TEST_F(AppendIntegrationTest, WriteLsnAfterTrimPoint) {
   // double check with admin command that the record wasn't written to RocksDB
   cmd = folly::sformat("info record {} {} {}", 2, new_lsn, new_lsn);
   response = cluster->getNode(0).sendCommand(cmd, false);
-  EXPECT_EQ("END\r\n", response);
+  EXPECT_TRUE(response.empty());
 
   // we shouldn't be able to read anything back (everything is trimmed)
   auto reader = client->createReader(1);
