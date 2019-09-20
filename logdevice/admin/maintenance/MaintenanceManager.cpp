@@ -563,8 +563,10 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
 
   switch (storageState.value()) {
     case membership::StorageState::NONE:
-    case membership::StorageState::NONE_TO_RO:
       result = ShardOperationalState::DRAINED;
+      break;
+    case membership::StorageState::NONE_TO_RO:
+      result = ShardOperationalState::ENABLING;
       break;
       // We only claim that the shard is MAY_DISAPPEAR if we successfully
       // transitioned to READ_ONLY.

@@ -619,6 +619,19 @@ TEST_F(MaintenanceManagerTest, GetShardOperationalState) {
   overrideStorageState(map);
   regenerateClusterMaintenanceWrapper();
   verifyShardOperationalState({shard}, ShardOperationalState::DRAINED);
+  // N1S0 Goes from NONE -> RO -> RW
+  map[shard] = membership::StorageState::NONE_TO_RO;
+  overrideStorageState(map);
+  regenerateClusterMaintenanceWrapper();
+  verifyShardOperationalState({shard}, ShardOperationalState::ENABLING);
+  map[shard] = membership::StorageState::READ_ONLY;
+  overrideStorageState(map);
+  regenerateClusterMaintenanceWrapper();
+  verifyShardOperationalState({shard}, ShardOperationalState::MAY_DISAPPEAR);
+  map[shard] = membership::StorageState::READ_WRITE;
+  overrideStorageState(map);
+  regenerateClusterMaintenanceWrapper();
+  verifyShardOperationalState({shard}, ShardOperationalState::ENABLED);
 
   // Nonexistent node
   verifyShardOperationalState(
