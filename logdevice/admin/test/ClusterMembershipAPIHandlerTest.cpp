@@ -114,6 +114,31 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
     return req;
   }
 
+  bool disableAndWait(std::vector<thrift::ShardID> shards,
+                      std::vector<thrift::NodeID> sequencers) {
+    auto admin_client = cluster_->getNode(0).createAdminClient();
+
+    return wait_until("Maintenance manager disables the node", [&]() {
+             thrift::MaintenanceDefinition request;
+             request.set_user("bunny");
+             request.set_shard_target_state(
+                 thrift::ShardOperationalState::DRAINED);
+             request.set_sequencer_nodes(sequencers);
+             request.set_sequencer_target_state(
+                 thrift::SequencingState::DISABLED);
+             request.set_shards(shards);
+             request.set_skip_safety_checks(true);
+             thrift::MaintenanceDefinitionResponse resp;
+             admin_client->sync_applyMaintenance(resp, request);
+             return std::all_of(resp.get_maintenances().begin(),
+                                resp.get_maintenances().end(),
+                                [](const auto& m) {
+                                  return m.progress ==
+                                      thrift::MaintenanceProgress::COMPLETED;
+                                });
+           }) == 0;
+  }
+
  public:
   std::unique_ptr<IntegrationTestUtils::Cluster> cluster_;
 };
@@ -123,6 +148,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveAliveNodes) {
       node_index_t(1), configuration::StorageState::DISABLED, 1, false);
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
   auto admin_client = cluster_->getNode(0).createAdminClient();
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  disableAndWait({mkShardID(1, -1)}, {mkNodeID(1)});
 
   try {
     thrift::RemoveNodesResponse resp;
@@ -168,6 +195,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNodeSuccess) {
       node_index_t(1), configuration::StorageState::DISABLED, 1, false);
   ASSERT_EQ(0, cluster_->start({0, 2, 3}));
   auto admin_client = cluster_->getNode(0).createAdminClient();
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  disableAndWait({mkShardID(1, -1)}, {mkNodeID(1)});
 
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({1}));
