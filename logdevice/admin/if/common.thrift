@@ -100,6 +100,10 @@ struct Addresses {
    * The socket address for SSL (data) connections to the server.
    */
   2: optional SocketAddress ssl;
+  /**
+   * The socket address for admin connections to the server.
+   */
+  3: optional SocketAddress admin;
 }
 
 /**

@@ -209,6 +209,11 @@ void fillNodeConfig(
     fillSocketAddress(ssl_address, node_sd->ssl_address.value());
     other_addresses.set_ssl(std::move(ssl_address));
   }
+  if (node_sd->admin_address) {
+    thrift::SocketAddress admin_address;
+    fillSocketAddress(admin_address, node_sd->admin_address.value());
+    other_addresses.set_admin(std::move(admin_address));
+  }
   out.set_other_addresses(std::move(other_addresses));
 }
 

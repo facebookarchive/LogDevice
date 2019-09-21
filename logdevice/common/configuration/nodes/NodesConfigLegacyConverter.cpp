@@ -156,6 +156,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     // structure as the gossip address will be set in the returned NC.
     node.gossip_address = serv.getGossipAddress();
     node.ssl_address = serv.ssl_address;
+    node.admin_address = serv.admin_address;
     node.location = serv.location;
     node.roles = serv.roles;
   }
@@ -198,6 +199,7 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
              ? folly::Optional<Sockaddr>(node.gossip_address)
              : folly::none,
          node.ssl_address,
+         node.admin_address,
          node.location,
          node.roles});
 
