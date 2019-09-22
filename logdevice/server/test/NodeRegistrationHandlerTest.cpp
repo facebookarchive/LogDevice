@@ -41,6 +41,7 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
     settings.sequencer_weight = 12;
     settings.storage_capacity = 13;
     settings.num_shards = 3;
+    settings.admin_enabled = true;
 
     NodeLocation loc;
     loc.fromDomainString("aa.bb.cc.dd.ee");
@@ -49,9 +50,17 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
     return settings;
   }
 
-  folly::Expected<node_index_t, E> registerNode(ServerSettings set) {
+  AdminServerSettings buildAdminServerSettings(std::string name) {
+    AdminServerSettings settings =
+        create_default_settings<AdminServerSettings>();
+    settings.admin_unix_socket = folly::format("/{}/admin", name).str();
+    return settings;
+  }
+
+  folly::Expected<node_index_t, E> registerNode(ServerSettings set,
+                                                AdminServerSettings admin_set) {
     NodeRegistrationHandler handler{
-        std::move(set), getNodesConfiguration(), store_};
+        std::move(set), std::move(admin_set), getNodesConfiguration(), store_};
     return handler.registerSelf(NodeIndicesAllocator{});
   }
 
@@ -66,7 +75,8 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
 
 TEST_F(NodeRegistrationHandlerTest, testAddNode) {
   auto settings = buildServerSettings("node1");
-  auto res = registerNode(settings);
+  auto admin_settings = buildAdminServerSettings("node1");
+  auto res = registerNode(settings, admin_settings);
   ASSERT_TRUE(res.hasValue());
 
   // Get NC
@@ -80,6 +90,7 @@ TEST_F(NodeRegistrationHandlerTest, testAddNode) {
   EXPECT_EQ("/node1/address", svd->address.toString());
   EXPECT_EQ("/node1/ssl", svd->ssl_address->toString());
   EXPECT_EQ("/node1/gossip", svd->gossip_address->toString());
+  EXPECT_EQ("/node1/admin", svd->admin_address->toString());
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
 
@@ -103,7 +114,8 @@ TEST_F(NodeRegistrationHandlerTest, testAddNode) {
 
 TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   auto settings = buildServerSettings("node1");
-  auto add_res = registerNode(settings);
+  auto admin_settings = buildAdminServerSettings("node1");
+  auto add_res = registerNode(settings, admin_settings);
   ASSERT_TRUE(add_res.hasValue());
   auto index = add_res.value();
 
@@ -112,8 +124,10 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   settings.gossip_unix_socket = "/new/gossip";
   settings.sequencer_weight = 22;
   settings.storage_capacity = 23;
+  settings.admin_enabled = false;
 
-  NodeRegistrationHandler handler{settings, getNodesConfiguration(), store_};
+  NodeRegistrationHandler handler{
+      settings, admin_settings, getNodesConfiguration(), store_};
   auto status = handler.updateSelf(index);
   ASSERT_EQ(Status::OK, status);
 
@@ -125,6 +139,7 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   EXPECT_EQ("/new/address", svd->address.toString());
   EXPECT_EQ("/new/ssl", svd->ssl_address->toString());
   EXPECT_EQ("/new/gossip", svd->gossip_address->toString());
+  EXPECT_FALSE(svd->admin_address.hasValue());
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
 
@@ -148,11 +163,13 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
 
 TEST_F(NodeRegistrationHandlerTest, testSameUpdateNoop) {
   auto settings = buildServerSettings("node1");
-  auto add_res = registerNode(settings);
+  auto admin_settings = buildAdminServerSettings("node1");
+  auto add_res = registerNode(settings, admin_settings);
   ASSERT_TRUE(add_res.hasValue());
 
   // Applying an update with the same setting should return UPTODATE.
-  NodeRegistrationHandler handler{settings, getNodesConfiguration(), store_};
+  NodeRegistrationHandler handler{
+      settings, admin_settings, getNodesConfiguration(), store_};
   auto status = handler.updateSelf(add_res.value());
   ASSERT_EQ(Status::UPTODATE, status);
 }

@@ -107,6 +107,18 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
         Sockaddr(server_settings_.address, server_settings_.ssl_port));
   }
 
+  // Admin address is optional, you only need it if the admin-enabled flag is
+  // set.
+  if (server_settings_.admin_enabled) {
+    if (!admin_server_settings_.admin_unix_socket.empty()) {
+      update_builder.setAdminAddress(
+          Sockaddr(admin_server_settings_.admin_unix_socket));
+    } else if (admin_server_settings_.admin_port > 0) {
+      update_builder.setAdminAddress(Sockaddr(
+          server_settings_.address, admin_server_settings_.admin_port));
+    }
+  }
+
   if (!server_settings_.location.isEmpty()) {
     update_builder.setLocation(server_settings_.location);
   }

@@ -87,6 +87,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
         thrift::Addresses other_addresses;
         other_addresses.set_gossip(make_address(50 + idx, 2000 + idx));
         other_addresses.set_ssl(make_address(100 + idx, 3000 + idx));
+        other_addresses.set_admin(make_address(150 + idx, 4000 + idx));
         cfg.set_other_addresses(other_addresses);
       }
 

@@ -252,6 +252,7 @@ bool ServerParameters::initMyNodeIDFinder() {
 bool ServerParameters::registerAndUpdateNodeInfo(
     std::shared_ptr<NodesConfigurationStore> nodes_configuration_store) {
   NodeRegistrationHandler handler{*server_settings_.get(),
+                                  *admin_server_settings_.get(),
                                   updateable_config_->getNodesConfiguration(),
                                   nodes_configuration_store};
   // Find our NodeID from the published NodesConfiguration
