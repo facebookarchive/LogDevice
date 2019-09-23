@@ -1684,6 +1684,13 @@ TEST_P(ReadingIntegrationTest, GuaranteedEfficiencyWithNodeDown) {
     lsns.push_back(lsn);
   }
 
+  // Wait for recovery of epoch 1 to complete before stopping N1.
+  // Without N1 the recovery would get stuck because it wouldn't be able to
+  // replicate the bridge record.
+  // Note that this test case could be made to not need this (by adding another
+  // node so recovery can always proceed), but it's a little simpler this way.
+  EXPECT_EQ(0, cluster->waitForRecovery());
+
   // Stop N1, wipe N2 to simulate silent underreplication.
   cluster->getNode(1).shutdown();
   cluster->getNode(2).shutdown();
