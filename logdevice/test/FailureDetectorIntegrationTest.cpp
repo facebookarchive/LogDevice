@@ -354,7 +354,7 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
 
 TEST_F(FailureDetectorIntegrationTest, MinorityIsolation) {
   // executes an append after 3 nodes out of 5 are killed, to verify that the
-  // nodes still alive are declining appends with E::ISOLATED.
+  // nodes still alive are declining appends with E::NOSEQUENCER.
   const int num_nodes = 5;
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -396,7 +396,7 @@ TEST_F(FailureDetectorIntegrationTest, MinorityIsolation) {
 
   std::atomic<bool> wait_cb(true);
   auto check_status_cb = [&](Status st, const DataRecord& /* unused */) {
-    EXPECT_EQ(E::ISOLATED, st);
+    EXPECT_TRUE(st == E::NOSEQUENCER || st == E::PEER_UNAVAILABLE);
     wait_cb.store(false);
   };
 
