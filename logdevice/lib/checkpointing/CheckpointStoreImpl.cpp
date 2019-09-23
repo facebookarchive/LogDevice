@@ -28,6 +28,49 @@ CheckpointStoreImpl::CheckpointStoreImpl(
     std::unique_ptr<VersionedConfigStore> vcs)
     : vcs_(std::move(vcs)) {}
 
+void CheckpointStoreImpl::getLSN(const std::string& customer_id,
+                                 logid_t log_id,
+                                 GetCallback gcb) const {
+  // TODO: Handle versions
+  auto version = folly::none;
+  auto cb = [log_id, gcb = std::move(gcb)](
+                Status status, std::string value) mutable {
+    if (status != Status::OK) {
+      gcb(status, lsn_t());
+      return;
+    }
+    auto value_thrift = ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
+        Slice::fromString(value));
+    if (value_thrift == nullptr) {
+      gcb(Status::BADMSG, LSN_INVALID);
+      return;
+    }
+    if (value_thrift->log_lsn_map.count(static_cast<uint64_t>(log_id))) {
+      auto lsn = value_thrift->log_lsn_map[static_cast<uint64_t>(log_id)];
+      gcb(Status::OK, static_cast<lsn_t>(lsn));
+    } else {
+      gcb(Status::NOTFOUND, lsn_t());
+    }
+  };
+  vcs_->getConfig(customer_id, std::move(cb), version);
+}
+
+Status CheckpointStoreImpl::getLSNSync(const std::string& customer_id,
+                                       logid_t log_id,
+                                       lsn_t* value_out) const {
+  folly::Baton<> get_baton;
+  Status return_status = Status::OK;
+  GetCallback cb = [&get_baton, &return_status, &value_out](
+                       Status status, lsn_t lsn) mutable {
+    return_status = status;
+    set_if_not_null(value_out, lsn);
+    get_baton.post();
+  };
+  getLSN(customer_id, log_id, std::move(cb));
+  get_baton.wait();
+  return return_status;
+};
+
 Status CheckpointStoreImpl::updateLSNSync(const std::string& customer_id,
                                           logid_t log_id,
                                           lsn_t lsn) {

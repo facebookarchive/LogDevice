@@ -20,6 +20,14 @@ class CheckpointStoreImpl : public CheckpointStore {
  public:
   explicit CheckpointStoreImpl(std::unique_ptr<VersionedConfigStore> vcs);
 
+  void getLSN(const std::string& customer_id,
+              logid_t log_id,
+              GetCallback cb) const override;
+
+  Status getLSNSync(const std::string& customer_id,
+                    logid_t log_id,
+                    lsn_t* value_out) const override;
+
   Status updateLSNSync(const std::string& customer_id,
                        logid_t log_id,
                        lsn_t lsn) override;
