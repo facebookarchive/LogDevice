@@ -475,7 +475,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
   auto get_shard_state = [&](const thrift::NodesState& state,
                              thrift::ShardID shard) {
     for (const auto& node : state) {
-      if (node.get_node_index() == *shard.get_node().node_index_ref()) {
+      if (node.get_config().get_node_index() ==
+          *shard.get_node().node_index_ref()) {
         return node.shard_states_ref()
             ->at(shard.get_shard_index())
             .get_storage_state();

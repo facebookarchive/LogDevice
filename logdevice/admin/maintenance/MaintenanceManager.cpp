@@ -387,6 +387,11 @@ MaintenanceManager::getNodeStateInternal(
     const ClusterState* cluster_state) const {
   thrift::NodeState state;
   state.set_node_index(node);
+
+  thrift::NodeConfig node_config;
+  fillNodeConfig(node_config, node, *nodes_config_);
+  state.set_config(std::move(node_config));
+
   if (cluster_state) {
     state.set_daemon_state(
         toThrift<thrift::ServiceState>(cluster_state->getNodeState(node)));

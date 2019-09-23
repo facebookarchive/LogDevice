@@ -12,6 +12,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
@@ -660,6 +661,12 @@ TEST_F(MaintenanceManagerTest, GetNodeStateTest) {
 
   thrift::NodeState expected_node_state;
   expected_node_state.set_node_index(node);
+
+  {
+    thrift::NodeConfig nc;
+    fillNodeConfig(nc, node, *nodes_config_);
+    expected_node_state.set_config(nc);
+  }
 
   thrift::SequencerState expected_seq_state;
   expected_seq_state.set_state(SequencingState::ENABLED);
