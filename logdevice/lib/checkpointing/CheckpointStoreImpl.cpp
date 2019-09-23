@@ -56,7 +56,7 @@ void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
       value_thrift = ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
           Slice::fromString(value.value()));
       if (value_thrift == nullptr) {
-        return std::make_pair(Status::INVALID_PARAM, std::string());
+        return std::make_pair(Status::BADMSG, std::string());
       }
     }
     value_thrift->log_lsn_map[static_cast<uint64_t>(log_id)] =
