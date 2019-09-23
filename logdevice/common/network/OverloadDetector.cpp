@@ -76,7 +76,7 @@ void OverloadDetector::start() {
   if (!deps_->settings().server) {
     // this should is only used by clients
     loop_timer_ = std::make_unique<Timer>([this]() { runOnce(); });
-    ld_info("Starting overload detector");
+    ld_debug("Starting overload detector");
     loop_timer_->activate(std::chrono::microseconds::zero());
   }
 }
