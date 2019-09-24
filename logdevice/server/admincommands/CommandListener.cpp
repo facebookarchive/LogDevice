@@ -13,6 +13,7 @@
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/AsyncTransport.h>
 #include <folly/io/async/EventBase.h>
+#include <folly/synchronization/Baton.h>
 
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RequestType.h"
@@ -88,7 +89,7 @@ void AdminCommandConnection::TLSSensingCallback::readEOF() noexcept {}
 
 void AdminCommandConnection::TLSSensingCallback::readErr(
     const folly::AsyncSocketException&) noexcept {
-  ld_error("tls sensing read error");
+  connection_.closeConnectionAndDestroyObject();
 }
 
 CommandListener::CommandListener(Listener::InterfaceDef iface,
@@ -163,29 +164,15 @@ void AdminCommandConnection::readDataAvailable(size_t length) noexcept {
 
     auto result =
         listener_.command_processor_.processCommand(command.c_str(), addr_);
-    socket_->writeChain(this, std::move(result));
+    socket_->writeChain(nullptr, std::move(result));
   }
 }
 
 void AdminCommandConnection::closeConnectionAndDestroyObject() {
-  if (destruction_scheduled_) {
+  if (shutdown_) {
     return;
   }
-  destruction_scheduled_ = true;
-  listener_.loop_->add([this] {
-    ld_debug("Closed connection from %s (id %zu, fd %d)",
-             addr_.describe().c_str(),
-             id_,
-             socket_->getNetworkSocket().toFd());
-    listener_.conns_.erase(id_);
-  });
-}
-
-void AdminCommandConnection::writeErr(
-    size_t /* bytesWritten */,
-    const folly::AsyncSocketException&) noexcept {
-  ld_error("write error");
-  closeConnectionAndDestroyObject();
+  listener_.conns_.erase(id_);
 }
 
 void AdminCommandConnection::readErr(
@@ -218,6 +205,20 @@ void CommandListener::connectionAccepted(
     conns_.erase(conns_.begin());
   }
   ld_check(res.second);
+}
+
+CommandListener::~CommandListener() {
+  folly::Baton baton;
+  loop_->add([&baton, this]() mutable {
+    conns_.clear();
+    baton.post();
+  });
+  baton.wait();
+}
+
+AdminCommandConnection::~AdminCommandConnection() {
+  shutdown_ = true;
+  socket_->close();
 }
 
 }} // namespace facebook::logdevice

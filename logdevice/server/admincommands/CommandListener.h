@@ -35,8 +35,7 @@ namespace facebook { namespace logdevice {
 class Server;
 class CommandListener;
 
-class AdminCommandConnection : public folly::AsyncReader::ReadCallback,
-                               public folly::AsyncWriter::WriteCallback {
+class AdminCommandConnection : public folly::AsyncReader::ReadCallback {
  public:
   AdminCommandConnection(size_t id,
                          folly::NetworkSocket fd,
@@ -47,9 +46,8 @@ class AdminCommandConnection : public folly::AsyncReader::ReadCallback,
   void readDataAvailable(size_t length) noexcept override;
   void readEOF() noexcept override;
   void readErr(const folly::AsyncSocketException& ex) noexcept override;
-  void writeSuccess() noexcept override {}
-  void writeErr(size_t bytesWritten,
-                const folly::AsyncSocketException& ex) noexcept override;
+
+  ~AdminCommandConnection() override;
 
  private:
   class TLSSensingCallback : public folly::AsyncReader::ReadCallback {
@@ -73,7 +71,7 @@ class AdminCommandConnection : public folly::AsyncReader::ReadCallback,
   folly::IOBufQueue read_buffer_{folly::IOBufQueue::cacheChainLength()};
   folly::io::QueueAppender cursor_;
   CommandListener& listener_;
-  bool destruction_scheduled_{false};
+  bool shutdown_{false};
   folly::AsyncSocket::UniquePtr socket_;
   std::unique_ptr<TLSSensingCallback> tls_sensing_;
 };
@@ -84,6 +82,8 @@ class CommandListener : public Listener {
   explicit CommandListener(Listener::InterfaceDef iface,
                            KeepAlive loop,
                            Server* server);
+
+  ~CommandListener() override;
 
  protected:
   void connectionAccepted(folly::NetworkSocket sock,
