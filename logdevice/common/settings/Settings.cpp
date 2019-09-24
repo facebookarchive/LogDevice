@@ -610,6 +610,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "this false ignores per request and per message ExecutorPriority.",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Execution);
+  init("use-legacy-evenbase",
+       &use_legacy_eventbase,
+       "true",
+       nullptr,
+       "Use libevent2 based event base to create EventLoop threadpool in "
+       "logdevice.",
+       SERVER | CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Execution);
   init("request-exec-threshold",
        &request_execution_delay_threshold,
        "10ms",

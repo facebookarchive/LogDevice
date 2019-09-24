@@ -30,10 +30,10 @@ namespace facebook { namespace logdevice {
 
 thread_local EventLoop* EventLoop::thisThreadLoop_{nullptr};
 
-static std::unique_ptr<EvBase> createEventBase() {
+static std::unique_ptr<EvBase> createEventBase(EvBase::EvBaseType base_type) {
   std::unique_ptr<EvBase> result;
   auto base = std::make_unique<EvBase>();
-  base->selectEvBase(EvBase::LEGACY_EVENTBASE);
+  base->selectEvBase(base_type);
   auto rv = base->init();
   switch (rv) {
     case EvBase::Status::NO_MEM:
@@ -61,7 +61,8 @@ EventLoop::EventLoop(
     size_t request_pump_capacity,
     bool enable_priority_queues,
     const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
-        requests_per_iteration)
+        requests_per_iteration,
+    EvBase::EvBaseType base_type)
     : thread_type_(thread_type),
       thread_name_(thread_name),
       priority_queues_enabled_(enable_priority_queues) {
@@ -71,9 +72,10 @@ EventLoop::EventLoop(
                          &requests_per_iteration,
                          &init_result,
                          &initialized,
+                         &base_type,
                          this]() {
     auto res = init_result =
-        init(request_pump_capacity, requests_per_iteration);
+        init(base_type, request_pump_capacity, requests_per_iteration);
     initialized.post();
     if (res == Status::OK) {
       run();
@@ -112,13 +114,14 @@ void EventLoop::addWithPriority(folly::Function<void()> func, int8_t priority) {
 }
 
 Status EventLoop::init(
+    EvBase::EvBaseType base_type,
     size_t request_pump_capacity,
     const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
         requests_per_iteration) {
   tid_ = syscall(__NR_gettid);
   ThreadID::set(thread_type_, thread_name_);
 
-  base_ = std::unique_ptr<EvBase>(createEventBase());
+  base_ = std::unique_ptr<EvBase>(createEventBase(base_type));
   if (!base_) {
     return err;
   }

@@ -169,6 +169,11 @@ struct Settings : public SettingsBundle {
   // true. Otherwise, all requests and messages are considered same priority.
   bool enable_executor_priority_queues;
 
+  // Inidicates executor event base used for eventloop is legacy type or folly
+  // eventbase type. If true EventLoop will be instantiated with legacy
+  // eventbase otherwise it will be instantiated with folly eventbase.
+  bool use_legacy_eventbase;
+
   // Request Execution time(in milli-seconds) after which it is considered slow
   // and Worker stats 'worker_slow_requests' is bumped
   std::chrono::milliseconds request_execution_delay_threshold;

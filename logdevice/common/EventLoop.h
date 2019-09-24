@@ -52,7 +52,8 @@ class EventLoop : public folly::Executor {
       size_t request_pump_capacity = 1024,
       bool enable_priority_queues = true,
       const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
-          requests_per_iteration = {13, 3, 1});
+          requests_per_iteration = {13, 3, 1},
+      EvBase::EvBaseType base_type = EvBase::LEGACY_EVENTBASE);
 
   // destructor has to be virtual because it is invoked by EventLoop::run()
   // as "delete this"
@@ -171,7 +172,8 @@ class EventLoop : public folly::Executor {
   std::unique_ptr<EventLoopTaskQueue> task_queue_;
 
   Status
-  init(size_t request_pump_capacity,
+  init(EvBase::EvBaseType base_type,
+       size_t request_pump_capacity,
        const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
            requests_per_iteration);
   // called by EventLoop.thread_ after init if it succeds
