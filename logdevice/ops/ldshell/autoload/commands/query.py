@@ -45,7 +45,7 @@ def uniquify_names(names):
 # Output Printers
 
 
-def _table_printer(headers, rows, column_sizes, delimiter):
+def _table_printer(headers, rows, column_sizes, delimiter, no_header):
     if not column_sizes:
         column_sizes = []
         for idx in range(len(headers)):
@@ -61,28 +61,46 @@ def _table_printer(headers, rows, column_sizes, delimiter):
     headerline = rowfmt.format(*headers)
     hrule = "+{{:-<{}}}+".format(len(headerline) - 2).format("-")
 
+    if not no_header:
+        cprint(hrule)
+        cprint(headerline)
     cprint(hrule)
-    cprint(headerline)
-    cprint(hrule)
+
     for row in rows:
         cprint(rowfmt.format(*row))
     cprint(hrule)
 
 
-def _list_printer(headers, rows, _, delimiter):
-    cprint(delimiter.join(headers))
+def _list_printer(headers, rows, _, delimiter, no_header):
+    if not no_header:
+        cprint(delimiter.join(headers))
     for row in rows:
         cprint(delimiter.join(row))
 
 
-def _line_printer(headers, rows, *_):
+def _line_printer(headers, rows, column_sizes, delimiter, no_header):
     for row in rows:
         for hdr_idx in range(len(headers)):
-            cprint("{} = {}".format(headers[hdr_idx], row[hdr_idx]))
+            if no_header:
+                cprint("{}".format(row[hdr_idx]))
+            else:
+                cprint("{} = {}".format(headers[hdr_idx], row[hdr_idx]))
         cprint("")
 
 
-PRINTER_MAP = {"table": _table_printer, "list": _list_printer, "line": _line_printer}
+def _csv_printer(headers, rows, column_sizes, delimiter, no_header):
+    if not no_header:
+        cprint(",".join(headers))
+    for row in rows:
+        cprint(",".join(row))
+
+
+PRINTER_MAP = {
+    "table": _table_printer,
+    "list": _list_printer,
+    "line": _line_printer,
+    "csv": _csv_printer,
+}
 
 
 class SelectCommand(Command):
@@ -98,8 +116,9 @@ class SelectCommand(Command):
         "run",
         ":pretty": "Enable or disable pretty printing of LSNs and timestamps",
         ":server_side_filtering": "Enable or disable server-side-filtering",
-        ":output_format": "One of: table, list, line. Determines the output format "
+        ":output_format": "One of: table, list, line, csv. Determines the output format "
         "of ldquery results. Defaults to 'table'",
+        ":no_header": "To output only values",
     }
 
     def __init__(self):
@@ -114,6 +133,7 @@ class SelectCommand(Command):
             ":pretty": self.run_pretty,
             ":server_side_filtering": self.run_server_side_filtering,
             ":output_format": self.run_output_format,
+            ":no_header": self.run_no_header,
         }
         self._last_res = None
         self._ldquery = None
@@ -127,6 +147,7 @@ class SelectCommand(Command):
         self.output_delimiter = "\t"
         self.running_from_cli = False
         self.output_format = "table"
+        self.no_header = False
 
     @property
     def ldquery(self):
@@ -312,6 +333,31 @@ class SelectCommand(Command):
             )
         )
 
+    def run_no_header(self, cmd, input, raw):
+        if input is None or input == "":
+            cprint("No header is not set")
+
+        if input in {"no", "off", "false", "0", "nope", "nah", "disable", "disabled"}:
+            no_header = False
+        elif input in {
+            "yes",
+            "on",
+            "true",
+            "1",
+            "yep",
+            "yeah",
+            "totally",
+            "enable",
+            "enabled",
+        }:
+            no_header = True
+        else:
+            cprint("Usage: :no header on|off")
+            return
+
+        self.no_header = no_header
+        cprint("No header is {}".format("on" if self.no_header else "off"))
+
     def run_output_format(self, cmd, input, raw):
         if input is None or input == "":
             cprint("Output format is {}".format(self.output_format))
@@ -319,7 +365,7 @@ class SelectCommand(Command):
         if input in PRINTER_MAP:
             self.output_format = input
         else:
-            cprint("Usage: :output-format table|list|line", "red")
+            cprint("Usage: :output-format table|list|line|csv", "red")
             return
         cprint("Output format is {}".format(self.output_format))
 
@@ -337,6 +383,7 @@ class SelectCommand(Command):
                     res._result.rows,
                     res._result.cols_max_size,
                     self.output_delimiter,
+                    self.no_header,
                 )
             else:
                 cprint("No records were retrieved.", "cyan")
@@ -416,6 +463,8 @@ class SelectCommand(Command):
             self.ldquery.server_side_filtering = False
         if args.delim:
             self.output_delimiter = args.delim
+        self.no_header = args.no_header
+
         self.running_from_cli = True
         return self.run_interactive(cmd, rest, args.query)
 
@@ -435,6 +484,13 @@ class SelectCommand(Command):
             "--disable-server-side-filtering", default=False, action="store_true"
         )
         subp.add_argument("--delim", default="\t")
+
+        subp.add_argument(
+            "--no-header",
+            default=False,
+            help=self.get_help(":no_header"),
+            action="store_true",
+        )
 
     def get_cli_aliases(self):
         return ["query"]
