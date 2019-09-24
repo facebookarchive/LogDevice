@@ -1035,6 +1035,9 @@ class LocalLogStoreReadFilter : public LocalLogStore::ReadFilter {
   // Used for rebuilding. Only return records that have at least one shard from
   // that list in the copyset.
   copyset_t required_in_copyset_;
+  // Ensure operator() returns true if this node sees itself in the known down
+  // list.
+  bool ship_if_i_am_down_{true};
   SCDCopysetReordering scd_copyset_reordering_{SCDCopysetReordering::NONE};
   // Hashed session id (128 bits in total) of client initiating the read.
   // Used as the seed for scd copyset shuffling

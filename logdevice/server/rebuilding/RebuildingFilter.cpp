@@ -21,14 +21,60 @@ operator()(logid_t log,
            LocalLogStoreRecordFormat::csi_flags_t flags,
            RecordTimestamp min_ts,
            RecordTimestamp max_ts) {
-  required_in_copyset_.clear();
-  scd_known_down_.clear();
-
   if (flags & LocalLogStoreRecordFormat::CSI_FLAG_DRAINED) {
     noteRecordFiltered(FilteredReason::DRAINED);
     return false;
   }
 
+  bool try_filter_relocate = rebuildingSet->filter_relocate_shards;
+
+  FilteredReason filtered_reason = FilteredReason::NOT_DIRTY;
+  if (try_filter_relocate) {
+    // Setting filter_relocate=true ensures that shards that are being rebuilt
+    // in RELOCATE mode are added to scd's known down list for filtering. If we
+    // do not do this, a bias is introduced that leads to that node rebuilding
+    // around 1/3rd of the copysets it belongs to, which is undesired as we
+    // prefer the load is distributed among all failure domains in the tier.
+    filtered_reason = populateFilterParams(
+        copyset, copyset_size, min_ts, max_ts, /*filter_relocate=*/true);
+  }
+
+  if (!try_filter_relocate || scd_known_down_.size() >= copyset_size) {
+    // Looks like all nodes are in `scd_known_down_`, which can happen if there
+    // are shards being rebuilt in RELOCATE mode and there are copysets that
+    // contain this shard but also in which all other shards are being rebuilt
+    // in RESTORE mode. In that case we have to resort to the node being rebuilt
+    // in RELOCATE mode to be donor.
+    // Retry with filter_relocate=false.
+    filtered_reason = populateFilterParams(
+        copyset, copyset_size, min_ts, max_ts, /*filter_relocate=*/false);
+  }
+
+  // Perform SCD copyset filtering.
+  bool result = !required_in_copyset_.empty();
+  if (result) {
+    filtered_reason = FilteredReason::SCD;
+    result = LocalLogStoreReadFilter::operator()(
+        log, lsn, copyset, copyset_size, flags, min_ts, max_ts);
+  }
+  if (!result) {
+    noteRecordFiltered(filtered_reason);
+  }
+  return result;
+}
+
+RebuildingReadFilter::FilteredReason
+RebuildingReadFilter::populateFilterParams(const ShardID* copyset,
+                                           const copyset_size_t copyset_size,
+                                           RecordTimestamp min_ts,
+                                           RecordTimestamp max_ts,
+                                           bool filter_relocate) {
+  required_in_copyset_.clear();
+  scd_known_down_.clear();
+  // Disable the ability to have a node seen as down ship its own copy as for
+  // rebuilding, and if filter_relocate=true, this can cause two nodes to
+  // rebuild the same copy.
+  ship_if_i_am_down_ = false;
   auto filtered_reason = FilteredReason::NOT_DIRTY;
   // TODO(T43708398): in order to work around T43708398, we always look for
   // append dirty ranges.
@@ -126,23 +172,18 @@ operator()(logid_t log,
       //       for the local node id and we will be considered a donor for
       //       the record. This can lead to overreplication, but also
       //       ensures that data that can be rebuilt isn't skipped.
-      if (node_kv->second.mode == RebuildingMode::RESTORE) {
+
+      // Add nodes that are being rebuilt in RESTORE mode to the known down list
+      // as we know they are down and cannot be donor.
+      // If filter_relocate==true, also add nodes that are being rebuilt in
+      // RELOCATE mode in order to avoid a bias where that node ends up
+      // rebuilding 1/3rd of all the copysets that it belongs to.
+      if (filter_relocate || node_kv->second.mode == RebuildingMode::RESTORE) {
         scd_known_down_.push_back(shard);
       }
     }
   }
-
-  // Perform SCD copyset filtering.
-  bool result = !required_in_copyset_.empty();
-  if (result) {
-    filtered_reason = FilteredReason::SCD;
-    result = LocalLogStoreReadFilter::operator()(
-        log, lsn, copyset, copyset_size, flags, min_ts, max_ts);
-  }
-  if (!result) {
-    noteRecordFiltered(filtered_reason);
-  }
-  return result;
+  return filtered_reason;
 }
 
 bool RebuildingReadFilter::shouldProcessTimeRange(RecordTimestamp min,

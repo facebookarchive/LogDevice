@@ -55,6 +55,7 @@ table ShardInfo {
   version: ulong;
   nodes: [NodeInfo];
   donor_progress: [DonorProgress];
+  filter_relocate_shards: bool;
 }
 
 table Set {

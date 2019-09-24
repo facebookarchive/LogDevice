@@ -541,6 +541,21 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "batch every 10 seconds.",
        SERVER,
        SettingsCategory::Rebuilding);
+  init("filter-relocate-shards",
+       &filter_relocate_shards,
+       "false",
+       nullptr,
+       "Enables an optimization that mitigates a bias causing shards in "
+       "RELOCATE mode to end up rebuilding 1/3rd of the data (assuming "
+       "3x replication). This setting will cause the server to use the "
+       "FILTER_RELOCATE_SHARDS when triggering rebuilding. It is safe to enable"
+       "/disable this setting while rebuilding is ongoing as this information "
+       "is propagated in the event log for a given rebuilding version. Note: "
+       "this setting does not affect the behavior of rebuildings triggered "
+       "outside the server by external tools. These tools need to add the "
+       "FILTER_RELOCATE_SHARDS flag for that purpose. Experimental.",
+       SERVER,
+       SettingsCategory::Rebuilding);
 }
 
 }} // namespace facebook::logdevice

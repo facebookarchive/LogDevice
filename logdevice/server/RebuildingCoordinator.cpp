@@ -681,6 +681,7 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
 
   std::shared_ptr<RebuildingSet> rebuildingSet =
       std::make_shared<RebuildingSet>();
+  rebuildingSet->filter_relocate_shards = rsi->filter_relocate_shards;
   rebuildingSet->all_dirty_time_intervals = rsi->all_dirty_time_intervals;
   if (!rebuildingSet->all_dirty_time_intervals.empty()) {
     normalizeTimeRanges(shard_idx, rebuildingSet->all_dirty_time_intervals);
@@ -1636,6 +1637,11 @@ void RebuildingCoordinator::restartForMyShard(uint32_t shard,
     // updated.
     conditional_version = LSN_INVALID;
     f &= ~SHARD_NEEDS_REBUILD_Header::CONDITIONAL_ON_VERSION;
+  }
+
+  // Make sure FILTER_RELOCATE_SHARDS is set if --filter-relocate-shards is set.
+  if (rebuildingSettings_->filter_relocate_shards) {
+    f |= SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
   }
 
   std::string source = "N" + std::to_string(myNodeId_);

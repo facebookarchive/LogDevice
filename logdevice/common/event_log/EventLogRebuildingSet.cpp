@@ -320,6 +320,8 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
       std::make_pair(nodeIdx, std::move(node_info)));
   shards_[shardIdx].version = lsn;
   shards_[shardIdx].donor_progress.clear();
+  shards_[shardIdx].filter_relocate_shards =
+      flags & SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
 
   setShardRecoverable(nodeIdx, shardIdx, is_recoverable);
 

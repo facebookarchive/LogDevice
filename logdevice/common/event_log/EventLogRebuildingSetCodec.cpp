@@ -35,12 +35,15 @@ EventLogRebuildingSetCodec::serialize(flatbuffers::FlatBufferBuilder& b,
     }
     auto donors_vector = b.CreateVector(donors);
 
+    bool filter_relocate_shards = it_shard.second.filter_relocate_shards;
+
     auto shardInfo =
         event_log_rebuilding_set::CreateShardInfo(b,
                                                   it_shard.first,
                                                   it_shard.second.version,
                                                   nodes_vector,
-                                                  donors_vector);
+                                                  donors_vector,
+                                                  filter_relocate_shards);
     shards.push_back(shardInfo);
   }
 
@@ -165,6 +168,7 @@ EventLogRebuildingSetCodec::deserialize(
   s.donor_progress = std::move(donors);
   s.num_acked_ = num_acked;
   s.num_recoverable_ = num_recoverable;
+  s.filter_relocate_shards = shard_info->filter_relocate_shards();
   return s;
 }
 

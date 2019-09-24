@@ -75,6 +75,7 @@ struct RebuildingSettings : public SettingsBundle {
   chrono_expbackoff_t<std::chrono::milliseconds> wait_purges_backoff_time;
   uint64_t max_malformed_records_to_tolerate;
   rate_limit_t rate_limit;
+  bool filter_relocate_shards;
 
  private:
   // Only UpdateableSettings can create this bundle.

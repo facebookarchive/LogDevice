@@ -120,6 +120,8 @@ constexpr SHARD_NEEDS_REBUILD_flags_t SHARD_NEEDS_REBUILD_Header::TIME_RANGED;
 constexpr SHARD_NEEDS_REBUILD_flags_t SHARD_NEEDS_REBUILD_Header::FORCE_RESTART;
 constexpr SHARD_NEEDS_REBUILD_flags_t
     SHARD_NEEDS_REBUILD_Header::CONDITIONAL_ON_VERSION;
+constexpr SHARD_NEEDS_REBUILD_flags_t
+    SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
 
 std::string SHARD_NEEDS_REBUILD_Header::describe() const {
   std::vector<std::string> flags_str;
@@ -134,6 +136,7 @@ std::string SHARD_NEEDS_REBUILD_Header::describe() const {
   FLAG(TIME_RANGED);
   FLAG(FORCE_RESTART);
   FLAG(CONDITIONAL_ON_VERSION);
+  FLAG(FILTER_RELOCATE_SHARDS);
 #undef FLAG
 
   if (remaining_flags) {

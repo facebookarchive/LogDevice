@@ -474,4 +474,92 @@ TEST(RebuidingFilterTest, RebuildingFilterDonorDirty) {
                      ts_not_in_any_dirty_ranges));
 }
 
+// Test the behavior of enabling --filter-relocate-shards.
+TEST(RebuildingFilterTest, FilterRelocateShards) {
+  auto rebuilding_set = std::make_shared<RebuildingSet>();
+
+  RebuildingNodeInfo n0_info(RebuildingMode::RELOCATE);
+  rebuilding_set->shards.emplace(N0S0, n0_info);
+
+  // N0 is draining and donor in this context.
+  std::vector<ShardID> copyset{N0S0, N1S0, N2S0};
+  logid_t log(42);
+  LocalLogStoreRecordFormat::csi_flags_t flags = 0;
+
+  // N0 should not filter as it appears first in the copyset. N1,N2 should
+  // filter.
+  rebuilding_set->filter_relocate_shards = false;
+  auto filter = std::make_unique<RebuildingReadFilter>(rebuilding_set, log);
+  filter->scd_my_shard_id_ = N0S0;
+  EXPECT_TRUE((*filter)(log,
+                        10,
+                        copyset.data(),
+                        copyset.size(),
+                        flags,
+                        RecordTimestamp::min(),
+                        RecordTimestamp::max()));
+  filter->scd_my_shard_id_ = N1S0;
+  EXPECT_FALSE((*filter)(log,
+                         10,
+                         copyset.data(),
+                         copyset.size(),
+                         flags,
+                         RecordTimestamp::min(),
+                         RecordTimestamp::max()));
+  filter->scd_my_shard_id_ = N2S0;
+  EXPECT_FALSE((*filter)(log,
+                         10,
+                         copyset.data(),
+                         copyset.size(),
+                         flags,
+                         RecordTimestamp::min(),
+                         RecordTimestamp::max()));
+
+  // Let's try again, but this time with filter_relocate_shards=true.
+  // This time N0,N2 should filter and let N1 rebuild.
+  rebuilding_set->filter_relocate_shards = true;
+  filter = std::make_unique<RebuildingReadFilter>(rebuilding_set, log);
+  filter->scd_my_shard_id_ = N0S0;
+  EXPECT_FALSE((*filter)(log,
+                         10,
+                         copyset.data(),
+                         copyset.size(),
+                         flags,
+                         RecordTimestamp::min(),
+                         RecordTimestamp::max()));
+  filter->scd_my_shard_id_ = N1S0;
+  EXPECT_TRUE((*filter)(log,
+                        10,
+                        copyset.data(),
+                        copyset.size(),
+                        flags,
+                        RecordTimestamp::min(),
+                        RecordTimestamp::max()));
+  filter->scd_my_shard_id_ = N2S0;
+  EXPECT_FALSE((*filter)(log,
+                         10,
+                         copyset.data(),
+                         copyset.size(),
+                         flags,
+                         RecordTimestamp::min(),
+                         RecordTimestamp::max()));
+
+  // Now, let's make it such that N1 and N2 are being rebuilt in RESTORE mode.
+  // Here we want to verify that in this case N0 does rebuild.
+  rebuilding_set->filter_relocate_shards = true;
+  rebuilding_set->shards.emplace(
+      N1S0, RebuildingNodeInfo(RebuildingMode::RESTORE));
+  rebuilding_set->shards.emplace(
+      N2S0, RebuildingNodeInfo(RebuildingMode::RESTORE));
+  filter = std::make_unique<RebuildingReadFilter>(rebuilding_set, log);
+  filter->scd_my_shard_id_ = N0S0;
+  EXPECT_TRUE((*filter)(log,
+                        10,
+                        copyset.data(),
+                        copyset.size(),
+                        flags,
+                        RecordTimestamp::min(),
+                        RecordTimestamp::max()));
+}
+
 }} // namespace facebook::logdevice

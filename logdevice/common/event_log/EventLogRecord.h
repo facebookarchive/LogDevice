@@ -181,6 +181,12 @@ struct SHARD_NEEDS_REBUILD_Header {
   static constexpr SHARD_NEEDS_REBUILD_flags_t CONDITIONAL_ON_VERSION =
       (unsigned)1 << 4;
 
+  // Enables an optimization that mitigates a bias causing shards in
+  // RELOCATE mode to end up rebuilding 1/3rd of the data (assuming
+  // 3x replication).
+  static constexpr SHARD_NEEDS_REBUILD_flags_t FILTER_RELOCATE_SHARDS =
+      (unsigned)1 << 5;
+
   // When adding new flags, don't forget to add them to describe().
 
   std::string getSource() const {

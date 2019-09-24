@@ -157,6 +157,9 @@ class EventLogRebuildingSet {
     // all shards unrecoverable.
     bool waiting_for_recoverable_shards_{false};
 
+    // Set if last SHARD_NEEDS_REBUILD had FILTER_RELOCATE_SHARDS flag.
+    bool filter_relocate_shards{false};
+
     bool operator==(const RebuildingShardInfo& rhs) const;
   };
 

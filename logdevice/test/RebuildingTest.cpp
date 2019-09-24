@@ -28,7 +28,6 @@
 using namespace facebook::logdevice;
 using IntegrationTestUtils::markShardUndrained;
 using IntegrationTestUtils::markShardUnrecoverable;
-using IntegrationTestUtils::requestShardRebuilding;
 using IntegrationTestUtils::waitUntilShardHasEventLogState;
 using IntegrationTestUtils::waitUntilShardsHaveEventLogState;
 
@@ -43,9 +42,13 @@ enum class DurabilityMode {
 
 enum class FlushMode { ROCKSDB, LD };
 
+// Enable/Disable --filter-relocate-shards
+enum class FilterMode { DEFAULT, FILTER_RELOCATE };
+
 struct TestMode {
   DurabilityMode m;
   FlushMode f;
+  FilterMode filter_mode;
 };
 
 const logid_t LOG_ID(1);
@@ -238,8 +241,37 @@ class RebuildingTest : public IntegrationTestBase,
           .useDefaultTrafficShapingConfig(false)
           .setParam("--rocksdb-ld-managed-flushes",
                     test_param.f == FlushMode::LD ? "true" : "false")
-          .setParam("--event-log-grace-period", "10ms");
+          .setParam("--event-log-grace-period", "10ms")
+          .setParam("--filter-relocate-shards",
+                    test_param.filter_mode == FilterMode::FILTER_RELOCATE
+                        ? "true"
+                        : "false");
     };
+  }
+
+  /**
+   * Write to the event log to trigger rebuilding of a shard.
+   * This is a wrapper around IntegrationTestUtils::requestShardRebuilding()
+   *
+   * @param client Client to use to write to event log.
+   * @param node   Node for which to rebuild a shard.
+   * @param shard  Shard to rebuild.
+   * @param flags  Flags to use.
+   * @param rrm    Time ranges for requesting time-ranged rebuilding (aka
+   *                    mini rebuilding)
+   * @return LSN of the event log record or LSN_INVALID on failure.
+   */
+  lsn_t requestShardRebuilding(Client& client,
+                               node_index_t node,
+                               uint32_t shard,
+                               SHARD_NEEDS_REBUILD_flags_t flags = 0,
+                               RebuildingRangesMetadata* rrm = nullptr) {
+    auto effective_flags = GetParam().filter_mode == FilterMode::FILTER_RELOCATE
+        ? SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS
+        : 0;
+    effective_flags |= flags;
+    return IntegrationTestUtils::requestShardRebuilding(
+        client, node, shard, effective_flags, rrm);
   }
 
   /**
@@ -3130,15 +3162,13 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
 }
 
 std::vector<TestMode> test_params{
-    {DurabilityMode::V1_WITH_WAL, FlushMode::ROCKSDB},
-    {DurabilityMode::V1_WITH_WAL, FlushMode::LD},
-    {DurabilityMode::V1_WITHOUT_WAL, FlushMode::ROCKSDB},
-    {DurabilityMode::V1_WITHOUT_WAL, FlushMode::LD},
-    {DurabilityMode::V2_WITH_WAL, FlushMode::ROCKSDB},
-    {DurabilityMode::V2_WITH_WAL, FlushMode::LD}};
+    {DurabilityMode::V1_WITH_WAL, FlushMode::ROCKSDB, FilterMode::DEFAULT},
+    {DurabilityMode::V1_WITH_WAL, FlushMode::LD, FilterMode::DEFAULT},
+    {DurabilityMode::V1_WITHOUT_WAL, FlushMode::ROCKSDB, FilterMode::DEFAULT},
+    {DurabilityMode::V1_WITHOUT_WAL, FlushMode::LD, FilterMode::DEFAULT},
+    {DurabilityMode::V2_WITH_WAL, FlushMode::ROCKSDB, FilterMode::DEFAULT},
+    {DurabilityMode::V2_WITH_WAL, FlushMode::LD, FilterMode::DEFAULT},
+    {DurabilityMode::V2_WITH_WAL, FlushMode::LD, FilterMode::FILTER_RELOCATE}};
 INSTANTIATE_TEST_CASE_P(RebuildingTest,
                         RebuildingTest,
                         ::testing::ValuesIn(test_params));
-
-// TODO(#8570293): write at test where we use a cross-domain copyset selector.
-// TODO(#8570293): once we support rebuilding with extras, write a test.

@@ -215,6 +215,26 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     // than CSI entry.
     void noteRecordFiltered(FilteredReason reason, bool late);
 
+    /**
+     * Iterate through the copyset and:
+     * - Identify which shards need to be added to `required_in_copyset_`, this
+     * is to ensure we only rebuild records that intersect with the rebuilding
+     * set;
+     * - Identify which shards need to be added to `scd_known_down_`.
+     *   `filter_relocate` indicates whether shards being rebuilt in RELOCATE
+     * mode should be added to that list;
+     *
+     * @return a reason for the record to be filtered should the filtering logic
+     * decide to filter the record given these params.
+     */
+    FilteredReason populateFilterParams(logid_t log,
+                                        lsn_t lsn,
+                                        const ShardID* copyset,
+                                        const copyset_size_t copyset_size,
+                                        RecordTimestamp min_ts,
+                                        RecordTimestamp max_ts,
+                                        bool filter_relocate);
+
     void clearStats();
 
     RebuildingReadStorageTaskV2* task;
