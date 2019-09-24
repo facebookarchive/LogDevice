@@ -12,17 +12,17 @@
 #include <folly/Function.h>
 #include <folly/io/async/TimeoutManager.h>
 
+#include "logdevice/common/libevent/IEvBase.h"
+
 struct timeval;
 struct event;
 namespace facebook { namespace logdevice {
-class EvBaseLegacy;
 class EvTimerLegacy {
  public:
-  using Callback = folly::Function<void()>;
-  explicit EvTimerLegacy(EvBaseLegacy* base);
+  explicit EvTimerLegacy(IEvBase* base);
   static const timeval* getCommonTimeout(std::chrono::microseconds timeout);
   void attachTimeoutManager(folly::TimeoutManager* timeoutManager);
-  void attachCallback(Callback callback) {
+  void attachCallback(IEvBase::EventCallback callback) {
     callback_ = std::move(callback);
   }
 
@@ -43,7 +43,7 @@ class EvTimerLegacy {
   bool isInTimeoutManagerThread();
   static void libeventCallback(int fd, short events, void* arg);
   event* event_;
-  Callback callback_;
-  EvBaseLegacy* timeout_manager_{nullptr};
+  IEvBase::EventCallback callback_;
+  IEvBase* timeout_manager_{nullptr};
 };
 }} // namespace facebook::logdevice

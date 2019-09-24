@@ -34,7 +34,7 @@ EventLoopTaskQueue::EventLoopTaskQueue(
   try {
     tasks_pending_event_ =
         std::make_unique<Event>([this]() { haveTasksEventHandler(); },
-                                Event::Events::READ_PERSIST,
+                                IEvBase::Events::READ_PERSIST,
                                 sem_waiter_->fd(),
                                 &base);
   } catch (const std::exception& e) {

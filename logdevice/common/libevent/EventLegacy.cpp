@@ -15,17 +15,17 @@
 
 namespace facebook { namespace logdevice {
 
-EventLegacy::EventLegacy(EventLegacy::Callback callback,
-                         EventLegacy::Events events,
+EventLegacy::EventLegacy(IEvBase::EventCallback callback,
+                         IEvBase::Events events,
                          int fd,
-                         EvBaseLegacy* base)
+                         IEvBase* base)
     : callback_(std::move(callback)), fd_(fd) {
   if (!base) {
     return;
   }
 
   event_ = LD_EV(event_new)(
-      base->getRawBase(), fd_, events, EventLegacy::evCallback, this);
+      base->getRawBaseDEPRECATED(), fd_, events, EventLegacy::evCallback, this);
 
   if (!event_ || LD_EV(event_add)(event_, nullptr)) {
     throw std::runtime_error("Failed to attach to event base");

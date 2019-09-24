@@ -10,6 +10,9 @@
 struct event_base;
 
 #include <folly/io/async/TimeoutManager.h>
+namespace folly {
+class EventBase;
+}
 
 namespace facebook { namespace logdevice {
 
@@ -31,6 +34,15 @@ class IEvBase : public folly::TimeoutManager {
     NUM_PRIORITIES,
     MAX_PRIORITIES = 256
   };
+
+  using EventCallback = folly::Function<void()>;
+  enum Events {
+    USER_ACTIVATED = 0,
+    READ = 0x02,
+    PERSIST = 0x10,
+    READ_PERSIST = READ | PERSIST
+  };
+
   virtual ~IEvBase() {}
 
   virtual Status
@@ -45,6 +57,14 @@ class IEvBase : public folly::TimeoutManager {
    * This is a function only used to slowly transition all use cases
    */
   virtual event_base* getRawBaseDEPRECATED() = 0;
+
+  virtual folly::EventBase* getEventBase() = 0;
+  static IEvBase* getRunningBase() {
+    return running_base_;
+  }
+
+ protected:
+  static thread_local IEvBase* running_base_;
 };
 
 }} // namespace facebook::logdevice

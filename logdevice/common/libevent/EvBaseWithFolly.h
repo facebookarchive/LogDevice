@@ -42,6 +42,10 @@ class EvBaseWithFolly : public IEvBase {
    */
   event_base* getRawBaseDEPRECATED() override;
 
+  folly::EventBase* getEventBase() override {
+    return &base_;
+  }
+
   void attachTimeoutManager(
       folly::AsyncTimeout* /* obj */,
       folly::TimeoutManager::InternalEnum /* internal */) override;
@@ -64,15 +68,7 @@ class EvBaseWithFolly : public IEvBase {
     return base_;
   }
 
-  folly::EventBase& getEventBase() {
-    return base_;
-  }
-
  protected:
-  static EvBaseWithFolly* getRunningBase();
-
- protected:
-  static thread_local EvBaseWithFolly* running_base_;
   folly::EventBase base_;
 };
 

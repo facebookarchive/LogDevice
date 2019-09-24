@@ -33,6 +33,7 @@ thread_local EventLoop* EventLoop::thisThreadLoop_{nullptr};
 static std::unique_ptr<EvBase> createEventBase() {
   std::unique_ptr<EvBase> result;
   auto base = std::make_unique<EvBase>();
+  base->selectEvBase(EvBase::LEGACY_EVENTBASE);
   auto rv = base->init();
   switch (rv) {
     case EvBase::Status::NO_MEM:

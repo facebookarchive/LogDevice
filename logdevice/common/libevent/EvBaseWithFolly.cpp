@@ -12,11 +12,16 @@
 
 namespace facebook { namespace logdevice {
 
-thread_local EvBaseWithFolly* EvBaseWithFolly::running_base_{nullptr};
-
-EvBaseWithFolly::Status EvBaseWithFolly::init(int) {
-  // noop
-  return EvBaseWithFolly::Status::OK;
+EvBaseWithFolly::Status EvBaseWithFolly::init(int num_priorities) {
+  auto event_base = getRawBaseDEPRECATED();
+  if (num_priorities < 1 ||
+      num_priorities > static_cast<int>(Priorities::MAX_PRIORITIES)) {
+    return Status::INVALID_PRIORITY;
+  }
+  if (event_base_priority_init(event_base, num_priorities) != 0) {
+    return Status::INTERNAL_ERROR;
+  }
+  return Status::OK;
 }
 
 EvBaseWithFolly::Status EvBaseWithFolly::free() {
@@ -52,10 +57,6 @@ EvBaseWithFolly::Status EvBaseWithFolly::terminateLoop() {
 
 event_base* EvBaseWithFolly::getRawBaseDEPRECATED() {
   return base_.getLibeventBase();
-}
-
-/* static */ EvBaseWithFolly* EvBaseWithFolly::getRunningBase() {
-  return running_base_;
 }
 
 void EvBaseWithFolly::attachTimeoutManager(

@@ -22,7 +22,8 @@ struct event_base;
 
 namespace folly {
 class AsyncTimeout;
-}
+class EventBase;
+} // namespace folly
 
 namespace facebook { namespace logdevice {
 
@@ -45,6 +46,7 @@ class EvBaseLegacy : public IEvBase {
    * This is a function only used to slowly transition all use cases
    */
   event_base* getRawBaseDEPRECATED() override;
+  folly::EventBase* getEventBase() override;
 
   void attachTimeoutManager(
       folly::AsyncTimeout* /* obj */,
@@ -63,8 +65,6 @@ class EvBaseLegacy : public IEvBase {
 
  protected:
   virtual event_base* getRawBase();
-  static EvBaseLegacy* getRunningBase();
-  static thread_local EvBaseLegacy* running_base_;
   static void deleter(event_base*);
   std::unique_ptr<event_base, std::function<void(event_base*)>> base_{nullptr,
                                                                       deleter};

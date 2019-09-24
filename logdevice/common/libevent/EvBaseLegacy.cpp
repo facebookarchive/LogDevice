@@ -17,8 +17,6 @@
 
 namespace facebook { namespace logdevice {
 
-thread_local EvBaseLegacy* EvBaseLegacy::running_base_{nullptr};
-
 static_assert(static_cast<int>(EvBaseLegacy::Priorities::MAX_PRIORITIES) ==
                   EVENT_MAX_PRIORITIES,
               "Adjust EvBaseLegacy::Priorities::MAX_PRIORITIES to match "
@@ -104,8 +102,8 @@ event_base* EvBaseLegacy::getRawBase() {
   return base_.get();
 }
 
-EvBaseLegacy* EvBaseLegacy::getRunningBase() {
-  return running_base_;
+folly::EventBase* FOLLY_NULLABLE EvBaseLegacy::getEventBase() {
+  return nullptr;
 }
 
 void EvBaseLegacy::deleter(event_base* base) {

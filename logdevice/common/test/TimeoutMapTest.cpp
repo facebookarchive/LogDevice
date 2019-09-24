@@ -20,11 +20,11 @@ using namespace testing;
 
 TEST(TimeoutMap, Correctness) {
   auto base_fake = LD_EV(event_base_new)();
-  EvBaseMock base;
+  EvBaseMock base(EvBase::EvBaseType::LEGACY_EVENTBASE);
   base.init();
   base.setAsRunningBase();
 
-  EXPECT_CALL(base, getRawBase())
+  EXPECT_CALL(base, getRawBaseDEPRECATED())
       .Times(Exactly(TIMEOUT_MAP_SIZE))
       .WillRepeatedly(Return(base_fake));
 

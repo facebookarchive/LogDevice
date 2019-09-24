@@ -19,9 +19,8 @@ namespace facebook { namespace logdevice {
 
 class EvTimerWithFolly : public folly::AsyncTimeout {
  public:
-  using Callback = folly::Function<void()>;
-  EvTimerWithFolly(EvBaseWithFolly* /* base */) {}
-  void attachCallback(Callback callback) {
+  EvTimerWithFolly(IEvBase* base) : folly::AsyncTimeout(base) {}
+  void attachCallback(IEvBase::EventCallback callback) {
     callback_ = std::move(callback);
   }
   void timeoutExpired() noexcept override {
@@ -34,8 +33,12 @@ class EvTimerWithFolly : public folly::AsyncTimeout {
     return nullptr;
   }
 
+  int setPriority(int pri);
+
+  void activate(int res, short ncalls);
+
  private:
-  Callback callback_;
+  IEvBase::EventCallback callback_;
 };
 
 }} // namespace facebook::logdevice

@@ -17,13 +17,16 @@
 
 namespace facebook { namespace logdevice {
 
-EvTimerLegacy::EvTimerLegacy(EvBaseLegacy* base) : timeout_manager_(base) {
+EvTimerLegacy::EvTimerLegacy(IEvBase* base) : timeout_manager_(base) {
   if (!base) {
     return;
   }
-  event_ = LD_EV(event_new)(base->getRawBase(), -1, 0, nullptr, nullptr);
-  evtimer_assign(
-      getEvent(), base->getRawBase(), EvTimerLegacy::libeventCallback, this);
+  event_ =
+      LD_EV(event_new)(base->getRawBaseDEPRECATED(), -1, 0, nullptr, nullptr);
+  evtimer_assign(getEvent(),
+                 base->getRawBaseDEPRECATED(),
+                 EvTimerLegacy::libeventCallback,
+                 this);
 }
 
 const timeval* FOLLY_NULLABLE
@@ -35,7 +38,8 @@ EvTimerLegacy::getCommonTimeout(std::chrono::microseconds timeout) {
   struct timeval tv_buf;
   tv_buf.tv_sec = timeout.count() / 1000000;
   tv_buf.tv_usec = timeout.count() % 1000000;
-  return LD_EV(event_base_init_common_timeout)(base->getRawBase(), &tv_buf);
+  return LD_EV(event_base_init_common_timeout)(
+      base->getRawBaseDEPRECATED(), &tv_buf);
 }
 
 void EvTimerLegacy::attachTimeoutManager(
