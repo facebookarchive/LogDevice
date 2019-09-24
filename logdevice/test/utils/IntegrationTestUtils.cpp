@@ -1111,6 +1111,11 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         {"--store-timeout", ParamValue{"10ms..1s"}},
         // smaller recovery retry timeout for reading seqencer metadata
         {"--recovery-seq-metadata-timeout", ParamValue{"100ms..500ms"}},
+        // Smaller mutation and cleaning timeout, to make recovery retry faster
+        // if a participating node died at the wrong moment.
+        // TODO (#54460972): Would be better to make recovery detect such
+        // situations by itself, probably using ClusterState.
+        {"--recovery-timeout", ParamValue{"5s"}},
         // if we fail to store something on a node, we should retry earlier than
         // the default 60s
         {"--unroutable-retry-interval", ParamValue{"1s"}},
