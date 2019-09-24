@@ -59,38 +59,8 @@ TestSocketDependencies::getNodeSockaddr(NodeID nid,
   return owner_->server_addr_;
 }
 
-int TestSocketDependencies::eventAssign(struct event* /*ev*/,
-                                        void (*/*cb*/)(evutil_socket_t,
-                                                       short what,
-                                                       void* arg),
-                                        void* /*arg*/) {
-  return 0;
-}
-
-void TestSocketDependencies::eventActive(struct event* ev,
-                                         int what,
-                                         short ncalls) {
-  owner_->eventActive(ev, what, ncalls);
-}
-
-void TestSocketDependencies::eventDel(struct event* /*ev*/) {}
-int TestSocketDependencies::eventPrioritySet(struct event* /*ev*/,
-                                             int /*priority*/) {
-  return 0;
-}
-
-int TestSocketDependencies::evtimerAssign(struct event* /*ev*/,
-                                          void (*/*cb*/)(evutil_socket_t,
-                                                         short what,
-                                                         void* arg),
-                                          void* /*arg*/) {
-  return 0;
-}
-
-void TestSocketDependencies::evtimerDel(struct event* /*ev*/) {}
-
-int TestSocketDependencies::evtimerPending(struct event*, struct timeval*) {
-  return 0;
+EvBase* TestSocketDependencies::getEvBase() {
+  return &owner_->ev_base_mock_;
 }
 
 const struct timeval*
@@ -108,11 +78,6 @@ TestSocketDependencies::getTimevalFromMilliseconds(std::chrono::milliseconds) {
 const struct timeval* TestSocketDependencies::getZeroTimeout() {
   // This is passed to evtimerAdd and ignored.
   return nullptr;
-}
-
-int TestSocketDependencies::evtimerAdd(struct event* ev,
-                                       const struct timeval* timeout) {
-  return owner_->evtimerAdd(ev, timeout);
 }
 
 struct bufferevent* TestSocketDependencies::buffereventSocketNew(
@@ -305,8 +270,6 @@ FlowGroupTest::FlowGroupTest() {
   flow_group = std::make_unique<FlowGroup>(
       std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr));
   flow_group->setScope(NodeLocationScope::ROOT);
-
-  setupConnection();
 
   // Setup a default update from the TrafficShaper
   FlowGroupPolicy policy;

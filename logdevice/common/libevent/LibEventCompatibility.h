@@ -99,6 +99,8 @@ class EvTimer {
   bool scheduleTimeout(folly::TimeoutManager::timeout_type timeout);
   void cancelTimeout();
   bool isScheduled() const;
+  int setPriority(int pri);
+  void activate(int res, short ncalls);
 
   static const timeval* FOLLY_NULLABLE
   getCommonTimeout(std::chrono::microseconds timeout);

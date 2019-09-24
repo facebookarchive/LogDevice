@@ -36,5 +36,17 @@ class EvBaseMock : public EvBase {
   void clearRunningBase() {
     EvBase::running_base_ = nullptr;
   }
+
+  MOCK_METHOD2(attachTimeoutManager,
+               void(folly::AsyncTimeout*, folly::TimeoutManager::InternalEnum));
+  MOCK_METHOD1(detachTimeoutManager, void(folly::AsyncTimeout*));
+  MOCK_METHOD2(scheduleTimeout,
+               bool(folly::AsyncTimeout*, folly::TimeoutManager::timeout_type));
+  MOCK_METHOD2(scheduleTimeoutHighRes,
+               bool(folly::AsyncTimeout* obj,
+                    folly::TimeoutManager::timeout_type_high_res));
+  MOCK_METHOD1(cancelTimeout, void(folly::AsyncTimeout*));
+  MOCK_METHOD0(bumpHandlingTime, void());
+  MOCK_METHOD0(isInTimeoutManagerThread, bool());
 };
 }} // namespace facebook::logdevice

@@ -86,7 +86,7 @@ inline void bumpEventHandlersCompleted() {
 template <EventHandlerFunc handler,
           EventPreflight preflight = preflight_noop,
           EventPostflight postflight = postflight_noop>
-void EventHandler(evutil_socket_t /*fd*/, short what, void* arg) {
+void EventHandler(int /*fd*/, short what, void* arg) {
   bumpEventHandersCalled();
   preflight(arg, what);
   handler(arg, what);

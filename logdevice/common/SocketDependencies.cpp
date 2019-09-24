@@ -113,41 +113,8 @@ const Sockaddr& SocketDependencies::getNodeSockaddr(NodeID nid,
   return Sockaddr::INVALID;
 }
 
-int SocketDependencies::eventAssign(struct event* ev,
-                                    void (*cb)(evutil_socket_t,
-                                               short what,
-                                               void* arg),
-                                    void* arg) {
-  return LD_EV(event_assign)(ev,
-                             EventLoop::onThisThread()->getEventBase(),
-                             -1,
-                             EV_WRITE | EV_PERSIST,
-                             cb,
-                             arg);
-}
-
-void SocketDependencies::eventActive(struct event* ev, int what, short ncalls) {
-  LD_EV(event_active)(ev, what, ncalls);
-}
-
-void SocketDependencies::eventDel(struct event* ev) {
-  LD_EV(event_del)(ev);
-}
-
-int SocketDependencies::eventPrioritySet(struct event* ev, int priority) {
-  return LD_EV(event_priority_set)(ev, priority);
-}
-
-int SocketDependencies::evtimerAssign(struct event* ev,
-                                      void (*cb)(evutil_socket_t,
-                                                 short what,
-                                                 void* arg),
-                                      void* arg) {
-  return evtimer_assign(ev, EventLoop::onThisThread()->getEventBase(), cb, arg);
-}
-
-void SocketDependencies::evtimerDel(struct event* ev) {
-  evtimer_del(ev);
+EvBase* SocketDependencies::getEvBase() {
+  return &EventLoop::onThisThread()->getEvBase();
 }
 
 const struct timeval*
@@ -164,15 +131,6 @@ SocketDependencies::getTimevalFromMilliseconds(std::chrono::milliseconds t) {
 
 const struct timeval* SocketDependencies::getZeroTimeout() {
   return EventLoop::onThisThread()->getZeroTimeout();
-}
-
-int SocketDependencies::evtimerAdd(struct event* ev,
-                                   const struct timeval* timeout) {
-  return evtimer_add(ev, timeout);
-}
-
-int SocketDependencies::evtimerPending(struct event* ev, struct timeval* tv) {
-  return evtimer_pending(ev, tv);
 }
 
 struct bufferevent* FOLLY_NULLABLE

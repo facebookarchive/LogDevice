@@ -20,6 +20,7 @@ namespace facebook { namespace logdevice {
 class EvTimerLegacy {
  public:
   explicit EvTimerLegacy(IEvBase* base);
+  virtual ~EvTimerLegacy();
   static const timeval* getCommonTimeout(std::chrono::microseconds timeout);
   void attachTimeoutManager(folly::TimeoutManager* timeoutManager);
   void attachCallback(IEvBase::EventCallback callback) {
@@ -38,11 +39,13 @@ class EvTimerLegacy {
   bool scheduleTimeout(folly::TimeoutManager::timeout_type timeout);
   void cancelTimeout();
   bool isScheduled() const;
+  int setPriority(int pri);
+  void activate(int res, short ncalls);
 
  private:
   bool isInTimeoutManagerThread();
   static void libeventCallback(int fd, short events, void* arg);
-  event* event_;
+  event* event_{nullptr};
   IEvBase::EventCallback callback_;
   IEvBase* timeout_manager_{nullptr};
 };

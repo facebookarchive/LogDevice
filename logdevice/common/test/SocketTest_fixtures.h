@@ -24,6 +24,7 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
+#include "logdevice/common/libevent/test/EvBaseMock.h"
 #include "logdevice/common/protocol/ACK_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/protocol/MessageDeserializers.h"
@@ -55,24 +56,12 @@ class TestSocketDependencies : public SocketDependencies {
   virtual const Sockaddr& getNodeSockaddr(NodeID nid,
                                           SocketType type,
                                           ConnectionType conntype) override;
-  virtual int eventAssign(struct event* ev,
-                          void (*cb)(evutil_socket_t, short what, void* arg),
-                          void* arg) override;
-  virtual void eventActive(struct event* ev, int what, short ncalls) override;
-  virtual void eventDel(struct event* ev) override;
-  virtual int eventPrioritySet(struct event* ev, int priority) override;
-  virtual int evtimerAssign(struct event* ev,
-                            void (*cb)(evutil_socket_t, short what, void* arg),
-                            void* arg) override;
-  virtual void evtimerDel(struct event* ev) override;
-  virtual int evtimerPending(struct event* ev, struct timeval* tv) override;
+  EvBase* getEvBase() override;
   virtual const struct timeval*
   getCommonTimeout(std::chrono::milliseconds t) override;
   virtual const timeval*
   getTimevalFromMilliseconds(std::chrono::milliseconds t) override;
   virtual const struct timeval* getZeroTimeout() override;
-  virtual int evtimerAdd(struct event* ev,
-                         const struct timeval* timeout) override;
   virtual struct bufferevent*
   buffereventSocketNew(int sfd,
                        int opts,
@@ -148,8 +137,8 @@ class SocketTest : public ::testing::Test {
         server_name_(0, 1),
         server_addr_(get_localhost_address_str(), 4440),
         destination_node_id_(client_id_, 1),
-        flow_group_(
-            std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr)) {
+        flow_group_(std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr)),
+        ev_base_mock_(EvBase::MOCK_EVENTBASE) {
     socket_ = std::make_unique<Socket>(
         server_name_,
         SocketType::DATA,
@@ -167,6 +156,11 @@ class SocketTest : public ::testing::Test {
   }
 
   using SentMsg = std::tuple<MessageType, Status>;
+
+  void SetUp() override {
+    ON_CALL(ev_base_mock_, isInTimeoutManagerThread())
+        .WillByDefault(::testing::Return(true));
+  }
 
   void triggerEventConnected() {
     ASSERT_NE(nullptr, event_cb_);
@@ -270,21 +264,8 @@ class SocketTest : public ::testing::Test {
   }
 
   virtual void eventActive(struct event* ev, int /*what*/, short /*ncalls*/) {
-    ld_check(ev == &socket_->end_stream_rewind_event_);
+    ld_check(ev == socket_->end_stream_rewind_event_.getEvent());
     socket_->endStreamRewind();
-  }
-
-  // Check if the timer is for buffered output. If it is - flush the buffer
-  int evtimerAdd(struct event* ev, const struct timeval* /*timeout*/) {
-    if (ev == &socket_->buffered_output_flush_event_) {
-      socket_->flushBufferedOutput();
-    } else if (ev == &socket_->deferred_event_queue_event_) {
-      socket_->processDeferredEventQueue();
-    }
-    if (ev_timer_add_hook_) {
-      ev_timer_add_hook_(ev);
-    }
-    return 0;
   }
 
   const Socket::EnvelopeQueue& getSerializeq() const {
@@ -316,6 +297,7 @@ class SocketTest : public ::testing::Test {
   std::string csid_;
   std::string client_build_info_;
   FlowGroup flow_group_;
+  EvBaseMock ev_base_mock_;
 
   // IMPORTANT: this remains uninitialized and a pointer to this is returned by
   // buffereventSocketConnect(). This remains untouched because Socket only
@@ -381,7 +363,8 @@ class ServerSocketTest : public SocketTest {
     cluster_name_ = "Socket_test_cluster";
     credentials_ = "Socket_test_credentials";
     csid_ = "";
-
+    ON_CALL(ev_base_mock_, isInTimeoutManagerThread())
+        .WillByDefault(::testing::Return(true));
     // Create a server socket.
     // Note that we can pass whatever we want here for fd and client_addr
     // because Socket will not use them directly, it will always pass them to
@@ -410,6 +393,12 @@ class FlowGroupTest : public ClientSocketTest {
 
   // Create an up and handshaked client connection.
   void setupConnection();
+
+  void SetUp() override {
+    ON_CALL(ev_base_mock_, isInTimeoutManagerThread())
+        .WillByDefault(::testing::Return(true));
+    setupConnection();
+  }
 
   bool drain(Envelope& e, Priority p) {
     if (e.message().tc_ == TrafficClass::HANDSHAKE) {

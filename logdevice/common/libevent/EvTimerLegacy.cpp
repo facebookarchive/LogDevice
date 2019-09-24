@@ -29,6 +29,12 @@ EvTimerLegacy::EvTimerLegacy(IEvBase* base) : timeout_manager_(base) {
                  this);
 }
 
+EvTimerLegacy::~EvTimerLegacy() {
+  if (event_) {
+    LD_EV(event_free)(event_);
+  }
+}
+
 const timeval* FOLLY_NULLABLE
 EvTimerLegacy::getCommonTimeout(std::chrono::microseconds timeout) {
   auto base = EvBaseLegacy::getRunningBase();
@@ -79,6 +85,14 @@ void EvTimerLegacy::cancelTimeout() {
 bool EvTimerLegacy::isScheduled() const {
   struct event* ev = getEvent();
   return evtimer_pending(ev, nullptr);
+}
+
+int EvTimerLegacy::setPriority(int pri) {
+  return LD_EV(event_priority_set)(getEvent(), pri);
+}
+
+void EvTimerLegacy::activate(int res, short ncalls) {
+  LD_EV(event_active)(getEvent(), res, ncalls);
 }
 
 void EvTimerLegacy::libeventCallback(int, short, void* arg) {

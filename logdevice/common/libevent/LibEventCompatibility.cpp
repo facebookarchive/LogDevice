@@ -246,6 +246,33 @@ bool EvTimer::isScheduled() const {
   return false;
 }
 
+int EvTimer::setPriority(int pri) {
+  if (is_mock_) {
+    return 0;
+  }
+  if (evtimer_legacy_) {
+    return evtimer_legacy_->setPriority(pri);
+  }
+  if (evtimer_folly_) {
+    return evtimer_folly_->setPriority(pri);
+  }
+  ld_check(false);
+  return -1;
+}
+
+void EvTimer::activate(int res, short ncalls) {
+  if (is_mock_) {
+    return;
+  }
+  if (evtimer_legacy_) {
+    evtimer_legacy_->activate(res, ncalls);
+  } else if (evtimer_folly_) {
+    evtimer_folly_->activate(res, ncalls);
+  } else {
+    ld_check(false);
+  }
+}
+
 const timeval* FOLLY_NULLABLE
 EvTimer::getCommonTimeout(std::chrono::microseconds timeout) {
   auto base = EvBase::getRunningBase();

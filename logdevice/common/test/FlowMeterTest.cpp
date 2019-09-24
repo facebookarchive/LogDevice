@@ -13,7 +13,7 @@ using namespace facebook::logdevice;
 
 namespace {
 
-TEST_F(FlowGroupTest, FlowMeterFill) {
+TEST(FlowMeterTest, FlowMeterFill) {
   FlowMeter test_meter;
   auto& test_bucket = test_meter.entries[0];
   size_t bucket_capacity = 300;
@@ -76,7 +76,7 @@ TEST_F(FlowGroupTest, FlowMeterFill) {
   ASSERT_EQ(test_bucket.depositBudget(), INT64_MAX);
 }
 
-TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCreditsOverFlowTest) {
+TEST(FlowMeterTest, FlowMeterPutUnutilizedCreditsOverFlowTest) {
   FlowMeter test_meter;
   auto& test_bucket = test_meter.entries[0];
   int64_t bucket_capacity = INT64_MAX;
@@ -127,7 +127,7 @@ TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCreditsOverFlowTest) {
   ASSERT_EQ(test_bucket.level(), 0);
 }
 
-TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCredits) {
+TEST(FlowMeterTest, FlowMeterPutUnutilizedCredits) {
   size_t megabyte = 1000000;
   FlowMeter test_meter;
   auto& test_bucket = test_meter.entries[0];
@@ -205,7 +205,7 @@ TEST_F(FlowGroupTest, FlowMeterPutUnutilizedCredits) {
   ASSERT_EQ(test_bucket.returnCredits(10), 10 /* overflow */);
 }
 
-TEST_F(FlowGroupTest, FlowMeterTransferCredit) {
+TEST(FlowMeterTest, FlowMeterTransferCredit) {
   FlowMeter test_meter;
   auto& test_bucket = test_meter.entries[0];
   auto bucket_capacity = 100;

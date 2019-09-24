@@ -113,14 +113,20 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
       our_name_at_peer_(ClientID::INVALID),
       connect_throttle_(getSettings().connect_throttle),
       outbuf_overflow_(getSettings().outbuf_overflow_kb * 1024),
+      read_more_(deps_->getEvBase()),
+      connect_timeout_event_(deps_->getEvBase()),
       retries_so_far_(0),
+      handshake_timeout_event_(deps_->getEvBase()),
       first_attempt_(true),
       tcp_sndbuf_cache_({128 * 1024, std::chrono::steady_clock::now()}),
       tcp_rcvbuf_size_(128 * 1024),
       close_reason_(E::UNKNOWN),
       num_messages_sent_(0),
       num_messages_received_(0),
-      num_bytes_received_(0) {
+      num_bytes_received_(0),
+      deferred_event_queue_event_(deps_->getEvBase()),
+      end_stream_rewind_event_(deps_->getEvBase()),
+      buffered_output_flush_event_(deps_->getEvBase()) {
   if ((conntype == ConnectionType::SSL) ||
       (forceSSLSockets() && type != SocketType::GOSSIP)) {
     conntype_ = ConnectionType::SSL;
@@ -146,59 +152,43 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
     throw ConstructorFailed();
   }
 
-  int rv =
-      deps_->evtimerAssign(&read_more_, EventHandler<readMoreCallback>, this);
+  read_more_.attachCallback([this] {
+    bumpEventHandersCalled();
+    onBytesAvailable(false /*fresh*/);
+    bumpEventHandlersCompleted();
+  });
+  connect_timeout_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    onConnectAttemptTimeout();
+    bumpEventHandlersCompleted();
+  });
+  handshake_timeout_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    onHandshakeTimeout();
+    bumpEventHandlersCompleted();
+  });
+  deferred_event_queue_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    processDeferredEventQueue();
+    bumpEventHandlersCompleted();
+  });
+  end_stream_rewind_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    endStreamRewind();
+    bumpEventHandlersCompleted();
+  });
+
+  int rv = end_stream_rewind_event_.setPriority(EventLoop::PRIORITY_HIGH);
   if (rv != 0) {
     err = E::INTERNAL;
     throw ConstructorFailed();
   }
 
-  rv = deps_->evtimerAssign(&connect_timeout_event_,
-                            EventHandler<connectAttemptTimeoutCallback>,
-                            this);
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->evtimerAssign(
-      &handshake_timeout_event_, EventHandler<handshakeTimeoutCallback>, this);
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->evtimerAssign(&deferred_event_queue_event_,
-                            EventHandler<deferredEventQueueEventCallback>,
-                            reinterpret_cast<void*>(this));
-
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->eventAssign(&end_stream_rewind_event_,
-                          EventHandler<endStreamRewindCallback>,
-                          reinterpret_cast<void*>(this));
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->eventPrioritySet(
-      &end_stream_rewind_event_, EventLoop::PRIORITY_HIGH);
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->evtimerAssign(&buffered_output_flush_event_,
-                            EventHandler<onBufferedOutputTimerEvent>,
-                            reinterpret_cast<void*>(this));
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
+  buffered_output_flush_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    flushBufferedOutput();
+    bumpEventHandlersCompleted();
+  });
 }
 
 Socket::Socket(NodeID server_name,
@@ -276,8 +266,7 @@ void Socket::onBufferedOutputWrite(struct evbuffer* buffer,
   ld_check(buffer == self->buffered_output_);
 
   if (info->n_added) {
-    self->deps_->evtimerAdd(
-        &self->buffered_output_flush_event_, self->deps_->getZeroTimeout());
+    self->buffered_output_flush_event_.scheduleTimeout(0);
   }
 }
 
@@ -297,7 +286,7 @@ void Socket::flushBufferedOutput() {
   // connected here, because the socket might have been closed above, or if we
   // flushed the last bytes (see flushOutputandClose())
   if (connected_ && LD_EV(evbuffer_get_length)(buffered_output_) != 0) {
-    deps_->evtimerAdd(&buffered_output_flush_event_, deps_->getZeroTimeout());
+    buffered_output_flush_event_.scheduleTimeout(0);
   }
 }
 
@@ -663,7 +652,7 @@ void Socket::onBytesAvailable(bool fresh) {
           if (err == E::NOBUFS) {
             STAT_INCR(deps_->getStats(), sock_read_event_nobufs);
             // Ran out of space to enqueue message into worker. Try again.
-            deps_->evtimerAdd(&read_more_, deps_->getZeroTimeout());
+            read_more_.scheduleTimeout(0);
             break;
           }
           if (!peer_name_.isClientAddress()) {
@@ -691,11 +680,11 @@ void Socket::onBytesAvailable(bool fresh) {
         // process before returning control to libevent. schedule
         // read_more_ to fire in the next iteration of event loop and
         // return control to libevent so that we can run other events
-        deps_->evtimerAdd(&read_more_, deps_->getZeroTimeout());
+        read_more_.scheduleTimeout(0);
         break;
       }
     } else {
-      deps_->evtimerDel(&read_more_);
+      read_more_.cancelTimeout();
       break;
     }
 
@@ -818,7 +807,7 @@ void Socket::onConnected() {
   ld_check(!connected_);
   ld_check(!peer_name_.isClientAddress());
 
-  deps_->evtimerDel(&connect_timeout_event_);
+  connect_timeout_event_.cancelTimeout();
   addHandshakeTimeoutEvent();
   connected_ = true;
   peer_shuttingdown_ = false;
@@ -1083,7 +1072,7 @@ void Socket::close(Status reason) {
 
   if (buffered_output_) {
     buffered_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
-    deps_->evtimerDel(&buffered_output_flush_event_);
+    buffered_output_flush_event_.cancelTimeout();
     LD_EV(evbuffer_free)(buffered_output_);
     buffered_output_ = nullptr;
   }
@@ -1115,11 +1104,11 @@ void Socket::close(Status reason) {
     STAT_DECR(deps_->getStats(), num_ssl_connections);
   }
 
-  deps_->evtimerDel(&read_more_);
-  deps_->evtimerDel(&connect_timeout_event_);
-  deps_->evtimerDel(&handshake_timeout_event_);
-  deps_->evtimerDel(&deferred_event_queue_event_);
-  deps_->eventDel(&end_stream_rewind_event_);
+  read_more_.cancelTimeout();
+  connect_timeout_event_.cancelTimeout();
+  handshake_timeout_event_.cancelTimeout();
+  deferred_event_queue_event_.cancelTimeout();
+  end_stream_rewind_event_.cancelTimeout();
 
   // Move everything here so that this Socket object has a clean state
   // before we call any callback.
@@ -1366,7 +1355,7 @@ bool Socket::injectAsyncMessageError(std::unique_ptr<Envelope>&& e) {
       // Turn off the rewind when the deferred event queue is drained.
       // Ensure this happens even if no other deferred events are added
       // for this socket during the current event loop cycle.
-      deps_->eventActive(&end_stream_rewind_event_, EV_WRITE, 0);
+      end_stream_rewind_event_.activate(EV_WRITE, 0);
       ld_error("Rewinding Stream on Socket (%p) - %jd passed, %01.8f%% chance",
                this,
                (intmax_t)message_error_injection_pass_count_,
@@ -1603,10 +1592,8 @@ void Socket::bytesSentCallback(struct evbuffer* buffer,
 void Socket::enqueueDeferredEvent(SocketEvent e) {
   deferred_event_queue_.push_back(e);
 
-  if (!deps_->evtimerPending(&deferred_event_queue_event_)) {
-    int rv = deps_->evtimerAdd(
-        &deferred_event_queue_event_, deps_->getZeroTimeout());
-    ld_check(rv == 0);
+  if (!deferred_event_queue_event_.isScheduled()) {
+    ld_check(deferred_event_queue_event_.scheduleTimeout(0));
   }
 }
 
@@ -1690,12 +1677,12 @@ void Socket::processDeferredEventQueue() {
     eventCallbackImpl(event);
   }
 
-  if (deps_->evtimerPending(&deferred_event_queue_event_)) {
-    deps_->evtimerDel(&deferred_event_queue_event_);
+  if (deferred_event_queue_event_.isScheduled()) {
+    deferred_event_queue_event_.cancelTimeout();
   }
 
   ld_check(queue.empty());
-  ld_assert(!deps_->evtimerPending(&deferred_event_queue_event_));
+  ld_assert(!deferred_event_queue_event_.isScheduled());
 }
 
 void Socket::endStreamRewindCallback(void* instance, short) {
@@ -2071,7 +2058,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
   if (isHandshakeMessage(ph.type)) {
     handshaken_ = true;
     first_attempt_ = false;
-    deps_->evtimerDel(&handshake_timeout_event_);
+    handshake_timeout_event_.cancelTimeout();
   }
 
   MESSAGE_TYPE_STAT_INCR(deps_->getStats(), ph.type, message_received);
@@ -2227,11 +2214,7 @@ uint64_t Socket::getNumBytesReceived() const {
 void Socket::addHandshakeTimeoutEvent() {
   std::chrono::milliseconds timeout = getSettings().handshake_timeout;
   if (timeout.count() > 0) {
-    const timeval* tvp = deps_->getCommonTimeout(timeout);
-    if (!tvp) {
-      tvp = deps_->getTimevalFromMilliseconds(timeout);
-    }
-    deps_->evtimerAdd(&handshake_timeout_event_, tvp);
+    handshake_timeout_event_.scheduleTimeout(timeout);
   }
 }
 
@@ -2240,11 +2223,7 @@ void Socket::addConnectAttemptTimeoutEvent() {
   if (timeout.count() > 0) {
     timeout *=
         pow(getSettings().connect_timeout_retry_multiplier, retries_so_far_);
-    const timeval* tvp = deps_->getCommonTimeout(timeout);
-    if (!tvp) {
-      tvp = deps_->getTimevalFromMilliseconds(timeout);
-    }
-    deps_->evtimerAdd(&connect_timeout_event_, tvp);
+    connect_timeout_event_.scheduleTimeout(timeout);
   }
 }
 
