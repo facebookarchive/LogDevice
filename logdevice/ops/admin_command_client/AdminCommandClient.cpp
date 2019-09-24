@@ -73,7 +73,7 @@ class AdminClientConnection
   void connectErr(const AsyncSocketException& ex) noexcept override {
     request_response_.success = false;
     request_response_.failure_reason = "CONNECTION_ERROR";
-    ld_error("Could not connect to %s: %s",
+    ld_debug("Could not connect to %s: %s",
              request_response_.sockaddr.describe().c_str(),
              ex.what());
     done();
@@ -132,7 +132,7 @@ class AdminClientConnection
   }
 
   void readErr(const AsyncSocketException& ex) noexcept override {
-    ld_error("Error reading from %s: %s",
+    ld_debug("Error reading from %s: %s",
              request_response_.sockaddr.describe().c_str(),
              ex.what());
     success_ = false;
@@ -146,7 +146,7 @@ class AdminClientConnection
 
   void writeErr(size_t /*bytesWritten*/,
                 const AsyncSocketException& ex) noexcept override {
-    ld_error("Error writting to %s: %s",
+    ld_debug("Error writing to %s: %s",
              request_response_.sockaddr.describe().c_str(),
              ex.what());
     request_response_.failure_reason = "WRITE_ERROR";
@@ -185,13 +185,13 @@ class AdminClientConnection
     double d2 =
         std::chrono::duration_cast<std::chrono::duration<double>>(tend - tdone)
             .count();
-    ld_info("Response from %s has %lu chunks, response size is %lu, "
-            "fetching data took %.1fs, preparing response took %.1fs",
-            request_response_.sockaddr.describe().c_str(),
-            result_.size(),
-            size,
-            d1,
-            d2);
+    ld_debug("Response from %s has %lu chunks, response size is %lu, "
+             "fetching data took %.1fs, preparing response took %.1fs",
+             request_response_.sockaddr.describe().c_str(),
+             result_.size(),
+             size,
+             d1,
+             d2);
     result_.clear();
   }
 
@@ -285,7 +285,7 @@ AdminCommandClient::semifuture_send(
       }
 
       if (timed_out) {
-        ld_error("Timed out after %lums reading from %lu nodes",
+        ld_debug("Timed out after %lums reading from %lu nodes",
                  command_timeout.count(),
                  connections_size - connections_done);
         for (size_t i = start;
