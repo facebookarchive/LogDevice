@@ -165,16 +165,24 @@ TEST_F(AppendIntegrationTest, AppendEchoClient) {
 }
 
 /**
- * Sends 1000 appends to 1000 logs.
+ * Sends 100 appends to 100 logs.
  * Checks throttling in SyncStorageThread.
  */
 TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
   int rv;
 
-  const int NUM_LOGS = 1000;
+  const int NUM_LOGS = 100;
 
   auto cluster =
-      IntegrationTestUtils::ClusterFactory().setNumLogs(NUM_LOGS).create(1);
+      IntegrationTestUtils::ClusterFactory()
+          .setNumLogs(NUM_LOGS)
+          // Allow all sequencer activations to happen concurrently,
+          // to maximize the batching of wal syncs.
+          .setParam("--concurrent-log-recoveries", "300")
+          .setParam("--max-sequencer-background-activations-in-flight", "300")
+          // Increase the window for batching of syncs.
+          .setParam("--storage-thread-delaying-sync-interval", "1s")
+          .create(1);
   // Make sure that sequencer won't reactivate.
   cluster->waitForMetaDataLogWrites();
 
@@ -203,16 +211,22 @@ TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
     async_append_sem.wait();
   }
 
+  // Recovery and metadata log writes are the main source of WAL syncs.
+  cluster->waitForRecovery();
+
   std::map<std::string, int64_t> stats = cluster->getNode(0).stats();
-  // expectation values depend on chosen NUM_LOGS
-  // most syncs here come from sequencer activation
-  // note opt mode also affects these numbers i.e. buck with @mode/opt
   int fdatasync = stats["fdatasyncs"];
   int wal_syncs = stats["wal_syncs"];
-  EXPECT_GT(fdatasync, 10);
-  EXPECT_LT(fdatasync, 250);
-  EXPECT_GT(wal_syncs, 10);
-  EXPECT_LT(wal_syncs, 250);
+  ld_info("fdatasync: %d, wal_syncs: %d", fdatasync, wal_syncs);
+  // Check that the stats are working at all.
+  EXPECT_GE(fdatasync, 1);
+  EXPECT_GE(wal_syncs, 1);
+  // Check that we didn't do way too many syncs. We expect each sequencer
+  // activation+recovery to do at least one sync (or maybe two: writing metadata
+  // log record and updating LCE in CLEAN message). So any number of syncs below
+  // 100 means that the delaying is probably working.
+  EXPECT_LE(fdatasync, 90);
+  EXPECT_LE(wal_syncs, 90);
 }
 
 /**
