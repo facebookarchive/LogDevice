@@ -24,6 +24,7 @@ struct NodeTemplate {
   double sequencer_weight{1.0};
   shard_size_t num_shards{2};
   bool metadata_node{false};
+  node_gen_t generation{1};
 };
 
 configuration::nodes::NodeServiceDiscovery

@@ -46,6 +46,8 @@ if(${BUILD_TESTS})
     "test/InMemNodesConfigurationStore.h"
     "test/InMemVersionedConfigStore.h"
     "test/InMemVersionedConfigStore.cpp"
+    "test/MockNodesConfigurationManager.h"
+    "test/MockNodesConfigurationManager.cpp"
     "test/TestUtil.h"
     "test/TestUtil.cpp"
     "test/NodeSetTestUtil.h"

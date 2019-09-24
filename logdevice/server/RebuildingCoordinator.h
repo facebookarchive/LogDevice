@@ -231,20 +231,13 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   virtual StatsHolder* getStats();
 
   /**
-   * If this node's generation is 1, write RebuildingCheckpointMetadata for each
-   * shard and mark all shards as rebuilt in Processor so that we can
-   * immediately start accepting reads and writes.
+   * Queries RebuildingMarkerChecker to check for RebuildingCompleteMetadata in
+   * all the shards. Shards that are not missing any data are reported to the
+   * processor as rebuilt so that they can start accepting reads and writes.
+   * Rebuilding supervisor will start a rebuilding for shards that are missing
+   * their data.
    *
-   * If this node's generation is >1, try and retrieve the
-   * RebuildingCheckpointMetadata for each shard. For each shard:
-   *
-   * - If the marker does exist, mark the shard as rebuilt in Processor;
-   * - If the marker does not exist, we don't mark the shard as rebuilt yet.
-   *   Once it is rebuilt, we will write the RebuildingCheckpointMetadata before
-   *   we send SHARD_ACK_REBUILT in the event log, and we will mark the shard as
-   *   rebuilt in Processor.
-   *
-   * @return 0 on success, or -1 on failure.
+   * Check the documentation of RebuildingMarkerChecker.
    */
   virtual int checkMarkers();
 

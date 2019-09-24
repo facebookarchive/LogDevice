@@ -323,7 +323,7 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
          std::make_unique<StorageNodeAttribute>(
              StorageNodeAttribute{/*capacity=*/256.0,
                                   /*num_shards*/ node.num_shards,
-                                  /*generation*/ 1,
+                                  /*generation*/ node.generation,
                                   /*exclude_from_nodesets*/ false})});
   }
   VLOG(1) << "update: " << update.toString();

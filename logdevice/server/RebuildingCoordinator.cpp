@@ -15,8 +15,10 @@
 #include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/request_util.h"
+#include "logdevice/server/RebuildingMarkerChecker.h"
 #include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
@@ -299,58 +301,38 @@ void RebuildingCoordinator::noteRebuildingSettingsChanged() {
 }
 
 int RebuildingCoordinator::checkMarkers() {
-  if (getMyNodeID().generation() <= 1) {
-    for (uint32_t shard = 0; shard < numShards(); ++shard) {
-      RebuildingCompleteMetadata metadata;
-      LocalLogStore::WriteOptions options;
-      LocalLogStore* store = shardedStore_->getByIndex(shard);
-      if (store->acceptingWrites() != E::DISABLED) {
+  const auto& storage_mem =
+      config_->getNodesConfiguration()->getStorageMembership();
+  RebuildingMarkerChecker checker(
+      storage_mem->getShardStates(getMyNodeID().index()),
+      getMyNodeID(),
+      storage_mem->getVersion(),
+      processor_->getNodesConfigurationManager(),
+      shardedStore_);
+
+  auto res = checker.checkAndWriteMarkers();
+  if (res.hasError()) {
+    return -1;
+  }
+
+  for (const auto& [shard, res] : res.value()) {
+    switch (res) {
+      case RebuildingMarkerChecker::CheckResult::SHARD_NOT_MISSING_DATA:
         notifyProcessorShardRebuilt(shard);
-      }
-      int rv = store->writeStoreMetadata(metadata, options);
-      if (rv != 0) {
-        ld_error("Could not write RebuildingCompleteMetadata for shard %u: %s",
-                 shard,
-                 error_description(err));
-        if (store->acceptingWrites() != E::DISABLED) {
-          // This shouldn't really happen with current LocalLogStore
-          // implementations because a failed write transitions the store to
-          // a disabled state.
-          return -1;
-        }
-      }
-    }
-    return 0;
-  }
-
-  for (shard_index_t shard = 0; shard < numShards(); ++shard) {
-    LocalLogStore* store = shardedStore_->getByIndex(shard);
-    RebuildingCompleteMetadata meta;
-    int rv = store->readStoreMetadata(&meta);
-    if (rv == 0) {
-      notifyProcessorShardRebuilt(shard);
-    } else if (err == E::NOTFOUND) {
-      ld_info("Did not find RebuildingCompleteMetadata for shard %u. Waiting "
-              "for the shard to be rebuilt...",
-              shard);
-
-      // Request rebuilding of the shard.
-      auto supervisor = processor_->rebuilding_supervisor_;
-      ld_check(supervisor);
-      supervisor->myShardNeedsRebuilding(shard);
-    } else {
-      // It's likely that the failing disk on which this shard resides has not
-      // been repaired yet. Once the disk is repaired, logdeviced will be
-      // restarted and we will try reading the marker again.
-      ld_error("Error reading RebuildingCompleteMetadata for shard %u: %s",
-               shard,
-               error_description(err));
-      if (store->acceptingWrites() != E::DISABLED) {
+        break;
+      case RebuildingMarkerChecker::CheckResult::SHARD_MISSING_DATA:
+        ld_check(processor_->rebuilding_supervisor_);
+        processor_->rebuilding_supervisor_->myShardNeedsRebuilding(shard);
+        break;
+      case RebuildingMarkerChecker::CheckResult::UNEXPECTED_ERROR:
         return -1;
-      }
+      case RebuildingMarkerChecker::CheckResult::SHARD_ERROR:
+      case RebuildingMarkerChecker::CheckResult::SHARD_DISABLED:
+        // It's ok to ignore those because they are either being rebuilt or
+        // will get rebuilt soon.
+        break;
     }
   }
-
   return 0;
 }
 
