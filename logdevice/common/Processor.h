@@ -18,6 +18,7 @@
 #include <folly/Memory.h>
 #include <folly/memory/EnableSharedFromThis.h>
 
+#include "logdevice/common/HealthMonitor.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/WorkerType.h"
@@ -147,6 +148,9 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * Decides which thread to send a request to.
    */
   int getTargetThreadForRequest(const std::unique_ptr<Request>& rq);
+
+  // HealthMonitor pointer. Used on server side.
+  std::unique_ptr<HealthMonitor> health_monitor_;
 
  public:
   /**
@@ -672,6 +676,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // inflight. Should ONLY be used in testing.
   void
   setSequencerBatching(std::unique_ptr<SequencerBatching> sequencer_batching);
+
+  HealthMonitor& getHealthMonitor() {
+    return *health_monitor_;
+  }
 
  private:
   const std::shared_ptr<TraceLogger> trace_logger_;

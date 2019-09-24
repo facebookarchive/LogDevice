@@ -844,7 +844,6 @@ bool Server::initProcessor() {
                                 "",
                                 "ld:srv", // prefix of worker thread names
                                 params_->getMyNodeID());
-
     if (params_->getProcessorSettings()->enable_nodes_configuration_manager) {
       // create and initialize NodesConfigurationManager (NCM) and attach it to
       // the Processor

@@ -329,10 +329,12 @@ void gossip_round(MockFailureDetector* d1, MockFailureDetector* d2) {
 
 void shutdown_processor(Processor* processor) {
   // gracefully stop the processor and all its worker threads
+  auto health_monitor_closed = processor->getHealthMonitor().shutdown();
   const int nworkers = processor->getAllWorkersCount();
   int nsuccess = post_and_wait(
       processor, [](Worker* worker) { worker->stopAcceptingWork(); });
   ASSERT_EQ(nworkers, nsuccess);
+  health_monitor_closed.wait();
   nsuccess = post_and_wait(
       processor, [](Worker* worker) { worker->finishWorkAndCloseSockets(); });
   ASSERT_EQ(nworkers, nsuccess);

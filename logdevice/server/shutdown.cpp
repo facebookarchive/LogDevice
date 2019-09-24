@@ -211,6 +211,8 @@ void shutdown_server(
     listeners_closed.emplace_back(
         ssl_connection_listener->stopAcceptingConnections());
   }
+  auto health_monitor_closed = processor->getHealthMonitor().shutdown();
+
   folly::collectAll(listeners_closed.begin(), listeners_closed.end()).wait();
 
   connection_listener.reset();
@@ -304,6 +306,8 @@ void shutdown_server(
 
   // Shutdown FAILURE_DETECTOR worker
   ld_info("Finishing work and closing sockets on FAILURE_DETECTOR");
+  health_monitor_closed.wait();
+
   nworkers = post_and_wait(processor.get(),
                            [](WorkerType worker_type) -> bool {
                              return worker_type == WorkerType::FAILURE_DETECTOR;

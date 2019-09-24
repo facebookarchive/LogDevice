@@ -81,6 +81,10 @@ struct Settings : public SettingsBundle {
   // Time interval after which watchdog wakes up and detects stalls
   std::chrono::milliseconds watchdog_poll_interval_ms;
 
+  // Time interval after which health monitor wakes up and detects
+  // issues on node
+  std::chrono::milliseconds health_monitor_poll_interval_ms;
+
   // Limit on the number of backtraces printed when watchdog detects workers
   // are stalled
   rate_limit_t watchdog_bt_ratelimit;

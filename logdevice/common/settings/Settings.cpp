@@ -776,6 +776,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Maximum allowed rate of printing backtraces.",
        SERVER | CLIENT | REQUIRES_RESTART /* Passed to WatchDogThread ctor */,
        SettingsCategory::Monitoring);
+
+  init("health-monitor-poll-interval",
+       &health_monitor_poll_interval_ms,
+       "500ms",
+       validate_positive<ssize_t>(),
+       "Interval after which health monitor detects issues on node.",
+       SERVER | REQUIRES_RESTART /* used in Server ctor */,
+       SettingsCategory::Monitoring);
+
   init("purging-use-metadata-log-only",
        &purging_use_metadata_log_only,
        "false",

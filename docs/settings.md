@@ -177,6 +177,7 @@ sidebar_label: Settings
 | client-readers-flow-tracer-period | Period for logging in logdevice\_readers\_flow scuba table and for triggering certain sampling actions for monitoring. Set it to 0 to disable feature. | 0s | client&nbsp;only |
 | client-readers-flow-tracer-unhealthy-publish-weight | Weight given to traces of unhealthy readers when publishing samples (for improved debuggability). | 5.0 | client&nbsp;only |
 | disable-trace-logger | If disabled, NoopTraceLogger will be used, otherwise FBTraceLogger is used | false | requires&nbsp;restart |
+| health-monitor-poll-interval | Interval after which health monitor detects issues on node. | 500ms | requires&nbsp;restart, server&nbsp;only |
 | message-tracing-log-level | For messages that pass the message tracing filters, emit a log line at this level. One of: critical, error, warning, notify, info, debug, spew | info |  |
 | message-tracing-peers | Emit a log line for each sent/received message to/from the specified address(es). Separate different addresses with a comma, prefix unix socket paths with 'unix://'. An empty unix path will match all unix paths |  |  |
 | message-tracing-types | Emit a log line for each sent/received message of the type(s) specified. Separate different types with a comma. 'all' to trace all messages. Prefix the value with '~' to trace all types except the given ones, e.g. '~WINDOW,RELEASE' will trace messages of all types except WINDOW and RELEASE. |  |  |
