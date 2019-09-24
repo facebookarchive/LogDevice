@@ -12,8 +12,8 @@
 #include <folly/ScopeGuard.h>
 #include <gtest/gtest.h>
 
-#include "event2/event.h"
-#include "logdevice/common/libevent/compat.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
+#include "logdevice/common/libevent/test/EvBaseMock.h"
 
 using namespace facebook::logdevice;
 
@@ -23,13 +23,16 @@ operator"" _ms(unsigned long long val) {
   return std::chrono::milliseconds(val);
 }
 
-TEST(LibeventTimer, Test) {
-  using namespace std::chrono;
+class LibeventTimerTest
+    : public testing::TestWithParam<facebook::logdevice::EvBase::EvBaseType> {};
 
-  struct event_base* base = LD_EV(event_base_new)();
-  SCOPE_EXIT {
-    LD_EV(event_base_free)(base);
-  };
+TEST_P(LibeventTimerTest, Test) {
+  using namespace std::chrono;
+  EvBase base;
+  base.selectEvBase(GetParam());
+  base.setAsRunningBase();
+  auto rv = base.init();
+  ASSERT_EQ(rv, EvBase::Status::OK);
 
   auto tstart = steady_clock::now();
   auto assert_passed = [tstart](milliseconds ms) {
@@ -38,42 +41,41 @@ TEST(LibeventTimer, Test) {
 
   int nfired = 0;
 
-  LibeventTimer t20(base, [&] {
+  LibeventTimer t20(&base, [&] {
     ++nfired;
     assert_passed(15_ms);
   });
   t20.activate(20_ms);
 
-  LibeventTimer t50_cancel(base, [] { FAIL() << "timer not cancelled"; });
+  LibeventTimer t50_cancel(&base, [] { FAIL() << "timer not cancelled"; });
   t50_cancel.activate(50_ms);
   t50_cancel.cancel();
 
-  LibeventTimer t100(base, [&] {
+  LibeventTimer t100(&base, [&] {
     ++nfired;
     assert_passed(95_ms);
   });
   t100.activate(100_ms);
 
-  LibeventTimer t100_change(base, [&] {
+  LibeventTimer t100_change(&base, [&] {
     ++nfired;
     assert_passed(95_ms);
   });
   t100_change.activate(10_ms);
   t100_change.activate(100_ms);
 
-  LibeventTimer t100_us(base, [&] {
+  LibeventTimer t100_us(&base, [&] {
     ++nfired;
     assert_passed(95_ms);
   });
   t100_us.activate(microseconds(100000));
 
-  LibeventTimer t100_double(base, [&] {
+  LibeventTimer t100_double(&base, [&] {
     ++nfired;
     assert_passed(95_ms);
   });
   t100_double.activate(duration_cast<microseconds>(duration<double>(0.1)));
 
-  LD_EV(event_base_dispatch)(base);
-
+  base.loop();
   ASSERT_EQ(5, nfired);
 }

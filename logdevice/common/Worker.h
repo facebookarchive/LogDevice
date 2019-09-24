@@ -237,6 +237,11 @@ class Worker : public WorkContext {
     return event_loop->getEventBase();
   }
 
+  EvBase& getEvBase() {
+    auto event_loop = checked_downcast<EventLoop*>(getExecutor());
+    return event_loop->getEvBase();
+  }
+
   /**
    * @return Thread id of thread that executes work given to this worker.
    * Deprecated. new code should not use this.

@@ -45,7 +45,7 @@ class LibEventTimerImpl : public TimerInterface, public LibeventTimer {
     } else {
       auto ev_loop = EventLoop::onThisThread();
       ld_check(ev_loop);
-      LibeventTimer::assign(ev_loop->getEventBase(), callback);
+      LibeventTimer::assign(&ev_loop->getEvBase(), callback);
     }
   }
 
@@ -137,7 +137,7 @@ WheelTimerDispatchImpl::makeWheelTimerInternalExecutor(Worker* worker) {
 LibEventTimerImpl::LibEventTimerImpl() : LibeventTimer() {}
 
 void LibEventTimerImpl::assign(std::function<void()> callback) {
-  assign(EventLoop::onThisThread()->getEventBase(), callback);
+  assign(&EventLoop::onThisThread()->getEvBase(), callback);
 }
 
 WheelTimerDispatchImpl::WheelTimerDispatchImpl() {}

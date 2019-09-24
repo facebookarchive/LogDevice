@@ -908,7 +908,7 @@ void RebuildingCoordinator::cancelRequestedPlans(shard_index_t shard_idx) {
 void RebuildingCoordinator::activatePlanningTimer() {
   if (!planning_timer_) {
     planning_timer_ = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(),
+        &Worker::onThisThread()->getEvBase(),
         [self = this] { self->executePlanningRequests(); });
   }
   if (!planning_timer_->isActive()) {
