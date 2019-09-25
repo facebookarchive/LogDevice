@@ -1495,6 +1495,15 @@ class Node {
                               std::chrono::milliseconds(30000)) const;
 
   /**
+   * Does sendCommand() and parses the output as a json table.
+   * If we failed to send the command, or the result is empty, or the result
+   * looks like an error, returns empty vector. If result looks like neither
+   * json nor error message, crashes.
+   */
+  std::vector<std::map<std::string, std::string>>
+  sendJsonCommand(const std::string& command, bool ssl = false) const;
+
+  /**
    * Returns the admin API address for this node
    */
   folly::SocketAddress getAdminAddress() const;

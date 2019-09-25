@@ -185,13 +185,16 @@ class AdminClientConnection
     double d2 =
         std::chrono::duration_cast<std::chrono::duration<double>>(tend - tdone)
             .count();
-    ld_debug("Response from %s has %lu chunks, response size is %lu, "
-             "fetching data took %.1fs, preparing response took %.1fs",
-             request_response_.sockaddr.describe().c_str(),
-             result_.size(),
-             size,
-             d1,
-             d2);
+    ld_log(
+        d1 + d2 > 0.5 ? dbg::Level::INFO : dbg::Level::DEBUG,
+        "Response from %s has %lu chunks, response size is %lu, "
+        "fetching data took %.3fs, preparing response took %.3fs. Command: %s",
+        request_response_.sockaddr.describe().c_str(),
+        result_.size(),
+        size,
+        d1,
+        d2,
+        request_response_.request.c_str());
     result_.clear();
   }
 
