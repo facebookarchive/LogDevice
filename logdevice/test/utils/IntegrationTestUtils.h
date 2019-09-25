@@ -319,6 +319,15 @@ class ClusterFactory {
    */
   ClusterFactory& runMaintenanceManagerOn(node_index_t n) {
     maintenance_manager_node_ = n;
+
+    // Maintenance manager usually responds to events (like maintenance log
+    // deltas, event log deltas, nodes config updates) quickly, but sometimes,
+    // due to some race conditions, it seems to miss an event and goes to sleep
+    // for maintenance-manager-reevaluation-timeout. Decrease it so that tests
+    // don't time out.
+    // TODO (#54454518): Maybe make MaintenanceManager not do that.
+    setParam("--maintenance-manager-reevaluation-timeout", "5s");
+
     return *this;
   }
 

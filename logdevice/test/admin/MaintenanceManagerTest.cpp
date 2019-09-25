@@ -449,7 +449,7 @@ TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
           .setParam("--loglevel", "debug")
           .setParam("--max-node-rebuilding-percentage", "80")
           .setLogAttributes(data_log_attrs)
-          // Starts MaintenanceManager on N2
+          // Starts MaintenanceManager on N3
           .runMaintenanceManagerOn(3)
           .setNumDBShards(num_shards)
           .setConfigLogAttributes(log_attrs)
