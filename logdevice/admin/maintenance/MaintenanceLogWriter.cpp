@@ -32,6 +32,7 @@ void MaintenanceLogWriter::writeNextDeltaInQueue() {
   if (!appendRequestRetryTimer_) {
     appendRequestRetryTimer_ =
         createAppendRetryTimer([this]() { writeNextDeltaInQueue(); });
+    appendRequestRetryTimer_->randomize(0.2);
   }
 
   ld_check(!appendQueue_.empty());

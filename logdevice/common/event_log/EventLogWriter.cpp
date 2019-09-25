@@ -41,6 +41,7 @@ void EventLogWriter::writeNextEventInQueue() {
   if (!appendRequestRetryTimer_) {
     appendRequestRetryTimer_ =
         createAppendRetryTimer([this]() { writeNextEventInQueue(); });
+    appendRequestRetryTimer_->randomize(0.2);
   }
 
   ld_check(!appendQueue_.empty());
