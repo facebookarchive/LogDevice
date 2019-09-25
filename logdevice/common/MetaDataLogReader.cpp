@@ -286,7 +286,9 @@ void MetaDataLogReader::concludeEpochInterval(epoch_t interval_until) {
           epoch_to_deliver_ <= interval_start) {
         deliverMetaData(E::OK, interval_start, false);
       }
-      if (epoch_to_deliver_ <= epoch_end_) {
+      // deliverMetaData() above may calls callback that finalize the reader,
+      // check started_ and only proceed if MetaDataLogReader is not finalized
+      if (started_ && epoch_to_deliver_ <= epoch_end_) {
         ld_check(error_reason_ != E::OK);
         deliverMetaData(error_reason_, until, last_record);
       }
