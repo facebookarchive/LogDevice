@@ -235,4 +235,23 @@ TEST_F(CheckpointStoreImplTest, UpdateAndGetWithInMemVersionedConfigStore) {
   status = checkpointStore->getLSNSync("customer2", logid_t(4), &value);
   ASSERT_EQ(Status::OK, status);
   ASSERT_EQ(1, value);
+
+  std::map<logid_t, lsn_t> new_entries = {
+      {logid_t(1), 5}, {logid_t(2), 3}, {logid_t(4), 6}};
+  checkpointStore->updateLSNSync("customer1", new_entries);
+  status = checkpointStore->getLSNSync("customer1", logid_t(1), &value);
+  ASSERT_EQ(Status::OK, status);
+  ASSERT_EQ(5, value);
+
+  status = checkpointStore->getLSNSync("customer1", logid_t(2), &value);
+  ASSERT_EQ(Status::OK, status);
+  ASSERT_EQ(3, value);
+
+  status = checkpointStore->getLSNSync("customer1", logid_t(3), &value);
+  ASSERT_EQ(Status::OK, status);
+  ASSERT_EQ(2, value);
+
+  status = checkpointStore->getLSNSync("customer1", logid_t(4), &value);
+  ASSERT_EQ(Status::OK, status);
+  ASSERT_EQ(6, value);
 }

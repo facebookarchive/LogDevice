@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <map>
+
 #include <folly/Function.h>
 
 #include "logdevice/include/Err.h"
@@ -68,6 +70,18 @@ class CheckpointStore {
   virtual Status updateLSNSync(const std::string& customer_id,
                                logid_t log_id,
                                lsn_t lsn) = 0;
+
+  /*
+   * Synchronous updateLSN for many logs at once.
+   *
+   * See params for updateLSN() for many logs.
+   *
+   * @return status: see the updateConfigSync return value in
+   *   VersionedConfigStore class, as these are equivalent.
+   */
+  virtual Status updateLSNSync(const std::string& customer_id,
+                               const std::map<logid_t, lsn_t>& checkpoints) = 0;
+
   /*
    * UpdateLSN does asynchronous update of the LSN for the given log and the
    * customer.
@@ -83,6 +97,20 @@ class CheckpointStore {
   virtual void updateLSN(const std::string& customer_id,
                          logid_t log_id,
                          lsn_t lsn,
+                         UpdateCallback cb) = 0;
+
+  /*
+   * UpdateLSN does asynchronous update of the LSNs for many logs.
+   *
+   * @param customer_id: see the customer_id parameter of updateLSN for a single
+   *   log.
+   * @param checkpoints: a map log_id -> lsn. For each log in this map,
+   *   the new LSN will be updated.
+   * @param cb: see the cb parameter of updateConfig function in
+   *   VersionedConfigStore class.
+   */
+  virtual void updateLSN(const std::string& customer_id,
+                         const std::map<logid_t, lsn_t>& checkpoints,
                          UpdateCallback cb) = 0;
 };
 
