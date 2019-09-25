@@ -925,7 +925,7 @@ TEST_F(SequencerIntegrationTest, SequencerIsolation) {
 
   // figure out which node is running a sequencer for log 1 and partition it on
   // the minority side later
-  auto node_idx = hashing::weighted_ch(1, {1.0, 1.0, 1.0, 1.0});
+  auto node_idx = hashing::weighted_ch(1, {1.0, 1.0, 1.0, 1.0, 1.0});
   std::set<int> partition1;
   std::set<int> partition2;
   partition1.insert(node_idx);

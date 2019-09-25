@@ -390,6 +390,8 @@ class ClusterFactory {
 
     setNodesConfigurationSourceOfTruth(
         NodesConfigurationSourceOfTruth::SERVER_CONFIG);
+    setParam("--enable-config-synchronization", "false");
+
     return *this;
   }
 
