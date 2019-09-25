@@ -53,8 +53,9 @@ class ClusterMembershipAPIHandler : public virtual AdminAPIHandlerBase {
    * If the NCM fails to apply the update, the future will be fullfiled with a
    * NodesConfigurationManagerError exception.
    */
-  folly::SemiFuture<std::shared_ptr<const NodesConfiguration>>
-  applyNodesConfigurationUpdates(NodesConfiguration::Update updates);
+  static folly::SemiFuture<std::shared_ptr<const NodesConfiguration>>
+  applyNodesConfigurationUpdates(Processor* processor,
+                                 NodesConfiguration::Update updates);
 };
 
 }} // namespace facebook::logdevice

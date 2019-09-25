@@ -446,22 +446,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
   req.set_shards({mkShardID(100, -1), mkShardID(101, 0)});
 
   thrift::MarkShardsAsProvisionedResponse resp;
-
-  /* Retry as long as it's a VERSION_MISMATCH */
-  bool failed = false;
-  for (size_t trials = 0; trials < 10; trials++) {
-    failed = false;
-    try {
-      admin_client->sync_markShardsAsProvisioned(resp, req);
-      break;
-    } catch (const thrift::NodesConfigurationManagerError& ex) {
-      ASSERT_EQ(static_cast<int32_t>(E::VERSION_MISMATCH),
-                ex.error_code_ref().value_unchecked());
-      failed = true;
-    }
-  }
-
-  ASSERT_FALSE(failed);
+  admin_client->sync_markShardsAsProvisioned(resp, req);
   EXPECT_THAT(resp.get_updated_shards(),
               UnorderedElementsAre(
                   mkShardID(100, 0), mkShardID(100, 1), mkShardID(101, 0)));
