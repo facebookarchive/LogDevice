@@ -26,6 +26,9 @@ using facebook::logdevice::thrift::NodesStateResponse;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
+using ShardWorkflowMap = MaintenanceManager::ShardWorkflowMap;
+using SequencerWorkflowMap = MaintenanceManager::SequencerWorkflowMap;
+
 void MaintenanceManagerDependencies::startSubscription() {
   ld_check(cluster_maintenance_state_machine_ != nullptr);
   ld_check(event_log_state_machine_ != nullptr);
@@ -1023,8 +1026,12 @@ void MaintenanceManager::evaluate() {
 
   updateClientMaintenanceStateWrapper();
 
+  ld_check(cluster_maintenance_wrapper_);
   // Create all required workflows
-  createWorkflows();
+  active_shard_workflows_ = createShardWorkflows(
+      std::move(active_shard_workflows_), *cluster_maintenance_wrapper_);
+  active_sequencer_workflows_ = createSequencerWorkflows(
+      std::move(active_sequencer_workflows_), *cluster_maintenance_wrapper_);
 
   // Run Shard workflows
   status_ = MMStatus::RUNNING_WORKFLOWS;
@@ -1066,6 +1073,9 @@ void MaintenanceManager::evaluate() {
       .thenValue([this](NCUpdateResult&& result)
                      -> folly::SemiFuture<SafetyCheckResult> {
         if (result.hasError() && result.error() != Status::EMPTY) {
+          ld_warning("Couldn't perform the requested NodesConfiguration "
+                     "update, reason: %s",
+                     error_name(result.error()));
           return folly::makeUnexpected<Status>(std::move(result).error());
         }
         if (shouldStopProcessing()) {
@@ -1097,6 +1107,14 @@ void MaintenanceManager::evaluate() {
       .thenValue([this](SafetyCheckResult&& result)
                      -> folly::SemiFuture<NCUpdateResult> {
         if (result.hasError()) {
+          if (result.error() == Status::EMPTY) {
+            // Safety check doesn't need to run, no workflows waiting for safety
+            // checks.
+            ld_info("No workflows waiting for safety checker, moving forward");
+          } else {
+            ld_warning("Couldn't perform the requested SafetyCheck, reason: %s",
+                       error_name(result.error()));
+          }
           return folly::makeUnexpected<Status>(std::move(result.error()));
         }
         if (shouldStopProcessing()) {
@@ -1108,10 +1126,12 @@ void MaintenanceManager::evaluate() {
       .via(this)
       // We have heard back from NodesConfiguration update.
       .thenValue([this](NCUpdateResult&& result) {
-        if (result.hasError() && result.error() == Status::SHUTDOWN) {
-          ld_check(shouldStopProcessing());
-          finishShutdown();
-          return;
+        if (result.hasError()) {
+          if (result.error() == Status::SHUTDOWN) {
+            ld_check(shouldStopProcessing());
+            finishShutdown();
+            return;
+          }
         }
 
         if (result.hasValue()) {
@@ -1664,64 +1684,88 @@ MaintenanceManager::runShardWorkflows() {
   return std::make_pair(std::move(shards), std::move(futures));
 }
 
-void MaintenanceManager::createWorkflows() {
-  ld_check(cluster_maintenance_wrapper_);
+ShardWorkflowMap MaintenanceManager::createShardWorkflows(
+    ShardWorkflowMap&& existing_shard_workflows,
+    const ClusterMaintenanceWrapper& maintenance_wrapper) {
+  // In this method we need to ensure that we have the set of workflows matching
+  // our needs. Any workflow that needs to be re-created will be re-created if
+  // it the existing doesn't match our current targets. Any extra workflow will
+  // be removed, and enable workflows will be created for shards that should be
+  // enabled (no maintenances).
+  // Handling shard workflows.
+  ShardWorkflowMap new_workflows;
   // Iterate over all the storage nodes in membership and create
   // workflows if required
   for (auto node : nodes_config_->getStorageNodes()) {
     auto num_shards = nodes_config_->getNumShards(node);
     for (shard_index_t i = 0; i < num_shards; i++) {
       auto shard_id = ShardID(node, i);
-      const auto& targets =
-          cluster_maintenance_wrapper_->getShardTargetStates(shard_id);
+      const auto& targets = maintenance_wrapper.getShardTargetStates(shard_id);
       if (targets.count(ShardOperationalState::ENABLED) &&
           isShardEnabled(shard_id)) {
-        // Shard is already enabled, do not bother creating a workflow
+        // Shard is already enabled, do not bother creating/moving a workflow.
         continue;
       }
       // Create a new workflow if one does not exist or if the target states
       // are different because some maintenance was removed or new maintenance
       // was added for this shard
-      if (!active_shard_workflows_.count(shard_id) ||
+      if (existing_shard_workflows.count(shard_id) == 0 ||
           targets !=
-              active_shard_workflows_[shard_id].first->getTargetOpStates()) {
-        active_shard_workflows_[shard_id] = std::make_pair(
+              existing_shard_workflows[shard_id].first->getTargetOpStates()) {
+        new_workflows[shard_id] = std::make_pair(
             std::make_unique<ShardWorkflow>(shard_id, getEventLogWriter()),
             MaintenanceStatus::STARTED);
         ld_debug(
             "Created a ShardWorkflow for shard:%s", toString(shard_id).c_str());
+      } else {
+        // Move the workflow to the list of active workflows.
+        new_workflows[shard_id] = std::move(existing_shard_workflows[shard_id]);
       }
-      ShardWorkflow* wf = active_shard_workflows_[shard_id].first.get();
+      ShardWorkflow* wf = new_workflows[shard_id].first.get();
       wf->addTargetOpState(targets);
       wf->isPassiveDrainAllowed(
-          cluster_maintenance_wrapper_->isPassiveDrainAllowed(shard_id));
+          maintenance_wrapper.isPassiveDrainAllowed(shard_id));
       wf->shouldSkipSafetyCheck(
-          cluster_maintenance_wrapper_->shouldSkipSafetyCheck(shard_id));
+          maintenance_wrapper.shouldSkipSafetyCheck(shard_id));
       wf->rebuildInRestoreMode(
-          cluster_maintenance_wrapper_->shouldForceRestoreRebuilding(shard_id));
+          maintenance_wrapper.shouldForceRestoreRebuilding(shard_id));
     }
+    // At this point, any old workflow that is not covered by maintenances or
+    // does not need to be enabled will be dropped since it was not moved out of
+    // existing_shard_workflows.
   }
+  return new_workflows;
+}
 
+SequencerWorkflowMap MaintenanceManager::createSequencerWorkflows(
+    SequencerWorkflowMap&& existing_sequencer_workflows,
+    const ClusterMaintenanceWrapper& maintenance_wrapper) {
+  SequencerWorkflowMap new_workflows;
   // Iterator over all the sequencer nodes in membership and create
   // workflows if required
   for (auto node : nodes_config_->getSequencerNodes()) {
-    auto target = cluster_maintenance_wrapper_->getSequencerTargetState(node);
+    auto target = maintenance_wrapper.getSequencerTargetState(node);
     if (target == SequencingState::ENABLED && isSequencingEnabled(node)) {
-      // Sequencer is already enabled, do not bother creating a workflow
+      // Sequencer is already enabled, do not bother creating/moving a
+      // workflow.
       continue;
     }
 
-    if (!active_sequencer_workflows_.count(node) ||
-        target != active_sequencer_workflows_[node].first->getTargetOpState()) {
-      active_sequencer_workflows_[node] =
+    if (existing_sequencer_workflows.count(node) == 0 ||
+        target !=
+            existing_sequencer_workflows[node].first->getTargetOpState()) {
+      new_workflows[node] =
           std::make_pair(std::make_unique<SequencerWorkflow>(node),
                          MaintenanceStatus::STARTED);
+    } else {
+      // Move the workflow to the list of active workflows.
+      new_workflows[node] = std::move(existing_sequencer_workflows[node]);
     }
-    SequencerWorkflow* wf = active_sequencer_workflows_[node].first.get();
+    SequencerWorkflow* wf = new_workflows[node].first.get();
     wf->setTargetOpState(target);
-    wf->shouldSkipSafetyCheck(
-        cluster_maintenance_wrapper_->shouldSkipSafetyCheck(node));
+    wf->shouldSkipSafetyCheck(maintenance_wrapper.shouldSkipSafetyCheck(node));
   }
+  return new_workflows;
 }
 
 bool MaintenanceManager::isShardEnabled(const ShardID& shard) {

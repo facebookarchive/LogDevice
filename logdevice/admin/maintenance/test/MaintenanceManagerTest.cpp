@@ -24,6 +24,9 @@ using facebook::logdevice::configuration::nodes::NodesConfiguration;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
+using ShardWorkflowMap = MaintenanceManager::ShardWorkflowMap;
+using SequencerWorkflowMap = MaintenanceManager::SequencerWorkflowMap;
+
 class MockMaintenanceManagerDependencies;
 class MockMaintenanceManager;
 
@@ -35,12 +38,18 @@ class MaintenanceManagerTest : public ::testing::Test {
 
   ~MaintenanceManagerTest();
   void init();
-  void regenerateClusterMaintenanceWrapper();
+  const ClusterMaintenanceWrapper& regenerateClusterMaintenanceWrapper();
   void overrideStorageState(
       std::unordered_map<ShardID, membership::StorageState> map);
   void createShardWorkflow(ShardID shard, MaintenanceStatus status);
   void addNewNode(node_index_t node, std::string location = DEFAULT_LOC);
   void runExecutor();
+  ShardWorkflowMap
+  createShardWorkflows(ShardWorkflowMap&& existing_shard_workflows,
+                       const ClusterMaintenanceWrapper& maintenance_wrapper);
+  SequencerWorkflowMap createSequencerWorkflows(
+      SequencerWorkflowMap&& existing_sequencer_workflows,
+      const ClusterMaintenanceWrapper& maintenance_wrapper);
   void verifyShardOperationalState(
       std::vector<ShardID> shards,
       folly::Expected<ShardOperationalState, Status> state);
@@ -321,6 +330,8 @@ void MaintenanceManagerTest::init() {
   shard4.set_node(node4);
   shard4.set_shard_index(0);
   def4.set_user("humans");
+  def4.set_sequencer_nodes({node4});
+  def4.set_sequencer_target_state(SequencingState::DISABLED);
   def4.set_shards({shard4});
   def4.set_shard_target_state(ShardOperationalState::DRAINED);
   def4.set_group_id("N17_DRAINED");
@@ -340,6 +351,9 @@ void MaintenanceManagerTest::init() {
   maintenance_manager_->start();
   runExecutor();
   verifyMMStatus(MaintenanceManager::MMStatus::STARTING);
+  maintenance_manager_->event_log_rebuilding_set_ =
+      std::make_unique<EventLogRebuildingSet>(set_);
+  // maintenance_manager_->last_ers_version_ = lsn_t(1);
   ASSERT_TRUE(start_subscription_called_);
 }
 
@@ -388,6 +402,20 @@ void MaintenanceManagerTest::verifyMaintenanceStatus(
   }
 }
 
+ShardWorkflowMap MaintenanceManagerTest::createShardWorkflows(
+    ShardWorkflowMap&& existing_shard_workflows,
+    const ClusterMaintenanceWrapper& maintenance_wrapper) {
+  return maintenance_manager_->createShardWorkflows(
+      std::move(existing_shard_workflows), maintenance_wrapper);
+}
+
+SequencerWorkflowMap MaintenanceManagerTest::createSequencerWorkflows(
+    SequencerWorkflowMap&& existing_sequencer_workflows,
+    const ClusterMaintenanceWrapper& maintenance_wrapper) {
+  return maintenance_manager_->createSequencerWorkflows(
+      std::move(existing_sequencer_workflows), maintenance_wrapper);
+}
+
 void MaintenanceManagerTest::applyNCUpdate() {
   NodesConfiguration::Update update{};
   if (shards_update_) {
@@ -407,11 +435,13 @@ void MaintenanceManagerTest::runExecutor() {
   }
 }
 
-void MaintenanceManagerTest::regenerateClusterMaintenanceWrapper() {
+const ClusterMaintenanceWrapper&
+MaintenanceManagerTest::regenerateClusterMaintenanceWrapper() {
   maintenance_manager_->cluster_maintenance_wrapper_ =
       std::make_unique<ClusterMaintenanceWrapper>(
           std::make_unique<ClusterMaintenanceState>(cms_), nodes_config_);
   maintenance_manager_->nodes_config_ = nodes_config_;
+  return *maintenance_manager_->cluster_maintenance_wrapper_;
 }
 
 void MaintenanceManagerTest::createShardWorkflow(ShardID shard,
@@ -637,6 +667,57 @@ TEST_F(MaintenanceManagerTest, GetShardOperationalState) {
   // Nonexistent node
   verifyShardOperationalState(
       {ShardID(111, 0)}, folly::makeUnexpected(E::NOTFOUND));
+}
+
+TEST_F(MaintenanceManagerTest, CreateWorkflows) {
+  // Init generates a the following maintenances
+  // - N1N2_MAYDISAPPEAR
+  // - N2_DRAINED
+  // - N9_DRAINED
+  // - N17_DRAINED
+  init();
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+      original_nodes_config =
+          std::make_shared<const configuration::nodes::NodesConfiguration>(
+              *nodes_config_);
+  node_index_t node = 17;
+  ShardID shard = ShardID(node, 0);
+  addNewNode(node);
+  const auto& wrapper = regenerateClusterMaintenanceWrapper();
+  maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
+  // No workflows should have been created at this point.
+  ShardWorkflowMap shard_workflows;
+  shard_workflows = createShardWorkflows(std::move(shard_workflows), wrapper);
+  ASSERT_EQ(4, shard_workflows.size());
+  SequencerWorkflowMap sequencer_workflows;
+  sequencer_workflows =
+      createSequencerWorkflows(std::move(sequencer_workflows), wrapper);
+  ASSERT_EQ(1, sequencer_workflows.size());
+  // Let's remove a maintenance N9_DRAINED. That should reduce the number of
+  // workflows by one.
+  std::vector<MaintenanceDefinition> defs;
+  defs = cms_.get_maintenances();
+  for (auto it = defs.begin(); it != defs.end(); ++it) {
+    if (it->group_id_ref().value() == "N9_DRAINED") {
+      defs.erase(it);
+      break;
+    }
+  }
+  cms_.set_maintenances(defs);
+  const auto& wrapper2 = regenerateClusterMaintenanceWrapper();
+  shard_workflows = createShardWorkflows(std::move(shard_workflows), wrapper2);
+  ASSERT_EQ(3, shard_workflows.size());
+  sequencer_workflows =
+      createSequencerWorkflows(std::move(sequencer_workflows), wrapper2);
+  ASSERT_EQ(1, sequencer_workflows.size());
+  // Let's revert to the original config (without node 17)
+  nodes_config_ = original_nodes_config;
+  const auto& wrapper3 = regenerateClusterMaintenanceWrapper();
+  shard_workflows = createShardWorkflows(std::move(shard_workflows), wrapper3);
+  ASSERT_EQ(2, shard_workflows.size());
+  sequencer_workflows =
+      createSequencerWorkflows(std::move(sequencer_workflows), wrapper3);
+  ASSERT_EQ(0, sequencer_workflows.size());
 }
 
 TEST_F(MaintenanceManagerTest, GetNodeStateTest) {
