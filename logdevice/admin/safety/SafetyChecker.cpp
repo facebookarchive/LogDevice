@@ -176,6 +176,7 @@ void SafetyChecker::onMetadataRefreshComplete(
           results.size(),
           logsconfig_version);
   metadata_ = std::make_shared<LogMetaDataFetcher::Results>(std::move(results));
+  STAT_INCR(processor_->stats_, admin_server.safety_checker_metadata_refreshes);
   // Deallocate the fetcher, we don't need it.
   fetcher_.reset();
 

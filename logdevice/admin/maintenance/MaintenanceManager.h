@@ -654,6 +654,9 @@ class MaintenanceManager : public SerialWorkContext {
   // Returns true if status_ is STOPPING
   bool shouldStopProcessing();
 
+  // Sets the counters for maintenances
+  void reportMaintenanceStats();
+
   // Fulfills the shutdown_promise_ indicating
   // shutdown of MaintenanceManager is complete
   void finishShutdown();

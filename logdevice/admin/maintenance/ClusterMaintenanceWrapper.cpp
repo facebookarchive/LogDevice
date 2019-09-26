@@ -205,6 +205,16 @@ bool ClusterMaintenanceWrapper::shouldForceRestoreRebuilding(
   return force_restore_mode;
 }
 
+size_t ClusterMaintenanceWrapper::size() const {
+  return getMaintenances().size();
+}
+
+const std::vector<MaintenanceDefinition>&
+ClusterMaintenanceWrapper::getMaintenances() const {
+  ld_assert(state_);
+  return state_->get_maintenances();
+}
+
 bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(
     node_index_t node_id) const {
   const auto& groups = getGroupsForSequencer(node_id);

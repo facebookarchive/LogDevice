@@ -147,7 +147,7 @@ class MockMaintenanceManagerDependencies
             test_->sequencers_update_
                 ? test_->sequencers_update_->toString().c_str()
                 : "null");
-    ld_info("Version of nodes_config_ when reqeust was posted:%lu",
+    ld_info("Version of nodes_config_ when request was posted:%lu",
             test_->nodes_config_->getVersion().val_);
     auto pf_pair = folly::makePromiseContract<NCUpdateResult>();
     test_->nc_update_promise_ = std::move(pf_pair.first);
@@ -278,11 +278,7 @@ void MaintenanceManagerTest::init() {
   node2.set_node_index(2);
 
   auto node3 = thrift::NodeID();
-  auto node3_addr = thrift::SocketAddress();
-  // this node will be matched by address.
-  node3_addr.set_address("127.0.0.9");
-  node3_addr.set_address_family(thrift::SocketAddressFamily::INET);
-  node3.set_address(node3_addr);
+  node3.set_node_index(9);
 
   auto shard1 = thrift::ShardID();
   shard1.set_node(node1);

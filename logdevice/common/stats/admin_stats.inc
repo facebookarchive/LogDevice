@@ -15,4 +15,25 @@
 // Stats published by Admin server.
 STAT_DEFINE(admin_server_started, SUM)
 
+// Maintenances
+STAT_DEFINE(num_maintenances, SUM)
+STAT_DEFINE(maintenance_state_version, SUM)
+
+STAT_DEFINE(maintenance_progress_UNKNOWN, SUM)
+STAT_DEFINE(maintenance_progress_BLOCKED_UNTIL_SAFE, SUM)
+STAT_DEFINE(maintenance_progress_IN_PROGRESS, SUM)
+STAT_DEFINE(maintenance_progress_COMPLETED, SUM)
+
+// Maintenance Manager
+STAT_DEFINE(mm_evaluations, SUM)
+STAT_DEFINE(mm_metadata_nodeset_selection_failed, SUM)
+STAT_DEFINE(mm_ncm_update_errors, SUM)
+
+// Safety Checker (via MM)
+STAT_DEFINE(mm_safety_checker_runs, SUM)
+
+// Safety Checker (general)
+// The total number of refreshes we have done
+STAT_DEFINE(safety_checker_metadata_refreshes, SUM)
+
 #undef STAT_DEFINE

@@ -103,7 +103,7 @@ MaintenanceManagerDependencies::postNodesConfigurationUpdate(
     update.sequencer_config_update = std::move(sequencers_update);
   }
 
-  auto cb = [promise = std::move(pf.first)](
+  auto cb = [promise = std::move(pf.first), this](
                 Status st,
                 std::shared_ptr<const configuration::nodes::NodesConfiguration>
                     nc) mutable {
@@ -117,6 +117,7 @@ MaintenanceManagerDependencies::postNodesConfigurationUpdate(
       // workflows again
       ld_info("NodesConfiguration update failed with status:%s",
               toString(st).c_str());
+      STAT_INCR(this->getStats(), admin_server.mm_ncm_update_errors);
       promise.setValue(folly::makeUnexpected(st));
     }
   };
@@ -1003,6 +1004,7 @@ void MaintenanceManager::evaluate() {
           lsn_to_string(last_cms_version_).c_str(),
           lsn_to_string(last_ers_version_).c_str());
 
+  STAT_INCR(deps_->getStats(), admin_server.mm_evaluations);
   run_evaluate_ = false;
   cancelReevaluationTimer();
 
@@ -1142,6 +1144,7 @@ void MaintenanceManager::evaluate() {
         }
 
         if (!shouldStopProcessing()) {
+          reportMaintenanceStats();
           evaluate();
         } else {
           finishShutdown();
@@ -1159,6 +1162,30 @@ void MaintenanceManager::finishShutdown() {
 
 bool MaintenanceManager::shouldStopProcessing() {
   return status_ == MMStatus::STOPPING;
+}
+
+void MaintenanceManager::reportMaintenanceStats() {
+  // For all maintenances let's figure out the progress of each maintenance.
+  folly::F14FastMap<thrift::MaintenanceProgress, size_t> maintenance_agg;
+  for (const auto& def : cluster_maintenance_wrapper_->getMaintenances()) {
+    maintenance_agg[getMaintenanceProgressInternal(def)] += 1;
+  }
+  static_assert(
+      apache::thrift::TEnumTraits<thrift::MaintenanceProgress>::size == 4);
+  // Reporting maintenances per progress.
+  STAT_SET(deps_->getStats(),
+           admin_server.maintenance_progress_UNKNOWN,
+           // will return 0 if empty
+           maintenance_agg[thrift::MaintenanceProgress::UNKNOWN]);
+  STAT_SET(deps_->getStats(),
+           admin_server.maintenance_progress_IN_PROGRESS,
+           maintenance_agg[thrift::MaintenanceProgress::IN_PROGRESS]);
+  STAT_SET(deps_->getStats(),
+           admin_server.maintenance_progress_BLOCKED_UNTIL_SAFE,
+           maintenance_agg[thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE]);
+  STAT_SET(deps_->getStats(),
+           admin_server.maintenance_progress_COMPLETED,
+           maintenance_agg[thrift::MaintenanceProgress::COMPLETED]);
 }
 
 void MaintenanceManager::processShardWorkflowResult(
@@ -1386,7 +1413,8 @@ void MaintenanceManager::updateMetadataNodesetIfRequired() {
 
   if (result.hasError()) {
     ld_error("Metatadata log NodeSet selection failed");
-    STAT_INCR(deps_->getStats(), metadata_log_nodeset_selection_failed);
+    STAT_INCR(
+        deps_->getStats(), admin_server.mm_metadata_nodeset_selection_failed);
     return;
   }
 
@@ -1642,6 +1670,12 @@ void MaintenanceManager::updateClientMaintenanceStateWrapper() {
 
   // Regenerate definition indices if necessary
   cluster_maintenance_wrapper_->updateNodesConfiguration(nodes_config_);
+  STAT_SET(deps_->getStats(),
+           admin_server.num_maintenances,
+           cluster_maintenance_wrapper_->size());
+  STAT_SET(deps_->getStats(),
+           admin_server.maintenance_state_version,
+           cluster_maintenance_wrapper_->getVersion());
 }
 
 std::pair<std::vector<ShardID>,

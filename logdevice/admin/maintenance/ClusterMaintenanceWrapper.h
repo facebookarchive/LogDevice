@@ -117,6 +117,15 @@ class ClusterMaintenanceWrapper {
    */
   bool shouldForceRestoreRebuilding(const ShardID& shard) const;
   /**
+   * Returns the number of maintenance definitions.
+   */
+  size_t size() const;
+  /**
+   * Returns a reference to the list of underlying maintenance definitions
+   */
+  const std::vector<MaintenanceDefinition>& getMaintenances() const;
+
+  /**
    * Update the underlying nodes configuration used by this structure to resolve
    * nodes and shards. This will trigger a recreation of the internal indexes.
    */

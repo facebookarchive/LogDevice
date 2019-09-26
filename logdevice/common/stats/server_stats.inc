@@ -1124,8 +1124,6 @@ STAT_DEFINE(maintenance_log_snapshot_size, MAX)
 // Maintenance log RSM snapshotting errors
 STAT_DEFINE(maintenance_log_snapshotting_errors, SUM)
 
-STAT_DEFINE(metadata_log_nodeset_selection_failed, SUM)
-
 // Server message handler
 // skip permission
 STAT_DEFINE(server_message_dispatch_skip_permission, SUM)
