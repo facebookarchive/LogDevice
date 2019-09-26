@@ -282,9 +282,9 @@ AdminCommandClient::semifuture_send(
           connections.push_back(std::move(connection));
         }
         connections_size = connections.size();
-        do {
+        while (connections_done < connections_size && !timed_out) {
           event_base.loopOnce();
-        } while (connections_done < connections_size && !timed_out);
+        }
       }
 
       if (timed_out) {
