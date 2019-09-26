@@ -417,7 +417,12 @@ struct StatsParams {
 
   // Used to initialize StatsHolder objects for custom stats, hooked into the
   // client by entities that wrap it, such as LDBench workers.
-  enum class StatsSet { DEFAULT = 0, LDBENCH_WORKER, CHARACTERIZE_LOAD };
+  enum class StatsSet {
+    DEFAULT = 0,
+    LDBENCH_WORKER,
+    CHARACTERIZE_LOAD,
+    ADMIN_SERVER
+  };
   StatsSet stats_set{StatsSet::DEFAULT};
 
   std::string getStatsSetName() const {
@@ -429,6 +434,8 @@ struct StatsParams {
           return "ldbench";
         case StatsSet::CHARACTERIZE_LOAD:
           return "characterize_load";
+        case StatsSet::ADMIN_SERVER:
+          return "admin";
         case StatsSet::DEFAULT:
           return "client";
       } // let compiler check that all enum values are handled.
@@ -753,6 +760,20 @@ struct Stats final {
     CharacterizeLoadStats& operator=(CharacterizeLoadStats&&) noexcept =
         default;
   };
+
+  struct AdminServerStats {
+#define STAT_DEFINE(name, _) StatsCounter name{};
+#include "logdevice/common/stats/admin_stats.inc" // nolint
+
+    AdminServerStats() = default;
+    ~AdminServerStats() = default;
+
+    AdminServerStats(const AdminServerStats&) = delete;
+    AdminServerStats& operator=(const AdminServerStats&) = delete;
+
+    AdminServerStats(AdminServerStats&&) noexcept = default;
+    AdminServerStats& operator=(AdminServerStats&&) noexcept = default;
+  } admin_server;
 
   // Lazily initialized.
   std::unique_ptr<LDBenchStats> ldbench{nullptr};

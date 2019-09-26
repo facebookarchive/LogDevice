@@ -18,7 +18,7 @@ AdminServer::AdminServer(
     UpdateableSettings<ServerSettings> server_settings,
     UpdateableSettings<AdminServerSettings> admin_server_settings,
     StatsHolder* stats_holder)
-    : admin_server_settings_(admin_server_settings) {
+    : processor_(processor), admin_server_settings_(admin_server_settings) {
   admin_api_handler_ =
       std::make_shared<AdminAPIHandler>(processor,
                                         std::move(settings_updater),

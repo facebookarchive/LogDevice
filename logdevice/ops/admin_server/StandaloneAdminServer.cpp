@@ -288,7 +288,8 @@ void StandaloneAdminServer::initClusterStateRefresher() {
 
 void StandaloneAdminServer::initStatsCollection() {
   if (settings_->stats_collection_interval.count() > 0) {
-    auto params = StatsParams().setIsServer(false);
+    auto params = StatsParams().setIsServer(false).setStatsSet(
+        StatsParams::StatsSet::ADMIN_SERVER);
     // avoid instantianting thread-local Stats unnecessarily
     stats_ = std::make_unique<StatsHolder>(std::move(params));
   }

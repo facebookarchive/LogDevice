@@ -60,6 +60,7 @@ class AdminServer {
   virtual std::shared_ptr<SafetyChecker> getSafetyChecker();
 
  protected:
+  Processor* processor_;
   UpdateableSettings<AdminServerSettings> admin_server_settings_;
   std::shared_ptr<AdminAPIHandler> admin_api_handler_;
   std::shared_ptr<apache::thrift::ThriftServer> server_;
