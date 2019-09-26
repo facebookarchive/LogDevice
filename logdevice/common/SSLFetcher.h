@@ -25,9 +25,6 @@ namespace facebook { namespace logdevice {
 
 class SSLFetcher {
  public:
-  static const char* IDENTITY_TYPE_OID;
-  static const char* BASIC_CONSTRAINTS_OID;
-
   SSLFetcher(const std::string& cert_path,
              const std::string& key_path,
              const std::string& ca_path,
@@ -88,9 +85,7 @@ class SSLFetcher {
         // Don't force client to use a certificate, however still verify
         // server certificate. If client does provide a certificate, then it is
         // also verifed by the server.
-        // TODO: remove callback before open-sourcing
-        SSL_CTX_set_verify(
-            context_->getSSLCtx(), SSL_VERIFY_PEER, verify_callback);
+        SSL_CTX_set_verify(context_->getSSLCtx(), SSL_VERIFY_PEER, nullptr);
 
         // Disabling sessions caching
         SSL_CTX_set_session_cache_mode(
@@ -115,10 +110,6 @@ class SSLFetcher {
   std::chrono::time_point<std::chrono::steady_clock> last_loaded_;
   bool last_accepting_state_ = false;
   bool last_load_cert_ = false;
-
-  // verification callback for ssl context. Used to check extra critical
-  // extensions of a certificate.
-  static int verify_callback(int preverify_ok, X509_STORE_CTX* x509_ctx);
 
   // a context update is required when refresh_interval_ has passed or when any
   // of the input information is changed
