@@ -373,6 +373,10 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   auto cluster_factory = IntegrationTestUtils::ClusterFactory();
   cluster_factory.setParam("--rocksdb-verify-checksum-during-store", "true");
   cluster_factory.setParam("--disable-graylisting", "false");
+  cluster_factory.setParam("--enable-sticky-copysets", "false");
+  cluster_factory.setParam("--store-timeout", "1s..10s");
+  cluster_factory.setParam("--enable-adaptive-store-timeout", "false");
+  cluster_factory.setParam("--gray-list-threshold", "0.6");
   cluster_factory.useHashBasedSequencerAssignment(/*gossip_interval_ms=*/20);
   logsconfig::LogAttributes log_attrs =
       cluster_factory.createDefaultLogAttributes(NUM_NODES);
@@ -384,6 +388,7 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   ASSERT_TRUE((bool)client);
 
   // Appends should work fine
+  ld_info("Doing first append.");
   lsn = client->appendSync(logid_t(LOG_ID), Payload(data.data(), 128));
   ASSERT_NE(lsn_to_esn(lsn), ESN_INVALID);
   ASSERT_EQ(lsn_to_esn(lsn), esn_t(1));
@@ -400,6 +405,7 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   int sequencer_node_id =
       cluster->getHashAssignedSequencerNodeId(logid_t(LOG_ID), client.get());
   ASSERT_NE(sequencer_node_id, -1);
+  ld_info("Sequencer is on N%d", sequencer_node_id);
 
   // There should be no known cases of corruption beforehand
   auto sequencer_stats_before = cluster->getNode(sequencer_node_id).stats();
@@ -409,30 +415,44 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   ASSERT_EQ(stats_before_n1[corr_fld], 0);
   ASSERT_EQ(sequencer_stats_before[corr_ignored_fld], 0);
 
+  ld_info("Enabling corruption on N0 and N1.");
   cluster->getNode(0).updateSetting("rocksdb-test-corrupt-stores", "true");
   cluster->getNode(1).updateSetting("rocksdb-test-corrupt-stores", "true");
 
   // This will not be successful, as 2/4 nodes keep reporting corruption
   client->setTimeout(std::chrono::milliseconds(1000));
+  ld_info("Doing a second append (should time out).");
   lsn = client->appendSync(logid_t(LOG_ID), Payload(data.data(), 28));
   ASSERT_EQ(lsn_to_esn(lsn), ESN_INVALID);
   ASSERT_EQ(E::TIMEDOUT, err);
 
   // Make N1 stop corrupting stores, leading to only N0 remaining graylisted
+  ld_info("Disabling corruption on N1.");
   cluster->getNode(1).updateSetting("rocksdb-test-corrupt-stores", "false");
 
-  // Append should work
+  // Append should work now. The previous appends could leave N0 ungraylisted if
+  // graylist was cleared just before N1 stopped corrupting stores. Do a few
+  // tens of appends to make sure N0 ends up graylisted (with very high
+  // probability).
   client->setTimeout(std::chrono::milliseconds(60000));
-  lsn = client->appendSync(logid_t(LOG_ID), Payload(data.data(), 7));
-  ASSERT_NE(ESN_INVALID, lsn_to_esn(lsn));
+  Semaphore sem;
+  const int num_appends = 30;
+  ld_info("Doing %d appends.", num_appends);
+  for (int i = 0; i < num_appends; ++i) {
+    int rv = client->append(logid_t(LOG_ID),
+                            Payload(data.data(), 7),
+                            [&](Status st, const DataRecord& r) {
+                              EXPECT_EQ(E::OK, st);
+                              EXPECT_NE(LSN_INVALID, r.attrs.lsn);
+                              sem.post();
+                            });
+    ASSERT_EQ(0, rv) << error_name(err);
+  }
+  for (int i = 0; i < num_appends; ++i) {
+    sem.wait();
+  }
 
-  std::map<std::string, int64_t> sequencer_stats_after;
-  int rv = wait_until("Waiting for appenders to be done", [&]() {
-    sequencer_stats_after = cluster->getNode(sequencer_node_id).stats();
-    return sequencer_stats_after["num_appenders"] == 0;
-  });
-  ld_check(rv == 0);
-
+  auto sequencer_stats_after = cluster->getNode(sequencer_node_id).stats();
   auto stats_after_n0 = cluster->getNode(0).stats();
   auto stats_after_n1 = cluster->getNode(1).stats();
 
@@ -444,6 +464,11 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   ASSERT_EQ(sequencer_stats_after[corr_ignored_fld], 0);
 
   // Write again; should not hit graylisted node N0
+  ld_info(
+      "Doing the last append. Sequencer state: %s",
+      toString(
+          cluster->getNode(sequencer_node_id).sequencerInfo(logid_t(LOG_ID)))
+          .c_str());
   lsn = client->appendSync(logid_t(LOG_ID), Payload(data.data(), 64));
   ASSERT_NE(lsn_to_esn(lsn), ESN_INVALID);
   ASSERT_NE(ESN_INVALID, lsn_to_esn(lsn));
