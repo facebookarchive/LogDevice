@@ -3011,7 +3011,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
 
   init("rsm-include-read-pointer-in-snapshot",
        &rsm_include_read_pointer_in_snapshot,
-       "false",
+       "true",
        nullptr,
        "Allow inclusion of read pointer in RSM snapshots. Note that if this is "
        "set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE!",

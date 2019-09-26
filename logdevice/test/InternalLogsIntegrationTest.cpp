@@ -38,6 +38,8 @@ class InternalLogsIntegrationTest
 
     if (rsm_include_read_pointer_in_snapshot) {
       factory.setParam("--rsm-include-read-pointer-in-snapshot", "true");
+    } else {
+      factory.setParam("--rsm-include-read-pointer-in-snapshot", "false");
     }
 
     cluster = factory.create(NNODES);
