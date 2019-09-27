@@ -237,6 +237,21 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
           err = E::ALREADY;
           return -1;
         }
+
+        if (it->second.auth_status ==
+            AuthoritativeStatus::AUTHORITATIVE_EMPTY) {
+          ld_info(
+              "Drain was requested for %s, but this shard is already "
+              "AUTHORITATIVE_EMPTY. Considering the drain done. Delta %s: %s",
+              ShardID(nodeIdx, shardIdx).toString().c_str(),
+              lsn_to_string(lsn).c_str(),
+              record.describe().c_str());
+
+          it->second.drain = true;
+          checkConsistency();
+
+          return 0;
+        }
       } else {
         // Do nothing if rebuilding is requested but the shard either
         // (a) has already been rebuilt, or (b) is already being rebuilt with
@@ -982,7 +997,7 @@ void EventLogRebuildingSet::recomputeShardAuthoritativeStatus(
   // anything. These are the nodes rebuilding complete shards in RESTORE mode
   // that have not acked, or have acked *after* our shard was marked as needing
   // rebuilding or the nodes that have been rebuilt in relocate mode and are
-  // now empty
+  // now empty.
   for (auto& n : shard_info.nodes_) {
     if ((n.second.mode == RebuildingMode::RESTORE &&
          n.second.dc_dirty_ranges.empty() &&

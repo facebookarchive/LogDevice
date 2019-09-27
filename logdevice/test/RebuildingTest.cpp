@@ -3161,6 +3161,92 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
   }
 }
 
+TEST_P(RebuildingTest, UndrainDeadNode) {
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .apply(commonSetup())
+          .setLogAttributes(
+              logsconfig::DefaultLogAttributes().with_replicationFactor(3))
+          .setNumDBShards(1)
+          .create(6);
+
+  auto client = cluster->createClient();
+
+  // Drain N1:S0.
+  ASSERT_NE(LSN_INVALID,
+            requestShardRebuilding(*client,
+                                   /* node */ 1,
+                                   /* shard */ 0,
+                                   SHARD_NEEDS_REBUILD_Header::DRAIN));
+  // Wait for rebuilding.
+  waitUntilShardsHaveEventLogState(
+      client, {ShardID(1, 0)}, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
+
+  // Stop N1.
+  cluster->getNode(1).shutdown();
+
+  // Undrain N1:S0.
+  ASSERT_NE(
+      LSN_INVALID, markShardUndrained(*client, /* node */ 1, /* shard */ 0));
+
+  // Check that N1:S0 is AUTHORITATIVE_EMPTY and has drain flag equal to
+  // `drain`.
+  auto check_still_auth_empty = [&](bool drain) {
+    EventLogRebuildingSet set;
+    ASSERT_EQ(0, EventLogUtils::getRebuildingSet(*client, set));
+    auto node = set.getNodeInfo(1, 0);
+    ASSERT_NE(nullptr, node);
+    EXPECT_EQ(AuthoritativeStatus::AUTHORITATIVE_EMPTY, node->auth_status);
+    EXPECT_EQ(drain, node->drain);
+  };
+
+  {
+    SCOPED_TRACE("");
+    check_still_auth_empty(false);
+  }
+
+  // Drain N1:S0 and N2:S0.
+
+  ASSERT_NE(LSN_INVALID,
+            requestShardRebuilding(*client,
+                                   /* node */ 1,
+                                   /* shard */ 0,
+                                   SHARD_NEEDS_REBUILD_Header::DRAIN));
+
+  {
+    SCOPED_TRACE("");
+    check_still_auth_empty(true);
+  }
+
+  ASSERT_NE(LSN_INVALID,
+            requestShardRebuilding(*client,
+                                   /* node */ 2,
+                                   /* shard */ 0,
+                                   SHARD_NEEDS_REBUILD_Header::DRAIN));
+
+  {
+    SCOPED_TRACE("");
+    check_still_auth_empty(true);
+  }
+
+  // Wait for rebuilding.
+  waitUntilShardsHaveEventLogState(
+      client, {ShardID(2, 0)}, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
+
+  // Undrain N2:S0.
+  ASSERT_NE(
+      LSN_INVALID, markShardUndrained(*client, /* node */ 2, /* shard */ 0));
+
+  // Wait for ack.
+  waitUntilShardsHaveEventLogState(
+      client, {ShardID(2, 0)}, AuthoritativeStatus::FULLY_AUTHORITATIVE, true);
+
+  {
+    SCOPED_TRACE("");
+    check_still_auth_empty(true);
+  }
+}
+
 std::vector<TestMode> test_params{
     {DurabilityMode::V1_WITH_WAL, FlushMode::ROCKSDB, FilterMode::DEFAULT},
     {DurabilityMode::V1_WITH_WAL, FlushMode::LD, FilterMode::DEFAULT},

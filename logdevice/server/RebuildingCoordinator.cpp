@@ -1384,6 +1384,8 @@ void RebuildingCoordinator::onUpdate(const EventLogRebuildingSet& set,
 
   last_seen_event_log_version_ = version;
 
+  bool first_update = first_update_;
+
   if (first_update_) {
     // The EventLog RSM releases its first update once it has caught up (read
     // the tail LSN that was discovered upon subscribing to the event log). Now
@@ -1395,6 +1397,25 @@ void RebuildingCoordinator::onUpdate(const EventLogRebuildingSet& set,
   }
 
   if (!delta) {
+    if (!first_update) {
+      // Event log state machine was fast-forwarded using a snapshot.
+      // RebuildingCoordinator was written when snapshots didn't exist (and
+      // haven't been considered), and all rebuilding set changes happened
+      // through applying a delta. When snapshots were introduced,
+      // RebuildingCoordinator was never properly changed from the event-based
+      // to the state-based mindset: it still relies on knowing the
+      // deltas, except for the initial start and this quick hack to
+      // inefficiently handle fast-forwards by restarting.
+      // It seems that it should be possible to make everything cleaner by
+      // removing the reliance on deltas.
+      ld_warning("Looks like event log was fast-forwarded using a snapshot. "
+                 "RebuildingCoordinator currently doesn't have proper handling "
+                 "of this situation, so we're going to restart all shard "
+                 "rebuildings. If this happens often and slows down rebuilding "
+                 "progress, consider cleaning up RebuildingCoordinator to make "
+                 "it not rely on deltas as heavily.");
+    }
+
     // We don't have a delta, just restart all rebuildings with the new
     // rebuilding set.
     for (auto& shard : set.getRebuildingShards()) {
@@ -1412,7 +1433,17 @@ void RebuildingCoordinator::onUpdate(const EventLogRebuildingSet& set,
   switch (delta->getType()) {
     case EventType::SHARD_NEEDS_REBUILD: {
       const auto ptr = static_cast<const SHARD_NEEDS_REBUILD_Event*>(delta);
-      scheduleRestartForShard(ptr->header.shardIdx);
+      auto shards_it = shardsRebuilding_.find(ptr->header.shardIdx);
+      auto set_it = set.getRebuildingShards().find(ptr->header.shardIdx);
+      ld_check(set_it != set.getRebuildingShards().end());
+      if (shards_it == shardsRebuilding_.end() ||
+          shards_it->second.version != set_it->second.version) {
+        scheduleRestartForShard(ptr->header.shardIdx);
+      } else {
+        // Sometimes a SHARD_NEEDS_REBUILD doesn't trigger a rebuilding restart.
+        // E.g. if a drain was requested for a node that is already
+        // AUTHORITATIVE_EMPTY.
+      }
     } break;
     case EventType::SHARD_ABORT_REBUILD: {
       const auto ptr = static_cast<const SHARD_ABORT_REBUILD_Event*>(delta);
