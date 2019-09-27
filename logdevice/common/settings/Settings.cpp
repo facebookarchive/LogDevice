@@ -782,7 +782,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "500ms",
        validate_positive<ssize_t>(),
        "Interval after which health monitor detects issues on node.",
-       SERVER | REQUIRES_RESTART /* used in Server ctor */,
+       SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
        SettingsCategory::Monitoring);
 
   init("purging-use-metadata-log-only",

@@ -955,7 +955,8 @@ void Worker::onStoppedRunning(RunContext prev_context) {
 
   auto end_time = currentlyRunningStart_;
   // Bumping the counters
-  if (end_time - start_time >= settings().request_execution_delay_threshold) {
+  auto duration = end_time - start_time;
+  if (duration >= settings().request_execution_delay_threshold) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       2,
                       "Slow request/timer callback: %.3fs, source: %s",
@@ -964,11 +965,15 @@ void Worker::onStoppedRunning(RunContext prev_context) {
                           .count(),
                       prev_context.describe().c_str());
     WORKER_STAT_INCR(worker_slow_requests);
+    if (worker_type_ == WorkerType::GENERAL) {
+      processor_->getHealthMonitor().reportWorkerStall(
+          idx_.val_,
+          std::chrono::duration_cast<std::chrono::milliseconds>(duration));
+    }
   }
 
-  auto usec = std::chrono::duration_cast<std::chrono::microseconds>(end_time -
-                                                                    start_time)
-                  .count();
+  auto usec =
+      std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
   switch (prev_context.type_) {
     case RunContext::MESSAGE: {
       auto msg_type = static_cast<int>(prev_context.subtype_.message);
@@ -1269,6 +1274,15 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
                       rq->describe().c_str(),
                       rq->id_.val(),
                       priority_to_str(priority));
+    if (processor_ && worker_type_ == WorkerType::GENERAL) {
+      processor_->getHealthMonitor().reportWorkerQueueHealth(
+          idx_.val_, /*delayed=*/true);
+    }
+  } else {
+    if (processor_ && worker_type_ == WorkerType::GENERAL) {
+      processor_->getHealthMonitor().reportWorkerQueueHealth(
+          idx_.val_, /*delayed=*/false);
+    }
   }
 
   onStartedRunning(run_context);

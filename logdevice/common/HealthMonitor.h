@@ -20,6 +20,12 @@ class HealthMonitor {
   virtual folly::SemiFuture<folly::Unit> shutdown() {
     return folly::makeSemiFuture();
   }
+
+  // reporter methods
+  virtual void reportWatchdogHealth(bool delayed) {}
+  virtual void reportStalledWorkers(int num_stalled) {}
+  virtual void reportWorkerStall(int idx, std::chrono::milliseconds duration) {}
+  virtual void reportWorkerQueueHealth(int idx, bool delayed) {}
 };
 
 }} // namespace facebook::logdevice

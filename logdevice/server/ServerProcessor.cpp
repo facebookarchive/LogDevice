@@ -63,7 +63,9 @@ void ServerProcessor::init() {
       auto executor =
           getWorker(worker_id_t(0), WorkerType::FAILURE_DETECTOR).getExecutor();
       health_monitor_ = std::make_unique<ServerHealthMonitor>(
-          *executor, updateableSettings()->health_monitor_poll_interval_ms);
+          *executor,
+          updateableSettings()->health_monitor_poll_interval_ms,
+          getWorkerCount(WorkerType::GENERAL));
       health_monitor_->startUp();
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct ServerHealthMonitor: %s",
