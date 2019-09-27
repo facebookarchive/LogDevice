@@ -34,13 +34,9 @@ class AdminClientConnection
  public:
   AdminClientConnection(EventBase* evb,
                         AdminCommandClient::RequestResponse& rr,
-                        std::function<void()> done_callback,
                         std::chrono::milliseconds timeout,
                         std::shared_ptr<folly::SSLContext> context)
-      : socket_(),
-        request_response_(rr),
-        done_callback_(done_callback),
-        timeout_(timeout) {
+      : socket_(), request_response_(rr), timeout_(timeout) {
     if (request_response_.conntype_ ==
         AdminCommandClient::ConnectionType::ENCRYPTED) {
       ld_check(context);
@@ -50,7 +46,7 @@ class AdminClientConnection
     }
   }
 
-  virtual void connect() {
+  virtual folly::SemiFuture<AdminCommandClient::RequestResponse*> connect() {
     bool ssl{request_response_.conntype_ ==
              AdminCommandClient::ConnectionType::ENCRYPTED};
     ld_debug("Connecting to %s with %s",
@@ -58,6 +54,7 @@ class AdminClientConnection
              (ssl) ? "SSL" : "PLAIN");
     tstart_ = std::chrono::steady_clock::now();
     socket_->connect(this, request_response_.sockaddr, timeout_.count());
+    return promise_.getSemiFuture();
   }
 
   void connectSuccess() noexcept override {
@@ -177,7 +174,7 @@ class AdminClientConnection
     }
 
     socket_->setReadCB(nullptr);
-    done_callback_();
+    promise_.setValue(&request_response_);
     steady_clock::time_point tend = steady_clock::now();
     double d1 = std::chrono::duration_cast<std::chrono::duration<double>>(
                     tdone - tstart_)
@@ -211,102 +208,38 @@ class AdminClientConnection
   std::vector<std::string> result_;
   bool success_{false};
   bool done_{false};
-  std::function<void()> done_callback_;
+  folly::Promise<AdminCommandClient::RequestResponse*> promise_;
   std::chrono::milliseconds timeout_;
   std::chrono::steady_clock::time_point tstart_;
 };
 
 std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>>
-AdminCommandClient::semifuture_send(
+AdminCommandClient::asyncSend(
     std::vector<AdminCommandClient::RequestResponse>& rr,
     std::chrono::milliseconds command_timeout,
     std::chrono::milliseconds connect_timeout) {
-  std::shared_ptr<
-      std::vector<folly::Promise<AdminCommandClient::RequestResponse*>>>
-      proms = std::make_shared<
-          std::vector<folly::Promise<AdminCommandClient::RequestResponse*>>>(
-          rr.size());
   std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>> futures;
   futures.reserve(rr.size());
-  for (auto& p : *proms) {
-    futures.emplace_back(p.getSemiFuture());
-  }
 
-  ld_check(num_threads_ > 0);
-  size_t actual_num_threads = num_threads_;
-  int num_requests_per_thread = rr.size() / actual_num_threads + 1;
-  if (num_threads_ > rr.size()) {
-    actual_num_threads = rr.size();
-    num_requests_per_thread = 1;
-  }
-  executor_ =
-      std::make_unique<folly::CPUThreadPoolExecutor>(actual_num_threads);
-  for (int k = 0; k < actual_num_threads; k++) {
-    int start = k * num_requests_per_thread;
-    if (start >= rr.size()) {
-      break;
-    }
-    executor_->add([proms,
-                    command_timeout,
-                    connect_timeout,
-                    start,
-                    num_requests_per_thread,
-                    &rr]() mutable {
-      bool timed_out = false;
-      size_t connections_done = 0;
-      size_t connections_size;
-      auto& promises = *proms;
-      {
-        // Scope event_base and connections objects
-        EventBase event_base;
-        std::vector<std::unique_ptr<AdminClientConnection>> connections;
-
-        auto timeout = AsyncTimeout::make(
-            event_base, [&]() noexcept { timed_out = true; });
-        timeout->scheduleTimeout(command_timeout);
-        auto context = std::make_shared<folly::SSLContext>();
-
-        for (size_t i = start;
-             i < rr.size() && i - start < num_requests_per_thread;
-             ++i) {
-          auto connection = std::make_unique<AdminClientConnection>(
-              &event_base,
-              rr[i],
-              [i, &connections_done, &promises, &rr]() {
-                ++connections_done;
-                promises[i].setValue(&rr[i]);
-              },
-              connect_timeout,
-              context);
-          connection->connect();
-          connections.push_back(std::move(connection));
-        }
-        connections_size = connections.size();
-        while (connections_done < connections_size && !timed_out) {
-          event_base.loopOnce();
-        }
-      }
-
-      if (timed_out) {
-        ld_debug("Timed out after %lums reading from %lu nodes",
-                 command_timeout.count(),
-                 connections_size - connections_done);
-        for (size_t i = start;
-             i < rr.size() && i - start < num_requests_per_thread;
-             ++i) {
-          if (!rr[i].success && rr[i].failure_reason.empty()) {
-            rr[i].failure_reason = "TIMEOUT";
-            if (!promises[i].isFulfilled()) {
-              ++connections_done;
-              promises[i].setValue(&rr[i]);
-              if (connections_done == connections_size) {
-                break;
-              }
-            }
-          }
-        }
-      }
-    });
+  for (auto& r : rr) {
+    futures.push_back(
+        folly::via(executor_.get())
+            .then([executor = executor_.get(), &r, connect_timeout](
+                      auto&&) mutable {
+              auto connection = std::make_unique<AdminClientConnection>(
+                  executor->getEventBase(),
+                  r,
+                  connect_timeout,
+                  std::make_shared<folly::SSLContext>());
+              auto fut = connection->connect();
+              return std::move(fut).via(executor).thenValue(
+                  [c = std::move(connection)](
+                      AdminCommandClient::RequestResponse* r) { return r; });
+            })
+            .onTimeout(command_timeout, [&r] {
+              r.failure_reason = "TIMEOUT";
+              return &r;
+            }));
   }
 
   return futures;
@@ -316,9 +249,7 @@ void AdminCommandClient::send(
     std::vector<AdminCommandClient::RequestResponse>& rr,
     std::chrono::milliseconds command_timeout,
     std::chrono::milliseconds connect_timeout) {
-  collectAllSemiFuture(semifuture_send(rr, command_timeout, connect_timeout))
-      .wait();
-  terminate();
+  collectAllSemiFuture(asyncSend(rr, command_timeout, connect_timeout)).wait();
 }
 
 }} // namespace facebook::logdevice
