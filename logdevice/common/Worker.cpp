@@ -230,6 +230,8 @@ Worker::~Worker() {
   shutting_down_ = true;
   stopAcceptingWork();
 
+  overload_detector_.reset();
+
   server_config_update_sub_.unsubscribe();
   logs_config_update_sub_.unsubscribe();
   updateable_settings_subscription_.unsubscribe();
@@ -570,8 +572,6 @@ void Worker::finishWorkAndCloseSockets() {
   ld_check(!accepting_work_);
 
   subclassFinishWork();
-
-  overload_detector_.reset();
 
   size_t c = runningSyncSequencerRequests().getList().size();
   if (c) {
