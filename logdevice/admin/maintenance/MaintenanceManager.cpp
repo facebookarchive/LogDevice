@@ -60,8 +60,8 @@ void MaintenanceManagerDependencies::startSubscription() {
   auto nc_callback = [this]() { owner_->onNodesConfigurationUpdated(); };
 
   nodes_config_update_handle_ = std::make_unique<ConfigSubscriptionHandle>(
-      processor_->config_->updateableNCMNodesConfiguration()
-          ->subscribeToUpdates(nc_callback));
+      processor_->config_->updateableNodesConfiguration()->subscribeToUpdates(
+          nc_callback));
 }
 
 void MaintenanceManagerDependencies::stopSubscription() {
