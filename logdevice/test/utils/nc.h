@@ -12,12 +12,15 @@
 
 #include <folly/SocketAddress.h>
 
+#include "logdevice/ops/admin_command_client/AdminCommandClient.h"
+
 namespace facebook { namespace logdevice { namespace test {
 
 // Connects to the specified address, feeds some input and returns the output.
 // Try it to send admin commands to logdeviced!
 std::string
-nc(const folly::SocketAddress& addr,
+nc(const std::shared_ptr<AdminCommandClient>& client,
+   const folly::SocketAddress& addr,
    const std::string& input,
    std::string* out_error,
    bool ssl = false,

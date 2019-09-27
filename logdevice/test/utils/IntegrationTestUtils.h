@@ -32,6 +32,7 @@
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/include/types.h"
+#include "logdevice/ops/admin_command_client/AdminCommandClient.h"
 #include "logdevice/test/utils/MetaDataProvisioner.h"
 #include "logdevice/test/utils/port_selection.h"
 
@@ -1285,6 +1286,8 @@ class Cluster {
   // keep handles around until the cluster is destroyed.
   std::vector<UpdateableServerConfig::HookHandle> server_config_hook_handles_;
 
+  std::shared_ptr<AdminCommandClient> admin_command_client_;
+
   friend class ClusterFactory;
 };
 
@@ -1313,6 +1316,8 @@ class Node {
   RocksDBType rocksdb_type_ = RocksDBType::PARTITIONED;
   // override cluster params for this particular node
   ParamMap cmd_args_;
+
+  std::shared_ptr<AdminCommandClient> admin_command_client_;
 
   Node();
   ~Node() {

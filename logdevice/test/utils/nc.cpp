@@ -11,21 +11,20 @@
 
 namespace facebook { namespace logdevice { namespace test {
 
-std::string nc(const folly::SocketAddress& addr,
+std::string nc(const std::shared_ptr<AdminCommandClient>& adminclient,
+               const folly::SocketAddress& addr,
                const std::string& input,
                std::string* out_error,
                bool ssl,
                std::chrono::milliseconds command_timeout,
                std::chrono::milliseconds connect_timeout) {
-  AdminCommandClient adminclient;
   AdminCommandClient::RequestResponses rr;
-  rr.reserve(1);
   rr.emplace_back(addr,
                   input,
                   ssl ? AdminCommandClient::ConnectionType::ENCRYPTED
                       : AdminCommandClient::ConnectionType::PLAIN);
 
-  adminclient.send(rr, command_timeout, connect_timeout);
+  adminclient->send(rr, command_timeout, connect_timeout);
 
   if (out_error && !rr[0].success) {
     *out_error = rr[0].failure_reason;

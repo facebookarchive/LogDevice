@@ -217,7 +217,7 @@ std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>>
 AdminCommandClient::asyncSend(
     std::vector<AdminCommandClient::RequestResponse>& rr,
     std::chrono::milliseconds command_timeout,
-    std::chrono::milliseconds connect_timeout) {
+    std::chrono::milliseconds connect_timeout) const {
   std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>> futures;
   futures.reserve(rr.size());
 
@@ -248,7 +248,7 @@ AdminCommandClient::asyncSend(
 void AdminCommandClient::send(
     std::vector<AdminCommandClient::RequestResponse>& rr,
     std::chrono::milliseconds command_timeout,
-    std::chrono::milliseconds connect_timeout) {
+    std::chrono::milliseconds connect_timeout) const {
   collectAllSemiFuture(asyncSend(rr, command_timeout, connect_timeout)).wait();
 }
 

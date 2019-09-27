@@ -293,7 +293,8 @@ Cluster::Cluster(std::string root_path,
       default_log_level_(default_log_level),
       write_logs_config_file_separately_(write_logs_config_file_separately),
       sync_server_config_to_nodes_configuration_(
-          sync_server_config_to_nodes_configuration) {
+          sync_server_config_to_nodes_configuration),
+      admin_command_client_(std::make_shared<AdminCommandClient>()) {
   config_ = std::make_shared<UpdateableConfig>();
   client_settings_.reset(ClientSettings::create());
   ClientSettingsImpl* impl_settings =
@@ -1196,6 +1197,7 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   }
 
   node->cmd_args_ = commandArgsForNode(index, *node);
+  node->admin_command_client_ = admin_command_client_;
 
   ld_info("Node N%d:%d will be started on protocol_addr:%s"
           ", gossip_addr:%s, command_addr:%s, admin_addr:%s (data in %s)",
@@ -1538,7 +1540,8 @@ std::string Node::sendCommand(const std::string& command,
                               bool ssl,
                               std::chrono::milliseconds command_timeout) const {
   std::string error;
-  std::string response = test::nc(addrs_.command_addr_.getSocketAddress(),
+  std::string response = test::nc(admin_command_client_,
+                                  addrs_.command_addr_.getSocketAddress(),
                                   command,
                                   &error,
                                   ssl,
@@ -1577,7 +1580,8 @@ std::string Node::sendIfaceCommand(const std::string& command,
   folly::SocketAddress iface = addrs_.command_addr_.getSocketAddress();
   iface.setFromIpPort(ifaceAddr, iface.getPort());
   std::string error;
-  std::string response = test::nc(iface, command, &error);
+  std::string response =
+      test::nc(admin_command_client_, iface, command, &error);
   if (!error.empty()) {
     ld_debug("Failed to send command: %s", error.c_str());
   }

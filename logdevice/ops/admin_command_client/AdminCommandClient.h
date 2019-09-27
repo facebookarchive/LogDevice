@@ -49,13 +49,13 @@ class AdminCommandClient {
   void send(RequestResponses& rr,
             std::chrono::milliseconds command_timeout,
             std::chrono::milliseconds connect_timeout =
-                std::chrono::milliseconds(5000));
+                std::chrono::milliseconds(5000)) const;
 
   std::vector<folly::SemiFuture<RequestResponse*>>
   asyncSend(std::vector<RequestResponse>& rr,
             std::chrono::milliseconds command_timeout,
             std::chrono::milliseconds connect_timeout =
-                std::chrono::milliseconds(5000));
+                std::chrono::milliseconds(5000)) const;
 
  private:
   std::unique_ptr<folly::IOThreadPoolExecutor> executor_;
