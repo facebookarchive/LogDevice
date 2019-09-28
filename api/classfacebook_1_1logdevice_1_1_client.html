@@ -2167,7 +2167,9 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#af5d99be796b2bdba8e9da20b08b04719">makeLogGroup()</a> If failure_reason is not nullptr, it will be populated with a human-readable error string if the operation failed. </p>
+<p>Blocking version of <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#af5d99be796b2bdba8e9da20b08b04719">makeLogGroup()</a>.</p>
+<p>Note that, even after this method returns success, it may take some time for the update to propagate to all servers, so the new log group may not be usable for a few seconds (appends may fail with NOTFOUND or NOTINSERVERCONFIG). Same applies to all other logs config update methods, e.g. <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a134074a21bfb899f19a20e335146a9fa">setAttributes()</a>.</p>
+<p>If failure_reason is not nullptr, it will be populated with a human-readable error string if the operation failed. </p>
 
 </div>
 </div>
