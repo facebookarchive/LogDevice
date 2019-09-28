@@ -110,21 +110,23 @@ static void expect_rebuildings(std::set<ShardID> shards,
 }
 
 void waitForNodesToReadEventLog(IntegrationTestUtils::Cluster& cluster) {
-  auto check_nodes = [=](IntegrationTestUtils::Node& node) {
-    auto map = node.eventLogInfo();
-    if (map.empty()) {
-      return false;
-    }
-    ld_check(map.count("Delta read ptr"));
-    ld_check(map.count("Delta replay tail"));
-    return (!map["Delta replay tail"].empty() &&
-            !map["Delta read ptr"].empty() &&
-            (folly::to<uint64_t>(map["Delta replay tail"]) <=
-             folly::to<uint64_t>(map["Delta read ptr"])));
-  };
-
-  cluster.waitUntilAll(
-      "Nodes have read the event log up to the tail", check_nodes);
+  for (auto& kv : cluster.getNodes()) {
+    wait_until(
+        folly::sformat("N{} has read the event log up to the tail", kv.first)
+            .c_str(),
+        [&] {
+          auto map = kv.second->eventLogInfo();
+          if (map.empty()) {
+            return false;
+          }
+          ld_check(map.count("Delta read ptr"));
+          ld_check(map.count("Delta replay tail"));
+          return (!map["Delta replay tail"].empty() &&
+                  !map["Delta read ptr"].empty() &&
+                  (folly::to<uint64_t>(map["Delta replay tail"]) <=
+                   folly::to<uint64_t>(map["Delta read ptr"])));
+        });
+  }
 }
 
 TEST_F(RebuildingSupervisorIntegrationTest, BasicFD) {

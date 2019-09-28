@@ -1414,14 +1414,6 @@ void Cluster::partition(std::vector<std::set<int>> partitions) {
   }
 }
 
-void Cluster::waitUntilAll(const char* desc, std::function<bool(Node&)> pred) {
-  wait_until(desc, [&]() {
-    return std::all_of(getNodes().begin(), getNodes().end(), [=](auto& p) {
-      return pred(*p.second);
-    });
-  });
-}
-
 std::unique_ptr<Cluster>
 ClusterFactory::create(const Configuration& source_config) {
   for (int outer_try = 0; outer_try < outerTries(); ++outer_try) {
@@ -1939,81 +1931,36 @@ int Node::waitForPurge(logid_t log_id,
   return rv;
 }
 
-int Node::waitUntilLogsConfigSynced(
-    lsn_t sync_lsn,
-    std::chrono::steady_clock::time_point deadline) {
-  if (stopped_) {
-    return false;
-  }
-  ld_info("Waiting for node %d to have read logs config log read up to %s.",
-          node_index_,
-          lsn_to_string(sync_lsn).c_str());
-
-  const int rv =
-      wait_until("logsconfig synced",
-                 [&]() {
-                   auto map = logsConfigInfo();
-                   if (map.empty()) {
-                     return false;
-                   }
-                   ld_check(map.count("Delta read ptr"));
-                   std::string s = map["Delta read ptr"];
-                   return !s.empty() && folly::to<lsn_t>(s) >= sync_lsn;
-                 },
-                 deadline);
-
-  if (rv == 0) {
-    ld_info("Node %d finished syncing logsconfig up to %s.",
-            node_index_,
-            lsn_to_string(sync_lsn).c_str());
-  } else {
-    ld_info("Timed out waiting for node %d to sync logsconfig up to %s.",
-            node_index_,
-            lsn_to_string(sync_lsn).c_str());
-  }
-
-  return rv;
-}
-
-int Node::waitUntilEventLogSynced(
-    lsn_t sync_lsn,
-    std::chrono::steady_clock::time_point deadline) {
+int Node::waitUntilRSMSynced(const char* rsm,
+                             lsn_t sync_lsn,
+                             std::chrono::steady_clock::time_point deadline) {
   if (stopped_) {
     return false;
   }
 
-  ld_info("Waiting for node %d to have read event log upto %s.",
-          node_index_,
-          lsn_to_string(sync_lsn).c_str());
+  const int rv = wait_until(
+      folly::sformat("node {} read {} up to {}",
+                     node_index_,
+                     rsm,
+                     lsn_to_string(sync_lsn).c_str())
+          .c_str(),
+      [&]() {
+        auto data = sendJsonCommand(folly::sformat("info {} --json", rsm));
+        if (data.empty()) {
+          return false;
+        }
 
-  const int rv = wait_until("event log is synced",
-                            [&]() {
-                              auto map = eventLogInfo();
-                              if (map.empty()) {
-                                return false;
-                              }
+        // This is not a very nice usage of ld_check: it
+        // assumes something about behavior of a different
+        // process (logdeviced). The only excuse is that
+        // this is only used in tests at the moment.
+        ld_check(data[0].count("Propagated read ptr"));
 
-                              // This is not a very nice usage of ld_check: it
-                              // assumes something about behavior of a different
-                              // process (logdeviced). The only excuse is that
-                              // this is only used in tests at the moment.
-                              ld_check(map.count("Propagated version"));
-
-                              std::string s = map["Propagated version"];
-                              ld_check(!s.empty());
-                              return folly::to<lsn_t>(s) >= sync_lsn;
-                            },
-                            deadline);
-
-  if (rv == 0) {
-    ld_info("Node %d read event log upto %s.",
-            node_index_,
-            lsn_to_string(sync_lsn).c_str());
-  } else {
-    ld_info("Timed out waiting for node %d to read event log upto %s.",
-            node_index_,
-            lsn_to_string(sync_lsn).c_str());
-  }
+        std::string s = data[0]["Propagated read ptr"];
+        ld_check(!s.empty());
+        return folly::to<lsn_t>(s) >= sync_lsn;
+      },
+      deadline);
 
   return rv;
 }
@@ -2847,26 +2794,18 @@ int Cluster::waitUntilAllAvailable(
   return rv;
 }
 
-int Cluster::waitUntilLogsConfigSynced(
+int Cluster::waitUntilRSMSynced(
+    const char* rsm,
     lsn_t sync_lsn,
-    const std::vector<node_index_t>& nodes,
+    std::vector<node_index_t> nodes,
     std::chrono::steady_clock::time_point deadline) {
-  for (int n : nodes) {
-    int rv = getNode(n).waitUntilLogsConfigSynced(sync_lsn, deadline);
-    if (rv != 0) {
-      return -1;
+  if (nodes.empty()) {
+    for (auto& kv : nodes_) {
+      nodes.push_back(kv.first);
     }
   }
-
-  return 0;
-}
-
-int Cluster::waitUntilEventLogSynced(
-    lsn_t sync_lsn,
-    const std::vector<node_index_t>& nodes,
-    std::chrono::steady_clock::time_point deadline) {
   for (int n : nodes) {
-    int rv = getNode(n).waitUntilEventLogSynced(sync_lsn, deadline);
+    int rv = getNode(n).waitUntilRSMSynced(rsm, sync_lsn, deadline);
     if (rv != 0) {
       return -1;
     }

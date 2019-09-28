@@ -1098,23 +1098,28 @@ class Cluster {
   int getShardAuthoritativeStatusMap(ShardAuthoritativeStatusMap& map);
 
   /**
-   * Wait until all nodes in @param nodes have read the logs config delta log up
-   * to @param sync_lsn.
+   * Do Node::waitUntilRSMSynced() on all nodes in @param nodes.
+   * If `nodes` is empty, all nodes.
    */
+  int waitUntilRSMSynced(const char* rsm,
+                         lsn_t sync_lsn,
+                         std::vector<node_index_t> nodes = {},
+                         std::chrono::steady_clock::time_point deadline =
+                             std::chrono::steady_clock::time_point::max());
+  int waitUntilEventLogSynced(
+      lsn_t sync_lsn,
+      const std::vector<node_index_t>& nodes = {},
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max()) {
+    return waitUntilRSMSynced("event_log", sync_lsn, nodes, deadline);
+  }
   int waitUntilLogsConfigSynced(
       lsn_t sync_lsn,
-      const std::vector<node_index_t>& nodes,
+      const std::vector<node_index_t>& nodes = {},
       std::chrono::steady_clock::time_point deadline =
-          std::chrono::steady_clock::time_point::max());
-
-  /**
-   * Wait until all nodes in @param nodes have read the event log up to
-   * @param sync_lsn.
-   */
-  int waitUntilEventLogSynced(lsn_t sync_lsn,
-                              const std::vector<node_index_t>& nodes,
-                              std::chrono::steady_clock::time_point deadline =
-                                  std::chrono::steady_clock::time_point::max());
+          std::chrono::steady_clock::time_point::max()) {
+    return waitUntilRSMSynced("logsconfig_rsm", sync_lsn, nodes, deadline);
+  }
 
   /**
    * Partitions cluster by overwriting individual node's config with invalid
@@ -1123,11 +1128,6 @@ class Cluster {
    * connections to nodes outside of their partition.
    */
   void partition(std::vector<std::set<int>> partitions);
-
-  /**
-   * Waits until all nodes satisfy the given predicate
-   */
-  void waitUntilAll(const char* desc, std::function<bool(Node&)> pred);
 
   /**
    * Gracefully shut down the given nodes. Faster than calling shutdown() on
@@ -1467,24 +1467,37 @@ class Node {
                        std::chrono::steady_clock::time_point::max());
 
   /**
-   * Wait until the node have read logsconfig delta log up to @param sync_lsn
-   * and propagated it to all workers.
+   * Wait until the node have read the event log or config log
+   * up to @param sync_lsn and propagated it to all workers.
+   * @param rsm is either "event_log" or "logsconfig_rsm". It gets translated
+   * into admin command "info <rsm> --json", which we poll until the value in
+   * column "Propagated read ptr" becomes >= sync_lsn.
+   *
+   * Note that in case of event_log the propagation is delayed
+   * by --event-log-grace-period, so if you're using this method you probably
+   * want to decrease --event-log-grace-period. In case of logsconfig_rsm,
+   * the delay is --logsconfig-manager-grace-period.
    */
+  int waitUntilRSMSynced(const char* rsm,
+                         lsn_t sync_lsn,
+                         std::chrono::steady_clock::time_point deadline =
+                             std::chrono::steady_clock::time_point::max());
+
+  /**
+   * Shorthand for waitUntilRSMSynced("event_log"/"logsconfig_rsm", ...).
+   */
+  int waitUntilEventLogSynced(
+      lsn_t sync_lsn,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max()) {
+    return waitUntilRSMSynced("event_log", sync_lsn, deadline);
+  }
   int waitUntilLogsConfigSynced(
       lsn_t sync_lsn,
       std::chrono::steady_clock::time_point deadline =
-          std::chrono::steady_clock::time_point::max());
-
-  /**
-   * Wait until the node have read the event log up to @param sync_lsn and
-   * propagated it to all workers.
-   * Note that the propagation is delayed by --event-log-grace-period, so if
-   * you're using this method you probably want to decrease
-   * --event-log-grace-period.
-   */
-  int waitUntilEventLogSynced(lsn_t sync_lsn,
-                              std::chrono::steady_clock::time_point deadline =
-                                  std::chrono::steady_clock::time_point::max());
+          std::chrono::steady_clock::time_point::max()) {
+    return waitUntilRSMSynced("logsconfig_rsm", sync_lsn, deadline);
+  }
 
   /**
    * Wait until all shards of this node are fully authoritative in event log.

@@ -57,7 +57,7 @@ class InfoLogsConfigRsm : public AdminCommand {
                                           "Delta log bytes",
                                           "Delta log records",
                                           "Delta log healthy",
-                                          "Propagated version");
+                                          "Propagated read ptr");
 
     auto tables = run_on_all_workers(server_->getProcessor(), [&]() {
       InfoReplicatedStateMachineTable t(table);
@@ -65,6 +65,11 @@ class InfoLogsConfigRsm : public AdminCommand {
       if (w->logsconfig_manager_ &&
           w->logsconfig_manager_->getStateMachine() != nullptr) {
         w->logsconfig_manager_->getStateMachine()->getDebugInfo(t);
+
+        // Currently all logs config updates are published synchronously, by
+        // updating UpdateableConfig. In particular, there's no broadcasting to
+        // all workers. So propagated LSN is just equal to read ptr.
+        t.set<14>(w->logsconfig_manager_->getStateMachine()->getDeltaReadPtr());
       }
       return t;
     });
@@ -75,11 +80,7 @@ class InfoLogsConfigRsm : public AdminCommand {
 
     ld_check_le(table.numRows(), 1ul);
 
-    // Omit the last column: "Propagated version". We're not populating it yet.
-    json_
-        ? table.printJson(out_, InfoReplicatedStateMachineTable::numCols() - 1)
-        : table.printRowVertically(
-              0, out_, InfoReplicatedStateMachineTable::numCols() - 1);
+    json_ ? table.printJson(out_) : table.printRowVertically(0, out_);
   }
 };
 

@@ -57,16 +57,19 @@ class InfoEventLog : public AdminCommand {
                                           "Delta log bytes",
                                           "Delta log records",
                                           "Delta log healthy",
-                                          "Propagated version");
+                                          "Propagated read ptr");
 
     std::atomic<lsn_t> min_propagated_version{LSN_MAX};
+    lsn_t rsm_version = LSN_INVALID;
+    lsn_t read_ptr = LSN_INVALID;
 
     auto tables = run_on_all_workers(server_->getProcessor(), [&]() {
       InfoReplicatedStateMachineTable t(table);
       Worker* w = Worker::onThisThread();
 
-      // Set "Propagated version" to the minimum version across all workers'
-      // ShardAuthoritativeStatusManager-s.
+      // Find the minimum version across all workers'
+      // ShardAuthoritativeStatusManager-s. We'll use it to calculate
+      // "Propagated read ptr".
       atomic_fetch_min(min_propagated_version,
                        w->shardStatusManager()
                            .getShardAuthoritativeStatusMap()
@@ -74,6 +77,8 @@ class InfoEventLog : public AdminCommand {
 
       if (w->event_log_) {
         w->event_log_->getDebugInfo(t);
+        rsm_version = w->event_log_->getVersion();
+        read_ptr = w->event_log_->getDeltaReadPtr();
 
         ld_check_eq(w->rebuilding_coordinator_ != nullptr,
                     server_->getRebuildingCoordinator() != nullptr);
@@ -87,7 +92,11 @@ class InfoEventLog : public AdminCommand {
 
     ld_check_eq(1ul, table.numRows());
     ld_check(min_propagated_version.load() < LSN_MAX);
-    table.set<14>(min_propagated_version.load());
+
+    table.set<14>(min_propagated_version.load() == rsm_version
+                      ? read_ptr
+                      : min_propagated_version.load());
+
     json_ ? table.printJson(out_) : table.printRowVertically(0, out_);
   }
 };

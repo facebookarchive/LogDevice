@@ -186,7 +186,7 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
   /* sync logsconfig everywhere */
   std::vector<node_index_t> all_nodes(NNODES);
   std::iota(all_nodes.begin(), all_nodes.end(), 0);
-  cluster->waitUntilLogsConfigSynced(tail_lsn, all_nodes);
+  cluster->waitUntilLogsConfigSynced(tail_lsn);
 
   /* take snapshot */
   auto result =

@@ -1247,7 +1247,14 @@ class Client {
                            bool mk_intermediate_dirs,
                            make_log_group_callback_t cb) noexcept = 0;
   /**
-   * blocking version of makeLogGroup()
+   * Blocking version of makeLogGroup().
+   *
+   * Note that, even after this method returns success, it may take some time
+   * for the update to propagate to all servers, so the new log group may not
+   * be usable for a few seconds (appends may fail with NOTFOUND or
+   * NOTINSERVERCONFIG). Same applies to all other logs config update methods,
+   * e.g. setAttributes().
+   *
    * If failure_reason is not nullptr, it will be populated with a
    * human-readable error string if the operation failed.
    */

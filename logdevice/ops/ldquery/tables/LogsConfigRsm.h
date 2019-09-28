@@ -35,10 +35,13 @@ class LogsConfigRsm : public AdminCommandTable {
         {"delta_log_id", DataType::LOGID, "Id of the delta log."},
         {"snapshot_log_id", DataType::LOGID, "Id of the snapshot log."},
         {"version", DataType::LSN, "Version of the state."},
-        {"delta_read_ptr", DataType::LSN, "Read pointer in the delta log."},
+        {"delta_read_ptr",
+         DataType::LSN,
+         "LSN of the last record or gap read from the delta log."},
         {"delta_replay_tail",
          DataType::LSN,
          "On startup, the state machine reads the delta log up to that lsn "
+         "(inclusive) "
          "before delivering the initial state to subscribers."},
         {"snapshot_read_ptr",
          DataType::LSN,
@@ -77,6 +80,10 @@ class LogsConfigRsm : public AdminCommandTable {
         {"delta_log_records",
          DataType::BIGINT,
          "Number of delta records that are past the last snapshot."},
+        {"propagated_read_ptr",
+         DataType::BIGINT,
+         "All updates up to this LSN (exclusive) were fully propagated to all "
+         "state machines."},
     };
   }
   std::string getCommandToSend(QueryContext& /*ctx*/) const override {
