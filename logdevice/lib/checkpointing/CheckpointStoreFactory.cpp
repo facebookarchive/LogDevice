@@ -17,7 +17,7 @@ std::unique_ptr<CheckpointStore>
 CheckpointStoreFactory::createFileBasedCheckpointStore(std::string root_path) {
   // TODO: implement version managing
   auto extract_version_function = [](folly::StringPiece) {
-    return static_cast<FileBasedVersionedConfigStore::version_t>(1);
+    return CheckpointStore::Version(1);
   };
   auto versioned_config_store = std::make_unique<FileBasedVersionedConfigStore>(
       root_path, extract_version_function);

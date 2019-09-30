@@ -45,9 +45,9 @@ void CheckpointStoreImpl::getLSN(const std::string& customer_id,
       gcb(Status::BADMSG, LSN_INVALID);
       return;
     }
-    if (value_thrift->log_lsn_map.count(static_cast<uint64_t>(log_id))) {
-      auto lsn = value_thrift->log_lsn_map[static_cast<uint64_t>(log_id)];
-      gcb(Status::OK, static_cast<lsn_t>(lsn));
+    if (value_thrift->log_lsn_map.count(log_id.val())) {
+      auto lsn = value_thrift->log_lsn_map[log_id.val()];
+      gcb(Status::OK, lsn);
     } else {
       gcb(Status::NOTFOUND, lsn_t());
     }
@@ -97,8 +97,7 @@ void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
       }
     }
     for (auto [log_id, lsn] : checkpoints) {
-      value_thrift->log_lsn_map[static_cast<uint64_t>(log_id)] =
-          static_cast<uint64_t>(lsn);
+      value_thrift->log_lsn_map[log_id.val()] = lsn;
     }
     auto serialized_thrift =
         ThriftCodec::serialize<BinarySerializer>(*value_thrift);
