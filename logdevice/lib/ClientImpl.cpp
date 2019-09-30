@@ -158,6 +158,8 @@ ClientImpl::ClientImpl(std::string cluster_name,
     stats_ = std::make_unique<StatsHolder>(std::move(params));
   }
 
+  STAT_SET(stats_.get(), client.client_started, 1);
+
   std::shared_ptr<ServerConfig> server_cfg = config_->get()->serverConfig();
 
   std::shared_ptr<TraceLoggerFactory> trace_logger_factory =
