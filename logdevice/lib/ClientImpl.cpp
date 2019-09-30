@@ -2306,10 +2306,12 @@ ClientImpl::prepareRequest(logid_t logid,
   return req;
 }
 
-// Some compilers (e.g., gcc-7.4.0, the default compiler on Ubuntu 18) may inline calls to prepareRequest<Payload>() in
-// ClientImpl::append() below. If that happens, the compiler will not generate code for prepareRequest<Payload>()
-// instantiation. However, lib/shadow/ShadowClient.cpp requires that instantiation. This leads to link errors when
-// linking examples/ and some tests. Adding an explicit instantiation here to fix.
+// Some compilers (e.g., gcc-7.4.0, the default compiler on Ubuntu 18) may
+// inline calls to prepareRequest<Payload>() in ClientImpl::append() below. If
+// that happens, the compiler will not generate code for
+// prepareRequest<Payload>() instantiation. However, lib/shadow/ShadowClient.cpp
+// requires that instantiation. This leads to link errors when linking examples/
+// and some tests. Adding an explicit instantiation here to fix.
 template std::unique_ptr<AppendRequest> 
 ClientImpl::prepareRequest<Payload>(logid_t logid,
                         Payload payload,
