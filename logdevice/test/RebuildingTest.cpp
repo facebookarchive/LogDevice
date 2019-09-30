@@ -1767,7 +1767,7 @@ TEST_P(RebuildingTest, RollingMiniRebuilding) {
       // every ~6 records.
       .setParam("--sticky-copysets-block-size", "128")
       // Use only a single shard so that partition creation/flushing commands
-      // can be unambiguously targetted.
+      // can be unambiguously targeted.
       .setNumDBShards(1);
 
   rollingRebuilding(cf, nnodes, 1, 4, 1, NodeFailureMode::KILL, check_args);
@@ -1804,7 +1804,7 @@ TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
           // every ~6 records.
           .setParam("--sticky-copysets-block-size", "128")
           // Use only a single shard so that partition creation/flushing
-          // commands can be unambiguously targetted.
+          // commands can be unambiguously targeted.
           .setNumDBShards(1)
           .create(5);
 
@@ -1883,7 +1883,7 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
           // on every record.
           .setParam("--sticky-copysets-block-size", "10")
           // Use only a single shard so that partition creation/flushing
-          // commands can be unambiguously targetted.
+          // commands can be unambiguously targeted.
           .setNumDBShards(1)
           .create(9); // 1 sequencer node + 8 storage nodes
 
@@ -2210,7 +2210,7 @@ TEST_P(RebuildingTest, UnderReplicatedRegions) {
           // while clients read data.
           .setParam("--rebuild-dirty-shards", "false")
           // Use only a single shard so that partition creation/flushing
-          // commands can be unambiguously targetted.
+          // commands can be unambiguously targeted.
           .setNumDBShards(1)
           .create(5);
 
@@ -2563,6 +2563,7 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
 // Case: shards come back wiped.
 TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
   // FIXME: Need to add a mix of retentions.
+  // Shorter than test duration.
   std::chrono::seconds maxBacklogDuration(20);
 
   ld_info("Creating cluster");
@@ -2678,6 +2679,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
 
 // Case: shards come back good.
 TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
+  // Longer than test duration.
   std::chrono::seconds maxBacklogDuration(300);
 
   logsconfig::LogAttributes log_attrs;
@@ -2764,6 +2766,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
 
 // Case: shards never come back.
 TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
+  // Shorter than test duration.
   std::chrono::seconds maxBacklogDuration(30);
 
   logsconfig::LogAttributes log_attrs;
@@ -2844,7 +2847,8 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
 }
 
 TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
-  std::chrono::seconds maxBacklogDuration(30);
+  // Longer than test duration.
+  std::chrono::seconds maxBacklogDuration(300);
 
   logsconfig::LogAttributes log_attrs;
   log_attrs.set_replicationFactor(3);
@@ -2865,6 +2869,7 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
       IntegrationTestUtils::ClusterFactory()
           .apply(commonSetup())
           .setLogGroupName("test-log-group")
+          .setLogAttributes(log_attrs)
           .setEventLogAttributes(event_log_attrs)
           .setParam("--append-store-durability", "memory")
           // Set min flush trigger intervals and partition duration high
@@ -2875,6 +2880,8 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
           // amount of wall clock delay required for this test to create
           // adjacent partitions with non-overlapping time ranges.
           .setParam("--rocksdb-partition-timestamp-granularity", "100ms")
+          // Print all flush events to server's log, for debugging.
+          .setParam("--rocksdb-print-details", "true")
           // To ensure that all nodes receive at least some data when we dirty
           // them, adjust the copyset block size so we get a copyset shuffle
           // every ~6 records.
@@ -2885,7 +2892,7 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
           .setParam("--disable-data-log-rebuilding")
           .setParam("--shard-is-rebuilt-msg-delay", "0s..2s")
           // Use only a single shard so that partition creation/flushing
-          // commands can be unambiguously targetted.
+          // commands can be unambiguously targeted.
           .setNumDBShards(1)
           .create(5);
 
