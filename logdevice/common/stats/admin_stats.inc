@@ -13,16 +13,16 @@
 #endif
 
 // Stats published by Admin server.
-STAT_DEFINE(admin_server_started, SUM)
+STAT_DEFINE(admin_server_started, MAX)
 
 // Maintenances
-STAT_DEFINE(num_maintenances, SUM)
-STAT_DEFINE(maintenance_state_version, SUM)
+STAT_DEFINE(num_maintenances, MAX)
+STAT_DEFINE(maintenance_state_version, MAX)
 
-STAT_DEFINE(maintenance_progress_UNKNOWN, SUM)
-STAT_DEFINE(maintenance_progress_BLOCKED_UNTIL_SAFE, SUM)
-STAT_DEFINE(maintenance_progress_IN_PROGRESS, SUM)
-STAT_DEFINE(maintenance_progress_COMPLETED, SUM)
+STAT_DEFINE(maintenance_progress_UNKNOWN, MAX)
+STAT_DEFINE(maintenance_progress_BLOCKED_UNTIL_SAFE, MAX)
+STAT_DEFINE(maintenance_progress_IN_PROGRESS, MAX)
+STAT_DEFINE(maintenance_progress_COMPLETED, MAX)
 
 // Maintenance Manager
 STAT_DEFINE(mm_evaluations, SUM)
@@ -35,5 +35,6 @@ STAT_DEFINE(mm_safety_checker_runs, SUM)
 // Safety Checker (general)
 // The total number of refreshes we have done
 STAT_DEFINE(safety_checker_metadata_refreshes, SUM)
+STAT_DEFINE(num_historical_epochs, MAX)
 
 #undef STAT_DEFINE

@@ -177,6 +177,18 @@ void SafetyChecker::onMetadataRefreshComplete(
           logsconfig_version);
   metadata_ = std::make_shared<LogMetaDataFetcher::Results>(std::move(results));
   STAT_INCR(processor_->stats_, admin_server.safety_checker_metadata_refreshes);
+  if (metadata_) {
+    // We need to scan all logs and count how many epochs per log do we have.
+    size_t num_epochs{0};
+    for (const auto& [_, v] : *metadata_) {
+      if (v.historical_metadata) {
+        num_epochs += v.historical_metadata->size();
+      }
+    }
+    // How many epochs do we have for historical metadata
+    STAT_SET(
+        processor_->stats_, admin_server.num_historical_epochs, num_epochs);
+  }
   // Deallocate the fetcher, we don't need it.
   fetcher_.reset();
 
