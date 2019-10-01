@@ -2389,7 +2389,10 @@ TEST_P(RebuildingTest, DerivedStats) {
   wait_until_event_log_synced(*cluster, event_lsn, /* nodes */ {1});
 
   // Rebuilding should be stuck because N2 is down.
-  stats = cluster->getNode(1).stats();
+  // The event propagation inside the server is asynchronous, even after the
+  // wait_until_event_log_synced() (RebuildingCoordinator uses a zero-delay
+  // timer and a storage task for restarting and acking rebuilding
+  // correspondingly).
   wait_until("shards_waiting_for_non_started_restore", [&cluster, &stats] {
     stats = cluster->getNode(1).stats();
     return 0 == stats["shards_waiting_for_non_started_restore"];
@@ -2406,7 +2409,17 @@ TEST_P(RebuildingTest, DerivedStats) {
 
   stats = cluster->getNode(1).stats();
   EXPECT_EQ(0, stats["shards_waiting_for_non_started_restore"]);
-  EXPECT_EQ(0, stats["non_empty_shards_in_restore"]);
+
+  // Logically, non_empty_shards_in_restore should stay zero for the whole
+  // duration of the test. But due to a race condition, it may change to 1
+  // for a brief moment, then back to 0:
+  // RebuildingCoordinator::notifyProcessorShardRebuilt() sets
+  // shard_missing_all_data to false, while full_restore_set_contains_myself
+  // remains true until a SHARD_ACK_REBUILT is written and read back.
+  wait_until("non_empty_shards_in_restore", [&cluster, &stats] {
+    stats = cluster->getNode(1).stats();
+    return 0 == stats["non_empty_shards_in_restore"];
+  });
 
   // Stop N2 again to make the next rebuilding stall.
   ld_info("Shutting down N2");
@@ -2449,7 +2462,8 @@ TEST_P(RebuildingTest, DerivedStats) {
   wait_until_event_log_synced(*cluster, event_lsn, /* nodes */ {3});
 
   stats = cluster->getNode(3).stats();
-  // don't know why there is a race here
+  // RebuildingCoordinator does things asynchronously even after
+  // wait_until_event_log_synced(). Wait for it to apply the event log update.
   wait_until("shards_waiting_for_non_started_restore", [&cluster, &stats] {
     stats = cluster->getNode(1).stats();
     return 0 == stats["shards_waiting_for_non_started_restore"];
@@ -2463,9 +2477,11 @@ TEST_P(RebuildingTest, DerivedStats) {
   ld_info("Waiting for N3 to ack");
   cluster->getNode(3).waitUntilAllShardsFullyAuthoritative(client);
 
-  stats = cluster->getNode(3).stats();
+  wait_until("non_empty_shards_in_restore", [&cluster, &stats] {
+    stats = cluster->getNode(3).stats();
+    return 0 == stats["non_empty_shards_in_restore"];
+  });
   EXPECT_EQ(0, stats["shards_waiting_for_non_started_restore"]);
-  EXPECT_EQ(0, stats["non_empty_shards_in_restore"]);
 }
 
 // During rebuilding records are underreplicated.
