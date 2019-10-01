@@ -652,7 +652,7 @@ void ZookeeperClient::createWithAncestors(std::string path,
               res.path_ = (rc == ZOK) ? std::move(resulting_path) : "";
               promise->setValue(std::move(res));
             },
-            std::move(acl),
+            acl,
             /* flags = */ 0);
         return fut;
       });
