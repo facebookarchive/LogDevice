@@ -74,6 +74,15 @@ NodeSetSelector::Result WeightAwareNodeSetSelector::getStorageSet(
     min_nodes_per_domain = 0;
   }
 
+  // We'll try to pick at least this many nodes in total.
+  // If target_nodeset_size seems too small compared to replication factor,
+  // increase it to 2*replication_factor - 1, which provides, in some sense,
+  // equal write and read availability.
+  nodeset_size_t min_nodes_total =
+      std::max(target_nodeset_size,
+               static_cast<nodeset_size_t>(
+                   replication_property.getReplicationFactor() * 2 - 1));
+
   struct CandidateNode {
     uint64_t shard_id_hash;
     ShardID shard_id;
@@ -237,7 +246,7 @@ NodeSetSelector::Result WeightAwareNodeSetSelector::getStorageSet(
       int picked_in_domain =
           only_writable ? d->num_picked_writable : d->num_picked;
       if (picked_in_domain >= min_nodes_per_domain &&
-          result_size >= target_nodeset_size) {
+          result_size >= min_nodes_total) {
         // The nodeset is big enough and has enough nodes from each domain.
         break;
       }

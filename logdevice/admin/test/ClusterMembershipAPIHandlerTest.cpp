@@ -16,6 +16,7 @@
 #include "logdevice/admin/if/gen-cpp2/cluster_membership_constants.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
+#include "logdevice/common/membership/gen-cpp2/Membership_types.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
@@ -86,6 +87,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
         thrift::Addresses other_addresses;
         other_addresses.set_gossip(make_address(50 + idx, 2000 + idx));
         other_addresses.set_ssl(make_address(100 + idx, 3000 + idx));
+        other_addresses.set_admin(make_address(150 + idx, 4000 + idx));
         cfg.set_other_addresses(other_addresses);
       }
 
@@ -113,6 +115,31 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
     return req;
   }
 
+  bool disableAndWait(std::vector<thrift::ShardID> shards,
+                      std::vector<thrift::NodeID> sequencers) {
+    auto admin_client = cluster_->getNode(0).createAdminClient();
+
+    return wait_until("Maintenance manager disables the node", [&]() {
+             thrift::MaintenanceDefinition request;
+             request.set_user("bunny");
+             request.set_shard_target_state(
+                 thrift::ShardOperationalState::DRAINED);
+             request.set_sequencer_nodes(sequencers);
+             request.set_sequencer_target_state(
+                 thrift::SequencingState::DISABLED);
+             request.set_shards(shards);
+             request.set_skip_safety_checks(true);
+             thrift::MaintenanceDefinitionResponse resp;
+             admin_client->sync_applyMaintenance(resp, request);
+             return std::all_of(resp.get_maintenances().begin(),
+                                resp.get_maintenances().end(),
+                                [](const auto& m) {
+                                  return m.progress ==
+                                      thrift::MaintenanceProgress::COMPLETED;
+                                });
+           }) == 0;
+  }
+
  public:
   std::unique_ptr<IntegrationTestUtils::Cluster> cluster_;
 };
@@ -122,6 +149,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveAliveNodes) {
       node_index_t(1), configuration::StorageState::DISABLED, 1, false);
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
   auto admin_client = cluster_->getNode(0).createAdminClient();
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  disableAndWait({mkShardID(1, -1)}, {mkNodeID(1)});
 
   try {
     thrift::RemoveNodesResponse resp;
@@ -167,6 +196,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNodeSuccess) {
       node_index_t(1), configuration::StorageState::DISABLED, 1, false);
   ASSERT_EQ(0, cluster_->start({0, 2, 3}));
   auto admin_client = cluster_->getNode(0).createAdminClient();
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  disableAndWait({mkShardID(1, -1)}, {mkNodeID(1)});
 
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({1}));
@@ -390,4 +421,70 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
                 exception.error_code_ref().value_unchecked());
     }
   }
+}
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  {
+    // Add two nodes with 2 shards each. They will get added as PROVISIONING.
+    thrift::AddNodesResponse resp;
+    admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
+    ASSERT_EQ(2, resp.added_nodes.size());
+
+    wait_until("AdminServer's NC picks the additions", [&]() {
+      thrift::NodesConfigResponse nc;
+      admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
+      return nc.version >= resp.new_nodes_configuration_version;
+    });
+  }
+
+  // Mark all N100 shards, and only N101:S0 as provisioned
+  thrift::MarkShardsAsProvisionedRequest req;
+  req.set_shards({mkShardID(100, -1), mkShardID(101, 0)});
+
+  thrift::MarkShardsAsProvisionedResponse resp;
+  admin_client->sync_markShardsAsProvisioned(resp, req);
+  EXPECT_THAT(resp.get_updated_shards(),
+              UnorderedElementsAre(
+                  mkShardID(100, 0), mkShardID(100, 1), mkShardID(101, 0)));
+
+  wait_until("AdminServer's NC picks the updates", [&]() {
+    thrift::NodesConfigResponse nc;
+    admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
+    return nc.version >= resp.new_nodes_configuration_version;
+  });
+
+  auto get_shard_state = [&](const thrift::NodesState& state,
+                             thrift::ShardID shard) {
+    for (const auto& node : state) {
+      if (node.get_config().get_node_index() ==
+          *shard.get_node().node_index_ref()) {
+        return node.shard_states_ref()
+            ->at(shard.get_shard_index())
+            .get_storage_state();
+      }
+    }
+    return membership::thrift::StorageState::INVALID;
+  };
+
+  thrift::NodesStateRequest state_req;
+  state_req.set_filter(thrift::NodesFilter{});
+
+  thrift::NodesStateResponse nc;
+  admin_client->sync_getNodesState(nc, state_req);
+
+  // MM could have already started enabling the shards after getting out of the
+  // PROVISIONING state. So it's just enough to check that they are not in
+  // PROVISIONING anymore.
+  EXPECT_NE(membership::thrift::StorageState::PROVISIONING,
+            get_shard_state(nc.get_states(), mkShardID(100, 0)));
+  EXPECT_NE(membership::thrift::StorageState::PROVISIONING,
+            get_shard_state(nc.get_states(), mkShardID(100, 1)));
+  EXPECT_NE(membership::thrift::StorageState::PROVISIONING,
+            get_shard_state(nc.get_states(), mkShardID(101, 0)));
+  EXPECT_EQ(membership::thrift::StorageState::PROVISIONING,
+            get_shard_state(nc.get_states(), mkShardID(101, 1)));
 }

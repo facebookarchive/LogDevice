@@ -265,17 +265,20 @@ TEST(APIUtilsTest, ExpandMaintenances2) {
   request.set_skip_safety_checks(true);
   request.set_group(false);
   {
+    // make sure we ignore a node with a wrong role (1)
     auto output = APIUtils::expandMaintenances(request, nodes_config);
-    ASSERT_TRUE(output.hasError());
-    ASSERT_EQ("Node 9 is not a sequencer node", output.error().get_message());
+    ASSERT_TRUE(output.hasValue());
+    ASSERT_EQ(output.value().size(), 1);
+    ASSERT_TRUE(output.value().front().sequencer_nodes.empty());
   }
   {
+    // make sure we ignore a node with a wrong role (2)
     request.set_sequencer_nodes({mkNodeID(1)});
-    // now let's try to set shards in non-storage nodes.
     request.set_shards({mkShardID(7, -1)});
     auto output = APIUtils::expandMaintenances(request, nodes_config);
-    ASSERT_TRUE(output.hasError());
-    ASSERT_EQ("Node 7 is not a storage node", output.error().get_message());
+    ASSERT_TRUE(output.hasValue());
+    ASSERT_EQ(output.value().size(), 1);
+    ASSERT_TRUE(output.value().front().shards.empty());
   }
 }
 

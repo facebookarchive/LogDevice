@@ -44,9 +44,6 @@ struct AdminServerSettings : public SettingsBundle {
   // How many bytes of delta records to keep in the event log before we snapshot
   // it
   size_t maintenance_log_max_delta_bytes;
-  // If the event log is snapshotted, how long to keep a history of snapshots
-  // and delta
-  std::chrono::milliseconds maintenance_log_retention;
   // Disable trimming of the maintenance log
   bool disable_maintenance_log_trimming;
 

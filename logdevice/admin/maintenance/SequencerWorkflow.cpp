@@ -11,7 +11,8 @@
 namespace facebook { namespace logdevice { namespace maintenance {
 
 folly::SemiFuture<MaintenanceStatus>
-SequencerWorkflow::run(const membership::SequencerNodeState& node_state) {
+SequencerWorkflow::run(const membership::SequencerNodeState& node_state,
+                       ClusterStateNodeState node_gossip_state) {
   current_sequencing_state_ = node_state.sequencer_enabled
       ? SequencingState::ENABLED
       : SequencingState::DISABLED;
@@ -24,8 +25,19 @@ SequencerWorkflow::run(const membership::SequencerNodeState& node_state) {
     promise_future.first.setValue(MaintenanceStatus::COMPLETED);
   } else {
     if (target_op_state_ == SequencingState::ENABLED || skip_safety_check_) {
-      promise_future.first.setValue(
-          MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+      // We require that the node is in FULLY_STARTED|STARTING_UP state before
+      // we proceed with the enable workflow. This ensures that we are not
+      // setting the shards or sequencers to READ_WRITE before the nodes are
+      // actually up and running.
+      if (node_gossip_state != ClusterStateNodeState::FULLY_STARTED &&
+          node_gossip_state != ClusterStateNodeState::STARTING &&
+          target_op_state_ == SequencingState::ENABLED) {
+        promise_future.first.setValue(
+            MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE);
+      } else {
+        promise_future.first.setValue(
+            MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+      }
     } else {
       ld_check(target_op_state_ == SequencingState::DISABLED);
       promise_future.first.setValue(MaintenanceStatus::AWAITING_SAFETY_CHECK);

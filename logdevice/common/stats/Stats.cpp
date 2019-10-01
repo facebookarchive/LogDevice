@@ -266,6 +266,7 @@ Stats::Stats(const FastUpdateableSharedPtr<StatsParams>* params)
     case StatsParams::StatsSet::CHARACTERIZE_LOAD:
       characterize_load = std::make_unique<CharacterizeLoadStats>();
       break;
+    case StatsParams::StatsSet::ADMIN_SERVER:
     case StatsParams::StatsSet::DEFAULT:
       break;
   }
@@ -294,6 +295,12 @@ void Stats::aggregate(Stats const& other, StatsAggOptional agg_override) {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, agg_override, name, other.name);
 #include "logdevice/common/stats/server_stats.inc" // nolint
+#define STAT_DEFINE(name, agg)     \
+  aggregateStat(StatsAgg::agg,     \
+                agg_override,      \
+                admin_server.name, \
+                other.admin_server.name);
+#include "logdevice/common/stats/admin_stats.inc" // nolint
       } else {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, agg_override, client.name, other.client.name);
@@ -317,6 +324,18 @@ void Stats::aggregate(Stats const& other, StatsAggOptional agg_override) {
                 other.characterize_load->name);
 #include "logdevice/common/stats/characterize_load_stats.inc" // nolint
       break;
+    case StatsParams::StatsSet::ADMIN_SERVER:
+#define STAT_DEFINE(name, agg)     \
+  aggregateStat(StatsAgg::agg,     \
+                agg_override,      \
+                admin_server.name, \
+                other.admin_server.name);
+#include "logdevice/common/stats/admin_stats.inc" // nolint
+// We want to include the common stats in admin server too.
+#define STAT_DEFINE(name, agg) \
+  aggregateStat(StatsAgg::agg, agg_override, name, other.name);
+#include "logdevice/common/stats/common_stats.inc" // nolint
+      break;
   } // let compiler check that all enum values are handled.
 
   aggregateCompoundStats(other, agg_override);
@@ -329,6 +348,9 @@ void Stats::aggregateForDestroyedThread(Stats const& other) {
       if (params->get()->is_server) {
 #define STAT_DEFINE(name, agg) aggregateStat(StatsAgg::agg, name, other.name);
 #include "logdevice/common/stats/server_stats.inc" // nolint
+#define STAT_DEFINE(name, agg) \
+  aggregateStat(StatsAgg::agg, admin_server.name, other.admin_server.name);
+#include "logdevice/common/stats/admin_stats.inc" // nolint
       } else {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, client.name, other.client.name);
@@ -347,6 +369,14 @@ void Stats::aggregateForDestroyedThread(Stats const& other) {
   aggregateStat(               \
       StatsAgg::agg, characterize_load->name, other.characterize_load->name);
 #include "logdevice/common/stats/characterize_load_stats.inc" // nolint
+      break;
+    case StatsParams::StatsSet::ADMIN_SERVER:
+#define STAT_DEFINE(name, agg) \
+  aggregateStat(StatsAgg::agg, admin_server.name, other.admin_server.name);
+#include "logdevice/common/stats/admin_stats.inc" // nolint
+// common stats are included for admin server too.
+#define STAT_DEFINE(name, agg) aggregateStat(StatsAgg::agg, name, other.name);
+#include "logdevice/common/stats/common_stats.inc" // nolint
       break;
   } // let compiler check that all enum values are handled.
 
@@ -465,6 +495,8 @@ void Stats::reset() {
       if (params->get()->is_server) {
 #define STAT_DEFINE(name, _) name = {};
 #include "logdevice/common/stats/server_stats.inc" // nolint
+#define STAT_DEFINE(name, _) admin_server.name = {};
+#include "logdevice/common/stats/admin_stats.inc" // nolint
         for (auto& sts : per_storage_task_type_stats) {
           sts.reset();
         }
@@ -516,6 +548,12 @@ void Stats::reset() {
     case StatsParams::StatsSet::CHARACTERIZE_LOAD:
 #define STAT_DEFINE(name, _) characterize_load->name = {};
 #include "logdevice/common/stats/characterize_load_stats.inc" // nolint
+      break;
+    case StatsParams::StatsSet::ADMIN_SERVER:
+#define STAT_DEFINE(name, _) admin_server.name = {};
+#include "logdevice/common/stats/admin_stats.inc" // nolint
+#define STAT_DEFINE(name, _) name = {};
+#include "logdevice/common/stats/common_stats.inc" // nolint
       break;
   } // let compiler check that all enum values are handled.
 }
@@ -578,6 +616,13 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
 #define STAT_DEFINE(s, _) cb->stat(#s, characterize_load->s);
 #include "logdevice/common/stats/characterize_load_stats.inc" // nolint
       return; // nothing more to do here
+    case StatsParams::StatsSet::ADMIN_SERVER:
+#define STAT_DEFINE(s, _) cb->stat(#s, admin_server.s);
+#include "logdevice/common/stats/admin_stats.inc" // nolint
+// We also want the common stats in admin server.
+#define STAT_DEFINE(s, _) cb->stat(#s, s);
+#include "logdevice/common/stats/common_stats.inc" // nolint
+      return;                                      // nothing more to do here
     case StatsParams::StatsSet::DEFAULT:
       break;
   } // let compiler check that all enum values are handled.
@@ -587,6 +632,9 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
 
 #define STAT_DEFINE(s, _) cb->stat(#s, s);
 #include "logdevice/common/stats/server_stats.inc" // nolint
+    // Admin server running in logdeviced
+#define STAT_DEFINE(s, _) cb->stat(#s, admin_server.s);
+#include "logdevice/common/stats/admin_stats.inc" // nolint
 
     // Per shard.
 
@@ -1073,6 +1121,7 @@ namespace {
 // This statically asserts that all names are unique in the union of:
 //  - common_stats.inc
 //  - server_stats.inc,
+//  - admin_stats.inc,
 //  - per_shard_stats.inc,
 //  - per_traffic_class_stats.inc.
 // The uniqueness is needed to prevent totals for per-something stats from
@@ -1083,6 +1132,8 @@ enum class StatsUniquenessCheck {
 #include "logdevice/common/stats/common_stats.inc" // nolint
 #define STAT_DEFINE(c, _) c,
 #include "logdevice/common/stats/server_stats.inc" // nolint
+#define STAT_DEFINE(c, _) c,
+#include "logdevice/common/stats/admin_stats.inc" // nolint
 #define STAT_DEFINE(c, _) c,
 #include "logdevice/common/stats/per_shard_stats.inc" // nolint
 #define STAT_DEFINE(c, _) c,

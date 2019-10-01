@@ -41,6 +41,7 @@ class RebuildingReadFilter : public LocalLogStoreReadFilter {
                   const csi_flags_t csi_flags,
                   RecordTimestamp min_ts,
                   RecordTimestamp max_ts) override;
+
   bool shouldProcessTimeRange(RecordTimestamp min,
                               RecordTimestamp max) override;
 
@@ -48,6 +49,23 @@ class RebuildingReadFilter : public LocalLogStoreReadFilter {
    * Update stats regarding skipped records.
    */
   void noteRecordFiltered(FilteredReason reason);
+
+  /**
+   * Iterate through the copyset and:
+   * - Identify which shards need to be added to `required_in_copyset_`, this is
+   *   to ensure we only rebuild records that intersect with the rebuilding set;
+   * - Identify which shards need to be added to `scd_known_down_`.
+   *   `filter_relocate` indicates whether shards being rebuilt in RELOCATE mode
+   *   should be added to that list;
+   *
+   * @return a reason for the record to be filtered should the filtering logic
+   * decide to filter the record given these params.
+   */
+  FilteredReason populateFilterParams(const ShardID* copyset,
+                                      const copyset_size_t copyset_size,
+                                      RecordTimestamp min_ts,
+                                      RecordTimestamp max_ts,
+                                      bool filter_relocate);
 
   const logid_t logid_; // for logging
   std::shared_ptr<const RebuildingSet> rebuildingSet;

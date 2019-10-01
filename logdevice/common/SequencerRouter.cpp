@@ -339,6 +339,7 @@ void SequencerRouter::onDeadNode(NodeID node, Status status) {
     case E::TIMEDOUT:
     case E::CONNFAILED:
     case E::PEER_CLOSED:
+    case E::ISOLATED:
       if (!getSettings().server) {
         // this block only applies to client.
         //
@@ -356,6 +357,8 @@ void SequencerRouter::onDeadNode(NodeID node, Status status) {
       blacklist(node);
       break;
     default:
+      ld_warning(
+          "Not handling status %s in sequencer routing", error_name(status));
       break;
   }
 }

@@ -167,9 +167,10 @@ bool LocalLogStoreReadFilter::operator()(logid_t,
   // 3/ If this storage shard is the first non-down recipient in the record's
   //    copyset, then ship the record.
   //
-  // Note that for all steps we ship the record even if we see ourself in
-  // the known down list because that is how the reader gets informed that we
-  // are back up and we should be removed from that list.
+  // Note that for all steps, and if ship_if_i_am_down_ is true, we ship the
+  // record even if we see ourself in the known down list because that is how
+  // the reader gets informed that we are back up and we should be removed from
+  // that list.
 
   auto is_down = [&](int i) {
     // We expect scd_known_down_ to always be empty or of a very small size,
@@ -204,43 +205,47 @@ bool LocalLogStoreReadFilter::operator()(logid_t,
     };
     for (copyset_off_t i = 0; i < copyset_size; ++i) {
       if (is_local(i)) {
-        if (is_me(i)) {
+        if (!is_down(i)) {
+          return is_me(i);
+        }
+        if (ship_if_i_am_down_ && is_me(i)) {
           return true;
-        } else if (!is_down(i)) {
-          return false;
         }
       }
     }
   }
 
-  // 2/ Normal scd logic
+  // 2/ Handle extra copies.
   if (scd_replication_ > 0) {
     int n_extras = copyset_size - scd_replication_;
     int n_not_down_seen = 0;
     for (int i = copyset_size - 1; i >= 0 && n_not_down_seen < n_extras; --i) {
-      if (is_me(i)) {
-        return true;
-      }
       if (is_down(i)) {
-        continue;
+        if (ship_if_i_am_down_ && is_me(i)) {
+          return true;
+        }
+      } else {
+        ++n_not_down_seen;
+        if (is_me(i)) {
+          return true;
+        }
       }
-      ++n_not_down_seen;
     }
   }
-  // 3/
+
+  // 3/ Normal SCD logic.
   for (copyset_off_t i = 0; i < copyset_size; ++i) {
-    if (is_me(i)) {
+    if (!is_down(i)) {
+      return is_me(i);
+    }
+    if (ship_if_i_am_down_ && is_me(i)) {
       return true;
     }
-    if (is_down(i)) {
-      continue;
-    }
-    return false;
   }
 
   // All shards in the copyset are in the known down list, and our shard is not
-  // in the copyset. This should not happen in practice, but let's be safe and
-  // ship this copy.
+  // in the copyset or ship_if_i_am_down_ is false. This should not happen in
+  // practice, but let's be safe and ship this copy.
   return true;
 }
 

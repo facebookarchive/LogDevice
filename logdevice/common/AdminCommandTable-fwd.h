@@ -367,7 +367,7 @@ typedef AdminCommandTable<logid_t,                  /* Delta log id */
                           size_t, /* Delta log bytes */
                           size_t, /* delta log records */
                           bool,   /* delta log read stream healthy */
-                          admin_command_table::LSN /* Propagated version */
+                          admin_command_table::LSN /* Propagated read ptr */
                           >
     InfoReplicatedStateMachineTable;
 

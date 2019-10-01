@@ -90,4 +90,11 @@ void Listener::acceptError(const std::exception& ex) noexcept {
                   ex.what());
 }
 
+bool Listener::isTLSHeader(const TLSHeader& buf) {
+  return buf[0] == SecureConnectionTag::SSL_HANDSHAKE_RECORD_TAG &&
+      buf[1] == SecureConnectionTag::TLS_TAG &&
+      buf[2] >= SecureConnectionTag::TLS_MIN_PROTOCOL &&
+      buf[2] <= SecureConnectionTag::TLS_MAX_PROTOCOL;
+}
+
 }} // namespace facebook::logdevice

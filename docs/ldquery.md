@@ -120,8 +120,8 @@ Dump debug information about the EventLogStateMachine objects running on nodes i
 | delta\_log\_id | log_id | Id of the delta log. |
 | snapshot\_log\_id | log_id | Id of the snapshot log. |
 | version | lsn | Version of the state. |
-| delta\_read\_ptr | lsn | Read pointer in the delta log. |
-| delta\_replay\_tail | lsn | On startup, the state machine reads the delta log up to that lsn before delivering the initial state to subscribers. |
+| delta\_read\_ptr | lsn | LSN of the last record or gap read from the delta log. |
+| delta\_replay\_tail | lsn | On startup, the state machine reads the delta log up to that lsn (inclusive) before delivering the initial state to subscribers. |
 | snapshot\_read\_ptr | lsn | Read pointer in the snapshot log. |
 | snapshot\_replay\_tail | lsn | On startup, the state machine reads the snapshot log up to that lsn before delivering the initial state to subscribers. |
 | stalled\_waiting\_for\_snapshot | lsn | If not null, this means the state machine is stalled because it missed data in the delta log either because it saw a DATALOSS or TRIM gap.  The state machine will be stalled until it sees a snapshot with a version greather than this LSN.  Unless another node writes a snapshot with a bigger version, the operator may have to manually write a snapshot to recover the state machine. |
@@ -131,7 +131,7 @@ Dump debug information about the EventLogStateMachine objects running on nodes i
 | delta\_log\_bytes | long | Number of bytes of delta records that are past the last snapshot. |
 | delta\_log\_records | long | Number of delta records that are past the last snapshot. |
 | delta\_log\_healthy | bool | Whether the ClientReadStream state machine used to read the delta log reports itself as healthy, ie it has enough healthy connections to the storage nodes in the delta log's storage set such that it should be able to not miss any delta. |
-| propagated\_version | lsn | Version of the last state that was fully propagated to all state machines (in particular, to RebuildingCoordinator). |
+| propagated\_read\_ptr | lsn | All updates up to this LSN (exclusive) were fully propagated to all state machines (in particular, to RebuildingCoordinator). |
 
 ## graylist
 Provides information on graylisted storage nodes per worker per node. This works only for the outlier based graylisting.
@@ -307,8 +307,8 @@ Dump debug information about the LogsConfigStateMachine objects running on nodes
 | delta\_log\_id | log_id | Id of the delta log. |
 | snapshot\_log\_id | log_id | Id of the snapshot log. |
 | version | lsn | Version of the state. |
-| delta\_read\_ptr | lsn | Read pointer in the delta log. |
-| delta\_replay\_tail | lsn | On startup, the state machine reads the delta log up to that lsn before delivering the initial state to subscribers. |
+| delta\_read\_ptr | lsn | LSN of the last record or gap read from the delta log. |
+| delta\_replay\_tail | lsn | On startup, the state machine reads the delta log up to that lsn (inclusive) before delivering the initial state to subscribers. |
 | snapshot\_read\_ptr | lsn | Read pointer in the snapshot log. |
 | snapshot\_replay\_tail | lsn | On startup, the state machine reads the snapshot log up to that lsn before delivering the initial state to subscribers. |
 | stalled\_waiting\_for\_snapshot | lsn | If not null, this means the state machine is stalled because it missed data in the delta log either because it saw a DATALOSS or TRIM gap.  The state machine will be stalled until it sees a snapshot with a version greather than this LSN.  Unless another node writes a snapshot with a bigger version, the operator may have to manually write a snapshot to recover the state machine. |
@@ -317,6 +317,7 @@ Dump debug information about the LogsConfigStateMachine objects running on nodes
 | snapshot\_in\_flight | long | Whether a snapshot is being appended by this node.  Only one node in the cluster is responsible for creating snapshots (typically the node with the smallest node id that's alive according to the failure detector). |
 | delta\_log\_bytes | long | Number of bytes of delta records that are past the last snapshot. |
 | delta\_log\_records | long | Number of delta records that are past the last snapshot. |
+| propagated\_read\_ptr | long | All updates up to this LSN (exclusive) were fully propagated to all state machines. |
 
 ## logsdb\_directory
 Contains debugging information about the LogsDB directory on storage shards.

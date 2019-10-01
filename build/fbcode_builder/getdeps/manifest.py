@@ -9,6 +9,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import io
+import os
 
 from .builder import (
     AutoconfBuilder,
@@ -28,6 +29,7 @@ from .fetcher import (
     ShipitTransformerFetcher,
     SimpleShipitTransformerFetcher,
 )
+from .py_wheel_builder import PythonWheelBuilder
 
 
 try:
@@ -196,6 +198,12 @@ class ManifestParser(object):
         self.fbsource_path = self.get("manifest", "fbsource_path")
         self.shipit_project = self.get("manifest", "shipit_project")
         self.shipit_fbcode_builder = self.get("manifest", "shipit_fbcode_builder")
+
+        if self.name != os.path.basename(file_name):
+            raise Exception(
+                "filename of the manifest '%s' does not match the manifest name '%s'"
+                % (file_name, self.name)
+            )
 
     def get(self, section, key, defval=None, ctx=None):
         ctx = ctx or {}
@@ -381,6 +389,11 @@ class ManifestParser(object):
             defines = self.get_section_as_dict("cmake.defines", ctx)
             return CMakeBuilder(
                 build_options, ctx, self, src_dir, build_dir, inst_dir, defines
+            )
+
+        if builder == "python-wheel":
+            return PythonWheelBuilder(
+                build_options, ctx, self, src_dir, build_dir, inst_dir
             )
 
         if builder == "sqlite":

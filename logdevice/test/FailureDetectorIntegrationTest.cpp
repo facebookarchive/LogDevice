@@ -354,7 +354,7 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
 
 TEST_F(FailureDetectorIntegrationTest, MinorityIsolation) {
   // executes an append after 3 nodes out of 5 are killed, to verify that the
-  // nodes still alive are declining appends with E::ISOLATED.
+  // nodes still alive are declining appends with E::NOSEQUENCER.
   const int num_nodes = 5;
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -396,7 +396,7 @@ TEST_F(FailureDetectorIntegrationTest, MinorityIsolation) {
 
   std::atomic<bool> wait_cb(true);
   auto check_status_cb = [&](Status st, const DataRecord& /* unused */) {
-    EXPECT_EQ(E::ISOLATED, st);
+    EXPECT_TRUE(st == E::NOSEQUENCER || st == E::PEER_UNAVAILABLE);
     wait_cb.store(false);
   };
 
@@ -588,13 +588,14 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
       true);
   ASSERT_NE(nullptr, log_group);
 
-  /* we need to wait our own version of LogsConfig catch up to the log_group we
-   * just created */
+  /* We need to wait for client's and servers' versions of LogsConfig to
+   * catch up to the log_group we just created */
   ASSERT_TRUE(client->syncLogsConfigVersion(log_group->version()));
+  EXPECT_EQ(0, cluster->waitUntilLogsConfigSynced(log_group->version()));
 
   /* and append */
   auto lsn = client->appendSync(logid_t(1), Payload("hello", 5));
-  ASSERT_NE(LSN_INVALID, lsn);
+  ASSERT_NE(LSN_INVALID, lsn) << error_name(err);
 }
 
 TEST_F(FailureDetectorIntegrationTest, GetClusterStatePeerUnavailable) {

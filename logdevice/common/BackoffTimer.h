@@ -57,6 +57,16 @@ class BackoffTimer {
   virtual void activate() = 0;
 
   /**
+   * Add some randomness to the delay period when scheduling the timer.  The
+   * purpose is to avoid a bunch of timers firing around the same time,
+   * instead diffusing them over time.
+   *
+   * The actual delay every time the timer is activated will be `expected_delay'
+   * * [1 - factor, 1 + factor], where `expected_delay' grows exponentially.
+   */
+  virtual void randomize(double factor = 0.5) = 0;
+
+  /**
    * Cancels the timer (if active) and resets the delay.
    *
    * Assuming the timer is used to handle an error condition, this is called

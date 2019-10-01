@@ -32,6 +32,7 @@
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/include/types.h"
+#include "logdevice/ops/admin_command_client/AdminCommandClient.h"
 #include "logdevice/test/utils/MetaDataProvisioner.h"
 #include "logdevice/test/utils/port_selection.h"
 
@@ -319,6 +320,15 @@ class ClusterFactory {
    */
   ClusterFactory& runMaintenanceManagerOn(node_index_t n) {
     maintenance_manager_node_ = n;
+
+    // Maintenance manager usually responds to events (like maintenance log
+    // deltas, event log deltas, nodes config updates) quickly, but sometimes,
+    // due to some race conditions, it seems to miss an event and goes to sleep
+    // for maintenance-manager-reevaluation-timeout. Decrease it so that tests
+    // don't time out.
+    // TODO (#54454518): Maybe make MaintenanceManager not do that.
+    setParam("--maintenance-manager-reevaluation-timeout", "5s");
+
     return *this;
   }
 
@@ -381,6 +391,8 @@ class ClusterFactory {
 
     setNodesConfigurationSourceOfTruth(
         NodesConfigurationSourceOfTruth::SERVER_CONFIG);
+    setParam("--enable-config-synchronization", "false");
+
     return *this;
   }
 
@@ -986,8 +998,14 @@ class Cluster {
 
   /**
    * Waits until all live nodes have a view of the config same as getConfig().
+   * This doesn't guarantees much about server behavior because the
+   * config update takes some time to propagate inside the server process,
+   * e.g. to all workers; this method does *not* wait for such propagation.
+   *
+   * This it not reliable for most purposes.
+   * If you rely on it your test will probably be flaky.
    */
-  void waitForConfigUpdate();
+  void waitForServersToPartiallyProcessConfigUpdate();
 
   /**
    * Wait for all sequencer nodes in the cluster to finish log recovery.
@@ -1086,23 +1104,28 @@ class Cluster {
   int getShardAuthoritativeStatusMap(ShardAuthoritativeStatusMap& map);
 
   /**
-   * Wait until all nodes in @param nodes have read the logs config delta log up
-   * to @param sync_lsn.
+   * Do Node::waitUntilRSMSynced() on all nodes in @param nodes.
+   * If `nodes` is empty, all nodes.
    */
+  int waitUntilRSMSynced(const char* rsm,
+                         lsn_t sync_lsn,
+                         std::vector<node_index_t> nodes = {},
+                         std::chrono::steady_clock::time_point deadline =
+                             std::chrono::steady_clock::time_point::max());
+  int waitUntilEventLogSynced(
+      lsn_t sync_lsn,
+      const std::vector<node_index_t>& nodes = {},
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max()) {
+    return waitUntilRSMSynced("event_log", sync_lsn, nodes, deadline);
+  }
   int waitUntilLogsConfigSynced(
       lsn_t sync_lsn,
-      const std::vector<node_index_t>& nodes,
+      const std::vector<node_index_t>& nodes = {},
       std::chrono::steady_clock::time_point deadline =
-          std::chrono::steady_clock::time_point::max());
-
-  /**
-   * Wait until all nodes in @param nodes have read the event log up to
-   * @param sync_lsn.
-   */
-  int waitUntilEventLogSynced(lsn_t sync_lsn,
-                              const std::vector<node_index_t>& nodes,
-                              std::chrono::steady_clock::time_point deadline =
-                                  std::chrono::steady_clock::time_point::max());
+          std::chrono::steady_clock::time_point::max()) {
+    return waitUntilRSMSynced("logsconfig_rsm", sync_lsn, nodes, deadline);
+  }
 
   /**
    * Partitions cluster by overwriting individual node's config with invalid
@@ -1111,11 +1134,6 @@ class Cluster {
    * connections to nodes outside of their partition.
    */
   void partition(std::vector<std::set<int>> partitions);
-
-  /**
-   * Waits until all nodes satisfy the given predicate
-   */
-  void waitUntilAll(const char* desc, std::function<bool(Node&)> pred);
 
   /**
    * Gracefully shut down the given nodes. Faster than calling shutdown() on
@@ -1131,7 +1149,8 @@ class Cluster {
    * is smaller than current, wait_for_update would make this method wait
    * forever.
    *
-   * Use waitForConfigUpdate() to wait for nodes to pick up the update.
+   * Use waitForServersToPartiallyProcessConfigUpdate() to wait for nodes to
+   * pick up the update.
    */
   int writeConfig(const ServerConfig* server_cfg,
                   const LogsConfig* logs_cfg,
@@ -1220,11 +1239,6 @@ class Cluster {
   // How many times to try starting a server
   int outer_tries_ = 2;
 
-  // How long we wait for servers to start.  Only applies when
-  // `use_tcp_' is true as we don't expect flaky startup with Unix domain
-  // sockets.
-  std::chrono::seconds start_timeout_{30};
-
   std::string root_path_;
   // If root_path_ is a temporary directory, this owns it
   std::unique_ptr<folly::test::TemporaryDirectory> root_pin_;
@@ -1279,6 +1293,8 @@ class Cluster {
   // keep handles around until the cluster is destroyed.
   std::vector<UpdateableServerConfig::HookHandle> server_config_hook_handles_;
 
+  std::shared_ptr<AdminCommandClient> admin_command_client_;
+
   friend class ClusterFactory;
 };
 
@@ -1307,6 +1323,8 @@ class Node {
   RocksDBType rocksdb_type_ = RocksDBType::PARTITIONED;
   // override cluster params for this particular node
   ParamMap cmd_args_;
+
+  std::shared_ptr<AdminCommandClient> admin_command_client_;
 
   Node();
   ~Node() {
@@ -1456,24 +1474,37 @@ class Node {
                        std::chrono::steady_clock::time_point::max());
 
   /**
-   * Wait until the node have read logsconfig delta log up to @param sync_lsn
-   * and propagated it to all workers.
+   * Wait until the node have read the event log or config log
+   * up to @param sync_lsn and propagated it to all workers.
+   * @param rsm is either "event_log" or "logsconfig_rsm". It gets translated
+   * into admin command "info <rsm> --json", which we poll until the value in
+   * column "Propagated read ptr" becomes >= sync_lsn.
+   *
+   * Note that in case of event_log the propagation is delayed
+   * by --event-log-grace-period, so if you're using this method you probably
+   * want to decrease --event-log-grace-period. In case of logsconfig_rsm,
+   * the delay is --logsconfig-manager-grace-period.
    */
+  int waitUntilRSMSynced(const char* rsm,
+                         lsn_t sync_lsn,
+                         std::chrono::steady_clock::time_point deadline =
+                             std::chrono::steady_clock::time_point::max());
+
+  /**
+   * Shorthand for waitUntilRSMSynced("event_log"/"logsconfig_rsm", ...).
+   */
+  int waitUntilEventLogSynced(
+      lsn_t sync_lsn,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max()) {
+    return waitUntilRSMSynced("event_log", sync_lsn, deadline);
+  }
   int waitUntilLogsConfigSynced(
       lsn_t sync_lsn,
       std::chrono::steady_clock::time_point deadline =
-          std::chrono::steady_clock::time_point::max());
-
-  /**
-   * Wait until the node have read the event log up to @param sync_lsn and
-   * propagated it to all workers.
-   * Note that the propagation is delayed by --event-log-grace-period, so if
-   * you're using this method you probably want to decrease
-   * --event-log-grace-period.
-   */
-  int waitUntilEventLogSynced(lsn_t sync_lsn,
-                              std::chrono::steady_clock::time_point deadline =
-                                  std::chrono::steady_clock::time_point::max());
+          std::chrono::steady_clock::time_point::max()) {
+    return waitUntilRSMSynced("logsconfig_rsm", sync_lsn, deadline);
+  }
 
   /**
    * Wait until all shards of this node are fully authoritative in event log.
@@ -1494,7 +1525,19 @@ class Node {
    * Sends admin command `command' to command port and returns the result.
    * Connect through SSL if requested.
    */
-  std::string sendCommand(const std::string& command, bool ssl = false) const;
+  std::string sendCommand(const std::string& command,
+                          bool ssl = false,
+                          std::chrono::milliseconds command_timeout =
+                              std::chrono::milliseconds(30000)) const;
+
+  /**
+   * Does sendCommand() and parses the output as a json table.
+   * If we failed to send the command, or the result is empty, or the result
+   * looks like an error, returns empty vector. If result looks like neither
+   * json nor error message, crashes.
+   */
+  std::vector<std::map<std::string, std::string>>
+  sendJsonCommand(const std::string& command, bool ssl = false) const;
 
   /**
    * Returns the admin API address for this node

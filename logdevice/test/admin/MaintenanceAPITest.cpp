@@ -11,6 +11,7 @@
 
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/Conv.h"
+#include "logdevice/admin/if/gen-cpp2/maintenance_types_custom_protocol.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/ThriftCodec.h"
@@ -20,6 +21,7 @@
 #include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
+#include "thrift/lib/cpp2/protocol/DebugProtocol.h"
 
 using namespace ::testing;
 using namespace facebook::logdevice;
@@ -90,7 +92,7 @@ void MaintenanceAPITest::init() {
           .setNodes(nodes)
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
-          .enableSelfInitiatedRebuilding("1s")
+          .enableSelfInitiatedRebuilding("3600s")
           .setParam("--max-node-rebuilding-percentage", "50")
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--enable-safety-check-periodic-metadata-update", "true")
@@ -221,7 +223,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValidNoClash) {
     thrift::MaintenanceDefinitionResponse resp;
     admin_client->sync_getMaintenances(resp, thrift::MaintenancesFilter());
     auto output = resp.get_maintenances();
-    ASSERT_EQ(1, output.size());
+    ASSERT_EQ(1, output.size()) << apache::thrift::debugString(resp);
     const MaintenanceDefinition& result = output[0];
     thrift::MaintenanceDefinition request;
     request.set_user(result.get_user());
@@ -758,6 +760,13 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
   // Let's apply a maintenance
   cluster_->getNode(0).kill();
   cluster_->getNode(1).kill();
+
+  // Make self-initiated rebuilding quicker.
+  for (const auto& kv : cluster_->getNodes()) {
+    if (kv.first != 0 && kv.first != 1) {
+      kv.second->updateSetting("self-initiated-rebuilding-grace-period", "5s");
+    }
+  }
 
   StorageSet expected_shards;
   for (int i = 0; i < 2; i++) {

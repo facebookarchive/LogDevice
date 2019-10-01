@@ -24,9 +24,16 @@
 
 namespace facebook { namespace logdevice {
 
+enum SecureConnectionTag : char {
+  SSL_HANDSHAKE_RECORD_TAG = 0x16,
+  TLS_TAG = 0x03,          // TLS 1.x
+  TLS_MIN_PROTOCOL = 0x01, // TLS 1.0
+  TLS_MAX_PROTOCOL = 0x04, // TLS 1.3
+};
 /**
  * An abstract class that wraps evconnlisteners and handles new connections.
  */
+using TLSHeader = std::array<char, 3>;
 class Listener : public folly::AsyncServerSocket::AcceptCallback {
  public:
   using KeepAlive = folly::Executor::KeepAlive<folly::EventBase>;
@@ -96,7 +103,7 @@ class Listener : public folly::AsyncServerSocket::AcceptCallback {
   /**
    * Stops listening and frees all events from EventLoop
    */
-  folly::SemiFuture<folly::Unit> stopAcceptingConnections();
+  virtual folly::SemiFuture<folly::Unit> stopAcceptingConnections();
 
  protected:
   /**
@@ -105,6 +112,9 @@ class Listener : public folly::AsyncServerSocket::AcceptCallback {
    */
   virtual void acceptCallback(evutil_socket_t /* sock */,
                               const folly::SocketAddress& /* addr */) {}
+
+  /* Returns true if TLS handshake header is detected in buf. */
+  static bool isTLSHeader(const TLSHeader& buf);
 
   void acceptError(const std::exception& ex) noexcept override;
 

@@ -45,6 +45,9 @@ class MockBackoffTimer : public BackoffTimer {
   bool isActive() const override {
     return active_;
   }
+  void randomize(double factor) override {
+    return;
+  }
   Duration getNextDelay() const override {
     return Duration(123);
   }

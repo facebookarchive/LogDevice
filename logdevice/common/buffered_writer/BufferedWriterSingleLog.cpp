@@ -476,6 +476,8 @@ void BufferedWriterSingleLog::dropBlockedAppends(Status status,
       BufferedWriter::AppendCallback::Context& context = append.context;
       context_set.emplace_back(std::move(context), std::move(payload));
     }
+    WORKER_STAT_ADD(
+        buffered_append_failed_dropped_behind_failed_batch, chunk.size());
     cb->onFailureInternal(log_id_, std::move(context_set), status, redirect);
   }
   blocked_appends_->clear();
@@ -558,8 +560,17 @@ void BufferedWriterSingleLog::invokeCallbacks(Batch& batch,
       parent_->parent_->getCallback();
 
   if (status == E::OK) {
+    WORKER_STAT_ADD(buffered_append_success, batch.appends.size());
+
     cb->onSuccess(log_id_, std::move(batch.appends), dr_batch.attrs);
   } else {
+    if (status == E::SHUTDOWN) {
+      WORKER_STAT_ADD(buffered_append_failed_shutdown, batch.appends.size());
+    } else {
+      WORKER_STAT_ADD(
+          buffered_append_failed_actual_append, batch.appends.size());
+    }
+
     cb->onFailureInternal(log_id_, std::move(batch.appends), status, redirect);
   }
 }

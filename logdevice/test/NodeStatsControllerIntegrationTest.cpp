@@ -235,7 +235,7 @@ class NodeStatsControllerIntegrationTest
     setOneLogPerNode();
     cluster->start();
     // Ensure all the nodes have the same config
-    cluster->waitForConfigUpdate();
+    cluster->waitForServersToPartiallyProcessConfigUpdate();
     waitForSequencersToActivate();
 
     int controller_count = params.max_boycott_count + 1;
@@ -890,7 +890,7 @@ TEST_P(NodeStatsControllerIntegrationTest, AdminCommand) {
   std::string reply =
       cluster->getNode(3).sendCommand("info append_outliers --json");
   bool found_bad = false;
-  auto parsed = folly::parseJson(reply.substr(0, reply.rfind("END")));
+  auto parsed = folly::parseJson(reply);
   for (auto& row : parsed["rows"]) {
     auto node_id = std::atoi(row[0].asString().c_str());
     auto failures = std::atoi(row[2].asString().c_str());

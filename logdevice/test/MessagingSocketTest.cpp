@@ -286,15 +286,31 @@ class ServerSocket {
   std::list<int> fds_;
 };
 
-std::tuple<std::unique_ptr<EventLoop>, std::unique_ptr<Worker>>
-createWorker(Processor* p, std::shared_ptr<UpdateableConfig>& config) {
+struct WorkerAndEventLoop {
+  std::unique_ptr<EventLoop> loop;
+  std::unique_ptr<Worker> worker;
+
+  WorkerAndEventLoop(std::unique_ptr<EventLoop> loop,
+                     std::unique_ptr<Worker> worker)
+      : loop(std::move(loop)), worker(std::move(worker)) {}
+
+  ~WorkerAndEventLoop() {
+    loop->getTaskQueue().shutdown();
+    loop->getThread().join();
+    worker.reset();
+    loop.reset();
+  }
+};
+
+WorkerAndEventLoop createWorker(Processor* p,
+                                std::shared_ptr<UpdateableConfig>& config) {
   auto h = std::make_unique<EventLoop>();
   auto w = std::make_unique<Worker>(
       folly::getKeepAliveToken(h.get()), p, worker_id_t(0), config);
 
   w->add([w = w.get()] { w->setupWorker(); });
 
-  return std::make_tuple(std::move(h), std::move(w));
+  return WorkerAndEventLoop(std::move(h), std::move(w));
 }
 
 /**
@@ -318,10 +334,9 @@ TEST_F(MessagingSocketTest, SocketConnect) {
 
   ld_check((bool)config);
   auto out = createWorker(&processor, config);
-  auto h = std::move(std::get<0>(out));
-  auto w = std::move(std::get<1>(out));
+  auto w = out.worker.get();
 
-  ASSERT_NE(std::this_thread::get_id(), h->getThread().get_id());
+  ASSERT_NE(std::this_thread::get_id(), out.loop->getThread().get_id());
 
   config.reset();
 
@@ -435,10 +450,9 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   ld_check((bool)config);
 
   auto out = createWorker(&processor, config);
-  auto h = std::move(std::get<0>(out));
-  auto w = std::move(std::get<1>(out));
+  auto w = out.worker.get();
 
-  ASSERT_NE(std::this_thread::get_id(), h->getThread().get_id());
+  ASSERT_NE(std::this_thread::get_id(), out.loop->getThread().get_id());
 
   config.reset();
 
@@ -553,8 +567,7 @@ TEST_F(MessagingSocketTest, OnHandshakeTimeout) {
   Processor processor(config, updateable_settings);
 
   auto out = createWorker(&processor, config);
-  auto h = std::move(std::get<0>(out));
-  auto w = std::move(std::get<1>(out));
+  auto w = out.worker.get();
   std::unique_ptr<Request> req =
       std::make_unique<SendStoredWithTimeoutRequest>();
   EXPECT_EQ(0, w->tryPost(req));
@@ -674,8 +687,7 @@ TEST_F(MessagingSocketTest, AckProtoNoSupportClose) {
 
   Processor processor(config, updateable_settings);
   auto out = createWorker(&processor, config);
-  auto h = std::move(std::get<0>(out));
-  auto w = std::move(std::get<1>(out));
+  auto w = out.worker.get();
 
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseProtoNoSupport(sem);
@@ -718,8 +730,7 @@ TEST_F(MessagingSocketTest, MessageProtoNoSupportOnSent) {
 
   Processor processor(config, updateable_settings);
   auto out = createWorker(&processor, config);
-  auto h = std::move(std::get<0>(out));
-  auto w = std::move(std::get<1>(out));
+  auto w = out.worker.get();
 
   Semaphore sem;
   std::unique_ptr<Request> req;
@@ -809,8 +820,7 @@ TEST_F(MessagingSocketTest, AckInvalidClusterClose) {
 
   Processor processor(config, updateable_settings);
   auto out = createWorker(&processor, config);
-  auto h = std::move(std::get<0>(out));
-  auto w = std::move(std::get<1>(out));
+  auto w = out.worker.get();
 
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseInvalidCluster(sem);
@@ -867,8 +877,7 @@ TEST_F(MessagingSocketTest, ReentrantOnSent) {
   std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
   Processor processor(config, updateable_settings);
   auto out = createWorker(&processor, config);
-  auto h = std::move(std::get<0>(out));
-  auto w = std::move(std::get<1>(out));
+  auto w = out.worker.get();
 
   Semaphore sem;
   std::unique_ptr<Request> req;

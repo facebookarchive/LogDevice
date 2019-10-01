@@ -37,10 +37,13 @@ class EventLog : public AdminCommandTable {
         {"delta_log_id", DataType::LOGID, "Id of the delta log."},
         {"snapshot_log_id", DataType::LOGID, "Id of the snapshot log."},
         {"version", DataType::LSN, "Version of the state."},
-        {"delta_read_ptr", DataType::LSN, "Read pointer in the delta log."},
+        {"delta_read_ptr",
+         DataType::LSN,
+         "LSN of the last record or gap read from the delta log."},
         {"delta_replay_tail",
          DataType::LSN,
          "On startup, the state machine reads the delta log up to that lsn "
+         "(inclusive) "
          "before delivering the initial state to subscribers."},
         {"snapshot_read_ptr",
          DataType::LSN,
@@ -85,10 +88,10 @@ class EventLog : public AdminCommandTable {
          "log reports itself as healthy, ie it has enough healthy connections "
          "to the storage nodes in the delta log's storage set such that it "
          "should be able to not miss any delta."},
-        {"propagated_version",
+        {"propagated_read_ptr",
          DataType::LSN,
-         "Version of the last state that was fully propagated to all state "
-         "machines (in particular, to RebuildingCoordinator)."}};
+         "All updates up to this LSN (exclusive) were fully propagated to all "
+         "state machines (in particular, to RebuildingCoordinator)."}};
   }
   std::string getCommandToSend(QueryContext& /*ctx*/) const override {
     return std::string("info event_log --json\n");

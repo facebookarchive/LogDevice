@@ -194,4 +194,28 @@ struct TemporaryPartitionedStore : public TemporaryLogStore {
   SystemTimestamp time_ = baseTime();
 };
 
+class ShardedTemporaryLogStore : public ShardedLocalLogStore {
+ public:
+  explicit ShardedTemporaryLogStore(int num_shards) {
+    stores_.reserve(num_shards);
+    for (size_t i = 0; i < num_shards; i++) {
+      stores_.emplace_back(std::make_unique<TemporaryRocksDBStore>());
+    }
+  }
+
+  int numShards() const override {
+    return stores_.size();
+  }
+
+  LocalLogStore* getByIndex(int idx) override {
+    if (idx >= stores_.size()) {
+      return nullptr;
+    }
+    return stores_[idx].get();
+  }
+
+ private:
+  std::vector<std::unique_ptr<TemporaryRocksDBStore>> stores_;
+};
+
 }} // namespace facebook::logdevice

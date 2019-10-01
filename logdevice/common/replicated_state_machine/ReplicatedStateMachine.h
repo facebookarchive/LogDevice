@@ -453,7 +453,7 @@ class ReplicatedStateMachine {
     return *data_;
   }
 
-  // Used for debugging. Doesn't populate "Propagated version" column.
+  // Used for debugging. Doesn't populate "Propagated read ptr" column.
   void getDebugInfo(InfoReplicatedStateMachineTable& table) const;
 
   // Used by tests to find which UUID was assigned during the last call to
@@ -466,10 +466,13 @@ class ReplicatedStateMachine {
   // by tests.
   void onDeltaConfirmationTimeout(boost::uuids::uuid uuid);
 
-  // return current version of the state
+  // Return current version of the state.
   lsn_t getVersion() const {
     return version_;
   }
+
+  // How far we have processed the delta log.
+  lsn_t getDeltaReadPtr() const;
 
  protected:
   // These functions may be overridden by tests.

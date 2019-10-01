@@ -141,6 +141,9 @@ folly::dynamic NodesConfig::toJson() const {
     if (node.ssl_address) {
       node_dict["ssl_host"] = node.ssl_address->toString();
     }
+    if (node.admin_address) {
+      node_dict["admin_address"] = node.admin_address->toString();
+    }
 
     // Sequencer Role Attributes.
     auto roles = folly::dynamic::array();

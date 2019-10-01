@@ -20,6 +20,16 @@ from typing import Optional
 
 from fb303.types import fb_status
 from logdevice.admin.clients import AdminAPI
+from logdevice.admin.cluster_membership.types import (
+    AddNodesRequest,
+    AddNodesResponse,
+    MarkShardsAsProvisionedRequest,
+    MarkShardsAsProvisionedResponse,
+    RemoveNodesRequest,
+    RemoveNodesResponse,
+    UpdateNodesRequest,
+    UpdateNodesResponse,
+)
 from logdevice.admin.logtree.types import (
     LogGroupCustomCountersRequest,
     LogGroupCustomCountersResponse,
@@ -30,10 +40,10 @@ from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MaintenanceDefinitionResponse,
     MaintenancesFilter,
-    RemoveMaintenancesRequest,
-    RemoveMaintenancesResponse,
     MarkAllShardsUnrecoverableRequest,
     MarkAllShardsUnrecoverableResponse,
+    RemoveMaintenancesRequest,
+    RemoveMaintenancesResponse,
 )
 from logdevice.admin.nodes.types import (
     NodesConfigResponse,
@@ -46,6 +56,31 @@ from logdevice.admin.settings.types import SettingsRequest, SettingsResponse
 
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+
+async def add_nodes(client: AdminAPI, req: AddNodesRequest) -> AddNodesResponse:
+    """
+    Wrapper for addNodes() Thrift method
+    """
+    return await client.addNodes(req)
+
+
+async def update_nodes(
+    client: AdminAPI, req: UpdateNodesRequest
+) -> UpdateNodesResponse:
+    """
+    Wrapper for updateNodes() Thrift method
+    """
+    return await client.updateNodes(req)
+
+
+async def remove_nodes(
+    client: AdminAPI, req: RemoveNodesRequest
+) -> RemoveNodesResponse:
+    """
+    Wrapper for removeNodes() Thrift method
+    """
+    return await client.removeNodes(req)
 
 
 async def get_nodes_config(
@@ -64,6 +99,40 @@ async def get_nodes_state(
     Wrapper for getNodesState() Thrift method
     """
     return await client.getNodesState(req or NodesStateRequest())
+
+
+async def add_nodes(client: AdminAPI, req: AddNodesRequest) -> AddNodesResponse:
+    """
+    Wrapper for addNodes() Thrift method
+    """
+    return await client.addNodes(req)
+
+
+async def update_nodes(
+    client: AdminAPI, req: UpdateNodesRequest
+) -> UpdateNodesResponse:
+    """
+    Wrapper for updateNodes() Thrift method
+    """
+    return await client.updateNodes(req)
+
+
+async def remove_nodes(
+    client: AdminAPI, req: RemoveNodesRequest
+) -> RemoveNodesResponse:
+    """
+    Wrapper for removeNodes() Thrift method
+    """
+    return await client.removeNodes(req)
+
+
+async def mark_shards_as_provisioned(
+    client: AdminAPI, req: MarkShardsAsProvisionedRequest
+) -> MarkShardsAsProvisionedResponse:
+    """
+    Wrapper for markShardsAsProvisionedRequest() Thrift method
+    """
+    return await client.markShardsAsProvisioned(req)
 
 
 async def get_maintenances(
@@ -93,11 +162,11 @@ async def remove_maintenances(
     return await client.removeMaintenances(req)
 
 
-async def unblock_rebuilding(
+async def mark_all_shards_unrecoverable(
     client: AdminAPI, req: MarkAllShardsUnrecoverableRequest
 ) -> MarkAllShardsUnrecoverableResponse:
     """
-    Wrapper for MarkAllShardsUnrecoverable() Thrift method
+    Wrapper for markAllShardsUnrecoverable() Thrift method
     """
     return await client.markAllShardsUnrecoverable(req)
 

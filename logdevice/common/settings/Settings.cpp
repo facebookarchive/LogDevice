@@ -610,6 +610,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "this false ignores per request and per message ExecutorPriority.",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Execution);
+  init("use-legacy-evenbase",
+       &use_legacy_eventbase,
+       "true",
+       nullptr,
+       "Use libevent2 based event base to create EventLoop threadpool in "
+       "logdevice.",
+       SERVER | CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Execution);
   init("request-exec-threshold",
        &request_execution_delay_threshold,
        "10ms",
@@ -768,6 +776,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Maximum allowed rate of printing backtraces.",
        SERVER | CLIENT | REQUIRES_RESTART /* Passed to WatchDogThread ctor */,
        SettingsCategory::Monitoring);
+
+  init("health-monitor-poll-interval",
+       &health_monitor_poll_interval_ms,
+       "500ms",
+       validate_positive<ssize_t>(),
+       "Interval after which health monitor detects issues on node.",
+       SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
+       SettingsCategory::Monitoring);
+
   init("purging-use-metadata-log-only",
        &purging_use_metadata_log_only,
        "false",
@@ -2626,7 +2643,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        nullptr, // no custom validation necessary
        "If true and enable_nodes_configuration_manager is set, logdevice will "
        "use the nodes configuration from the NodesConfigurationManager.",
-       CLIENT | SERVER | REQUIRES_RESTART,
+       CLIENT | SERVER,
        SettingsCategory::Configuration);
 
   init("nodes-configuration-manager-store-polling-interval",
@@ -2681,6 +2698,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "setting "
        "allows the client constructor to disable initialization for members "
        "that may not be necessary for shadow clients.",
+       CLIENT | INTERNAL_ONLY);
+
+  init("internal-logs-only-client",
+       &internal_logs_only_client,
+       "false",
+       nullptr, // no validation
+       "if true, LCM won't be loaded and only internal logs will be present in "
+       "the logs config. Only effective on clients. Used by internal tools",
        CLIENT | INTERNAL_ONLY);
 
   init("real-time-reads-enabled",
@@ -2986,7 +3011,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
 
   init("rsm-include-read-pointer-in-snapshot",
        &rsm_include_read_pointer_in_snapshot,
-       "false",
+       "true",
        nullptr,
        "Allow inclusion of read pointer in RSM snapshots. Note that if this is "
        "set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE!",

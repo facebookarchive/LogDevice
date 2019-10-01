@@ -38,6 +38,8 @@ class InternalLogsIntegrationTest
 
     if (rsm_include_read_pointer_in_snapshot) {
       factory.setParam("--rsm-include-read-pointer-in-snapshot", "true");
+    } else {
+      factory.setParam("--rsm-include-read-pointer-in-snapshot", "false");
     }
 
     cluster = factory.create(NNODES);
@@ -184,7 +186,7 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
   /* sync logsconfig everywhere */
   std::vector<node_index_t> all_nodes(NNODES);
   std::iota(all_nodes.begin(), all_nodes.end(), 0);
-  cluster->waitUntilLogsConfigSynced(tail_lsn, all_nodes);
+  cluster->waitUntilLogsConfigSynced(tail_lsn);
 
   /* take snapshot */
   auto result =

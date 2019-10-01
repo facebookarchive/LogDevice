@@ -28,44 +28,26 @@ Request::Execution TrimRSMRequest::execute() {
 
   auto ticket = callbackHelper_.ticket();
 
-  std::unique_ptr<Request> req;
+  auto cb = [ticket](Status st,
+                     NodeID /*seq*/,
+                     lsn_t next_lsn,
+                     std::unique_ptr<LogTailAttributes> /* unused */,
+                     std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
+                     std::shared_ptr<TailRecord> /*tail_record*/,
+                     folly::Optional<bool> /*is_log_empty*/) {
+    ticket.postCallbackRequest([=](TrimRSMRequest* rq) {
+      if (rq) {
+        rq->snapshotSyncSequencerCallback(st, next_lsn);
+      }
+    });
+  };
+  std::unique_ptr<Request> req = std::make_unique<SyncSequencerRequest>(
+      snapshot_log_id_,
+      /* flags */ 0,
+      cb,
+      GetSeqStateRequest::Context::SYNC_SEQUENCER,
+      trim_everything_ ? std::chrono::milliseconds(0) : findtime_timeout_);
 
-  if (trim_everything_) {
-    auto cb = [ticket](Status st,
-                       NodeID /*seq*/,
-                       lsn_t next_lsn,
-                       std::unique_ptr<LogTailAttributes> /* unused */,
-                       std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
-                       std::shared_ptr<TailRecord> /*tail_record*/,
-                       folly::Optional<bool> /*is_log_empty*/) {
-      const lsn_t tail_lsn = next_lsn <= LSN_OLDEST ? LSN_OLDEST : next_lsn - 1;
-      ticket.postCallbackRequest([=](TrimRSMRequest* rq) {
-        if (rq) {
-          rq->snapshotFindTimeCallback(st, tail_lsn);
-        }
-      });
-    };
-    req = std::make_unique<SyncSequencerRequest>(
-        snapshot_log_id_, SyncSequencerRequest::INCLUDE_TAIL_ATTRIBUTES, cb);
-
-  } else {
-    auto cb = [ticket](Status st, lsn_t lsn) {
-      ticket.postCallbackRequest([=](TrimRSMRequest* rq) {
-        if (rq) {
-          rq->snapshotFindTimeCallback(st, lsn);
-        }
-      });
-    };
-
-    req = std::make_unique<FindKeyRequest>(
-        snapshot_log_id_,
-        RecordTimestamp::duration::max(), // max() gives us last released lsn
-        folly::none,
-        findtime_timeout_,
-        cb,
-        find_key_callback_t(),
-        FindKeyAccuracy::STRICT);
-  }
   Worker* w = Worker::onThisThread();
   Processor* processor = w->processor_;
   processor->postWithRetrying(req);
@@ -107,34 +89,48 @@ void TrimRSMRequest::extractVersionAndReadPointerFromSnapshot(DataRecord& rec,
   }
 }
 
-void TrimRSMRequest::snapshotFindTimeCallback(Status st, lsn_t lsn) {
+void TrimRSMRequest::snapshotSyncSequencerCallback(Status st, lsn_t next_lsn) {
   if (st != E::OK && st != E::PARTIAL) {
     rsm_error(rsm_type_,
-              "findTime completed with st=%s for snapshot log %lu",
+              "SyncSequencerRequest completed with st=%s for snapshot log %lu",
               error_name(st),
               snapshot_log_id_.val_);
     completeAndDeleteThis(st);
     return;
   }
 
-  if (lsn == LSN_OLDEST) {
+  if (next_lsn <= LSN_OLDEST) {
     // Snapshot log is empty, nothing to trim.
     rsm_info(rsm_type_,
-             "findTime completed with st=%s, lsn=LSN_OLDEST for "
+             "SyncSequencerRequest completed with st=%s, next_lsn=%s for "
              "snapshot log %lu, not trimming anything.",
              error_name(st),
+             lsn_to_string(next_lsn).c_str(),
              snapshot_log_id_.val_);
     completeAndDeleteThis(E::OK);
     return;
   }
 
   rsm_info(rsm_type_,
-           "findTime completed with st=%s, lsn=%s for snapshot log %lu",
+           "SyncSequencerRequest completed with st=%s, next_lsn=%s for "
+           "snapshot log %lu",
            error_name(st),
-           lsn_to_string(lsn).c_str(),
+           lsn_to_string(next_lsn).c_str(),
            snapshot_log_id_.val_);
 
-  // Step 2: read the snapshot log up to the last released lsn to find the last
+  // If we want to trim everything, there is no point in starting a readstream
+  // for the latest snapshot. We can trim up to next_lsn
+  if (trim_everything_) {
+    rsm_info(rsm_type_,
+             "Trimming up to next_lsn=%s; trim_everything=true",
+             lsn_to_string(next_lsn).c_str());
+    last_seen_snapshot_ =
+        std::make_unique<DataRecord>(snapshot_log_id_, Payload(), next_lsn);
+    trimSnapshotLog();
+    return;
+  }
+
+  // Step 2: read the snapshot log up to the tail lsn to find the last
   // snapshot record.
 
   auto record_callback = [&](std::unique_ptr<DataRecord>& record) {
@@ -145,42 +141,27 @@ void TrimRSMRequest::snapshotFindTimeCallback(Status st, lsn_t lsn) {
     return true;
   };
 
-  auto done_callback = [this, lsn](logid_t) {
+  auto done_callback = [this](logid_t) {
+    ld_check(!trim_everything_);
     if (!last_seen_snapshot_) {
-      if (trim_everything_) {
-        rsm_info(rsm_type_,
-                 "Trimming up to next_lsn=%s; trim_everything=true",
-                 lsn_to_string(lsn).c_str());
-        last_seen_snapshot_ =
-            std::make_unique<DataRecord>(snapshot_log_id_, Payload(), lsn);
-      } else {
-        // We did not read any snapshot, there is nothing to trim.
-        rsm_info(rsm_type_,
-                 "There are no snapshots with a timestamp older than %s.",
-                 format_time(min_timestamp_).c_str());
-        completeAndDeleteThis(E::OK);
-        return;
-      }
+      // We did not read any snapshot, there is nothing to trim.
+      rsm_info(rsm_type_,
+               "There are no snapshots with a timestamp older than %s.",
+               format_time(min_timestamp_).c_str());
+      completeAndDeleteThis(E::OK);
+      return;
     }
 
     trimSnapshotLog();
   };
 
-  // If we want to trim everything, there is no point in starting a readstream
-  // for the latest snapshot. We can trim up to next_lsn
-  if (trim_everything_) {
-    done_callback(logid_t(0));
-    return;
-  }
-
   rsm_info(rsm_type_,
            "Creating a read stream to read snapshot log %lu up to lsn %s",
            snapshot_log_id_.val_,
-           lsn_to_string(lsn).c_str());
+           lsn_to_string(next_lsn - 1).c_str());
 
-  // Read up to lsn - 1. We are guaranteed the read stream will stop since lsn
-  // may be at most last_released_lsn + 1.
-  const lsn_t until_lsn = lsn - 1;
+  // Read up to tail LSN.
+  const lsn_t until_lsn = next_lsn - 1;
 
   Worker* w = Worker::onThisThread();
   Processor* processor = w->processor_;
@@ -194,11 +175,12 @@ void TrimRSMRequest::snapshotFindTimeCallback(Status st, lsn_t lsn) {
                                                              nullptr,
                                                              nullptr);
 
-  // We could use findKey which returns a [lo,hi] interval instead of findTime
-  // which returns only one LSN, this would help make a point query read instead
-  // of reading from LSN_OLDEST. However, we expect to read very few snapshots
-  // (if not one) when reading from LSN_OLDEST if we assume this request will be
-  // run periodically (after creating a snapshot for instance).
+  // We could use findKey which returns a [lo,hi] interval instead of
+  // SyncSequencerRequest which returns only one LSN, this would help make a
+  // point query read instead of reading from LSN_OLDEST. However, we expect to
+  // read very few snapshots (if not one) when reading from LSN_OLDEST if we
+  // assume this request will be run periodically (after creating a snapshot for
+  // instance).
   auto read_stream = std::make_unique<ClientReadStream>(
       rsid,
       snapshot_log_id_,

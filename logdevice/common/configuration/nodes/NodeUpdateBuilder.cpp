@@ -32,6 +32,11 @@ NodeUpdateBuilder& NodeUpdateBuilder::setSSLAddress(Sockaddr addr) {
   return *this;
 }
 
+NodeUpdateBuilder& NodeUpdateBuilder::setAdminAddress(Sockaddr addr) {
+  admin_address_ = std::move(addr);
+  return *this;
+}
+
 NodeUpdateBuilder& NodeUpdateBuilder::setLocation(NodeLocation loc) {
   location_ = std::move(loc);
   return *this;
@@ -115,6 +120,7 @@ NodeUpdateBuilder::buildNodeServiceDiscovery() {
   sd->address = std::move(data_address_).value();
   sd->gossip_address = std::move(gossip_address_);
   sd->ssl_address = std::move(ssl_address_);
+  sd->admin_address = std::move(admin_address_);
   sd->location = std::move(location_);
   sd->roles = roles_;
 

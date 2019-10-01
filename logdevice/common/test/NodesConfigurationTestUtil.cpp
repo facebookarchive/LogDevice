@@ -37,6 +37,7 @@ NodeServiceDiscovery genDiscovery(node_index_t n,
                               Sockaddr(addr, 4440),
                               Sockaddr(addr, 4441),
                               /*ssl address*/ folly::none,
+                              /*admin address*/ Sockaddr(addr, 6440),
                               l,
                               roles};
 }
@@ -322,7 +323,7 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
          std::make_unique<StorageNodeAttribute>(
              StorageNodeAttribute{/*capacity=*/256.0,
                                   /*num_shards*/ node.num_shards,
-                                  /*generation*/ 1,
+                                  /*generation*/ node.generation,
                                   /*exclude_from_nodesets*/ false})});
   }
   VLOG(1) << "update: " << update.toString();

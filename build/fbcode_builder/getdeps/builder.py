@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright (c) 2019-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -103,11 +102,19 @@ class MakeBuilder(BuilderBase):
         self.args = args or []
 
     def _build(self, install_dirs, reconfigure):
-        cmd = ["make", "-j%s" % self.build_opts.num_jobs] + self.args
-        self._run_cmd(cmd)
+        env = self._compute_env(install_dirs)
 
-        install_cmd = ["make", "install", "PREFIX=" + self.inst_dir]
-        self._run_cmd(install_cmd)
+        # Need to ensure that PREFIX is set prior to install because
+        # libbpf uses it when generating its pkg-config file
+        cmd = (
+            ["make", "-j%s" % self.build_opts.num_jobs]
+            + self.args
+            + ["PREFIX=" + self.inst_dir]
+        )
+        self._run_cmd(cmd, env=env)
+
+        install_cmd = ["make", "install"] + self.args + ["PREFIX=" + self.inst_dir]
+        self._run_cmd(install_cmd, env=env)
 
 
 class AutoconfBuilder(BuilderBase):
@@ -121,11 +128,7 @@ class AutoconfBuilder(BuilderBase):
         configure_path = os.path.join(self.src_dir, "configure")
         autogen_path = os.path.join(self.src_dir, "autogen.sh")
 
-        env = self.env.copy()
-        for d in install_dirs:
-            add_path_entry(env, "PKG_CONFIG_PATH", "%s/lib/pkgconfig" % d)
-            bindir = os.path.join(d, "bin")
-            add_path_entry(env, "PATH", bindir, append=False)
+        env = self._compute_env(install_dirs)
 
         if not os.path.exists(configure_path):
             print("%s doesn't exist, so reconfiguring" % configure_path)
@@ -199,9 +202,11 @@ class CMakeBuilder(BuilderBase):
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import argparse
-import os
+import subprocess
+import sys
 
 CMAKE = {cmake!r}
+CTEST = {ctest!r}
 SRC_DIR = {src_dir!r}
 BUILD_DIR = {build_dir!r}
 INSTALL_DIR = {install_dir!r}
@@ -220,7 +225,7 @@ def main():
     )
     ap.add_argument(
       "--mode",
-      choices=["configure", "build", "install"],
+      choices=["configure", "build", "install", "test"],
       default="configure",
       help="The mode to run: configure, build, or install.  "
       "Defaults to configure",
@@ -238,6 +243,13 @@ def main():
       const="install",
       dest="mode",
       help="An alias for --mode=install",
+    )
+    ap.add_argument(
+      "--test",
+      action="store_const",
+      const="test",
+      dest="mode",
+      help="An alias for --mode=test",
     )
     args = ap.parse_args()
 
@@ -260,13 +272,15 @@ def main():
                 "--config",
                 "Release",
         ] + args.cmake_args
+    elif args.mode == "test":
+        full_cmd = CMD_PREFIX + [CTEST] + args.cmake_args
     else:
         ap.error("unknown invocation mode: %s" % (args.mode,))
 
     cmd_str = " ".join(full_cmd)
     print("Running: %r" % (cmd_str,))
-    os.chdir(BUILD_DIR)
-    os.execve(CMAKE, full_cmd, env)
+    proc = subprocess.run(full_cmd, env=env, cwd=BUILD_DIR)
+    sys.exit(proc.returncode)
 
 
 if __name__ == "__main__":
@@ -392,6 +406,7 @@ if __name__ == "__main__":
             self._write_build_script(
                 cmd_prefix=self._get_cmd_prefix(),
                 cmake=cmake,
+                ctest=path_search(env, "ctest"),
                 env=env,
                 define_args=define_args,
                 src_dir=self.src_dir,

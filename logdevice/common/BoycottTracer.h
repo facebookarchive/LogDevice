@@ -24,8 +24,7 @@ class BoycottTracer : public ThrottledTracer {
 
   void traceBoycott(NodeID boycotted_node,
                     std::chrono::system_clock::time_point boycott_start_time,
-                    std::chrono::milliseconds boycott_duration,
-                    folly::dynamic controller_state);
+                    std::chrono::milliseconds boycott_duration);
 };
 
 }} // namespace facebook::logdevice

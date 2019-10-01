@@ -63,6 +63,7 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
   auto shard_status_version = owner_->deps_->getShardStatus().getVersion();
   auto time_lag = estimateTimeLag();
   auto byte_lag = estimateByteLag();
+  bool overloaded = owner_->deps_->isWorkerOverloaded();
 
   auto sample_builder =
       [=,
@@ -109,6 +110,7 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
     sample->addNormalValue("sender_state", owner_->senderStatePretty());
     sample->addNormalValue("grace_counters", owner_->graceCountersPretty());
     sample->addIntValue("shard_status_version", shard_status_version);
+    sample->addIntValue("in_overloaded_worker", overloaded);
     return sample;
   };
   last_num_bytes_read_ = num_bytes_read;

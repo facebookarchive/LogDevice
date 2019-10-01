@@ -93,7 +93,7 @@ class TrimRSMRequest : public Request {
   }
 
   Execution execute() override;
-  void snapshotFindTimeCallback(Status st, lsn_t lsn);
+  void snapshotSyncSequencerCallback(Status st, lsn_t next_lsn);
   void trimSnapshotLog();
   void onSnapshotTrimmed(Status st);
   void deltaFindTimeCallback(Status st, lsn_t lsn);

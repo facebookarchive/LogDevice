@@ -5,50 +5,40 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/common/libevent/EvBase.h"
-
 #include <gtest/gtest.h>
+
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 
 namespace {
 
-class EvBaseTest : public ::testing::Test {};
+class EvBaseTest
+    : public testing::TestWithParam<facebook::logdevice::EvBase::EvBaseType> {};
 
 } // namespace
 
 namespace facebook { namespace logdevice {
 
-TEST(EvBaseTest, ConstructFree) {
+TEST_P(EvBaseTest, InitPriorities) {
   using S = EvBase::Status;
   EvBase base;
-  EXPECT_EQ(S::OK, base.free());
-  EXPECT_EQ(nullptr, base.getRawBaseDEPRECATED());
-  EXPECT_EQ(S::NOT_INITIALIZED, base.loopOnce());
-  EXPECT_EQ(S::OK, base.init());
-  EXPECT_NE(nullptr, base.getRawBaseDEPRECATED());
-  EXPECT_EQ(S::ALREADY_INITIALIZED, base.init());
-  EXPECT_EQ(S::OK, base.free());
-  EXPECT_EQ(nullptr, base.getRawBaseDEPRECATED());
-  EXPECT_EQ(S::OK, base.init());
-  EXPECT_NE(nullptr, base.getRawBaseDEPRECATED());
-}
-
-TEST(EvBaseTest, InitPriorities) {
-  using S = EvBase::Status;
-  EvBase base;
+  base.selectEvBase(GetParam());
   EXPECT_EQ(S::INVALID_PRIORITY, base.init(-1));
   EXPECT_EQ(
       S::INVALID_PRIORITY,
       base.init(static_cast<int>(EvBase::Priorities::MAX_PRIORITIES) + 1));
   EXPECT_EQ(S::OK, base.init(1));
-  EXPECT_EQ(S::ALREADY_INITIALIZED, base.init());
 }
 
-TEST(EvBaseTest, LoopOnce) {
+TEST_P(EvBaseTest, LoopOnce) {
   using S = EvBase::Status;
   EvBase base;
-  EXPECT_EQ(S::NOT_INITIALIZED, base.loopOnce());
+  base.selectEvBase(GetParam());
   EXPECT_EQ(S::OK, base.init());
   EXPECT_EQ(S::OK, base.loopOnce());
 }
 
+INSTANTIATE_TEST_CASE_P(TestAllBase,
+                        EvBaseTest,
+                        ::testing::Values(EvBase::EvBaseType::LEGACY_EVENTBASE,
+                                          EvBase::EvBaseType::FOLLY_EVENTBASE));
 }} // namespace facebook::logdevice

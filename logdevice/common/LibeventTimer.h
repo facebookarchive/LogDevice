@@ -14,9 +14,8 @@
 #include <folly/IntrusiveList.h>
 #include <folly/io/async/Request.h>
 
-#include "event2/event_struct.h"
 #include "logdevice/common/RunContext.h"
-
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 /**
  * @file
  * Convenience class for a timer that runs on libevent.
@@ -50,11 +49,11 @@ class LibeventTimer : boost::noncopyable {
    * @param callback  to be called (with this LibeventTimer object as argument)
    *                  when timer fires, must be copyable
    */
-  LibeventTimer(struct event_base* base, std::function<void()> callback);
+  LibeventTimer(EvBase* base, std::function<void()> callback);
 
   // Uses nullptr callback. setCallback() must be called before the timer is
   // activated.
-  LibeventTimer(struct event_base* base);
+  explicit LibeventTimer(EvBase* base);
 
   /**
    * Activates the timer to fire once after the specified delay.  Microseconds
@@ -98,28 +97,18 @@ class LibeventTimer : boost::noncopyable {
 
   // Methods are virtual to allow MockLibeventTimer to override in tests
 
-  virtual void assign(struct event_base* base, std::function<void()> callback);
+  virtual void assign(EvBase* base, std::function<void()> callback);
 
  private:
-  /**
-   * Variant of activate() that takes a struct timeval.
-   */
-  virtual void activate(const struct timeval* delay);
-
   // Called by libevent when the timer goes off.  Invokes the supplied
   // callback.
-  static void libeventCallback(void* instance, short);
-
-  bool initialized_{false};
-
-  struct event timer_;
+  void libeventCallback();
+  std::function<void()> callback_;
+  std::unique_ptr<EvTimer> timer_;
 
   // Use to save off worker context and used in LibeventTimer::libeventCallback
   // when timeout happens.
   Worker* worker_;
-
-  std::function<void()> callback_;
-  bool active_ = false;
 
   // The worker run context that this timer was activated in. Will be propagated
   // with all callbacks.

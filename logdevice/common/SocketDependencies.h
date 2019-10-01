@@ -15,6 +15,7 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/RunContext.h"
 #include "logdevice/common/SocketTypes.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 #include "logdevice/common/protocol/Message.h"
 namespace facebook { namespace logdevice {
 namespace configuration { namespace nodes {
@@ -55,22 +56,11 @@ class SocketDependencies {
   virtual const Sockaddr& getNodeSockaddr(NodeID nid,
                                           SocketType type,
                                           ConnectionType conntype);
-  virtual int eventAssign(struct event* ev,
-                          void (*cb)(evutil_socket_t, short what, void* arg),
-                          void* arg);
-  virtual void eventActive(struct event* ev, int what, short ncalls);
-  virtual void eventDel(struct event* ev);
-  virtual int eventPrioritySet(struct event* ev, int priority);
-  virtual int evtimerAssign(struct event* ev,
-                            void (*cb)(evutil_socket_t, short what, void* arg),
-                            void* arg);
-  virtual void evtimerDel(struct event* ev);
-  virtual int evtimerPending(struct event* ev, struct timeval* tv = nullptr);
+  virtual EvBase* getEvBase();
   virtual const struct timeval* getCommonTimeout(std::chrono::milliseconds t);
   virtual const timeval*
   getTimevalFromMilliseconds(std::chrono::milliseconds t);
   virtual const struct timeval* getZeroTimeout();
-  virtual int evtimerAdd(struct event* ev, const struct timeval* timeout);
   virtual struct bufferevent* buffereventSocketNew(int sfd,
                                                    int opts,
                                                    bool secure,

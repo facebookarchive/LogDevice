@@ -158,6 +158,8 @@ ClientImpl::ClientImpl(std::string cluster_name,
     stats_ = std::make_unique<StatsHolder>(std::move(params));
   }
 
+  STAT_SET(stats_.get(), client.client_started, 1);
+
   std::shared_ptr<ServerConfig> server_cfg = config_->get()->serverConfig();
 
   std::shared_ptr<TraceLoggerFactory> trace_logger_factory =
@@ -234,6 +236,21 @@ ClientImpl::ClientImpl(std::string cluster_name,
                                          plugin_registry_,
                                          /* num_shards */ 0,
                                          stats_.get());
+
+  if (settings->internal_logs_only_client) {
+    ld_info("Operating on INTERNAL logs only");
+    // We don't set the namespace delimiter to this empty config because we
+    // don't know it yet, this will be known after loading the server config.
+    auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
+    // This to ensure that the client doesn't block waiting for the config to
+    // be fully updated
+    logs_config->markAsFullyLoaded();
+    config_->updateableLogsConfig()->update(logs_config);
+    // In case we were using enable_logsconfig_manager we will need to set
+    // the internal logs config structure for the initially-empty logsconfig
+    config_->getLocalLogsConfig()->setInternalLogsConfig(
+        config_->getServerConfig()->getInternalLogsConfig());
+  }
 
   if (!config_->getLogsConfig() || !config_->getLogsConfig()->isFullyLoaded()) {
     Semaphore sem;
@@ -2290,6 +2307,21 @@ ClientImpl::prepareRequest(logid_t logid,
   }
   return req;
 }
+
+// Some compilers (e.g., gcc-7.4.0, the default compiler on Ubuntu 18) may
+// inline calls to prepareRequest<Payload>() in ClientImpl::append() below. If
+// that happens, the compiler will not generate code for
+// prepareRequest<Payload>() instantiation. However, lib/shadow/ShadowClient.cpp
+// requires that instantiation. This leads to link errors when linking examples/
+// and some tests. Adding an explicit instantiation here to fix.
+template std::unique_ptr<AppendRequest> ClientImpl::prepareRequest<Payload>(
+    logid_t logid,
+    Payload payload,
+    append_callback_t cb,
+    AppendAttributes attrs,
+    worker_id_t target_worker,
+    std::unique_ptr<std::string> per_request_token);
+
 void ClientImpl::initLogsConfigRandomSeed() {
   logsconfig_api_random_seed_ = folly::Random::rand64();
 }

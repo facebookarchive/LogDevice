@@ -30,7 +30,7 @@ void Message::onSent(Status st,
 }
 
 size_t Message::size(uint16_t proto) const {
-  ProtocolWriter writer(type_, nullptr, proto);
+  ProtocolWriter writer(type_, static_cast<folly::IOBuf*>(nullptr), proto);
   serialize(writer);
   ssize_t size = writer.result();
   ld_check(size >= 0);

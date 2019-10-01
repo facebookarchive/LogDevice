@@ -54,6 +54,13 @@ bool EpochMetaDataMap::isValid(const Map& epoch_map, epoch_t effective_until) {
   return true;
 }
 
+size_t EpochMetaDataMap::size() const {
+  if (epoch_map_) {
+    return epoch_map_->size();
+  }
+  return 0;
+}
+
 std::shared_ptr<const EpochMetaDataMap>
 EpochMetaDataMap::withNewEffectiveUntil(epoch_t new_effective_until) const {
   return create(getMetaDataMap(), new_effective_until);

@@ -85,6 +85,9 @@ struct RebuildingSet {
 
   RecordTimeIntervals all_dirty_time_intervals;
 
+  // @see FILTER_RELOCATE_SHARDS flag of SHARD_NEEDS_REBUILD event log message.
+  bool filter_relocate_shards{false};
+
   // The output string is truncated to `max_size`. Useful when writing the
   // resulting string to error log, which truncates each line to ~2 KB anyway.
   // E.g. in extreme cases, full output of describe() can take tens of MBs;

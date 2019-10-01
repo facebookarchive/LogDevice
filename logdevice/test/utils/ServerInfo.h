@@ -32,8 +32,7 @@ struct ServerInfo {
 
   static ServerInfo fromJson(const std::string& data) {
     ServerInfo s;
-    folly::dynamic info_map =
-        folly::parseJson(data.substr(0, data.rfind("END")));
+    folly::dynamic info_map = folly::parseJson(data);
     auto headers = info_map["headers"];
 
     size_t pid_idx = findIndex(headers, "PID");

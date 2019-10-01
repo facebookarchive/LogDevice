@@ -20,15 +20,21 @@ TEST(SequencerWorkflowTest, EnableSequencer) {
   wf->setTargetOpState(SequencingState::ENABLED);
   membership::SequencerNodeState node_state;
   node_state.sequencer_enabled = false;
-  auto future = wf->run(node_state);
+  // We cannot allow the ENABLE workflow if the node is dead.
+  auto future = wf->run(node_state, ClusterStateNodeState::DEAD);
+  ASSERT_EQ(
+      std::move(future).get(), MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE);
+
+  // STARTING should be sufficient to move forward.
+  future = wf->run(node_state, ClusterStateNodeState::STARTING);
   ASSERT_EQ(std::move(future).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   node_state.sequencer_enabled = true;
-  future = wf->run(node_state);
+  future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
   // Calling run again when target state has already been reached
-  // should return same result
-  future = wf->run(node_state);
+  // should return same result. Even if the node is dead.
+  future = wf->run(node_state, ClusterStateNodeState::DEAD);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
 }
 
@@ -38,17 +44,17 @@ TEST(SequencerWorkflowTest, ManualOverrideBlocksEnableSequencer) {
   membership::SequencerNodeState node_state;
   node_state.sequencer_enabled = false;
   node_state.manual_override = true;
-  auto future = wf->run(node_state);
+  auto future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(
       std::move(future).get(), MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE);
 
   node_state.manual_override = false;
-  future = wf->run(node_state);
+  future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(future).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
 
   node_state.sequencer_enabled = true;
-  future = wf->run(node_state);
+  future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
 }
 
@@ -57,14 +63,15 @@ TEST(SequencerWorkflowTest, DisableSequencer) {
   wf->setTargetOpState(SequencingState::DISABLED);
   membership::SequencerNodeState node_state;
   node_state.sequencer_enabled = true;
-  auto future = wf->run(node_state);
+  auto future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::AWAITING_SAFETY_CHECK);
   node_state.sequencer_enabled = false;
-  future = wf->run(node_state);
+  // Being dead should have no effect.
+  future = wf->run(node_state, ClusterStateNodeState::DEAD);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
   // Calling run again when target state has already been reached
   // should return same result
-  future = wf->run(node_state);
+  future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
 }
 
@@ -74,14 +81,14 @@ TEST(SequencerWorkflowTest, DisableSequencerSkipSafety) {
   wf->shouldSkipSafetyCheck(true);
   membership::SequencerNodeState node_state;
   node_state.sequencer_enabled = true;
-  auto future = wf->run(node_state);
+  auto future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(future).get(),
             MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
   node_state.sequencer_enabled = false;
-  future = wf->run(node_state);
+  future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
   // Calling run again when target state has already been reached
   // should return same result
-  future = wf->run(node_state);
+  future = wf->run(node_state, ClusterStateNodeState::FULLY_STARTED);
   ASSERT_EQ(std::move(future).get(), MaintenanceStatus::COMPLETED);
 }

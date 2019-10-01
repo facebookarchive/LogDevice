@@ -12,6 +12,10 @@
 #define STAT_DEFINE(...)
 #endif
 
+// Used to count the number of active clients in the cluster. This is bumped
+// when the client object is created.
+STAT_DEFINE(client_started, MAX)
+
 // Appends that came back with different common statuses.  These are
 // client-level statuses (which we pass to the client-provided callback), not
 // internal error codes that we pass over the wire in APPENDED messages.

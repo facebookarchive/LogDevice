@@ -10,6 +10,7 @@
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/FailureDetector.h"
+#include "logdevice/server/ServerHealthMonitor.h"
 #include "logdevice/server/storage/PurgeCoordinator.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
@@ -46,7 +47,6 @@ void ServerProcessor::maybeCreateLogStorageStateMap() {
 
 void ServerProcessor::init() {
   Processor::init();
-
   if (sharded_storage_thread_pool_ != nullptr) {
     // All shards are assumed to be waiting to be rebuilt until
     // markShardAsNotMissingData() is called.
@@ -55,6 +55,21 @@ void ServerProcessor::init() {
          ++shard_idx) {
       PER_SHARD_STAT_INCR(stats_, shard_missing_all_data, shard_idx);
       PER_SHARD_STAT_INCR(stats_, shard_dirty, shard_idx);
+    }
+  }
+  if (gossip_settings_->enabled &&
+      getWorkerCount(WorkerType::FAILURE_DETECTOR) > 0) {
+    try {
+      auto executor =
+          getWorker(worker_id_t(0), WorkerType::FAILURE_DETECTOR).getExecutor();
+      health_monitor_ = std::make_unique<ServerHealthMonitor>(
+          *executor,
+          updateableSettings()->health_monitor_poll_interval_ms,
+          getWorkerCount(WorkerType::GENERAL));
+      health_monitor_->startUp();
+    } catch (const ConstructorFailed&) {
+      ld_error("Failed to construct ServerHealthMonitor: %s",
+               error_description(err));
     }
   }
 }

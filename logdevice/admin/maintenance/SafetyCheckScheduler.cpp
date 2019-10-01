@@ -161,6 +161,7 @@ SafetyCheckScheduler::performSafetyCheck(
   shards.insert(disabled_shards.begin(), disabled_shards.end());
   sequencers.insert(disabled_sequencers.begin(), disabled_sequencers.end());
 
+  STAT_INCR(processor_->stats_, admin_server.mm_safety_checker_runs);
   return safety_checker_->checkImpact(
       status_map,
       shards,

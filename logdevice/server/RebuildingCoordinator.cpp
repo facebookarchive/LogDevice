@@ -15,8 +15,10 @@
 #include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/request_util.h"
+#include "logdevice/server/RebuildingMarkerChecker.h"
 #include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
@@ -299,58 +301,38 @@ void RebuildingCoordinator::noteRebuildingSettingsChanged() {
 }
 
 int RebuildingCoordinator::checkMarkers() {
-  if (getMyNodeID().generation() <= 1) {
-    for (uint32_t shard = 0; shard < numShards(); ++shard) {
-      RebuildingCompleteMetadata metadata;
-      LocalLogStore::WriteOptions options;
-      LocalLogStore* store = shardedStore_->getByIndex(shard);
-      if (store->acceptingWrites() != E::DISABLED) {
+  const auto& storage_mem =
+      config_->getNodesConfiguration()->getStorageMembership();
+  RebuildingMarkerChecker checker(
+      storage_mem->getShardStates(getMyNodeID().index()),
+      getMyNodeID(),
+      storage_mem->getVersion(),
+      processor_->getNodesConfigurationManager(),
+      shardedStore_);
+
+  auto res = checker.checkAndWriteMarkers();
+  if (res.hasError()) {
+    return -1;
+  }
+
+  for (const auto& [shard, res] : res.value()) {
+    switch (res) {
+      case RebuildingMarkerChecker::CheckResult::SHARD_NOT_MISSING_DATA:
         notifyProcessorShardRebuilt(shard);
-      }
-      int rv = store->writeStoreMetadata(metadata, options);
-      if (rv != 0) {
-        ld_error("Could not write RebuildingCompleteMetadata for shard %u: %s",
-                 shard,
-                 error_description(err));
-        if (store->acceptingWrites() != E::DISABLED) {
-          // This shouldn't really happen with current LocalLogStore
-          // implementations because a failed write transitions the store to
-          // a disabled state.
-          return -1;
-        }
-      }
-    }
-    return 0;
-  }
-
-  for (shard_index_t shard = 0; shard < numShards(); ++shard) {
-    LocalLogStore* store = shardedStore_->getByIndex(shard);
-    RebuildingCompleteMetadata meta;
-    int rv = store->readStoreMetadata(&meta);
-    if (rv == 0) {
-      notifyProcessorShardRebuilt(shard);
-    } else if (err == E::NOTFOUND) {
-      ld_info("Did not find RebuildingCompleteMetadata for shard %u. Waiting "
-              "for the shard to be rebuilt...",
-              shard);
-
-      // Request rebuilding of the shard.
-      auto supervisor = processor_->rebuilding_supervisor_;
-      ld_check(supervisor);
-      supervisor->myShardNeedsRebuilding(shard);
-    } else {
-      // It's likely that the failing disk on which this shard resides has not
-      // been repaired yet. Once the disk is repaired, logdeviced will be
-      // restarted and we will try reading the marker again.
-      ld_error("Error reading RebuildingCompleteMetadata for shard %u: %s",
-               shard,
-               error_description(err));
-      if (store->acceptingWrites() != E::DISABLED) {
+        break;
+      case RebuildingMarkerChecker::CheckResult::SHARD_MISSING_DATA:
+        ld_check(processor_->rebuilding_supervisor_);
+        processor_->rebuilding_supervisor_->myShardNeedsRebuilding(shard);
+        break;
+      case RebuildingMarkerChecker::CheckResult::UNEXPECTED_ERROR:
         return -1;
-      }
+      case RebuildingMarkerChecker::CheckResult::SHARD_ERROR:
+      case RebuildingMarkerChecker::CheckResult::SHARD_DISABLED:
+        // It's ok to ignore those because they are either being rebuilt or
+        // will get rebuilt soon.
+        break;
     }
   }
-
   return 0;
 }
 
@@ -699,6 +681,7 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
 
   std::shared_ptr<RebuildingSet> rebuildingSet =
       std::make_shared<RebuildingSet>();
+  rebuildingSet->filter_relocate_shards = rsi->filter_relocate_shards;
   rebuildingSet->all_dirty_time_intervals = rsi->all_dirty_time_intervals;
   if (!rebuildingSet->all_dirty_time_intervals.empty()) {
     normalizeTimeRanges(shard_idx, rebuildingSet->all_dirty_time_intervals);
@@ -925,7 +908,7 @@ void RebuildingCoordinator::cancelRequestedPlans(shard_index_t shard_idx) {
 void RebuildingCoordinator::activatePlanningTimer() {
   if (!planning_timer_) {
     planning_timer_ = std::make_unique<LibeventTimer>(
-        Worker::onThisThread()->getEventBase(),
+        &Worker::onThisThread()->getEvBase(),
         [self = this] { self->executePlanningRequests(); });
   }
   if (!planning_timer_->isActive()) {
@@ -1401,6 +1384,8 @@ void RebuildingCoordinator::onUpdate(const EventLogRebuildingSet& set,
 
   last_seen_event_log_version_ = version;
 
+  bool first_update = first_update_;
+
   if (first_update_) {
     // The EventLog RSM releases its first update once it has caught up (read
     // the tail LSN that was discovered upon subscribing to the event log). Now
@@ -1412,6 +1397,25 @@ void RebuildingCoordinator::onUpdate(const EventLogRebuildingSet& set,
   }
 
   if (!delta) {
+    if (!first_update) {
+      // Event log state machine was fast-forwarded using a snapshot.
+      // RebuildingCoordinator was written when snapshots didn't exist (and
+      // haven't been considered), and all rebuilding set changes happened
+      // through applying a delta. When snapshots were introduced,
+      // RebuildingCoordinator was never properly changed from the event-based
+      // to the state-based mindset: it still relies on knowing the
+      // deltas, except for the initial start and this quick hack to
+      // inefficiently handle fast-forwards by restarting.
+      // It seems that it should be possible to make everything cleaner by
+      // removing the reliance on deltas.
+      ld_warning("Looks like event log was fast-forwarded using a snapshot. "
+                 "RebuildingCoordinator currently doesn't have proper handling "
+                 "of this situation, so we're going to restart all shard "
+                 "rebuildings. If this happens often and slows down rebuilding "
+                 "progress, consider cleaning up RebuildingCoordinator to make "
+                 "it not rely on deltas as heavily.");
+    }
+
     // We don't have a delta, just restart all rebuildings with the new
     // rebuilding set.
     for (auto& shard : set.getRebuildingShards()) {
@@ -1429,7 +1433,17 @@ void RebuildingCoordinator::onUpdate(const EventLogRebuildingSet& set,
   switch (delta->getType()) {
     case EventType::SHARD_NEEDS_REBUILD: {
       const auto ptr = static_cast<const SHARD_NEEDS_REBUILD_Event*>(delta);
-      scheduleRestartForShard(ptr->header.shardIdx);
+      auto shards_it = shardsRebuilding_.find(ptr->header.shardIdx);
+      auto set_it = set.getRebuildingShards().find(ptr->header.shardIdx);
+      ld_check(set_it != set.getRebuildingShards().end());
+      if (shards_it == shardsRebuilding_.end() ||
+          shards_it->second.version != set_it->second.version) {
+        scheduleRestartForShard(ptr->header.shardIdx);
+      } else {
+        // Sometimes a SHARD_NEEDS_REBUILD doesn't trigger a rebuilding restart.
+        // E.g. if a drain was requested for a node that is already
+        // AUTHORITATIVE_EMPTY.
+      }
     } break;
     case EventType::SHARD_ABORT_REBUILD: {
       const auto ptr = static_cast<const SHARD_ABORT_REBUILD_Event*>(delta);
@@ -1654,6 +1668,11 @@ void RebuildingCoordinator::restartForMyShard(uint32_t shard,
     // updated.
     conditional_version = LSN_INVALID;
     f &= ~SHARD_NEEDS_REBUILD_Header::CONDITIONAL_ON_VERSION;
+  }
+
+  // Make sure FILTER_RELOCATE_SHARDS is set if --filter-relocate-shards is set.
+  if (rebuildingSettings_->filter_relocate_shards) {
+    f |= SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
   }
 
   std::string source = "N" + std::to_string(myNodeId_);

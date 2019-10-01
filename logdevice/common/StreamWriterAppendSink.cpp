@@ -93,7 +93,10 @@ StreamWriterAppendSink::getStream(logid_t log_id) {
     write_stream_id_t stream_id(folly::Random::rand64());
     auto result = streams_.insert(
         std::make_pair(log_id, std::make_unique<Stream>(log_id, stream_id)));
-    return result.first->second.get();
+    ld_check(result.second);
+    auto stream = result.first->second.get();
+    stream->setRetryTimer(createBackoffTimer(*stream));
+    return stream;
   } else {
     return it->second.get();
   }
@@ -153,7 +156,7 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
 
   // Create appropriate request state in inflight map before sending async
   // call.
-  auto result = stream.inflight_stream_requests_.emplace(
+  auto result = stream.pending_stream_requests_.emplace(
       std::piecewise_construct,
       // Sequence number as key
       std::forward_as_tuple(stream_req_id.seq_num),
@@ -167,7 +170,13 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
                             checksum_bits,
                             stream_req_id));
   ld_check(result.second);
-  postAppend(stream, result.first->second);
+
+  // If the message is next one to be posted, then post immediately.
+  if (stream_req_id.seq_num ==
+      next_seq_num(stream.max_inflight_window_seq_num_)) {
+    postNextReadyRequestsIfExists(stream, 1);
+  }
+
   return std::make_pair(E::OK, NodeID());
 }
 
@@ -211,8 +220,9 @@ void StreamWriterAppendSink::onCallback(Stream& stream,
                                         write_stream_request_id_t stream_reqid,
                                         Status status,
                                         const DataRecord& record) {
-  auto it = stream.inflight_stream_requests_.find(stream_reqid.seq_num);
-  ld_check(it != stream.inflight_stream_requests_.end());
+  auto req_seq_num = stream_reqid.seq_num;
+  auto it = stream.pending_stream_requests_.find(req_seq_num);
+  ld_check(it != stream.pending_stream_requests_.end());
   auto& req_state = it->second;
 
   // Update epoch by default. Must be done based on status (subsequent diffs).
@@ -223,22 +233,47 @@ void StreamWriterAppendSink::onCallback(Stream& stream,
   req_state.inflight_request = nullptr;
 
   if (status == Status::OK) {
-    // Copy record attributes into req_state to create DataRecord for callback.
-    req_state.record_attrs = record.attrs;
+    // Check that LSN returned does not violate monotonicity for sequence
+    // numbers until req_seq_num.
+    if (checkLsnMonotonicityUntil(stream, req_seq_num, record.attrs.lsn)) {
+      // Ensure that LSN monotonicity can be maintained after LSN is accepted
+      // for req_seq_num, by rewinding stream until the first instance of
+      // violation in the stream (if there exists any).
+      ensureLsnMonotonicityAfter(stream, req_seq_num, record.attrs.lsn);
 
-    // If seq_num is one more than max_prefix_acked_seq_num, then trigger prefix
-    // callback on the stream. The callback is invoked for the entire prefix of
-    // sequence numbers that have been ACKed so far.
-    if (stream_reqid.seq_num ==
-        next_seq_num(stream.max_prefix_acked_seq_num_)) {
-      stream.triggerPrefixCallbacks();
+      // Accept the ACK.
+      req_state.record_attrs = record.attrs;
+      // Update the max acked sequence number.
+      if (req_seq_num > stream.max_acked_seq_num_) {
+        stream.max_acked_seq_num_ = req_seq_num;
+      }
+
+      // If message is left most in the window, we trigger callbacks and send
+      // more stream requests that are ready. Currently, we are sending twice
+      // the number of prefix ACKs.
+      //
+      // If we send only 1 pending message per prefix ACK, that will resemble
+      // ONE_AT_A_TIME mode. We chose 2 so that the client can systematically
+      // improve the input throughput by having many inflight, as a proper write
+      // stream connection is established with a sequencer.
+      // TODO: Try out more than 2 triggers for each sequencer prefix ACK.
+      if (req_seq_num == next_seq_num(stream.max_prefix_acked_seq_num_)) {
+        auto num_called_back = stream.triggerPrefixCallbacks();
+        postNextReadyRequestsIfExists(stream, 2 * num_called_back);
+      }
+    } else {
+      rewindStreamUntil(stream, req_seq_num);
+      postNextReadyRequestsIfExists(stream, 2);
     }
   } else {
-    // Activate the retry_timer to post another request in the future.
-    if (!req_state.retry_timer) {
-      req_state.retry_timer = createBackoffTimer(stream, req_state);
-    }
-    req_state.retry_timer->activate();
+    // Rewinding a stream until req_seq_num discards any previous successful
+    // appends with higher sequence number and cancels any inflight appends with
+    // higher sequence number. Note that this is fine because we have to retry
+    // req_seq_num message anyway and that will definitely get a larger LSN
+    // than all these. To maintain LSN monotonicity property, we will retry all
+    // of them anyway!
+    rewindStreamUntil(stream, req_seq_num);
+    ensureEarliestPendingRequestInflight(stream);
   }
 }
 
@@ -252,11 +287,10 @@ epoch_t StreamWriterAppendSink::getSeenEpoch(worker_id_t worker_id,
   return it != map.end() ? it->second : EPOCH_INVALID;
 }
 
-std::unique_ptr<BackoffTimer> StreamWriterAppendSink::createBackoffTimer(
-    Stream& stream,
-    StreamAppendRequestState& req_state) {
-  auto wrapped_callback = [this, &stream, &req_state]() {
-    postAppend(stream, req_state);
+std::unique_ptr<BackoffTimer>
+StreamWriterAppendSink::createBackoffTimer(Stream& stream) {
+  auto wrapped_callback = [this, &stream]() {
+    postNextReadyRequestsIfExists(stream, 1);
   };
   std::unique_ptr<BackoffTimer> retry_timer =
       std::make_unique<ExponentialBackoffTimer>(
@@ -281,4 +315,124 @@ void StreamWriterAppendSink::postAppend(Stream& stream,
                 (std::uint16_t)err);
   }
 }
+
+void StreamWriterAppendSink::postNextReadyRequestsIfExists(
+    Stream& stream,
+    size_t suggested_count) {
+  for (size_t i = 0; i < suggested_count; i++) {
+    auto next_ready_seq_num = next_seq_num(stream.max_inflight_window_seq_num_);
+    auto it = stream.pending_stream_requests_.find(next_ready_seq_num);
+    if (it != stream.pending_stream_requests_.end()) {
+      auto& req_state = it->second;
+      // request must not be in flight.
+      ld_check(!req_state.inflight_request);
+      postAppend(stream, req_state);
+      increment_seq_num(stream.max_inflight_window_seq_num_);
+    } else {
+      break;
+    }
+  }
+}
+
+void StreamWriterAppendSink::ensureEarliestPendingRequestInflight(
+    Stream& stream) {
+  auto earliest_seq_num = next_seq_num(stream.max_prefix_acked_seq_num_);
+  auto it = stream.pending_stream_requests_.find(earliest_seq_num);
+  ld_check(it != stream.pending_stream_requests_.end());
+  auto& req_state = it->second;
+  // Either there must be an inflight request corresponding to the
+  // earliest_seq_num or the corresponding retry_timer must be active so that it
+  // will eventually be retried again.
+  if (!req_state.inflight_request) {
+    // Check that max_inflight_window_seq_num_ is also same as
+    // max_prefix_acked_seq_num_ i.e. are no inflight messages.
+    ld_check_eq(
+        stream.max_prefix_acked_seq_num_, stream.max_inflight_window_seq_num_);
+    // If timer is already active, does nothing.
+    stream.retry_timer_->activate();
+  }
+}
+
+bool StreamWriterAppendSink::checkLsnMonotonicityUntil(
+    Stream& stream,
+    write_stream_seq_num_t seq_num,
+    lsn_t assigned_lsn) {
+  // assigned_lsn > lsn_of_max_prefix_acked_seq_num_ gives us the guarantee that
+  // assigned_lsn is greater than all of the messages that are part of the
+  // persistent prefix.
+  bool monotonic = (stream.lsn_of_max_prefix_acked_seq_num_ < assigned_lsn);
+
+  // For messages from (max_prefix_acked_seq_num_, seq_num), we must check that
+  // all the available LSNs are smaller than assigned_lsn. We do this by tracing
+  // back from (seq_num - 1) in reverse and comparing the LSN of the first ACK
+  // we see with assigned_lsn. Since, LSN monotonicity for existing ACKs is an
+  // invariant, this guarantees our monotonic property for currently available
+  // ACKs and assigned_lsn at seq_num.
+  if (monotonic) {
+    write_stream_seq_num_t prev(seq_num.val_ - 1);
+    for (auto temp = prev; temp > stream.max_prefix_acked_seq_num_;
+         --temp.val_) {
+      auto it = stream.pending_stream_requests_.find(seq_num);
+      ld_check(it != stream.pending_stream_requests_.end());
+      auto& req_state = it->second;
+      if (req_state.last_status == E::OK) {
+        monotonic = (req_state.record_attrs.lsn < assigned_lsn);
+        break;
+      }
+    }
+  }
+  return monotonic;
+}
+
+void StreamWriterAppendSink::ensureLsnMonotonicityAfter(
+    Stream& stream,
+    write_stream_seq_num_t seq_num,
+    lsn_t assigned_lsn) {
+  for (auto temp = next_seq_num(seq_num); temp <= stream.max_acked_seq_num_;
+       increment_seq_num(temp)) {
+    auto it = stream.pending_stream_requests_.find(temp);
+    ld_check(it != stream.pending_stream_requests_.end());
+    auto& req_state = it->second;
+    if (req_state.last_status == E::OK) {
+      if (req_state.record_attrs.lsn < assigned_lsn) {
+        // Uh oh, we have a violation. Rewind the stream until here so that we
+        // can repost and eliminate the violation.
+        rewindStreamUntil(stream, req_state.stream_req_id.seq_num);
+      }
+      // If the first ACK is not violated, later ones are not because they are
+      // larger than req_state.record_attrs.lsn. More power to induction!
+      break;
+    }
+  }
+}
+void StreamWriterAppendSink::rewindStreamUntil(Stream& stream,
+                                               write_stream_seq_num_t seq_num) {
+  // Reset all requests in the range [seq_num, max_inflight_window_seq_num_]
+  for (auto temp = seq_num; temp <= stream.max_inflight_window_seq_num_;
+       increment_seq_num(temp)) {
+    auto it = stream.pending_stream_requests_.find(temp);
+    ld_check(it != stream.pending_stream_requests_.end());
+    resetPreviousAttempts(it->second);
+  }
+
+  // We have discarded all ACKs after seq_num. We need to find the largest
+  // sequence number that has been ACKed before seq_num.
+  stream.max_acked_seq_num_ = stream.max_prefix_acked_seq_num_;
+  // Go in the reverse direction, maybe quicker!
+  write_stream_seq_num_t prev(seq_num.val_ - 1);
+  for (auto temp = prev; temp > stream.max_prefix_acked_seq_num_; --temp.val_) {
+    auto it = stream.pending_stream_requests_.find(temp);
+    ld_check(it != stream.pending_stream_requests_.end());
+    auto& req_state = it->second;
+    if (req_state.last_status == E::OK) {
+      stream.max_acked_seq_num_ = temp;
+      break;
+    }
+  }
+
+  // Since we rewound all requests including and after seq_num, the
+  // max_inflight_window_seq_num should be one less than seq_num.
+  stream.max_inflight_window_seq_num_.val_ = (seq_num.val_ - 1);
+}
+
 }} // namespace facebook::logdevice

@@ -21,22 +21,19 @@ BoycottTracer::BoycottTracer(std::shared_ptr<TraceLogger> logger)
 void BoycottTracer::traceBoycott(
     NodeID boycotted_node,
     std::chrono::system_clock::time_point start_time,
-    std::chrono::milliseconds boycott_duration,
-    folly::dynamic controller_state) {
+    std::chrono::milliseconds boycott_duration) {
   auto sample_builder = [&]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("boycotted_node_id", boycotted_node.toString());
     sample->addIntValue("start_time", start_time.time_since_epoch().count());
     sample->addIntValue("duration_ms", boycott_duration.count());
-    sample->addNormalValue("controller_state_json", toString(controller_state));
     return sample;
   };
   publish(sample_builder);
-  ld_info("Boycotted %s since %s for %lums, controller state: %s",
+  ld_info("Boycotted %s since %s for %lums",
           boycotted_node.toString().c_str(),
           format_time(SystemTimestamp(start_time)).c_str(),
-          boycott_duration.count(),
-          toString(controller_state).c_str());
+          boycott_duration.count());
 }
 
 }} // namespace facebook::logdevice

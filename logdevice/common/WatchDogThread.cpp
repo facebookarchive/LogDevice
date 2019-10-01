@@ -48,9 +48,6 @@ void WatchDogThread::detectStalls() {
         size_t events_called_new = event_loop->event_handlers_called_.load();
         size_t events_completed_new =
             event_loop->event_handlers_completed_.load();
-        STAT_ADD(w.processor_->stats_,
-                 event_loop_sched_delay,
-                 event_loop->delay_us_.exchange(0, std::memory_order_relaxed));
 
         // Watchdog considers a worker as stalled if the worker hasn't
         // completed any outstanding events since the time Watchdog last
@@ -77,6 +74,7 @@ void WatchDogThread::detectStalls() {
                   events_completed_[idx],
                   events_called_new,
                   events_completed_new);
+
         } else {
           // Clear accumulated time for idx which is not stalled any more
           total_stalled_time_ms_[idx] = std::chrono::milliseconds::zero();
@@ -87,7 +85,8 @@ void WatchDogThread::detectStalls() {
       },
       Processor::Order::FORWARD,
       WorkerType::GENERAL);
-
+  processor_->getHealthMonitor().reportStalledWorkers(
+      stalled_worker_pids.size());
   if (stalled_worker_pids.size()) {
     ld_warning("Found %zu stalled workers", stalled_worker_pids.size());
     STAT_ADD(

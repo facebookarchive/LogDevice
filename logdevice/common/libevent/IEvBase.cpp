@@ -5,14 +5,10 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#pragma once
 
-#include <chrono>
+#include "logdevice/common/libevent/IEvBase.h"
 
-struct timeval;
 namespace facebook { namespace logdevice {
-class EvTimer {
- public:
-  static const timeval* getCommonTimeout(std::chrono::microseconds timeout);
-};
+thread_local IEvBase* IEvBase::running_base_ = nullptr;
+
 }} // namespace facebook::logdevice

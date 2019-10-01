@@ -35,7 +35,7 @@ TEST_F(ServerConfigSourceIntegrationTest, Basic) {
   auto new_server_config =
       cluster->getConfig()->getServerConfig()->withVersion(config_version_t(2));
   cluster->writeServerConfig(new_server_config.get());
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   std::string config_path = "server:";
   auto nodes = new_server_config->getNodes();
@@ -127,8 +127,7 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromClient) {
 
   wait_until([&]() -> bool {
     std::string reply = cluster->getNode(0).sendCommand("info config");
-    std::string config_str = reply.substr(0, reply.length() - 5);
-    auto updated_config = Configuration::fromJson(config_str, nullptr, nullptr);
+    auto updated_config = Configuration::fromJson(reply, nullptr, nullptr);
     ld_check(updated_config);
     return client_config->get()->serverConfig()->getVersion() ==
         updated_config->serverConfig()->getVersion();
@@ -202,8 +201,7 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromSource) {
   client->appendSync(logid_t(1), Payload(data, sizeof data));
   wait_until([&]() -> bool {
     std::string reply = cluster->getNode(0).sendCommand("info config");
-    std::string config_str = reply.substr(0, reply.length() - 5);
-    auto updated_config = Configuration::fromJson(config_str, nullptr, nullptr);
+    auto updated_config = Configuration::fromJson(reply, nullptr, nullptr);
     ld_check(updated_config);
     return client_config->get()->serverConfig()->getVersion() ==
         updated_config->serverConfig()->getVersion();

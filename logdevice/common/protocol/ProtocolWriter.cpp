@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/protocol/ProtocolWriter.h"
 
+#include <folly/io/IOBuf.h>
+
 #include "event2/buffer.h"
 #include "event2/event.h"
 #include "logdevice/common/Checksum.h"
@@ -17,6 +19,95 @@
 namespace facebook { namespace logdevice {
 
 namespace {
+// Write into folly::IOBuf to create a chain. First buffer is allocated outside
+// and passed in, to create this object. On write, bytes are copied into the
+// current active iobuf. If the buffer becomes full, another buffer is prepended
+// as IOBuf chains are circular hence the last added buffer or tail of chain is
+// just before the link pointed by iobuf_ . Hence the current active buffer is
+// always prev of iobuf_. In presence of just one element iobuf_->prev points
+// to itself which is correctly the current active iobuf. writeWithoutCopy API
+// just wraps the given buffer with IOBuf without taking ownership. Entity
+// passing in the buffer needs to make sure that the buffer exists till the
+// IOBuf gets deleted.
+class IOBufDestination : public ProtocolWriter::Destination {
+ public:
+  int write(const void* src, size_t nbytes, size_t /*nwritten*/) override {
+    const uint8_t* ptr = static_cast<const uint8_t*>(src);
+    auto add_to_iobuf = [this](const void* ptr, size_t nbytes) {
+      // iobuf_ points to the head of the IOBuf chain. IOBuf chain is circular
+      // hence the iobuf_->prev is the tail of the chain.
+      auto prev_buf = iobuf_->prev();
+      ld_check(prev_buf->tailroom() >= nbytes);
+      memcpy(static_cast<void*>(prev_buf->writableTail()), ptr, nbytes);
+      prev_buf->append(nbytes);
+    };
+
+    auto avail = iobuf_->prev()->tailroom();
+    auto nadd = std::min(nbytes, avail);
+    if (avail == 0) {
+      auto new_iobuf =
+          folly::IOBuf::create(std::max(nbytes, IOBUF_ALLOCATION_UNIT));
+      // IOBuf chain is circular. Add the newly created IOBuf to the tail of
+      // IOBuf chain by prepending it to the first IOBuf.
+      iobuf_->prependChain(std::move(new_iobuf));
+      nadd = nbytes;
+    }
+
+    add_to_iobuf(ptr, nadd);
+    ptr += nadd;
+    nbytes -= nadd;
+
+    if (nbytes > 0) {
+      auto new_iobuf =
+          folly::IOBuf::create(std::max(nbytes, IOBUF_ALLOCATION_UNIT));
+      // IOBuf chain is circular. Add the newly created IOBuf to the tail of
+      // IOBuf chain by prepending it to the first IOBuf.
+      iobuf_->prependChain(std::move(new_iobuf));
+    }
+
+    add_to_iobuf(ptr, nbytes);
+
+    return 0;
+  }
+
+  int writeWithoutCopy(const void* src,
+                       size_t nbytes,
+                       size_t /*nwritten*/) override {
+    auto new_iobuf =
+        folly::IOBuf::wrapBuffer(static_cast<const void*>(src), nbytes);
+    iobuf_->prependChain(std::move(new_iobuf));
+    return 0;
+  }
+
+  uint64_t computeChecksum() override {
+    uint64_t checksum = 0;
+    const size_t len = iobuf_->computeChainDataLength();
+    std::string data(len, 0);
+    auto it = data.begin();
+    for (auto& buf : *iobuf_) {
+      std::copy(buf.begin(), buf.end(), it);
+      it += buf.size();
+    }
+    Slice slice(&data[0], len);
+    checksum_bytes(slice, 64, (char*)&checksum);
+    return checksum;
+  }
+  const char* identify() const override {
+    return "iobuf destination";
+  }
+
+  bool isNull() const override {
+    return iobuf_ == nullptr;
+  }
+
+  explicit IOBufDestination(folly::IOBuf* dest) : iobuf_(dest) {}
+
+  ~IOBufDestination() override {}
+
+ private:
+  folly::IOBuf* const iobuf_;
+};
+
 class EvbufferDestination : public ProtocolWriter::Destination {
  public:
   int write(const void* src, size_t nbytes, size_t /*nwritten*/) override {
@@ -36,22 +127,6 @@ class EvbufferDestination : public ProtocolWriter::Destination {
     ld_check(!isNull());
     int rv = LD_EV(evbuffer_add_reference)(
         dest_evbuf_, src, nbytes, nullptr, nullptr);
-    if (rv != 0) {
-      err = E::INTERNAL;
-      ld_check(false);
-    }
-    return rv;
-  }
-
-  int writeEvbuffer(evbuffer* src) override {
-    ld_check(!isNull());
-#if LIBEVENT_VERSION_NUMBER >= 0x02010100
-    // In libevent >= 2.1 we can add the evbuffer by reference which should be
-    // cheaper
-    int rv = LD_EV(evbuffer_add_buffer_reference)(dest_evbuf_, src);
-#else
-    int rv = LD_EV(evbuffer_add_buffer)(dest_evbuf_, src);
-#endif
     if (rv != 0) {
       err = E::INTERNAL;
       ld_check(false);
@@ -120,11 +195,6 @@ class LinearBufferDestinationBase : public ProtocolWriter::Destination {
     // currently zero copy is *not* support in linear buffer destination
     // fallback to copy
     return write(src, nbytes, nwritten);
-  }
-
-  int writeEvbuffer(evbuffer* /*src*/) override {
-    err = E::NOTSUPPORTED;
-    return -1;
   }
 
   /* unused */
@@ -208,6 +278,15 @@ ProtocolWriter::ProtocolWriter(MessageType type,
   static_assert(sizeof(dest_space_) >= sizeof(EvbufferDestination), "");
 }
 
+ProtocolWriter::ProtocolWriter(MessageType type,
+                               folly::IOBuf* iobuf,
+                               folly::Optional<uint16_t> proto)
+    : dest_(new (dest_space_) IOBufDestination(iobuf)),
+      context_(messageTypeNames()[type].c_str()),
+      proto_(proto) {
+  static_assert(sizeof(dest_space_) >= sizeof(IOBufDestination), "");
+}
+
 ProtocolWriter::ProtocolWriter(Slice dest,
                                std::string context,
                                folly::Optional<uint16_t> proto)
@@ -259,18 +338,6 @@ void ProtocolWriter::writeImplCb(Fn&& fn) {
 
 void ProtocolWriter::writeImpl(const void* data, size_t nbytes) {
   writeImplCb([&] { return dest_->write(data, nbytes, nwritten_); });
-}
-
-void ProtocolWriter::writeEvbuffer(evbuffer* data) {
-  if (!isProtoVersionAllowed()) {
-    return;
-  }
-
-  size_t nbytes = LD_EV(evbuffer_get_length)(data);
-  if (!dest_->isNull() && ok()) {
-    writeImplCb([&] { return dest_->writeEvbuffer(data); });
-  }
-  nwritten_ += nbytes;
 }
 
 void ProtocolWriter::writeWithoutCopy(const void* data, size_t nbytes) {

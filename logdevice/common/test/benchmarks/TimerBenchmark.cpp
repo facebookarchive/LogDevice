@@ -14,11 +14,10 @@
 #include <folly/ScopeGuard.h>
 #include <folly/Singleton.h>
 
-#include "event2/event.h"
 #include "logdevice/common/LibeventTimer.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 
 using namespace facebook::logdevice;
 using namespace std::chrono_literals;
@@ -54,23 +53,33 @@ BENCHMARK(TimerBenchmarkParallel, n) {
 
 BENCHMARK_RELATIVE(LibeventTimerParallel, n) {
   dbg::currentLevel = dbg::Level::NONE;
-  struct event_base* base;
+  std::unique_ptr<EvBase> base;
   std::vector<std::unique_ptr<LibeventTimer>> timers;
   BENCHMARK_SUSPEND {
-    base = LD_EV(event_base_new)();
+    base = std::make_unique<EvBase>();
+    auto rv = base->init();
+    assert(rv == EvBase::Status::OK);
     timers.reserve(n);
   }
-  SCOPE_EXIT {
-    LD_EV(event_base_free)(base);
-  };
 
   int nfired = 0;
   for (int i = 0; i < n; ++i) {
     timers.emplace_back(
-        std::make_unique<LibeventTimer>(base, [&] { ++nfired; }));
+        std::make_unique<LibeventTimer>(base.get(), [&] { ++nfired; }));
     timers.back()->activate(0ms);
   }
-  LD_EV(event_base_dispatch)(base);
+  base->loop();
   while (nfired != n) {
   }
 }
+
+#ifndef BENCHMARK_BUNDLE
+
+int main(int argc, char** argv) {
+  dbg::currentLevel = dbg::Level::ERROR;
+  folly::SingletonVault::singleton()->registrationComplete();
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  folly::runBenchmarks();
+  return 0;
+}
+#endif

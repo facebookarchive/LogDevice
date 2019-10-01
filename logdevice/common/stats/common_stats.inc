@@ -139,6 +139,22 @@ STAT_DEFINE(buffered_writer_batches_failed, SUM)
 STAT_DEFINE(buffered_writer_batches_succeeded, SUM)
 STAT_DEFINE(buffered_writer_bytes_in_flight, SUM)
 
+// Lifetime of a BufferedWriter append
+
+STAT_DEFINE(buffered_append_success, SUM)
+// Synchronous errors
+STAT_DEFINE(buffered_append_failed_post_request, SUM)
+STAT_DEFINE(buffered_append_failed_memory_limit, SUM)
+STAT_DEFINE(buffered_append_failed_invalid_param, SUM)
+// Asynchronous errors
+STAT_DEFINE(buffered_append_failed_dropped_behind_failed_batch, SUM)
+STAT_DEFINE(buffered_append_failed_actual_append, SUM)
+// These can be sync or async, but should be rare either way
+STAT_DEFINE(buffered_append_failed_shutdown, SUM)
+STAT_DEFINE(buffered_append_failed_other, SUM)
+// This should be equal to the sum of all the stats above
+STAT_DEFINE(buffered_appends, SUM)
+
 // No. of times a recipient got a Message payload where the checksum
 // in the ProtocolHeader does not match the checksum computed on the recipient
 STAT_DEFINE(protocol_checksum_mismatch, SUM)

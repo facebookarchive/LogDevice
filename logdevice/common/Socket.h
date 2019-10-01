@@ -13,6 +13,7 @@
 
 #include <folly/Memory.h>
 #include <folly/Optional.h>
+#include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/SSLContext.h>
 
 #include "event2/buffer.h"
@@ -33,6 +34,7 @@
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 #include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
@@ -902,11 +904,11 @@ class Socket : public TrafficShappingSocket {
   // This is a timer event with timeout of 0 that we use to regain
   // control after we processed incoming_messages_max_per_socket
   // messages from bev_ and yielded.
-  struct event read_more_;
+  EvTimer read_more_;
 
   // Timer event used to give up the TCP connection if it is not established
   // within some reasonable period of time.
-  struct event connect_timeout_event_;
+  EvTimer connect_timeout_event_;
 
   // Number of times we have tried connecting so far. This value is incremented
   // each time the connection times out until it reaches the maximum specified
@@ -916,7 +918,7 @@ class Socket : public TrafficShappingSocket {
   // Timer event used to close the connection if the LD protocol handshake
   // (HELLO/ACK message received) is not fully established within some
   // reasonable period of time.
-  struct event handshake_timeout_event_;
+  EvTimer handshake_timeout_event_;
 
   // Indicates that we haven't had a fully established connection (including
   // the handshake) to the peer yet. Used by checkConnection() to differentiate
@@ -974,11 +976,11 @@ class Socket : public TrafficShappingSocket {
 
   // event for signalling there are pending callbacks for various deferred
   // events in the queue for this socket. See Socket::eventCallback()
-  struct event deferred_event_queue_event_;
+  EvTimer deferred_event_queue_event_;
 
   // event signalling the need to terminate the current simulated stream
   // rewind event as soon as control is returned to the event loop.
-  struct event end_stream_rewind_event_;
+  EvTimer end_stream_rewind_event_;
 
   // The number of messages that were asynchronously failed with NOBUFS
   // duing the current simulated stream rewind event.
@@ -1006,7 +1008,7 @@ class Socket : public TrafficShappingSocket {
   struct evbuffer* buffered_output_{nullptr};
 
   // The zero-timeout timer used to flush the output buffer
-  struct event buffered_output_flush_event_;
+  EvTimer buffered_output_flush_event_;
 
   // called by bev_ when all bytes we have been waiting for arrive
   static void dataReadCallback(struct bufferevent*, void*, short);

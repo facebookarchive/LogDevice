@@ -209,6 +209,11 @@ void fillNodeConfig(
     fillSocketAddress(ssl_address, node_sd->ssl_address.value());
     other_addresses.set_ssl(std::move(ssl_address));
   }
+  if (node_sd->admin_address) {
+    thrift::SocketAddress admin_address;
+    fillSocketAddress(admin_address, node_sd->admin_address.value());
+    other_addresses.set_admin(std::move(admin_address));
+  }
   out.set_other_addresses(std::move(other_addresses));
 }
 
@@ -470,6 +475,14 @@ thrift::NodeID mkNodeID(node_index_t node_id) {
   thrift::NodeID new_node;
   new_node.set_node_index(node_id);
   return new_node;
+}
+
+thrift::ShardSet mkShardSet(const ShardSet& shards) {
+  thrift::ShardSet set;
+  for (const auto& shard : shards) {
+    set.push_back(mkShardID(shard));
+  }
+  return set;
 }
 
 }} // namespace facebook::logdevice

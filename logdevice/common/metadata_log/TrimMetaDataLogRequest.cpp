@@ -159,8 +159,19 @@ void TrimMetaDataLogRequest::onDataLogTrimComplete(Status st,
     return;
   }
 
-  // must have a valid trim point
-  ld_check(data_trim_point != LSN_INVALID);
+  // this can happend when data log is empty, or never trimmed
+  if (data_trim_point == LSN_INVALID) {
+    RATELIMIT_INFO(
+        std::chrono::seconds(10),
+        10,
+        "Data Log %lu trim point is LSN_INVALID, do_trim %s, nothing to do.",
+        log_id_.val_,
+        do_trim_data_log_ ? "true" : "false");
+    state_ = State::FINISHED;
+    complete(E::UPTODATE);
+    return;
+  }
+
   trim_point_datalog_ = data_trim_point;
   // advance to the next stage
   state_ = State::READ_METADATA_LOG;

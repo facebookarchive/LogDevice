@@ -38,7 +38,8 @@ static bool parseHostFields(const folly::dynamic&,
                             std::string& /* name */,
                             Sockaddr&, /* host address */
                             Sockaddr&, /* gossip address */
-                            folly::Optional<Sockaddr>& /* ssl address */);
+                            folly::Optional<Sockaddr>& /* ssl address */,
+                            folly::Optional<Sockaddr>& /* admin_address */);
 static bool parseLocation(const folly::dynamic&, Configuration::Node&);
 static bool parseRoles(const folly::dynamic&, Configuration::Node&);
 using RoleParser = bool(const folly::dynamic&, Configuration::Node&);
@@ -207,7 +208,8 @@ static bool parseOneNode(const folly::dynamic& nodeMap,
                          output.name,
                          output.address,
                          output.gossip_address,
-                         output.ssl_address) &&
+                         output.ssl_address,
+                         output.admin_address) &&
       parseLocation(nodeMap, output) && parseRoles(nodeMap, output);
 }
 
@@ -281,11 +283,12 @@ static bool parseHostFields(const folly::dynamic& nodeMap,
                             std::string& name,
                             Sockaddr& addr_out,
                             Sockaddr& gossip_addr_out,
-                            folly::Optional<Sockaddr>& ssl_addr_out) {
+                            folly::Optional<Sockaddr>& ssl_addr_out,
+                            folly::Optional<Sockaddr>& admin_addr_out) {
   std::string hostStr;
-  std::string gossipAddressStr;
+  std::string gossipAddressStr, adminAddressStr;
   std::string sslHostStr;
-  int sslPort, gossipPort;
+  int sslPort, gossipPort, adminPort;
 
   // Parse the name of the node, if it's there
   // TODO(T44427489): Make the name field a required field.
@@ -365,8 +368,31 @@ static bool parseHostFields(const folly::dynamic& nodeMap,
     ssl_addr_out.assign(addr_out.withPort(sslPort));
   }
 
+  if (getIntFromMap<int>(nodeMap, "admin_port", adminPort)) {
+    size_t posn = hostStr.find_last_of(":");
+    std::string host_prefix = hostStr.substr(0, posn + 1);
+    adminAddressStr = host_prefix;
+    adminAddressStr += folly::to<std::string>(adminPort);
+  } else {
+    // Port not found, looking for unix domain socket / full address
+    if (!getStringFromMap(nodeMap, "admin_address", adminAddressStr)) {
+      // we don't have an admin address in this case
+      adminAddressStr = "";
+    }
+  }
+  if (!adminAddressStr.empty()) {
+    Sockaddr admin_addr;
+    if (!parseHostString(adminAddressStr, admin_addr, "admin_address")) {
+      ld_warning("parseHostString() failed for admin_address:%s",
+                 adminAddressStr.c_str());
+      // err set by parseHostString()
+      return false;
+    }
+    admin_addr_out.assign(admin_addr);
+  }
   return true;
 }
+
 static bool parseLocation(const folly::dynamic& nodeMap,
                           Configuration::Node& output) {
   std::string location_str;
@@ -385,8 +411,10 @@ static bool parseLocation(const folly::dynamic& nodeMap,
      *          legacy deployments are upgraded
      */
     std::vector<std::string> tokens;
-    folly::split(
-        NodeLocation::DELIMITER, location_str, tokens, /* ignoreEmpty */ false);
+    folly::split(NodeLocation::DELIMITER,
+                 location_str,
+                 tokens,
+                 /* ignoreEmpty */ false);
     if (tokens.size() == NodeLocation::NUM_SCOPES - 1) {
       // possible old format, manually create the REGION label by
       // right-stripping digits from DATA_CENTER label
@@ -428,8 +456,8 @@ static bool parseSequencer(const folly::dynamic& nodeMap,
                            Configuration::Node& output) {
   // Sequencing is controlled by two attributes:
   // 'sequencer':        This is a bool that enables or disables sequencing.
-  //                     The node must also be provisioned with the 'sequencer'
-  //                     role. If omitted, sequencing is disabled.
+  //                     The node must also be provisioned with the
+  //                     'sequencer' role. If omitted, sequencing is disabled.
   // 'sequencer_weight': This is a double that controls the amount of logs
   //                     this node should sequence relative to other nodes
   //                     in the cluster. If omitted, weight defaults to 1.
@@ -695,8 +723,8 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
   if (!getBoolFromMap(
           nodeMap, "exclude_from_nodesets", storage->exclude_from_nodesets)) {
     if (err != E::NOTFOUND) {
-      ld_error(
-          "Invalid value for \"exclude_from_nodesets\". Expecting true/false");
+      ld_error("Invalid value for \"exclude_from_nodesets\". Expecting "
+               "true/false");
       err = E::INVALID_CONFIG;
       return false;
     }
@@ -704,5 +732,4 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
   }
   return true;
 }
-
 }}}} // namespace facebook::logdevice::configuration::parser

@@ -34,10 +34,5 @@ class NodeStatsControllerCallback {
                                BucketedNodeStats stats) = 0;
 
   virtual void getDebugInfo(InfoAppendOutliersTable* table) = 0;
-
-  virtual void
-  traceBoycott(NodeID boycotted_node,
-               std::chrono::system_clock::time_point boycott_start_time,
-               std::chrono::milliseconds boycott_duration) = 0;
 };
 }} // namespace facebook::logdevice

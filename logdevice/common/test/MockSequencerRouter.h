@@ -46,6 +46,7 @@ class MockClusterState : public ClusterState {
                                Sockaddr(url, 4440),
                                Sockaddr(url, 4441),
                                /*ssl_address=*/folly::none,
+                               /*admin_address=*/Sockaddr(url, 6440),
                                /*location=*/folly::none,
                                both_roles});
       NodeUpdate nup{

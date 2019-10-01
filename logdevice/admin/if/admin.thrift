@@ -108,6 +108,25 @@ service AdminAPI extends fb303.FacebookService {
        4: exceptions.NotSupported not_supported) (cpp.coroutine);
 
   /**
+   * Marks a list of shards as provisioned, transitioning their storage state
+   * from PROVISIONING to NONE.
+   * In general, this should be done by the node itself, but that's a helper
+   * API in case the node fails to do it for any reason.
+   *
+   * This API doesn't do any kind of verification of the health of the node. It
+   * just force transitions the node to NONE.
+   *
+   * If any of the shards are unknown, the whole request will fail with an
+   * InvalidRequest error and non of the changes will get applied.
+   */
+  cluster_membership.MarkShardsAsProvisionedResponse markShardsAsProvisioned(1:
+      cluster_membership.MarkShardsAsProvisionedRequest request) throws
+      (1: exceptions.NodeNotReady notready,
+       2: exceptions.InvalidRequest invalid_request,
+       3: exceptions.NodesConfigurationManagerError ncm_error,
+       4: exceptions.NotSupported not_supported) (cpp.coroutine);
+
+  /**
    * Lists the maintenance by group-ids. This returns maintenances from the
    * state stored in the server which may include maintenances that were not
    * processed/started yet. If filter is empty, this will return all

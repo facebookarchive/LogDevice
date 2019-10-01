@@ -165,16 +165,24 @@ TEST_F(AppendIntegrationTest, AppendEchoClient) {
 }
 
 /**
- * Sends 1000 appends to 1000 logs.
+ * Sends 100 appends to 100 logs.
  * Checks throttling in SyncStorageThread.
  */
 TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
   int rv;
 
-  const int NUM_LOGS = 1000;
+  const int NUM_LOGS = 100;
 
   auto cluster =
-      IntegrationTestUtils::ClusterFactory().setNumLogs(NUM_LOGS).create(1);
+      IntegrationTestUtils::ClusterFactory()
+          .setNumLogs(NUM_LOGS)
+          // Allow all sequencer activations to happen concurrently,
+          // to maximize the batching of wal syncs.
+          .setParam("--concurrent-log-recoveries", "300")
+          .setParam("--max-sequencer-background-activations-in-flight", "300")
+          // Increase the window for batching of syncs.
+          .setParam("--storage-thread-delaying-sync-interval", "1s")
+          .create(1);
   // Make sure that sequencer won't reactivate.
   cluster->waitForMetaDataLogWrites();
 
@@ -203,16 +211,22 @@ TEST_F(AppendIntegrationTest, SyncStorageThreadThrottling) {
     async_append_sem.wait();
   }
 
+  // Recovery and metadata log writes are the main source of WAL syncs.
+  cluster->waitForRecovery();
+
   std::map<std::string, int64_t> stats = cluster->getNode(0).stats();
-  // expectation values depend on chosen NUM_LOGS
-  // most syncs here come from sequencer activation
-  // note opt mode also affects these numbers i.e. buck with @mode/opt
   int fdatasync = stats["fdatasyncs"];
   int wal_syncs = stats["wal_syncs"];
-  EXPECT_GT(fdatasync, 10);
-  EXPECT_LT(fdatasync, 250);
-  EXPECT_GT(wal_syncs, 10);
-  EXPECT_LT(wal_syncs, 250);
+  ld_info("fdatasync: %d, wal_syncs: %d", fdatasync, wal_syncs);
+  // Check that the stats are working at all.
+  EXPECT_GE(fdatasync, 1);
+  EXPECT_GE(wal_syncs, 1);
+  // Check that we didn't do way too many syncs. We expect each sequencer
+  // activation+recovery to do at least one sync (or maybe two: writing metadata
+  // log record and updating LCE in CLEAN message). So any number of syncs below
+  // 100 means that the delaying is probably working.
+  EXPECT_LE(fdatasync, 90);
+  EXPECT_LE(wal_syncs, 90);
 }
 
 /**
@@ -359,6 +373,10 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   auto cluster_factory = IntegrationTestUtils::ClusterFactory();
   cluster_factory.setParam("--rocksdb-verify-checksum-during-store", "true");
   cluster_factory.setParam("--disable-graylisting", "false");
+  cluster_factory.setParam("--enable-sticky-copysets", "false");
+  cluster_factory.setParam("--store-timeout", "1s..10s");
+  cluster_factory.setParam("--enable-adaptive-store-timeout", "false");
+  cluster_factory.setParam("--gray-list-threshold", "0.6");
   cluster_factory.useHashBasedSequencerAssignment(/*gossip_interval_ms=*/20);
   logsconfig::LogAttributes log_attrs =
       cluster_factory.createDefaultLogAttributes(NUM_NODES);
@@ -370,6 +388,7 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   ASSERT_TRUE((bool)client);
 
   // Appends should work fine
+  ld_info("Doing first append.");
   lsn = client->appendSync(logid_t(LOG_ID), Payload(data.data(), 128));
   ASSERT_NE(lsn_to_esn(lsn), ESN_INVALID);
   ASSERT_EQ(lsn_to_esn(lsn), esn_t(1));
@@ -386,6 +405,7 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   int sequencer_node_id =
       cluster->getHashAssignedSequencerNodeId(logid_t(LOG_ID), client.get());
   ASSERT_NE(sequencer_node_id, -1);
+  ld_info("Sequencer is on N%d", sequencer_node_id);
 
   // There should be no known cases of corruption beforehand
   auto sequencer_stats_before = cluster->getNode(sequencer_node_id).stats();
@@ -395,30 +415,44 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   ASSERT_EQ(stats_before_n1[corr_fld], 0);
   ASSERT_EQ(sequencer_stats_before[corr_ignored_fld], 0);
 
+  ld_info("Enabling corruption on N0 and N1.");
   cluster->getNode(0).updateSetting("rocksdb-test-corrupt-stores", "true");
   cluster->getNode(1).updateSetting("rocksdb-test-corrupt-stores", "true");
 
   // This will not be successful, as 2/4 nodes keep reporting corruption
   client->setTimeout(std::chrono::milliseconds(1000));
+  ld_info("Doing a second append (should time out).");
   lsn = client->appendSync(logid_t(LOG_ID), Payload(data.data(), 28));
   ASSERT_EQ(lsn_to_esn(lsn), ESN_INVALID);
   ASSERT_EQ(E::TIMEDOUT, err);
 
   // Make N1 stop corrupting stores, leading to only N0 remaining graylisted
+  ld_info("Disabling corruption on N1.");
   cluster->getNode(1).updateSetting("rocksdb-test-corrupt-stores", "false");
 
-  // Append should work
+  // Append should work now. The previous appends could leave N0 ungraylisted if
+  // graylist was cleared just before N1 stopped corrupting stores. Do a few
+  // tens of appends to make sure N0 ends up graylisted (with very high
+  // probability).
   client->setTimeout(std::chrono::milliseconds(60000));
-  lsn = client->appendSync(logid_t(LOG_ID), Payload(data.data(), 7));
-  ASSERT_NE(ESN_INVALID, lsn_to_esn(lsn));
+  Semaphore sem;
+  const int num_appends = 30;
+  ld_info("Doing %d appends.", num_appends);
+  for (int i = 0; i < num_appends; ++i) {
+    int rv = client->append(logid_t(LOG_ID),
+                            Payload(data.data(), 7),
+                            [&](Status st, const DataRecord& r) {
+                              EXPECT_EQ(E::OK, st);
+                              EXPECT_NE(LSN_INVALID, r.attrs.lsn);
+                              sem.post();
+                            });
+    ASSERT_EQ(0, rv) << error_name(err);
+  }
+  for (int i = 0; i < num_appends; ++i) {
+    sem.wait();
+  }
 
-  std::map<std::string, int64_t> sequencer_stats_after;
-  int rv = wait_until("Waiting for appenders to be done", [&]() {
-    sequencer_stats_after = cluster->getNode(sequencer_node_id).stats();
-    return sequencer_stats_after["num_appenders"] == 0;
-  });
-  ld_check(rv == 0);
-
+  auto sequencer_stats_after = cluster->getNode(sequencer_node_id).stats();
   auto stats_after_n0 = cluster->getNode(0).stats();
   auto stats_after_n1 = cluster->getNode(1).stats();
 
@@ -430,6 +464,11 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   ASSERT_EQ(sequencer_stats_after[corr_ignored_fld], 0);
 
   // Write again; should not hit graylisted node N0
+  ld_info(
+      "Doing the last append. Sequencer state: %s",
+      toString(
+          cluster->getNode(sequencer_node_id).sequencerInfo(logid_t(LOG_ID)))
+          .c_str());
   lsn = client->appendSync(logid_t(LOG_ID), Payload(data.data(), 64));
   ASSERT_NE(lsn_to_esn(lsn), ESN_INVALID);
   ASSERT_NE(ESN_INVALID, lsn_to_esn(lsn));
@@ -949,9 +988,7 @@ TEST_F(AppendIntegrationTest, WriteLsnAfterTrimPoint) {
     cmd = folly::sformat(
         "info record {} {} {} --json  --table", 2, old_lsn, old_lsn);
     response = cluster->getNode(0).sendCommand(cmd, false);
-    // even with --json, there are some trailing chars that need to be clipped
-    EXPECT_GT(response.size(), 7);
-    auto json = folly::parseJson(response.substr(0, response.size() - 7));
+    auto json = folly::parseJson(response);
     // sanity check (this is a dict with rows and headers keys)
     EXPECT_EQ(2, json.size());
 
@@ -989,7 +1026,7 @@ TEST_F(AppendIntegrationTest, WriteLsnAfterTrimPoint) {
   // double check with admin command that the record wasn't written to RocksDB
   cmd = folly::sformat("info record {} {} {}", 2, new_lsn, new_lsn);
   response = cluster->getNode(0).sendCommand(cmd, false);
-  EXPECT_EQ("END\r\n", response);
+  EXPECT_TRUE(response.empty());
 
   // we shouldn't be able to read anything back (everything is trimmed)
   auto reader = client->createReader(1);

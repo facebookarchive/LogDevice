@@ -137,6 +137,9 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(4446);
     EXPECT_EQ(expected_port, aptr->sin_port);
 
+    ASSERT_TRUE(node.admin_address.hasValue());
+    EXPECT_EQ("127.0.0.1:6440", node.admin_address->toString());
+
     EXPECT_EQ(configuration::StorageState::READ_WRITE, node.getStorageState());
     EXPECT_EQ(1, node.storage_attributes->capacity);
     EXPECT_EQ(1, node.getWritableStorageCapacity());
@@ -182,6 +185,9 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(6670);
     EXPECT_EQ(expected_port, aptr->sin6_port);
 
+    ASSERT_TRUE(node.admin_address.hasValue());
+    EXPECT_EQ("[::1]:6440", node.admin_address->toString());
+
     EXPECT_EQ(configuration::StorageState::READ_WRITE,
               node.storage_attributes->state);
     EXPECT_EQ(4, node.storage_attributes->capacity);
@@ -222,6 +228,8 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_STREQ("::1", buf);
     expected_port = htons(6673);
     EXPECT_EQ(expected_port, aptr->sin6_port);
+
+    EXPECT_FALSE(node.admin_address.hasValue());
 
     EXPECT_EQ(configuration::StorageState::READ_WRITE,
               node.storage_attributes->state);
@@ -265,6 +273,8 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_STREQ("::1", buf);
     expected_port = htons(6672);
     EXPECT_EQ(expected_port, aptr->sin6_port);
+
+    EXPECT_FALSE(node.admin_address.hasValue());
 
     EXPECT_EQ(configuration::StorageState::READ_WRITE,
               node.storage_attributes->state);

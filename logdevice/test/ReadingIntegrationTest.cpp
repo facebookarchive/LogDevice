@@ -1057,7 +1057,7 @@ TEST_P(ReadingIntegrationTest, PurgingStuck) {
   // Inject IO errors in N3 so it won't complete purging.
   std::string res = cluster->getNode(3).sendCommand(
       "inject shard_fault all metadata all io_error");
-  ASSERT_EQ("END\r\n", res);
+  ASSERT_TRUE(res.empty());
 
   // Restart the sequencer.
   cluster->getSequencerNode().kill();
@@ -1498,7 +1498,7 @@ TEST_P(ReadingIntegrationTest, UnderreplicatedRegion) {
     // These admin commands output a few lines of human-readable things like
     // "Clearing dirty ranges and writting checkpoint for shard %u...",
     // followed by two lines "Done." and "END".
-    const std::string expected = "Done.\r\nEND\r\n";
+    const std::string expected = "Done.\r\n";
     return output.size() >= expected.size() &&
         output.substr(output.size() - expected.size()) == expected;
   };
@@ -1683,6 +1683,13 @@ TEST_P(ReadingIntegrationTest, GuaranteedEfficiencyWithNodeDown) {
     }
     lsns.push_back(lsn);
   }
+
+  // Wait for recovery of epoch 1 to complete before stopping N1.
+  // Without N1 the recovery would get stuck because it wouldn't be able to
+  // replicate the bridge record.
+  // Note that this test case could be made to not need this (by adding another
+  // node so recovery can always proceed), but it's a little simpler this way.
+  EXPECT_EQ(0, cluster->waitForRecovery());
 
   // Stop N1, wipe N2 to simulate silent underreplication.
   cluster->getNode(1).shutdown();

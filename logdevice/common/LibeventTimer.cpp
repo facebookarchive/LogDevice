@@ -9,25 +9,17 @@
 
 #include <cstring>
 
-#include <event2/event.h>
-
-#include "logdevice/common/EventHandler.h"
 #include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {
 
-LibeventTimer::LibeventTimer() {
-  memset(&timer_, 0, sizeof(timer_));
-}
+LibeventTimer::LibeventTimer() {}
 
-LibeventTimer::LibeventTimer(struct event_base* base)
-    : LibeventTimer(base, nullptr) {}
+LibeventTimer::LibeventTimer(EvBase* base) : LibeventTimer(base, nullptr) {}
 
-LibeventTimer::LibeventTimer(struct event_base* base,
-                             std::function<void()> callback) {
+LibeventTimer::LibeventTimer(EvBase* base, std::function<void()> callback) {
   assign(base, callback);
 }
 
@@ -35,99 +27,61 @@ LibeventTimer::~LibeventTimer() {
   cancel();
 }
 
-void LibeventTimer::assign(struct event_base* base,
-                           std::function<void()> callback) {
+void LibeventTimer::assign(EvBase* base, std::function<void()> callback) {
   callback_ = callback;
 
   worker_ = Worker::onThisThread(false /*enforce*/);
-  ld_check(!initialized_);
-  // Passing `this` as the callback arg is safe.  If the timer fires, we know
-  // the instance still exists.  The destructor would have cancelled the timer
-  // otherwise.
-  int rv = evtimer_assign(&timer_,
-                          base,
-                          (EventHandler<LibeventTimer::libeventCallback>),
-                          reinterpret_cast<void*>(this));
-  ld_check(rv == 0);
-  ld_assert(!evtimer_pending(&timer_, nullptr));
+  ld_check(!isAssigned());
+  timer_ = std::make_unique<EvTimer>(base);
+  timer_->attachCallback([&] { libeventCallback(); });
 
-  initialized_ = true;
+  ld_assert(!timer_->isScheduled());
 }
 
 void LibeventTimer::activate(std::chrono::microseconds delay,
-                             TimeoutMap* timeout_map) {
-  struct timeval tv_buf;
-  const struct timeval* tv{nullptr};
-  if (timeout_map == nullptr && EventLoop::onThisThread()) {
-    timeout_map = &EventLoop::onThisThread()->commonTimeouts();
-  }
-
-  if (timeout_map != nullptr) {
-    tv = timeout_map->get(delay);
-  }
-  if (!tv) {
-    tv_buf.tv_sec = delay.count() / 1000000;
-    tv_buf.tv_usec = delay.count() % 1000000;
-    tv = &tv_buf;
-  }
-  activate(tv);
-}
-
-void LibeventTimer::activate(const struct timeval* delay) {
-  if (!ThreadID::isEventLoop()) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(1), 5, "LibeventTimer used outside event loop");
-  }
-
-  ld_check(initialized_);
+                             TimeoutMap* /* timeout_map */) {
+  ld_check(isAssigned());
   ld_check(callback_);
-  evtimer_add(&timer_, delay);
-  ld_assert(evtimer_pending(&timer_, nullptr));
-
+  timer_->scheduleTimeout(
+      std::chrono::duration_cast<std::chrono::milliseconds>(delay));
   auto w = Worker::onThisThread(false /*enforce*/);
   workerRunContext_ = w ? w->currentlyRunning_ : RunContext();
-  active_ = true;
 }
 
 void LibeventTimer::cancel() {
   if (isActive()) {
-    ld_check(initialized_);
-    ld_assert(evtimer_pending(&timer_, nullptr));
-    evtimer_del(&timer_);
-    active_ = false;
+    ld_check(isAssigned());
+    timer_->cancelTimeout();
   }
 }
 
 bool LibeventTimer::isActive() const {
-  return active_;
+  return isAssigned() && timer_->isScheduled();
 }
 
 bool LibeventTimer::isAssigned() const {
-  ld_assert(initialized_ == LD_EV(event_initialized)(&timer_));
-  return initialized_;
+  return timer_ != nullptr;
 }
 
-void LibeventTimer::libeventCallback(void* instance, short) {
-  auto self = reinterpret_cast<LibeventTimer*>(instance);
-  ld_assert(!evtimer_pending(&self->timer_, nullptr));
+void LibeventTimer::libeventCallback() {
+  ld_assert(!timer_->isScheduled());
 
-  RunContext run_context = self->workerRunContext_;
+  RunContext run_context = workerRunContext_;
   if (!ThreadID::isEventLoop()) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     5,
-                    "LibeventTimer not used on a worker, timer source: %s",
+                    "LibeventTimer not used on a EventLoop, timer source: %s",
                     run_context.describe().c_str());
   }
 
-  ld_check(self->callback_);
-  self->active_ = false;
-  if (self->worker_) {
-    WorkerContextScopeGuard g(self->worker_);
-    self->worker_->onStartedRunning(run_context);
-    self->callback_();
-    self->worker_->onStoppedRunning(run_context);
+  ld_check(callback_);
+  if (worker_) {
+    WorkerContextScopeGuard g(worker_);
+    worker_->onStartedRunning(run_context);
+    callback_();
+    worker_->onStoppedRunning(run_context);
   } else {
-    self->callback_();
+    callback_();
   }
 }
 

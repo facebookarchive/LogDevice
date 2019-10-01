@@ -61,8 +61,10 @@ class NODE_STATS_Message : public Message {
   append_list_t append_fails_;
 
  protected: // for tests
-  friend Message::Disposition NODE_STATS_onReceived(NODE_STATS_Message* msg,
-                                                    const Address& from);
+  friend Message::Disposition
+  NODE_STATS_onReceived(NODE_STATS_Message* msg,
+                        const Address& from,
+                        BoycottingStatsHolder* stats);
   // used when deserializing or testing
   NODE_STATS_Message()
       : Message(MessageType::NODE_STATS, TrafficClass::FAILURE_DETECTOR) {}

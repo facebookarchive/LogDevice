@@ -53,14 +53,14 @@ class RebuildingWakeupQueue {
     RecordTimestamp nextTimestamp;
 
     struct TimestampComparer {
-      bool operator()(const LogState& a, const LogState& b) {
+      bool operator()(const LogState& a, const LogState& b) const {
         return std::tie(a.nextTimestamp, a.logId) <
             std::tie(b.nextTimestamp, b.logId);
       }
     };
 
     struct LogIdComparer {
-      bool operator()(const LogState& a, const LogState& b) {
+      bool operator()(const LogState& a, const LogState& b) const {
         return a.logId < b.logId;
       }
     };

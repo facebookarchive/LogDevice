@@ -6628,8 +6628,10 @@ FlushEvaluator::pickCFsToFlush(SteadyTimestamp now,
 
     auto oldDataThresholdTriggered = [&] {
       auto& cf = cf_data.cf;
+      SteadyTimestamp first_dirtied_time = cf->first_dirtied_time_;
       return settings->partition_data_age_flush_trigger.count() > 0 &&
-          (now - cf->first_dirtied_time_) >
+          first_dirtied_time != SteadyTimestamp::min() &&
+          (now - first_dirtied_time) >
           settings->partition_data_age_flush_trigger;
     };
 

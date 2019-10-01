@@ -121,7 +121,7 @@ PurgeCoordinator::~PurgeCoordinator() {
 
 Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
                                                   const Address& from) {
-  ld_debug("CLEAN message from %s: log_id %lu, epoch %u, recovery_id %lu",
+  ld_debug("CLEAN message from %s: log %lu, epoch %u, recovery_id %lu",
            Sender::describeConnection(from).c_str(),
            msg->header_.log_id.val_,
            msg->header_.epoch.val_,
@@ -132,16 +132,20 @@ Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
   if (w->sender().isClosed(from)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
-                   "CLEAN message from disconnected client %s",
-                   Sender::describeConnection(from).c_str());
+                   "CLEAN message from disconnected client %s log %lu",
+                   Sender::describeConnection(from).c_str(),
+                   msg->header_.log_id.val_);
     return Message::Disposition::NORMAL;
   }
 
   if (msg->header_.last_known_good > msg->header_.last_digest_esn) {
-    ld_error("Got a CLEAN message with last_known_good %u larger than "
-             "last_digest_esn %u.",
-             msg->header_.last_known_good.val_,
-             msg->header_.last_digest_esn.val_);
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    10,
+                    "Got a CLEAN message with last_known_good %u larger than "
+                    "last_digest_esn %u for log %lu.",
+                    msg->header_.last_known_good.val_,
+                    msg->header_.last_digest_esn.val_,
+                    msg->header_.log_id.val_);
     err = E::BADMSG;
     return Message::Disposition::ERROR;
   }
@@ -166,10 +170,11 @@ Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
                     "Got CLEAN message from %s with invalid shard %u, "
-                    "this node only has %u shards",
+                    "this node only has %u shards for log %lu",
                     Sender::describeConnection(from).c_str(),
                     shard,
-                    n_shards);
+                    n_shards,
+                    msg->header_.log_id.val_);
     return Message::Disposition::NORMAL;
   }
 
@@ -179,10 +184,12 @@ Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
   }
 
   if (!w->processor_->runningOnStorageNode()) {
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    10,
-                    "got CLEAN message from %s but not a storage node",
-                    Sender::describeConnection(from).c_str());
+    RATELIMIT_ERROR(
+        std::chrono::seconds(10),
+        10,
+        "got CLEAN message for log %lu from %s but not a storage node",
+        msg->header_.log_id.val_,
+        Sender::describeConnection(from).c_str());
     return Message::Disposition::NORMAL;
   }
 
@@ -190,18 +197,23 @@ Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
   if (!w->getLogsConfig()->isFullyLoaded() &&
       !w->getLogsConfig()->isInternalLogID(msg->header_.log_id) &&
       !MetaDataLog::isMetaDataLog(msg->header_.log_id)) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(10),
-        10,
-        "got CLEAN message from %s but config is not fully loaded yet",
-        Sender::describeConnection(from).c_str());
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    10,
+                    "got CLEAN message for log %lu from %s but config is not "
+                    "fully loaded yet",
+                    msg->header_.log_id.val_,
+                    Sender::describeConnection(from).c_str());
     err = E::AGAIN;
     return Message::Disposition::NORMAL;
   }
 
   if (processor->isDataMissingFromShard(shard)) {
-    ld_error("Got CLEAN for an empty shard waiting for rebuilding; something's "
-             "wrong; ignoring");
+    RATELIMIT_ERROR(
+        std::chrono::seconds(1),
+        10,
+        "Got CLEAN for log %lu for an empty shard waiting for rebuilding; "
+        "something's wrong; ignoring",
+        msg->header_.log_id.val_);
     return Message::Disposition::NORMAL;
   }
 
@@ -249,8 +261,9 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
   if (shard >= n_shards) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Got RELEASE message from client %s with invalid shard %u,"
-                    " this node only has %u shards",
+                    "Got RELEASE message for log %lu from client %s with "
+                    "invalid shard %u, this node only has %u shards",
+                    header.rid.logid.val_,
                     Sender::describeConnection(from).c_str(),
                     shard,
                     n_shards);
@@ -316,9 +329,8 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
   if (log_state == nullptr) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     1,
-                    "LogStorageStateMap is full.  RELEASE messages for new "
-                    "logs will not be "
-                    "processed.");
+                    "LogStorageStateMap is full. RELEASE messages for new "
+                    "logs will not be processed.");
     return Message::Disposition::NORMAL;
   }
 
@@ -511,12 +523,14 @@ PurgeCoordinator::checkPreemption(epoch_t sequencer_epoch) {
     // state machine sends a CLEAN after retry, in such case, currently we do
     // not check for preemption as this is not strictly required for
     // correctness.
-    ld_warning("Unable to find seal of soft seal in LogStorageState "
-               "after received CLEAN message for log %lu from sequencer "
-               "with epoch %u. Probably this node was restarted between "
-               "digesting and cleaning phase of recovery.",
-               log_id_.val_,
-               sequencer_epoch.val_);
+    RATELIMIT_WARNING(std::chrono::seconds(1),
+                      10,
+                      "Unable to find seal of soft seal in LogStorageState "
+                      "after received CLEAN message for log %lu from sequencer "
+                      "with epoch %u. Probably this node was restarted between "
+                      "digesting and cleaning phase of recovery.",
+                      log_id_.val_,
+                      sequencer_epoch.val_);
     return std::make_pair(Status::OK, Seal());
   }
 

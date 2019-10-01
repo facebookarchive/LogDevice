@@ -113,22 +113,10 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
 
     ("maintenance-log-max-delta-bytes",
      &maintenance_log_max_delta_bytes,
-     "10485760",
+     "10485760", // 10MB
      parse_nonnegative<ssize_t>(),
      "How many bytes of deltas to keep in the maintenance log before "
      "we snapshot it.",
-     SERVER,
-     SettingsCategory::AdminAPI)
-
-    ("maintenance-log-retention",
-     &maintenance_log_retention,
-     "14d",
-     nullptr,
-     "How long to keep a history of snapshots and deltas for "
-     "the maintenance log. "
-     "Unused if the event log has never been snapshotted or "
-     "if maintenance log "
-     "trimming is disabled with disable-maintenance-log-trimming.",
      SERVER,
      SettingsCategory::AdminAPI)
 

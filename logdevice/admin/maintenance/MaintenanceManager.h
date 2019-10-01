@@ -161,6 +161,15 @@ class MaintenanceManagerDependencies {
  */
 class MaintenanceManager : public SerialWorkContext {
  public:
+  using ShardWorkflowMap = folly::F14NodeMap<
+      ShardID,
+      std::pair<std::unique_ptr<ShardWorkflow>, MaintenanceStatus>,
+      ShardID::Hash>;
+
+  using SequencerWorkflowMap = folly::F14NodeMap<
+      node_index_t,
+      std::pair<std::unique_ptr<SequencerWorkflow>, MaintenanceStatus>>;
+
   MaintenanceManager(folly::Executor* executor,
                      std::unique_ptr<MaintenanceManagerDependencies> deps);
 
@@ -514,8 +523,16 @@ class MaintenanceManager : public SerialWorkContext {
   void updateClientMaintenanceStateWrapper();
 
   // Iterates over all shards/nodes in the current
-  // NodesConfig and creates shard/sequencer workflows
-  void createWorkflows();
+  // NodesConfig and creates shard workflows
+  ShardWorkflowMap
+  createShardWorkflows(ShardWorkflowMap&& existing_shard_workflows,
+                       const ClusterMaintenanceWrapper& maintenance_wrapper);
+
+  // Iterates over all shards/nodes in the current
+  // NodesConfig and creates sequencer workflows
+  SequencerWorkflowMap createSequencerWorkflows(
+      SequencerWorkflowMap&& existing_sequencer_workflows,
+      const ClusterMaintenanceWrapper& maintenance_wrapper);
 
   // Returns true if given shard is enabled in current state
   // A shard is considered enabled if its storageState is READ_WRITE
@@ -590,17 +607,9 @@ class MaintenanceManager : public SerialWorkContext {
   MMStatus status_{MMStatus::NOT_STARTED};
 
   // A map of shard to the currently running maintenance worlflow
-  folly::F14NodeMap<
-      ShardID,
-      std::pair<std::unique_ptr<ShardWorkflow>, MaintenanceStatus>,
-      ShardID::Hash>
-      active_shard_workflows_;
-
+  ShardWorkflowMap active_shard_workflows_;
   // A map of node to the currently running sequencer maintenance worlflow
-  folly::F14NodeMap<
-      node_index_t,
-      std::pair<std::unique_ptr<SequencerWorkflow>, MaintenanceStatus>>
-      active_sequencer_workflows_;
+  SequencerWorkflowMap active_sequencer_workflows_;
 
   // The current ClusterMaintenanceWrapper generated from the last known
   // ClusterManintenanceState and NodesConfiguration. Gets updated in
@@ -644,6 +653,9 @@ class MaintenanceManager : public SerialWorkContext {
 
   // Returns true if status_ is STOPPING
   bool shouldStopProcessing();
+
+  // Sets the counters for maintenances
+  void reportMaintenanceStats();
 
   // Fulfills the shutdown_promise_ indicating
   // shutdown of MaintenanceManager is complete

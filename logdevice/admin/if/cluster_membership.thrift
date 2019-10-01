@@ -169,3 +169,30 @@ struct RemoveNodesResponse {
    */
   2: common.unsigned64 new_nodes_configuration_version,
 }
+
+
+////////////////////////////////////////////////////////////////////////////
+////////////////// Mark Shards As Provisioned Request //////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Request to mark some shard as provisioned, transitioning them from the
+ * PROVISIONING storage state to NONE.
+ */
+struct MarkShardsAsProvisionedRequest {
+  /**
+   * List of shards to be marked as provisioned.
+   */
+  1: common.ShardSet shards,
+}
+
+struct MarkShardsAsProvisionedResponse {
+  /**
+   * List of shards successfully marked as provisioned.
+   */
+  1: common.ShardSet updated_shards,
+  /**
+   * The version of the updated NodesConfiguration.
+   */
+  2: common.unsigned64 new_nodes_configuration_version,
+}

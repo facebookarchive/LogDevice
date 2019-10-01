@@ -12,7 +12,7 @@
 #include <vector>
 
 #include <folly/SocketAddress.h>
-#include <folly/executors/CPUThreadPoolExecutor.h>
+#include <folly/executors/IOThreadPoolExecutor.h>
 #include <folly/futures/Future.h>
 
 /**
@@ -27,7 +27,7 @@ class AdminCommandClient {
   enum class ConnectionType { UNKNOWN, PLAIN, ENCRYPTED };
 
   AdminCommandClient(size_t num_threads = 4)
-      : executor_(), num_threads_(num_threads) {}
+      : executor_(std::make_unique<folly::IOThreadPoolExecutor>(num_threads)) {}
 
   class RequestResponse {
    public:
@@ -49,21 +49,16 @@ class AdminCommandClient {
   void send(RequestResponses& rr,
             std::chrono::milliseconds command_timeout,
             std::chrono::milliseconds connect_timeout =
-                std::chrono::milliseconds(5000));
+                std::chrono::milliseconds(5000)) const;
 
   std::vector<folly::SemiFuture<RequestResponse*>>
-  semifuture_send(std::vector<RequestResponse>& rr,
-                  std::chrono::milliseconds command_timeout,
-                  std::chrono::milliseconds connect_timeout =
-                      std::chrono::milliseconds(5000));
-
-  void terminate() {
-    executor_.reset();
-  }
+  asyncSend(std::vector<RequestResponse>& rr,
+            std::chrono::milliseconds command_timeout,
+            std::chrono::milliseconds connect_timeout =
+                std::chrono::milliseconds(5000)) const;
 
  private:
-  std::unique_ptr<folly::CPUThreadPoolExecutor> executor_;
-  size_t num_threads_{4};
+  std::unique_ptr<folly::IOThreadPoolExecutor> executor_;
 };
 
 }} // namespace facebook::logdevice

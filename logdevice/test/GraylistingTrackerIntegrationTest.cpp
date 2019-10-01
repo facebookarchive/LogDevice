@@ -62,7 +62,7 @@ class AppendThread {
       append_threads_.emplace_back([=] {
         while (!stop_) {
           for (auto i = from_logid; i <= to_logid; i++) {
-            client->append(logid_t{i}, ".", [](auto, const auto&) {});
+            client->appendSync(logid_t{i}, ".");
             std::this_thread::sleep_for(100ms);
           }
         }
@@ -121,10 +121,8 @@ class GraylistingTrackerIntegrationTest : public IntegrationTestBase {
   getGraylistedNodesPerWorker(node_index_t from) {
     auto resp = cluster->getNode(from).sendCommand("info graylist --json");
 
-    // Remove the trailing \r\nEND\r\n
-    resp.erase(resp.end() - 7, resp.end());
-
-    ld_info("%s", resp.c_str());
+    // Print without the trailing "\r\n".
+    ld_info("%s", resp.substr(0, std::max(2ul, resp.size()) - 2).c_str());
 
     auto rows = folly::parseJson(resp)["rows"];
 

@@ -15,7 +15,6 @@ sidebar_label: Settings
 | enable-safety-check-periodic-metadata-update | Safety check to update its metadata cache periodically | false | server&nbsp;only |
 | maintenance-log-max-delta-bytes | How many bytes of deltas to keep in the maintenance log before we snapshot it. | 10485760 | server&nbsp;only |
 | maintenance-log-max-delta-records | How many delta records to keep in the maintenance log before we snapshot it. | 100 | server&nbsp;only |
-| maintenance-log-retention | How long to keep a history of snapshots and deltas for the maintenance log. Unused if the event log has never been snapshotted or if maintenance log trimming is disabled with disable-maintenance-log-trimming. | 14d | server&nbsp;only |
 | maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | false | server&nbsp;only |
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | maintenance-manager-metadata-nodeset-update-period | The period of how often to check if metadata nodeset update is required | 2min | server&nbsp;only |
@@ -74,7 +73,7 @@ sidebar_label: Settings
 | server-default-dscp | Use default DSCP to setup to server sockets at Sender.Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4 | 0 | requires&nbsp;restart, server&nbsp;only |
 | server\_based\_nodes\_configuration\_store\_polling\_extra\_requests | how many extra requests to send for server based Nodes Configuration Store polling in addition to the required response for each wave | 1 |  |
 | shutdown-on-my-node-id-mismatch | Gracefully shutdown whenever the server's NodeID changes | true | server&nbsp;only |
-| use-nodes-configuration-manager-nodes-configuration | If true and enable\_nodes\_configuration\_manager is set, logdevice will use the nodes configuration from the NodesConfigurationManager. | false | requires&nbsp;restart |
+| use-nodes-configuration-manager-nodes-configuration | If true and enable\_nodes\_configuration\_manager is set, logdevice will use the nodes configuration from the NodesConfigurationManager. | false |  |
 | zk-config-polling-interval | polling and retry interval for Zookeeper config source | 1000ms | CLI&nbsp;only |
 
 ## Core settings
@@ -95,7 +94,7 @@ sidebar_label: Settings
 | meta-api-timeout | Timeout for trims/isLogEmpty/tailLSN/datasize API/etc. If omitted the client timeout will be used. |  | client&nbsp;only |
 | my-location | {client-only setting}. Specifies the location of the machine running the client. Used for determining whether to use SSL based on --ssl-boundary. Also used in local SCD reading. Format: "{region}.{dc}.{cluster}.{row}.{rack}". |  | requires&nbsp;restart, client&nbsp;only |
 | port | TCP port on which the server listens for non-SSL clients | 16111 | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
-| rsm-include-read-pointer-in-snapshot | Allow inclusion of read pointer in RSM snapshots. Note that if this is set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE! | false |  |
+| rsm-include-read-pointer-in-snapshot | Allow inclusion of read pointer in RSM snapshots. Note that if this is set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE! | true |  |
 | server-id | optional server ID, reported by INFO admin command |  | requires&nbsp;restart, server&nbsp;only |
 | shutdown-timeout | amount of time to wait for the server to shut down before terminating the process. Consider modifying --time-delay-before-force-abort when changing this value. | 120s | server&nbsp;only |
 | store-histogram-min-samples-per-bucket | How many stores should the store histogram wait for before reporting latency estimates | 30 | server&nbsp;only |
@@ -178,6 +177,7 @@ sidebar_label: Settings
 | client-readers-flow-tracer-period | Period for logging in logdevice\_readers\_flow scuba table and for triggering certain sampling actions for monitoring. Set it to 0 to disable feature. | 0s | client&nbsp;only |
 | client-readers-flow-tracer-unhealthy-publish-weight | Weight given to traces of unhealthy readers when publishing samples (for improved debuggability). | 5.0 | client&nbsp;only |
 | disable-trace-logger | If disabled, NoopTraceLogger will be used, otherwise FBTraceLogger is used | false | requires&nbsp;restart |
+| health-monitor-poll-interval | Interval after which health monitor detects issues on node. | 500ms | requires&nbsp;restart, server&nbsp;only |
 | message-tracing-log-level | For messages that pass the message tracing filters, emit a log line at this level. One of: critical, error, warning, notify, info, debug, spew | info |  |
 | message-tracing-peers | Emit a log line for each sent/received message to/from the specified address(es). Separate different addresses with a comma, prefix unix socket paths with 'unix://'. An empty unix path will match all unix paths |  |  |
 | message-tracing-types | Emit a log line for each sent/received message of the type(s) specified. Separate different types with a comma. 'all' to trace all messages. Prefix the value with '~' to trace all types except the given ones, e.g. '~WINDOW,RELEASE' will trace messages of all types except WINDOW and RELEASE. |  |  |
@@ -307,6 +307,7 @@ sidebar_label: Settings
 | event-log-snapshot-compression | Use ZSTD compression to compress event log snapshots | true |  |
 | event-log-snapshotting | Allow the event log to be snapshotted onto a snapshot log. This requires the event log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | requires&nbsp;restart |
 | eventlog-snapshotting-period | Controls time based snapshotting. New eventlog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
+| filter-relocate-shards | Enables an optimization that mitigates a bias causing shards in RELOCATE mode to end up rebuilding 1/3rd of the data (assuming 3x replication). This setting will cause the server to use the FILTER\_RELOCATE\_SHARDS when triggering rebuilding. It is safe to enable/disable this setting while rebuilding is ongoing as this information is propagated in the event log for a given rebuilding version. Note: this setting does not affect the behavior of rebuildings triggered outside the server by external tools. These tools need to add the FILTER\_RELOCATE\_SHARDS flag for that purpose. Experimental. | false | server&nbsp;only |
 | max-log-rebuilding-size-mb | Maximum amount of memory that can be consumed by a single LogRebuilding state machine. V1 only. | 5 | server&nbsp;only |
 | max-node-rebuilding-percentage | Do not initiate rebuilding if more than this percentage of storage nodes in the cluster appear to have been lost or have shards that appear to require rebuilding. | 35 | server&nbsp;only |
 | planner-scheduling-delay | Delay between a shard rebuilding plan request and its execution to allow many shards to be grouped and planned together. | 1min | server&nbsp;only |
@@ -526,6 +527,7 @@ sidebar_label: Settings
 | num-workers | number of worker threads to run, or "cores" for one thread per CPU core | cores | requires&nbsp;restart |
 | prioritized-task-execution | Enable prioritized execution of requests within CPU executor. Setting this false ignores per request and per message ExecutorPriority. | true | requires&nbsp;restart |
 | test-mode | Enable functionality in integration tests. Currently used for admin commands that are only enabled for testing purposes. | false | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| use-legacy-evenbase | Use libevent2 based event base to create EventLoop threadpool in logdevice. | true | requires&nbsp;restart |
 | worker-request-pipe-capacity | size each worker request queue to hold this many requests | 524288 | requires&nbsp;restart |
 
 ## Storage

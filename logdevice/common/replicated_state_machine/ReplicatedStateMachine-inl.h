@@ -1249,20 +1249,22 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
 }
 
 template <typename T, typename D>
+lsn_t ReplicatedStateMachine<T, D>::getDeltaReadPtr() const {
+  return delta_read_ptr_;
+}
+
+template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::getDebugInfo(
     InfoReplicatedStateMachineTable& table) const {
   Worker* w = Worker::onThisThread();
   AllClientReadStreams& streams = w->clientReadStreams();
-  ClientReadStream* delta_reader = streams.getStream(delta_log_rsid_);
   ClientReadStream* snapshot_reader = streams.getStream(snapshot_log_rsid_);
 
   table.next();
   table.set<0>(delta_log_id_);
   table.set<1>(snapshot_log_id_);
   table.set<2>(version_);
-  if (delta_reader) {
-    table.set<3>(delta_reader->getNextLSNToDeliver());
-  }
+  table.set<3>(delta_read_ptr_);
   table.set<4>(delta_sync_);
   if (snapshot_reader) {
     table.set<5>(snapshot_reader->getNextLSNToDeliver());

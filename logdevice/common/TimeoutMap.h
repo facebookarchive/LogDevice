@@ -14,8 +14,6 @@
 
 #include <folly/container/F14Map.h>
 
-#include "logdevice/common/libevent/EvTimer.h"
-
 namespace facebook { namespace logdevice {
 
 class MicrosecondsHash {

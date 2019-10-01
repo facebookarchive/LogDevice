@@ -12,6 +12,7 @@
 
 #include "logdevice/admin/maintenance/EventLogWriter.h"
 #include "logdevice/admin/maintenance/types.h"
+#include "logdevice/common/ClusterState.h"
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/membership/StorageState.h"
@@ -53,6 +54,7 @@ class ShardWorkflow {
    * @param shard_state     The membership ShardState in NC
    * @param data_health     ShardDataHealth for the shard
    * @param rebuilding_mode RebuildingMode for the shard
+   * @param node_gossip_state The gossip state of the node for this shard
    *
    * @return folly::SemiFuture<MaintenanceStatus> A SemiFuture out of
    *      MaintenanceStatus. Promise is fulfiled immediately if there
@@ -63,7 +65,8 @@ class ShardWorkflow {
   folly::SemiFuture<thrift::MaintenanceStatus>
   run(const membership::ShardState& shard_state,
       ShardDataHealth data_health,
-      RebuildingMode rebuilding_mode);
+      RebuildingMode rebuilding_mode,
+      ClusterStateNodeState node_gossip_state);
 
   // Returns the ShardID for this workflow
   ShardID getShardID() const;
@@ -146,6 +149,8 @@ class ShardWorkflow {
   // shard.
   // Gets updated every time `run` is called
   ShardDataHealth current_data_health_;
+  // The last known gossip state for the node.
+  ClusterStateNodeState gossip_state_;
   // The last RebuildingMode as informed by the MM for this
   // shard.
   // Gets updated every time `run` is called

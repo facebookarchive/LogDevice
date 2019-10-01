@@ -81,6 +81,10 @@ struct Settings : public SettingsBundle {
   // Time interval after which watchdog wakes up and detects stalls
   std::chrono::milliseconds watchdog_poll_interval_ms;
 
+  // Time interval after which health monitor wakes up and detects
+  // issues on node
+  std::chrono::milliseconds health_monitor_poll_interval_ms;
+
   // Limit on the number of backtraces printed when watchdog detects workers
   // are stalled
   rate_limit_t watchdog_bt_ratelimit;
@@ -168,6 +172,11 @@ struct Settings : public SettingsBundle {
   // Request and message processing priorities are honored when this is set to
   // true. Otherwise, all requests and messages are considered same priority.
   bool enable_executor_priority_queues;
+
+  // Inidicates executor event base used for eventloop is legacy type or folly
+  // eventbase type. If true EventLoop will be instantiated with legacy
+  // eventbase otherwise it will be instantiated with folly eventbase.
+  bool use_legacy_eventbase;
 
   // Request Execution time(in milli-seconds) after which it is considered slow
   // and Worker stats 'worker_slow_requests' is bumped
@@ -1168,6 +1177,10 @@ struct Settings : public SettingsBundle {
 
   // Defaults to false, should only be set by traffic shadowing framework
   bool shadow_client;
+
+  // if true, LCM won't be loaded and only internal logs will be present in
+  // the logs config. Only effective on clients. Used by internal tools.
+  bool internal_logs_only_client;
 
   // enable NodesConfigurationManager on clients and servers
   bool enable_nodes_configuration_manager;

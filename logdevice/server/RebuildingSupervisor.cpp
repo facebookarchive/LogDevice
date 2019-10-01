@@ -416,11 +416,18 @@ void RebuildingSupervisor::requestRebuilding(RebuildingTrigger& trigger,
                    "Triggering rebuilding of N%d:S%d by writing to EventLog",
                    trigger.node_id_,
                    shard);
+    SHARD_NEEDS_REBUILD_flags_t flags = 0;
+
+    // Make sure FILTER_RELOCATE_SHARDS is set if --filter-relocate-shards is
+    // set.
+    if (rebuildingSettings_->filter_relocate_shards) {
+      flags |= SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
+    }
     SHARD_NEEDS_REBUILD_Event event(trigger.node_id_,
                                     (uint32_t)shard,
                                     myNodeId_.toString(),   // source
                                     "RebuildingSupervisor", // details
-                                    SHARD_NEEDS_REBUILD_flags_t(0));
+                                    flags);
     auto mode = EventLogStateMachine::WriteMode::CONFIRM_APPLIED;
     eventLog_->writeDelta(event, cb, mode, trigger.base_version);
   }

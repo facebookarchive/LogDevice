@@ -2025,27 +2025,29 @@ bool Appender::onRecipientFailed(Recipient* recipient,
     return true;
   }
 
-  if (replies_expected_ < recipients_.getReplication()) {
-    // We won't be able to make progress for this wave. Start a new wave.
-    cancelStoreTimer();
-    cancelRetryTimer();
-    // Check the current NodeSetState to see if we have enough available nodes
-    // to immediately resend another wave. If we don't, trigger storer_timer_
-    // instead of retry_timer_ so that we wait some time before sending the new
-    // wave.
-    store_timeout_set_ = false;
-    if (checkNodeSet()) {
-      activateRetryTimer();
-    } else {
-      ld_check(timeout_.hasValue());
-      activateStoreTimer(timeout_.value());
-    }
-    // We aborted the wave.
-    return false;
+  if (replies_expected_ >= recipients_.getReplication()) {
+    // This wave can still succeed.
+    return true;
   }
 
-  // This wave can still succeed.
-  return true;
+  // If we won't be able to make progress for this wave.
+  cancelStoreTimer();
+  cancelRetryTimer();
+  store_timeout_set_ = false;
+
+  // If we have enough nodes, and wave is not too high (threshold 2 is
+  // arbitrary, to prevent fast retry loops if many storage nodes are failing
+  // quickly every time), send another wave right away.
+  if (store_hdr_.wave <= 2 && checkNodeSet()) {
+    activateRetryTimer();
+  } else {
+    // Retry after a store timeout.
+    ld_check(timeout_.hasValue());
+    activateStoreTimer(timeout_.value());
+  }
+
+  // We aborted the wave.
+  return false;
 }
 
 void Appender::deleteExtras() {

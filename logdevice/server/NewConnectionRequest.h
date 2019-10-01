@@ -58,6 +58,10 @@ class NewConnectionRequest : public Request {
     return worker_type_;
   }
 
+  void setConnectionType(ConnectionType conntype) {
+    conntype_ = conntype;
+  }
+
  private:
   const int fd_;
   const worker_id_t worker_id_;

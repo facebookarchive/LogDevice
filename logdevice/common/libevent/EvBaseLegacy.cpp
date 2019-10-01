@@ -6,22 +6,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/libevent/EvBase.h"
+#include "logdevice/common/libevent/EvBaseLegacy.h"
 
 #include <event2/event.h>
 #include <folly/ScopeGuard.h>
+#include <folly/io/async/AsyncTimeout.h>
 
+#include "logdevice/common/libevent/IEvBase.h"
 #include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {
 
-thread_local EvBase* EvBase::running_base_{nullptr};
-
-static_assert(static_cast<int>(EvBase::Priorities::MAX_PRIORITIES) ==
+static_assert(static_cast<int>(EvBaseLegacy::Priorities::MAX_PRIORITIES) ==
                   EVENT_MAX_PRIORITIES,
-              "Adjust EvBase::Priorities::MAX_PRIORITIES to match "
+              "Adjust EvBaseLegacy::Priorities::MAX_PRIORITIES to match "
               "LibEvent EVENT_MAX_PRIORITIES");
-EvBase::Status EvBase::init(int num_priorities) {
+EvBaseLegacy::Status EvBaseLegacy::init(int num_priorities) {
   if (base_) {
     return Status::ALREADY_INITIALIZED;
   }
@@ -30,7 +30,7 @@ EvBase::Status EvBase::init(int num_priorities) {
     return Status::INVALID_PRIORITY;
   }
   base_ = std::unique_ptr<event_base, std::function<void(event_base*)>>(
-      LD_EV(event_base_new)(), EvBase::deleter);
+      LD_EV(event_base_new)(), EvBaseLegacy::deleter);
   if (!base_) {
     return Status::NO_MEM;
   }
@@ -42,12 +42,12 @@ EvBase::Status EvBase::init(int num_priorities) {
   return Status::OK;
 }
 
-EvBase::Status EvBase::free() {
+EvBaseLegacy::Status EvBaseLegacy::free() {
   base_.reset(nullptr);
   return Status::OK;
 }
 
-EvBase::Status EvBase::loop() {
+EvBaseLegacy::Status EvBaseLegacy::loop() {
   if (!base_) {
     return Status::NOT_INITIALIZED;
   }
@@ -67,7 +67,7 @@ EvBase::Status EvBase::loop() {
   }
   return res;
 }
-EvBase::Status EvBase::loopOnce() {
+EvBaseLegacy::Status EvBaseLegacy::loopOnce() {
   if (!base_) {
     return Status::NOT_INITIALIZED;
   }
@@ -87,30 +87,49 @@ EvBase::Status EvBase::loopOnce() {
   }
   return res;
 }
-EvBase::Status EvBase::terminateLoop() {
+EvBaseLegacy::Status EvBaseLegacy::terminateLoop() {
   if (LD_EV(event_base_loopbreak)(getRawBase())) {
     return Status::INTERNAL_ERROR;
   }
   return Status::OK;
 }
 
-event_base* EvBase::getRawBaseDEPRECATED() {
+event_base* EvBaseLegacy::getRawBaseDEPRECATED() {
   return getRawBase();
 }
 
-event_base* EvBase::getRawBase() {
+event_base* EvBaseLegacy::getRawBase() {
   return base_.get();
 }
 
-EvBase* EvBase::getRunningBase() {
-  return running_base_;
+folly::EventBase* FOLLY_NULLABLE EvBaseLegacy::getEventBase() {
+  return nullptr;
 }
 
-void EvBase::deleter(event_base* base) {
+void EvBaseLegacy::deleter(event_base* base) {
   if (!base) {
     return;
   }
   LD_EV(event_base_free)(base);
 }
 
+void EvBaseLegacy::attachTimeoutManager(
+    folly::AsyncTimeout* /* obj */,
+    folly::TimeoutManager::InternalEnum /* internal*/) {}
+
+void EvBaseLegacy::detachTimeoutManager(folly::AsyncTimeout* /* obj */) {}
+
+bool EvBaseLegacy::scheduleTimeout(
+    folly::AsyncTimeout* /* obj */,
+    folly::TimeoutManager::timeout_type /* timeout */) {
+  return false;
+}
+
+void EvBaseLegacy::cancelTimeout(folly::AsyncTimeout* /* obj */) {}
+
+void EvBaseLegacy::bumpHandlingTime() {}
+
+bool EvBaseLegacy::isInTimeoutManagerThread() {
+  return EvBaseLegacy::getRunningBase() == this;
+}
 }} // namespace facebook::logdevice

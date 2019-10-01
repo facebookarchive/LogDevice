@@ -138,12 +138,6 @@ class ClusterMaintenanceStateMachine
   void onSnapshotCreated(Status st, size_t snapshotSize) override;
 
   virtual void trim();
-  /**
-   * Trim the delta log when it is not paired with the snapshot log
-   *
-   * @param lsn LSN up to which to trim
-   */
-  virtual void trimNotSnapshotted(lsn_t lsn);
 
   UpdateableSettings<AdminServerSettings> settings_;
 

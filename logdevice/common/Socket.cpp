@@ -113,14 +113,20 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
       our_name_at_peer_(ClientID::INVALID),
       connect_throttle_(getSettings().connect_throttle),
       outbuf_overflow_(getSettings().outbuf_overflow_kb * 1024),
+      read_more_(deps_->getEvBase()),
+      connect_timeout_event_(deps_->getEvBase()),
       retries_so_far_(0),
+      handshake_timeout_event_(deps_->getEvBase()),
       first_attempt_(true),
       tcp_sndbuf_cache_({128 * 1024, std::chrono::steady_clock::now()}),
       tcp_rcvbuf_size_(128 * 1024),
       close_reason_(E::UNKNOWN),
       num_messages_sent_(0),
       num_messages_received_(0),
-      num_bytes_received_(0) {
+      num_bytes_received_(0),
+      deferred_event_queue_event_(deps_->getEvBase()),
+      end_stream_rewind_event_(deps_->getEvBase()),
+      buffered_output_flush_event_(deps_->getEvBase()) {
   if ((conntype == ConnectionType::SSL) ||
       (forceSSLSockets() && type != SocketType::GOSSIP)) {
     conntype_ = ConnectionType::SSL;
@@ -146,59 +152,43 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
     throw ConstructorFailed();
   }
 
-  int rv =
-      deps_->evtimerAssign(&read_more_, EventHandler<readMoreCallback>, this);
+  read_more_.attachCallback([this] {
+    bumpEventHandersCalled();
+    onBytesAvailable(false /*fresh*/);
+    bumpEventHandlersCompleted();
+  });
+  connect_timeout_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    onConnectAttemptTimeout();
+    bumpEventHandlersCompleted();
+  });
+  handshake_timeout_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    onHandshakeTimeout();
+    bumpEventHandlersCompleted();
+  });
+  deferred_event_queue_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    processDeferredEventQueue();
+    bumpEventHandlersCompleted();
+  });
+  end_stream_rewind_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    endStreamRewind();
+    bumpEventHandlersCompleted();
+  });
+
+  int rv = end_stream_rewind_event_.setPriority(EventLoop::PRIORITY_HIGH);
   if (rv != 0) {
     err = E::INTERNAL;
     throw ConstructorFailed();
   }
 
-  rv = deps_->evtimerAssign(&connect_timeout_event_,
-                            EventHandler<connectAttemptTimeoutCallback>,
-                            this);
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->evtimerAssign(
-      &handshake_timeout_event_, EventHandler<handshakeTimeoutCallback>, this);
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->evtimerAssign(&deferred_event_queue_event_,
-                            EventHandler<deferredEventQueueEventCallback>,
-                            reinterpret_cast<void*>(this));
-
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->eventAssign(&end_stream_rewind_event_,
-                          EventHandler<endStreamRewindCallback>,
-                          reinterpret_cast<void*>(this));
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->eventPrioritySet(
-      &end_stream_rewind_event_, EventLoop::PRIORITY_HIGH);
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
-
-  rv = deps_->evtimerAssign(&buffered_output_flush_event_,
-                            EventHandler<onBufferedOutputTimerEvent>,
-                            reinterpret_cast<void*>(this));
-  if (rv != 0) {
-    err = E::INTERNAL;
-    throw ConstructorFailed();
-  }
+  buffered_output_flush_event_.attachCallback([this] {
+    bumpEventHandersCalled();
+    flushBufferedOutput();
+    bumpEventHandlersCompleted();
+  });
 }
 
 Socket::Socket(NodeID server_name,
@@ -276,8 +266,7 @@ void Socket::onBufferedOutputWrite(struct evbuffer* buffer,
   ld_check(buffer == self->buffered_output_);
 
   if (info->n_added) {
-    self->deps_->evtimerAdd(
-        &self->buffered_output_flush_event_, self->deps_->getZeroTimeout());
+    self->buffered_output_flush_event_.scheduleTimeout(0);
   }
 }
 
@@ -297,7 +286,7 @@ void Socket::flushBufferedOutput() {
   // connected here, because the socket might have been closed above, or if we
   // flushed the last bytes (see flushOutputandClose())
   if (connected_ && LD_EV(evbuffer_get_length)(buffered_output_) != 0) {
-    deps_->evtimerAdd(&buffered_output_flush_event_, deps_->getZeroTimeout());
+    buffered_output_flush_event_.scheduleTimeout(0);
   }
 }
 
@@ -663,7 +652,7 @@ void Socket::onBytesAvailable(bool fresh) {
           if (err == E::NOBUFS) {
             STAT_INCR(deps_->getStats(), sock_read_event_nobufs);
             // Ran out of space to enqueue message into worker. Try again.
-            deps_->evtimerAdd(&read_more_, deps_->getZeroTimeout());
+            read_more_.scheduleTimeout(0);
             break;
           }
           if (!peer_name_.isClientAddress()) {
@@ -691,11 +680,11 @@ void Socket::onBytesAvailable(bool fresh) {
         // process before returning control to libevent. schedule
         // read_more_ to fire in the next iteration of event loop and
         // return control to libevent so that we can run other events
-        deps_->evtimerAdd(&read_more_, deps_->getZeroTimeout());
+        read_more_.scheduleTimeout(0);
         break;
       }
     } else {
-      deps_->evtimerDel(&read_more_);
+      read_more_.cancelTimeout();
       break;
     }
 
@@ -818,7 +807,7 @@ void Socket::onConnected() {
   ld_check(!connected_);
   ld_check(!peer_name_.isClientAddress());
 
-  deps_->evtimerDel(&connect_timeout_event_);
+  connect_timeout_event_.cancelTimeout();
   addHandshakeTimeoutEvent();
   connected_ = true;
   peer_shuttingdown_ = false;
@@ -1083,7 +1072,7 @@ void Socket::close(Status reason) {
 
   if (buffered_output_) {
     buffered_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
-    deps_->evtimerDel(&buffered_output_flush_event_);
+    buffered_output_flush_event_.cancelTimeout();
     LD_EV(evbuffer_free)(buffered_output_);
     buffered_output_ = nullptr;
   }
@@ -1115,11 +1104,11 @@ void Socket::close(Status reason) {
     STAT_DECR(deps_->getStats(), num_ssl_connections);
   }
 
-  deps_->evtimerDel(&read_more_);
-  deps_->evtimerDel(&connect_timeout_event_);
-  deps_->evtimerDel(&handshake_timeout_event_);
-  deps_->evtimerDel(&deferred_event_queue_event_);
-  deps_->eventDel(&end_stream_rewind_event_);
+  read_more_.cancelTimeout();
+  connect_timeout_event_.cancelTimeout();
+  handshake_timeout_event_.cancelTimeout();
+  deferred_event_queue_event_.cancelTimeout();
+  end_stream_rewind_event_.cancelTimeout();
 
   // Move everything here so that this Socket object has a clean state
   // before we call any callback.
@@ -1210,17 +1199,11 @@ int Socket::serializeMessageWithoutChecksum(const Message& msg,
   protohdr.type = msg.type_;
   size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
 
-  if (LD_EV(evbuffer_add)(outbuf, &protohdr, protohdr_bytes) != 0) {
-    // unlikely
-    ld_critical("INTERNAL ERROR: failed to add message length and type "
-                "to output evbuffer");
-    ld_check(0);
-    close(E::INTERNAL);
-    err = E::INTERNAL;
-    return -1;
-  }
-
-  ProtocolWriter writer(msg.type_, outbuf, proto_);
+  auto io_buf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
+  ld_check(protohdr_bytes <= IOBUF_ALLOCATION_UNIT);
+  memcpy(io_buf->writableData(), &protohdr, protohdr_bytes);
+  io_buf->append(protohdr_bytes);
+  ProtocolWriter writer(msg.type_, io_buf.get(), proto_);
   msg.serialize(writer);
   ssize_t bodylen = writer.result();
   if (bodylen <= 0) { // unlikely
@@ -1233,52 +1216,39 @@ int Socket::serializeMessageWithoutChecksum(const Message& msg,
     return -1;
   }
 
+  for (auto& buf : *io_buf) {
+    int rv = LD_EV(evbuffer_add)(outbuf, buf.data(), buf.size());
+    if (rv) {
+      size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
+      RATELIMIT_CRITICAL(std::chrono::seconds(1),
+                         2,
+                         "INTERNAL ERROR: Failed to move payload_evbuf to "
+                         "outbuf, evbuf size "
+                         "(msg:%zu, outbuf:%zu), msg type:%s",
+                         bodylen + protohdr_bytes,
+                         outbuf_size,
+                         messageTypeNames()[msg.type_].c_str());
+      err = E::INTERNAL;
+      close(err);
+      return -1;
+    }
+  }
   ld_check(bodylen + protohdr_bytes == protohdr.len);
   return 0;
 }
 
-// Serialization steps:
-//  1. ProtocolWriter allocates 2 temporary evbuffers(payload_evbuf and
-//     header_evbuf), one is for accepting serialized payload and the other for
-//     storing the ProtocolHeader(with checksum). The payload_evbuf is used
-//     in its constructor.
-//  2. message.serialize() writes serialized version of the message
-//     to ProtocolWriter, which internally writes it to payload_evbuf.
-//  3. Checksum is computed on payload_evbuf and a ProtocolHeader
-//     is generated. This ProtocolHeader is then written into header_evbuf.
-//  4. header_evbuf is pulled into payload_evbuf to avoid fragmentation, which
-//     otherwise causes 2 packets to be sent out over the network, thereby
-//     causing CPU regression.
-//  5. This combined temporary evbuffer is then moved into outbuf w/o any extra
-//     copy
 int Socket::serializeMessageWithChecksum(const Message& msg,
                                          size_t msglen,
                                          struct evbuffer* outbuf) {
-  struct evbuffer* payload_evbuf = LD_EV(evbuffer_new)();
-  struct evbuffer* header_evbuf = LD_EV(evbuffer_new)();
-  if (!payload_evbuf || !header_evbuf) {
-    err = E::NOMEM;
-    close(err);
-    return -1;
-  }
-
-  SCOPE_EXIT {
-    if (payload_evbuf) {
-      LD_EV(evbuffer_free)(payload_evbuf);
-      payload_evbuf = nullptr;
-    }
-    if (header_evbuf) {
-      LD_EV(evbuffer_free)(header_evbuf);
-      header_evbuf = nullptr;
-    }
-  };
-
+  size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
   ProtocolHeader protohdr;
   protohdr.len = msglen;
   protohdr.type = msg.type_;
-
-  // 1. Serialize the message into payload evbuffer
-  ProtocolWriter writer(msg.type_, payload_evbuf, proto_);
+  auto io_buf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
+  ld_check(protohdr_bytes <= IOBUF_ALLOCATION_UNIT);
+  io_buf->advance(protohdr_bytes);
+  // 1. Serialize the message into iobuf.
+  ProtocolWriter writer(msg.type_, io_buf.get(), proto_);
   msg.serialize(writer);
   ssize_t bodylen = writer.result();
   if (bodylen <= 0) { // unlikely
@@ -1300,56 +1270,28 @@ int Socket::serializeMessageWithChecksum(const Message& msg,
     protohdr.cksum += 1;
   }
 
-  // 3. Add proto header to header evbuffer
-  size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
-  if (LD_EV(evbuffer_add)(header_evbuf, &protohdr, protohdr_bytes) != 0) {
-    // unlikely
-    RATELIMIT_CRITICAL(
-        std::chrono::seconds(1),
-        2,
-        "INTERNAL ERROR: Failed to add ProtocolHeader to evbuffer, msg type:%s",
-        messageTypeNames()[msg.type_].c_str());
-    ld_check(0);
-    err = E::INTERNAL;
-    close(err);
-    return -1;
-  }
-
-  // 4. Combine header_evbuf and payload_evbuf. The pullup call may require
-  //    a copy.
-  LD_EV(evbuffer_prepend_buffer)(payload_evbuf, header_evbuf);
-  size_t msg_evbuf_size = LD_EV(evbuffer_get_length)(payload_evbuf);
-  unsigned char* pullup_result =
-      LD_EV(evbuffer_pullup)(payload_evbuf, msg_evbuf_size);
-  if (!pullup_result) {
-    RATELIMIT_CRITICAL(
-        std::chrono::seconds(1),
-        2,
-        "INTERNAL ERROR: Failed during evbuffer_pullup, size:%zu, msg type:%s",
-        msg_evbuf_size,
-        messageTypeNames()[msg.type_].c_str());
-    err = E::INTERNAL;
-    close(err);
-    return -1;
-  }
+  // 3. Add proto header to IOBUF
+  io_buf->prepend(protohdr_bytes);
+  memcpy(static_cast<void*>(io_buf->writableData()), &protohdr, protohdr_bytes);
 
   // 5. Finally move the whole serialized message from payload_evbuf to outbuf
   if (outbuf) {
-    // This moves all data b/w evbuffers without memory copy
-    int rv = LD_EV(evbuffer_add_buffer)(outbuf, payload_evbuf);
-    if (rv) {
-      size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
-      RATELIMIT_CRITICAL(
-          std::chrono::seconds(1),
-          2,
-          "INTERNAL ERROR: Failed to move payload_evbuf to outbuf, evbuf size "
-          "(msg:%zu, outbuf:%zu), msg type:%s",
-          msg_evbuf_size,
-          outbuf_size,
-          messageTypeNames()[msg.type_].c_str());
-      err = E::INTERNAL;
-      close(err);
-      return -1;
+    for (auto& buf : *io_buf) {
+      int rv = LD_EV(evbuffer_add)(outbuf, buf.data(), buf.size());
+      if (rv) {
+        size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
+        RATELIMIT_CRITICAL(std::chrono::seconds(1),
+                           2,
+                           "INTERNAL ERROR: Failed to move payload_evbuf to "
+                           "outbuf, evbuf size "
+                           "(msg:%zu, outbuf:%zu), msg type:%s",
+                           bodylen + protohdr_bytes,
+                           outbuf_size,
+                           messageTypeNames()[msg.type_].c_str());
+        err = E::INTERNAL;
+        close(err);
+        return -1;
+      }
     }
   }
 
@@ -1413,7 +1355,7 @@ bool Socket::injectAsyncMessageError(std::unique_ptr<Envelope>&& e) {
       // Turn off the rewind when the deferred event queue is drained.
       // Ensure this happens even if no other deferred events are added
       // for this socket during the current event loop cycle.
-      deps_->eventActive(&end_stream_rewind_event_, EV_WRITE, 0);
+      end_stream_rewind_event_.activate(EV_WRITE, 0);
       ld_error("Rewinding Stream on Socket (%p) - %jd passed, %01.8f%% chance",
                this,
                (intmax_t)message_error_injection_pass_count_,
@@ -1650,10 +1592,8 @@ void Socket::bytesSentCallback(struct evbuffer* buffer,
 void Socket::enqueueDeferredEvent(SocketEvent e) {
   deferred_event_queue_.push_back(e);
 
-  if (!deps_->evtimerPending(&deferred_event_queue_event_)) {
-    int rv = deps_->evtimerAdd(
-        &deferred_event_queue_event_, deps_->getZeroTimeout());
-    ld_check(rv == 0);
+  if (!deferred_event_queue_event_.isScheduled()) {
+    ld_check(deferred_event_queue_event_.scheduleTimeout(0));
   }
 }
 
@@ -1737,12 +1677,12 @@ void Socket::processDeferredEventQueue() {
     eventCallbackImpl(event);
   }
 
-  if (deps_->evtimerPending(&deferred_event_queue_event_)) {
-    deps_->evtimerDel(&deferred_event_queue_event_);
+  if (deferred_event_queue_event_.isScheduled()) {
+    deferred_event_queue_event_.cancelTimeout();
   }
 
   ld_check(queue.empty());
-  ld_assert(!deps_->evtimerPending(&deferred_event_queue_event_));
+  ld_assert(!deferred_event_queue_event_.isScheduled());
 }
 
 void Socket::endStreamRewindCallback(void* instance, short) {
@@ -2118,7 +2058,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
   if (isHandshakeMessage(ph.type)) {
     handshaken_ = true;
     first_attempt_ = false;
-    deps_->evtimerDel(&handshake_timeout_event_);
+    handshake_timeout_event_.cancelTimeout();
   }
 
   MESSAGE_TYPE_STAT_INCR(deps_->getStats(), ph.type, message_received);
@@ -2274,11 +2214,7 @@ uint64_t Socket::getNumBytesReceived() const {
 void Socket::addHandshakeTimeoutEvent() {
   std::chrono::milliseconds timeout = getSettings().handshake_timeout;
   if (timeout.count() > 0) {
-    const timeval* tvp = deps_->getCommonTimeout(timeout);
-    if (!tvp) {
-      tvp = deps_->getTimevalFromMilliseconds(timeout);
-    }
-    deps_->evtimerAdd(&handshake_timeout_event_, tvp);
+    handshake_timeout_event_.scheduleTimeout(timeout);
   }
 }
 
@@ -2287,11 +2223,7 @@ void Socket::addConnectAttemptTimeoutEvent() {
   if (timeout.count() > 0) {
     timeout *=
         pow(getSettings().connect_timeout_retry_multiplier, retries_so_far_);
-    const timeval* tvp = deps_->getCommonTimeout(timeout);
-    if (!tvp) {
-      tvp = deps_->getTimevalFromMilliseconds(timeout);
-    }
-    deps_->evtimerAdd(&connect_timeout_event_, tvp);
+    connect_timeout_event_.scheduleTimeout(timeout);
   }
 }
 

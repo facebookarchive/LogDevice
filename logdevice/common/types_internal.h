@@ -210,6 +210,7 @@ struct write_stream_request_id_t {
 };
 constexpr write_stream_id_t WRITE_STREAM_ID_INVALID(0UL);
 constexpr write_stream_seq_num_t WRITE_STREAM_SEQ_NUM_INVALID(0UL);
+constexpr write_stream_seq_num_t WRITE_STREAM_SEQ_NUM_MIN(1UL);
 constexpr write_stream_request_id_t WRITE_STREAM_REQUEST_ID_INVALID = {
     WRITE_STREAM_ID_INVALID,
     WRITE_STREAM_SEQ_NUM_INVALID};
@@ -379,6 +380,8 @@ enum class DataKeyFormat {
   OLD,
   NEW,
 };
+
+constexpr size_t IOBUF_ALLOCATION_UNIT = 1024;
 
 }} // namespace facebook::logdevice
 

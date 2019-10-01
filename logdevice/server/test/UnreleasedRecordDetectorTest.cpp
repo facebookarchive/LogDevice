@@ -118,7 +118,7 @@ class UnreleasedRecordDetectorTest : public ::testing::Test {
  protected:
   void SetUp() override;
   void TearDown() override;
-  void acceptConnections();
+  folly::SemiFuture<bool> acceptConnections();
   void failSequencer();
   void setUnreleasedRecordDetectorInterval(std::string interval);
   bool sequencerIsActive();
@@ -322,9 +322,10 @@ void UnreleasedRecordDetectorTest::TearDown() {
   ld_notify("Gracefully stopped processor and all its worker threads.");
 }
 
-void UnreleasedRecordDetectorTest::acceptConnections() {
-  connection_listener_->startAcceptingConnections();
+folly::SemiFuture<bool> UnreleasedRecordDetectorTest::acceptConnections() {
+  auto res = connection_listener_->startAcceptingConnections();
   ld_notify("ConnectionListener accepting connections and started.");
+  return res;
 }
 
 void UnreleasedRecordDetectorTest::failSequencer() {
@@ -406,11 +407,11 @@ TEST_F(UnreleasedRecordDetectorTest, StartStop) {
  */
 TEST_F(UnreleasedRecordDetectorTest, TransientSequencerFailure) {
   // start accepting connections
-  acceptConnections();
+  EXPECT_TRUE(acceptConnections().get());
 
   // append record to log, expect success
-  lsn_t lsn = LSN_INVALID;
-  int rv = wait_until("can append to the log", [&]() -> bool {
+  lsn_t lsn;
+  {
     std::promise<std::pair<Status, lsn_t>> promise;
     auto future(promise.get_future());
     const auto append_callback = [&promise](Status st, const DataRecord& r) {
@@ -428,19 +429,11 @@ TEST_F(UnreleasedRecordDetectorTest, TransientSequencerFailure) {
     EXPECT_EQ(
         std::future_status::ready, future.wait_for(std::chrono::seconds(60)));
     const auto result(future.get());
-    if (result.first == Status::OK) {
-      lsn = result.second;
-      return true;
-    } else {
-      // Listener has not started yet.
-      EXPECT_EQ(Status::CONNFAILED, result.first);
-      return false;
-    }
-  });
-  ASSERT_EQ(0, rv);
-
-  ld_notify(
-      "Successfully appended record with lsn %s.", lsn_to_string(lsn).c_str());
+    ASSERT_EQ(E::OK, result.first) << error_name(result.first);
+    lsn = result.second;
+    ld_notify("Successfully appended record with lsn %s.",
+              lsn_to_string(lsn).c_str());
+  }
 
   // create a reader and start reading from the beginning
   TestReader reader(processor_.get());
@@ -452,7 +445,7 @@ TEST_F(UnreleasedRecordDetectorTest, TransientSequencerFailure) {
   while (true) {
     std::vector<std::unique_ptr<DataRecord>> data_out;
     GapRecord gap_out;
-    rv = reader.read(1, &data_out, &gap_out);
+    int rv = reader.read(1, &data_out, &gap_out);
     if (rv == -1) {
       ASSERT_EQ(E::GAP, err);
       ASSERT_LT(gap_out.hi, lsn);

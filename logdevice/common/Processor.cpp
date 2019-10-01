@@ -169,8 +169,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      std::string csid,
                      std::string name,
                      folly::Optional<NodeID> my_node_id)
-    :
-
+    : health_monitor_(std::make_unique<HealthMonitor>()),
       config_(std::move(updateable_config)),
       settings_(settings),
       plugin_registry_(std::move(plugin_registry)),
@@ -256,7 +255,6 @@ void Processor::init() {
       cluster_state_->refreshClusterStateAsync();
     }
   }
-
   initialized_.store(true, std::memory_order_relaxed);
 }
 
@@ -279,7 +277,9 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
           folly::make_array<uint32_t>(
               local_settings->hi_requests_per_iteration,
               local_settings->mid_requests_per_iteration,
-              local_settings->lo_requests_per_iteration)));
+              local_settings->lo_requests_per_iteration),
+          local_settings->use_legacy_eventbase ? EvBase::LEGACY_EVENTBASE
+                                               : EvBase::FOLLY_EVENTBASE));
       auto executor = folly::getKeepAliveToken(loops.back().get());
       worker.reset(createWorker(std::move(executor), worker_id_t(i), type));
     } catch (ConstructorFailed&) {
@@ -298,7 +298,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      bool fake_storage_node,
                      int /*max_logs*/,
                      StatsHolder* stats)
-    : config_(std::move(updateable_config)),
+    : health_monitor_(std::make_unique<HealthMonitor>()),
+      config_(std::move(updateable_config)),
       fake_storage_node_(fake_storage_node),
       settings_(settings),
       plugin_registry_(std::make_shared<PluginRegistry>(

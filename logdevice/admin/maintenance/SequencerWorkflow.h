@@ -10,6 +10,7 @@
 #include <folly/futures/Future.h>
 
 #include "logdevice/admin/maintenance/types.h"
+#include "logdevice/common/ClusterState.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/membership/SequencerMembership.h"
@@ -37,7 +38,8 @@ class SequencerWorkflow {
   SequencerWorkflow& operator=(const SequencerWorkflow& /* unused */) = delete;
 
   folly::SemiFuture<MaintenanceStatus>
-  run(const membership::SequencerNodeState& node_state);
+  run(const membership::SequencerNodeState& node_state,
+      ClusterStateNodeState node_gossip_state);
 
   // Sets the target_op_state_ to given value
   // Can only be SequencingState::ENABLED or SequencingState::DISABLED

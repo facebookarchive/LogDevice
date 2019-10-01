@@ -67,6 +67,11 @@ class EpochMetaDataMap {
                epoch_t new_effective_until) const;
 
   /**
+   * The size of the epoch metadata map
+   */
+  size_t size() const;
+
+  /**
    * Get EpochMetaData for a given epoch.
    *
    * @return        a unique_ptr containing the results, or

@@ -104,8 +104,10 @@ expandMaintenances(
     //
     // this may throw InvalidRequest.
     // It returns logdevice's unordered_set<ShardID>
-    auto all_shards = expandShardSet(
-        definition.get_shards(), *nodes_config, /* ignore_missing = */ false);
+    auto all_shards = expandShardSet(definition.get_shards(),
+                                     *nodes_config,
+                                     /* ignore_missing = */ false,
+                                     /* ignore_non_storage_nodes */ true);
 
     folly::F14FastSet<node_index_t> all_sequencers;
     for (const auto& node : definition.get_sequencer_nodes()) {
@@ -121,12 +123,9 @@ expandMaintenances(
             "Sequencer node {} was not found in the nodes configuration",
             toString(node))));
       }
-      // validate that it's actually a sequencer node
-      if (!nodes_config->isSequencerNode(*found_node)) {
-        return folly::makeUnexpected(InvalidRequest(
-            folly::sformat("Node {} is not a sequencer node", *found_node)));
+      if (nodes_config->isSequencerNode(*found_node)) {
+        all_sequencers.insert(*found_node);
       }
-      all_sequencers.insert(*found_node);
     }
 
     // Step2: if group = false, we need to group shards and sequencers together
