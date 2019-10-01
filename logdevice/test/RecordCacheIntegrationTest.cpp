@@ -71,7 +71,7 @@ TEST_F(RecordCacheIntegrationTest, RecordCacheHitForNewAppends) {
   for (auto n : {1}) {
     cluster->updateNodeAttributes(n, configuration::StorageState::READ_ONLY, 0);
   }
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
   rv = cluster->waitForMetaDataLogWrites(std::chrono::steady_clock::now() +
                                          std::chrono::seconds(5));
   EXPECT_EQ(0, rv);

@@ -235,7 +235,7 @@ class NodeStatsControllerIntegrationTest
     setOneLogPerNode();
     cluster->start();
     // Ensure all the nodes have the same config
-    cluster->waitForConfigUpdate();
+    cluster->waitForServersToPartiallyProcessConfigUpdate();
     waitForSequencersToActivate();
 
     int controller_count = params.max_boycott_count + 1;

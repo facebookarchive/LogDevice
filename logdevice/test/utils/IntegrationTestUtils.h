@@ -998,8 +998,14 @@ class Cluster {
 
   /**
    * Waits until all live nodes have a view of the config same as getConfig().
+   * This doesn't guarantees much about server behavior because the
+   * config update takes some time to propagate inside the server process,
+   * e.g. to all workers; this method does *not* wait for such propagation.
+   *
+   * This it not reliable for most purposes.
+   * If you rely on it your test will probably be flaky.
    */
-  void waitForConfigUpdate();
+  void waitForServersToPartiallyProcessConfigUpdate();
 
   /**
    * Wait for all sequencer nodes in the cluster to finish log recovery.
@@ -1143,7 +1149,8 @@ class Cluster {
    * is smaller than current, wait_for_update would make this method wait
    * forever.
    *
-   * Use waitForConfigUpdate() to wait for nodes to pick up the update.
+   * Use waitForServersToPartiallyProcessConfigUpdate() to wait for nodes to
+   * pick up the update.
    */
   int writeConfig(const ServerConfig* server_cfg,
                   const LogsConfig* logs_cfg,

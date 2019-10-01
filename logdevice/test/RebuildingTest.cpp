@@ -2152,7 +2152,7 @@ TEST_P(RebuildingTest, RebuildMetaDataLogsOfDeletedLogs) {
     tree.setVersion(tree.version() + 1);
 
     cluster->writeLogsConfig(logs_config_changed.get());
-    cluster->waitForConfigUpdate();
+    cluster->waitForServersToPartiallyProcessConfigUpdate();
   };
 
   ld_info("Changing config with removed log_id");

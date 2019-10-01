@@ -342,7 +342,7 @@ void NodeSetTest::markMetaDataWrittenInEpochStore(logid_t log) {
         iter->second.getFullyQualifiedName(), new_node);                      \
     ld_check(result);                                                         \
     cluster_->writeLogsConfig(logs_config.get());                             \
-    cluster_->waitForConfigUpdate();                                          \
+    cluster_->waitForServersToPartiallyProcessConfigUpdate();                 \
     auto attrs =                                                              \
         cluster_->getConfig()->get()->getLogGroupByIDShared(LOG_ID)->attrs(); \
     ASSERT_EQ(replication_, attrs.replicationFactor().value());               \

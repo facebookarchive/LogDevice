@@ -634,7 +634,7 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
     // Write the new config to the file and
     // update the in-memory UpdateableConfig.
     cluster->writeConfig(*new_config);
-    cluster->waitForConfigUpdate();
+    cluster->waitForServersToPartiallyProcessConfigUpdate();
   }
   stats = cluster->getNode(0).stats();
   ASSERT_EQ(stats["num_logs_configured"], 9);
@@ -644,7 +644,7 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
     auto new_logs_config = std::make_unique<configuration::LocalLogsConfig>();
     new_logs_config->insert(logid_interval, "test_range_3", log_attrs);
     cluster->writeLogsConfig(new_logs_config.get());
-    cluster->waitForConfigUpdate();
+    cluster->waitForServersToPartiallyProcessConfigUpdate();
     stats = cluster->getNode(0).stats();
     ASSERT_EQ(stats["num_logs_configured"], 5);
   }
@@ -815,7 +815,7 @@ TEST_F(ConfigIntegrationTest, ExpandWithVersionUpdate) {
                                  ->getServerConfig()
                                  ->withVersion(config_version_t(1))
                                  .get());
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
   std::shared_ptr<Configuration> cluster_config = cluster->getConfig()->get();
 
   std::shared_ptr<UpdateableConfig> client_config =
@@ -910,7 +910,7 @@ TEST_F(ConfigIntegrationTest, ConfigSyncAfterReconnect) {
   auto new_server_config =
       cluster_config->serverConfig()->withVersion(config_version_t(1));
   cluster->writeServerConfig(new_server_config.get());
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   std::shared_ptr<UpdateableConfig> client_config =
       std::make_shared<UpdateableConfig>(
@@ -972,7 +972,7 @@ TEST_F(ConfigIntegrationTest, ConfigSyncAfterReconnect) {
   new_server_config =
       cluster_config->serverConfig()->withVersion(config_version_t(2));
   cluster->writeServerConfig(new_server_config.get());
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   // Get the updated cluster configuration
   cluster_config = cluster->getConfig()->get();
@@ -1015,7 +1015,7 @@ TEST_F(ConfigIntegrationTest, ExpandWithoutVersionUpdate) {
   auto new_server_config =
       cluster_config->serverConfig()->withVersion(config_version_t(1));
   cluster->writeServerConfig(new_server_config.get());
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   std::shared_ptr<UpdateableConfig> client_config =
       std::make_shared<UpdateableConfig>(
@@ -1044,7 +1044,7 @@ TEST_F(ConfigIntegrationTest, ExpandWithoutVersionUpdate) {
 
   // Expand the cluster by one node without updating the config version
   cluster->expand(1, /*start*/ true, /*bump_config_versiion*/ false);
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   // Make an appendSync() call. Configs should not be synchronized after
   // append since the config versions are the same.
@@ -1132,7 +1132,7 @@ TEST_F(ConfigIntegrationTest, Stats) {
   std::string config_str = new_config.toString();
   ld_info("CFG: %s", config_str.c_str() + 2000);
   cluster->writeConfig(new_config);
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   // take a snapshot of the stats
   auto initial_stats = cluster->getNode(0).stats();
@@ -1160,7 +1160,7 @@ TEST_F(ConfigIntegrationTest, Stats) {
   // test #2: change config without updating version. expect
   // config_update_hash_mismatch and updated_config to be incremented.
   cluster->expand(1, /*start*/ true, /*bump_config_versiion*/ false);
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   auto stats2 = cluster->getNode(0).stats();
   EXPECT_LE(stats["config_update_same_version"],

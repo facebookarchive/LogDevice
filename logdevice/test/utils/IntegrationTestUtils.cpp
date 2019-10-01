@@ -1004,7 +1004,7 @@ int Cluster::expand(std::vector<node_index_t> new_indices,
   if (rv != 0) {
     return -1;
   }
-  waitForConfigUpdate();
+  waitForServersToPartiallyProcessConfigUpdate();
 
   if (!start_nodes) {
     return 0;
@@ -1076,7 +1076,7 @@ int Cluster::shrink(std::vector<node_index_t> indices) {
   if (rv != 0) {
     return -1;
   }
-  waitForConfigUpdate();
+  waitForServersToPartiallyProcessConfigUpdate();
 
   return 0;
 }
@@ -2655,7 +2655,7 @@ int Cluster::replace(node_index_t index, bool defer_start) {
       return -1;
     }
     // Wait for all nodes to pick up the config update
-    waitForConfigUpdate();
+    waitForServersToPartiallyProcessConfigUpdate();
 
     nodes_[index] = createNode(index, std::move(addrs[0]), std::move(addrs[1]));
     if (defer_start) {
@@ -2738,7 +2738,7 @@ int Cluster::updateNodeAttributes(node_index_t index,
   return 0;
 }
 
-void Cluster::waitForConfigUpdate() {
+void Cluster::waitForServersToPartiallyProcessConfigUpdate() {
   // TODO: make it work with one config per nodes.
   ld_check(!one_config_per_node_);
   auto check = [this]() {

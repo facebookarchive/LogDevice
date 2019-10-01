@@ -36,6 +36,8 @@
  */
 
 using namespace facebook::logdevice;
+
+namespace {
 struct SeqReactivationStats {
   uint64_t scheduled = 0;
   uint64_t completed = 0;
@@ -47,6 +49,26 @@ struct SeqReactivationStats {
     return ((scheduled == completed) && (delayed == delayCompleted));
   }
 };
+
+SeqReactivationStats getSeqReactivationStats(
+    const std::unique_ptr<IntegrationTestUtils::Cluster>& cluster) {
+  SeqReactivationStats stats;
+  for (const auto& it : cluster->getNodes()) {
+    auto nodeStats = it.second->stats();
+    stats.scheduled +=
+        nodeStats["background_sequencer_reactivation_checks_scheduled"];
+    stats.completed +=
+        nodeStats["background_sequencer_reactivation_checks_completed"];
+
+    stats.delayed += nodeStats["sequencer_reactivations_delayed"];
+    stats.delayCompleted +=
+        nodeStats["sequencer_reactivations_delay_completed"];
+    stats.reactivations +=
+        nodeStats["sequencer_reactivations_for_metadata_update"];
+  }
+  return stats;
+}
+} // namespace
 
 class SequencerIntegrationTest : public IntegrationTestBase {};
 
@@ -230,35 +252,19 @@ TEST_F(SequencerIntegrationTest,
       log_in_directory.getFullyQualifiedName(),
       log_in_directory.log_group->withLogAttributes(new_attrs)));
 
+  uint64_t scheduled_before = getSeqReactivationStats(cluster).scheduled;
+
   cluster->writeConfig(
       full_config->serverConfig().get(), logs_config_changed.get());
-
-  cluster->waitForConfigUpdate();
-
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
   cluster->waitForRecovery();
 
-  auto get_stats = [&]() {
-    SeqReactivationStats stats;
-    for (const auto& it : nodes) {
-      auto nodeStats = cluster->getNode(it.first).stats();
-      stats.scheduled +=
-          nodeStats["background_sequencer_reactivation_checks_scheduled"];
-      stats.completed +=
-          nodeStats["background_sequencer_reactivation_checks_completed"];
-
-      stats.delayed += nodeStats["sequencer_reactivations_delayed"];
-      stats.delayCompleted +=
-          nodeStats["sequencer_reactivations_delay_completed"];
-      stats.reactivations +=
-          nodeStats["sequencer_reactivations_for_metadata_update"];
-    }
-    return stats;
-  };
-
-  // Wait until the scheduled activations are completed
-  wait_until("stats match up", [&]() {
-    auto stats = get_stats();
-    EXPECT_GT(stats.scheduled, 0);
+  // Wait until more reactivations are scheduled and completed, presumably
+  // triggered by the config update. There can also be spurious checks caused
+  // by previous events, which may cause this wait to end too early, making this
+  // test case weaker but not causing it to fail spuriously.
+  wait_until("more reactivation checks are scheduled and completed", [&]() {
+    auto stats = getSeqReactivationStats(cluster);
     ld_info("reactivations: scheduled: %lu, completed: %lu, "
             "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
@@ -266,7 +272,7 @@ TEST_F(SequencerIntegrationTest,
             stats.delayed,
             stats.delayCompleted,
             stats.reactivations);
-    return stats.statsMatch();
+    return stats.scheduled > scheduled_before && stats.statsMatch();
   });
 
   // Check that reactivations completed without waiting for the specified delay
@@ -274,7 +280,7 @@ TEST_F(SequencerIntegrationTest,
   auto delay = RecordTimestamp::now().toSeconds() - start;
   EXPECT_LT(delay.count(), 1200);
 
-  auto stats = get_stats();
+  auto stats = getSeqReactivationStats(cluster);
   EXPECT_EQ(stats.delayed, 0);
   EXPECT_EQ(stats.delayCompleted, 0);
 
@@ -369,35 +375,16 @@ TEST_F(SequencerIntegrationTest, WinSizeChangeDelayTest) {
           log_in_directory.log_group->attrs().with_maxWritesInFlight(300)));
   ASSERT_TRUE(rv);
 
+  uint64_t scheduled_before = getSeqReactivationStats(cluster).scheduled;
+
   cluster->writeConfig(
       full_config->serverConfig().get(), logs_config_changed.get());
-
-  cluster->waitForConfigUpdate();
-
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
   cluster->waitForRecovery();
 
-  auto get_stats = [&]() {
-    SeqReactivationStats stats;
-    for (const auto& it : nodes) {
-      auto nodeStats = cluster->getNode(it.first).stats();
-      stats.scheduled +=
-          nodeStats["background_sequencer_reactivation_checks_scheduled"];
-      stats.completed +=
-          nodeStats["background_sequencer_reactivation_checks_completed"];
-
-      stats.delayed += nodeStats["sequencer_reactivations_delayed"];
-      stats.delayCompleted +=
-          nodeStats["sequencer_reactivations_delay_completed"];
-      stats.reactivations +=
-          nodeStats["sequencer_reactivations_for_metadata_update"];
-    }
-    return stats;
-  };
-
   // Wait until the scheduled activations are completed
-  wait_until("stats match up", [&]() {
-    auto stats = get_stats();
-    EXPECT_GT(stats.scheduled, 0);
+  wait_until("more reactivation checks are scheduled and completed", [&]() {
+    auto stats = getSeqReactivationStats(cluster);
     ld_info("reactivations: scheduled: %lu, completed: %lu, "
             "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
@@ -405,7 +392,7 @@ TEST_F(SequencerIntegrationTest, WinSizeChangeDelayTest) {
             stats.delayed,
             stats.delayCompleted,
             stats.reactivations);
-    return stats.statsMatch();
+    return stats.scheduled > scheduled_before && stats.statsMatch();
   });
 
   // Check that reactivations completed without waiting for the specified delay
@@ -413,7 +400,7 @@ TEST_F(SequencerIntegrationTest, WinSizeChangeDelayTest) {
   auto delay = RecordTimestamp::now().toSeconds() - start;
   EXPECT_LT(delay.count(), 1200);
 
-  auto stats = get_stats();
+  auto stats = getSeqReactivationStats(cluster);
   EXPECT_EQ(stats.delayed, 0);
   EXPECT_EQ(stats.delayCompleted, 0);
 
@@ -490,46 +477,65 @@ TEST_F(SequencerIntegrationTest, StorageStateChangeDelayTest) {
   const size_t initial_activations = get_activations();
   EXPECT_GE(initial_activations, numLogs);
 
-  auto get_stats = [&]() {
-    SeqReactivationStats stats;
-    for (const auto& it : nodes) {
-      auto nodeStats = cluster->getNode(it.first).stats();
-      stats.scheduled +=
-          nodeStats["background_sequencer_reactivation_checks_scheduled"];
-      stats.completed +=
-          nodeStats["background_sequencer_reactivation_checks_completed"];
+  // Wait for sequencers to become quiescent. This is stupidly difficult to
+  // do correctly, and we're *not* doing it correctly here. But currently this
+  // seems good enough to avoid flakiness in practice.
+  //
+  // As far as I can tell, things currently work like this:
+  //  1. Our appendSync() triggers a sequencer activation. The newly activated
+  //     sequencer takes and completes our append.
+  //  2. The sequencer activation kicks off a recovery and a metadata log write.
+  //  3. When metadata log write completes, it triggers a sequencer
+  //     reactivation, for bad arcane reasons. For even more bad reasons,
+  //     that reactivation may fail and be retried using an exponential backoff
+  //     timer. There's no easy way to tell whether such a retry is currently
+  //     pending (the timer is of fire-and-forget kind); neither
+  //     waitForRecovery() nor waitForMetaDataLogWrites() waits for such
+  //     reactivations.
+  //  4. If we update config while sequencer reactivation is in progress, the
+  //     reactivation may apply the config changes along the way, and we'll
+  //     never see delayed reactivations or reactivations triggered by config
+  //     updates.
+  cluster->waitForRecovery();
+  cluster->waitForMetaDataLogWrites();
 
-      stats.delayed += nodeStats["sequencer_reactivations_delayed"];
-      stats.delayCompleted +=
-          nodeStats["sequencer_reactivations_delay_completed"];
-      stats.reactivations +=
-          nodeStats["sequencer_reactivations_for_metadata_update"];
-    }
-    return stats;
-  };
-
-  // Find node with most STOREs and disable it. This should  regenerate the
-  // nodeset for the written log.
-  std::unordered_map<node_index_t, size_t> stores;
+  // Pick any node from the nodeset of log 1 and disable it. This should
+  // regenerate the nodeset for the written log.
   node_index_t to_disable = 1;
-  for (node_index_t n = 2; n < num_nodes; ++n) {
-    stores[n] = cluster->getNode(n).stats()["message_received.STORE"];
-    if (stores[n] > stores[to_disable]) {
-      to_disable = n;
+  for (node_index_t n = 0; n < 2; ++n) {
+    auto info = cluster->getNode(n).sequencerInfo(logid_t(1));
+    if (info.empty()) {
+      continue;
     }
+    // Parse the value in "Nodeset state" column, which looks similar to this:
+    // H: {N0:S4,N1:S4,N2:S4,N3:S4,N4:S4,N5:S4,N6:S4,N7:S4,N8:S4} G: {N9:S4}
+    ASSERT_NE(0, info.count("Nodeset state"));
+    std::string s = info.at("Nodeset state");
+    auto p = s.find("H: {N");
+    ASSERT_NE(std::string::npos, p);
+    p += strlen("H: {N");
+    auto q = s.find(":S", p);
+    ASSERT_NE(std::string::npos, q);
+    to_disable = folly::to<node_index_t>(s.substr(p, q - p));
+
+    ld_info("N%d is in nodeset of log 1 according to sequencer info on N%d: %s",
+            (int)to_disable,
+            (int)n,
+            toString(info).c_str());
   }
+
+  EXPECT_EQ(0, getSeqReactivationStats(cluster).delayed);
 
   ld_info("Set the weight of N%hu to 0.", to_disable);
   auto start = RecordTimestamp::now().toSeconds();
   cluster->updateNodeAttributes(
       to_disable, configuration::StorageState::DISABLED, 1);
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
   cluster->waitForRecovery();
 
-  // Wait until the scheduled activations are completed
+  // Wait for some delayed reactivations to happen.
   wait_until("background activations completed", [&]() {
-    auto stats = get_stats();
-    EXPECT_GT(stats.scheduled, 0);
+    auto stats = getSeqReactivationStats(cluster);
     ld_info("reactivations: scheduled: %lu, completed: %lu, "
             "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
@@ -537,26 +543,11 @@ TEST_F(SequencerIntegrationTest, StorageStateChangeDelayTest) {
             stats.delayed,
             stats.delayCompleted,
             stats.reactivations);
-    return stats.statsMatch();
-  });
-
-  // We are done processing all the scheduled activations so those that need to
-  // be postponed must also be scheduled by now.
-  wait_until("Delayed activations completed", [&]() {
-    auto stats = get_stats();
-    EXPECT_GT(stats.delayed, 0);
-    ld_info("reactivations: scheduled: %lu, completed: %lu, "
-            "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
-            stats.scheduled,
-            stats.completed,
-            stats.delayed,
-            stats.delayCompleted,
-            stats.reactivations);
-    return stats.statsMatch();
+    return stats.delayed != 0 && stats.statsMatch();
   });
 
   // The delayed reactivatins must result in actual reactivations
-  auto stats = get_stats();
+  auto stats = getSeqReactivationStats(cluster);
   uint64_t activations_after_state_change =
       stats.reactivations - initial_activations;
   EXPECT_GE(activations_after_state_change, stats.delayCompleted);
@@ -634,27 +625,9 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   const size_t initial_activations = get_activations();
   EXPECT_GE(initial_activations, numLogs);
 
-  auto get_stats = [&]() {
-    SeqReactivationStats stats;
-    for (size_t nodeId = 0; nodeId < num_nodes; nodeId++) {
-      auto nodeStats = cluster->getNode(nodeId).stats();
-      stats.scheduled +=
-          nodeStats["background_sequencer_reactivation_checks_scheduled"];
-      stats.completed +=
-          nodeStats["background_sequencer_reactivation_checks_completed"];
-
-      stats.delayed += nodeStats["sequencer_reactivations_delayed"];
-      stats.delayCompleted +=
-          nodeStats["sequencer_reactivations_delay_completed"];
-      stats.reactivations +=
-          nodeStats["sequencer_reactivations_for_metadata_update"];
-    }
-    return stats;
-  };
-
   // Wait until all the scheduled activations are completed
   wait_until("background activations completed", [&]() {
-    auto stats = get_stats();
+    auto stats = getSeqReactivationStats(cluster);
     ld_info("reactivations: scheduled: %lu, completed: %lu, "
             "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
@@ -665,7 +638,7 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
     return stats.statsMatch();
   });
 
-  auto stats = get_stats();
+  auto stats = getSeqReactivationStats(cluster);
   EXPECT_EQ(stats.delayed, 0);
   // Randomly chose to expand or shrink the cluster
   auto start = RecordTimestamp::now().toSeconds();
@@ -683,7 +656,7 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
 
   // Wait until the scheduled activations are completed
   wait_until("background activations completed", [&]() {
-    auto latest_stats = get_stats();
+    auto latest_stats = getSeqReactivationStats(cluster);
     EXPECT_GT(latest_stats.scheduled, 0);
     ld_info("reactivations: scheduled: %lu, completed: %lu, "
             "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
@@ -698,7 +671,7 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   // We are done processing all the scheduled activations so those that need to
   // be postponed must also be scheduled by now.
   wait_until("Delayed activations completed", [&]() {
-    auto latest_stats = get_stats();
+    auto latest_stats = getSeqReactivationStats(cluster);
     EXPECT_GT(latest_stats.delayed, 0);
     ld_info("reactivations: scheduled: %lu, completed: %lu, "
             "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
@@ -711,7 +684,7 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   });
 
   // The delayed reactivations must result in actual reactivations
-  stats = get_stats();
+  stats = getSeqReactivationStats(cluster);
   uint64_t activations_after_size_change =
       stats.reactivations - initial_activations;
   EXPECT_GE(activations_after_size_change, stats.delayCompleted);
@@ -868,34 +841,17 @@ TEST_F(SequencerIntegrationTest, ConfigParamsAndStorageStateChangeDelayTest) {
       full_config->serverConfig()
           ->withNodes(std::move(new_nodes_config))
           ->withIncrementedVersion();
-  cluster->writeConfig(new_server_config.get(), logs_config_changed.get());
 
-  cluster->waitForConfigUpdate();
+  uint64_t scheduled_before = getSeqReactivationStats(cluster).scheduled;
+
+  cluster->writeConfig(new_server_config.get(), logs_config_changed.get());
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
   cluster->waitForRecovery();
   ld_info("Set the weight of N%hu to 0.", to_disable);
 
-  auto get_stats = [&]() {
-    SeqReactivationStats stats;
-    for (const auto& it : nodes) {
-      auto nodeStats = cluster->getNode(it.first).stats();
-      stats.scheduled +=
-          nodeStats["background_sequencer_reactivation_checks_scheduled"];
-      stats.completed +=
-          nodeStats["background_sequencer_reactivation_checks_completed"];
-
-      stats.delayed += nodeStats["sequencer_reactivations_delayed"];
-      stats.delayCompleted +=
-          nodeStats["sequencer_reactivations_delay_completed"];
-      stats.reactivations +=
-          nodeStats["sequencer_reactivations_for_metadata_update"];
-    }
-    return stats;
-  };
-
-  // Wait until the scheduled activations are completed
+  // Wait until some activations are scheduled and completed
   wait_until("background activations completed", [&]() {
-    auto stats = get_stats();
-    EXPECT_GT(stats.scheduled, 0);
+    auto stats = getSeqReactivationStats(cluster);
     ld_info("reactivations: scheduled: %lu, completed: %lu, "
             "delayed: %lu, delayCompleted: %lu, reactivations: %lu",
             stats.scheduled,
@@ -903,7 +859,7 @@ TEST_F(SequencerIntegrationTest, ConfigParamsAndStorageStateChangeDelayTest) {
             stats.delayed,
             stats.delayCompleted,
             stats.reactivations);
-    return stats.statsMatch();
+    return stats.scheduled > scheduled_before && stats.statsMatch();
   });
 
   // We are done processing all the scheduled activations so those that need to
@@ -912,7 +868,7 @@ TEST_F(SequencerIntegrationTest, ConfigParamsAndStorageStateChangeDelayTest) {
   auto delay = RecordTimestamp::now().toSeconds() - start;
   EXPECT_LT(delay.count(), 1200);
 
-  auto stats = get_stats();
+  auto stats = getSeqReactivationStats(cluster);
   EXPECT_EQ(stats.delayed, 0);
   EXPECT_EQ(stats.delayCompleted, 0);
 
@@ -1399,7 +1355,7 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorNotInConfig) {
   auto client2 = cluster->createClient();
   lsn_t lsn2 = client2->appendSync(logid_t(1), "bar");
   ASSERT_NE(LSN_INVALID, lsn2);
-  ASSERT_GE(lsn_to_epoch(lsn2), lsn_to_epoch(lsn1));
+  ASSERT_GT(lsn_to_epoch(lsn2), lsn_to_epoch(lsn1));
 
   // bring primary up
   cluster->getNode(primary).resume();
@@ -1407,15 +1363,14 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorNotInConfig) {
 
   // replace secondary node to up its generation number
   cluster->bumpGeneration(secondary);
-  cluster->waitForConfigUpdate();
 
   // write into the log again - this should succeed after internally retrying
   // due to: primary PREEMPTED --> secondary NOTINCONFIG -->
   // primary reactivate_if_preempted
   auto client3 = cluster->createClient();
-  lsn_t lsn4 = client3->appendSync(logid_t(1), "baz");
-  ASSERT_NE(LSN_INVALID, lsn4);
-  ASSERT_GE(lsn4, lsn2);
+  lsn_t lsn3 = client3->appendSync(logid_t(1), "baz");
+  ASSERT_NE(LSN_INVALID, lsn3);
+  ASSERT_GT(lsn_to_epoch(lsn3), lsn_to_epoch(lsn2));
 }
 
 // Simulates situation where a node which was sequencer and previously
@@ -1495,7 +1450,7 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorZeroWeight) {
   auto client2 = cluster->createClient();
   lsn_t lsn2 = client2->appendSync(logid_t(1), "bar");
   ASSERT_NE(LSN_INVALID, lsn2);
-  ASSERT_GE(lsn_to_epoch(lsn2), lsn_to_epoch(lsn1));
+  ASSERT_GT(lsn_to_epoch(lsn2), lsn_to_epoch(lsn1));
 
   // bring primary up
   cluster->getNode(primary).resume();
@@ -1506,15 +1461,14 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorZeroWeight) {
   // update the weights so the secondary is no longer a sequencer
   cluster->updateNodeAttributes(
       secondary, configuration::StorageState::DISABLED, 0);
-  cluster->waitForConfigUpdate();
 
   // write into the log again - this should succeed after internally retrying
   // due to: primary PREEMPTED --> secondary NOTREADY -->
   // primary reactivate_if_preempted
   auto client3 = cluster->createClient();
-  lsn_t lsn4 = client3->appendSync(logid_t(1), "baz");
-  ASSERT_NE(LSN_INVALID, lsn4);
-  ASSERT_GE(lsn4, lsn2);
+  lsn_t lsn3 = client3->appendSync(logid_t(1), "baz");
+  ASSERT_NE(LSN_INVALID, lsn3);
+  ASSERT_GT(lsn_to_epoch(lsn3), lsn_to_epoch(lsn2));
 }
 
 // Start a cluster with lazy sequencer placement on all nodes.
@@ -2811,7 +2765,7 @@ TEST_F(SequencerIntegrationTest, AbortEpoch) {
       window_size, cluster->getNode(0).stats()["append_rejected_cancelled"]);
 }
 
-// test changing weight to 0 for a storage node would make sequencer stops
+// test changing weight to 0 for a storage node would make sequencer stop
 // sending writes to the node
 TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
   logsconfig::LogAttributes log_attrs =
@@ -2866,7 +2820,7 @@ TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
   // set the weight of the node that received most stores to 0
   cluster->updateNodeAttributes(
       to_disable, configuration::StorageState::READ_ONLY, 0);
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
   ld_info("Set the weight of N%hu to 0.", to_disable);
 
   // Get most recent stat for the node being disabled, in case auto log
@@ -2946,7 +2900,7 @@ TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
   // set sequencer weight of N0 to 0 (in order to reproduce the condition of
   // the crash)
   cluster->updateNodeAttributes(0, configuration::StorageState::READ_WRITE, 0);
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   do_write();
 
@@ -2969,13 +2923,17 @@ TEST_F(SequencerIntegrationTest, LogRemovalStressTest) {
   logsconfig::LogAttributes log_attrs;
   log_attrs.set_replicationFactor(2);
   log_attrs.set_nodeSetSize(3);
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes)
-                     .useHashBasedSequencerAssignment(100, "10s")
-                     .enableMessageErrorInjection()
-                     .setLogGroupName("test_range")
-                     .setLogAttributes(log_attrs)
-                     .create(num_nodes);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setNodes(nodes)
+          .useHashBasedSequencerAssignment(100, "10s")
+          .enableMessageErrorInjection()
+          .setLogGroupName("test_range")
+          .setLogAttributes(log_attrs)
+          // Storage nodes may miss releases if the log was not in config at the
+          // time. Make them notice and request missing releases quicker.
+          .setParam("--unreleased-record-detector-interval", "5s")
+          .create(num_nodes);
   for (const auto& it : nodes) {
     node_index_t idx = it.first;
     cluster->getNode(idx).waitUntilAvailable();
@@ -3069,7 +3027,7 @@ TEST_F(SequencerIntegrationTest, LogRemovalStressTest) {
           removes);
 
   cluster->writeConfig(*original_config);
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   std::set<lsn_t> read_lsns;
   // read the newly written data
@@ -3084,6 +3042,19 @@ TEST_F(SequencerIntegrationTest, LogRemovalStressTest) {
     }
     return true;
   });
+  async_reader->setGapCallback([&](const GapRecord& gap) -> bool {
+    ld_info("Got %s gap [%s, %s]",
+            gapTypeToString(gap.type).c_str(),
+            lsn_to_string(gap.lo).c_str(),
+            lsn_to_string(gap.hi).c_str());
+    if (gap.hi == last_lsn) {
+      sem.post();
+    }
+    return true;
+  });
+  ld_info("Reading up to %s, expect at least %lu records",
+          lsn_to_string(last_lsn).c_str(),
+          appended_lsns.size());
   async_reader->startReading(LOG_ID, LSN_OLDEST, last_lsn);
   sem.wait();
 
@@ -3142,6 +3113,9 @@ TEST_F(SequencerIntegrationTest, DynamicallyChangingWindowSize) {
     return activations;
   };
 
+  cluster->waitForRecovery();
+  cluster->waitForMetaDataLogWrites();
+
   const size_t num_activations = get_activations();
   EXPECT_GE(num_activations, 128);
   // change the sequencer window size in config
@@ -3167,12 +3141,16 @@ TEST_F(SequencerIntegrationTest, DynamicallyChangingWindowSize) {
   cluster->writeConfig(
       full_config->serverConfig().get(), logs_config_changed.get());
 
-  cluster->waitForConfigUpdate();
-  // waiting for all sequencer activations to complete
-  cluster->waitForRecovery();
-  const size_t num_activations_after_config_change = get_activations();
-  // we should expect at least one reactivation per active sequencer
-  ASSERT_GE(num_activations_after_config_change - num_activations, 128);
+  // we should expect at least one reactivation per active sequencer, eventually
+  wait_until("all sequencers got reactivated", [&] {
+    size_t act = get_activations();
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   1,
+                   "%lu activations now, %lu before update",
+                   act,
+                   num_activations);
+    return act >= num_activations + 128;
+  });
 }
 
 TEST_F(SequencerIntegrationTest, SequencerZeroWeightWhileAppendsPending) {
@@ -3243,7 +3221,6 @@ TEST_F(SequencerIntegrationTest, SequencerZeroWeightWhileAppendsPending) {
   // Make it not a sequencer node
   cluster->updateNodeAttributes(
       primary, configuration::StorageState::READ_WRITE, 0);
-  cluster->waitForConfigUpdate();
 
   // Check that the sequencer moved into UNAVAILABLE state on the primary
   wait_until("sequencer is unavailable", [&]() {
@@ -3299,10 +3276,8 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
   std::shared_ptr<Client> client = cluster->createClient();
 
   ld_info("disabling N1");
-  for (auto n : {1}) {
-    cluster->updateNodeAttributes(n, configuration::StorageState::READ_ONLY, 0);
-  }
-  cluster->waitForConfigUpdate();
+  cluster->updateNodeAttributes(1, configuration::StorageState::READ_ONLY, 0);
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   // suspend N3
   cluster->getNode(3).suspend();

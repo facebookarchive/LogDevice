@@ -35,7 +35,7 @@ TEST_F(ServerConfigSourceIntegrationTest, Basic) {
   auto new_server_config =
       cluster->getConfig()->getServerConfig()->withVersion(config_version_t(2));
   cluster->writeServerConfig(new_server_config.get());
-  cluster->waitForConfigUpdate();
+  cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   std::string config_path = "server:";
   auto nodes = new_server_config->getNodes();
