@@ -30,6 +30,7 @@
 #include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
+#include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/SequencerBatching.h"
@@ -130,6 +131,8 @@ class ProcessorImpl {
   std::vector<std::unique_ptr<EventLoop>> ev_loops_;
   std::unique_ptr<AllSequencers> allSequencers_;
   std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
+  std::unique_ptr<ReadStreamDebugInfoSamplingConfig>
+      read_stream_debug_info_sampling_config_;
   // If anything depends on worker make sure that it is deleted in the
   // destructor above.
 };
@@ -255,7 +258,21 @@ void Processor::init() {
       cluster_state_->refreshClusterStateAsync();
     }
   }
+
+  impl_->read_stream_debug_info_sampling_config_ =
+      std::make_unique<ReadStreamDebugInfoSamplingConfig>(
+          getPluginRegistry(), settings()->all_read_streams_debug_config_path);
+
   initialized_.store(true, std::memory_order_relaxed);
+}
+
+bool Processor::isReadStreamDebugInfoSamplingAllowed(
+    const std::string& csid) const {
+  if (!settings()->enable_all_read_streams_debug) {
+    return false;
+  }
+  return impl_->read_stream_debug_info_sampling_config_
+      ->isReadStreamDebugInfoSamplingAllowed(csid);
 }
 
 workers_t Processor::createWorkerPool(WorkerType type, size_t count) {

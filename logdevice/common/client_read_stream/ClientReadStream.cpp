@@ -334,11 +334,12 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
 
 void ClientReadStream::sampleDebugInfo(
     const ClientReadStream::ClientReadStreamDebugInfo& info) const {
-  if (deps_->getSettings().all_read_streams_sampling_allowed_csid !=
-          info.csid ||
-      info.csid == "") {
+  Worker* w = Worker::onThisThread(false);
+  if (!(w && w->processor_ &&
+        w->processor_->isReadStreamDebugInfoSamplingAllowed(info.csid))) {
     return;
   }
+
   auto sample = std::make_unique<TraceSample>();
   sample->addNormalValue("thread_name", ThreadID::getName());
   sample->addNormalValue("csid", info.csid);
