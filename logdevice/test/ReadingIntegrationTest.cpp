@@ -1338,6 +1338,10 @@ TEST_P(ReadingIntegrationTest,
                      .setNumLogs(1)
                      .setLogAttributes(attrs)
                      .setNumDBShards(nshards)
+                     // Use very big store timeout to make sure Appenders send
+                     // only one wave. Otherwise our record erasing may race
+                     // with stores from old waves.
+                     .setParam("--store-timeout", "20s")
                      .doPreProvisionEpochMetaData()
                      .allowExistingMetaData()
                      .create(nnodes);
@@ -1350,7 +1354,6 @@ TEST_P(ReadingIntegrationTest,
 
   // Step 2. Make a random storage node unresponsive.
   cluster->getNode(node_down).shutdown();
-  cluster->waitForRecovery();
 
   // Step 2.a. Force shard status map to have a non-LSN_INVALID version so
   // reconnects may trigger a call to ClientReadStream::findGapsAndRecords().
@@ -1375,13 +1378,21 @@ TEST_P(ReadingIntegrationTest,
                                 shard_idx,
                                 logid.val_,
                                 lsn_to_string(lsn2));
-      n.sendCommand(cmd, true);
+      std::string response = n.sendCommand(cmd, true);
+      // Strip the trailing "\r\n".
+      ld_info("N%d replied: %s",
+              (int)n.node_index_,
+              response.substr(0, std::max(2ul, response.size()) - 2).c_str());
     }
   });
 
   // Step 4. Add more data and try to read it by starting from e0n1
   lsn_t lsn3 = client->appendSync(logid, Payload("available data", 14));
   ASSERT_NE(LSN_INVALID, lsn3) << "We are unable to append to log";
+  ld_info("LSNs: %s, %s, %s",
+          lsn_to_string(lsn1).c_str(),
+          lsn_to_string(lsn2).c_str(),
+          lsn_to_string(lsn3).c_str());
 
   auto reader = client->createReader(1);
   reader->setTimeout(waitClientDataTimeout); // so we don't get stuck in read()
