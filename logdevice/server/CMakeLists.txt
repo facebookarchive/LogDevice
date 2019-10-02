@@ -41,6 +41,7 @@ if(${BUILD_TESTS})
   file(GLOB test_files  "${LOGDEVICE_SERVER_DIR}/test/*.cpp")
 
   add_executable(server_test
+    ${LOGDEVICE_PHONY_MAIN}
     ${test_hfiles}
     ${test_files}
   )
