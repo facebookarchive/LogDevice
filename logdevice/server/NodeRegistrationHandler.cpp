@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/NodeRegistrationHandler.h"
 
+#include <folly/Random.h>
 #include <folly/String.h>
 
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
@@ -17,7 +18,10 @@ using namespace facebook::logdevice::configuration::nodes;
 
 namespace {
 constexpr size_t kMaxNumRetries = 5;
-};
+
+// Maximum sleep duration before attempting register/update again
+constexpr std::chrono::milliseconds kMaxSleepDuration(10000);
+}; // namespace
 
 folly::Expected<node_index_t, E>
 NodeRegistrationHandler::registerSelf(NodeIndicesAllocator allocator) {
@@ -44,6 +48,13 @@ NodeRegistrationHandler::registerSelf(NodeIndicesAllocator allocator) {
       return folly::makeUnexpected(status);
     } else {
       // It's a VERSION_MISMATCH. Keep retrying.
+      if (trials < kMaxNumRetries - 1) {
+        auto sleep_duration = folly::Random::rand64(kMaxSleepDuration.count());
+        ld_info("Version mismatch for NodesConfiguration registration, "
+                "will retry in %lu ms",
+                sleep_duration);
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
+      }
     }
   }
   ld_error("Exhusted all retries. Giving up.");
@@ -68,6 +79,13 @@ Status NodeRegistrationHandler::updateSelf(node_index_t my_idx) {
       return status;
     } else {
       // It's a VERSION_MISMATCH. Keep retrying.
+      if (trials < kMaxNumRetries - 1) {
+        auto sleep_duration = folly::Random::rand64(kMaxSleepDuration.count());
+        ld_info("Version mismatch for NodesConfiguration update, "
+                "will retry in %lu ms",
+                sleep_duration);
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
+      }
     }
   }
   ld_error("Exhusted all retries. Giving up.");
