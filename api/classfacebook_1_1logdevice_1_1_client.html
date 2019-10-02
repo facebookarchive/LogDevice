@@ -2868,7 +2868,8 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>This waits (blocks) until the LogsConfig satisfy the supplied predicate or until the timeout has passed.</p>
+<p>This waits (blocks) until this <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a>'s local view of LogsConfig catches up to the given version or higher, or until the timeout has passed. Doesn't wait for config propagation to servers.</p>
+<p>This guarantees that subsequent get*() calls (<a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a2c2b8650e686d6165f1d5a7945d63996">getDirectory()</a>, <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aab2bf5451fc1e3415681271b64de0bfe">getLogGroup()</a> etc) will get an up-to-date view. Does <em>not</em> guarantee that subsequent <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">append()</a>, <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a70bbf9403fb51a73c2124e55fb97d0f4">makeDirectory()</a>, <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#af5d99be796b2bdba8e9da20b08b04719">makeLogGroup()</a>, etc, will have an up-to-date view.</p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">version</td><td>The minimum version you need to sync LogsConfig to</td></tr>
