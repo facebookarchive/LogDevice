@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc. and its affiliates.
+ * Copyright (c) 2019-present, Facebook, Inc. and its affiliates.
  * All rights reserved.
  *
  * This source code is licensed under the BSD-style license found in the
@@ -7,12 +7,10 @@
  */
 #include <chrono>
 #include <cstdio>
-#include <cstdlib>
 #include <iostream>
-#include <string>
 
-#include <boost/program_options.hpp>
 #include <folly/Singleton.h>
+#include <folly/synchronization/Baton.h>
 
 #include "logdevice/examples/parse_target_log.h"
 #include "logdevice/examples/tail_flags.h"
@@ -26,6 +24,11 @@
  */
 
 using facebook::logdevice::logid_t;
+
+static bool
+recordCallback(std::unique_ptr<facebook::logdevice::DataRecord>& record);
+
+static bool gapCallback(const facebook::logdevice::GapRecord& gap);
 
 int main(int argc, const char* argv[]) {
   folly::SingletonVault::singleton()->registrationComplete();
@@ -81,47 +84,62 @@ int main(int argc, const char* argv[]) {
     return 0;
   }
 
-  std::unique_ptr<facebook::logdevice::Reader> reader = client->createReader(1);
-  int rv __attribute__((__unused__)) =
-      reader->startReading(log, start_lsn, until_lsn);
-  assert(rv == 0);
-  // In follow mode, ask Reader to give us records as they come in instead of
-  // waiting for full batches to form.
-  if (command_line_options.follow) {
-    reader->waitOnlyWhenNoData();
-  }
+  std::unique_ptr<facebook::logdevice::AsyncReader> reader =
+      client->createAsyncReader();
 
-  int exit_code = 0;
-  bool done = false;
-  std::vector<std::unique_ptr<facebook::logdevice::DataRecord>> data;
-  do {
-    data.clear();
-    facebook::logdevice::GapRecord gap;
-    ssize_t nread = reader->read(100, &data, &gap);
-    if (nread >= 0) {
-      // Got some data, print to stdout
-      for (auto& record_ptr : data) {
-        const facebook::logdevice::Payload& payload = record_ptr->payload;
-        ::fwrite(payload.data(), 1, payload.size(), stdout);
-        ::putchar('\n');
-        if (record_ptr->attrs.lsn == until_lsn) {
-          done = true;
-        }
-      }
-    } else {
-      // A gap in the numbering sequence.  Warn about data loss but ignore
-      // other types of gaps.
-      if (gap.type == facebook::logdevice::GapType::DATALOSS) {
-        fprintf(stderr,
-                "warning: DATALOSS gaps for LSN range [%ld, %ld]\n",
-                gap.lo,
-                gap.hi);
-        exit_code = 1;
-      }
-      if (gap.hi == until_lsn) {
-        done = true;
-      }
-    }
-  } while (!done);
-  return exit_code;
+  folly::Baton<> stop_baton;
+  reader->setRecordCallback(recordCallback);
+  reader->setGapCallback(gapCallback);
+  reader->setDoneCallback([&](logid_t log) {
+    fprintf(stderr, "AsyncReader: Done reading log %lu", log.val_);
+    stop_baton.post();
+  });
+
+  int rv = reader->startReading(log, start_lsn, until_lsn);
+  ld_check(!rv);
+
+  stop_baton.wait();
+  return 0;
+}
+
+bool recordCallback(std::unique_ptr<facebook::logdevice::DataRecord>& record) {
+  std::cout << "Received record for log " << record->logid.val() << ": LSN "
+            << facebook::logdevice::lsn_to_string(record->attrs.lsn)
+            << ", payload \"" << record->payload.toString() << "\""
+            << std::endl;
+  return true;
+}
+
+bool gapCallback(const facebook::logdevice::GapRecord& gap) {
+  using facebook::logdevice::GapType;
+  switch (gap.type) {
+    case GapType::BRIDGE:
+    case GapType::HOLE:
+    case GapType::TRIM:
+    case GapType::FILTERED_OUT:
+      // benign gaps in LSN numbering sequence
+      break;
+    case GapType::DATALOSS:
+      std::cout << "Error! Data has been lost for log " << gap.logid.val()
+                << " from LSN " << facebook::logdevice::lsn_to_string(gap.lo)
+                << " to LSN " << facebook::logdevice::lsn_to_string(gap.hi)
+                << std::endl;
+      break;
+    case GapType::ACCESS:
+      std::cout << "Error! Access denied to log " << gap.logid.val()
+                << std::endl;
+      break;
+    case GapType::NOTINCONFIG:
+      std::cout << "Error! Log " << gap.logid.val() << " not found!"
+                << std::endl;
+      break;
+    default:
+      std::cout << "Unrecognized gap of type "
+                << facebook::logdevice::gapTypeToString(gap.type) << " for log "
+                << gap.logid.val() << " from LSN "
+                << facebook::logdevice::lsn_to_string(gap.lo) << " to LSN "
+                << facebook::logdevice::lsn_to_string(gap.hi) << std::endl;
+      break;
+  }
+  return true;
 }

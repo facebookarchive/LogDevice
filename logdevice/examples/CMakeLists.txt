@@ -11,6 +11,13 @@ add_executable(ldcat
 
 add_executable(ldtail
   ${LOGDEVICE_EXAMPLES_DIR}/tail.cpp
+  ${LOGDEVICE_EXAMPLES_DIR}/tail_flags.h
+  ${LOGDEVICE_EXAMPLES_DIR}/parse_target_log.h
+  ${LOGDEVICE_EXAMPLES_DIR}/parse_target_log.cpp)
+
+add_executable(ldtailasync
+  ${LOGDEVICE_EXAMPLES_DIR}/tail_async.cpp
+  ${LOGDEVICE_EXAMPLES_DIR}/tail_flags.h
   ${LOGDEVICE_EXAMPLES_DIR}/parse_target_log.h
   ${LOGDEVICE_EXAMPLES_DIR}/parse_target_log.cpp)
 
@@ -59,9 +66,10 @@ target_link_libraries(ld-dev-cluster
 
 target_link_libraries(ldcat ldclient)
 target_link_libraries(ldtail ldclient)
+target_link_libraries(ldtailasync ldclient)
 target_link_libraries(ldtrim ldclient)
 target_link_libraries(ldwrite ldclient)
 target_link_libraries(ldbuffwrite ldclient)
 
 add_custom_target(examples)
-add_dependencies(examples ldcat ldtail ldtrim ldwrite ldbuffwrite)
+add_dependencies(examples ldcat ldtail ldtailasync ldtrim ldwrite ldbuffwrite)
