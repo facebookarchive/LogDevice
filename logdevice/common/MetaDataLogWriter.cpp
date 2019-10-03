@@ -524,7 +524,22 @@ void MetaDataLogWriter::checkActivation(logid_t log_id,
     delete node;
     return;
   }
+
   const epoch_t epoch_now = seq->getCurrentEpoch();
+  if (epoch_now == EPOCH_INVALID) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   100,
+                   "Cannot re-activate sequencer for log %lu. "
+                   "Current epoch is invalid. Epoch before: %d. "
+                   "Destroying the timer.",
+                   log_id.val_,
+                   epoch_before.val_);
+
+    ld_check(node->list_hook.is_linked());
+    delete node;
+    return;
+  }
+
   if (epoch_now > epoch_before) {
     // sequencer advanced to a new epoch larger than epoch_before
     ld_debug("Sequencer for log %lu has successfully activated to a new epoch "
