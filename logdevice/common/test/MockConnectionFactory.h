@@ -10,12 +10,14 @@
 #include <gmock/gmock.h>
 
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Sockaddr.h"
+#include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/SocketTypes.h"
-#include "logdevice/common/network/ConnectionFactory.h"
+#include "logdevice/common/network/IConnectionFactory.h"
 
 namespace facebook { namespace logdevice {
 

@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/protocol/ACK_Message.h"
 
+#include <openssl/ssl.h>
+
 #include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
