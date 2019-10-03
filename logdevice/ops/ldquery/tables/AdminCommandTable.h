@@ -127,7 +127,7 @@ class AdminCommandTable : public Table {
   std::unordered_map<ColumnName, int> nameToPosMap_;
 
   std::vector<TableData>
-  transformDataParallel(AdminCommandClient::RequestResponses& responses);
+  transformDataParallel(std::vector<AdminCommandClient::Response>& responses);
 
   std::chrono::milliseconds command_timeout_;
   Type type_;

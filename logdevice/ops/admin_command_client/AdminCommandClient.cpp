@@ -33,12 +33,11 @@ class AdminClientConnection
       public folly::AsyncTransportWrapper::WriteCallback {
  public:
   AdminClientConnection(EventBase* evb,
-                        AdminCommandClient::RequestResponse& rr,
+                        const AdminCommandClient::Request& rr,
                         std::chrono::milliseconds timeout,
                         std::shared_ptr<folly::SSLContext> context)
-      : socket_(), request_response_(rr), timeout_(timeout) {
-    if (request_response_.conntype_ ==
-        AdminCommandClient::ConnectionType::ENCRYPTED) {
+      : socket_(), request_(rr), timeout_(timeout) {
+    if (request_.conntype_ == AdminCommandClient::ConnectionType::ENCRYPTED) {
       ld_check(context);
       socket_ = AsyncSSLSocket::newSocket(context, evb);
     } else {
@@ -46,19 +45,19 @@ class AdminClientConnection
     }
   }
 
-  virtual folly::SemiFuture<AdminCommandClient::RequestResponse*> connect() {
-    bool ssl{request_response_.conntype_ ==
+  virtual folly::SemiFuture<AdminCommandClient::Response> connect() {
+    bool ssl{request_.conntype_ ==
              AdminCommandClient::ConnectionType::ENCRYPTED};
     ld_debug("Connecting to %s with %s",
-             request_response_.sockaddr.describe().c_str(),
+             request_.sockaddr.describe().c_str(),
              (ssl) ? "SSL" : "PLAIN");
     tstart_ = std::chrono::steady_clock::now();
-    socket_->connect(this, request_response_.sockaddr, timeout_.count());
+    socket_->connect(this, request_.sockaddr, timeout_.count());
     return promise_.getSemiFuture();
   }
 
   void connectSuccess() noexcept override {
-    auto& request = request_response_.request;
+    auto& request = request_.request;
     socket_->setRecvBufSize(1 * 1024 * 1024);
     socket_->write(this, request.data(), request.size());
     if (request.back() != '\n') {
@@ -68,10 +67,10 @@ class AdminClientConnection
   }
 
   void connectErr(const AsyncSocketException& ex) noexcept override {
-    request_response_.success = false;
-    request_response_.failure_reason = "CONNECTION_ERROR";
+    response_.success = false;
+    response_.failure_reason = "CONNECTION_ERROR";
     ld_debug("Could not connect to %s: %s",
-             request_response_.sockaddr.describe().c_str(),
+             request_.sockaddr.describe().c_str(),
              ex.what());
     done();
   }
@@ -130,10 +129,10 @@ class AdminClientConnection
 
   void readErr(const AsyncSocketException& ex) noexcept override {
     ld_debug("Error reading from %s: %s",
-             request_response_.sockaddr.describe().c_str(),
+             request_.sockaddr.describe().c_str(),
              ex.what());
     success_ = false;
-    request_response_.failure_reason = "READ_ERROR";
+    response_.failure_reason = "READ_ERROR";
     done();
   }
 
@@ -144,9 +143,9 @@ class AdminClientConnection
   void writeErr(size_t /*bytesWritten*/,
                 const AsyncSocketException& ex) noexcept override {
     ld_debug("Error writing to %s: %s",
-             request_response_.sockaddr.describe().c_str(),
+             request_.sockaddr.describe().c_str(),
              ex.what());
-    request_response_.failure_reason = "WRITE_ERROR";
+    response_.failure_reason = "WRITE_ERROR";
     success_ = false;
     done();
   }
@@ -154,9 +153,9 @@ class AdminClientConnection
   void done() {
     using std::chrono::steady_clock;
     steady_clock::time_point tdone = steady_clock::now();
-    request_response_.success = success_;
+    response_.success = success_;
 
-    auto& response = request_response_.response;
+    auto& response = response_.response;
     response.clear();
 
     // If the last buffer's first character is a nul byte, discard it.
@@ -174,7 +173,7 @@ class AdminClientConnection
     }
 
     socket_->setReadCB(nullptr);
-    promise_.setValue(&request_response_);
+    promise_.setValue(response_);
     steady_clock::time_point tend = steady_clock::now();
     double d1 = std::chrono::duration_cast<std::chrono::duration<double>>(
                     tdone - tstart_)
@@ -186,12 +185,12 @@ class AdminClientConnection
         d1 + d2 > 0.5 ? dbg::Level::INFO : dbg::Level::DEBUG,
         "Response from %s has %lu chunks, response size is %lu, "
         "fetching data took %.3fs, preparing response took %.3fs. Command: %s",
-        request_response_.sockaddr.describe().c_str(),
+        request_.sockaddr.describe().c_str(),
         result_.size(),
         size,
         d1,
         d2,
-        request_response_.request.c_str());
+        request_.request.c_str());
     result_.clear();
   }
 
@@ -204,21 +203,22 @@ class AdminClientConnection
 
  private:
   std::shared_ptr<AsyncSocket> socket_;
-  AdminCommandClient::RequestResponse& request_response_;
+  const AdminCommandClient::Request request_;
+  AdminCommandClient::Response response_;
   std::vector<std::string> result_;
   bool success_{false};
   bool done_{false};
-  folly::Promise<AdminCommandClient::RequestResponse*> promise_;
+  folly::Promise<AdminCommandClient::Response> promise_;
   std::chrono::milliseconds timeout_;
   std::chrono::steady_clock::time_point tstart_;
 };
 
-std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>>
+std::vector<folly::SemiFuture<AdminCommandClient::Response>>
 AdminCommandClient::asyncSend(
-    std::vector<AdminCommandClient::RequestResponse>& rr,
+    const std::vector<AdminCommandClient::Request>& rr,
     std::chrono::milliseconds command_timeout,
     std::chrono::milliseconds connect_timeout) const {
-  std::vector<folly::SemiFuture<AdminCommandClient::RequestResponse*>> futures;
+  std::vector<folly::SemiFuture<AdminCommandClient::Response>> futures;
   futures.reserve(rr.size());
 
   for (auto& r : rr) {
@@ -233,23 +233,40 @@ AdminCommandClient::asyncSend(
                   std::make_shared<folly::SSLContext>());
               auto fut = connection->connect();
               return std::move(fut).via(executor).thenValue(
-                  [c = std::move(connection)](
-                      AdminCommandClient::RequestResponse* r) { return r; });
+                  [c = std::move(connection)](AdminCommandClient::Response r) {
+                    return r;
+                  });
             })
-            .onTimeout(command_timeout, [&r] {
-              r.failure_reason = "TIMEOUT";
-              return &r;
+            .onTimeout(command_timeout, [] {
+              return AdminCommandClient::Response{"", false, "TIMEOUT"};
             }));
   }
 
   return futures;
 }
 
-void AdminCommandClient::send(
-    std::vector<AdminCommandClient::RequestResponse>& rr,
-    std::chrono::milliseconds command_timeout,
-    std::chrono::milliseconds connect_timeout) const {
-  collectAllSemiFuture(asyncSend(rr, command_timeout, connect_timeout)).wait();
+std::vector<AdminCommandClient::Response>
+AdminCommandClient::send(const std::vector<AdminCommandClient::Request>& rr,
+                         std::chrono::milliseconds command_timeout,
+                         std::chrono::milliseconds connect_timeout) const {
+  return collectAllSemiFuture(asyncSend(rr, command_timeout, connect_timeout))
+      .via(executor_.get())
+      .thenValue(
+          [](std::vector<folly::Try<AdminCommandClient::Response>> results) {
+            std::vector<AdminCommandClient::Response> ret;
+            ret.reserve(results.size());
+            for (const auto& result : results) {
+              if (result.hasValue()) {
+                ret.emplace_back(result.value());
+              } else {
+                ret.emplace_back(std::string(),
+                                 false,
+                                 result.exception().what().toStdString());
+              }
+            }
+            return ret;
+          })
+      .get();
 }
 
 }} // namespace facebook::logdevice

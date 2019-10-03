@@ -282,8 +282,8 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
   AdminCommandClient ld_admin_client;
 
   std::unordered_map<folly::SocketAddress, node_index_t> addr_to_node_id;
-  AdminCommandClient::RequestResponses request_response;
-  request_response.reserve(selected_nodes.size());
+  std::vector<AdminCommandClient::Request> requests;
+  requests.reserve(selected_nodes.size());
   for (node_index_t i : selected_nodes) {
     ld_check(nodes_configuration->isNodeInServiceDiscoveryConfig(i));
 
@@ -292,51 +292,52 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
     SocketAddress addr;
     std::tie(addr, conntype) = getAddrForNode(i, nodes_configuration);
     addr_to_node_id[addr] = i;
-    request_response.emplace_back(addr, cmd, conntype);
+    requests.emplace_back(addr, cmd, conntype);
     ld_ctx_->activeQueryMetadata.contacted_nodes++;
   }
 
   ld_info("Sending '%s' admin command to %lu nodes...",
           folly::rtrimWhitespace(cmd.c_str()).str().c_str(),
-          request_response.size());
+          requests.size());
 
   steady_clock::time_point tstart = steady_clock::now();
-  ld_admin_client.send(request_response, command_timeout_);
+  auto responses = ld_admin_client.send(requests, command_timeout_);
+  ld_check(requests.size() == responses.size());
   steady_clock::time_point tend = steady_clock::now();
   double duration =
       std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart)
           .count();
   size_t replies = 0;
-  for (const auto& r : request_response) {
+  for (const auto& r : responses) {
     replies += r.success;
   }
   ld_info("Receiving data took %.1fs, %lu/%lu nodes replied",
           duration,
           replies,
-          request_response.size());
+          responses.size());
   tstart = tend;
 
   ld_info("Parsing json data...");
-  std::vector<TableData> results = transformDataParallel(request_response);
-  ld_check(results.size() == request_response.size());
+  std::vector<TableData> results = transformDataParallel(responses);
+  ld_check(results.size() == responses.size());
   for (int i = 0; i < results.size(); ++i) {
     if (!results[i].cols.empty()) {
       size_t rows = results[i].cols.begin()->second.size();
       std::string node_id_str =
-          folly::to<std::string>(addr_to_node_id[request_response[i].sockaddr]);
+          folly::to<std::string>(addr_to_node_id[requests[i].sockaddr]);
       results[i].cols["node_id"] = Column(rows, node_id_str);
     }
   }
 
-  for (const auto& r : request_response) {
-    if (!r.success) {
-      node_index_t node_id = addr_to_node_id[r.sockaddr];
+  for (int i = 0; i < requests.size(); i++) {
+    if (!responses[i].success) {
+      node_index_t node_id = addr_to_node_id[requests[i].sockaddr];
       ld_info("Failed request for N%d (%s): %s",
               node_id,
-              r.sockaddr.describe().c_str(),
-              r.failure_reason.c_str());
-      ld_ctx_->activeQueryMetadata.failures[node_id] =
-          FailedNodeDetails{r.sockaddr.describe(), r.failure_reason};
+              requests[i].sockaddr.describe().c_str(),
+              responses[i].failure_reason.c_str());
+      ld_ctx_->activeQueryMetadata.failures[node_id] = FailedNodeDetails{
+          requests[i].sockaddr.describe(), responses[i].failure_reason};
     }
   }
 
@@ -348,7 +349,7 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
 
   tstart = tend;
   Data data;
-  ld_info("Aggregating data from %lu nodes...", request_response.size());
+  ld_info("Aggregating data from %lu nodes...", responses.size());
   data.data = std::make_shared<TableData>(aggregate(std::move(results)));
 
   tend = steady_clock::now();
@@ -716,7 +717,7 @@ AdminCommandTable::transformData(std::string response_from_node) const {
 }
 
 std::vector<TableData> AdminCommandTable::transformDataParallel(
-    AdminCommandClient::RequestResponses& responses) {
+    std::vector<AdminCommandClient::Response>& responses) {
   std::vector<TableData> outputs(responses.size());
 
   auto thread_func = [&](size_t from, size_t to) {
