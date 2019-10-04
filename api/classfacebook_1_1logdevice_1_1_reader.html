@@ -304,7 +304,7 @@ const std::chrono::milliseconds&#160;</td><td class="memItemRight" valign="botto
   </tr>
 </table>
 </div><div class="memdoc">
-<p>Checks if a log is being read. Can be used to find out if the end of the log was reached (for a log that was being read). </p>
+<p>Checks if a log is being read. Can be used to find out if the <code>until</code> LSN (passed to <a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#a211ad73ea203bf37a65745fe37f63cd1">startReading()</a>) was reached (for a log that was being read). </p>
 
 </div>
 </div>
@@ -548,7 +548,7 @@ const std::chrono::milliseconds&#160;</td><td class="memItemRight" valign="botto
 </table>
 </div><div class="memdoc">
 <p>Stop reading a log.</p>
-<dl class="section return"><dt>Returns</dt><dd>On success, returns 0. On failure, -1 is returned and logdevice::err is set to: [any of the error codes from <a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#a7e26fd1ce23777a8af17922a3005f1ef">AsyncReader::stopReading()</a>] NOTFOUND log is not being read </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>On success, returns 0. On failure, -1 is returned and logdevice::err is set to: [any of the error codes from <a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#a7e26fd1ce23777a8af17922a3005f1ef">AsyncReader::stopReading()</a>] NOTFOUND log is not being read, either because <a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#a211ad73ea203bf37a65745fe37f63cd1">startReading()</a> was never called (or <a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#a7c5403cffbef361843ebb1344e44e716">stopReading()</a> was called), or because <code>until</code> LSN was reached </dd></dl>
 
 </div>
 </div>
