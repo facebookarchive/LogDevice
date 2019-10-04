@@ -47,7 +47,6 @@ set(FBTHRIFT_LIBRARIES
     ${BINARY_DIR}/lib/libthrift-core.a
     ${BINARY_DIR}/lib/libcompiler_base.a
     ${BINARY_DIR}/lib/libthriftprotocol.a
-    ${BINARY_DIR}/lib/libthrift.a
     ${BINARY_DIR}/lib/libconcurrency.a
 )
 
