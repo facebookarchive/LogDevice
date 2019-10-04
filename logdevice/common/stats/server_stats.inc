@@ -1017,6 +1017,16 @@ STAT_DEFINE(watchdog_num_delays, SUM)
 // Num workers detected as stalled by watchdog
 STAT_DEFINE(num_stalled_workers, SUM)
 
+// How many times the health monitor has looped.
+// Note: temporary
+STAT_DEFINE(health_monitor_num_loops, SUM)
+// Note: temporary
+STAT_DEFINE(health_monitor_errors, SUM)
+// Note: temporary
+STAT_DEFINE(health_monitor_state_indicator, SUM)
+// Note: temporary
+STAT_DEFINE(health_monitor_overload_indicator, SUM)
+
 // EventLoop delays.
 STAT_DEFINE(event_loop_sched_delay, SUM)
 

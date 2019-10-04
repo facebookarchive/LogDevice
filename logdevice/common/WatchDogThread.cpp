@@ -131,6 +131,9 @@ void WatchDogThread::run() {
                      1,
                      "Entry into watchdog loop took %lums",
                      loop_entry_delay);
+      processor_->getHealthMonitor().reportWatchdogHealth(/*delayed=*/true);
+    } else {
+      processor_->getHealthMonitor().reportWatchdogHealth(/*delayed=*/false);
     }
     detectStalls();
     last_entry_time = std::chrono::steady_clock::now();

@@ -18,9 +18,11 @@ using namespace facebook::logdevice;
 namespace facebook { namespace logdevice {
 class ServerHealthMonitorTest : public testing::Test {
  public:
-  const std::chrono::milliseconds loop_duration{50};
-  const int stalled_workers{2};
-  const std::chrono::milliseconds worker_stall_duration{50};
+  const std::chrono::milliseconds kLoopDuration{50};
+  const int kStalledWorkers{2};
+  const std::chrono::milliseconds kWorkerStallDuration{50};
+  const std::chrono::milliseconds kLongLoopDuration{100};
+  const std::chrono::milliseconds kExtraLongLoopDuration{500};
 
   explicit ServerHealthMonitorTest() {}
   // Tests case for when no changes are reported to the health monitor.
@@ -30,18 +32,22 @@ class ServerHealthMonitorTest : public testing::Test {
     std::unique_ptr<ServerHealthMonitor> shm =
         std::make_unique<ServerHealthMonitor>(
             inlineExecutor,
-            std::chrono::milliseconds(loop_duration),
-            stalled_workers);
+            std::chrono::milliseconds(kLoopDuration),
+            kStalledWorkers,
+            nullptr);
 
     shm->startUp();
     auto health_monitor_closed = shm->shutdown();
     health_monitor_closed.wait();
     EXPECT_EQ(false, shm->internal_info_.watchdog_delay_);
-    EXPECT_EQ(false, shm->internal_info_.worker_queue_delays_[0]);
-    EXPECT_EQ(false, shm->internal_info_.worker_queue_delays_[1]);
+    EXPECT_EQ(false, shm->internal_info_.health_monitor_delay_);
     EXPECT_EQ(0, shm->internal_info_.total_stalled_workers);
-    EXPECT_EQ(true, shm->internal_info_.worker_stalls_[0].empty());
-    EXPECT_EQ(true, shm->internal_info_.worker_stalls_[1].empty());
+    EXPECT_EQ(0, shm->internal_info_.worker_stalls_[0].count());
+    EXPECT_EQ(0, shm->internal_info_.worker_stalls_[1].count());
+    EXPECT_EQ(0, shm->internal_info_.worker_queue_stalls_[0].count());
+    EXPECT_EQ(0, shm->internal_info_.worker_queue_stalls_[1].count());
+    EXPECT_EQ(false, shm->overloaded_);
+    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
   }
 
   void totalStalledWorkersTest() {
@@ -49,12 +55,14 @@ class ServerHealthMonitorTest : public testing::Test {
     std::unique_ptr<ServerHealthMonitor> shm =
         std::make_unique<ServerHealthMonitor>(
             inlineExecutor,
-            std::chrono::milliseconds(loop_duration),
-            stalled_workers);
+            std::chrono::milliseconds(kLoopDuration),
+            kStalledWorkers,
+            nullptr);
+
     shm->startUp();
-    shm->reportStalledWorkers(stalled_workers);
+    shm->reportStalledWorkers(kStalledWorkers);
     auto health_monitor_closed =
-        folly::futures::sleep(std::chrono::milliseconds(3 * loop_duration))
+        folly::futures::sleep(std::chrono::milliseconds(3 * kLoopDuration))
             .via(&inlineExecutor)
             .then([&shm](folly::Try<folly::Unit>) mutable {
               return shm->shutdown();
@@ -62,18 +70,20 @@ class ServerHealthMonitorTest : public testing::Test {
 
     health_monitor_closed.wait();
     EXPECT_EQ(2, shm->internal_info_.total_stalled_workers);
+    EXPECT_EQ(false, shm->overloaded_);
+    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
   }
 
   void watchdogDelayTest() {
     auto& inlineExecutor = folly::InlineExecutor::instance();
     std::unique_ptr<ServerHealthMonitor> shm =
         std::make_unique<ServerHealthMonitor>(
-            inlineExecutor, loop_duration, stalled_workers);
+            inlineExecutor, kLoopDuration, kStalledWorkers, nullptr);
 
     shm->startUp();
     shm->reportWatchdogHealth(/*delayed = */ true);
     auto health_monitor_closed =
-        folly::futures::sleep(std::chrono::milliseconds(2 * loop_duration))
+        folly::futures::sleep(std::chrono::milliseconds(2 * kLoopDuration))
             .via(&inlineExecutor)
             .then([&shm](folly::Try<folly::Unit>) mutable {
               return shm->shutdown();
@@ -81,54 +91,185 @@ class ServerHealthMonitorTest : public testing::Test {
 
     health_monitor_closed.wait();
     EXPECT_EQ(true, shm->internal_info_.watchdog_delay_);
+    EXPECT_EQ(false, shm->overloaded_);
+    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
   }
 
-  void workerStallsTest() {
+  ServerHealthMonitor::NodeState
+  calculateHealthMonitorState(ServerHealthMonitor& shm,
+                              std::chrono::milliseconds sleep_period) {
+    return (sleep_period < shm.state_timer_.getCurrentValue())
+        ? ServerHealthMonitor::NodeState::UNHEALTHY
+        : ServerHealthMonitor::NodeState::HEALTHY;
+  }
+
+  void simulateLoop(ServerHealthMonitor& shm,
+                    ServerHealthMonitor::TimePoint now,
+                    ServerHealthMonitor::TimePoint start_time,
+                    ServerHealthMonitor::TimePoint end_time) {
+    shm.updateVariables(now);
+    shm.overloaded_ = shm.isOverloaded(start_time, end_time);
+    shm.calculateNegativeSignal(now, start_time, end_time);
+    shm.node_state_ = calculateHealthMonitorState(shm, kExtraLongLoopDuration);
+  }
+
+  void stateTest() {
+    const std::chrono::milliseconds delay_time{250};
     auto& inlineExecutor = folly::InlineExecutor::instance();
-    auto now = std::chrono::steady_clock::now();
     std::unique_ptr<ServerHealthMonitor> shm =
         std::make_unique<ServerHealthMonitor>(
-            inlineExecutor, loop_duration, stalled_workers);
-    shm->startUp();
+            inlineExecutor, kExtraLongLoopDuration, kStalledWorkers, nullptr);
 
-    shm->reportWorkerStall(0, worker_stall_duration);
-
-    folly::futures::sleep(std::chrono::milliseconds(loop_duration))
-        .via(&inlineExecutor)
-        .then([=, &shm](folly::Try<folly::Unit>) mutable {
-          shm->reportWorkerStall(0, worker_stall_duration);
-          shm->reportWorkerStall(1, worker_stall_duration);
-        });
-
-    folly::futures::sleep(std::chrono::milliseconds(2 * loop_duration))
-        .via(&inlineExecutor)
-        .then([&shm](folly::Try<folly::Unit>) mutable {
-          EXPECT_EQ(2, shm->internal_info_.worker_stalls_[0].count());
-          EXPECT_EQ(1, shm->internal_info_.worker_stalls_[1].count());
-        });
-
-    auto health_monitor_closed =
-
-        folly::futures::sleep(std::chrono::milliseconds(4 * loop_duration))
-            .via(&inlineExecutor)
-            .then([=, &shm](folly::Try<folly::Unit>) mutable {
-              shm->internal_info_.worker_stalls_[0].update(now +
-                                                           4 * loop_duration);
-              shm->internal_info_.worker_stalls_[1].update(now +
-                                                           4 * loop_duration);
-              return shm->shutdown();
-            });
-
-    health_monitor_closed.wait();
+    auto now = SteadyTimestamp::now();
+    shm->updateVariables(now);
+    shm->internal_info_.worker_stalls_[0].addValue(
+        now + delay_time, kWorkerStallDuration);
+    // fake loop 1
+    now += kExtraLongLoopDuration;
+    auto start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    auto end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // report stalls
+    shm->internal_info_.worker_stalls_[0].addValue(
+        now + delay_time, kWorkerStallDuration);
+    shm->internal_info_.worker_stalls_[1].addValue(
+        now + delay_time, kWorkerStallDuration);
+    // fake loop 2
+    now += kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
+    EXPECT_EQ(2, shm->internal_info_.worker_stalls_[0].count());
+    EXPECT_EQ(1, shm->internal_info_.worker_stalls_[1].count());
+    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(3 * (3 - 1) * kExtraLongLoopDuration.count(),
+              shm->state_timer_.getCurrentValue().count());
+    // fake loop 3
+    now += kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
+    EXPECT_EQ(2, shm->internal_info_.worker_stalls_[0].count());
+    EXPECT_EQ(1, shm->internal_info_.worker_stalls_[1].count());
+    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(3 * (3 * (3 - 1) - 1) * kExtraLongLoopDuration.count(),
+              shm->state_timer_.getCurrentValue().count());
+    // fake loop 4
+    now += kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
+    EXPECT_EQ(1, shm->internal_info_.worker_stalls_[0].count());
+    EXPECT_EQ(1, shm->internal_info_.worker_stalls_[1].count());
+    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ((3 * (3 * (3 - 1) - 1) - 1) * kExtraLongLoopDuration.count(),
+              shm->state_timer_.getCurrentValue().count());
+    // fake loop 5
+    now += kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
     EXPECT_EQ(0, shm->internal_info_.worker_stalls_[0].count());
     EXPECT_EQ(0, shm->internal_info_.worker_stalls_[1].count());
+    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ((3 * (3 * (3 - 1) - 1) - 2) * kExtraLongLoopDuration.count(),
+              shm->state_timer_.getCurrentValue().count());
+    // fake loop 6-17
+    now += 12 * kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
+    EXPECT_EQ(0, shm->internal_info_.worker_stalls_[0].count());
+    EXPECT_EQ(0, shm->internal_info_.worker_stalls_[1].count());
+    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
+    EXPECT_EQ(kExtraLongLoopDuration.count(),
+              shm->state_timer_.getCurrentValue().count());
   }
 
+  void overloadTest() {
+    const std::chrono::milliseconds delay_time{250};
+    auto& inlineExecutor = folly::InlineExecutor::instance();
+    std::unique_ptr<ServerHealthMonitor> shm =
+        std::make_unique<ServerHealthMonitor>(
+            inlineExecutor, kExtraLongLoopDuration, kStalledWorkers, nullptr);
+
+    auto now = SteadyTimestamp::now();
+    shm->updateVariables(now);
+    shm->internal_info_.worker_queue_stalls_[0].addValue(
+        now + delay_time, kWorkerStallDuration);
+    // fake loop 1
+    now += kExtraLongLoopDuration;
+    auto start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    auto end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // report stalls
+    shm->internal_info_.worker_queue_stalls_[0].addValue(
+        now + delay_time, kWorkerStallDuration);
+    shm->internal_info_.worker_queue_stalls_[1].addValue(
+        now + delay_time, kWorkerStallDuration);
+    // fake loop 2
+    now += kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
+    EXPECT_EQ(2, shm->internal_info_.worker_queue_stalls_[0].count());
+    EXPECT_EQ(1, shm->internal_info_.worker_queue_stalls_[1].count());
+    EXPECT_EQ(true, shm->overloaded_);
+    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
+    // fake loop 3
+    now += kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
+    EXPECT_EQ(2, shm->internal_info_.worker_queue_stalls_[0].count());
+    EXPECT_EQ(1, shm->internal_info_.worker_queue_stalls_[1].count());
+    EXPECT_EQ(true, shm->overloaded_);
+    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
+    // fake loop 4
+    now += kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
+    EXPECT_EQ(1, shm->internal_info_.worker_queue_stalls_[0].count());
+    EXPECT_EQ(1, shm->internal_info_.worker_queue_stalls_[1].count());
+    EXPECT_EQ(false, shm->overloaded_);
+    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
+    // fake loop 5
+    now += kExtraLongLoopDuration;
+    start_time =
+        now - ServerHealthMonitor::kPeriodRange * kExtraLongLoopDuration;
+    end_time = now + std::chrono::nanoseconds(1);
+    simulateLoop(*shm, now, start_time, end_time);
+    // check values
+    EXPECT_EQ(0, shm->internal_info_.worker_queue_stalls_[0].count());
+    EXPECT_EQ(0, shm->internal_info_.worker_queue_stalls_[1].count());
+    EXPECT_EQ(false, shm->overloaded_);
+    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
+    EXPECT_EQ(kExtraLongLoopDuration.count(),
+              shm->state_timer_.getCurrentValue().count());
+  }
   // Tests case for when no changes are reported to the health monitor, but
   // health monitor itself is delayed
   // Waits for HM shutdown.
   void healthMonitorDelayTest() {
-    const std::chrono::milliseconds long_loop_duration{100};
     const std::chrono::milliseconds wake_up{150};
     const std::chrono::milliseconds offset{40};
     const int wait_ticks{80};
@@ -136,7 +277,7 @@ class ServerHealthMonitorTest : public testing::Test {
     auto& inlineExecutor = folly::InlineExecutor::instance();
     std::unique_ptr<ServerHealthMonitor> shm =
         std::make_unique<ServerHealthMonitor>(
-            inlineExecutor, long_loop_duration, stalled_workers);
+            inlineExecutor, kLongLoopDuration, kStalledWorkers, nullptr);
 
     shm->startUp();
     auto health_monitor_closed =
@@ -156,6 +297,7 @@ class ServerHealthMonitorTest : public testing::Test {
 
     health_monitor_closed.wait();
     EXPECT_EQ(true, shm->internal_info_.health_monitor_delay_);
+    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
   }
 };
 
@@ -171,11 +313,15 @@ TEST_F(ServerHealthMonitorTest, TotalStalledWorkersTest) {
   totalStalledWorkersTest();
 }
 
+TEST_F(ServerHealthMonitorTest, StateTest) {
+  stateTest();
+}
+
+TEST_F(ServerHealthMonitorTest, OverloadTest) {
+  overloadTest();
+}
 TEST_F(ServerHealthMonitorTest, WatchdogDelayTest) {
   watchdogDelayTest();
 }
 
-TEST_F(ServerHealthMonitorTest, WorkerStallsTest) {
-  workerStallsTest();
-}
 }} // namespace facebook::logdevice

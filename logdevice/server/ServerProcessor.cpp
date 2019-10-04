@@ -65,12 +65,16 @@ void ServerProcessor::init() {
       health_monitor_ = std::make_unique<ServerHealthMonitor>(
           *executor,
           updateableSettings()->health_monitor_poll_interval_ms,
-          getWorkerCount(WorkerType::GENERAL));
+          getWorkerCount(WorkerType::GENERAL),
+          getWorker(worker_id_t(0), WorkerType::FAILURE_DETECTOR).getStats());
       health_monitor_->startUp();
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct ServerHealthMonitor: %s",
                error_description(err));
+      STAT_INCR(stats_, health_monitor_errors);
     }
+  } else {
+    STAT_INCR(stats_, health_monitor_errors);
   }
 }
 

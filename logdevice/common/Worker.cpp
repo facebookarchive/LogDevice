@@ -1252,9 +1252,8 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
   RunContext run_context = rq->getRunContext();
 
   auto priority = rq->getExecutorPriority();
-
-  auto queue_time{
-      duration_cast<microseconds>(steady_clock::now() - rq->enqueue_time_)};
+  auto queue_period = steady_clock::now() - rq->enqueue_time_;
+  auto queue_time{duration_cast<milliseconds>(queue_period)};
   if (queue_time > settings().request_queue_warning_time_limit) {
     auto priority_to_str = [](int8_t priority) {
       switch (priority) {
@@ -1270,18 +1269,14 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
     RATELIMIT_WARNING(5s,
                       10,
                       "Request queued for %g msec: %s (id: %lu), p :%s",
-                      queue_time.count() / 1000.0,
+                      static_cast<double>(queue_time.count()),
                       rq->describe().c_str(),
                       rq->id_.val(),
                       priority_to_str(priority));
-    if (processor_ && worker_type_ == WorkerType::GENERAL) {
-      processor_->getHealthMonitor().reportWorkerQueueHealth(
-          idx_.val_, /*delayed=*/true);
-    }
-  } else {
-    if (processor_ && worker_type_ == WorkerType::GENERAL) {
-      processor_->getHealthMonitor().reportWorkerQueueHealth(
-          idx_.val_, /*delayed=*/false);
+    if (worker_type_ == WorkerType::GENERAL &&
+        priority == folly::Executor::HI_PRI) {
+      processor_->getHealthMonitor().reportWorkerQueueStall(
+          idx_.val_, queue_time);
     }
   }
 
