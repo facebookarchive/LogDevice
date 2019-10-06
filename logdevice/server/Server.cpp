@@ -1252,8 +1252,32 @@ bool Server::initAdminServer() {
     auto adm_plugin =
         params_->getPluginRegistry()->getSinglePlugin<AdminServerFactory>(
             PluginType::ADMIN_SERVER_FACTORY);
+
+    auto my_node_id = params_->getMyNodeID().value();
+    auto svd =
+        updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
+            my_node_id.index());
+    ld_check(svd);
+
+    auto admin_listen_addr = svd->admin_address;
+    if (!admin_listen_addr.hasValue()) {
+      const auto& admin_settings = params_->getAdminServerSettings();
+      if (!admin_settings->admin_unix_socket.empty()) {
+        admin_listen_addr = Sockaddr(admin_settings->admin_unix_socket);
+      } else {
+        admin_listen_addr = Sockaddr("::", admin_settings->admin_port);
+      }
+      ld_warning(
+          "The admin-enabled setting is true, but "
+          "admin_address/admin_port are missing from the config. Will use "
+          "default address (%s) instead. Please consider setting a port in the "
+          "config",
+          admin_listen_addr->toString().c_str());
+    }
+
     if (adm_plugin) {
-      admin_server_handle_ = (*adm_plugin)(processor_.get(),
+      admin_server_handle_ = (*adm_plugin)(admin_listen_addr.value(),
+                                           processor_.get(),
                                            params_->getSettingsUpdater(),
                                            params_->getServerSettings(),
                                            params_->getAdminServerSettings(),
@@ -1261,7 +1285,8 @@ bool Server::initAdminServer() {
     } else {
       // Use built-in SimpleAdminServer
       admin_server_handle_ =
-          std::make_unique<SimpleAdminServer>(processor_.get(),
+          std::make_unique<SimpleAdminServer>(admin_listen_addr.value(),
+                                              processor_.get(),
                                               params_->getSettingsUpdater(),
                                               params_->getServerSettings(),
                                               params_->getAdminServerSettings(),

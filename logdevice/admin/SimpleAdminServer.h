@@ -31,6 +31,7 @@ class SimpleAdminServer : public AdminServer {
    * socket for the admin server.
    */
   SimpleAdminServer(
+      Sockaddr listen_addr,
       Processor* processor,
       std::shared_ptr<SettingsUpdater> settings_updater,
       UpdateableSettings<ServerSettings> server_settings,

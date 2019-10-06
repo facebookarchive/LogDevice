@@ -14,12 +14,14 @@ using apache::thrift::util::ScopedServerThread;
 
 namespace facebook { namespace logdevice {
 SimpleAdminServer::SimpleAdminServer(
+    Sockaddr listen_addr,
     Processor* processor,
     std::shared_ptr<SettingsUpdater> settings_updater,
     UpdateableSettings<ServerSettings> server_settings,
     UpdateableSettings<AdminServerSettings> admin_server_settings,
     StatsHolder* stats_holder)
-    : AdminServer(processor,
+    : AdminServer(listen_addr,
+                  processor,
                   std::move(settings_updater),
                   std::move(server_settings),
                   std::move(admin_server_settings),

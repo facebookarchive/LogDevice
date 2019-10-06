@@ -773,6 +773,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
       if (!no_ssl_address_) {
         node.ssl_address.assign(ssl_addrs[i].protocol_addr_);
       }
+      node.admin_address.assign(addrs[i].admin_addr_);
     }
   } else {
     // This test uses unix domain sockets. These will be created in the
@@ -792,6 +793,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
       if (!no_ssl_address_) {
         node.ssl_address.assign(ssl_addrs[i].protocol_addr_);
       }
+      node.admin_address.assign(addrs[i].admin_addr_);
     }
   }
 
@@ -989,6 +991,7 @@ int Cluster::expand(std::vector<node_index_t> new_indices,
     if (!no_ssl_address_) {
       nodes[idx].ssl_address = ssl_addrs[i].protocol_addr_;
     }
+    nodes[idx].admin_address = addrs[i].admin_addr_;
   }
 
   Configuration::NodesConfig nodes_config(std::move(nodes));

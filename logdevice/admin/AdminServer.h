@@ -34,7 +34,8 @@ class AdminServer {
    * The address defines the information needed to create a listening
    * socket for the admin server.
    */
-  AdminServer(Processor* processor,
+  AdminServer(Sockaddr listen_addr,
+              Processor* processor,
               std::shared_ptr<SettingsUpdater> settings_updater,
               UpdateableSettings<ServerSettings> server_settings,
               UpdateableSettings<AdminServerSettings> admin_server_settings,

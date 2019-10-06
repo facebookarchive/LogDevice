@@ -13,6 +13,7 @@
 
 namespace facebook { namespace logdevice {
 AdminServer::AdminServer(
+    Sockaddr listen_addr,
     Processor* processor,
     std::shared_ptr<SettingsUpdater> settings_updater,
     UpdateableSettings<ServerSettings> server_settings,
@@ -30,19 +31,17 @@ AdminServer::AdminServer(
   server_ = std::make_shared<apache::thrift::ThriftServer>();
   server_->setInterface(admin_api_handler_);
 
-  if (!admin_server_settings_->admin_unix_socket.empty()) {
+  ld_check(listen_addr.valid());
+  if (listen_addr.isUnixAddress()) {
     ld_info("Using unix socket for admin server: %s",
-            admin_server_settings_->admin_unix_socket.c_str());
+            listen_addr.toString().c_str());
     // We must unlink the previous socket if exists otherwise we will get
     // "Address already in use" error.
-    unlink(admin_server_settings_->admin_unix_socket.c_str());
-    folly::SocketAddress address;
-    address.setFromPath(admin_server_settings_->admin_unix_socket);
-    server_->setAddress(address);
+    unlink(listen_addr.toString().c_str());
+    server_->setAddress(listen_addr.getSocketAddress());
   } else {
-    ld_info("Admin server will listen on port %i",
-            admin_server_settings_->admin_port);
-    server_->setPort(admin_server_settings_->admin_port);
+    ld_info("Admin server will listen on port %i", listen_addr.port());
+    server_->setPort(listen_addr.port());
   }
 }
 

@@ -35,6 +35,7 @@ class AdminServerFactory : public Plugin {
    * there is no implementation available, the admin server will not be started.
    */
   virtual std::unique_ptr<AdminServer> operator()(
+      Sockaddr listen_addr,
       Processor* processor,
       std::shared_ptr<SettingsUpdater> settings_updater,
       UpdateableSettings<ServerSettings> updateable_server_settings,
