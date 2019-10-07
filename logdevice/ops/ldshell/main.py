@@ -8,13 +8,14 @@
 
 import sys
 
+from ldshell.autoload import commands
 from ldshell.logdevice_plugin import LogDevicePlugin
 from nubia import Nubia
 
 
 def main():
     plugin = LogDevicePlugin()
-    shell = Nubia(name="ldshell", plugin=plugin)
+    shell = Nubia(name="ldshell", plugin=plugin, command_pkgs=commands)
     sys.exit(shell.run())
 
 
