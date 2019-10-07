@@ -52,6 +52,7 @@
 #include "logdevice/server/admincommands/InfoStorageTasks.h"
 #include "logdevice/server/admincommands/InfoStoredLogs.h"
 #include "logdevice/server/admincommands/InfoSyncSequencerRequests.h"
+#include "logdevice/server/admincommands/InfoWriteMetaDataRecord.h"
 #include "logdevice/server/admincommands/InjectShardFault.h"
 #include "logdevice/server/admincommands/ListOrEraseMetadata.h"
 #include "logdevice/server/admincommands/LogStorageStateCommand.h"
@@ -113,6 +114,8 @@ AdminCommandFactory::AdminCommandFactory() {
   selector_.add<commands::InfoRecord>("info record");
   selector_.add<commands::InfoPartitions>("info partitions");
   selector_.add<commands::InfoLogsDBMetadata>("info logsdb metadata");
+  selector_.add<commands::InfoWriteMetaDataRecord>(
+      "info write_metadata_record");
   selector_.add<commands::ListOrEraseMetadata>("info metadata",
                                                /* erase */ false);
   selector_.add<commands::ListOrEraseMetadata>("delete metadata",
