@@ -51,6 +51,8 @@ class SafetyChecker {
               bool check_metadata_logs = true,
               bool check_internal_logs = true,
               bool check_capacity = true,
+              int max_unavailable_storage_capacity_pct = 25,
+              int max_unavailable_sequencing_capacity_pct = 25,
               folly::Optional<std::vector<logid_t>> logids_to_check = {});
 
   static std::string
@@ -121,6 +123,10 @@ class SafetyChecker {
       bool check_internal_logs,
       /* Do we check capacity? */
       bool check_capacity,
+      /* Percentage of allowed unavailable of storage capacity. */
+      int max_unavailable_storage_capacity_pct,
+      /* Percentage of allowed unavailable of sequencing capacity. */
+      int max_unavailable_sequencing_capacity_pct,
       /*
        * if folly::none we check all logs, if empty vector, we don't check any
        * logs, unless check_metadata_logs and/or check_internal_logs is/are set.

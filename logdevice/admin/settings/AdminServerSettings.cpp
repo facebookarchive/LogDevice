@@ -72,6 +72,46 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::AdminAPI)
 
+    ("max-unavailable-storage-capacity-pct",
+     &max_unavailable_storage_capacity_pct,
+     "25",
+     [](int x) -> void {
+       if (x < 0 || x > 100) {
+         throw boost::program_options::error(
+             "max-unavailable-storage-capacity-pct must be a valid "
+             "percentage, between 0 and 100."
+         );
+       }
+     },
+     "The precentage of the storage that is allowed to be taken down by "
+     "operations, safety checker will take into account DEAD nodes as well. "
+     "This means that if this value is 25, then safety checker will deny "
+     "maintenances that will may take down more storage nodes. The percentage "
+     "takes into account the weight of shards in the storage nodes, so does "
+     "not necessarily equals 25% of the number of storage nodes",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
+    ("max-unavailable-sequencing-capacity-pct",
+     &max_unavailable_sequencing_capacity_pct,
+     "25",
+     [](int x) -> void {
+       if (x < 0 || x > 100) {
+         throw boost::program_options::error(
+             "max-unavailable-sequencing-capacity-pct must be a valid "
+             "percentage, between 0 and 100."
+         );
+       }
+     },
+     "The precentage of the sequencing capacity that is allowed to be taken "
+     "down by operations, safety checker will take into account DEAD nodes as "
+     "well. This means that if this value is 25, then safety checker will deny "
+     "maintenances that will may take down more sequencer nodes. The percentage "
+     "takes into account the weight of the sequencer nodes, so does not "
+     "necessarily equals 25% of the number of sequencer nodes",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
     ("enable-cluster-maintenance-state-machine",
      &enable_cluster_maintenance_state_machine,
      "false",

@@ -288,10 +288,11 @@ struct Node {
     sequencer_attributes->setWeight(weight);
   }
 
-  void addStorageRole(shard_size_t num_shards = 1) {
+  void addStorageRole(shard_size_t num_shards = 1, double capacity = 1.0) {
     setRole(NodeRole::STORAGE);
     storage_attributes = std::make_unique<StorageNodeAttributes>();
     storage_attributes->num_shards = num_shards;
+    storage_attributes->capacity = capacity;
   }
 
   // return a human-readable string for the location info

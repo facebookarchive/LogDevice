@@ -49,6 +49,8 @@ folly::SemiFuture<folly::Expected<Impact, Status>> SafetyChecker::checkImpact(
     bool check_metadata_logs,
     bool check_internal_logs,
     bool check_capacity,
+    int max_unavailable_storage_capacity_pct,
+    int max_unavailable_sequencing_capacity_pct,
     folly::Optional<std::vector<logid_t>> logids_to_check) {
   // If we have metadata use it (and trigger async refresh if needed), if not,
   // refreshMetadata will fetch.
@@ -64,6 +66,8 @@ folly::SemiFuture<folly::Expected<Impact, Status>> SafetyChecker::checkImpact(
                               check_metadata_logs,
                               check_internal_logs,
                               check_capacity,
+                              max_unavailable_storage_capacity_pct,
+                              max_unavailable_sequencing_capacity_pct,
                               std::move(logids_to_check));
   });
 }
@@ -223,6 +227,8 @@ SafetyChecker::performSafetyCheck(
     bool check_metadata_logs,
     bool check_internal_logs,
     bool check_capacity,
+    int max_unavailable_storage_capacity_pct,
+    int max_unavailable_sequencing_capacity_pct,
     folly::Optional<std::vector<logid_t>> logids_to_check) {
   auto start_time = std::chrono::steady_clock::now();
   // We are moving the values to ensure lifetime in this async operation. We
@@ -237,6 +243,8 @@ SafetyChecker::performSafetyCheck(
                   check_metadata_logs,
                   check_internal_logs,
                   check_capacity,
+                  max_unavailable_storage_capacity_pct,
+                  max_unavailable_sequencing_capacity_pct,
                   logids_to_check = std::move(logids_to_check),
                   start_time,
                   this](auto&&) mutable
@@ -259,11 +267,27 @@ SafetyChecker::performSafetyCheck(
         // Check impact on capacity
         Impact capacity_impact;
         if (check_capacity) {
-          capacity_impact = safety::checkSequencingCapacity(
-              sequencers,
-              nodes_config,
-              cluster_state,
-              /*require_fully_started_nodes=*/true);
+          Impact seq_impact;
+          Impact storage_impact;
+          if (!sequencers.empty()) {
+            seq_impact = safety::checkSequencingCapacity(
+                sequencers,
+                nodes_config,
+                cluster_state,
+                /*require_fully_started_nodes=*/true,
+                max_unavailable_sequencing_capacity_pct);
+          }
+          if (target_storage_state != StorageState::READ_WRITE) {
+            storage_impact = safety::checkStorageCapacity(
+                shards,
+                nodes_config,
+                status_map,
+                cluster_state,
+                /*require_fully_started_nodes=*/true,
+                max_unavailable_storage_capacity_pct);
+          }
+          capacity_impact =
+              Impact::merge(seq_impact, storage_impact, error_sample_size_);
           if (abort_on_error_ &&
               capacity_impact.result != Impact::ImpactResult::NONE) {
             // We will not proceed if we will impact capacity and

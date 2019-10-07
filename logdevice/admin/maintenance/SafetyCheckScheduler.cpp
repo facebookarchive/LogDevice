@@ -172,6 +172,8 @@ SafetyCheckScheduler::performSafetyCheck(
       /* check_metadata_logs= */ true,
       /* check_internal_logs= */ true,
       /* check_capacity= */ true,
+      settings_->max_unavailable_storage_capacity_pct,
+      settings_->max_unavailable_sequencing_capacity_pct,
       /* logids_to_check= */ folly::none);
 }
 

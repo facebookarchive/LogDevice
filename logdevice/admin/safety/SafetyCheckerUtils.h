@@ -86,18 +86,33 @@ std::pair<bool, bool> checkReadWriteAvailablity(
         nodes_config,
     ClusterState* cluster_state,
     bool require_fully_started_nodes);
+
 /**
- * Makes sure there will be at least one sequencer that's alive and
- * ENABLED after disabling the passed *sequencers* nodes.
- * TODO: This should be a more comprehensive capacity check, but for now it
- * prevents us from allowing checks that disables all the sequencers.
+ * Makes sure there will be enough sequencing capacity that's alive and
+ * ENABLED after disabling the passed *sequencers* nodes. It also takes into
+ * account the DEAD sequencer nodes.
  */
 Impact checkSequencingCapacity(
     const folly::F14FastSet<node_index_t>& sequencers,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_config,
     ClusterState* cluster_state,
-    bool require_fully_started_nodes);
+    bool require_fully_started_nodes,
+    int max_unavailable_sequencing_capacity_pct);
+
+/**
+ * Makes sure there will be enough storage capacity that's alive and
+ * ENABLED after (assuming disabling) the passed shards nodes. It also takes
+ * into account the DEAD storage nodes.
+ */
+Impact checkStorageCapacity(
+    const ShardSet& op_shards,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_config,
+    const ShardAuthoritativeStatusMap& shard_status,
+    ClusterState* cluster_state,
+    bool require_fully_started_nodes,
+    int max_unavailable_storage_capacity_pct);
 
 /**
  * Create modified ReplicationProperty which takes into account Safety Margin.

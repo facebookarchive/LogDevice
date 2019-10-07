@@ -119,8 +119,16 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
   folly::Expected<Impact, Status> impact =
       // block until completion for tests.
       safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::READ_ONLY)
+          .checkImpact(shard_status,
+                       shards,
+                       {},
+                       configuration::StorageState::READ_ONLY,
+                       SafetyMargin(),
+                       /* check_metadata_logs = */ true,
+                       /* check_internal_logs = */ true,
+                       /* check_capacity = */ true,
+                       /* max_unavailable_storage_capacity_pct = */ 100,
+                       /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -145,11 +153,18 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
     shards.insert(ShardID(1, i));
   }
 
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::READ_ONLY)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::READ_ONLY,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -160,11 +175,18 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
     shards.insert(ShardID(2, i));
   }
 
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::READ_ONLY)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::READ_ONLY,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::WRITE_AVAILABILITY_LOSS, impact->result);
@@ -188,11 +210,18 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
 
   // try to shrink first num_nodes nodes
   // this is going to cause write stall as metadat nodes are only on first nodes
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::READ_ONLY)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::READ_ONLY,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::WRITE_AVAILABILITY_LOSS, impact->result);
@@ -258,8 +287,16 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
   // it is safe to drain 2 nodes as nodeset size is 5, replication is 2
   folly::Expected<Impact, Status> impact =
       safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::READ_ONLY)
+          .checkImpact(shard_status,
+                       shards,
+                       {},
+                       configuration::StorageState::READ_ONLY,
+                       SafetyMargin(),
+                       /* check_metadata_logs = */ true,
+                       /* check_internal_logs = */ true,
+                       /* check_capacity = */ true,
+                       /* max_unavailable_storage_capacity_pct = */ 100,
+                       /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -272,11 +309,18 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
   cluster->waitForMetaDataLogWrites();
 
   // now it is unsafe to drain first 2 nodes
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::READ_ONLY)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::READ_ONLY,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
@@ -335,8 +379,16 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
   // it is unsafe to drain 3 nodes as replication is 3 for event log
   folly::Expected<Impact, Status> impact =
       safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::READ_ONLY)
+          .checkImpact(shard_status,
+                       shards,
+                       {},
+                       configuration::StorageState::READ_ONLY,
+                       SafetyMargin(),
+                       /* check_metadata_logs = */ true,
+                       /* check_internal_logs = */ true,
+                       /* check_capacity = */ true,
+                       /* max_unavailable_storage_capacity_pct = */ 100,
+                       /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -352,11 +404,18 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
   shards.clear();
   shards.insert(ShardID(3, 0));
 
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::READ_ONLY)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::READ_ONLY,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -421,8 +480,16 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
   // it is unsafe to stop all shards
   folly::Expected<Impact, Status> impact =
       safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::DISABLED)
+          .checkImpact(shard_status,
+                       shards,
+                       {},
+                       configuration::StorageState::DISABLED,
+                       SafetyMargin(),
+                       /* check_metadata_logs = */ true,
+                       /* check_internal_logs = */ true,
+                       /* check_capacity = */ true,
+                       /* max_unavailable_storage_capacity_pct = */ 100,
+                       /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -441,11 +508,18 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
     }
   }
 
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::DISABLED)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -456,11 +530,18 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
     shards.insert(ShardID(i, 2));
   }
 
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::DISABLED)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
@@ -473,11 +554,18 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
   shards.insert(ShardID(1, 1));
   shards.insert(ShardID(2, 2));
   shards.insert(ShardID(3, 3));
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::DISABLED)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -564,7 +652,12 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                        shards,
                        {},
                        configuration::StorageState::READ_ONLY,
-                       safety)
+                       safety,
+                       /* check_metadata_logs = */ true,
+                       /* check_internal_logs = */ true,
+                       /* check_capacity = */ true,
+                       /* max_unavailable_storage_capacity_pct = */ 100,
+                       /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -575,7 +668,13 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             shards,
                             {},
                             configuration::StorageState::DISABLED,
-                            safety)
+                            safety,
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+
                .get();
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -587,7 +686,12 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             shards,
                             {},
                             configuration::StorageState::READ_ONLY,
-                            safety)
+                            safety,
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -598,7 +702,12 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             shards,
                             {},
                             configuration::StorageState::DISABLED,
-                            safety)
+                            safety,
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -611,7 +720,12 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             shards,
                             {},
                             configuration::StorageState::READ_ONLY,
-                            safety)
+                            safety,
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -625,7 +739,12 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             shards,
                             {},
                             configuration::StorageState::DISABLED,
-                            safety)
+                            safety,
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -640,11 +759,18 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
   }
 
   // it is fine to drain 2 nodes, without safety maring
-  impact =
-      safety_checker
-          .checkImpact(
-              shard_status, shards, {}, configuration::StorageState::DISABLED)
-          .get();
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            shards,
+                            {},
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
@@ -656,7 +782,12 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             shards,
                             {},
                             configuration::StorageState::DISABLED,
-                            safety)
+                            safety,
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
@@ -667,16 +798,43 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
   ASSERT_TRUE(impact->internal_logs_affected);
 }
 
-TEST_F(SafetyAPIIntegrationTest, DisableAllSequencers) {
+TEST_F(SafetyAPIIntegrationTest, Capacity) {
   const size_t num_nodes = 5;
   const size_t num_shards = 3;
 
   Configuration::Nodes nodes;
 
+  // Adding sequencer role to all nodes
+  // Weight of 0, 1 is 1.5, sequencer on 2 is disabled.
+  // Given that num_nodes = 5, total weight is 6.
+  // Where N0, N1 are 50% of the total weight.
   for (int i = 0; i < num_nodes; ++i) {
+    double weight = 1.0;
+    if (i == 0 || i == 1) {
+      // Node 0, 1 has sequencer weight of 1.5
+      weight = 1.5;
+    }
     nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
+    bool sequencer_enabled = true;
+    if (i == 2) {
+      sequencer_enabled = false;
+    }
+    nodes[i].addSequencerRole(sequencer_enabled, weight);
+    // Add storage role to all 5 nodes,
+    // capacity of num_nodes and num_nodes - 1 is 1.5
+    // Given that num_nodes = 5, total capacity is 6.
+    // Where N4, N3 are 50% of the total capacity.
+    // N0 is a READ_ONLY node.
+    double capacity = 1.0;
+    if (i == num_nodes - 2 || i == num_nodes - 1) {
+      capacity = 1.5;
+    }
+    nodes[i].addStorageRole(num_shards, capacity);
+    // N0 is READ_ONLY.
+    if (i == 0) {
+      nodes[i].storage_attributes->state =
+          configuration::StorageState::READ_ONLY;
+    }
   }
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -696,7 +854,7 @@ TEST_F(SafetyAPIIntegrationTest, DisableAllSequencers) {
 
   SafetyChecker safety_checker(&client_impl->getProcessor());
   // Get all possible errors.
-  safety_checker.setAbortOnError(false);
+  safety_checker.setAbortOnError(true);
   folly::F14FastSet<node_index_t> seqs;
 
   for (int i = 0; i < num_nodes; ++i) {
@@ -707,13 +865,119 @@ TEST_F(SafetyAPIIntegrationTest, DisableAllSequencers) {
   int rv = cluster->getShardAuthoritativeStatusMap(shard_status);
   ASSERT_EQ(0, rv);
 
-  // it is unsafe to stop all sequencers
+  // it is unsafe to stop all sequencers, we should allow maximum 25% of the
   folly::Expected<Impact, Status> impact =
       safety_checker
-          .checkImpact(
-              shard_status, {}, seqs, configuration::StorageState::READ_WRITE)
+          .checkImpact(shard_status,
+                       {},
+                       seqs,
+                       configuration::StorageState::DISABLED,
+                       SafetyMargin(),
+                       /* check_metadata_logs = */ true,
+                       /* check_internal_logs = */ true,
+                       /* check_capacity = */ true,
+                       /* max_unavailable_storage_capacity_pct = */ 25,
+                       /* max_unavailable_sequencing_capacity_pct = */ 25)
           .get();
   ASSERT_TRUE(impact.hasValue());
   ld_info("IMPACT: %s", impact->toString().c_str());
   ASSERT_EQ(Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS, impact->result);
+
+  // 50% of capacity via 2 nodes, that should be still fail. Because N2 is
+  // disabled, we already lost 16.6% of capacity.
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            {},
+                            {0, 1}, // 50% of the sequencing capacity
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 50)
+               .get();
+
+  ASSERT_TRUE(impact.hasValue());
+  ld_info("IMPACT: %s", impact->toString().c_str());
+  ASSERT_EQ(Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS, impact->result);
+
+  // Pass since N1 = 25% and N2 is 16.6%, and the limit is 50%.
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            {},
+                            {1}, // 25% of the sequencing capacity
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 100,
+                            /* max_unavailable_sequencing_capacity_pct = */ 50)
+               .get();
+  ASSERT_TRUE(impact.hasValue());
+  ld_info("IMPACT: %s", impact->toString().c_str());
+  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+
+  // STORAGE CAPACITY
+
+  // Fail because the limit is 40% and we are losing 25% in addition to the
+  // disabled node (N2 = 16.6%)
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            // 25% of the total capacity
+                            {ShardID(3, 0), ShardID(3, 1), ShardID(3, 2)},
+                            {},
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 40,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
+  ASSERT_TRUE(impact.hasValue());
+  ld_info("IMPACT: %s", impact->toString().c_str());
+  ASSERT_EQ(Impact::ImpactResult::STORAGE_CAPACITY_LOSS, impact->result);
+
+  // Success because the limit is 50% and we are losing 25% in addition to the
+  // disabled node (N2 = 16.6%)
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            // 25% of the total capacity
+                            {ShardID(3, 0), ShardID(3, 1), ShardID(3, 2)},
+                            {},
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 50,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
+  ASSERT_TRUE(impact.hasValue());
+  ld_info("IMPACT: %s", impact->toString().c_str());
+  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+
+  // Fail because N4:S0, N4:S1 are UNAVAILABLE/EMPTY (total capacity loss of 2/3
+  // * 25% = 16.6%) the limit is 50% and we are losing 25% (N3) in addition to
+  // the disabled node (N2 = 16.6%)
+  shard_status.setShardStatus(4, 0, AuthoritativeStatus::UNAVAILABLE);
+  shard_status.setShardStatus(4, 1, AuthoritativeStatus::AUTHORITATIVE_EMPTY);
+  impact = safety_checker
+               .checkImpact(shard_status,
+                            // 25% of the total capacity
+                            {ShardID(3, 0), ShardID(3, 1), ShardID(3, 2)},
+                            {},
+                            configuration::StorageState::DISABLED,
+                            SafetyMargin(),
+                            /* check_metadata_logs = */ true,
+                            /* check_internal_logs = */ true,
+                            /* check_capacity = */ true,
+                            /* max_unavailable_storage_capacity_pct = */ 50,
+                            /* max_unavailable_sequencing_capacity_pct = */ 100)
+               .get();
+  ASSERT_TRUE(impact.hasValue());
+  ld_info("IMPACT: %s", impact->toString().c_str());
+  ASSERT_EQ(Impact::ImpactResult::STORAGE_CAPACITY_LOSS, impact->result);
 }

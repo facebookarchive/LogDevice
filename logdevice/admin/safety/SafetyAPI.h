@@ -100,6 +100,9 @@ struct Impact {
     // operation could lead to loss of sequencer nodes impacting write
     // availability.
     SEQUENCING_CAPACITY_LOSS = (1u << 4),
+    // Operation could lead to loss of storage node capacity above the
+    // configured safety threshold.
+    STORAGE_CAPACITY_LOSS = (1u << 5),
     // Impact Could not be established due to an error.
     INVALID = (1u << 30),
   };

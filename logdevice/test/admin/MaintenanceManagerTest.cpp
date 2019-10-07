@@ -272,6 +272,8 @@ TEST_F(MaintenanceManagerTest, Snapshotting) {
           .setParam("--min-gossips-for-stable-state", "0")
           .setParam("--enable-cluster-maintenance-state-machine", "true")
           .setParam("--enable-nodes-configuration-manager", "true")
+          .setParam("--max-unavailable-storage-capacity-pct", "50")
+          .setParam("--max-unavailable-sequencing-capacity-pct", "50")
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")

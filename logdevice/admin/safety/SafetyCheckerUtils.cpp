@@ -453,16 +453,132 @@ Impact checkSequencingCapacity(
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_config,
     ClusterState* cluster_state,
-    bool require_fully_started) {
+    bool require_fully_started,
+    int max_unavailable_sequencing_capacity_pct) {
   const auto& seq_mem = nodes_config->getSequencerMembership();
   const auto& all_seqs = nodes_config->getSequencerNodes();
-  auto num_alive_enabled_nodes =
-      std::count_if(all_seqs.cbegin(), all_seqs.cend(), [&](const auto& seq) {
-        return seq_mem->isSequencingEnabled(seq) && !sequencers.contains(seq) &&
-            isAlive(cluster_state, seq, require_fully_started);
-      });
-  if (num_alive_enabled_nodes == 0) {
+  double total_weight = 0;
+  double dead_weight = 0;
+  double to_be_disabled_weight = 0;
+  std::vector<node_index_t> dead_nodes;
+  for (node_index_t idx : all_seqs) {
+    folly::Optional<membership::SequencerNodeState> sequencer =
+        seq_mem->getNodeState(idx);
+    ld_check(sequencer);
+    double sequencer_weight = sequencer->getConfiguredWeight();
+    total_weight += sequencer_weight;
+    if (!isAlive(cluster_state, idx, require_fully_started) ||
+        !sequencer->sequencer_enabled) {
+      // Already dead sequencer nodes are subtracted, regardless we want to
+      // disable or not.
+      dead_weight += sequencer_weight;
+      dead_nodes.push_back(idx);
+    } else if (sequencers.contains(idx)) {
+      to_be_disabled_weight += sequencer_weight;
+    }
+  }
+  // (dead_weight + to_be_disabled_weight) <= total_weight
+  double allowed_to_be_dead_weight =
+      (static_cast<double>(max_unavailable_sequencing_capacity_pct) / 100) *
+      total_weight;
+  if (dead_weight + to_be_disabled_weight > allowed_to_be_dead_weight) {
+    ld_info(
+        "Unavailable sequencing capacity is %f (%f dead/disabled, %f "
+        "because of the op), max allowed %f. Total cluster capacity is %f. "
+        "Dead nodes (%s), sequencers to be disabled in this operation is (%s)",
+        dead_weight + to_be_disabled_weight,
+        dead_weight,
+        to_be_disabled_weight,
+        allowed_to_be_dead_weight,
+        total_weight,
+        toString(dead_nodes).c_str(),
+        toString(sequencers).c_str());
     return Impact(Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS);
+  }
+  return Impact(Impact::ImpactResult::NONE);
+}
+
+Impact checkStorageCapacity(
+    const ShardSet& op_shards,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_config,
+    const ShardAuthoritativeStatusMap& shard_status,
+    ClusterState* cluster_state,
+    bool require_fully_started_nodes,
+    int max_unavailable_storage_capacity_pct) {
+  /**
+   * For storage capacity checking, we don't care whether you are setting the
+   * shard to read-only or disabled, in both case it's a capacity degradation.
+   */
+  std::vector<node_index_t> storage_nodes = nodes_config->getStorageNodes();
+  std::vector<node_index_t> unavailable_nodes;
+  std::vector<ShardID> unavailable_shards;
+  double total_capacity = 0;
+  double dead_capacity = 0;
+  double to_be_disabled_capacity = 0;
+  for (node_index_t idx : storage_nodes) {
+    // We assume that the pointer exists since these are the storage nodes as
+    // per configuration.
+    const auto* storage_node = nodes_config->getNodeStorageAttribute(idx);
+    ld_check(storage_node);
+    double node_capacity = storage_node->capacity;
+    // We assume that the shard capacity is the node capacity / num_shards.
+    shard_size_t num_shards = storage_node->num_shards;
+
+    total_capacity += node_capacity;
+    if (!isAlive(cluster_state, idx, require_fully_started_nodes)) {
+      // Already dead nodes are subtracted, regardless we want to
+      // disable or not.
+      dead_capacity += node_capacity;
+      unavailable_nodes.push_back(idx);
+    } else {
+      // how many shards do we want to disable in this node?
+      // This calculation will not be very accurate (thanks to floating-point
+      // artimetic). But it should be close enough to not cause problems since
+      // we don't test for equality.
+      double per_shard_capacity = node_capacity / num_shards;
+      for (int i = 0; i < num_shards; i++) {
+        ShardID shard(idx, i);
+        // Non-writable shards are considered capacity loss, since we don't
+        // have separate capacity measures for read vs. writes. We take the
+        // upper-bound by choosing to test for write-availability.
+        //
+        // We also consider the shard inaccessible if it's not
+        // FULLY_AUTHORITATIVE (in rebuilding, or broken).
+        if (!nodes_config->getStorageMembership()->canWriteToShard(shard) ||
+            shard_status.getShardStatus(shard) !=
+                AuthoritativeStatus::FULLY_AUTHORITATIVE ||
+            // is it in mini-rebuilding?
+            shard_status.shardIsTimeRangeRebuilding(
+                shard.node(), shard.shard()) ||
+            // is it one of the shards we are taking down?
+            op_shards.count(ShardID(idx, i)) > 0) {
+          to_be_disabled_capacity += per_shard_capacity;
+          unavailable_shards.push_back(shard);
+        }
+        // if all shards in a node is in the maintenance, the
+        // to_be_disabled_capacity will not be increased by exactly
+        // node_capacity. But that's okay, the difference doesn't matter much
+        // to us since it's extremely small.
+      }
+    }
+  }
+  // (dead_capacity + to_be_disabled_capacity) <= total_capacity
+  double allowed_to_be_dead_capacity =
+      (static_cast<double>(max_unavailable_storage_capacity_pct) / 100) *
+      total_capacity;
+  if (dead_capacity + to_be_disabled_capacity > allowed_to_be_dead_capacity) {
+    ld_info("Unavailable storage capacity is %f (%f dead/disabled, %f "
+            "because of the op), max allowed %f. Total cluster capacity is %f. "
+            "Dead nodes (%s). Shards that are/will be disabled are (%s)",
+            dead_capacity + to_be_disabled_capacity,
+            dead_capacity,
+            to_be_disabled_capacity,
+            allowed_to_be_dead_capacity,
+            total_capacity,
+            toString(unavailable_nodes).c_str(),
+            toString(unavailable_shards).c_str());
+    return Impact(Impact::ImpactResult::STORAGE_CAPACITY_LOSS);
   }
   return Impact(Impact::ImpactResult::NONE);
 }
@@ -553,5 +669,4 @@ Impact::StorageSetMetadata getStorageSetMetadata(
   }
   return out;
 }
-
 }}} // namespace facebook::logdevice::safety

@@ -36,12 +36,16 @@ enum OperationImpact {
    * were they need to establish f-majority on some records.
    */
   READ_AVAILABILITY_LOSS = 3,
-
   /**
    * This means that if we perform the operation, we might lose a lot of
    * sequencers which may impact write availability.
    */
   SEQUENCING_CAPACITY_LOSS = 4,
+  /**
+   * This means that by performing the operation, we will go below the
+   * configured threshold of maximum unavailability for storage nodes.
+   */
+  STORAGE_CAPACITY_LOSS = 5,
 }
 
 /**
@@ -134,6 +138,28 @@ struct CheckImpactRequest {
   8: optional bool check_metadata_logs = true,
   9: optional bool check_internal_logs = true,
   10: optional bool check_capacity = true,
+  /**
+   * The precentage of the storage that is allowed to be taken down by
+   * operations, safety checker will take into account DEAD nodes as well.
+   * This means that if this value is 25, then safety checker will deny
+   * maintenances that will may take down more storage nodes if the operation
+   * results in losing more than 25% of the storage capacity, this includes the
+   * existing unavailable storage capacity. The percentage takes into account
+   * the weight of shards in the storage nodes, so does not necessarily
+   * equals 25% of the number of storage nodes.
+   */
+  11: i32 max_unavailable_storage_capacity_pct = 25,
+  /**
+   * The precentage of the sequencing capacity that is allowed to be taken down
+   * by operations, safety checker will take into account DEAD/DISABLED nodes
+   * as well. This means that if this value is 25, then safety checker will deny
+   * maintenances that will may take down more sequencer nodes if the operation
+   * results in losing more than 25% of the capacity, this includes the
+   * existing unavailable sequencing capacity. The percentage takes into account
+   * the weight of nodes, so does not necessarily equals 25% of the number of
+   * sequencer nodes.
+   */
+  12: i32 max_unavailable_sequencing_capacity_pct = 25,
 }
 
 struct CheckImpactResponse {
