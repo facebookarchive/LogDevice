@@ -210,3 +210,76 @@ TEST_F(ServerConfigSourceIntegrationTest, StaleServerConfigFetchFromSource) {
   EXPECT_LT(
       0, cluster->getNode(0).stats()["config_changed_ignored_not_trusted"]);
 }
+
+TEST_F(ServerConfigSourceIntegrationTest, ServerConfigInternalLogUpdate) {
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableLogsConfigManager()
+          .setInternalLogsReplicationFactor(1)
+          .eventLogMode(
+              IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
+          .create(1);
+
+  // The default version for the cluster is 1
+  std::shared_ptr<Configuration> cluster_config = cluster->getConfig()->get();
+  EXPECT_EQ(config_version_t(1), cluster_config->serverConfig()->getVersion());
+
+  // Bump version of server config
+  auto new_server_config =
+      cluster_config->serverConfig()->withVersion(config_version_t(2));
+  cluster->writeConfig(
+      new_server_config.get(), cluster_config->logsConfig().get());
+
+  // Wait until the node picks up the updated config
+  wait_until([&]() -> bool {
+    std::string reply = cluster->getNode(0).sendCommand("info config");
+    auto updated_config = Configuration::fromJson(reply, nullptr, nullptr);
+    ld_check(updated_config);
+
+    return new_server_config->getVersion() ==
+        updated_config->serverConfig()->getVersion();
+  });
+
+  // We should not have published a new LogsConfig
+  EXPECT_EQ(0,
+            cluster->getNode(0)
+                .stats()["logsconfig_manager_published_server_config_update"]);
+
+  // Now update the internal logs section of the config.
+  logsconfig::LogAttributes log_attrs;
+  log_attrs.set_replicationFactor(1);
+  log_attrs.set_extraCopies(0);
+  log_attrs.set_syncedCopies(0);
+  log_attrs.set_maxWritesInFlight(2);
+  configuration::InternalLogs internalLogs;
+  internalLogs.insert("config_log_deltas", log_attrs);
+  internalLogs.insert("config_log_snapshots", log_attrs);
+  internalLogs.insert("event_log_deltas", log_attrs);
+  internalLogs.insert("event_log_snapshots", log_attrs);
+  internalLogs.insert("maintenance_log_deltas", log_attrs);
+  internalLogs.insert("maintenance_log_snapshots", log_attrs);
+
+  auto server_config_updated_internal_logs =
+      ServerConfig::fromDataTest(new_server_config->getClusterName(),
+                                 new_server_config->getNodesConfig(),
+                                 new_server_config->getMetaDataLogsConfig(),
+                                 ServerConfig::PrincipalsConfig(),
+                                 new_server_config->getSecurityConfig(),
+                                 ServerConfig::TraceLoggerConfig(),
+                                 new_server_config->getTrafficShapingConfig(),
+                                 new_server_config->getReadIOShapingConfig(),
+                                 new_server_config->getServerSettingsConfig(),
+                                 new_server_config->getClientSettingsConfig(),
+                                 internalLogs);
+  cluster->writeConfig(
+      server_config_updated_internal_logs->withVersion(config_version_t(3))
+          .get(),
+      cluster_config->logsConfig().get());
+
+  // Wait till logs config gets updated
+  wait_until([&]() -> bool {
+    return cluster->getNode(0)
+               .stats()["logsconfig_manager_published_server_config_update"] ==
+        1;
+  });
+}

@@ -130,6 +130,9 @@ class InternalLogs {
    */
   folly::dynamic toDynamic() const;
 
+  bool operator!=(const InternalLogs& other) const;
+  bool operator==(const InternalLogs& other) const;
+
  private:
   void reset();
 
