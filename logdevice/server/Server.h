@@ -79,7 +79,7 @@ class ServerParameters {
   ServerParameters& operator=(const ServerParameters& rhs) = delete;
 
   // Not mutually exclusive.
-  bool isReadableStorageNode() const;
+  bool isStorageNode() const;
   bool isSequencingEnabled() const;
   size_t getNumDBShards() const;
 

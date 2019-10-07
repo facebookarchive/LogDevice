@@ -528,7 +528,7 @@ ServerParameters::~ServerParameters() {
   dbg::bumpErrorCounterFn = nullptr;
 }
 
-bool ServerParameters::isReadableStorageNode() const {
+bool ServerParameters::isStorageNode() const {
   return storage_node_;
 }
 
@@ -777,7 +777,7 @@ bool Server::initListeners() {
 bool Server::initStore() {
   const std::string local_log_store_path =
       params_->getLocalLogStoreSettings()->local_log_store_path;
-  if (params_->isReadableStorageNode()) {
+  if (params_->isStorageNode()) {
     if (local_log_store_path.empty()) {
       ld_critical("This node is identified as a storage node in config (it has "
                   "a 'weight' attribute), but --local-log-store-path is not "
@@ -891,6 +891,10 @@ bool Server::initProcessor() {
             "Processing initial NodesConfiguration did not finish in time.");
         throw ConstructorFailed();
       }
+      if (params_->isStorageNode()) {
+        // Only storage nodes need to upgrade to being proposers.
+        ncm->upgradeToProposer();
+      }
     }
 
     if (sharded_storage_thread_pool_) {
@@ -914,7 +918,7 @@ bool Server::initProcessor() {
 }
 
 bool Server::repopulateRecordCaches() {
-  if (!params_->isReadableStorageNode()) {
+  if (!params_->isStorageNode()) {
     ld_info("Not repopulating record caches");
     return true;
   }
@@ -1013,7 +1017,7 @@ bool Server::initSequencers() {
 }
 
 bool Server::initLogStoreMonitor() {
-  if (params_->isReadableStorageNode()) {
+  if (params_->isStorageNode()) {
     logstore_monitor_ = std::make_unique<LogStoreMonitor>(
         processor_.get(), params_->getLocalLogStoreSettings());
     logstore_monitor_->start();
@@ -1217,7 +1221,7 @@ bool Server::initFailureDetector() {
 }
 
 bool Server::initUnreleasedRecordDetector() {
-  if (params_->isReadableStorageNode()) {
+  if (params_->isStorageNode()) {
     unreleased_record_detector_ = std::make_shared<UnreleasedRecordDetector>(
         processor_.get(), params_->getProcessorSettings());
     unreleased_record_detector_->start();

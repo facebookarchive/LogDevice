@@ -53,6 +53,8 @@ OperationMode::forNodeRoles(NodeServiceDiscovery::RoleSet roles) {
 }
 
 void OperationMode::upgradeToProposer() {
+  // The node should mark itself as proposer only when it sees itself in the
+  // config.
   setFlags(kIsProposer);
 }
 
@@ -145,11 +147,6 @@ bool NodesConfigurationManager::init(
 }
 
 void NodesConfigurationManager::upgradeToProposer() {
-  // TODO; this is done separately from init because a storage node should only
-  // be upgraded to a proposer after it sees itself as not-NONE in the
-  // membership config.
-  //
-  // For now we manually set this in tests
   mode_.upgradeToProposer();
 }
 
