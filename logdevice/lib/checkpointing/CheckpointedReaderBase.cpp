@@ -10,6 +10,7 @@
 
 #include <chrono>
 
+#include "logdevice/common/ReadStreamAttributes.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
@@ -41,7 +42,7 @@ Status CheckpointedReaderBase::syncWriteCheckpoints(
 
 void CheckpointedReaderBase::asyncWriteCheckpoints(
     const std::map<logid_t, lsn_t>& checkpoints,
-    Callback cb) {
+    StatusCallback cb) {
   auto update_cb = [cb = std::move(cb)](Status status,
                                         CheckpointStore::Version,
                                         std::string) mutable {

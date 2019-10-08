@@ -22,6 +22,14 @@ class SyncCheckpointedReader : public CheckpointedReaderBase, public Reader {
                          std::unique_ptr<CheckpointStore> store,
                          CheckpointingOptions opts)
       : CheckpointedReaderBase(reader_name, std::move(store), opts) {}
+
+  /*
+   * This function is blocking.
+   */
+  virtual int
+  startReadingFromCheckpoint(logid_t log_id,
+                             lsn_t until = LSN_MAX,
+                             const ReadStreamAttributes* attrs = nullptr) = 0;
 };
 
 }} // namespace facebook::logdevice

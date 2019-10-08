@@ -22,6 +22,32 @@ AsyncCheckpointedReaderImpl::AsyncCheckpointedReaderImpl(
   ld_check(reader_);
 }
 
+void AsyncCheckpointedReaderImpl::startReadingFromCheckpoint(
+    logid_t log_id,
+    StatusCallback scb,
+    lsn_t until,
+    const ReadStreamAttributes* attrs) {
+  auto cb = [this, log_id, until, attrs, scb = std::move(scb)](
+                Status status, lsn_t from) mutable {
+    // We don't want to read the checkpoint twice, so we start from the next
+    // record.
+    ++from;
+    if (status == Status::NOTFOUND) {
+      from = LSN_OLDEST;
+      status = Status::OK;
+    }
+
+    if (status == Status::OK) {
+      int return_value = startReading(log_id, from, until, attrs);
+      if (return_value == -1) {
+        status = err;
+      }
+    }
+    scb(status);
+  };
+  store_->getLSN(reader_name_, log_id, std::move(cb));
+}
+
 void AsyncCheckpointedReaderImpl::setRecordCallback(
     std::function<bool(std::unique_ptr<DataRecord>&)> cb) {
   reader_->setRecordCallback(cb);

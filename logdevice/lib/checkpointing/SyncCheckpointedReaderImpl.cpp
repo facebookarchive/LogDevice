@@ -22,6 +22,26 @@ SyncCheckpointedReaderImpl::SyncCheckpointedReaderImpl(
   ld_check(reader_);
 }
 
+int SyncCheckpointedReaderImpl::startReadingFromCheckpoint(
+    logid_t log_id,
+    lsn_t until,
+    const ReadStreamAttributes* attrs) {
+  lsn_t from = LSN_INVALID;
+  auto status = store_->getLSNSync(reader_name_, log_id, &from);
+  // We don't want to read the checkpoint twice, so we start from the next
+  // record.
+  ++from;
+  if (status == Status::NOTFOUND) {
+    from = LSN_OLDEST;
+    status = Status::OK;
+  }
+  if (status != Status::OK) {
+    err = status;
+    return -1;
+  }
+  return startReading(log_id, from, until, attrs);
+}
+
 int SyncCheckpointedReaderImpl::startReading(
     logid_t log_id,
     lsn_t from,

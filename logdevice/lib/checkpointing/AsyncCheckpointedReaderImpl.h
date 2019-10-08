@@ -22,6 +22,12 @@ class AsyncCheckpointedReaderImpl : public AsyncCheckpointedReader {
                               std::unique_ptr<CheckpointStore> store,
                               CheckpointingOptions opts);
 
+  void startReadingFromCheckpoint(
+      logid_t log_id,
+      StatusCallback cb,
+      lsn_t until = LSN_MAX,
+      const ReadStreamAttributes* attrs = nullptr) override;
+
   void
   setRecordCallback(std::function<bool(std::unique_ptr<DataRecord>&)>) override;
 
