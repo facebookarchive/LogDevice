@@ -132,7 +132,7 @@ void waitForNodesToReadEventLog(IntegrationTestUtils::Cluster& cluster) {
 TEST_F(RebuildingSupervisorIntegrationTest, BasicFD) {
   // Replication factor is 2 by default.
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("1s")
+                     .enableSelfInitiatedRebuilding("10s")
                      .setParam("--event-log-grace-period", "1ms")
                      .setParam("--disable-event-log-trimming", "true")
                      .useHashBasedSequencerAssignment()
@@ -240,7 +240,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, ShrinkAtBeginning) {
 
   // Replication factor is 2 by default.
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("1s")
+                     .enableSelfInitiatedRebuilding("10s")
                      // Start with self-initiated rebuilding disabled
                      .setParam("--enable-self-initiated-rebuilding", "false")
                      .setParam("--event-log-grace-period", "1ms")
@@ -281,7 +281,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, ExpandWithDeadNodes) {
 
   // Replication factor is 2 by default.
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("1s")
+                     .enableSelfInitiatedRebuilding("10s")
                      // Start with self-initiated rebuilding disabled
                      .setParam("--enable-self-initiated-rebuilding", "false")
                      .setParam("--event-log-grace-period", "1ms")
@@ -324,7 +324,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, DontRebuildNonStorageNode) {
 
   // Replication factor is 2 by default.
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("1s")
+                     .enableSelfInitiatedRebuilding("10s")
                      .setParam("--event-log-grace-period", "1ms")
                      .setParam("--disable-event-log-trimming", "true")
                      .useHashBasedSequencerAssignment()
@@ -364,7 +364,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedNode) {
   int num_shards = 2;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("1s")
+                     .enableSelfInitiatedRebuilding("10s")
                      // Start with self-initiated rebuilding disabled
                      .setParam("--enable-self-initiated-rebuilding", "false")
                      .setParam("--event-log-grace-period", "1ms")
@@ -432,7 +432,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedRack) {
   event_log_attrs.set_syncReplicationScope(NodeLocationScope::RACK);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("1s")
+                     .enableSelfInitiatedRebuilding("10s")
                      // Start with self-initiated rebuilding disabled
                      .setParam("--enable-self-initiated-rebuilding", "false")
                      .setParam("--event-log-grace-period", "1ms")
@@ -529,7 +529,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, s143309) {
                      .setParam("--event-log-grace-period", "1ms")
                      .setParam("--reader-stalled-grace-period", "1s")
                      .setParam("--disable-event-log-trimming", "true")
-                     .enableSelfInitiatedRebuilding("1s")
+                     .enableSelfInitiatedRebuilding("10s")
                      // Start with self-initiated rebuilding disabled
                      .setParam("--enable-self-initiated-rebuilding", "false")
                      .useHashBasedSequencerAssignment(100, "2s")

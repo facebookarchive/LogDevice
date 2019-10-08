@@ -55,7 +55,7 @@ void MaintenanceManagerTest::init() {
           .setNodes(nodes)
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
-          .enableSelfInitiatedRebuilding("1s")
+          .enableSelfInitiatedRebuilding("10s")
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
@@ -263,7 +263,7 @@ TEST_F(MaintenanceManagerTest, Snapshotting) {
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
           .setNodes(nodes)
-          .enableSelfInitiatedRebuilding("1s")
+          .enableSelfInitiatedRebuilding("10s")
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .setParam("--event-log-grace-period", "1ms")
@@ -426,7 +426,7 @@ TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
           .setNodes(nodes)
-          .enableSelfInitiatedRebuilding("1s")
+          .enableSelfInitiatedRebuilding("10s")
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .setParam("--rebuild-store-durability", "async_write")
@@ -466,9 +466,6 @@ TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
   std::iota(node_set.begin(), node_set.end(), 0);
 
   cluster_->start(node_set);
-  for (auto n : node_set) {
-    cluster_->getNode(n).waitUntilAvailable();
-  }
   std::shared_ptr<Client> client = cluster_->createClient();
   write_test_records(client, LOG_ID, 100);
 
