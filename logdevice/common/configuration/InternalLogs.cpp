@@ -176,39 +176,4 @@ folly::dynamic InternalLogs::toDynamic() const {
   return logs;
 }
 
-bool InternalLogs::operator!=(const InternalLogs& other) const {
-  return !(*this == other);
-}
-
-bool InternalLogs::operator==(const InternalLogs& other) const {
-  // If sizes don't match, they are not equal
-  if (size() != other.size()) {
-    return false;
-  }
-
-  for (const auto& kv : nameLookup()) {
-    auto log_id = kv.second;
-    // Check if the log exists in both configs and that their attrs match
-    auto this_config_attr =
-        logExists(log_id) ? getLogGroupByID(log_id)->log_group : nullptr;
-    auto other_config_attr = other.logExists(log_id)
-        ? other.getLogGroupByID(log_id)->log_group
-        : nullptr;
-    // Log not configured in both configs.
-    if (this_config_attr == nullptr && other_config_attr == nullptr) {
-      continue;
-    }
-    // Log is present in one config but not the other
-    if (this_config_attr == nullptr || other_config_attr == nullptr) {
-      return false;
-    }
-    // Log id present in both configs but the attributes don't match
-    if (!(*this_config_attr == *other_config_attr)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 }}} // namespace facebook::logdevice::configuration

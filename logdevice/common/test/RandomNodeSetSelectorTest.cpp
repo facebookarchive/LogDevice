@@ -770,7 +770,6 @@ TEST(WeightAwareNodeSetSelectorTest, InternalLogs) {
   ASSERT_NE(nullptr, log_group_node);
   log_group_node = il.insert("maintenance_log_deltas", log_attrs);
   ASSERT_NE(nullptr, log_group_node);
-  logs_config->setInternalLogsConfig(il);
 
   ShapingConfig shaping_cfg(
       std::set<NodeLocationScope>{NodeLocationScope::NODE},
@@ -1109,7 +1108,6 @@ TEST(WeightAwareNodeSetSelectorTest, InternalLogsConfiguredTooSmall) {
   log_attrs.set_replicateAcross(replication.getDistinctReplicationFactors());
   auto log_group_node = il.insert("event_log_snapshots", log_attrs);
   ASSERT_NE(nullptr, log_group_node);
-  logs_config->setInternalLogsConfig(il);
 
   ShapingConfig shaping_cfg(
       std::set<NodeLocationScope>{NodeLocationScope::NODE},
