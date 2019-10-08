@@ -31,77 +31,6 @@ const std::chrono::milliseconds LogRecoveryRequest::SEAL_RETRY_INITIAL_DELAY{
 const std::chrono::milliseconds LogRecoveryRequest::SEAL_RETRY_MAX_DELAY{5000};
 const std::chrono::milliseconds LogRecoveryRequest::SEAL_CHECK_INTERVAL{15000};
 
-namespace {
-/**
- * @file ShardRetryHandler is a utility class used to perform an action on a
- *       storage shard (e.g. sending a message), retrying later (with a backoff)
- *       in case of a failure.
- */
-class ShardRetryHandler {
- public:
-  typedef std::function<int(ShardID)> func_t;
-
-  explicit ShardRetryHandler(
-      func_t handler, // handler should return 0 on success
-      std::chrono::milliseconds retry_initial_delay =
-          std::chrono::milliseconds(5),
-      std::chrono::milliseconds retry_max_delay =
-          std::chrono::milliseconds(1000))
-      : handler_(handler),
-        retry_initial_delay_(retry_initial_delay),
-        retry_max_delay_(retry_max_delay) {
-    ld_check(handler);
-  }
-
-  /**
-   * Activate the timer that calls handler_.
-   *
-   * @param shard  shard to activate the timer for
-   * @param reset  if set, timeout will be reset to its initial value
-   */
-  void activateTimer(ShardID to, bool reset = false) {
-    std::unique_ptr<BackoffTimer>& timer = retry_timers_[to];
-
-    if (!timer) {
-      timer = createRetryTimer(to);
-    }
-
-    if (reset) {
-      timer->reset();
-    }
-
-    timer->activate();
-  }
-
-  // Call handler_ and activate the timer in case of failure
-  int execute(ShardID shard) {
-    int rv = handler_(shard);
-    if (rv != 0) {
-      activateTimer(shard);
-    }
-    return rv;
-  }
-
- private:
-  std::unique_ptr<BackoffTimer> createRetryTimer(ShardID shard) {
-    return std::make_unique<ExponentialBackoffTimer>(
-
-        [this, shard] { this->execute(shard); },
-        retry_initial_delay_,
-        retry_max_delay_);
-  }
-
-  func_t handler_;
-  std::chrono::milliseconds retry_initial_delay_;
-  std::chrono::milliseconds retry_max_delay_;
-
-  // Retry timers for connection or transient errors
-  std::unordered_map<ShardID, std::unique_ptr<BackoffTimer>, ShardID::Hash>
-      retry_timers_;
-};
-
-} // namespace
-
 RecoveredLSNs::~RecoveredLSNs() {}
 
 void RecoveredLSNs::noteMutationsCompleted(
@@ -943,7 +872,7 @@ void LogRecoveryRequest::sealLog() {
   ld_check(nodeset_size_ > 0);
 
   // attempt to seal all the nodes in the recovery set
-  seal_retry_handler_.reset(new ShardRetryHandler(
+  seal_retry_handler_.reset(new RetryHandler(
       [this](ShardID shard) {
         ld_check(seal_header_ != nullptr);
         auto it = node_statuses_.find(shard);
