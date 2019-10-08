@@ -128,6 +128,13 @@ class LogsConfigManager {
   void onSettingsUpdated();
 
   /**
+   * Callback that gets called when the ServerConfig is updated. Must be called
+   * on the same worker on which this manager is running as a new
+   * LocalLogsConfig may be published
+   */
+  void onServerConfigUpdated();
+
+  /**
    * Decides on which worker the LogsConfigManager and LogsConfigStateMachine
    * should bind to.
    */
