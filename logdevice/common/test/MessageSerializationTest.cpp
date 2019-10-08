@@ -25,6 +25,7 @@
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
+#include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 #include "logdevice/common/protocol/MUTATED_Message.h"
 #include "logdevice/common/protocol/MessageDeserializers.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
@@ -1643,6 +1644,41 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
             },
             nullptr);
   }
+}
+
+TEST_F(MessageSerializationTest, LOGS_CONFIG_API) {
+  LOGS_CONFIG_API_Header h = {request_id_t{1},
+                              LOGS_CONFIG_API_Header::Type::MUTATION_REQUEST,
+                              true,
+                              LogsConfigRequestOrigin::LOGS_CONFIG_API_REQUEST};
+  LOGS_CONFIG_API_Message msg(
+      h, "I'm a blob", std::chrono::milliseconds(12345));
+
+  DO_TEST(msg,
+          [&](const LOGS_CONFIG_API_Message& msg2, uint16_t proto) {
+            EXPECT_EQ(msg2.header_.client_rqid, msg.header_.client_rqid);
+            EXPECT_EQ(msg2.header_.request_type, msg.header_.request_type);
+            EXPECT_EQ(msg2.header_.subscribe_to_config_,
+                      msg.header_.subscribe_to_config_);
+            EXPECT_EQ(msg2.header_.origin, msg.header_.origin);
+            EXPECT_EQ(msg2.blob_, msg.blob_);
+            if (proto >= Compatibility::LOGS_CONFIG_API_MESSAGE_HAS_TIMEOUT) {
+              EXPECT_EQ(msg2.timeout_, msg.timeout_);
+            } else {
+              EXPECT_EQ(msg2.timeout_, std::chrono::seconds(5));
+            }
+          },
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::MAX_PROTOCOL_SUPPORTED,
+          [&](uint16_t proto) {
+            if (proto >= Compatibility::LOGS_CONFIG_API_MESSAGE_HAS_TIMEOUT) {
+              return "010000000000000000010039300000000000000A00000049276D20612"
+                     "0626C6F62";
+            } else {
+              return "01000000000000000001000A00000049276D206120626C6F62";
+            }
+          },
+          nullptr);
 }
 
 }} // namespace facebook::logdevice

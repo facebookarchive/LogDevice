@@ -402,7 +402,7 @@ Request::Execution LogsConfigManagerRequest::execute() {
     deleteThis();
   };
   state_machine->writeDelta(
-      blob_, cb, LogsConfigStateMachine::WriteMode::CONFIRM_APPLIED);
+      blob_, cb, LogsConfigStateMachine::WriteMode::CONFIRM_APPLIED, timeout_);
   return Execution::CONTINUE;
 }
 

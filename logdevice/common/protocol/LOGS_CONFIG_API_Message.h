@@ -56,10 +56,12 @@ class LOGS_CONFIG_API_Message : public Message {
         header_(header) {}
 
   explicit LOGS_CONFIG_API_Message(const LOGS_CONFIG_API_Header& header,
-                                   std::string blob)
+                                   std::string blob,
+                                   std::chrono::milliseconds timeout)
       : Message(MessageType::LOGS_CONFIG_API, TrafficClass::HANDSHAKE),
         header_(header),
-        blob_(std::move(blob)) {}
+        blob_(std::move(blob)),
+        timeout_(timeout) {}
 
   void serialize(ProtocolWriter& writer) const override;
 
@@ -77,6 +79,8 @@ class LOGS_CONFIG_API_Message : public Message {
 
   LOGS_CONFIG_API_Header header_;
   std::string blob_;
+  // Used only by MUTATION_REQUEST.
+  std::chrono::milliseconds timeout_{0};
 
  protected:
   // Used by deserialization

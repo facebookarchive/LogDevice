@@ -21,6 +21,9 @@ namespace facebook { namespace logdevice {
 
 void LOGS_CONFIG_API_Message::serialize(ProtocolWriter& writer) const {
   writer.write(&header_, LOGS_CONFIG_API_Header::headerSize(writer.proto()));
+  if (writer.proto() >= Compatibility::LOGS_CONFIG_API_MESSAGE_HAS_TIMEOUT) {
+    writer.write(static_cast<int64_t>(timeout_.count()));
+  }
   const blob_size_t size = blob_.size();
   ld_check(blob_.size() <= Message::MAX_LEN -
                LOGS_CONFIG_API_Header::headerSize(writer.proto()) -
@@ -39,6 +42,17 @@ MessageReadResult LOGS_CONFIG_API_Message::deserialize(ProtocolReader& reader) {
   m->header_.subscribe_to_config_ = false;
 
   reader.read(&m->header_, LOGS_CONFIG_API_Header::headerSize(reader.proto()));
+
+  if (reader.proto() >= Compatibility::LOGS_CONFIG_API_MESSAGE_HAS_TIMEOUT) {
+    int64_t v;
+    reader.read(&v);
+    m->timeout_ = std::chrono::milliseconds(v);
+  } else {
+    // Use the value that was hard-coded before we started putting it in message
+    // (ReplicatedStateMachine::confirm_timeout_).
+    m->timeout_ = std::chrono::seconds(5);
+  }
+
   blob_size_t blob_length = 0;
   reader.read(&blob_length);
   if (blob_length) {

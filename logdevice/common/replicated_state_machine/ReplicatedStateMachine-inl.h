@@ -798,7 +798,8 @@ void ReplicatedStateMachine<T, D>::writeDelta(
     std::function<
         void(Status st, lsn_t version, const std::string& failure_reason)> cb,
     WriteMode mode,
-    folly::Optional<lsn_t> base_version) {
+    folly::Optional<lsn_t> base_version,
+    folly::Optional<std::chrono::milliseconds> timeout) {
   ld_check(!stopped_);
 
   if (mode == WriteMode::CONFIRM_APPLIED) {
@@ -862,6 +863,7 @@ void ReplicatedStateMachine<T, D>::writeDelta(
     DeltaPendingConfirmation a = {};
     a.uuid = header.uuid;
     a.cb = cb;
+    a.timeout = timeout.value_or(confirm_timeout_);
     auto it = pending_confirmation_.emplace(
         pending_confirmation_.end(), std::move(a));
     pending_confirmation_by_uuid_[header.uuid] = it;
@@ -903,8 +905,10 @@ void ReplicatedStateMachine<T, D>::writeDelta(
   };
 
   ++delta_appends_in_flight_;
-  postAppendRequest(
-      delta_log_id_, std::move(buf), delta_append_timeout_, append_cb);
+  postAppendRequest(delta_log_id_,
+                    std::move(buf),
+                    timeout.value_or(delta_append_timeout_),
+                    append_cb);
 }
 
 template <typename T, typename D>
@@ -1036,7 +1040,7 @@ void ReplicatedStateMachine<T, D>::activateConfirmTimer(
   ld_check(!it->second->timer);
   it->second->timer = std::make_unique<Timer>();
   it->second->timer->assign([this, uuid] { onDeltaConfirmationTimeout(uuid); });
-  it->second->timer->activate(confirm_timeout_);
+  it->second->timer->activate(it->second->timeout);
 }
 
 template <typename T, typename D>

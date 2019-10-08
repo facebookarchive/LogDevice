@@ -205,6 +205,7 @@ class LogsConfigManagerRequest : public Request {
   LogsConfigManagerRequest(const LOGS_CONFIG_API_Header& request_header,
                            const Address& to,
                            std::string blob,
+                           std::chrono::milliseconds timeout,
                            int respond_to_worker,
                            WorkerType respond_to_worker_type,
                            WorkerType lcm_worker_type,
@@ -213,6 +214,7 @@ class LogsConfigManagerRequest : public Request {
         request_header_(request_header),
         to_(to),
         blob_(std::move(blob)),
+        timeout_(timeout),
         respond_to_worker_(respond_to_worker),
         respond_to_worker_type_(respond_to_worker_type),
         lcm_worker_type_(lcm_worker_type),
@@ -257,6 +259,7 @@ class LogsConfigManagerRequest : public Request {
   LOGS_CONFIG_API_Header request_header_;
   Address to_;
   std::string blob_;
+  std::chrono::milliseconds timeout_;
   int respond_to_worker_;
   WorkerType respond_to_worker_type_;
   WorkerType lcm_worker_type_;
