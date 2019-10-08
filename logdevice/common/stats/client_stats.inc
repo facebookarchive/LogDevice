@@ -182,4 +182,14 @@ STAT_DEFINE(error_events, SUM)
 STAT_DEFINE(warning_events, SUM)
 STAT_DEFINE(notice_events, SUM)
 STAT_DEFINE(info_events, SUM)
+
+
+// Metadata API
+STAT_DEFINE(metadata_api_failures, SUM)
+STAT_DEFINE(metadata_api_total, SUM)
+
+// Appends
+STAT_DEFINE(append_requests, SUM)
+STAT_DEFINE(unexpected_append_failures, SUM)
+
 #undef STAT_DEFINE

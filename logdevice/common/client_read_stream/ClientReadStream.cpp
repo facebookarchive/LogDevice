@@ -3335,6 +3335,7 @@ int ClientReadStream::deliverRecord(
         WORKER_STAT_INCR(records_delivered_wait_for_all);
       } else {
         WORKER_STAT_INCR(records_delivered);
+        WORKER_STAT_INCR(durability_total);
         if (scd_ && scd_->isActive()) {
           WORKER_STAT_INCR(records_delivered_scd);
         } else {
@@ -3431,6 +3432,10 @@ int ClientReadStream::deliverGap(GapType type, lsn_t lo, lsn_t hi) {
     epoch_t epoch = lsn_to_epoch(lo);
     if (epoch == lsn_to_epoch(hi)) {
       WORKER_STAT_ADD(records_lost, lsn_to_esn(hi).val_ - lsn_to_esn(lo).val_);
+      WORKER_STAT_ADD(
+          durability_total, lsn_to_esn(hi).val_ - lsn_to_esn(lo).val_);
+      WORKER_STAT_ADD(
+          durability_failures, lsn_to_esn(hi).val_ - lsn_to_esn(lo).val_);
     }
   }
   return success ? 0 : -1;

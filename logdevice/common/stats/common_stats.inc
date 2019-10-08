@@ -390,6 +390,10 @@ STAT_DEFINE(config_update_hash_mismatch, SUM)
 // Counts config updates ignored because they were identical to running config
 STAT_DEFINE(config_update_same_version, SUM)
 
+// SLO
+STAT_DEFINE(durability_failures, SUM)
+STAT_DEFINE(durability_total, SUM)
+
 #endif // DESTROYING_THREAD
 #endif // RESETTING_STATS
 

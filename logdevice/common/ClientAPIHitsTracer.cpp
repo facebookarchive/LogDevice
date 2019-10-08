@@ -45,6 +45,13 @@ std::ostream& operator<<(std::ostream& os, const ShardID& rhs) {
   return os;
 }
 
+void incr_metadata_api_counters(Status status) {
+  if (status != E::OK) {
+    WORKER_STAT_INCR(client.metadata_api_failures);
+  }
+  WORKER_STAT_INCR(client.metadata_api_total);
+}
+
 std::map<std::string, std::string>
 failed_shards_to_string_map(FailedShardsMap&& failed_shards) {
   std::map<std::string, std::string> result;
@@ -91,6 +98,8 @@ void ClientAPIHitsTracer::traceFindTime(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(findtime, SHUTDOWN)
     API_HITS_DEFAULT(findtime)
   }
+  incr_metadata_api_counters(out_status);
+
   auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "findTime");
@@ -126,6 +135,8 @@ void ClientAPIHitsTracer::traceFindKey(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(findkey, SHUTDOWN)
     API_HITS_DEFAULT(findkey)
   }
+  incr_metadata_api_counters(out_status);
+
   auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "findKey");
@@ -163,6 +174,8 @@ void ClientAPIHitsTracer::traceGetTailAttributes(
     API_HITS_STATUS_CASE(get_tail_attributes, AGAIN)
     API_HITS_DEFAULT(get_tail_attributes)
   }
+  incr_metadata_api_counters(out_status);
+
   auto sample_builder = [msec_resp_time,
                          in_logid,
                          out_status,
@@ -198,6 +211,8 @@ void ClientAPIHitsTracer::traceGetHeadAttributes(
     API_HITS_STATUS_CASE(get_head_attributes, FAILED)
     API_HITS_DEFAULT(get_head_attributes)
   }
+  incr_metadata_api_counters(out_status);
+
   auto sample_builder = [msec_resp_time,
                          in_logid,
                          out_status,
@@ -235,6 +250,8 @@ void ClientAPIHitsTracer::traceGetTailLSN(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(get_tail_lsn, INTERNAL)
     API_HITS_DEFAULT(get_tail_lsn)
   }
+  incr_metadata_api_counters(out_status);
+
   auto sample_builder = [=]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "getTailLSN");
@@ -267,6 +284,8 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(is_log_empty, INTERNAL)
     API_HITS_DEFAULT(is_log_empty)
   }
+  incr_metadata_api_counters(out_status);
+
   if (is_flappy) {
     WORKER_STAT_INCR(client.is_log_empty_flappy);
   }
@@ -384,6 +403,8 @@ void ClientAPIHitsTracer::traceTrim(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(trim, NOTFOUND)
     API_HITS_DEFAULT(trim)
   }
+  incr_metadata_api_counters(out_status);
+
   auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("method", "trim");
