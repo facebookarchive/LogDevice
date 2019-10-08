@@ -82,9 +82,18 @@ MaintenanceManagerDependencies::postSafetyCheckRequest(
     const std::vector<const ShardWorkflow*>& shard_wf,
     const std::vector<const SequencerWorkflow*>& seq_wf) {
   ld_check(safety_check_scheduler_);
+  auto config = processor_->getConfig();
+  ReplicationProperty repl =
+      config->localLogsConfig()->getNarrowestReplication();
+  NodeLocationScope biggest_replication_scope =
+      repl.getBiggestReplicationScope();
   ld_debug("Posting Safety check request");
-  return safety_check_scheduler_->schedule(
-      maintenance_state, status_map, nodes_config, shard_wf, seq_wf);
+  return safety_check_scheduler_->schedule(maintenance_state,
+                                           status_map,
+                                           nodes_config,
+                                           shard_wf,
+                                           seq_wf,
+                                           biggest_replication_scope);
 }
 
 folly::SemiFuture<NCUpdateResult>

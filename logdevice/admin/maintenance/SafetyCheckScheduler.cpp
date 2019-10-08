@@ -22,11 +22,16 @@ SafetyCheckScheduler::schedule(
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_config,
     const std::vector<const ShardWorkflow*>& shard_wf,
-    const std::vector<const SequencerWorkflow*>& seq_wf) const {
+    const std::vector<const SequencerWorkflow*>& seq_wf,
+    NodeLocationScope biggest_replication_scope) const {
   // Build an empty Result object
   Result result;
   // Build Plan.
-  auto plan = buildExecutionPlan(maintenance_state, shard_wf, seq_wf);
+  auto plan = buildExecutionPlan(maintenance_state,
+                                 shard_wf,
+                                 seq_wf,
+                                 nodes_config,
+                                 biggest_replication_scope);
   if (plan.size() == 0) {
     ld_warning(
         "We are producing an empty safety-check execution plan. This should "
@@ -181,11 +186,19 @@ std::deque<std::pair<GroupID, SafetyCheckScheduler::ShardsAndSequencers>>
 SafetyCheckScheduler::buildExecutionPlan(
     const ClusterMaintenanceWrapper& maintenance_state,
     const std::vector<const ShardWorkflow*>& shard_wf,
-    const std::vector<const SequencerWorkflow*>& seq_wf) const {
+    const std::vector<const SequencerWorkflow*>& seq_wf,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_config,
+    NodeLocationScope biggest_replication_scope) const {
+  //
+  // We want to sort the shard and sequencer maintenances so that we process
+  // maintenances for shards that are in the same (biggest) replication
+  // location. Maintenances that span multiple locations (grouped) are processed
+  // next.
+  //
   // We assume that all the workflows passed to us require safety checks.
   // We also assume that all these shards already exist in the
   // ClusterMaintenanceWrapper as well.
-  //
   std::deque<std::pair<GroupID, ShardsAndSequencers>> plan;
   // Stage 1: Group the shards into their corresponding groups.
   std::vector<ShardID> all_shards;
@@ -200,85 +213,95 @@ SafetyCheckScheduler::buildExecutionPlan(
     all_sequencers.push_back(workflow->getNodeIndex());
   }
 
-  folly::F14FastMap<GroupID, ShardSet> shards_in_group =
+  // A mapping from a group ID to the set of shards.
+  folly::F14FastMap<GroupID, ShardSet> group_to_shards =
       maintenance_state.groupShardsByGroupID(all_shards);
 
-  folly::F14FastMap<GroupID, NodeIndexSet> sequencers_in_group =
+  // A mapping from a group ID to the set of sequencer node ids.
+  folly::F14FastMap<GroupID, NodeIndexSet> group_to_sequencers =
       maintenance_state.groupSequencersByGroupID(all_sequencers);
 
   // Stage 2: Order the shard sets as following:
   //   1. Group all MAY_DISAPPEAR groups first as we know that these are
   //   short-term maintenances.
-  //   2. For the MAY_DISAPPEAR groups, order by creation_time. First-come
-  //   should be allowed to be served first.
+  //   2. The MAY_DISAPPEAR maintenances should be sorted where the maintenances
+  //   that have a single scope come first. The maintenances that have the same
+  //   maintenance scope should be next to each other.
+  //   3. For the MAY_DISAPPEAR groups, order by creation_time within the
+  //   location scope boundry. First-come should be allowed to be served first.
   //   3. DRAINED targets are grouped afterwards with the same sub-ordering
   //   strategy.
-
-  std::vector<std::tuple<int64_t, GroupID, ShardsAndSequencers>> may_disappear;
-  std::vector<std::tuple<int64_t, GroupID, ShardsAndSequencers>> drained;
+  std::vector<MaintenanceManifest> may_disappear;
+  std::vector<MaintenanceManifest> drained;
 
   // Finding all may_disappear groups that have shards in the workflows, if
-  for (const auto& it : shards_in_group) {
+  for (const auto& it : group_to_shards) {
     const GroupID& group_id = it.first;
     auto* maintenance = maintenance_state.getMaintenanceByGroupID(group_id);
     ld_check(maintenance != nullptr);
-    int64_t timestamp = maintenance->created_on_ref().value_or(0);
+    MaintenanceManifest manifest{};
+    manifest.group_id = group_id;
+    manifest.timestamp = maintenance->created_on_ref().value_or(0);
     // Do we have sequencer disable requests for this group?
     NodeIndexSet sequencers_to_disable;
-    auto seq_it = sequencers_in_group.find(group_id);
-    if (seq_it != sequencers_in_group.end()) {
+    auto seq_it = group_to_sequencers.find(group_id);
+    if (seq_it != group_to_sequencers.end()) {
       // We have sequencers to disable here.
       sequencers_to_disable = seq_it->second;
+      // go over these sequencer nodes, and find the location for the
+      // replication scope (biggest_replication_scope)
+      for (node_index_t seq_id : sequencers_to_disable) {
+        const auto* sd = nodes_config->getNodeServiceDiscovery(seq_id);
+        if (sd != nullptr && sd->location) {
+          // Add the location to the locations set for this maintenance.
+          manifest.locations.insert(
+              sd->location->getDomain(biggest_replication_scope, seq_id));
+        }
+      }
       // remove it from the groups, as we have picked that up already.
-      sequencers_in_group.erase(seq_it);
+      group_to_sequencers.erase(seq_it);
     }
 
-    ShardsAndSequencers v = std::make_pair(it.second, sequencers_to_disable);
+    manifest.shards_and_seqs = std::make_pair(it.second, sequencers_to_disable);
+
+    // Go over the shards and collect all the locations for the
+    // scope (biggest_replication_scope)
+    for (const ShardID& shard : manifest.shards_and_seqs.first) {
+      const auto* sd = nodes_config->getNodeServiceDiscovery(shard.node());
+      if (sd != nullptr && sd->location) {
+        // Add the location to the locations set for this maintenance.
+        manifest.locations.insert(
+            sd->location->getDomain(biggest_replication_scope, shard.node()));
+      }
+    }
 
     if (maintenance->shard_target_state ==
         ShardOperationalState::MAY_DISAPPEAR) {
-      may_disappear.push_back(std::make_tuple(timestamp, group_id, v));
+      may_disappear.push_back(std::move(manifest));
     } else {
       ld_check(maintenance->shard_target_state ==
                ShardOperationalState::DRAINED);
-      drained.push_back(std::make_tuple(timestamp, group_id, v));
+      drained.push_back(std::move(manifest));
     }
   }
+  may_disappear = sortAndGroupMaintenances(std::move(may_disappear));
+  drained = sortAndGroupMaintenances(std::move(drained));
 
-  // sort by creation timestamp
-  std::sort(may_disappear.begin(),
-            may_disappear.end(),
-            [](const std::tuple<int64_t, GroupID, ShardsAndSequencers>& i,
-               const std::tuple<int64_t, GroupID, ShardsAndSequencers>& j) {
-              return std::get<0>(i) < std::get<0>(j);
-            });
-
-  // sort by creation timestamp
-  std::sort(drained.begin(),
-            drained.end(),
-            [](const std::tuple<int64_t, GroupID, ShardsAndSequencers>& i,
-               const std::tuple<int64_t, GroupID, ShardsAndSequencers>& j) {
-              return std::get<0>(i) < std::get<0>(j);
-            });
-
-  // Build the plan
-  std::for_each(
-      may_disappear.begin(),
-      may_disappear.end(),
-      [&](std::tuple<int64_t, GroupID, ShardsAndSequencers> v) {
-        plan.push_back(std::make_pair(std::get<1>(v), std::get<2>(v)));
-      });
+  // Build the plan, we start by the MAY_DISAPPEAR maintenances
+  std::for_each(may_disappear.begin(),
+                may_disappear.end(),
+                [&](const MaintenanceManifest& v) {
+                  plan.push_back(std::make_pair(v.group_id, v.shards_and_seqs));
+                });
 
   std::for_each(
-      drained.begin(),
-      drained.end(),
-      [&](std::tuple<int64_t, GroupID, ShardsAndSequencers> v) {
-        plan.push_back(std::make_pair(std::get<1>(v), std::get<2>(v)));
+      drained.begin(), drained.end(), [&](const MaintenanceManifest& v) {
+        plan.push_back(std::make_pair(v.group_id, v.shards_and_seqs));
       });
 
   // Do we have sequencer-only maintenances still left?
-  if (sequencers_in_group.size() > 0) {
-    for (const auto& it : sequencers_in_group) {
+  if (group_to_sequencers.size() > 0) {
+    for (const auto& it : group_to_sequencers) {
       ShardSet empty;
       plan.push_back(
           std::make_pair(it.first, std::make_pair(empty, it.second)));
@@ -286,7 +309,89 @@ SafetyCheckScheduler::buildExecutionPlan(
   }
 
   ld_check(plan.size() ==
-           may_disappear.size() + drained.size() + sequencers_in_group.size());
+           may_disappear.size() + drained.size() + group_to_sequencers.size());
   return plan;
+}
+
+std::vector<SafetyCheckScheduler::MaintenanceManifest>
+SafetyCheckScheduler::sortAndGroupMaintenances(
+    std::vector<SafetyCheckScheduler::MaintenanceManifest>&& input) const {
+  // We pay special attention to maintenances that do not span across multiple
+  // replication scopes, we try to group them together and sort each by
+  // timestamp.
+  //
+  // Maintenance groups that span multiple failure domains we process next since
+  // their chance is lower in passing safety check and we might hit the capacity
+  // checker limits before achieving them.
+  //
+  // For each of the list that we will generate, we want to sort by timestamp.
+  // - We we want to process the oldest single-failure-domain maintenances
+  // first.
+  // - Then the oldest multi-failure-domain maintenances after that.
+  //
+  std::vector<MaintenanceManifest> output;
+  // Maps location-string => [MaintenanceManifest]
+  folly::F14FastMap<std::string, std::vector<MaintenanceManifest>>
+      maintenances_with_single_fd;
+
+  // Remove the maintenances that have one location scope and move to the map.
+  folly::F14FastMap<std::string, int64_t> location_to_oldest_timestamp;
+  auto it = input.begin();
+  while (it != input.end()) {
+    if (it->locations.size() == 1) {
+      auto loc = *it->locations.begin();
+      // Let's insert this into the sorted vector value.
+      auto& vec = maintenances_with_single_fd[loc];
+      // Using binary-search to keep this vector sorted by timestamp.
+      vec.insert(std::upper_bound(vec.begin(),
+                                  vec.end(),
+                                  *it,
+                                  [](const auto& i, const auto& j) {
+                                    return i.timestamp < j.timestamp;
+                                  }),
+                 *it);
+
+      // We use this map to index what is the oldest maintenance in this
+      // location scope.
+      if (location_to_oldest_timestamp.count(loc) > 0) {
+        if (it->timestamp < location_to_oldest_timestamp[loc]) {
+          // Only replace the value if this maintenance is older than the one we
+          // have seen previously.
+          location_to_oldest_timestamp[loc] = it->timestamp;
+        }
+      } else {
+        // first time to see this location, store the timestamp.
+        location_to_oldest_timestamp[loc] = it->timestamp;
+      }
+      it = input.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  // For the rest of the maintenances, let's sort by timestamp too.
+  std::sort(input.begin(),
+            input.end(),
+            [](const MaintenanceManifest& i, const MaintenanceManifest& j) {
+              return i.timestamp < j.timestamp;
+            });
+
+  // This looks into the different location scopes and pick the scope that has
+  // the oldest maintenance to be poped.
+  while (!location_to_oldest_timestamp.empty()) {
+    auto it = std::min_element(
+        location_to_oldest_timestamp.begin(),
+        location_to_oldest_timestamp.end(),
+        [](const auto& i, const auto& j) { return i.second < j.second; });
+    const auto& maintenances = maintenances_with_single_fd[it->first];
+    std::copy(
+        maintenances.begin(), maintenances.end(), std::back_inserter(output));
+    // Remove it from maintenances and move to the next oldest.
+    maintenances_with_single_fd.erase(it->first);
+    location_to_oldest_timestamp.erase(it->first);
+  }
+  // Everything we have left is now part of the output;
+  std::copy(input.begin(), input.end(), std::back_inserter(output));
+  return output;
 }
 }}} // namespace facebook::logdevice::maintenance
