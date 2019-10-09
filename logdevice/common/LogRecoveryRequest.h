@@ -18,7 +18,6 @@
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
-#include "logdevice/common/RetryHandler.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 #include "logdevice/common/protocol/SEALED_Message.h"
@@ -123,6 +122,8 @@ class RecoveredLSNs {
 
 class LogRecoveryRequest : public Request,
                            public ShardAuthoritativeStatusSubscriber {
+  class ShardRetryHandler;
+
  public:
   enum class AuthoritativeSource {
     NODE,      // The authoritative status of the node is known from the
@@ -493,9 +494,9 @@ class LogRecoveryRequest : public Request,
   // to and received a SEALED(OK) to the node at this offset in the cluster.
   std::unordered_map<ShardID, NodeStatus, ShardID::Hash> node_statuses_;
 
-  // RetryHandler object responsible for resending SEAL messages when sending
-  // fails.
-  std::unique_ptr<RetryHandler> seal_retry_handler_;
+  // ShardRetryHandler object responsible for resending SEAL messages when
+  // sending fails.
+  std::unique_ptr<ShardRetryHandler> seal_retry_handler_;
 
   // timer used for periodically checking and scheduling retries on node that
   // has not yet been sealed
