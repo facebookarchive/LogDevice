@@ -22,8 +22,6 @@ STAT_DEFINE(append_failed, SUM)
 STAT_DEFINE(records_sent, SUM)
 // Number of FINDKEY messages received for the log
 STAT_DEFINE(findkey_received, SUM)
-// Number of GET_LOG_INFO messages received for the log
-STAT_DEFINE(get_log_info_received, SUM)
 // Number of TRIM messages received for the log
 STAT_DEFINE(trim_received, SUM)
 // Payload bytes sent by clients in APPENDs

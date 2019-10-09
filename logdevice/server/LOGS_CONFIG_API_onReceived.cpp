@@ -40,8 +40,6 @@ static Message::Disposition send_error_reply(const LOGS_CONFIG_API_Message* msg,
   return Message::Disposition::NORMAL;
 }
 
-// This is a 1-1 copy of the old logic in GET_LOG_INFO_Message.cpp
-//
 // This is the callback to be called whenever the socket that we use for config
 // change notifications is closed on the node. It erases the client from the
 // list of clients that are subscribed to config changes.
