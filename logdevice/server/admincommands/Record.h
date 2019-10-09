@@ -109,7 +109,7 @@ class EraseRecord : public AdminCommand {
     int rv = store->writeMulti(std::vector<const WriteOp*>(1, &op));
 
     if (rv != 0) {
-      out_.printf("Error: %s\r\n", error_description(err));
+      out_.printf("Error: %s\r\n", error_name(err));
       return;
     }
 

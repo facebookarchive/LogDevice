@@ -209,6 +209,21 @@ int MetaDataLogWriter::checkAppenderPayload(Appender* appender,
   return 0;
 }
 
+std::string MetaDataLogWriter::getDebugInfo() const {
+  return folly::sformat("logid: {}, state: {}, current_epoch: {}, "
+                        "last_writer_epoch: {}, recovery_only: {} "
+                        "metadata_last_released: {}, running_write: {}, "
+                        "current_worker: {}.",
+                        getDataLogID().val(),
+                        int(state_.load()),
+                        current_epoch_.load(),
+                        last_writer_epoch_.load(),
+                        recovery_only_.load() ? "true" : "false",
+                        last_released_.load(),
+                        running_write_.get(),
+                        current_worker_.val());
+}
+
 // caller of this function owns the appender
 RunAppenderStatus MetaDataLogWriter::runAppender(Appender* appender) {
   const logid_t log_id(getDataLogID());
@@ -272,6 +287,16 @@ RunAppenderStatus MetaDataLogWriter::runAppender(Appender* appender) {
     // logdevice is shutting down or current write operation is in progress,
     // report back to the client
     err = prev == State::SHUTDOWN ? E::SHUTDOWN : E::NOBUFS;
+
+    if (err == E::NOBUFS) {
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     2,
+                     "MetaDataLogWriter cannnot accept a new "
+                     "metadata append due to an existing write / recovery in "
+                     "progress. Failing the append with E::NOBUF. Debug: %s.",
+                     getDebugInfo().c_str());
+    }
+
     return RunAppenderStatus::ERROR_DELETE;
   }
 
@@ -524,7 +549,22 @@ void MetaDataLogWriter::checkActivation(logid_t log_id,
     delete node;
     return;
   }
+
   const epoch_t epoch_now = seq->getCurrentEpoch();
+  if (epoch_now == EPOCH_INVALID) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   100,
+                   "Cannot re-activate sequencer for log %lu. "
+                   "Current epoch is invalid. Epoch before: %d. "
+                   "Destroying the timer.",
+                   log_id.val_,
+                   epoch_before.val_);
+
+    ld_check(node->list_hook.is_linked());
+    delete node;
+    return;
+  }
+
   if (epoch_now > epoch_before) {
     // sequencer advanced to a new epoch larger than epoch_before
     ld_debug("Sequencer for log %lu has successfully activated to a new epoch "

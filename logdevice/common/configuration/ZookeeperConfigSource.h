@@ -7,16 +7,10 @@
  */
 #pragma once
 
-#include <atomic>
-#include <memory>
 #include <mutex>
-#include <set>
 #include <unordered_map>
-#include <unordered_set>
 
 #include <folly/IntrusiveList.h>
-#include <folly/Memory.h>
-#include <folly/hash/Hash.h>
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/ConfigSource.h"
@@ -34,6 +28,8 @@ class ZookeeperClientBase;
 
 class ZookeeperConfigSource : public ConfigSource {
  public:
+  const int ZK_SESSION_TIMEOUT_SEC = 10;
+
   std::string getName() override {
     return "Zookeeper";
   }
@@ -49,13 +45,13 @@ class ZookeeperConfigSource : public ConfigSource {
 
   explicit ZookeeperConfigSource(
       std::chrono::milliseconds retry_delay,
-      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory,
-      std::string uri_scheme = configuration::ZookeeperConfig::URI_SCHEME_IP);
-  explicit ZookeeperConfigSource(
-      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory,
-      std::string uri_scheme = configuration::ZookeeperConfig::URI_SCHEME_IP);
+      std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory);
   ZookeeperConfigSource() = delete;
   ~ZookeeperConfigSource() override;
+
+ protected:
+  virtual configuration::ZookeeperConfig
+  getZookeeperConfig(const std::string& quorum);
 
  private:
   // Protects all data structures, ensures we only run one callback at a
@@ -74,10 +70,6 @@ class ZookeeperConfigSource : public ConfigSource {
   std::unordered_map<std::string, int64_t> delivered_versions_;
 
   std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory_;
-
-  // URI Scheme, default value is "ip"
-  std::string uri_scheme_;
-  const int ZK_SESSION_TIMEOUT_SEC = 10;
 
   // Track all inflight requests, to delete any outstanding ones in the
   // destructor.

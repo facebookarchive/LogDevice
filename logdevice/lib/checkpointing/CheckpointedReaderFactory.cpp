@@ -7,6 +7,7 @@
  */
 #include "logdevice/include/CheckpointedReaderFactory.h"
 
+#include "logdevice/lib/checkpointing/AsyncCheckpointedReaderImpl.h"
 #include "logdevice/lib/checkpointing/SyncCheckpointedReaderImpl.h"
 
 namespace facebook { namespace logdevice {
@@ -18,6 +19,16 @@ CheckpointedReaderFactory::createSyncCheckpointedReader(
     std::unique_ptr<CheckpointStore> store,
     CheckpointedReaderBase::CheckpointingOptions opts) {
   return std::make_unique<SyncCheckpointedReaderImpl>(
+      reader_name, std::move(reader), std::move(store), opts);
+}
+
+std::unique_ptr<AsyncCheckpointedReader>
+CheckpointedReaderFactory::createAsyncCheckpointedReader(
+    const std::string& reader_name,
+    std::unique_ptr<AsyncReader> reader,
+    std::unique_ptr<CheckpointStore> store,
+    CheckpointedReaderBase::CheckpointingOptions opts) {
+  return std::make_unique<AsyncCheckpointedReaderImpl>(
       reader_name, std::move(reader), std::move(store), opts);
 }
 

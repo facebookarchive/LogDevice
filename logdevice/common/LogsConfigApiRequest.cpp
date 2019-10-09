@@ -183,7 +183,10 @@ void LogsConfigApiRequest::sendRequestTo(NodeID target) {
   ld_debug(
       "Sending LOGS_CONFIG_API_REQUEST to Node %s", target.toString().c_str());
   LOGS_CONFIG_API_Header header = {id_, request_type_};
-  auto msg = std::make_unique<LOGS_CONFIG_API_Message>(header, payload_);
+  // Instead of timeout_, we could use remaining time (if previous attempts
+  // too a significant time), but it doesn't seem worth the effort.
+  auto msg =
+      std::make_unique<LOGS_CONFIG_API_Message>(header, payload_, timeout_);
   onclose_callback_ = std::make_unique<LogsConfigSocketClosedCallback>(id_);
   int rv = Worker::onThisThread()->sender().sendMessage(
       std::move(msg), target, onclose_callback_.get());
@@ -292,10 +295,10 @@ void LogsConfigApiRequest::onError(Status status, std::string failure_reason) {
     activateRetryTimer();
     return;
   } else if (status == E::CONNFAILED || status == E::PEER_CLOSED ||
-             status == E::PEER_UNAVAILABLE || status == E::TIMEDOUT ||
-             status == E::NOBUFS || status == E::SHUTDOWN ||
-             status == E::DISABLED) {
-    // retry, but this time we pick a different node unless we are out of nodes
+             status == E::PEER_UNAVAILABLE || status == E::NOBUFS ||
+             status == E::SHUTDOWN || status == E::DISABLED) {
+    // Error code suggests that the mutation has not been done.
+    // Retry, but this time we pick a different node unless we are out of nodes
     // in the cluster or we reached the errors limit.
     RATELIMIT_INFO(
         std::chrono::seconds(1),
@@ -321,7 +324,12 @@ void LogsConfigApiRequest::onError(Status status, std::string failure_reason) {
                    "LogsConfigApiRequest failed, this feature is not "
                    "supported or disabled on the server");
   } else {
-    // e.g, E::ACCESS et al.
+    // Likely-permanent errors like E::ACCESS, as well as E::TIMEDOUT.
+    //
+    // E::TIMEDOUT indicates that server timed out trying to write the delta or
+    // waiting for it to get applied. The mutation may or may not have been
+    // done. Don't retry or we might end up applying the mutation twice or
+    // getting a false E::EXISTS.
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
                    "LogsConfigApiRequest failed: %s",

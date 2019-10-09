@@ -28,6 +28,11 @@ ld_thrift_py3_library(
 
 add_dependencies(AllReadStreamsDebugConfig-cpp2-target fbthrift)
 
+set_target_properties(
+  AllReadStreamsDebugConfig-cpp2-obj
+  PROPERTIES POSITION_INDEPENDENT_CODE True
+)
+
 target_link_libraries(
   AllReadStreamsDebugConfig-cpp2
   ${THRIFT_DEPS}

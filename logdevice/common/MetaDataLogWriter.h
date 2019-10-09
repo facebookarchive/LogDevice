@@ -252,6 +252,8 @@ class MetaDataLogWriter {
   logid_t getDataLogID() const;
   logid_t getMetaDataLogID() const;
 
+  std::string getDebugInfo() const;
+
   // retry timer callback to ensure that the parent sequencer has successfully
   // reactivated to a new epoch
   static void checkActivation(logid_t log_id,

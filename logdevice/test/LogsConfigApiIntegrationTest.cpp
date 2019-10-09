@@ -190,6 +190,7 @@ TEST_F(LogsConfigIntegrationTest, Rename) {
   ASSERT_EQ(nullptr, lg2);
   ASSERT_EQ(E::EXISTS, err);
 
+  client->syncLogsConfigVersion(lg1->version());
   std::unique_ptr<client::LogGroup> log2_back =
       client->getLogGroupSync("/log2");
 
@@ -388,36 +389,48 @@ std::string random_string(size_t length) {
 }
 
 TEST_F(LogsConfigIntegrationTest, TooBigConfig) {
-  LogAttributes::ExtrasMap extras;
-  extras["clowntown"] = random_string(4 * 1024 * 1024);
-  LogAttributes log_attrs =
-      DefaultLogAttributes().with_replicationFactor(2).with_extras(extras);
+  const int num_logs = 20;
 
   auto clusterFactory =
       IntegrationTestUtils::ClusterFactory().enableLogsConfigManager().setParam(
           "--logsconfig-snapshotting", "false");
 
+  // Use one-node cluster to minimize the test's space footprint since it
+  // writes a few tens of MB of records.
   clusterFactory.useDefaultTrafficShapingConfig(false);
-  auto cluster = clusterFactory.create(2);
+  auto cluster = clusterFactory.create(1);
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   client_settings->set("on-demand-logs-config", "false");
   std::shared_ptr<Client> client = cluster->createIndependentClient(
       DEFAULT_TEST_TIMEOUT, std::move(client_settings));
 
-  for (int i = 0; i < 30; i++) {
+  uint64_t version = 0;
+  for (int i = 0; i < num_logs; i++) {
+    // Generate extras string short enough to fit into the message size limit,
+    // but long enough that the whole config won't fit in the limit.
+    // Generate a new random string for each log group to make sure the logs
+    // config is not too compressible.
+    LogAttributes::ExtrasMap extras;
+    extras["clowntown"] = random_string(Message::MAX_LEN * 2 / num_logs);
+    LogAttributes log_attrs =
+        DefaultLogAttributes().with_replicationFactor(1).with_extras(extras);
     std::string name =
         "/this is a pretty big log name that has a number " + std::to_string(i);
-    ASSERT_NE(
-        nullptr,
+
+    auto group =
         client->makeLogGroupSync(std::move(name),
                                  logid_range_t(logid_t(i + 1), logid_t(i + 1)),
-                                 log_attrs));
+                                 log_attrs);
+    ASSERT_NE(nullptr, group);
+    EXPECT_GT(group->version(), version);
+    version = group->version();
   }
 
+  client->syncLogsConfigVersion(version);
   auto root1 = client->getDirectorySync("/");
   ASSERT_NE(nullptr, root1);
-  ASSERT_EQ(30, root1->logs().size());
+  ASSERT_EQ(num_logs, root1->logs().size());
 }
 
 TEST_F(LogsConfigIntegrationTest, ClientTest) {

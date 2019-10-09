@@ -389,3 +389,53 @@ TEST(APIUtilsTest, MaintenanceFilter) {
   ASSERT_EQ(1, res1.size());
   ASSERT_THAT(res1, UnorderedElementsAre(def1));
 }
+
+TEST(APIUtilsTest, TestIsEmptyMaintenance) {
+  MaintenanceDefinition def;
+  def.set_user("bunny");
+  def.set_shard_target_state(ShardOperationalState::DRAINED);
+  def.set_shards({mkShardID(1, -1), mkShardID(13, -1)});
+  def.set_sequencer_nodes({mkNodeID(1)});
+  def.set_sequencer_target_state(SequencingState::DISABLED);
+  EXPECT_FALSE(APIUtils::isEmptyMaintenance(def));
+
+  def.set_shards({});
+  def.set_sequencer_nodes({mkNodeID(1)});
+  EXPECT_FALSE(APIUtils::isEmptyMaintenance(def));
+
+  def.set_shards({mkShardID(1, -1), mkShardID(13, -1)});
+  def.set_sequencer_nodes({});
+  EXPECT_FALSE(APIUtils::isEmptyMaintenance(def));
+
+  def.set_shards({});
+  def.set_sequencer_nodes({});
+  EXPECT_TRUE(APIUtils::isEmptyMaintenance(def));
+}
+
+TEST(APIUtilsTest, TestRemoveNonExistentNodesFromMaintenance) {
+  MaintenanceDefinition def;
+  def.set_user("bunny");
+  def.set_shard_target_state(ShardOperationalState::DRAINED);
+  def.set_shards(
+      {mkShardID(1, -1), mkShardID(130, 0), mkShardID(0, 1), mkShardID(7, 1)});
+  def.set_sequencer_nodes(
+      {mkNodeID(1), mkNodeID(100), mkNodeID(0), mkNodeID(101)});
+  def.set_sequencer_target_state(SequencingState::DISABLED);
+
+  APIUtils::removeNonExistentNodesFromMaintenance(
+      def, *genNodesConfiguration());
+
+  for (auto seq : def.get_sequencer_nodes()) {
+    LOG(INFO) << *seq.get_node_index();
+  }
+
+  EXPECT_THAT(def.get_shards(),
+              UnorderedElementsAre(mkShardID(1, -1), mkShardID(7, 1)));
+  EXPECT_THAT(def.get_sequencer_nodes(), UnorderedElementsAre(mkNodeID(1)));
+
+  // Trying to remove the nodes again, wouldn't change anything
+  auto def_copy = def;
+  APIUtils::removeNonExistentNodesFromMaintenance(
+      def_copy, *genNodesConfiguration());
+  EXPECT_EQ(def, def_copy);
+}

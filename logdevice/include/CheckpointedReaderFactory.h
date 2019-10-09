@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/include/AsyncCheckpointedReader.h"
 #include "logdevice/include/SyncCheckpointedReader.h"
 
 namespace facebook { namespace logdevice {
@@ -24,6 +25,17 @@ class CheckpointedReaderFactory {
   std::unique_ptr<SyncCheckpointedReader> createSyncCheckpointedReader(
       const std::string& reader_name,
       std::unique_ptr<Reader> reader,
+      std::unique_ptr<CheckpointStore> store,
+      CheckpointedReaderBase::CheckpointingOptions opts);
+
+  /**
+   * Creates an async CheckpointedReader.
+   *
+   * @param reader: an underlying reader.
+   */
+  std::unique_ptr<AsyncCheckpointedReader> createAsyncCheckpointedReader(
+      const std::string& reader_name,
+      std::unique_ptr<AsyncReader> reader,
       std::unique_ptr<CheckpointStore> store,
       CheckpointedReaderBase::CheckpointingOptions opts);
 };

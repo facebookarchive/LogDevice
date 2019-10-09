@@ -12,6 +12,7 @@
 
 #include <folly/Optional.h>
 
+#include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
@@ -104,6 +105,8 @@ class WriteMetaDataRecord {
     return driver_;
   }
 
+  void getDebugInfo(InfoWriteMetaDataRecordTable& table) const;
+
   void notePreempted(epoch_t epoch, NodeID preempted_by);
 
   // expose the managed metadata sequencer, must be called on
@@ -158,6 +161,8 @@ class WriteMetaDataRecord {
 
   // finalize the state machine by notifying parent to destroy `this'
   void finalize(Status st);
+
+  static std::string stateString(State state);
 };
 
 // Wrapper instead of typedef to allow forward-declaring in Worker.h

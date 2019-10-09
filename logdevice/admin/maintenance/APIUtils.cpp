@@ -370,5 +370,32 @@ bool doesMaintenanceMatchFilter(const thrift::MaintenancesFilter& filter,
   return true;
 }
 
+void removeNonExistentNodesFromMaintenance(
+    thrift::MaintenanceDefinition& maintenance,
+    const configuration::nodes::NodesConfiguration& nodes_configuration) {
+  maintenance.shards.erase(
+      std::remove_if(maintenance.shards.begin(),
+                     maintenance.shards.end(),
+                     [&](const auto& shard) {
+                       return !findNodeIndex(
+                                   shard.get_node(), nodes_configuration)
+                                   .hasValue();
+                     }),
+      maintenance.shards.end());
+  maintenance.sequencer_nodes.erase(
+      std::remove_if(
+          maintenance.sequencer_nodes.begin(),
+          maintenance.sequencer_nodes.end(),
+          [&](const auto& node) {
+            return !findNodeIndex(node, nodes_configuration).hasValue();
+          }),
+      maintenance.sequencer_nodes.end());
+}
+
+bool isEmptyMaintenance(const thrift::MaintenanceDefinition& maintenance) {
+  return maintenance.get_shards().empty() &&
+      maintenance.get_sequencer_nodes().empty();
+}
+
 } // namespace APIUtils
 }}} // namespace facebook::logdevice::maintenance

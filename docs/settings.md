@@ -19,6 +19,8 @@ sidebar_label: Settings
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | maintenance-manager-metadata-nodeset-update-period | The period of how often to check if metadata nodeset update is required | 2min | server&nbsp;only |
 | maintenance-manager-reevaluation-timeout | Timeout after which a new run is scheduled in MaintenanceManager. Used for periodic reevaluation of the state in the absence of any state changes | 2min | server&nbsp;only |
+| max-unavailable-sequencing-capacity-pct | The precentage of the sequencing capacity that is allowed to be taken down by operations, safety checker will take into account DEAD nodes as well. This means that if this value is 25, then safety checker will deny maintenances that will may take down more sequencer nodes. The percentage takes into account the weight of the sequencer nodes, so does not necessarily equals 25% of the number of sequencer nodes | 25 | server&nbsp;only |
+| max-unavailable-storage-capacity-pct | The precentage of the storage that is allowed to be taken down by operations, safety checker will take into account DEAD nodes as well. This means that if this value is 25, then safety checker will deny maintenances that will may take down more storage nodes. The percentage takes into account the weight of shards in the storage nodes, so does not necessarily equals 25% of the number of storage nodes | 25 | server&nbsp;only |
 | read-metadata-from-sequencers | Safety checker to read the metadata of logs directly from sequencers. | true | server&nbsp;only |
 | safety-check-failure-sample-size | The number of sample epochs returned by the Maintenance API for each maintenance if safety check blocks the operation. | 10 | server&nbsp;only |
 | safety-check-max-batch-size | The maximum number of logs to be checked in a single batch. Larger batches mean faster performance but means blocking the CPU thread pool for longer (not yielding often enough) | 15000 | server&nbsp;only |
@@ -215,7 +217,7 @@ sidebar_label: Settings
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
 | incoming-messages-max-bytes-limit | maximum byte limit of unprocessed messages within the system. | 524288000 | requires&nbsp;restart |
 | inline-message-execution | Indicates whether message should be processed right after deserialization. Usually within new worker model all messages are processed after posting them into the work context. This option works only when worker context is run with previous eventloop architecture. | false | requires&nbsp;restart |
-| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 98 |  |
+| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 99 |  |
 | max-time-to-allow-socket-drain | After hitting NOBUFS, amount of time a socket is allowed to successfully send a single message before it is closed. | 3min |  |
 | nagle | enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | false |  |
 | outbuf-kb | max output buffer size (userspace extension of socket sendbuf) in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 32768 |  |
@@ -256,7 +258,6 @@ sidebar_label: Settings
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
 | all-read-streams-debug-config-path | The config path for sampling all client read streams debug info |  | client&nbsp;only |
-| all-read-streams-sampling-allowed-csid | Enable all read streams sampling for client with specified Client Session ID. If value empty then sampling disabled for all clients. |  | client&nbsp;only |
 | all-read-streams-sampling-rate | Rate of sampling all client read streams debug info | 100ms | client&nbsp;only |
 | authoritative-status-overrides | Force the given authoritative statuses for the given shards. Comma-separated list of overrides, each override of form 'N<node>S<shard>:<status>' or 'N<node>S<shard1>-<shard2>:<status>'. E.g. 'N7:S0-15:UNDERREPLICATION,N8:S2:UNDERREPLICATION' will set status of shards 0-15 of node 7 and shard 2 of node 8 to UNDERREPLICATION. This is useful for recovering from situations where internal logs or metadata logs are unreadable because too many nodes are unavailable or lost their data. In such situation, use this setting to temporarily override the state of shards that are unavailable (not running logdeviced) to UNDERREPLICATION, then, optionally, write SHARD\_UNRECOVERABLE events for the same shards to event log. |  | server&nbsp;only |
 | client-epoch-metadata-cache-size | maximum number of entries in the client-side epoch metadata cache. Set it to 0 to disable the epoch metadata cache. | 50000 | requires&nbsp;restart, client&nbsp;only |
@@ -266,6 +267,7 @@ sidebar_label: Settings
 | client-read-buffer-size | number of records to buffer per read stream in the client object while reading. If this setting is changed on-the-fly, the change will only apply to new reader instances | 512 |  |
 | client-read-flow-control-threshold | threshold (relative to buffer size) at which the client broadcasts window update messages (less means more often) | 0.7 |  |
 | data-log-gap-grace-period | When non-zero, replaces gap-grace-period for data logs. | 0ms |  |
+| enable-all-read-streams-debug | Enable all read streams sampling of debug info for debugging readers. | false | client&nbsp;only |
 | enable-read-throttling | Throttle Disk I/O due to log read streams | false | server&nbsp;only |
 | gap-grace-period | gap detection grace period for all logs, including data logs, metadata logs, and internal state machine logs. Millisecond granularity. Can be 0. | 100ms |  |
 | grace-counter-limit | Maximum number of consecutive grace periods a storage node may fail to send a record or gap (if in all read all mode) before it is considered disgraced and client read streams no longer wait for it. If all nodes are disgraced or in GAP state, a gap record is issued. May be 0. Set to -1 to disable grace counters and use simpler logic: no disgraced nodes, issue gap record as soon as grace period expires. | 2 |  |

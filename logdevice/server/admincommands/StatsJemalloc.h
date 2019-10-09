@@ -18,10 +18,11 @@
 // allow us to check this at runtime (the function pointers will be null if
 // jemalloc is not present).
 extern "C" int mallctl(const char*, void*, size_t*, void*, size_t)
-    __attribute__((__weak__));
+    __attribute__((__nothrow__, __weak__));
 extern "C" void malloc_stats_print(void (*)(void*, const char*),
                                    void*,
-                                   const char*) __attribute__((__weak__));
+                                   const char*)
+    __attribute__((__nothrow__, __weak__));
 
 namespace facebook { namespace logdevice { namespace commands {
 

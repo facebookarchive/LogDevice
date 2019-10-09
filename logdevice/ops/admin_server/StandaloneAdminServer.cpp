@@ -256,17 +256,26 @@ void StandaloneAdminServer::initAdminServer() {
   cpu_executor_ = std::make_shared<folly::CPUThreadPoolExecutor>(25);
   folly::setCPUExecutor(cpu_executor_);
 
+  Sockaddr listen_addr;
+  if (!admin_settings_->admin_unix_socket.empty()) {
+    listen_addr = Sockaddr(admin_settings_->admin_unix_socket);
+  } else {
+    listen_addr = Sockaddr("::", admin_settings_->admin_port);
+  }
+
   auto adm_plugin = plugin_registry_->getSinglePlugin<AdminServerFactory>(
       PluginType::ADMIN_SERVER_FACTORY);
   if (adm_plugin) {
-    admin_server_ = (*adm_plugin)(processor_.get(),
+    admin_server_ = (*adm_plugin)(listen_addr,
+                                  processor_.get(),
                                   settings_updater_,
                                   server_settings_,
                                   admin_settings_,
                                   stats_.get());
   } else {
     // Use built-in SimpleAdminServer
-    admin_server_ = std::make_unique<SimpleAdminServer>(processor_.get(),
+    admin_server_ = std::make_unique<SimpleAdminServer>(listen_addr,
+                                                        processor_.get(),
                                                         settings_updater_,
                                                         server_settings_,
                                                         admin_settings_,
@@ -357,7 +366,8 @@ void StandaloneAdminServer::createAndAttachMaintenanceManager(
         std::make_unique<maintenance::SafetyCheckScheduler>(
             processor_.get(),
             admin_settings_,
-            admin_server->getSafetyChecker()));
+            admin_server->getSafetyChecker()),
+        std::make_unique<maintenance::MaintenanceLogWriter>(processor_.get()));
     auto worker_idx = processor_->selectWorkerRandomly(
         configuration::InternalLogs::MAINTENANCE_LOG_DELTAS.val_ /*seed*/,
         maintenance::MaintenanceManager::workerType(processor_.get()));

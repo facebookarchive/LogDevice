@@ -80,6 +80,17 @@ CheckImpactHandler::semifuture_checkImpact(
       logs_to_check->push_back(logid_t(to_unsigned(id)));
     }
   }
+  if (request->get_max_unavailable_storage_capacity_pct() < 0 ||
+      request->get_max_unavailable_storage_capacity_pct() > 100) {
+    throw thrift::InvalidRequest(
+        "max-unavailable-storage-capacity-pct has to be between 0 and 100");
+  }
+
+  if (request->get_max_unavailable_sequencing_capacity_pct() < 0 ||
+      request->get_max_unavailable_sequencing_capacity_pct() > 100) {
+    throw thrift::InvalidRequest(
+        "max-unavailable-sequencing-capacity-pct has to be between 0 and 100");
+  }
 
   return safety_checker_
       ->checkImpact(std::move(status_map),
@@ -90,6 +101,8 @@ CheckImpactHandler::semifuture_checkImpact(
                     request->check_metadata_logs_ref().value_or(true),
                     request->check_internal_logs_ref().value_or(true),
                     request->check_capacity_ref().value_or(true),
+                    request->get_max_unavailable_storage_capacity_pct(),
+                    request->get_max_unavailable_sequencing_capacity_pct(),
                     logs_to_check)
       .via(this->getThreadManager())
       .thenValue([](const folly::Expected<Impact, Status>& impact) {

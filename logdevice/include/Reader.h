@@ -62,13 +62,15 @@ class Reader {
    * @return On success, returns 0.  On failure, -1 is returned and
    *         logdevice::err is set to:
    *            [any of the error codes from AsyncReader::stopReading()]
-   *            NOTFOUND  log is not being read
+   *            NOTFOUND  log is not being read, either because startReading()
+   *                      was never called (or stopReading() was called), or
+   *                      because `until` LSN was reached
    */
   virtual int stopReading(logid_t log_id) = 0;
 
   /**
-   * Checks if a log is being read.  Can be used to find out if the end of the
-   * log was reached (for a log that was being read).
+   * Checks if a log is being read. Can be used to find out if the `until`
+   * LSN (passed to startReading()) was reached (for a log that was being read).
    */
   virtual bool isReading(logid_t log_id) const = 0;
 

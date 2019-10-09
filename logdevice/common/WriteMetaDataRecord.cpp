@@ -9,6 +9,7 @@
 
 #include <folly/Memory.h>
 
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/LogIDUniqueQueue.h"
 #include "logdevice/common/LogRecoveryRequest.h"
 #include "logdevice/common/MetaDataLog.h"
@@ -370,6 +371,33 @@ void WriteMetaDataRecord::noteConfigurationChanged() {
 
 WriteMetaDataRecord::~WriteMetaDataRecord() {
   ld_check(meta_seq_ == nullptr || meta_seq_->getNumAppendsInFlight() == 0);
+}
+
+void WriteMetaDataRecord::getDebugInfo(
+    InfoWriteMetaDataRecordTable& table) const {
+  table.next()
+      .set<0>(log_id_)
+      .set<1>(epoch_)
+      .set<2>(stateString(state_))
+      .set<3>(target_lsn_)
+      .set<4>(recovery_only_)
+      .set<5>(recovery_status_.value_or(Status::UNKNOWN))
+      .set<6>(num_releases_sent_)
+      .set<7>(created_on_.val());
+}
+
+/* static */
+std::string WriteMetaDataRecord::stateString(State state) {
+  switch (state) {
+    case State::READY:
+      return "READY";
+    case State::STARTED:
+      return "STARTED";
+    case State::STORED:
+      return "STORED";
+  }
+  ld_check(false);
+  return "UNKNOWN";
 }
 
 void WriteMetaDataRecordMap::noteConfigurationChanged() {

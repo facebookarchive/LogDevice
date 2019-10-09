@@ -1313,7 +1313,7 @@ struct Settings : public SettingsBundle {
   // enforcing permissions on the given message types if supported.
   std::unordered_set<MessageType> require_permission_message_types;
 
-  std::string all_read_streams_sampling_allowed_csid;
+  bool enable_all_read_streams_debug;
   std::chrono::milliseconds all_read_streams_sampling_rate;
   std::string all_read_streams_debug_config_path;
 

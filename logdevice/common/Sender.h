@@ -31,7 +31,6 @@
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/TrafficClass.h"
 #include "logdevice/common/configuration/TrafficShapingConfig.h"
-#include "logdevice/common/network/ConnectionFactory.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/include/Err.h"
 
@@ -61,6 +60,7 @@ class SocketCallback;
 class SocketProxy;
 class StatsHolder;
 struct Settings;
+class IConnectionFactory;
 
 namespace configuration {
 struct TrafficShapingConfig;
@@ -789,7 +789,6 @@ class Sender : public SenderBase {
 
   void onSettingsUpdated(std::shared_ptr<const Settings> new_settings) {
     settings_.swap(new_settings);
-    connection_factory_->onSettingsUpdated(*settings_);
   }
 
   /**

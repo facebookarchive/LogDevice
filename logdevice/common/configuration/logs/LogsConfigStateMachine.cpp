@@ -143,10 +143,15 @@ void LogsConfigStateMachine::writeDelta(
     std::string payload,
     std::function<
         void(Status st, lsn_t version, const std::string& failure_reason)> cb,
-    WriteMode mode) {
+    WriteMode mode,
+    folly::Optional<std::chrono::milliseconds> timeout) {
   if (is_writable_) {
     STAT_INCR(getStats(), logsconfig_manager_delta_written);
-    Parent::writeDelta(std::move(payload), std::move(cb), std::move(mode));
+    Parent::writeDelta(std::move(payload),
+                       std::move(cb),
+                       std::move(mode),
+                       /* base_version */ folly::none,
+                       timeout);
   } else {
     ld_error("Attempting to write to a read-only LogsConfigStateMachine, "
              "operation denied: E::ACCESS");

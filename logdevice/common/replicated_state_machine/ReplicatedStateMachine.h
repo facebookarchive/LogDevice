@@ -302,13 +302,18 @@ class ReplicatedStateMachine {
    *                     that the current state version matches the
    *                     base_version. Otherwise, the callback will be executed
    *                     with status E::STALE.
+   * @param timeout If specified, this timeout will be used for the append and
+   *                for waiting for the delta to be applied (if
+   *                CONFIRM_APPLIED). If not specified, use some default
+   *                timeout.
    */
   void writeDelta(
       std::string payload,
       std::function<
           void(Status st, lsn_t version, const std::string& failure_reason)> cb,
       WriteMode mode = WriteMode::CONFIRM_APPLIED,
-      folly::Optional<lsn_t> base_version = folly::none);
+      folly::Optional<lsn_t> base_version = folly::none,
+      folly::Optional<std::chrono::milliseconds> timeout = folly::none);
 
   using update_cb_t =
       std::function<void(const T& state, const D* delta, lsn_t version)>;
@@ -743,6 +748,7 @@ class ReplicatedStateMachine {
     lsn_t lsn{LSN_INVALID};
     boost::uuids::uuid uuid;
     std::function<void(Status, lsn_t, const std::string&)> cb;
+    std::chrono::milliseconds timeout{-1};
     // After the append completes, we activate this timer. If the timer expires
     // before we can confirm the delta, we confirm the delta with E::TIMEDOUT.
     std::unique_ptr<Timer> timer;

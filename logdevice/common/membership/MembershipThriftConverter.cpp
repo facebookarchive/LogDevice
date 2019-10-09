@@ -12,6 +12,13 @@
 
 namespace facebook { namespace logdevice { namespace membership {
 
+namespace {
+template <class T>
+bool sort_by_shard_idx(const T& first, const T& second) {
+  return first.get_shard_idx() < second.get_shard_idx();
+};
+} // namespace
+
 constexpr MembershipThriftConverter::ProtocolVersion
     MembershipThriftConverter::CURRENT_PROTO_VERSION;
 
@@ -51,6 +58,9 @@ thrift::StorageMembership MembershipThriftConverter::toThrift(
 
       shard_states.push_back(std::move(state));
     }
+    std::sort(shard_states.begin(),
+              shard_states.end(),
+              sort_by_shard_idx<thrift::ShardState>);
 
     node_states.emplace(node_kv.first, std::move(shard_states));
   }
@@ -62,6 +72,9 @@ thrift::StorageMembership MembershipThriftConverter::toThrift(
     shard_id.set_shard_idx(meta_shard.shard());
     metadata_shards.push_back(std::move(shard_id));
   }
+  std::sort(metadata_shards.begin(),
+            metadata_shards.end(),
+            sort_by_shard_idx<thrift::ShardID>);
 
   thrift::StorageMembership membership;
   membership.set_proto_version(CURRENT_PROTO_VERSION);

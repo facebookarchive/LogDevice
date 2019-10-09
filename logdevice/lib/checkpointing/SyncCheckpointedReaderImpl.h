@@ -22,6 +22,11 @@ class SyncCheckpointedReaderImpl : public SyncCheckpointedReader {
                              std::unique_ptr<CheckpointStore> store,
                              CheckpointingOptions opts);
 
+  int startReadingFromCheckpoint(
+      logid_t log_id,
+      lsn_t until = LSN_MAX,
+      const ReadStreamAttributes* attrs = nullptr) override;
+
   int startReading(logid_t log_id,
                    lsn_t from,
                    lsn_t until = LSN_MAX,

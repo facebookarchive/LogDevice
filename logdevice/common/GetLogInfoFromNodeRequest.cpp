@@ -113,8 +113,10 @@ int GetLogInfoFromNodeRequest::sendOneMessage(NodeID to) {
       .request_type = parent->request_type_,
       .subscribe_to_config_ = true, /* Subscribes to CONFIG_CHANGED */
       .origin = LogsConfigRequestOrigin::REMOTE_LOGS_CONFIG_REQUEST};
-  auto msg =
-      std::make_unique<LOGS_CONFIG_API_Message>(header, parent->identifier_);
+  auto msg = std::make_unique<LOGS_CONFIG_API_Message>(
+      header,
+      parent->identifier_,
+      /* timeout, ignored */ std::chrono::milliseconds(0));
   auto w = Worker::onThisThread();
 
   // registering callback in case the socket gets closed, even when we aren't

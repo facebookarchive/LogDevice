@@ -28,6 +28,7 @@ STAT_DEFINE(maintenance_progress_COMPLETED, MAX)
 STAT_DEFINE(mm_evaluations, SUM)
 STAT_DEFINE(mm_metadata_nodeset_selection_failed, SUM)
 STAT_DEFINE(mm_ncm_update_errors, SUM)
+STAT_DEFINE(mm_expired_maintenances_removed, SUM)
 
 // Safety Checker (via MM)
 STAT_DEFINE(mm_safety_checker_runs, SUM)

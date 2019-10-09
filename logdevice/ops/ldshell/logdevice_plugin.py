@@ -8,7 +8,6 @@
 
 import argparse
 
-from ldshell.autoload.commands import logsconfig
 from ldshell.autoload.commands.connect import Connect
 from ldshell.autoload.commands.query import SelectCommand
 from ldshell.logdevice_context import Context
@@ -44,9 +43,6 @@ class LogDevicePlugin(PluginInterface):
 
     def get_commands(self):
         commands = [Connect(), SelectCommand()]
-
-        auto_commands = [logsconfig.Logs]
-        commands.extend(AutoCommand(c) for c in auto_commands)
         return commands
 
     def get_opts_parser(self, add_help=True):

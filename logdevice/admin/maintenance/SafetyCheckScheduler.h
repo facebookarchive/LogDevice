@@ -21,6 +21,7 @@
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
+#include "logdevice/include/NodeLocationScope.h"
 
 namespace facebook { namespace logdevice {
 class Processor;
@@ -93,7 +94,8 @@ class SafetyCheckScheduler {
       const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
           nodes_config,
       const std::vector<const ShardWorkflow*>& shard_wf,
-      const std::vector<const SequencerWorkflow*>& seq_wf) const;
+      const std::vector<const SequencerWorkflow*>& seq_wf,
+      NodeLocationScope biggest_replication_scope) const;
 
   virtual ~SafetyCheckScheduler() {}
 
@@ -101,6 +103,21 @@ class SafetyCheckScheduler {
   // Used by Tests.
   SafetyCheckScheduler() {}
 
+  /**
+   * A helper data structure that holds meta information about a given
+   * maintenance.
+   */
+  struct MaintenanceManifest {
+    // When the maintenance was created.
+    int64_t timestamp;
+    // The maintenance group ID.
+    GroupID group_id;
+    // The shards and sequencers in this maintenance.
+    ShardsAndSequencers shards_and_seqs;
+    // The different location strings (only for the biggest replication scope)
+    // that is affected by this maintenance.
+    folly::F14FastSet<std::string> locations;
+  };
   /**
    * A data structure that records the progress of the progressive safety check
    * operations. The `result` field has the final recorded result if the plan
@@ -160,9 +177,20 @@ class SafetyCheckScheduler {
   // performing a disable on a sequencer if we know we can't transition to the
   // target state for shards within the same maintenanc group.
   virtual std::deque<std::pair<GroupID, ShardsAndSequencers>>
-  buildExecutionPlan(const ClusterMaintenanceWrapper& maintenance_state,
-                     const std::vector<const ShardWorkflow*>& shard_wf,
-                     const std::vector<const SequencerWorkflow*>& seq_wf) const;
+  buildExecutionPlan(
+      const ClusterMaintenanceWrapper& maintenance_state,
+      const std::vector<const ShardWorkflow*>& shard_wf,
+      const std::vector<const SequencerWorkflow*>& seq_wf,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_config,
+      NodeLocationScope biggest_replication_scope) const;
+
+  /**
+   * Performs the sorting an grouping of maintenances in a way that would
+   * maximize the chances of them passing the safety checks.
+   */
+  std::vector<MaintenanceManifest>
+  sortAndGroupMaintenances(std::vector<MaintenanceManifest>&& input) const;
 
  private:
   // Reads the last set impact in the execution state object and updates the

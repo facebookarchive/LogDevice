@@ -82,10 +82,17 @@ struct SequencerNodeState {
     return !(*this == rhs);
   }
 
+  /**
+   * The weight of this sequencer node relative to the rest of the cluster.
+   */
   double getConfiguredWeight() const {
     return weight_;
   }
 
+  /**
+   * Same as the configured weight, except that it's set to 0 if the sequencer
+   * is disabled
+   */
   double getEffectiveWeight() const {
     return sequencer_enabled ? weight_ : 0;
   }

@@ -10,6 +10,7 @@
 
 #include <chrono>
 
+#include "logdevice/common/ReadStreamAttributes.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
@@ -41,7 +42,7 @@ Status CheckpointedReaderBase::syncWriteCheckpoints(
 
 void CheckpointedReaderBase::asyncWriteCheckpoints(
     const std::map<logid_t, lsn_t>& checkpoints,
-    Callback cb) {
+    StatusCallback cb) {
   auto update_cb = [cb = std::move(cb)](Status status,
                                         CheckpointStore::Version,
                                         std::string) mutable {
@@ -49,6 +50,28 @@ void CheckpointedReaderBase::asyncWriteCheckpoints(
     cb(status);
   };
   store_->updateLSN(reader_name_, checkpoints, std::move(update_cb));
+}
+
+void CheckpointedReaderBase::asyncRemoveCheckpoints(
+    const std::vector<logid_t>& checkpoints,
+    StatusCallback cb) {
+  auto update_cb = [cb = std::move(cb)](Status status,
+                                        CheckpointStore::Version,
+                                        std::string) mutable {
+    // TODO: Implement versioning.
+    cb(status);
+  };
+  store_->removeCheckpoints(reader_name_, checkpoints, std::move(update_cb));
+}
+
+void CheckpointedReaderBase::asyncRemoveAllCheckpoints(StatusCallback cb) {
+  auto update_cb = [cb = std::move(cb)](Status status,
+                                        CheckpointStore::Version,
+                                        std::string) mutable {
+    // TODO: Implement versioning.
+    cb(status);
+  };
+  store_->removeAllCheckpoints(reader_name_, std::move(update_cb));
 }
 
 }} // namespace facebook::logdevice

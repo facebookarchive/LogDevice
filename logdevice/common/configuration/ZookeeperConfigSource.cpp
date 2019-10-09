@@ -9,8 +9,6 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <mutex>
-#include <queue>
 #include <thread>
 
 #include <boost/multi_index/composite_key.hpp>
@@ -24,7 +22,7 @@
 
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/ThreadID.h"
-#include "logdevice/common/ZookeeperClient.h"
+#include "logdevice/common/ZookeeperClientBase.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
 #include "logdevice/common/debug.h"
@@ -154,11 +152,9 @@ class ZookeeperConfigSource::BackgroundThread {
 
 ZookeeperConfigSource::ZookeeperConfigSource(
     std::chrono::milliseconds polling_delay,
-    std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory,
-    std::string uri_scheme)
+    std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory)
     : polling_delay_(polling_delay),
-      zookeeper_client_factory_(std::move(zookeeper_client_factory)),
-      uri_scheme_(uri_scheme) {}
+      zookeeper_client_factory_(std::move(zookeeper_client_factory)) {}
 
 Status ZookeeperConfigSource::getConfig(const std::string& quorum_path,
                                         Output* /* out */) {
@@ -215,15 +211,13 @@ int ZookeeperConfigSource::requestZnode(const std::string& quorum,
 
 ZookeeperClientBase*
 ZookeeperConfigSource::getClient(const std::string& quorum) {
-  ZookeeperConfig zkcfg(
-      quorum, uri_scheme_, std::chrono::seconds(ZK_SESSION_TIMEOUT_SEC));
-
   std::lock_guard<std::mutex> guard(mutex_);
   auto it = zkclients_.find(quorum);
   if (it == zkclients_.end()) {
     try {
       auto insert_result = zkclients_.emplace(
-          quorum, zookeeper_client_factory_->getClient(zkcfg));
+          quorum,
+          zookeeper_client_factory_->getClient(getZookeeperConfig(quorum)));
       it = insert_result.first;
     } catch (const ConstructorFailed&) {
       ld_info("ZookeeperClient constructor failed with %s", error_name(err));
@@ -231,6 +225,13 @@ ZookeeperConfigSource::getClient(const std::string& quorum) {
     }
   }
   return it->second.get();
+}
+
+ZookeeperConfig
+ZookeeperConfigSource::getZookeeperConfig(const std::string& quorum) {
+  return ZookeeperConfig(quorum,
+                         ZookeeperConfig::URI_SCHEME_IP,
+                         std::chrono::seconds(ZK_SESSION_TIMEOUT_SEC));
 }
 
 void ZookeeperConfigSource::dataCompletionCallback(int rc,

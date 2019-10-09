@@ -105,7 +105,7 @@ class NodeLocation {
    * E.g. a possible output for scope CLUSTER is "ash.ash1.21..".
    * If @param node_idx is folly::none, scope NODE is treated differently:
    * it's equivalent to RACK; i.e. the returned string will identify a rack,
-   * not node. If @param node_idx is givem, and scope is NODE, the returned
+   * not node. If @param node_idx is given, and scope is NODE, the returned
    * string will be identify a node, e.g. "ash.ash1.21.L.hi:N42" or "....:N42".
    */
   std::string

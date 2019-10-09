@@ -34,7 +34,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
     cluster_ =
         IntegrationTestUtils::ClusterFactory()
             .useHashBasedSequencerAssignment()
-            .enableSelfInitiatedRebuilding("1s")
+            .enableSelfInitiatedRebuilding("10s")
             .setNodesConfigurationSourceOfTruth(
                 IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
             .setParam("--event-log-grace-period", "1ms")

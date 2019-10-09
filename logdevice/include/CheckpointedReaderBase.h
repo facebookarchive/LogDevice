@@ -16,13 +16,15 @@
 
 namespace facebook { namespace logdevice {
 
+struct ReadStreamAttributes;
+
 /*
  * @file CheckpointedReaderBase provides API for checkpointing logs which
  *   will be shared between SyncCheckpointedReader and AsyncCheckpointedReader.
  */
 class CheckpointedReaderBase {
  public:
-  using Callback = folly::Function<void(Status)>;
+  using StatusCallback = folly::Function<void(Status)>;
 
   struct CheckpointingOptions {
     /*
@@ -39,6 +41,8 @@ class CheckpointedReaderBase {
                          std::unique_ptr<CheckpointStore> store,
                          CheckpointingOptions opts);
 
+  virtual ~CheckpointedReaderBase() = default;
+
   /*
    * Writes the passed checkpoints synchronously with retries specified in opts.
    *
@@ -54,7 +58,15 @@ class CheckpointedReaderBase {
    *   param description in VersionedConfigStore.
    */
   void asyncWriteCheckpoints(const std::map<logid_t, lsn_t>& checkpoints,
-                             Callback cb);
+                             StatusCallback cb);
+
+  /*
+   * Removes some or all the checkpoints for a customer.
+   */
+  void asyncRemoveCheckpoints(const std::vector<logid_t>& checkpoints,
+                              StatusCallback cb);
+
+  void asyncRemoveAllCheckpoints(StatusCallback cb);
 
  protected:
   CheckpointingOptions options_;

@@ -29,30 +29,36 @@ class AdminCommandClient {
   AdminCommandClient(size_t num_threads = 4)
       : executor_(std::make_unique<folly::IOThreadPoolExecutor>(num_threads)) {}
 
-  class RequestResponse {
+  class Request {
    public:
-    RequestResponse(folly::SocketAddress addr,
-                    std::string req,
-                    ConnectionType conntype = ConnectionType::UNKNOWN)
+    Request(folly::SocketAddress addr,
+            std::string req,
+            ConnectionType conntype = ConnectionType::UNKNOWN)
         : sockaddr(addr), request(req), conntype_(conntype) {}
 
     folly::SocketAddress sockaddr;
     std::string request;
-    std::string response;
-    bool success{false};
-    std::string failure_reason;
     ConnectionType conntype_;
   };
 
-  typedef std::vector<AdminCommandClient::RequestResponse> RequestResponses;
+  struct Response {
+    Response() {}
+    Response(std::string response, bool success, std::string failure_reason)
+        : response(response),
+          success(success),
+          failure_reason(failure_reason) {}
+    std::string response{""};
+    bool success{false};
+    std::string failure_reason{""};
+  };
 
-  void send(RequestResponses& rr,
-            std::chrono::milliseconds command_timeout,
-            std::chrono::milliseconds connect_timeout =
-                std::chrono::milliseconds(5000)) const;
+  std::vector<Response> send(const std::vector<Request>& r,
+                             std::chrono::milliseconds command_timeout,
+                             std::chrono::milliseconds connect_timeout =
+                                 std::chrono::milliseconds(5000)) const;
 
-  std::vector<folly::SemiFuture<RequestResponse*>>
-  asyncSend(std::vector<RequestResponse>& rr,
+  std::vector<folly::SemiFuture<Response>>
+  asyncSend(const std::vector<Request>& rr,
             std::chrono::milliseconds command_timeout,
             std::chrono::milliseconds connect_timeout =
                 std::chrono::milliseconds(5000)) const;

@@ -928,6 +928,7 @@ void AppendRequest::SocketClosedCallback::operator()(Status st,
 }
 
 void AppendRequest::bumpStatForOutcome(StatsHolder* stats, Status status) {
+  STAT_INCR(stats, client.append_requests);
   switch (status) {
     case E::OK:
       STAT_INCR(stats, client.append_success);
@@ -937,35 +938,41 @@ void AppendRequest::bumpStatForOutcome(StatsHolder* stats, Status status) {
       // track it.
       break;
 
+#define HANDLE_SLO_TRACKED_CODE(code)                    \
+  case E::code:                                          \
+    STAT_INCR(stats, client.append_failed_##code);       \
+    STAT_INCR(stats, client.unexpected_append_failures); \
+    break;
+
 #define HANDLE_CODE(code)                          \
   case E::code:                                    \
     STAT_INCR(stats, client.append_failed_##code); \
     break;
 
-      HANDLE_CODE(TIMEDOUT)
+      HANDLE_SLO_TRACKED_CODE(TIMEDOUT)
       HANDLE_CODE(NOTFOUND)
-      HANDLE_CODE(NOSEQUENCER)
+      HANDLE_SLO_TRACKED_CODE(NOSEQUENCER)
       HANDLE_CODE(NOTINSERVERCONFIG)
       HANDLE_CODE(CONNFAILED)
       HANDLE_CODE(PEER_CLOSED)
       HANDLE_CODE(TOOBIG)
       HANDLE_CODE(NOBUFS)
-      HANDLE_CODE(SYSLIMIT)
-      HANDLE_CODE(SEQNOBUFS)
-      HANDLE_CODE(SEQSYSLIMIT)
-      HANDLE_CODE(NOSPC)
-      HANDLE_CODE(OVERLOADED)
-      HANDLE_CODE(DISABLED)
+      HANDLE_SLO_TRACKED_CODE(SYSLIMIT)
+      HANDLE_SLO_TRACKED_CODE(SEQNOBUFS)
+      HANDLE_SLO_TRACKED_CODE(SEQSYSLIMIT)
+      HANDLE_SLO_TRACKED_CODE(NOSPC)
+      HANDLE_SLO_TRACKED_CODE(OVERLOADED)
+      HANDLE_SLO_TRACKED_CODE(DISABLED)
       HANDLE_CODE(ACCESS)
-      HANDLE_CODE(INTERNAL)
+      HANDLE_SLO_TRACKED_CODE(INTERNAL)
       HANDLE_CODE(INVALID_PARAM)
       HANDLE_CODE(BADPAYLOAD)
-      HANDLE_CODE(ISOLATED)
+      HANDLE_SLO_TRACKED_CODE(ISOLATED)
       HANDLE_CODE(CANCELLED)
       HANDLE_CODE(PEER_UNAVAILABLE)
 
 #undef HANDLE_CODE
-
+#undef HANDLE_SLO_TRACKED_CODE
     default:
       // Bucket any other errors into one counter.  This shouldn't happen if
       // we keep the above list in sync with return values from

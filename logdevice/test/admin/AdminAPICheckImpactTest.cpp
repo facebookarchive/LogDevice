@@ -116,6 +116,8 @@ TEST_F(AdminAPICheckImpactTest, DisableReads) {
   request.set_shards(shards);
   request.set_target_storage_state(thrift::ShardStorageState::DISABLED);
   request.set_disable_sequencers(false);
+  request.set_max_unavailable_sequencing_capacity_pct(100);
+  request.set_max_unavailable_storage_capacity_pct(100);
   admin_client->sync_checkImpact(response, request);
 
   ASSERT_TRUE(*response.get_internal_logs_affected());

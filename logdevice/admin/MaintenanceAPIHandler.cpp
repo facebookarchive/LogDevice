@@ -55,7 +55,7 @@ MaintenanceAPIHandler::semifuture_getMaintenances(
       .via(this->getThreadManager())
       .thenValue(
           // We get expected<vec<definition>, maintenance error>
-          [request = std::move(request)](
+          [request = std::move(request), processor = this->processor_](
               auto&& value) -> std::unique_ptr<MaintenanceDefinitionResponse> {
             if (value.hasError()) {
               // The exception will be passed through to the user of the API on
@@ -64,8 +64,33 @@ MaintenanceAPIHandler::semifuture_getMaintenances(
               ld_assert(false);
             }
             auto v = std::make_unique<MaintenanceDefinitionResponse>();
-            v->set_maintenances(
-                APIUtils::filterMaintenances(*request, value.value()));
+
+            auto filtered_maintenances =
+                APIUtils::filterMaintenances(*request, value.value());
+
+            // Remove nodes from maintenance definition that doesn't exist in
+            // the nodes configuration anymore.
+            auto nodes_config = processor->getNodesConfiguration();
+            std::transform(filtered_maintenances.begin(),
+                           filtered_maintenances.end(),
+                           filtered_maintenances.begin(),
+                           [&nodes_config](auto m) {
+                             APIUtils::removeNonExistentNodesFromMaintenance(
+                                 m, *nodes_config);
+                             return m;
+                           });
+
+            // Removing nodes, may lead to empty maintenances, filter those out
+            // as well.
+            filtered_maintenances.erase(
+                std::remove_if(filtered_maintenances.begin(),
+                               filtered_maintenances.end(),
+                               [](const auto& m) {
+                                 return APIUtils::isEmptyMaintenance(m);
+                               }),
+                filtered_maintenances.end());
+
+            v->set_maintenances(std::move(filtered_maintenances));
             return v;
           });
 }

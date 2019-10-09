@@ -788,3 +788,86 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
   IntegrationTestUtils::waitUntilShardsHaveEventLogState(
       client, expected_shards, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
 }
+
+TEST_F(MaintenanceAPITest, RemoveNodesInMaintenance) {
+  init();
+
+  // Start with a disabled N5, to make the remove easier.
+  cluster_->updateNodeAttributes(
+      node_index_t(4), configuration::StorageState::DISABLED, 1, false);
+
+  cluster_->start({0, 1, 2, 3});
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+
+  {
+    thrift::MaintenanceDefinition m1;
+    m1.set_user("bunny");
+    m1.set_shard_target_state(ShardOperationalState::DRAINED);
+    // expands to all shards of node 1
+    m1.set_shards({mkShardID(4, -1)});
+    m1.set_sequencer_nodes({mkNodeID(4)});
+    m1.set_sequencer_target_state(SequencingState::DISABLED);
+
+    thrift::MaintenanceDefinitionResponse m1_def;
+    admin_client->sync_applyMaintenance(m1_def, m1);
+
+    wait_until("N4 maintenance is completed", [&]() {
+      admin_client->sync_applyMaintenance(m1_def, m1);
+      return std::all_of(m1_def.get_maintenances().begin(),
+                         m1_def.get_maintenances().end(),
+                         [](const auto& m) {
+                           return m.progress ==
+                               thrift::MaintenanceProgress::COMPLETED;
+                         });
+    });
+  }
+
+  {
+    // Apply another maintenance that includes N4
+    thrift::MaintenanceDefinition m2;
+    m2.set_user("bunny2");
+    m2.set_shard_target_state(ShardOperationalState::DRAINED);
+    m2.set_shards({mkShardID(4, -1), mkShardID(3, 0)});
+    thrift::MaintenanceDefinitionResponse m2_def;
+    admin_client->sync_applyMaintenance(m2_def, m2);
+  }
+
+  // Remove N5 from the config
+  {
+    thrift::NodesFilter fltr;
+    fltr.set_node(mkNodeID(4));
+
+    thrift::RemoveNodesRequest rem_req;
+    rem_req.set_node_filters({fltr});
+
+    thrift::RemoveNodesResponse resp;
+    try {
+      admin_client->sync_removeNodes(resp, rem_req);
+    } catch (const thrift::ClusterMembershipOperationFailed& ex) {
+      for (auto node : ex.get_failed_nodes()) {
+        ld_error("N%d failed: %s",
+                 *node.get_node_id().get_node_index(),
+                 node.get_message().c_str());
+      }
+      FAIL();
+    }
+
+    wait_until("AdminServer's NC picks the removal", [&]() {
+      thrift::NodesConfigResponse nodes_config;
+      admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
+      return nodes_config.version >= resp.new_nodes_configuration_version;
+    });
+  }
+
+  // We expect to find only the second maintenance, with the removed shards not
+  // there.
+  thrift::MaintenancesFilter fltr;
+  thrift::MaintenanceDefinitionResponse resp;
+  admin_client->sync_getMaintenances(resp, fltr);
+  auto output = resp.get_maintenances();
+  EXPECT_EQ(1, output.size());
+  EXPECT_THAT(resp.get_maintenances()[0].get_shards(),
+              UnorderedElementsAre(mkShardID(3, 0)));
+}

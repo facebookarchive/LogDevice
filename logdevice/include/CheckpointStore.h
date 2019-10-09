@@ -112,6 +112,28 @@ class CheckpointStore {
   virtual void updateLSN(const std::string& customer_id,
                          const std::map<logid_t, lsn_t>& checkpoints,
                          UpdateCallback cb) = 0;
+
+  /*
+   * RemoveCheckpoints removes given checkpoints asynchronously.
+   *
+   * @param customer_id: the id of the customer, which removes the checkpoints.
+   * @param checkpoints: a list of logs to remove.
+   * @param cb: see the cb parameter of updateConfig function in
+   *   VersionedConfigStore class.
+   */
+  virtual void removeCheckpoints(const std::string& customer_id,
+                                 const std::vector<logid_t>& checkpoints,
+                                 UpdateCallback cb) = 0;
+
+  /*
+   * RemoveAllCheckpoints removes all checkpoints asynchronously.
+   *
+   * @param customer_id: the id of the customer, which removes the checkpoints.
+   * @param cb: see the cb parameter of updateConfig function in
+   *   VersionedConfigStore class.
+   */
+  virtual void removeAllCheckpoints(const std::string& customer_id,
+                                    UpdateCallback cb) = 0;
 };
 
 }} // namespace facebook::logdevice

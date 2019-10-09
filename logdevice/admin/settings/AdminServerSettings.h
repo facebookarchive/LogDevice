@@ -33,6 +33,8 @@ struct AdminServerSettings : public SettingsBundle {
   int safety_max_logs_in_flight;
   size_t safety_check_failure_sample_size;
   size_t safety_check_max_batch_size;
+  int max_unavailable_storage_capacity_pct;
+  int max_unavailable_sequencing_capacity_pct;
 
   bool enable_cluster_maintenance_state_machine;
   // Allow the maintenance log to be snapshotted onto a snapshot log

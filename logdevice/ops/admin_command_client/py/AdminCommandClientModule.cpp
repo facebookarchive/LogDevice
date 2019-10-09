@@ -24,17 +24,18 @@ std::string send_to_node(AdminCommandClient& self,
                          float timeout,
                          AdminCommandClient::ConnectionType conntype) {
   folly::SocketAddress addr(host, port, true);
-  AdminCommandClient::RequestResponses reqs;
+  std::vector<AdminCommandClient::Request> reqs;
+  std::vector<AdminCommandClient::Response> responses;
   reqs.emplace_back(addr, cmd, conntype);
   {
     gil_release_and_guard guard;
-    self.send(reqs, std::chrono::milliseconds(int(timeout * 1000)));
+    responses = self.send(reqs, std::chrono::milliseconds(int(timeout * 1000)));
   }
 
-  if (reqs[0].success) {
-    return reqs[0].response;
+  if (responses.at(0).success) {
+    return responses.at(0).response;
   } else {
-    object args = make_tuple(reqs[0].failure_reason.c_str());
+    object args = make_tuple(responses.at(0).failure_reason.c_str());
     throw_python_exception(adminCommandClientException, args);
   }
 }

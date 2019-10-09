@@ -528,7 +528,7 @@ ServerParameters::~ServerParameters() {
   dbg::bumpErrorCounterFn = nullptr;
 }
 
-bool ServerParameters::isReadableStorageNode() const {
+bool ServerParameters::isStorageNode() const {
   return storage_node_;
 }
 
@@ -777,7 +777,7 @@ bool Server::initListeners() {
 bool Server::initStore() {
   const std::string local_log_store_path =
       params_->getLocalLogStoreSettings()->local_log_store_path;
-  if (params_->isReadableStorageNode()) {
+  if (params_->isStorageNode()) {
     if (local_log_store_path.empty()) {
       ld_critical("This node is identified as a storage node in config (it has "
                   "a 'weight' attribute), but --local-log-store-path is not "
@@ -891,6 +891,10 @@ bool Server::initProcessor() {
             "Processing initial NodesConfiguration did not finish in time.");
         throw ConstructorFailed();
       }
+      if (params_->isStorageNode()) {
+        // Only storage nodes need to upgrade to being proposers.
+        ncm->upgradeToProposer();
+      }
     }
 
     if (sharded_storage_thread_pool_) {
@@ -914,7 +918,7 @@ bool Server::initProcessor() {
 }
 
 bool Server::repopulateRecordCaches() {
-  if (!params_->isReadableStorageNode()) {
+  if (!params_->isStorageNode()) {
     ld_info("Not repopulating record caches");
     return true;
   }
@@ -1013,7 +1017,7 @@ bool Server::initSequencers() {
 }
 
 bool Server::initLogStoreMonitor() {
-  if (params_->isReadableStorageNode()) {
+  if (params_->isStorageNode()) {
     logstore_monitor_ = std::make_unique<LogStoreMonitor>(
         processor_.get(), params_->getLocalLogStoreSettings());
     logstore_monitor_->start();
@@ -1146,9 +1150,8 @@ bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
         cluster_maintenance_state_machine_.get(),
         event_log_.get(),
         std::make_unique<maintenance::SafetyCheckScheduler>(
-            processor_.get(),
-            admin_settings,
-            admin_server->getSafetyChecker()));
+            processor_.get(), admin_settings, admin_server->getSafetyChecker()),
+        std::make_unique<maintenance::MaintenanceLogWriter>(processor_.get()));
     auto worker_idx = processor_->selectWorkerRandomly(
         configuration::InternalLogs::MAINTENANCE_LOG_DELTAS.val_ /*seed*/,
         maintenance::MaintenanceManager::workerType(processor_.get()));
@@ -1217,7 +1220,7 @@ bool Server::initFailureDetector() {
 }
 
 bool Server::initUnreleasedRecordDetector() {
-  if (params_->isReadableStorageNode()) {
+  if (params_->isStorageNode()) {
     unreleased_record_detector_ = std::make_shared<UnreleasedRecordDetector>(
         processor_.get(), params_->getProcessorSettings());
     unreleased_record_detector_->start();
@@ -1252,8 +1255,32 @@ bool Server::initAdminServer() {
     auto adm_plugin =
         params_->getPluginRegistry()->getSinglePlugin<AdminServerFactory>(
             PluginType::ADMIN_SERVER_FACTORY);
+
+    auto my_node_id = params_->getMyNodeID().value();
+    auto svd =
+        updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
+            my_node_id.index());
+    ld_check(svd);
+
+    auto admin_listen_addr = svd->admin_address;
+    if (!admin_listen_addr.hasValue()) {
+      const auto& admin_settings = params_->getAdminServerSettings();
+      if (!admin_settings->admin_unix_socket.empty()) {
+        admin_listen_addr = Sockaddr(admin_settings->admin_unix_socket);
+      } else {
+        admin_listen_addr = Sockaddr("::", admin_settings->admin_port);
+      }
+      ld_warning(
+          "The admin-enabled setting is true, but "
+          "admin_address/admin_port are missing from the config. Will use "
+          "default address (%s) instead. Please consider setting a port in the "
+          "config",
+          admin_listen_addr->toString().c_str());
+    }
+
     if (adm_plugin) {
-      admin_server_handle_ = (*adm_plugin)(processor_.get(),
+      admin_server_handle_ = (*adm_plugin)(admin_listen_addr.value(),
+                                           processor_.get(),
                                            params_->getSettingsUpdater(),
                                            params_->getServerSettings(),
                                            params_->getAdminServerSettings(),
@@ -1261,7 +1288,8 @@ bool Server::initAdminServer() {
     } else {
       // Use built-in SimpleAdminServer
       admin_server_handle_ =
-          std::make_unique<SimpleAdminServer>(processor_.get(),
+          std::make_unique<SimpleAdminServer>(admin_listen_addr.value(),
+                                              processor_.get(),
                                               params_->getSettingsUpdater(),
                                               params_->getServerSettings(),
                                               params_->getAdminServerSettings(),

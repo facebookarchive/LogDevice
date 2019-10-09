@@ -544,7 +544,8 @@ class Sequencer {
 
   /**
    * @return   the current epoch managed by the Sequencer. If the Sequencer has
-   *           not yet gotten a valid epoch OR is in PERMANENT_ERROR state,
+   *           not yet gotten a valid epoch (or was disabled)
+   *           OR is in PERMANENT_ERROR state,
    *           returns EPOCH_INVALID.
    */
   epoch_t getCurrentEpoch() const {

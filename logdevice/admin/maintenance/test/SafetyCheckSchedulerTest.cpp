@@ -10,11 +10,15 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/maintenance/test/MaintenanceTestUtil.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
 using namespace ::testing;
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
+using namespace facebook::logdevice::NodesConfigurationTestUtil;
+using facebook::logdevice::configuration::nodes::NodesConfiguration;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 class SafetyCheckSchedulerMock : public SafetyCheckScheduler {
@@ -36,19 +40,21 @@ class SafetyCheckSchedulerMock : public SafetyCheckScheduler {
   };
   std::vector<CannedCheckImpact> shard_impacts;
 
-  virtual folly::SemiFuture<folly::Expected<Impact, Status>> performSafetyCheck(
-      ShardSet disabled_shards,
-      NodeIndexSet disabled_sequencers,
-      ShardAuthoritativeStatusMap status_map,
-      std::shared_ptr<const configuration::nodes::NodesConfiguration>,
-      ShardSet shards,
-      NodeIndexSet sequencers) const override;
+  virtual folly::SemiFuture<folly::Expected<Impact, Status>>
+  performSafetyCheck(ShardSet disabled_shards,
+                     NodeIndexSet disabled_sequencers,
+                     ShardAuthoritativeStatusMap status_map,
+                     std::shared_ptr<const NodesConfiguration>,
+                     ShardSet shards,
+                     NodeIndexSet sequencers) const override;
 
   virtual std::deque<std::pair<GroupID, ShardsAndSequencers>>
   buildExecutionPlan(
       const ClusterMaintenanceWrapper& maintenance_state,
       const std::vector<const ShardWorkflow*>& shard_wf,
-      const std::vector<const SequencerWorkflow*>& seq_wf) const override;
+      const std::vector<const SequencerWorkflow*>& seq_wf,
+      const std::shared_ptr<const NodesConfiguration>& nodes_config,
+      NodeLocationScope biggest_replication_scope) const override;
 };
 
 folly::SemiFuture<folly::Expected<Impact, Status>>
@@ -56,8 +62,7 @@ SafetyCheckSchedulerMock::performSafetyCheck(
     ShardSet disabled_shards,
     SafetyCheckScheduler::NodeIndexSet disabled_sequencers,
     ShardAuthoritativeStatusMap /* unused */,
-    std::shared_ptr<
-        const configuration::nodes::NodesConfiguration> /* unused */,
+    std::shared_ptr<const NodesConfiguration> /* unused */,
     ShardSet shards,
     SafetyCheckScheduler::NodeIndexSet sequencers) const {
   auto promise_future_pair =
@@ -83,9 +88,14 @@ std::deque<std::pair<GroupID, SafetyCheckScheduler::ShardsAndSequencers>>
 SafetyCheckSchedulerMock::buildExecutionPlan(
     const ClusterMaintenanceWrapper& maintenance_state,
     const std::vector<const ShardWorkflow*>& shard_wf,
-    const std::vector<const SequencerWorkflow*>& seq_wf) const {
-  return SafetyCheckScheduler::buildExecutionPlan(
-      maintenance_state, shard_wf, seq_wf);
+    const std::vector<const SequencerWorkflow*>& seq_wf,
+    const std::shared_ptr<const NodesConfiguration>& nodes_config,
+    NodeLocationScope biggest_replication_scope) const {
+  return SafetyCheckScheduler::buildExecutionPlan(maintenance_state,
+                                                  shard_wf,
+                                                  seq_wf,
+                                                  nodes_config,
+                                                  biggest_replication_scope);
 }
 }}} // namespace facebook::logdevice::maintenance
 
@@ -136,8 +146,9 @@ TEST(SafetyCheckerSchedulerTest, TestMock) {
 }
 
 TEST(SafetyCheckerSchedulerTest, ShardPlanning1) {
-  ClusterMaintenanceWrapper wrapper{
-      genMaintenanceState(), genNodesConfiguration()};
+  auto nodes_config = genNodesConfiguration();
+
+  ClusterMaintenanceWrapper wrapper{genMaintenanceState(), nodes_config};
   std::vector<ShardWorkflow> shard_wf_values = genShardWorkflows();
   std::vector<const ShardWorkflow*> shard_wf;
   for (const auto& workflow : shard_wf_values) {
@@ -150,7 +161,8 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning1) {
   }
 
   SafetyCheckSchedulerMock mock;
-  auto plan = mock.buildExecutionPlan(wrapper, shard_wf, seq_wf);
+  auto plan = mock.buildExecutionPlan(
+      wrapper, shard_wf, seq_wf, nodes_config, NodeLocationScope::RACK);
   // We expect the following results:
   // G1 (N1S0 -> MAY_DISAPPEAR) + (N1 -> DISABLED)
   // G3 (N2:S0 -> DRAINED)
@@ -187,8 +199,8 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning1) {
 }
 
 TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
-  ClusterMaintenanceWrapper wrapper{
-      genMaintenanceState(), genNodesConfiguration()};
+  auto nodes_config = genNodesConfiguration();
+  ClusterMaintenanceWrapper wrapper{genMaintenanceState(), nodes_config};
   std::vector<ShardWorkflow> shard_wf_values = genShardWorkflows();
   std::vector<SequencerWorkflow> seq_wf_values = genSequencerWorkflows();
 
@@ -229,7 +241,8 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
     }
   }
   SafetyCheckSchedulerMock mock;
-  auto plan = mock.buildExecutionPlan(wrapper, shard_wf, seq_wf);
+  auto plan = mock.buildExecutionPlan(
+      wrapper, shard_wf, seq_wf, nodes_config, NodeLocationScope::RACK);
   // We expect the following results:
   // G1 (N1S0 -> MAY_DISAPPEAR) + (N1 -> DISABLED)
   // G2 () + (N11 -> DISABLED)
@@ -248,14 +261,225 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
   ASSERT_EQ(folly::F14FastSet<node_index_t>{11}, shards2_sequencers2.second);
 }
 
+TEST(SafetyCheckerSchedulerTest, ShardPlanningLocationAware) {
+  std::vector<NodeTemplate> node_templates;
+  // N0 in RK0
+  node_templates.push_back(
+      NodeTemplate{.id = 0, .location = "rg0.dc0.c10.ro0.rk0"});
+  // N1 in RK0
+  node_templates.push_back(
+      NodeTemplate{.id = 1, .location = "rg0.dc0.c10.ro0.rk0"});
+  // N2 in RK1
+  node_templates.push_back(
+      NodeTemplate{.id = 2, .location = "rg0.dc0.c10.ro0.rk1"});
+  // N3 in RK1
+  node_templates.push_back(
+      NodeTemplate{.id = 3, .location = "rg0.dc0.c10.ro0.rk1"});
+  // N4 in RK2
+  node_templates.push_back(
+      NodeTemplate{.id = 4, .location = "rg0.dc0.c10.ro0.rk2"});
+  auto nodes_config =
+      provisionNodes(std::move(node_templates),
+                     ReplicationProperty{{NodeLocationScope::RACK, 2}});
+  // Shard Workflows
+  std::vector<ShardWorkflow> shard_wf_values;
+  // N0S0
+  shard_wf_values.emplace_back(ShardID(0, 0), nullptr);
+  // N0S1
+  shard_wf_values.emplace_back(ShardID(0, 1), nullptr);
+  // N1S0
+  shard_wf_values.emplace_back(ShardID(1, 0), nullptr);
+  // N2S0
+  shard_wf_values.emplace_back(ShardID(2, 0), nullptr);
+  // N3S0
+  shard_wf_values.emplace_back(ShardID(3, 0), nullptr);
+  // N3S1
+  shard_wf_values.emplace_back(ShardID(3, 1), nullptr);
+  // N4S0
+  shard_wf_values.emplace_back(ShardID(4, 0), nullptr);
+
+  // Sequencer Workflows
+  std::vector<SequencerWorkflow> seq_wf_values;
+  seq_wf_values.emplace_back(1);
+  seq_wf_values.emplace_back(2);
+  seq_wf_values.emplace_back(4);
+
+  auto maintenance = std::make_unique<thrift::ClusterMaintenanceState>();
+  // We have 4 maintenances
+  //
+  // N0S0 -> MAY_DISAPPEAR  RK0
+  // N0S1 -> MAY_DISAPPEAR  RK0
+  // N1S0 -> MAY_DISAPPEAR  RK0   (oldest in MAY_DISAPPEAR)
+  //
+  // N2S0 -> MAY_DISAPPEAR  RK1
+  // N3S0 -> DRAINED RK1
+  // N3S1 -> DRAINED RK1
+  //
+  // N4S0 -> DRAINED  RK2 (oldest in DRAINED)
+  //
+  std::vector<MaintenanceDefinition> definitions;
+  // N0S0 -> MAY_DISAPPEAR  RK0
+  auto N0S0_def = MaintenanceDefinition();
+  N0S0_def.set_user("Autobot");
+  N0S0_def.set_shards({mkShardID(0, 0)});
+  N0S0_def.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  N0S0_def.set_created_on(20);
+  N0S0_def.set_group_id("N0S0");
+  definitions.push_back(std::move(N0S0_def));
+
+  // N0S1 -> MAY_DISAPPEAR  RK0
+  auto N0S1_def = MaintenanceDefinition();
+  N0S1_def.set_user("Autobot");
+  N0S1_def.set_shards({mkShardID(0, 1)});
+  N0S1_def.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  N0S1_def.set_created_on(30);
+  N0S1_def.set_group_id("N0S1");
+  definitions.push_back(std::move(N0S1_def));
+
+  // N1S0 -> MAY_DISAPPEAR  RK0   (oldest in MAY_DISAPPEAR) + SEQUENCER
+  auto N1S0_def = MaintenanceDefinition();
+  N1S0_def.set_user("Autobot");
+  N1S0_def.set_shards({mkShardID(1, 0)});
+  N1S0_def.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  N1S0_def.set_sequencer_nodes({mkNodeID(1)});
+  N1S0_def.set_sequencer_target_state(SequencingState::DISABLED);
+  N1S0_def.set_created_on(5);
+  N1S0_def.set_group_id("N1S0");
+  definitions.push_back(std::move(N1S0_def));
+
+  // N2S0 -> MAY_DISAPPEAR  RK1       + SEQUENCER
+  auto N2S0_def = MaintenanceDefinition();
+  N2S0_def.set_user("Autobot");
+  N2S0_def.set_shards({mkShardID(2, 0)});
+  N2S0_def.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  N2S0_def.set_sequencer_nodes({mkNodeID(2)});
+  N2S0_def.set_sequencer_target_state(SequencingState::DISABLED);
+  N2S0_def.set_created_on(10);
+  N2S0_def.set_group_id("N2S0");
+  definitions.push_back(std::move(N2S0_def));
+
+  // N3S0 -> DRAINED RK1
+  auto N3S0_def = MaintenanceDefinition();
+  N3S0_def.set_user("Autobot");
+  N3S0_def.set_shards({mkShardID(3, 0)});
+  N3S0_def.set_shard_target_state(ShardOperationalState::DRAINED);
+  N3S0_def.set_created_on(30);
+  N3S0_def.set_group_id("N3S0");
+  definitions.push_back(std::move(N3S0_def));
+
+  // N3S1 -> DRAINED RK1
+  auto N3S1_def = MaintenanceDefinition();
+  N3S1_def.set_user("Autobot");
+  N3S1_def.set_shards({mkShardID(3, 1)});
+  N3S1_def.set_shard_target_state(ShardOperationalState::DRAINED);
+  N3S1_def.set_created_on(24);
+  N3S1_def.set_group_id("N3S1");
+  definitions.push_back(std::move(N3S1_def));
+
+  // N4S0 -> DRAINED  RK2 (oldest in DRAINED) + SEQUENCER
+  auto N4S0_def = MaintenanceDefinition();
+  N4S0_def.set_user("Autobot");
+  N4S0_def.set_shards({mkShardID(4, 0)});
+  N4S0_def.set_shard_target_state(ShardOperationalState::DRAINED);
+  N4S0_def.set_sequencer_nodes({mkNodeID(4)});
+  N4S0_def.set_sequencer_target_state(SequencingState::DISABLED);
+  N4S0_def.set_created_on(7);
+  N4S0_def.set_group_id("N4S0");
+  definitions.push_back(std::move(N4S0_def));
+  maintenance->set_maintenances(std::move(definitions));
+  ClusterMaintenanceWrapper wrapper{std::move(maintenance), nodes_config};
+
+  std::vector<const ShardWorkflow*> shard_wf;
+  for (const auto& workflow : shard_wf_values) {
+    shard_wf.push_back(&workflow);
+  }
+
+  std::vector<const SequencerWorkflow*> seq_wf;
+  for (const auto& workflow : seq_wf_values) {
+    seq_wf.push_back(&workflow);
+  }
+
+  SafetyCheckSchedulerMock mock;
+  auto plan = mock.buildExecutionPlan(
+      wrapper, shard_wf, seq_wf, nodes_config, NodeLocationScope::RACK);
+
+  // We expect the following results:
+  // RK0
+  // N1S0 (N1S0 -> MAY_DISAPPEAR) + (N1 -> DISABLED)
+  // N0S0 (N0S0 -> MAY_DISAPPEAR)
+  // N0S1 (N0S1 -> MAY_DISAPPEAR)
+  // RK1
+  // N2S0 (N2S0 -> MAY_DISAPPEAR) + (N2 -> DISABLED)
+  //
+  // RK2
+  // N4S0 (N4S0 -> DRAINED) + (N4 -> DISABLED)
+  //
+  // RK1
+  // N3S1 (N3S1 -> DRAINED)
+  // N3S0 (N3S0 -> DRAINED)
+  //
+  ASSERT_EQ(7, plan.size());
+  {
+    auto group = plan[0];
+    auto shards_sequencers = group.second;
+    ASSERT_EQ("N1S0", group.first);
+    ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards_sequencers.first);
+    ASSERT_EQ(folly::F14FastSet<node_index_t>{1}, shards_sequencers.second);
+  }
+  {
+    auto group = plan[1];
+    auto shards_sequencers = group.second;
+    ASSERT_EQ("N0S0", group.first);
+    ASSERT_EQ(ShardSet{{ShardID(0, 0)}}, shards_sequencers.first);
+    ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
+  }
+  {
+    auto group = plan[2];
+    auto shards_sequencers = group.second;
+    ASSERT_EQ("N0S1", group.first);
+    ASSERT_EQ(ShardSet{{ShardID(0, 1)}}, shards_sequencers.first);
+    ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
+  }
+  {
+    auto group = plan[3];
+    auto shards_sequencers = group.second;
+    ASSERT_EQ("N2S0", group.first);
+    ASSERT_EQ(ShardSet{{ShardID(2, 0)}}, shards_sequencers.first);
+    ASSERT_EQ(folly::F14FastSet<node_index_t>{2}, shards_sequencers.second);
+  }
+  {
+    auto group = plan[4];
+    auto shards_sequencers = group.second;
+    ASSERT_EQ("N4S0", group.first);
+    ASSERT_EQ(ShardSet{{ShardID(4, 0)}}, shards_sequencers.first);
+    ASSERT_EQ(folly::F14FastSet<node_index_t>{4}, shards_sequencers.second);
+  }
+  {
+    auto group = plan[5];
+    auto shards_sequencers = group.second;
+    ASSERT_EQ("N3S1", group.first);
+    ASSERT_EQ(ShardSet{{ShardID(3, 1)}}, shards_sequencers.first);
+    ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
+  }
+  {
+    auto group = plan[6];
+    auto shards_sequencers = group.second;
+    ASSERT_EQ("N3S0", group.first);
+    ASSERT_EQ(ShardSet{{ShardID(3, 0)}}, shards_sequencers.first);
+    ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
+  }
+}
+
 TEST(SafetyCheckerSchedulerTest, EmptyPlanning) {
-  ClusterMaintenanceWrapper wrapper{
-      genMaintenanceState(), genNodesConfiguration()};
+  auto nodes_config = genNodesConfiguration();
+  ClusterMaintenanceWrapper wrapper{genMaintenanceState(), nodes_config};
 
   SafetyCheckSchedulerMock mock;
   auto plan = mock.buildExecutionPlan(wrapper,
                                       std::vector<const ShardWorkflow*>(),
-                                      std::vector<const SequencerWorkflow*>());
+                                      std::vector<const SequencerWorkflow*>(),
+                                      nodes_config,
+                                      NodeLocationScope::RACK);
   ASSERT_EQ(0, plan.size());
 }
 
@@ -335,7 +559,12 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
       .impact = safe_impact,
   });
 
-  auto f = mock.schedule(wrapper, status_map, nodes_config, shard_wf, seq_wf);
+  auto f = mock.schedule(wrapper,
+                         status_map,
+                         nodes_config,
+                         shard_wf,
+                         seq_wf,
+                         NodeLocationScope::RACK);
   // in test everything happens sync.
   ASSERT_TRUE(f.isReady());
 
@@ -360,7 +589,8 @@ TEST(SafetyCheckerSchedulerTest, EmptyScheduling) {
   ShardAuthoritativeStatusMap status_map;
   SafetyCheckSchedulerMock mock;
 
-  auto f = mock.schedule(wrapper, status_map, nodes_config, {}, {});
+  auto f = mock.schedule(
+      wrapper, status_map, nodes_config, {}, {}, NodeLocationScope::RACK);
   // in test everything happens sync.
   ASSERT_TRUE(f.isReady());
   auto result = std::move(f).get();

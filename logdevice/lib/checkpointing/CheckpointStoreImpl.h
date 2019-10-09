@@ -10,6 +10,7 @@
 #include "logdevice/common/VersionedConfigStore.h"
 #include "logdevice/include/CheckpointStore.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/lib/checkpointing/if/gen-cpp2/Checkpoint_types.h"
 
 namespace facebook { namespace logdevice {
 /*
@@ -44,7 +45,20 @@ class CheckpointStoreImpl : public CheckpointStore {
                  const std::map<logid_t, lsn_t>& checkpoints,
                  UpdateCallback cb) override;
 
+  void removeCheckpoints(const std::string& customer_id,
+                         const std::vector<logid_t>& checkpoints,
+                         UpdateCallback cb) override;
+
+  void removeAllCheckpoints(const std::string& customer_id,
+                            UpdateCallback cb) override;
+
  private:
+  void
+  updateCheckpoints(const std::string& customer_id,
+                    folly::Function<void(checkpointing::thrift::Checkpoint&)>
+                        modify_checkpoint,
+                    UpdateCallback cb);
+
   std::unique_ptr<VersionedConfigStore> vcs_;
 };
 

@@ -437,6 +437,7 @@ int main(int argc, const char** argv) {
                                                 plugin_registry,
                                                 signal_shutdown);
   } catch (const ConstructorFailed&) {
+    ld_critical("Unable to instantiate ServerParameters. Exiting.");
     return 1;
   }
 

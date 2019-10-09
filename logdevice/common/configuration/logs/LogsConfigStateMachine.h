@@ -44,7 +44,8 @@ class LogsConfigStateMachine
       std::string payload,
       std::function<
           void(Status st, lsn_t version, const std::string& failure_reason)> cb,
-      WriteMode mode = WriteMode::CONFIRM_APPLIED);
+      WriteMode mode = WriteMode::CONFIRM_APPLIED,
+      folly::Optional<std::chrono::milliseconds> timeout = folly::none);
   /**
    * Serialization and Deserialization Helpers
    */

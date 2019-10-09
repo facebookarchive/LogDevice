@@ -17,6 +17,7 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/protocol/NODE_STATS_AGGREGATE_Message.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"

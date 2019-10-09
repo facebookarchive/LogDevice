@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/lib/checkpointing/test/MockCheckpointStore.h"
+#include "logdevice/lib/checkpointing/test/MockCheckpointedReader.h"
 
 using namespace facebook::logdevice;
 
@@ -44,7 +45,7 @@ TEST_F(CheckpointedReaderBaseTest, AsyncWriteUsesCheckpointStore) {
       }));
 
   auto reader_base =
-      CheckpointedReaderBase("customer", std::move(mock_checkpoint_store_), {});
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
   reader_base.asyncWriteCheckpoints(checkpoints, callback);
   call_baton.wait();
 }
@@ -56,7 +57,7 @@ TEST_F(CheckpointedReaderBaseTest, SyncWriteRetries) {
       .Times(5)
       .WillRepeatedly(Return(Status::BADMSG));
 
-  auto reader_base = CheckpointedReaderBase(
+  auto reader_base = MockCheckpointedReader(
       "customer", std::move(mock_checkpoint_store_), {5});
   auto status = reader_base.syncWriteCheckpoints(checkpoints);
   EXPECT_EQ(Status::BADMSG, status);
@@ -74,7 +75,46 @@ TEST_F(CheckpointedReaderBaseTest, SyncWriteStopsRetryingWhenOK) {
       .WillOnce(Return(Status::OK));
 
   auto reader_base =
-      CheckpointedReaderBase("customer", std::move(mock_checkpoint_store_), {});
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
   auto status = reader_base.syncWriteCheckpoints(checkpoints);
   EXPECT_EQ(Status::OK, status);
+}
+
+TEST_F(CheckpointedReaderBaseTest, AsyncRemoveCheckpointsUsesCheckpointStore) {
+  std::vector<logid_t> checkpoints = {logid_t(3), logid_t(5)};
+  folly::Baton<> call_baton;
+  auto callback = [&call_baton](Status status) {
+    EXPECT_EQ(Status::OK, status);
+    call_baton.post();
+  };
+  EXPECT_CALL(
+      *mock_checkpoint_store_, removeCheckpoints("customer", checkpoints, _))
+      .Times(1)
+      .WillOnce(Invoke([](auto, auto, auto cb) {
+        cb(Status::OK, CheckpointStore::Version(1), "");
+      }));
+
+  auto reader_base =
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
+  reader_base.asyncRemoveCheckpoints(checkpoints, callback);
+  call_baton.wait();
+}
+
+TEST_F(CheckpointedReaderBaseTest,
+       AsyncRemoveAllCheckpointsUsesCheckpointStore) {
+  folly::Baton<> call_baton;
+  auto callback = [&call_baton](Status status) {
+    EXPECT_EQ(Status::OK, status);
+    call_baton.post();
+  };
+  EXPECT_CALL(*mock_checkpoint_store_, removeAllCheckpoints("customer", _))
+      .Times(1)
+      .WillOnce(Invoke([](auto, auto cb) {
+        cb(Status::OK, CheckpointStore::Version(1), "");
+      }));
+
+  auto reader_base =
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
+  reader_base.asyncRemoveAllCheckpoints(callback);
+  call_baton.wait();
 }

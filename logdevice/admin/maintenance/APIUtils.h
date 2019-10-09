@@ -118,5 +118,18 @@ void matchMaintenances(const thrift::MaintenancesFilter& filter,
 bool doesMaintenanceMatchFilter(const thrift::MaintenancesFilter& filter,
                                 const MaintenanceDefinition& def);
 
+/**
+ * Filters out shards/sequencers from maintenance definition that don't exist in
+ * the nodes configuration anymore.
+ */
+void removeNonExistentNodesFromMaintenance(
+    thrift::MaintenanceDefinition& maintenance,
+    const configuration::nodes::NodesConfiguration& nodes_configuration);
+
+/**
+ * Returns true if the maintenance doesn't have any shards/sequencers to act on.
+ */
+bool isEmptyMaintenance(const thrift::MaintenanceDefinition& maintenance);
+
 } // namespace APIUtils
 }}} // namespace facebook::logdevice::maintenance

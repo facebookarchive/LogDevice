@@ -334,11 +334,12 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
 
 void ClientReadStream::sampleDebugInfo(
     const ClientReadStream::ClientReadStreamDebugInfo& info) const {
-  if (deps_->getSettings().all_read_streams_sampling_allowed_csid !=
-          info.csid ||
-      info.csid == "") {
+  Worker* w = Worker::onThisThread(false);
+  if (!(w && w->processor_ &&
+        w->processor_->isReadStreamDebugInfoSamplingAllowed(info.csid))) {
     return;
   }
+
   auto sample = std::make_unique<TraceSample>();
   sample->addNormalValue("thread_name", ThreadID::getName());
   sample->addNormalValue("csid", info.csid);
@@ -3334,6 +3335,7 @@ int ClientReadStream::deliverRecord(
         WORKER_STAT_INCR(records_delivered_wait_for_all);
       } else {
         WORKER_STAT_INCR(records_delivered);
+        WORKER_STAT_INCR(durability_total);
         if (scd_ && scd_->isActive()) {
           WORKER_STAT_INCR(records_delivered_scd);
         } else {
@@ -3430,6 +3432,10 @@ int ClientReadStream::deliverGap(GapType type, lsn_t lo, lsn_t hi) {
     epoch_t epoch = lsn_to_epoch(lo);
     if (epoch == lsn_to_epoch(hi)) {
       WORKER_STAT_ADD(records_lost, lsn_to_esn(hi).val_ - lsn_to_esn(lo).val_);
+      WORKER_STAT_ADD(
+          durability_total, lsn_to_esn(hi).val_ - lsn_to_esn(lo).val_);
+      WORKER_STAT_ADD(
+          durability_failures, lsn_to_esn(hi).val_ - lsn_to_esn(lo).val_);
     }
   }
   return success ? 0 : -1;

@@ -10,61 +10,31 @@
 #include <memory>
 
 #include "logdevice/common/ClientID.h"
-#include "logdevice/common/Connection.h"
-#include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ResourceBudget.h"
-#include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/Socket.h"
-#include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/SocketTypes.h"
+#include "logdevice/common/network/IConnectionFactory.h"
 
 namespace facebook { namespace logdevice {
 
 struct Settings;
-
-/**
- * This interface provides a way to create connections for Sender.
- * Implementations are responsible for management of connections.
- */
-
-class IConnectionFactory {
- public:
-  virtual std::unique_ptr<Connection>
-  createConnection(NodeID node_id,
-                   SocketType type,
-                   ConnectionType connection_type,
-                   FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const = 0;
-
-  virtual std::unique_ptr<Connection>
-  createConnection(int fd,
-                   ClientID client_name,
-                   const Sockaddr& client_address,
-                   ResourceBudget::Token connection_token,
-                   SocketType type,
-                   ConnectionType conntype,
-                   FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const = 0;
-
-  virtual ~IConnectionFactory() = default;
-
-  virtual void onSettingsUpdated(const Settings& settings) {}
-};
+class Connection;
+class FlowGroup;
+class Sockaddr;
+class SocketDependencies;
 
 class ConnectionFactory : public IConnectionFactory {
  public:
   explicit ConnectionFactory(const Settings& settings) {}
 
+  ~ConnectionFactory() override {}
+
   std::unique_ptr<Connection>
   createConnection(NodeID node_id,
                    SocketType type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const override {
-    return std::make_unique<Connection>(
-        node_id, type, connection_type, flow_group, std::move(deps));
-  }
+                   std::unique_ptr<SocketDependencies> deps) const override;
 
   std::unique_ptr<Connection>
   createConnection(int fd,
@@ -74,16 +44,7 @@ class ConnectionFactory : public IConnectionFactory {
                    SocketType type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const override {
-    return std::make_unique<Connection>(fd,
-                                        client_name,
-                                        client_address,
-                                        std::move(connection_token),
-                                        type,
-                                        connection_type,
-                                        flow_group,
-                                        std::move(deps));
-  }
+                   std::unique_ptr<SocketDependencies> deps) const override;
 };
 
 }} // namespace facebook::logdevice

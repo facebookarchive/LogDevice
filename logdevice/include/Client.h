@@ -1348,8 +1348,14 @@ class Client {
   getDirectorySync(const std::string& path) noexcept = 0;
 
   /**
-   * This waits (blocks) until the LogsConfig satisfy the supplied predicate or
-   * until the timeout has passed.
+   * This waits (blocks) until this Client's local view of LogsConfig catches up
+   * to the given version or higher, or until the timeout has passed.
+   * Doesn't wait for config propagation to servers.
+   *
+   * This guarantees that subsequent get*() calls (getDirectory(), getLogGroup()
+   * etc) will get an up-to-date view.
+   * Does *not* guarantee that subsequent append(), makeDirectory(),
+   * makeLogGroup(), etc, will have an up-to-date view.
    *
    * @param version   The minimum version you need to sync LogsConfig to
    *

@@ -73,7 +73,7 @@ bool NodeServiceDiscovery::isValid() const {
 
 bool NodeServiceDiscovery::isValidForReset(
     const NodeServiceDiscovery& current) const {
-  // Currently, roles and location are immutable.
+  // Roles are immutable
   if (current.roles != roles) {
     ld_error("Node's roles are assumed to be immutable. Current value: '%s', "
              "requested update: '%s'",
@@ -82,10 +82,12 @@ bool NodeServiceDiscovery::isValidForReset(
     return false;
   }
 
-  if (current.location != location) {
+  // Storage nodes can't change their location, but sequencer-only nodes can.
+  if (current.location != location && hasRole(NodeRole::STORAGE)) {
     ld_error(
-        "Node's location is assumed to be immutable. Current value: '%s', "
-        "requested update: '%s'",
+        "Storage nodes' location is assumed to be immutable to maintain the "
+        "correctness of the replication property of the historical nodesets. "
+        "Current value: '%s', requested update: '%s'",
         current.location.hasValue() ? current.location->toString().c_str() : "",
         location.hasValue() ? location->toString().c_str() : "");
     return false;

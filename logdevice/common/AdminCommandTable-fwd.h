@@ -485,4 +485,15 @@ typedef AdminCommandTable<logid_t,    /* Log ID */
                           >
     IsLogEmptyVersionComparisonTable;
 
+typedef AdminCommandTable<logid_t,                  /* Log id */
+                          epoch_t,                  /* Epoch */
+                          std::string,              /* State */
+                          admin_command_table::LSN, /* target_lsn */
+                          bool,                     /* recovery only */
+                          Status,                   /* recovery status */
+                          uint16_t,                 /* releases sent */
+                          int                       /* created on */
+                          >
+    InfoWriteMetaDataRecordTable;
+
 }} // namespace facebook::logdevice
