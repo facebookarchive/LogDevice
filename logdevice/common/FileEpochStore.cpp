@@ -370,9 +370,13 @@ void FileEpochStore::postCompletionLCE(EpochStore::CompletionLCE cf,
       ? Worker::onThisThread()->idx_
       : worker_id_t(-1);
 
+  WorkerType worker_type = Worker::onThisThread(false /* enforce_worker */)
+      ? Worker::onThisThread()->worker_type_
+      : WorkerType::GENERAL;
+
   std::unique_ptr<Request> rq =
       std::make_unique<EpochStore::CompletionLCERequest>(
-          cf, worker_idx, status, log_id, epoch, std::move(tail_record));
+          cf, worker_idx, worker_type, status, log_id, epoch, std::move(tail_record));
 
   int rv = processor_->postWithRetrying(rq);
   if (rv != 0) {
@@ -401,10 +405,15 @@ void FileEpochStore::postCompletionMetaData(
       ? Worker::onThisThread()->idx_
       : worker_id_t(-1);
 
+  WorkerType worker_type = Worker::onThisThread(false /* enforce_worker */)
+      ? Worker::onThisThread()->worker_type_
+      : WorkerType::GENERAL;
+
   std::unique_ptr<Request> rq =
       std::make_unique<EpochStore::CompletionMetaDataRequest>(
           cf,
           worker_idx,
+          worker_type,
           status,
           log_id,
           std::move(metadata),

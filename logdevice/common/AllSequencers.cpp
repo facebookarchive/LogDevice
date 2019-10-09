@@ -411,7 +411,7 @@ void AllSequencers::notifyWorkerActivationCompletion(logid_t logid, Status st) {
        worker->processor_->getWorkerCount(WorkerType::GENERAL);
        ++worker_idx.val_) {
     std::unique_ptr<Request> rq = std::make_unique<ActivationCompletionRequest>(
-        completion_callback, worker_idx, st, logid);
+        completion_callback, worker_idx, WorkerType::GENERAL, st, logid);
 
     int rv = worker->processor_->postWithRetrying(rq);
     if (rv != 0 && err != E::SHUTDOWN) {

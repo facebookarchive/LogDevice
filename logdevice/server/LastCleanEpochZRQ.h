@@ -48,7 +48,7 @@ class LastCleanEpochZRQ : public ZookeeperEpochStoreRequest {
 
   void postCompletion(Status st) override {
     store_->postCompletion(std::make_unique<EpochStore::CompletionLCERequest>(
-        cf_lce_, worker_idx_, st, logid_, epoch_, tail_record_));
+        cf_lce_, worker_idx_, worker_type_, st, logid_, epoch_, tail_record_));
   }
 
   static constexpr const char* znodeNameDataLog = "lce";
