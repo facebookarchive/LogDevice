@@ -60,6 +60,14 @@ class CheckpointedReaderBase {
   void asyncWriteCheckpoints(const std::map<logid_t, lsn_t>& checkpoints,
                              StatusCallback cb);
 
+  /*
+   * Removes some or all the checkpoints for a customer.
+   */
+  void asyncRemoveCheckpoints(const std::vector<logid_t>& checkpoints,
+                              StatusCallback cb);
+
+  void asyncRemoveAllCheckpoints(StatusCallback cb);
+
  protected:
   CheckpointingOptions options_;
   std::string reader_name_;

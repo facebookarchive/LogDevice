@@ -255,3 +255,58 @@ TEST_F(CheckpointStoreImplTest, UpdateAndGetWithInMemVersionedConfigStore) {
   ASSERT_EQ(Status::OK, status);
   ASSERT_EQ(6, value);
 }
+
+TEST_F(CheckpointStoreImplTest, RemoveSomeCheckpoints) {
+  Checkpoint correct;
+  correct.log_lsn_map = {{1, 2}, {2, 5}, {3, 7}, {2, 3}};
+
+  EXPECT_CALL(
+      *mock_versioned_config_store_, readModifyWriteConfig("customer", _, _))
+      .Times(1)
+      .WillRepeatedly(Invoke([correct](auto, auto mcb, auto cb) {
+        auto before_remove = correct;
+        before_remove.log_lsn_map[5] = 8;
+        before_remove.log_lsn_map[7] = 1;
+        auto [status, value] =
+            mcb(ThriftCodec::serialize<BinarySerializer>(before_remove));
+        EXPECT_EQ(status, Status::OK);
+        auto value_thrift =
+            ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
+                Slice::fromString(value));
+        ASSERT_NE(nullptr, value_thrift);
+        EXPECT_EQ(correct, *value_thrift);
+        cb(status, CheckpointStore::Version(1), "");
+      }));
+
+  auto checkpointStore = std::make_unique<CheckpointStoreImpl>(
+      std::move(mock_versioned_config_store_));
+
+  checkpointStore->removeCheckpoints(
+      "customer", {logid_t(5), logid_t(7)}, std::move(cb_));
+}
+
+TEST_F(CheckpointStoreImplTest, RemoveAllCheckpoints) {
+  Checkpoint correct;
+
+  EXPECT_CALL(
+      *mock_versioned_config_store_, readModifyWriteConfig("customer", _, _))
+      .Times(1)
+      .WillRepeatedly(Invoke([correct](auto, auto mcb, auto cb) {
+        Checkpoint before_remove;
+        before_remove.log_lsn_map = {{1, 2}, {2, 5}, {3, 7}, {2, 3}};
+        auto [status, value] =
+            mcb(ThriftCodec::serialize<BinarySerializer>(before_remove));
+        EXPECT_EQ(status, Status::OK);
+        auto value_thrift =
+            ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
+                Slice::fromString(value));
+        ASSERT_NE(nullptr, value_thrift);
+        EXPECT_EQ(correct, *value_thrift);
+        cb(status, CheckpointStore::Version(1), "");
+      }));
+
+  auto checkpointStore = std::make_unique<CheckpointStoreImpl>(
+      std::move(mock_versioned_config_store_));
+
+  checkpointStore->removeAllCheckpoints("customer", std::move(cb_));
+}

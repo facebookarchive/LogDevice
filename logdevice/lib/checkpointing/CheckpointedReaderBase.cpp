@@ -52,4 +52,26 @@ void CheckpointedReaderBase::asyncWriteCheckpoints(
   store_->updateLSN(reader_name_, checkpoints, std::move(update_cb));
 }
 
+void CheckpointedReaderBase::asyncRemoveCheckpoints(
+    const std::vector<logid_t>& checkpoints,
+    StatusCallback cb) {
+  auto update_cb = [cb = std::move(cb)](Status status,
+                                        CheckpointStore::Version,
+                                        std::string) mutable {
+    // TODO: Implement versioning.
+    cb(status);
+  };
+  store_->removeCheckpoints(reader_name_, checkpoints, std::move(update_cb));
+}
+
+void CheckpointedReaderBase::asyncRemoveAllCheckpoints(StatusCallback cb) {
+  auto update_cb = [cb = std::move(cb)](Status status,
+                                        CheckpointStore::Version,
+                                        std::string) mutable {
+    // TODO: Implement versioning.
+    cb(status);
+  };
+  store_->removeAllCheckpoints(reader_name_, std::move(update_cb));
+}
+
 }} // namespace facebook::logdevice

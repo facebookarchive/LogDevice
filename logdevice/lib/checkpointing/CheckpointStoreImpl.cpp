@@ -17,7 +17,6 @@
 #include "logdevice/common/toString.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/util.h"
-#include "logdevice/lib/checkpointing/if/gen-cpp2/Checkpoint_types.h"
 
 namespace facebook { namespace logdevice {
 
@@ -87,24 +86,12 @@ void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
 void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
                                     const std::map<logid_t, lsn_t>& checkpoints,
                                     UpdateCallback cb) {
-  auto mcb = [checkpoints](folly::Optional<std::string> value) {
-    auto value_thrift = std::make_unique<Checkpoint>();
-    if (value.hasValue()) {
-      value_thrift = ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
-          Slice::fromString(value.value()));
-      if (value_thrift == nullptr) {
-        return std::make_pair(Status::BADMSG, std::string());
-      }
-    }
+  auto modify_checkpoint = [&checkpoints](Checkpoint& checkpoint) {
     for (auto [log_id, lsn] : checkpoints) {
-      value_thrift->log_lsn_map[log_id.val()] = lsn;
+      checkpoint.log_lsn_map[log_id.val()] = lsn;
     }
-    auto serialized_thrift =
-        ThriftCodec::serialize<BinarySerializer>(*value_thrift);
-    return std::make_pair(Status::OK, std::move(serialized_thrift));
   };
-
-  vcs_->readModifyWriteConfig(customer_id, std::move(mcb), std::move(cb));
+  updateCheckpoints(customer_id, std::move(modify_checkpoint), std::move(cb));
 }
 
 Status CheckpointStoreImpl::updateLSNSync(
@@ -123,6 +110,50 @@ Status CheckpointStoreImpl::updateLSNSync(
   update_baton.wait();
 
   return return_status;
+}
+
+void CheckpointStoreImpl::removeCheckpoints(
+    const std::string& customer_id,
+    const std::vector<logid_t>& checkpoints,
+    UpdateCallback cb) {
+  auto modify_checkpoint = [&checkpoints](Checkpoint& checkpoint) {
+    for (auto log_id : checkpoints) {
+      checkpoint.log_lsn_map.erase(log_id.val());
+    }
+  };
+  updateCheckpoints(customer_id, std::move(modify_checkpoint), std::move(cb));
+}
+
+void CheckpointStoreImpl::removeAllCheckpoints(const std::string& customer_id,
+                                               UpdateCallback cb) {
+  auto modify_checkpoint = [](Checkpoint& checkpoint) {
+    checkpoint.log_lsn_map.clear();
+  };
+  // TODO: Remove the whole checkpoint from the VCS.
+  updateCheckpoints(customer_id, std::move(modify_checkpoint), std::move(cb));
+}
+
+void CheckpointStoreImpl::updateCheckpoints(
+    const std::string& customer_id,
+    folly::Function<void(Checkpoint&)> modify_checkpoint,
+    UpdateCallback cb) {
+  auto mcb = [modify_checkpoint = std::move(modify_checkpoint)](
+                 folly::Optional<std::string> value) mutable {
+    auto value_thrift = std::make_unique<Checkpoint>();
+    if (value.hasValue()) {
+      value_thrift = ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
+          Slice::fromString(value.value()));
+      if (value_thrift == nullptr) {
+        return std::make_pair(Status::BADMSG, std::string());
+      }
+    }
+    modify_checkpoint(*value_thrift);
+    auto serialized_thrift =
+        ThriftCodec::serialize<BinarySerializer>(*value_thrift);
+    return std::make_pair(Status::OK, std::move(serialized_thrift));
+  };
+
+  vcs_->readModifyWriteConfig(customer_id, std::move(mcb), std::move(cb));
 }
 
 }} // namespace facebook::logdevice
