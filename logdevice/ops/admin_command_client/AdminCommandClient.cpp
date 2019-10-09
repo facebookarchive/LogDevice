@@ -224,7 +224,7 @@ AdminCommandClient::asyncSend(
   for (auto& r : rr) {
     futures.push_back(
         folly::via(executor_.get())
-            .then([executor = executor_.get(), &r, connect_timeout](
+            .then([executor = executor_.get(), r, connect_timeout](
                       auto&&) mutable {
               auto connection = std::make_unique<AdminClientConnection>(
                   executor->getEventBase(),
