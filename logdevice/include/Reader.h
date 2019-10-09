@@ -179,7 +179,7 @@ class Reader {
    * configured to support it. Each data record will be sent by all storage
    * nodes that have a copy instead of exactly one.
    * This greatly increases read availability at the cost of higher network
-   * bandwith and cpu usage.
+   * bandwidth and cpu usage.
    *
    * Only affects subsequent startReading() calls.
    */
