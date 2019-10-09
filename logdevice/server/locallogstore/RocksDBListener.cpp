@@ -73,7 +73,10 @@ void RocksDBListener::OnTableFileCreated(
             2,
             "Failed to parse retention distribution from table properties that "
             "were supposed to be produced by us just now. Something about "
-            "table properties is broken, please investigate. Properties: %s",
+            "table properties is broken, please investigate. Reason for file "
+            "creation: %d, CF: %s. Properties: %s",
+            (int)info.reason,
+            info.cf_name.c_str(),
             toString(info.table_properties.user_collected_properties).c_str());
       }
     }
@@ -430,6 +433,12 @@ bool RocksDBTablePropertiesCollector::extractLogSizeHistogram(
   }
 
   out_histogram.clear();
+
+  if (list_section.empty()) {
+    // No log IDs in the file. Unusual but possible.
+    return true;
+  }
+
   std::vector<std::string> tokens;
   folly::split(',', list_section, tokens);
   for (const std::string& tok : tokens) {
