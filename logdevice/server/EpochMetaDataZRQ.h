@@ -125,6 +125,7 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
         std::make_unique<EpochStore::CompletionMetaDataRequest>(
             cf_meta_data_,
             worker_idx_,
+            worker_type_,
             st,
             logid_,
             std::move(metadata_),

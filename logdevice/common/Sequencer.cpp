@@ -1721,6 +1721,7 @@ void Sequencer::processRedirectedRecords() {
               sequencer->processRedirectedRecords(st, logid);
             },
             worker_id_t{worker_idx},
+            WorkerType::GENERAL,
             E::OK,
             log_id_);
 

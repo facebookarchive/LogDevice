@@ -58,13 +58,15 @@ class CompletionRequestBase : public Request {
    */
   CompletionRequestBase(CompletionFunction cf,
                         worker_id_t destination,
+                        WorkerType worker_type,
                         Status st,
                         Args... args)
       : Request(RequestType::COMPLETION),
         params_(std::make_tuple(std::move(args)...)),
         cf_(std::move(cf)),
         status_(st),
-        destination_(destination) {}
+        destination_(destination),
+        worker_type_(worker_type) {}
 
   int getThreadAffinity(int nthreads) override {
     ld_check(destination_.val_ < nthreads);
@@ -76,6 +78,10 @@ class CompletionRequestBase : public Request {
     return Execution::COMPLETE;
   }
 
+  WorkerType getWorkerTypeAffinity() override {
+    return worker_type_;
+  }
+
   std::tuple<Args...> params_; // passed to cf_
 
  private:
@@ -83,6 +89,9 @@ class CompletionRequestBase : public Request {
   const Status status_;           // passed to cf_
   const worker_id_t destination_; // Worker thread on which to execute cf_,
                                   // or -1 for arbitrary Worker
+  const WorkerType
+      worker_type_; // Type of worker on which to execute cf_.
+                    // This defines at which worker pool worker lives.
 
   template <int... S>
   void callCompletionFunction(seq<S...>) {

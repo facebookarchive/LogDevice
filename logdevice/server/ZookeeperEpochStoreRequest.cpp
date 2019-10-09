@@ -27,7 +27,10 @@ ZookeeperEpochStoreRequest::ZookeeperEpochStoreRequest(
       cf_meta_data_(cf),
       worker_idx_(Worker::onThisThread(false /* enforce_worker */)
                       ? Worker::onThisThread()->idx_
-                      : worker_id_t(-1)) {
+                      : worker_id_t(-1)),
+      worker_type_(Worker::onThisThread(false /* enforce_worker */)
+                       ? Worker::onThisThread()->worker_type_
+                       : WorkerType::GENERAL) {
   ld_check(logid_ != LOGID_INVALID);
   ld_check(store_);
 }
@@ -44,7 +47,10 @@ ZookeeperEpochStoreRequest::ZookeeperEpochStoreRequest(
       cf_lce_(cf),
       worker_idx_(Worker::onThisThread(false /* enforce_worker */)
                       ? Worker::onThisThread()->idx_
-                      : worker_id_t(-1)) {
+                      : worker_id_t(-1)),
+      worker_type_(Worker::onThisThread(false /* enforce_worker */)
+                       ? Worker::onThisThread()->worker_type_
+                       : WorkerType::GENERAL) {
   ld_check(logid_ != LOGID_INVALID);
   ld_check(store_);
 }

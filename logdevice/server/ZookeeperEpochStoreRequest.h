@@ -121,6 +121,10 @@ class ZookeeperEpochStoreRequest {
 
   const worker_id_t worker_idx_; // id of Worker on which to execute cf_, or
                                  // -1 if cf_ can be executed on any Worker
+
+  // Type of worker on which to execute cf_. This defines at which worker
+  // pool worker lives.
+  const WorkerType worker_type_;
 };
 
 }} // namespace facebook::logdevice
