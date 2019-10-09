@@ -45,10 +45,6 @@ std::shared_ptr<LogsConfig::LogGroupNode>
 Configuration::getLogGroupByIDShared(logid_t id) const {
   if (MetaDataLog::isMetaDataLog(id)) {
     return server_config_->getMetaDataLogGroup();
-  } else if (configuration::InternalLogs::isInternal(id)) {
-    const auto raw_directory =
-        server_config_->getInternalLogsConfig().getLogGroupByID(id);
-    return raw_directory != nullptr ? raw_directory->log_group : nullptr;
   } else {
     return logs_config_->getLogGroupByIDShared(id);
   }
@@ -60,8 +56,6 @@ Configuration::getLogGroupInDirectoryByIDRaw(logid_t id) const {
   ld_check(logs_config_->isLocal());
   if (MetaDataLog::isMetaDataLog(id)) {
     return &server_config_->getMetaDataLogGroupInDir();
-  } else if (configuration::InternalLogs::isInternal(id)) {
-    return server_config_->getInternalLogsConfig().getLogGroupByID(id);
   } else {
     return localLogsConfig()->getLogGroupInDirectoryByIDRaw(id);
   }
@@ -72,12 +66,6 @@ void Configuration::getLogGroupByIDAsync(
     std::function<void(std::shared_ptr<LogsConfig::LogGroupNode>)> cb) const {
   if (MetaDataLog::isMetaDataLog(id)) {
     cb(server_config_->getMetaDataLogGroup());
-    return;
-  } else if (configuration::InternalLogs::isInternal(id)) {
-    const auto raw_directory =
-        server_config_->getInternalLogsConfig().getLogGroupByID(id);
-    cb(raw_directory != nullptr ? raw_directory->log_group : nullptr);
-    return;
   } else {
     logs_config_->getLogGroupByIDAsync(id, cb);
   }

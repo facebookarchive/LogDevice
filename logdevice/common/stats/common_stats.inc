@@ -8,8 +8,8 @@
 /* can be included multiple times */
 
 #ifndef STAT_DEFINE
-  #error STAT_DEFINE() macro not defined
-  #define STAT_DEFINE(...)
+#error STAT_DEFINE() macro not defined
+#define STAT_DEFINE(...)
 #endif
 
 // Stats shared between server and client
@@ -52,7 +52,6 @@ STAT_DEFINE(metadata_log_read_failed_corruption, SUM)
 STAT_DEFINE(metadata_log_read_dataloss, SUM)
 STAT_DEFINE(metadata_log_read_failed_other, SUM)
 
-
 // Number of CONFIG_CHANGED_Messages received with Action::Reload.
 STAT_DEFINE(config_changed_reload, SUM)
 // Number of CONFIG_CHANGED_Messages ignored because the config is already
@@ -92,6 +91,9 @@ STAT_DEFINE(nodeset_finder_fallback_to_metadata_log, SUM)
 // LogsConfigManager
 // Number of updates sent to UpdateableLogsConfig by LogsConfigManager
 STAT_DEFINE(logsconfig_manager_published_update, SUM)
+// Number of times a new LocalLogsConfig was published because
+// server config was updated
+STAT_DEFINE(logsconfig_manager_published_server_config_update, SUM)
 // LogsConfig manager receiving updates from the state machine
 STAT_DEFINE(logsconfig_manager_received_update, SUM)
 // The version of the last processed delta/snapshot on this node
