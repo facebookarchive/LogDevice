@@ -34,6 +34,14 @@ void RocksDBListener::OnTableFileCreated(
     // Let's ignore such compactions.
     return;
   }
+  if (info.file_size == 0) {
+    // This currently happens in rare cases when an empty memtable gets flushed
+    // for some weird reason.
+    // TODO (#55376527):
+    //   Would be nice to make rocksdb either not flush empty memtables or set
+    //   file_path to "(nil)".
+    return;
+  }
   if (info.cf_name == "metadata") {
     if (info.reason == rocksdb::TableFileCreationReason::kFlush) {
       PER_SHARD_STAT_INCR(
