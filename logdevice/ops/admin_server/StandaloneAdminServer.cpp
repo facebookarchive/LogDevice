@@ -366,7 +366,8 @@ void StandaloneAdminServer::createAndAttachMaintenanceManager(
         std::make_unique<maintenance::SafetyCheckScheduler>(
             processor_.get(),
             admin_settings_,
-            admin_server->getSafetyChecker()));
+            admin_server->getSafetyChecker()),
+        std::make_unique<maintenance::MaintenanceLogWriter>(processor_.get()));
     auto worker_idx = processor_->selectWorkerRandomly(
         configuration::InternalLogs::MAINTENANCE_LOG_DELTAS.val_ /*seed*/,
         maintenance::MaintenanceManager::workerType(processor_.get()));

@@ -15,6 +15,7 @@
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceWrapper.h"
 #include "logdevice/admin/maintenance/EventLogWriter.h"
+#include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/admin/maintenance/SafetyCheckScheduler.h"
 #include "logdevice/admin/maintenance/SequencerWorkflow.h"
 #include "logdevice/admin/maintenance/ShardWorkflow.h"
@@ -55,12 +56,14 @@ class MaintenanceManagerDependencies {
       UpdateableSettings<AdminServerSettings> admin_settings,
       ClusterMaintenanceStateMachine* cluster_maintenance_state_machine,
       EventLogStateMachine* event_log,
-      std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler)
+      std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler,
+      std::unique_ptr<MaintenanceLogWriter> maintenance_log_writer)
       : processor_(processor),
         admin_settings_(std::move(admin_settings)),
         cluster_maintenance_state_machine_(cluster_maintenance_state_machine),
         event_log_state_machine_(event_log),
-        safety_check_scheduler_(std::move(safety_check_scheduler)) {}
+        safety_check_scheduler_(std::move(safety_check_scheduler)),
+        maintenance_log_writer_(std::move(maintenance_log_writer)) {}
 
   virtual ~MaintenanceManagerDependencies() {}
 
@@ -120,6 +123,10 @@ class MaintenanceManagerDependencies {
     return Worker::stats();
   }
 
+  virtual MaintenanceLogWriter* getMaintenanceLogWriter() const {
+    return maintenance_log_writer_.get();
+  }
+
  private:
   // Handle to processor for getting the NodesConfig
   Processor* processor_;
@@ -149,6 +156,9 @@ class MaintenanceManagerDependencies {
 
   // Subscription handle for NodesConfig update
   std::unique_ptr<ConfigSubscriptionHandle> nodes_config_update_handle_;
+
+  // MaintenanceLogWriter used mainly to remove expired maintenances.
+  std::unique_ptr<MaintenanceLogWriter> maintenance_log_writer_;
 };
 
 /*
@@ -647,6 +657,11 @@ class MaintenanceManager : public SerialWorkContext {
 
   bool metadata_nodeset_update_in_flight_{false};
 
+  // Indicates that there's currently a delta issues by the maintenance manager
+  // to remove some maintenances in flight. This is used avoid send multiple
+  // deltas to remove the same maintenances.
+  std::atomic<bool> remove_maintenance_delta_in_flight_{false};
+
   virtual void activateReevaluationTimer();
 
   virtual void cancelReevaluationTimer();
@@ -682,6 +697,16 @@ class MaintenanceManager : public SerialWorkContext {
   bool isBootstrappingCluster() const;
 
   folly::SemiFuture<Status> writeShardUnrecoverable(const ShardID& shard);
+
+  /**
+   * Writes to the maintenance log deltas removing:
+   *  - Maintenances where all of their nodes are not in the config anymore.
+   * This happens asynchronusly and its effect will then appear when MM detects
+   * the written delta.
+   */
+  void
+  purgeExpiredMaintenances(const std::vector<MaintenanceDefinition>&,
+                           const configuration::nodes::NodesConfiguration&);
 
   friend class MaintenanceManagerTest;
 };

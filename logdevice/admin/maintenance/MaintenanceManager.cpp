@@ -17,7 +17,6 @@
 #include "logdevice/admin/Conv.h"
 #include "logdevice/admin/MetadataNodesetSelector.h"
 #include "logdevice/admin/maintenance/APIUtils.h"
-#include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/membership/utils.h"
 #include "logdevice/common/request_util.h"
@@ -1038,6 +1037,10 @@ void MaintenanceManager::evaluate() {
   updateClientMaintenanceStateWrapper();
 
   ld_check(cluster_maintenance_wrapper_);
+
+  purgeExpiredMaintenances(
+      cluster_maintenance_wrapper_->getMaintenances(), *nodes_config_);
+
   // Create all required workflows
   active_shard_workflows_ = createShardWorkflows(
       std::move(active_shard_workflows_), *cluster_maintenance_wrapper_);
@@ -1917,6 +1920,60 @@ bool MaintenanceManager::isBootstrappingCluster() const {
 
   return storage_membership->isBootstrapping() ||
       sequencer_membership->isBootstrapping();
+}
+
+void MaintenanceManager::purgeExpiredMaintenances(
+    const std::vector<MaintenanceDefinition>& maintenances,
+    const configuration::nodes::NodesConfiguration& nodes_config) {
+  std::vector<thrift::MaintenanceGroupID> to_remove;
+  for (auto maintenance : maintenances) {
+    APIUtils::removeNonExistentNodesFromMaintenance(maintenance, nodes_config);
+    if (APIUtils::isEmptyMaintenance(maintenance)) {
+      to_remove.push_back(maintenance.group_id_ref().value());
+    }
+  }
+
+  if (to_remove.empty()) {
+    return;
+  }
+
+  if (remove_maintenance_delta_in_flight_.exchange(true)) {
+    RATELIMIT_INFO(std::chrono::minutes(1),
+                   1,
+                   "Maintenances (%s) should be removed because all of their "
+                   "affected nodes are no longer members of the cluster, but "
+                   "there's already a remove delta in flight, so will postpone "
+                   "this until the delta is written.",
+                   toString(to_remove).c_str());
+    return;
+  }
+
+  ld_info("Removing maintenances (%s) because all of their affected nodes are "
+          "no longer members of the cluster.",
+          toString(to_remove).c_str());
+  STAT_INCR(deps_->getStats(), admin_server.mm_expired_maintenances_removed);
+
+  thrift::MaintenancesFilter fltr;
+  fltr.set_group_ids(std::move(to_remove));
+
+  thrift::RemoveMaintenancesRequest req;
+  req.set_filter(std::move(fltr));
+  req.set_reason("All affected nodes are no longer members of the cluster");
+  req.set_user(INTERNAL_USER.str());
+
+  MaintenanceDelta delta;
+  delta.set_remove_maintenances(std::move(req));
+  deps_->getMaintenanceLogWriter()->writeDelta(
+      std::move(delta),
+      [this](Status st, lsn_t, const std::string& failure_reason) {
+        if (st != Status::OK) {
+          RATELIMIT_ERROR(std::chrono::seconds(10),
+                          1,
+                          "Failed remove the expired maintenances: %s",
+                          failure_reason.c_str());
+        }
+        remove_maintenance_delta_in_flight_.store(false);
+      });
 }
 
 }}} // namespace facebook::logdevice::maintenance

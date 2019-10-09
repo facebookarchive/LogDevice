@@ -29,6 +29,7 @@ using SequencerWorkflowMap = MaintenanceManager::SequencerWorkflowMap;
 
 class MockMaintenanceManagerDependencies;
 class MockMaintenanceManager;
+class MockMaintenanceLogWriter;
 
 std::string DEFAULT_LOC = "aa.bb.cc.dd.ee";
 
@@ -106,10 +107,24 @@ class MaintenanceManagerTest : public ::testing::Test {
   UpdateableSettings<AdminServerSettings> settings_;
   std::unique_ptr<folly::ManualExecutor> executor_;
   StatsHolder stats_;
+  std::unique_ptr<MockMaintenanceLogWriter> mock_maintenance_log_writer_;
   bool start_subscription_called_{false};
   bool stop_subscription_called_{false};
   bool periodic_reeval_timer_active_{false};
   bool periodic_metadata_nodeset_timer_active_{false};
+};
+
+class MockMaintenanceLogWriter : public MaintenanceLogWriter {
+ public:
+  MockMaintenanceLogWriter() : MaintenanceLogWriter(nullptr) {}
+
+  MOCK_METHOD4(writeDelta,
+               void(const MaintenanceDelta&,
+                    std::function<void(Status st,
+                                       lsn_t version,
+                                       const std::string& failure_reason)>,
+                    ClusterMaintenanceStateMachine::WriteMode mode,
+                    folly::Optional<lsn_t> base_version));
 };
 
 class MockMaintenanceManagerDependencies
@@ -118,6 +133,7 @@ class MockMaintenanceManagerDependencies
   explicit MockMaintenanceManagerDependencies(MaintenanceManagerTest* test)
       : MaintenanceManagerDependencies(nullptr,
                                        test->settings_,
+                                       nullptr,
                                        nullptr,
                                        nullptr,
                                        nullptr),
@@ -192,6 +208,10 @@ class MockMaintenanceManagerDependencies
 
   StatsHolder* getStats() const override {
     return &test_->stats_;
+  }
+
+  MaintenanceLogWriter* getMaintenanceLogWriter() const override {
+    return test_->mock_maintenance_log_writer_.get();
   }
 
   MaintenanceManagerTest* test_;
@@ -336,6 +356,8 @@ void MaintenanceManagerTest::init() {
 
   cms_.set_maintenances(std::move(definitions));
   set_ = EventLogRebuildingSet();
+  mock_maintenance_log_writer_ = std::make_unique<MockMaintenanceLogWriter>();
+
   deps_ = std::make_unique<MockMaintenanceManagerDependencies>(this);
 
   AdminServerSettings settings = create_default_settings<AdminServerSettings>();
@@ -1683,4 +1705,85 @@ TEST_F(MaintenanceManagerTest, TestBootstrappingFlag) {
 
   // The MM continues normally from here enabling the node.
 }
+
+TEST_F(MaintenanceManagerTest, TestPurgeMaintenance) {
+  init();
+
+  EXPECT_CALL(*maintenance_manager_, runShardWorkflows())
+      .WillRepeatedly(Invoke([this]() { return getShardWorkflowResult(); }));
+  EXPECT_CALL(*maintenance_manager_, runSequencerWorkflows())
+      .WillRepeatedly(
+          Invoke([this]() { return getSequencerWorkflowResult(); }));
+  EXPECT_CALL(
+      *maintenance_manager_, getExpectedStorageStateTransition(::testing::_))
+      .WillRepeatedly(Invoke([this](ShardID shard) {
+        return expected_storage_state_transition_[shard];
+      }));
+
+  // Prepare list of maintenances
+
+  MaintenanceDefinition def1;
+  def1.set_user("bunny");
+  def1.set_shard_target_state(ShardOperationalState::DRAINED);
+  def1.set_shards({mkShardID(1, 0), mkShardID(13, 0)});
+  def1.set_sequencer_nodes({mkNodeID(1)});
+  def1.set_sequencer_target_state(SequencingState::DISABLED);
+  def1.set_group_id("empty_1");
+
+  MaintenanceDefinition def2 = def1;
+  def2.set_shards({mkShardID(1, 0), mkShardID(13, 0), mkShardID(2, 0)});
+  def2.set_sequencer_nodes({});
+  def2.set_group_id("empty_2");
+
+  cms_.set_maintenances({def1, def2});
+
+  regenerateClusterMaintenanceWrapper();
+  maintenance_manager_->onClusterMaintenanceStateUpdate(cms_, lsn_t(1));
+  maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
+  runExecutor();
+
+  // Simluate node removal by building a new nodes config without nodes 1 & 13
+  nodes_config_ = NodesConfigurationTestUtil::provisionNodes({2, 9, 11})
+                      ->withVersion(membership::MembershipVersion::Type(100));
+  ASSERT_NE(nullptr, nodes_config_);
+  maintenance_manager_->onNodesConfigurationUpdated();
+
+  // Make sure that a delta will be written to remove empty_1 maintenance
+  std::function<void(Status, lsn_t, std::string)> write_done_cb;
+  EXPECT_CALL(*mock_maintenance_log_writer_, writeDelta(_, _, _, _))
+      .Times(1)
+      .WillOnce(Invoke([&](const MaintenanceDelta& delta, auto cb, auto, auto) {
+        EXPECT_EQ((std::vector<thrift::MaintenanceGroupID>{"empty_1"}),
+                  delta.get_remove_maintenances().get_filter().get_group_ids());
+        // Capture the write callback to invoke it later.
+        write_done_cb = std::move(cb);
+      }));
+  runExecutor();
+
+  // Simulate the remove of N2
+  nodes_config_ =
+      NodesConfigurationTestUtil::provisionNodes({9, 11})->withVersion(
+          membership::MembershipVersion::Type(110));
+  ASSERT_NE(nullptr, nodes_config_);
+  maintenance_manager_->onNodesConfigurationUpdated();
+
+  // Purging shouldn't happen because there's still a delta in flight.
+  EXPECT_CALL(*mock_maintenance_log_writer_, writeDelta(_, _, _, _)).Times(0);
+  runExecutor();
+
+  // Now let's remove the maintenance and call the removal callback.
+  write_done_cb(Status::OK, 1, "");
+  cms_.set_maintenances({def2});
+  maintenance_manager_->onClusterMaintenanceStateUpdate(cms_, lsn_t(1));
+
+  EXPECT_CALL(*mock_maintenance_log_writer_, writeDelta(_, _, _, _))
+      .Times(1)
+      .WillOnce(Invoke([&](const MaintenanceDelta& delta, auto cb, auto, auto) {
+        EXPECT_EQ((std::vector<thrift::MaintenanceGroupID>{"empty_2"}),
+                  delta.get_remove_maintenances().get_filter().get_group_ids());
+        cb(Status::OK, 2, "");
+      }));
+  runExecutor();
+}
+
 }}} // namespace facebook::logdevice::maintenance
