@@ -125,6 +125,10 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
 
   switch (current_storage_state_) {
     case membership::StorageState::NONE:
+      // If the node is provisioning, we can consider it drained as well. Any
+      // maintenance that needs this node to be drained will appear completed
+      // immediately.
+    case membership::StorageState::PROVISIONING:
       // We have reached the target already, there is no further transitions
       // needed to declare the shard as DRAINED.
       updateStatus(MaintenanceStatus::COMPLETED);

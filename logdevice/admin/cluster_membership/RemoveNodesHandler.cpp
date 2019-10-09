@@ -74,7 +74,9 @@ check_is_disabled(const NodesConfiguration& nodes_configuration,
         nodes_configuration.getStorageMembership()->getShardStates(idx);
     for (const auto& state : states) {
       storage_disabled &=
-          state.second.storage_state == membership::StorageState::NONE;
+          (state.second.storage_state == membership::StorageState::NONE ||
+           state.second.storage_state ==
+               membership::StorageState::PROVISIONING);
     }
   }
 

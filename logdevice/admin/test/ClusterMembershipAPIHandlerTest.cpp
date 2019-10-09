@@ -165,6 +165,53 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveAliveNodes) {
   }
 }
 
+TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveProvisioningNodes) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  {
+    // Add two nodes with 2 shards each. They will get added as PROVISIONING.
+    thrift::AddNodesResponse resp;
+    admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
+    ASSERT_EQ(2, resp.added_nodes.size());
+
+    wait_until("AdminServer's NC picks the additions", [&]() {
+      thrift::NodesConfigResponse nc;
+      admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
+      return nc.version >= resp.new_nodes_configuration_version;
+    });
+  }
+
+  thrift::RemoveNodesResponse resp;
+  admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({100, 101}));
+  EXPECT_EQ(2, resp.removed_nodes.size());
+}
+
+TEST_F(ClusterMemebershipAPIIntegrationTest, TestApplyDrainOnProvisioning) {
+  ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  {
+    // Add two nodes with 2 shards each. They will get added as PROVISIONING.
+    thrift::AddNodesResponse resp;
+    admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
+    ASSERT_EQ(2, resp.added_nodes.size());
+
+    wait_until("AdminServer's NC picks the additions", [&]() {
+      thrift::NodesConfigResponse nc;
+      admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
+      return nc.version >= resp.new_nodes_configuration_version;
+    });
+  }
+
+  // We didn't provision the shared, let's apply a DRAINED maintenance
+  // immediately.
+  disableAndWait(
+      {mkShardID(100, -1), mkShardID(101, -1)}, {mkNodeID(100), mkNodeID(101)});
+}
+
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNonExistentNode) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
   auto admin_client = cluster_->getNode(0).createAdminClient();

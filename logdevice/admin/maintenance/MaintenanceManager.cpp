@@ -601,6 +601,9 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
         result = ShardOperationalState::ENABLED;
       }
       break;
+    case membership::StorageState::PROVISIONING:
+      result = ShardOperationalState::PROVISIONING;
+      break;
     default:
       // This should never happen. All storage state
       // cases are handled above
@@ -1896,12 +1899,17 @@ bool MaintenanceManager::isTargetAchieved(ShardOperationalState current,
   static folly::F14FastSet<ShardOperationalState> may_disappear_states{
       {ShardOperationalState::MAY_DISAPPEAR,
        ShardOperationalState::MIGRATING_DATA,
+       ShardOperationalState::PROVISIONING,
        ShardOperationalState::DRAINED}};
+
+  // Any of these states are considered higher or equals the DRAINED state.
+  static folly::F14FastSet<ShardOperationalState> drained_states{
+      {ShardOperationalState::PROVISIONING, ShardOperationalState::DRAINED}};
 
   if (target == ShardOperationalState::MAY_DISAPPEAR) {
     return may_disappear_states.count(current) > 0;
   } else if (target == ShardOperationalState::DRAINED) {
-    return current == ShardOperationalState::DRAINED;
+    return drained_states.count(current) > 0;
   } else {
     // we don't know any other targets.
     ld_assert(false);
