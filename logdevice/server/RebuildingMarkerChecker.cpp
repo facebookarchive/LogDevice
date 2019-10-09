@@ -10,17 +10,17 @@
 
 #include <tuple>
 
+#include "logdevice/common/RetryHandler.h"
+
 namespace facebook { namespace logdevice {
 
 RebuildingMarkerChecker::RebuildingMarkerChecker(
     const std::unordered_map<shard_index_t, membership::ShardState>& shards,
     NodeID my_node_id,
-    membership::MembershipVersion::Type storage_version,
     configuration::NodesConfigurationAPI* nc_api,
     ShardedLocalLogStore* sharded_store)
     : shards_(shards),
       my_node_id_(std::move(my_node_id)),
-      storage_version_(storage_version),
       nc_api_(nc_api),
       sharded_store_(sharded_store) {
   ld_check(sharded_store_);
@@ -124,37 +124,59 @@ Status RebuildingMarkerChecker::markShardsAsProvisioned(
     return Status::OK;
   }
 
-  ld_info("Will mark shards %s as provisioned in the NodesConfiguration",
-          toString(to_be_updated).c_str());
+  auto result = RetryHandler<Status>::syncRun(
+      [&](size_t trial_num) {
+        ld_info("Will mark shards %s as PROVISIONED in the NodesConfiguration "
+                "(trial #%ld)",
+                toString(to_be_updated).c_str(),
+                trial_num);
 
-  using namespace configuration::nodes;
-  using namespace membership;
+        using namespace configuration::nodes;
+        using namespace membership;
 
-  // Build the MARK_SHARD_PROVISIONED update
-  NodesConfiguration::Update update;
-  update.storage_config_update = std::make_unique<StorageConfig::Update>();
-  update.storage_config_update->membership_update =
-      std::make_unique<StorageMembership::Update>(storage_version_);
-  for (auto shard : shards) {
-    update.storage_config_update->membership_update->addShard(
-        ShardID(my_node_id_.index(), shard),
-        {
-            StorageStateTransition::MARK_SHARD_PROVISIONED,
-            Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
-                Condition::NO_SELF_REPORT_MISSING_DATA,
-        });
-  }
+        auto storage_membership = nc_api_->getConfig()->getStorageMembership();
+        auto storage_version = storage_membership->getVersion();
 
-  // Apply the update
-  Status update_status;
-  folly::Baton<> b;
-  nc_api_->update(std::move(update),
-                  [&](Status st, std::shared_ptr<const NodesConfiguration>) {
-                    update_status = st;
-                    b.post();
-                  });
-  b.wait();
-  return update_status;
+        // Build the MARK_SHARD_PROVISIONED update
+        NodesConfiguration::Update update;
+        update.storage_config_update =
+            std::make_unique<StorageConfig::Update>();
+        update.storage_config_update->membership_update =
+            std::make_unique<StorageMembership::Update>(storage_version);
+        for (auto shard : shards) {
+          auto shard_id = ShardID(my_node_id_.index(), shard);
+          if (storage_membership->getShardState(shard_id)->storage_state !=
+              StorageState::PROVISIONING) {
+            continue;
+          }
+          update.storage_config_update->membership_update->addShard(
+              shard_id,
+              {
+                  StorageStateTransition::MARK_SHARD_PROVISIONED,
+                  Condition::EMPTY_SHARD | Condition::LOCAL_STORE_READABLE |
+                      Condition::NO_SELF_REPORT_MISSING_DATA,
+              });
+        }
+
+        // Apply the update
+        Status update_status;
+        folly::Baton<> b;
+        nc_api_->update(
+            std::move(update),
+            [&](Status st, std::shared_ptr<const NodesConfiguration>) {
+              update_status = st;
+              b.post();
+            });
+        b.wait();
+        return update_status;
+      },
+      [](const Status& st) { return st == Status::VERSION_MISMATCH; },
+      /* num_tries */ 10,
+      /* backoff_min */ std::chrono::seconds(1),
+      /* backoff_max */ std::chrono::seconds(60),
+      /* jitter_param */ 0.25);
+
+  return result.hasValue() ? result.value() : result.error();
 }
 
 }} // namespace facebook::logdevice

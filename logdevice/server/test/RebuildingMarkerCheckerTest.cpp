@@ -48,7 +48,6 @@ TEST(RebuildingMarkerCheckerTest, testAllProvisioning) {
   RebuildingMarkerChecker checker(
       nc.getStorageMembership()->getShardStates(node_idx),
       NodeID(node_idx, generation),
-      nc.getStorageMembership()->getVersion(),
       nc_api.get(),
       store.get());
 
@@ -93,7 +92,6 @@ TEST(RebuildingMarkerCheckerTest, testFirstGeneration) {
   RebuildingMarkerChecker checker(
       nc.getStorageMembership()->getShardStates(node_idx),
       NodeID(node_idx, generation),
-      nc.getStorageMembership()->getVersion(),
       nullptr /* simulating a disabled NCM */,
       store.get());
 
@@ -145,7 +143,6 @@ TEST(RebuildingMarkerCheckerTest, testMissingData) {
   RebuildingMarkerChecker checker(
       nc.getStorageMembership()->getShardStates(node_idx),
       NodeID(node_idx, generation),
-      nc.getStorageMembership()->getVersion(),
       nc_api.get(),
       store.get());
 

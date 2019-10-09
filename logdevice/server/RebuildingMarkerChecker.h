@@ -57,7 +57,6 @@ class RebuildingMarkerChecker {
   RebuildingMarkerChecker(
       const std::unordered_map<shard_index_t, membership::ShardState>& shards,
       NodeID my_node_id,
-      membership::MembershipVersion::Type storage_version,
       configuration::NodesConfigurationAPI* nc_api,
       ShardedLocalLogStore* sharded_store);
 
@@ -84,7 +83,6 @@ class RebuildingMarkerChecker {
   // Shards to checkm
   std::unordered_map<shard_index_t, membership::ShardState> shards_;
   NodeID my_node_id_;
-  membership::MembershipVersion::Type storage_version_;
   // The NCAPI to apply the NodesConfiguration update. The update is ignored
   // if it's a nullptr (meaning that the NCM is disabled).
   // If the NCAPI is set, it has to outlive the RebuildingMarkerChecker.

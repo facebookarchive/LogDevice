@@ -306,7 +306,6 @@ int RebuildingCoordinator::checkMarkers() {
   RebuildingMarkerChecker checker(
       storage_mem->getShardStates(getMyNodeID().index()),
       getMyNodeID(),
-      storage_mem->getVersion(),
       processor_->getNodesConfigurationManager(),
       shardedStore_);
 
