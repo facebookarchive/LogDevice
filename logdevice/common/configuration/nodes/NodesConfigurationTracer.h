@@ -50,6 +50,13 @@ class NodesConfigurationTracer : SampledTracer {
   };
 
   explicit NodesConfigurationTracer(std::shared_ptr<TraceLogger> logger);
+  /**
+   * The local default for this is 100% of samples unless explicity overridden
+   * by the config file.
+   */
+  virtual folly::Optional<double> getDefaultSamplePercentage() const {
+    return 100;
+  }
 
   void trace(Sample sample);
 };
