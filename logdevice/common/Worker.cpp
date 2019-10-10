@@ -332,6 +332,10 @@ void Worker::onServerConfigUpdated() {
 
   sender().noteConfigurationChanged(getNodesConfiguration());
 
+  if (logsconfig_manager_) {
+    logsconfig_manager_->onServerConfigUpdated();
+  }
+
   clientReadStreams().noteConfigurationChanged();
   // propagate the config change to metadata sequencer
   runningWriteMetaDataRecords().noteConfigurationChanged();
