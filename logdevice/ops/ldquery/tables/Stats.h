@@ -28,7 +28,7 @@ class Stats : public AdminCommandTable {
   std::string getDescription() override {
     return "Return statistics for all nodes in the cluster.  See "
            "\"logdevice/common/stats/\".  See \"stats_rocksdb\" for "
-           "statitistics related to RocksDB.";
+           "statistics related to RocksDB.";
   }
   TableColumns getFetchableColumns() const override {
     return {{"name", DataType::TEXT, "Name of the stat counter."},

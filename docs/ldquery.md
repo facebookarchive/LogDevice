@@ -695,7 +695,7 @@ Tracks all sockets on all nodes in the cluster.
 | fd | int | The file descriptor of the underlying os socket. |
 
 ## stats
-Return statistics for all nodes in the cluster.  See "logdevice/common/stats/".  See "stats\_rocksdb" for statitistics related to RocksDB.
+Return statistics for all nodes in the cluster.  See "logdevice/common/stats/".  See "stats\_rocksdb" for statistics related to RocksDB.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
