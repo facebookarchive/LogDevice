@@ -235,7 +235,7 @@ Socket::Socket(int fd,
   if (!bev_) {
     throw ConstructorFailed(); // err is already set
   }
-
+  conn_closed_ = std::make_shared<std::atomic<bool>>(false);
   conn_incoming_token_ = std::move(conn_token);
 
   addHandshakeTimeoutEvent();
@@ -261,7 +261,7 @@ void Socket::onBufferedOutputWrite(struct evbuffer* buffer,
   Socket* self = reinterpret_cast<Socket*>(arg);
 
   ld_check(self);
-  ld_check(self->bev_);
+  ld_check(!self->isClosed());
   ld_check(self->buffered_output_);
   ld_check(buffer == self->buffered_output_);
 
@@ -272,7 +272,7 @@ void Socket::onBufferedOutputWrite(struct evbuffer* buffer,
 
 void Socket::flushBufferedOutput() {
   ld_check(buffered_output_);
-  ld_check(bev_);
+  ld_check(!isClosed());
   // Moving buffer chains into bev's output
   int rv = LD_EV(evbuffer_add_buffer)(deps_->getOutput(bev_), buffered_output_);
   if (rv != 0) {
@@ -426,7 +426,7 @@ struct bufferevent* Socket::newBufferevent(int sfd,
 
 int Socket::connect() {
   if (peer_name_.isClientAddress()) {
-    if (bev_) {
+    if (!isClosed()) {
       ld_check(connected_);
       err = E::ISCONN;
     } else {
@@ -437,7 +437,7 @@ int Socket::connect() {
 
   // it's a server socket
 
-  if (bev_) {
+  if (!isClosed()) {
     err = connected_ ? E::ISCONN : E::ALREADY;
     return -1;
   }
@@ -460,7 +460,7 @@ int Socket::connect() {
   int rv = doConnectAttempt();
   if (rv != 0) {
     connect_throttle_.connectFailed();
-    if (bev_) {
+    if (!isClosed()) {
       STAT_INCR(deps_->getStats(), num_connections);
       close(err);
     }
@@ -510,7 +510,7 @@ int Socket::doConnectAttempt() {
   if (!bev_) {
     return -1; // err is already set
   }
-
+  conn_closed_ = std::make_shared<std::atomic<bool>>(false);
   expectProtocolHeader();
 
   struct sockaddr_storage ss;
@@ -561,6 +561,7 @@ int Socket::doConnectAttempt() {
         err = E::INTERNAL;
         break;
     }
+
     return -1;
   }
   if (isSSL()) {
@@ -710,7 +711,7 @@ void Socket::dataReadCallback(struct bufferevent* bev, void* arg, short) {
 void Socket::readMoreCallback(void* arg, short what) {
   Socket* self = reinterpret_cast<Socket*>(arg);
   ld_check(what & EV_TIMEOUT);
-  ld_check(self->bev_);
+  ld_check(!self->isClosed());
   ld_spew(
       "Socket %s remains above low watermark", self->conn_description_.c_str());
   self->onBytesAvailable(/*fresh=*/false);
@@ -793,7 +794,7 @@ void Socket::flushSerializeQueue() {
 }
 
 void Socket::onConnected() {
-  ld_check(bev_);
+  ld_check(!isClosed());
   if (expecting_ssl_handshake_) {
     ld_check(connected_);
     // we receive a BEV_EVENT_CONNECTED for an _incoming_ connection after the
@@ -850,7 +851,13 @@ void Socket::onSent(std::unique_ptr<Envelope> e,
 }
 
 void Socket::onError(short direction, int socket_errno) {
-  if (!bev_) {
+  // DeferredEventQueue is cleared as part of socket close which can call
+  // onError recursively. Check if this is recursive call and skip the check.
+  if (closing_) {
+    return;
+  }
+
+  if (isClosed()) {
     ld_critical("INTERNAL ERROR: got a libevent error on disconnected socket "
                 "with peer %s. errno=%d (%s)",
                 conn_description_.c_str(),
@@ -918,8 +925,13 @@ void Socket::onError(short direction, int socket_errno) {
 }
 
 void Socket::onPeerClosed() {
+  // This method can be called recursively as part of Socket::close when
+  // deferred event queue is cleared. Return rightaway if this a recursive call.
+  if (closing_) {
+    return;
+  }
   ld_spew("Peer %s closed.", conn_description_.c_str());
-  ld_check(bev_);
+  ld_check(!isClosed());
   if (!isSSL()) {
     // an SSL socket can be in a state where the TCP connection is established,
     // but the SSL handshake hasn't finished, this isn't considered connected.
@@ -974,6 +986,7 @@ void Socket::onConnectAttemptTimeout() {
     deps_->buffereventFree(bev_); // this also closes the TCP socket
     bev_ = nullptr;
     ssl_context_.reset();
+    conn_closed_->store(true);
 
     // Try connecting again.
     if (doConnectAttempt() != 0) {
@@ -1031,10 +1044,11 @@ void Socket::close(Status reason) {
     closing_ = false;
   };
 
-  if (!bev_) {
-    ld_check(!connected_);
+  if (isClosed()) {
     return;
   }
+
+  *conn_closed_ = true;
 
   RATELIMIT_LEVEL((reason == E::CONNFAILED || reason == E::TIMEDOUT)
                       ? dbg::Level::DEBUG
@@ -1167,10 +1181,10 @@ void Socket::close(Status reason) {
 }
 
 bool Socket::isClosed() const {
-  if (bev_) {
+  if (conn_closed_ != nullptr &&
+      !conn_closed_->load(std::memory_order_relaxed)) {
     return false;
   }
-
   ld_check(!connected_);
   ld_check(sendq_.empty());
   ld_check(serializeq_.empty());
@@ -1375,7 +1389,7 @@ bool Socket::injectAsyncMessageError(std::unique_ptr<Envelope>&& e) {
 }
 
 int Socket::preSendCheck(const Message& msg) {
-  if (!bev_) {
+  if (isClosed()) {
     err = E::NOTCONN;
     return -1;
   }
@@ -1544,7 +1558,7 @@ std::unique_ptr<Message> Socket::discardEnvelope(Envelope& envelope) {
 }
 
 void Socket::sendHello() {
-  ld_check(bev_);
+  ld_check(!isClosed());
   ld_check(!connected_);
   ld_check(next_pos_ == 0);
   ld_check(drain_pos_ == 0);
@@ -1559,7 +1573,7 @@ void Socket::sendHello() {
 }
 
 void Socket::sendShutdown() {
-  ld_check(bev_);
+  ld_check(!isClosed());
 
   auto shutdown = deps_->createShutdownMessage(deps_->getServerInstanceId());
   auto envelope = registerMessage(std::move(shutdown));
@@ -1581,7 +1595,7 @@ void Socket::bytesSentCallback(struct evbuffer* buffer,
   Socket* self = reinterpret_cast<Socket*>(arg);
 
   ld_check(self);
-  ld_check(self->bev_);
+  ld_check(!self->isClosed());
   ld_check(buffer == self->deps_->getOutput(self->bev_));
   STAT_INCR(self->deps_->getStats(), sock_write_events);
   if (info->n_deleted > 0) {
@@ -1701,7 +1715,7 @@ void Socket::endStreamRewind() {
 }
 
 void Socket::expectProtocolHeader() {
-  ld_check(bev_);
+  ld_check(!isClosed());
   size_t protohdr_bytes =
       ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
 
@@ -1718,7 +1732,7 @@ void Socket::expectProtocolHeader() {
 }
 
 void Socket::expectMessageBody() {
-  ld_check(bev_);
+  ld_check(!isClosed());
   ld_check(expecting_header_);
 
   size_t protohdr_bytes =
@@ -1738,7 +1752,7 @@ void Socket::expectMessageBody() {
 int Socket::receiveMessage() {
   int nbytes;
 
-  ld_check(bev_);
+  ld_check(!isClosed());
   ld_check(connected_);
 
   struct evbuffer* inbuf = deps_->getInput(bev_);
@@ -2138,7 +2152,7 @@ int Socket::pushOnBWAvailableCallback(BWAvailableCallback& cb) {
 }
 
 size_t Socket::getTcpSendBufSize() const {
-  if (!bev_) {
+  if (isClosed()) {
     return 0;
   }
 
@@ -2255,11 +2269,11 @@ int Socket::checkConnection(ClientID* our_name_at_peer) {
     // to complete
     if (!connect_throttle_.mayConnect()) {
       ld_check(!connected_);
-      ld_check(!bev_);
+      ld_check(isClosed());
       err = E::DISABLED;
     } else if (peer_name_.isClientAddress()) {
       err = E::INVALID_PARAM;
-    } else if (bev_) {
+    } else if (!isClosed()) {
       err = E::ALREADY;
     } else {
       ld_check(!handshaken_);
@@ -2289,7 +2303,7 @@ void Socket::dumpQueuedMessages(std::map<MessageType, int>* out) const {
 void Socket::getDebugInfo(InfoSocketsTable& table) const {
   std::string state;
   // Connection state of the socket.
-  if (!bev_) {
+  if (isClosed()) {
     state = "I";
   } else if (!connected_) {
     state = "C";

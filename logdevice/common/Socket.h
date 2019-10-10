@@ -1093,6 +1093,11 @@ class Socket : public TrafficShappingSocket {
   int fd_;
 
   /**
+   * Avoid invoking Socket::close on socket that is already closed.
+   */
+  std::shared_ptr<std::atomic<bool>> conn_closed_;
+
+  /**
    * For Testing only!
    */
   bool shouldTamperChecksum() {
