@@ -310,3 +310,15 @@ TEST_F(CheckpointStoreImplTest, RemoveAllCheckpoints) {
 
   checkpointStore->removeAllCheckpoints("customer", std::move(cb_));
 }
+
+TEST_F(CheckpointStoreImplTest, ExtractVersion) {
+  auto version = CheckpointStoreImpl::extractVersion("Incorrect thrift");
+  EXPECT_EQ(folly::none, version);
+
+  Checkpoint checkpoint;
+  checkpoint.version = 5;
+  auto serialized_thrift = ThriftCodec::serialize<BinarySerializer>(checkpoint);
+  version = CheckpointStoreImpl::extractVersion(serialized_thrift);
+  ASSERT_NE(folly::none, version);
+  EXPECT_EQ(CheckpointStore::Version(5), version.value());
+}

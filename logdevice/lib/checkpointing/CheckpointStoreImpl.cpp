@@ -156,4 +156,14 @@ void CheckpointStoreImpl::updateCheckpoints(
   vcs_->readModifyWriteConfig(customer_id, std::move(mcb), std::move(cb));
 }
 
+folly::Optional<CheckpointStore::Version>
+CheckpointStoreImpl::extractVersion(folly::StringPiece value) {
+  auto value_thrift = ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
+      Slice::fromString(value.toString()));
+  if (value_thrift == nullptr) {
+    return folly::none;
+  }
+  return CheckpointStore::Version(value_thrift->version);
+}
+
 }} // namespace facebook::logdevice

@@ -18,4 +18,5 @@ struct Checkpoint {
    * The map where the key is log_id and the value is lsn.
    */
   1: map<u64, u64> log_lsn_map;
+  2: u64 version;
 }

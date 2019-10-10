@@ -15,12 +15,8 @@ namespace facebook { namespace logdevice {
 
 std::unique_ptr<CheckpointStore>
 CheckpointStoreFactory::createFileBasedCheckpointStore(std::string root_path) {
-  // TODO: implement version managing
-  auto extract_version_function = [](folly::StringPiece) {
-    return CheckpointStore::Version(1);
-  };
   auto versioned_config_store = std::make_unique<FileBasedVersionedConfigStore>(
-      root_path, extract_version_function);
+      root_path, CheckpointStoreImpl::extractVersion);
   return std::make_unique<CheckpointStoreImpl>(
       std::move(versioned_config_store));
 }
