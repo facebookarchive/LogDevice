@@ -52,5 +52,12 @@ class MockCheckpointStore : public CheckpointStore {
 
   MOCK_METHOD2(removeAllCheckpoints,
                void(const std::string& customer_id, UpdateCallback cb));
+
+  MOCK_METHOD2(removeCheckpointsSync,
+               Status(const std::string& customer_id,
+                      const std::vector<logid_t>& checkpoints));
+
+  MOCK_METHOD1(removeAllCheckpointsSync,
+               Status(const std::string& customer_id));
 };
 }} // namespace facebook::logdevice

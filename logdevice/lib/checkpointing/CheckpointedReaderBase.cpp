@@ -52,6 +52,11 @@ void CheckpointedReaderBase::asyncWriteCheckpoints(
   store_->updateLSN(reader_name_, checkpoints, std::move(update_cb));
 }
 
+Status CheckpointedReaderBase::syncRemoveCheckpoints(
+    const std::vector<logid_t>& checkpoints) {
+  return store_->removeCheckpointsSync(reader_name_, checkpoints);
+}
+
 void CheckpointedReaderBase::asyncRemoveCheckpoints(
     const std::vector<logid_t>& checkpoints,
     StatusCallback cb) {
@@ -62,6 +67,10 @@ void CheckpointedReaderBase::asyncRemoveCheckpoints(
     cb(status);
   };
   store_->removeCheckpoints(reader_name_, checkpoints, std::move(update_cb));
+}
+
+Status CheckpointedReaderBase::syncRemoveAllCheckpoints() {
+  return store_->removeAllCheckpointsSync(reader_name_);
 }
 
 void CheckpointedReaderBase::asyncRemoveAllCheckpoints(StatusCallback cb) {

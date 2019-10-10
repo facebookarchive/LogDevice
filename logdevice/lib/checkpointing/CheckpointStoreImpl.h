@@ -52,6 +52,12 @@ class CheckpointStoreImpl : public CheckpointStore {
   void removeAllCheckpoints(const std::string& customer_id,
                             UpdateCallback cb) override;
 
+  Status
+  removeCheckpointsSync(const std::string& customer_id,
+                        const std::vector<logid_t>& checkpoints) override;
+
+  Status removeAllCheckpointsSync(const std::string& customer_id) override;
+
   static folly::Optional<CheckpointStore::Version>
       extractVersion(folly::StringPiece);
 

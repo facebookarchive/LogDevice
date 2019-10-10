@@ -118,3 +118,28 @@ TEST_F(CheckpointedReaderBaseTest,
   reader_base.asyncRemoveAllCheckpoints(callback);
   call_baton.wait();
 }
+
+TEST_F(CheckpointedReaderBaseTest, SyncRemoveCheckpointsUsesCheckpointStore) {
+  std::vector<logid_t> checkpoints = {logid_t(3), logid_t(5)};
+  EXPECT_CALL(
+      *mock_checkpoint_store_, removeCheckpointsSync("customer", checkpoints))
+      .Times(1)
+      .WillOnce(Return(Status::OK));
+
+  auto reader_base =
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
+  auto status = reader_base.syncRemoveCheckpoints(checkpoints);
+  EXPECT_EQ(Status::OK, status);
+}
+
+TEST_F(CheckpointedReaderBaseTest,
+       SyncRemoveAllCheckpointsUsesCheckpointStore) {
+  EXPECT_CALL(*mock_checkpoint_store_, removeAllCheckpointsSync("customer"))
+      .Times(1)
+      .WillOnce(Return(Status::OK));
+
+  auto reader_base =
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
+  auto status = reader_base.syncRemoveAllCheckpoints();
+  EXPECT_EQ(Status::OK, status);
+}

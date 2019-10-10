@@ -254,6 +254,25 @@ TEST_F(CheckpointStoreImplTest, UpdateAndGetWithInMemVersionedConfigStore) {
   status = checkpointStore->getLSNSync("customer1", logid_t(4), &value);
   ASSERT_EQ(Status::OK, status);
   ASSERT_EQ(6, value);
+
+  checkpointStore->removeCheckpointsSync("customer1", {logid_t(2), logid_t(4)});
+
+  status = checkpointStore->getLSNSync("customer1", logid_t(1), &value);
+  ASSERT_EQ(Status::OK, status);
+  status = checkpointStore->getLSNSync("customer1", logid_t(2), &value);
+  ASSERT_EQ(Status::NOTFOUND, status);
+  status = checkpointStore->getLSNSync("customer1", logid_t(3), &value);
+  ASSERT_EQ(Status::OK, status);
+  status = checkpointStore->getLSNSync("customer1", logid_t(4), &value);
+  ASSERT_EQ(Status::NOTFOUND, status);
+
+  checkpointStore->removeAllCheckpointsSync("customer2");
+  status = checkpointStore->getLSNSync("customer2", logid_t(2), &value);
+  ASSERT_EQ(Status::NOTFOUND, status);
+  status = checkpointStore->getLSNSync("customer2", logid_t(3), &value);
+  ASSERT_EQ(Status::NOTFOUND, status);
+  status = checkpointStore->getLSNSync("customer2", logid_t(4), &value);
+  ASSERT_EQ(Status::NOTFOUND, status);
 }
 
 TEST_F(CheckpointStoreImplTest, RemoveSomeCheckpoints) {
@@ -262,7 +281,7 @@ TEST_F(CheckpointStoreImplTest, RemoveSomeCheckpoints) {
 
   EXPECT_CALL(
       *mock_versioned_config_store_, readModifyWriteConfig("customer", _, _))
-      .Times(1)
+      .Times(2)
       .WillRepeatedly(Invoke([correct](auto, auto mcb, auto cb) {
         auto before_remove = correct;
         before_remove.log_lsn_map[5] = 8;
@@ -283,6 +302,9 @@ TEST_F(CheckpointStoreImplTest, RemoveSomeCheckpoints) {
 
   checkpointStore->removeCheckpoints(
       "customer", {logid_t(5), logid_t(7)}, std::move(cb_));
+  auto status = checkpointStore->removeCheckpointsSync(
+      "customer", {logid_t(5), logid_t(7)});
+  EXPECT_EQ(Status::OK, status);
 }
 
 TEST_F(CheckpointStoreImplTest, RemoveAllCheckpoints) {
@@ -290,7 +312,7 @@ TEST_F(CheckpointStoreImplTest, RemoveAllCheckpoints) {
 
   EXPECT_CALL(
       *mock_versioned_config_store_, readModifyWriteConfig("customer", _, _))
-      .Times(1)
+      .Times(2)
       .WillRepeatedly(Invoke([correct](auto, auto mcb, auto cb) {
         Checkpoint before_remove;
         before_remove.log_lsn_map = {{1, 2}, {2, 5}, {3, 7}, {2, 3}};
@@ -309,6 +331,8 @@ TEST_F(CheckpointStoreImplTest, RemoveAllCheckpoints) {
       std::move(mock_versioned_config_store_));
 
   checkpointStore->removeAllCheckpoints("customer", std::move(cb_));
+  auto status = checkpointStore->removeAllCheckpointsSync("customer");
+  EXPECT_EQ(Status::OK, status);
 }
 
 TEST_F(CheckpointStoreImplTest, ExtractVersion) {

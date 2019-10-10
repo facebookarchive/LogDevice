@@ -63,9 +63,11 @@ class CheckpointedReaderBase {
   /*
    * Removes some or all the checkpoints for a customer.
    */
+  Status syncRemoveCheckpoints(const std::vector<logid_t>& checkpoints);
   void asyncRemoveCheckpoints(const std::vector<logid_t>& checkpoints,
                               StatusCallback cb);
 
+  Status syncRemoveAllCheckpoints();
   void asyncRemoveAllCheckpoints(StatusCallback cb);
 
  protected:

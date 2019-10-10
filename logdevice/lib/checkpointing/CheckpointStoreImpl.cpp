@@ -23,6 +23,19 @@ namespace facebook { namespace logdevice {
 using apache::thrift::BinarySerializer;
 using checkpointing::thrift::Checkpoint;
 
+namespace {
+CheckpointStore::UpdateCallback
+updateCallbackPostingBaton(Status* return_status, folly::Baton<>& call_baton) {
+  CheckpointStore::UpdateCallback callback =
+      [&call_baton, return_status](
+          Status status, VersionedConfigStore::version_t, std::string) {
+        *return_status = status;
+        call_baton.post();
+      };
+  return callback;
+}
+} // namespace
+
 CheckpointStoreImpl::CheckpointStoreImpl(
     std::unique_ptr<VersionedConfigStore> vcs)
     : vcs_(std::move(vcs)) {}
@@ -97,19 +110,12 @@ void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
 Status CheckpointStoreImpl::updateLSNSync(
     const std::string& customer_id,
     const std::map<logid_t, lsn_t>& checkpoints) {
-  folly::Baton<> update_baton;
-  Status return_status = Status::OK;
-  UpdateCallback cb =
-      [&update_baton, &return_status](
-          Status status, VersionedConfigStore::version_t, std::string) {
-        return_status = status;
-        update_baton.post();
-      };
-
+  Status status;
+  folly::Baton<> call_baton;
+  auto cb = updateCallbackPostingBaton(&status, call_baton);
   updateLSN(customer_id, checkpoints, std::move(cb));
-  update_baton.wait();
-
-  return return_status;
+  call_baton.wait();
+  return status;
 }
 
 void CheckpointStoreImpl::removeCheckpoints(
@@ -131,6 +137,27 @@ void CheckpointStoreImpl::removeAllCheckpoints(const std::string& customer_id,
   };
   // TODO: Remove the whole checkpoint from the VCS.
   updateCheckpoints(customer_id, std::move(modify_checkpoint), std::move(cb));
+}
+
+Status CheckpointStoreImpl::removeCheckpointsSync(
+    const std::string& customer_id,
+    const std::vector<logid_t>& checkpoints) {
+  Status status;
+  folly::Baton<> call_baton;
+  auto cb = updateCallbackPostingBaton(&status, call_baton);
+  removeCheckpoints(customer_id, checkpoints, std::move(cb));
+  call_baton.wait();
+  return status;
+}
+
+Status
+CheckpointStoreImpl::removeAllCheckpointsSync(const std::string& customer_id) {
+  Status status;
+  folly::Baton<> call_baton;
+  auto cb = updateCallbackPostingBaton(&status, call_baton);
+  removeAllCheckpoints(customer_id, std::move(cb));
+  call_baton.wait();
+  return status;
 }
 
 void CheckpointStoreImpl::updateCheckpoints(
