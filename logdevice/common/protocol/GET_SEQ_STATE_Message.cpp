@@ -181,6 +181,9 @@ GET_SEQ_STATE_Message::checkSeals(Address src, std::shared_ptr<Sequencer> seq) {
     return Disposition::NORMAL;
   }
 
+  // CheckSealRequest will call either
+  // GET_SEQ_STATE_Message::continueExecution() or
+  // GET_SEQ_STATE_Message::sendReply() when done.
   auto rq = std::make_unique<CheckSealRequest>(
       std::unique_ptr<GET_SEQ_STATE_Message>(this),
       src,
@@ -481,14 +484,14 @@ void GET_SEQ_STATE_Message::onSequencerNodeFound(Status status,
                 std::chrono::seconds(10),
                 5,
                 "Sequencer for log:%lu is in PREEMPTED state and cur_epoch is "
-                "INVALID, this means that the sequencer failed  epoch store "
+                "INVALID, this means that the sequencer failed epoch store "
                 "conditional update during first time activation. "
                 "(st:%s, preempted_by: %s)",
                 datalog_id.val_,
-                error_description(st),
+                error_name(st),
                 preempted_by.toString().c_str());
-            sendReply(from, reply_hdr, st, preempted_by);
-            return;
+            // Go to continueExecution(), which will handle the preemption.
+            break;
           }
 
           // In all other cases, we still perform check seals since the
