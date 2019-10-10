@@ -110,30 +110,34 @@ void LogsConfigManager::onSettingsUpdated() {
 }
 
 void LogsConfigManager::onServerConfigUpdated() {
-  auto server_config = updateable_config_->getServerConfig();
-  const auto& server_config_internal_log =
-      server_config->getInternalLogsConfig();
-  auto logs_config = updateable_config_->getLocalLogsConfig();
-  const auto& logs_config_internal_log = logs_config->getInternalLogs();
+  // Check for updates only if LCM is running
+  if (isEnabledInSettings() && is_running_) {
+    auto server_config = updateable_config_->getServerConfig();
+    const auto& server_config_internal_log =
+        server_config->getInternalLogsConfig();
+    auto logs_config = updateable_config_->getLocalLogsConfig();
+    const auto& logs_config_internal_log = logs_config->getInternalLogs();
 
-  if (server_config_internal_log != logs_config_internal_log) {
-    // Make a new copy of the existing config
-    std::shared_ptr<LocalLogsConfig> new_logs_config =
-        std::make_shared<LocalLogsConfig>(
-            *updateable_config_->getLocalLogsConfig());
-    // Setting the InternalLogs from ServerConfig
-    new_logs_config->setInternalLogsConfig(server_config_internal_log);
-    // We want the latest namespace delimiter to be set for this config.
-    new_logs_config->setNamespaceDelimiter(
-        server_config->getNamespaceDelimiter());
-    updateable_config_->updateableLogsConfig()->update(new_logs_config);
-    ld_info("Published new LogsConfig (fully loaded? %s) version (%lu) from "
-            "LogsConfigManager because ServerConfig was updated to version:%s",
-            new_logs_config->isFullyLoaded() ? "yes" : "no",
-            new_logs_config->getVersion(),
-            toString(server_config->getVersion()).c_str());
-    // increment the counter of number of published updates
-    STAT_INCR(getStats(), logsconfig_manager_published_server_config_update);
+    if (server_config_internal_log != logs_config_internal_log) {
+      // Make a new copy of the existing config
+      std::shared_ptr<LocalLogsConfig> new_logs_config =
+          std::make_shared<LocalLogsConfig>(
+              *updateable_config_->getLocalLogsConfig());
+      // Setting the InternalLogs from ServerConfig
+      new_logs_config->setInternalLogsConfig(server_config_internal_log);
+      // We want the latest namespace delimiter to be set for this config.
+      new_logs_config->setNamespaceDelimiter(
+          server_config->getNamespaceDelimiter());
+      updateable_config_->updateableLogsConfig()->update(new_logs_config);
+      ld_info(
+          "Published new LogsConfig (fully loaded? %s) version (%lu) from "
+          "LogsConfigManager because ServerConfig was updated to version:%s",
+          new_logs_config->isFullyLoaded() ? "yes" : "no",
+          new_logs_config->getVersion(),
+          toString(server_config->getVersion()).c_str());
+      // increment the counter of number of published updates
+      STAT_INCR(getStats(), logsconfig_manager_published_server_config_update);
+    }
   }
 }
 

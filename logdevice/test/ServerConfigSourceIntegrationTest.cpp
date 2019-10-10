@@ -220,6 +220,17 @@ TEST_F(ServerConfigSourceIntegrationTest, ServerConfigInternalLogUpdate) {
               IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
           .create(1);
 
+  auto client = ClientFactory()
+                    .setSetting("file-config-update-interval", "10ms")
+                    .setSetting("on-demand-logs-config", "true")
+                    .setTimeout(testTimeout())
+                    .create(cluster->getConfigPath());
+  ASSERT_TRUE((bool)client);
+
+  auto client_impl = static_cast<ClientImpl*>(client.get());
+  auto config = client_impl->getConfig()->get();
+  ASSERT_FALSE(config->logsConfig()->isLocal());
+
   // The default version for the cluster is 1
   std::shared_ptr<Configuration> cluster_config = cluster->getConfig()->get();
   EXPECT_EQ(config_version_t(1), cluster_config->serverConfig()->getVersion());
@@ -230,20 +241,22 @@ TEST_F(ServerConfigSourceIntegrationTest, ServerConfigInternalLogUpdate) {
   cluster->writeConfig(
       new_server_config.get(), cluster_config->logsConfig().get());
 
-  // Wait until the node picks up the updated config
+  // Wait until the client picks up the updated config
   wait_until([&]() -> bool {
-    std::string reply = cluster->getNode(0).sendCommand("info config");
-    auto updated_config = Configuration::fromJson(reply, nullptr, nullptr);
-    ld_check(updated_config);
+    auto client_config = client_impl->getConfig()->get();
+    ld_check(client_config);
 
     return new_server_config->getVersion() ==
-        updated_config->serverConfig()->getVersion();
+        client_config->serverConfig()->getVersion();
   });
 
-  // We should not have published a new LogsConfig
+  // We should not have published a new LogsConfig on server and client
   EXPECT_EQ(0,
             cluster->getNode(0)
                 .stats()["logsconfig_manager_published_server_config_update"]);
+  Stats stats =
+      checked_downcast<ClientImpl*>(client.get())->stats()->aggregate();
+  EXPECT_EQ(0, stats.logsconfig_manager_published_server_config_update);
 
   // Now update the internal logs section of the config.
   logsconfig::LogAttributes log_attrs;
@@ -276,10 +289,20 @@ TEST_F(ServerConfigSourceIntegrationTest, ServerConfigInternalLogUpdate) {
           .get(),
       cluster_config->logsConfig().get());
 
-  // Wait till logs config gets updated
+  // Wait till logs config gets updated on server
   wait_until([&]() -> bool {
     return cluster->getNode(0)
                .stats()["logsconfig_manager_published_server_config_update"] ==
         1;
   });
+  // Wait till logs config is picked up on client
+  wait_until([&]() -> bool {
+    auto client_config = client_impl->getConfig()->get();
+    ld_check(client_config);
+
+    return client_config->serverConfig()->getVersion() == config_version_t(3);
+  });
+  // No new logs config update should have been published on client
+  stats = checked_downcast<ClientImpl*>(client.get())->stats()->aggregate();
+  EXPECT_EQ(0, stats.logsconfig_manager_published_server_config_update);
 }
