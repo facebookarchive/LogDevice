@@ -1933,11 +1933,26 @@ bool MaintenanceManager::isBootstrappingCluster() const {
 void MaintenanceManager::purgeExpiredMaintenances(
     const std::vector<MaintenanceDefinition>& maintenances,
     const configuration::nodes::NodesConfiguration& nodes_config) {
+  auto time_now = SystemTimestamp::now().toMilliseconds().count();
+  std::vector<thrift::MaintenanceGroupID> expired_maintenances;
+  std::vector<thrift::MaintenanceGroupID> empty_maintenances;
   std::vector<thrift::MaintenanceGroupID> to_remove;
   for (auto maintenance : maintenances) {
-    APIUtils::removeNonExistentNodesFromMaintenance(maintenance, nodes_config);
-    if (APIUtils::isEmptyMaintenance(maintenance)) {
+    // If the maintenance has a TTL and we're past its expires_on time, we
+    // should remove it.
+    if (maintenance.expires_on_ref().has_value() &&
+        time_now > maintenance.expires_on_ref().value()) {
+      expired_maintenances.push_back(maintenance.group_id_ref().value());
       to_remove.push_back(maintenance.group_id_ref().value());
+    } else {
+      APIUtils::removeNonExistentNodesFromMaintenance(
+          maintenance, nodes_config);
+      // If the maintenance didn't expire, but all of its nodes are removed,
+      // we should remove it as well.
+      if (APIUtils::isEmptyMaintenance(maintenance)) {
+        empty_maintenances.push_back(maintenance.group_id_ref().value());
+        to_remove.push_back(maintenance.group_id_ref().value());
+      }
     }
   }
 
@@ -1946,19 +1961,22 @@ void MaintenanceManager::purgeExpiredMaintenances(
   }
 
   if (remove_maintenance_delta_in_flight_.exchange(true)) {
-    RATELIMIT_INFO(std::chrono::minutes(1),
-                   1,
-                   "Maintenances (%s) should be removed because all of their "
-                   "affected nodes are no longer members of the cluster, but "
-                   "there's already a remove delta in flight, so will postpone "
-                   "this until the delta is written.",
-                   toString(to_remove).c_str());
+    RATELIMIT_INFO(
+        std::chrono::minutes(1),
+        1,
+        "Maintenances (%s) should be removed because all of their "
+        "affected nodes are no longer members of the cluster or "
+        "they are past their TTL, but there's already a remove delta in "
+        "flight, so will postpone this until the delta is written.",
+        toString(to_remove).c_str());
     return;
   }
 
   ld_info("Removing maintenances (%s) because all of their affected nodes are "
-          "no longer members of the cluster.",
-          toString(to_remove).c_str());
+          "no longer members of the cluster and maintenances (%s) beacause "
+          "they are past their TTL.",
+          toString(empty_maintenances).c_str(),
+          toString(expired_maintenances).c_str());
   STAT_INCR(deps_->getStats(), admin_server.mm_expired_maintenances_removed);
 
   thrift::MaintenancesFilter fltr;
@@ -1966,7 +1984,11 @@ void MaintenanceManager::purgeExpiredMaintenances(
 
   thrift::RemoveMaintenancesRequest req;
   req.set_filter(std::move(fltr));
-  req.set_reason("All affected nodes are no longer members of the cluster");
+  req.set_reason(folly::sformat(
+      "maintenances ({}): All affected nodes are no longer members "
+      "of the cluster, maintenances ({}): past their TTL.",
+      toString(empty_maintenances),
+      toString(expired_maintenances)));
   req.set_user(INTERNAL_USER.str());
 
   MaintenanceDelta delta;

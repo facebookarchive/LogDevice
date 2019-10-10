@@ -1734,6 +1734,8 @@ TEST_F(MaintenanceManagerTest, TestPurgeMaintenance) {
   def2.set_shards({mkShardID(1, 0), mkShardID(13, 0), mkShardID(2, 0)});
   def2.set_sequencer_nodes({});
   def2.set_group_id("empty_2");
+  def2.set_expires_on(SystemTimestamp::now().toMilliseconds().count() +
+                      1000 * 60 * 60 * 24); // Expires in 1 day
 
   cms_.set_maintenances({def1, def2});
 
@@ -1753,12 +1755,14 @@ TEST_F(MaintenanceManagerTest, TestPurgeMaintenance) {
   EXPECT_CALL(*mock_maintenance_log_writer_, writeDelta(_, _, _, _))
       .Times(1)
       .WillOnce(Invoke([&](const MaintenanceDelta& delta, auto cb, auto, auto) {
-        EXPECT_EQ((std::vector<thrift::MaintenanceGroupID>{"empty_1"}),
-                  delta.get_remove_maintenances().get_filter().get_group_ids());
+        EXPECT_THAT(
+            delta.get_remove_maintenances().get_filter().get_group_ids(),
+            UnorderedElementsAre("empty_1"));
         // Capture the write callback to invoke it later.
         write_done_cb = std::move(cb);
       }));
   runExecutor();
+  ASSERT_NE(nullptr, write_done_cb);
 
   // Simulate the remove of N2
   nodes_config_ =
@@ -1773,14 +1777,23 @@ TEST_F(MaintenanceManagerTest, TestPurgeMaintenance) {
 
   // Now let's remove the maintenance and call the removal callback.
   write_done_cb(Status::OK, 1, "");
-  cms_.set_maintenances({def2});
+
+  // Add an expired maintenance which should be removed as well
+  MaintenanceDefinition def3 = def1;
+  def3.set_shards({mkShardID(9, 0)});
+  def3.set_expires_on(SystemTimestamp::now().toMilliseconds().count() -
+                      1000 * 60); // Expired a minute ago
+  def3.set_group_id("expired_1");
+  cms_.set_maintenances({def2, def3});
+
   maintenance_manager_->onClusterMaintenanceStateUpdate(cms_, lsn_t(1));
 
   EXPECT_CALL(*mock_maintenance_log_writer_, writeDelta(_, _, _, _))
       .Times(1)
       .WillOnce(Invoke([&](const MaintenanceDelta& delta, auto cb, auto, auto) {
-        EXPECT_EQ((std::vector<thrift::MaintenanceGroupID>{"empty_2"}),
-                  delta.get_remove_maintenances().get_filter().get_group_ids());
+        EXPECT_THAT(
+            delta.get_remove_maintenances().get_filter().get_group_ids(),
+            UnorderedElementsAre("empty_2", "expired_1"));
         cb(Status::OK, 2, "");
       }));
   runExecutor();
