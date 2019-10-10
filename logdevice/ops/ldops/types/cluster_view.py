@@ -263,6 +263,9 @@ class ClusterView:
             node_view = self.get_node_view(
                 node_index=shard.node.node_index, node_name=shard.node.name
             )
+            if not node_view.is_storage:
+                continue
+
             if shard.shard_index == ALL_SHARDS:
                 r = range(0, node_view.num_shards)
             else:
