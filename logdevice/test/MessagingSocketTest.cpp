@@ -250,20 +250,19 @@ class ServerSocket {
   explicit ServerSocket() {
     // try to claim any port from range [4445-5445), give up if that fails.
     for (int port = 4445; port < 5445; port++) {
-      std::unique_ptr<PortOwner> p =
-          IntegrationTestUtils::detail::claim_port(port);
-      if (p != nullptr) {
-        sock_ = std::move(p);
+      auto p = IntegrationTestUtils::detail::claim_port(port);
+      if (p.hasValue()) {
+        sock_ = std::move(p.value());
         break;
       }
     }
-    EXPECT_NE(sock_, nullptr);
+    EXPECT_TRUE(sock_.valid());
   }
 
   int accept() {
     struct sockaddr_in cli_addr;
     socklen_t clilen = sizeof(cli_addr);
-    const int fd = ::accept(sock_->fd, (struct sockaddr*)&cli_addr, &clilen);
+    const int fd = ::accept(sock_.fd, (struct sockaddr*)&cli_addr, &clilen);
     perror("");
     EXPECT_TRUE(fd > 0);
     fds_.push_back(fd);
@@ -271,7 +270,7 @@ class ServerSocket {
   }
 
   int getPort() const {
-    return sock_->port;
+    return sock_.port;
   }
 
   ~ServerSocket() {
@@ -281,7 +280,7 @@ class ServerSocket {
   }
 
  private:
-  std::unique_ptr<PortOwner> sock_{nullptr};
+  PortOwner sock_;
   // Keep track of which fds we need to close.
   std::list<int> fds_;
 };

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <boost/noncopyable.hpp>
+#include <folly/Optional.h>
 
 #include "logdevice/common/checks.h"
 
@@ -23,18 +24,49 @@ namespace detail {
  * RAII-style container for a socket listening on a port.  Closes socket
  * (releasing the port) on destruction.
  */
-struct PortOwner : boost::noncopyable {
+struct PortOwner {
+  int port = -1, fd = -1;
+
+  PortOwner() = default;
   PortOwner(int port, int fd) : port(port), fd(fd) {}
+  PortOwner(PortOwner&& rhs) noexcept : port(rhs.port), fd(rhs.fd) {
+    rhs.release();
+  }
+  PortOwner& operator=(PortOwner&& rhs) {
+    reset();
+    port = rhs.port;
+    fd = rhs.fd;
+    rhs.release();
+    return *this;
+  }
   ~PortOwner() {
+    reset();
+  }
+
+  PortOwner(const PortOwner& rhs) = delete;
+  PortOwner& operator=(const PortOwner& rhs) = delete;
+
+  bool valid() const {
+    return fd != -1;
+  }
+
+  void reset() {
+    if (!valid()) {
+      return;
+    }
+
     int rv = close(fd);
     ld_check(rv == 0);
-  }
-  int port, fd;
-};
 
-using PortOwnerPtrTuple = std::tuple<std::unique_ptr<PortOwner>,  // data
-                                     std::unique_ptr<PortOwner>,  // command
-                                     std::unique_ptr<PortOwner>>; // admin
+    port = -1;
+    fd = -1;
+  }
+
+  void release() {
+    port = -1;
+    fd = -1;
+  }
+};
 
 /**
  * Tries to claim `npairs` tuples of ports on localhost by opening listening
@@ -42,12 +74,12 @@ using PortOwnerPtrTuple = std::tuple<std::unique_ptr<PortOwner>,  // data
  *
  * @return 0 on success, -1 on failure
  */
-int find_free_port_set(int npairs, std::vector<PortOwnerPtrTuple>& ports_out);
+int find_free_port_set(size_t count, std::vector<PortOwner>& ports_out);
 
 /** Claim one port, bind and listen to it, then construct corresponding
  * PortOwner.
- * returns nullptr if failed
+ * returns folly::none if failed
  */
-std::unique_ptr<PortOwner> claim_port(int port);
+folly::Optional<PortOwner> claim_port(int port);
 
 }}}} // namespace facebook::logdevice::IntegrationTestUtils::detail

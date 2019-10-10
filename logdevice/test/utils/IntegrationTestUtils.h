@@ -738,50 +738,56 @@ class ClusterFactory {
   createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster);
 };
 
-struct SockaddrPair {
-  Sockaddr protocol_addr_;
-  Sockaddr command_addr_;
-  Sockaddr gossip_addr_;
-  Sockaddr admin_addr_;
-  // If one of protocol_addr_ or command_addr_ contains a TCP port, we own a
-  // detail::PortOwner object for it that keeps a socket bound to it.
-  detail::PortOwnerPtrTuple tcp_ports_owned_;
+// All ports logdeviced can listen on.
+struct ServerAddresses {
+  static constexpr size_t COUNT = 6;
 
-  static SockaddrPair fromTcpPortPair(detail::PortOwnerPtrTuple tuple) {
-    SockaddrPair addrs;
-    addrs.protocol_addr_ =
-        Sockaddr(get_localhost_address_str(), std::get<0>(tuple)->port);
-    addrs.command_addr_ =
-        Sockaddr(get_localhost_address_str(), std::get<1>(tuple)->port);
-    addrs.admin_addr_ =
-        Sockaddr(get_localhost_address_str(), std::get<2>(tuple)->port);
-    addrs.tcp_ports_owned_ = std::move(tuple);
-    return addrs;
+  Sockaddr protocol;
+  Sockaddr command;
+  Sockaddr gossip;
+  Sockaddr admin;
+  Sockaddr protocol_ssl;
+  Sockaddr command_ssl;
+
+  // If we're holding open sockets on the above ports, this list contains the
+  // fd-s of these sockets. This list is cleared (and sockets closed) just
+  // before starting the server process.
+  std::vector<detail::PortOwner> owners;
+
+  void toNodeConfig(configuration::Node& node, bool ssl) {
+    node.address = protocol;
+    node.gossip_address = gossip;
+    if (ssl) {
+      node.ssl_address.assign(protocol_ssl);
+    }
+    node.admin_address.assign(admin);
   }
 
-  static void buildGossipTcpSocket(SockaddrPair& addr, int port) {
-    addr.gossip_addr_ = Sockaddr(get_localhost_address_str(), port);
+  static ServerAddresses withTCPPorts(std::vector<detail::PortOwner> ports) {
+    std::string addr = get_localhost_address_str();
+    ServerAddresses r;
+
+    r.protocol = Sockaddr(addr, ports[0].port);
+    r.command = Sockaddr(addr, ports[1].port);
+    r.gossip = Sockaddr(addr, ports[2].port);
+    r.admin = Sockaddr(addr, ports[3].port);
+    r.protocol_ssl = Sockaddr(addr, ports[4].port);
+    r.command_ssl = Sockaddr(addr, ports[5].port);
+
+    r.owners = std::move(ports);
+
+    return r;
   }
 
-  static SockaddrPair buildGossipSocket(const std::string& path) {
-    SockaddrPair addrs;
-    addrs.gossip_addr_ = Sockaddr(path + "/" + "socket_gossip");
-    return addrs;
-  }
-
-  static SockaddrPair buildUnixSocketPair(const std::string& path, bool ssl) {
-    SockaddrPair addrs;
-    std::string ssl_prefix = (ssl ? "ssl_" : "");
-    addrs.protocol_addr_ =
-        Sockaddr(folly::format("{}/{}socket_main", path, ssl_prefix).str());
-    // Gossip currently never uses SSL
-    addrs.gossip_addr_ =
-        Sockaddr(folly::format("{}/socket_gossip", path).str());
-    addrs.command_addr_ =
-        Sockaddr(folly::format("{}/{}socket_command", path, ssl_prefix).str());
-    addrs.admin_addr_ =
-        Sockaddr(folly::format("{}/{}socket_admin", path, ssl_prefix).str());
-    return addrs;
+  static ServerAddresses withUnixSockets(const std::string& path) {
+    ServerAddresses r;
+    r.protocol = Sockaddr(path + "/socket_main");
+    r.command = Sockaddr(path + "/socket_command");
+    r.gossip = Sockaddr(path + "/socket_gossip");
+    r.admin = Sockaddr(path + "/socket_admin");
+    r.protocol_ssl = Sockaddr(path + "/ssl_socket_main");
+    r.command_ssl = Sockaddr(path + "/ssl_socket_command");
+    return r;
   }
 };
 
@@ -1217,12 +1223,20 @@ class Cluster {
     return getNodeDataPath(root, index, getNodeReplacementCounter(index));
   }
 
+  // Forms Sockaddr-s for the node. If use_tcp is true, picks and reserves
+  // the ports. Otherwise forms paths for unix fomain sockets.
+  static int pickAddressesForServers(
+      const std::vector<node_index_t>& indices,
+      bool use_tcp,
+      const std::string& root_path,
+      const std::map<node_index_t, node_gen_t>& node_replacement_counters,
+      std::vector<ServerAddresses>& out);
+
   // Creates a Node instance for the specified config entry and starts the
   // process.  Does not wait for process to start; call
   // node->waitUntilStarted() for that.
   std::unique_ptr<Node> createNode(node_index_t index,
-                                   SockaddrPair addrs,
-                                   SockaddrPair ssl_addrs) const;
+                                   ServerAddresses addrs) const;
   // Helper for createNode().  Figures out the initial command line args for the
   // specified node
   ParamMap commandArgsForNode(node_index_t index, const Node& node) const;
@@ -1308,10 +1322,7 @@ class Node {
   std::string config_path_;
   std::string server_binary_;
   node_index_t node_index_;
-  SockaddrPair addrs_; // Pair of Sockaddr to use for the protocol socket
-  // and command socket.
-  SockaddrPair ssl_addrs_; // Pair of Sockaddr to use for the protocol socket
-  // and command socket in SSL.
+  ServerAddresses addrs_;
   int num_db_shards_ = 4; // how many shards storage nodes will use
   // Random ID generated by constructor.  Passed on the command line to the
   // server.  waitUntilStarted() looks for this to verify that we are talking
@@ -1359,7 +1370,7 @@ class Node {
   }
 
   Sockaddr getCommandSockAddr() const {
-    return addrs_.command_addr_;
+    return addrs_.command;
   }
 
   void signal(int sig) {

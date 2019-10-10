@@ -745,56 +745,14 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
     }
   }
 
-  // Each node in the cluster has a SockaddrPair object that defines with
-  // tcp port or unix domain socket it uses for its protocol port and
-  // command port.
-  std::vector<SockaddrPair> addrs(nnodes);
-  std::vector<SockaddrPair> ssl_addrs(nnodes);
+  std::vector<ServerAddresses> addrs;
+  if (Cluster::pickAddressesForServers(
+          node_ids, use_tcp_, root_path, replacement_counters, addrs) != 0) {
+    return nullptr;
+  }
 
-  if (use_tcp_) {
-    // This test uses TCP. Look for N free pairs of ports
-    std::vector<detail::PortOwnerPtrTuple> port_pairs;
-    if (detail::find_free_port_set(nnodes * 3, port_pairs) != 0) {
-      ld_error("Not enough free ports on system to start LogDevice test "
-               "cluster with %d nodes",
-               nnodes);
-      return nullptr;
-    }
-
-    for (int i = 0; i < nnodes; ++i) {
-      auto& node = nodes[node_ids[i]];
-      addrs[i] = SockaddrPair::fromTcpPortPair(std::move(port_pairs[i]));
-      SockaddrPair::buildGossipTcpSocket(
-          addrs[i], std::get<0>(port_pairs[nnodes + i])->port);
-      ssl_addrs[i] =
-          SockaddrPair::fromTcpPortPair(std::move(port_pairs[2 * nnodes + i]));
-      node.address = addrs[i].protocol_addr_;
-      node.gossip_address = addrs[i].gossip_addr_;
-      if (!no_ssl_address_) {
-        node.ssl_address.assign(ssl_addrs[i].protocol_addr_);
-      }
-      node.admin_address.assign(addrs[i].admin_addr_);
-    }
-  } else {
-    // This test uses unix domain sockets. These will be created in the
-    // test directory.
-    for (int i = 0; i < nnodes; ++i) {
-      auto& node = nodes[node_ids[i]];
-      addrs[i] = SockaddrPair::buildUnixSocketPair(
-          Cluster::getNodeDataPath(
-              root_path, node_ids[i], replacement_counters[node_ids[i]]),
-          false);
-      ssl_addrs[i] = SockaddrPair::buildUnixSocketPair(
-          Cluster::getNodeDataPath(
-              root_path, node_ids[i], replacement_counters[node_ids[i]]),
-          true);
-      node.address = addrs[i].protocol_addr_;
-      node.gossip_address = addrs[i].gossip_addr_;
-      if (!no_ssl_address_) {
-        node.ssl_address.assign(ssl_addrs[i].protocol_addr_);
-      }
-      node.admin_address.assign(addrs[i].admin_addr_);
-    }
+  for (int i = 0; i < nnodes; ++i) {
+    addrs[i].toNodeConfig(nodes[node_ids[i]], !no_ssl_address_);
   }
 
   if (!nodes_configuration_sot_.hasValue()) {
@@ -863,8 +821,8 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
 
   // create Node objects, but don't start the processes
   for (int i = 0; i < nnodes; i++) {
-    cluster->nodes_[node_ids[i]] = cluster->createNode(
-        node_ids[i], std::move(addrs[i]), std::move(ssl_addrs[i]));
+    cluster->nodes_[node_ids[i]] =
+        cluster->createNode(node_ids[i], std::move(addrs[i]));
   }
 
   // if allowed, provision the initial epoch metadata in epoch store,
@@ -917,6 +875,42 @@ ClusterFactory::createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster) {
       attrs);
 }
 
+int Cluster::pickAddressesForServers(
+    const std::vector<node_index_t>& indices,
+    bool use_tcp,
+    const std::string& root_path,
+    const std::map<node_index_t, node_gen_t>& node_replacement_counters,
+    std::vector<ServerAddresses>& out) {
+  if (use_tcp) {
+    // This test uses TCP. Look for 6 free ports for each node.
+    std::vector<detail::PortOwner> ports;
+    if (detail::find_free_port_set(
+            indices.size() * ServerAddresses::COUNT, ports) != 0) {
+      ld_error("Not enough free ports on system for %lu nodes", indices.size());
+      return -1;
+    }
+
+    out.resize(indices.size());
+    for (int i = 0; i < indices.size(); ++i) {
+      std::vector<detail::PortOwner> node_ports(
+          std::make_move_iterator(ports.begin() + i * ServerAddresses::COUNT),
+          std::make_move_iterator(ports.begin() +
+                                  (i + 1) * ServerAddresses::COUNT));
+      out[i] = ServerAddresses::withTCPPorts(std::move(node_ports));
+    }
+  } else {
+    // This test uses unix domain sockets. These will be created in the
+    // test directory.
+    out.resize(indices.size());
+    for (size_t i = 0; i < indices.size(); ++i) {
+      out[i] = ServerAddresses::withUnixSockets(Cluster::getNodeDataPath(
+          root_path, indices.at(i), node_replacement_counters.at(indices[i])));
+    }
+  }
+
+  return 0;
+}
+
 int Cluster::expand(std::vector<node_index_t> new_indices,
                     bool start_nodes,
                     bool bump_config_version) {
@@ -949,49 +943,17 @@ int Cluster::expand(std::vector<node_index_t> new_indices,
     nodes[idx] = std::move(node);
   }
 
-  std::vector<SockaddrPair> addrs(new_indices.size());
-  std::vector<SockaddrPair> gossip_addrs(new_indices.size());
-  std::vector<SockaddrPair> ssl_addrs(new_indices.size());
-
-  if (use_tcp_) {
-    // This test uses TCP. Look for N free pairs of ports
-    std::vector<detail::PortOwnerPtrTuple> port_pairs;
-    if (detail::find_free_port_set(new_indices.size() * 3, port_pairs) != 0) {
-      ld_error("Not enough free ports on system to expand LogDevice test "
-               "cluster with %lu nodes",
-               new_indices.size());
-      return -1;
-    }
-
-    for (int i = 0; i < new_indices.size(); ++i) {
-      addrs[i] = SockaddrPair::fromTcpPortPair(std::move(port_pairs[i]));
-      SockaddrPair::buildGossipTcpSocket(
-          addrs[i], std::get<0>(port_pairs[new_indices.size() + i])->port);
-      ssl_addrs[i] = SockaddrPair::fromTcpPortPair(
-          std::move(port_pairs[2 * new_indices.size() + i]));
-    }
-  } else {
-    // This test uses unix domain sockets. These will be created in the
-    // test directory.
-    for (int i = 0; i < new_indices.size(); ++i) {
-      int idx = new_indices[i];
-      addrs[i] = SockaddrPair::buildUnixSocketPair(
-          Cluster::getNodeDataPath(root_path_, idx), false);
-      gossip_addrs[i] = SockaddrPair::buildGossipSocket(
-          Cluster::getNodeDataPath(root_path_, idx));
-      ssl_addrs[i] = SockaddrPair::buildUnixSocketPair(
-          Cluster::getNodeDataPath(root_path_, idx), true);
-    }
+  std::vector<ServerAddresses> addrs;
+  if (pickAddressesForServers(new_indices,
+                              use_tcp_,
+                              root_path_,
+                              node_replacement_counters_,
+                              addrs) != 0) {
+    return -1;
   }
 
   for (size_t i = 0; i < new_indices.size(); ++i) {
-    node_index_t idx = new_indices[i];
-    nodes[idx].address = addrs[i].protocol_addr_;
-    nodes[idx].gossip_address = addrs[i].gossip_addr_;
-    if (!no_ssl_address_) {
-      nodes[idx].ssl_address = ssl_addrs[i].protocol_addr_;
-    }
-    nodes[idx].admin_address = addrs[i].admin_addr_;
+    addrs[i].toNodeConfig(nodes[new_indices[i]], !no_ssl_address_);
   }
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
@@ -1015,7 +977,7 @@ int Cluster::expand(std::vector<node_index_t> new_indices,
 
   for (size_t i = 0; i < new_indices.size(); ++i) {
     node_index_t idx = new_indices[i];
-    nodes_[idx] = createNode(idx, std::move(addrs[i]), std::move(ssl_addrs[i]));
+    nodes_[idx] = createNode(idx, std::move(addrs[i]));
   }
 
   return start(new_indices);
@@ -1173,15 +1135,13 @@ int Cluster::updateNodesConfigurationFromServerConfig(
 }
 
 std::unique_ptr<Node> Cluster::createNode(node_index_t index,
-                                          SockaddrPair addrs,
-                                          SockaddrPair ssl_addrs) const {
+                                          ServerAddresses addrs) const {
   std::shared_ptr<const Configuration> config = config_->get();
   ld_check(config != nullptr);
 
   std::unique_ptr<Node> node = std::make_unique<Node>();
   node->node_index_ = index;
   node->addrs_ = std::move(addrs);
-  node->ssl_addrs_ = std::move(ssl_addrs);
   node->num_db_shards_ = num_db_shards_;
   node->rocksdb_type_ = rocksdb_type_;
   node->server_binary_ = server_binary_;
@@ -1202,14 +1162,15 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   node->cmd_args_ = commandArgsForNode(index, *node);
   node->admin_command_client_ = admin_command_client_;
 
-  ld_info("Node N%d:%d will be started on protocol_addr:%s"
-          ", gossip_addr:%s, command_addr:%s, admin_addr:%s (data in %s)",
+  ld_info("Node N%d:%d will be started on addresses: protocol:%s, ssl: %s"
+          ", gossip:%s, command:%s, admin:%s (data in %s)",
           index,
           getNodeReplacementCounter(index),
-          node->addrs_.protocol_addr_.toString().c_str(),
-          node->addrs_.gossip_addr_.toString().c_str(),
-          node->addrs_.command_addr_.toString().c_str(),
-          node->addrs_.admin_addr_.toString().c_str(),
+          node->addrs_.protocol.toString().c_str(),
+          node->addrs_.protocol_ssl.toString().c_str(),
+          node->addrs_.gossip.toString().c_str(),
+          node->addrs_.command.toString().c_str(),
+          node->addrs_.admin.toString().c_str(),
           node->data_path_.c_str());
 
   return node;
@@ -1218,17 +1179,17 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
 ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
   std::shared_ptr<const Configuration> config = config_->get();
 
-  const auto& p = node.addrs_.protocol_addr_;
+  const auto& p = node.addrs_.protocol;
   auto protocol_addr_param = p.isUnixAddress()
       ? std::make_pair("--unix-socket", ParamValue{p.getPath()})
       : std::make_pair("--port", ParamValue{std::to_string(p.port())});
 
-  const auto& c = node.addrs_.command_addr_;
+  const auto& c = node.addrs_.command;
   auto command_addr_param = c.isUnixAddress()
       ? std::make_pair("--command-unix-socket", ParamValue{c.getPath()})
       : std::make_pair("--command-port", ParamValue{std::to_string(c.port())});
 
-  const auto& admn = node.addrs_.admin_addr_;
+  const auto& admn = node.addrs_.admin;
   auto admin_addr_param = admn.isUnixAddress()
       ? std::make_pair("--admin-unix-socket", ParamValue{admn.getPath()})
       : std::make_pair("--admin-port", ParamValue{std::to_string(admn.port())});
@@ -1448,12 +1409,7 @@ void Node::start() {
   options.parentDeathSignal(SIGKILL); // kill children if test process dies
 
   // Make any tcp port that we reserved available to logdeviced.
-  std::get<0>(addrs_.tcp_ports_owned_).reset();
-  std::get<1>(addrs_.tcp_ports_owned_).reset();
-  std::get<2>(addrs_.tcp_ports_owned_).reset();
-  std::get<0>(ssl_addrs_.tcp_ports_owned_).reset();
-  std::get<1>(ssl_addrs_.tcp_ports_owned_).reset();
-  std::get<2>(ssl_addrs_.tcp_ports_owned_).reset();
+  addrs_.owners.clear();
 
   // Without this, calling start() twice would causes a crash because
   // folly::Subprocess::~Subprocess asserts that the process is not running.
@@ -1512,10 +1468,10 @@ bool Node::isRunning() const {
 
 void Node::kill() {
   if (isRunning()) {
-    ld_info("Killing node on %s", addrs_.protocol_addr_.toString().c_str());
+    ld_info("Killing node on %s", addrs_.protocol.toString().c_str());
     logdeviced_->kill();
     logdeviced_->wait();
-    ld_info("Killed node on %s", addrs_.protocol_addr_.toString().c_str());
+    ld_info("Killed node on %s", addrs_.protocol.toString().c_str());
     stopped_ = true;
   }
   logdeviced_.reset();
@@ -1536,7 +1492,7 @@ std::string Node::sendCommand(const std::string& command,
                               std::chrono::milliseconds command_timeout) const {
   std::string error;
   std::string response = test::nc(admin_command_client_,
-                                  addrs_.command_addr_.getSocketAddress(),
+                                  addrs_.command.getSocketAddress(),
                                   command,
                                   &error,
                                   ssl,
@@ -1562,7 +1518,7 @@ Node::sendJsonCommand(const std::string& command, bool ssl) const {
 }
 
 folly::SocketAddress Node::getAdminAddress() const {
-  return addrs_.admin_addr_.getSocketAddress();
+  return addrs_.admin.getSocketAddress();
 }
 
 std::string Node::sendIfaceCommand(const std::string& command,
@@ -1572,7 +1528,7 @@ std::string Node::sendIfaceCommand(const std::string& command,
     ld_error("Failed to send command, couldn't get interface address!");
     return "";
   }
-  folly::SocketAddress iface = addrs_.command_addr_.getSocketAddress();
+  folly::SocketAddress iface = addrs_.command.getSocketAddress();
   iface.setFromIpPort(ifaceAddr, iface.getPort());
   std::string error;
   std::string response =
@@ -2607,42 +2563,25 @@ int Cluster::replace(node_index_t index, bool defer_start) {
     nodes_.at(index).reset();
 
     Configuration::Nodes nodes = config_->get()->serverConfig()->getNodes();
-    // addrs[0] - non-SSL address pair
-    // addrs[1] - SSL address pair
-    std::array<SockaddrPair, 2> addrs;
 
-    for (int ssl = 0; ssl <= (no_ssl_address_ ? 0 : 1); ++ssl) {
-      if (ssl) {
-        ld_check(nodes.at(index).ssl_address);
-      }
-      Sockaddr& prev_address =
-          ssl ? *nodes[index].ssl_address : nodes[index].address;
-      // If the node was using a tcp port, we need to reserve new ports.
-      if (!prev_address.isUnixAddress()) {
-        std::vector<detail::PortOwnerPtrTuple> port_pairs;
-        if (detail::find_free_port_set(1, port_pairs) != 0) {
-          ld_error("Could not find two adjacent free ports to replace "
-                   "LogDevice node");
-          return -1;
-        }
-        addrs[ssl] = SockaddrPair::fromTcpPortPair(std::move(port_pairs[0]));
-      } else {
-        addrs[ssl] = SockaddrPair::buildUnixSocketPair(
-            Cluster::getNodeDataPath(root_path_, index, gen), ssl);
-      }
+    // bump the internal node replacement counter
+    setNodeReplacementCounter(index, gen);
+
+    std::vector<ServerAddresses> addrs;
+    if (pickAddressesForServers(std::vector<node_index_t>{index},
+                                use_tcp_,
+                                root_path_,
+                                node_replacement_counters_,
+                                addrs) != 0) {
+      return -1;
     }
 
-    nodes[index].address = addrs[0].protocol_addr_;
-    if (!no_ssl_address_) {
-      nodes[index].ssl_address.assign(addrs[1].protocol_addr_);
-    }
+    addrs[0].toNodeConfig(nodes.at(index), !no_ssl_address_);
 
     if (hasStorageRole(index)) {
       // only bump the config generation if the node has storage role
       nodes[index].generation = gen;
     }
-    // always bump the internal node replacement counter
-    setNodeReplacementCounter(index, gen);
 
     Configuration::NodesConfig nodes_config(std::move(nodes));
     auto config = config_->get();
@@ -2660,7 +2599,7 @@ int Cluster::replace(node_index_t index, bool defer_start) {
     // Wait for all nodes to pick up the config update
     waitForServersToPartiallyProcessConfigUpdate();
 
-    nodes_[index] = createNode(index, std::move(addrs[0]), std::move(addrs[1]));
+    nodes_[index] = createNode(index, std::move(addrs[0]));
     if (defer_start) {
       return 0;
     }

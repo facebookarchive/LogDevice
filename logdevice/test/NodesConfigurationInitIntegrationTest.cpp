@@ -24,7 +24,7 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
   auto cluster = buildCluster();
 
   auto get_protocol_addr = [&](node_index_t idx) {
-    return cluster->getNode(idx).addrs_.protocol_addr_.toString();
+    return cluster->getNode(idx).addrs_.protocol.toString();
   };
 
   {
@@ -60,8 +60,7 @@ TEST_F(NodesConfigurationInitIntegrationTest, SeedDown) {
   auto cluster = buildCluster();
   cluster->shutdownNodes({0});
 
-  auto seed_addr =
-      "data:" + cluster->getNode(0).addrs_.protocol_addr_.toString();
+  auto seed_addr = "data:" + cluster->getNode(0).addrs_.protocol.toString();
   auto settings = std::unique_ptr<ClientSettings>(ClientSettings::create());
   settings->set("enable-nodes-configuration-manager", "true");
   settings->set("nodes-configuration-seed-servers", seed_addr);

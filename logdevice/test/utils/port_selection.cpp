@@ -20,7 +20,7 @@
 namespace facebook { namespace logdevice { namespace IntegrationTestUtils {
 namespace detail {
 
-std::unique_ptr<PortOwner> claim_port(int port) {
+folly::Optional<PortOwner> claim_port(int port) {
   int rv;
   const Sockaddr addr("::", std::to_string(port));
   int sock = socket(AF_INET6, SOCK_STREAM, 0);
@@ -42,40 +42,41 @@ std::unique_ptr<PortOwner> claim_port(int port) {
   if (rv != 0) {
     ld_check(errno == EADDRINUSE);
     close(sock);
-    return nullptr;
+    return folly::none;
   }
 
   rv = listen(sock, 0);
   if (rv != 0) {
     ld_check(errno == EADDRINUSE);
     close(sock);
-    return nullptr;
+    return folly::none;
   }
 
-  return std::make_unique<PortOwner>(port, sock);
+  return PortOwner(port, sock);
 }
 
-int find_free_port_set(int npairs, std::vector<PortOwnerPtrTuple>& ports_out) {
+int find_free_port_set(size_t count, std::vector<PortOwner>& ports_out) {
   std::random_device rnd;
   const int port_from = 38000, port_upto = 49000;
   const int port_range_size = port_upto - port_from + 1;
   const int offset =
       std::uniform_int_distribution<int>(0, port_range_size - 1)(rnd);
 
-  for (int i = 0; ports_out.size() < npairs && i < port_range_size;) {
-    int port1 = port_from + (offset + i) % port_range_size, port2 = port1 + 1,
-        port3 = port2 + 1;
-
-    PortOwnerPtrTuple tuple(
-        claim_port(port1), claim_port(port2), claim_port(port3));
-    if (std::get<0>(tuple) && std::get<1>(tuple) && std::get<2>(tuple)) {
-      ports_out.push_back(std::move(tuple));
-      i += 2;
-    } else {
-      i += 1;
+  std::vector<PortOwner> out;
+  for (int i = 0; out.size() < count && i < port_range_size; ++i) {
+    int port = port_from + (offset + i) % port_range_size;
+    auto owner = claim_port(port);
+    if (owner.hasValue()) {
+      out.push_back(std::move(owner.value()));
     }
   }
-  return ports_out.size() == npairs ? 0 : -1;
+
+  if (out.size() != count) {
+    return -1;
+  }
+
+  ports_out = std::move(out);
+  return 0;
 }
 
 }}}} // namespace facebook::logdevice::IntegrationTestUtils::detail
