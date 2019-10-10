@@ -143,3 +143,88 @@ TEST_F(CheckpointedReaderBaseTest,
   auto status = reader_base.syncRemoveAllCheckpoints();
   EXPECT_EQ(Status::OK, status);
 }
+
+TEST_F(CheckpointedReaderBaseTest, SyncWritesCheckpointsStoredInMap) {
+  std::map<logid_t, lsn_t> correct_checkpoints = {
+      {logid_t(3), 5}, {logid_t(9), 12}};
+  EXPECT_CALL(
+      *mock_checkpoint_store_, updateLSNSync("customer", correct_checkpoints))
+      .Times(1)
+      .WillOnce(Return(Status::OK));
+
+  auto reader_base =
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
+  reader_base.insertLastReadLSN(logid_t(3), 5);
+  reader_base.insertLastReadLSN(logid_t(7), 4);
+  reader_base.insertLastReadLSN(logid_t(9), 12);
+  auto status = reader_base.syncWriteCheckpoints(
+      std::vector<logid_t>({logid_t(3), logid_t(9)}));
+  EXPECT_EQ(Status::OK, status);
+}
+
+TEST_F(CheckpointedReaderBaseTest, SyncWritesCheckpointsIncorrectLog) {
+  std::map<logid_t, lsn_t> correct_checkpoints = {
+      {logid_t(3), 5}, {logid_t(9), 12}};
+  EXPECT_CALL(
+      *mock_checkpoint_store_, updateLSNSync("customer", correct_checkpoints))
+      .Times(0);
+
+  auto reader_base =
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
+  reader_base.insertLastReadLSN(logid_t(3), 5);
+  reader_base.insertLastReadLSN(logid_t(7), 4);
+  reader_base.insertLastReadLSN(logid_t(9), 12);
+  auto status =
+      reader_base.syncWriteCheckpoints({logid_t(3), logid_t(9), logid_t(16)});
+  EXPECT_EQ(Status::INVALID_OPERATION, status);
+}
+
+TEST_F(CheckpointedReaderBaseTest, AsyncWritesCheckpointsStoredInMap) {
+  std::map<logid_t, lsn_t> correct_checkpoints = {
+      {logid_t(3), 5}, {logid_t(9), 12}};
+  folly::Baton<> call_baton;
+  auto status_cb = [&call_baton](Status status) {
+    EXPECT_EQ(Status::OK, status);
+    call_baton.post();
+  };
+
+  EXPECT_CALL(
+      *mock_checkpoint_store_, updateLSN("customer", correct_checkpoints, _))
+      .Times(1)
+      .WillOnce(Invoke([](auto, auto, auto cb) {
+        cb(Status::OK, CheckpointStore::Version(1), "");
+      }));
+
+  auto reader_base =
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
+  reader_base.insertLastReadLSN(logid_t(3), 5);
+  reader_base.insertLastReadLSN(logid_t(7), 4);
+  reader_base.insertLastReadLSN(logid_t(9), 12);
+
+  reader_base.asyncWriteCheckpoints(status_cb, {logid_t(3), logid_t(9)});
+  call_baton.wait();
+}
+
+TEST_F(CheckpointedReaderBaseTest, AsyncWritesCheckpointsInvalidLog) {
+  std::map<logid_t, lsn_t> correct_checkpoints = {
+      {logid_t(3), 5}, {logid_t(9), 12}};
+  folly::Baton<> call_baton;
+  auto status_cb = [&call_baton](Status status) {
+    EXPECT_EQ(Status::INVALID_OPERATION, status);
+    call_baton.post();
+  };
+
+  EXPECT_CALL(
+      *mock_checkpoint_store_, updateLSN("customer", correct_checkpoints, _))
+      .Times(0);
+
+  auto reader_base =
+      MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
+  reader_base.insertLastReadLSN(logid_t(3), 5);
+  reader_base.insertLastReadLSN(logid_t(7), 4);
+  reader_base.insertLastReadLSN(logid_t(9), 12);
+
+  reader_base.asyncWriteCheckpoints(
+      status_cb, {logid_t(3), logid_t(9), logid_t(16)});
+  call_baton.wait();
+}

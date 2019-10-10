@@ -7,10 +7,9 @@
  */
 #pragma once
 
-#include <map>
-
 #include <folly/Function.h>
 #include <folly/Optional.h>
+#include <folly/concurrency/ConcurrentHashMap.h>
 
 #include "logdevice/include/CheckpointStore.h"
 
@@ -70,10 +69,34 @@ class CheckpointedReaderBase {
   Status syncRemoveAllCheckpoints();
   void asyncRemoveAllCheckpoints(StatusCallback cb);
 
+  /*
+   * For each log, writes the checkpoint, which is the last lsn
+   * returned in the read function or in the RecordCallback since the
+   * last call of startReading function. If the
+   * log was never read since then, the returned status (or status callback
+   * argument for async version) will be equal to E::INVALID_OPERATION.
+   * @param logs: if the logs param is empty, all the logs which were read will
+   *   be updated.
+   */
+  Status syncWriteCheckpoints(const std::vector<logid_t>& logs = {});
+  void asyncWriteCheckpoints(StatusCallback cb,
+                             const std::vector<logid_t>& logs = {});
+
  protected:
+  void setLastLSNInMap(logid_t log_id, lsn_t lsn);
+
   CheckpointingOptions options_;
   std::string reader_name_;
   std::unique_ptr<CheckpointStore> store_;
+  /*
+   * This map should be updated after reading each record and after each call of
+   * startReading function.
+   */
+  folly::ConcurrentHashMap<logid_t, lsn_t> last_read_lsn_;
+
+ private:
+  folly::Expected<std::map<logid_t, lsn_t>, E>
+  getNewCheckpoints(const std::vector<logid_t>& logs);
 };
 
 }} // namespace facebook::logdevice

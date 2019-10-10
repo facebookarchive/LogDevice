@@ -20,5 +20,9 @@ class MockCheckpointedReader : public CheckpointedReaderBase {
                          CheckpointingOptions opts)
       : CheckpointedReaderBase(reader_name, std::move(store), std::move(opts)) {
   }
+
+  void insertLastReadLSN(logid_t log_id, lsn_t lsn) {
+    last_read_lsn_.insert_or_assign(log_id, lsn);
+  }
 };
 }} // namespace facebook::logdevice

@@ -83,4 +83,47 @@ void CheckpointedReaderBase::asyncRemoveAllCheckpoints(StatusCallback cb) {
   store_->removeAllCheckpoints(reader_name_, std::move(update_cb));
 }
 
+Status
+CheckpointedReaderBase::syncWriteCheckpoints(const std::vector<logid_t>& logs) {
+  auto checkpoints = getNewCheckpoints(logs);
+  if (checkpoints.hasError()) {
+    return checkpoints.error();
+  }
+  return syncWriteCheckpoints(std::move(checkpoints).value());
+}
+
+void CheckpointedReaderBase::asyncWriteCheckpoints(
+    StatusCallback cb,
+    const std::vector<logid_t>& logs) {
+  auto checkpoints = getNewCheckpoints(logs);
+  if (checkpoints.hasError()) {
+    cb(checkpoints.error());
+    return;
+  }
+  asyncWriteCheckpoints(std::move(checkpoints).value(), std::move(cb));
+}
+
+folly::Expected<std::map<logid_t, lsn_t>, E>
+CheckpointedReaderBase::getNewCheckpoints(const std::vector<logid_t>& logs) {
+  std::map<logid_t, lsn_t> checkpoints;
+  if (logs.empty()) {
+    for (auto [log_id, lsn] : last_read_lsn_) {
+      checkpoints[log_id] = lsn;
+    }
+  } else {
+    for (auto log : logs) {
+      auto it = last_read_lsn_.find(log);
+      if (it == last_read_lsn_.end()) {
+        return folly::makeUnexpected(E::INVALID_OPERATION);
+      }
+      checkpoints[log] = it->second;
+    }
+  }
+  return checkpoints;
+}
+
+void CheckpointedReaderBase::setLastLSNInMap(logid_t log_id, lsn_t lsn) {
+  last_read_lsn_.insert_or_assign(
+      log_id, std::max(last_read_lsn_[log_id], lsn));
+}
 }} // namespace facebook::logdevice
