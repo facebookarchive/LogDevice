@@ -223,7 +223,7 @@ class TestNodeView(TestCase):
         else:
             self.assertIsNone(nv.storage_config)
             self.assertIsNone(nv.storage_weight)
-            self.assertIsNone(nv.num_shards)
+            self.assertEqual(nv.num_shards, 0)
             self.assertTupleEqual(nv.shard_states, ())
 
     @async_test

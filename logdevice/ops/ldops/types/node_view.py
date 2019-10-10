@@ -159,12 +159,12 @@ class NodeView:
             return None
 
     @property
-    def num_shards(self) -> Optional[int]:
+    def num_shards(self) -> int:
         if self.storage_config is not None:
             # pyre-fixme[16]: `Optional` has no attribute `num_shards`.
             return self.storage_config.num_shards
         else:
-            return None
+            return 0
 
     @property
     def shard_states(self) -> Tuple[ShardState, ...]:
