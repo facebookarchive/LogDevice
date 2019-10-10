@@ -271,8 +271,15 @@ MATCHER_P2(NodeConfigEq, expected_idx, req, "") {
       req.storage_ref() == arg.storage_ref();
 };
 
+MATCHER_P2(SequencerStateEq, expected_idx, req, "") {
+  return expected_idx == arg.node_index && arg.sequencer_state_ref() &&
+      arg.sequencer_state_ref().value().get_state() == req;
+};
+
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
+  cluster_->waitUntilAllAvailable();
+  cluster_->getNode(0).waitUntilMaintenanceRSMReady();
   auto admin_client = cluster_->getNode(0).createAdminClient();
 
   thrift::AddNodesRequest req = buildAddNodesRequest({10, 50});
@@ -301,6 +308,14 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
       nodes_config.nodes,
       AllOf(Contains(NodeConfigEq(10, req.new_node_requests[0].new_config)),
             Contains(NodeConfigEq(4, req.new_node_requests[1].new_config))));
+
+  thrift::NodesStateResponse nodes_state;
+  admin_client->sync_getNodesState(nodes_state, thrift::NodesStateRequest{});
+  EXPECT_EQ(6, nodes_state.states.size());
+  EXPECT_THAT(
+      nodes_state.states,
+      AllOf(Contains(SequencerStateEq(10, thrift::SequencingState::DISABLED)),
+            Contains(SequencerStateEq(4, thrift::SequencingState::DISABLED))));
 }
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddAlreadyExists) {
