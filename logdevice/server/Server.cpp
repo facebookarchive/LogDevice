@@ -1147,6 +1147,7 @@ bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
     auto deps = std::make_unique<maintenance::MaintenanceManagerDependencies>(
         processor_.get(),
         admin_settings,
+        params_->getRebuildingSettings(),
         cluster_maintenance_state_machine_.get(),
         event_log_.get(),
         std::make_unique<maintenance::SafetyCheckScheduler>(

@@ -83,6 +83,10 @@ class ShardWorkflow {
   // Sets the RebuildingMode for the maintenance
   void rebuildInRestoreMode(bool is_restore);
 
+  // If filter_relocate_shards is true, FILTER_RELOCATE_SHARDS will be
+  // added to SHARD_NEEDS_REBUILD event
+  void rebuildingFilterRelocateShards(bool filter_relocate_shards);
+
   // Returns the target_op_state_
   folly::F14FastSet<ShardOperationalState> getTargetOpStates() const;
 
@@ -105,7 +109,8 @@ class ShardWorkflow {
         target_op_state_ == other.target_op_state_ &&
         allow_passive_drain_ == other.allow_passive_drain_ &&
         skip_safety_check_ == other.skip_safety_check_ &&
-        restore_mode_rebuilding_ == other.restore_mode_rebuilding_;
+        restore_mode_rebuilding_ == other.restore_mode_rebuilding_ &&
+        filter_relocate_shards_ == other.filter_relocate_shards_;
   }
 
  protected:
@@ -136,6 +141,8 @@ class ShardWorkflow {
   // True if RebuildingMode requested by the maintenance is RESTORE.
   // Mainly set by internal maintenance request when a shard is down
   bool restore_mode_rebuilding_{false};
+  // True if rebuilding needs to filter shards in relocate mode
+  bool filter_relocate_shards_{false};
   // The EventLogRecord to write as determined by workflow.
   // nullptr if there isn't one to write
   std::unique_ptr<EventLogRecord> event_;

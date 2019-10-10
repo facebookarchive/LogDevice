@@ -26,6 +26,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationAPI.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
+#include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/work_model/SerialWorkContext.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 
@@ -54,12 +55,14 @@ class MaintenanceManagerDependencies {
   MaintenanceManagerDependencies(
       Processor* processor,
       UpdateableSettings<AdminServerSettings> admin_settings,
+      UpdateableSettings<RebuildingSettings> rebuilding_settings,
       ClusterMaintenanceStateMachine* cluster_maintenance_state_machine,
       EventLogStateMachine* event_log,
       std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler,
       std::unique_ptr<MaintenanceLogWriter> maintenance_log_writer)
       : processor_(processor),
         admin_settings_(std::move(admin_settings)),
+        rebuilding_settings_(std::move(rebuilding_settings)),
         cluster_maintenance_state_machine_(cluster_maintenance_state_machine),
         event_log_state_machine_(event_log),
         safety_check_scheduler_(std::move(safety_check_scheduler)),
@@ -119,6 +122,10 @@ class MaintenanceManagerDependencies {
     return admin_settings_.get();
   }
 
+  std::shared_ptr<const RebuildingSettings> rebuildingSettings() const {
+    return rebuilding_settings_.get();
+  }
+
   virtual StatsHolder* getStats() const {
     return Worker::stats();
   }
@@ -132,6 +139,8 @@ class MaintenanceManagerDependencies {
   Processor* processor_;
 
   UpdateableSettings<AdminServerSettings> admin_settings_;
+
+  UpdateableSettings<RebuildingSettings> rebuilding_settings_;
 
   // The MaintenanceManager instance this is attached to
   MaintenanceManager* owner_{nullptr};

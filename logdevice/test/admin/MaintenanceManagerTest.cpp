@@ -20,7 +20,9 @@ using namespace facebook::logdevice::maintenance;
 
 #define LOG_ID logid_t(1)
 
-class MaintenanceManagerTest : public IntegrationTestBase {
+class MaintenanceManagerTest
+    : public IntegrationTestBase,
+      public ::testing::WithParamInterface<bool /*filter relocate shards*/> {
  public:
   void init();
   std::unique_ptr<IntegrationTestUtils::Cluster> cluster_;
@@ -65,6 +67,7 @@ void MaintenanceManagerTest::init() {
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")
+          .setParam("--filter-relocate-shards", GetParam() ? "true" : "false")
           .setParam("--loglevel", "debug")
           // Starts MaintenanceManager on N2
           .runMaintenanceManagerOn(2)
@@ -131,7 +134,7 @@ static lsn_t writeToMaintenanceLog(Client& client,
   return lsn;
 }
 
-TEST_F(MaintenanceManagerTest, BasicDrain) {
+TEST_P(MaintenanceManagerTest, BasicDrain) {
   init();
   cluster_->start({0, 1, 2, 3, 4});
   for (auto n : {0, 1, 2, 3, 4}) {
@@ -241,7 +244,7 @@ TEST_F(MaintenanceManagerTest, BasicDrain) {
   });
 }
 
-TEST_F(MaintenanceManagerTest, Snapshotting) {
+TEST_P(MaintenanceManagerTest, Snapshotting) {
   const size_t num_nodes = 5;
   const size_t num_shards = 2;
 
@@ -398,7 +401,7 @@ TEST_F(MaintenanceManagerTest, Snapshotting) {
   });
 }
 
-TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
+TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
   const size_t num_nodes = 5;
   const size_t num_shards = 2;
 
@@ -497,3 +500,7 @@ TEST_F(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
   // Verify that the shards are dirty
   EXPECT_FALSE(cluster_->getNode(1).dirtyShardInfo().empty());
 }
+
+INSTANTIATE_TEST_CASE_P(MaintenanceManagerTest,
+                        MaintenanceManagerTest,
+                        ::testing::Bool());

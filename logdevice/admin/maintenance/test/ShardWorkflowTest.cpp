@@ -133,6 +133,44 @@ TEST_F(ShardWorkflowTest, SimpleDrain) {
   ASSERT_EQ(std::move(f5).get(), MaintenanceStatus::COMPLETED);
 }
 
+TEST_F(ShardWorkflowTest, SimpleDrainWithFilterRelocateShards) {
+  init();
+  wf->addTargetOpState({ShardOperationalState::DRAINED});
+  wf->shouldSkipSafetyCheck(false);
+  wf->rebuildingFilterRelocateShards(true);
+  membership::ShardState shard_state;
+  shard_state.storage_state = membership::StorageState::READ_WRITE;
+  auto result = wf->run(shard_state,
+                        ShardDataHealth::HEALTHY,
+                        RebuildingMode::INVALID,
+                        ClusterStateNodeState::FULLY_STARTED);
+  ASSERT_EQ(std::move(result).get(), MaintenanceStatus::AWAITING_SAFETY_CHECK);
+  ASSERT_EQ(wf->getExpectedStorageStateTransition(),
+            membership::StorageStateTransition::DISABLING_WRITE);
+
+  shard_state.storage_state = membership::StorageState::READ_ONLY;
+  result = wf->run(shard_state,
+                   ShardDataHealth::HEALTHY,
+                   RebuildingMode::INVALID,
+                   ClusterStateNodeState::FULLY_STARTED);
+  ASSERT_EQ(std::move(result).get(),
+            MaintenanceStatus::AWAITING_START_DATA_MIGRATION);
+  ASSERT_NE(event, nullptr);
+
+  SHARD_NEEDS_REBUILD_flags_t expected_flag{0};
+  expected_flag |= SHARD_NEEDS_REBUILD_Header::DRAIN;
+  expected_flag |= SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
+
+  ASSERT_EQ(
+      expected_flag,
+      (static_cast<SHARD_NEEDS_REBUILD_Event*>(event.get()))->header.flags);
+
+  EventType expected_event_type{EventType::SHARD_NEEDS_REBUILD};
+  ASSERT_EQ(expected_event_type,
+            (static_cast<SHARD_NEEDS_REBUILD_Event*>(event.get()))->getType());
+  //... rest of workflow is same as test above
+}
+
 TEST_F(ShardWorkflowTest, SimpleMayDisappear) {
   init();
   wf->addTargetOpState({ShardOperationalState::MAY_DISAPPEAR});

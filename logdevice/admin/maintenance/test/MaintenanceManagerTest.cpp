@@ -105,6 +105,7 @@ class MaintenanceManagerTest : public ::testing::Test {
   ClusterMaintenanceState cms_;
   EventLogRebuildingSet set_;
   UpdateableSettings<AdminServerSettings> settings_;
+  UpdateableSettings<RebuildingSettings> rebuilding_settings_;
   std::unique_ptr<folly::ManualExecutor> executor_;
   StatsHolder stats_;
   std::unique_ptr<MockMaintenanceLogWriter> mock_maintenance_log_writer_;
@@ -133,6 +134,7 @@ class MockMaintenanceManagerDependencies
   explicit MockMaintenanceManagerDependencies(MaintenanceManagerTest* test)
       : MaintenanceManagerDependencies(nullptr,
                                        test->settings_,
+                                       test->rebuilding_settings_,
                                        nullptr,
                                        nullptr,
                                        nullptr,
@@ -360,8 +362,15 @@ void MaintenanceManagerTest::init() {
 
   deps_ = std::make_unique<MockMaintenanceManagerDependencies>(this);
 
-  AdminServerSettings settings = create_default_settings<AdminServerSettings>();
-  settings.enable_maintenance_manager = true;
+  AdminServerSettings admin_settings =
+      create_default_settings<AdminServerSettings>();
+  admin_settings.enable_maintenance_manager = true;
+  settings_ = UpdateableSettings<AdminServerSettings>(admin_settings);
+
+  RebuildingSettings rebuilding_settings =
+      create_default_settings<RebuildingSettings>();
+  rebuilding_settings_ =
+      UpdateableSettings<RebuildingSettings>(rebuilding_settings);
 
   executor_ = std::make_unique<folly::ManualExecutor>();
   maintenance_manager_ = std::make_unique<MockMaintenanceManager>(this);

@@ -1778,6 +1778,8 @@ ShardWorkflowMap MaintenanceManager::createShardWorkflows(
           maintenance_wrapper.shouldSkipSafetyCheck(shard_id));
       wf->rebuildInRestoreMode(
           maintenance_wrapper.shouldForceRestoreRebuilding(shard_id));
+      wf->rebuildingFilterRelocateShards(
+          deps_->rebuildingSettings()->filter_relocate_shards);
     }
     // At this point, any old workflow that is not covered by maintenances or
     // does not need to be enabled will be dropped since it was not moved out of

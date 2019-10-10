@@ -321,6 +321,9 @@ void ShardWorkflow::createRebuildEventIfRequired(RebuildingMode new_mode,
     if (new_mode == RebuildingMode::RELOCATE) {
       flag = SHARD_NEEDS_REBUILD_Header::DRAIN;
     }
+    if (filter_relocate_shards_) {
+      flag |= SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
+    }
     event_ = std::make_unique<SHARD_NEEDS_REBUILD_Event>(
         SHARD_NEEDS_REBUILD_Header{shard_.node(),
                                    (uint32_t)shard_.shard(),
@@ -357,6 +360,11 @@ void ShardWorkflow::shouldSkipSafetyCheck(bool skip) {
 
 void ShardWorkflow::rebuildInRestoreMode(bool is_restore) {
   restore_mode_rebuilding_ = is_restore;
+}
+
+void ShardWorkflow::rebuildingFilterRelocateShards(
+    bool filter_relocate_shards) {
+  filter_relocate_shards_ = filter_relocate_shards;
 }
 
 folly::F14FastSet<ShardOperationalState>
