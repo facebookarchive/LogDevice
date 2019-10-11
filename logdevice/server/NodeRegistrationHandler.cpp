@@ -7,9 +7,11 @@
  */
 #include "logdevice/server/NodeRegistrationHandler.h"
 
+#include <folly/Expected.h>
 #include <folly/Random.h>
 #include <folly/String.h>
 
+#include "logdevice/common/RetryHandler.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 
 namespace facebook { namespace logdevice {
@@ -17,80 +19,61 @@ namespace facebook { namespace logdevice {
 using namespace facebook::logdevice::configuration::nodes;
 
 namespace {
-constexpr size_t kMaxNumRetries = 5;
+constexpr size_t kMaxNumRetries = 10;
 
 // Maximum sleep duration before attempting register/update again
-constexpr std::chrono::milliseconds kMaxSleepDuration(10000);
+constexpr std::chrono::seconds kMaxSleepDuration(60);
 }; // namespace
 
 folly::Expected<node_index_t, E>
 NodeRegistrationHandler::registerSelf(NodeIndicesAllocator allocator) {
-  Status status = Status::OK;
-  for (size_t trials = 0; trials < kMaxNumRetries; trials++) {
-    auto idxs =
-        allocator.allocate(*nodes_configuration_->getServiceDiscovery(), 1);
-    ld_assert(idxs.size() > 0);
-    auto my_idx = idxs.front();
-    ld_info("Trying to register in the NodesConfiguration as N%d. Trial #%zu",
+  node_index_t my_idx;
+  auto result = RetryHandler<Status>::syncRun(
+      [this, &my_idx, &allocator](size_t trial_num) -> Status {
+        auto idxs =
+            allocator.allocate(*nodes_configuration_->getServiceDiscovery(), 1);
+        ld_assert(idxs.size() > 0);
+        my_idx = idxs.front();
+        ld_info(
+            "Trying to register in the NodesConfiguration as N%d. Trial #%zu",
             my_idx,
-            trials);
+            trial_num);
 
-    auto update = buildSelfUpdate(my_idx, /* is_update= */ false);
-    if (!update.hasValue()) {
-      return folly::makeUnexpected(Status::INVALID_ATTRIBUTES);
-    }
-    status = applyUpdate(std::move(update).value());
-
-    // Keep retrying as long as we get a VERSION_MISMATCH
-    if (status == Status::OK) {
-      return my_idx;
-    } else if (status != Status::VERSION_MISMATCH) {
-      return folly::makeUnexpected(status);
-    } else {
-      // It's a VERSION_MISMATCH. Keep retrying.
-      if (trials < kMaxNumRetries - 1) {
-        auto sleep_duration = folly::Random::rand64(kMaxSleepDuration.count());
-        ld_info("Version mismatch for NodesConfiguration registration, "
-                "will retry in %lu ms",
-                sleep_duration);
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
-      }
-    }
-  }
-  ld_error("Exhusted all retries. Giving up.");
-  ld_check(status == Status::VERSION_MISMATCH);
-  return folly::makeUnexpected(status);
+        auto update = buildSelfUpdate(my_idx, /* is_update= */ false);
+        if (!update.hasValue()) {
+          return Status::INVALID_ATTRIBUTES;
+        }
+        return applyUpdate(std::move(update).value());
+      },
+      [](const Status& st) { return st == Status::VERSION_MISMATCH; },
+      /* num_tries */ kMaxNumRetries,
+      /* backoff_min */ std::chrono::seconds(1),
+      /* backoff_max */ kMaxSleepDuration,
+      /* jitter_param */ 0.25);
+  return result.hasValue() ? folly::makeExpected<E>(my_idx)
+                           : folly::makeUnexpected(result.error());
 }
 
 Status NodeRegistrationHandler::updateSelf(node_index_t my_idx) {
-  Status status = Status::OK;
-  for (size_t trials = 0; trials < kMaxNumRetries; trials++) {
-    ld_info("Checking if my attributes as N%d are up to date in the "
-            "NodesConfiguration. Trial #%zu",
-            my_idx,
-            trials);
-    auto update = buildSelfUpdate(my_idx, /* is_update= */ true);
-    if (!update.hasValue()) {
-      return Status::INVALID_ATTRIBUTES;
-    }
-    status = applyUpdate(std::move(update).value());
+  auto result = RetryHandler<Status>::syncRun(
+      [this, my_idx](size_t trial_num) -> Status {
+        ld_info("Trying to update node as N%d in the NodesConfiguration. "
+                "Trial #%zu",
+                my_idx,
+                trial_num);
+        auto update = buildSelfUpdate(my_idx, /* is_update= */ true);
+        if (!update.hasValue()) {
+          return Status::INVALID_ATTRIBUTES;
+        }
+        return applyUpdate(std::move(update).value());
+      },
+      [](const Status& st) { return st == Status::VERSION_MISMATCH; },
+      /* num_tries */ kMaxNumRetries,
+      /* backoff_min */ std::chrono::seconds(1),
+      /* backoff_max */ kMaxSleepDuration,
+      /* jitter_param */ 0.25);
 
-    if (status != Status::VERSION_MISMATCH) {
-      return status;
-    } else {
-      // It's a VERSION_MISMATCH. Keep retrying.
-      if (trials < kMaxNumRetries - 1) {
-        auto sleep_duration = folly::Random::rand64(kMaxSleepDuration.count());
-        ld_info("Version mismatch for NodesConfiguration update, "
-                "will retry in %lu ms",
-                sleep_duration);
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
-      }
-    }
-  }
-  ld_error("Exhusted all retries. Giving up.");
-  ld_check(status == Status::VERSION_MISMATCH);
-  return status;
+  return result.hasValue() ? result.value() : result.error();
 }
 
 configuration::nodes::NodeUpdateBuilder
