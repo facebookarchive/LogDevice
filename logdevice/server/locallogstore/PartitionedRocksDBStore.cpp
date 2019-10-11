@@ -3987,6 +3987,18 @@ int PartitionedRocksDBStore::trimLogsToExcludePartitions(
                                               stats_);
 }
 
+std::string PartitionedRocksDBStore::PartitionToCompact::toString() const {
+  std::string s = folly::sformat(
+      "partition: {}, reason: {}", partition->id_, reasonNames()[reason]);
+  if (reason == Reason::RETENTION) {
+    s += folly::sformat(", retention: {}s", retention.count());
+  } else if (reason == Reason::PARTIAL) {
+    s += folly::sformat(
+        ", files: {}", logdevice::toString(partial_compaction_filenames));
+  }
+  return s;
+}
+
 bool PartitionedRocksDBStore::PartialCompactionEvaluator::evaluateAll(
     std::vector<PartitionToCompact>* out_to_compact,
     size_t max_results) {
@@ -4072,6 +4084,7 @@ bool PartitionedRocksDBStore::PartialCompactionEvaluator::evaluateAll(
         p.partial_compaction_file_sizes.push_back(
             candidate.metadata->levels[0].files[file_offset].size);
       }
+      ld_check(!p.partial_compaction_filenames.empty());
       idx.emplace(candidate.partition_offset, candidate);
       out_to_compact->push_back(std::move(p));
 
@@ -4096,6 +4109,7 @@ void PartitionedRocksDBStore::PartialCompactionEvaluator::evaluate(
                                  max_num_files,
                                  &num_files);
   if (value > 0.0) {
+    ld_check(num_files != 0);
     candidates_.push_back({value, metadata, partition, start_idx, num_files});
   }
 }
@@ -4783,7 +4797,11 @@ void PartitionedRocksDBStore::performCompactionInternal(
     }
 
     if (!status.ok()) {
-      enterFailSafeIfFailed(status, "CompactRange()/CompactFiles()");
+      enterFailSafeIfFailed(
+          status,
+          folly::sformat(
+              "CompactRange()/CompactFiles() for {}", to_compact.toString())
+              .c_str());
       return;
     }
   }

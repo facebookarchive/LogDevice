@@ -909,6 +909,8 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
       }
     }
 
+    std::string toString() const;
+
    private:
     size_t sort_order;
   };
