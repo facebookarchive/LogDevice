@@ -30,16 +30,11 @@ using ::testing::Invoke;
 class CheckpointStoreImplTest : public ::testing::Test {
  public:
   void SetUp() override {
-    // TODO: Change the extract version function when proper versioning is
-    // added.
-    auto extract_version_function = [](folly::StringPiece) {
-      return VersionedConfigStore::version_t(1);
-    };
-
-    mock_versioned_config_store_ =
-        std::make_unique<MockVersionedConfigStore>(extract_version_function);
+    mock_versioned_config_store_ = std::make_unique<MockVersionedConfigStore>(
+        CheckpointStoreImpl::extractVersion);
     in_mem_versioned_config_store_ =
-        std::make_unique<InMemVersionedConfigStore>(extract_version_function);
+        std::make_unique<InMemVersionedConfigStore>(
+            CheckpointStoreImpl::extractVersion);
     cb_ = [](Status) {};
   }
 
@@ -51,9 +46,9 @@ class CheckpointStoreImplTest : public ::testing::Test {
 TEST_F(CheckpointStoreImplTest, GetLSN) {
   Checkpoint checkpoint;
   checkpoint.log_lsn_map = {{1, 5}, {2, 7}, {5, 9}};
-  EXPECT_CALL(*mock_versioned_config_store_, getConfig("customer", _, _))
+  EXPECT_CALL(*mock_versioned_config_store_, getLatestConfig("customer", _))
       .Times(6)
-      .WillRepeatedly(Invoke([checkpoint](auto, auto cb, auto) {
+      .WillRepeatedly(Invoke([checkpoint](auto, auto cb) {
         cb(Status::OK, ThriftCodec::serialize<BinarySerializer>(checkpoint));
       }));
 
@@ -81,9 +76,9 @@ TEST_F(CheckpointStoreImplTest, GetLSN) {
 TEST_F(CheckpointStoreImplTest, GetHandleInvalidCheckpoint) {
   Checkpoint checkpoint;
   checkpoint.log_lsn_map = {{1, 5}, {2, 7}, {5, 9}};
-  EXPECT_CALL(*mock_versioned_config_store_, getConfig("customer", _, _))
+  EXPECT_CALL(*mock_versioned_config_store_, getLatestConfig("customer", _))
       .Times(2)
-      .WillRepeatedly(Invoke([checkpoint](auto, auto cb, auto) {
+      .WillRepeatedly(Invoke([checkpoint](auto, auto cb) {
         cb(Status::OK, "IncorrectSerializedThrift");
       }));
 
@@ -106,9 +101,9 @@ TEST_F(CheckpointStoreImplTest, GetHandleInvalidCheckpoint) {
 TEST_F(CheckpointStoreImplTest, GetHandleMissingLog) {
   Checkpoint checkpoint;
   checkpoint.log_lsn_map = {{1, 5}, {2, 7}, {5, 9}};
-  EXPECT_CALL(*mock_versioned_config_store_, getConfig("customer", _, _))
+  EXPECT_CALL(*mock_versioned_config_store_, getLatestConfig("customer", _))
       .Times(2)
-      .WillRepeatedly(Invoke([checkpoint](auto, auto cb, auto) {
+      .WillRepeatedly(Invoke([checkpoint](auto, auto cb) {
         cb(Status::OK, ThriftCodec::serialize<BinarySerializer>(checkpoint));
       }));
 
@@ -126,6 +121,7 @@ TEST_F(CheckpointStoreImplTest, GetHandleMissingLog) {
 TEST_F(CheckpointStoreImplTest, UpdateEmptyStore) {
   Checkpoint correct;
   correct.log_lsn_map[1] = 2;
+  correct.version = 1;
 
   EXPECT_CALL(
       *mock_versioned_config_store_, readModifyWriteConfig("customer", _, _))
@@ -151,6 +147,7 @@ TEST_F(CheckpointStoreImplTest, UpdateEmptyStore) {
 TEST_F(CheckpointStoreImplTest, UpdateWhenMultipleValues) {
   Checkpoint correct;
   correct.log_lsn_map = {{1, 2}, {2, 5}, {3, 7}, {2, 3}};
+  correct.version = 4;
 
   EXPECT_CALL(
       *mock_versioned_config_store_, readModifyWriteConfig("customer2", _, _))
@@ -158,6 +155,7 @@ TEST_F(CheckpointStoreImplTest, UpdateWhenMultipleValues) {
       .WillRepeatedly(Invoke([correct](auto, auto mcb, auto cb) mutable {
         auto before_update = correct;
         before_update.log_lsn_map[3] = 9;
+        before_update.version = 3;
         auto [status, value] =
             mcb(ThriftCodec::serialize<BinarySerializer>(before_update));
         EXPECT_EQ(status, Status::OK);
@@ -278,6 +276,7 @@ TEST_F(CheckpointStoreImplTest, UpdateAndGetWithInMemVersionedConfigStore) {
 TEST_F(CheckpointStoreImplTest, RemoveSomeCheckpoints) {
   Checkpoint correct;
   correct.log_lsn_map = {{1, 2}, {2, 5}, {3, 7}, {2, 3}};
+  correct.version = 2;
 
   EXPECT_CALL(
       *mock_versioned_config_store_, readModifyWriteConfig("customer", _, _))
@@ -286,6 +285,7 @@ TEST_F(CheckpointStoreImplTest, RemoveSomeCheckpoints) {
         auto before_remove = correct;
         before_remove.log_lsn_map[5] = 8;
         before_remove.log_lsn_map[7] = 1;
+        before_remove.version = 1;
         auto [status, value] =
             mcb(ThriftCodec::serialize<BinarySerializer>(before_remove));
         EXPECT_EQ(status, Status::OK);
@@ -309,6 +309,7 @@ TEST_F(CheckpointStoreImplTest, RemoveSomeCheckpoints) {
 
 TEST_F(CheckpointStoreImplTest, RemoveAllCheckpoints) {
   Checkpoint correct;
+  correct.version = 4;
 
   EXPECT_CALL(
       *mock_versioned_config_store_, readModifyWriteConfig("customer", _, _))
@@ -316,6 +317,7 @@ TEST_F(CheckpointStoreImplTest, RemoveAllCheckpoints) {
       .WillRepeatedly(Invoke([correct](auto, auto mcb, auto cb) {
         Checkpoint before_remove;
         before_remove.log_lsn_map = {{1, 2}, {2, 5}, {3, 7}, {2, 3}};
+        before_remove.version = 3;
         auto [status, value] =
             mcb(ThriftCodec::serialize<BinarySerializer>(before_remove));
         EXPECT_EQ(status, Status::OK);

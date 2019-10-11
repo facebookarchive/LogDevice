@@ -62,11 +62,11 @@ class CheckpointStoreImpl : public CheckpointStore {
       extractVersion(folly::StringPiece);
 
  private:
-  void
-  updateCheckpoints(const std::string& customer_id,
-                    folly::Function<void(checkpointing::thrift::Checkpoint&)>
-                        modify_checkpoint,
-                    StatusCallback cb);
+  void updateCheckpoints(
+      const std::string& customer_id,
+      folly::Function<void(checkpointing::thrift::Checkpoint&) const>
+          modify_checkpoint,
+      StatusCallback cb);
 
   std::unique_ptr<VersionedConfigStore> vcs_;
 };

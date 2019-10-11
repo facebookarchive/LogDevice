@@ -42,8 +42,6 @@ CheckpointStoreImpl::CheckpointStoreImpl(
 void CheckpointStoreImpl::getLSN(const std::string& customer_id,
                                  logid_t log_id,
                                  GetCallback gcb) const {
-  // TODO: Handle versions
-  auto version = folly::none;
   auto cb = [log_id, gcb = std::move(gcb)](
                 Status status, std::string value) mutable {
     if (status != Status::OK) {
@@ -63,7 +61,7 @@ void CheckpointStoreImpl::getLSN(const std::string& customer_id,
       gcb(Status::NOTFOUND, lsn_t());
     }
   };
-  vcs_->getConfig(customer_id, std::move(cb), version);
+  vcs_->getLatestConfig(customer_id, std::move(cb));
 }
 
 Status CheckpointStoreImpl::getLSNSync(const std::string& customer_id,
@@ -98,7 +96,7 @@ void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
 void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
                                     const std::map<logid_t, lsn_t>& checkpoints,
                                     StatusCallback cb) {
-  auto modify_checkpoint = [&checkpoints](Checkpoint& checkpoint) {
+  auto modify_checkpoint = [checkpoints](Checkpoint& checkpoint) {
     for (auto [log_id, lsn] : checkpoints) {
       checkpoint.log_lsn_map[log_id.val()] = lsn;
     }
@@ -121,7 +119,7 @@ void CheckpointStoreImpl::removeCheckpoints(
     const std::string& customer_id,
     const std::vector<logid_t>& checkpoints,
     StatusCallback cb) {
-  auto modify_checkpoint = [&checkpoints](Checkpoint& checkpoint) {
+  auto modify_checkpoint = [checkpoints](Checkpoint& checkpoint) {
     for (auto log_id : checkpoints) {
       checkpoint.log_lsn_map.erase(log_id.val());
     }
@@ -161,10 +159,10 @@ CheckpointStoreImpl::removeAllCheckpointsSync(const std::string& customer_id) {
 
 void CheckpointStoreImpl::updateCheckpoints(
     const std::string& customer_id,
-    folly::Function<void(Checkpoint&)> modify_checkpoint,
+    folly::Function<void(Checkpoint&) const> modify_checkpoint,
     StatusCallback cb) {
   auto mcb = [modify_checkpoint = std::move(modify_checkpoint)](
-                 folly::Optional<std::string> value) mutable {
+                 folly::Optional<std::string> value) {
     auto value_thrift = std::make_unique<Checkpoint>();
     if (value.hasValue()) {
       value_thrift = ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
@@ -174,14 +172,25 @@ void CheckpointStoreImpl::updateCheckpoints(
       }
     }
     modify_checkpoint(*value_thrift);
+    value_thrift->version++;
     auto serialized_thrift =
         ThriftCodec::serialize<BinarySerializer>(*value_thrift);
     return std::make_pair(Status::OK, std::move(serialized_thrift));
   };
 
-  auto ucb = [cb = std::move(cb)](
+  auto ucb = [customer_id, cb = std::move(cb)](
                  Status status, CheckpointStore::Version, std::string) mutable {
-    // TODO: Implement versioning
+    if (status == Status::VERSION_MISMATCH) {
+      RATELIMIT_ERROR(
+          std::chrono::minutes(1),
+          1,
+          "Got a VERSION_MISMATCH when writing to the checkpoint store, this "
+          "means that there's potentially another reader using the same "
+          "customer ID. Customer IDs should be used exclusively by a single "
+          "reader instance. Multiple readers with the same customer ID can "
+          "leave the checkpoint in an inconsistent state. Customer ID: %s",
+          customer_id.c_str());
+    }
     cb(status);
   };
 
