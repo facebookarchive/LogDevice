@@ -40,9 +40,7 @@ TEST_F(CheckpointedReaderBaseTest, AsyncWriteUsesCheckpointStore) {
   };
   EXPECT_CALL(*mock_checkpoint_store_, updateLSN("customer", checkpoints, _))
       .Times(1)
-      .WillOnce(Invoke([](auto, auto, auto cb) {
-        cb(Status::OK, CheckpointStore::Version(1), "");
-      }));
+      .WillOnce(Invoke([](auto, auto, auto cb) { cb(Status::OK); }));
 
   auto reader_base =
       MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
@@ -90,9 +88,7 @@ TEST_F(CheckpointedReaderBaseTest, AsyncRemoveCheckpointsUsesCheckpointStore) {
   EXPECT_CALL(
       *mock_checkpoint_store_, removeCheckpoints("customer", checkpoints, _))
       .Times(1)
-      .WillOnce(Invoke([](auto, auto, auto cb) {
-        cb(Status::OK, CheckpointStore::Version(1), "");
-      }));
+      .WillOnce(Invoke([](auto, auto, auto cb) { cb(Status::OK); }));
 
   auto reader_base =
       MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
@@ -109,9 +105,7 @@ TEST_F(CheckpointedReaderBaseTest,
   };
   EXPECT_CALL(*mock_checkpoint_store_, removeAllCheckpoints("customer", _))
       .Times(1)
-      .WillOnce(Invoke([](auto, auto cb) {
-        cb(Status::OK, CheckpointStore::Version(1), "");
-      }));
+      .WillOnce(Invoke([](auto, auto cb) { cb(Status::OK); }));
 
   auto reader_base =
       MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});
@@ -191,9 +185,7 @@ TEST_F(CheckpointedReaderBaseTest, AsyncWritesCheckpointsStoredInMap) {
   EXPECT_CALL(
       *mock_checkpoint_store_, updateLSN("customer", correct_checkpoints, _))
       .Times(1)
-      .WillOnce(Invoke([](auto, auto, auto cb) {
-        cb(Status::OK, CheckpointStore::Version(1), "");
-      }));
+      .WillOnce(Invoke([](auto, auto, auto cb) { cb(Status::OK); }));
 
   auto reader_base =
       MockCheckpointedReader("customer", std::move(mock_checkpoint_store_), {});

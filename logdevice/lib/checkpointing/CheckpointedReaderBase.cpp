@@ -43,13 +43,7 @@ Status CheckpointedReaderBase::syncWriteCheckpoints(
 void CheckpointedReaderBase::asyncWriteCheckpoints(
     const std::map<logid_t, lsn_t>& checkpoints,
     StatusCallback cb) {
-  auto update_cb = [cb = std::move(cb)](Status status,
-                                        CheckpointStore::Version,
-                                        std::string) mutable {
-    // TODO: Implement versioning.
-    cb(status);
-  };
-  store_->updateLSN(reader_name_, checkpoints, std::move(update_cb));
+  store_->updateLSN(reader_name_, checkpoints, std::move(cb));
 }
 
 Status CheckpointedReaderBase::syncRemoveCheckpoints(
@@ -60,13 +54,7 @@ Status CheckpointedReaderBase::syncRemoveCheckpoints(
 void CheckpointedReaderBase::asyncRemoveCheckpoints(
     const std::vector<logid_t>& checkpoints,
     StatusCallback cb) {
-  auto update_cb = [cb = std::move(cb)](Status status,
-                                        CheckpointStore::Version,
-                                        std::string) mutable {
-    // TODO: Implement versioning.
-    cb(status);
-  };
-  store_->removeCheckpoints(reader_name_, checkpoints, std::move(update_cb));
+  store_->removeCheckpoints(reader_name_, checkpoints, std::move(cb));
 }
 
 Status CheckpointedReaderBase::syncRemoveAllCheckpoints() {
@@ -74,13 +62,7 @@ Status CheckpointedReaderBase::syncRemoveAllCheckpoints() {
 }
 
 void CheckpointedReaderBase::asyncRemoveAllCheckpoints(StatusCallback cb) {
-  auto update_cb = [cb = std::move(cb)](Status status,
-                                        CheckpointStore::Version,
-                                        std::string) mutable {
-    // TODO: Implement versioning.
-    cb(status);
-  };
-  store_->removeAllCheckpoints(reader_name_, std::move(update_cb));
+  store_->removeAllCheckpoints(reader_name_, std::move(cb));
 }
 
 Status

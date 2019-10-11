@@ -24,14 +24,13 @@ using apache::thrift::BinarySerializer;
 using checkpointing::thrift::Checkpoint;
 
 namespace {
-CheckpointStore::UpdateCallback
-updateCallbackPostingBaton(Status* return_status, folly::Baton<>& call_baton) {
-  CheckpointStore::UpdateCallback callback =
-      [&call_baton, return_status](
-          Status status, VersionedConfigStore::version_t, std::string) {
-        *return_status = status;
-        call_baton.post();
-      };
+CheckpointStore::StatusCallback
+statusCallbackPostingBaton(Status* return_status, folly::Baton<>& call_baton) {
+  CheckpointStore::StatusCallback callback = [&call_baton,
+                                              return_status](Status status) {
+    *return_status = status;
+    call_baton.post();
+  };
   return callback;
 }
 } // namespace
@@ -92,13 +91,13 @@ Status CheckpointStoreImpl::updateLSNSync(const std::string& customer_id,
 void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
                                     logid_t log_id,
                                     lsn_t lsn,
-                                    UpdateCallback cb) {
+                                    StatusCallback cb) {
   updateLSN(customer_id, {{log_id, lsn}}, std::move(cb));
 };
 
 void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
                                     const std::map<logid_t, lsn_t>& checkpoints,
-                                    UpdateCallback cb) {
+                                    StatusCallback cb) {
   auto modify_checkpoint = [&checkpoints](Checkpoint& checkpoint) {
     for (auto [log_id, lsn] : checkpoints) {
       checkpoint.log_lsn_map[log_id.val()] = lsn;
@@ -112,7 +111,7 @@ Status CheckpointStoreImpl::updateLSNSync(
     const std::map<logid_t, lsn_t>& checkpoints) {
   Status status;
   folly::Baton<> call_baton;
-  auto cb = updateCallbackPostingBaton(&status, call_baton);
+  auto cb = statusCallbackPostingBaton(&status, call_baton);
   updateLSN(customer_id, checkpoints, std::move(cb));
   call_baton.wait();
   return status;
@@ -121,7 +120,7 @@ Status CheckpointStoreImpl::updateLSNSync(
 void CheckpointStoreImpl::removeCheckpoints(
     const std::string& customer_id,
     const std::vector<logid_t>& checkpoints,
-    UpdateCallback cb) {
+    StatusCallback cb) {
   auto modify_checkpoint = [&checkpoints](Checkpoint& checkpoint) {
     for (auto log_id : checkpoints) {
       checkpoint.log_lsn_map.erase(log_id.val());
@@ -131,7 +130,7 @@ void CheckpointStoreImpl::removeCheckpoints(
 }
 
 void CheckpointStoreImpl::removeAllCheckpoints(const std::string& customer_id,
-                                               UpdateCallback cb) {
+                                               StatusCallback cb) {
   auto modify_checkpoint = [](Checkpoint& checkpoint) {
     checkpoint.log_lsn_map.clear();
   };
@@ -144,7 +143,7 @@ Status CheckpointStoreImpl::removeCheckpointsSync(
     const std::vector<logid_t>& checkpoints) {
   Status status;
   folly::Baton<> call_baton;
-  auto cb = updateCallbackPostingBaton(&status, call_baton);
+  auto cb = statusCallbackPostingBaton(&status, call_baton);
   removeCheckpoints(customer_id, checkpoints, std::move(cb));
   call_baton.wait();
   return status;
@@ -154,7 +153,7 @@ Status
 CheckpointStoreImpl::removeAllCheckpointsSync(const std::string& customer_id) {
   Status status;
   folly::Baton<> call_baton;
-  auto cb = updateCallbackPostingBaton(&status, call_baton);
+  auto cb = statusCallbackPostingBaton(&status, call_baton);
   removeAllCheckpoints(customer_id, std::move(cb));
   call_baton.wait();
   return status;
@@ -163,7 +162,7 @@ CheckpointStoreImpl::removeAllCheckpointsSync(const std::string& customer_id) {
 void CheckpointStoreImpl::updateCheckpoints(
     const std::string& customer_id,
     folly::Function<void(Checkpoint&)> modify_checkpoint,
-    UpdateCallback cb) {
+    StatusCallback cb) {
   auto mcb = [modify_checkpoint = std::move(modify_checkpoint)](
                  folly::Optional<std::string> value) mutable {
     auto value_thrift = std::make_unique<Checkpoint>();
@@ -180,7 +179,13 @@ void CheckpointStoreImpl::updateCheckpoints(
     return std::make_pair(Status::OK, std::move(serialized_thrift));
   };
 
-  vcs_->readModifyWriteConfig(customer_id, std::move(mcb), std::move(cb));
+  auto ucb = [cb = std::move(cb)](
+                 Status status, CheckpointStore::Version, std::string) mutable {
+    // TODO: Implement versioning
+    cb(status);
+  };
+
+  vcs_->readModifyWriteConfig(customer_id, std::move(mcb), std::move(ucb));
 }
 
 folly::Optional<CheckpointStore::Version>

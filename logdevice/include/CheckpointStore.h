@@ -25,7 +25,7 @@ class CheckpointStore {
  public:
   using Version = vcs_config_version_t;
   using GetCallback = folly::Function<void(Status, lsn_t)>;
-  using UpdateCallback = folly::Function<void(Status, Version, std::string)>;
+  using StatusCallback = folly::Function<void(Status)>;
 
   /**
    * Destructor must be virtual in order to work correctly.
@@ -97,7 +97,7 @@ class CheckpointStore {
   virtual void updateLSN(const std::string& customer_id,
                          logid_t log_id,
                          lsn_t lsn,
-                         UpdateCallback cb) = 0;
+                         StatusCallback cb) = 0;
 
   /*
    * UpdateLSN does asynchronous update of the LSNs for many logs.
@@ -111,7 +111,7 @@ class CheckpointStore {
    */
   virtual void updateLSN(const std::string& customer_id,
                          const std::map<logid_t, lsn_t>& checkpoints,
-                         UpdateCallback cb) = 0;
+                         StatusCallback cb) = 0;
 
   /*
    * RemoveCheckpoints removes given checkpoints asynchronously.
@@ -123,7 +123,7 @@ class CheckpointStore {
    */
   virtual void removeCheckpoints(const std::string& customer_id,
                                  const std::vector<logid_t>& checkpoints,
-                                 UpdateCallback cb) = 0;
+                                 StatusCallback cb) = 0;
 
   /*
    * RemoveAllCheckpoints removes all checkpoints asynchronously.
@@ -133,7 +133,7 @@ class CheckpointStore {
    *   VersionedConfigStore class.
    */
   virtual void removeAllCheckpoints(const std::string& customer_id,
-                                    UpdateCallback cb) = 0;
+                                    StatusCallback cb) = 0;
 
   /*
    * RemoveCheckpointsSync removes given checkpoints synchronously.

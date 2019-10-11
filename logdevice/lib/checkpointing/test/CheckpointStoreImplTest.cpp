@@ -40,12 +40,12 @@ class CheckpointStoreImplTest : public ::testing::Test {
         std::make_unique<MockVersionedConfigStore>(extract_version_function);
     in_mem_versioned_config_store_ =
         std::make_unique<InMemVersionedConfigStore>(extract_version_function);
-    cb_ = [](Status, CheckpointStore::Version, std::string) {};
+    cb_ = [](Status) {};
   }
 
   std::unique_ptr<MockVersionedConfigStore> mock_versioned_config_store_;
   std::unique_ptr<InMemVersionedConfigStore> in_mem_versioned_config_store_;
-  CheckpointStore::UpdateCallback cb_;
+  CheckpointStore::StatusCallback cb_;
 };
 
 TEST_F(CheckpointStoreImplTest, GetLSN) {

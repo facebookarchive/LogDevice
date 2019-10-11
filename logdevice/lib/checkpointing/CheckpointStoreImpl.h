@@ -39,18 +39,18 @@ class CheckpointStoreImpl : public CheckpointStore {
   void updateLSN(const std::string& customer_id,
                  logid_t log_id,
                  lsn_t lsn,
-                 UpdateCallback cb) override;
+                 StatusCallback cb) override;
 
   void updateLSN(const std::string& customer_id,
                  const std::map<logid_t, lsn_t>& checkpoints,
-                 UpdateCallback cb) override;
+                 StatusCallback cb) override;
 
   void removeCheckpoints(const std::string& customer_id,
                          const std::vector<logid_t>& checkpoints,
-                         UpdateCallback cb) override;
+                         StatusCallback cb) override;
 
   void removeAllCheckpoints(const std::string& customer_id,
-                            UpdateCallback cb) override;
+                            StatusCallback cb) override;
 
   Status
   removeCheckpointsSync(const std::string& customer_id,
@@ -66,7 +66,7 @@ class CheckpointStoreImpl : public CheckpointStore {
   updateCheckpoints(const std::string& customer_id,
                     folly::Function<void(checkpointing::thrift::Checkpoint&)>
                         modify_checkpoint,
-                    UpdateCallback cb);
+                    StatusCallback cb);
 
   std::unique_ptr<VersionedConfigStore> vcs_;
 };
