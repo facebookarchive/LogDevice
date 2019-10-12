@@ -1468,10 +1468,14 @@ bool Node::isRunning() const {
 
 void Node::kill() {
   if (isRunning()) {
-    ld_info("Killing node on %s", addrs_.protocol.toString().c_str());
+    ld_info("Killing node N%hd on %s",
+            node_index_,
+            addrs_.protocol.toString().c_str());
     logdeviced_->kill();
     logdeviced_->wait();
-    ld_info("Killed node on %s", addrs_.protocol.toString().c_str());
+    ld_info("Killed node N%hd on %s",
+            node_index_,
+            addrs_.protocol.toString().c_str());
     stopped_ = true;
   }
   logdeviced_.reset();
@@ -1571,8 +1575,9 @@ std::string Node::getIfaceAddr(const std::string ifname) const {
   return "";
 }
 
-folly::Optional<test::ServerInfo> Node::getServerInfo() const {
-  auto data = sendCommand("info --json");
+folly::Optional<test::ServerInfo>
+Node::getServerInfo(std::chrono::milliseconds command_timeout) const {
+  auto data = sendCommand("info --json", /* ssl */ false, command_timeout);
   if (data.empty()) {
     return folly::Optional<test::ServerInfo>();
   }
@@ -1598,10 +1603,14 @@ int Node::waitUntilStarted(std::chrono::steady_clock::time_point deadline) {
     // if the server id matches what we expect.  This is to detect races where
     // two tests try to simultaneously claim the same port and hand it over to
     // a child process.
-    // catch any exceptions here and ignore them. eg: socket closed while
+    // Catch any exceptions here and ignore them. eg: socket closed while
     // querying the server. logdeviced will eventually be restarted.
+    // Use small timeout to make the above isRunning() check run more often in
+    // case logdeviced is dead and some random other process is using its former
+    // admin command TCP port.
     try {
-      folly::Optional<test::ServerInfo> info = getServerInfo();
+      folly::Optional<test::ServerInfo> info =
+          getServerInfo(std::chrono::seconds(1));
       if (info) {
         bool match = info->server_id == server_id_;
         if (!match) {

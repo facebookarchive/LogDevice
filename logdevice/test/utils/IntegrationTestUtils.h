@@ -1570,7 +1570,9 @@ class Node {
   /**
    * Connects to the admin ports and returns the running server information
    */
-  folly::Optional<test::ServerInfo> getServerInfo() const;
+  folly::Optional<test::ServerInfo>
+  getServerInfo(std::chrono::milliseconds command_timeout =
+                    std::chrono::milliseconds(30000)) const;
 
   /**
    * Waits for the logdeviced process to exit.
