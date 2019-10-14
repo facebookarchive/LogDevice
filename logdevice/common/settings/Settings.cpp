@@ -2199,7 +2199,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &byte_offsets,
        "false",
        nullptr, // no validation
-       "Enables the server-side byte offset calculation feature."
+       "Enables the server-side byte offset calculation feature. "
        "NOTE: There is no guarantee of byte offsets result correctness if "
        "feature"
        "was switched on->off->on in period shorter than retention value for"
@@ -2768,7 +2768,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "to be made immediately visible on the other hand changes changes to the "
       "nodeset due to say the 'exclude_from_nodeset' flag being set as part "
       "of a passive drain can be postponed. If the reactivations can be "
-      "postponed then the delay is chosen to be a radnom delay seconds "
+      "postponed then the delay is chosen to be a random delay seconds "
       "between the above range. If 0 then don't postpone ",
       SERVER,
       SettingsCategory::Configuration);
@@ -3097,7 +3097,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &enable_offset_map,
        "false",
        nullptr, // no validation
-       "Enables the server-side OffsetMap calculation feature."
+       "Enables the server-side OffsetMap calculation feature. "
        "NOTE: There is no guarantee of byte offsets result correctness if "
        "feature"
        "was switched on->off->on in period shorter than retention value for "

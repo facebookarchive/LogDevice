@@ -435,7 +435,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
     ("address", &address, "",
      nullptr,
      "[Only used when node self registration is enabled] The interface address "
-     "that the server will be listening on for data, gossip, commmand and admin"
+     "that the server will be listening on for data, gossip, command and admin"
      " connections (unless overridden by unix sockets"
      " settings).",
      SERVER | REQUIRES_RESTART | CLI_ONLY,

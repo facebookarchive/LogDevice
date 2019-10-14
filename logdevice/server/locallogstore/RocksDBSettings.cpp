@@ -653,7 +653,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
          }
        },
        "Minimum guaranteed time period for a node to re-dirty a partition "
-       "after a MemTable is flushed without incurring a syncronous write "
+       "after a MemTable is flushed without incurring a synchronous write "
        "penalty to update the partition dirty metadata.",
        SERVER,
        SettingsCategory::LogsDB);

@@ -515,7 +515,7 @@ sidebar_label: Settings
 | node-stats-send-period | Send per-node stats into the cluster with this period. Currently only 30s of stats is tracked on the clients, so a value above 30s will not have any effect. | 15s | client&nbsp;only |
 | node-stats-send-retry-delay | When sending per-node stats into the cluster, and the message failed, wait this much before retrying. | 5ms..1s | requires&nbsp;restart, client&nbsp;only |
 | node-stats-send-worst-client-count | Once a node has aggregated the values sent from writers, there may be some amount of writers that are in a bad state and report 'false' values. By setting this value, the `node-stats-send-worst-client-count` worst values reported by clients per node will be sent separately to the controller, which can then take a decision if the writer is functioning correctly or not. | 20 | server&nbsp;only |
-| node-stats-timeout-delay | Wait this long for an acknowledgment that the sent node stats message was received before sending the stats to another node | 2s | client&nbsp;only |
+| node-stats-timeout-delay | Wait this long for an acknowledgement that the sent node stats message was received before sending the stats to another node | 2s | client&nbsp;only |
 
 ## State machine execution
 |   Name    |   Description   |  Default  |   Notes   |
@@ -600,7 +600,7 @@ sidebar_label: Settings
 | test-reject-hello | if set to the name of an error code, reject all HELLOs with the specified error code. Currently supported values are ACCESS and PROTONOSUPPORT. Used for testing. | OK | requires&nbsp;restart, server&nbsp;only |
 | test-sequencer-corrupt-stores | Simulates bad hardware flipping a bit in the payload of a STORE message. | false | server&nbsp;only |
 | test-stall-rebuilding | Makes rebuilding pretend to start but not make any actual progress. Used in tests. | false | server&nbsp;only |
-| test-timestamp-linear-transform | Coefficients for transforming the timestamp of records for test. The value should contain two integers separated by ','. For example'm,c'. Records timestamp is tranformed as m * now() + c.A default value of '1,0' makes the timestamp = now() which is expectedfor all the normal use cases. | 1,0 | requires&nbsp;restart, server&nbsp;only |
+| test-timestamp-linear-transform | Coefficients for transforming the timestamp of records for test. The value should contain two integers separated by ','. For example 'm,c'. Records timestamp is transformed as m * now() + c.A default value of '1,0' makes the timestamp = now() which is expected for all the normal use cases. | 1,0 | requires&nbsp;restart, server&nbsp;only |
 | unix-socket | Path to the unix domain socket the server will use to listen for non-SSL clients |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 
 ## Uncategorized
@@ -613,10 +613,10 @@ sidebar_label: Settings
 ## Write path
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
-| append-store-durability | The minimum guaranteed durablity of record copies before a storage node confirms the STORE as successful. Can be one of "memory" if record is to be stored in a RocksDB memtable only (logdeviced memory), "async\_write" if record is to be additionally written to the RocksDB WAL file (kernel memory, frequently synced to disk), or "sync\_write" if the record is to be written to the memtable and WAL, and the STORE acknowledged only after the WAL is synced to disk by a separate WAL syncing thread using fdatasync(3). | async\_write | server&nbsp;only |
+| append-store-durability | The minimum guaranteed durability of record copies before a storage node confirms the STORE as successful. Can be one of "memory" if record is to be stored in a RocksDB memtable only (logdeviced memory), "async\_write" if record is to be additionally written to the RocksDB WAL file (kernel memory, frequently synced to disk), or "sync\_write" if the record is to be written to the memtable and WAL, and the STORE acknowledged only after the WAL is synced to disk by a separate WAL syncing thread using fdatasync(3). | async\_write | server&nbsp;only |
 | appender-buffer-process-batch | batch size for processing per-log queue of pending writes | 20 | server&nbsp;only |
 | appender-buffer-queue-cap | capacity of per-log queue of pending writes while sequencer  is initializing or activating | 10000 | requires&nbsp;restart, server&nbsp;only |
-| byte-offsets | Enables the server-side byte offset calculation feature.NOTE: There is no guarantee of byte offsets result correctness if featurewas switched on->off->on in period shorter than retention value forlogs. | false | server&nbsp;only |
+| byte-offsets | Enables the server-side byte offset calculation feature. NOTE: There is no guarantee of byte offsets result correctness if featurewas switched on->off->on in period shorter than retention value forlogs. | false | server&nbsp;only |
 | check-node-health-request-timeout | Timeout for health check probes that sequencers send to unresponsive storage nodes. If no reply arrives after timeout, another probe is sent. | 120s | server&nbsp;only |
 | checksum-bits | how big a checksum to include with newly appended records (0, 32 or 64) | 32 |  |
 | copyset-locality-min-scope | Tl;dr: if you experience data distribution imbalance caused by hot logs, and you have plenty of unused cross-rack/cross-region bandwidth, try changing this setting to "root"; otherwise the default "rack" is just fine.  More details: let X be the value of this setting, and let Y be the biggest scope in log's replicateAcross property; if Y < X, nothing happens; if Y >= X, at least one copy of each record will be stored in sequencer's domain of scope Y (not X), when it's possible without affecting average data distribution. This, combined with chain-sending, typically reduces the number of cross-Y hops by one per record. | rack | server&nbsp;only |
@@ -625,7 +625,7 @@ sidebar_label: Settings
 | disable-outlier-based-graylisting | setting this to true disables the outlier based graylisting nodes by sequencers in the write path | true | **experimental**, server&nbsp;only |
 | disabled-retry-interval | Time interval during which a sequencer will not route record copies to a storage node that reported a permanent error. | 30s | server&nbsp;only |
 | enable-adaptive-store-timeout | decides whether to enable an adaptive store timeout | false | **experimental**, server&nbsp;only |
-| enable-offset-map | Enables the server-side OffsetMap calculation feature.NOTE: There is no guarantee of byte offsets result correctness if featurewas switched on->off->on in period shorter than retention value forlogs. | false | server&nbsp;only |
+| enable-offset-map | Enables the server-side OffsetMap calculation feature. NOTE: There is no guarantee of byte offsets result correctness if featurewas switched on->off->on in period shorter than retention value for logs. | false | server&nbsp;only |
 | enable-sticky-copysets | If set, sequencers will enable sticky copysets. Doesn't affect the copyset index. | true | requires&nbsp;restart, server&nbsp;only |
 | epoch-metadata-use-new-storage-set-format | Serialize copysets using ShardIDs instead of node\_index\_t inside EpochMetaData. TODO(T15517759): enable by default once Flexible Log Sharding is fully implemented and this has been thoroughly tested. | false | **experimental** |
 | gray-list-threshold | if the number of storage nodes graylisted on the write path of a log exceeds this fraction of the log's nodeset size the gray list will be cleared to make sure that copysets can still be picked | 0.25 | server&nbsp;only |
