@@ -175,7 +175,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        &node_stats_boycott_min_adaptive_duration,
        "30min",
        validate_positive<ssize_t>(),
-       "(experimental) The minmum (and default) adaptive boycotting duration",
+       "(experimental) The minimum (and default) adaptive boycotting duration",
        SERVER | EXPERIMENTAL,
        SettingsCategory::SequencerBoycotting);
 
@@ -191,7 +191,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        &node_stats_boycott_adaptive_duration_increase_factor,
        "2",
        validate_positive<ssize_t>(),
-       "(experimental) the multiplicative increase factor of the adaptive"
+       "(experimental) the multiplicative increase factor of the adaptive "
        "boycotting duration",
        SERVER | EXPERIMENTAL,
        SettingsCategory::SequencerBoycotting);
@@ -200,7 +200,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        &node_stats_boycott_adaptive_duration_decrease_rate,
        "1min",
        validate_positive<ssize_t>(),
-       "(experimental) the additive decrease rate of the adaptive boycotting"
+       "(experimental) the additive decrease rate of the adaptive boycotting "
        "duration",
        SERVER | EXPERIMENTAL,
        SettingsCategory::SequencerBoycotting);
@@ -209,7 +209,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        &node_stats_boycott_adaptive_duration_decrease_time_step,
        "30s",
        validate_positive<ssize_t>(),
-       "(experimental) the time step of the decrease of the adaptive boycotting"
+       "(experimental) the time step of the decrease of the adaptive boycotting "
        "duration",
        SERVER | EXPERIMENTAL,
        SettingsCategory::SequencerBoycotting);

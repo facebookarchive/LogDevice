@@ -31,7 +31,7 @@ class PrincipalParserFactory : public Plugin {
    * @param type The AuthenticationType representing which PrincipalParser
    *             will be created.
    * @return     A unique pointer to the PrincipalParser if successful. A
-   *             nullptr will be returned when the AuthenticaitonType is NONE,
+   *             nullptr will be returned when the AuthenticationType is NONE,
    *             invalid or, when no suitable PrincipalParser is found for the
    *             AuthenticationType
    */

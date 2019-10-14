@@ -57,7 +57,7 @@ getRecordErrorDescriptions() {
       std::string(
           "Not all copies of the last wave of a record have the same copyset. "
           "This is unexpected and may be due to rebuilding failures leaving "
-          "inconsistent copysets accross copies of the same wave."),
+          "inconsistent copysets across copies of the same wave."),
       std::string("A record has been found on node `NX` but `NX` is not in the "
                   "record's "
                   "copyset. This is really bad. This should never happen."),
@@ -79,8 +79,8 @@ getRecordErrorDescriptions() {
           "their expected failure domain properties. For instance, a record "
           "lies "
           "within an epoch whose metadata indicates that records should be "
-          "replicated accross 2 racks but all copies are on the same rack."),
-      std::string("Same as BAD_REPLICATION_LAST_WAVE but accross all waves."),
+          "replicated across 2 racks but all copies are on the same rack."),
+      std::string("Same as BAD_REPLICATION_LAST_WAVE but across all waves."),
       std::string(
           "Some copies of a record are hole plugs while some others have "
           "payloads. "

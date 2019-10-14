@@ -225,7 +225,7 @@ class RocksDBSettings : public SettingsBundle {
   // its uncommitted data.
   std::chrono::milliseconds partition_idle_flush_trigger;
 
-  // Minumum guaranteed time period for a node to re-dirty a partition after
+  // Minimum guaranteed time period for a node to re-dirty a partition after
   // a MemTable is flushed without incurring a syncronous write penalty to
   // update the partition dirty metadata
   std::chrono::milliseconds partition_redirty_grace_period;

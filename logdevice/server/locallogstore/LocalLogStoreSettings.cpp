@@ -73,7 +73,7 @@ void LocalLogStoreSettings::defineSettings(SettingEasyInit& init) {
          }
        },
        "minimal interval between consecutive manual "
-       "compactions on log stores"
+       "compactions on log stores "
        "that are out of disk space",
        SERVER,
        SettingsCategory::LogsDB);

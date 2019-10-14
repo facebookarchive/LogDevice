@@ -83,7 +83,7 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
          );
        }
      },
-     "The precentage of the storage that is allowed to be taken down by "
+     "The percentage of the storage that is allowed to be taken down by "
      "operations, safety checker will take into account DEAD nodes as well. "
      "This means that if this value is 25, then safety checker will deny "
      "maintenances that will may take down more storage nodes. The percentage "
@@ -103,7 +103,7 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
          );
        }
      },
-     "The precentage of the sequencing capacity that is allowed to be taken "
+     "The percentage of the sequencing capacity that is allowed to be taken "
      "down by operations, safety checker will take into account DEAD nodes as "
      "well. This means that if this value is 25, then safety checker will deny "
      "maintenances that will may take down more sequencer nodes. The percentage "

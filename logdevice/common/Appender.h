@@ -783,7 +783,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   // so that we can expect to get replies from them.
   copyset_size_t replies_expected_;
 
-  // the following members keep track of the status of STOREs accross waves:
+  // the following members keep track of the status of STOREs across waves:
   // number of successful STORE messages
   bool stored_{false};
   // the number of failed STORE messages with E::PREEMPTED

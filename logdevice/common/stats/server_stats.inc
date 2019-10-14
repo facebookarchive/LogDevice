@@ -1232,7 +1232,7 @@ STAT_DEFINE(flow_groups_run_deadline_exceeded_rt, SUM)
 // intact or marking each shard "unrecoverable" which means "I know the data on
 // this shard will never be restored, allow readers to make progress".
 STAT_DEFINE(rebuilding_waiting_for_recoverable_shards, MAX)
-// Number of storage tasks buffered accross all workers.
+// Number of storage tasks buffered across all workers.
 STAT_DEFINE(storage_task_buffer_size_fast_time_sensitive, SUM)
 STAT_DEFINE(storage_task_buffer_size_fast_stallable, SUM)
 STAT_DEFINE(storage_task_buffer_size_slow, SUM)

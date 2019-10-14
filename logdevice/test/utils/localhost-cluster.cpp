@@ -83,7 +83,7 @@ void parse_command_line(int argc, const char* argv[]) {
     ("nracks",
      value<int>(&options::nracks)
      ->default_value(options::nracks),
-     "number of racks in the cluster to spread the nodes accross")
+     "number of racks in the cluster to spread the nodes across")
 
     ("nodeset-size",
      value<int>(&options::nodeset_size),

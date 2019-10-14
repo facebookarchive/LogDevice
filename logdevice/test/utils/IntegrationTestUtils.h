@@ -269,7 +269,7 @@ class ClusterFactory {
 
   /**
    * Sets that number of logs that needs to be created if LogsConfigManager is
-   * enabled. It's created by client API calls after after bootstraping the
+   * enabled. It's created by client API calls after after bootstrapping the
    * cluster. It's ignored when `defer_start_` is true.
    */
   ClusterFactory& setNumLogsConfigManagerLogs(int n) {
