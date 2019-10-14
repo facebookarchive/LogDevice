@@ -52,6 +52,7 @@ void AdminCommandConnection::TLSSensingCallback::getReadBuffer(
   if (rv != 1) {
     ld_critical("There is no 1 byte in the socket for TLS detection.");
     connection_.closeConnectionAndDestroyObject();
+    return;
   }
 
   ld_debug("read data is available for peeking");
