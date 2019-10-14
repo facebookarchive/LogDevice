@@ -66,7 +66,12 @@ void ServerProcessor::init() {
           *executor,
           updateableSettings()->health_monitor_poll_interval_ms,
           getWorkerCount(WorkerType::GENERAL),
-          getWorker(worker_id_t(0), WorkerType::FAILURE_DETECTOR).getStats());
+          getWorker(worker_id_t(0), WorkerType::FAILURE_DETECTOR).getStats(),
+          updateableSettings()->health_monitor_max_queue_stalls_avg_ms,
+          updateableSettings()->health_monitor_max_queue_stall_duration_ms,
+          updateableSettings()->health_monitor_max_overloaded_worker_percentage,
+          updateableSettings()->health_monitor_max_stalls_avg_ms,
+          updateableSettings()->health_monitor_max_stalled_worker_percentage);
       health_monitor_->startUp();
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct ServerHealthMonitor: %s",

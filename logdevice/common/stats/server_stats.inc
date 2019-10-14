@@ -1026,6 +1026,8 @@ STAT_DEFINE(health_monitor_errors, SUM)
 STAT_DEFINE(health_monitor_state_indicator, SUM)
 // Note: temporary
 STAT_DEFINE(health_monitor_overload_indicator, SUM)
+// Note: temporary
+STAT_DEFINE(health_monitor_stall_indicator, SUM)
 
 // EventLoop delays.
 STAT_DEFINE(event_loop_sched_delay, SUM)

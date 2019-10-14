@@ -23,11 +23,16 @@ namespace facebook { namespace logdevice {
 
 class ServerHealthMonitor : public HealthMonitor {
  public:
-  enum class NodeState { HEALTHY, UNHEALTHY };
+  enum class NodeState { HEALTHY, OVERLOADED, UNHEALTHY };
   ServerHealthMonitor(folly::Executor& executor,
                       std::chrono::milliseconds sleep_period,
                       int num_workers,
-                      StatsHolder* stats);
+                      StatsHolder* stats,
+                      std::chrono::milliseconds max_queue_stalls_avg,
+                      std::chrono::milliseconds max_queue_stall_duration,
+                      double max_overloaded_worker_percentage,
+                      std::chrono::milliseconds max_stalls_avg,
+                      double max_stalled_worker_percentage);
   ~ServerHealthMonitor() override {}
 
   void startUp() override;
@@ -47,36 +52,50 @@ class ServerHealthMonitor : public HealthMonitor {
 
  private:
   friend class ServerHealthMonitorTest;
-  using TimeSeries = folly::BucketedTimeSeries<std::chrono::milliseconds,
+  using TimeSeries = folly::BucketedTimeSeries<std::chrono::duration<float>,
                                                std::chrono::steady_clock>;
   using TimePoint = std::chrono::time_point<std::chrono::steady_clock,
                                             std::chrono::milliseconds>;
-  static constexpr int kNumBuckets = 6;
-  static constexpr int kNumPeriods = 3;
-  static constexpr int kPeriodRange = 2;
+  static constexpr int kNumBuckets = 12;
+  static constexpr int kNumPeriods = 6;
+  static constexpr int kMultiplier = 3;
+  static constexpr int kPeriodRange = 3;
   static constexpr int kDecreaseRate = 1000; // decrease is just time passed
   static constexpr int kFuzzFactor = 0;      // no uncertainty
   static constexpr std::chrono::milliseconds kMaxTimerValue =
-      std::chrono::milliseconds(10000);
+      std::chrono::milliseconds(100000);
   static constexpr std::chrono::milliseconds kMaxLoopStall =
-      std::chrono::milliseconds(10);
+      std::chrono::milliseconds(50);
 
   folly::Executor& executor_;
-  std::chrono::milliseconds sleep_period_;
+  const std::chrono::milliseconds sleep_period_;
   std::atomic_bool shutdown_{false};
   folly::Promise<folly::Unit> shutdown_promise_;
   std::chrono::steady_clock::time_point last_entry_time_;
   StatsHolder* stats_;
+
+  const std::chrono::milliseconds max_queue_stalls_avg_;
+  const std::chrono::milliseconds max_queue_stall_duration_;
+  const double max_overloaded_worker_percentage_;
+
+  const std::chrono::milliseconds max_stalls_avg_;
+  const double max_stalled_worker_percentage_;
+
+  struct StallInfo {
+    int critically_stalled_{0};
+    bool stalled_{false};
+  };
+
   ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
       state_timer_;
   NodeState node_state_{NodeState::HEALTHY};
   bool overloaded_{false};
+  StallInfo stall_info_{0, false};
 
-  bool isOverloaded(TimePoint start_time, TimePoint end_time);
+  bool isOverloaded(TimePoint now, std::chrono::milliseconds half_period);
+  StallInfo isStalled(TimePoint now, std::chrono::milliseconds half_period);
   void updateVariables(TimePoint now);
-  void calculateNegativeSignal(TimePoint now,
-                               TimePoint start_time,
-                               TimePoint end_time);
+  void calculateNegativeSignal(TimePoint now);
 
   struct HMInfo {
     int num_workers_{};
