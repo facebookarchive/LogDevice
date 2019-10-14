@@ -413,16 +413,16 @@ class ReplicatedStateMachine {
   // Called when we received a gap from the delta log.
   bool onDeltaGap(const GapRecord& gap);
 
-  // Called once the tail lsn of the delta log was retrieved. Create a read
-  // stream to read the delta log starting from `delta_log_start_lsn_`.
+  // Called when the tail lsn of the delta log was retrieved. Can be called
+  // multiple times.
   void onGotDeltaLogTailLSN(Status st, lsn_t lsn);
 
   // Called when the delta log client read stream switches to being unhealthy
   // or healthy again
   void onDeltaLogReadStreamHealthChange(bool is_healthy);
 
-  // Called once the tail lsn of the snapshot log was retrieved. Create a read
-  // stream to read the snapshot log.
+  // Called when the tail lsn of the snapshot log was retrieved. Can be called
+  // multiple times.
   void onGotSnapshotLogTailLSN(Status st, lsn_t start, lsn_t lsn);
 
   // Create a payload for a snapshot. The payload includes `data` serialized as

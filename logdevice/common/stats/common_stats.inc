@@ -214,6 +214,7 @@ STAT_DEFINE(get_seq_state_attempts_context_historical_metadata, SUM)
 STAT_DEFINE(get_seq_state_attempts_context_get_tail_record, SUM)
 STAT_DEFINE(get_seq_state_attempts_context_reader_monitoring, SUM)
 STAT_DEFINE(get_seq_state_attempts_context_is_log_empty_v2, SUM)
+STAT_DEFINE(get_seq_state_attempts_context_rsm, SUM)
 
 // No. of actual GetSeqStateRequests that were sent out
 STAT_DEFINE(get_seq_state_unique_context_unknown, SUM)
@@ -236,6 +237,7 @@ STAT_DEFINE(get_seq_state_unique_context_historical_metadata, SUM)
 STAT_DEFINE(get_seq_state_unique_context_get_tail_record, SUM)
 STAT_DEFINE(get_seq_state_unique_context_reader_monitoring, SUM)
 STAT_DEFINE(get_seq_state_unique_context_is_log_empty_v2, SUM)
+STAT_DEFINE(get_seq_state_unique_context_rsm, SUM)
 
 // Socket stats.
 STAT_DEFINE(sock_read_events, SUM)

@@ -133,6 +133,7 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
     GET_TAIL_RECORD,
     READER_MONITORING,
     IS_LOG_EMPTY_V2,
+    RSM,
     MAX,
   };
 

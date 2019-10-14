@@ -86,7 +86,7 @@ class GET_SEQ_STATE_REPLY_Message : public Message {
   //    PREEMPTED     This sequencer was preempted for this log by some other
   //                  sequencer
   //    AGAIN         The node is responsible for this log, but the sequencer
-  //                  is not ready yet(e.g. recovery is not complete)
+  //                  is not ready yet (e.g. recovery is not complete)
   //    NOSEQUENCER   Sequencer for the log doesn't exist yet
   //    NOTREADY      The node is not ready e.g. it is still coming up or it is
   //                  not a sequencer node.

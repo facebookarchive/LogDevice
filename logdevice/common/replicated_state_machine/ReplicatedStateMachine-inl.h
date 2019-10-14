@@ -142,7 +142,8 @@ void ReplicatedStateMachine<T, D>::getSnapshotLogTailLSN() {
   std::unique_ptr<Request> req = std::make_unique<SyncSequencerRequest>(
       snapshot_log_id_,
       SyncSequencerRequest::INCLUDE_TAIL_ATTRIBUTES,
-      cb_wrapper);
+      cb_wrapper,
+      GetSeqStateRequest::Context::RSM);
   postRequestWithRetrying(req);
 }
 
@@ -442,8 +443,8 @@ void ReplicatedStateMachine<T, D>::getDeltaLogTailLSN() {
     });
   };
 
-  std::unique_ptr<Request> req =
-      std::make_unique<SyncSequencerRequest>(delta_log_id_, 0, cb);
+  std::unique_ptr<Request> req = std::make_unique<SyncSequencerRequest>(
+      delta_log_id_, 0, cb, GetSeqStateRequest::Context::RSM);
   postRequestWithRetrying(req);
 }
 
