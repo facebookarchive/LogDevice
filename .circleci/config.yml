@@ -2,9 +2,6 @@ aliases:
   - &filter-ignore-gh-pages
     branches:
       ignore: gh-pages
-  - &filter-only-master
-    branches:
-      only: master
 
 version: 2
 jobs:
@@ -105,8 +102,15 @@ jobs:
           name: Push Image to DockerHub
           command: |
             if [ -n "$DOCKER_PWD" ]; then
+              if [ "$CIRCLE_BRANCH" == "master" ]; then
+                DOCKER_TAG=latest;
+              elif [ -n "$CIRCLE_TAG" ]; then
+                DOCKER_TAG=$CIRCLE_TAG;
+              else
+                DOCKER_TAG=$CIRCLE_BRANCH;
+              fi
               echo $DOCKER_PWD | docker login -u $DOCKER_LOGIN --password-stdin
-              docker push facebookincubator/logdevice:latest
+              docker push facebookincubator/logdevice:$DOCKER_TAG
             fi
 workflows:
   version: 2
@@ -119,10 +123,16 @@ workflows:
           requires:
             - build
       - dockerimage:
-          filters: *filter-only-master
+          filters:
+            branches:
+              only: master
+            tags:
+              only: /.*/
           requires:
             - build
       - deploy-website:
-          filters: *filter-only-master
+          filters:
+            branches:
+              only: master
           requires:
             - build
