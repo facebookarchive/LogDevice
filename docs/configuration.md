@@ -73,7 +73,6 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
         "max_writes_in_flight": 2000,
         "nodeset_size": 20,
         "replicate_across": {
-        "replicate_across": {
             "node": 6,
             "rack": 3
         },
