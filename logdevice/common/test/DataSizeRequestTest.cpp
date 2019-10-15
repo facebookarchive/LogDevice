@@ -60,7 +60,8 @@ class Callback {
 };
 
 ShardAuthoritativeStatusMap starting_map_;
-void changeShardStartingAuthStatus(ShardID shard, AuthoritativeStatus st) {
+
+void changeShardStartingAuthStatus(ShardID shard, AuthoritativeStatus st) {    
   starting_map_.setShardStatus(shard.node(), shard.shard(), st);
 }
 
@@ -193,9 +194,16 @@ ShardID node(node_index_t index) {
   return ShardID(index, 1);
 }
 
+class DataSizeRequestTest : public ::testing::Test {
+ public:
+  void SetUp() override {
+    starting_map_ = ShardAuthoritativeStatusMap();
+  }
+};
+
 } // namespace
 
-TEST(DataSizeRequestTest, AllEmpty) {
+TEST_F(DataSizeRequestTest, AllEmpty) {
   Callback cb;
   MockDataSizeRequest req(5,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
@@ -217,7 +225,7 @@ TEST(DataSizeRequestTest, AllEmpty) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(DataSizeRequestTest, EmptyAfterFmajority) {
+TEST_F(DataSizeRequestTest, EmptyAfterFmajority) {
   Callback cb;
   MockDataSizeRequest req(5,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
@@ -247,7 +255,7 @@ TEST(DataSizeRequestTest, EmptyAfterFmajority) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(DataSizeRequestTest, NotEmpty) {
+TEST_F(DataSizeRequestTest, NotEmpty) {
   Callback cb;
   MockDataSizeRequest req(8,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
@@ -284,9 +292,10 @@ TEST(DataSizeRequestTest, NotEmpty) {
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
 }
 
-TEST(DataSizeRequestTest, NotEmptyMixedResponses) {
+TEST_F(DataSizeRequestTest, NotEmptyMixedResponses) {
   Callback cb;
   // Have N7's shard be underreplicated from the start
+  starting_map_ = ShardAuthoritativeStatusMap();
   changeShardStartingAuthStatus(node(7), AuthoritativeStatus::UNDERREPLICATION);
   MockDataSizeRequest req(8,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
@@ -319,7 +328,7 @@ TEST(DataSizeRequestTest, NotEmptyMixedResponses) {
   cb.assertCalled(E::OK, {16900000000, 17100000000});
 }
 
-TEST(DataSizeRequestTest, DeadEnd1) {
+TEST_F(DataSizeRequestTest, DeadEnd1) {
   Callback cb;
   MockDataSizeRequest req(5,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
@@ -345,9 +354,10 @@ TEST(DataSizeRequestTest, DeadEnd1) {
   cb.assertCalled(E::PARTIAL, {16800000000, 16950000000});
 }
 
-TEST(DataSizeRequestTest, DeadEnd2) {
+TEST_F(DataSizeRequestTest, DeadEnd2) {
   Callback cb;
   // Set some initial shard authoritative states
+  starting_map_ = ShardAuthoritativeStatusMap();
   changeShardStartingAuthStatus(node(7), AuthoritativeStatus::UNDERREPLICATION);
   changeShardStartingAuthStatus(
       node(1), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
@@ -378,12 +388,16 @@ TEST(DataSizeRequestTest, DeadEnd2) {
   ASSERT_TRUE(req.haveDeadEnd());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   // Answer should be (SUM / 4 responses) * 8 nodes = ~18.85 GB.
+  
+  // WHY 4 responses ???
+  
   cb.assertCalled(E::PARTIAL, {18800000000, 18950000000});
 }
 
-TEST(DataSizeRequestTest, DeadEndWithPermanentErrors1) {
+TEST_F(DataSizeRequestTest, DeadEndWithPermanentErrors1) {
   Callback cb;
   // Set some initial shard authoritative states
+  starting_map_ = ShardAuthoritativeStatusMap();
   changeShardStartingAuthStatus(node(7), AuthoritativeStatus::UNDERREPLICATION);
   MockDataSizeRequest req(8,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
@@ -405,8 +419,9 @@ TEST(DataSizeRequestTest, DeadEndWithPermanentErrors1) {
   cb.assertCalled(E::PARTIAL, {26800000000, 27200000000});
 }
 
-TEST(DataSizeRequestTest, DeadEndWithPermanentErrors2) {
+TEST_F(DataSizeRequestTest, DeadEndWithPermanentErrors2) {
   Callback cb;
+  starting_map_ = ShardAuthoritativeStatusMap();
   MockDataSizeRequest req(8,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
@@ -435,7 +450,7 @@ TEST(DataSizeRequestTest, DeadEndWithPermanentErrors2) {
   cb.assertCalled(E::PARTIAL, {16000000000, 16500000000});
 }
 
-TEST(DataSizeRequestTest, Failed) {
+TEST_F(DataSizeRequestTest, Failed) {
   Callback cb;
   MockDataSizeRequest req(5,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
@@ -452,7 +467,7 @@ TEST(DataSizeRequestTest, Failed) {
   cb.assertCalled(E::FAILED, 0);
 }
 
-TEST(DataSizeRequestTest, ClientTimeout) {
+TEST_F(DataSizeRequestTest, ClientTimeout) {
   Callback cb;
   MockDataSizeRequest req(5,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
