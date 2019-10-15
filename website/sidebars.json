@@ -19,7 +19,8 @@
       "Concepts": [
           "Writepath",
           "ReadPath",
-          "Terminology"
+          "Terminology",
+          "Consensus"
         ],
       "Designs": [
           "FailureDetection",
