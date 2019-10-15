@@ -59,12 +59,6 @@ class Callback {
   Status status_;
 };
 
-ShardAuthoritativeStatusMap starting_map_;
-
-void changeShardStartingAuthStatus(ShardID shard, AuthoritativeStatus st) {    
-  starting_map_.setShardStatus(shard.node(), shard.shard(), st);
-}
-
 static_assert(
     static_cast<int>(DataSizeAccuracy::COUNT) == 1,
     "Some cases of DataSizeAccuracy not covered by integration tests!");
@@ -76,6 +70,7 @@ class MockDataSizeRequest : public DataSizeRequest {
                       Callback& callback,
                       std::chrono::milliseconds start,
                       std::chrono::milliseconds end,
+                      ShardAuthoritativeStatusMap starting_map,
                       folly::Optional<Configuration::NodesConfig>
                           nodes_config_override = folly::none)
       : DataSizeRequest(logid_t(1),
@@ -84,9 +79,8 @@ class MockDataSizeRequest : public DataSizeRequest {
                         DataSizeAccuracy::APPROXIMATE,
                         std::ref(callback),
                         std::chrono::seconds(1)),
-        replication_(replication) {
-    map_ = starting_map_;
-
+        replication_(replication),
+        map_(starting_map) {
     Configuration::NodesConfig nodes_config = nodes_config_override.hasValue()
         ? std::move(nodes_config_override.value())
         : createSimpleNodesConfig(storage_set_size);
@@ -196,9 +190,11 @@ ShardID node(node_index_t index) {
 
 class DataSizeRequestTest : public ::testing::Test {
  public:
-  void SetUp() override {
-    starting_map_ = ShardAuthoritativeStatusMap();
+  void changeShardStartingAuthStatus(ShardID shard, AuthoritativeStatus st) {    
+    starting_map_.setShardStatus(shard.node(), shard.shard(), st);
   }
+
+  ShardAuthoritativeStatusMap starting_map_ = ShardAuthoritativeStatusMap();
 };
 
 } // namespace
@@ -209,7 +205,8 @@ TEST_F(DataSizeRequestTest, AllEmpty) {
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::zero(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(0), E::OK, 0);
@@ -231,7 +228,8 @@ TEST_F(DataSizeRequestTest, EmptyAfterFmajority) {
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::zero(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(0), E::OK, 0);
@@ -261,7 +259,8 @@ TEST_F(DataSizeRequestTest, NotEmpty) {
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::zero(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(2), E::OK, 0);
@@ -295,13 +294,13 @@ TEST_F(DataSizeRequestTest, NotEmpty) {
 TEST_F(DataSizeRequestTest, NotEmptyMixedResponses) {
   Callback cb;
   // Have N7's shard be underreplicated from the start
-  starting_map_ = ShardAuthoritativeStatusMap();
   changeShardStartingAuthStatus(node(7), AuthoritativeStatus::UNDERREPLICATION);
   MockDataSizeRequest req(8,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::zero(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(2), E::OK, 0);
@@ -334,7 +333,8 @@ TEST_F(DataSizeRequestTest, DeadEnd1) {
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::zero(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.mockShardStatusChanged(node(2), AuthoritativeStatus::UNAVAILABLE);
@@ -357,7 +357,6 @@ TEST_F(DataSizeRequestTest, DeadEnd1) {
 TEST_F(DataSizeRequestTest, DeadEnd2) {
   Callback cb;
   // Set some initial shard authoritative states
-  starting_map_ = ShardAuthoritativeStatusMap();
   changeShardStartingAuthStatus(node(7), AuthoritativeStatus::UNDERREPLICATION);
   changeShardStartingAuthStatus(
       node(1), AuthoritativeStatus::AUTHORITATIVE_EMPTY);
@@ -365,7 +364,8 @@ TEST_F(DataSizeRequestTest, DeadEnd2) {
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::min(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(5), E::OK, 10122122122);
@@ -387,23 +387,20 @@ TEST_F(DataSizeRequestTest, DeadEnd2) {
   ASSERT_FALSE(req.haveSufficientResult());
   ASSERT_TRUE(req.haveDeadEnd());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
-  // Answer should be (SUM / 4 responses) * 8 nodes = ~18.85 GB.
-  
-  // WHY 4 responses ???
-  
+  // Answer should be (SUM / 4 responses) * 8 nodes = ~18.85 GB.  
   cb.assertCalled(E::PARTIAL, {18800000000, 18950000000});
 }
 
 TEST_F(DataSizeRequestTest, DeadEndWithPermanentErrors1) {
   Callback cb;
   // Set some initial shard authoritative states
-  starting_map_ = ShardAuthoritativeStatusMap();
   changeShardStartingAuthStatus(node(7), AuthoritativeStatus::UNDERREPLICATION);
   MockDataSizeRequest req(8,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::min(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(5), E::OK, 10122122122);
@@ -421,12 +418,12 @@ TEST_F(DataSizeRequestTest, DeadEndWithPermanentErrors1) {
 
 TEST_F(DataSizeRequestTest, DeadEndWithPermanentErrors2) {
   Callback cb;
-  starting_map_ = ShardAuthoritativeStatusMap();
   MockDataSizeRequest req(8,
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::min(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(5), E::OK, 10122122122);
@@ -456,7 +453,8 @@ TEST_F(DataSizeRequestTest, Failed) {
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::zero(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(0), E::FAILED, 0);
@@ -473,7 +471,8 @@ TEST_F(DataSizeRequestTest, ClientTimeout) {
                           ReplicationProperty({{NodeLocationScope::NODE, 3}}),
                           cb,
                           std::chrono::milliseconds::zero(),
-                          std::chrono::milliseconds::max());
+                          std::chrono::milliseconds::max(),
+                          starting_map_);
   ASSERT_TRUE(req.isMockJobTimerActive());
   ASSERT_FALSE(req.isMockGracePeriodTimerActive());
   req.onReply(node(0), E::FAILED, 0);
