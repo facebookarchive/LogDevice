@@ -68,7 +68,8 @@ class NodesConfigurationInit {
   bool
   init(std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_config,
        std::shared_ptr<PluginRegistry> plugin_registry,
-       const std::string& server_seed_str);
+       const std::string& server_seed_str,
+       std::shared_ptr<ServerConfig> current_server_config);
 
   /**
    * Updates the passed updatable `nodes_configuration_config` with the
@@ -88,7 +89,8 @@ class NodesConfigurationInit {
 
  protected:
   std::shared_ptr<UpdateableConfig> buildBootstrappingServerConfig(
-      const std::vector<std::string>& host_list) const;
+      const std::vector<std::string>& host_list,
+      std::shared_ptr<ServerConfig> current_server_config) const;
 
   // Used by the unit tests to inject extra settings to the created processor
   virtual void injectExtraSettings(Settings&) const {}
@@ -98,8 +100,9 @@ class NodesConfigurationInit {
                              std::vector<std::string>* addrs) const;
 
  private:
-  std::shared_ptr<Processor>
-  buildBootstrappingProcessor(std::shared_ptr<UpdateableConfig> config) const;
+  std::shared_ptr<Processor> buildBootstrappingProcessor(
+      std::shared_ptr<UpdateableConfig> config,
+      std::shared_ptr<PluginRegistry> plugin_registry) const;
 
   static std::shared_ptr<const configuration::nodes::NodesConfiguration>
   parseNodesConfiguration(const std::string& config);

@@ -203,7 +203,8 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
               "server...");
       success = nodes_cfg_init.init(config->updateableNCMNodesConfiguration(),
                                     plugin_registry,
-                                    nodes_configuration_seed);
+                                    nodes_configuration_seed,
+                                    config->getServerConfig());
     } else if (use_zk_ncs) {
       ld_info("Trying to obtain initial NodesConfiguration from Zookeeper...");
       success = nodes_cfg_init.initWithoutProcessor(

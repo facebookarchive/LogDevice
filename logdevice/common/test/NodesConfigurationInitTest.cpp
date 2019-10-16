@@ -109,11 +109,17 @@ class TimeControlledNCS : public NodesConfigurationStore {
 
 TEST(NodesConfigurationInitTest, ConfigCreation) {
   MockNodesConfigurationInit init(nullptr, UpdateableSettings<Settings>());
-  auto config = init.buildBootstrappingServerConfig({
-      "10.0.0.2:4440",
-      "10.0.0.3:4440",
-      "10.0.0.4:4440",
-  });
+  auto server_config =
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
+          ->serverConfig();
+
+  auto config = init.buildBootstrappingServerConfig(
+      {
+          "10.0.0.2:4440",
+          "10.0.0.3:4440",
+          "10.0.0.4:4440",
+      },
+      server_config);
   EXPECT_NE(nullptr, config);
 
   auto nodes = config->getServerConfig()
@@ -147,8 +153,15 @@ TEST(NodesConfigurationInitTest, InitTest) {
   MockNodesConfigurationInit init(
       std::move(store), UpdateableSettings<Settings>());
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
-  int success = init.init(
-      fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
+
+  auto current_server_config =
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
+          ->serverConfig();
+
+  int success = init.init(fetched_node_config,
+                          make_test_plugin_registry(),
+                          "data:10.0.0.2:4440",
+                          current_server_config);
   EXPECT_TRUE(success);
   ASSERT_NE(nullptr, fetched_node_config->get());
   EXPECT_EQ(vcs_config_version_t(2), fetched_node_config->get()->getVersion());
@@ -172,8 +185,13 @@ TEST(NodesConfigurationInitTest, Retry) {
   MockNodesConfigurationInit init(
       std::move(store), UpdateableSettings<Settings>(settings));
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
-  int success = init.init(
-      fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
+  auto current_server_config =
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
+          ->serverConfig();
+  int success = init.init(fetched_node_config,
+                          make_test_plugin_registry(),
+                          "data:10.0.0.2:4440",
+                          current_server_config);
   EXPECT_TRUE(success);
   ASSERT_NE(nullptr, fetched_node_config->get());
   EXPECT_EQ(*nodes_configuration, *fetched_node_config->get());
@@ -196,8 +214,13 @@ TEST(NodesConfigurationInitTest, Timeout) {
   MockNodesConfigurationInit init(
       std::move(store), UpdateableSettings<Settings>(settings));
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
-  int success = init.init(
-      fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
+  auto current_server_config =
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
+          ->serverConfig();
+  int success = init.init(fetched_node_config,
+                          make_test_plugin_registry(),
+                          "data:10.0.0.2:4440",
+                          current_server_config);
   EXPECT_FALSE(success);
   ASSERT_EQ(nullptr, fetched_node_config->get());
 }
@@ -219,8 +242,13 @@ TEST(NodesConfigurationInitTest, WithLongDurationCallback) {
   MockNodesConfigurationInit init(
       std::move(store), UpdateableSettings<Settings>(settings));
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
-  int success = init.init(
-      fetched_node_config, make_test_plugin_registry(), "data:10.0.0.2:4440");
+  auto current_server_config =
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
+          ->serverConfig();
+  int success = init.init(fetched_node_config,
+                          make_test_plugin_registry(),
+                          "data:10.0.0.2:4440",
+                          current_server_config);
   // we should still success after 2 seconds despite that the config init
   // timeout is 1s
   EXPECT_TRUE(success);
