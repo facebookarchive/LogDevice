@@ -728,4 +728,8 @@ folly::Func SocketDependencies::setupContextGuard() {
     }
   };
 }
+
+folly::Executor* SocketDependencies::getExecutor() const {
+  return worker_->getExecutor();
+}
 }} // namespace facebook::logdevice

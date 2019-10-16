@@ -513,7 +513,7 @@ class Socket : public TrafficShappingSocket {
   /**
    * The amount of bytes waiting to be sent on this socket.
    */
-  size_t getBytesPending() const;
+  virtual size_t getBytesPending() const;
 
   /**
    * Check if the socket cannot drain a message in
@@ -548,6 +548,18 @@ class Socket : public TrafficShappingSocket {
    * If n_retries_left_ is positive, will try to connect again.
    */
   virtual void onConnectAttemptTimeout();
+
+  enum class SendStatus : uint8_t {
+    SCHEDULED, // Buffer is scheduled to be written into the socket.
+    SENT,  // Buffer was written into the socket. Does not guarantee that bytes
+           // were actually received by the endpoint.
+    ERROR, // Hit errors when writing the bytes.
+  };
+  /**
+   * Writes a serialized buffer into the socket.
+   * @returns SendStatus based on the status of the write.
+   */
+  virtual SendStatus sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain);
   virtual void
       onSent(std::unique_ptr<Envelope>,
              Status,
@@ -631,17 +643,17 @@ class Socket : public TrafficShappingSocket {
    * - SSL is enabled
    * - checksumming is disabled
    * - Message Type is ACK/HELLO
-   * @return 0 for success, -1 for failure
+   * @return serialized buffer if no errors, returns a nullptr otherwise. err
+   * contains the actual reason.
    */
-  int serializeMessageWithoutChecksum(const Message& msg,
-                                      size_t msglen,
-                                      struct evbuffer* outbuf);
+  std::unique_ptr<folly::IOBuf>
+  serializeMessageWithoutChecksum(const Message& msg, size_t msglen);
   /**
-   * @return 0 for success, -1 for failure
+   * @return serialized buffer if no errors, returns a nullptr otherwise. err
+   * contains the actual reason.
    */
-  int serializeMessageWithChecksum(const Message& msg,
-                                   size_t msglen,
-                                   struct evbuffer* outbuf);
+  std::unique_ptr<folly::IOBuf> serializeMessageWithChecksum(const Message& msg,
+                                                             size_t msglen);
 
   /**
    * Allow the async message error simulator to optionally take ownership of

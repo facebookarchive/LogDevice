@@ -15,6 +15,8 @@
 
 using ::testing::_;
 using ::testing::Invoke;
+using ::testing::NotNull;
+using ::testing::Return;
 using ::testing::WithArg;
 
 using namespace facebook::logdevice;
@@ -47,4 +49,24 @@ TEST_F(ConnectionTest, ConnectTest) {
           })));
   conn_->setSocketAdapter(std::move(sock));
   EXPECT_EQ(conn_->connect(), 0);
+}
+
+TEST_F(ConnectionTest, DISABLED_SendBuffers) {
+  auto sock = std::make_unique<MockSocketAdapter>();
+  EXPECT_CALL(*sock, connect_(_, server_addr_.getSocketAddress(), _, _, _))
+      .Times(1)
+      .WillOnce(
+          WithArg<0>(Invoke([](folly::AsyncSocket::ConnectCallback* conn_cb) {
+            conn_cb->connectSuccess();
+          })));
+  EXPECT_CALL(*sock, writeChain(NotNull(), NotNull(), folly::WriteFlags::NONE))
+      .Times(1);
+  ON_CALL(*sock, good()).WillByDefault(Return(true));
+  conn_->setSocketAdapter(std::move(sock));
+
+  EXPECT_EQ(conn_->connect(), 0);
+
+  auto iobuf = folly::IOBuf::create(10);
+  iobuf->append(10);
+  conn_->sendBuffer(std::move(iobuf));
 }

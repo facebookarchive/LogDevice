@@ -144,11 +144,18 @@ class Connection : public Socket {
    */
   int connect() override;
 
+  Socket::SendStatus
+  sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) override;
+
   void close(Status reason) override;
 
   bool isClosed() const override;
 
   void setSocketAdapter(std::unique_ptr<SocketAdapter> adapter);
+
+  void onBytesPassedToTCP(size_t nbytes_drained) override;
+
+  size_t getBytesPending() const override;
 
  protected:
   folly::Future<Status> asyncConnect();
@@ -181,10 +188,58 @@ class Connection : public Socket {
 
   void onPeerClosed() override;
 
-  void onBytesPassedToTCP(size_t nbytes_drained) override;
-
   std::unique_ptr<SocketAdapter> sock_;
   std::shared_ptr<ProtocolHandler> proto_handler_;
+
+  // This is passed to WriteCallback to activate
+  class SocketWriteCallback : public folly::AsyncSocket::WriteCallback {
+   public:
+    SocketWriteCallback(IProtocolHandler* conn = nullptr)
+        : proto_handler_(conn) {}
+    /**
+     * writeSuccess() will be invoked when all of the data has been
+     * successfully written.
+     *
+     * Note that this mainly signals that the buffer containing the data to
+     * write is no longer needed and may be freed or re-used.  It does not
+     * guarantee that the data has been fully transmitted to the remote
+     * endpoint.  For example, on socket-based transports, writeSuccess() only
+     * indicates that the data has been given to the kernel for eventual
+     * transmission.
+     */
+    void writeSuccess() noexcept override {
+      proto_handler_->notifyBytesWritten(0);
+      ++num_success_;
+    }
+
+    /**
+     * writeError() will be invoked if an error occurs writing the data.
+     *
+     * @param bytesWritten The number of bytes that were successfull
+     * @param ex           An exception describing the error that occurred.
+     */
+    void writeErr(size_t /* bytesWritten */,
+                  const folly::AsyncSocketException& ex) noexcept override {
+      proto_handler_->notifyErrorOnSocket(ex);
+    }
+
+    size_t bufferedBytes() const {
+      size_t buffered_bytes = 0;
+      for (const size_t& len : chain_lengths_) {
+        buffered_bytes += len;
+      }
+      return buffered_bytes;
+    }
+
+    IProtocolHandler* proto_handler_;
+    std::deque<size_t> chain_lengths_;
+    size_t num_success_{0};
+  };
+
+  SocketWriteCallback sock_write_cb_;
+
+  std::unique_ptr<folly::IOBuf> sendChain_;
+  void drainSendQueue();
 };
 
 }} // namespace facebook::logdevice

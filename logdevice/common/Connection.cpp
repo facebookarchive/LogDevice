@@ -35,7 +35,10 @@ Connection::Connection(NodeID server_name,
     : Socket(server_name, type, conntype, flow_group, std::move(deps)),
       sock_(std::move(sock_adapter)),
       proto_handler_(
-          std::make_shared<ProtocolHandler>(this, getDeps()->getEvBase())) {}
+          std::make_shared<ProtocolHandler>(this, getDeps()->getEvBase())),
+      sock_write_cb_(proto_handler_.get()) {
+  proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
+}
 
 Connection::Connection(int fd,
                        ClientID client_name,
@@ -73,7 +76,10 @@ Connection::Connection(int fd,
              std::move(deps)),
       sock_(std::move(sock_adapter)),
       proto_handler_(
-          std::make_shared<ProtocolHandler>(this, getDeps()->getEvBase())) {}
+          std::make_shared<ProtocolHandler>(this, getDeps()->getEvBase())),
+      sock_write_cb_(proto_handler_.get()) {
+  proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
+}
 
 Connection::~Connection() {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
@@ -248,13 +254,62 @@ folly::Future<Status> Connection::asyncConnect() {
       });
 }
 
+Socket::SendStatus
+Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
+  if (sock_) {
+    if (sock_->good()) {
+      if (sendChain_) {
+        sendChain_->prependChain(std::move(buffer_chain));
+      } else {
+        sendChain_ = std::move(buffer_chain);
+        auto schedule_write =
+            [this,
+             ref = std::weak_ptr<std::atomic<bool>>(conn_closed_)]() mutable {
+              if (ref.lock() && sock_->good()) {
+                auto chain_length = sendChain_->computeChainDataLength();
+                sock_write_cb_.chain_lengths_.push_back(chain_length);
+                sock_->writeChain(&sock_write_cb_, std::move(sendChain_));
+              }
+            };
+        auto exec = getDeps()->getExecutor();
+        if (exec->getNumPriorities() > 1) {
+          exec->addWithPriority(
+              std::move(schedule_write), folly::Executor::HI_PRI);
+        } else {
+          exec->add(std::move(schedule_write));
+        }
+      }
+    }
+    // Socket was already bad or it can hit error in writeChain invocation.
+    if (sock_->good()) {
+      // OnSent for the message will be called immediately.
+      return Socket::SendStatus::SENT;
+    } else {
+      err = E::INTERNAL;
+      return Socket::SendStatus::ERROR;
+    }
+  } else {
+    return Socket::sendBuffer(
+        std::forward<std::unique_ptr<folly::IOBuf>>(buffer_chain));
+  }
+}
+
 void Connection::close(Status reason) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   if (isClosed()) {
     return;
   }
   Socket::close(reason);
-  if (sock_ && sock_->good()) {
+  if (sock_) {
+    size_t buffered_bytes = sock_write_cb_.bufferedBytes();
+    sock_write_cb_.chain_lengths_.clear();
+    sock_write_cb_.num_success_ = 0;
+    if (sendChain_) {
+      buffered_bytes += sendChain_->computeChainDataLength();
+      sendChain_ = nullptr;
+    }
+    getDeps()->noteBytesDrained(buffered_bytes, /* message_type */ folly::none);
+    // Invoke closeNow before deleting the writing callback below.
     sock_->closeNow();
   }
 }
@@ -277,6 +332,17 @@ void Connection::onConnected() {
 int Connection::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   return Socket::onReceived(ph, inbuf);
+}
+
+size_t Connection::getBytesPending() const {
+  size_t bytes_pending = Socket::getBytesPending();
+  if (sock_) {
+    if (sendChain_) {
+      bytes_pending += sendChain_->computeChainDataLength();
+    }
+    bytes_pending += sock_write_cb_.bufferedBytes();
+  }
+  return bytes_pending;
 }
 
 void Connection::onConnectTimeout() {
@@ -313,6 +379,19 @@ void Connection::onPeerClosed() {
 
 void Connection::onBytesPassedToTCP(size_t nbytes_drained) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onBytesPassedToTCP(nbytes_drained);
+  if (sock_) {
+    ld_check(false);
+  } else {
+    Socket::onBytesPassedToTCP(nbytes_drained);
+  }
+}
+
+void Connection::drainSendQueue() {
+  auto& cb = sock_write_cb_;
+  for (size_t& i = cb.num_success_; i > 0; --i) {
+    getDeps()->noteBytesDrained(
+        cb.chain_lengths_.front(), /* message_type */ folly::none);
+    cb.chain_lengths_.pop_front();
+  }
 }
 }} // namespace facebook::logdevice

@@ -35,6 +35,7 @@ class IProtocolHandler {
   virtual int dispatchMessageBody(const ProtocolHeader& hdr,
                                   std::unique_ptr<folly::IOBuf> body) = 0;
   virtual void notifyErrorOnSocket(const folly::AsyncSocketException& err) = 0;
+  virtual void notifyBytesWritten(size_t nbytes) = 0;
 };
 
 }} // namespace facebook::logdevice

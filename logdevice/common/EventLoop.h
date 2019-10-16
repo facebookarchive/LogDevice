@@ -72,6 +72,10 @@ class EventLoop : public folly::Executor {
     return *base_;
   }
 
+  uint8_t getNumPriorities() const override {
+    return EventLoopTaskQueue::kNumberOfPriorities;
+  }
+
   /// Enqueue a function to executed by this executor. This and all
   /// variants must be threadsafe.
   void add(folly::Function<void()>) override;

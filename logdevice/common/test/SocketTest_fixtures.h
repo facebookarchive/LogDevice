@@ -122,6 +122,8 @@ class TestSocketDependencies : public SocketDependencies {
 
   NodeID getDestinationNodeID();
 
+  virtual folly::Executor* getExecutor() const override;
+
   virtual ~TestSocketDependencies() {}
 
   SocketTest* owner_;
@@ -223,8 +225,13 @@ class SocketTest : public ::testing::Test {
     // ClientSocketTest.CloseConnectionOnProtocolChecksumMismatch
     // need to always run irrespective of the
     // "Settings::checksumming_enabled" value
-    socket_->serializeMessageWithChecksum(
-        *msg, protohdr_bytes + bodylen, input_);
+    temp_output_ = input_;
+    auto serialized_buf =
+        socket_->serializeMessageWithChecksum(*msg, protohdr_bytes + bodylen);
+    ld_check(serialized_buf);
+    auto status = socket_->sendBuffer(std::move(serialized_buf));
+    ld_check(status == Socket::SendStatus::SCHEDULED);
+    temp_output_ = nullptr;
 
     triggerOnDataAvailable();
   }
@@ -306,6 +313,9 @@ class SocketTest : public ::testing::Test {
   // evbuffers that will be used by socket_ to write and read data.
   struct evbuffer* input_;
   struct evbuffer* output_;
+  // Check receiveMsg and getOutput for usage. Allows test to change buffer
+  // returned by getOutput API.
+  struct evbuffer* temp_output_{nullptr};
 
   // Updated when Socket calls noteBytesQueued/noteBytesDrained.
   size_t bytes_pending_{0};

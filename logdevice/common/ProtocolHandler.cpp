@@ -28,13 +28,20 @@ bool ProtocolHandler::validateProtocolHeader(
 int ProtocolHandler::dispatchMessageBody(
     const ProtocolHeader& /* hdr */,
     std::unique_ptr<folly::IOBuf> /* body */) {
+  // If some write hit an error it could close the socket. Return from here.
+  if (conn_->isClosed()) {
+    return -1;
+  }
   return 0;
 }
 
 void ProtocolHandler::notifyErrorOnSocket(
     const folly::AsyncSocketException& ex) {
-  ld_info(
-      "Socket %s hit error %s", conn_->conn_description_.c_str(), ex.what());
+  RATELIMIT_INFO(std::chrono::seconds(10),
+                 1,
+                 "Socket %s hit error %s",
+                 conn_->conn_description_.c_str(),
+                 ex.what());
   auto err_code = ProtocolHandler::translateToLogDeviceStatus(ex);
   if (!set_error_on_socket_.isScheduled()) {
     set_error_on_socket_.attachCallback(
@@ -71,4 +78,11 @@ ProtocolHandler::translateToLogDeviceStatus(folly::AsyncSocketException ex) {
   }
   return E::CONNFAILED;
 }
+
+void ProtocolHandler::notifyBytesWritten(size_t /* bytes_written */) {
+  if (!buffer_passed_to_tcp_.isScheduled()) {
+    buffer_passed_to_tcp_.scheduleTimeout(0);
+  }
+}
+
 }} // namespace facebook::logdevice

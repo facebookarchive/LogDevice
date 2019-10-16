@@ -69,6 +69,11 @@ class ProtocolHandler : public IProtocolHandler {
   void notifyErrorOnSocket(const folly::AsyncSocketException& err) override;
 
   /**
+   * Notify bytes written successfully into the socket.
+   */
+  void notifyBytesWritten(size_t nbytes) override;
+
+  /**
    * Get event used notify connection about the sent message.
    */
   EvTimer* getSentEvent() {

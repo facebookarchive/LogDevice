@@ -141,6 +141,7 @@ class SocketDependencies {
    * for usage.
    */
   virtual folly::Func setupContextGuard();
+  virtual folly::Executor* getExecutor() const;
   virtual ~SocketDependencies() {}
 
  private:

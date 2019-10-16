@@ -8,6 +8,7 @@
 
 #include "logdevice/common/test/SocketTest_fixtures.h"
 
+#include <folly/executors/InlineExecutor.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -28,7 +29,7 @@ void TestSocketDependencies::noteBytesQueued(size_t nbytes,
 
 void TestSocketDependencies::noteBytesDrained(size_t nbytes,
                                               folly::Optional<MessageType>) {
-  ASSERT_TRUE(owner_->bytes_pending_ >= nbytes);
+  ASSERT_GE(owner_->bytes_pending_, nbytes);
   owner_->bytes_pending_ -= nbytes;
 }
 
@@ -91,7 +92,7 @@ struct bufferevent* TestSocketDependencies::buffereventSocketNew(
 
 struct evbuffer*
 TestSocketDependencies::getOutput(struct bufferevent* /*bev*/) {
-  return owner_->output_;
+  return owner_->temp_output_ ? owner_->temp_output_ : owner_->output_;
 }
 
 struct evbuffer* TestSocketDependencies::getInput(struct bufferevent* /*bev*/) {
@@ -241,6 +242,10 @@ TestSocketDependencies::getResourceToken(size_t payload_size) {
 
 int TestSocketDependencies::setSoMark(int /*fd*/, uint32_t /*so_mark*/) {
   return 0;
+}
+
+folly::Executor* TestSocketDependencies::getExecutor() const {
+  return &folly::InlineExecutor::instance();
 }
 
 //

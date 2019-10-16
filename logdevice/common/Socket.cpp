@@ -645,6 +645,7 @@ void Socket::onBytesAvailable(bool fresh) {
   // "bev_ is readable" if TCP socket becomes readable after
   // read_more_ was activated. If that happens this callback may find
   // fewer bytes in bev_'s input buffer than dataReadCallback() expects.
+  ld_check_ge(available, bytesExpected());
   ld_assert(!fresh || available >= bytesExpected());
 
   auto start_time = std::chrono::steady_clock::now();
@@ -1210,9 +1211,8 @@ bool Socket::isChecksummingEnabled(MessageType msgtype) {
   return msg_checksum_set.find((char)msgtype) == msg_checksum_set.end();
 }
 
-int Socket::serializeMessageWithoutChecksum(const Message& msg,
-                                            size_t msglen,
-                                            struct evbuffer* outbuf) {
+std::unique_ptr<folly::IOBuf>
+Socket::serializeMessageWithoutChecksum(const Message& msg, size_t msglen) {
   ProtocolHeader protohdr;
   protohdr.len = msglen;
   protohdr.type = msg.type_;
@@ -1232,33 +1232,15 @@ int Socket::serializeMessageWithoutChecksum(const Message& msg,
     ld_check(0);
     close(E::INTERNAL);
     err = E::INTERNAL;
-    return -1;
+    return nullptr;
   }
-
-  for (auto& buf : *io_buf) {
-    int rv = LD_EV(evbuffer_add)(outbuf, buf.data(), buf.size());
-    if (rv) {
-      size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
-      RATELIMIT_CRITICAL(std::chrono::seconds(1),
-                         2,
-                         "INTERNAL ERROR: Failed to move payload_evbuf to "
-                         "outbuf, evbuf size "
-                         "(msg:%zu, outbuf:%zu), msg type:%s",
-                         bodylen + protohdr_bytes,
-                         outbuf_size,
-                         messageTypeNames()[msg.type_].c_str());
-      err = E::INTERNAL;
-      close(err);
-      return -1;
-    }
-  }
+  ld_check_eq(msglen, io_buf->computeChainDataLength());
   ld_check(bodylen + protohdr_bytes == protohdr.len);
-  return 0;
+  return io_buf;
 }
 
-int Socket::serializeMessageWithChecksum(const Message& msg,
-                                         size_t msglen,
-                                         struct evbuffer* outbuf) {
+std::unique_ptr<folly::IOBuf>
+Socket::serializeMessageWithChecksum(const Message& msg, size_t msglen) {
   size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
   ProtocolHeader protohdr;
   protohdr.len = msglen;
@@ -1279,7 +1261,7 @@ int Socket::serializeMessageWithChecksum(const Message& msg,
     ld_check(0);
     err = E::INTERNAL;
     close(err);
-    return -1;
+    return nullptr;
   }
 
   // 2. Compute checksum
@@ -1293,29 +1275,35 @@ int Socket::serializeMessageWithChecksum(const Message& msg,
   io_buf->prepend(protohdr_bytes);
   memcpy(static_cast<void*>(io_buf->writableData()), &protohdr, protohdr_bytes);
 
-  // 5. Finally move the whole serialized message from payload_evbuf to outbuf
-  if (outbuf) {
-    for (auto& buf : *io_buf) {
-      int rv = LD_EV(evbuffer_add)(outbuf, buf.data(), buf.size());
-      if (rv) {
-        size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
-        RATELIMIT_CRITICAL(std::chrono::seconds(1),
-                           2,
-                           "INTERNAL ERROR: Failed to move payload_evbuf to "
-                           "outbuf, evbuf size "
-                           "(msg:%zu, outbuf:%zu), msg type:%s",
-                           bodylen + protohdr_bytes,
-                           outbuf_size,
-                           messageTypeNames()[msg.type_].c_str());
-        err = E::INTERNAL;
-        close(err);
-        return -1;
-      }
+  // 5. Finally move the whole serialized message from iobuf to outbuf
+  ld_check_eq(msglen, io_buf->computeChainDataLength());
+  ld_check(bodylen + protohdr_bytes == protohdr.len);
+  return io_buf;
+}
+
+Socket::SendStatus
+Socket::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
+  std::unique_ptr<folly::IOBuf> io_buf(std::move(buffer_chain));
+  struct evbuffer* outbuf =
+      buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
+  ld_check(outbuf);
+  for (auto& buf : *io_buf) {
+    int rv = LD_EV(evbuffer_add)(outbuf, buf.data(), buf.size());
+    if (rv) {
+      size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
+      RATELIMIT_CRITICAL(std::chrono::seconds(1),
+                         2,
+                         "INTERNAL ERROR: Failed to move iobuffers to "
+                         "outbuf, from io_buf"
+                         "(io_buf_size:%zu, outbuf:%zu)",
+                         io_buf->computeChainDataLength(),
+                         outbuf_size);
+      err = E::INTERNAL;
+      close(err);
+      return Socket::SendStatus::ERROR;
     }
   }
-
-  ld_check(bodylen + protohdr_bytes == protohdr.len);
-  return 0;
+  return Socket::SendStatus::SCHEDULED;
 }
 
 int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
@@ -1324,23 +1312,30 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
   ld_check(connected_);
 
   const auto& msg = envelope->message();
-  struct evbuffer* outbuf =
-      buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
-  ld_check(outbuf);
 
   bool compute_checksum =
       ProtocolHeader::needChecksumInHeader(msg.type_, proto_) &&
       isChecksummingEnabled(msg.type_);
 
-  int rv = 0;
+  std::unique_ptr<folly::IOBuf> serialized_buf;
   if (compute_checksum) {
-    rv = serializeMessageWithChecksum(msg, msglen, outbuf);
+    serialized_buf = serializeMessageWithChecksum(msg, msglen);
   } else {
-    rv = serializeMessageWithoutChecksum(msg, msglen, outbuf);
+    serialized_buf = serializeMessageWithoutChecksum(msg, msglen);
   }
 
-  if (rv != 0) {
-    return rv;
+  if (serialized_buf == nullptr) {
+    return -1;
+  }
+
+  Socket::SendStatus status = sendBuffer(std::move(serialized_buf));
+  if (status == Socket::SendStatus::ERROR) {
+    RATELIMIT_CRITICAL(std::chrono::seconds(1),
+                       2,
+                       "INTERNAL ERROR: Failed to send a message of "
+                       "type %s into evbuffer",
+                       messageTypeNames()[msg.type_].c_str());
+    return -1;
   }
 
   MESSAGE_TYPE_STAT_INCR(deps_->getStats(), msg.type_, message_sent);
@@ -1350,14 +1345,40 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
   ld_check(!isHandshakeMessage(msg.type_) || next_pos_ == 0);
   ld_check(next_pos_ >= drain_pos_);
 
-  next_pos_ += msglen;
-  envelope->setDrainPos(next_pos_);
-
-  envelope->enqTime(std::chrono::steady_clock::now());
-  sendq_.push_back(*envelope.release());
-  ld_check(!envelope);
-
   deps_->noteBytesQueued(msglen, /* message_type */ folly::none);
+  if (status == Socket::SendStatus::SCHEDULED) {
+    next_pos_ += msglen;
+    envelope->setDrainPos(next_pos_);
+
+    envelope->enqTime(std::chrono::steady_clock::now());
+    sendq_.push_back(*envelope.release());
+    ld_check(!envelope);
+  }
+  if (status == Socket::SendStatus::SENT) {
+    STAT_INCR(deps_->getStats(), sock_num_messages_sent);
+    STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, msglen);
+    ld_check(status == Socket::SendStatus::SENT);
+    // Some state machines expect onSent for success scenarios to be called
+    // after completion of sendMessage invocation. Hence, we need to post a
+    // function to invoke onSent later.
+    auto exec = deps_->getExecutor();
+    ld_check(exec);
+    auto sent_success = [this,
+                         is_closed =
+                             std::weak_ptr<std::atomic<bool>>(conn_closed_),
+                         e = std::move(envelope)]() mutable {
+      auto ref = is_closed.lock();
+      if (ref && !*ref) {
+        auto g = folly::makeGuard(deps_->setupContextGuard());
+        onSent(std::move(e), E::OK);
+      }
+    };
+    if (exec->getNumPriorities() > 1) {
+      exec->addWithPriority(std::move(sent_success), folly::Executor::HI_PRI);
+    } else {
+      exec->add(std::move(sent_success));
+    }
+  }
   return 0;
 }
 
@@ -1456,10 +1477,10 @@ void Socket::send(std::unique_ptr<Envelope> envelope) {
     return;
   }
 
-  // If we are handshaken, serialize the message directly to the output buffer.
-  // Otherwise, push the message to the serializeq_ queue, it will be serialized
-  // once we are handshaken. An exception is handshake messages, they can be
-  // serialized as soon as we are connected.
+  // If we are handshaken, serialize the message directly to the output
+  // buffer. Otherwise, push the message to the serializeq_ queue, it will be
+  // serialized once we are handshaken. An exception is handshake messages,
+  // they can be serialized as soon as we are connected.
   if (handshaken_ || (connected_ && isHandshakeMessage(msg.type_))) {
     // compute the message length only when 1) handshaken is completed and
     // negotiaged proto_ is known; or 2) message is a handshaken message
@@ -1625,10 +1646,13 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
   while (!sendq_.empty() && sendq_.front().getDrainPos() <= next_drain_pos) {
     // All bytes of message at cur have been sent into the underlying socket.
     std::unique_ptr<Envelope> e(&sendq_.front());
+    ld_spew("%s: message sent of type %c and size %lu",
+            conn_description_.c_str(),
+            int(e->message().type_),
+            e->message().size());
     sendq_.pop_front();
     STAT_ADD(
         deps_->getStats(), sock_total_time_in_messages_written, e->enqTime());
-
     // Messages should be serialized only if we are handshaken_. The only
     // exception is the first message which is a handshake message. HELLO and
     // ACK messages are always at pos_ 0 since they are the first messages to
@@ -1652,23 +1676,20 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
         ld_check(drain_pos_ > 0 || num_messages > 0);
       }
     }
-
     onSent(std::move(e), E::OK);
     ++num_messages_sent_;
     ++num_messages;
   }
 
-  STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, nbytes);
-
-  deps_->noteBytesDrained(nbytes, /* message_type */ folly::none);
-
   drain_pos_ = next_drain_pos;
-
   auto total_time = getTimeDiff(start_time);
   STAT_ADD(deps_->getStats(),
            sock_time_spent_to_process_send_done,
            total_time.count());
   STAT_ADD(deps_->getStats(), sock_num_messages_sent, num_messages);
+  STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, nbytes);
+
+  deps_->noteBytesDrained(nbytes, /* message_type */ folly::none);
 
   ld_spew("Socket %s passed %zu bytes to TCP. Sender now has %zu total "
           "bytes pending",
@@ -1688,7 +1709,8 @@ void Socket::processDeferredEventQueue() {
 
   while (!queue.empty()) {
     // we have to remove the event from the queue before hitting callbacks, as
-    // they might trigger calls into deferredEventQueueEventCallback() as well.
+    // they might trigger calls into deferredEventQueueEventCallback() as
+    // well.
     SocketEvent event = queue.front();
     queue.pop_front();
 
@@ -2284,8 +2306,9 @@ int Socket::checkConnection(ClientID* our_name_at_peer) {
       ld_check(!handshaken_);
       // Sender always initiates a connection attempt whenever a Socket is
       // created. Therefore, we're either still waiting on a connection to be
-      // established or are expecting an ACK to complete the handshake. Set err
-      // to NOTCONN only if we previously had a working connection to the node.
+      // established or are expecting an ACK to complete the handshake. Set
+      // err to NOTCONN only if we previously had a working connection to the
+      // node.
       err = first_attempt_ ? E::NEVER_CONNECTED : E::NOTCONN;
     }
 
