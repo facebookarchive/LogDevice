@@ -18,6 +18,8 @@
 
 #include <folly/Range.h>
 
+#include "logdevice/common/debug.h"
+
 namespace folly {
 template <typename>
 class Histogram;
@@ -155,6 +157,27 @@ class HistogramInterface {
    * Thread-safe.
    */
   virtual void print(std::ostream& out) const = 0;
+
+  /**
+   * Returns whether to publish bucket counts on StatsPublisher.
+   */
+  virtual bool shouldPublishFrequencyCounters() const {
+    return false;
+  }
+
+  struct FrequencyCounters {
+    using ValueInterval = std::pair<int64_t, int64_t>;
+
+    std::vector<std::pair<ValueInterval, uint64_t>> counters;
+  };
+
+  /**
+   * Returns a object of type `FrequencyCounters` with
+   */
+  virtual FrequencyCounters getFrequencyCounters() const {
+    ld_check(false); // not implemented
+    return FrequencyCounters();
+  }
 
   // Returns the unit of measurement, e.g. "B" for bytes, "us" for microseconds.
   virtual std::string getUnitName() const = 0;
@@ -435,6 +458,13 @@ class CompactHistogram : public HistogramInterface {
   // If the string is not in the right format, returns false.
   bool fromShortString(folly::StringPiece s);
 
+  struct PublishRange {
+    size_t from;
+    size_t to;
+  };
+  bool shouldPublishFrequencyCounters() const override;
+  FrequencyCounters getFrequencyCounters() const override;
+
  protected:
   struct Unit {
     // What value constitutes one of this unit. E.g. 1<<20 for "MiB".
@@ -442,20 +472,25 @@ class CompactHistogram : public HistogramInterface {
     const char* name;
   };
 
-  explicit CompactHistogram(const std::vector<Unit>* units);
+  explicit CompactHistogram(
+      const std::vector<Unit>* units,
+      folly::Optional<PublishRange> publish_range = folly::none);
 
  private:
+  folly::Optional<PublishRange> publish_range_;
   // buckets_[i] corresponds to values [1l<<(i-1), 1l<<i).
   // buckets_[0] is [-infinity, 0].
   std::array<std::atomic<uint64_t>, 60> buckets_{};
   const std::vector<Unit>* units_ = nullptr;
 
   const Unit& pickUnit(int64_t value) const;
+  int64_t indexToValue(int64_t index) const;
 };
 
 class CompactLatencyHistogram : public CompactHistogram {
  public:
-  CompactLatencyHistogram();
+  CompactLatencyHistogram(
+      folly::Optional<PublishRange> publish_range = folly::none);
 };
 
 class CompactSizeHistogram : public CompactHistogram {

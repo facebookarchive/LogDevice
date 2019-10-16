@@ -246,6 +246,59 @@ TEST(StatsTest, HistogramConcurrencyTest) {
   }
 }
 
+TEST(StatsTest, CompactLatencyHistogramShouldGetFrequencyCounters) {
+  constexpr auto min_value = std::numeric_limits<int64_t>::min();
+  constexpr auto max_value = std::numeric_limits<int64_t>::max();
+  const auto min_bucket_to_publish = 10;
+  const auto max_bucket_to_publish = 20;
+  const auto max_bucket = 59;
+
+  CompactLatencyHistogram hist{CompactHistogram::PublishRange{
+      min_bucket_to_publish, max_bucket_to_publish}};
+
+  CompactLatencyHistogram default_hist;
+
+  for (int64_t idx = 0; idx <= max_bucket; idx++) {
+    // bucket at index `idx` should have count = idx+1
+    int times = idx + 1;
+    while (times--) {
+      hist.add((1l << idx) - 1);
+    }
+  }
+
+  ASSERT_TRUE(hist.shouldPublishFrequencyCounters());
+  ASSERT_FALSE(default_hist.shouldPublishFrequencyCounters());
+
+  auto frequency_counters = hist.getFrequencyCounters().counters;
+  std::sort(frequency_counters.begin(), frequency_counters.end());
+
+  std::vector<std::pair<std::pair<int64_t, int64_t>, uint64_t>> expected_result;
+
+  // From min_value to value of first bucket, count is sum from 1 to
+  // min_bucket_to_publish.
+  expected_result.push_back(std::make_pair(
+      std::make_pair(min_value, 1l << (min_bucket_to_publish - 1)),
+      min_bucket_to_publish * (min_bucket_to_publish + 1) / 2));
+
+  for (auto idx = min_bucket_to_publish; idx <= max_bucket_to_publish; ++idx) {
+    // within a single bucket, the counter at index idx should be idx+1
+    expected_result.push_back(
+        std::make_pair(std::make_pair(1l << (idx - 1), 1l << (idx)), idx + 1));
+  }
+
+  // From value of last bucket to max_value, count is sum from
+  // max_bucket_to_publish + 2 to max_bucket + 1.
+  expected_result.push_back(
+      std::make_pair(std::make_pair(1l << max_bucket_to_publish, max_value),
+                     (max_bucket + 1 + max_bucket_to_publish + 2) *
+                         (max_bucket - max_bucket_to_publish) / 2));
+
+  std::sort(expected_result.begin(), expected_result.end());
+
+  ASSERT_EQ(expected_result, frequency_counters)
+      << "Unexpected result of method getFrequencyCounters()";
+}
+
 TEST(StatsTest, PerNodeTimeSeriesSingleThread) {
   StatsHolder holder(
       StatsParams().setIsServer(false).setNodeStatsRetentionTimeOnClients(

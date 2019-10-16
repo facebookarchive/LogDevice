@@ -31,7 +31,9 @@ struct ClientHistograms : public HistogramBundle {
          &nodes_configuration_manager_propagation_latency},
     };
   }
-  LatencyHistogram append_latency;
+  CompactLatencyHistogram append_latency{
+      CompactHistogram::PublishRange{/*from*/ 10,
+                                     /*to*/ 23}}; // = from 1ms to 8s
   LatencyHistogram findtime_latency;
   LatencyHistogram findkey_latency;
   LatencyHistogram get_tail_attributes_latency;
