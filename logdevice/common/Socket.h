@@ -247,7 +247,7 @@ class Socket : public TrafficShappingSocket {
    *    INTERNAL        bufferevent unexpectedly failed to initiate connection,
    *                    unexpected error from socket(2).
    */
-  int connect();
+  virtual int connect();
 
   /**
    * Register a message with this socket and return the enclosing message
@@ -326,7 +326,7 @@ class Socket : public TrafficShappingSocket {
    * @return true iff close() has been called on the socket, or if it is
    *         a server socket that has never been connected
    */
-  bool isClosed() const;
+  virtual bool isClosed() const;
 
   /**
    * @return true iff close() has been called on the socket and all clients have
@@ -527,6 +527,7 @@ class Socket : public TrafficShappingSocket {
    * Called by bev_ when the underlying connection is established
    */
   virtual void onConnected();
+  void transitionToConnected();
 
   virtual int onReceived(ProtocolHeader ph, struct evbuffer* inbuf);
 
@@ -579,7 +580,6 @@ class Socket : public TrafficShappingSocket {
     return deps_.get();
   }
 
- private:
   /**
    * This is strictly a delegating constructor. It sets all members
    * other than peer_name_, peer_sockaddr_ and conntype_ to defaults.
@@ -651,6 +651,13 @@ class Socket : public TrafficShappingSocket {
    *          envelope.
    */
   bool injectAsyncMessageError(std::unique_ptr<Envelope>&& msg);
+
+  /**
+   * Called by connect().
+   *
+   * Used to run basic checks before attempting a new connection.
+   */
+  int preConnectAttempt();
 
   /**
    * Called by connect() and by onConnectAttemptTimeout().

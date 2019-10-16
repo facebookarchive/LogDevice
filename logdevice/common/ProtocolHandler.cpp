@@ -35,6 +35,40 @@ void ProtocolHandler::notifyErrorOnSocket(
     const folly::AsyncSocketException& ex) {
   ld_info(
       "Socket %s hit error %s", conn_->conn_description_.c_str(), ex.what());
+  auto err_code = ProtocolHandler::translateToLogDeviceStatus(ex);
+  if (!set_error_on_socket_.isScheduled()) {
+    set_error_on_socket_.attachCallback(
+        [&, error_code = err_code] { conn_->close(error_code); });
+    set_error_on_socket_.scheduleTimeout(0);
+  }
 }
 
+Status
+ProtocolHandler::translateToLogDeviceStatus(folly::AsyncSocketException ex) {
+  auto ex_type = ex.getType();
+  switch (ex_type) {
+    case folly::AsyncSocketException::END_OF_FILE:
+      return E::PEER_CLOSED;
+    case folly::AsyncSocketException::CORRUPTED_DATA:
+      return E::BADMSG;
+    case folly::AsyncSocketException::TIMED_OUT:
+      return E::TIMEDOUT;
+    case folly::AsyncSocketException::BAD_ARGS:
+    case folly::AsyncSocketException::INVALID_STATE:
+      return E::INTERNAL;
+    case folly::AsyncSocketException::ALREADY_OPEN:
+      return E::ISCONN;
+    case folly::AsyncSocketException::NOT_OPEN:
+    // AsyncSocket returns INTERNAL ERROR for various reasons it is better to
+    // mark as CONN_FAILED.
+    case folly::AsyncSocketException::INTERNAL_ERROR:
+    case folly::AsyncSocketException::NETWORK_ERROR:
+    case folly::AsyncSocketException::SSL_ERROR:
+      return E::CONNFAILED;
+    default:
+      ld_check(false);
+      return E::CONNFAILED;
+  }
+  return E::CONNFAILED;
+}
 }} // namespace facebook::logdevice

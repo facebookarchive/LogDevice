@@ -256,7 +256,7 @@ class ProtocolWriter {
   ProtocolWriter(MessageType type,
                  struct evbuffer* dest, // may be null
                  folly::Optional<uint16_t> proto = folly::none);
-  ProtocolWriter(MessageType tyoe,
+  ProtocolWriter(MessageType type,
                  folly::IOBuf* iobuf,
                  folly::Optional<uint16_t> proto);
 

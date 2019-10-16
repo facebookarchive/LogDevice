@@ -424,7 +424,7 @@ struct bufferevent* Socket::newBufferevent(int sfd,
   return bev;
 }
 
-int Socket::connect() {
+int Socket::preConnectAttempt() {
   if (peer_name_.isClientAddress()) {
     if (!isClosed()) {
       ld_check(connected_);
@@ -454,12 +454,19 @@ int Socket::connect() {
     err = E::DISABLED;
     return -1;
   }
+  return 0;
+}
+
+int Socket::connect() {
+  int rv = preConnectAttempt();
+  if (rv != 0) {
+    return rv;
+  }
 
   retries_so_far_ = 0;
 
-  int rv = doConnectAttempt();
+  rv = doConnectAttempt();
   if (rv != 0) {
-    connect_throttle_.connectFailed();
     if (!isClosed()) {
       STAT_INCR(deps_->getStats(), num_connections);
       close(err);
@@ -662,7 +669,6 @@ void Socket::onBytesAvailable(bool fresh) {
                             "receiveMessage() failed with %s from %s.",
                             error_name(err),
                             conn_description_.c_str());
-            connect_throttle_.connectFailed();
           }
           if ((err == E::PROTONOSUPPORT || err == E::INVALID_CLUSTER ||
                err == E::ACCESS || err == E::DESTINATION_MISMATCH) &&
@@ -793,6 +799,18 @@ void Socket::flushSerializeQueue() {
   }
 }
 
+void Socket::transitionToConnected() {
+  addHandshakeTimeoutEvent();
+  connected_ = true;
+  peer_shuttingdown_ = false;
+
+  ld_debug(
+      "Socket(%p) to node %s has connected", this, conn_description_.c_str());
+
+  ld_check(!serializeq_.empty());
+  flushNextInSerializeQueue();
+}
+
 void Socket::onConnected() {
   ld_check(!isClosed());
   if (expecting_ssl_handshake_) {
@@ -809,19 +827,7 @@ void Socket::onConnected() {
   ld_check(!peer_name_.isClientAddress());
 
   connect_timeout_event_.cancelTimeout();
-  addHandshakeTimeoutEvent();
-  connected_ = true;
-  peer_shuttingdown_ = false;
-
-  ld_debug(
-      "Socket(%p) to node %s has connected", this, conn_description_.c_str());
-
-  // Send the first message enqueued in serializeq_, which should be a HELLO
-  // message. The rest of the content of the queue will be serialized only once
-  // we are handshaken and we know the protocol that will be used for
-  // communicating with the other end.
-  ld_check(!serializeq_.empty());
-  flushNextInSerializeQueue();
+  transitionToConnected();
 }
 
 void Socket::onSent(std::unique_ptr<Envelope> e,
@@ -910,7 +916,6 @@ void Socket::onError(short direction, int socket_errno) {
                    : "OpenSSL didn't report any details about the error.");
   } else {
     ld_check(!peer_name_.isClientAddress());
-    connect_throttle_.connectFailed();
     RATELIMIT_LEVEL(
         socket_errno == ECONNREFUSED ? dbg::Level::DEBUG : dbg::Level::WARNING,
         std::chrono::seconds(10),
@@ -941,7 +946,6 @@ void Socket::onPeerClosed() {
   Status reason = E::PEER_CLOSED;
 
   if (!peer_name_.isClientAddress()) {
-    connect_throttle_.connectFailed();
     if (peer_shuttingdown_) {
       reason = E::SHUTDOWN;
     }
@@ -952,9 +956,6 @@ void Socket::onPeerClosed() {
 
 void Socket::onConnectTimeout() {
   ld_spew("Connection timeout connecting to %s", conn_description_.c_str());
-  if (!peer_name_.isClientAddress()) {
-    connect_throttle_.connectFailed();
-  }
 
   close(E::TIMEDOUT);
 }
@@ -1069,6 +1070,10 @@ void Socket::close(Status reason) {
   }
 
   endStreamRewind();
+
+  if (!peer_name_.isClientAddress() && reason != E::SHUTDOWN) {
+    connect_throttle_.connectFailed();
+  }
 
   if (!deferred_event_queue_.empty()) {
     // Process outstanding deferred events since they may inform us that

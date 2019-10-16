@@ -11,6 +11,7 @@
 #include "logdevice/common/Address.h"
 #include "logdevice/common/IProtocolHandler.h"
 #include "logdevice/common/libevent/LibEventCompatibility.h"
+#include "logdevice/include/Err.h"
 
 namespace folly {
 class AsyncSocketException;
@@ -73,6 +74,12 @@ class ProtocolHandler : public IProtocolHandler {
   EvTimer* getSentEvent() {
     return &buffer_passed_to_tcp_;
   }
+
+  /**
+   * Method used by various AsyncSocket callback to translate exception to
+   * logdevice::Status.
+   */
+  static Status translateToLogDeviceStatus(folly::AsyncSocketException ex);
 
  private:
   Connection* const conn_;

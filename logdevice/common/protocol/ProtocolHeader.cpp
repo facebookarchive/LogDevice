@@ -11,7 +11,8 @@
 
 namespace facebook { namespace logdevice {
 
-bool ProtocolHeader::needChecksumInHeader(MessageType msgtype, uint16_t proto) {
+bool ProtocolHeader::needChecksumInHeader(MessageType msgtype,
+                                          uint16_t /* proto */) {
   return msgtype != MessageType::INVALID && !isHandshakeMessage(msgtype);
 }
 

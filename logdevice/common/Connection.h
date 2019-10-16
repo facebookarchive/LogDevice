@@ -5,13 +5,21 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
 #pragma once
+
+#include <folly/futures/Future.h>
+#include <folly/io/async/AsyncSocket.h>
+#include <folly/io/async/Request.h>
+
 #include "logdevice/common/Address.h"
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/ProtocolHandler.h"
 #include "logdevice/common/Socket.h"
 
 namespace facebook { namespace logdevice {
+
+class SocketAdapter;
+
 /**
  * this will we a wrapper around our socket which knows about protocol and
  * serialization
@@ -46,6 +54,13 @@ class Connection : public Socket {
              ConnectionType conntype,
              FlowGroup& flow_group,
              std::unique_ptr<SocketDependencies> deps);
+
+  Connection(NodeID server_name,
+             SocketType type,
+             ConnectionType conntype,
+             FlowGroup& flow_group,
+             std::unique_ptr<SocketDependencies> deps,
+             std::unique_ptr<SocketAdapter> sock_adapter);
 
   /**
    * Constructs a new Connection from a TCP socket fd that was returned by
@@ -84,6 +99,16 @@ class Connection : public Socket {
              FlowGroup& flow_group,
              std::unique_ptr<SocketDependencies> deps);
 
+  Connection(int fd,
+             ClientID client_name,
+             const Sockaddr& client_addr,
+             ResourceBudget::Token conn_token,
+             SocketType type,
+             ConnectionType conntype,
+             FlowGroup& flow_group,
+             std::unique_ptr<SocketDependencies> deps,
+             std::unique_ptr<SocketAdapter> sock_adapter);
+
   /**
    * Disconnects, deletes the underlying bufferevent, and closes the TCP socket.
    */
@@ -93,9 +118,40 @@ class Connection : public Socket {
   Connection(Connection&&) = delete;
   Connection& operator=(const Connection&) = delete;
   Connection& operator=(Connection&&) = delete;
+  /**
+   * Initiate an asynchronous connect and handshake on the socket. The socket's
+   * .peer_name_ must resolve to an ip:port to which we can connect. Currently
+   * this means that .peer_name_ must be a server address.
+   *
+   * @return  0 if connection was successfully initiated. -1 on failure, err
+   *          is set to:
+   *
+   *    ALREADY         the socket is already in CONNECTING or HANDSHAKE
+   *    ISCONN          the socket is CONNECTED
+   *    UNREACHABLE     attempt to connect to a client. Reported for
+   *                    disconnected client sockets.
+   *    UNROUTABLE      the peer endpoint of a server socket has an IP address
+   *                    to which there is no route. This may happen if a network
+   *                    interface has been taken down, e.g., during system
+   *                    shutdown.
+   *    DISABLED        connection was not initiated because the server
+   *                    is temporarily marked down (disabled) after a series
+   *                    of unsuccessful connection attempts
+   *    SYSLIMIT        out of file descriptors or ephemeral ports
+   *    NOMEM           out of kernel memory for sockets, or malloc() failed
+   *    INTERNAL        bufferevent unexpectedly failed to initiate connection,
+   *                    unexpected error from socket(2).
+   */
+  int connect() override;
+
   void close(Status reason) override;
 
+  bool isClosed() const override;
+
+  void setSocketAdapter(std::unique_ptr<SocketAdapter> adapter);
+
  protected:
+  folly::Future<Status> asyncConnect();
   void onConnected() override;
   int onReceived(ProtocolHeader ph, struct evbuffer* inbuf) override;
   /**
@@ -126,6 +182,9 @@ class Connection : public Socket {
   void onPeerClosed() override;
 
   void onBytesPassedToTCP(size_t nbytes_drained) override;
+
+  std::unique_ptr<SocketAdapter> sock_;
+  std::shared_ptr<ProtocolHandler> proto_handler_;
 };
 
 }} // namespace facebook::logdevice

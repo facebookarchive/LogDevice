@@ -125,6 +125,11 @@ class SocketAdapter {
   virtual void getPeerAddress(folly::SocketAddress* address) const = 0;
 
   /**
+   * Get the underlying file descriptor.
+   */
+  virtual folly::NetworkSocket getNetworkSocket() const = 0;
+
+  /**
    * Get the address of the remote endpoint to which this transport is
    * connected.
    *
