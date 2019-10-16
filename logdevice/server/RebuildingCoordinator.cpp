@@ -423,7 +423,7 @@ void RebuildingCoordinator::onShardRebuildingComplete(uint32_t shard_idx) {
    * We are done rebuilding the shard. If the setting
    * disable-data-log-rebuilding was enabled, then we just skipped over the data
    * logs that have a retention specified. In that case, we want to delay
-   * sending the SHARD_IS_REBULT message until the data logs expire. The timer
+   * sending the SHARD_IS_REBUILT message until the data logs expire. The timer
    * below handles that for us.
    */
 

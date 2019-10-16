@@ -619,7 +619,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   /**
    * Actual callback used to send the SHARD_IS_REBUILT message.
    *
-   * The SHARD_IS_REBULT message may be delayed if the planning
+   * The SHARD_IS_REBUILT message may be delayed if the planning
    * stage requested it, based on the 'disable_data_log_rebuilding'
    * setting. This callback is either called immediately after
    * onshardIsRebuilt or after a delay.

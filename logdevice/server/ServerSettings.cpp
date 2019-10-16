@@ -323,7 +323,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
        }
      },
      "maximum number of file descriptors that the process can allocate (may "
-     "require root priviliges). If equal to zero, do not set any limit.",
+     "require root privileges). If equal to zero, do not set any limit.",
      SERVER | REQUIRES_RESTART,
      SettingsCategory::ResourceManagement)
 
@@ -435,8 +435,8 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
     ("address", &address, "",
      nullptr,
      "[Only used when node self registration is enabled] The interface address "
-     "that the server will be listening on for data, gossip, commmand and admin"
-     " conenctions (unless overridden by unix sockets"
+     "that the server will be listening on for data, gossip, command and admin"
+     " connections (unless overridden by unix sockets"
      " settings).",
      SERVER | REQUIRES_RESTART | CLI_ONLY,
      SettingsCategory::NodeRegistration)

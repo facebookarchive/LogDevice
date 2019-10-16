@@ -582,7 +582,7 @@ class Sequencer {
   size_t getMaxWindowSize() const;
 
   /**
-   * Returns the ImmitableOptions of the current epoch sequencer.
+   * Returns the ImmutableOptions of the current epoch sequencer.
    * If there's no epoch sequencer, returns false.
    */
   folly::Optional<EpochSequencerImmutableOptions>

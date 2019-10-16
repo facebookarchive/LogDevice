@@ -684,11 +684,11 @@ struct Settings : public SettingsBundle {
   // See @file in Appender for more details.
   int scd_sync_leaders_max_waves;
 
-  // Total size in bytes of running Appenders accross all workers after which
+  // Total size in bytes of running Appenders across all workers after which
   // we start taking measures to reduce the Appender residency time.
   size_t max_total_appenders_size_soft;
 
-  // Total size in bytes of running Appenders accross all workers after which
+  // Total size in bytes of running Appenders across all workers after which
   // we start rejecting new appends.
   size_t max_total_appenders_size_hard;
 

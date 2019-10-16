@@ -74,7 +74,7 @@ class Principal {
  * Used mainly when parsing the configuration file and creating new
  * PrincipalParsers.
  * Note: When updating the configuration file while the cluster is running,
- *       changes to authenticaiton_type and permission_checking_type will
+ *       changes to authentication_type and permission_checking_type will
  *       not take effect until the cluster is restarted.
  *
  * NONE                 This indicates that there is no authentication for the
@@ -120,7 +120,7 @@ enum class AuthenticationType {
  * Logdevice. Used mainly when parsing the configuration file and creating new
  * PermissionCheckers.
  * Note: When updating the configuration file while the cluster is running,
- *       changes to authenticaiton_type and permission_checking_type will
+ *       changes to authentication_type and permission_checking_type will
  *       not take effect until the cluster is restarted.
  *
  * NONE                 This indicates that there is no authorization for the

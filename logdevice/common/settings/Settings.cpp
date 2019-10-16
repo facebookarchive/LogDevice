@@ -410,7 +410,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "false",
        nullptr, // no validation
        "if true, the Processor with this Settings object is only used to "
-       "perform bootstraping and will be destroyed after bootstrapping is "
+       "perform bootstrapping and will be destroyed after bootstrapping is "
        "completed. This isn't set by any parsed setting, but is only set "
        "directly internally",
        INTERNAL_ONLY);
@@ -840,7 +840,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &purging_use_metadata_log_only,
        "false",
        nullptr,
-       "If true, the NodeSetFinder within PurgeUncleanEpochs will use"
+       "If true, the NodeSetFinder within PurgeUncleanEpochs will use "
        "only the metadata log as source for fetching historical metadata."
        "used only for migration",
        SERVER,
@@ -1577,7 +1577,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &max_total_appenders_size_soft,
        "524288000", // 500MB
        parse_positive<ssize_t>(),
-       "Total size in bytes of running Appenders accross all workers after "
+       "Total size in bytes of running Appenders across all workers after "
        "which "
        "we start taking measures to reduce the Appender residency time.",
        SERVER,
@@ -1586,7 +1586,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &max_total_appenders_size_hard,
        "629145600", // 600MB
        parse_positive<ssize_t>(),
-       "Total size in bytes of running Appenders accross all workers after "
+       "Total size in bytes of running Appenders across all workers after "
        "which "
        "we start rejecting new appends.",
        SERVER,
@@ -1741,7 +1741,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &rebuilding_stores_max_mem_bytes,
        "2G",
        parse_positive<size_t>(),
-       "Maxumun total size of in-flight StoreStorageTasks from rebuilding. "
+       "Maximum total size of in-flight StoreStorageTasks from rebuilding. "
        "Evenly divided among shards.",
        SERVER,
        SettingsCategory::ResourceManagement);
@@ -1765,7 +1765,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &ssl_load_client_cert,
        "false",
        nullptr, // no validation
-       "Set to include client certificate for mutual ssl authenticaiton",
+       "Set to include client certificate for mutual ssl authentication",
        CLIENT | SERVER,
        SettingsCategory::Security);
   init("ssl-cert-path",
@@ -1963,7 +1963,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "The seed string that will be used to fetch the initial nodes "
        "configuration. It can be in the form string:<server1>,<server2>,etc. "
        "Or you can provide an smc tier via 'smc:<smc_tier>'. If it's empty, "
-       "NCM client bootstraping is not used.",
+       "NCM client bootstrapping is not used.",
        CLIENT,
        SettingsCategory::Configuration);
   init("nodes-configuration-init-retry-timeout",
@@ -2018,7 +2018,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &tcp_user_timeout,
        "300000", // 5 min
        nullptr,  // no validation
-       "The time in miliseconds that transmitted data may remain unacknowledged"
+       "The time in milliseconds that transmitted data may remain "
+       "unacknowledged "
        "before TCP will close the connection. "
        "0 for system default. "
        "-1 to disable. "
@@ -2250,7 +2251,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &byte_offsets,
        "false",
        nullptr, // no validation
-       "Enables the server-side byte offset calculation feature."
+       "Enables the server-side byte offset calculation feature. "
        "NOTE: There is no guarantee of byte offsets result correctness if "
        "feature"
        "was switched on->off->on in period shorter than retention value for"
@@ -2498,32 +2499,33 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::Rebuilding);
 
-  init(
-      "append-store-durability",
-      &append_store_durability,
-      "async_write",
-      nullptr, // no validation
-      "The minimum guaranteed durablity of record copies before a storage node "
-      "confirms the STORE as successful. Can be one of \"memory\" if record "
-      "is to be stored in a RocksDB memtable only (logdeviced memory), "
-      "\"async_write\" if record is to be additionally written to the RocksDB "
-      "WAL file (kernel memory, frequently synced to disk), or \"sync_write\" "
-      "if the record is to be written to the memtable and WAL, and the STORE "
-      "acknowledged only after the WAL is synced to disk by a separate WAL "
-      "syncing thread using fdatasync(3).",
-      SERVER,
-      SettingsCategory::WritePath);
-
-  init("rebuild-store-durability",
-       &rebuild_store_durability,
+  init("append-store-durability",
+       &append_store_durability,
        "async_write",
        nullptr, // no validation
-       "The minimum guaranteed durablity of rebuilding writes before a storage "
-       "node will confirm the STORE as successful. Can be one of \"memory\", "
-       "\"async_write\", or \"sync_write\". See --append-store-durability for "
-       "a description of these options.",
+       "The minimum guaranteed durability of record copies before a storage "
+       "node "
+       "confirms the STORE as successful. Can be one of \"memory\" if record "
+       "is to be stored in a RocksDB memtable only (logdeviced memory), "
+       "\"async_write\" if record is to be additionally written to the RocksDB "
+       "WAL file (kernel memory, frequently synced to disk), or \"sync_write\" "
+       "if the record is to be written to the memtable and WAL, and the STORE "
+       "acknowledged only after the WAL is synced to disk by a separate WAL "
+       "syncing thread using fdatasync(3).",
        SERVER,
-       SettingsCategory::Rebuilding);
+       SettingsCategory::WritePath);
+
+  init(
+      "rebuild-store-durability",
+      &rebuild_store_durability,
+      "async_write",
+      nullptr, // no validation
+      "The minimum guaranteed durability of rebuilding writes before a storage "
+      "node will confirm the STORE as successful. Can be one of \"memory\", "
+      "\"async_write\", or \"sync_write\". See --append-store-durability for "
+      "a description of these options.",
+      SERVER,
+      SettingsCategory::Rebuilding);
 
   init("rebuilding-dont-wait-for-flush-callbacks",
        &rebuilding_dont_wait_for_flush_callbacks,
@@ -2814,12 +2816,12 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "60s..3600s",
       validate_nonnegative<ssize_t>(),
       "Some sequencer reactivations may be postponed when the changes that "
-      "triggered the reactivation are not important enough to be propogated "
+      "triggered the reactivation are not important enough to be propagated "
       "immediately. E.g., changes to replication factor or window size, need "
       "to be made immediately visible on the other hand changes changes to the "
       "nodeset due to say the 'exclude_from_nodeset' flag being set as part "
       "of a passive drain can be postponed. If the reactivations can be "
-      "postponed then the delay is chosen to be a radnom delay seconds "
+      "postponed then the delay is chosen to be a random delay seconds "
       "between the above range. If 0 then don't postpone ",
       SERVER,
       SettingsCategory::Configuration);
@@ -2862,10 +2864,10 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &test_timestamp_linear_transform,
        "1,0",
        parse_test_timestamp_linear_tranform,
-       "Coefficents for tranforming the timestamp of records for test. "
-       "The value should contain two integrs sperated by ','. For example"
-       "'m,c'. Records timestamp is tranformed as m * now() + c."
-       "A default value of '1,0' makes the timestamp = now() which is expected"
+       "Coefficients for transforming the timestamp of records for test. "
+       "The value should contain two integers separated by ','. For example "
+       "'m,c'. Records timestamp is transformed as m * now() + c."
+       "A default value of '1,0' makes the timestamp = now() which is expected "
        "for all the normal use cases.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::Testing);
@@ -2999,7 +3001,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
            throw boost::program_options::error(buf);
          }
        },
-       "If true, readers in SCD mode will detect shards that are very slow and"
+       "If true, readers in SCD mode will detect shards that are very slow and "
        "may ask the other storage shards to filter them out",
        CLIENT,
        SettingsCategory::ReaderFailover);
@@ -3148,10 +3150,10 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &enable_offset_map,
        "false",
        nullptr, // no validation
-       "Enables the server-side OffsetMap calculation feature."
+       "Enables the server-side OffsetMap calculation feature. "
        "NOTE: There is no guarantee of byte offsets result correctness if "
        "feature"
-       "was switched on->off->on in period shorter than retention value for"
+       "was switched on->off->on in period shorter than retention value for "
        "logs.",
        SERVER,
        SettingsCategory::WritePath);
@@ -3159,7 +3161,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &enable_hh_wheel_backed_timers,
        "true",
        nullptr, // no validation
-       "Enables the new version of timers which run on a different thread"
+       "Enables the new version of timers which run on a different thread "
        "and use HHWheelTimer backend.",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Core);
@@ -3205,7 +3207,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "based on logs's measured throughput. This settings controls how often "
        "such adjustments will be considered. The nodeset size is chosen "
        "proportionally to throughput, replication factor and backlog duration. "
-       "The nodeset_size log attribute acts as the minimim allowed nodeset "
+       "The nodeset_size log attribute acts as the minimum allowed nodeset "
        "size, used for low-throughput logs and logs with infinite backlog "
        "duration. If --nodeset-adjustment-period is changed from nonzero to "
        "zero, all adjusted nodesets get immediately updated back to normal "
@@ -3240,21 +3242,22 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::Sequencer);
 
-  init("nodeset-adjustment-min-window",
-       &nodeset_adjustment_min_window,
-       "1h",
-       validate_positive<ssize_t>(),
-       "When automatic nodeset size adjustment is enabled, only do the "
-       "adjustment if we've got append throughput information for at least this"
-       "period of time. More details: we choose nodeset size based on log's "
-       "average append throughput in a moving window of "
-       "size --nodeset-adjustment-period. The average is maintained by the "
-       "sequencer. If the sequencer was activated recently, we may not have a "
-       "good estimate of log's append throughput. This setting says how long "
-       "to wait after sequencer activation before allowing adjusting nodeset "
-       "size based on that sequencer's throughput.",
-       SERVER,
-       SettingsCategory::Sequencer);
+  init(
+      "nodeset-adjustment-min-window",
+      &nodeset_adjustment_min_window,
+      "1h",
+      validate_positive<ssize_t>(),
+      "When automatic nodeset size adjustment is enabled, only do the "
+      "adjustment if we've got append throughput information for at least this "
+      "period of time. More details: we choose nodeset size based on log's "
+      "average append throughput in a moving window of "
+      "size --nodeset-adjustment-period. The average is maintained by the "
+      "sequencer. If the sequencer was activated recently, we may not have a "
+      "good estimate of log's append throughput. This setting says how long "
+      "to wait after sequencer activation before allowing adjusting nodeset "
+      "size based on that sequencer's throughput.",
+      SERVER,
+      SettingsCategory::Sequencer);
 
   init("nodeset-max-randomizations",
        &nodeset_max_randomizations,
@@ -3280,7 +3283,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Check permissions only for the received message of the type(s) "
        "specified. Separate different types with a comma. 'all' to apply to "
        "all messages. Prefix the value with '~' to include all types except "
-       "the given ones, e.g. '~WINDOW,RELEASE' will check permssions for "
+       "the given ones, e.g. '~WINDOW,RELEASE' will check permissions for "
        "messages of all types except WINDOW and RELEASE.",
        SERVER,
        SettingsCategory::Security);

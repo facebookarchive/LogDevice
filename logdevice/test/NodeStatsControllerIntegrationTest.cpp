@@ -57,7 +57,7 @@ struct Params {
 };
 
 /**
- * Used to asyncronously append to logs. Uses RAII to ensure that the
+ * Used to asynchronously append to logs. Uses RAII to ensure that the
  * thread is stopped.
  */
 class AppendThread {

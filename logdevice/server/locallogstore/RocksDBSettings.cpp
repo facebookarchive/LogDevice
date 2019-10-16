@@ -415,7 +415,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        nullptr,
        "the largest L0 files that it is beneficial to compact on their own. "
        "Note that we can still compact larger files than this if that enables "
-       "usto compact a longer range of consecutive files.",
+       "us to compact a longer range of consecutive files.",
        SERVER,
        SettingsCategory::LogsDB);
 
@@ -441,7 +441,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
          }
        },
        "Partial compaction candidate file ranges that contain a file that "
-       "comprises a larger propotion of the total file size in the range than "
+       "comprises a larger proportion of the total file size in the range than "
        "this setting, will not be considered.",
        SERVER,
        SettingsCategory::LogsDB);
@@ -652,8 +652,8 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
                std::to_string(val.count()) + "ms given.");
          }
        },
-       "Minumum guaranteed time period for a node to re-dirty a partition "
-       "after a MemTable is flushed without incurring a syncronous write "
+       "Minimum guaranteed time period for a node to re-dirty a partition "
+       "after a MemTable is flushed without incurring a synchronous write "
        "penalty to update the partition dirty metadata.",
        SERVER,
        SettingsCategory::LogsDB);
@@ -1235,7 +1235,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "1",
        parse_positive<ssize_t>(),
        "maximum number of concurrent background memtable flushes per shard. "
-       "Flushes run on the rocksdb hipri thread pool",
+       "Flushes run on the rocksdb hi-pri thread pool",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
@@ -1324,8 +1324,8 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
       "100G", // >> memtable-size-per-node to make this irrelevant
       parse_memory_budget(),
       "When any RocksDB memtable ('write buffer') reaches this size it is made "
-      "immitable, then flushed into a newly created L0 file. This setting may "
-      "soon be superceded by a more dynamic --memtable-size-per-node limit. ",
+      "immutable, then flushed into a newly created L0 file. This setting may "
+      "soon be superseded by a more dynamic --memtable-size-per-node limit. ",
       SERVER,
       SettingsCategory::RocksDB);
 

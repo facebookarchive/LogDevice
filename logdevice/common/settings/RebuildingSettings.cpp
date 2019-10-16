@@ -345,7 +345,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        &shard_is_rebuilt_msg_delay,
        "5s..300s",
        validate_nonnegative<ssize_t>(),
-       "In large clusters SHARD_IS_REBULT messages can arrive in a thundering "
+       "In large clusters SHARD_IS_REBUILT messages can arrive in a thundering "
        "herd overwhelming thread 0 processing those messages. The messages "
        "will be delayed by a random time in seconds between the min and the "
        "max value specified in the range above. 0 means no delay. NOTE: "
@@ -422,7 +422,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
                "record-durability-timeout", "non-negative", val.count());
          }
        },
-       "Time for which LogRebuilding/RebuidlingCoordinator will wait for "
+       "Time for which LogRebuilding/RebuildingCoordinator will wait for "
        "pending records to be durable before restarting the rebuilding for "
        "the log.",
        SERVER | EXPERIMENTAL,
