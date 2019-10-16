@@ -33,7 +33,7 @@ class ServerHealthMonitorTest : public testing::Test {
   // Tests case for when no changes are reported to the health monitor.
   // Waits for HM shutdown.
   std::unique_ptr<ServerHealthMonitor>
-  createHM(folly::InlineExecutor executor,
+  createHM(folly::InlineExecutor& executor,
            const std::chrono::milliseconds loop_duration) {
     return std::make_unique<ServerHealthMonitor>(executor,
                                                  loop_duration,
