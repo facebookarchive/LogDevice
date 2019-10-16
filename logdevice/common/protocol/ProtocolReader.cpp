@@ -41,6 +41,18 @@ class EvbufferSource : public ProtocolReader::Source {
     return rv;
   }
 
+  int readIOBuf(std::unique_ptr<folly::IOBuf>* dest,
+                size_t to_read,
+                size_t nread) override {
+    *dest = folly::IOBuf::create(to_read);
+    int rv = read(static_cast<void*>((*dest)->writableTail()), to_read, nread);
+    if (rv != to_read) {
+      return rv;
+    }
+    (*dest)->append(to_read);
+    return to_read;
+  }
+
   int drain(size_t to_drain, size_t nread) override {
     // must be checked by caller
     ld_check(nread + to_drain <= len_);
@@ -117,6 +129,18 @@ class LinearBufferSource : public ProtocolReader::Source {
     return -1;
   }
 
+  int readIOBuf(std::unique_ptr<folly::IOBuf>* dest,
+                size_t to_read,
+                size_t nread) override {
+    *dest = folly::IOBuf::create(to_read);
+    int rv = read(static_cast<void*>((*dest)->writableTail()), to_read, nread);
+    if (rv != to_read) {
+      return rv;
+    }
+    (*dest)->append(to_read);
+    return to_read;
+  }
+
   int drain(size_t to_drain, size_t nread) override {
     // must be checked by caller
     ld_check(nread + to_drain <= getLength());
@@ -148,6 +172,83 @@ class LinearBufferSource : public ProtocolReader::Source {
 
  private:
   const Slice src_;
+};
+
+class IOBufSource : public ProtocolReader::Source {
+ public:
+  int read(void* dest, size_t to_read, size_t /* nread */) override {
+    if (to_read == 0) {
+      return to_read;
+    }
+    // must be checked by caller
+    ld_check(to_read <= io_buf_->length());
+    ld_check(dest);
+    memcpy(dest, io_buf_->data(), to_read);
+    io_buf_->trimStart(to_read);
+    return to_read;
+  }
+
+  int readEvbuffer(evbuffer* /* dest */,
+                   size_t /* to_read */,
+                   size_t /* nread */) override {
+    err = E::NOTSUPPORTED;
+    return -1;
+  }
+
+  int readIOBuf(std::unique_ptr<folly::IOBuf>* dest,
+                size_t to_read,
+                size_t /* nread */) override {
+    ld_check(to_read <= io_buf_->length());
+    *dest = io_buf_->clone();
+    (*dest)->trimEnd(io_buf_->length() - to_read);
+    ld_check_eq((*dest)->length(), to_read);
+    io_buf_->trimStart(to_read);
+    return (*dest)->length();
+  }
+
+  int drain(size_t to_drain, size_t /* nread*/) override {
+    // must be checked by caller
+    ld_check(to_drain <= io_buf_->length());
+    io_buf_->trimStart(to_drain);
+    return 0;
+  }
+
+  size_t getLength() const override {
+    return io_buf_->length();
+  }
+
+  // This assumes caller is sure about presence of checksum
+  // field in header. Also should not be called after buffer has been trimmed in
+  // anyway by calling read API's
+  uint64_t computeChecksum(size_t /* msg_len */) override {
+    uint64_t checksum = 0;
+    size_t len = io_buf_->length();
+    if (len == 0) {
+      return checksum;
+    }
+
+    Slice slice(static_cast<void*>(io_buf_->writableData()), len);
+    checksum_bytes(slice, 64, (char*)&checksum);
+    return checksum;
+  }
+
+  const char* identify() const override {
+    return "iobuf source";
+  }
+
+  std::string hexDump(size_t /*unused*/) const override {
+    // currently not supported for evbuffer
+    return "N/A";
+  }
+
+  explicit IOBufSource(std::unique_ptr<folly::IOBuf> iobuf)
+      : io_buf_(std::move(iobuf)) {
+    // source must be valid
+    ld_check(io_buf_ != nullptr);
+  }
+
+ private:
+  std::unique_ptr<folly::IOBuf> io_buf_;
 };
 } // anonymous namespace
 
@@ -183,6 +284,17 @@ ProtocolReader::ProtocolReader(Slice src,
       proto_(proto),
       src_left_(src_->getLength()) {
   static_assert(sizeof(src_space_) >= sizeof(LinearBufferSource));
+}
+
+ProtocolReader::ProtocolReader(MessageType type,
+                               std::unique_ptr<folly::IOBuf> src,
+                               folly::Optional<uint16_t> proto)
+    : src_owned_(true),
+      src_(new (src_space_) IOBufSource(std::move(src))),
+      context_(messageTypeNames()[type].c_str()),
+      proto_(proto),
+      src_left_(src_->getLength()) {
+  static_assert(sizeof(src_space_) >= sizeof(IOBufSource));
 }
 
 ProtocolReader::~ProtocolReader() {
@@ -229,15 +341,10 @@ void ProtocolReader::readEvbuffer(evbuffer* out, size_t to_read) {
 }
 
 std::unique_ptr<folly::IOBuf> ProtocolReader::readIntoIOBuf(size_t to_read) {
-  auto iobuf = folly::IOBuf::create(to_read);
+  std::unique_ptr<folly::IOBuf> iobuf;
   if (ok() && isProtoVersionAllowed()) {
-    readImplCb(to_read, [&] {
-      auto nread = src_->read((void*)iobuf->writableData(), to_read, nread_);
-      if (nread == to_read) {
-        iobuf->append(to_read);
-      }
-      return nread;
-    });
+    readImplCb(
+        to_read, [&] { return src_->readIOBuf(&iobuf, to_read, nread_); });
   }
   return iobuf;
 }

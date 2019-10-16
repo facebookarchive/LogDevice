@@ -160,7 +160,7 @@ class Connection : public Socket {
  protected:
   folly::Future<Status> asyncConnect();
   void onConnected() override;
-  int onReceived(ProtocolHeader ph, struct evbuffer* inbuf) override;
+  int readMessageBody(std::unique_ptr<folly::IOBuf>& msg_buffer) override;
   /**
    * Called when connection timeout occurs. Either we could not establish the
    * TCP connection after multiple retries or the LD handshake did not complete

@@ -77,6 +77,10 @@ class ProtocolReader {
      */
     virtual int readEvbuffer(evbuffer* dest, size_t to_read, size_t nread) = 0;
 
+    virtual int readIOBuf(std::unique_ptr<folly::IOBuf>* dest,
+                          size_t to_read,
+                          size_t nread) = 0;
+
     /**
      * Remove @param to_drain number of bytes from the beginning of the source
      * buffer. Caller must ensure that source buffer still has enough remaining
@@ -401,6 +405,10 @@ class ProtocolReader {
 
   ProtocolReader(Slice src,
                  std::string context,
+                 folly::Optional<uint16_t> proto = folly::none);
+
+  ProtocolReader(MessageType type,
+                 std::unique_ptr<folly::IOBuf> src,
                  folly::Optional<uint16_t> proto = folly::none);
 
   ProtocolReader(const ProtocolReader&) = delete;

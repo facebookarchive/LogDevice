@@ -329,9 +329,9 @@ void Connection::onConnected() {
   Socket::onConnected();
 }
 
-int Connection::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
+int Connection::readMessageBody(std::unique_ptr<folly::IOBuf>& msg_buffer) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  return Socket::onReceived(ph, inbuf);
+  return Socket::readMessageBody(msg_buffer);
 }
 
 size_t Connection::getBytesPending() const {

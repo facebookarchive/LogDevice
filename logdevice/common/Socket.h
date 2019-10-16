@@ -529,7 +529,7 @@ class Socket : public TrafficShappingSocket {
   virtual void onConnected();
   void transitionToConnected();
 
-  virtual int onReceived(ProtocolHeader ph, struct evbuffer* inbuf);
+  virtual int readMessageBody(std::unique_ptr<folly::IOBuf>& msg_buffer);
 
   /**
    * Called when connection timeout occurs. Either we could not establish the
@@ -700,7 +700,8 @@ class Socket : public TrafficShappingSocket {
    *         be closed. err is set to the value to pass to Socket::close():
    *   INTERNAL, BADMSG, TOOBIG, PROTO, PROTONOSUPPORT, ACCESS
    */
-  int receiveMessage();
+
+  int readMessageHeader(struct evbuffer* inbuf);
 
   /**
    * Called by dataReadCallback() or readMoreCallback() to read one or

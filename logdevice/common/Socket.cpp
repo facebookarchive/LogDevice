@@ -653,23 +653,41 @@ void Socket::onBytesAvailable(bool fresh) {
   STAT_INCR(deps_->getStats(), sock_read_events);
   for (;; i++) {
     if (available >= bytesExpected()) {
+      // it's i/2 because we need 2 calls : one for the protocol header, the
+      // other for message
       if (i / 2 < process_max) {
-        // it's i/2 because we need 2 calls to receiveMessage() to consume
-        // a message: one for the protocol header, the other for message body
-        int rv = receiveMessage();
+        struct evbuffer* inbuf = deps_->getInput(bev_);
+        int rv = 0;
+        if (expectingProtocolHeader()) {
+          rv = readMessageHeader(inbuf);
+          if (rv == 0) {
+            expectMessageBody();
+          }
+        } else {
+          auto expected_bytes = bytesExpected();
+          auto iobuf = folly::IOBuf::create(expected_bytes);
+          int read_bytes = LD_EV(evbuffer_remove)(
+              inbuf, (void*)iobuf->writableData(), expected_bytes);
+          ld_check_eq(read_bytes, expected_bytes);
+          iobuf->append(expected_bytes);
+          rv = readMessageBody(iobuf);
+          if (rv == 0) {
+            expectProtocolHeader();
+          }
+        }
         if (rv != 0) {
+          if (!peer_name_.isClientAddress()) {
+            RATELIMIT_ERROR(std::chrono::seconds(10),
+                            10,
+                            "reading message failed with %s from %s.",
+                            error_name(err),
+                            conn_description_.c_str());
+          }
           if (err == E::NOBUFS) {
             STAT_INCR(deps_->getStats(), sock_read_event_nobufs);
             // Ran out of space to enqueue message into worker. Try again.
             read_more_.scheduleTimeout(0);
             break;
-          }
-          if (!peer_name_.isClientAddress()) {
-            RATELIMIT_ERROR(std::chrono::seconds(10),
-                            10,
-                            "receiveMessage() failed with %s from %s.",
-                            error_name(err),
-                            conn_description_.c_str());
           }
           if ((err == E::PROTONOSUPPORT || err == E::INVALID_CLUSTER ||
                err == E::ACCESS || err == E::DESTINATION_MISMATCH) &&
@@ -1776,97 +1794,77 @@ void Socket::expectMessageBody() {
   expecting_header_ = false;
 }
 
-int Socket::receiveMessage() {
-  int nbytes;
-
-  ld_check(!isClosed());
-  ld_check(connected_);
-
-  struct evbuffer* inbuf = deps_->getInput(bev_);
-
+int Socket::readMessageHeader(struct evbuffer* inbuf) {
+  ld_check(expectingProtocolHeader());
   static_assert(sizeof(recv_message_ph_) == sizeof(ProtocolHeader),
                 "recv_message_ph_ type is not ProtocolHeader");
+  // 1. Read first 2 fields of ProtocolHeader to extract message type
+  size_t min_protohdr_bytes =
+      sizeof(ProtocolHeader) - sizeof(ProtocolHeader::cksum);
+  int nbytes =
+      LD_EV(evbuffer_remove)(inbuf, &recv_message_ph_, min_protohdr_bytes);
+  if (nbytes != min_protohdr_bytes) { // unlikely
+    ld_critical("INTERNAL ERROR: got %d from evbuffer_remove() while "
+                "reading a protocol header from peer %s. "
+                "Expected %lu bytes.",
+                nbytes,
+                conn_description_.c_str(),
+                min_protohdr_bytes);
+    err = E::INTERNAL; // TODO: make sure close() works as an error handler
+    return -1;
+  }
+  if (recv_message_ph_.len <= min_protohdr_bytes) {
+    ld_error("PROTOCOL ERROR: got message length %u from peer %s, expected "
+             "at least %zu given sizeof(ProtocolHeader)=%zu",
+             recv_message_ph_.len,
+             conn_description_.c_str(),
+             min_protohdr_bytes + 1,
+             sizeof(ProtocolHeader));
+    err = E::BADMSG;
+    return -1;
+  }
 
-  if (expectingProtocolHeader()) {
-    // 1. Read first 2 fields of ProtocolHeader to extract message type
-    size_t min_protohdr_bytes =
-        sizeof(ProtocolHeader) - sizeof(ProtocolHeader::cksum);
-    nbytes =
-        LD_EV(evbuffer_remove)(inbuf, &recv_message_ph_, min_protohdr_bytes);
-    if (nbytes != min_protohdr_bytes) { // unlikely
+  size_t protohdr_bytes =
+      ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
+
+  if (recv_message_ph_.len > Message::MAX_LEN + protohdr_bytes) {
+    err = E::BADMSG;
+    ld_error("PROTOCOL ERROR: got invalid message length %u from peer %s "
+             "for msg:%s. Expected at most %u. min_protohdr_bytes:%zu",
+             recv_message_ph_.len,
+             conn_description_.c_str(),
+             messageTypeNames()[recv_message_ph_.type].c_str(),
+             Message::MAX_LEN,
+             min_protohdr_bytes);
+    return -1;
+  }
+
+  if (!handshaken_ && !isHandshakeMessage(recv_message_ph_.type)) {
+    ld_error("PROTOCOL ERROR: got a message of type %s on a brand new "
+             "connection to/from %s). Expected %s.",
+             messageTypeNames()[recv_message_ph_.type].c_str(),
+             conn_description_.c_str(),
+             peer_name_.isClientAddress() ? "HELLO" : "ACK");
+    err = E::PROTO;
+    return -1;
+  }
+
+  // 2. Now read checksum field if needed
+  if (ProtocolHeader::needChecksumInHeader(recv_message_ph_.type, proto_)) {
+    int cksum_nbytes = LD_EV(evbuffer_remove)(
+        inbuf, &recv_message_ph_.cksum, sizeof(recv_message_ph_.cksum));
+
+    if (cksum_nbytes != sizeof(recv_message_ph_.cksum)) { // unlikely
       ld_critical("INTERNAL ERROR: got %d from evbuffer_remove() while "
-                  "reading a protocol header from peer %s. "
+                  "reading checksum in protocol header from peer %s. "
                   "Expected %lu bytes.",
-                  nbytes,
+                  cksum_nbytes,
                   conn_description_.c_str(),
-                  min_protohdr_bytes);
-      err = E::INTERNAL; // TODO: make sure close() works as an error handler
+                  sizeof(recv_message_ph_.cksum));
+      err = E::INTERNAL;
       return -1;
     }
-    if (recv_message_ph_.len <= min_protohdr_bytes) {
-      ld_error("PROTOCOL ERROR: got message length %u from peer %s, expected "
-               "at least %zu given sizeof(ProtocolHeader)=%zu",
-               recv_message_ph_.len,
-               conn_description_.c_str(),
-               min_protohdr_bytes + 1,
-               sizeof(ProtocolHeader));
-      err = E::BADMSG;
-      return -1;
-    }
-
-    size_t protohdr_bytes =
-        ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-
-    if (recv_message_ph_.len > Message::MAX_LEN + protohdr_bytes) {
-      err = E::BADMSG;
-      ld_error("PROTOCOL ERROR: got invalid message length %u from peer %s "
-               "for msg:%s. Expected at most %u. min_protohdr_bytes:%zu",
-               recv_message_ph_.len,
-               conn_description_.c_str(),
-               messageTypeNames()[recv_message_ph_.type].c_str(),
-               Message::MAX_LEN,
-               min_protohdr_bytes);
-      return -1;
-    }
-
-    if (!handshaken_ && !isHandshakeMessage(recv_message_ph_.type)) {
-      ld_error("PROTOCOL ERROR: got a message of type %s on a brand new "
-               "connection to/from %s). Expected %s.",
-               messageTypeNames()[recv_message_ph_.type].c_str(),
-               conn_description_.c_str(),
-               peer_name_.isClientAddress() ? "HELLO" : "ACK");
-      err = E::PROTO;
-      return -1;
-    }
-
-    // 2. Now read checksum field if needed
-    if (ProtocolHeader::needChecksumInHeader(recv_message_ph_.type, proto_)) {
-      int cksum_nbytes = LD_EV(evbuffer_remove)(
-          inbuf, &recv_message_ph_.cksum, sizeof(recv_message_ph_.cksum));
-
-      if (cksum_nbytes != sizeof(recv_message_ph_.cksum)) { // unlikely
-        ld_critical("INTERNAL ERROR: got %d from evbuffer_remove() while "
-                    "reading checksum in protocol header from peer %s. "
-                    "Expected %lu bytes.",
-                    cksum_nbytes,
-                    conn_description_.c_str(),
-                    sizeof(recv_message_ph_.cksum));
-        err = E::INTERNAL;
-        return -1;
-      }
-    }
-
-    expectMessageBody();
-
-    ld_check(!expectingProtocolHeader());
-  } else {
-    // Got message body.
-    int rv = onReceived(recv_message_ph_, inbuf);
-    if (rv != 0) {
-      return rv;
-    }
-  } // processing message body
-
+  }
   return 0;
 }
 
@@ -1900,7 +1898,7 @@ bool Socket::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
     RATELIMIT_ERROR(
         std::chrono::seconds(1),
         2,
-        "checksum mismatch: (recvd:%lu, computed:%lu) detected with peer %s"
+        "Checksum mismatch (recvd:%lu, computed:%lu) detected with peer %s"
         ", msgtype:%s",
         cksum_recvd,
         cksum_computed,
@@ -1991,7 +1989,8 @@ bool Socket::processHandshakeMessage(const Message* msg) {
   return true;
 }
 
-int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
+int Socket::readMessageBody(std::unique_ptr<folly::IOBuf>& inbuf) {
+  ProtocolHeader& ph = recv_message_ph_;
   // Tell the Worker that we're processing a message, so it can time it.
   // The time will include message's deserialization, checksumming,
   // onReceived, destructor and Socket's processing overhead.
@@ -2019,7 +2018,7 @@ int Socket::onReceived(ProtocolHeader ph, struct evbuffer* inbuf) {
     return -1;
   }
 
-  ProtocolReader reader(ph.type, inbuf, payload_size, proto_);
+  ProtocolReader reader(ph.type, std::move(inbuf), proto_);
 
   ++num_messages_received_;
   num_bytes_received_ += ph.len;
