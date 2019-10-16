@@ -670,7 +670,7 @@ void Socket::onBytesAvailable(bool fresh) {
               inbuf, (void*)iobuf->writableData(), expected_bytes);
           ld_check_eq(read_bytes, expected_bytes);
           iobuf->append(expected_bytes);
-          rv = readMessageBody(iobuf);
+          rv = dispatchMessageBody(recv_message_ph_, std::move(iobuf));
           if (rv == 0) {
             expectProtocolHeader();
           }
@@ -1989,7 +1989,9 @@ bool Socket::processHandshakeMessage(const Message* msg) {
   return true;
 }
 
-int Socket::readMessageBody(std::unique_ptr<folly::IOBuf>& inbuf) {
+int Socket::dispatchMessageBody(ProtocolHeader header,
+                                std::unique_ptr<folly::IOBuf> inbuf) {
+  recv_message_ph_ = header;
   ProtocolHeader& ph = recv_message_ph_;
   // Tell the Worker that we're processing a message, so it can time it.
   // The time will include message's deserialization, checksumming,

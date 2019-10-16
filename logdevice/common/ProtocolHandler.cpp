@@ -15,24 +15,82 @@
 #include "logdevice/common/protocol/MessageTypeNames.h"
 
 namespace facebook { namespace logdevice {
-ProtocolHandler::ProtocolHandler(Connection* conn, EvBase* evBase)
+ProtocolHandler::ProtocolHandler(Connection* conn,
+                                 const std::string& conn_description,
+                                 EvBase* evBase)
     : conn_(conn),
+      conn_description_(conn_description),
       buffer_passed_to_tcp_(evBase),
       set_error_on_socket_(evBase) {}
 
-bool ProtocolHandler::validateProtocolHeader(
-    const ProtocolHeader& /* hdr */) const {
+bool ProtocolHandler::validateProtocolHeader(const ProtocolHeader& hdr) const {
+  static_assert(
+      sizeof(hdr) == sizeof(ProtocolHeader), "hdr type is not ProtocolHeader");
+  // 1. Read first 2 fields of ProtocolHeader to extract message type
+  size_t min_protohdr_bytes =
+      sizeof(ProtocolHeader) - sizeof(ProtocolHeader::cksum);
+
+  if (hdr.len <= min_protohdr_bytes) {
+    ld_error("PROTOCOL ERROR: got message length %u from peer %s, expected "
+             "at least %zu given sizeof(ProtocolHeader)=%zu",
+             hdr.len,
+             conn_description_.c_str(),
+             min_protohdr_bytes + 1,
+             sizeof(ProtocolHeader));
+    err = E::BADMSG;
+    return false;
+  }
+
+  size_t protohdr_bytes = ProtocolHeader::bytesNeeded(hdr.type, 0 /* unused */);
+
+  if (hdr.len > Message::MAX_LEN + protohdr_bytes) {
+    err = E::BADMSG;
+    ld_error("PROTOCOL ERROR: got invalid message length %u from peer %s "
+             "for msg:%s. Expected at most %u. min_protohdr_bytes:%zu",
+             hdr.len,
+             conn_description_.c_str(),
+             messageTypeNames()[hdr.type].c_str(),
+             Message::MAX_LEN,
+             min_protohdr_bytes);
+    return false;
+  }
+
+  if (!conn_->isHandshaken() && !isHandshakeMessage(hdr.type)) {
+    ld_error("PROTOCOL ERROR: got a message of type %s on a brand new "
+             "connection to/from %s). Expected %s.",
+             messageTypeNames()[hdr.type].c_str(),
+             conn_description_.c_str(),
+             isHELLOMessage(hdr.type) ? "HELLO" : "ACK");
+    err = E::PROTO;
+    return false;
+  }
   return true;
 }
 
-int ProtocolHandler::dispatchMessageBody(
-    const ProtocolHeader& /* hdr */,
-    std::unique_ptr<folly::IOBuf> /* body */) {
+int ProtocolHandler::dispatchMessageBody(const ProtocolHeader& hdr,
+                                         std::unique_ptr<folly::IOBuf> body) {
   // If some write hit an error it could close the socket. Return from here.
   if (conn_->isClosed()) {
     return -1;
   }
-  return 0;
+  auto body_clone = body->clone();
+  int rv = conn_->dispatchMessageBody(hdr, std::move(body));
+  if (rv != 0) {
+    if ((err == E::PROTONOSUPPORT || err == E::INVALID_CLUSTER ||
+         err == E::ACCESS || err == E::DESTINATION_MISMATCH) &&
+        isHELLOMessage(hdr.type)) {
+      conn_->flushOutputAndClose(err);
+      return rv;
+    }
+    if (err == E::NOBUFS) {
+      // Skip closing socket on ENOBUFS, Connection will take steps to uninstall
+      // the read callback which will stop reading.
+      return rv;
+    }
+    conn_->close(err);
+  }
+
+  return rv;
 }
 
 void ProtocolHandler::notifyErrorOnSocket(

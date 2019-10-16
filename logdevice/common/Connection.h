@@ -154,13 +154,14 @@ class Connection : public Socket {
   void setSocketAdapter(std::unique_ptr<SocketAdapter> adapter);
 
   void onBytesPassedToTCP(size_t nbytes_drained) override;
+  int dispatchMessageBody(ProtocolHeader header,
+                          std::unique_ptr<folly::IOBuf> msg_buffer) override;
 
   size_t getBytesPending() const override;
 
  protected:
   folly::Future<Status> asyncConnect();
   void onConnected() override;
-  int readMessageBody(std::unique_ptr<folly::IOBuf>& msg_buffer) override;
   /**
    * Called when connection timeout occurs. Either we could not establish the
    * TCP connection after multiple retries or the LD handshake did not complete
@@ -190,6 +191,12 @@ class Connection : public Socket {
 
   std::unique_ptr<SocketAdapter> sock_;
   std::shared_ptr<ProtocolHandler> proto_handler_;
+  std::unique_ptr<folly::AsyncSocket::ReadCallback> read_cb_;
+
+  // If receive of a message hit ENOBUFS then we will retry the same message
+  // again till it succeeds. This will all stop reading more messages from the
+  // socket.
+  EvTimer retry_receipt_of_message_;
 
   // This is passed to WriteCallback to activate
   class SocketWriteCallback : public folly::AsyncSocket::WriteCallback {

@@ -10,6 +10,9 @@
 #include <folly/io/async/AsyncSocket.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/ProtocolHandler.h"
+#include "logdevice/common/libevent/test/EvBaseMock.h"
+#include "logdevice/common/network/MessageReader.h"
 #include "logdevice/common/test/MockSocketAdapter.h"
 #include "logdevice/common/test/SocketTest_fixtures.h"
 
@@ -69,4 +72,11 @@ TEST_F(ConnectionTest, DISABLED_SendBuffers) {
   auto iobuf = folly::IOBuf::create(10);
   iobuf->append(10);
   conn_->sendBuffer(std::move(iobuf));
+}
+
+TEST_F(ConnectionTest, ReceiveBuffers) {
+  EvBaseMock ev_base_mock(EvBase::MOCK_EVENTBASE);
+  std::unique_ptr<ProtocolHandler> proto_handler =
+      std::make_unique<ProtocolHandler>(conn_.get(), "", &ev_base_mock);
+  MessageReader read_cb(*proto_handler, 1);
 }

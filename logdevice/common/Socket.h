@@ -529,7 +529,8 @@ class Socket : public TrafficShappingSocket {
   virtual void onConnected();
   void transitionToConnected();
 
-  virtual int readMessageBody(std::unique_ptr<folly::IOBuf>& msg_buffer);
+  virtual int dispatchMessageBody(ProtocolHeader header,
+                                  std::unique_ptr<folly::IOBuf> msg_buffer);
 
   /**
    * Called when connection timeout occurs. Either we could not establish the

@@ -46,7 +46,9 @@ class Connection;
  */
 class ProtocolHandler : public IProtocolHandler {
  public:
-  ProtocolHandler(Connection* conn, EvBase* evBase);
+  ProtocolHandler(Connection* conn,
+                  const std::string& conn_description,
+                  EvBase* evBase);
 
   ~ProtocolHandler() override {}
 
@@ -81,6 +83,13 @@ class ProtocolHandler : public IProtocolHandler {
   }
 
   /**
+   * Returns true if there is no error set on the socket.
+   */
+  bool good() const override {
+    return !set_error_on_socket_.isScheduled();
+  }
+
+  /**
    * Method used by various AsyncSocket callback to translate exception to
    * logdevice::Status.
    */
@@ -88,9 +97,9 @@ class ProtocolHandler : public IProtocolHandler {
 
  private:
   Connection* const conn_;
+  const std::string conn_description_;
   EvTimer buffer_passed_to_tcp_;
   EvTimer set_error_on_socket_;
-  const Address peer_name_;
 };
 
 }} // namespace facebook::logdevice

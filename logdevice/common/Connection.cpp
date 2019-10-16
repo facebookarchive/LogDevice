@@ -11,6 +11,7 @@
 #include "folly/ScopeGuard.h"
 #include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/network/MessageReader.h"
 #include "logdevice/common/network/SocketAdapter.h"
 #include "logdevice/common/network/SocketConnectCallback.h"
 #include "logdevice/common/protocol/Message.h"
@@ -24,7 +25,8 @@ Connection::Connection(NodeID server_name,
                        ConnectionType conntype,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps)
-    : Socket(server_name, type, conntype, flow_group, std::move(deps)) {}
+    : Socket(server_name, type, conntype, flow_group, std::move(deps)),
+      retry_receipt_of_message_(getDeps()->getEvBase()) {}
 
 Connection::Connection(NodeID server_name,
                        SocketType type,
@@ -34,8 +36,10 @@ Connection::Connection(NodeID server_name,
                        std::unique_ptr<SocketAdapter> sock_adapter)
     : Socket(server_name, type, conntype, flow_group, std::move(deps)),
       sock_(std::move(sock_adapter)),
-      proto_handler_(
-          std::make_shared<ProtocolHandler>(this, getDeps()->getEvBase())),
+      proto_handler_(std::make_shared<ProtocolHandler>(this,
+                                                       conn_description_,
+                                                       getDeps()->getEvBase())),
+      retry_receipt_of_message_(getDeps()->getEvBase()),
       sock_write_cb_(proto_handler_.get()) {
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
 }
@@ -55,7 +59,8 @@ Connection::Connection(int fd,
              type,
              conntype,
              flow_group,
-             std::move(deps)) {}
+             std::move(deps)),
+      retry_receipt_of_message_(getDeps()->getEvBase()) {}
 
 Connection::Connection(int fd,
                        ClientID client_name,
@@ -75,10 +80,15 @@ Connection::Connection(int fd,
              flow_group,
              std::move(deps)),
       sock_(std::move(sock_adapter)),
-      proto_handler_(
-          std::make_shared<ProtocolHandler>(this, getDeps()->getEvBase())),
+      proto_handler_(std::make_shared<ProtocolHandler>(this,
+                                                       conn_description_,
+                                                       getDeps()->getEvBase())),
+      retry_receipt_of_message_(getDeps()->getEvBase()),
       sock_write_cb_(proto_handler_.get()) {
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
+  // Set the read callback.
+  read_cb_.reset(new MessageReader(*proto_handler_, proto_));
+  sock_->setReadCB(read_cb_.get());
 }
 
 Connection::~Connection() {
@@ -113,7 +123,8 @@ int Connection::connect() {
     err = st;
     if (err == E::ISCONN) {
       Socket::transitionToConnected();
-      // TODO(gauresh) : Set the read callback here.
+      read_cb_.reset(new MessageReader(*proto_handler_, proto_));
+      sock_->setReadCB(read_cb_.get());
     }
   };
 
@@ -301,6 +312,9 @@ void Connection::close(Status reason) {
   }
   Socket::close(reason);
   if (sock_) {
+    // Clear read callback on close.
+    sock_->setReadCB(nullptr);
+
     size_t buffered_bytes = sock_write_cb_.bufferedBytes();
     sock_write_cb_.chain_lengths_.clear();
     sock_write_cb_.num_success_ = 0;
@@ -329,9 +343,26 @@ void Connection::onConnected() {
   Socket::onConnected();
 }
 
-int Connection::readMessageBody(std::unique_ptr<folly::IOBuf>& msg_buffer) {
+int Connection::dispatchMessageBody(ProtocolHeader header,
+                                    std::unique_ptr<folly::IOBuf> msg_buffer) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  return Socket::readMessageBody(msg_buffer);
+  auto body_clone = msg_buffer->clone();
+  int rv = Socket::dispatchMessageBody(header, std::move(msg_buffer));
+  if (rv != 0 && err == E::NOBUFS) {
+    // No space to push more messages on the worker, disable the read callback.
+    // Retry this message and if successful it will add back the ReadCallback.
+    ld_check(!retry_receipt_of_message_.isScheduled());
+    retry_receipt_of_message_.attachCallback(
+        [this, hdr = header, payload = std::move(body_clone)]() mutable {
+          if (proto_handler_->dispatchMessageBody(hdr, std::move(payload)) ==
+              0) {
+            sock_->setReadCB(read_cb_.get());
+          }
+        });
+    retry_receipt_of_message_.scheduleTimeout(0);
+    sock_->setReadCB(nullptr);
+  }
+  return rv;
 }
 
 size_t Connection::getBytesPending() const {
