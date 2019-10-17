@@ -284,7 +284,8 @@ TEST_F(AdminAPILowLevelTest, LogGroupThroughputAPITest) {
   request.set_time_period({60});
   admin_client->sync_getLogGroupThroughput(response, request);
   ASSERT_TRUE(!response.get_throughput().empty());
-  std::set<std::string> log_groups{"/log1", "/log2", "/config_log_deltas"};
+  std::set<std::string> log_groups{
+      "/log1", "/log2", "/config_log_deltas", "/config_log_snapshots"};
   for (const auto& it : response.get_throughput()) {
     ASSERT_TRUE((bool)log_groups.count(it.first));
     ASSERT_EQ(thrift::LogGroupOperation::APPENDS, it.second.get_operation());
