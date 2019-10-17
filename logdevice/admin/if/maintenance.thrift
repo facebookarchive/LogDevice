@@ -78,9 +78,9 @@ struct MaintenanceDefinition {
    */
   8: bool skip_safety_checks = false,
   /**
-   * Should NEVER be set by the user. Admin API will reject requests setting
-   * this to true. This can only be set by internal maintenances requested by
-   * the RebuildingSupervisor.
+   * Should not be set by the user unless there is a very good reason to.
+   * This is normally set by internal maintenances requested by the
+   * RebuildingSupervisor.
    *
    * If this is set to true, this means that we don't expect the shards to be
    * donors in the rebuilding process. aka. shards are inaccessible!

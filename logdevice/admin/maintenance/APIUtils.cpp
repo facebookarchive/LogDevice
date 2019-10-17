@@ -67,10 +67,6 @@ validateDefinition(const MaintenanceDefinition& definition) {
     }
   }
 
-  // force_restore_rebuilding cannot be set by the user.
-  if (definition.get_force_restore_rebuilding()) {
-    return InvalidRequest("Setting force_restore_rebuilding is not allowed");
-  }
   // ttl cannot be a negative numebr
   if (definition.get_ttl_seconds() < 0) {
     return InvalidRequest("ttl_seconds must be a non-negative number");
