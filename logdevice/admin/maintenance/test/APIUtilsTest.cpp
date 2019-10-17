@@ -73,13 +73,6 @@ TEST(APIUtilsTest, Validate) {
 
   {
     MaintenanceDefinition def2 = def1;
-    def2.set_force_restore_rebuilding(true);
-    auto failed2 = APIUtils::validateDefinition(def2);
-    ASSERT_EQ("Setting force_restore_rebuilding is not allowed",
-              failed2->get_message());
-  }
-  {
-    MaintenanceDefinition def2 = def1;
     def2.set_ttl_seconds(-1);
     auto failed2 = APIUtils::validateDefinition(def2);
     ASSERT_EQ(
