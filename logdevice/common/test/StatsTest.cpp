@@ -119,56 +119,54 @@ TEST(StatsTest, MultipleThreadsTest) {
 TEST(StatsTest, LatencyPercentileTest) {
   FastUpdateableSharedPtr<StatsParams> params(std::make_shared<StatsParams>());
   Stats s(&params);
-  int64_t p;
-
   auto& h = s.client.histograms->append_latency;
+  {
+    int64_t p;
 
-  p = h.estimatePercentile(.5);
-  EXPECT_EQ(0, p);
+    p = h.estimatePercentile(.5);
+    EXPECT_EQ(0, p);
 
-  h.add(85);
-  p = h.estimatePercentile(.5);
-  EXPECT_GT(p, 10);
-  EXPECT_LT(p, 100);
+    h.add(85);
+    p = h.estimatePercentile(.5);
+    EXPECT_GE(p, 1ll << 6); // 64
+    EXPECT_LE(p, 1ll << 7); // 128
 
-  // 5000s
-  h.add((int64_t)5e9);
-  p = h.estimatePercentile(.99);
-  EXPECT_GT(p, (int64_t)1e9);
-  EXPECT_LT(p, (int64_t)1e10);
+    h.add(5ll << 30); // 5000s
+    p = h.estimatePercentile(.99);
+    EXPECT_GE(p, 1ll << 32);
+    EXPECT_LE(p, 1ll << 33);
 
-  // ~5 years
-  h.add((int64_t)16e13);
-  p = h.estimatePercentile(.99);
-  EXPECT_GT(p, (int64_t)1e14);
-  EXPECT_LT(p, (int64_t)1e15);
+    h.add(1ll << 50); // ~5 years
+    p = h.estimatePercentile(.99);
+    EXPECT_GE(p, 1ll << 50);
+    EXPECT_LE(p, 1ll << 51);
 
-  // min and max percentile
-  p = h.estimatePercentile(0.);
-  EXPECT_EQ(p, 80);
-  p = h.estimatePercentile(1.);
-  EXPECT_EQ(p, (int64_t)2e14);
+    // min and max percentile
+    p = h.estimatePercentile(0.);
+    EXPECT_GE(p, 1ll << 6); // 64
+    EXPECT_LE(p, 1ll << 7); // 128
+    p = h.estimatePercentile(1.);
+    EXPECT_GE(p, 1ll << 50);
+    EXPECT_LE(p, 1ll << 51);
+  }
 
   // estimate percentiles in batch
   const double pcts[] = {0., .01, .1, .25, .5, .75, .9, .99, 1.};
   constexpr size_t npcts = sizeof(pcts) / sizeof(pcts[0]);
   int64_t samples[npcts];
   h.estimatePercentiles(pcts, npcts, samples);
-  EXPECT_EQ(samples[0], 80);
-  EXPECT_EQ(samples[1], 80);
-  EXPECT_GT(samples[2], 80);
-  EXPECT_LT(samples[2], 90);
-  EXPECT_GT(samples[3], 80);
-  EXPECT_LT(samples[3], 90);
-  EXPECT_GT(samples[4], (int64_t)1e9);
-  EXPECT_LT(samples[4], (int64_t)1e10);
-  EXPECT_GT(samples[5], (int64_t)1e14);
-  EXPECT_LT(samples[5], (int64_t)2e14);
-  EXPECT_GT(samples[6], (int64_t)1e14);
-  EXPECT_LT(samples[6], (int64_t)2e14);
-  EXPECT_GT(samples[7], (int64_t)1e14);
-  EXPECT_LT(samples[7], (int64_t)2e14);
-  EXPECT_EQ(samples[8], (int64_t)2e14);
+  for (auto p : {samples[0], samples[1], samples[2], samples[3]}) {
+    EXPECT_GE(p, 1ll << 6); // 64
+    EXPECT_LE(p, 1ll << 7); // 128
+  }
+  for (auto p : {samples[4]}) {
+    EXPECT_GE(p, 1ll << 32);
+    EXPECT_LE(p, 1ll << 33);
+  }
+  for (auto p : {samples[5], samples[6], samples[7], samples[8]}) {
+    EXPECT_GE(p, 1ll << 50);
+    EXPECT_LE(p, 1ll << 51);
+  }
 }
 
 TEST(StatsTest, HistogramConcurrencyTest) {
