@@ -27,6 +27,8 @@ from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MaintenanceDefinitionResponse,
     MaintenancesFilter,
+    MarkAllShardsUnrecoverableRequest,
+    MarkAllShardsUnrecoverableResponse,
     RemoveMaintenancesRequest,
     RemoveMaintenancesResponse,
 )
@@ -225,3 +227,15 @@ async def remove_maintenances(
         client=client, req=req
     )
     return resp.maintenances
+
+
+async def mark_all_shards_unrecoverable(
+    client: AdminAPI, user: Optional[str] = None, reason: Optional[str] = ""
+) -> MarkAllShardsUnrecoverableResponse:
+    """
+    Marks all the UNAVAILABLE shards as unrecoverable. This will advice the
+    readers to not wait for data on these shards and issue data loss gaps
+    if necessary.
+    """
+    req = MarkAllShardsUnrecoverableRequest(user=user, reason=reason)
+    return await admin_api.mark_all_shards_unrecoverable(client=client, req=req)

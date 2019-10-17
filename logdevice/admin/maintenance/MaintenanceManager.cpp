@@ -809,11 +809,6 @@ MaintenanceManager::markAllShardsUnrecoverable(std::string user,
     std::move(markAllShardsUnrecoverableInternal(user, reason))
         .via(this)
         .thenValue([promise = std::move(mpromise)](auto&& result) mutable {
-          if (!result.hasError() && result.value().first.empty() &&
-              result.value().second.empty()) {
-            promise.setValue(folly::makeUnexpected(E::EMPTY));
-            return;
-          }
           promise.setValue(std::move(result));
           return;
         });
@@ -863,6 +858,11 @@ MaintenanceManager::markAllShardsUnrecoverableInternal(std::string /*unused*/,
                      }),
       shards_to_mark_unrecoverable.end());
 
+  // No work is needed if we don't have shards to mark
+  if (shards_to_mark_unrecoverable.empty()) {
+    return std::make_pair(std::vector<ShardID>(), std::vector<ShardID>());
+  }
+
   // Post a NC update to mark shards unrecoverable.
   auto storage_membership_update =
       std::make_unique<membership::StorageMembership::Update>(
@@ -908,7 +908,7 @@ MaintenanceManager::markAllShardsUnrecoverableInternal(std::string /*unused*/,
             .thenValue([shards = std::move(shards_to_mark_unrecoverable)](
                            std::vector<folly::Try<Status>>&& result) mutable
                        -> MarkAllShardsUnrecoverableResult {
-              int i = 0, num_failed = 0;
+              int i = 0;
               std::vector<ShardID> succeeded;
               std::vector<ShardID> failed;
               for (auto shard : shards) {
@@ -917,17 +917,10 @@ MaintenanceManager::markAllShardsUnrecoverableInternal(std::string /*unused*/,
                   succeeded.push_back(shard);
                 } else {
                   failed.push_back(shard);
-                  num_failed++;
                 }
                 i++;
               }
-              if (num_failed == shards.size()) {
-                return folly::makeUnexpected(E::FAILED);
-              } else {
-                // Note: We do not return Unexpected if some of the shards
-                // failed while some succeeded
-                return std::make_pair(std::move(succeeded), std::move(failed));
-              }
+              return std::make_pair(std::move(succeeded), std::move(failed));
             });
       });
 }

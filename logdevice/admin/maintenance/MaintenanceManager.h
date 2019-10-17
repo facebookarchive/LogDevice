@@ -290,12 +290,8 @@ class MaintenanceManager : public SerialWorkContext {
    *         as unrecoverable.
    *         Error status can be
    *            E::NOTREADY if MaintenanceManager is not fully ready yet
-   *            E::EMPTY  if there are no shards that are UNAVAILABLE
-   *            E::FAILED if all shards failed to be marked as unrecoverable
-   *          Note: if request succeeds partially(i.e some shards are marked
-   * successfully while some fail) the overall request itself is considered
-   * successful (i.e error wont be set) but the resultant value vector will be
-   * filled appropriately with succeeded and failed shards
+   * If all shards fail to be marked unrecoverable, the success list will be
+   * empty and the failure list will contain all these shards.
    */
   folly::SemiFuture<MarkAllShardsUnrecoverableResult>
   markAllShardsUnrecoverable(std::string user, std::string reason);
