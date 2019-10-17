@@ -59,7 +59,10 @@ bool LogsConfigManager::createAndAttach(Processor& processor,
   std::unique_ptr<Request> req =
       std::make_unique<StartLogsConfigManagerRequest>(std::move(manager));
 
-  const int rv = processor.postRequest(req);
+  // We want to make sure that LCM has called start() (if needed) before the
+  // rest of the components execute their work, this ensures that the empty
+  // LogsConfig is published before the rest of dependencies.
+  const int rv = processor.blockingRequest(req);
   if (rv != 0) {
     ld_error("Cannot post request to start logs config manager: %s (%s)",
              error_name(err),
