@@ -67,6 +67,7 @@ void Configuration::getLogGroupByIDAsync(
   if (MetaDataLog::isMetaDataLog(id)) {
     cb(server_config_->getMetaDataLogGroup());
   } else {
+    ld_check(logs_config_);
     logs_config_->getLogGroupByIDAsync(id, cb);
   }
 }
