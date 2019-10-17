@@ -667,6 +667,124 @@ TEST_F(NodesConfigurationTest, LegacyConversion1) {
   checkCodecSerialization(*converted_nodes_config);
 }
 
+TEST_F(NodesConfigurationTest, LegacyMetadataLogsConfigConversion) {
+  std::shared_ptr<Configuration> config(
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
+  ASSERT_NE(config, nullptr);
+  const auto nodes_config =
+      config->serverConfig()->getNodesConfigurationFromServerConfigSource();
+  const auto metadata_nodeset =
+      nodes_config->getStorageMembership()->getMetaDataNodeIndices();
+
+  auto replication_property_update = [&](ReplicationProperty prop) {
+    NodesConfiguration::Update update;
+    update.metadata_logs_rep_update =
+        std::make_unique<MetaDataLogsReplication::Update>(
+            nodes_config->getMetaDataLogsReplication()->getVersion());
+    update.metadata_logs_rep_update->replication = std::move(prop);
+    return update;
+  };
+
+  {
+    // NC uses non-backward compatible new format
+    auto prop = ReplicationProperty({{NodeLocationScope::CLUSTER, 2},
+                                     {NodeLocationScope::RACK, 2},
+                                     {NodeLocationScope::NODE, 3}});
+    auto nc = nodes_config->applyUpdate(replication_property_update(prop));
+
+    // Metadata cfg uses new format
+    configuration::MetaDataLogsConfig metadata_cfg;
+    metadata_cfg.setMetadataLogGroup(
+        logsconfig::LogGroupNode().withLogAttributes(
+            logsconfig::LogAttributes().with_replicateAcross(
+                {{NodeLocationScope::CLUSTER, 2},
+                 {NodeLocationScope::RACK, 2},
+                 {NodeLocationScope::NODE, 4}})));
+
+    NodesConfigLegacyConverter::toLegacyMetadataLogsConfig(*nc, metadata_cfg);
+
+    // Output Metadata cfg should continue using new format
+    ASSERT_TRUE(
+        metadata_cfg.metadata_log_group->attrs().replicateAcross().hasValue());
+    EXPECT_EQ(
+        prop.getDistinctReplicationFactors(),
+        metadata_cfg.metadata_log_group->attrs().replicateAcross().value());
+    EXPECT_FALSE(metadata_cfg.metadata_log_group->attrs()
+                     .replicationFactor()
+                     .hasValue());
+    EXPECT_FALSE(metadata_cfg.metadata_log_group->attrs()
+                     .syncReplicationScope()
+                     .hasValue());
+    EXPECT_EQ(metadata_nodeset, metadata_cfg.metadata_nodes);
+  }
+
+  {
+    // NC uses non-backward compatible new format
+    auto prop = ReplicationProperty({{NodeLocationScope::CLUSTER, 2},
+                                     {NodeLocationScope::RACK, 3},
+                                     {NodeLocationScope::NODE, 5}});
+    auto nc = nodes_config->applyUpdate(replication_property_update(prop));
+
+    // Metadata cfg uses old format
+    configuration::MetaDataLogsConfig metadata_cfg;
+    metadata_cfg.setMetadataLogGroup(
+        logsconfig::LogGroupNode().withLogAttributes(
+            logsconfig::LogAttributes()
+                .with_syncReplicationScope(NodeLocationScope::CLUSTER)
+                .with_replicationFactor(3)));
+
+    NodesConfigLegacyConverter::toLegacyMetadataLogsConfig(*nc, metadata_cfg);
+
+    // Output Metadata cfg should use new format
+    ASSERT_TRUE(
+        metadata_cfg.metadata_log_group->attrs().replicateAcross().hasValue());
+    EXPECT_EQ(
+        prop.getDistinctReplicationFactors(),
+        metadata_cfg.metadata_log_group->attrs().replicateAcross().value());
+    EXPECT_FALSE(metadata_cfg.metadata_log_group->attrs()
+                     .replicationFactor()
+                     .hasValue());
+    EXPECT_FALSE(metadata_cfg.metadata_log_group->attrs()
+                     .syncReplicationScope()
+                     .hasValue());
+    EXPECT_EQ(metadata_nodeset, metadata_cfg.metadata_nodes);
+  }
+
+  {
+    // NC uses backward compatible new format
+    auto prop = ReplicationProperty({{NodeLocationScope::NODE, 5}});
+    auto nc = nodes_config->applyUpdate(replication_property_update(prop));
+
+    // Metadata cfg uses old format
+    configuration::MetaDataLogsConfig metadata_cfg;
+    metadata_cfg.setMetadataLogGroup(
+        logsconfig::LogGroupNode().withLogAttributes(
+            logsconfig::LogAttributes()
+                .with_syncReplicationScope(NodeLocationScope::CLUSTER)
+                .with_replicationFactor(3)));
+
+    NodesConfigLegacyConverter::toLegacyMetadataLogsConfig(*nc, metadata_cfg);
+
+    // Output Metadata cfg should use old format
+    ASSERT_FALSE(
+        metadata_cfg.metadata_log_group->attrs().replicateAcross().hasValue());
+    EXPECT_TRUE(metadata_cfg.metadata_log_group->attrs()
+                    .replicationFactor()
+                    .hasValue());
+    EXPECT_EQ(
+        5,
+        metadata_cfg.metadata_log_group->attrs().replicationFactor().value());
+    EXPECT_TRUE(metadata_cfg.metadata_log_group->attrs()
+                    .syncReplicationScope()
+                    .hasValue());
+    EXPECT_EQ(NodeLocationScope::NODE,
+              metadata_cfg.metadata_log_group->attrs()
+                  .syncReplicationScope()
+                  .value());
+    EXPECT_EQ(metadata_nodeset, metadata_cfg.metadata_nodes);
+  }
+} // namespace
+
 TEST_F(NodesConfigurationTest, ExtractVersionErrorEmptyString) {
   auto version = NodesConfigurationCodec::extractConfigVersion(std::string());
   ASSERT_FALSE(version.hasValue());

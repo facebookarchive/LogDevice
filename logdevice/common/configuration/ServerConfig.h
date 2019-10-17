@@ -354,6 +354,13 @@ class ServerConfig {
   std::shared_ptr<ServerConfig> withNodes(NodesConfig) const;
 
   /**
+   * Returns a clone of the ServerConfig object with the MetadataLogsConfig
+   * section replaced by the parameter.
+   */
+  std::shared_ptr<ServerConfig>
+      withMetaDataLogsConfig(MetaDataLogsConfig) const;
+
+  /**
    * Returns a clone of the ServerConfig object with version replaced by the
    * given value.
    */

@@ -424,6 +424,33 @@ std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
   return config;
 }
 
+std::shared_ptr<ServerConfig> ServerConfig::withMetaDataLogsConfig(
+    MetaDataLogsConfig metaDataLogsConfig) const {
+  auto new_nodes = folly::copy(nodesConfig_);
+  if (!new_nodes.generateNodesConfiguration(metaDataLogsConfig, version_)) {
+    return nullptr;
+  }
+
+  std::shared_ptr<ServerConfig> config = fromData(clusterName_,
+                                                  std::move(new_nodes),
+                                                  std::move(metaDataLogsConfig),
+                                                  principalsConfig_,
+                                                  securityConfig_,
+                                                  traceLoggerConfig_,
+                                                  trafficShapingConfig_,
+                                                  readIOShapingConfig_,
+                                                  serverSettingsConfig_,
+                                                  clientSettingsConfig_,
+                                                  internalLogs_,
+                                                  getClusterCreationTime(),
+                                                  getCustomFields(),
+                                                  ns_delimiter_);
+  config->setVersion(version_);
+  config->setMainConfigMetadata(main_config_metadata_);
+  config->setIncludedConfigMetadata(included_config_metadata_);
+  return config;
+}
+
 std::shared_ptr<ServerConfig>
 ServerConfig::withVersion(config_version_t version) const {
   std::shared_ptr<ServerConfig> config = fromData(clusterName_,

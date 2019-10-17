@@ -29,6 +29,10 @@ class NodesConfigLegacyConverter {
                         const MetaDataLogsConfig& meta_config,
                         config_version_t version);
 
+  static int
+  toLegacyMetadataLogsConfig(const NodesConfiguration& config,
+                             MetaDataLogsConfig& existing_metadata_config);
+
   // take a server config, convert its nodes config to the new type,
   // and convert it back, create a new server config with the config that
   // got converted back, compare with the original. return true if the

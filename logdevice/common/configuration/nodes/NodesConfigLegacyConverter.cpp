@@ -18,6 +18,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/utils.h"
 #include "logdevice/common/toString.h"
+#include "logdevice/include/NodeLocationScope.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
@@ -284,6 +285,46 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
   return res;
 }
 
+int NodesConfigLegacyConverter::toLegacyMetadataLogsConfig(
+    const NodesConfiguration& config,
+    MetaDataLogsConfig& existing_metadata_config) {
+  // Update metadata nodeset
+  existing_metadata_config.metadata_nodes =
+      config.getStorageMembership()->getMetaDataNodeIndices();
+
+  // Update the replication property of the metadata
+  auto replication_property =
+      config.getMetaDataLogsReplication()->getReplicationProperty();
+  auto replicate_acorss = replication_property.getDistinctReplicationFactors();
+  auto& log_group = existing_metadata_config.metadata_log_group;
+
+  logsconfig::LogAttributes new_attrs;
+  if (log_group->attrs().syncReplicationScope().hasValue()) {
+    // Uses old format to minimize the diff if possible, if not, fallback to the
+    // new format.
+    auto old_format = replication_property.toOldRepresentation();
+    if (old_format.hasValue()) {
+      new_attrs =
+          log_group->attrs()
+              .with_syncReplicationScope(old_format->sync_replication_scope)
+              .with_replicationFactor(old_format->replication_factor);
+    } else {
+      new_attrs =
+          log_group->attrs()
+              .with_replicateAcross(replicate_acorss)
+              .with_syncReplicationScope(
+                  logsconfig::Attribute<NodeLocationScope>(folly::none))
+              .with_replicationFactor(logsconfig::Attribute<int>(folly::none));
+    }
+  } else {
+    ld_check(log_group->attrs().replicateAcross().hasValue());
+    new_attrs = log_group->attrs().with_replicateAcross(replicate_acorss);
+  }
+  existing_metadata_config.setMetadataLogGroup(
+      log_group->withLogAttributes(new_attrs));
+  return 0;
+}
+
 /*static*/
 bool NodesConfigLegacyConverter::testWithServerConfig(
     const ServerConfig& server_config) {
@@ -414,7 +455,18 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     return false;
   }
 
+  auto metadata_converted_back = server_config.getMetaDataLogsConfig();
+  rv = toLegacyMetadataLogsConfig(*new_nodes_config, metadata_converted_back);
+  if (rv != 0) {
+    return false;
+  }
+
   auto cfg_to_compare = server_config.withNodes(std::move(converted_back));
+  if (cfg_to_compare == nullptr) {
+    return false;
+  }
+  cfg_to_compare = cfg_to_compare->withMetaDataLogsConfig(
+      std::move(metadata_converted_back));
   if (cfg_to_compare == nullptr) {
     return false;
   }
