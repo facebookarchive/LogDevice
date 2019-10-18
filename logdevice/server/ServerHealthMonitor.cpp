@@ -83,6 +83,7 @@ void ServerHealthMonitor::updateVariables(TimePoint now) {
                 [now](TimeSeries& t) { t.update(now); });
   state_timer_.positiveFeedback(now); // calc how much time has passed
 }
+
 bool ServerHealthMonitor::isOverloaded(TimePoint now,
                                        std::chrono::milliseconds half_period) {
   // A node is overloaded when more than max_overloaded_worker_percentage_% of
@@ -111,6 +112,7 @@ bool ServerHealthMonitor::isOverloaded(TimePoint now,
               }) >= max_overloaded_worker_percentage_ *
               internal_info_.worker_queue_stalls_.capacity());
 }
+
 ServerHealthMonitor::StallInfo
 ServerHealthMonitor::isStalled(TimePoint now,
                                std::chrono::milliseconds half_period) {

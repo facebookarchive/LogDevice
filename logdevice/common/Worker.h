@@ -815,6 +815,10 @@ class Worker : public WorkContext {
   // Helper used by onStartedRunning() and onStoppedRunning()
   void setCurrentlyRunningContext(RunContext new_context,
                                   RunContext prev_context);
+  // Helper used to generate error injection if the conditions are correct. Used
+  // to test HealthMonitor functionalities.
+  void generateErrorInjection(double error_chance,
+                              std::chrono::milliseconds sleep_duration);
 
   // Subclasses can override to create a MessageDispatch subclass during
   // initialisation
@@ -916,6 +920,12 @@ class Worker : public WorkContext {
   // Stop on EventLogStateMachine should only be called once.
   // Set to true once stop has been called
   bool event_log_stopped_{false};
+
+  // Error Injection settings:
+  double worker_stall_error_injection_chance_;
+  double worker_queue_stall_error_injection_chance_;
+  std::chrono::milliseconds worker_stall_inj_ms_;
+  std::chrono::milliseconds worker_queue_inj_ms_;
 
   friend struct ::testing::SocketConnectRequest;
 };

@@ -836,6 +836,33 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
        SettingsCategory::Monitoring);
 
+  init("worker-stall-error-injection-chance",
+       &worker_stall_error_injection_chance,
+       "0",
+       validate_range<double>(0, 100),
+       "Percentage chance of delayed request execution in a worker thread. "
+       "Used to exercise error handling paths in Health Monitor.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Testing);
+
+  init("worker-queue-stall-error-injection-chance",
+       &worker_queue_stall_error_injection_chance,
+       "0",
+       validate_range<double>(0, 100),
+       "Percentage chance of delayed request queuing in a worker thread. "
+       "Used to exercise error handling paths in Health Monitor.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Testing);
+
+  init("watchdog-detected-worker-stall-error-injection-chance",
+       &watchdog_detected_worker_stall_error_injection_chance,
+       "0",
+       validate_range<double>(0, 100),
+       "Percentage chance of detection of stalled workers in watchdog thread. "
+       "Used to exercise error handling paths in Health Monitor.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Testing);
+
   init("purging-use-metadata-log-only",
        &purging_use_metadata_log_only,
        "false",

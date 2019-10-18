@@ -47,6 +47,8 @@ class WatchDogThread {
   std::mutex mutex_;
 
   std::vector<std::chrono::milliseconds> total_stalled_time_ms_;
+  // Error injection
+  double watchdog_detected_worker_stall_error_injection_chance_;
   // Main thread loop.
   void run();
 

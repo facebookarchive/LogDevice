@@ -22,6 +22,10 @@ STAT_DEFINE(post_request_failed, SUM)
 STAT_DEFINE(worker_requests_executed, SUM)
 // Number of Requests > request_execution_delay_threshold in execute().
 STAT_DEFINE(worker_slow_requests, SUM)
+// Number of Request queue times > request_queue_warning_time_limit in execute().
+STAT_DEFINE(worker_long_queued_requests, SUM)
+// Number of HI_PRI Request queue times > request_queue_warning_time_limit in execute().
+STAT_DEFINE(worker_hi_pri_long_queued_requests, SUM)
 // Number of tasks on background thread that spent > 10 msec executing.
 STAT_DEFINE(background_slow_requests, SUM)
 // TaskQueue stats.

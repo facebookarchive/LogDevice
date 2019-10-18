@@ -607,6 +607,9 @@ sidebar_label: Settings
 | test-stall-rebuilding | Makes rebuilding pretend to start but not make any actual progress. Used in tests. | false | server&nbsp;only |
 | test-timestamp-linear-transform | Coefficients for transforming the timestamp of records for test. The value should contain two integers separated by ','. For example 'm,c'. Records timestamp is transformed as m * now() + c.A default value of '1,0' makes the timestamp = now() which is expected for all the normal use cases. | 1,0 | requires&nbsp;restart, server&nbsp;only |
 | unix-socket | Path to the unix domain socket the server will use to listen for non-SSL clients |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
+| watchdog-detected-worker-stall-error-injection-chance | Percentage chance of detection of stalled workers in watchdog thread. Used to exercise error handling paths in Health Monitor. | 0 | requires&nbsp;restart, server&nbsp;only |
+| worker-queue-stall-error-injection-chance | Percentage chance of delayed request queuing in a worker thread. Used to exercise error handling paths in Health Monitor. | 0 | requires&nbsp;restart, server&nbsp;only |
+| worker-stall-error-injection-chance | Percentage chance of delayed request execution in a worker thread. Used to exercise error handling paths in Health Monitor. | 0 | requires&nbsp;restart, server&nbsp;only |
 
 ## Uncategorized
 |   Name    |   Description   |  Default  |   Notes   |

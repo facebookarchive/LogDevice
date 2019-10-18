@@ -224,7 +224,16 @@ Worker::Worker(WorkContext::KeepAlive event_loop,
       accepting_work_(true),
       worker_timeout_stats_(std::make_unique<WorkerTimeoutStats>()),
       overload_detector_(std::make_unique<OverloadDetector>(
-          std::make_unique<OverloadDetectorDependencies>())) {}
+          std::make_unique<OverloadDetectorDependencies>())),
+      worker_stall_error_injection_chance_(
+          processor->updateableSettings()->worker_stall_error_injection_chance),
+      worker_queue_stall_error_injection_chance_(
+          processor->updateableSettings()
+              ->worker_queue_stall_error_injection_chance),
+      worker_stall_inj_ms_(
+          processor->updateableSettings()->health_monitor_max_stalls_avg_ms),
+      worker_queue_inj_ms_(processor->updateableSettings()
+                               ->health_monitor_max_queue_stalls_avg_ms) {}
 
 Worker::~Worker() {
   shutting_down_ = true;
@@ -954,7 +963,8 @@ ClusterState* Worker::getClusterState() {
 void Worker::onStoppedRunning(RunContext prev_context) {
   std::chrono::steady_clock::time_point start_time;
   start_time = currentlyRunningStart_;
-
+  generateErrorInjection(
+      worker_stall_error_injection_chance_, worker_stall_inj_ms_);
   setCurrentlyRunningContext(RunContext(), prev_context);
 
   auto end_time = currentlyRunningStart_;
@@ -1252,9 +1262,11 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
         1s, 1, "INTERNAL ERROR: got a NULL request pointer from RequestPump");
     return;
   }
-
+  if (rq->getExecutorPriority() == folly::Executor::HI_PRI) {
+    generateErrorInjection(
+        worker_queue_stall_error_injection_chance_, worker_queue_inj_ms_);
+  }
   RunContext run_context = rq->getRunContext();
-
   auto priority = rq->getExecutorPriority();
   auto queue_period = steady_clock::now() - rq->enqueue_time_;
   auto queue_time{duration_cast<milliseconds>(queue_period)};
@@ -1270,6 +1282,7 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
       }
       return "";
     };
+    WORKER_STAT_INCR(worker_long_queued_requests);
     RATELIMIT_WARNING(5s,
                       10,
                       "Request queued for %g msec: %s (id: %lu), p :%s",
@@ -1281,6 +1294,7 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
         priority == folly::Executor::HI_PRI) {
       processor_->getHealthMonitor().reportWorkerQueueStall(
           idx_.val_, queue_time);
+      WORKER_STAT_INCR(worker_hi_pri_long_queued_requests);
     }
   }
 
@@ -1394,5 +1408,13 @@ int Worker::forcePost(std::unique_ptr<Request>& req) {
   addWithPriority(std::move(func), priority);
 
   return 0;
+}
+
+void Worker::generateErrorInjection(double error_chance,
+                                    std::chrono::milliseconds sleep_duration) {
+  if (UNLIKELY(worker_type_ == WorkerType::GENERAL && error_chance > 0 &&
+               folly::Random::randDouble(0, 100.0) <= error_chance)) {
+    std::this_thread::sleep_for(sleep_duration);
+  }
 }
 }} // namespace facebook::logdevice

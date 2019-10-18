@@ -110,6 +110,21 @@ struct Settings : public SettingsBundle {
   // transitions into an UNHEALTHY state in the HM.
   double health_monitor_max_stalled_worker_percentage;
 
+  // Used to simulate delayed request execution in a worker thread by adding a
+  // fixed value onto the real execution time. Expressed as a percentage: 100 =
+  // 100%.
+  double worker_stall_error_injection_chance;
+
+  // Used to simulate delayed request queuing in a worker thread by adding a
+  // fixed value onto the real queuing time. Expressed as a percentage: 100 =
+  // 100%.
+  double worker_queue_stall_error_injection_chance;
+
+  // Used to simulate detection of stalled workers in watchdog thread by
+  // reporting a fixed number (one) of stalled workers. Expressed as a
+  // percentage: 100 = 100%.
+  double watchdog_detected_worker_stall_error_injection_chance;
+
   // Limit on the number of backtraces printed when watchdog detects workers
   // are stalled
   rate_limit_t watchdog_bt_ratelimit;

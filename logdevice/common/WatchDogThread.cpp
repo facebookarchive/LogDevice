@@ -28,7 +28,10 @@ WatchDogThread::WatchDogThread(Processor* p,
       events_completed_(processor_->settings()->num_workers, 0),
       bt_ratelimiter_(bt_ratelimit),
       total_stalled_time_ms_(processor_->settings()->num_workers,
-                             std::chrono::milliseconds::zero()) {
+                             std::chrono::milliseconds::zero()),
+      watchdog_detected_worker_stall_error_injection_chance_(
+          processor_->settings()
+              ->watchdog_detected_worker_stall_error_injection_chance) {
   ld_check(processor_->getWorkerCount(WorkerType::GENERAL) != 0);
   thread_ = std::thread(&WatchDogThread::run, this);
 }
@@ -85,8 +88,17 @@ void WatchDogThread::detectStalls() {
       },
       Processor::Order::FORWARD,
       WorkerType::GENERAL);
-  processor_->getHealthMonitor().reportStalledWorkers(
-      stalled_worker_pids.size());
+  if (UNLIKELY(!stalled_worker_pids.size() &&
+               watchdog_detected_worker_stall_error_injection_chance_ > 0 &&
+               folly::Random::randDouble(0, 100.0) <=
+                   watchdog_detected_worker_stall_error_injection_chance_)) {
+    processor_->getHealthMonitor().reportStalledWorkers(1);
+    STAT_INCR(processor_->stats_, watchdog_fault_injection_indicator);
+
+  } else {
+    processor_->getHealthMonitor().reportStalledWorkers(
+        stalled_worker_pids.size());
+  }
   if (stalled_worker_pids.size()) {
     ld_warning("Found %zu stalled workers", stalled_worker_pids.size());
     STAT_ADD(

@@ -1027,6 +1027,8 @@ STAT_DEFINE(health_monitor_state_indicator, SUM)
 // Note: temporary
 STAT_DEFINE(health_monitor_overload_indicator, SUM)
 // Note: temporary
+STAT_DEFINE(watchdog_fault_injection_indicator, SUM)
+// Note: temporary
 STAT_DEFINE(health_monitor_stall_indicator, SUM)
 
 // EventLoop delays.
