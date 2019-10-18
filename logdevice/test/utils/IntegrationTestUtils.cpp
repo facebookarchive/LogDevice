@@ -92,7 +92,6 @@ std::string defaultMarkdownLDQueryPath() {
 static const char* CHECKER_PATH = "bin/replication_checker_nofb";
 #endif
 
-using folly::test::TemporaryDirectory;
 namespace fs = boost::filesystem;
 
 // Checks LOGDEVICE_TEST_PAUSE_FOR_GDB environment variable and pauses if
@@ -344,10 +343,6 @@ Cluster::Cluster(std::string root_path,
           config_,
           impl_settings->getSettings(),
           std::make_unique<NoopTraceLogger>(config_, folly::none));
-}
-
-static std::unique_ptr<TemporaryDirectory> create_temporary_root_dir() {
-  return createTemporaryDir("IntegrationTestUtils");
 }
 
 logsconfig::LogAttributes
@@ -722,7 +717,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
     boost::filesystem::create_directories(root_path);
   } else {
     // Create a directory that will contain all the data for this cluster
-    root_pin = create_temporary_root_dir();
+    root_pin = std::make_unique<TemporaryDirectory>("IntegrationTestUtils");
     root_path = root_pin->path().string();
   }
 

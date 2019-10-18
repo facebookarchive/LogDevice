@@ -817,7 +817,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
         300,
         &stats_);
 
-    temp_dir_ = createTemporaryDir("TemporaryLogStore");
+    temp_dir_ = std::make_unique<TemporaryDirectory>("TemporaryLogStore");
     ld_check(temp_dir_);
     path_ = temp_dir_->path().string();
     openStore();
@@ -1529,7 +1529,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     return res;
   }
 
-  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+  std::unique_ptr<TemporaryDirectory> temp_dir_;
   std::string path_;
 
   Settings settings_;

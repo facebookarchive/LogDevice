@@ -126,7 +126,7 @@ class UnreleasedRecordDetectorTest : public ::testing::Test {
   bool waitUntilSequencerIsActive(std::chrono::duration<Rep, Period> duration,
                                   lsn_t expect_released);
   void setHighestInsertedLSN(lsn_t lsn);
-  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+  std::unique_ptr<TemporaryDirectory> temp_dir_;
   std::unique_ptr<UpdateableSettings<Settings>> usettings_;
   std::unique_ptr<UpdateableSettings<ServerSettings>> userver_settings_;
   std::unique_ptr<UpdateableSettings<GossipSettings>> ugossip_settings_;
@@ -155,7 +155,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
   }
 
   // create a temp directory for the test, removed at exit
-  temp_dir_ = createTemporaryDir(TEMP_DIR_PREFIX);
+  temp_dir_ = std::make_unique<TemporaryDirectory>(TEMP_DIR_PREFIX);
   ASSERT_NE(nullptr, temp_dir_);
   const std::string temp_dir_path(temp_dir_->path().string());
 

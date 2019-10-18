@@ -39,11 +39,11 @@ const std::string kConfigKey{"/foo"};
 class NodesConfigurationStoreTest : public ::testing::Test {
  public:
   // temporary dir for file baesd store test
-  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+  std::unique_ptr<TemporaryDirectory> temp_dir_;
 
   explicit NodesConfigurationStoreTest()
-      : temp_dir_(createTemporaryDir("NodesConfigurationStoreTest",
-                                     /*keep_data*/ false)) {
+      : temp_dir_(std::make_unique<TemporaryDirectory>(
+            "NodesConfigurationStoreTest")) {
     ld_check(temp_dir_ != nullptr);
   }
 

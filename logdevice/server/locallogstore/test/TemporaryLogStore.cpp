@@ -19,7 +19,7 @@ namespace facebook { namespace logdevice {
 TemporaryLogStore::TemporaryLogStore(factory_func_t factory,
                                      bool open_right_away)
     : factory_(factory) {
-  temp_dir_ = createTemporaryDir("TemporaryLogStore", /*keep_data=*/false);
+  temp_dir_ = std::make_unique<TemporaryDirectory>("TemporaryLogStore");
   ld_check(temp_dir_);
 
   if (open_right_away) {

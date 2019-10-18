@@ -487,7 +487,8 @@ class NodesConfigurationManagerTest2 : public ::testing::Test {
   void SetUp() override {
     dbg::currentLevel = getLogLevelFromEnv().value_or(dbg::Level::INFO);
 
-    temp_dir_ = createTemporaryDir("NodesConfigurationManagerTest2");
+    temp_dir_ =
+        std::make_unique<TemporaryDirectory>("NodesConfigurationManagerTest2");
     file_ncs_ = createNCS();
 
     // provision initial config in FileBasedNCS
@@ -561,7 +562,7 @@ class NodesConfigurationManagerTest2 : public ::testing::Test {
   }
 
  public:
-  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+  std::unique_ptr<TemporaryDirectory> temp_dir_;
   std::unique_ptr<FileBasedNodesConfigurationStore> file_ncs_;
   membership::MembershipVersion::Type init_version_;
 

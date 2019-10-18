@@ -56,7 +56,7 @@ class MockFileEpochStore : public FileEpochStore {
 class FileEpochStoreTest : public ::testing::Test {
  public:
   FileEpochStoreTest()
-      : temp_dir_(createTemporaryDir("FileEpochStoreTest", false)) {}
+      : temp_dir_(std::make_unique<TemporaryDirectory>("FileEpochStoreTest")) {}
 
   void SetUp() override {
     dbg::assertOnData = true;
@@ -86,7 +86,7 @@ class FileEpochStoreTest : public ::testing::Test {
   }
 
  private:
-  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+  std::unique_ptr<TemporaryDirectory> temp_dir_;
 
  public:
   std::shared_ptr<UpdateableConfig> cluster_config_;

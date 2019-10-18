@@ -1197,7 +1197,7 @@ class Cluster {
  private:
   // Private constructor.  Factory (friend class) is only caller.
   Cluster(std::string root_path,
-          std::unique_ptr<folly::test::TemporaryDirectory> root_pin,
+          std::unique_ptr<TemporaryDirectory> root_pin,
           std::string config_path,
           std::string epoch_store_path,
           std::string ncs_path,
@@ -1255,7 +1255,7 @@ class Cluster {
 
   std::string root_path_;
   // If root_path_ is a temporary directory, this owns it
-  std::unique_ptr<folly::test::TemporaryDirectory> root_pin_;
+  std::unique_ptr<TemporaryDirectory> root_pin_;
   std::string config_path_;
   std::string epoch_store_path_;
   // path for the file-based nodes configuration store
@@ -1621,12 +1621,12 @@ class Node {
   std::map<std::string, std::string> sequencerInfo(logid_t log_id) const;
 
   /**
-   * Issues a GOSSIP BLACKLIST command, and EXPECT_EQs that it succeeds.
+   * Issues a GOSSIP BLACKLIST command, and ld_check-s that it succeeds.
    */
   void gossipBlacklist(node_index_t node_id) const;
 
   /**
-   * Issues a GOSSIP WHITELIST command, and EXPECT_EQs that it succeeds.
+   * Issues a GOSSIP WHITELIST command, and ld_check-s that it succeeds.
    */
   void gossipWhitelist(node_index_t node_id) const;
 
@@ -1643,12 +1643,12 @@ class Node {
                         folly::Optional<double> chance = folly::none,
                         folly::Optional<uint32_t> latency_ms = folly::none);
   /**
-   * Issues a NEWCONNECTIONS command, and EXPECT_EQs that it succeeds.
+   * Issues a NEWCONNECTIONS command, and ld_check-s that it succeeds.
    */
   void newConnections(bool accept) const;
 
   /**
-   * Issues a STARTRECOVERY command, and EXPECT_EQs that it succeeds.
+   * Issues a STARTRECOVERY command, and ld_check-s that it succeeds.
    */
   void startRecovery(logid_t logid) const;
 

@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;
 namespace fs = boost::filesystem;
@@ -24,7 +25,7 @@ class ShardToPathMappingTest : public ::testing::Test {
   void SetUp() override {
     dbg::currentLevel = dbg::Level::DEBUG;
     const char* prefix = "ShardToPathMappingTest";
-    root_pin_ = std::make_unique<folly::test::TemporaryDirectory>(prefix);
+    root_pin_ = std::make_unique<TemporaryDirectory>(prefix);
     root_ = root_pin_->path();
   }
 
@@ -37,7 +38,7 @@ class ShardToPathMappingTest : public ::testing::Test {
   fs::path root_;
 
  private:
-  std::unique_ptr<folly::test::TemporaryDirectory> root_pin_;
+  std::unique_ptr<TemporaryDirectory> root_pin_;
 };
 
 template <typename Container = std::vector<std::string>>

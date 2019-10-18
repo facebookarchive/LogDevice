@@ -24,6 +24,7 @@
 #include <folly/dynamic.h>
 #include <folly/experimental/TestUtil.h>
 #include <folly/json.h>
+#include <gtest/gtest.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -127,29 +128,43 @@ int overwriteConfig(const char* path,
   return 0;
 }
 
-std::unique_ptr<folly::test::TemporaryDirectory>
-createTemporaryDir(const std::string& name_prefix, bool keep_data) {
-  using folly::test::TemporaryDirectory;
-
-  TemporaryDirectory::Scope scope = keep_data
-      ? TemporaryDirectory::Scope::PERMANENT
-      : TemporaryDirectory::Scope::DELETE_ON_DESTRUCTION;
-
-  using boost::filesystem::path;
-  std::vector<path> prefixes = {"/dev/shm/tmp/logdevice", "/tmp/logdevice"};
-  for (path prefix : prefixes) {
+TemporaryDirectory::TemporaryDirectory(const std::string& name_prefix) {
+  const static std::vector<fs::path> prefixes = {
+      "/dev/shm/tmp/logdevice", "/tmp/logdevice"};
+  for (fs::path prefix : prefixes) {
     try {
-      boost::filesystem::create_directories(prefix);
-      auto dir =
-          std::make_unique<TemporaryDirectory>(name_prefix, prefix, scope);
-      return dir;
-    } catch (const boost::filesystem::filesystem_error& e) {
-      // Failed.  Continue with next prefix.
+      fs::create_directories(prefix);
+      fs::path p =
+          prefix / fs::unique_path(name_prefix + ".%%%%-%%%%-%%%%-%%%%");
+      fs::create_directory(p);
+      path_ = p;
+      return;
+    } catch (const fs::filesystem_error& e) {
+      // Failed. Continue with next prefix.
     }
   }
-  ld_error("Failed to create root directory for test data");
+  ld_error("Failed to create directory for test data");
   ld_check(false);
-  return nullptr;
+}
+
+TemporaryDirectory::~TemporaryDirectory() {
+  if (!path_.hasValue()) {
+    // Moved out.
+    return;
+  }
+  if (getenv_switch("LOGDEVICE_TEST_LEAVE_DATA") ||
+      (getenv_switch("LOGDEVICE_TEST_LEAVE_DATA_IF_FAILED") &&
+       testing::Test::HasFailure())) {
+    ld_info("Leaving data in %s", path_.value().string().c_str());
+    return;
+  }
+  boost::system::error_code ec;
+  fs::remove_all(path_.value(), ec);
+  if (ec) {
+    ld_error("Failed to delete temporary directory at %s: %s",
+             path_.value().string().c_str(),
+             toString(ec).c_str());
+  }
 }
 
 ServerConfig::NodesConfig createSimpleNodesConfig(size_t nnodes) {
@@ -368,10 +383,6 @@ std::chrono::milliseconds getDefaultTestTimeout() {
   return getenv_switch("LOGDEVICE_TEST_NO_TIMEOUT")
       ? std::chrono::hours(24 * 365)
       : DEFAULT_TEST_TIMEOUT;
-}
-
-bool testsShouldLeaveData() {
-  return getenv_switch("LOGDEVICE_TEST_LEAVE_DATA");
 }
 
 std::shared_ptr<PluginRegistry> make_test_plugin_registry() {

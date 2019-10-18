@@ -15,7 +15,7 @@
 #include <string>
 #include <thread>
 
-#include <folly/experimental/TestUtil.h>
+#include <boost/filesystem.hpp>
 
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -40,11 +40,6 @@ constexpr std::chrono::seconds DEFAULT_TEST_TIMEOUT(240);
 constexpr std::chrono::seconds DEFAULT_TEST_TIMEOUT(90);
 #endif
 
-// Returns true if LOGDEVICE_TEST_LEAVE_DATA environment variable is set.
-// This instructs the tests to not delete temporary directories after the test
-// is done.
-bool testsShouldLeaveData();
-
 /**
  * Atomically overwrites a file.  (Writes to a temporary file then renames to
  * target file.)
@@ -61,22 +56,6 @@ int overwriteConfig(const char* path,
                     const ServerConfig*,
                     const LogsConfig*,
                     bool write_logs_config_separately);
-
-/**
- * Create a temporary directory to be used by tests.
- *
- * @param name_prefix  prefix for the directory name
- * @param keep_data    if true, don't remove the directory after the returned
- *                     object is destroyed
- *
- *
- * @return  A TemporaryDirectory object representing the newly created
- *          directory.
- *
- */
-std::unique_ptr<folly::test::TemporaryDirectory>
-createTemporaryDir(const std::string& name_prefix,
-                   bool keep_data = testsShouldLeaveData());
 
 inline void writeSimpleConfig(const char* path, int server_generation) {
   std::string contents = "{\n"
@@ -272,6 +251,29 @@ class Alarm {
   std::mutex mutex_;
   std::condition_variable cv_;
   std::thread thread_;
+};
+
+/**
+ * Constructor creates a temporary directory, destructor optionally deletes it,
+ * depending on environment variables. Crashes if failed to create directory.
+ * Similar to folly::test::TemporaryDirectory, but with some logdevice-specific
+ * knowledge.
+ */
+class TemporaryDirectory {
+ public:
+  explicit TemporaryDirectory(const std::string& name_prefix);
+  ~TemporaryDirectory();
+
+  TemporaryDirectory(TemporaryDirectory&& rhs) = default;
+  TemporaryDirectory& operator=(TemporaryDirectory&& rhs) = default;
+
+  const boost::filesystem::path& path() const {
+    ld_check(path_.hasValue());
+    return path_.value();
+  }
+
+ private:
+  folly::Optional<boost::filesystem::path> path_;
 };
 
 class Processor;

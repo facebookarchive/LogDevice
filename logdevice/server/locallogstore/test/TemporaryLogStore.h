@@ -147,7 +147,7 @@ class TemporaryLogStore : public LocalLogStore {
 
  protected:
   factory_func_t factory_;
-  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+  std::unique_ptr<TemporaryDirectory> temp_dir_;
   std::unique_ptr<LocalLogStore> db_;
 };
 
