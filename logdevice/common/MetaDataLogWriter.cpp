@@ -210,18 +210,17 @@ int MetaDataLogWriter::checkAppenderPayload(Appender* appender,
 }
 
 std::string MetaDataLogWriter::getDebugInfo() const {
+  // This needs to be thread safe because it's called without synchronization.
+  // Only access atomic or immutable fields.
   return folly::sformat("logid: {}, state: {}, current_epoch: {}, "
                         "last_writer_epoch: {}, recovery_only: {} "
-                        "metadata_last_released: {}, running_write: {}, "
-                        "current_worker: {}.",
+                        "metadata_last_released: %s.",
                         getDataLogID().val(),
                         int(state_.load()),
                         current_epoch_.load(),
                         last_writer_epoch_.load(),
                         recovery_only_.load() ? "true" : "false",
-                        last_released_.load(),
-                        running_write_.get(),
-                        current_worker_.val());
+                        lsn_to_string(last_released_.load()));
 }
 
 // caller of this function owns the appender
@@ -289,12 +288,15 @@ RunAppenderStatus MetaDataLogWriter::runAppender(Appender* appender) {
     err = prev == State::SHUTDOWN ? E::SHUTDOWN : E::NOBUFS;
 
     if (err == E::NOBUFS) {
-      RATELIMIT_INFO(std::chrono::seconds(10),
-                     2,
-                     "MetaDataLogWriter cannnot accept a new "
-                     "metadata append due to an existing write / recovery in "
-                     "progress. Failing the append with E::NOBUF. Debug: %s.",
-                     getDebugInfo().c_str());
+      // Note that getDebugInfo() is thread safe, so it's ok to call it even if
+      // we failed to acquire the state_ lock.
+      RATELIMIT_INFO(
+          std::chrono::seconds(10),
+          2,
+          "MetaDataLogWriter cannnot accept a new "
+          "metadata append due to an existing write / recovery in "
+          "progress. Failing the append with E::NOBUF. Some info: %s",
+          getDebugInfo().c_str());
     }
 
     return RunAppenderStatus::ERROR_DELETE;
