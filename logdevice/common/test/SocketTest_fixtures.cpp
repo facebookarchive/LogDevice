@@ -23,11 +23,13 @@ StatsHolder* TestSocketDependencies::getStats() const {
 }
 
 void TestSocketDependencies::noteBytesQueued(size_t nbytes,
+                                             PeerType /* Peer type */,
                                              folly::Optional<MessageType>) {
   owner_->bytes_pending_ += nbytes;
 }
 
 void TestSocketDependencies::noteBytesDrained(size_t nbytes,
+                                              PeerType /* Peer type */,
                                               folly::Optional<MessageType>) {
   ASSERT_GE(owner_->bytes_pending_, nbytes);
   owner_->bytes_pending_ -= nbytes;

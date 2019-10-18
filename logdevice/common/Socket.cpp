@@ -113,6 +113,7 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
       our_name_at_peer_(ClientID::INVALID),
       connect_throttle_(getSettings().connect_throttle),
       outbuf_overflow_(getSettings().outbuf_overflow_kb * 1024),
+      outbufs_min_budget_(getSettings().outbuf_socket_min_kb * 1024),
       read_more_(deps_->getEvBase()),
       connect_timeout_event_(deps_->getEvBase()),
       retries_so_far_(0),
@@ -869,7 +870,7 @@ void Socket::onSent(std::unique_ptr<Envelope> e,
   }
 
   if (!deps_->shuttingDown()) {
-    deps_->noteBytesDrained(e->cost(), e->message().type_);
+    deps_->noteBytesDrained(e->cost(), getPeerType(), e->message().type_);
     deps_->onSent(e->moveMessage(), peer_name_, reason, e->birthTime(), cm);
     ld_check(!e->haveMessage());
   }
@@ -1121,6 +1122,7 @@ void Socket::close(Status reason) {
 
   if (buffered_bytes != 0 && !deps_->shuttingDown()) {
     deps_->noteBytesDrained(buffered_bytes,
+                            getPeerType(),
                             /* message_type */ folly::none);
   }
 
@@ -1363,7 +1365,7 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
   ld_check(!isHandshakeMessage(msg.type_) || next_pos_ == 0);
   ld_check(next_pos_ >= drain_pos_);
 
-  deps_->noteBytesQueued(msglen, /* message_type */ folly::none);
+  deps_->noteBytesQueued(msglen, getPeerType(), /* message_type */ folly::none);
   if (status == Socket::SendStatus::SCHEDULED) {
     next_pos_ += msglen;
     envelope->setDrainPos(next_pos_);
@@ -1564,7 +1566,8 @@ Envelope* Socket::registerMessage(std::unique_ptr<Message>&& msg) {
   ld_check(!msg);
 
   pendingq_.push(*envelope);
-  deps_->noteBytesQueued(envelope->cost(), envelope->message().type_);
+  deps_->noteBytesQueued(
+      envelope->cost(), getPeerType(), envelope->message().type_);
 
   return envelope.release();
 }
@@ -1591,7 +1594,8 @@ std::unique_ptr<Message> Socket::discardEnvelope(Envelope& envelope) {
   // This envelope should be in the pendingq_.
   ld_check(envelope.links_.is_linked());
 
-  deps_->noteBytesDrained(envelope.cost(), envelope.message().type_);
+  deps_->noteBytesDrained(
+      envelope.cost(), getPeerType(), envelope.message().type_);
 
   // Take ownership of the envelope so it is deleted.
   std::unique_ptr<Envelope> pending_envelope(&envelope);
@@ -1707,7 +1711,8 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
   STAT_ADD(deps_->getStats(), sock_num_messages_sent, num_messages);
   STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, nbytes);
 
-  deps_->noteBytesDrained(nbytes, /* message_type */ folly::none);
+  deps_->noteBytesDrained(
+      nbytes, getPeerType(), /* message_type */ folly::none);
 
   ld_spew("Socket %s passed %zu bytes to TCP. Sender now has %zu total "
           "bytes pending",
@@ -2362,7 +2367,7 @@ void Socket::getDebugInfo(InfoSocketsTable& table) const {
 }
 
 bool Socket::peerIsClient() const {
-  return peer_name_.isClientAddress() && !peer_node_id_.isNodeID();
+  return peer_type_ == PeerType::CLIENT;
 }
 
 X509* Socket::getPeerCert() const {

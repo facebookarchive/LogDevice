@@ -312,6 +312,7 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
 // Testing Constructor
 Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      UpdateableSettings<Settings> settings,
+                     folly::Optional<NodeID> my_node_id,
                      bool fake_storage_node,
                      int /*max_logs*/,
                      StatsHolder* stats)
@@ -326,7 +327,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                               settings,
                               std::make_shared<NoopTraceLogger>(config_))),
       conn_budget_incoming_(settings_.get()->max_incoming_connections),
-      conn_budget_external_(settings_.get()->max_external_connections) {
+      conn_budget_external_(settings_.get()->max_external_connections),
+      my_node_id_(std::move(my_node_id)) {
   ld_check(settings.get());
   num_general_workers_ = settings_->num_workers;
   security_info_ =

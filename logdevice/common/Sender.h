@@ -698,34 +698,39 @@ class Sender : public SenderBase {
   /**
    * Called by a Socket managed by this Sender when bytes are added to one of
    * Socket's queues or evbuffers.
-   * If message bytes are added to a queue, @param message_type is the type of
-   * that message. If message is passed to a evbuffer, message_type
-   * is folly::none.
    * These calls should be matched by noteBytesDrained() calls, such that for
    * each message_type (including folly::none) the (queued - drained) value
    * reflects the current in-flight situation.
+   * @param peer_type CLIENT or NODE.
+   * @param message_type If message bytes are added to a queue, message_type is
+   *        the type of that message. If message is passed to a evbuffer,
+   *        message_type is folly::none.
    *
    * @param nbytes   how many bytes were appended
    */
   void noteBytesQueued(size_t nbytes,
+                       PeerType peer_type,
                        folly::Optional<MessageType> message_type);
 
   /**
    * Called by a Socket managed by this Sender when some bytes from
    * the Socket bufferevent's output buffer have been drained into the
-   * underlying TCP socket. @param message_type is treated the same way as in
+   * underlying TCP socket.
+   * @param peer_type CLIENT or NODE.
+   * @param message_type is treated the same way as in
    * noteBytesQueued()
    *
    * @param nbytes   how many bytes were sent
    */
   void noteBytesDrained(size_t nbytes,
+                        PeerType peer_type,
                         folly::Optional<MessageType> message_type);
 
   /**
    * @return   the current total number of bytes in the output evbuffers of
-   *           all Sockets managed by this Sender.
+   *           all Sockets of all peer types managed by this Sender.
    */
-  size_t getBytesPending() {
+  size_t getBytesPending() const {
     return bytes_pending_;
   }
 
@@ -734,7 +739,7 @@ class Sender : public SenderBase {
    *              all Sockets managed by this Sender exceeds the limit set
    *              in this Processor's configuration
    */
-  bool bytesPendingLimitReached();
+  bool bytesPendingLimitReached(const PeerType peer_type) const;
 
   /**
    * Queue a message for a deferred completion. Used from contexts that
@@ -868,8 +873,13 @@ class Sender : public SenderBase {
 
   std::atomic<bool> delivering_completed_messages_{false};
 
-  // current number of bytes in all output buffers combined
+  // current number of bytes in all output buffers.
   std::atomic<size_t> bytes_pending_{0};
+  // current number of bytes in all output buffers of logdevice client
+  // connections.
+  std::atomic<size_t> bytes_pending_client_{0};
+  // current number of bytes in all output buffers of node connections.
+  std::atomic<size_t> bytes_pending_node_{0};
 
   // if true, disallow sending messages and initiating connections
   bool shutting_down_ = false;
@@ -1021,6 +1031,54 @@ class Sender : public SenderBase {
   void closeSlowSockets();
 
   static void onCompletedMessagesAvailable(void* self, short);
+
+  /**
+   * Increment the bytes pending for a given peer type.
+   */
+  void incrementBytesPending(size_t nbytes, PeerType peer_type) {
+    bytes_pending_ += nbytes;
+    switch (peer_type) {
+      case PeerType::CLIENT:
+        bytes_pending_client_ += nbytes;
+        return;
+      case PeerType::NODE:
+        bytes_pending_node_ += nbytes;
+        return;
+      default:
+        ld_check(false);
+    }
+  }
+
+  /**
+   * Decrement the bytes pending for a given peer type.
+   */
+  void decrementBytesPending(size_t nbytes, PeerType peer_type) {
+    ld_check(bytes_pending_ >= nbytes);
+    ld_check(getBytesPending(peer_type) >= nbytes);
+    bytes_pending_ -= nbytes;
+    switch (peer_type) {
+      case PeerType::CLIENT:
+        bytes_pending_client_ -= nbytes;
+        return;
+      case PeerType::NODE:
+        bytes_pending_node_ -= nbytes;
+        return;
+      default:
+        ld_check(false);
+    }
+  }
+
+  size_t getBytesPending(PeerType peer_type) const {
+    switch (peer_type) {
+      case PeerType::CLIENT:
+        return bytes_pending_client_;
+      case PeerType::NODE:
+        return bytes_pending_node_;
+      default:
+        ld_check(false);
+    }
+    return 0;
+  }
 };
 
 }} // namespace facebook::logdevice

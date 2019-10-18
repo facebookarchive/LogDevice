@@ -322,7 +322,9 @@ void Connection::close(Status reason) {
       buffered_bytes += sendChain_->computeChainDataLength();
       sendChain_ = nullptr;
     }
-    getDeps()->noteBytesDrained(buffered_bytes, /* message_type */ folly::none);
+    getDeps()->noteBytesDrained(buffered_bytes,
+                                getPeerType(),
+                                /* message_type */ folly::none);
     // Invoke closeNow before deleting the writing callback below.
     sock_->closeNow();
   }
@@ -420,8 +422,9 @@ void Connection::onBytesPassedToTCP(size_t nbytes_drained) {
 void Connection::drainSendQueue() {
   auto& cb = sock_write_cb_;
   for (size_t& i = cb.num_success_; i > 0; --i) {
-    getDeps()->noteBytesDrained(
-        cb.chain_lengths_.front(), /* message_type */ folly::none);
+    getDeps()->noteBytesDrained(cb.chain_lengths_.front(),
+                                getPeerType(),
+                                /* message_type */ folly::none);
     cb.chain_lengths_.pop_front();
   }
 }

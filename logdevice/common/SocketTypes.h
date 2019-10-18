@@ -13,8 +13,15 @@ namespace facebook { namespace logdevice {
 
 enum class SocketType : uint8_t { DATA, GOSSIP };
 enum class ConnectionType : uint8_t { NONE, PLAIN, SSL };
+enum class PeerType : uint8_t {
+  FIRST = 0,
+  CLIENT = FIRST,
+  NODE,
+  NUM_PEER_TYPES
+};
 
 const char* socketTypeToString(SocketType sock_type);
 const char* connectionTypeToString(ConnectionType conn_type);
+const char* peerTypeToString(PeerType peer_type);
 
 }} // namespace facebook::logdevice

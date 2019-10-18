@@ -1382,6 +1382,14 @@ struct Settings : public SettingsBundle {
   double overload_detector_freshness_factor;
   std::chrono::milliseconds overload_detector_period;
 
+  // If flag is enabled, divide the outbufs_mb_max_per_thread budget for each
+  //  peer type (CLIENT / NODE) equally.
+  bool outbufs_limit_per_peer_type_enabled;
+
+  // If the sender's global outbufs limit is reached , allow a minimum budget of
+  //  outbuf_min_kb per socket.
+  size_t outbuf_socket_min_kb;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

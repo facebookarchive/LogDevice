@@ -291,7 +291,8 @@ int Appender::sendSTORE(const StoreChainLink copyset[],
       return 0;
 
     case E::NOBUFS:
-      if (bytesPendingLimitReached()) {
+      // STORE messages are sent to other server node.
+      if (bytesPendingLimitReached(PeerType::NODE)) {
         // reached Worker-wide output buffer space limit. Advise the caller
         // to wait for a while before retrying
         return -1;
@@ -2353,8 +2354,8 @@ std::string Appender::describeConnection(const Address& addr) const {
   return Worker::onThisThread()->sender().describeConnection(addr);
 }
 
-bool Appender::bytesPendingLimitReached() const {
-  return Worker::onThisThread()->sender().bytesPendingLimitReached();
+bool Appender::bytesPendingLimitReached(const PeerType peer_type) const {
+  return Worker::onThisThread()->sender().bytesPendingLimitReached(peer_type);
 }
 
 bool Appender::isAcceptingWork() const {

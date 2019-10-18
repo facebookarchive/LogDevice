@@ -185,6 +185,15 @@ class Socket : public TrafficShappingSocket {
     tamper_ = enable;
   }
 
+  void setPeerNodeId(const NodeID node_id) {
+    peer_node_id_ = node_id;
+    if (peer_name_.isClientAddress() && !peer_node_id_.isNodeID()) {
+      peer_type_ = PeerType::CLIENT;
+    } else {
+      peer_type_ = PeerType::NODE;
+    }
+  }
+
   // LogDevice-level address of peer end-point at the other end of the
   // connection
   const Address peer_name_;
@@ -214,6 +223,9 @@ class Socket : public TrafficShappingSocket {
   // NodeID of the peer if this is a client (incoming) connection with another
   // node from the cluster on the other end.
   NodeID peer_node_id_;
+
+  // Type of the peer this socket is connecte to (CLIENT or NODE)
+  PeerType peer_type_{PeerType::NODE};
 
   // Traffic shaping state shared between Sockets with the same bandwidth
   // constraints.
@@ -451,6 +463,10 @@ class Socket : public TrafficShappingSocket {
     return peer_config_version_;
   }
 
+  PeerType getPeerType() const {
+    return peer_type_;
+  }
+
   /**
    * @return True if the peer is a LogDevice client.
    */
@@ -509,6 +525,14 @@ class Socket : public TrafficShappingSocket {
   }
 
   const Settings& getSettings();
+
+  /**
+   * Minimum guaranteed outbuf budget limit reached. This will ensure minimal
+   * traffic flow on sockets that are not using sender's outbuf.
+   */
+  bool minOutBufLimitReached() const {
+    return (getBytesPending() > outbufs_min_budget_);
+  }
 
   /**
    * The amount of bytes waiting to be sent on this socket.
@@ -921,6 +945,10 @@ class Socket : public TrafficShappingSocket {
   // registerMessage() will fail with NOBUFS, until message processing
   // through to TCP drops getBytesPending() below this limit.
   size_t outbuf_overflow_;
+
+  // If the sender's outbufs limit is reached , allow a minimum budget of
+  //  outbufs_min_budget_
+  size_t outbufs_min_budget_;
 
   // This is a timer event with timeout of 0 that we use to regain
   // control after we processed incoming_messages_max_per_socket

@@ -520,6 +520,23 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "only to newly created ones", // TODO (t13429319): fix this
       SERVER | CLIENT,
       SettingsCategory::Network);
+  init("outbufs-limit-per-peer-type",
+       &outbufs_limit_per_peer_type_enabled,
+       "true",
+       nullptr, // no validation
+       "If disabled, per peer-type limit will not be enforced.",
+       SERVER,
+       SettingsCategory::Network);
+  init("outbuf-socket-min-kb",
+       &outbuf_socket_min_kb,
+       "1",
+       parse_positive<ssize_t>(),
+       "Minimum outstanding bytes per socket in kb. Global sender's budget "
+       "will be ignored if socket's outstanding bytes is less than this value. "
+       "Changing this setting on-the-fly will not apply it to existing "
+       "sockets, only to newly created ones", // TODO (t13429319): fix this
+       SERVER,
+       SettingsCategory::Network);
   init("output-max-records-kb",
        &output_max_records_kb,
        "1024",

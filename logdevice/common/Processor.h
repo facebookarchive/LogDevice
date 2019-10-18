@@ -170,9 +170,19 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    */
   explicit Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      UpdateableSettings<Settings> settings,
+                     folly::Optional<NodeID> my_node_id = folly::none,
                      bool fake_storage_node = false,
                      int max_logs = 1,
                      StatsHolder* stats = nullptr);
+
+  /**
+   * Used for testing.
+   */
+  template <typename... Args>
+  static std::shared_ptr<Processor> createNoInit(Args&&... args) {
+    auto p = std::make_shared<Processor>(std::forward<Args>(args)...);
+    return p;
+  }
 
   virtual ~Processor();
 

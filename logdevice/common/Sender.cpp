@@ -269,10 +269,11 @@ int Sender::addClient(int fd,
 }
 
 void Sender::noteBytesQueued(size_t nbytes,
+                             PeerType peer_type,
                              folly::Optional<MessageType> message_type) {
   // nbytes cannot exceed maximum message size
   ld_check(nbytes <= (size_t)Message::MAX_LEN + sizeof(ProtocolHeader));
-  bytes_pending_ += nbytes;
+  incrementBytesPending(nbytes, peer_type);
   StatsHolder* stats = Worker::stats();
   STAT_ADD(stats, sockets_bytes_pending_total, nbytes);
   STAT_ADD(stats, sockets_bytes_pending_max_worker, nbytes);
@@ -283,9 +284,9 @@ void Sender::noteBytesQueued(size_t nbytes,
 }
 
 void Sender::noteBytesDrained(size_t nbytes,
+                              PeerType peer_type,
                               folly::Optional<MessageType> message_type) {
-  ld_check(bytes_pending_ >= nbytes);
-  bytes_pending_ -= nbytes;
+  decrementBytesPending(nbytes, peer_type);
   StatsHolder* stats = Worker::stats();
   STAT_SUB(stats, sockets_bytes_pending_total, nbytes);
   STAT_SUB(stats, sockets_bytes_pending_max_worker, nbytes);
@@ -500,7 +501,19 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
     }
   }
 
-  if (!isHandshakeMessage(msg->type_) && bytesPendingLimitReached()) {
+  if (!isHandshakeMessage(msg->type_) &&
+      // Return ENOBUFS error Sender's outbuf limit and the socket's minimum
+      // out buf limit is reached.
+      bytesPendingLimitReached(sock.getPeerType()) &&
+      sock.minOutBufLimitReached()) {
+    RATELIMIT_WARNING(std::chrono::seconds(1),
+                      10,
+                      "ENOBUFS for Sender. Peer type: %s."
+                      "Current sender outbuf usage: %zu"
+                      "Current sender peer outbuf usage : %zu",
+                      peerTypeToString(sock.getPeerType()),
+                      getBytesPending(),
+                      getBytesPending(sock.getPeerType()));
     err = E::NOBUFS;
     return -1;
   }
@@ -1313,8 +1326,7 @@ NodeID Sender::getNodeID(const Address& addr) const {
 void Sender::setPeerNodeID(const Address& addr, NodeID node_id) {
   auto it = impl_->client_sockets_.find(addr.id_.client_);
   if (it != impl_->client_sockets_.end()) {
-    NodeID& peer_node = it->second->peer_node_id_;
-    peer_node = node_id;
+    it->second->setPeerNodeId(node_id);
     if (node_id.isNodeID()) {
       it->second->setDSCP(settings_->server_dscp_default);
     }
@@ -1441,16 +1453,24 @@ void Sender::noteConfigurationChanged(
   }
 }
 
-bool Sender::bytesPendingLimitReached() {
-  size_t limit = Worker::settings().outbufs_mb_max_per_thread * 1024 * 1024;
-  bool limit_reached = getBytesPending() > limit;
-  if (limit_reached) {
-    RATELIMIT_WARNING(std::chrono::seconds(1),
-                      10,
-                      "ENOBUFS for Sender. Current socket usage: %zu, max: %zu",
-                      getBytesPending(),
-                      limit);
+bool Sender::bytesPendingLimitReached(const PeerType peer_type) const {
+  auto& settings = Worker::settings();
+  size_t limit = settings.outbufs_mb_max_per_thread * 1024 * 1024;
+  const bool enforce_per_peer_type_limit =
+      settings.server && settings.outbufs_limit_per_peer_type_enabled;
+  if (enforce_per_peer_type_limit) {
+    // If per peer-type limit is enabled, equally divide the budget.
+    limit = (limit / (size_t)PeerType::NUM_PEER_TYPES);
   }
+  size_t bytes_pending;
+  if (enforce_per_peer_type_limit) {
+    bytes_pending = getBytesPending(peer_type);
+  } else {
+    bytes_pending = getBytesPending();
+  }
+
+  const bool limit_reached = (bytes_pending > limit);
+
   return limit_reached;
 }
 

@@ -813,6 +813,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
             create_default_settings<AdminServerSettings>()),
         updateable_config,
         updateable_settings,
+        folly::none,
         true,
         300,
         &stats_);

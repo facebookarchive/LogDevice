@@ -1086,7 +1086,8 @@ class Appender : public IntrusiveUnorderedMapHook {
   virtual const std::shared_ptr<Configuration> getClusterConfig() const;
   virtual NodeID getMyNodeID() const;
   virtual std::string describeConnection(const Address& addr) const;
-  virtual bool bytesPendingLimitReached() const;
+
+  virtual bool bytesPendingLimitReached(const PeerType peer_type) const;
   virtual bool isAcceptingWork() const;
   virtual NodeID checkIfPreempted(epoch_t epoch);
   virtual void retireAppender(Status st, lsn_t lsn, Reaper& reaper);

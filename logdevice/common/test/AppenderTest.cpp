@@ -601,7 +601,7 @@ class AppenderTest::MockAppender : public Appender {
     return addr.toString();
   }
 
-  bool bytesPendingLimitReached() const override {
+  bool bytesPendingLimitReached(const PeerType /*peer_type*/) const override {
     return test_->bytes_pending_limit_reached_;
   }
 

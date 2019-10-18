@@ -31,4 +31,17 @@ const char* connectionTypeToString(ConnectionType conn_type) {
   }
   return "";
 }
+
+const char* peerTypeToString(PeerType peer_type) {
+  switch (peer_type) {
+    case PeerType::CLIENT:
+      return "CLIENT";
+    case PeerType::NODE:
+      return "NODE";
+    default:
+      return "";
+  }
+  return "";
+}
+
 }} // namespace facebook::logdevice

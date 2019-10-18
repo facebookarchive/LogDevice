@@ -58,14 +58,16 @@ SocketDependencies::getNodesConfiguration() const {
 
 void SocketDependencies::noteBytesQueued(
     size_t nbytes,
+    PeerType peer_type,
     folly::Optional<MessageType> message_type) {
-  sender_->noteBytesQueued(nbytes, message_type);
+  sender_->noteBytesQueued(nbytes, peer_type, message_type);
 }
 
 void SocketDependencies::noteBytesDrained(
     size_t nbytes,
+    PeerType peer_type,
     folly::Optional<MessageType> message_type) {
-  sender_->noteBytesDrained(nbytes, message_type);
+  sender_->noteBytesDrained(nbytes, peer_type, message_type);
 }
 
 size_t SocketDependencies::getBytesPending() const {

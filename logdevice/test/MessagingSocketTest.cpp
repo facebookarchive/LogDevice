@@ -30,11 +30,14 @@
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/test/SocketTest_fixtures.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/lib/ClientImpl.h"
+#include "logdevice/server/NewConnectionRequest.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 #include "logdevice/test/utils/port_selection.h"
@@ -46,9 +49,11 @@ class MessagingSocketTest : public IntegrationTestBase {};
 
 // The name of the cluster used in testing
 static const char* CLUSTER_NAME = "logdevice_test_MessagingSocketTest.cpp";
-static NodeID firstNodeID{0, 3}; // id of first node in config
-static NodeID badNodeID{332, 3}; // a node id that does not appear in
-                                 // config
+static NodeID firstNodeID{0, 3};  // id of first node in config
+static NodeID secondNodeID{1, 3}; // id of second node in config
+static NodeID clNodeID{2, 3};     // id of second node in config
+static NodeID badNodeID{332, 3};  // a node id that does not appear in
+                                  // config
 
 // Infrastructure that must be publicly visible to LogDevice code
 // (e.g. so Worker can friend SocketConnectRequest).
@@ -167,21 +172,25 @@ struct CONFIG_ADVISORY_Raw {
   CONFIG_ADVISORY_Header hdr;
 } __attribute__((__packed__));
 
-static std::shared_ptr<UpdateableConfig> create_config(int ld_port) {
-  Configuration::Node node;
-  node.address = Sockaddr("127.0.0.1", std::to_string(ld_port).c_str());
-  node.gossip_address =
-      Sockaddr("127.0.0.1", std::to_string(ld_port + 1).c_str());
-  node.generation = 3;
-  node.addStorageRole(/*num_shards*/ 2);
-
-  Configuration::NodesConfig nodes({{0, std::move(node)}});
-
+static std::shared_ptr<UpdateableConfig>
+create_config(std::vector<int> ld_ports) {
+  int node_idx = 0;
+  std::unordered_map<node_index_t, Configuration::Node> nodes;
+  for (auto ld_port : ld_ports) {
+    Configuration::Node node;
+    node.address = Sockaddr("127.0.0.1", std::to_string(ld_port).c_str());
+    node.gossip_address =
+        Sockaddr("127.0.0.1", std::to_string(ld_port + 1).c_str());
+    node.generation = 3;
+    node.addStorageRole(/*num_shards*/ 2);
+    nodes.insert(std::make_pair(node_idx, std::move(node)));
+    node_idx++;
+  }
   configuration::MetaDataLogsConfig meta_config;
-
   auto updateable_config = std::make_shared<UpdateableConfig>();
+  Configuration::NodesConfig node_config{nodes};
   updateable_config->updateableServerConfig()->update(
-      ServerConfig::fromDataTest(CLUSTER_NAME, nodes, meta_config));
+      ServerConfig::fromDataTest(CLUSTER_NAME, node_config, meta_config));
   return updateable_config;
 }
 
@@ -260,13 +269,23 @@ class ServerSocket {
   }
 
   int accept() {
-    struct sockaddr_in cli_addr;
+    struct sockaddr_in6 cli_addr;
     socklen_t clilen = sizeof(cli_addr);
     const int fd = ::accept(sock_.fd, (struct sockaddr*)&cli_addr, &clilen);
     perror("");
     EXPECT_TRUE(fd > 0);
     fds_.push_back(fd);
     return fd;
+  }
+
+  Sockaddr accept(int& fd) {
+    struct sockaddr_in6 cli_addr;
+    socklen_t clilen = sizeof(cli_addr);
+    fd = ::accept(sock_.fd, (struct sockaddr*)&cli_addr, &clilen);
+    perror("");
+    EXPECT_TRUE(fd > 0);
+    fds_.push_back(fd);
+    return Sockaddr((struct sockaddr*)&cli_addr, clilen);
   }
 
   int getPort() const {
@@ -328,7 +347,8 @@ TEST_F(MessagingSocketTest, SocketConnect) {
   settings.num_workers = 1;
   ServerSocket server;
 
-  std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  std::shared_ptr<UpdateableConfig> config(
+      create_config(std::vector<int>{server.getPort()}));
   Processor processor(config, updateable_settings);
 
   ld_check((bool)config);
@@ -442,7 +462,8 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   UpdateableSettings<Settings> updateable_settings(settings);
 
   ServerSocket server;
-  std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  std::shared_ptr<UpdateableConfig> config(
+      create_config(std::vector<int>{server.getPort()}));
 
   Processor processor(config, updateable_settings);
 
@@ -520,6 +541,274 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   dbg::currentLevel = dbg::Level::ERROR;
 }
 
+struct SenderVarLenMessageRequest : public Request {
+  SenderVarLenMessageRequest(Semaphore& sem,
+                             std::unique_ptr<VarLengthTestMessage>& msg,
+                             E expected_err,
+                             Address node_addr)
+      : Request(RequestType::TEST_MESSAGING_SEND_VARLEN_REQUEST),
+        msg_(std::move(msg)),
+        sem_(sem),
+        expected_err_(expected_err),
+        node_addr_(node_addr) {}
+  Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
+    Worker* w = Worker::onThisThread();
+    EXPECT_TRUE(w);
+
+    if (expected_err_ == E::OK) {
+      EXPECT_EQ(0, w->sender().sendMessage(std::move(msg_), node_addr_));
+    } else {
+      EXPECT_EQ(-1, w->sender().sendMessage(std::move(msg_), node_addr_));
+      EXPECT_EQ(expected_err_, err);
+    }
+    sem_.post();
+
+    return Execution::COMPLETE;
+  }
+
+  std::unique_ptr<VarLengthTestMessage> msg_;
+  Semaphore& sem_;
+  E expected_err_;
+  Address node_addr_;
+};
+
+void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled) {
+  Settings settings = create_default_settings<Settings>();
+  settings.include_cluster_name_on_handshake = true;
+  settings.include_destination_on_handshake = true;
+  settings.outbufs_mb_max_per_thread = 1;
+  settings.outbuf_socket_min_kb = 1;
+  Address firstNodeAddress(firstNodeID);
+  Address secondNodeAddress(secondNodeID);
+
+  if (outBufsLimitPerPeerTypeDisabled) {
+    settings.outbufs_limit_per_peer_type_enabled = false;
+  }
+
+  ServerSocket server1;
+  ServerSocket server2;
+  ServerSocket cl_node;
+  ServerSocket processor_socket;
+
+  settings.server = false;
+  UpdateableSettings<Settings> updateable_cl_settings(settings);
+  std::shared_ptr<UpdateableConfig> config(create_config(std::vector<int>{
+      server1.getPort(), server2.getPort(), cl_node.getPort()}));
+
+  // Client processor
+  auto cl_processor =
+      Processor::createNoInit(config, updateable_cl_settings, firstNodeID);
+  auto out = createWorker(cl_processor.get(), config);
+  auto cl_w = out.worker.get();
+  auto cl_processor2 =
+      Processor::createNoInit(config, updateable_cl_settings, clNodeID);
+  auto out2 = createWorker(cl_processor2.get(), config);
+  auto cl_w2 = out2.worker.get();
+
+  // Create server processor.
+  settings.server = true;
+  UpdateableSettings<Settings> updateable_srv_settings(settings);
+  auto srv_processor =
+      Processor::createNoInit(config, updateable_srv_settings, secondNodeID);
+  auto out3 = createWorker(srv_processor.get(), config);
+  auto srv_w = out3.worker.get();
+
+  ld_check((bool)config);
+
+  ASSERT_NE(std::this_thread::get_id(), out.loop->getThread().get_id());
+
+  // Fill up the client sender output buffer by sending to node server 1.
+  Semaphore sem;
+  auto msg1 = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 600 * 1024);
+  std::unique_ptr<Request> rq1 = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg1, E::OK, firstNodeAddress);
+  EXPECT_EQ(0, cl_w->tryPost(rq1));
+  sem.wait();
+
+  // For client, outbufs-limit-per-peer-type is disabled, expect E::OK as the
+  //  sender's output buffer limit is not yet full.
+  sem = Semaphore();
+  auto msg2 = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 600 * 1024);
+  std::unique_ptr<Request> rq2 = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg2, E::OK, firstNodeAddress);
+  EXPECT_EQ(0, cl_w->tryPost(rq2));
+  sem.wait();
+
+  // Expect ENOBUFS now as it is over combined out-bufs limit
+  //  (outbufs-limit-per-peer-type is disabled for client).
+  sem = Semaphore();
+  auto msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 600 * 1024);
+  std::unique_ptr<Request> rq = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg, E::NOBUFS, firstNodeAddress);
+  EXPECT_EQ(0, cl_w->tryPost(rq));
+  sem.wait();
+
+  // Send to a different server node and expect success due to new socket's
+  // outbuf_socket_min_kb  guaranteed budget.
+  sem = Semaphore();
+  auto msg3 = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 2 * 1024);
+  std::unique_ptr<Request> rq3 = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg3, E::OK, secondNodeAddress);
+  EXPECT_EQ(0, cl_w->tryPost(rq3));
+  sem.wait();
+
+  // Expect message over new socket fail with ENOBUF as this is over both
+  //  sender's outbuf limit and socket's outbuf_socket_min_kb.
+  sem = Semaphore();
+  auto msg4 = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 2 * 1024);
+  std::unique_ptr<Request> rq4 = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg4, E::NOBUFS, secondNodeAddress);
+  EXPECT_EQ(0, cl_w->tryPost(rq4));
+  sem.wait();
+
+  // Test server->client connection and CLIENT output buffer limits.
+
+  // Create second client and add to the server processor.
+  sem = Semaphore();
+  auto cl_msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 600 * 1024);
+  std::unique_ptr<Request> cl_rq = std::make_unique<SenderVarLenMessageRequest>(
+      sem, cl_msg, E::OK, secondNodeAddress);
+  EXPECT_EQ(0, cl_w2->tryPost(cl_rq));
+  sem.wait();
+
+  // Create first client connection for server1 on srv_processor.
+  int client_fd;
+  Sockaddr client_socket = server2.accept(client_fd);
+  std::unique_ptr<Request> ncrq =
+      std::make_unique<NewConnectionRequest>(client_fd,
+                                             srv_w->idx_,
+                                             client_socket,
+                                             ResourceBudget::Token(),
+                                             ResourceBudget::Token(),
+                                             SocketType::DATA,
+                                             ConnectionType::NONE);
+  sem = Semaphore();
+  ncrq->setClientBlockedSemaphore(&sem);
+  EXPECT_EQ(0, srv_w->tryPost(ncrq));
+  sem.wait();
+
+  // Create first client connection for server1 on srv_processor.
+  int client_fd2;
+  Sockaddr client_socket2 = server2.accept(client_fd2);
+  std::unique_ptr<Request> ncrq2 =
+      std::make_unique<NewConnectionRequest>(client_fd2,
+                                             srv_w->idx_,
+                                             client_socket2,
+                                             ResourceBudget::Token(),
+                                             ResourceBudget::Token(),
+                                             SocketType::DATA,
+                                             ConnectionType::NONE);
+  sem = Semaphore();
+  ncrq2->setClientBlockedSemaphore(&sem);
+  EXPECT_EQ(0, srv_w->tryPost(ncrq2));
+  sem.wait();
+
+  std::vector<ClientID> clientIDs;
+  auto fn = [&](Socket& s) { clientIDs.push_back(s.peer_name_.asClientID()); };
+
+  sem = Semaphore();
+  srv_w->add([&]() {
+    auto* worker = Worker::onThisThread();
+    worker->sender().forAllClientSockets(fn);
+    sem.post();
+    return true;
+  });
+  sem.wait();
+
+  ld_check(clientIDs.size() == 2);
+  Address clientNodeAddress1(clientIDs[0]);
+  Address clientNodeAddress2(clientIDs[1]);
+
+  // Fill up the sender output buffer by sending to client 1.
+  sem = Semaphore();
+  auto msg5 = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 400 * 1024);
+  std::unique_ptr<Request> rq5 = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg5, E::OK, clientNodeAddress1);
+  EXPECT_EQ(0, srv_w->tryPost(rq5));
+  sem.wait();
+
+  sem = Semaphore();
+
+  // If outbufs-limit-per-peer-type is enabled, expect ENOBUF as the sender's
+  //  output buffer limit. Peer-type limit is enforced in server.
+  E expected_err = E::NOBUFS;
+  if (outBufsLimitPerPeerTypeDisabled) {
+    expected_err = E::OK;
+  }
+  auto msg6 = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 400 * 1024);
+  std::unique_ptr<Request> rq6 = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg6, expected_err, clientNodeAddress1);
+  EXPECT_EQ(0, srv_w->tryPost(rq6));
+  sem.wait();
+
+  // Expect ENOBUFS when outbufs-limit-per-peer-type is disabled now that
+  //  outbufs sender limit is full.
+  if (outBufsLimitPerPeerTypeDisabled) {
+    sem = Semaphore();
+    auto pmsg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MAX_PROTOCOL_SUPPORTED, 400 * 1024);
+    std::unique_ptr<Request> prq = std::make_unique<SenderVarLenMessageRequest>(
+        sem, pmsg, E::NOBUFS, clientNodeAddress1);
+    EXPECT_EQ(0, srv_w->tryPost(prq));
+    sem.wait();
+  }
+
+  // Send to a different client and expect success due to new socket's
+  // outbuf_socket_min_kb  guaranteed budget.
+  sem = Semaphore();
+  auto msg7 = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 400 * 1024);
+  std::unique_ptr<Request> rq7 = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg7, E::OK, clientNodeAddress2);
+  EXPECT_EQ(0, srv_w->tryPost(rq7));
+  sem.wait();
+
+  // Expect message over new socket fail with ENOBUF as this is over both
+  //  sender's outbuf limit and socket's outbuf_socket_min_kb.
+  sem = Semaphore();
+  auto msg8 = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 1 * 1024);
+  std::unique_ptr<Request> rq8 = std::make_unique<SenderVarLenMessageRequest>(
+      sem, msg8, E::NOBUFS, clientNodeAddress2);
+  EXPECT_EQ(0, srv_w->tryPost(rq8));
+  sem.wait();
+}
+
+/**
+ * Tests to verify Sender and socket outbuf limits.
+ *   Tests the CLIENT outbufs budget by
+ *     -  sending the client messages and using up sender's
+ *        outbufs_mb_max_per_thread / 2 budget for NODE connections.
+ *     - Verifies that ENOBUF error is received after NODE output buffer is full
+ *     - Verified that messages of upto outbuf_socket_min_kb can be sent over
+ *       a different server socket while the sender's NODE output buf is full.
+ *
+ *   The above set of tests are repeated for CLIENT output buffer budget as
+ *   well ( by having server node sending to two client end points).
+ */
+TEST_F(MessagingSocketTest, SenderOutBufLimitsPerPeerType) {
+  testOutBufsLimit(false);
+}
+
+/**
+ * Tests to verify Sender and socket outbuf limits.
+ *   This test verifies the sender outbuf limit without the per peer-type
+ *   limit.
+ *  It also verifies the per socket minimum guaranteed budget.
+ */
+TEST_F(MessagingSocketTest, SenderOutBufLimits) {
+  testOutBufsLimit(true);
+}
+
 struct SendStoredWithTimeoutRequest : public Request {
   SendStoredWithTimeoutRequest()
       : Request(RequestType::TEST_MESSAGING_SEND_STORED_WITH_TIMEOUT_REQUEST) {}
@@ -561,7 +850,8 @@ TEST_F(MessagingSocketTest, OnHandshakeTimeout) {
   UpdateableSettings<Settings> updateable_settings(settings);
 
   ServerSocket server;
-  std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  std::shared_ptr<UpdateableConfig> config(
+      create_config(std::vector<int>{server.getPort()}));
 
   Processor processor(config, updateable_settings);
 
@@ -682,7 +972,8 @@ struct SendMessageExpectBadProtoRequest : public Request {
 TEST_F(MessagingSocketTest, AckProtoNoSupportClose) {
   UpdateableSettings<Settings> updateable_settings;
   ServerSocket server;
-  std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  std::shared_ptr<UpdateableConfig> config(
+      create_config(std::vector<int>{server.getPort()}));
 
   Processor processor(config, updateable_settings);
   auto out = createWorker(&processor, config);
@@ -725,7 +1016,8 @@ TEST_F(MessagingSocketTest, MessageProtoNoSupportOnSent) {
   settings.handshake_timeout = std::chrono::milliseconds(1000);
   UpdateableSettings<Settings> updateable_settings(settings);
   ServerSocket server;
-  std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  std::shared_ptr<UpdateableConfig> config(
+      create_config(std::vector<int>{server.getPort()}));
 
   Processor processor(config, updateable_settings);
   auto out = createWorker(&processor, config);
@@ -815,7 +1107,8 @@ TEST_F(MessagingSocketTest, AckInvalidClusterClose) {
   settings.include_destination_on_handshake = true;
   UpdateableSettings<Settings> updateable_settings(settings);
   ServerSocket server;
-  std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  std::shared_ptr<UpdateableConfig> config(
+      create_config(std::vector<int>{server.getPort()}));
 
   Processor processor(config, updateable_settings);
   auto out = createWorker(&processor, config);
@@ -873,7 +1166,8 @@ struct SendReentrantMessage : public Request {
 TEST_F(MessagingSocketTest, ReentrantOnSent) {
   UpdateableSettings<Settings> updateable_settings;
   ServerSocket server;
-  std::shared_ptr<UpdateableConfig> config(create_config(server.getPort()));
+  std::shared_ptr<UpdateableConfig> config(
+      create_config(std::vector<int>{server.getPort()}));
   Processor processor(config, updateable_settings);
   auto out = createWorker(&processor, config);
   auto w = out.worker.get();
