@@ -22,7 +22,7 @@ class CheckpointingIntegrationTest : public ::testing::Test {
   void SetUp() override {
     cluster_ = IntegrationTestUtils::ClusterFactory().setNumLogs(2).create(4);
     client_ = cluster_->createClient();
-    temp_dir_ = createTemporaryDir("checkpointTestForStore");
+    temp_dir_ = std::make_unique<TemporaryDirectory>("checkpointTestForStore");
     store_path_ = temp_dir_->path().generic_string();
   }
   void TearDown() override {}
@@ -37,7 +37,7 @@ class CheckpointingIntegrationTest : public ::testing::Test {
   std::shared_ptr<Client> client_;
   std::unique_ptr<SyncCheckpointedReader> reader_;
   std::unique_ptr<AsyncCheckpointedReader> async_reader_;
-  std::unique_ptr<folly::test::TemporaryDirectory> temp_dir_;
+  std::unique_ptr<TemporaryDirectory> temp_dir_;
   std::string store_path_;
 };
 
