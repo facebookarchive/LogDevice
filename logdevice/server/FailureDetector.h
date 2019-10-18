@@ -40,7 +40,6 @@ class ServerProcessor;
 class Socket;
 class StatsHolder;
 class ClusterState;
-class MockFailureDetector;
 
 class FailureDetector {
  public:

@@ -21,18 +21,20 @@
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/GOSSIP_Message.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerSettings.h"
-#include "logdevice/server/shutdown.h"
 #include "logdevice/server/test/TestUtil.h"
 
 using namespace facebook::logdevice;
 
-void shutdown_processor(Processor* processor);
+static void
+shutdown_processors(std::vector<std::shared_ptr<ServerProcessor>> processors);
 
 namespace facebook { namespace logdevice {
+
 class MockBoycottTracker : public BoycottTracker {
  public:
   unsigned int getMaxBoycottCount() const override {
@@ -120,6 +122,14 @@ class MockFailureDetector : public FailureDetector {
 
 namespace {
 
+class FailureDetectorTest : public testing::Test {
+ public:
+  FailureDetectorTest() = default;
+
+ private:
+  Alarm alarm_{DEFAULT_TEST_TIMEOUT};
+};
+
 // generates a dummy config consisting of num_nodes sequencers
 std::shared_ptr<ServerConfig> gen_config(size_t num_nodes,
                                          node_index_t this_node) {
@@ -199,12 +209,16 @@ void simulate_single(detector_list_t& detectors,
   bool detected = false;
 
   while (steps++ < limit && !detected) {
+    ld_info("step %lu", steps);
+
     // gossip
+    ld_info("gossip");
     for (auto idx : alive) {
       detectors[idx]->advanceTime();
     }
 
     // send messages
+    ld_info("send messages");
     for (auto idx : alive) {
       auto& messages = detectors[idx]->messages_;
       for (auto& it : messages) {
@@ -218,6 +232,7 @@ void simulate_single(detector_list_t& detectors,
     }
 
     // check if all nodes are correctly detected by all other nodes
+    ld_info("check");
     detected = true;
     for (size_t j = 0; j < alive.size() && detected; ++j) {
       node_index_t idx = alive[j];
@@ -262,6 +277,8 @@ void simulate(size_t num_nodes, const GossipSettings& settings) {
   folly::ThreadLocalPRNG g;
 
   for (size_t num_dead = 1; num_dead < num_nodes / 2; ++num_dead) {
+    ld_info("num_dead = %lu; creating processors", num_dead);
+
     std::vector<node_index_t> indices;
     for (node_index_t i = 0; i < num_nodes; ++i) {
       indices.push_back(i);
@@ -282,22 +299,21 @@ void simulate(size_t num_nodes, const GossipSettings& settings) {
     // Cleanly shutdown the processors since FailureDetector runs on
     // ServerProcessor and its ServerWorkers need to cleanup the server read
     // streams.
-    for (auto& processor : processors) {
-      shutdown_processor(processor.get());
-    }
+    ld_info("shutting down processors");
+    shutdown_processors(processors);
   }
 }
 
 } // namespace
 
-TEST(FailureDetector, RandomGossip) {
+TEST_F(FailureDetectorTest, RandomGossip) {
   GossipSettings settings = create_default_settings<GossipSettings>();
   settings.mode = GossipSettings::SelectionMode::RANDOM;
   settings.suspect_duration = std::chrono::milliseconds(0);
   simulate(20, settings);
 }
 
-TEST(FailureDetector, RoundRobinGossip) {
+TEST_F(FailureDetectorTest, RoundRobinGossip) {
   GossipSettings settings = create_default_settings<GossipSettings>();
   settings.mode = GossipSettings::SelectionMode::ROUND_ROBIN;
   settings.suspect_duration = std::chrono::milliseconds(0);
@@ -327,23 +343,58 @@ void gossip_round(MockFailureDetector* d1, MockFailureDetector* d2) {
 }
 } // namespace
 
-void shutdown_processor(Processor* processor) {
-  // gracefully stop the processor and all its worker threads
-  auto health_monitor_closed = processor->getHealthMonitor().shutdown();
-  const int nworkers = processor->getAllWorkersCount();
-  int nsuccess = post_and_wait(
-      processor, [](Worker* worker) { worker->stopAcceptingWork(); });
-  ASSERT_EQ(nworkers, nsuccess);
-  health_monitor_closed.wait();
-  nsuccess = post_and_wait(
-      processor, [](Worker* worker) { worker->finishWorkAndCloseSockets(); });
-  ASSERT_EQ(nworkers, nsuccess);
-  processor->waitForWorkers(nworkers);
-  processor->shutdown();
+void shutdown_processors(
+    std::vector<std::shared_ptr<ServerProcessor>> processors) {
+  std::vector<folly::SemiFuture<folly::Unit>> to_wait;
+
+  for (auto p : processors) {
+    to_wait.push_back(p->getHealthMonitor().shutdown());
+
+    auto f = fulfill_on_all_workers<folly::Unit>(
+        p.get(),
+        [](folly::Promise<folly::Unit> p) {
+          Worker::onThisThread()->stopAcceptingWork();
+          p.setValue();
+        },
+        RequestType::MISC,
+        /* with_retrying */ true);
+    to_wait.insert(to_wait.end(),
+                   std::make_move_iterator(f.begin()),
+                   std::make_move_iterator(f.end()));
+  }
+
+  for (auto& f : to_wait) {
+    f.wait();
+  }
+  to_wait.clear();
+
+  for (auto p : processors) {
+    auto f = fulfill_on_all_workers<folly::Unit>(
+        p.get(),
+        [](folly::Promise<folly::Unit> p) {
+          Worker::onThisThread()->finishWorkAndCloseSockets();
+          p.setValue();
+        },
+        RequestType::MISC,
+        /* with_retrying */ true);
+    to_wait.insert(to_wait.end(),
+                   std::make_move_iterator(f.begin()),
+                   std::make_move_iterator(f.end()));
+  }
+
+  for (auto& f : to_wait) {
+    f.wait();
+  }
+  to_wait.clear();
+
+  for (auto p : processors) {
+    p->waitForWorkers();
+    p->shutdown();
+  }
 }
 // Simulates a node requesting shard failover. Other nodes are expected to
 // immediately treat this node as unavailable, even if it's still gossiping.
-TEST(FailureDetector, Failover) {
+TEST_F(FailureDetectorTest, Failover) {
   const int num_nodes = 2;
 
   GossipSettings settings = create_default_settings<GossipSettings>();
@@ -379,7 +430,8 @@ TEST(FailureDetector, Failover) {
   EXPECT_FALSE(detectors[1]->isAlive(node_index_t(0)));
 
   // "restart" the first node
-  shutdown_processor(processors[0].get());
+  shutdown_processors(
+      std::vector<std::shared_ptr<ServerProcessor>>{std::move(processors[0])});
   std::tie(processors[0], detectors[0]) =
       make_processor_with_detector(0, num_nodes, settings);
 
@@ -395,13 +447,12 @@ TEST(FailureDetector, Failover) {
   }
   EXPECT_TRUE(detectors[0]->isAlive(node_index_t(0)));
   EXPECT_TRUE(detectors[1]->isAlive(node_index_t(0)));
-  shutdown_processor(processors[0].get());
-  shutdown_processor(processors[1].get());
+  shutdown_processors(processors);
 }
 
 // Simulates a node that is stuck not loading Logsconfig. It must be flagged
 // correctly as "STARTING".
-TEST(FailureDetector, Starting) {
+TEST_F(FailureDetectorTest, Starting) {
   const int num_nodes = 2;
 
   GossipSettings settings = create_default_settings<GossipSettings>();
@@ -447,12 +498,10 @@ TEST(FailureDetector, Starting) {
     EXPECT_FALSE(detectors[idx]->getClusterState()->isNodeStarting(1));
   }
 
-  for (node_index_t i = 0; i < num_nodes; ++i) {
-    shutdown_processor(processors[i].get());
-  }
+  shutdown_processors(processors);
 }
 
-TEST(FailureDetector, GossipRetry) {
+TEST_F(FailureDetectorTest, GossipRetry) {
   const int nodes = 2;
 
   GossipSettings settings = create_default_settings<GossipSettings>();
@@ -510,6 +559,5 @@ TEST(FailureDetector, GossipRetry) {
   // make sure only one gossip interval elapsed
   ASSERT_TRUE(end - start >= settings.gossip_interval);
   ASSERT_TRUE(end - start < 2 * settings.gossip_interval);
-  shutdown_processor(processors[0].get());
-  shutdown_processor(processors[1].get());
+  shutdown_processors(processors);
 }
