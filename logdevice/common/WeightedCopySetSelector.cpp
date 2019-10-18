@@ -756,9 +756,12 @@ WeightedCopySetSelector::select(copyset_size_t extras,
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
         2,
-        "Failed to select %d nodes for log %lu because too many nodes are "
-        "unavailable. Nodeset: %s. Unavailable nodes: %s",
+        "Failed to select %d %ss in %d %ss for log %lu because too many nodes "
+        "are unavailable. Nodeset: %s. Unavailable nodes: %s",
         (int)replication_,
+        NodeLocation::scopeNames()[replication_scope_].c_str(),
+        (int)secondary_replication_,
+        NodeLocation::scopeNames()[secondary_replication_scope_].c_str(),
         logid_.val_,
         toString(nodeset_indices_).c_str(),
         toString(cache.unavailable_nodes).c_str());
