@@ -20,10 +20,13 @@ void UpdateableSettingsBase::setDefaultValue(const char* name,
   int argc = 3;
   const char* argv[3] = {"UpdateableSettingsBase", dash_name.c_str(), value};
 
+  auto it = settings_.find(name);
+  ld_check(it != settings_.end());
+  SettingDescriptor& setting = it->second;
+  ld_check(setting.default_value.empty());
+
   boost::program_options::options_description desc;
-  for (auto& opt : settings_) {
-    desc.add(opt.second.boost_description);
-  }
+  desc.add(setting.boost_description);
 
   boost::program_options::command_line_parser parser(argc, argv);
   auto parsed_options = parser.options(desc)
@@ -33,25 +36,16 @@ void UpdateableSettingsBase::setDefaultValue(const char* name,
   boost::program_options::store(parsed_options, parsed);
   boost::program_options::notify(parsed);
 
-  for (auto& opt : parsed_options.options) {
-    if (opt.unregistered) {
-      continue;
-    }
-    if (opt.string_key.empty()) {
-      continue;
-    }
-    if (!settings_.count(opt.string_key)) {
-      continue;
-    }
+  ld_check_eq(1, parsed_options.options.size());
+  auto& opt = parsed_options.options[0];
+  ld_check(!opt.unregistered);
+  ld_check_eq(opt.string_key, name);
 
-    ld_check(settings_[opt.string_key].default_value.empty());
-    for (auto& v : opt.value) {
-      settings_[opt.string_key].default_value.push_back(v);
-    }
-    if (docs_override) {
-      settings_[opt.string_key].default_value_docs_override.assign(
-          docs_override);
-    }
+  setting.default_value.insert(
+      setting.default_value.end(), opt.value.begin(), opt.value.end());
+
+  if (docs_override) {
+    setting.default_value_docs_override.assign(docs_override);
   }
 }
 
