@@ -315,6 +315,8 @@
 <tr><td>max-time-to-allow-socket-drain</td><td>After hitting NOBUFS, amount of time a socket is allowed to successfully send a single message before it is closed.</td><td style="text-align:center">3min</td><td></td></tr>
 <tr><td>nagle</td><td>enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones</td><td style="text-align:center">false</td><td></td></tr>
 <tr><td>outbuf-kb</td><td>max output buffer size (userspace extension of socket sendbuf) in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones</td><td style="text-align:center">32768</td><td></td></tr>
+<tr><td>outbuf-socket-min-kb</td><td>Minimum outstanding bytes per socket in kb. Global sender's budget will be ignored if socket's outstanding bytes is less than this value. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones</td><td style="text-align:center">1</td><td>server only</td></tr>
+<tr><td>outbufs-limit-per-peer-type</td><td>If disabled, per peer-type limit will not be enforced.</td><td style="text-align:center">true</td><td>server only</td></tr>
 <tr><td>outbytes-mb</td><td>per-thread limit on bytes pending in output evbuffers (in MB)</td><td style="text-align:center">512</td><td></td></tr>
 <tr><td>rcvbuf-kb</td><td>TCP socket rcvbuf size in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones</td><td style="text-align:center">-1</td><td></td></tr>
 <tr><td>read-messages</td><td>read up to this many incoming messages before returning to libevent</td><td style="text-align:center">128</td><td></td></tr>
