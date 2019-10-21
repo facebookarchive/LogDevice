@@ -14,6 +14,7 @@
 
 // Args: enum_name, string_name
 
+RSM_TYPE(CHECKPOINT_STATE_MACHINE, "checkpoint")
 RSM_TYPE(EVENT_LOG_STATE_MACHINE, "eventlog")
 RSM_TYPE(LOGS_CONFIG_STATE_MACHINE, "logsconfig")
 RSM_TYPE(MAINTENANCE_LOG_STATE_MACHINE, "maintenancelog")
