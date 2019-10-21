@@ -85,6 +85,9 @@ typedef AdminCommandTable<std::string, /* State */
                           float,       /* Write (MB) */
                           int,         /* Read-cnt */
                           int,         /* Write-cnt */
+                          float,       /* Throughput */
+                          float,       /* RWND Limited % */
+                          float,       /* SNDBuf Limited % */
                           int,         /* Proto */
                           size_t,      /* Send buf-sz */
                           uint32_t,    /* Peer Config Version */

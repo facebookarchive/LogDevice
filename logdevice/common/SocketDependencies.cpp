@@ -552,6 +552,10 @@ std::string SocketDependencies::getClientBuildInfo() {
   return build_info->getBuildInfoJson();
 }
 
+SteadyTimestamp SocketDependencies::getCurrentTimestamp() {
+  return SteadyTimestamp::now();
+}
+
 bool SocketDependencies::authenticationEnabled() {
   if (processor_->security_info_) {
     auto principal_parser = processor_->security_info_->getPrincipalParser();
@@ -733,5 +737,10 @@ folly::Func SocketDependencies::setupContextGuard() {
 
 folly::Executor* SocketDependencies::getExecutor() const {
   return worker_->getExecutor();
+}
+
+int SocketDependencies::getTCPInfo(TCPInfo* info, int fd) {
+  LinuxNetUtils util;
+  return util.getTCPInfo(info, fd);
 }
 }} // namespace facebook::logdevice

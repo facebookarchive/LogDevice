@@ -16,6 +16,7 @@
 #include "logdevice/common/RunContext.h"
 #include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/libevent/LibEventCompatibility.h"
+#include "logdevice/common/network/LinuxNetUtils.h"
 #include "logdevice/common/protocol/Message.h"
 namespace facebook { namespace logdevice {
 namespace configuration { namespace nodes {
@@ -120,6 +121,7 @@ class SocketDependencies {
   virtual const std::string& getHELLOCredentials();
   virtual const std::string& getCSID();
   virtual std::string getClientBuildInfo();
+  virtual SteadyTimestamp getCurrentTimestamp();
   virtual bool authenticationEnabled();
   virtual bool allowUnauthenticated();
   virtual bool includeHELLOCredentials();
@@ -146,6 +148,7 @@ class SocketDependencies {
    */
   virtual folly::Func setupContextGuard();
   virtual folly::Executor* getExecutor() const;
+  virtual int getTCPInfo(TCPInfo* info, int fd);
   virtual ~SocketDependencies() {}
 
  private:

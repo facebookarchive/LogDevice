@@ -548,8 +548,53 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &max_time_to_allow_socket_drain,
        "3min",
        validate_positive<ssize_t>(),
-       "After hitting NOBUFS, amount of time a socket is allowed to "
-       "successfully send a single message before it is closed.",
+       "If a socket does not drain a complete message for "
+       "max-time-to-allow-socket-drain. Then the socket is closed.",
+       SERVER | CLIENT,
+       SettingsCategory::Network);
+  init("socket-idle-threshold",
+       &socket_idle_threshold,
+       "1000000",
+       validate_positive<ssize_t>(),
+       "A socket is considered idle if number of bytes pending in the socket "
+       "is below or equal to this threshold. This is used along with "
+       "min_socket_idle_threshold_percent to find active socket and select "
+       "them for health check. Check socket-health-check-period for more "
+       "details.",
+       SERVER | CLIENT,
+       SettingsCategory::Network);
+  init("min-socket-idle-threshold-percent",
+       &min_socket_idle_threshold_percent,
+       "50",
+       validate_positive<ssize_t>(),
+       "A socket is considered active if it had bytes pending in the socket "
+       "above socket-idle-threshold for greater than "
+       "min-socket-idle-threshold-percent of socket-health-check-period.",
+       SERVER | CLIENT,
+       SettingsCategory::Network);
+  init("min-bytes-to-drain-per-second",
+       &min_bytes_to_drain_per_second,
+       "1000000",
+       validate_positive<ssize_t>(),
+       "Refer socket-health-check-period for details.",
+       SERVER | CLIENT,
+       SettingsCategory::Network);
+  init("socket-health-check-period",
+       &socket_health_check_period,
+       "1min",
+       validate_positive<ssize_t>(),
+       "Time between consecutive socket health check. Every "
+       "socket-health-check-period, a socket is closed, if it was not draining "
+       "for max-time-to-allow-socket-drain or it was active but the throughput "
+       "during the time it was active dropped below"
+       "min-bytes-to-drain-per-second due to network congestion.",
+       SERVER | CLIENT,
+       SettingsCategory::Network);
+  init("rate-limit-socket-closed",
+       &rate_limit_socket_closed,
+       "1",
+       validate_positive<ssize_t>(),
+       "Max number of sockets closed in a socket health check period.",
        SERVER | CLIENT,
        SettingsCategory::Network);
   init("max-cached-digest-record-queued-kb",

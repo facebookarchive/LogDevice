@@ -173,10 +173,31 @@ struct Settings : public SettingsBundle {
   // KILOBYTES. See Socket.h.
   size_t outbuf_overflow_kb;
 
-  // If socket is running out of buffers and it is not draining for a while
-  // there is less value in maintaining it's socket buffers. This setting
-  // decides how long will we allow the socket to drain before we close it.
+  // If the socket does not drain message for this long then it is closed.
+  // socket-health-check-period needs to be always less than or equal to this
+  // value.
   std::chrono::milliseconds max_time_to_allow_socket_drain;
+
+  // A socket is considered idle if number of bytes pending in sendq is below
+  // or equal to this threshold. This is used to find active socket and select
+  // them for health check. Check socket-health-check-period for more details.
+  size_t socket_idle_threshold;
+
+  // A socket is considered active if it had bytes pending in the socket above
+  // socket-idle-threshold for greater than min-socket-idle-threshold-percent of
+  // socket-health-check-period.
+  size_t min_socket_idle_threshold_percent;
+
+  // Check socket_check_period for details.
+  size_t min_bytes_to_drain_per_second;
+
+  // Socket health check period.
+  std::chrono::milliseconds socket_health_check_period;
+
+  // This setting is used to express limit on the number of socket closed per
+  // socket per socket-health-check-period because their throughput dropped
+  // below expected value.
+  size_t rate_limit_socket_closed;
 
   // How many kilobytes of RECORD messages the delivery code tries to push
   // to the client at once.  If -1, use the TCP sendbuf size.

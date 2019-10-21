@@ -63,6 +63,17 @@ class Sockets : public AdminCommandTable {
         {"write_cnt",
          DataType::INTEGER,
          "Number of messages that were written to the socket."},
+        {"bytes_per_second",
+         DataType::REAL,
+         "Socket throughput in the last health check period."},
+        {"rwnd_limited_pct",
+         DataType::REAL,
+         "Portion of last health check period, when socket throughput was "
+         "limited by receiver."},
+        {"sndbuf_limited_pct",
+         DataType::REAL,
+         "Protion of last health check peiod, when socket throughput was "
+         "limited by send buffer."},
         {"proto",
          DataType::INTEGER,
          "Protocol that was handshaken. Do not trust this value if the "

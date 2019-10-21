@@ -678,4 +678,191 @@ TEST_F(ServerSocketTest, IncomingMessageBytesLimit) {
   receiveMsg(msg);
 }
 
+TEST_F(ClientSocketTest, RunSocketHealthCheck) {
+  int rv = socket_->connect();
+  ASSERT_EQ(0, rv);
+  CHECK_SENDQ();
+  CHECK_SERIALIZEQ(MessageType::HELLO);
+  triggerEventConnected();
+  CHECK_SENDQ(MessageType::HELLO);
+  flushOutputEvBuffer();
+  CHECK_ON_SENT(MessageType::HELLO, E::OK);
+  CHECK_SENDQ();
+  ACK_Header ackhdr{0, request_id_t(0), client_id_, max_proto_, E::OK};
+  receiveMsg(new TestACK_Message(ackhdr));
+  EXPECT_TRUE(handshaken());
+
+  // Test cases that consider just socket-idle-threshold to qualify a active
+  // socket. min_socket_idle_threshold_percent is zero for these cases.
+  settings_.socket_health_check_period = std::chrono::milliseconds(1000);
+  settings_.min_socket_idle_threshold_percent = 0;
+  settings_.socket_idle_threshold = 100;
+  settings_.min_bytes_to_drain_per_second = 1000;
+  // Message well below socket-idle-threshold should not be considered in
+  // slowness detection.
+  auto msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 10);
+  auto e = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  flushOutputEvBuffer();
+  EXPECT_EQ(SocketDrainStatusType::IDLE, socket_->checkSocketHealth());
+
+  // Message is above socket-idle-threshold and also the throughput is way low
+  // compared min_bytes_to_drain_per_second
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 200);
+  e = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  flushOutputEvBuffer();
+  EXPECT_EQ(SocketDrainStatusType::NET_SLOW, socket_->checkSocketHealth());
+
+  // Message is above socket-idle-threshold and also the throughput is
+  // above min_bytes_to_drain_per_second.
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 1000);
+  e = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  flushOutputEvBuffer();
+  EXPECT_EQ(SocketDrainStatusType::ACTIVE, socket_->checkSocketHealth());
+
+  // Message above socket-idle-threshold and also the throughput is way low
+  // compared min_bytes_to_drain_per_second. But the socket is receiver limited.
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 200);
+  e = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  socket_flow_stats_.rwnd_limited_time += std::chrono::milliseconds(
+      51 * settings_.socket_health_check_period.count() / 100);
+  flushOutputEvBuffer();
+  EXPECT_EQ(SocketDrainStatusType::RECV_SLOW, socket_->checkSocketHealth());
+
+  // Tests cases with non-zero min_socket_idle_threshold_percent where is a
+  // socket is not active for enough time it is not considered active and is not
+  // included in slow detection.
+  settings_.min_socket_idle_threshold_percent = 40;
+
+  // Pass time to 61% of socket_health_check_period this means socket can be
+  // active only for 39% of time in this period, below the threshold limit.
+  cur_time_ += std::chrono::milliseconds(
+      settings_.socket_health_check_period.count() * 61 / 100);
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 200);
+  e = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*e);
+  cur_time_ += std::chrono::milliseconds(
+      settings_.socket_health_check_period.count() * 39 / 100);
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  flushOutputEvBuffer();
+  EXPECT_EQ(SocketDrainStatusType::IDLE, socket_->checkSocketHealth());
+  // Pass time to 55% of ocket_health_check_period this means socket can be
+  // active for more than 40% time.
+  cur_time_ += std::chrono::milliseconds(
+      settings_.socket_health_check_period.count() * 55 / 100);
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 200);
+  e = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*e);
+  cur_time_ += std::chrono::milliseconds(
+      settings_.socket_health_check_period.count() * 45 / 100);
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  flushOutputEvBuffer();
+  EXPECT_EQ(SocketDrainStatusType::NET_SLOW, socket_->checkSocketHealth());
+}
+
+TEST_F(ClientSocketTest, SocketThroughput) {
+  int rv = socket_->connect();
+  ASSERT_EQ(0, rv);
+  CHECK_SENDQ();
+  CHECK_SERIALIZEQ(MessageType::HELLO);
+  triggerEventConnected();
+  CHECK_SENDQ(MessageType::HELLO);
+  flushOutputEvBuffer();
+  CHECK_ON_SENT(MessageType::HELLO, E::OK);
+  CHECK_SENDQ();
+  ACK_Header ackhdr{0, request_id_t(0), client_id_, max_proto_, E::OK};
+  receiveMsg(new TestACK_Message(ackhdr));
+  EXPECT_TRUE(handshaken());
+
+  // Test cases that don't care about idle percent and just make sure correct
+  // throughput is calculated.
+  settings_.socket_health_check_period = std::chrono::milliseconds(1000);
+  settings_.min_socket_idle_threshold_percent = 0;
+  settings_.socket_idle_threshold = 0;
+  // To reset health stats invoke checkSocketHealth
+  socket_->checkSocketHealth();
+
+  auto payload_size = 301;
+  auto msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, payload_size);
+  auto total_msg_size = msg->size();
+  auto e = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  flushOutputEvBuffer();
+  socket_->checkSocketHealth();
+  EXPECT_EQ(
+      int(total_msg_size * 1e3 / settings_.socket_health_check_period.count()),
+      int(socket_->getSocketThroughput() * 1e3));
+
+  // Send 6 messages 3 messages above idle-threshold 3 messages below
+  // idle-threshold and make sure write throughput is used.
+  payload_size = 305 / 3;
+  settings_.socket_idle_threshold = payload_size - 1;
+  auto time_slice = settings_.socket_health_check_period.count() / 6;
+  total_msg_size = 0;
+  for (int i = 1; i <= 3; ++i) {
+    msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MIN_PROTOCOL_SUPPORTED, payload_size);
+    total_msg_size += msg->size();
+    e = socket_->registerMessage(std::move(msg));
+    socket_->releaseMessage(*e);
+    cur_time_ += std::chrono::milliseconds(time_slice);
+    flushOutputEvBuffer();
+  }
+  for (int i = 1; i <= 3; ++i) {
+    msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MIN_PROTOCOL_SUPPORTED, 1);
+    total_msg_size += msg->size();
+    e = socket_->registerMessage(std::move(msg));
+    socket_->releaseMessage(*e);
+    cur_time_ += std::chrono::milliseconds(time_slice);
+    flushOutputEvBuffer();
+  }
+  socket_->checkSocketHealth();
+  EXPECT_GT(int(socket_->getSocketThroughput() * 1e3), 0);
+  EXPECT_EQ(
+      int(total_msg_size * 1e3 / settings_.socket_health_check_period.count()),
+      int(socket_->getSocketThroughput() * 1e3));
+  // Send 6 messages with alternating busy and idle times and make sure
+  // calculated throughput is correct.
+  // Using same values for payload_size, time_slice and total_msg_size.
+  for (int i = 1; i <= 3; ++i) {
+    msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MIN_PROTOCOL_SUPPORTED, payload_size);
+    e = socket_->registerMessage(std::move(msg));
+    socket_->releaseMessage(*e);
+    cur_time_ += std::chrono::milliseconds(time_slice);
+    flushOutputEvBuffer();
+    msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MIN_PROTOCOL_SUPPORTED, 1);
+    e = socket_->registerMessage(std::move(msg));
+    socket_->releaseMessage(*e);
+    cur_time_ += std::chrono::milliseconds(time_slice);
+    flushOutputEvBuffer();
+  }
+
+  socket_->checkSocketHealth();
+  EXPECT_GT(int(socket_->getSocketThroughput() * 1e3), 0);
+  EXPECT_EQ(
+      int(total_msg_size * 1e3 / settings_.socket_health_check_period.count()),
+      int(socket_->getSocketThroughput() * 1e3));
+}
 }} // namespace facebook::logdevice

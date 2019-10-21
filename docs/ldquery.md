@@ -688,6 +688,9 @@ Tracks all sockets on all nodes in the cluster.
 | write\_mb | real | Number of bytes that were written to the socket. |
 | read\_cnt | int | Number of messages that were read from the socket. |
 | write\_cnt | int | Number of messages that were written to the socket. |
+| bytes\_per\_second | real | Socket throughput in the last health check period. |
+| rwnd\_limited\_pct | real | Portion of last health check period, when socket throughput was limited by receiver. |
+| sndbuf\_limited\_pct | real | Protion of last health check peiod, when socket throughput was limited by send buffer. |
 | proto | int | Protocol that was handshaken. Do not trust this value if the socket's state is not active. |
 | sendbuf | int | Size of the send buffer of the underlying TCP socket. |
 | peer\_config\_version | int | Last config version that the peer advertised |

@@ -400,6 +400,15 @@ STAT_DEFINE(config_update_same_version, SUM)
 STAT_DEFINE(durability_failures, SUM)
 STAT_DEFINE(durability_total, SUM)
 
+// Socket health check stats. Not accumulated for destroyed threads.
+STAT_DEFINE(num_sockets, SUM)
+STAT_DEFINE(sock_active, SUM)
+STAT_DEFINE(sock_stalled, SUM)
+STAT_DEFINE(sock_app_limited, SUM)
+STAT_DEFINE(sock_receiver_throttled, SUM)
+STAT_DEFINE(sock_network_throttled, SUM)
+STAT_DEFINE(slow_socket_detection_time, SUM)
+STAT_DEFINE(sock_health_unknown, SUM)
 #endif // DESTROYING_THREAD
 #endif // RESETTING_STATS
 

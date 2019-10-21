@@ -540,11 +540,17 @@ class Socket : public TrafficShappingSocket {
   virtual size_t getBytesPending() const;
 
   /**
-   * Check if the socket cannot drain a message in
-   * max_time_to_allow_socket_drain. Higher layer can take action whether to
-   * close the Socket and keep it as is.
+   * Run checks to make sure if the socket performing as expected.
    */
-  bool slowInDraining();
+
+  SocketDrainStatusType checkSocketHealth();
+
+  /**
+   * Get socket throughput calculated for last socket_health_check_period.
+   */
+  double getSocketThroughput() const {
+    return cached_socket_throughput_;
+  }
 
  protected:
   /**
@@ -847,11 +853,21 @@ class Socket : public TrafficShappingSocket {
    */
   void addConnectAttemptTimeoutEvent();
 
-  // Reference holder that holds socket pointer and is distributed to whoever
-  // wants cache the socket. It is encapsulated in SocketProxy. The socket
-  // instance itself is not reclaimed till all the references on the ref_holder
-  // go away.  This way we guarantee that the ClientID if valid does not get
-  // reclaimed.
+  /**
+   * A helper function to determine the reason for lower socket throughput.
+   * Returns a decision for the socket slow if it can determine it otherwise
+   * returns NONE. Also retuns, what percent of time was socket limited by
+   * network, or limited by receiver or limited by unavailability of sendbufs.
+   */
+  SocketDrainStatusType getSlowSocketReason(unsigned* network_limited,
+                                            unsigned* rwnd_limited,
+                                            unsigned* sndbuf_limited);
+
+  // Reference holder that holds socket pointer and is distributed to
+  // whoever wants cache the socket. It is encapsulated in SocketProxy. The
+  // socket instance itself is not reclaimed till all the references on the
+  // ref_holder go away.  This way we guarantee that the ClientID if valid
+  // does not get reclaimed.
   std::shared_ptr<Socket> socket_ref_holder_;
 
   friend class SocketImpl;
@@ -1004,6 +1020,52 @@ class Socket : public TrafficShappingSocket {
 
   // Total number of bytes received since this socket was created.
   size_t num_bytes_received_;
+
+  // Set of stats that are are used to detect low socket performance.
+  struct HealthStats {
+    void clear() {
+      active_start_time_ = SteadyTimestamp::min();
+      active_time_ = std::chrono::milliseconds(0);
+      num_bytes_sent_ = 0;
+      busy_time_ = std::chrono::milliseconds(0);
+      rwnd_limited_time_ = std::chrono::milliseconds(0);
+      sndbuf_limited_time_ = std::chrono::milliseconds(0);
+    }
+
+    // Timestamp when socket switched from idle to active. This is used to
+    // calculate total amount of time when bytes enqueued in the socket was
+    // above idle-threshold.
+    SteadyTimestamp active_start_time_{SteadyTimestamp::min()};
+
+    // Total time in last health-check-period when bytes enqueued in the socket
+    // were above idle-threshold. Socket throughput is calculated over this
+    // time. This is updated on active to idle transition or during socket
+    // health check.
+    std::chrono::milliseconds active_time_{0};
+
+    // This is sum of bytes written to the socket in the last health check
+    // period.
+    size_t num_bytes_sent_{0};
+
+    // Amount of time when socket had bytes available to send since it was
+    // created.
+    std::chrono::milliseconds busy_time_{0};
+
+    // Portion of busy time since the socket was created, when receiver was not
+    // able to expand its window to accept all sender's pending bytes.
+    std::chrono::milliseconds rwnd_limited_time_{0};
+
+    // Portion of busy time since the socket was created, when sender was not
+    // able to enqueue more because of insufficient sendbuf.
+    std::chrono::milliseconds sndbuf_limited_time_{0};
+  };
+
+  HealthStats health_stats_;
+
+  // Calculated socket throughput in last socket-health-check-period in
+  // KBps. This value caches the socket throughput for InfoSocket command and
+  // the value here is valid only if socket-health-check-period is non-zero.
+  double cached_socket_throughput_{0};
 
   // Indicates whether this is an SSL socket
   ConnectionType conntype_{ConnectionType::PLAIN};

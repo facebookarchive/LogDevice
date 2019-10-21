@@ -101,6 +101,10 @@ struct evbuffer* TestSocketDependencies::getInput(struct bufferevent* /*bev*/) {
   return owner_->input_;
 }
 
+SteadyTimestamp TestSocketDependencies::getCurrentTimestamp() {
+  return owner_->cur_time_;
+}
+
 int TestSocketDependencies::buffereventSocketConnect(
     struct bufferevent* /*bev*/,
     struct sockaddr* /*ss*/,
@@ -248,6 +252,11 @@ int TestSocketDependencies::setSoMark(int /*fd*/, uint32_t /*so_mark*/) {
 
 folly::Executor* TestSocketDependencies::getExecutor() const {
   return &folly::InlineExecutor::instance();
+}
+
+int TestSocketDependencies::getTCPInfo(TCPInfo* info, int /*fd*/) {
+  *info = owner_->socket_flow_stats_;
+  return 0;
 }
 
 //

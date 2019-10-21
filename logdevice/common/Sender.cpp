@@ -206,10 +206,12 @@ int Sender::addClient(int fd,
   eraseDisconnectedClients();
   // Activate slow_socket_timer if not active already.
   if (!impl_->detect_slow_socket_timer_.isActive()) {
+    auto prev_context = Worker::packRunContext();
     impl_->detect_slow_socket_timer_.setCallback(
         [this]() { closeSlowSockets(); });
     impl_->detect_slow_socket_timer_.activate(
-        Worker::settings().max_time_to_allow_socket_drain);
+        Worker::settings().socket_health_check_period);
+    Worker::unpackRunContext(prev_context);
   }
 
   auto w = Worker::onThisThread();
@@ -946,10 +948,12 @@ Socket* Sender::initServerSocket(NodeID nid,
   if (it == impl_->server_sockets_.end()) {
     // Activate slow_socket_timer if not active already.
     if (!impl_->detect_slow_socket_timer_.isActive()) {
+      auto prev_context = Worker::packRunContext();
       impl_->detect_slow_socket_timer_.setCallback(
           [this]() { closeSlowSockets(); });
       impl_->detect_slow_socket_timer_.activate(
           Worker::settings().max_time_to_allow_socket_drain);
+      Worker::unpackRunContext(prev_context);
     }
     // Don't try to connect if we expect a generation and it's different than
     // what is in the config.
@@ -1552,38 +1556,56 @@ void Sender::forAllClientSockets(std::function<void(Socket&)> fn) {
 }
 
 void Sender::closeSlowSockets() {
-  size_t sockets_closed = 0;
-  // Allow this function to run just for 2ms. Stop loop if it goes beyond that
-  // time. We will try it again in 10s.
-  auto deadline = SteadyTimestamp::now() + std::chrono::milliseconds(2);
-  bool end_loop = false;
+  size_t num_sockets = 0, sockets_closed = 0;
+  size_t sock_stalled = 0, sock_active = 0;
+  size_t reason_net_slow = 0, reason_recv_slow = 0, app_limited = 0;
+  size_t max_closures_allowed = settings_->rate_limit_socket_closed;
+  auto startTime = SteadyTimestamp::now();
   auto close_if_slow = [&](Socket& sock) {
-    if (sock.slowInDraining()) {
+    ++num_sockets;
+    auto status = sock.checkSocketHealth();
+    bool close_socket = status == SocketDrainStatusType::STALLED ||
+        (status == SocketDrainStatusType::NET_SLOW &&
+         reason_net_slow < max_closures_allowed);
+    sock_active += status == SocketDrainStatusType::ACTIVE ? 1 : 0;
+    app_limited += status == SocketDrainStatusType::IDLE ? 1 : 0;
+    sock_stalled += status == SocketDrainStatusType::STALLED ? 1 : 0;
+    reason_recv_slow += status == SocketDrainStatusType::RECV_SLOW ? 1 : 0;
+    reason_net_slow += status == SocketDrainStatusType::NET_SLOW ? 1 : 0;
+    if (close_socket) {
       ++sockets_closed;
       sock.close(E::TIMEDOUT);
-      if (SteadyTimestamp::now() > deadline) {
-        end_loop = true;
-      }
     }
   };
 
   for (auto& entry : impl_->server_sockets_) {
-    if (end_loop) {
-      break;
-    }
     close_if_slow(*entry.second);
   }
   for (auto& entry : impl_->client_sockets_) {
-    if (end_loop) {
-      break;
-    }
     close_if_slow(*entry.second);
   }
-  ld_log(sockets_closed > 0 ? dbg::Level::INFO : dbg::Level::DEBUG,
-         "Sender closed %lu slow sockets. ended loop soon %d",
-         sockets_closed,
-         end_loop);
+  if (sockets_closed) {
+    RATELIMIT_WARNING(
+        std::chrono::seconds(10),
+        10,
+        "Sender closed %lu sockets of which %lu had slow network , "
+        "Found %lu socket with slow receiver",
+        sockets_closed,
+        reason_net_slow,
+        reason_recv_slow);
+  }
+  auto socket_health_unknown = num_sockets - sock_active - app_limited -
+      sock_stalled - reason_recv_slow - reason_net_slow;
+  STAT_SET(Worker::stats(), num_sockets, num_sockets);
+  STAT_SET(Worker::stats(), sock_active, sock_active);
+  STAT_SET(Worker::stats(), sock_health_unknown, socket_health_unknown);
+  STAT_SET(Worker::stats(), sock_stalled, sock_stalled);
+  STAT_SET(Worker::stats(), sock_app_limited, app_limited);
+  STAT_SET(Worker::stats(), sock_receiver_throttled, reason_recv_slow);
+  STAT_SET(Worker::stats(), sock_network_throttled, reason_net_slow);
+  auto diff = SteadyTimestamp::now() - startTime;
+  STAT_ADD(Worker::stats(), slow_socket_detection_time, to_msec(diff).count());
   impl_->detect_slow_socket_timer_.activate(
-      Worker::settings().max_time_to_allow_socket_drain);
+      Worker::settings().socket_health_check_period);
 }
 }} // namespace facebook::logdevice

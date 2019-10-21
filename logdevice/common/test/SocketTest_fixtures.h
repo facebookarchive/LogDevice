@@ -72,6 +72,7 @@ class TestSocketDependencies : public SocketDependencies {
                        folly::SSLContext*) override;
   struct evbuffer* getOutput(struct bufferevent* bev) override;
   virtual struct evbuffer* getInput(struct bufferevent* bev) override;
+  virtual SteadyTimestamp getCurrentTimestamp() override;
   virtual int buffereventSocketConnect(struct bufferevent* bev,
                                        struct sockaddr* ss,
                                        int len) override;
@@ -121,6 +122,7 @@ class TestSocketDependencies : public SocketDependencies {
   virtual void onStoppedRunning(RunContext prev_context) override;
   ResourceBudget::Token getResourceToken(size_t payload_size) override;
   virtual int setSoMark(int fd, uint32_t so_mark) override;
+  virtual int getTCPInfo(TCPInfo*, int fd) override;
 
   NodeID getDestinationNodeID();
 
@@ -307,6 +309,7 @@ class SocketTest : public ::testing::Test {
   std::string client_build_info_;
   FlowGroup flow_group_;
   EvBaseMock ev_base_mock_;
+  SteadyTimestamp cur_time_{SteadyTimestamp::now()};
 
   // IMPORTANT: this remains uninitialized and a pointer to this is returned by
   // buffereventSocketConnect(). This remains untouched because Socket only
@@ -328,6 +331,9 @@ class SocketTest : public ::testing::Test {
   int next_connect_attempts_errno_{0};
   // Keep track of all calls to onSent.
   std::queue<SentMsg> sent_;
+
+  // Keep track of socket flow stats.
+  TCPInfo socket_flow_stats_;
 
   // These are set when Socket calls buffereventSetCb.
   bufferevent_data_cb read_cb_{nullptr};

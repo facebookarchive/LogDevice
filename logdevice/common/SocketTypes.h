@@ -19,9 +19,18 @@ enum class PeerType : uint8_t {
   NODE,
   NUM_PEER_TYPES
 };
+enum class SocketDrainStatusType : uint8_t {
+  UNKNOWN,
+  ACTIVE,
+  STALLED,
+  NET_SLOW,
+  RECV_SLOW,
+  IDLE
+};
 
 const char* socketTypeToString(SocketType sock_type);
 const char* connectionTypeToString(ConnectionType conn_type);
 const char* peerTypeToString(PeerType peer_type);
+const char* socketDrainStatusToString(SocketDrainStatusType type);
 
 }} // namespace facebook::logdevice

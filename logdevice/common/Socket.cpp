@@ -481,7 +481,7 @@ int Socket::connect() {
 
   next_pos_ = 0;
   drain_pos_ = 0;
-
+  health_stats_.clear();
   sendHello(); // queue up HELLO, to be sent when we connect
 
   STAT_INCR(deps_->getStats(), num_connections);
@@ -1373,6 +1373,13 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
     envelope->enqTime(std::chrono::steady_clock::now());
     sendq_.push_back(*envelope.release());
     ld_check(!envelope);
+    auto& s = health_stats_;
+    // Check if bytes in socket is above idle_threshold. Accumulate active bytes
+    // sent and change state to active if necessary.
+    if (next_pos_ - drain_pos_ > getSettings().socket_idle_threshold &&
+        s.active_start_time_ == SteadyTimestamp::min()) {
+      s.active_start_time_ = deps_->getCurrentTimestamp();
+    }
   }
   if (status == Socket::SendStatus::SENT) {
     STAT_INCR(deps_->getStats(), sock_num_messages_sent);
@@ -1704,6 +1711,20 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
   }
 
   drain_pos_ = next_drain_pos;
+
+  // If we are in active state and bytes were written into the socket, assume
+  // that they are already sent to the remote and mark the state as inactive if
+  // necessary.
+  auto bytes_in_socket = next_pos_ - drain_pos_;
+  auto& s = health_stats_;
+  s.num_bytes_sent_ += nbytes;
+  if (s.active_start_time_ != SteadyTimestamp::min() &&
+      bytes_in_socket <= getSettings().socket_idle_threshold) {
+    auto diff = deps_->getCurrentTimestamp() - s.active_start_time_;
+    s.active_time_ += to_msec(diff);
+    s.active_start_time_ = SteadyTimestamp::min();
+  }
+
   auto total_time = getTimeDiff(start_time);
   STAT_ADD(deps_->getStats(),
            sock_time_spent_to_process_send_done,
@@ -2350,6 +2371,9 @@ void Socket::getDebugInfo(InfoSocketsTable& table) const {
   const size_t available =
       bev_ ? LD_EV(evbuffer_get_length)(deps_->getInput(bev_)) : 0;
 
+  auto total_busy_time = health_stats_.busy_time_.count();
+  auto total_rwnd_limited_time = health_stats_.rwnd_limited_time_.count();
+  auto total_sndbuf_limited_time = health_stats_.sndbuf_limited_time_.count();
   table.next()
       .set<0>(state)
       .set<1>(deps_->describeConnection(peer_name_))
@@ -2359,11 +2383,18 @@ void Socket::getDebugInfo(InfoSocketsTable& table) const {
       .set<5>(drain_pos_ / 1048576.0)
       .set<6>(num_messages_received_)
       .set<7>(num_messages_sent_)
-      .set<8>(proto_)
-      .set<9>(this->getTcpSendBufSize())
-      .set<10>(getPeerConfigVersion().val())
-      .set<11>(isSSL())
-      .set<12>(fd_);
+      .set<8>(cached_socket_throughput_)
+      .set<9>(total_busy_time == 0
+                  ? 0
+                  : 100.0 * total_rwnd_limited_time / total_busy_time)
+      .set<10>(total_busy_time == 0
+                   ? 0
+                   : 100.0 * total_sndbuf_limited_time / total_busy_time)
+      .set<11>(proto_)
+      .set<12>(this->getTcpSendBufSize())
+      .set<13>(getPeerConfigVersion().val())
+      .set<14>(isSSL())
+      .set<15>(fd_);
 }
 
 bool Socket::peerIsClient() const {
@@ -2381,22 +2412,127 @@ X509* Socket::getPeerCert() const {
   return SSL_get_peer_certificate(ctx);
 }
 
-bool Socket::slowInDraining() {
-  if (!handshaken_ || sendq_.size() == 0) {
-    return false;
+SocketDrainStatusType Socket::getSlowSocketReason(unsigned* net_ltd_pct,
+                                                  unsigned* rwnd_ltd_pct,
+                                                  unsigned* sndbuf_ltd_pct) {
+  TCPInfo tcp_info;
+  int rv = deps_->getTCPInfo(&tcp_info, fd_);
+  if (rv != 0) {
+    return SocketDrainStatusType::NET_SLOW;
+  }
+  auto& s = health_stats_;
+  auto cur_busy = to_msec(tcp_info.busy_time > s.busy_time_
+                              ? tcp_info.busy_time - s.busy_time_
+                              : std::chrono::milliseconds(0));
+  auto cur_rwnd =
+      to_msec(tcp_info.rwnd_limited_time > s.rwnd_limited_time_
+                  ? tcp_info.rwnd_limited_time - s.rwnd_limited_time_
+                  : std::chrono::milliseconds(0));
+  auto cur_sndbuf =
+      to_msec(tcp_info.sndbuf_limited_time > s.sndbuf_limited_time_
+                  ? tcp_info.sndbuf_limited_time - s.sndbuf_limited_time_
+                  : std::chrono::milliseconds(0));
+  s.busy_time_ = to_msec(tcp_info.busy_time);
+  s.rwnd_limited_time_ = to_msec(tcp_info.rwnd_limited_time);
+  s.sndbuf_limited_time_ = to_msec(tcp_info.sndbuf_limited_time);
+  if (cur_busy.count() > 0) {
+    *rwnd_ltd_pct = 100.0 * cur_rwnd.count() / cur_busy.count();
+    *sndbuf_ltd_pct = 100.0 * cur_sndbuf.count() / cur_busy.count();
+    *net_ltd_pct = 100.0 - *rwnd_ltd_pct - *sndbuf_ltd_pct;
+    // If network was congested most of the time which prevented from
+    // attaining higher throughput mark the socket as slow.
+    if (*net_ltd_pct > 50) {
+      return SocketDrainStatusType::NET_SLOW;
+    }
+    if (*rwnd_ltd_pct > 50) {
+      return SocketDrainStatusType::RECV_SLOW;
+    }
   }
 
-  auto& envelope = sendq_.front();
-  auto age_in_ms = envelope.age() / 1000;
+  return SocketDrainStatusType::IDLE;
+}
 
-  if (std::chrono::milliseconds(age_in_ms) <
+// The socket is either stalled completely or just slow.
+// If the socket is stalled completely irrespective of whether it is active
+// socket or not we just go ahead and close it in Sender.
+// If the socket is not stalled completely.
+// 1. Check is made to verify if the socket is an active socket. A socket is
+//    active if it has bytes pending for delivery above the
+//    socket_idle_threshold for some percentage of socket_health_check period.
+// 2. If the socket is inactive socket, it is not closed.
+// 3. If the socket is active, check if the socket average throughput when
+//    active was way low than expected min_bytes_to_drain_per_second. If this
+//    is the case, get the TCPInfo to confirm if the socket has low
+//    throughput because of network.
+// 4. If network is congested, then we can close the socket if rate limiter
+//    allows to do so. In all other cases, socket is not closed.
+SocketDrainStatusType Socket::checkSocketHealth() {
+  // Close the active window if open.
+  auto& s = health_stats_;
+  if (s.active_start_time_ != SteadyTimestamp::min()) {
+    s.active_time_ +=
+        to_msec(deps_->getCurrentTimestamp() - s.active_start_time_);
+  }
+
+  SCOPE_EXIT {
+    // Reset counters.
+    s.active_time_ = std::chrono::milliseconds(0);
+    s.num_bytes_sent_ = 0;
+    s.active_start_time_ = SteadyTimestamp::min();
+    if (next_pos_ - drain_pos_ > getSettings().socket_idle_threshold) {
+      s.active_start_time_ = deps_->getCurrentTimestamp();
+    }
+  };
+
+  std::chrono::milliseconds health_check_period =
+      getSettings().socket_health_check_period;
+  if (!handshaken_ || health_check_period.count() == 0) {
+    return SocketDrainStatusType::UNKNOWN;
+  }
+  auto age_in_ms = sendq_.size() > 0 ? sendq_.front().age() / 1000 : 0;
+  auto is_active = health_check_period.count() *
+          getSettings().min_socket_idle_threshold_percent / 100.0 <
+      s.active_time_.count();
+  double rateKBps = s.num_bytes_sent_ * 1.0 / health_check_period.count();
+  cached_socket_throughput_ = rateKBps;
+  double min_rateKBps = getSettings().min_bytes_to_drain_per_second / 1e3;
+  auto decision = SocketDrainStatusType::UNKNOWN;
+  unsigned net_ltd_pct = 0, rwnd_ltd_pct = 0, sndbuf_ltd_pct = 0;
+  if (std::chrono::milliseconds(age_in_ms) >
       deps_->getSettings().max_time_to_allow_socket_drain) {
-    return false;
+    decision = SocketDrainStatusType::STALLED;
+  } else if (!is_active) {
+    decision = SocketDrainStatusType::IDLE;
+  } else if (rateKBps < min_rateKBps) {
+    decision =
+        getSlowSocketReason(&net_ltd_pct, &rwnd_ltd_pct, &sndbuf_ltd_pct);
+  } else {
+    decision = SocketDrainStatusType::ACTIVE;
   }
 
-  ld_info("Socket %s is slow in draining. Last drained %lu ms back.",
-          peer_name_.toString().c_str(),
-          age_in_ms);
-  return true;
+  if (decision != SocketDrainStatusType::UNKNOWN &&
+      decision != SocketDrainStatusType::IDLE &&
+      decision != SocketDrainStatusType::ACTIVE) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   5,
+                   "[%s]. Oldest msg %lums old, throughput %.3fKBps, active "
+                   "time %.3fs], decision %s, net %u%%, rwnd %u%%, sndbuf %u%%",
+                   peer_name_.toString().c_str(),
+                   age_in_ms,
+                   rateKBps,
+                   s.active_time_.count() / 1e3,
+                   socketDrainStatusToString(decision),
+                   net_ltd_pct,
+                   rwnd_ltd_pct,
+                   sndbuf_ltd_pct);
+  }
+  // Socket is having a normal throughput increment the busy_time for the
+  // socket. This is just an estimate, actual busy time might be lesser than
+  // this, this avoids a getsockopt call to fetch the busy time.
+  if (decision == SocketDrainStatusType::ACTIVE ||
+      decision == SocketDrainStatusType::UNKNOWN) {
+    s.busy_time_ += s.active_time_;
+  }
+  return decision;
 }
 }} // namespace facebook::logdevice

@@ -223,15 +223,20 @@ sidebar_label: Settings
 | incoming-messages-max-bytes-limit | maximum byte limit of unprocessed messages within the system. | 524288000 | requires&nbsp;restart |
 | inline-message-execution | Indicates whether message should be processed right after deserialization. Usually within new worker model all messages are processed after posting them into the work context. This option works only when worker context is run with previous eventloop architecture. | false | requires&nbsp;restart |
 | max-protocol | maximum version of LogDevice protocol that the server/client will accept | 99 |  |
-| max-time-to-allow-socket-drain | After hitting NOBUFS, amount of time a socket is allowed to successfully send a single message before it is closed. | 3min |  |
+| max-time-to-allow-socket-drain | If a socket does not drain a complete message for max-time-to-allow-socket-drain. Then the socket is closed. | 3min |  |
+| min-bytes-to-drain-per-second | Refer socket-health-check-period for details. | 1000000 |  |
+| min-socket-idle-threshold-percent | A socket is considered active if it had bytes pending in the socket above socket-idle-threshold for greater than min-socket-idle-threshold-percent of socket-health-check-period. | 50 |  |
 | nagle | enable Nagle's algorithm on TCP sockets. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | false |  |
 | outbuf-kb | max output buffer size (userspace extension of socket sendbuf) in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 32768 |  |
 | outbuf-socket-min-kb | Minimum outstanding bytes per socket in kb. Global sender's budget will be ignored if socket's outstanding bytes is less than this value. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 1 | server&nbsp;only |
 | outbufs-limit-per-peer-type | If disabled, per peer-type limit will not be enforced. | true | server&nbsp;only |
 | outbytes-mb | per-thread limit on bytes pending in output evbuffers (in MB) | 512 |  |
+| rate-limit-socket-closed | Max number of sockets closed in a socket health check period. | 1 |  |
 | rcvbuf-kb | TCP socket rcvbuf size in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | -1 |  |
 | read-messages | read up to this many incoming messages before returning to libevent | 128 |  |
 | sendbuf-kb | TCP socket sendbuf size in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | -1 |  |
+| socket-health-check-period | Time between consecutive socket health check. Every socket-health-check-period, a socket is closed, if it was not draining for max-time-to-allow-socket-drain or it was active but the throughput during the time it was active dropped belowmin-bytes-to-drain-per-second due to network congestion. | 1min |  |
+| socket-idle-threshold | A socket is considered idle if number of bytes pending in the socket is below or equal to this threshold. This is used along with min\_socket\_idle\_threshold\_percent to find active socket and select them for health check. Check socket-health-check-period for more details. | 1000000 |  |
 | tcp-keep-alive-intvl | TCP keepalive interval. The interval between successive probes.If negative the OS default will be used. | -1 |  |
 | tcp-keep-alive-probes | TCP keepalive probes. How many unacknowledged probes before the connection is considered broken. If negative the OS default will be used. | -1 |  |
 | tcp-keep-alive-time | TCP keepalive time. This is the time, in seconds, before the first probe will be sent. If negative the OS default will be used. | -1 |  |
