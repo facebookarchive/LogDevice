@@ -56,23 +56,28 @@ void ServerHealthMonitor::startUp() {
 
 void ServerHealthMonitor::monitorLoop() {
   last_entry_time_ = SteadyTimestamp::now();
-  folly::futures::sleep(sleep_period_)
-      .via(&executor_)
-      .then([this](folly::Try<folly::Unit>) mutable {
-        STAT_INCR(stats_, health_monitor_num_loops);
-
-        if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
-          shutdown_promise_.setValue();
-          return;
-        }
-        int64_t loop_entry_delay = msec_since(last_entry_time_);
-        internal_info_.health_monitor_delay_ =
-            (loop_entry_delay - sleep_period_.count() > kMaxLoopStall.count())
-            ? true
-            : false;
-        processReports();
-        monitorLoop();
-      });
+  sleep_semifuture_ =
+      folly::futures::sleep(sleep_period_)
+          .via(&executor_)
+          .then([this](folly::Try<folly::Unit>) mutable {
+            STAT_INCR(stats_, health_monitor_num_loops);
+            if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
+              shutdown_promise_.setValue();
+              return;
+            }
+            int64_t loop_entry_delay = msec_since(last_entry_time_);
+            internal_info_.health_monitor_delay_ =
+                (loop_entry_delay - sleep_period_.count() >
+                 kMaxLoopStall.count())
+                ? true
+                : false;
+            processReports();
+            if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
+              shutdown_promise_.setValue();
+              return;
+            }
+            monitorLoop();
+          });
 }
 void ServerHealthMonitor::updateVariables(TimePoint now) {
   std::for_each(internal_info_.worker_stalls_.begin(),
@@ -185,6 +190,7 @@ void ServerHealthMonitor::processReports() {
 
 folly::SemiFuture<folly::Unit> ServerHealthMonitor::shutdown() {
   shutdown_.exchange(true, std::memory_order::memory_order_relaxed);
+  executor_.add([this]() mutable { sleep_semifuture_.cancel(); });
   return shutdown_promise_.getSemiFuture();
 }
 

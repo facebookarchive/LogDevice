@@ -67,10 +67,12 @@ class ServerHealthMonitor : public HealthMonitor {
   static constexpr std::chrono::milliseconds kMaxLoopStall =
       std::chrono::milliseconds(50);
 
+  folly::Promise<folly::Unit> shutdown_promise_;
+  folly::SemiFuture<folly::Unit> sleep_semifuture_;
+
   folly::Executor& executor_;
   const std::chrono::milliseconds sleep_period_;
   std::atomic_bool shutdown_{false};
-  folly::Promise<folly::Unit> shutdown_promise_;
   std::chrono::steady_clock::time_point last_entry_time_;
   StatsHolder* stats_;
 
