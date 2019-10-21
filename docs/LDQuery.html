@@ -856,6 +856,9 @@
 <tr><td>write_mb</td><td style="text-align:center">real</td><td>Number of bytes that were written to the socket.</td></tr>
 <tr><td>read_cnt</td><td style="text-align:center">int</td><td>Number of messages that were read from the socket.</td></tr>
 <tr><td>write_cnt</td><td style="text-align:center">int</td><td>Number of messages that were written to the socket.</td></tr>
+<tr><td>bytes_per_second</td><td style="text-align:center">real</td><td>Socket throughput in the last health check period.</td></tr>
+<tr><td>rwnd_limited_pct</td><td style="text-align:center">real</td><td>Portion of last health check period, when socket throughput was limited by receiver.</td></tr>
+<tr><td>sndbuf_limited_pct</td><td style="text-align:center">real</td><td>Protion of last health check peiod, when socket throughput was limited by send buffer.</td></tr>
 <tr><td>proto</td><td style="text-align:center">int</td><td>Protocol that was handshaken. Do not trust this value if the socket's state is not active.</td></tr>
 <tr><td>sendbuf</td><td style="text-align:center">int</td><td>Size of the send buffer of the underlying TCP socket.</td></tr>
 <tr><td>peer_config_version</td><td style="text-align:center">int</td><td>Last config version that the peer advertised</td></tr>
