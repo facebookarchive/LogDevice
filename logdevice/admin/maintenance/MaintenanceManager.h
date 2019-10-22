@@ -78,10 +78,17 @@ class MaintenanceManagerDependencies {
   /*
    * Posts safety check request
    *
-   * @param shard_wf Set of references to ShardWorkflow for
-   *                 the shards for which we need to run safety check
-   * @param seq_wf   Set of references to SequencerWorkflow for
-   *                 the sequencer nodes for which we need to run safety check
+   * @param maintenance_state Current ClusterMaintenanceWrapper
+   * @param status_map        Current ShardAuthoritativeStatusMap
+   * @param nodes_config      Current NodesConfiguration
+   * @param shard_wf          Set of references to ShardWorkflow for
+   *                          the shards for which we need to run safety check
+   * @param seq_wf            Set of references to SequencerWorkflow for
+   *                          the sequencer nodes for which we need to run
+   *                          safety check
+   * @param safe_shards       Set of shards that have already passed safety
+   *                          checks or skipped safety check and can go down
+   *                          anytime
    *
    * @return folly::SemiFuture<SafetyCheckResult> A future whose promise
    * is fulfiled once we have results for all workflows
@@ -93,7 +100,8 @@ class MaintenanceManagerDependencies {
       const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
           nodes_config,
       const std::vector<const ShardWorkflow*>& shard_wf,
-      const std::vector<const SequencerWorkflow*>& seq_wf);
+      const std::vector<const SequencerWorkflow*>& seq_wf,
+      const ShardSet& safe_shards);
 
   // calls `update` on the NodesConfigManager
   virtual folly::SemiFuture<NCUpdateResult> postNodesConfigurationUpdate(

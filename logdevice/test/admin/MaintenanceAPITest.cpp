@@ -64,7 +64,7 @@ class MaintenanceAPITest : public IntegrationTestBase {
 };
 
 void MaintenanceAPITest::init() {
-  const size_t num_nodes = 5;
+  const size_t num_nodes = 6;
   const size_t num_shards = 2;
 
   Configuration::Nodes nodes;
@@ -85,7 +85,7 @@ void MaintenanceAPITest::init() {
   internal_log_attrs.set_maxWritesInFlight(2048);
 
   auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4}, 3, NodeLocationScope::NODE);
+      createMetaDataLogsConfig({0, 1, 2, 3, 4, 5}, 3, NodeLocationScope::NODE);
 
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
@@ -105,6 +105,7 @@ void MaintenanceAPITest::init() {
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")
+          .setParam("--max-unavailable-storage-capacity-pct", "80")
           .setParam("--loglevel", "debug")
           // Starts MaintenanceManager on N2
           .runMaintenanceManagerOn(maintenance_leader)
@@ -446,6 +447,148 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
       thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE, def.get_progress());
 }
 
+TEST_F(MaintenanceAPITest, MayDisappearInSequencerFailsSafetyCheck) {
+  init();
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+
+  // Create a maintenance that sets N1 to MAY_DISAPPEAR
+  thrift::MaintenanceDefinition request1;
+  request1.set_user("user1");
+  request1.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  request1.set_shards({mkShardID(1, -1)});
+  request1.set_sequencer_nodes({mkNodeID(1)});
+  request1.set_sequencer_target_state(SequencingState::DISABLED);
+  request1.set_group(true);
+  thrift::MaintenanceDefinitionResponse resp1;
+  admin_client->sync_applyMaintenance(resp1, request1);
+  ASSERT_EQ(1, resp1.get_maintenances().size());
+
+  wait_until("Maintenance for N1 transitions to COMPLETED", [&]() {
+    thrift::MaintenancesFilter request2;
+    request2.set_user("user1");
+    thrift::MaintenanceDefinitionResponse resp2;
+    admin_client->sync_getMaintenances(resp2, request2);
+    const auto& def = resp2.get_maintenances()[0];
+    return thrift::MaintenanceProgress::COMPLETED == def.get_progress();
+  });
+
+  // Create a maintenance that sets N3 to MAY_DISAPPEAR
+  // This should fail safety check becasue we will lose read
+  // availability with 2 nodes in MAY_DISAPPEAR
+  thrift::MaintenanceDefinition request3;
+  request3.set_user("user2");
+  request3.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  request3.set_shards({mkShardID(3, -1)});
+  request3.set_sequencer_target_state(SequencingState::DISABLED);
+  request3.set_group(true);
+  thrift::MaintenanceDefinitionResponse resp3;
+  admin_client->sync_applyMaintenance(resp3, request3);
+  ASSERT_EQ(1, resp3.get_maintenances().size());
+
+  wait_until("Maintenance for N3 transitions to BLOCKED_UNTIL_SAFE", [&]() {
+    thrift::MaintenancesFilter request4;
+    request4.set_user("user2");
+    thrift::MaintenanceDefinitionResponse resp4;
+    admin_client->sync_getMaintenances(resp4, request4);
+    const auto& def = resp4.get_maintenances()[0];
+    return thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE ==
+        def.get_progress();
+  });
+
+  // Now create a maintenance to set N4 to MAY_DISAPPEAR.
+  // This should fail safety check becasue we will lose read
+  // availability with 3 nodes in MAY_DISAPPEAR
+  thrift::MaintenanceDefinition request4;
+  request4.set_user("user3");
+  request4.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
+  request4.set_shards({mkShardID(4, -1)});
+  request4.set_sequencer_target_state(SequencingState::DISABLED);
+  request4.set_group(true);
+  thrift::MaintenanceDefinitionResponse resp4;
+  admin_client->sync_applyMaintenance(resp4, request4);
+  ASSERT_EQ(1, resp4.get_maintenances().size());
+
+  wait_until("Maintenance for N4 transitions to BLOCKED_UNTIL_SAFE", [&]() {
+    thrift::MaintenancesFilter request5;
+    request5.set_user("user3");
+    thrift::MaintenanceDefinitionResponse resp5;
+    admin_client->sync_getMaintenances(resp5, request5);
+    const auto& def = resp5.get_maintenances()[0];
+    return thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE ==
+        def.get_progress();
+  });
+
+  // Remove Maintenance from user1
+  thrift::RemoveMaintenancesRequest request6;
+  thrift::MaintenancesFilter filter6;
+  filter6.set_user("user1");
+  request6.set_filter(filter6);
+  thrift::RemoveMaintenancesResponse resp6;
+  admin_client->sync_removeMaintenances(resp6, request6);
+  // Let's wait until N1 is ENABLED again
+  {
+    thrift::NodesFilter filter;
+    thrift::NodeID node_id;
+    node_id.set_node_index(1);
+    filter.set_node(node_id);
+    thrift::NodesStateRequest request;
+    request.set_filter(filter);
+    thrift::NodesStateResponse response;
+    wait_until("All Shards in N1 are ENABLED", [&]() {
+      try {
+        admin_client->sync_getNodesState(response, request);
+        const auto& state = response.get_states()[0];
+        const auto& shard_states = state.shard_states_ref().value();
+        bool all_finished = true;
+        for (const auto& shard : shard_states) {
+          if (shard.get_storage_state() !=
+              membership::thrift::StorageState::READ_WRITE) {
+            all_finished = false;
+          }
+        }
+        return all_finished == true;
+      } catch (thrift::NodeNotReady& e) {
+        return false;
+      }
+      return false;
+    });
+  }
+
+  // Verify that maintenance for N4 is still blocked
+  thrift::MaintenancesFilter request7;
+  request7.set_user("user3");
+  thrift::MaintenanceDefinitionResponse resp7;
+  admin_client->sync_getMaintenances(resp7, request7);
+  const auto& def = resp7.get_maintenances()[0];
+  ASSERT_TRUE(def.last_check_impact_result_ref().has_value());
+  const auto& check_impact_result = def.last_check_impact_result_ref().value();
+  ASSERT_TRUE(check_impact_result.get_impact().size() > 0);
+  ASSERT_EQ(
+      thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE, def.get_progress());
+
+  // Remove Maintenance from user2
+  thrift::RemoveMaintenancesRequest request8;
+  thrift::MaintenancesFilter filter8;
+  filter8.set_user("user2");
+  request8.set_filter(filter8);
+  thrift::RemoveMaintenancesResponse resp8;
+  admin_client->sync_removeMaintenances(resp8, request8);
+
+  // Now N4's maintenance should be unblocked and run to completion
+  wait_until("Maintenance for N4 transitions to COMPLETED", [&]() {
+    thrift::MaintenancesFilter request9;
+    request9.set_user("user3");
+    thrift::MaintenanceDefinitionResponse resp9;
+    admin_client->sync_getMaintenances(resp9, request9);
+    const auto& tmpdef = resp9.get_maintenances()[0];
+    return thrift::MaintenanceProgress::COMPLETED == tmpdef.get_progress();
+  });
+}
+
 TEST_F(MaintenanceAPITest, RemoveMaintenancesInvalid) {
   init();
   cluster_->start();
@@ -590,7 +733,7 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
     thrift::NodesStateRequest request;
     thrift::NodesStateResponse response;
     admin_client->sync_getNodesState(response, request);
-    ASSERT_EQ(5, response.get_states().size());
+    ASSERT_EQ(6, response.get_states().size());
     for (const auto& state : response.get_states()) {
       ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
       const thrift::SequencerState& seq_state =

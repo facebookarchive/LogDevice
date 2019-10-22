@@ -79,7 +79,8 @@ MaintenanceManagerDependencies::postSafetyCheckRequest(
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_config,
     const std::vector<const ShardWorkflow*>& shard_wf,
-    const std::vector<const SequencerWorkflow*>& seq_wf) {
+    const std::vector<const SequencerWorkflow*>& seq_wf,
+    const ShardSet& safe_shards) {
   ld_check(safety_check_scheduler_);
   auto config = processor_->getConfig();
   ReplicationProperty repl =
@@ -92,6 +93,7 @@ MaintenanceManagerDependencies::postSafetyCheckRequest(
                                            nodes_config,
                                            shard_wf,
                                            seq_wf,
+                                           safe_shards,
                                            biggest_replication_scope);
 }
 
@@ -1310,19 +1312,19 @@ void MaintenanceManager::processSafetyCheckResult(
     SafetyCheckScheduler::Result result) {
   ld_debug("Processing Safety check results");
   for (auto shard : result.safe_shards) {
-    ld_debug("Safety check passed for shard:%s", toString(shard).c_str());
-    // We should have an active workflow for every shard in result
-    ld_check(active_shard_workflows_.count(shard));
-    // And its status should be waiting on safety check results
-    ld_check(active_shard_workflows_.at(shard).second ==
-             MaintenanceStatus::AWAITING_SAFETY_CHECK);
-    active_shard_workflows_[shard].second =
-        MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES;
-    ld_debug("MaintenanceStatus for Shard:%s updated to %s",
-             toString(shard).c_str(),
-             apache::thrift::util::enumNameSafe(
-                 active_shard_workflows_[shard].second)
-                 .c_str());
+    if (active_shard_workflows_.at(shard).second ==
+        MaintenanceStatus::AWAITING_SAFETY_CHECK) {
+      ld_debug("Safety check passed for shard:%s", toString(shard).c_str());
+      // We should have an active workflow for every shard in result
+      ld_check(active_shard_workflows_.count(shard));
+      active_shard_workflows_[shard].second =
+          MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES;
+      ld_debug("MaintenanceStatus for Shard:%s updated to %s",
+               toString(shard).c_str(),
+               apache::thrift::util::enumNameSafe(
+                   active_shard_workflows_[shard].second)
+                   .c_str());
+    }
   }
 
   for (auto node : result.safe_sequencers) {
@@ -1631,9 +1633,26 @@ membership::StateTransitionCondition MaintenanceManager::getCondition(
 
 folly::SemiFuture<SafetyCheckResult> MaintenanceManager::scheduleSafetyCheck() {
   std::vector<const ShardWorkflow*> shard_wf;
+  ShardSet safe_shards;
   for (const auto& it : active_shard_workflows_) {
     if (it.second.second == MaintenanceStatus::AWAITING_SAFETY_CHECK) {
       shard_wf.push_back(it.second.first.get());
+      continue;
+    }
+    // Add the Shards that are in RW_TO_RO, RO and DM to set of safe shards
+    // This set indicates the shards that have passed safety check previously
+    // and can go down anytime or had safety check skipped and are down. For
+    // the purposes of new safety checks, these shards should be considered as
+    // disabled.
+    // Note: Shards whose state is NONE or NONE_TO_RO should not affect the
+    // outcome of the safety check because they are already considered to be
+    // disabled
+    auto storageState = getStorageStateInternal(it.first);
+    if (storageState.hasValue() &&
+        (storageState.value() == membership::StorageState::RW_TO_RO ||
+         storageState.value() == membership::StorageState::READ_ONLY ||
+         storageState.value() == membership::StorageState::DATA_MIGRATION)) {
+      safe_shards.insert(it.first);
     }
   }
   std::vector<const SequencerWorkflow*> seq_wf;
@@ -1653,7 +1672,8 @@ folly::SemiFuture<SafetyCheckResult> MaintenanceManager::scheduleSafetyCheck() {
         event_log_rebuilding_set_->toShardStatusMap(*nodes_config_),
         nodes_config_,
         shard_wf,
-        seq_wf);
+        seq_wf,
+        safe_shards);
   }
 }
 

@@ -95,6 +95,7 @@ class SafetyCheckScheduler {
           nodes_config,
       const std::vector<const ShardWorkflow*>& shard_wf,
       const std::vector<const SequencerWorkflow*>& seq_wf,
+      const ShardSet& safe_shards,
       NodeLocationScope biggest_replication_scope) const;
 
   virtual ~SafetyCheckScheduler() {}

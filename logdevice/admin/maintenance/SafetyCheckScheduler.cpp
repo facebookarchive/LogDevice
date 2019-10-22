@@ -23,6 +23,7 @@ SafetyCheckScheduler::schedule(
         nodes_config,
     const std::vector<const ShardWorkflow*>& shard_wf,
     const std::vector<const SequencerWorkflow*>& seq_wf,
+    const ShardSet& safe_shards,
     NodeLocationScope biggest_replication_scope) const {
   // Build an empty Result object
   Result result;
@@ -40,6 +41,7 @@ SafetyCheckScheduler::schedule(
   }
   // Execute Progressively.
   ExecutionState state;
+  state.result.safe_shards.insert(safe_shards.begin(), safe_shards.end());
   state.plan = std::move(plan);
   return executePlan(state, status_map, nodes_config);
 }

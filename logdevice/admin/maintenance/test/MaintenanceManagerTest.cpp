@@ -178,7 +178,8 @@ class MockMaintenanceManagerDependencies
       const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
           nodes_config,
       const std::vector<const ShardWorkflow*>& shard_wf,
-      const std::vector<const SequencerWorkflow*>& seq_wf) override {
+      const std::vector<const SequencerWorkflow*>& seq_wf,
+      const ShardSet& /* unused */) override {
     // Verify that Safety check is requested only for expected shards
     for (auto wf : shard_wf) {
       if (std::find(test_->safety_check_shards_.begin(),

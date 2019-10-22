@@ -514,7 +514,10 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
   // G2 => UNSAFE (N11:S0, N11) [blocked].
   // G4 => SAFE (, N7) -> disabled
 
-  ShardSet safe_shards_to_disable;
+  // Say N13 already passed safety check. We expect it to
+  // be included in the safety check result since it is
+  // being passed as safe shard
+  ShardSet safe_shards_to_disable{ShardID(13, 0)};
   SafetyCheckScheduler::NodeIndexSet safe_sequencers_to_disable;
 
   Impact bad_impact;
@@ -525,6 +528,7 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
 
   // G1 test. => SAFE
   mock.shard_impacts.push_back(SafetyCheckSchedulerMock::CannedCheckImpact{
+      .disabled_shards = safe_shards_to_disable,
       .shards = {{ShardID(1, 0)}},
       .sequencers = {1},
       .impact = safe_impact,
@@ -564,6 +568,7 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
                          nodes_config,
                          shard_wf,
                          seq_wf,
+                         {ShardID(13, 0)},
                          NodeLocationScope::RACK);
   // in test everything happens sync.
   ASSERT_TRUE(f.isReady());
@@ -574,7 +579,8 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
 
   ASSERT_TRUE(result.hasValue());
 
-  ASSERT_EQ(ShardSet({ShardID(1, 0), ShardID(2, 0)}), result->safe_shards);
+  ASSERT_EQ(ShardSet({ShardID(13, 0), ShardID(1, 0), ShardID(2, 0)}),
+            result->safe_shards);
   ASSERT_EQ(
       SafetyCheckScheduler::NodeIndexSet({1, 7}), result->safe_sequencers);
 
@@ -590,7 +596,7 @@ TEST(SafetyCheckerSchedulerTest, EmptyScheduling) {
   SafetyCheckSchedulerMock mock;
 
   auto f = mock.schedule(
-      wrapper, status_map, nodes_config, {}, {}, NodeLocationScope::RACK);
+      wrapper, status_map, nodes_config, {}, {}, {}, NodeLocationScope::RACK);
   // in test everything happens sync.
   ASSERT_TRUE(f.isReady());
   auto result = std::move(f).get();
