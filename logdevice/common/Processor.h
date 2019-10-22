@@ -58,6 +58,7 @@ class ProcessorImpl;
 class RebuildingSupervisor;
 class Request;
 class SequencerBatching;
+class ReadStreamDebugInfoSamplingConfig;
 class SequencerLocator;
 class StatsHolder;
 class TraceLogger;
@@ -478,11 +479,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    */
   ResourceBudget::Token getIncomingMessageToken(size_t payload_size);
 
-  /**
-   * Check if sampling of all read streams debug info is allowed for given
-   * Client Session ID.
-   */
-  bool isReadStreamDebugInfoSamplingAllowed(const std::string&) const;
+  ReadStreamDebugInfoSamplingConfig& getDebugClientConfig();
 
  private:
   // Make runningOnStorageNode() return true. Used for tests.

@@ -105,7 +105,10 @@ class ProcessorImpl {
                 : settings->incoming_messages_max_bytes_limit),
         background_init_flag_(),
         background_queue_(),
-        nc_publisher_(processor->config_, settings, std::move(trace_logger)) {}
+        nc_publisher_(processor->config_, settings, std::move(trace_logger)),
+        read_stream_debug_info_sampling_config_(
+            processor->getPluginRegistry(),
+            settings->all_read_streams_debug_config_path) {}
 
   ~ProcessorImpl() {
     for (auto& workers : all_workers_) {
@@ -131,8 +134,7 @@ class ProcessorImpl {
   std::vector<std::unique_ptr<EventLoop>> ev_loops_;
   std::unique_ptr<AllSequencers> allSequencers_;
   std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
-  std::unique_ptr<ReadStreamDebugInfoSamplingConfig>
-      read_stream_debug_info_sampling_config_;
+  ReadStreamDebugInfoSamplingConfig read_stream_debug_info_sampling_config_;
   // If anything depends on worker make sure that it is deleted in the
   // destructor above.
 };
@@ -259,20 +261,11 @@ void Processor::init() {
     }
   }
 
-  impl_->read_stream_debug_info_sampling_config_ =
-      std::make_unique<ReadStreamDebugInfoSamplingConfig>(
-          getPluginRegistry(), settings()->all_read_streams_debug_config_path);
-
   initialized_.store(true, std::memory_order_relaxed);
 }
 
-bool Processor::isReadStreamDebugInfoSamplingAllowed(
-    const std::string& csid) const {
-  if (!settings()->enable_all_read_streams_debug) {
-    return false;
-  }
-  return impl_->read_stream_debug_info_sampling_config_
-      ->isReadStreamDebugInfoSamplingAllowed(csid);
+ReadStreamDebugInfoSamplingConfig& Processor::getDebugClientConfig() {
+  return impl_->read_stream_debug_info_sampling_config_;
 }
 
 workers_t Processor::createWorkerPool(WorkerType type, size_t count) {

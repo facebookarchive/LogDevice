@@ -30,6 +30,7 @@
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/Timestamp.h"
@@ -336,7 +337,8 @@ void ClientReadStream::sampleDebugInfo(
     const ClientReadStream::ClientReadStreamDebugInfo& info) const {
   Worker* w = Worker::onThisThread(false);
   if (!(w && w->processor_ &&
-        w->processor_->isReadStreamDebugInfoSamplingAllowed(info.csid))) {
+        w->processor_->getDebugClientConfig()
+            .isReadStreamDebugInfoSamplingAllowed(info.csid))) {
     return;
   }
 
