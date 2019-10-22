@@ -677,7 +677,7 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
       read_lock.unlock();
       folly::SharedMutex::WriteHolder write_lock(nodes_mutex_);
       if (nodes_.find(id) == nodes_.end()) {
-        Node& new_node = nodes_[sender_idx];
+        Node& new_node = nodes_[id];
         new_node.last_suspected_at_ = initial_time_ms_;
       }
       read_lock = folly::SharedMutex::ReadHolder(std::move(write_lock));
