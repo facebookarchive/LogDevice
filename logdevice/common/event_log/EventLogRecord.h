@@ -10,9 +10,9 @@
 #include <memory>
 #include <type_traits>
 
-#include <folly/Demangle.h>
 #include <folly/Memory.h>
 #include <folly/Portability.h>
+#include <folly/lang/CString.h>
 
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/NodeID.h"
