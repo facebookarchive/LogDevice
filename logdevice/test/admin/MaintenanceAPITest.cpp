@@ -869,7 +869,7 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
     thrift::NodesStateRequest request;
     thrift::NodesStateResponse response;
     admin_client->sync_getNodesState(response, request);
-    ASSERT_EQ(5, response.get_states().size());
+    ASSERT_EQ(6, response.get_states().size());
     for (const auto& state : response.get_states()) {
       ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
       const thrift::SequencerState& seq_state =
