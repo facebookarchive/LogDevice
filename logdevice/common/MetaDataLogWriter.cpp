@@ -275,7 +275,6 @@ RunAppenderStatus MetaDataLogWriter::runAppender(Appender* appender) {
       // that the abort request won't cancel a WriteMetaDataRecord that actually
       // does append.
 
-      ld_check(current_worker_ != worker_id_t(-1));
       abortRecovery();
 
       // E::INPROGRESS will cause the metadata appender buffered on worker
