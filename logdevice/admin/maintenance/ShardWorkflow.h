@@ -51,9 +51,10 @@ class ShardWorkflow {
    * Computes the new MaintenanceStatus based on the parameters
    * passed
    *
-   * @param shard_state     The membership ShardState in NC
-   * @param data_health     ShardDataHealth for the shard
-   * @param rebuilding_mode RebuildingMode for the shard
+   * @param shard_state           The membership ShardState in NC
+   * @param data_health           ShardDataHealth for the shard
+   * @param rebuilding_mode       RebuildingMode for the shard
+   * @param is_non_authoritative  Is current rebuilding non authoritative.
    * @param node_gossip_state The gossip state of the node for this shard
    *
    * @return folly::SemiFuture<MaintenanceStatus> A SemiFuture out of
@@ -66,6 +67,7 @@ class ShardWorkflow {
   run(const membership::ShardState& shard_state,
       ShardDataHealth data_health,
       RebuildingMode rebuilding_mode,
+      bool is_non_authoritative,
       ClusterStateNodeState node_gossip_state);
 
   // Returns the ShardID for this workflow
@@ -156,6 +158,9 @@ class ShardWorkflow {
   // shard.
   // Gets updated every time `run` is called
   ShardDataHealth current_data_health_;
+  // True if current rebuilding is non authoritative
+  // Gets updated every time `run` is called
+  bool current_rebuilding_is_non_authoritative_;
   // The last known gossip state for the node.
   ClusterStateNodeState gossip_state_;
   // The last RebuildingMode as informed by the MM for this

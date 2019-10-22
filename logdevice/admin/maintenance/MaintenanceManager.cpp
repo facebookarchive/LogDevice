@@ -1228,6 +1228,7 @@ void MaintenanceManager::processShardWorkflowResult(
       case MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION:
       case MaintenanceStatus::AWAITING_SAFETY_CHECK:
       case MaintenanceStatus::AWAITING_DATA_REBUILDING:
+      case MaintenanceStatus::REBUILDING_IS_BLOCKED:
       case MaintenanceStatus::AWAITING_START_DATA_MIGRATION:
       case MaintenanceStatus::RETRY:
         if (active_shard_workflows_[shard].first->getTargetOpStates().count(
@@ -1721,6 +1722,7 @@ MaintenanceManager::runShardWorkflows() {
     futures.push_back(wf->run(current_storage_state.value(),
                               getShardDataHealthInternal(shard_id).value(),
                               getCurrentRebuildingMode(shard_id),
+                              isRebuildingNonAuthoritative(shard_id),
                               gossip_state));
   }
   return std::make_pair(std::move(shards), std::move(futures));
@@ -1885,6 +1887,17 @@ RebuildingMode MaintenanceManager::getCurrentRebuildingMode(ShardID shard) {
   ld_check(event_log_rebuilding_set_);
   return event_log_rebuilding_set_->getRebuildingMode(
       shard.node(), shard.shard());
+}
+
+bool MaintenanceManager::isRebuildingNonAuthoritative(
+    const ShardID& shard) const {
+  ld_check(event_log_rebuilding_set_);
+  auto node_info =
+      event_log_rebuilding_set_->getNodeInfo(shard.node(), shard.shard());
+  if (node_info == nullptr) {
+    return false;
+  }
+  return node_info->rebuildingIsNonAuthoritative();
 }
 
 /* static */

@@ -21,6 +21,7 @@ folly::SemiFuture<MaintenanceStatus>
 ShardWorkflow::run(const membership::ShardState& shard_state,
                    ShardDataHealth data_health,
                    RebuildingMode rebuilding_mode,
+                   bool is_non_authoritative,
                    ClusterStateNodeState node_gossip_state) {
   ld_spew("%s",
           folly::format(
@@ -46,6 +47,7 @@ ShardWorkflow::run(const membership::ShardState& shard_state,
   current_data_health_ = data_health;
   gossip_state_ = node_gossip_state;
   current_rebuilding_mode_ = rebuilding_mode;
+  current_rebuilding_is_non_authoritative_ = is_non_authoritative;
   event_.reset();
   if (shard_state.manual_override) {
     updateStatus(MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE);
@@ -188,6 +190,9 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
         expected_storage_state_transition_ =
             membership::StorageStateTransition::DATA_MIGRATION_COMPLETED;
         updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+      } else if (current_data_health_ == ShardDataHealth::UNAVAILABLE &&
+                 current_rebuilding_is_non_authoritative_) {
+        updateStatus(MaintenanceStatus::REBUILDING_IS_BLOCKED);
       } else {
         updateStatus(MaintenanceStatus::AWAITING_DATA_REBUILDING);
       }

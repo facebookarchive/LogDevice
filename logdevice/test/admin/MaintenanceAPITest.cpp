@@ -8,6 +8,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/Conv.h"
@@ -778,6 +779,41 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
   // Let's wait until the maintenance is applied.
   IntegrationTestUtils::waitUntilShardsHaveEventLogState(
       client, expected_shards, AuthoritativeStatus::UNAVAILABLE, true);
+
+  // wait till the MaintenanceStatus is REBUILDING_IS_BLOCKED
+  {
+    thrift::NodesFilter filter;
+    thrift::NodeID node_id;
+    node_id.set_node_index(0);
+    filter.set_node(node_id);
+    thrift::NodesStateRequest request;
+    request.set_filter(filter);
+    thrift::NodesStateResponse response;
+    wait_until("Maintenance Status is REBUILDING_IS_BLOCKED for N0", [&]() {
+      try {
+        admin_client->sync_getNodesState(response, request);
+        const auto& state = response.get_states()[0];
+        const auto& shard_states = state.shard_states_ref().value();
+        // We need to wait for all shard maintenances to finish
+        bool all_shards_blocked = true;
+        for (const auto& shard : shard_states) {
+          if (shard.maintenance_ref().has_value()) {
+            const auto& maintenance_progress = shard.maintenance_ref().value();
+            if (maintenance_progress.get_status() !=
+                MaintenanceStatus::REBUILDING_IS_BLOCKED) {
+              all_shards_blocked = false;
+            }
+          }
+        }
+        return all_shards_blocked == true;
+      } catch (thrift::NodeNotReady& e) {
+        return false;
+      }
+      return false;
+    });
+  }
+
+  ld_info("Rebuilding is blocked. Proceeding with unblocking...");
 
   thrift::MarkAllShardsUnrecoverableRequest request;
   request.set_user("test");
