@@ -108,7 +108,8 @@ bool ServerHealthMonitor::isOverloaded(TimePoint now,
                   // Number of queue stalls during this period.
                   auto period_count = t.count(
                       now - p * half_period, now - (p - 2) * half_period);
-                  if ((period_sum >= max_queue_stall_duration_) &&
+                  if ((period_count > 0) &&
+                      (period_sum >= max_queue_stall_duration_) &&
                       (period_sum / period_count >= max_queue_stalls_avg_)) {
                     return true;
                   }
@@ -140,7 +141,7 @@ ServerHealthMonitor::isStalled(TimePoint now,
                // Number of request stalls during this period.
                auto period_count =
                    t.count(now - p * half_period, now - (p - 2) * half_period);
-               if (period_count > 0 &&
+               if ((period_count > 0) &&
                    (period_sum / period_count >= max_stalls_avg_)) {
                  // Critically stalled requests are those whose duration is
                  // equal to or greater than the sleep_period_. These represent
