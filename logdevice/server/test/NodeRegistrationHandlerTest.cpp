@@ -59,8 +59,10 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
 
   folly::Expected<node_index_t, E> registerNode(ServerSettings set,
                                                 AdminServerSettings admin_set) {
+    auto updateable_nc = std::make_shared<UpdateableNodesConfiguration>();
+    updateable_nc->update(getNodesConfiguration());
     NodeRegistrationHandler handler{
-        std::move(set), std::move(admin_set), getNodesConfiguration(), store_};
+        std::move(set), std::move(admin_set), updateable_nc, store_};
     return handler.registerSelf(NodeIndicesAllocator{});
   }
 
@@ -126,8 +128,10 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   settings.storage_capacity = 23;
   settings.admin_enabled = false;
 
+  auto updateable_nc = std::make_shared<UpdateableNodesConfiguration>();
+  updateable_nc->update(getNodesConfiguration());
   NodeRegistrationHandler handler{
-      settings, admin_settings, getNodesConfiguration(), store_};
+      settings, admin_settings, updateable_nc, store_};
   auto status = handler.updateSelf(index);
   ASSERT_EQ(Status::OK, status);
 
@@ -168,8 +172,10 @@ TEST_F(NodeRegistrationHandlerTest, testSameUpdateNoop) {
   ASSERT_TRUE(add_res.hasValue());
 
   // Applying an update with the same setting should return UPTODATE.
+  auto updateable_nc = std::make_shared<UpdateableNodesConfiguration>();
+  updateable_nc->update(getNodesConfiguration());
   NodeRegistrationHandler handler{
-      settings, admin_settings, getNodesConfiguration(), store_};
+      settings, admin_settings, updateable_nc, store_};
   auto status = handler.updateSelf(add_res.value());
   ASSERT_EQ(Status::UPTODATE, status);
 }

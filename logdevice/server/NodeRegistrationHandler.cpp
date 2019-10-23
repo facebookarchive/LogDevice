@@ -30,8 +30,8 @@ NodeRegistrationHandler::registerSelf(NodeIndicesAllocator allocator) {
   node_index_t my_idx;
   auto result = RetryHandler<Status>::syncRun(
       [this, &my_idx, &allocator](size_t trial_num) -> Status {
-        auto idxs =
-            allocator.allocate(*nodes_configuration_->getServiceDiscovery(), 1);
+        auto idxs = allocator.allocate(
+            *getNodesConfiguration().getServiceDiscovery(), 1);
         ld_assert(idxs.size() > 0);
         my_idx = idxs.front();
         ld_info(
@@ -150,11 +150,11 @@ NodeRegistrationHandler::buildSelfUpdate(node_index_t my_idx,
         std::move(updateBuilderFromSettings(my_idx))
             .buildAddNodeUpdate(
                 update,
-                nodes_configuration_->getSequencerMembership()->getVersion(),
-                nodes_configuration_->getStorageMembership()->getVersion());
+                getNodesConfiguration().getSequencerMembership()->getVersion(),
+                getNodesConfiguration().getStorageMembership()->getVersion());
   } else {
     result = std::move(updateBuilderFromSettings(my_idx))
-                 .buildUpdateNodeUpdate(update, *nodes_configuration_);
+                 .buildUpdateNodeUpdate(update, getNodesConfiguration());
   }
   if (result.status != Status::OK) {
     ld_error("Failed building selfUpdate: %s", result.message.c_str());
@@ -169,7 +169,7 @@ Status NodeRegistrationHandler::applyUpdate(
     return Status::UPTODATE;
   }
 
-  auto new_config = nodes_configuration_->applyUpdate(std::move(update));
+  auto new_config = getNodesConfiguration().applyUpdate(std::move(update));
   if (new_config == nullptr) {
     return err;
   }
@@ -181,10 +181,32 @@ Status NodeRegistrationHandler::applyUpdate(
 
   NodesConfigurationStore::version_t new_version;
   std::string config_out;
-  return store_->updateConfigSync(std::move(nc_serialized),
-                                  nodes_configuration_->getVersion(),
-                                  &new_version,
-                                  &config_out);
+  auto status = store_->updateConfigSync(std::move(nc_serialized),
+                                         getNodesConfiguration().getVersion(),
+                                         &new_version,
+                                         &config_out);
+  if (status == Status::VERSION_MISMATCH) {
+    // There's a new NC, let's refresh our updatable.
+    auto new_nc = NodesConfigurationCodec::deserialize(config_out);
+    if (new_nc == nullptr) {
+      ld_error("Got a NodesConfiguration version mismatch during update, but "
+               "failed to deserialize the new version: %s",
+               error_name(err));
+      return err;
+    }
+
+    ld_info("Got a NodesConfiguration version mismatch during update. "
+            "Updating NC version from %ld to %ld",
+            getNodesConfiguration().getVersion().val(),
+            new_nc->getVersion().val());
+    nodes_configuration_->update(std::move(new_nc));
+  }
+  return status;
+}
+
+const NodesConfiguration&
+NodeRegistrationHandler::getNodesConfiguration() const {
+  return *nodes_configuration_->get();
 }
 
 }} // namespace facebook::logdevice

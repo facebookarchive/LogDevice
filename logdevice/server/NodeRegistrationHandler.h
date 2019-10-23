@@ -10,6 +10,7 @@
 #include <folly/Expected.h>
 
 #include "logdevice/admin/settings/AdminServerSettings.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/nodes/NodeIndicesAllocator.h"
 #include "logdevice/common/configuration/nodes/NodeUpdateBuilder.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
@@ -29,8 +30,7 @@ class NodeRegistrationHandler {
   NodeRegistrationHandler(
       ServerSettings settings,
       AdminServerSettings admin_settings,
-      std::shared_ptr<const configuration::nodes::NodesConfiguration>
-          nodes_configuration,
+      std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration,
       std::shared_ptr<configuration::nodes::NodesConfigurationStore> store)
       : server_settings_(std::move(settings)),
         admin_server_settings_(std::move(admin_settings)),
@@ -70,10 +70,11 @@ class NodeRegistrationHandler {
    */
   Status applyUpdate(configuration::nodes::NodesConfiguration::Update) const;
 
+  const NodesConfiguration& getNodesConfiguration() const;
+
   ServerSettings server_settings_;
   AdminServerSettings admin_server_settings_;
-  std::shared_ptr<const configuration::nodes::NodesConfiguration>
-      nodes_configuration_;
+  std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_;
   std::shared_ptr<configuration::nodes::NodesConfigurationStore> store_;
 };
 
