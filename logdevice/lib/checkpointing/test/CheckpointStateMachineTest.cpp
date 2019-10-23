@@ -111,3 +111,61 @@ TEST_F(CheckpointStateMachineTest, DeserializeDeltaRemove) {
   ASSERT_NE(nullptr, ptr);
   EXPECT_EQ(checkpoint_delta, *ptr);
 }
+
+TEST_F(CheckpointStateMachineTest, AppliesDeltaForUpdate) {
+  Checkpoint checkpoint_1;
+  checkpoint_1.log_lsn_map = {{4, 3}, {3, 2}};
+  checkpoint_1.version = 1;
+  Checkpoint checkpoint_2;
+  checkpoint_2.log_lsn_map = {{2, 3}, {1, 9}};
+  CheckpointState checkpoint_state;
+  checkpoint_state.checkpoints = std::map<std::string, Checkpoint>(
+      {{"customer1", checkpoint_1}, {"customer2", checkpoint_2}});
+  checkpoint_state.version = 5;
+
+  Checkpoint checkpoint;
+  checkpoint.log_lsn_map = {{1, 5}, {6, 7}};
+  checkpoint.version = 1;
+  UpdateCheckpoint update;
+  update.customer_id = "customer1";
+  update.checkpoint = checkpoint;
+  CheckpointDelta checkpoint_delta;
+  checkpoint_delta.set_update_checkpoint(update);
+
+  std::string failure_reason;
+  int rv = state_machine_->applyDelta(checkpoint_delta,
+                                      checkpoint_state,
+                                      60,
+                                      std::chrono::milliseconds(0),
+                                      failure_reason);
+  EXPECT_EQ(0, rv);
+  EXPECT_EQ("", failure_reason);
+
+  EXPECT_EQ(2, checkpoint_state.checkpoints.size());
+  EXPECT_EQ(checkpoint, checkpoint_state.checkpoints["customer1"]);
+  EXPECT_EQ(checkpoint_2, checkpoint_state.checkpoints["customer2"]);
+  EXPECT_EQ(60, checkpoint_state.version);
+}
+
+TEST_F(CheckpointStateMachineTest, AppliesDeltaWrongDeltaType) {
+  Checkpoint checkpoint_1;
+  checkpoint_1.log_lsn_map = {{4, 3}, {3, 2}};
+  checkpoint_1.version = 1;
+  Checkpoint checkpoint_2;
+  checkpoint_2.log_lsn_map = {{2, 3}, {1, 9}};
+  CheckpointState checkpoint_state;
+  checkpoint_state.checkpoints = std::map<std::string, Checkpoint>(
+      {{"customer1", checkpoint_1}, {"customer2", checkpoint_2}});
+  checkpoint_state.version = 5;
+
+  CheckpointDelta checkpoint_delta;
+
+  std::string failure_reason;
+  int rv = state_machine_->applyDelta(checkpoint_delta,
+                                      checkpoint_state,
+                                      60,
+                                      std::chrono::milliseconds(0),
+                                      failure_reason);
+  EXPECT_EQ(-1, rv);
+  EXPECT_EQ("Unknown type", failure_reason);
+}

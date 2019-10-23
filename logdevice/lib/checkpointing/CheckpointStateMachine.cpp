@@ -56,13 +56,28 @@ CheckpointStateMachine::deserializeDelta(Payload payload) {
   return delta;
 }
 
-int CheckpointStateMachine::applyDelta(const CheckpointDelta&,
-                                       CheckpointState&,
-                                       lsn_t,
+int CheckpointStateMachine::applyDelta(const CheckpointDelta& delta,
+                                       CheckpointState& state,
+                                       lsn_t version,
                                        std::chrono::milliseconds,
-                                       std::string&) {
-  // TODO: Not implemented
-  return 0;
+                                       std::string& failure_reason) {
+  auto type = delta.getType();
+  switch (type) {
+    case CheckpointDelta::Type::update_checkpoint: {
+      state.checkpoints[delta.get_update_checkpoint().customer_id] =
+          delta.get_update_checkpoint().checkpoint;
+      state.set_version(version);
+      return 0;
+    }
+    case CheckpointDelta::Type::remove_checkpoint: {
+      // TODO: Not implemented
+      return 0;
+    }
+    default:
+      ld_warning("Unknown type of CheckpointDelta. Not applying the delta");
+      failure_reason = "Unknown type";
+      return -1;
+  }
 }
 
 int CheckpointStateMachine::serializeState(const CheckpointState& state,
