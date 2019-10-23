@@ -1507,7 +1507,7 @@ TEST_P(ReadingIntegrationTest, UnderreplicatedRegion) {
   // "rebuilding mark_dirty" seems to indicate success.
   auto command_ok = [](std::string output) {
     // These admin commands output a few lines of human-readable things like
-    // "Clearing dirty ranges and writting checkpoint for shard %u...",
+    // "Clearing dirty ranges and writing checkpoint for shard %u...",
     // followed by two lines "Done." and "END".
     const std::string expected = "Done.\r\n";
     return output.size() >= expected.size() &&

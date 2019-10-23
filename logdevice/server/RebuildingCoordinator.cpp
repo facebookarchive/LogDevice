@@ -379,10 +379,10 @@ void RebuildingCoordinator::onMarkerWrittenForShard(uint32_t shard,
                                                     lsn_t version,
                                                     Status status) {
   if (status != E::OK) {
-    ld_error("Error writting RebuildingCompleteMetadata for shard %u.", shard);
+    ld_error("Error writing RebuildingCompleteMetadata for shard %u.", shard);
     // It's likely that the failing disk on which this shard resides has not
     // been replaced yet. Once the disk is replaced, logdeviced will be
-    // restarted and we will try writting the marker again.
+    // restarted and we will try writing the marker again.
     return;
   }
 

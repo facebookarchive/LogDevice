@@ -22,7 +22,7 @@
 
 using namespace facebook::logdevice;
 
-// Convenient shortcuts for writting ShardIDs.
+// Convenient shortcuts for writing ShardIDs.
 #define N0S0 ShardID(0, 0)
 #define N1S0 ShardID(1, 0)
 #define N2S0 ShardID(2, 0)

@@ -5777,7 +5777,7 @@ int PartitionedRocksDBStore::writeRebuildingRanges(
     RebuildingRangesMetadata& rrm) {
   int rv = writeStoreMetadata(rrm, LocalLogStore::WriteOptions());
   if (rv != 0) {
-    ld_error("Error writting RebuildingRangesMetadata for shard %u: %s\r\n",
+    ld_error("Error writing RebuildingRangesMetadata for shard %u: %s\r\n",
              getShardIdx(),
              error_description(err));
     return -1;

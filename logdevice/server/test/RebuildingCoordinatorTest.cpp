@@ -29,7 +29,7 @@
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
 
-// Convenient shortcuts for writting ShardIDs.
+// Convenient shortcuts for writing ShardIDs.
 #define N0S1 ShardID(0, 1)
 #define N1S1 ShardID(1, 1)
 #define N2S1 ShardID(2, 1)

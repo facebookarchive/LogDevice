@@ -682,8 +682,8 @@ Tracks all sockets on all nodes in the cluster.
 | node\_id | int | Node ID this row is for. |
 | state | string | State of the socket.   I: The socket is Inactive;   C: The socket is connecting;   H: The socket is doing the handshake at the LD protocol level;   A: The socket is active. |
 | name | string | Name of the socket. If the other end is a client, the format is similar to the column "client" of the table "catchup\_queues" and the column "client" of the table "readers". If the other end is another node in the cluster, describes that's node's id and ip. |
-| pending\_kb | real | Number of bytes that are available for writting on the socket's output evbuffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writting them. |
-| available\_kb | real | Number of bytes that are available for reading on the socket's input evbuffer.  If this value is high this usually means that the other end is writting faster than this node is able to read. |
+| pending\_kb | real | Number of bytes that are available for writing on the socket's output evbuffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writing them. |
+| available\_kb | real | Number of bytes that are available for reading on the socket's input evbuffer.  If this value is high this usually means that the other end is writing faster than this node is able to read. |
 | read\_mb | real | Number of bytes that were read from the socket. |
 | write\_mb | real | Number of bytes that were written to the socket. |
 | read\_cnt | int | Number of messages that were read from the socket. |

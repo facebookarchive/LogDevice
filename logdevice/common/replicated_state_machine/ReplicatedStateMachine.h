@@ -172,7 +172,7 @@ class ReplicatedStateMachine {
    * not expect it. This option should be used if it is expected that there are
    * still old binaries that cannot undarstand that header. The counterpart is
    * that if the header is not written, we cannot use the CONFIRM_APPLIED option
-   * when writting a delta.
+   * when writing a delta.
    *
    * More concretely, this option should be used while we are migrating all
    * servers and clients to using EventLogStateMachine which uses this utility

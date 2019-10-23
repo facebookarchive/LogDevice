@@ -42,15 +42,15 @@ class Sockets : public AdminCommandTable {
          "another node in the cluster, describes that's node's id and ip."},
         {"pending_kb",
          DataType::REAL,
-         "Number of bytes that are available for writting on the socket's "
+         "Number of bytes that are available for writing on the socket's "
          "output evbuffer. If this value is high this usually means that the "
-         "other end is not able to read messages as fast as we are writting "
+         "other end is not able to read messages as fast as we are writing "
          "them."},
         {"available_kb",
          DataType::REAL,
          "Number of bytes that are available for reading on the socket's input "
          "evbuffer.  If this value is high this usually means that the other "
-         "end is writting faster than this node is able to read."},
+         "end is writing faster than this node is able to read."},
         {"read_mb",
          DataType::REAL,
          "Number of bytes that were read from the socket."},

@@ -27,7 +27,7 @@ using namespace facebook::logdevice::NodeSetTestUtil;
 
 namespace {
 
-// Convenient shortcuts for writting ShardIDs.
+// Convenient shortcuts for writing ShardIDs.
 #define N0 ShardID(0, 0)
 #define N1 ShardID(1, 0)
 #define N2 ShardID(2, 0)

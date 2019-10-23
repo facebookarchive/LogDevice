@@ -19,7 +19,7 @@ using namespace facebook::logdevice::NodesConfigurationTestUtil;
 using namespace std::literals::string_literals;
 using namespace ::testing;
 
-// Convenient shortcuts for writting NodeIDs.
+// Convenient shortcuts for writing NodeIDs.
 #define N0 NodeID(0, 1)
 #define N1 NodeID(1, 1)
 #define N2 NodeID(2, 1)

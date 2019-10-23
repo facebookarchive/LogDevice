@@ -693,7 +693,7 @@ void LogRebuilding::writeCheckpoint() {
   const lsn_t next_lsn =
       restartLsn_ == LSN_INVALID ? readPointer_.lsn : restartLsn_;
   if (next_lsn == LSN_OLDEST) {
-    // There is no point writting a checkpoint.
+    // There is no point writing a checkpoint.
     return;
   }
 

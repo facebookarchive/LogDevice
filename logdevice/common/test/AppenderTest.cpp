@@ -39,7 +39,7 @@ namespace facebook { namespace logdevice {
  *       a sufficient number of storage nodes.
  */
 
-// Convenient shortcuts for writting ShardIDs.
+// Convenient shortcuts for writing ShardIDs.
 #define N0S0 ShardID(0, 0)
 #define N1S0 ShardID(1, 0)
 #define N2S0 ShardID(2, 0)
@@ -49,7 +49,7 @@ namespace facebook { namespace logdevice {
 #define N6S0 ShardID(6, 0)
 #define N7S0 ShardID(7, 0)
 #define N8S0 ShardID(8, 0)
-// Convenient shortcuts for writting NodeIDs.
+// Convenient shortcuts for writing NodeIDs.
 #define N0 NodeID(0, 0)
 #define N1 NodeID(1, 0)
 #define N2 NodeID(2, 0)
