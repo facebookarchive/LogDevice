@@ -77,7 +77,7 @@ void FileBasedVersionedConfigStore::threadMain() {
 
 void FileBasedVersionedConfigStore::getConfigImpl(
     std::string key,
-    value_callback_t cb,
+    value_callback_t::SharedProxy cb,
     folly::Optional<version_t> base_version) const {
   if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, "");
@@ -146,7 +146,7 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
     std::string value,
     version_t new_version,
     folly::Optional<version_t> base_version,
-    write_callback_t cb) {
+    write_callback_t::SharedProxy cb) {
   if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, {}, "");
     return;
@@ -218,7 +218,9 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
   if (base_version.hasValue() && base_version != current_version) {
     // version conditional update failed, invoke the callback with the
     // version and value that are more recent
-    cb(E::VERSION_MISMATCH, current_version, std::move(current_value));
+    cb(E::VERSION_MISMATCH,
+       std::move(current_version),
+       std::move(current_value));
     return;
   }
 
@@ -237,7 +239,7 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
     return;
   }
 
-  cb(E::OK, new_version, "");
+  cb(E::OK, std::move(new_version), "");
 }
 
 void FileBasedVersionedConfigStore::getConfig(
@@ -249,13 +251,18 @@ void FileBasedVersionedConfigStore::getConfig(
     return;
   }
 
-  bool success = task_queue_.writeIfNotFull(
-      [this, key = std::move(key), cb = std::move(cb), base_version]() mutable {
-        getConfigImpl(std::move(key), std::move(cb), base_version);
-      });
+  auto cb_shared = std::move(cb).asSharedProxy();
+  bool success = task_queue_.writeIfNotFull([this,
+                                             key = std::move(key),
+                                             cb_shared = cb_shared,
+                                             base_version]() mutable {
+    getConfigImpl(std::move(key), cb_shared, base_version);
+  });
   if (!success) {
-    // queue full, report transient error
-    cb(E::AGAIN, {});
+    // Queue full, report transient error.
+    // `func` was not moved out of, so it wasn't destroyed and wasn't called,
+    // so cb_plain is still alive.
+    cb_shared(E::AGAIN, {});
     return;
   }
 }
@@ -325,22 +332,23 @@ void FileBasedVersionedConfigStore::readModifyWriteConfig(
                       new_version.val());
   }
 
+  auto cb_shared = std::move(cb).asSharedProxy();
   bool success =
       task_queue_.writeIfNotFull([this,
                                   key = std::move(key),
                                   value = std::move(write_value),
                                   base_version = std::move(cur_ver),
                                   new_version = std::move(new_version),
-                                  cb = std::move(cb)]() mutable {
+                                  cb_shared = cb_shared]() mutable {
         updateConfigImpl(std::move(key),
                          std::move(value),
                          std::move(new_version),
                          std::move(base_version),
-                         std::move(cb));
+                         cb_shared);
       });
   if (!success) {
     // queue full, report transient error
-    cb(E::AGAIN, {}, "");
+    cb_shared(E::AGAIN, {}, "");
     return;
   }
 }

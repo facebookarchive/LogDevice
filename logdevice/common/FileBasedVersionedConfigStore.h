@@ -51,13 +51,13 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
 
   // must be executed on the TaskThread
   void getConfigImpl(std::string key,
-                     value_callback_t cb,
+                     value_callback_t::SharedProxy cb,
                      folly::Optional<version_t> base_version) const;
   void updateConfigImpl(std::string key,
                         std::string value,
                         version_t version,
                         folly::Optional<version_t> base_version,
-                        write_callback_t cb);
+                        write_callback_t::SharedProxy cb);
 
   std::string getDataFilePath(const std::string& key) const {
     return root_path_ + "/" + key;
