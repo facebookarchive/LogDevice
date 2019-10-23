@@ -59,5 +59,6 @@ const char* socketDrainStatusToString(SocketDrainStatusType type) {
     case SocketDrainStatusType::IDLE:
       return "IDLE";
   }
+  return "";
 }
 }} // namespace facebook::logdevice
