@@ -39,16 +39,9 @@ namespace facebook { namespace logdevice {
 template <typename T, folly::IntrusiveListHook T::*ListHook>
 class PriorityQueue : boost::noncopyable {
  public:
-  PriorityQueue() : total_cost_(0) {
-    enabled_queues_.set();
-  }
+  PriorityQueue() {}
   PriorityQueue(PriorityQueue&&) noexcept;
   PriorityQueue& operator=(PriorityQueue&&) noexcept;
-
-  bool isEnabled(Priority p) const {
-    int p_index = asInt(p);
-    return enabled_queues_.test(p_index);
-  }
 
   bool empty() const {
     return active_queues_.none();
@@ -67,13 +60,6 @@ class PriorityQueue : boost::noncopyable {
     return queues_[asInt(p)].size();
   }
 
-  /** Same as empty, but ignores elements from disabled priority levels. */
-  bool enabledEmpty() const {
-    auto active = active_queues_.to_ulong();
-    auto enabled = enabled_queues_.to_ulong();
-    return (active & enabled) == 0;
-  }
-
   /** The cost to service all elements in this queue. */
   uint64_t cost() const {
     return total_cost_;
@@ -84,21 +70,6 @@ class PriorityQueue : boost::noncopyable {
     return queues_[asInt(p)].cost();
   }
 
-  /**
-   * Enable/Disable visibility of items at the given priority.
-   * Disabled items are ignored by enabledEmpty(), enabeldFront(),
-   * and enabledPop().
-   *
-   * @note: Items default to being visible at queue construction.
-   */
-  void enable(Priority p, bool enable = true) {
-    assert(p < Priority::NUM_PRIORITIES);
-    if (p < Priority::NUM_PRIORITIES) {
-      int p_index = asInt(p);
-      enabled_queues_.set(p_index, enable);
-    }
-  }
-
   /* STL idiom conforming methods. */
   T& front();
   T& front(Priority& p);
@@ -106,12 +77,6 @@ class PriorityQueue : boost::noncopyable {
   void pop();
   void pop(Priority& p);
   void erase(T&);
-
-  /**
-   * Highest priority element from an enabled priority class.
-   */
-  T& enabledFront();
-  void enabledPop();
 
   /**
    * Remove and apply function callback on items enqueued with a priority
@@ -133,14 +98,10 @@ class PriorityQueue : boost::noncopyable {
       std::array<CostQueue<T, ListHook>, asInt(Priority::NUM_PRIORITIES)>;
 
   // Sum of calling T::cost() on all members of all queues.
-  uint64_t total_cost_;
+  uint64_t total_cost_ = 0;
 
   // Set bits indicate CostQueues that contain elements.
   std::bitset<asInt(Priority::NUM_PRIORITIES)> active_queues_;
-
-  // Set bits indicate queues that should be excluded from pop()
-  // operations.
-  std::bitset<asInt(Priority::NUM_PRIORITIES)> enabled_queues_;
 
   // One CostQueue "bucket" per-priority level.
   CostQueues queues_;
@@ -155,11 +116,9 @@ template <typename T, folly::IntrusiveListHook T::*ListHook>
 PriorityQueue<T, ListHook>::PriorityQueue(PriorityQueue&& rhs) noexcept
     : total_cost_(rhs.total_cost_),
       active_queues_(std::move(rhs.active_queues_)),
-      enabled_queues_(std::move(rhs.enabled_queues_)),
       queues_(std::move(rhs.queues_)) {
   rhs.total_cost_ = 0;
   rhs.active_queues_.reset();
-  rhs.enabled_queues_.set();
 }
 
 template <typename T, folly::IntrusiveListHook T::*ListHook>
@@ -167,11 +126,9 @@ PriorityQueue<T, ListHook>& PriorityQueue<T, ListHook>::
 operator=(PriorityQueue&& rhs) noexcept {
   total_cost_ = rhs.total_cost_;
   active_queues_ = std::move(rhs.active_queues_);
-  enabled_queues_ = std::move(rhs.enabled_queues_);
   queues_ = std::move(rhs.queues_);
   rhs.total_cost_ = 0;
   rhs.active_queues_.reset();
-  rhs.enabled_queues_.set();
 }
 
 template <typename T, folly::IntrusiveListHook T::*ListHook>
@@ -185,22 +142,6 @@ template <typename T, folly::IntrusiveListHook T::*ListHook>
 T& PriorityQueue<T, ListHook>::front(Priority& p) {
   int p_index = asInt(p);
   return queues_[p_index].front();
-}
-
-template <typename T, folly::IntrusiveListHook T::*ListHook>
-T& PriorityQueue<T, ListHook>::enabledFront() {
-  auto active = active_queues_.to_ulong();
-  auto enabled = enabled_queues_.to_ulong();
-  int p_index = folly::findFirstSet(active & enabled);
-  ld_check(p_index != 0);
-  return queues_[p_index - 1].front();
-}
-
-template <typename T, folly::IntrusiveListHook T::*ListHook>
-void PriorityQueue<T, ListHook>::enabledPop() {
-  if (!enabledEmpty()) {
-    erase(enabledFront());
-  }
 }
 
 template <typename T, folly::IntrusiveListHook T::*ListHook>

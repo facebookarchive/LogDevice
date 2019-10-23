@@ -166,9 +166,6 @@ bool FlowGroup::run(std::mutex& flow_meters_mutex,
     // backlog
     deps_->statsSet(
         &PerShapingPriorityStats::pq_backlog, scope_, p, priorityq_.empty(p));
-    // Reconfigure access to priority queue bandwidth. The traffic shaper
-    // may have reset the deposit budget.
-    priorityq_.enable(p, meter_entry.canFill());
   }
 
   return run_limits_exceeded();

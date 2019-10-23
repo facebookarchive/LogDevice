@@ -352,12 +352,6 @@ class FlowGroup {
                     scope_,
                     sink,
                     initialSourceLevel - source_entry.level());
-
-    // If the sink can no longer take additional credit, remove it from
-    // contention for bandwidth from the priority queue.
-    if (!sink_entry.canFill()) {
-      priorityq_.enable(sink, false);
-    }
   }
 
   /**

@@ -185,38 +185,4 @@ TEST(PriorityQueueTest, TrimFromMultiplePriorities) {
   }
 }
 
-TEST(PriorityQueueTest, DisablePriorityLevel) {
-  TestPriorityQ pq;
-  std::vector<Item*> items = AllocateItems();
-  PriorityQueueInsert(pq, items);
-  EXPECT_FALSE(pq.empty());
-  Priority cur_priority = priorityAbove(Priority::NUM_PRIORITIES);
-  while (cur_priority != Priority::INVALID && pq.cost(cur_priority) != 0) {
-    pq.enable(cur_priority, false);
-    cur_priority = priorityAbove(cur_priority);
-  }
-  EXPECT_FALSE(pq.empty());
-  EXPECT_TRUE(pq.enabledEmpty());
-
-  cur_priority = priorityAbove(Priority::NUM_PRIORITIES);
-  while (cur_priority != Priority::INVALID && pq.cost(cur_priority) != 0) {
-    pq.enable(cur_priority);
-    cur_priority = priorityAbove(cur_priority);
-  }
-  EXPECT_FALSE(pq.empty());
-  EXPECT_FALSE(pq.enabledEmpty());
-
-  cur_priority = priorityAbove(Priority::MAX);
-  while (cur_priority != Priority::INVALID && pq.cost(cur_priority) != 0) {
-    if (!pq.empty(cur_priority)) {
-      EXPECT_EQ(&pq.enabledFront(), &pq.front(cur_priority));
-      pq.enable(cur_priority, false);
-      if (!pq.enabledEmpty()) {
-        EXPECT_NE(&pq.enabledFront(), &pq.front(cur_priority));
-      }
-    }
-    cur_priority = priorityBelow(cur_priority);
-  }
-}
-
 } // namespace
