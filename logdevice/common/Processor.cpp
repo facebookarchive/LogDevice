@@ -39,7 +39,6 @@
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/TrafficShaper.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
-#include "logdevice/common/WatchDogThread.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/WorkerLoadBalancing.h"
@@ -237,28 +236,14 @@ void Processor::init() {
   impl_->allSequencers_ =
       std::make_unique<AllSequencers>(this, config_, settings_);
 
-  if (settings_->server) {
-    traffic_shaper_ = std::make_unique<TrafficShaper>(this, stats_);
-
-    if (getWorkerCount(WorkerType::GENERAL) != 0) {
-      watchdog_thread_ =
-          std::make_unique<WatchDogThread>(this,
-                                           settings_->watchdog_poll_interval_ms,
-                                           settings_->watchdog_bt_ratelimit);
-    }
-
-    // Now that workers are running, we can initialize SequencerBatching
-    // (which waits for all workers to process a Request).  It would be nice
-    // to do this lazily only when sequencer batching is actually on, however
-    // because it needs to talk to all workers and wait for replies, it would
-    // be suspect to deadlocks.
-    sequencer_batching_.reset(new SequencerBatching(this));
-  } else {
-    // in the context of clients, the processor triggers a cluster state refresh
-    // so that appends can be routed to nodes that are alive from the start
-    if (settings_->enable_initial_get_cluster_state) {
-      cluster_state_->refreshClusterStateAsync();
-    }
+  // in the context of clients, the processor triggers a cluster state refresh
+  // so that appends can be routed to nodes that are alive from the start
+  if (!settings_->server && settings_->enable_initial_get_cluster_state) {
+    cluster_state_->refreshClusterStateAsync();
+  }
+  if (settings_->server){
+    // Remaining necessary steps are implemented in ServerProcessor::init().
+    return;
   }
 
   initialized_.store(true, std::memory_order_relaxed);
@@ -554,10 +539,6 @@ void Processor::shutdown() {
 
   if (traffic_shaper_) {
     traffic_shaper_->shutdown();
-  }
-
-  if (watchdog_thread_) {
-    watchdog_thread_->shutdown();
   }
 
   if (impl_->allSequencers_) {

@@ -12,11 +12,13 @@
 
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/LocalLogFile.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/WatchDogThread.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/sequencer_boycotting/BoycottingStats.h"
 
@@ -125,12 +127,14 @@ class ServerProcessor : public Processor {
     maybeCreateLogStorageStateMap();
   }
 
-  ~ServerProcessor() {}
+  ~ServerProcessor() override;
   std::unique_ptr<FailureDetector> failure_detector_;
 
   BoycottingStatsHolder* getBoycottingStats() {
     return &boycotting_stats_;
   }
+
+  void shutdown() override;
 
  private:
   void maybeCreateLogStorageStateMap();
@@ -143,5 +147,7 @@ class ServerProcessor : public Processor {
   // node stats sent from the clients. Keep it in a map to be able to identify
   // the client who sent it.
   BoycottingStatsHolder boycotting_stats_;
+  // A thread running on server side to detect worker stalls
+  std::unique_ptr<WatchDogThread> watchdog_thread_;
 };
 }} // namespace facebook::logdevice

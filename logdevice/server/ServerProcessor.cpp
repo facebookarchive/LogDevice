@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/ServerProcessor.h"
 
+#include "logdevice/common/TrafficShaper.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/FailureDetector.h"
@@ -47,6 +48,20 @@ void ServerProcessor::maybeCreateLogStorageStateMap() {
 
 void ServerProcessor::init() {
   Processor::init();
+  traffic_shaper_ = std::make_unique<TrafficShaper>(this, stats_);
+  if (getWorkerCount(WorkerType::GENERAL) != 0) {
+    watchdog_thread_ = std::make_unique<WatchDogThread>(
+        this,
+        updateableSettings()->watchdog_poll_interval_ms,
+        updateableSettings()->watchdog_bt_ratelimit);
+  }
+  // Now that workers are running, we can initialize SequencerBatching
+  // (which waits for all workers to process a Request).  It would be nice
+  // to do this lazily only when sequencer batching is actually on, however
+  // because it needs to talk to all workers and wait for replies, it would
+  // be suspect to deadlocks.
+  sequencer_batching_.reset(new SequencerBatching(this));
+  initialized_.store(true, std::memory_order_relaxed);
   if (sharded_storage_thread_pool_ != nullptr) {
     // All shards are assumed to be waiting to be rebuilt until
     // markShardAsNotMissingData() is called.
@@ -134,4 +149,20 @@ LogStorageStateMap& ServerProcessor::getLogStorageStateMap() const {
   ld_check(log_storage_state_map_);
   return *log_storage_state_map_;
 }
+
+void ServerProcessor::shutdown() {
+  if (isShuttingDown()) {
+    return;
+  }
+  if (watchdog_thread_) {
+    watchdog_thread_->shutdown();
+  }
+
+  Processor::shutdown();
+}
+
+ServerProcessor::~ServerProcessor() {
+  shutdown();
+}
+
 }} // namespace facebook::logdevice

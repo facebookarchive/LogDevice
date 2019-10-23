@@ -65,7 +65,6 @@ class TraceLogger;
 class TrafficShaper;
 class UpdateableConfig;
 class UpdateableSecurityInfo;
-class WatchDogThread;
 class Worker;
 class WheelTimer;
 class Configuration;
@@ -152,6 +151,11 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   // HealthMonitor pointer. Used on server side.
   std::unique_ptr<HealthMonitor> health_monitor_;
+  // BufferedWriter for batching by sequencers.  Initialized only on servers.
+  std::unique_ptr<SequencerBatching> sequencer_batching_;
+  // Used to detect that we are in a test environment without a
+  // fully initialized processor;
+  std::atomic<bool> initialized_{false};
 
  public:
   /**
@@ -529,9 +533,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // in each Worker.
   std::unique_ptr<TrafficShaper> traffic_shaper_;
 
-  // A thread running on server side to detect worker stalls
-  std::unique_ptr<WatchDogThread> watchdog_thread_;
-
   // ResourceBudget used to limit the total number of accepted connections.
   // See Settings::max_incoming_connections_.
   ResourceBudget conn_budget_incoming_;
@@ -562,7 +563,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * Stops any running threads.  Normally exercised through the destructor but
    * also if the constructor fails or explicitly during shutdown.
    */
-  void shutdown();
+  virtual void shutdown();
 
   /**
    * Called by a Worker during shutdown informing the Processor that it had
@@ -707,10 +708,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   std::atomic<bool> allow_post_during_shutdown_{false};
 
-  // Used to detect that we are in a test environment without a
-  // fully initialized processor;
-  std::atomic<bool> initialized_{false};
-
   // Keeps track of those workers that called noteWorkerFinished()
   std::array<folly::AtomicBitSet<MAX_WORKERS>,
              static_cast<uint8_t>(WorkerType::MAX)>
@@ -727,9 +724,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   // See isShardDirty().
   folly::AtomicBitSet<MAX_SHARDS> clean_shards_;
-
-  // BufferedWriter for batching by sequencers.  Initialized only on servers.
-  std::unique_ptr<SequencerBatching> sequencer_batching_;
 
   std::string name_;
 
