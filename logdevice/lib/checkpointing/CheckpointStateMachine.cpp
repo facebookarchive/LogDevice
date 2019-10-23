@@ -26,9 +26,10 @@ CheckpointStateMachine::CheckpointStateMachine(logid_t delta_log_id,
           snapshot_log_id) {}
 
 std::unique_ptr<CheckpointState>
-CheckpointStateMachine::makeDefaultState(lsn_t) const {
-  // TODO: Not implemented.
-  return nullptr;
+CheckpointStateMachine::makeDefaultState(lsn_t version) const {
+  auto state = std::make_unique<CheckpointState>();
+  state->version = version;
+  return state;
 }
 
 std::unique_ptr<CheckpointState>

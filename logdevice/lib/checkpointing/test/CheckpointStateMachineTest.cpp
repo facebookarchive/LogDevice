@@ -169,3 +169,9 @@ TEST_F(CheckpointStateMachineTest, AppliesDeltaWrongDeltaType) {
   EXPECT_EQ(-1, rv);
   EXPECT_EQ("Unknown type", failure_reason);
 }
+
+TEST_F(CheckpointStateMachineTest, DefaultStateHasVersion) {
+  auto default_state = state_machine_->makeDefaultState(50);
+  EXPECT_TRUE(default_state->checkpoints.empty());
+  EXPECT_EQ(50, default_state->version);
+}
