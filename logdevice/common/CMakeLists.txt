@@ -19,6 +19,7 @@ add_subdirectory(configuration/if)
 add_subdirectory(configuration/utils)
 add_subdirectory(configuration/nodes)
 add_subdirectory(membership)
+add_subdirectory(replicated_state_machine/if)
 
 add_library(common STATIC ${hfiles} ${files})
 add_dependencies(common folly flatbuffers OpenTracing)
@@ -33,6 +34,7 @@ target_link_libraries(common
   Membership-cpp2
   NodesConfiguration-cpp2
   ConfigurationCodec-cpp2
+  KeyValueStore-cpp2
   AllReadStreamsDebugConfig-cpp2
   ${LOGDEVICE_EXTERNAL_DEPS}
 )
