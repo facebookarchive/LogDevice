@@ -26,7 +26,7 @@ class IConnectionFactory {
                    SocketType type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const = 0;
+                   std::unique_ptr<SocketDependencies> deps) = 0;
 
   virtual std::unique_ptr<Connection>
   createConnection(int fd,

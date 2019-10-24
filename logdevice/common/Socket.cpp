@@ -96,7 +96,6 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
       handshaken_(false),
       proto_(getSettings().max_protocol),
       our_name_at_peer_(ClientID::INVALID),
-      connect_throttle_(getSettings().connect_throttle),
       outbuf_overflow_(getSettings().outbuf_overflow_kb * 1024),
       outbufs_min_budget_(getSettings().outbuf_socket_min_kb * 1024),
       read_more_(deps_->getEvBase()),
@@ -430,8 +429,9 @@ int Socket::preConnectAttempt() {
   ld_check(serializeq_.empty());
   ld_check(sendq_.empty());
   ld_check(getBytesPending() == 0);
+  ld_check(connect_throttle_);
 
-  if (!connect_throttle_.mayConnect()) {
+  if (connect_throttle_ && !connect_throttle_->mayConnect()) {
     err = E::DISABLED;
     return -1;
   }
@@ -1071,8 +1071,8 @@ void Socket::close(Status reason) {
 
   endStreamRewind();
 
-  if (!peer_name_.isClientAddress() && reason != E::SHUTDOWN) {
-    connect_throttle_.connectFailed();
+  if (connect_throttle_ && (peer_shuttingdown_ || reason != E::SHUTDOWN)) {
+    connect_throttle_->connectFailed();
   }
 
   if (!deferred_event_queue_.empty()) {
@@ -1952,7 +1952,11 @@ bool Socket::processHandshakeMessage(const Message* msg) {
   switch (msg->type_) {
     case MessageType::ACK: {
       deps_->processACKMessage(msg, &our_name_at_peer_, &proto_);
-      connect_throttle_.connectSucceeded();
+      if (connect_throttle_) {
+        connect_throttle_->connectSucceeded();
+      } else {
+        ld_check(connect_throttle_);
+      }
     } break;
     case MessageType::HELLO:
       // If this is a newly handshaken client connection, we might want to
@@ -2301,7 +2305,8 @@ int Socket::checkConnection(ClientID* our_name_at_peer) {
   if (!our_name_at_peer_.valid()) {
     // socket is either not connected or we're still waiting for a handshake
     // to complete
-    if (!connect_throttle_.mayConnect()) {
+    ld_check(connect_throttle_);
+    if (connect_throttle_ && !connect_throttle_->mayConnect()) {
       ld_check(!connected_);
       ld_check(isClosed());
       err = E::DISABLED;

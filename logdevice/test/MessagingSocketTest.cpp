@@ -74,7 +74,7 @@ struct SocketConnectRequest : public Request {
       // Worker shutdown here to avoid tripping asserts in Socket that
       // expects to be destroyed only when Worker shuts down.
       Worker::onThisThread()->shutting_down_ = true;
-      delete SocketConnectRequest::sock;
+      SocketConnectRequest::sock.reset();
       return Execution::COMPLETE;
     }
 
@@ -94,16 +94,19 @@ struct SocketConnectRequest : public Request {
     EXPECT_EQ(E::NOTINCONFIG, err);
 
     constructor_failed = false;
-
     try {
+      auto deps = std::make_unique<SocketDependencies>(
+          Worker::onThisThread()->processor_,
+          &Worker::onThisThread()->sender());
+      const auto throttle_settings = deps->getSettings().connect_throttle;
       SocketConnectRequest::sock =
-          new Connection(firstNodeID,
-                         SocketType::DATA,
-                         ConnectionType::PLAIN,
-                         flow_group,
-                         std::make_unique<SocketDependencies>(
-                             Worker::onThisThread()->processor_,
-                             &Worker::onThisThread()->sender()));
+          std::make_unique<Connection>(firstNodeID,
+                                       SocketType::DATA,
+                                       ConnectionType::PLAIN,
+                                       flow_group,
+                                       std::move(deps));
+      connect_throttle = std::make_unique<ConnectThrottle>(throttle_settings);
+      SocketConnectRequest::sock->setConnectThrottle(connect_throttle.get());
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
     }
@@ -122,11 +125,13 @@ struct SocketConnectRequest : public Request {
     return Execution::COMPLETE;
   }
 
-  static Socket* sock; // socket we are connecting
+  static std::unique_ptr<ConnectThrottle> connect_throttle;
+  static std::unique_ptr<Socket> sock; // socket we are connecting
   static FlowGroup flow_group;
-};
+}; // namespace testing
 
-Socket* SocketConnectRequest::sock{};
+std::unique_ptr<ConnectThrottle> SocketConnectRequest::connect_throttle{};
+std::unique_ptr<Socket> SocketConnectRequest::sock{};
 FlowGroup SocketConnectRequest::flow_group{nullptr};
 
 } // namespace testing

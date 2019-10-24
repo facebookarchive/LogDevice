@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/network/LibeventCompatibilityConnectionFactory.h"
 
+#include "logdevice/common/ConnectThrottle.h"
 #include "logdevice/common/Connection.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/FlowGroup.h"
@@ -52,13 +53,24 @@ LibeventCompatibilityConnectionFactory::createConnection(
     SocketType type,
     ConnectionType connection_type,
     FlowGroup& flow_group,
-    std::unique_ptr<SocketDependencies> deps) const {
+    std::unique_ptr<SocketDependencies> deps) {
+  const auto throttle_setting = deps->getSettings().connect_throttle;
   if (connection_type != ConnectionType::SSL &&
       (forceSSLSockets() && type != SocketType::GOSSIP)) {
     connection_type = ConnectionType::SSL;
   }
-  return concrete_factory_->createConnection(
+  auto connection = concrete_factory_->createConnection(
       node_id, type, connection_type, flow_group, std::move(deps));
+  auto it = connect_throttle_map_.find(node_id);
+  if (it == connect_throttle_map_.end()) {
+    auto res = connect_throttle_map_.emplace(
+        node_id, std::make_unique<ConnectThrottle>(throttle_setting));
+    ld_check(res.second);
+    it = res.first;
+    ld_check(it->second);
+  }
+  connection->setConnectThrottle(it->second.get());
+  return connection;
 }
 
 std::unique_ptr<Connection>
@@ -84,5 +96,4 @@ LibeventCompatibilityConnectionFactory::createConnection(
                                              flow_group,
                                              std::move(deps));
 }
-
 }} // namespace facebook::logdevice

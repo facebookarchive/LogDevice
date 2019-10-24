@@ -21,7 +21,7 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     SocketType type,
     ConnectionType connection_type,
     FlowGroup& flow_group,
-    std::unique_ptr<SocketDependencies> deps) const {
+    std::unique_ptr<SocketDependencies> deps) {
   std::unique_ptr<AsyncSocketAdapter> sock_adapter;
   if (connection_type == ConnectionType::SSL) {
     sock_adapter = std::make_unique<AsyncSocketAdapter>(

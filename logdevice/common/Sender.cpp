@@ -923,18 +923,22 @@ Socket* Sender::initServerSocket(NodeID nid,
 
   auto it = impl_->server_sockets_.find(nid.index());
   if (it != impl_->server_sockets_.end()) {
+    // for all connections :
+    //     create new connection if the existing connection is closed.
     // for DATA connection:
-    //     reconnect if the connection is not SSL but should be.
+    //     create new connection if the existing connection is not SSL but
+    //     should be.
     // for GOSSIP connection:
-    //     reconnect if the connection is not SSL but ssl_on_gossip_port is
-    //     true or the connection is SSL but the ssl_on_gossip_port is false.
-    const bool should_reconnect =
+    //     create new connection if the existing connection is not SSL but
+    //     ssl_on_gossip_port is true or the existing connection is SSL but the
+    //     ssl_on_gossip_port is false.
+    const bool should_create_new = it->second->isClosed() ||
         (sock_type != SocketType::GOSSIP && !it->second->isSSL() &&
          !allow_unencrypted && useSSLWith(nid)) ||
         (it->second->isSSL() != Worker::settings().ssl_on_gossip_port &&
          sock_type == SocketType::GOSSIP);
 
-    if (should_reconnect) {
+    if (should_create_new) {
       // We have a plaintext connection, but now we need an encrypted one.
       // Scheduling this socket to be closed and moving it out of
       // server_sockets_ to initialize an SSL connection in its place.

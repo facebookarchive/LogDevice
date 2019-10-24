@@ -30,7 +30,7 @@ using namespace facebook::logdevice;
 
 class ClientConnectionTest : public SocketTest {
  public:
-  ClientConnectionTest() {
+  ClientConnectionTest() : connect_throttle_({1, 1000}) {
     deps_ = new TestSocketDependencies(this);
     auto sock = std::make_unique<testing::NiceMock<MockSocketAdapter>>();
     sock_ = sock.get();
@@ -48,6 +48,7 @@ class ClientConnectionTest : public SocketTest {
     csid_ = "client_uuid";
     EXPECT_FALSE(connected());
     EXPECT_FALSE(handshaken());
+    conn_->setConnectThrottle(&connect_throttle_);
   }
 
   void SetUp() override {
@@ -76,6 +77,7 @@ class ClientConnectionTest : public SocketTest {
   folly::AsyncSocket::ReadCallback* rd_callback_;
   bool tamper_checksum_;
   bool socket_closed_{false};
+  ConnectThrottle connect_throttle_;
 };
 
 class ServerConnectionTest : public SocketTest {

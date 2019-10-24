@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "folly/container/F14Map.h"
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ResourceBudget.h"
@@ -19,6 +20,7 @@ class Connection;
 class FlowGroup;
 class SockAddr;
 class SocketDependencies;
+class ConnectThrottle;
 class LibeventCompatibilityConnectionFactory : public IConnectionFactory {
  public:
   explicit LibeventCompatibilityConnectionFactory(EvBase& base);
@@ -28,7 +30,7 @@ class LibeventCompatibilityConnectionFactory : public IConnectionFactory {
                    SocketType type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const override;
+                   std::unique_ptr<SocketDependencies> deps) override;
 
   std::unique_ptr<Connection>
   createConnection(int fd,
@@ -42,6 +44,11 @@ class LibeventCompatibilityConnectionFactory : public IConnectionFactory {
 
  private:
   std::unique_ptr<IConnectionFactory> concrete_factory_;
+  // A new server socket instance is created everytime, connect throttle map
+  // maintains history of connection attempts and cannot be destroyed alongwith
+  // server socket.
+  folly::F14FastMap<NodeID, std::unique_ptr<ConnectThrottle>, NodeID::Hash>
+      connect_throttle_map_;
 };
 
 }} // namespace facebook::logdevice

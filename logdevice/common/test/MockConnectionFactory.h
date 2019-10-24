@@ -22,7 +22,7 @@
 namespace facebook { namespace logdevice {
 
 struct MockConnectionFactory : public IConnectionFactory {
-  MOCK_CONST_METHOD5(
+  MOCK_METHOD5(
       createConnection,
       std::unique_ptr<Connection>(NodeID node_id,
                                   SocketType type,

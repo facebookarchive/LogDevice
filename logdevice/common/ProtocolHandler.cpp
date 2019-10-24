@@ -143,4 +143,8 @@ void ProtocolHandler::notifyBytesWritten(size_t /* bytes_written */) {
   }
 }
 
+bool ProtocolHandler::good() const {
+  return !set_error_on_socket_.isScheduled();
+}
+
 }} // namespace facebook::logdevice

@@ -85,9 +85,7 @@ class ProtocolHandler : public IProtocolHandler {
   /**
    * Returns true if there is no error set on the socket.
    */
-  bool good() const override {
-    return !set_error_on_socket_.isScheduled();
-  }
+  bool good() const override;
 
   /**
    * Method used by various AsyncSocket callback to translate exception to

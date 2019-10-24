@@ -34,7 +34,7 @@ class ConnectionFactory : public IConnectionFactory {
                    SocketType type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const override;
+                   std::unique_ptr<SocketDependencies> deps) override;
 
   std::unique_ptr<Connection>
   createConnection(int fd,

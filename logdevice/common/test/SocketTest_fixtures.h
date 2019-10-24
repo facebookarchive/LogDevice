@@ -365,7 +365,7 @@ class SocketTest : public ::testing::Test {
 
 class ClientSocketTest : public SocketTest {
  public:
-  ClientSocketTest() {
+  ClientSocketTest() : connect_throttle_(settings_.connect_throttle) {
     // Create a client socket.
     socket_ = std::unique_ptr<Socket, SocketDeleter>(
         new Socket(server_name_,
@@ -374,6 +374,7 @@ class ClientSocketTest : public SocketTest {
                    flow_group_,
                    std::make_unique<TestSocketDependencies>(this)),
         SocketDeleter());
+    socket_->setConnectThrottle(&connect_throttle_);
     cluster_name_ = "Socket_test_cluster";
     credentials_ = "Socket_test_credentials";
     csid_ = "client_uuid";
@@ -381,6 +382,12 @@ class ClientSocketTest : public SocketTest {
     EXPECT_FALSE(connected());
     EXPECT_FALSE(handshaken());
   }
+
+  ~ClientSocketTest() override {
+    socket_->setConnectThrottle(nullptr);
+  }
+
+  ConnectThrottle connect_throttle_;
 };
 
 class ServerSocketTest : public SocketTest {

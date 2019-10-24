@@ -441,7 +441,11 @@ class Socket : public TrafficShappingSocket {
    * want to retry connecting to it immediately.
    */
   void resetConnectThrottle() {
-    connect_throttle_.connectSucceeded();
+    connect_throttle_->connectSucceeded();
+  }
+
+  void setConnectThrottle(ConnectThrottle* throttle) {
+    connect_throttle_ = throttle;
   }
 
   void dumpQueuedMessages(std::map<MessageType, int>* out) const;
@@ -954,7 +958,7 @@ class Socket : public TrafficShappingSocket {
 
   // if the peer is a server, this object throttles the rate of connection
   // attempts
-  ConnectThrottle connect_throttle_;
+  ConnectThrottle* connect_throttle_{nullptr};
 
   // If the successful association of a message via registerMessage()
   // causes getBytesPending() to exceed outbuf_overflow_, future calls to

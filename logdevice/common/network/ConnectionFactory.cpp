@@ -18,12 +18,12 @@
 
 namespace facebook { namespace logdevice {
 
-std::unique_ptr<Connection> ConnectionFactory::createConnection(
-    NodeID node_id,
-    SocketType type,
-    ConnectionType connection_type,
-    FlowGroup& flow_group,
-    std::unique_ptr<SocketDependencies> deps) const {
+std::unique_ptr<Connection>
+ConnectionFactory::createConnection(NodeID node_id,
+                                    SocketType type,
+                                    ConnectionType connection_type,
+                                    FlowGroup& flow_group,
+                                    std::unique_ptr<SocketDependencies> deps) {
   return std::make_unique<Connection>(
       node_id, type, connection_type, flow_group, std::move(deps));
 }
