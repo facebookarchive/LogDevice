@@ -9,15 +9,17 @@
 
 #include <vector>
 
+#include "logdevice/common/HealthMonitor.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/sequencer_boycotting/Boycott.h"
 #include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
+
 namespace facebook { namespace logdevice {
 
 class FailureDetector;
 
-struct GOSSIP_Node {
+struct GOSSIP_Node_Legacy {
   // Note: this is different from NodeID
   size_t node_id_;
 
@@ -36,6 +38,15 @@ struct GOSSIP_Node {
   // The node is in starting state?
   bool is_node_starting_;
 
+  bool operator<(const GOSSIP_Node_Legacy& a) const {
+    return node_id_ < a.node_id_;
+  }
+};
+
+struct GOSSIP_Node : public GOSSIP_Node_Legacy {
+  // Health status of node
+  HealthMonitor::NodeStatus node_status_{HealthMonitor::NodeStatus::UNDEFINED};
+
   bool operator<(const GOSSIP_Node& a) const {
     return node_id_ < a.node_id_;
   }
@@ -43,6 +54,7 @@ struct GOSSIP_Node {
 
 class GOSSIP_Message : public Message {
  public:
+  using legacy_node_list_t = std::vector<GOSSIP_Node_Legacy>;
   using node_list_t = std::vector<GOSSIP_Node>;
   using gossip_list_t = std::vector<uint32_t>;
   using gossip_ts_t = std::vector<std::chrono::milliseconds>;

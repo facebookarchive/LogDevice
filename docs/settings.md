@@ -222,7 +222,7 @@ sidebar_label: Settings
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
 | incoming-messages-max-bytes-limit | maximum byte limit of unprocessed messages within the system. | 524288000 | requires&nbsp;restart |
 | inline-message-execution | Indicates whether message should be processed right after deserialization. Usually within new worker model all messages are processed after posting them into the work context. This option works only when worker context is run with previous eventloop architecture. | false | requires&nbsp;restart |
-| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 99 |  |
+| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 100 |  |
 | max-time-to-allow-socket-drain | If a socket does not drain a complete message for max-time-to-allow-socket-drain. Then the socket is closed. | 3min |  |
 | min-bytes-to-drain-per-second | Refer socket-health-check-period for details. | 1000000 |  |
 | min-socket-idle-threshold-percent | A socket is considered active if it had bytes pending in the socket above socket-idle-threshold for greater than min-socket-idle-threshold-percent of socket-health-check-period. | 50 |  |

@@ -48,7 +48,6 @@ Message::Disposition GOSSIP_Message::onReceived(const Address& /*from*/) {
 
 void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
   auto flags = flags_;
-  node_list_t sorted_node_list;
 
   writer.write((uint16_t)node_list_.size());
   writer.write(gossip_node_);
@@ -57,7 +56,19 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
   writer.write(sent_time_);
   writeBoycottList(writer);
   writeBoycottDurations(writer);
-  writer.writeVector(node_list_);
+  if (writer.proto() <
+      Compatibility::ProtocolVersion::HEALTH_MONITOR_SUPPORT_IN_GOSSIP) {
+    legacy_node_list_t legacy_node_list{};
+    std::transform(node_list_.begin(),
+                   node_list_.end(),
+                   std::back_inserter(legacy_node_list),
+                   [](GOSSIP_Node gossip_node) {
+                     return static_cast<GOSSIP_Node_Legacy>(gossip_node);
+                   });
+    writer.writeVector(legacy_node_list);
+  } else {
+    writer.writeVector(node_list_);
+  }
 }
 
 MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {

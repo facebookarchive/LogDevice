@@ -16,6 +16,7 @@
 #include <folly/Optional.h>
 
 #include "logdevice/common/DomainIsolationChecker.h"
+#include "logdevice/common/HealthMonitor.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SequencerPlacement.h"
@@ -292,6 +293,9 @@ class FailureDetector {
     // The node is in starting state?
     bool is_node_starting_;
 
+    // Health Status of node.
+    HealthMonitor::NodeStatus status_;
+
     Node()
         : state(NodeState::DEAD),
           blacklisted(false),
@@ -299,7 +303,8 @@ class FailureDetector {
           gossip_(std::numeric_limits<uint32_t>::max()),
           gossip_ts_(std::chrono::milliseconds::zero()),
           failover_(std::chrono::milliseconds::zero()),
-          is_node_starting_(false) {}
+          is_node_starting_(false),
+          status_{HealthMonitor::NodeStatus::UNDEFINED} {}
   };
 
   // Used for restricting the logging of FD state and Gossip messages

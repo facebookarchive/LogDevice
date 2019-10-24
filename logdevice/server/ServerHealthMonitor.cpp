@@ -53,7 +53,9 @@ void ServerHealthMonitor::startUp() {
   updateVariables(now);
   monitorLoop();
 }
-
+HealthMonitor::NodeStatus ServerHealthMonitor::getNodeStatus() {
+  return node_status_;
+}
 void ServerHealthMonitor::monitorLoop() {
   last_entry_time_ = SteadyTimestamp::now();
   sleep_semifuture_ =
@@ -181,10 +183,10 @@ void ServerHealthMonitor::processReports() {
   auto start_time = now - kPeriodRange * sleep_period_;
   auto end_time = now + std::chrono::nanoseconds(1);
   calculateNegativeSignal(now);
-  node_state_ = (sleep_period_ < state_timer_.getCurrentValue())
-      ? NodeState::UNHEALTHY
-      : overloaded_ ? NodeState::OVERLOADED : NodeState::HEALTHY;
-  if (node_state_ == NodeState::HEALTHY) {
+  node_status_ = (sleep_period_ < state_timer_.getCurrentValue())
+      ? NodeStatus::UNHEALTHY
+      : overloaded_ ? NodeStatus::OVERLOADED : NodeStatus::HEALTHY;
+  if (node_status_ == NodeStatus::HEALTHY) {
     STAT_INCR(stats_, health_monitor_state_indicator);
   }
 }

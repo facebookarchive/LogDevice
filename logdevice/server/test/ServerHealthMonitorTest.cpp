@@ -61,7 +61,7 @@ class ServerHealthMonitorTest : public testing::Test {
     EXPECT_EQ(0, shm->internal_info_.worker_queue_stalls_[0].count());
     EXPECT_EQ(0, shm->internal_info_.worker_queue_stalls_[1].count());
     EXPECT_EQ(false, shm->overloaded_);
-    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::HEALTHY, shm->node_status_);
   }
 
   void totalStalledWorkersTest() {
@@ -80,7 +80,7 @@ class ServerHealthMonitorTest : public testing::Test {
     health_monitor_closed.wait();
     EXPECT_EQ(2, shm->internal_info_.total_stalled_workers);
     EXPECT_EQ(false, shm->overloaded_);
-    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::UNHEALTHY, shm->node_status_);
   }
 
   void watchdogDelayTest() {
@@ -99,16 +99,16 @@ class ServerHealthMonitorTest : public testing::Test {
     health_monitor_closed.wait();
     EXPECT_EQ(true, shm->internal_info_.watchdog_delay_);
     EXPECT_EQ(false, shm->overloaded_);
-    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::UNHEALTHY, shm->node_status_);
   }
 
-  ServerHealthMonitor::NodeState
+  ServerHealthMonitor::NodeStatus
   calculateHealthMonitorState(ServerHealthMonitor& shm,
                               std::chrono::milliseconds sleep_period) {
     return shm.sleep_period_ < shm.state_timer_.getCurrentValue()
-        ? ServerHealthMonitor::NodeState::UNHEALTHY
-        : shm.overloaded_ ? ServerHealthMonitor::NodeState::OVERLOADED
-                          : ServerHealthMonitor::NodeState::HEALTHY;
+        ? HealthMonitor::NodeStatus::UNHEALTHY
+        : shm.overloaded_ ? HealthMonitor::NodeStatus::OVERLOADED
+                          : HealthMonitor::NodeStatus::HEALTHY;
   }
 
   void simulateLoop(ServerHealthMonitor& shm,
@@ -117,7 +117,7 @@ class ServerHealthMonitorTest : public testing::Test {
                     ServerHealthMonitor::TimePoint end_time) {
     shm.updateVariables(now);
     shm.calculateNegativeSignal(now);
-    shm.node_state_ = calculateHealthMonitorState(shm, kExtraLongLoopDuration);
+    shm.node_status_ = calculateHealthMonitorState(shm, kExtraLongLoopDuration);
   }
 
   void stateTest() {
@@ -149,7 +149,7 @@ class ServerHealthMonitorTest : public testing::Test {
     // check values
     EXPECT_EQ(2, shm->internal_info_.worker_stalls_[0].count());
     EXPECT_EQ(1, shm->internal_info_.worker_stalls_[1].count());
-    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::UNHEALTHY, shm->node_status_);
     EXPECT_EQ(3 * (3 - 1) * kExtraLongLoopDuration.count(),
               shm->state_timer_.getCurrentValue().count());
     // fake loop 3
@@ -161,7 +161,7 @@ class ServerHealthMonitorTest : public testing::Test {
     // check values
     EXPECT_EQ(2, shm->internal_info_.worker_stalls_[0].count());
     EXPECT_EQ(1, shm->internal_info_.worker_stalls_[1].count());
-    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::UNHEALTHY, shm->node_status_);
     EXPECT_EQ(3 * (3 * (3 - 1) - 1) * kExtraLongLoopDuration.count(),
               shm->state_timer_.getCurrentValue().count());
     // fake loop 4
@@ -173,7 +173,7 @@ class ServerHealthMonitorTest : public testing::Test {
     // check values
     EXPECT_EQ(2, shm->internal_info_.worker_stalls_[0].count());
     EXPECT_EQ(1, shm->internal_info_.worker_stalls_[1].count());
-    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::UNHEALTHY, shm->node_status_);
     EXPECT_EQ(3 * (3 * (3 * (3 - 1) - 1) - 1) * kExtraLongLoopDuration.count(),
               shm->state_timer_.getCurrentValue().count());
     // fake loop 5
@@ -185,7 +185,7 @@ class ServerHealthMonitorTest : public testing::Test {
     // check values
     EXPECT_EQ(2, shm->internal_info_.worker_stalls_[0].count());
     EXPECT_EQ(1, shm->internal_info_.worker_stalls_[1].count());
-    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::UNHEALTHY, shm->node_status_);
     EXPECT_EQ(
         (3 * (3 * (3 * (3 - 1) - 1) - 1) - 1) * kExtraLongLoopDuration.count(),
         shm->state_timer_.getCurrentValue().count());
@@ -198,7 +198,7 @@ class ServerHealthMonitorTest : public testing::Test {
     // check values
     EXPECT_EQ(0, shm->internal_info_.worker_stalls_[0].count());
     EXPECT_EQ(0, shm->internal_info_.worker_stalls_[1].count());
-    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::HEALTHY, shm->node_status_);
     EXPECT_EQ(kExtraLongLoopDuration.count(),
               shm->state_timer_.getCurrentValue().count());
   }
@@ -233,7 +233,7 @@ class ServerHealthMonitorTest : public testing::Test {
     EXPECT_EQ(2, shm->internal_info_.worker_queue_stalls_[0].count());
     EXPECT_EQ(1, shm->internal_info_.worker_queue_stalls_[1].count());
     EXPECT_EQ(true, shm->overloaded_);
-    EXPECT_EQ(ServerHealthMonitor::NodeState::OVERLOADED, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::OVERLOADED, shm->node_status_);
     // fake loop 3
     now += kExtraLongLoopDuration;
     start_time =
@@ -244,7 +244,7 @@ class ServerHealthMonitorTest : public testing::Test {
     EXPECT_EQ(2, shm->internal_info_.worker_queue_stalls_[0].count());
     EXPECT_EQ(1, shm->internal_info_.worker_queue_stalls_[1].count());
     EXPECT_EQ(true, shm->overloaded_);
-    EXPECT_EQ(ServerHealthMonitor::NodeState::OVERLOADED, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::OVERLOADED, shm->node_status_);
     // fake loop 4
     now += kExtraLongLoopDuration;
     start_time =
@@ -255,7 +255,7 @@ class ServerHealthMonitorTest : public testing::Test {
     EXPECT_EQ(2, shm->internal_info_.worker_queue_stalls_[0].count());
     EXPECT_EQ(1, shm->internal_info_.worker_queue_stalls_[1].count());
     EXPECT_EQ(true, shm->overloaded_);
-    EXPECT_EQ(ServerHealthMonitor::NodeState::OVERLOADED, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::OVERLOADED, shm->node_status_);
     // fake loop 5
     now += kExtraLongLoopDuration;
     start_time =
@@ -266,7 +266,7 @@ class ServerHealthMonitorTest : public testing::Test {
     EXPECT_EQ(2, shm->internal_info_.worker_queue_stalls_[0].count());
     EXPECT_EQ(1, shm->internal_info_.worker_queue_stalls_[1].count());
     EXPECT_EQ(false, shm->overloaded_);
-    EXPECT_EQ(ServerHealthMonitor::NodeState::HEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::HEALTHY, shm->node_status_);
     EXPECT_EQ(kExtraLongLoopDuration.count(),
               shm->state_timer_.getCurrentValue().count());
   }
@@ -299,7 +299,7 @@ class ServerHealthMonitorTest : public testing::Test {
 
     health_monitor_closed.wait();
     EXPECT_EQ(true, shm->internal_info_.health_monitor_delay_);
-    EXPECT_EQ(ServerHealthMonitor::NodeState::UNHEALTHY, shm->node_state_);
+    EXPECT_EQ(HealthMonitor::NodeStatus::UNHEALTHY, shm->node_status_);
   }
 };
 

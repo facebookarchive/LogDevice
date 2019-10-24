@@ -23,7 +23,6 @@ namespace facebook { namespace logdevice {
 
 class ServerHealthMonitor : public HealthMonitor {
  public:
-  enum class NodeState { HEALTHY, OVERLOADED, UNHEALTHY };
   ServerHealthMonitor(folly::Executor& executor,
                       std::chrono::milliseconds sleep_period,
                       int num_workers,
@@ -37,6 +36,7 @@ class ServerHealthMonitor : public HealthMonitor {
 
   void startUp() override;
   folly::SemiFuture<folly::Unit> shutdown() override;
+  NodeStatus getNodeStatus() override;
 
   // reporter methods
   void reportWatchdogHealth(bool delayed) override;
@@ -90,7 +90,7 @@ class ServerHealthMonitor : public HealthMonitor {
 
   ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
       state_timer_;
-  NodeState node_state_{NodeState::HEALTHY};
+  NodeStatus node_status_{NodeStatus::HEALTHY};
   bool overloaded_{false};
   StallInfo stall_info_{0, false};
 

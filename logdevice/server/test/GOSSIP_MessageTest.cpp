@@ -41,6 +41,7 @@ struct Params {
   bool with_failover = false;
   bool with_boycott = false;
   bool with_starting = false;
+  bool with_health_status = false;
   std::string expected;
 };
 void checkGOSSIP_Node(const GOSSIP_Node& left, const GOSSIP_Node& right) {
@@ -49,6 +50,7 @@ void checkGOSSIP_Node(const GOSSIP_Node& left, const GOSSIP_Node& right) {
   EXPECT_EQ(left.gossip_ts_, right.gossip_ts_);
   EXPECT_EQ(left.failover_, right.failover_);
   EXPECT_EQ(left.is_node_starting_, right.is_node_starting_);
+  EXPECT_EQ(left.node_status_, right.node_status_);
 };
 
 void checkNodeList(const node_list_t& left, const node_list_t& right) {
@@ -97,6 +99,11 @@ void serializeAndDeserializeTest(Params params) {
   if (params.with_boycott) {
     boycott_durations.emplace_back(
         1, 30min, 2h, 1min, 30s, 2, 60min, BoycottAdaptiveDuration::TS(1000h));
+  }
+
+  if (params.with_health_status) {
+    node_list[0].node_status_ = HealthMonitor::NodeStatus::HEALTHY;
+    node_list[1].node_status_ = HealthMonitor::NodeStatus::UNHEALTHY;
   }
 
   GOSSIP_Message msg(this_node,
@@ -198,5 +205,23 @@ TEST(GOSSIP_MessageTest, SerializeAndDeserializeWithStarting) {
       "000000000100000000000000050000000000000001000000000000000000000000000000"
       "010000000000000002000000000000000A00000000000000020000000000000001000000"
       "00000000";
+  serializeAndDeserializeTest(params);
+}
+
+TEST(GOSSIP_MessageTest, SerializeAndDeserializeWithNodeHealthStatus) {
+  Params params{
+      Compatibility::ProtocolVersion::HEALTH_MONITOR_SUPPORT_IN_GOSSIP};
+  params.with_health_status = true;
+  params.expected = "0200000001000001000000000000000100000000000000000000000000"
+                    "0000000000000000000000010000000000000005000000000000000000"
+                    "0000000000000000000001000000010000000000000002000000000000"
+                    "000A0000000000000000000000000000000000000003000000";
+  serializeAndDeserializeTest(params);
+
+  params.with_failover = true;
+  params.expected = "0200000001000101000000000000000100000000000000000000000000"
+                    "0000000000000000000000010000000000000005000000000000000100"
+                    "0000000000000000000001000000010000000000000002000000000000"
+                    "000A0000000000000002000000000000000000000003000000";
   serializeAndDeserializeTest(params);
 }

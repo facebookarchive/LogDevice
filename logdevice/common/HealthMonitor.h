@@ -13,12 +13,16 @@ namespace facebook { namespace logdevice {
 
 class HealthMonitor {
  public:
+  enum class NodeStatus { UNDEFINED, HEALTHY, OVERLOADED, UNHEALTHY };
   HealthMonitor() {}
   virtual ~HealthMonitor() {}
 
   virtual void startUp() {}
   virtual folly::SemiFuture<folly::Unit> shutdown() {
     return folly::makeSemiFuture();
+  }
+  virtual NodeStatus getNodeStatus() {
+    return NodeStatus::UNDEFINED;
   }
 
   // reporter methods

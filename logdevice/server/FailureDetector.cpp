@@ -401,6 +401,7 @@ void FailureDetector::gossip() {
   node.failover_ =
       failover_.load() ? instance_id_ : std::chrono::milliseconds::zero();
   node.is_node_starting_ = !isLogsConfigLoaded();
+  node.status_ = processor_->getHealthMonitor().getNodeStatus();
   // Don't trigger other nodes' state transition until we receive min number
   // of gossips. The GCS reply is not same as a regular gossip, and therefore
   // doesn't contain Node::gossip_ values. The default values of Node::gossip_
@@ -479,6 +480,7 @@ void FailureDetector::gossip() {
     gnode.gossip_ts_ = it.second.gossip_ts_;
     gnode.failover_ = it.second.failover_;
     gnode.is_node_starting_ = it.second.is_node_starting_;
+    gnode.node_status_ = it.second.status_;
     node_list.push_back(gnode);
   }
 
@@ -724,6 +726,7 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
           // TODO: figure out what to do for compat
           nodes_[id].is_node_starting_ = node.is_node_starting_;
         }
+        nodes_[id].status_ = node.node_status_;
       }
       continue;
     }
