@@ -82,6 +82,10 @@ void AsyncSocketAdapter::closeNow() {
   sock_->closeNow();
 }
 
+void AsyncSocketAdapter::close() {
+  sock_->close();
+}
+
 bool AsyncSocketAdapter::good() const {
   return sock_->good();
 }

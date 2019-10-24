@@ -33,7 +33,6 @@ class Sockaddr;
 class Worker;
 
 /**
- * Interface to access dependencies of Socket.
  * Unit tests implement a derived class, @see common/test/SocketTest.cpp.
  */
 class SocketDependencies {

@@ -120,6 +120,11 @@ class AsyncSocketAdapter : public SocketAdapter {
   void closeNow() override;
 
   /**
+   * Close the socket after flushing write buffer. Stop reading immediately.
+   */
+  void close() override;
+
+  /**
    * Determine if transport is open and ready to read or write.
    *
    * Note that this function returns false on EOF; you must also call error()
@@ -200,6 +205,9 @@ class AsyncSocketAdapter : public SocketAdapter {
     return addr;
   }
 
+  /**
+   * @return Get the underlying file description used by the async socket.
+   */
   folly::NetworkSocket getNetworkSocket() const override;
 
   /**

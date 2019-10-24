@@ -58,6 +58,11 @@ class SocketAdapter {
   virtual void closeNow() = 0;
 
   /**
+   * Close the socket after flushing write buffer. Stop reading immediately.
+   */
+  virtual void close() = 0;
+
+  /**
    * Determine if transport is open and ready to read or write.
    *
    * Note that this function returns false on EOF; you must also call error()

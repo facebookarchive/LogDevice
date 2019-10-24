@@ -320,7 +320,7 @@ class Socket : public TrafficShappingSocket {
    *
    * @param reason for closing. See close().
    */
-  void flushOutputAndClose(Status reason);
+  virtual void flushOutputAndClose(Status reason);
 
   /**
    * Set the RFC 2474 "Differentiated Services Field Code Point" value
@@ -508,7 +508,7 @@ class Socket : public TrafficShappingSocket {
    * @return should only be called if the socket is SSL enabled. Returns
    *         the peers certificate if one was provided and nullptr otherwise.
    */
-  X509* getPeerCert() const;
+  virtual X509* getPeerCert() const;
 
   void setPeerShuttingDown() {
     peer_shuttingdown_ = true;

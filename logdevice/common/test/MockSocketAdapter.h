@@ -29,6 +29,7 @@ class MockSocketAdapter : public SocketAdapter {
   }
 
   MOCK_METHOD0(closeNow, void());
+  MOCK_METHOD0(close, void());
   MOCK_CONST_METHOD0(good, bool());
   MOCK_CONST_METHOD0(readable, bool());
   MOCK_CONST_METHOD0(writable, bool());

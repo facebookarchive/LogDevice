@@ -330,6 +330,25 @@ void Connection::close(Status reason) {
   }
 }
 
+void Connection::flushOutputAndClose(Status reason) {
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
+  if (!sock_) {
+    return Socket::flushOutputAndClose(reason);
+  }
+
+  if (isClosed()) {
+    return;
+  }
+
+  if (sendChain_ || sock_write_cb_.chain_lengths_.size() > 0) {
+    close_reason_ = reason;
+    // Set the readcallback to nullptr as we know that socket is getting closed.
+    sock_->setReadCB(nullptr);
+  } else {
+    close(reason);
+  }
+}
+
 bool Connection::isClosed() const {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   return Socket::isClosed();
@@ -376,6 +395,18 @@ size_t Connection::getBytesPending() const {
     bytes_pending += sock_write_cb_.bufferedBytes();
   }
   return bytes_pending;
+}
+
+X509* Connection::getPeerCert() const {
+  if (!sock_) {
+    return Socket::getPeerCert();
+  }
+  ld_check(isSSL());
+  auto sock_peer_cert = sock_->getPeerCertificate();
+  if (sock_peer_cert) {
+    return sock_peer_cert->getX509().get();
+  }
+  return nullptr;
 }
 
 void Connection::onConnectTimeout() {
@@ -426,6 +457,14 @@ void Connection::drainSendQueue() {
                                 getPeerType(),
                                 /* message_type */ folly::none);
     cb.chain_lengths_.pop_front();
+  }
+
+  // flushOutputAndClose sets close_reason_ and waits for all buffers to drain.
+  // Check if all buffers were drained here if that is the case close the
+  // connection.
+  if (close_reason_ != E::UNKNOWN && cb.chain_lengths_.size() == 0 &&
+      !sendChain_) {
+    close(close_reason_);
   }
 }
 }} // namespace facebook::logdevice

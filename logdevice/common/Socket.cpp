@@ -2199,23 +2199,22 @@ size_t Socket::getTcpSendBufSize() const {
   if (now - tcp_sndbuf_cache_.update_time >= SNDBUF_CACHE_TTL) {
     tcp_sndbuf_cache_.update_time = now;
     socklen_t optlen = sizeof(int);
-    int fd = LD_EV(bufferevent_getfd)(bev_);
-    ld_check(fd != -1);
+    ld_check(fd_ != -1);
     int prev_tcp_sndbuf_size_cache = tcp_sndbuf_cache_.size;
-    int rv =
-        getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &tcp_sndbuf_cache_.size, &optlen);
+    int rv = getsockopt(
+        fd_, SOL_SOCKET, SO_SNDBUF, &tcp_sndbuf_cache_.size, &optlen);
     if (rv == 0) {
       if (tcp_sndbuf_cache_.size > 0) {
         tcp_sndbuf_cache_.size /= 2;
       } else {
         ld_error("getsockopt() returned non-positive number %d: %s",
-                 fd,
+                 fd_,
                  strerror(errno));
         tcp_sndbuf_cache_.size = prev_tcp_sndbuf_size_cache;
       }
     } else {
       ld_error("Failed to get sndbuf size for TCP socket %d: %s",
-               fd,
+               fd_,
                strerror(errno));
       tcp_sndbuf_cache_.size = prev_tcp_sndbuf_size_cache;
     }

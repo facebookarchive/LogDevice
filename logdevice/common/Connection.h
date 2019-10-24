@@ -149,6 +149,8 @@ class Connection : public Socket {
 
   void close(Status reason) override;
 
+  void flushOutputAndClose(Status reason) override;
+
   bool isClosed() const override;
 
   void setSocketAdapter(std::unique_ptr<SocketAdapter> adapter);
@@ -158,6 +160,8 @@ class Connection : public Socket {
                           std::unique_ptr<folly::IOBuf> msg_buffer) override;
 
   size_t getBytesPending() const override;
+
+  X509* getPeerCert() const override;
 
  protected:
   folly::Future<Status> asyncConnect();
