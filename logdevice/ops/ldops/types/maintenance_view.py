@@ -12,6 +12,7 @@ import operator
 from datetime import datetime, timedelta
 from typing import Any, Collection, Dict, Optional, Tuple
 
+from ldops.const import INTERNAL_USER
 from ldops.exceptions import NodeIsNotASequencerError
 from ldops.types.maintenance_overall_status import MaintenanceOverallStatus
 from ldops.types.node_view import NodeView
@@ -215,6 +216,10 @@ class MaintenanceView:
     @property
     def is_in_progress(self) -> bool:
         return not self.is_blocked and not self.is_completed
+
+    @property
+    def is_internal(self) -> bool:
+        return self.user == INTERNAL_USER
 
     def get_shard_state(self, shard: ShardID) -> ShardState:
         assert shard.node.node_index is not None

@@ -297,6 +297,7 @@ class TestMaintenanceView(TestCase):
             self.assertFalse(mv.is_blocked)
             self.assertFalse(mv.is_completed)
             self.assertTrue(mv.is_in_progress)
+            self.assertFalse(mv.is_internal)
             self.assertEqual(mv.overall_status, MaintenanceOverallStatus.IN_PROGRESS)
 
             # In progress
@@ -321,6 +322,7 @@ class TestMaintenanceView(TestCase):
             self.assertFalse(mv.is_blocked)
             self.assertFalse(mv.is_completed)
             self.assertTrue(mv.is_in_progress)
+            self.assertFalse(mv.is_internal)
             self.assertEqual(mv.overall_status, MaintenanceOverallStatus.IN_PROGRESS)
 
             # Blocked
