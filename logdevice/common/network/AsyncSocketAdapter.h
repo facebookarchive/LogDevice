@@ -46,8 +46,7 @@ class AsyncSocketAdapter : public SocketAdapter {
    * Create a client AsyncSSLSocket
    */
   AsyncSocketAdapter(const std::shared_ptr<folly::SSLContext>& ctx,
-                     folly::EventBase* evb,
-                     bool deferSecurityNegotiation = false);
+                     folly::EventBase* evb);
 
   /**
    * Create a new AsyncSocket and begin the connection process.
@@ -93,13 +92,10 @@ class AsyncSocketAdapter : public SocketAdapter {
    * @param ctx  SSL context for this connection.
    * @param evb  EventBase that will manage this socket.
    * @param fd   File descriptor to take over (should be a connected socket).
-   * @param serverName tlsext_hostname that will be sent in ClientHello.
    */
   AsyncSocketAdapter(const std::shared_ptr<folly::SSLContext>& ctx,
                      folly::EventBase* evb,
-                     folly::NetworkSocket fd,
-                     const std::string& serverName,
-                     bool deferSecurityNegotiation = false);
+                     folly::NetworkSocket fd);
 
   ~AsyncSocketAdapter() override;
 

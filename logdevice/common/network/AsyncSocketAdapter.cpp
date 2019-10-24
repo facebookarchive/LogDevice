@@ -37,11 +37,9 @@ AsyncSocketAdapter::AsyncSocketAdapter(folly::EventBase* evb,
 
 AsyncSocketAdapter::AsyncSocketAdapter(
     const std::shared_ptr<folly::SSLContext>& ctx,
-    folly::EventBase* evb,
-    bool deferSecurityNegotiation)
-    : sock_(folly::AsyncSocket::UniquePtr(
-          new folly::AsyncSSLSocket(ctx, evb, deferSecurityNegotiation),
-          Destructor())) {}
+    folly::EventBase* evb)
+    : sock_(folly::AsyncSocket::UniquePtr(new folly::AsyncSSLSocket(ctx, evb),
+                                          Destructor())) {}
 
 AsyncSocketAdapter::AsyncSocketAdapter(folly::EventBase* evb,
                                        const std::string& ip,
@@ -61,16 +59,13 @@ AsyncSocketAdapter::AsyncSocketAdapter(folly::EventBase* evb,
 AsyncSocketAdapter::AsyncSocketAdapter(
     const std::shared_ptr<folly::SSLContext>& ctx,
     folly::EventBase* evb,
-    folly::NetworkSocket fd,
-    const std::string& serverName,
-    bool deferSecurityNegotiation)
-    : sock_(folly::AsyncSocket::UniquePtr(
-          new folly::AsyncSSLSocket(ctx,
-                                    evb,
-                                    fd,
-                                    serverName,
-                                    deferSecurityNegotiation),
-          Destructor())) {}
+    folly::NetworkSocket fd)
+    : sock_(
+          folly::AsyncSocket::UniquePtr(new folly::AsyncSSLSocket(ctx, evb, fd),
+                                        Destructor())) {
+  auto sock = dynamic_cast<folly::AsyncSSLSocket*>(sock_.get());
+  sock->sslAccept(nullptr /*handshakecb*/);
+}
 
 AsyncSocketAdapter::~AsyncSocketAdapter() {}
 

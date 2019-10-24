@@ -66,21 +66,6 @@ class SocketImpl {
       pending_bw_cbs_;
 };
 
-// Setting the env forces all sockets to be SSL-enabled. Aiming to load the
-// env just once.
-static bool forceSSLSockets() {
-  static std::atomic<int> force_ssl{-1};
-  int val = force_ssl.load();
-  if (val == -1) {
-    const char* env = getenv("LOGDEVICE_TEST_FORCE_SSL");
-    // Return false for null, "" and "0", true otherwise.
-    val = env != nullptr && strlen(env) > 0 && strcmp(env, "0") != 0;
-
-    force_ssl.store(val);
-  }
-  return val;
-}
-
 static std::chrono::milliseconds
 getTimeDiff(std::chrono::steady_clock::time_point& start_time) {
   auto diff = std::chrono::steady_clock::now() - start_time;
@@ -128,12 +113,7 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
       deferred_event_queue_event_(deps_->getEvBase()),
       end_stream_rewind_event_(deps_->getEvBase()),
       buffered_output_flush_event_(deps_->getEvBase()) {
-  if ((conntype == ConnectionType::SSL) ||
-      (forceSSLSockets() && type != SocketType::GOSSIP)) {
-    conntype_ = ConnectionType::SSL;
-  } else {
-    conntype_ = ConnectionType::PLAIN;
-  }
+  conntype_ = conntype;
 
   if (!peer_sockaddr.valid()) {
     ld_check(!peer_name.isClientAddress());

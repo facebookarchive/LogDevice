@@ -7,27 +7,21 @@
  */
 #pragma once
 
-#include <memory>
-
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SocketTypes.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 #include "logdevice/common/network/IConnectionFactory.h"
 
 namespace facebook { namespace logdevice {
-
-struct Settings;
 class Connection;
 class FlowGroup;
-class Sockaddr;
+class SockAddr;
 class SocketDependencies;
-
-class ConnectionFactory : public IConnectionFactory {
+class LibeventCompatibilityConnectionFactory : public IConnectionFactory {
  public:
-  ConnectionFactory() {}
-
-  ~ConnectionFactory() override {}
+  explicit LibeventCompatibilityConnectionFactory(EvBase& base);
 
   std::unique_ptr<Connection>
   createConnection(NodeID node_id,
@@ -42,9 +36,12 @@ class ConnectionFactory : public IConnectionFactory {
                    const Sockaddr& client_address,
                    ResourceBudget::Token connection_token,
                    SocketType type,
-                   ConnectionType connection_type,
+                   ConnectionType conntype,
                    FlowGroup& flow_group,
                    std::unique_ptr<SocketDependencies> deps) const override;
+
+ private:
+  std::unique_ptr<IConnectionFactory> concrete_factory_;
 };
 
 }} // namespace facebook::logdevice

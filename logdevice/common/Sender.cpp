@@ -149,7 +149,7 @@ Sender::Sender(std::shared_ptr<const Settings> settings,
              std::move(nodes),
              my_index,
              my_location,
-             std::make_unique<ConnectionFactory>(*settings),
+             std::make_unique<ConnectionFactory>(),
              stats){};
 
 Sender::Sender(std::shared_ptr<const Settings> settings,
@@ -981,16 +981,16 @@ Socket* Sender::initServerSocket(NodeID nid,
     bool ssl_authentication = false;
     bool use_ssl = !allow_unencrypted &&
         useSSLWith(nid, &cross_boundary, &ssl_authentication);
+    if (sock_type == SocketType::GOSSIP) {
+      ld_check(is_gossip_sender_);
+      if (Worker::settings().send_to_gossip_port) {
+        use_ssl = Worker::settings().ssl_on_gossip_port;
+      }
+    }
 
     try {
       auto& flow_group =
           nw_shaping_container_->selectFlowGroup(flow_group_scope);
-      if (sock_type == SocketType::GOSSIP) {
-        ld_check(is_gossip_sender_);
-        if (Worker::settings().send_to_gossip_port) {
-          use_ssl = Worker::settings().ssl_on_gossip_port;
-        }
-      }
 
       auto sock = connection_factory_->createConnection(
           nid,
@@ -1002,7 +1002,13 @@ Socket* Sender::initServerSocket(NodeID nid,
 
       auto res = impl_->server_sockets_.emplace(nid.index(), std::move(sock));
       it = res.first;
-    } catch (ConstructorFailed&) {
+    } catch (ConstructorFailed& exp) {
+      ld_critical("Could not create server socket to node %s sock_type %s "
+                  "use_ssl %d. %s",
+                  toString(nid).c_str(),
+                  socketTypeToString(sock_type),
+                  use_ssl,
+                  exp.what());
       if (err == E::NOTINCONFIG || err == E::NOSSLCONFIG) {
         return nullptr;
       }
