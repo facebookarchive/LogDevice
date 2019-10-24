@@ -2495,13 +2495,12 @@ SocketDrainStatusType Socket::checkSocketHealth() {
     decision = SocketDrainStatusType::ACTIVE;
   }
 
-  if (decision != SocketDrainStatusType::UNKNOWN &&
-      decision != SocketDrainStatusType::IDLE &&
-      decision != SocketDrainStatusType::ACTIVE) {
+  if (decision == SocketDrainStatusType::STALLED ||
+      (is_active && decision != SocketDrainStatusType::ACTIVE)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    5,
-                   "[%s]. Oldest msg %lums old, throughput %.3fKBps, active "
-                   "time %.3fs], decision %s, net %u%%, rwnd %u%%, sndbuf %u%%",
+                   "[%s]: Oldest msg %lums old, throughput %.3fKBps, active "
+                   "time %.3fs, decision %s, net %u%%, rwnd %u%%, sndbuf %u%%",
                    peer_name_.toString().c_str(),
                    age_in_ms,
                    rateKBps,
@@ -2510,6 +2509,15 @@ SocketDrainStatusType Socket::checkSocketHealth() {
                    net_ltd_pct,
                    rwnd_ltd_pct,
                    sndbuf_ltd_pct);
+  } else {
+    ld_debug(
+        "[%s] : Oldest msg age %lums, throughput %.3fKBps, active time %3.fs, "
+        "decision %s",
+        peer_name_.toString().c_str(),
+        age_in_ms,
+        rateKBps,
+        s.active_time_.count() / 1e3,
+        socketDrainStatusToString(decision));
   }
   // Socket is having a normal throughput increment the busy_time for the
   // socket. This is just an estimate, actual busy time might be lesser than
