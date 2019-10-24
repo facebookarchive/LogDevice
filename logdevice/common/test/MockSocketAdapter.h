@@ -28,8 +28,8 @@ class MockSocketAdapter : public SocketAdapter {
     connect_(callback, address, timeout, options, bindAddr);
   }
 
-  MOCK_METHOD0(closeNow, void());
   MOCK_METHOD0(close, void());
+  MOCK_METHOD0(closeNow, void());
   MOCK_CONST_METHOD0(good, bool());
   MOCK_CONST_METHOD0(readable, bool());
   MOCK_CONST_METHOD0(writable, bool());

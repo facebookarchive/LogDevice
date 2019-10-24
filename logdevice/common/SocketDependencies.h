@@ -38,7 +38,11 @@ class Worker;
 class SocketDependencies {
  public:
   SocketDependencies(Processor* processor, Sender* sender);
-
+  /*
+   * Indicates whether the event base on this socket is attached to legacy
+   * type or not.
+   */
+  virtual bool attachedToLegacyEventBase() const;
   virtual const Settings& getSettings() const;
   virtual StatsHolder* getStats() const;
   virtual std::shared_ptr<Configuration> getConfig() const;

@@ -14,6 +14,10 @@
 
 namespace facebook { namespace logdevice {
 
+bool TestSocketDependencies::attachedToLegacyEventBase() const {
+  return owner_->attachedToLegacyEventBase_;
+}
+
 const Settings& TestSocketDependencies::getSettings() const {
   return owner_->settings_;
 }

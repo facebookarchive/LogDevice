@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include "event2/bufferevent.h"
 #include "event2/bufferevent_ssl.h"
 #include "event2/event.h"
 #include "logdevice/common/AdminCommandTable.h"
@@ -204,16 +205,18 @@ Socket::Socket(int fd,
   // note that caller (Sender.addClient()) does not close(fd) on error.
   // If you add code here that throws ConstructorFailed you must close(fd)!
 
-  bev_ = newBufferevent(fd,
-                        client_addr.family(),
-                        &tcp_sndbuf_cache_.size,
-                        &tcp_rcvbuf_size_,
-                        // This is only used if conntype_ == SSL, tells libevent
-                        // we are in a server context
-                        BUFFEREVENT_SSL_ACCEPTING,
-                        getSettings().client_dscp_default);
-  if (!bev_) {
-    throw ConstructorFailed(); // err is already set
+  if (deps_->attachedToLegacyEventBase()) {
+    bev_ = newBufferevent(fd,
+                          client_addr.family(),
+                          &tcp_sndbuf_cache_.size,
+                          &tcp_rcvbuf_size_,
+                          // This is only used if conntype_ == SSL, tells
+                          // libevent we are in a server context
+                          BUFFEREVENT_SSL_ACCEPTING,
+                          getSettings().client_dscp_default);
+    if (!bev_) {
+      throw ConstructorFailed(); // err is already set
+    }
   }
   conn_closed_ = std::make_shared<std::atomic<bool>>(false);
   conn_incoming_token_ = std::move(conn_token);
@@ -1087,27 +1090,31 @@ void Socket::close(Status reason) {
     }
   }
 
-  size_t buffered_bytes = LD_EV(evbuffer_get_length)(deps_->getOutput(bev_));
+  if (deps_->attachedToLegacyEventBase()) {
+    // This means that bufferevent was created and should be valid here.
+    ld_check(bev_);
+    size_t buffered_bytes = LD_EV(evbuffer_get_length)(deps_->getOutput(bev_));
 
-  if (buffered_output_) {
-    buffered_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
-    buffered_output_flush_event_.cancelTimeout();
-    LD_EV(evbuffer_free)(buffered_output_);
-    buffered_output_ = nullptr;
+    if (buffered_output_) {
+      buffered_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
+      buffered_output_flush_event_.cancelTimeout();
+      LD_EV(evbuffer_free)(buffered_output_);
+      buffered_output_ = nullptr;
+    }
+
+    if (isSSL()) {
+      deps_->buffereventShutDownSSL(bev_);
+    }
+
+    if (buffered_bytes != 0 && !deps_->shuttingDown()) {
+      deps_->noteBytesDrained(buffered_bytes,
+                              getPeerType(),
+                              /* message_type */ folly::none);
+    }
+
+    deps_->buffereventFree(bev_); // this also closes the TCP socket
+    bev_ = nullptr;
   }
-
-  if (isSSL()) {
-    deps_->buffereventShutDownSSL(bev_);
-  }
-
-  if (buffered_bytes != 0 && !deps_->shuttingDown()) {
-    deps_->noteBytesDrained(buffered_bytes,
-                            getPeerType(),
-                            /* message_type */ folly::none);
-  }
-
-  deps_->buffereventFree(bev_); // this also closes the TCP socket
-  bev_ = nullptr;
 
   // socket was just closed; make sure it's properly accounted for
   conn_incoming_token_.release();
@@ -1767,18 +1774,19 @@ void Socket::endStreamRewind() {
 
 void Socket::expectProtocolHeader() {
   ld_check(!isClosed());
-  size_t protohdr_bytes =
-      ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
+  if (bev_) {
+    size_t protohdr_bytes =
+        ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
 
-  // Set read watermarks. This tells bev_ to call dataReadCallback()
-  // only after sizeof(ProtocolHeader) bytes are available in the input
-  // evbuffer (low watermark). bev_ will stop reading from TCP socket after
-  // the evbuffer hits tcp_rcvbuf_size_ (high watermark).
-  deps_->buffereventSetWatermark(bev_,
-                                 EV_READ,
-                                 protohdr_bytes,
-                                 std::max(protohdr_bytes, tcp_rcvbuf_size_));
-
+    // Set read watermarks. This tells bev_ to call dataReadCallback()
+    // only after sizeof(ProtocolHeader) bytes are available in the input
+    // evbuffer (low watermark). bev_ will stop reading from TCP socket after
+    // the evbuffer hits tcp_rcvbuf_size_ (high watermark).
+    deps_->buffereventSetWatermark(bev_,
+                                   EV_READ,
+                                   protohdr_bytes,
+                                   std::max(protohdr_bytes, tcp_rcvbuf_size_));
+  }
   expecting_header_ = true;
 }
 
@@ -1786,17 +1794,18 @@ void Socket::expectMessageBody() {
   ld_check(!isClosed());
   ld_check(expecting_header_);
 
-  size_t protohdr_bytes =
-      ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-  ld_check(recv_message_ph_.len > protohdr_bytes);
-  ld_check(recv_message_ph_.len <= Message::MAX_LEN + protohdr_bytes);
+  if (bev_) {
+    size_t protohdr_bytes =
+        ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
+    ld_check(recv_message_ph_.len > protohdr_bytes);
+    ld_check(recv_message_ph_.len <= Message::MAX_LEN + protohdr_bytes);
 
-  deps_->buffereventSetWatermark(
-      bev_,
-      EV_READ,
-      recv_message_ph_.len - protohdr_bytes,
-      std::max((size_t)recv_message_ph_.len, tcp_rcvbuf_size_));
-
+    deps_->buffereventSetWatermark(
+        bev_,
+        EV_READ,
+        recv_message_ph_.len - protohdr_bytes,
+        std::max((size_t)recv_message_ph_.len, tcp_rcvbuf_size_));
+  }
   expecting_header_ = false;
 }
 

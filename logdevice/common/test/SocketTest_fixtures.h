@@ -43,6 +43,7 @@ class TestSocketDependencies : public SocketDependencies {
  public:
   explicit TestSocketDependencies(SocketTest* owner)
       : SocketDependencies(nullptr, nullptr), owner_(owner) {}
+  bool attachedToLegacyEventBase() const override;
   virtual const Settings& getSettings() const override;
   virtual StatsHolder* getStats() const override;
   virtual void noteBytesQueued(size_t nbytes,
@@ -317,6 +318,7 @@ class SocketTest : public ::testing::Test {
   EvBase ev_base_folly_;
   SteadyTimestamp cur_time_{SteadyTimestamp::now()};
 
+  bool attachedToLegacyEventBase_{true};
   // IMPORTANT: this remains uninitialized and a pointer to this is returned by
   // buffereventSocketConnect(). This remains untouched because Socket only
   // accesses this through TestSocketDependencies.

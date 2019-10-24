@@ -31,6 +31,7 @@ using namespace facebook::logdevice;
 class ClientConnectionTest : public SocketTest {
  public:
   ClientConnectionTest() : connect_throttle_({1, 1000}) {
+    attachedToLegacyEventBase_ = false;
     deps_ = new TestSocketDependencies(this);
     auto sock = std::make_unique<testing::NiceMock<MockSocketAdapter>>();
     sock_ = sock.get();

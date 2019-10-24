@@ -14,6 +14,7 @@
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/libevent/LibEventCompatibility.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/protocol/ACK_Message.h"
@@ -34,6 +35,14 @@ SocketDependencies::SocketDependencies(Processor* processor, Sender* sender)
     : processor_(processor),
       sender_(sender),
       worker_(Worker::onThisThread(false /*enforce_worker*/)) {}
+
+bool SocketDependencies::attachedToLegacyEventBase() const {
+  if (!worker_) {
+    return false;
+  }
+  const auto base_type = worker_->getEvBase().getType();
+  return base_type == EvBase::LEGACY_EVENTBASE;
+}
 
 const Settings& SocketDependencies::getSettings() const {
   return *processor_->settings();
