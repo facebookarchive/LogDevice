@@ -551,9 +551,16 @@ void Processor::shutdown() {
 
   // Shutdown wheeltimer so that before shutting down executor threads.
   impl_->wheel_timer_.shutdown();
-
   // Processor will now stop allowing any requests to workers.
   allow_post_during_shutdown_.store(false);
+  // Shutdown all socket on the worker thread before we break the eventloops.
+  for (auto& workers : impl_->all_workers_) {
+    for (auto& worker : workers) {
+      WorkerContextScopeGuard g(worker.get());
+      worker->sender().shutdownSockets(worker.get());
+    }
+  }
+
   // Tell all Workers to shut down and terminate their threads. This
   // also alters WorkerHandles so that further attempts to post
   // requests through them fail with E::SHUTDOWN.

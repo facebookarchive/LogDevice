@@ -672,7 +672,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "this false ignores per request and per message ExecutorPriority.",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Execution);
-  init("use-legacy-evenbase",
+  init("use-legacy-eventbase",
        &use_legacy_eventbase,
        "true",
        nullptr,

@@ -751,6 +751,17 @@ int Sender::closeAllClientSockets(Status reason) {
   return sockets_closed;
 }
 
+void Sender::shutdownSockets(folly::Executor* executor) {
+  Semaphore sem;
+  executor->add([&] {
+    closeAllSockets();
+    impl_->server_sockets_.clear();
+    impl_->client_sockets_.clear();
+    sem.post();
+  });
+  sem.wait();
+}
+
 bool Sender::isClosed() const {
   // Go over all sockets at shutdown to find pending work. This could help in
   // figuring which sockets are slow in draining buffers.

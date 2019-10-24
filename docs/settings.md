@@ -541,7 +541,7 @@ sidebar_label: Settings
 | num-workers | number of worker threads to run, or "cores" for one thread per CPU core | cores | requires&nbsp;restart |
 | prioritized-task-execution | Enable prioritized execution of requests within CPU executor. Setting this false ignores per request and per message ExecutorPriority. | true | requires&nbsp;restart |
 | test-mode | Enable functionality in integration tests. Currently used for admin commands that are only enabled for testing purposes. | false | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
-| use-legacy-evenbase | Use libevent2 based event base to create EventLoop threadpool in logdevice. | true | requires&nbsp;restart |
+| use-legacy-eventbase | Use libevent2 based event base to create EventLoop threadpool in logdevice. | true | requires&nbsp;restart |
 | worker-request-pipe-capacity | size each worker request queue to hold this many requests | 524288 | requires&nbsp;restart |
 
 ## Storage

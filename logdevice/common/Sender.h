@@ -499,6 +499,12 @@ class Sender : public SenderBase {
   }
 
   /**
+   * Final step of processor shutdown is to close all sockets on the executor
+   * thread where the socket were created thread.
+   */
+  void shutdownSockets(folly::Executor* exec);
+
+  /**
    * @return true iff all owned sockets are closed.
    */
   bool isClosed() const;
