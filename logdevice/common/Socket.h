@@ -1220,6 +1220,7 @@ class Socket : public TrafficShappingSocket {
   friend class SocketTest;
   friend class ClientSocketTest;
   friend class ServerSocketTest;
+  friend class ClientConnectionTest;
   friend class Connection;
 };
 

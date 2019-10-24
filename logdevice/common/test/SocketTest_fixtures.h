@@ -135,7 +135,15 @@ class TestSocketDependencies : public SocketDependencies {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Test fixtures
-
+struct SocketDeleter {
+  SocketDeleter(bool skip_delete = false) : skip_(skip_delete) {}
+  void operator()(Socket* s) {
+    if (!skip_) {
+      delete s;
+    }
+  }
+  bool skip_;
+};
 class SocketTest : public ::testing::Test {
  public:
   SocketTest()
@@ -144,13 +152,9 @@ class SocketTest : public ::testing::Test {
         server_addr_(get_localhost_address_str(), 4440),
         destination_node_id_(client_id_, 1),
         flow_group_(std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr)),
-        ev_base_mock_(EvBase::MOCK_EVENTBASE) {
-    socket_ = std::make_unique<Socket>(
-        server_name_,
-        SocketType::DATA,
-        ConnectionType::PLAIN,
-        flow_group_,
-        std::make_unique<TestSocketDependencies>(this));
+        ev_base_mock_(EvBase::MOCK_EVENTBASE),
+        socket_(
+            std::unique_ptr<Socket, SocketDeleter>(nullptr, SocketDeleter())) {
     input_ = LD_EV(evbuffer_new)();
     output_ = LD_EV(evbuffer_new)();
   }
@@ -303,12 +307,14 @@ class SocketTest : public ::testing::Test {
   Sockaddr server_addr_;  // stays invalid on a client.
   NodeID source_node_id_; // stays invalid on a client.
   NodeID destination_node_id_;
-  std::string cluster_name_;
-  std::string credentials_;
+  std::string cluster_name_{"Socket_test_cluster"};
+  std::string credentials_{"Socket_test_credentials"};
   std::string csid_;
-  std::string client_build_info_;
+  std::string client_build_info_{"{}"};
   FlowGroup flow_group_;
+  bool use_mock_evbase_{true};
   EvBaseMock ev_base_mock_;
+  EvBase ev_base_folly_;
   SteadyTimestamp cur_time_{SteadyTimestamp::now()};
 
   // IMPORTANT: this remains uninitialized and a pointer to this is returned by
@@ -343,27 +349,31 @@ class SocketTest : public ::testing::Test {
   ResourceBudget conn_budget_external_{std::numeric_limits<uint64_t>::max()};
   ResourceBudget incoming_message_bytes_limit_{
       std::numeric_limits<uint64_t>::max()};
-  std::function<void(Message*,
-                     const Address&,
-                     std::shared_ptr<PrincipalIdentity>,
-                     ResourceBudget::Token)>
+  // On returning ERROR or NORMAL, the message onReceived is not invoked but the
+  // status is returned to caller for appropriate processing. On returning KEEP
+  // the message is forwarded to msg->onReceived for further processing.
+  std::function<Message::Disposition(Message*,
+                                     const Address&,
+                                     std::shared_ptr<PrincipalIdentity>,
+                                     ResourceBudget::Token)>
       on_received_hook_;
 
   std::function<void(struct event*)> ev_timer_add_hook_;
 
-  std::unique_ptr<Socket> socket_;
+  std::unique_ptr<Socket, SocketDeleter> socket_;
 };
 
 class ClientSocketTest : public SocketTest {
  public:
   ClientSocketTest() {
     // Create a client socket.
-    socket_ = std::make_unique<Socket>(
-        server_name_,
-        SocketType::DATA,
-        ConnectionType::PLAIN,
-        flow_group_,
-        std::make_unique<TestSocketDependencies>(this));
+    socket_ = std::unique_ptr<Socket, SocketDeleter>(
+        new Socket(server_name_,
+                   SocketType::DATA,
+                   ConnectionType::PLAIN,
+                   flow_group_,
+                   std::make_unique<TestSocketDependencies>(this)),
+        SocketDeleter());
     cluster_name_ = "Socket_test_cluster";
     credentials_ = "Socket_test_credentials";
     csid_ = "client_uuid";
@@ -387,15 +397,17 @@ class ServerSocketTest : public SocketTest {
     // Note that we can pass whatever we want here for fd and client_addr
     // because Socket will not use them directly, it will always pass them to
     // methods of TestSocketDependencies so these will remain untouched.
-    socket_ = std::make_unique<Socket>(
-        42 /* fd */,
-        ClientID(client_id_) /* client_name */,
-        Sockaddr(get_localhost_address_str(), 4440) /* client_addr */,
-        ResourceBudget::Token() /* accounting token, not used */,
-        SocketType::DATA /* socket type */,
-        ConnectionType::PLAIN,
-        flow_group_,
-        std::make_unique<TestSocketDependencies>(this));
+    socket_ = std::unique_ptr<Socket, SocketDeleter>(
+        new Socket(
+            42 /* fd */,
+            ClientID(client_id_) /* client_name */,
+            Sockaddr(get_localhost_address_str(), 4440) /* client_addr */,
+            ResourceBudget::Token() /* accounting token, not used */,
+            SocketType::DATA /* socket type */,
+            ConnectionType::PLAIN,
+            flow_group_,
+            std::make_unique<TestSocketDependencies>(this)),
+        SocketDeleter());
     // A server socket is connected from the beginning.
     EXPECT_TRUE(connected());
     EXPECT_FALSE(handshaken());

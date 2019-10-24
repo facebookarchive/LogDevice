@@ -48,6 +48,7 @@ Message::Disposition DUMMY_Message::onReceived(const Address& /*from*/) {
 template <>
 void DUMMY_Message::onSent(Status, const Address& to) const {
   if (header_.send_another) {
+    ld_info("Dummy message on sent invoked.");
     auto msg = std::make_unique<DUMMY_Message>(DUMMY_Header{false});
     Worker::onThisThread()->sender().sendMessage(std::move(msg), to);
     // shouldn't trip an assert

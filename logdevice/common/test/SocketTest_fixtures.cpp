@@ -63,7 +63,8 @@ TestSocketDependencies::getNodeSockaddr(NodeID nid,
 }
 
 EvBase* TestSocketDependencies::getEvBase() {
-  return &owner_->ev_base_mock_;
+  return owner_->use_mock_evbase_ ? &owner_->ev_base_mock_
+                                  : &owner_->ev_base_folly_;
 }
 
 const struct timeval*
@@ -187,7 +188,12 @@ TestSocketDependencies::onReceived(Message* msg,
                                    std::shared_ptr<PrincipalIdentity> identity,
                                    ResourceBudget::Token token) {
   if (owner_->on_received_hook_) {
-    owner_->on_received_hook_(msg, from, identity, std::move(token));
+    auto retval =
+        owner_->on_received_hook_(msg, from, identity, std::move(token));
+    if (retval == Message::Disposition::NORMAL ||
+        retval == Message::Disposition::ERROR) {
+      return retval;
+    }
   }
   return msg->onReceived(from);
 }

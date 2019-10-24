@@ -590,7 +590,7 @@ TEST_F(ClientSocketTest, CloseConnectionOnProtocolChecksumMismatch) {
   ld_check(socket_->isClosed());
 }
 // Test that we can reconnect after error
-TEST_F(ClientSocketTest, ReconnectPossible) {
+TEST_F(ClientSocketTest, DISABLED_ReconnectPossible) {
   // If buffereventSocketConnect returns -1 with err set to ENETUNREACH,
   // connect() should fail immediately with E::UNROUTABLE.
   setNextConnectAttempsStatus(ENETUNREACH);
@@ -643,8 +643,8 @@ TEST_F(ServerSocketTest, IncomingMessageBytesLimit) {
                           const Address&,
                           std::shared_ptr<PrincipalIdentity>,
                           ResourceBudget::Token token) {
-    ASSERT_TRUE(token.valid());
-    ASSERT_FALSE(incoming_message_bytes_limit_.acquire(msg->size()));
+    EXPECT_TRUE(token.valid());
+    EXPECT_FALSE(incoming_message_bytes_limit_.acquire(msg->size()));
     auto check_node_hdr = CHECK_NODE_HEALTH_Header{request_id_t(1), 1, 0};
     // Try sending another message, this message should fail to send with
     // ENOBUFS.
@@ -658,6 +658,7 @@ TEST_F(ServerSocketTest, IncomingMessageBytesLimit) {
       }
     };
     receiveMsg(new_msg);
+    return Message::Disposition::NORMAL;
   };
 
   auto check_node_hdr = CHECK_NODE_HEALTH_Header{request_id_t(1), 1, 0};

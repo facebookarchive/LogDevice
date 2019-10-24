@@ -42,10 +42,15 @@ class MockSocketAdapter : public SocketAdapter {
   MOCK_CONST_METHOD0(getRawBytesReceived, size_t());
   MOCK_METHOD1(setReadCB, void(folly::AsyncSocket::ReadCallback*));
   MOCK_CONST_METHOD0(getReadCallback, folly::AsyncSocket::ReadCallback*());
-  MOCK_METHOD3(writeChain,
+  MOCK_METHOD3(writeChain_,
                void(folly::AsyncSocket::WriteCallback*,
-                    std::unique_ptr<folly::IOBuf>&&,
+                    folly::IOBuf*,
                     folly::WriteFlags));
+  void writeChain(WriteCallback* callback,
+                  std::unique_ptr<folly::IOBuf>&& buf,
+                  folly::WriteFlags flags) override {
+    writeChain_(callback, buf.release(), flags);
+  }
   MOCK_METHOD1(setSendBufSize, int(size_t));
   MOCK_METHOD1(setRecvBufSize, int(size_t));
   MOCK_METHOD4(getSockOptVirtual, int(int, int, void*, socklen_t*));
