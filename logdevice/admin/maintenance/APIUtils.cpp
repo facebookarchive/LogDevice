@@ -209,7 +209,7 @@ void fillSystemGeneratedAttributes(
     std::vector<MaintenanceDefinition>& definitions) {
   // System-generated values.
   auto created_on = SystemTimestamp::now().toMilliseconds().count();
-  int32_t expires_on = 0;
+  int64_t expires_on = 0;
   if (input.get_ttl_seconds() > 0) {
     expires_on = SystemTimestamp::now().toMilliseconds().count() +
         input.get_ttl_seconds() * 1000;
