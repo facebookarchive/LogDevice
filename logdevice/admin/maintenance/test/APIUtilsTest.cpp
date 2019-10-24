@@ -39,6 +39,11 @@ TEST(APIUtilsTest, Validate) {
   ASSERT_TRUE(failed.hasValue());
   ASSERT_EQ("user must be set for the definition to non-empty string",
             failed->get_message());
+  def1.set_user(INTERNAL_USER);
+  failed = APIUtils::validateDefinition(def1);
+  ASSERT_TRUE(failed.hasValue());
+  ASSERT_EQ("This is a reserved user, cannot be used through the API",
+            failed->get_message());
   def1.set_user("bunny");
   failed = APIUtils::validateDefinition(def1);
   ASSERT_EQ(folly::none, failed);

@@ -36,6 +36,11 @@ validateDefinition(const MaintenanceDefinition& definition) {
     return InvalidRequest(
         "user must be set for the definition to non-empty string");
   }
+
+  if (definition.get_user() == INTERNAL_USER) {
+    return InvalidRequest(
+        "This is a reserved user, cannot be used through the API");
+  }
   // does user has whitespaces?
   const std::string& user = definition.get_user();
   if (contains_whitespaces(user)) {
