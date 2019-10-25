@@ -29,10 +29,19 @@ const std::map<std::string, std::string>& TraceSample::empty_map_() const {
   return *empty_map;
 }
 
+const std::set<std::string>& TraceSample::empty_set_() const {
+  // Implemented that way because of
+  // https://isocpp.org/wiki/faq/ctors#static-init-order
+  static std::set<std::string>* empty_set = new std::set<std::string>();
+  return *empty_set;
+}
+
 void TraceSample::reset() {
   ints_.clear();
   strs_.clear();
   vectors_.clear();
+  maps_.clear();
+  sets_.clear();
 }
 
 void TraceSample::addIntValue(const std::string& key, int64_t value) {
@@ -53,41 +62,91 @@ void TraceSample::addMapValue(const std::string& key,
   maps_[key] = std::move(map);
 }
 
+void TraceSample::addSetValue(const std::string& key,
+                              std::set<std::string> set) {
+  sets_[key] = std::move(set);
+}
+
 // this will return 0 if the key does not exist.
 int64_t TraceSample::getIntValue(const std::string& key) const {
-  try {
-    return ints_.at(key);
-  } catch (const std::out_of_range& _) {
+  if (!isIntValueSet(key)) {
     return 0;
   }
+  return ints_.at(key);
 }
 
 // this will return empty string if the key does not exist.
 const std::string& TraceSample::getNormalValue(const std::string& key) const {
-  try {
-    return strs_.at(key);
-  } catch (const std::out_of_range& _) {
+  if (!isNormalValueSet(key)) {
     return empty_str_;
   }
+  return strs_.at(key);
 }
 
 // returns an empty vector if key does not exist.
 const std::vector<std::string>&
 TraceSample::getNormVectorValue(const std::string& key) const {
-  try {
-    return vectors_.at(key);
-  } catch (const std::out_of_range& _) {
+  if (!isNormVectorValueSet(key)) {
     return empty_vector_();
   }
+  return vectors_.at(key);
 }
 
 const std::map<std::string, std::string>&
 TraceSample::getMapValue(const std::string& key) const {
-  try {
-    return maps_.at(key);
-  } catch (const std::out_of_range& _) {
+  if (!isMapValueSet(key)) {
     return empty_map_();
   }
+  return maps_.at(key);
+}
+
+const std::set<std::string>&
+TraceSample::getSetValue(const std::string& key) const {
+  try {
+    return sets_.at(key);
+  } catch (const std::out_of_range& _) {
+    return empty_set_();
+  }
+}
+
+folly::Optional<int64_t>
+TraceSample::getOptionalIntValue(const std::string& key) const {
+  if (!isIntValueSet(key)) {
+    return folly::none;
+  }
+  return getIntValue(key);
+}
+
+folly::Optional<std::string>
+TraceSample::getOptionalNormalValue(const std::string& key) const {
+  if (!isNormalValueSet(key)) {
+    return folly::none;
+  }
+  return getNormalValue(key);
+}
+
+folly::Optional<std::vector<std::string>>
+TraceSample::getOptionalNormVectorValue(const std::string& key) const {
+  if (!isNormVectorValueSet(key)) {
+    return folly::none;
+  }
+  return getNormVectorValue(key);
+}
+
+folly::Optional<std::map<std::string, std::string>>
+TraceSample::getOptionalMapValue(const std::string& key) const {
+  if (!isMapValueSet(key)) {
+    return folly::none;
+  }
+  return getMapValue(key);
+}
+
+folly::Optional<std::set<std::string>>
+TraceSample::getOptionalSetValue(const std::string& key) const {
+  if (!isSetValueSet(key)) {
+    return folly::none;
+  }
+  return getSetValue(key);
 }
 
 bool TraceSample::isNormalValueSet(const std::string& key) const {
@@ -100,6 +159,14 @@ bool TraceSample::isIntValueSet(const std::string& key) const {
 
 bool TraceSample::isMapValueSet(const std::string& key) const {
   return maps_.count(key) > 0;
+}
+
+bool TraceSample::isNormVectorValueSet(const std::string& key) const {
+  return vectors_.count(key) > 0;
+}
+
+bool TraceSample::isSetValueSet(const std::string& key) const {
+  return sets_.count(key) > 0;
 }
 
 std::string TraceSample::toJson() const {
@@ -134,6 +201,14 @@ std::string TraceSample::toJson() const {
       }
 
       json[MAP_KEY][km.first] = map;
+    }
+  }
+
+  if (!sets_.empty()) {
+    json[SET_KEY] = folly::dynamic::object;
+    for (auto& kv : sets_) {
+      json[SET_KEY][kv.first] =
+          folly::dynamic(kv.second.begin(), kv.second.end());
     }
   }
 
