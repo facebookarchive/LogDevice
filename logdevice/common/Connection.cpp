@@ -293,6 +293,13 @@ Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
     }
     // Socket was already bad or it can hit error in writeChain invocation.
     if (sock_->good()) {
+      auto& s = health_stats_;
+      // Check if bytes in socket is above idle_threshold. Accumulate active
+      // bytes sent and change state to active if necessary.
+      if (s.active_start_time_ == SteadyTimestamp::min() &&
+          getBufferedBytes() > getSettings().socket_idle_threshold) {
+        s.active_start_time_ = deps_->getCurrentTimestamp();
+      }
       // OnSent for the message will be called immediately.
       return Socket::SendStatus::SENT;
     } else {
@@ -315,13 +322,10 @@ void Connection::close(Status reason) {
     // Clear read callback on close.
     sock_->setReadCB(nullptr);
 
-    size_t buffered_bytes = sock_write_cb_.bufferedBytes();
+    size_t buffered_bytes = getBufferedBytes();
     sock_write_cb_.chain_lengths_.clear();
     sock_write_cb_.num_success_ = 0;
-    if (sendChain_) {
-      buffered_bytes += sendChain_->computeChainDataLength();
-      sendChain_ = nullptr;
-    }
+    sendChain_.reset();
     getDeps()->noteBytesDrained(buffered_bytes,
                                 getPeerType(),
                                 /* message_type */ folly::none);
@@ -386,13 +390,20 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   return rv;
 }
 
+size_t Connection::getBufferedBytes() const {
+  ld_check(sock_);
+  size_t buffered_bytes = 0;
+  if (sendChain_) {
+    buffered_bytes += sendChain_->computeChainDataLength();
+  }
+  buffered_bytes += sock_write_cb_.bufferedBytes();
+  return buffered_bytes;
+}
+
 size_t Connection::getBytesPending() const {
   size_t bytes_pending = Socket::getBytesPending();
   if (sock_) {
-    if (sendChain_) {
-      bytes_pending += sendChain_->computeChainDataLength();
-    }
-    bytes_pending += sock_write_cb_.bufferedBytes();
+    bytes_pending += getBufferedBytes();
   }
   return bytes_pending;
 }
@@ -452,13 +463,22 @@ void Connection::onBytesPassedToTCP(size_t nbytes_drained) {
 
 void Connection::drainSendQueue() {
   auto& cb = sock_write_cb_;
+  size_t total_bytes_drained = 0;
   for (size_t& i = cb.num_success_; i > 0; --i) {
-    getDeps()->noteBytesDrained(cb.chain_lengths_.front(),
-                                getPeerType(),
-                                /* message_type */ folly::none);
+    total_bytes_drained += cb.chain_lengths_.front();
     cb.chain_lengths_.pop_front();
   }
 
+  getDeps()->noteBytesDrained(total_bytes_drained, getPeerType(), folly::none);
+
+  auto& s = health_stats_;
+  s.num_bytes_sent_ += total_bytes_drained;
+  if (s.active_start_time_ != SteadyTimestamp::min() &&
+      getBufferedBytes() <= getSettings().socket_idle_threshold) {
+    auto diff = deps_->getCurrentTimestamp() - s.active_start_time_;
+    s.active_time_ += to_msec(diff);
+    s.active_start_time_ = SteadyTimestamp::min();
+  }
   // flushOutputAndClose sets close_reason_ and waits for all buffers to drain.
   // Check if all buffers were drained here if that is the case close the
   // connection.
