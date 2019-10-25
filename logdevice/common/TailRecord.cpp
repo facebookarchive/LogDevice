@@ -14,10 +14,7 @@ TailRecord::TailRecord(const TailRecordHeader& header_in,
                        std::shared_ptr<PayloadHolder> payload)
     : header(header_in),
       offsets_map_(std::move(offset_map)),
-      payload_(hasPayload() ? std::move(payload) : nullptr) {
-  // should be a flat payload for this constructor
-  ld_check(payload == nullptr || !payload->isIOBuffer());
-}
+      payload_(hasPayload() ? std::move(payload) : nullptr) {}
 
 TailRecord::TailRecord(TailRecord&& rhs) noexcept
     : header(rhs.header),
@@ -32,6 +29,7 @@ TailRecord::TailRecord(const TailRecordHeader& header_in,
                        std::shared_ptr<ZeroCopiedRecord> record)
     : header(header_in),
       offsets_map_(std::move(offset_map)),
+      payload_(hasPayload() ? record->getPayloadHolder() : nullptr),
       zero_copied_record_(hasPayload() ? std::move(record) : nullptr) {}
 
 TailRecord& TailRecord::operator=(TailRecord&& rhs) noexcept {
@@ -51,11 +49,7 @@ Slice TailRecord::getPayloadSlice() const {
     return Slice();
   }
 
-  if (zero_copied_record_ != nullptr) {
-    return zero_copied_record_->payload_raw;
-  }
-
-  ld_check(payload_ != nullptr);
+  ld_check(payload_);
   return Slice(payload_->getFlatPayload());
 }
 
@@ -154,8 +148,7 @@ void TailRecord::deserialize(ProtocolReader& reader,
             /*unused copyset*/ copyset_t{},
             offsets_map_,
             /*unused keys*/ std::map<KeyType, std::string>{},
-            std::move(payload_));
-        ld_check(payload_ == nullptr);
+            payload_);
       }
     }
   }

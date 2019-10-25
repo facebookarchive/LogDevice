@@ -158,7 +158,7 @@ class TailRecord : public SerializableData {
 
   bool isValid() const {
     return header.log_id != LOGID_INVALID &&
-        (!hasPayload() || (!payload_ != !zero_copied_record_));
+        (!hasPayload() || payload_ != nullptr);
   }
 
   bool containOffsetWithinEpoch() const {
@@ -183,6 +183,7 @@ class TailRecord : public SerializableData {
              OffsetMap offset_map) {
     header = h;
     payload_.reset();
+    payload_ = zero_copied_record_->getPayloadHolder();
     zero_copied_record_ = std::move(record);
     offsets_map_ = std::move(offset_map);
   }
@@ -257,10 +258,9 @@ class TailRecord : public SerializableData {
   OffsetMap offsets_map_;
 
  private:
-  // container of the actual payload, can be one of
-  // 1) a flat, self-owned payload
-  // 2) ZeroCopiedRecord containing zero-copied evbuffer
+  // container of the actual payload.
   std::shared_ptr<PayloadHolder> payload_;
+  // ZeroCopiedRecord containing zero-copied from network buffer.
   std::shared_ptr<ZeroCopiedRecord> zero_copied_record_;
 
   // calculate the size of the variable length blob for serialization

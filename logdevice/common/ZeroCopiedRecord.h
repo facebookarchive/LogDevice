@@ -74,6 +74,10 @@ class ZeroCopiedRecord {
   virtual void onDisposedOf() {}
   virtual size_t getBytesEstimate() const;
 
+  std::shared_ptr<PayloadHolder> getPayloadHolder() {
+    return payload_holder_;
+  }
+
   /**
    * Get an estimate of the amount of bytes used for the record.
    * it is an estimate since it estimates the size of the control block
