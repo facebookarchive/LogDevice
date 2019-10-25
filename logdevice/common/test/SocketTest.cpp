@@ -156,18 +156,18 @@ TEST_F(ClientSocketTest, MessageRejectedAfterHandshakeInvalidProtocol) {
       1 /* size */);
   auto envelope = socket_->registerMessage(std::move(msg));
   socket_->releaseMessage(*envelope);
-  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::TEST);
   CHECK_SENDQ();
 
   // The socket connects, HELLO is serialized.
   triggerEventConnected();
-  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::TEST);
   CHECK_SENDQ(MessageType::HELLO);
 
   // HELLO is sent.
   flushOutputEvBuffer();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
-  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::TEST);
   CHECK_SENDQ();
 
   // The server sends back ACK with min protocol supported
@@ -180,7 +180,7 @@ TEST_F(ClientSocketTest, MessageRejectedAfterHandshakeInvalidProtocol) {
 
   // The message required protocol >= 6, so it is finally rejected (removed from
   // serializeq_) before it could be serialized.
-  CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::PROTONOSUPPORT);
+  CHECK_ON_SENT(MessageType::TEST, E::PROTONOSUPPORT);
   CHECK_SERIALIZEQ();
   CHECK_SENDQ();
 }
@@ -205,18 +205,18 @@ TEST_F(ClientSocketTest, MessageChangesSizeAfterHanshake) {
   std::unique_ptr<Message> msg(raw_msg);
   auto envelope = socket_->registerMessage(std::move(msg));
   socket_->releaseMessage(*envelope);
-  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::TEST);
   CHECK_SENDQ();
 
   // The socket connects, HELLO is serialized.
   triggerEventConnected();
-  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::TEST);
   CHECK_SENDQ(MessageType::HELLO);
 
   // HELLO is sent.
   flushOutputEvBuffer();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
-  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::TEST);
   CHECK_SENDQ();
 
   // The server sends back ACK with min protocol
@@ -227,8 +227,8 @@ TEST_F(ClientSocketTest, MessageChangesSizeAfterHanshake) {
                     E::OK};
   receiveMsg(new TestACK_Message(ackhdr));
 
-  // We completed handshake. GET_SEQ_STATE is serialized.
-  CHECK_SENDQ(MessageType::GET_SEQ_STATE);
+  // We completed handshake. TEST is serialized.
+  CHECK_SENDQ(MessageType::TEST);
   CHECK_SERIALIZEQ();
 }
 
@@ -489,9 +489,9 @@ TEST_F(ClientSocketTest, DownRevEvbufferAccounting) {
   msg->setSize(max_proto_, msg_max_proto_size);
 
   size_t protohdr_size_for_max_proto =
-      ProtocolHeader::bytesNeeded(msg->getType(), max_proto_);
+      ProtocolHeader::bytesNeeded(msg->type_, max_proto_);
   size_t protohdr_size_for_test_proto =
-      ProtocolHeader::bytesNeeded(msg->getType(), test_proto_ver);
+      ProtocolHeader::bytesNeeded(msg->type_, test_proto_ver);
   auto* envelope = socket_->registerMessage(std::move(msg));
 
   // Queued messages are accounted assuming MAX_PROTOCOL_SUPPORTED.

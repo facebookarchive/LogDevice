@@ -608,9 +608,13 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   // for log 1..numLogs, send a write to activate the sequencer
   for (logid_t::raw_type logid_r = 1; logid_r <= numLogs; ++logid_r) {
     lsn_t lsn;
-    do {
+    while (true) {
       lsn = client->appendSync(logid_t(logid_r), "dummy");
-    } while (lsn == LSN_INVALID);
+      if (lsn != LSN_INVALID) {
+        break;
+      }
+      ld_debug("Apend for log %lu failed: %s", logid_r, error_name(err));
+    }
   }
 
   auto get_activations = [&]() {

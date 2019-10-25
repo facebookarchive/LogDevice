@@ -60,7 +60,7 @@ TEST_F(FlowGroupTest, DisableTest) {
   flushOutputEvBuffer();
   for (Priority p = Priority::MAX; p < Priority::NUM_PRIORITIES;
        p = priorityBelow(p)) {
-    CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
+    CHECK_ON_SENT(MessageType::TEST, E::OK);
   }
   // Nothing should be left to send.
   flow_group->empty();
@@ -85,7 +85,7 @@ TEST_F(FlowGroupTest, DisableTest) {
   flushOutputEvBuffer();
   for (Priority p = Priority::MAX; p < Priority::NUM_PRIORITIES;
        p = priorityBelow(p)) {
-    CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
+    CHECK_ON_SENT(MessageType::TEST, E::OK);
   }
   // Nothing should be left to send.
   flow_group->empty();
@@ -244,7 +244,7 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
   ASSERT_EQ(flow_group->debt(Priority::BACKGROUND), 0);
   run();
   flushOutputEvBuffer();
-  CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
+  CHECK_ON_SENT(MessageType::TEST, E::OK);
   ASSERT_EQ(flow_group->debt(Priority::CLIENT_HIGH), 0);
 
   // This next message will take us over our max. We allow it to be sent
@@ -266,7 +266,7 @@ TEST_F(FlowGroupTest, FlowGroupBandwidthCaps) {
   flow_group->applyUpdate(update);
   run();
   flushOutputEvBuffer();
-  CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
+  CHECK_ON_SENT(MessageType::TEST, E::OK);
   ASSERT_EQ(flow_group->debt(Priority::CLIENT_HIGH), 0);
 }
 

@@ -15,6 +15,8 @@ bool FlowGroup::injectShapingEvent(Priority p, double error_chance) {
   if (error_chance != 0 &&
       reordering_allowed_at_priority_ == Priority::INVALID && configured() &&
       enabled() && folly::Random::randDouble(0, 100.0) <= error_chance) {
+    RATELIMIT_DEBUG(
+        std::chrono::seconds(10), 100, "Injecting traffic shaping event");
     // Empty the meter so that all subsequent messages see a shortage
     // until more bandwdith is added.
     resetMeter(p);

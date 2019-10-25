@@ -371,14 +371,14 @@ TEST_F(ClientConnectionTest, MessageRejectedAfterHandshakeInvalidProtocol) {
           1 /* size */);
   auto envelope = socket_->registerMessage(std::move(msg));
   socket_->releaseMessage(*envelope);
-  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::TEST);
 
   conn_callback_->connectSuccess();
-  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::TEST);
 
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
-  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::TEST);
 
   receiveAckMessage(E::OK,
                     facebook::logdevice::Message::Disposition::NORMAL,
@@ -386,7 +386,7 @@ TEST_F(ClientConnectionTest, MessageRejectedAfterHandshakeInvalidProtocol) {
   EXPECT_TRUE(handshaken());
   // The message required protocol >= 6, so it is finally rejected (removed
   // from serializeq_) before it could be serialized.
-  CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::PROTONOSUPPORT);
+  CHECK_ON_SENT(MessageType::TEST, E::PROTONOSUPPORT);
   CHECK_SERIALIZEQ();
 }
 
@@ -420,22 +420,22 @@ TEST_F(ClientConnectionTest, MessageChangesSizeAfterHandshake) {
   std::unique_ptr<facebook::logdevice::Message> msg(raw_msg);
   auto envelope = socket_->registerMessage(std::move(msg));
   socket_->releaseMessage(*envelope);
-  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::TEST);
 
   conn_callback_->connectSuccess();
-  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::TEST);
 
   // HELLO is sent.
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
-  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  CHECK_SERIALIZEQ(MessageType::TEST);
 
   // The server sends back ACK with min protocol
   receiveAckMessage(E::OK,
                     facebook::logdevice::Message::Disposition::NORMAL,
                     Compatibility::MIN_PROTOCOL_SUPPORTED);
 
-  // We completed handshake. GET_SEQ_STATE is serialized.
+  // We completed handshake. TEST is serialized.
 
   CHECK_SERIALIZEQ();
 }
@@ -623,7 +623,7 @@ TEST_F(ClientConnectionTest, DownRevEvbufferAccounting) {
   msg->setSize(max_proto_, msg_max_proto_size);
 
   size_t protohdr_size_for_test_proto =
-      ProtocolHeader::bytesNeeded(msg->getType(), test_proto_ver);
+      ProtocolHeader::bytesNeeded(msg->type_, test_proto_ver);
   auto* envelope = socket_->registerMessage(std::move(msg));
 
   // Queued messages are accounted assuming MAX_PROTOCOL_SUPPORTED.
@@ -684,7 +684,7 @@ TEST_F(ClientConnectionTest, MaxLenRejected) {
                                 std::shared_ptr<PrincipalIdentity>,
                                 ResourceBudget::Token) {
     EXPECT_FALSE(called);
-    EXPECT_EQ(msg->type_, MessageType::GET_SEQ_STATE);
+    EXPECT_EQ(msg->type_, MessageType::TEST);
     err = E::OK;
     called = true;
     return facebook::logdevice::Message::Disposition::NORMAL;
@@ -734,7 +734,7 @@ TEST_F(ClientConnectionTest, CloseConnectionOnProtocolChecksumMismatch) {
                                 const Address&,
                                 std::shared_ptr<PrincipalIdentity>,
                                 ResourceBudget::Token) {
-    EXPECT_EQ(msg->type_, MessageType::GET_SEQ_STATE);
+    EXPECT_EQ(msg->type_, MessageType::TEST);
     err = E::OK;
     EXPECT_LT(0, called);
     --called;

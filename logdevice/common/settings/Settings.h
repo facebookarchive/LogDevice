@@ -1320,6 +1320,9 @@ struct Settings : public SettingsBundle {
   // Simulates bad hardware flipping bits in STORE message.
   bool test_sequencer_corrupt_stores{false};
 
+  // Instead of writing messages into a socket, drop them on the floor.
+  bool test_drop_sent_messages{false};
+
   // If true then the check to fail trim requests past
   // the tail will be disbled.
   bool disable_trim_past_tail_check;

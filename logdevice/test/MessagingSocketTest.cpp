@@ -237,6 +237,7 @@ create_config(std::vector<int> ld_ports) {
   configuration::MetaDataLogsConfig meta_config;
   auto updateable_config = std::make_shared<UpdateableConfig>();
   Configuration::NodesConfig node_config{nodes};
+
   updateable_config->updateableServerConfig()->update(
       ServerConfig::fromDataTest(CLUSTER_NAME, node_config, meta_config));
   return updateable_config;
@@ -320,8 +321,7 @@ class ServerSocket {
     struct sockaddr_in6 cli_addr;
     socklen_t clilen = sizeof(cli_addr);
     const int fd = ::accept(sock_.fd, (struct sockaddr*)&cli_addr, &clilen);
-    perror("");
-    EXPECT_TRUE(fd > 0);
+    EXPECT_TRUE(fd > 0) << folly::errnoStr(errno);
     fds_.push_back(fd);
     return fd;
   }
@@ -330,8 +330,7 @@ class ServerSocket {
     struct sockaddr_in6 cli_addr;
     socklen_t clilen = sizeof(cli_addr);
     fd = ::accept(sock_.fd, (struct sockaddr*)&cli_addr, &clilen);
-    perror("");
-    EXPECT_TRUE(fd > 0);
+    EXPECT_TRUE(fd > 0) << folly::errnoStr(errno);
     fds_.push_back(fd);
     return Sockaddr((struct sockaddr*)&cli_addr, clilen);
   }
@@ -371,7 +370,10 @@ struct WorkerAndEventLoop {
 WorkerAndEventLoop createWorker(Processor* p,
                                 std::shared_ptr<UpdateableConfig>& config,
                                 EvBase::EvBaseType base_type) {
-  auto h = std::make_unique<EventLoop>("",
+  static int idx_alloc = 0;
+  int idx = idx_alloc++;
+  ld_info("Creating worker %d", idx);
+  auto h = std::make_unique<EventLoop>("test" + toString(idx),
                                        ThreadID::Type::UNKNOWN_EVENT_LOOP,
                                        1024,
                                        true,
@@ -645,6 +647,11 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   settings.outbufs_mb_max_per_thread = 1;
   settings.outbuf_socket_min_kb = 1;
   settings.use_legacy_eventbase = type == EvBase::EvBaseType::LEGACY_EVENTBASE;
+  // Tell Sender to not actually send any messages (except HELLO).
+  // Instead, the messages will be kept in flight indefinitely.
+  settings.message_error_injection_status = E::DROPPED;
+  settings.message_error_injection_chance_percent = 100;
+
   Address firstNodeAddress(firstNodeID);
   Address secondNodeAddress(secondNodeID);
 
@@ -655,7 +662,6 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   ServerSocket server1;
   ServerSocket server2;
   ServerSocket cl_node;
-  ServerSocket processor_socket;
 
   settings.server = false;
   UpdateableSettings<Settings> updateable_cl_settings(settings);
@@ -685,6 +691,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   ASSERT_FALSE(out.loop->getThread().isCurrentThread());
 
   // Fill up the client sender output buffer by sending to node server 1.
+  ld_info("Sending 600K to first node");
   Semaphore sem;
   auto msg1 = std::make_unique<VarLengthTestMessage>(
       Compatibility::MAX_PROTOCOL_SUPPORTED, 600 * 1024);
@@ -695,6 +702,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
 
   // For client, outbufs-limit-per-peer-type is disabled, expect E::OK as the
   //  sender's output buffer limit is not yet full.
+  ld_info("Sending another 600K to first node");
   sem = Semaphore();
   auto msg2 = std::make_unique<VarLengthTestMessage>(
       Compatibility::MAX_PROTOCOL_SUPPORTED, 600 * 1024);
@@ -705,6 +713,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
 
   // Expect ENOBUFS now as it is over combined out-bufs limit
   //  (outbufs-limit-per-peer-type is disabled for client).
+  ld_info("Sending yet another 600K to first node");
   sem = Semaphore();
   auto msg = std::make_unique<VarLengthTestMessage>(
       Compatibility::MAX_PROTOCOL_SUPPORTED, 600 * 1024);
@@ -715,6 +724,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
 
   // Send to a different server node and expect success due to new socket's
   // outbuf_socket_min_kb  guaranteed budget.
+  ld_info("Sending 2K to second node");
   sem = Semaphore();
   auto msg3 = std::make_unique<VarLengthTestMessage>(
       Compatibility::MAX_PROTOCOL_SUPPORTED, 2 * 1024);
@@ -725,6 +735,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
 
   // Expect message over new socket fail with ENOBUF as this is over both
   //  sender's outbuf limit and socket's outbuf_socket_min_kb.
+  ld_info("Sending another 2K to second node");
   sem = Semaphore();
   auto msg4 = std::make_unique<VarLengthTestMessage>(
       Compatibility::MAX_PROTOCOL_SUPPORTED, 2 * 1024);
@@ -736,6 +747,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   // Test server->client connection and CLIENT output buffer limits.
 
   // Create second client and add to the server processor.
+  ld_info("Sending 600K to second node on second client");
   sem = Semaphore();
   auto cl_msg = std::make_unique<VarLengthTestMessage>(
       Compatibility::MAX_PROTOCOL_SUPPORTED, 600 * 1024);
@@ -744,7 +756,8 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   EXPECT_EQ(0, cl_w2->tryPost(cl_rq));
   sem.wait();
 
-  // Create first client connection for server1 on srv_processor.
+  // Create first client connection for server2 on srv_processor.
+  ld_info("Creating first client connection");
   int client_fd;
   Sockaddr client_socket = server2.accept(client_fd);
   std::unique_ptr<Request> ncrq =
@@ -760,7 +773,8 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   EXPECT_EQ(0, srv_w->tryPost(ncrq));
   sem.wait();
 
-  // Create first client connection for server1 on srv_processor.
+  // Create second client connection for server2 on srv_processor.
+  ld_info("Creating second client connection");
   int client_fd2;
   Sockaddr client_socket2 = server2.accept(client_fd2);
   std::unique_ptr<Request> ncrq2 =
@@ -777,25 +791,47 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   sem.wait();
 
   std::vector<ClientID> clientIDs;
-  auto fn = [&](Socket& s) { clientIDs.push_back(s.peer_name_.asClientID()); };
 
-  sem = Semaphore();
-  srv_w->add([&]() {
-    auto* worker = Worker::onThisThread();
-    worker->sender().forAllClientSockets(fn);
-    sem.post();
-    return true;
-  });
-  sem.wait();
+  // Get the ClientIDs that the server's Sender has assigned to the incoming
+  // connections. Also wait for the server to receive HELLO messages from
+  // both clients; otherwise server's Sender will refuse to send messages with
+  // E::UNREACHABLE.
+  ld_info("Collecting ClientIDs and waiting for handshakes");
+  while (true) {
+    bool all_handshaken = true;
+    clientIDs.clear();
+    sem = Semaphore();
+    srv_w->add([&]() {
+      auto* worker = Worker::onThisThread();
+      worker->sender().forAllClientSockets([&](Socket& s) {
+        ClientID c = s.peer_name_.asClientID();
+        bool h = s.isHandshaken();
+        all_handshaken &= h;
+        clientIDs.push_back(s.peer_name_.asClientID());
+        ld_debug("%s is %shandshaken", c.toString().c_str(), h ? "" : "not ");
+      });
+      sem.post();
+      return true;
+    });
+    sem.wait();
 
-  ld_check(clientIDs.size() == 2);
+    if (all_handshaken) {
+      break;
+    }
+
+    /* sleep override */
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  ASSERT_EQ(2, clientIDs.size());
   Address clientNodeAddress1(clientIDs[0]);
   Address clientNodeAddress2(clientIDs[1]);
 
   // Fill up the sender output buffer by sending to client 1.
+  ld_info("Sending 700K to first client");
   sem = Semaphore();
   auto msg5 = std::make_unique<VarLengthTestMessage>(
-      Compatibility::MAX_PROTOCOL_SUPPORTED, 1024 * 1024);
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 700 * 1024);
   std::unique_ptr<Request> rq5 = std::make_unique<SenderVarLenMessageRequest>(
       sem, msg5, E::OK, clientNodeAddress1);
   EXPECT_EQ(0, srv_w->tryPost(rq5));
@@ -805,15 +841,34 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
 
   // If outbufs-limit-per-peer-type is enabled, expect ENOBUF as the sender's
   //  output buffer limit. Peer-type limit is enforced in server.
+  E expected_err = E::NOBUFS;
+  if (outBufsLimitPerPeerTypeDisabled) {
+    expected_err = E::OK;
+  }
+  ld_info("Sending another 700K to first client");
   auto msg6 = std::make_unique<VarLengthTestMessage>(
-      Compatibility::MAX_PROTOCOL_SUPPORTED, 400 * 1024);
+      Compatibility::MAX_PROTOCOL_SUPPORTED, 700 * 1024);
   std::unique_ptr<Request> rq6 = std::make_unique<SenderVarLenMessageRequest>(
-      sem, msg6, E::NOBUFS, clientNodeAddress1);
+      sem, msg6, expected_err, clientNodeAddress1);
   EXPECT_EQ(0, srv_w->tryPost(rq6));
   sem.wait();
 
+  // Expect ENOBUFS when outbufs-limit-per-peer-type is disabled now that
+  //  outbufs sender limit is full.
+  if (outBufsLimitPerPeerTypeDisabled) {
+    ld_info("Sending yet another 700K to first client");
+    sem = Semaphore();
+    auto pmsg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MAX_PROTOCOL_SUPPORTED, 700 * 1024);
+    std::unique_ptr<Request> prq = std::make_unique<SenderVarLenMessageRequest>(
+        sem, pmsg, E::NOBUFS, clientNodeAddress1);
+    EXPECT_EQ(0, srv_w->tryPost(prq));
+    sem.wait();
+  }
+
   // Send to a different client and expect success due to new socket's
   // outbuf_socket_min_kb  guaranteed budget.
+  ld_info("Sending 400K to second client");
   sem = Semaphore();
   auto msg7 = std::make_unique<VarLengthTestMessage>(
       Compatibility::MAX_PROTOCOL_SUPPORTED, 400 * 1024);
@@ -824,6 +879,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
 
   // Expect message over new socket fail with ENOBUF as this is over both
   //  sender's outbuf limit and socket's outbuf_socket_min_kb.
+  ld_info("Sending 1K to second client");
   sem = Semaphore();
   auto msg8 = std::make_unique<VarLengthTestMessage>(
       Compatibility::MAX_PROTOCOL_SUPPORTED, 1 * 1024);

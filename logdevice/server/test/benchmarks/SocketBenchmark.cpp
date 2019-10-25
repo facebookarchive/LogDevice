@@ -85,7 +85,7 @@ BENCHMARK(SocketBenchmark, n) {
     size_t sent_in_this_iteration = 0;
     Address addr(NodeID(0));
     while (to_send) {
-      auto msg = std::make_unique<TEST_Message>(TEST_Message_Header());
+      auto msg = std::make_unique<TEST_Message>();
       int rv = w->sender().sendMessage(std::move(msg), addr);
       if (rv == 0) {
         --to_send;

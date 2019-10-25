@@ -463,8 +463,11 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &message_error_injection_status,
        "NOBUFS",
        nullptr, // no validation
-       "status that should be returned for a simulated message transmission "
-       "error",
+       "Status that should be returned for a simulated message transmission "
+       "error. Some values are treated in special ways: CBREGISTERED pretends "
+       "that the message was delayed by traffic shaping (only if traffic "
+       "shaping is enabled); DROPPED makes Sender to pretend that the message "
+       "is in-flight indefinitely, without ever sending it.",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Testing);
   init("disable-trace-logger",
@@ -524,7 +527,11 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &outbufs_limit_per_peer_type_enabled,
        "true",
        nullptr, // no validation
-       "If disabled, per peer-type limit will not be enforced.",
+       "If enabled, the outbytes-mb limit is split in half between "
+       "client-to-server and server-to-server connections. If disabled, the "
+       "limit is shared; in particular, a few misbehaving clients may cause "
+       "the server to use up all its outbytes-mb and become unable to send to "
+       "other servers.",
        SERVER,
        SettingsCategory::Network);
   init("outbuf-socket-min-kb",

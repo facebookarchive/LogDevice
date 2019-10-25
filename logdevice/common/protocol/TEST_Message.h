@@ -11,12 +11,13 @@
 
 namespace facebook { namespace logdevice {
 
-struct TEST_Message_Header {
-  uint64_t id;
-};
+class TEST_Message : public Message {
+ public:
+  TEST_Message() : Message(MessageType::TEST, TrafficClass::REBUILD) {}
 
-using TEST_Message = FixedSizeMessage<TEST_Message_Header,
-                                      MessageType::TEST,
-                                      TrafficClass::REBUILD>;
+  void serialize(ProtocolWriter&) const override;
+  static Message::deserializer_t deserialize;
+  Disposition onReceived(const Address& from) override;
+};
 
 }} // namespace facebook::logdevice

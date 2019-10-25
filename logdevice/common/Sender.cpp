@@ -478,7 +478,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
           "Unable to send a message of type %s to %s: error %s",
           messageTypeNames()[msg->type_].c_str(),
           Sender::describeConnection(addr).c_str(),
-          error_description(err));
+          error_name(err));
     }
   }
   return rv;
@@ -510,8 +510,8 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
       sock.minOutBufLimitReached()) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       10,
-                      "ENOBUFS for Sender. Peer type: %s."
-                      "Current sender outbuf usage: %zu"
+                      "ENOBUFS for Sender. Peer type: %s. "
+                      "Current sender outbuf usage: %zu. "
                       "Current sender peer outbuf usage : %zu",
                       peerTypeToString(sock.getPeerType()),
                       getBytesPending(),
@@ -533,9 +533,22 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   }
 
   auto lock = nw_shaping_container_->lock();
+
+  Status error_to_inject = Worker::settings().message_error_injection_status;
+  if (UNLIKELY(error_to_inject == E::DROPPED) &&
+      envelope->message().type_ != MessageType::HELLO &&
+      envelope->message().type_ != MessageType::ACK &&
+      folly::Random::randDouble01() <
+          Worker::settings().message_error_injection_chance_percent / 100.) {
+    // Leak the envelope.
+    // It'll stay in Socket's pendingq_ and will never be sent.
+    ld_debug("Dropping message %s of size %lu",
+             messageTypeNames()[envelope->message().type_].c_str(),
+             envelope->cost());
+    return 0;
+  }
   auto inject_shaping_event = [&]() -> bool {
-    return Worker::settings().message_error_injection_status ==
-        E::CBREGISTERED &&
+    return error_to_inject == E::CBREGISTERED &&
         sock.flow_group_.injectShapingEvent(
             envelope->priority(),
             Worker::settings().message_error_injection_chance_percent);

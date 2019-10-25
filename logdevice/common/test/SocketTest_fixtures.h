@@ -525,10 +525,12 @@ using TestACK_MessageProtoNoSupport =
  */
 class VarLengthTestMessage : public Message {
  public:
+  // Pretend to be TEST_Message. This will make the recipient deserialize and
+  // process a TEST_Message instead of a VarLengthTestMessage.
   VarLengthTestMessage(uint16_t min_proto,
                        size_t size,
                        TrafficClass tc = TrafficClass::RECOVERY)
-      : Message(MessageType::GET_SEQ_STATE, tc), min_proto_(min_proto) {
+      : Message(MessageType::TEST, tc), min_proto_(min_proto) {
     size_map_[Compatibility::MAX_PROTOCOL_SUPPORTED] = size;
   }
 
@@ -550,10 +552,6 @@ class VarLengthTestMessage : public Message {
   VarLengthTestMessage* setSize(uint16_t proto, size_t sz) {
     size_map_[proto] = sz;
     return this;
-  }
-
-  MessageType getType() {
-    return MessageType::GET_SEQ_STATE;
   }
 
   void serialize(ProtocolWriter& writer) const override {
