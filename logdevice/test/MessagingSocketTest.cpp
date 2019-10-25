@@ -415,7 +415,7 @@ TEST_P(MessagingSocketTest, SocketConnect) {
     w->sender().shutdownSockets(w);
   };
 
-  ASSERT_NE(std::this_thread::get_id(), out.loop->getThread().get_id());
+  ASSERT_FALSE(out.loop->getThread().isCurrentThread());
 
   config.reset();
 
@@ -536,7 +536,7 @@ TEST_P(MessagingSocketTest, SenderBasicSend) {
   SCOPE_EXIT {
     w->sender().shutdownSockets(w);
   };
-  ASSERT_NE(std::this_thread::get_id(), out.loop->getThread().get_id());
+  ASSERT_FALSE(out.loop->getThread().isCurrentThread());
 
   config.reset();
 
@@ -682,7 +682,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
 
   ld_check((bool)config);
 
-  ASSERT_NE(std::this_thread::get_id(), out.loop->getThread().get_id());
+  ASSERT_FALSE(out.loop->getThread().isCurrentThread());
 
   // Fill up the client sender output buffer by sending to node server 1.
   Semaphore sem;

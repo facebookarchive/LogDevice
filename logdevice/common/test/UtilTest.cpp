@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/util.h"
 
+#include <pthread.h>
+
 #include <gtest/gtest.h>
 
 #include "logdevice/common/MetaDataLog.h"

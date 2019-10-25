@@ -31,7 +31,7 @@
 
 using namespace facebook::logdevice;
 
-static std::map<std::thread::id, int> requests_per_thread;
+static std::map<pid_t, int> requests_per_thread;
 static std::mutex requests_per_thread_map_lock;
 
 /**
@@ -44,7 +44,7 @@ struct ThreadCountingRequest : public Request {
 
   Request::Execution execute() override {
     std::lock_guard<std::mutex> guard(requests_per_thread_map_lock);
-    auto id = EventLoop::onThisThread()->getThread().get_id();
+    pid_t id = ThreadID::getId();
     ++requests_per_thread[id];
     return Execution::COMPLETE;
   }

@@ -136,7 +136,7 @@ TEST(MessagingTest, EventLoop) {
   EXPECT_EQ(0, processor->postRequest(rq));
   EXPECT_EQ(nullptr, rq.get());
 
-  ASSERT_NE(std::this_thread::get_id(), l->getThread().get_id());
+  ASSERT_FALSE(l->getThread().isCurrentThread());
 
   // since no EventLoop is running on this thread
   ASSERT_EQ(nullptr, EventLoop::onThisThread());

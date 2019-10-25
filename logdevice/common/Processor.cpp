@@ -534,7 +534,7 @@ void Processor::shutdown() {
   }
 
   // First get the pthread_t for all running worker threads
-  std::vector<std::thread*> event_threads;
+  std::vector<PThread*> event_threads;
   event_threads.reserve(getAllWorkersCount());
 
   if (traffic_shaper_) {

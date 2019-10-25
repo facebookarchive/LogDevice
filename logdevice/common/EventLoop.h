@@ -18,6 +18,7 @@
 #include <folly/Executor.h>
 
 #include "logdevice/common/EventLoopTaskQueue.h"
+#include "logdevice/common/PThread.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/TimeoutMap.h"
@@ -92,7 +93,7 @@ class EventLoop : public folly::Executor {
    *
    * @return the pthread handle. This function should never fail.
    */
-  std::thread& getThread() {
+  PThread& getThread() {
     return thread_;
   }
 
@@ -167,7 +168,7 @@ class EventLoop : public folly::Executor {
   ThreadID::Type thread_type_;
   std::string thread_name_;
 
-  std::thread thread_; // thread on which this loop runs
+  PThread thread_; // thread on which this loop runs
 
   // pid of thread_
   int tid_{-1};

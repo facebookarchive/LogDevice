@@ -68,12 +68,12 @@ EventLoop::EventLoop(
       priority_queues_enabled_(enable_priority_queues) {
   Semaphore initialized;
   Status init_result{Status::INTERNAL};
-  thread_ = std::thread([request_pump_capacity,
-                         &requests_per_iteration,
-                         &init_result,
-                         &initialized,
-                         &base_type,
-                         this]() {
+  thread_ = PThread([request_pump_capacity,
+                     &requests_per_iteration,
+                     &init_result,
+                     &initialized,
+                     &base_type,
+                     this]() {
     auto res = init_result =
         init(base_type, request_pump_capacity, requests_per_iteration);
     initialized.post();
