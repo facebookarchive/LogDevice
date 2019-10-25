@@ -840,8 +840,7 @@ void Appender::prepareTailRecord(bool include_payload) {
   }
 
   // tail optimized logs, include payload in the tail record
-  if (payload_->isIOBuffer()) {
-
+  if (payload_->owner()) {
     auto zero_copied_record = std::make_shared<ZeroCopiedRecord>(
         lsn_t(store_hdr_.rid.lsn()),
         STORE_flags_t(store_hdr_.flags),

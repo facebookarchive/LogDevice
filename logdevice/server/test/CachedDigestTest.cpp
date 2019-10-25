@@ -283,13 +283,11 @@ void CachedDigestTest::setUp() {
                                          EpochRecordCache::StoredBefore::NEVER);
 
   auto gen_payload = [](lsn_t lsn) {
-    lsn_t* payload_flat = (lsn_t*)malloc(sizeof(lsn_t));
-    *payload_flat = lsn;
-    return std::make_shared<PayloadHolder>(payload_flat, sizeof(lsn_t));
+    return std::make_shared<PayloadHolder>(
+        folly::IOBuf::copyBuffer(static_cast<void*>(&lsn), sizeof(lsn)));
   };
 
   auto put_record = [&](lsn_t lsn, const Snapshot::Record& r) {
-    auto ph = gen_payload(lsn);
     cache_->putRecord(RecordID(lsn, LOG_ID),
                       r.timestamp,
                       r.last_known_good,
@@ -297,7 +295,7 @@ void CachedDigestTest::setUp() {
                       dummyCopyset,
                       r.flags,
                       std::map<KeyType, std::string>{},
-                      std::move(ph));
+                      gen_payload(lsn));
   };
 
   // now write all records to cache

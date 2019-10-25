@@ -92,13 +92,25 @@ void TailRecord::serialize(ProtocolWriter& writer) const {
   if (blob_size > 0) {
     writer.write(blob_size);
     ld_check(hasPayload());
-    auto payload_slice = getPayloadSlice();
-    TailRecordHeader::payload_size_t payload_size =
-        static_cast<TailRecordHeader::payload_size_t>(payload_slice.size);
+    auto payloadClone = payload_->clonePayload();
+    Payload flat_payload;
+    TailRecordHeader::payload_size_t payload_size = 0;
+    if (!payloadClone) {
+      flat_payload = payload_->getFlatPayload();
+      payload_size =
+          static_cast<TailRecordHeader::payload_size_t>(flat_payload.size());
+    } else {
+      payload_size = static_cast<TailRecordHeader::payload_size_t>(
+          payloadClone->computeChainDataLength());
+    }
     writer.write(payload_size);
     if (payload_size > 0) {
-      // if possible, zero-copy write the actual payload
-      writer.writeWithoutCopy(payload_slice.data, payload_slice.size);
+      if (payloadClone) {
+        // if possible, zero-copy write the actual payload
+        writer.writeWithoutCopy(payloadClone.get());
+      } else {
+        writer.write(flat_payload.data(), flat_payload.size());
+      }
     }
   }
 }

@@ -15,11 +15,10 @@
 namespace facebook { namespace logdevice {
 
 /**
- * PayloadHolder encapsulates the different types of buffers we use
- * for record payload: flat buffers and folly::IOBufs. It serves as a kind of
- * smart pointer for record payloads stored in a buffer of one of those
- * types. This is not a thread-safe data structure hence care should be taken
- * when using non-const API's.
+ * PayloadHolder is wrapper around folly::IOBuf. It manages weak reference and
+ * strong references to data and helps in serializing data. This is not a
+ * thread-safe data structure hence care should be taken when using non-const
+ * API's.
  */
 
 class ProtocolWriter;
@@ -31,13 +30,7 @@ class PayloadHolder {
    * Assumes ownership of the given buffer.  It must have been malloc'd and
    * will be free'd by the destructor.
    */
-  PayloadHolder(const void* buf, size_t size, bool ignore_size_limit = false)
-      : payload_flat_(buf, size) {
-    if (!ignore_size_limit) {
-      ld_check(payload_flat_.size() == 0 || payload_flat_.data() != nullptr);
-      ld_check(payload_flat_.size() < Message::MAX_LEN);
-    }
-  }
+  PayloadHolder(const void* buf, size_t size, bool ignore_size_limit = false);
 
   /**
    *  Assumes ownership of the given folly::IOBuf.
@@ -49,22 +42,18 @@ class PayloadHolder {
    * Wraps the given `Payload' without assuming ownership of the buffer.  You
    * must pass `UNOWNED' to make this explicit at the callsite.
    */
-  explicit PayloadHolder(const Payload& payload, unowned_t)
-      : PayloadHolder(payload.data(), payload.size()) {
-    owned_ = false;
-  }
+  explicit PayloadHolder(const Payload& payload, unowned_t);
 
   /**
    * Creates an invalid PayloadHolder.
    */
-  explicit PayloadHolder() : payload_flat_(Payload(nullptr, 1)) {}
+  PayloadHolder() {}
 
   /**
    * @return true iff PayloadHolder references a payload
    */
   bool valid() const {
-    return payload_flat_.data() || payload_flat_.size() == 0 ||
-        iobuf_ != nullptr;
+    return iobuf_ != nullptr;
   }
 
   // If _other_ owned the buffer, the ownership is transferred to *this. If
@@ -73,15 +62,7 @@ class PayloadHolder {
     *this = std::move(other);
   }
 
-  PayloadHolder& operator=(PayloadHolder&& other) noexcept {
-    if (this != &other) {
-      std::swap(payload_flat_, other.payload_flat_);
-      std::swap(iobuf_, other.iobuf_);
-      std::swap(owned_, other.owned_);
-      other.reset();
-    }
-    return *this;
-  }
+  PayloadHolder& operator=(PayloadHolder&& other) noexcept;
 
   PayloadHolder(const PayloadHolder& other) = delete;
   PayloadHolder& operator=(const PayloadHolder& other) = delete;
@@ -91,7 +72,7 @@ class PayloadHolder {
   }
 
   bool owner() const {
-    return valid() && owned_;
+    return valid() && iobuf_->isManaged();
   }
 
   /**
@@ -148,10 +129,13 @@ class PayloadHolder {
   Payload getFlatPayload() const;
 
   /**
-   * returns true if payload is backed by IOBuf
+   * Clone payload buffer. Creates a zero copy strong reference for the payload.
    */
-  bool isIOBuffer() const {
-    return iobuf_ != nullptr;
+  std::unique_ptr<folly::IOBuf> clonePayload() {
+    if (iobuf_ && iobuf_->isManaged()) {
+      return iobuf_->clone();
+    }
+    return nullptr;
   }
 
   /**
@@ -160,19 +144,8 @@ class PayloadHolder {
   std::string toString() const;
 
  private:
-  // A client-supplied payload, or a small payload that was read from
-  // ProtocolReader buffer.
-  //
-  // Depending on the value of `owned_', upon destruction the object may
-  // delete the payload referenced by payload_flat_.
-  Payload payload_flat_;
-
   // IOBuf contains the payload read from socket or getting sent over to socket.
   std::unique_ptr<folly::IOBuf> iobuf_;
-
-  // If true (default), the PayloadHolder owns the payload and will free it in
-  // the destructor.
-  bool owned_ = true;
 };
 
 }} // namespace facebook::logdevice

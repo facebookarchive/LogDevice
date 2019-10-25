@@ -115,15 +115,15 @@ class DummySequencer {
 // for simplicity, payload of the record is a fixed 8 bytes storing the
 // lsn value of the record
 std::shared_ptr<PayloadHolder> createPayload(lsn_t lsn) {
-  lsn_t* payload_flat = (lsn_t*)malloc(sizeof(lsn_t));
-  *payload_flat = lsn;
-  return std::make_shared<PayloadHolder>(payload_flat, sizeof(lsn_t));
+  return std::make_shared<PayloadHolder>(
+      folly::IOBuf::copyBuffer(static_cast<void*>(&lsn), sizeof(lsn)));
 }
 
 std::shared_ptr<PayloadHolder> createPayload(size_t size, char fill) {
   void* payload_flat = malloc(size);
   memset(payload_flat, fill, size);
-  return std::make_shared<PayloadHolder>(payload_flat, size);
+  return std::make_shared<PayloadHolder>(
+      folly::IOBuf::takeOwnership(payload_flat, size));
 }
 
 // convenient function for putting a record in the cache
