@@ -40,12 +40,20 @@ class ReaderBridgeImpl : public ReaderBridge {
                   GapRecord,
                   bool notify_when_consumed) override;
 
+  // Waits for all in-progress callbacks to return.
+  void waitUntilSafeToShutDown();
+
  private:
   void maybeWakeConsumer();
   // Helper method, handles interactions with ReaderImpl for one QueueEntry
   // whether data or gap
   int onEntry(ReaderImpl::QueueEntry&& entry, bool notify_when_consumed);
   ReaderImpl* owner_;
+
+  // How many onEntry() calls are currently in flight. ReaderImpl's destructor
+  // waits for for this to reach zero before deallocating, along with making
+  // sure that no *new* calls to onEntry() can happen.
+  std::atomic<int> callbacks_in_progress_{0};
 };
 
 static size_t calculate_queue_capacity(size_t max_logs,
@@ -98,7 +106,7 @@ ReaderImpl::ReaderImpl(size_t max_logs,
                        double flow_control_threshold)
     : max_logs_(max_logs),
       read_buffer_size_(client_read_buffer_size),
-      bridge_(new ReaderBridgeImpl(this)),
+      bridge_(std::make_unique<ReaderBridgeImpl>(this)),
       processor_(processor),
       epoch_metadata_cache_(epoch_metadata_cache),
       client_shared_(std::move(client_shared)),
@@ -113,7 +121,7 @@ ReaderImpl::~ReaderImpl() {
   // ReaderBridge which they used to send records to us).
 
   if (!destructor_stops_reading_) {
-    // Tests bypass this code to avoid non-virtual calls to
+    // Some tests bypass this code to avoid non-virtual calls to
     // postStopReadingRequest() in the destructor
     return;
   }
@@ -162,6 +170,8 @@ ReaderImpl::~ReaderImpl() {
   for (int i = 0; i < nlogs; ++i) {
     sem.wait();
   }
+
+  bridge_->waitUntilSafeToShutDown();
 }
 
 int ReaderImpl::startReading(logid_t log_id,
@@ -718,10 +728,21 @@ void ReaderImpl::notifyWorker(LogState& state) {
   }
 }
 
+ReaderBridge* ReaderImpl::TEST_getBridge() {
+  // The test can't do this upcast itself because it doesn't have access to
+  // ReaderBridgeImpl definition.
+  return static_cast<ReaderBridge*>(bridge_.get());
+}
+
 // These methods run on worker threads
 
 int ReaderBridgeImpl::onEntry(ReaderImpl::QueueEntry&& entry,
                               bool notify_when_consumed) {
+  ++callbacks_in_progress_;
+  SCOPE_EXIT {
+    --callbacks_in_progress_;
+  };
+
   if (notify_when_consumed) {
     entry.setNotifyWhenConsumed(true);
     ++owner_->notify_count_;
@@ -801,6 +822,12 @@ void ReaderBridgeImpl::maybeWakeConsumer() {
       owner_->cv_.notify_one();
       break;
     }
+  }
+}
+
+void ReaderBridgeImpl::waitUntilSafeToShutDown() {
+  while (callbacks_in_progress_.load() != 0) {
+    std::this_thread::yield();
   }
 }
 

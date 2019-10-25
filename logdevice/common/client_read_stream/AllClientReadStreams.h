@@ -43,7 +43,7 @@ class AllClientReadStreams : public ShardAuthoritativeStatusSubscriber {
    * Deletes a ClientReadStream object.  Called when the application wants to
    * stop reading a log.
    */
-  void erase(read_stream_id_t id);
+  bool erase(read_stream_id_t id);
 
   /**
    * Delivers a record to the correct read stream.  Called by

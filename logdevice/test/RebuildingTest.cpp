@@ -2130,6 +2130,7 @@ TEST_P(RebuildingTest, RebuildMetaDataLogsOfDeletedLogs) {
         rec_count += count;
       }
     } while (count != 0);
+
     return rec_count;
   };
 

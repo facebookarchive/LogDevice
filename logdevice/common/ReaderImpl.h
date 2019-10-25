@@ -136,7 +136,7 @@ class ReaderImpl : public Reader {
 
   // Bridge through which ClientReadStream sends us data.  Implemented in .cpp.
   friend class ReaderBridgeImpl;
-  std::unique_ptr<ReaderBridge> bridge_;
+  std::unique_ptr<ReaderBridgeImpl> bridge_;
 
   Processor* processor_;
   EpochMetaDataCache* epoch_metadata_cache_;
@@ -437,6 +437,8 @@ class ReaderImpl : public Reader {
   // original records onto `pre_queue_'.  If decoding fails, a DATALOSS gap is
   // generated instead.
   void read_decodeBuffered(QueueEntry& entry);
+
+  ReaderBridge* TEST_getBridge();
 
   friend class TestReader;
 };

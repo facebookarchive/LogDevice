@@ -29,11 +29,13 @@ void AllClientReadStreams::insertAndStart(
   insert_result.first->second->start();
 }
 
-void AllClientReadStreams::erase(read_stream_id_t id) {
+bool AllClientReadStreams::erase(read_stream_id_t id) {
   auto it = streams_.find(id);
   if (it != streams_.end()) {
     streams_.erase(it);
+    return true;
   }
+  return false;
 }
 
 void AllClientReadStreams::onDataRecord(

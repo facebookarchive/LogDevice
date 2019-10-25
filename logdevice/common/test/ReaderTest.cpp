@@ -52,7 +52,7 @@ class TestReader : public ReaderImpl {
   }
 
   ReaderBridge* getBridge() {
-    return bridge_.get();
+    return TEST_getBridge();
   }
 
  protected:

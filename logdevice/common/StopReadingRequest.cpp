@@ -16,7 +16,13 @@ namespace facebook { namespace logdevice {
 
 Request::Execution StopReadingRequest::execute() {
   Worker* w = Worker::onThisThread();
-  w->clientReadStreams().erase(stop_handle_.read_stream_id);
+  bool found = w->clientReadStreams().erase(stop_handle_.read_stream_id);
+  if (!found) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   2,
+                   "Stream %lu not found. Ignoring. This should be rare.",
+                   stop_handle_.read_stream_id.val());
+  }
   if (callback_) {
     callback_();
   }
