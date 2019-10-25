@@ -517,8 +517,8 @@ class NodesConfigurationManagerTest2 : public ::testing::Test {
     ncm1_ = NodesConfigurationManager::create(
         NodesConfigurationManager::OperationMode::forTooling(),
         std::move(deps));
-    ASSERT_TRUE(ncm1_->init(std::make_shared<const NodesConfiguration>()));
     ncm1_->upgradeToProposer();
+    ASSERT_TRUE(ncm1_->init(std::make_shared<const NodesConfiguration>()));
 
     waitTillNCMReceives(*ncm1_, init_version_);
 
@@ -533,8 +533,8 @@ class NodesConfigurationManagerTest2 : public ::testing::Test {
     ncm2_ = NodesConfigurationManager::create(
         NodesConfigurationManager::OperationMode::forTooling(),
         std::move(deps));
-    ASSERT_TRUE(ncm2_->init(std::make_shared<const NodesConfiguration>()));
     ncm2_->upgradeToProposer();
+    ASSERT_TRUE(ncm2_->init(std::make_shared<const NodesConfiguration>()));
   }
 
   //////// Helper functions ////////

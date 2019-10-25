@@ -873,6 +873,7 @@ bool Server::initProcessor() {
                     "creation!");
         throw ConstructorFailed();
       }
+      ncm->upgradeToProposer();
 
       auto initial_nc =
           processor_->config_->getNodesConfigurationFromNCMSource();
@@ -891,10 +892,6 @@ bool Server::initProcessor() {
         ld_critical(
             "Processing initial NodesConfiguration did not finish in time.");
         throw ConstructorFailed();
-      }
-      if (params_->isStorageNode()) {
-        // Only storage nodes need to upgrade to being proposers.
-        ncm->upgradeToProposer();
       }
     }
 
@@ -1163,11 +1160,6 @@ bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
     maintenance_manager_ =
         std::make_unique<maintenance::MaintenanceManager>(&w, std::move(deps));
     admin_server->setMaintenanceManager(maintenance_manager_.get());
-    // Since this node is going to run MaintenanceManager, upgrade the
-    // NodesConfigManager to be a proposer
-    auto ncm = processor_->getNodesConfigurationManager();
-    ld_check(ncm);
-    ncm->upgradeToProposer();
     maintenance_manager_->start();
   } else {
     ld_info(
