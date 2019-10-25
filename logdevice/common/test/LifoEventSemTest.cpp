@@ -21,9 +21,6 @@ using namespace folly;
 using namespace folly::test;
 using namespace facebook::logdevice;
 
-typedef LifoEventSemImpl<DeterministicAtomic> DLifoEventSem;
-typedef DeterministicSchedule DSched;
-
 namespace facebook { namespace logdevice { namespace detail {
 
 template <>
