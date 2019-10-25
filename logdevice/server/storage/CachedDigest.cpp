@@ -320,7 +320,7 @@ CachedDigest::shipRecord(esn_t esn,
   auto msg =
       std::make_unique<RECORD_Message>(header,
                                        TrafficClass::RECOVERY,
-                                       payload_raw.dup(),
+                                       payload_raw.toIOBuf(),
                                        std::move(extra_metadata),
                                        RECORD_Message::Source::CACHED_DIGEST);
 
