@@ -57,6 +57,13 @@ class ProtocolWriter {
                                  size_t nbytes,
                                  size_t nwritten) = 0;
 
+    virtual int writeWithoutCopy(folly::IOBuf* const /* buffer */,
+                                 size_t /* nwritten */) {
+      ld_check(false);
+      err = E::INTERNAL;
+      return -1;
+    }
+
     /**
      * @return  a string to identify the buffer destination
      */
@@ -141,6 +148,7 @@ class ProtocolWriter {
    * Wraps evbuffer_add_reference() from libevent.
    */
   void writeWithoutCopy(const void* data, size_t size);
+  void writeWithoutCopy(folly::IOBuf* const buffer);
 
   /**
    * Writes a vector.  std::string also welcome as it is sufficiently

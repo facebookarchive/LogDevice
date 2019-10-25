@@ -42,6 +42,7 @@ class IOBufDestination : public ProtocolWriter::Destination {
       prev_buf->append(nbytes);
     };
 
+    ld_check(nbytes > 0);
     auto avail = iobuf_->prev()->tailroom();
     auto nadd = std::min(nbytes, avail);
     if (avail == 0) {
@@ -73,9 +74,18 @@ class IOBufDestination : public ProtocolWriter::Destination {
   int writeWithoutCopy(const void* src,
                        size_t nbytes,
                        size_t /*nwritten*/) override {
+    ld_check(nbytes > 0);
     auto new_iobuf =
         folly::IOBuf::wrapBuffer(static_cast<const void*>(src), nbytes);
     iobuf_->prependChain(std::move(new_iobuf));
+    return 0;
+  }
+
+  int writeWithoutCopy(folly::IOBuf* const buffer,
+                       size_t /* nwritten */) override {
+    ld_check(buffer->length());
+    auto clone = buffer->clone();
+    iobuf_->prependChain(std::move(clone));
     return 0;
   }
 
@@ -132,6 +142,10 @@ class EvbufferDestination : public ProtocolWriter::Destination {
       ld_check(false);
     }
     return rv;
+  }
+
+  int writeWithoutCopy(folly::IOBuf* const buffer, size_t nwritten) override {
+    return writeWithoutCopy(buffer->data(), buffer->length(), nwritten);
   }
 
   uint64_t computeChecksum() override {
@@ -195,6 +209,10 @@ class LinearBufferDestinationBase : public ProtocolWriter::Destination {
     // currently zero copy is *not* support in linear buffer destination
     // fallback to copy
     return write(src, nbytes, nwritten);
+  }
+
+  int writeWithoutCopy(folly::IOBuf* const buffer, size_t nwritten) override {
+    return writeWithoutCopy(buffer->data(), buffer->length(), nwritten);
   }
 
   /* unused */
@@ -349,6 +367,16 @@ void ProtocolWriter::writeWithoutCopy(const void* data, size_t nbytes) {
         [&] { return dest_->writeWithoutCopy(data, nbytes, nwritten_); });
   }
   nwritten_ += nbytes;
+}
+
+void ProtocolWriter::writeWithoutCopy(folly::IOBuf* const buffer) {
+  if (!isProtoVersionAllowed()) {
+    return;
+  }
+  if (!dest_->isNull() && ok()) {
+    writeImplCb([&] { return dest_->writeWithoutCopy(buffer, nwritten_); });
+  }
+  nwritten_ += buffer->length();
 }
 
 }} // namespace facebook::logdevice
