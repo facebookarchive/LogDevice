@@ -304,17 +304,23 @@ class LifoEventSemImpl
         throw folly::ShutdownSemError("semaphore has been shut down");
       }
 
-      try {
-        do {
-          func();
-        } while (--maxCalls > 0 && owner_.tryWait());
-      } catch (...) {
-        // recycle, but don't throw ShutdownSemError.  In the case of
-        // shutdown fd() will remain readable so we can throw on the next
-        // call to process(), which will happen very soon.
+      // We use a scope guard instead of try { ... } catch (...) { ...; throw; }
+      // because the rethrowing truncates stack trace if the exception is not
+      // caught: if we catch+rethrow, std::terminate will be called at the point
+      // of our rethrow, which makes stack trace much less useful; if we don't
+      // catch, std::terminate is called at the point of original throw.
+      auto if_exception = folly::makeGuard([&] {
+        // If func() throws, recycle, but don't throw ShutdownSemError.
+        // In the case of shutdown fd() will remain readable so we can throw on
+        // the next call to process(), which will happen very soon.
         recycleAndCheckShutdown();
-        throw;
-      }
+      });
+
+      do {
+        func();
+      } while (--maxCalls > 0 && owner_.tryWait());
+
+      if_exception.dismiss();
       recycle();
     }
 
@@ -349,14 +355,19 @@ class LifoEventSemImpl
         throw folly::ShutdownSemError("semaphore has been shut down");
       }
 
-      try {
-        assert(maxBatchSize > 0);
-        auto extra = maxBatchSize > 1 ? owner_.tryWait(maxBatchSize - 1) : 0ul;
-        func(1 + extra);
-      } catch (...) {
+      // See process() for explanation of this usage of scope guard.
+      auto if_exception = folly::makeGuard([&] {
+        // If func() throws, recycle, but don't throw ShutdownSemError.
+        // In the case of shutdown fd() will remain readable so we can throw on
+        // the next call to process(), which will happen very soon.
         recycleAndCheckShutdown();
-        throw;
-      }
+      });
+
+      assert(maxBatchSize > 0);
+      auto extra = maxBatchSize > 1 ? owner_.tryWait(maxBatchSize - 1) : 0ul;
+      func(1 + extra);
+
+      if_exception.dismiss();
       recycle();
     }
 
