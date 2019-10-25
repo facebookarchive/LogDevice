@@ -16,6 +16,7 @@
 #include <utility>
 
 #include <folly/Range.h>
+#include <folly/io/IOBuf.h>
 
 #include "logdevice/include/strong_typedef.h"
 
@@ -137,6 +138,11 @@ struct Payload {
 
   folly::StringPiece toStringPiece() const noexcept {
     return folly::StringPiece{static_cast<const char*>(data_), size_};
+  }
+
+  // Copies data into a IOBuf
+  std::unique_ptr<folly::IOBuf> toIOBuf() const {
+    return folly::IOBuf::copyBuffer(data_, size_);
   }
 
   // returns maximum payload size supported by this implementation of

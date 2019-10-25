@@ -11,9 +11,9 @@
 
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
+#include <folly/io/IOBuf.h>
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
@@ -61,19 +61,15 @@ TEST_F(RECORD_MessageTest, SerializationNoExtraMetadata) {
   RECORD_Header header = create_test_header();
   RECORD_Message orig(
       header, TrafficClass::READ_TAIL, Payload(nullptr, 0), nullptr);
-  struct evbuffer* evbuf = LD_EV(evbuffer_new)();
-  SCOPE_EXIT {
-    LD_EV(evbuffer_free)(evbuf);
-  };
 
+  std::unique_ptr<folly::IOBuf> iobuf =
+      folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
   ProtocolWriter writer(
-      orig.type_, evbuf, Compatibility::MAX_PROTOCOL_SUPPORTED);
+      orig.type_, iobuf.get(), Compatibility::MAX_PROTOCOL_SUPPORTED);
   orig.serialize(writer);
   ASSERT_GT(writer.result(), 0);
-
   ProtocolReader reader(MessageType::RECORD,
-                        evbuf,
-                        LD_EV(evbuffer_get_length)(evbuf),
+                        std::move(iobuf),
                         Compatibility::MAX_PROTOCOL_SUPPORTED);
   auto read = checked_downcast<std::unique_ptr<RECORD_Message>>(
       RECORD_Message::deserialize(reader).msg);
@@ -85,6 +81,81 @@ TEST_F(RECORD_MessageTest, SerializationNoExtraMetadata) {
       0,
       memcmp(
           &expected_header, &this->getHeader(*read), sizeof expected_header));
+}
+
+// RecordMessage should be safe to destroy after deserialize. Payload should be
+// either copied or cloned into the ProtocolWriter buffer.
+TEST_F(RECORD_MessageTest, DestroyRecordAfterSerialize) {
+  {
+    RECORD_Header header = create_test_header();
+    std::unique_ptr<folly::IOBuf> payload =
+        folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
+    payload->append(IOBUF_ALLOCATION_UNIT);
+    auto payload_clone = payload->clone();
+    std::unique_ptr<RECORD_Message> orig = std::make_unique<RECORD_Message>(
+        header, TrafficClass::READ_TAIL, std::move(payload), nullptr);
+
+    std::unique_ptr<folly::IOBuf> iobuf =
+        folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
+    ProtocolWriter writer(
+        orig->type_, iobuf.get(), Compatibility::MAX_PROTOCOL_SUPPORTED);
+    orig->serialize(writer);
+    ASSERT_GT(writer.result(), IOBUF_ALLOCATION_UNIT);
+    // It should be safe to reset the buffer as the data payload is already
+    // cloned.
+    orig.reset();
+    // The share count should be 2. 1 in the writer and one referred by
+    // payload_clone.
+    ASSERT_EQ(payload_clone->approximateShareCountOne(), 2);
+    ProtocolReader reader(MessageType::RECORD,
+                          std::move(iobuf),
+                          Compatibility::MAX_PROTOCOL_SUPPORTED);
+    auto read = checked_downcast<std::unique_ptr<RECORD_Message>>(
+        RECORD_Message::deserialize(reader).msg);
+    ASSERT_NE(read.get(), nullptr);
+
+    RECORD_Header expected_header = header;
+    expected_header.flags = 0;
+    ASSERT_EQ(
+        0,
+        memcmp(
+            &expected_header, &this->getHeader(*read), sizeof expected_header));
+  }
+  {
+    RECORD_Header header = create_test_header();
+    std::unique_ptr<folly::IOBuf> payload =
+        folly::IOBuf::create(MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE - 1);
+    payload->append(MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE - 1);
+    auto payload_clone = payload->clone();
+    std::unique_ptr<RECORD_Message> orig = std::make_unique<RECORD_Message>(
+        header, TrafficClass::READ_TAIL, std::move(payload), nullptr);
+
+    std::unique_ptr<folly::IOBuf> iobuf =
+        folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
+    ProtocolWriter writer(
+        orig->type_, iobuf.get(), Compatibility::MAX_PROTOCOL_SUPPORTED);
+    orig->serialize(writer);
+    ASSERT_GT(writer.result(), MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE - 1);
+    // It should be safe to reset the buffer as the data payload is already
+    // cloned.
+    orig.reset();
+    // The share count should be 1 as payload was less than
+    // MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE it should be copied instead of cloned.
+    ASSERT_EQ(payload_clone->approximateShareCountOne(), 1);
+    ProtocolReader reader(MessageType::RECORD,
+                          std::move(iobuf),
+                          Compatibility::MAX_PROTOCOL_SUPPORTED);
+    auto read = checked_downcast<std::unique_ptr<RECORD_Message>>(
+        RECORD_Message::deserialize(reader).msg);
+    ASSERT_NE(read.get(), nullptr);
+
+    RECORD_Header expected_header = header;
+    expected_header.flags = 0;
+    ASSERT_EQ(
+        0,
+        memcmp(
+            &expected_header, &this->getHeader(*read), sizeof expected_header));
+  }
 }
 
 TEST_F(RECORD_MessageTest, SerializationWithExtraMetadata) {
@@ -110,19 +181,15 @@ TEST_F(RECORD_MessageTest, SerializationWithExtraMetadata) {
                       std::move(orig_meta),
                       RECORD_Message::Source::LOCAL_LOG_STORE,
                       byte_offsets);
-  struct evbuffer* evbuf = LD_EV(evbuffer_new)();
-  SCOPE_EXIT {
-    LD_EV(evbuffer_free)(evbuf);
-  };
-
+  std::unique_ptr<folly::IOBuf> iobuf =
+      folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
   ProtocolWriter writer(
-      orig.type_, evbuf, Compatibility::MAX_PROTOCOL_SUPPORTED);
+      orig.type_, iobuf.get(), Compatibility::MAX_PROTOCOL_SUPPORTED);
   orig.serialize(writer);
   ASSERT_GT(writer.result(), 0);
 
   ProtocolReader reader(MessageType::RECORD,
-                        evbuf,
-                        LD_EV(evbuffer_get_length)(evbuf),
+                        std::move(iobuf),
                         Compatibility::MAX_PROTOCOL_SUPPORTED);
   auto read = checked_downcast<std::unique_ptr<RECORD_Message>>(
       RECORD_Message::deserialize(reader).msg);

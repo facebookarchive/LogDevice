@@ -600,9 +600,8 @@ int ReadingCallback::shipRecord(lsn_t lsn,
                           static_cast<uint64_t>(timestamp.count()),
                           wire_flags,
                           stream_->shard_};
-
+  std::unique_ptr<folly::IOBuf> payload_buf_;
   if (stream_->no_payload_ || stream_->csi_data_only_) {
-    payload = Payload(nullptr, 0);
     // Clear checksum flags if we don't ship payload
     header.flags &= ~(RECORD_Header::CHECKSUM | RECORD_Header::CHECKSUM_64BIT);
     header.flags |= RECORD_Header::CHECKSUM_PARITY;
@@ -635,11 +634,11 @@ int ReadingCallback::shipRecord(lsn_t lsn,
 
     h.length = static_cast<uint32_t>(payload.size());
     h.hash = checksum_32bit(Slice(payload));
-    payload = Payload(&h, sizeof(h)).dup();
+    payload_buf_ = Payload(&h, sizeof(h)).toIOBuf();
   } else {
     // Make private copy of the data so it is stable for the lifetime of
     // the, possibly deferred on transmission, RECORD message.
-    payload = payload.dup();
+    payload_buf_ = payload.toIOBuf();
   }
 
   if (stream_->include_byte_offset_ && offsets.isValid()) {
@@ -653,7 +652,7 @@ int ReadingCallback::shipRecord(lsn_t lsn,
   auto msg =
       std::make_unique<RECORD_Message>(header,
                                        stream_->trafficClass(),
-                                       std::move(payload),
+                                       std::move(payload_buf_),
                                        std::move(extra_metadata),
                                        RECORD_Message::Source::LOCAL_LOG_STORE,
                                        std::move(offsets),

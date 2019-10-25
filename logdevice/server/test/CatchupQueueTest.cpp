@@ -240,10 +240,11 @@ class CatchupQueueTest : public ::testing::Test {
                                           lsn_t lsn,
                                           size_t payload_size) const {
     RECORD_Header header{log_id_, id, lsn, 0};
-    auto msg = new RECORD_Message(header,
-                                  TrafficClass::READ_TAIL,
-                                  Payload(nullptr, payload_size),
-                                  nullptr);
+    auto payload = folly::IOBuf::create(payload_size);
+    payload->append(payload_size);
+    auto msg = new RECORD_Message(
+        header, TrafficClass::READ_TAIL, std::move(payload), nullptr);
+
     return msg;
   }
 

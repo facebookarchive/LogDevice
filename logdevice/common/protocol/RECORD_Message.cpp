@@ -41,9 +41,7 @@ RECORD_Message::RECORD_Message(const RECORD_Header& header,
                                Source source,
                                OffsetMap offsets,
                                std::shared_ptr<std::string> log_group_path)
-    :
-
-      Message(MessageType::RECORD, tc),
+    : Message(MessageType::RECORD, tc),
       header_(header),
       payload_(std::move(payload)),
       extra_metadata_(std::move(extra_metadata)),
@@ -51,8 +49,27 @@ RECORD_Message::RECORD_Message(const RECORD_Header& header,
       offsets_(std::move(offsets)),
       log_group_path_(std::move(log_group_path)) {}
 
+RECORD_Message::RECORD_Message(const RECORD_Header& header,
+                               TrafficClass tc,
+                               std::unique_ptr<folly::IOBuf>&& payload,
+                               std::unique_ptr<ExtraMetadata> extra_metadata,
+                               Source source,
+                               OffsetMap offsets,
+                               std::shared_ptr<std::string> log_group_path)
+    : Message(MessageType::RECORD, tc),
+      header_(header),
+      payload_(payload && payload->length() > 0 ? payload->data() : nullptr,
+               payload && payload->length() > 0 ? payload->length() : 0),
+      buffer_(std::move(payload)),
+      extra_metadata_(std::move(extra_metadata)),
+      source_(source),
+      offsets_(std::move(offsets)),
+      log_group_path_(std::move(log_group_path)) {}
+
 RECORD_Message::~RECORD_Message() {
-  free(const_cast<void*>(payload_.data()));
+  if (!buffer_) {
+    free(const_cast<void*>(payload_.data()));
+  }
 }
 
 void RECORD_Message::serialize(ProtocolWriter& writer) const {
@@ -79,8 +96,11 @@ void RECORD_Message::serialize(ProtocolWriter& writer) const {
                                                 // by upper layers
   if (payload_.size() <= MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE) {
     writer.write(payload_.data(), payload_.size());
-  } else {
-    writer.writeWithoutCopy(payload_.data(), payload_.size());
+  } else if (buffer_) {
+    writer.writeWithoutCopy(buffer_.get());
+  } else if (payload_.size() > 0) {
+    ld_check(buffer_);
+    writer.write(payload_.data(), payload_.size());
   }
 }
 

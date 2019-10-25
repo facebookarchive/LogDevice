@@ -151,6 +151,13 @@ class RECORD_Message : public Message, boost::noncopyable {
                  Source source = Source::LOCAL_LOG_STORE,
                  OffsetMap offsets = OffsetMap(),
                  std::shared_ptr<std::string> log_group_path = nullptr);
+  RECORD_Message(const RECORD_Header& header,
+                 TrafficClass tc,
+                 std::unique_ptr<folly::IOBuf>&& payload,
+                 std::unique_ptr<ExtraMetadata> extra_metadata,
+                 Source source = Source::LOCAL_LOG_STORE,
+                 OffsetMap offsets = OffsetMap(),
+                 std::shared_ptr<std::string> log_group_path = nullptr);
 
   /**
    * Convenience method that calculates how much space a RECORD message
@@ -196,6 +203,7 @@ class RECORD_Message : public Message, boost::noncopyable {
   //   onReceived() then passes its ownership to the client library where the
   //   memory will get freed later when it is no longer needed.
   Payload payload_;
+  std::unique_ptr<folly::IOBuf> buffer_;
 
   // If non-null:
   // - On the send path, the structure will be embedded in the RECORD
