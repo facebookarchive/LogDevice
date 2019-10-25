@@ -290,7 +290,6 @@ void CachedDigestTest::setUp() {
 
   auto put_record = [&](lsn_t lsn, const Snapshot::Record& r) {
     auto ph = gen_payload(lsn);
-    Payload pl = ph->getPayload();
     cache_->putRecord(RecordID(lsn, LOG_ID),
                       r.timestamp,
                       r.last_known_good,
@@ -298,7 +297,6 @@ void CachedDigestTest::setUp() {
                       dummyCopyset,
                       r.flags,
                       std::map<KeyType, std::string>{},
-                      Slice(pl),
                       std::move(ph));
   };
 

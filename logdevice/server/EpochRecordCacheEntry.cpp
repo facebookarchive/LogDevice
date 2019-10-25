@@ -34,7 +34,6 @@ EpochRecordCacheEntry::EpochRecordCacheEntry(
     const copyset_t& copyset,
     OffsetMap offsets_within_epoch,
     std::map<KeyType, std::string>&& keys,
-    Slice payload_raw,
     std::shared_ptr<PayloadHolder> payload_holder)
     : ZeroCopiedRecord(lsn,
                        flags,
@@ -44,7 +43,6 @@ EpochRecordCacheEntry::EpochRecordCacheEntry(
                        copyset,
                        std::move(offsets_within_epoch),
                        std::move(keys),
-                       payload_raw,
                        std::move(payload_holder)) {}
 
 int EpochRecordCacheEntry::fromLinearBuffer(lsn_t lsn,

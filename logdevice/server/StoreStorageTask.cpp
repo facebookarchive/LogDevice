@@ -350,7 +350,6 @@ int StoreStorageTask::putCache() {
                             copyset_,
                             flags_,
                             write_op_.getKeys(),
-                            payload_raw_,
                             payload_holder_,
                             extra_.offsets_within_epoch);
   if (rv == 0) {

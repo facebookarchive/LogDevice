@@ -28,7 +28,6 @@ ZeroCopiedRecord::ZeroCopiedRecord(
     const copyset_t& copyset,
     OffsetMap offsets_within_epoch,
     std::map<KeyType, std::string>&& keys,
-    Slice payload_raw,
     std::shared_ptr<PayloadHolder> payload_holder)
     : lsn(lsn),
       flags(flags),
@@ -38,7 +37,7 @@ ZeroCopiedRecord::ZeroCopiedRecord(
       copyset(copyset),
       offsets_within_epoch(std::move(offsets_within_epoch)),
       keys(std::move(keys)),
-      payload_raw(payload_raw),
+      payload_raw(payload_holder ? payload_holder->getPayload() : Payload()),
       payload_holder_(std::move(payload_holder)) {}
 
 /*static*/

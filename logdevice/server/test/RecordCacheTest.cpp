@@ -138,12 +138,10 @@ int putRecord(Cache* c,
               copyset_t copyset = copyset_t({N0, N1, N2}),
               OffsetMap offsets_within_epoch = OffsetMap()) {
   std::shared_ptr<PayloadHolder> ph = nullptr;
-  Payload pl;
   if ((flags & STORE_Header::HOLE) || (flags & STORE_Header::AMEND)) {
     // no payload for hole plug of amends
   } else {
     ph = createPayload(lsn);
-    pl = ph->getPayload();
   }
   // use timestamp as the same as lsn
   uint64_t timestamp = lsn;
@@ -156,7 +154,6 @@ int putRecord(Cache* c,
                       flags,
                       // putRecord() can destroy keys, so make copy.
                       KeysType(keys),
-                      Slice(pl),
                       ph,
                       std::move(offsets_within_epoch));
 }
@@ -811,9 +808,6 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
   auto payload1 = createPayload(payload_len, 0);
   auto payload2 = createPayload(payload_len, 0);
   auto payload_short = createPayload(payload_len_short, 1);
-  Slice slice1 = Slice(payload1->getPayload());
-  Slice slice2 = Slice(payload2->getPayload());
-  Slice slice_short = Slice(payload_short->getPayload());
 
   // Serialize OffsetMap
   uint32_t flags = STORE_Header::OFFSET_MAP;
@@ -828,7 +822,6 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
                                                  copyset,
                                                  OffsetMap({{BYTE_OFFSET, 15}}),
                                                  KeysType{},
-                                                 slice1,
                                                  payload1),
                                        Entry::Disposer(deps_.get()));
   auto entry2 = std::shared_ptr<Entry>(new Entry(0,
@@ -839,7 +832,6 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
                                                  copyset,
                                                  OffsetMap({{BYTE_OFFSET, 15}}),
                                                  KeysType{},
-                                                 slice2,
                                                  payload2),
                                        Entry::Disposer(deps_.get()));
   int entry1_serial_len = entry1->toLinearBuffer(buf1.get(), buflen);
@@ -860,7 +852,6 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
                                             copyset,
                                             OffsetMap({{BYTE_OFFSET, 15}}),
                                             KeysType{},
-                                            slice_short,
                                             payload_short),
                                   Entry::Disposer(deps_.get()));
   entry2_serial_len = entry2->toLinearBuffer(buf2.get(), buflen);

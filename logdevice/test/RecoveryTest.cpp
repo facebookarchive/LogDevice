@@ -496,12 +496,13 @@ void RecoveryTest::prepopulateRecordCacheForLog(
   // ensure we get cache hit later
   record_cache->neverStored();
   for (const TestRecord& tr : records) {
-    Slice payload_slice =
-        tr.payload_.hasValue() ? Slice(tr.payload_.value()) : Slice("blah", 4);
     auto ph = (tr.payload_.hasValue()
                    ? std::make_shared<PayloadHolder>(
                          tr.payload_.value(), PayloadHolder::UNOWNED)
-                   : std::make_shared<PayloadHolder>(nullptr, 0));
+                   : std::make_shared<PayloadHolder>(
+                         Payload(TestRecord::kEmptySlice.data(),
+                                 TestRecord::kEmptySlice.size()),
+                         PayloadHolder::UNOWNED));
 
     STORE_flags_t store_flags =
         STORE_flags_t(tr.flags_ & LocalLogStoreRecordFormat::FLAG_MASK);
@@ -518,7 +519,6 @@ void RecoveryTest::prepopulateRecordCacheForLog(
         copyset_t(tr.copyset_.cbegin(), tr.copyset_.cend()),
         store_flags,
         {},
-        payload_slice,
         ph,
         tr.offsets_within_epoch_);
 

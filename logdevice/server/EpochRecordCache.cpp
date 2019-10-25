@@ -221,7 +221,6 @@ int EpochRecordCache::putRecord(
     const copyset_t& copyset,
     STORE_flags_t flags,
     std::map<KeyType, std::string>&& keys,
-    Slice payload_raw,
     const std::shared_ptr<PayloadHolder>& payload_holder,
     OffsetMap offsets_within_epoch) {
   esn_t head = esn_t(head_.load());
@@ -278,7 +277,6 @@ int EpochRecordCache::putRecord(
                                 copyset,
                                 offsets_within_epoch,
                                 std::move(keys),
-                                payload_raw,
                                 payload_holder),
       EpochRecordCacheEntry::Disposer(deps_));
 

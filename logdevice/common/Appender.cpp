@@ -841,9 +841,6 @@ void Appender::prepareTailRecord(bool include_payload) {
 
   // tail optimized logs, include payload in the tail record
   if (payload_->isIOBuffer()) {
-    // payload is evbuffer backed,
-    // 1) linearize the evbuffer if not already done
-    auto ph_raw = payload_->getPayload();
 
     auto zero_copied_record = std::make_shared<ZeroCopiedRecord>(
         lsn_t(store_hdr_.rid.lsn()),
@@ -854,7 +851,6 @@ void Appender::prepareTailRecord(bool include_payload) {
         /*unused copyset*/ copyset_t{},
         extra_.offsets_within_epoch,
         /*unused keys*/ std::map<KeyType, std::string>{},
-        Slice{ph_raw},
         payload_);
 
     tail_record_ = std::make_shared<TailRecord>(

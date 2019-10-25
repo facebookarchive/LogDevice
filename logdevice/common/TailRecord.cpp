@@ -102,8 +102,10 @@ void TailRecord::serialize(ProtocolWriter& writer) const {
     TailRecordHeader::payload_size_t payload_size =
         static_cast<TailRecordHeader::payload_size_t>(payload_slice.size);
     writer.write(payload_size);
-    // if possible, zero-copy write the actual payload
-    writer.writeWithoutCopy(payload_slice.data, payload_slice.size);
+    if (payload_size > 0) {
+      // if possible, zero-copy write the actual payload
+      writer.writeWithoutCopy(payload_slice.data, payload_slice.size);
+    }
   }
 }
 
@@ -142,8 +144,6 @@ void TailRecord::deserialize(ProtocolReader& reader,
       payload_ = std::make_shared<PayloadHolder>(
           PayloadHolder::deserialize(reader, payload_size));
       if (payload_ && evbuffer_zero_copy) {
-        // linearize the payload
-        auto ph_raw = payload_->getPayload();
         // further wraps the payload into ZeroCopiedRecord
         zero_copied_record_ = std::make_shared<ZeroCopiedRecord>(
             header.lsn,
@@ -154,7 +154,6 @@ void TailRecord::deserialize(ProtocolReader& reader,
             /*unused copyset*/ copyset_t{},
             offsets_map_,
             /*unused keys*/ std::map<KeyType, std::string>{},
-            Slice{ph_raw},
             std::move(payload_));
         ld_check(payload_ == nullptr);
       }

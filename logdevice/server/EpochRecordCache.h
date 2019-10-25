@@ -90,7 +90,6 @@ class EpochRecordCache {
                 const copyset_t& copyset,
                 STORE_flags_t flags,
                 std::map<KeyType, std::string>&& keys,
-                Slice payload_raw,
                 const std::shared_ptr<PayloadHolder>& payload_holder,
                 OffsetMap offsets_within_epoch = OffsetMap());
 

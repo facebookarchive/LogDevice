@@ -53,7 +53,6 @@ int RecordCache::putRecord(RecordID rid,
                            const copyset_t& copyset,
                            STORE_flags_t flags,
                            std::map<KeyType, std::string>&& optional_keys,
-                           Slice payload_raw,
                            const std::shared_ptr<PayloadHolder>& payload_holder,
                            OffsetMap offsets_within_epoch) {
   ld_check(rid.logid == log_id_);
@@ -88,7 +87,6 @@ int RecordCache::putRecord(RecordID rid,
                                   copyset,
                                   flags,
                                   std::move(optional_keys),
-                                  payload_raw,
                                   payload_holder,
                                   std::move(offsets_within_epoch));
   }
@@ -207,7 +205,6 @@ int RecordCache::putRecord(RecordID rid,
                                 copyset,
                                 flags,
                                 std::move(optional_keys),
-                                payload_raw,
                                 payload_holder,
                                 std::move(offsets_within_epoch));
 }
