@@ -145,7 +145,7 @@ CommandProcessor::processCommand(const char* command_line,
          address.describe().c_str(),
          std::chrono::duration_cast<std::chrono::duration<double>>(duration)
              .count(),
-         buffer->length(),
+         buffer->computeChainDataLength(),
          sanitize_string(command_line).c_str());
   return buffer;
 }
