@@ -28,6 +28,14 @@
  * log. It's basically a utility that wraps GetSeqStateRequest with a retry
  * mechanism with exponential backoff.
  *
+ * Can be used in two ways:
+ *  1. As a fire-and-forget request. Post it to Processor as a regular Request.
+ *     The SyncSequencerRequest will be automatically deleted after callback
+ *     has been called.
+ *  2. As an owned state machine. Call start() to start the state machine on
+ *     current worker. Destroy the SyncSequencerRequest, on the same worker,
+ *     to cancel it. Destroying from inside the callback is ok.
+ *
  * The completion callback provides a `next_lsn` which provides the following
  * guarantees if the GSS merge type is GSS_MERGE_INTO_NEW:
  *
@@ -147,9 +155,19 @@ class SyncSequencerRequest : public Request {
           GetSeqStateRequest::MergeType::GSS_MERGE_INTO_NEW,
       folly::Optional<epoch_t> min_epoch = folly::none);
 
-  ~SyncSequencerRequest() override {}
+  ~SyncSequencerRequest() override = default;
 
   Request::Execution execute() override;
+
+  // Call this if you intend to own this SyncSequencerRequest rather than
+  // firing-and-forgetting. The state machine will run on the Worker thread from
+  // which start() was called, and the callback will be called from the same
+  // thread. If you use this API, *don't* post this as a Request to Processor.
+  // @return  0 if the state machine was started, -1 if something's wrong;
+  //          in the latter case, does *not* call the callback, and sets err to:
+  //   * E::INVALID_PARAM  if the provided log ID is a metadata log, and
+  //     setPreventMetadataLogs() was called.
+  int start();
 
   // Can be overridden if base class wants to implement a cancellation
   // mechanism.
@@ -239,6 +257,8 @@ class SyncSequencerRequest : public Request {
   bool prevent_metadata_logs_{false};
 
  private:
+  friend class SyncSequencerRequestList;
+
   logid_t logid_;
   uint8_t flags_;
   Callback cb_;
@@ -248,6 +268,8 @@ class SyncSequencerRequest : public Request {
   GetSeqStateRequest::MergeType merge_type_;
   folly::Optional<epoch_t> min_epoch_;
   folly::Optional<int> override_thread_idx_;
+  // True if we need to `delete this` when done.
+  bool self_owned_ = false;
 
   // Timer for retrying GetSeqStateRequests.
   std::unique_ptr<ExponentialBackoffTimer> retry_timer_;
@@ -275,7 +297,7 @@ class SyncSequencerRequest : public Request {
   folly::Optional<bool> is_log_empty_;
 
   void onTimeout();
-  void complete(Status status, bool delete_this = true);
+  void complete(Status status);
 
   void tryAgain();
   void onGotSeqState(GetSeqStateRequest::Result res);
@@ -289,7 +311,11 @@ class SyncSequencerRequestList {
                            &SyncSequencerRequest::list_hook>;
 
   void terminateRequests() {
-    list_.clear_and_dispose(std::default_delete<SyncSequencerRequest>());
+    list_.clear_and_dispose([](SyncSequencerRequest* req) {
+      if (req->self_owned_) {
+        delete req;
+      }
+    });
   }
 
   ~SyncSequencerRequestList() {

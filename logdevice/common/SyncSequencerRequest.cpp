@@ -42,13 +42,26 @@ SyncSequencerRequest::SyncSequencerRequest(
       min_epoch_(min_epoch) {}
 
 Request::Execution SyncSequencerRequest::execute() {
-  if (prevent_metadata_logs_ && MetaDataLog::isMetaDataLog(logid_)) {
-    complete(E::INVALID_PARAM, /*delete_this=*/false);
+  int rv = start();
+
+  if (rv != 0) {
+    complete(err);
     return Execution::COMPLETE;
   }
 
-  Worker::onThisThread()->runningSyncSequencerRequests().getList().push_back(
-      *this);
+  self_owned_ = true;
+  return Execution::CONTINUE;
+}
+
+int SyncSequencerRequest::start() {
+  if (prevent_metadata_logs_ && MetaDataLog::isMetaDataLog(logid_)) {
+    err = E::INVALID_PARAM;
+    return -1;
+  }
+
+  Worker* w = Worker::onThisThread();
+  ld_check(w);
+  w->runningSyncSequencerRequests().getList().push_back(*this);
 
   retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
       [this]() { tryAgain(); }, Worker::settings().seq_state_backoff_time);
@@ -60,7 +73,7 @@ Request::Execution SyncSequencerRequest::execute() {
 
   tryAgain();
 
-  return Execution::CONTINUE;
+  return 0;
 }
 
 void SyncSequencerRequest::tryAgain() {
@@ -291,7 +304,7 @@ void SyncSequencerRequest::onTimeout() {
   complete(res);
 }
 
-void SyncSequencerRequest::complete(Status status, bool delete_this) {
+void SyncSequencerRequest::complete(Status status) {
   ld_check(cb_);
   ld_check_in(status,
               ({E::OK,
@@ -311,6 +324,14 @@ void SyncSequencerRequest::complete(Status status, bool delete_this) {
     ld_check_ne(status, E::CONNFAILED);
     ld_check_ne(status, E::NOSEQUENCER);
   }
+
+  // Cease all activity.
+  retry_timer_.reset();
+  timeout_timer_.reset();
+  callbackHelper_.getHolder().invalidate();
+
+  bool self_owned = self_owned_; // if false, `cb_` may delete this
+
   cb_(status,
       getLastSequencer(),
       nextLsn_.hasValue() ? nextLsn_.value() : LSN_INVALID,
@@ -318,7 +339,8 @@ void SyncSequencerRequest::complete(Status status, bool delete_this) {
       std::move(metadata_map_),
       std::move(tail_record_),
       is_log_empty_);
-  if (delete_this) {
+
+  if (self_owned) {
     delete this;
   }
 }

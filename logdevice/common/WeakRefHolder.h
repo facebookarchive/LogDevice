@@ -118,7 +118,16 @@ class WeakRefHolder {
     parent_ = std::shared_ptr<T>(std::make_shared<bool>(true), parent);
   }
   Ref ref() const {
+    ld_check(parent_ != nullptr); // invalidate() wasn't called
     return Ref(parent_);
+  }
+
+  // Invalidate all references, as if this WeakRefHolder was destroyed.
+  // After this call, this object is unusable, and any methods except destructor
+  // will fail an assert if called.
+  void invalidate() {
+    ld_check(parent_ != nullptr);
+    parent_.reset();
   }
 
  private:

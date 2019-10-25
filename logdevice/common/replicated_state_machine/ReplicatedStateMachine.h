@@ -688,6 +688,10 @@ class ReplicatedStateMachine {
   // back to this worker thread.
   WorkerCallbackHelper<ReplicatedStateMachine<T, D>> callbackHelper_;
 
+  // Currently running request to retrieve tail LSN, either for snapshot log (if
+  // SyncState is SYNC_SNAPSHOT) or for deltas log (if SYNC_DELTAS).
+  std::unique_ptr<SyncSequencerRequest> sync_sequencer_request_;
+
   // LSN of the tail of the snapshot log computed on startup. We use this to
   // define which record in the snapshot log can be considered the most recent
   // base to apply deltas on. Once we have found that record (if any), we start

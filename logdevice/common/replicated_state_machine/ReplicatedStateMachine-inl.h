@@ -119,32 +119,27 @@ void ReplicatedStateMachine<T, D>::resumeReadStream(read_stream_id_t id) {
 template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::getSnapshotLogTailLSN() {
   rsm_info(rsm_type_, "Retrieving tail lsn of snapshot log...");
+  ld_check_eq(sync_state_, SyncState::SYNC_SNAPSHOT);
+  ld_check(sync_sequencer_request_ == nullptr);
 
-  auto ticket = callbackHelper_.ticket();
-  auto cb_wrapper =
-      [ticket](Status st,
-               NodeID /*seq*/,
-               lsn_t next_lsn,
-               std::unique_ptr<LogTailAttributes> /*tail*/,
-               std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
-               std::shared_ptr<TailRecord> /*tail_record*/,
-               folly::Optional<bool> /*is_log_empty*/) {
+  sync_sequencer_request_ = std::make_unique<SyncSequencerRequest>(
+      snapshot_log_id_,
+      /* flags */ 0,
+      [this](Status st,
+             NodeID /*seq*/,
+             lsn_t next_lsn,
+             std::unique_ptr<LogTailAttributes> /*tail*/,
+             std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
+             std::shared_ptr<TailRecord> /*tail_record*/,
+             folly::Optional<bool> /*is_log_empty*/) {
         const lsn_t tail_lsn =
             next_lsn <= LSN_OLDEST ? LSN_OLDEST : next_lsn - 1;
-        ticket.postCallbackRequest(
-            [st, tail_lsn](ReplicatedStateMachine<T, D>* s) {
-              if (s) {
-                s->onGotSnapshotLogTailLSN(st, LSN_OLDEST, tail_lsn);
-              }
-            });
-      };
-
-  std::unique_ptr<Request> req = std::make_unique<SyncSequencerRequest>(
-      snapshot_log_id_,
-      SyncSequencerRequest::INCLUDE_TAIL_ATTRIBUTES,
-      cb_wrapper,
+        sync_sequencer_request_.reset();
+        onGotSnapshotLogTailLSN(st, LSN_OLDEST, tail_lsn);
+      },
       GetSeqStateRequest::Context::RSM);
-  postRequestWithRetrying(req);
+  int rv = sync_sequencer_request_->start();
+  ld_check(rv == 0);
 }
 
 template <typename T, typename D>
@@ -424,28 +419,28 @@ template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::getDeltaLogTailLSN() {
   ld_check(version_ != LSN_INVALID);
   ld_check(data_);
+  ld_check_eq(sync_state_, SyncState::SYNC_DELTAS);
+  ld_check(sync_sequencer_request_ == nullptr);
 
   rsm_info(rsm_type_, "Retrieving tail lsn of delta log...");
 
-  auto callback_ticket = callbackHelper_.ticket();
-  auto cb = [=](Status st,
-                NodeID /*seq*/,
-                lsn_t next_lsn,
-                std::unique_ptr<LogTailAttributes> /* tail_attributes */,
-                std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
-                std::shared_ptr<TailRecord> /*tail_record*/,
-                folly::Optional<bool> /*is_log_empty*/) {
-    callback_ticket.postCallbackRequest([=](ReplicatedStateMachine<T, D>* s) {
-      if (s) {
+  sync_sequencer_request_ = std::make_unique<SyncSequencerRequest>(
+      delta_log_id_,
+      /* flags */ 0,
+      [this](Status st,
+             NodeID /*seq*/,
+             lsn_t next_lsn,
+             std::unique_ptr<LogTailAttributes> /* tail_attributes */,
+             std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
+             std::shared_ptr<TailRecord> /*tail_record*/,
+             folly::Optional<bool> /*is_log_empty*/) {
+        sync_sequencer_request_.reset();
         lsn_t tail_lsn = next_lsn <= LSN_OLDEST ? LSN_OLDEST : next_lsn - 1;
-        s->onGotDeltaLogTailLSN(st, tail_lsn);
-      }
-    });
-  };
-
-  std::unique_ptr<Request> req = std::make_unique<SyncSequencerRequest>(
-      delta_log_id_, 0, cb, GetSeqStateRequest::Context::RSM);
-  postRequestWithRetrying(req);
+        onGotDeltaLogTailLSN(st, tail_lsn);
+      },
+      GetSeqStateRequest::Context::RSM);
+  int rv = sync_sequencer_request_->start();
+  ld_check(rv == 0);
 }
 
 template <typename T, typename D>
