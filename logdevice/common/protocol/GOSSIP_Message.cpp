@@ -87,7 +87,19 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
   reader.read(&msg->sent_time_);
   msg->readBoycottList(reader);
   msg->readBoycottDurations(reader);
-  reader.readVector(&msg->node_list_, num_nodes);
+  if (reader.proto() <
+      Compatibility::ProtocolVersion::HEALTH_MONITOR_SUPPORT_IN_GOSSIP) {
+    legacy_node_list_t legacy_node_list{};
+    reader.readVector(&legacy_node_list, num_nodes);
+    std::transform(legacy_node_list.begin(),
+                   legacy_node_list.end(),
+                   std::back_inserter(msg->node_list_),
+                   [](GOSSIP_Node_Legacy gossip_node) {
+                     return GOSSIP_Node{gossip_node};
+                   });
+  } else {
+    reader.readVector(&msg->node_list_, num_nodes);
+  }
   return reader.resultMsg(std::move(msg));
 }
 
