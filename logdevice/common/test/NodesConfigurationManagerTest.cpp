@@ -116,8 +116,9 @@ class NodesConfigurationManagerTest : public ::testing::Test {
     ncm_ = NodesConfigurationManager::create(
         NodesConfigurationManager::OperationMode::forTooling(),
         std::move(deps));
-    ASSERT_TRUE(ncm_->init(std::make_shared<const NodesConfiguration>()));
+    ASSERT_NE(nullptr, ncm_);
     ncm_->upgradeToProposer();
+    ASSERT_TRUE(ncm_->init(std::make_shared<const NodesConfiguration>()));
   }
 
   //////// Helper functions ////////
