@@ -142,7 +142,7 @@ folly::Optional<epoch_t> LogStorageState::getLastCleanEpoch() const {
   return result;
 }
 
-const folly::Optional<std::pair<epoch_t, OffsetMap>>&
+folly::Optional<std::pair<epoch_t, OffsetMap>>
 LogStorageState::getEpochOffsetMap() const {
   RWLock::ReadHolder read_guard(rw_lock_);
   return latest_epoch_offsets_;

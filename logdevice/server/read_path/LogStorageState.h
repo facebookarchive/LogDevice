@@ -193,8 +193,7 @@ class LogStorageState {
 
   folly::Optional<epoch_t> getLastCleanEpoch() const;
 
-  const folly::Optional<std::pair<epoch_t, OffsetMap>>&
-  getEpochOffsetMap() const;
+  folly::Optional<std::pair<epoch_t, OffsetMap>> getEpochOffsetMap() const;
 
   std::chrono::seconds getLogRemovalTime() const {
     return log_removal_time_.load();

@@ -454,8 +454,8 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
   ld_check(last_released_lsn.hasValue());
   epoch_t last_epoch = lsn_to_epoch(last_released_lsn.value());
 
-  const folly::Optional<std::pair<epoch_t, OffsetMap>>&
-      epoch_offsets_from_log_state = log_state.getEpochOffsetMap();
+  folly::Optional<std::pair<epoch_t, OffsetMap>> epoch_offsets_from_log_state =
+      log_state.getEpochOffsetMap();
 
   const folly::Optional<std::pair<epoch_t, OffsetMap>>&
       epoch_offsets_from_metadata = stream_->epoch_offsets_;
