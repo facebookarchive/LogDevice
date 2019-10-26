@@ -16,6 +16,7 @@
 #include "logdevice/admin/maintenance/ClusterMaintenanceWrapper.h"
 #include "logdevice/admin/maintenance/EventLogWriter.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
+#include "logdevice/admin/maintenance/MaintenanceManagerTracer.h"
 #include "logdevice/admin/maintenance/SafetyCheckScheduler.h"
 #include "logdevice/admin/maintenance/SequencerWorkflow.h"
 #include "logdevice/admin/maintenance/ShardWorkflow.h"
@@ -59,14 +60,16 @@ class MaintenanceManagerDependencies {
       ClusterMaintenanceStateMachine* cluster_maintenance_state_machine,
       EventLogStateMachine* event_log,
       std::unique_ptr<SafetyCheckScheduler> safety_check_scheduler,
-      std::unique_ptr<MaintenanceLogWriter> maintenance_log_writer)
+      std::unique_ptr<MaintenanceLogWriter> maintenance_log_writer,
+      std::unique_ptr<MaintenanceManagerTracer> tracer)
       : processor_(processor),
         admin_settings_(std::move(admin_settings)),
         rebuilding_settings_(std::move(rebuilding_settings)),
         cluster_maintenance_state_machine_(cluster_maintenance_state_machine),
         event_log_state_machine_(event_log),
         safety_check_scheduler_(std::move(safety_check_scheduler)),
-        maintenance_log_writer_(std::move(maintenance_log_writer)) {}
+        maintenance_log_writer_(std::move(maintenance_log_writer)),
+        tracer_(std::move(tracer)) {}
 
   virtual ~MaintenanceManagerDependencies() {}
 
@@ -142,6 +145,10 @@ class MaintenanceManagerDependencies {
     return maintenance_log_writer_.get();
   }
 
+  virtual MaintenanceManagerTracer* getTracer() const {
+    return tracer_.get();
+  }
+
  private:
   // Handle to processor for getting the NodesConfig
   Processor* processor_;
@@ -176,6 +183,9 @@ class MaintenanceManagerDependencies {
 
   // MaintenanceLogWriter used mainly to remove expired maintenances.
   std::unique_ptr<MaintenanceLogWriter> maintenance_log_writer_;
+
+  // The tracer responsible for tracing maintenance manager events.
+  std::unique_ptr<MaintenanceManagerTracer> tracer_;
 };
 
 /*
@@ -674,6 +684,13 @@ class MaintenanceManager : public SerialWorkContext {
   // to remove some maintenances in flight. This is used avoid send multiple
   // deltas to remove the same maintenances.
   std::atomic<bool> remove_maintenance_delta_in_flight_{false};
+
+  // A tracer sample to collect stats about the maintenance manager evaluation
+  // loop. It gets reseted in each evaluation loop.
+  // MaintenanceManager evaluation loop is single threaded, so no
+  // synchronization is needed here. This is a member variable to avoid
+  // polluting the MM API by passing the sample around.
+  MaintenanceManagerTracer::PeriodicStateSample state_tracer_sample_;
 
   virtual void activateReevaluationTimer();
 

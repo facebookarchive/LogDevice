@@ -15,7 +15,9 @@
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/MockTimer.h"
+#include "logdevice/common/test/MockTraceLogger.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
+#include "logdevice/common/test/TestUtil.h"
 
 using namespace ::testing;
 using namespace facebook::logdevice;
@@ -113,6 +115,8 @@ class MaintenanceManagerTest : public ::testing::Test {
   bool stop_subscription_called_{false};
   bool periodic_reeval_timer_active_{false};
   bool periodic_metadata_nodeset_timer_active_{false};
+  std::shared_ptr<MockTraceLogger> logger_;
+  std::unique_ptr<MaintenanceManagerTracer> tracer_;
 };
 
 class MockMaintenanceLogWriter : public MaintenanceLogWriter {
@@ -135,6 +139,7 @@ class MockMaintenanceManagerDependencies
       : MaintenanceManagerDependencies(nullptr,
                                        test->settings_,
                                        test->rebuilding_settings_,
+                                       nullptr,
                                        nullptr,
                                        nullptr,
                                        nullptr,
@@ -215,6 +220,10 @@ class MockMaintenanceManagerDependencies
 
   MaintenanceLogWriter* getMaintenanceLogWriter() const override {
     return test_->mock_maintenance_log_writer_.get();
+  }
+
+  MaintenanceManagerTracer* getTracer() const override {
+    return test_->tracer_.get();
   }
 
   MaintenanceManagerTest* test_;
@@ -383,16 +392,26 @@ void MaintenanceManagerTest::init() {
       std::make_unique<EventLogRebuildingSet>(set_);
   // maintenance_manager_->last_ers_version_ = lsn_t(1);
   ASSERT_TRUE(start_subscription_called_);
+
+  {
+    // Dummy config for the tracer
+    auto config =
+        Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"));
+    auto updateable_config =
+        std::make_shared<UpdateableConfig>(std::move(config));
+    logger_ = std::make_shared<MockTraceLogger>(std::move(updateable_config));
+    tracer_ = std::make_unique<MaintenanceManagerTracer>(logger_);
+  }
 }
 
 void MaintenanceManagerTest::verifyShardOperationalState(
     std::vector<ShardID> shards,
-    folly::Expected<ShardOperationalState, Status> expectedResult) {
+    folly::Expected<ShardOperationalState, Status> expected_result) {
   for (auto shard : shards) {
     auto f = maintenance_manager_->getShardOperationalState(shard);
     runExecutor();
     ASSERT_TRUE(f.hasValue());
-    EXPECT_EQ(f.value(), expectedResult);
+    EXPECT_EQ(expected_result, f.value());
   }
 }
 
@@ -404,13 +423,13 @@ void MaintenanceManagerTest::verifyStorageState(
     runExecutor();
     ASSERT_TRUE(f.hasValue());
     ASSERT_TRUE(f.value().hasValue());
-    EXPECT_EQ(f.value().value(), state);
+    EXPECT_EQ(state, f.value().value());
   }
 }
 
 void MaintenanceManagerTest::verifyMMStatus(
     MaintenanceManager::MMStatus status) {
-  ASSERT_EQ(maintenance_manager_->getStatusInternal(), status);
+  ASSERT_EQ(status, maintenance_manager_->getStatusInternal());
   if (status == MaintenanceManager::MMStatus::AWAITING_STATE_CHANGE) {
     // reeval timer should be active
     EXPECT_TRUE(periodic_reeval_timer_active_);
@@ -426,7 +445,7 @@ void MaintenanceManagerTest::verifyMaintenanceStatus(
     auto wf = getShardWorkflow(shard);
     ASSERT_NE(wf, nullptr);
     ASSERT_EQ(
-        maintenance_manager_->active_shard_workflows_[shard].second, status);
+        status, maintenance_manager_->active_shard_workflows_[shard].second);
   }
 }
 
@@ -1807,6 +1826,95 @@ TEST_F(MaintenanceManagerTest, TestPurgeMaintenance) {
         cb(Status::OK, 2, "");
       }));
   runExecutor();
+}
+
+TEST_F(MaintenanceManagerTest, TestTracing) {
+  init();
+
+  EXPECT_CALL(*maintenance_manager_, runShardWorkflows())
+      .WillRepeatedly(Invoke([this]() { return getShardWorkflowResult(); }));
+  EXPECT_CALL(*maintenance_manager_, runSequencerWorkflows())
+      .WillRepeatedly(
+          Invoke([this]() { return getSequencerWorkflowResult(); }));
+  EXPECT_CALL(
+      *maintenance_manager_, getExpectedStorageStateTransition(::testing::_))
+      .WillRepeatedly(Invoke([this](ShardID shard) {
+        return expected_storage_state_transition_[shard];
+      }));
+
+  // Define two maintenances, one of them in progress and the other completed.
+  MaintenanceDefinition def1;
+  def1.set_user("bunny2");
+  def1.set_shard_target_state(ShardOperationalState::DRAINED);
+  def1.set_shards({mkShardID(1, 0), mkShardID(13, 0)});
+  def1.set_sequencer_nodes({mkNodeID(9)});
+  def1.set_sequencer_target_state(SequencingState::DISABLED);
+  def1.set_group_id("group1");
+
+  MaintenanceDefinition def2;
+  def2.set_user("bunny1");
+  def2.set_shard_target_state(ShardOperationalState::DRAINED);
+  def2.set_shards({mkShardID(11, 0)});
+  def2.set_group_id("group2");
+
+  cms_.set_maintenances({def1, def2});
+
+  setShardWorkflowResult({
+      {ShardID(11, 0),
+       {MaintenanceStatus::COMPLETED,
+        membership::StorageStateTransition::DATA_MIGRATION_COMPLETED}},
+      {ShardID(1, 0),
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+      {ShardID(13, 0),
+       {MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES,
+        membership::StorageStateTransition::DISABLING_WRITE}},
+  });
+
+  setSequencerWorkflowResult(SeqWfResult());
+
+  overrideStorageState({
+      {ShardID(11, 0), membership::StorageState::NONE},
+  });
+
+  // Run a one complete evaluation loop
+  regenerateClusterMaintenanceWrapper();
+  maintenance_manager_->onClusterMaintenanceStateUpdate(cms_, lsn_t(1));
+  maintenance_manager_->onEventLogRebuildingSetUpdate(set_, lsn_t(1));
+  runExecutor();
+  applyNCUpdate();
+  fulfillNCPromise(E::OK, nodes_config_);
+  runExecutor();
+
+  // Expect to get one periodic evaluation sample describing the state of the
+  // world at this point.
+  EXPECT_EQ(1, logger_->pushed_samples.at("maintenance_manager").size());
+  auto& sample = logger_->pushed_samples.at("maintenance_manager")[0];
+  EXPECT_EQ("PERIODIC_EVALUATION_SAMPLE", sample->getNormalValue("event"));
+  EXPECT_EQ(1, sample->getIntValue("maintenance_state_version"));
+  EXPECT_EQ(nodes_config_->getLastChangeTimestamp().toMilliseconds().count(),
+            sample->getIntValue("published_nc_ctime_ms"));
+  EXPECT_EQ((std::set<std::string>{"group1", "group2"}),
+            sample->getSetValue("maintenance_ids"));
+  EXPECT_EQ((std::set<std::string>{"bunny1", "bunny2"}),
+            sample->getSetValue("users"));
+  EXPECT_EQ((std::set<std::string>{"N1:S0", "N11:S0", "N13:S0"}),
+            sample->getSetValue("shards_affected"));
+  EXPECT_EQ((std::set<std::string>{"1", "9", "11", "13"}),
+            sample->getSetValue("node_ids_affected"));
+  EXPECT_EQ(
+      (std::set<std::string>{"server-1", "server-9", "server-11", "server-13"}),
+      sample->getSetValue("node_names_affected"));
+  EXPECT_EQ((std::set<std::string>{}),
+            sample->getSetValue("maintenances_skipping_safety_checker"));
+  EXPECT_EQ(
+      (std::set<std::string>{}), sample->getSetValue("maintenances_unknown"));
+  EXPECT_EQ((std::set<std::string>{}),
+            sample->getSetValue("maintenances_blocked_until_safe"));
+  EXPECT_EQ((std::set<std::string>{"group1"}),
+            sample->getSetValue("maintenances_in_progress"));
+  EXPECT_EQ((std::set<std::string>{"group2"}),
+            sample->getSetValue("maintenances_in_completed"));
 }
 
 }}} // namespace facebook::logdevice::maintenance

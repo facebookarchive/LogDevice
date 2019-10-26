@@ -148,7 +148,7 @@ class ClusterMaintenanceWrapper {
              nodes_config_->getVersion().val_);
   }
 
-  uint64_t getVersion() {
+  uint64_t getVersion() const {
     return static_cast<uint64_t>(state_->get_version());
   }
 

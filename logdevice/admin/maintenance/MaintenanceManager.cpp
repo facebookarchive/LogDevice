@@ -1032,6 +1032,9 @@ void MaintenanceManager::evaluate() {
     return;
   }
 
+  state_tracer_sample_ = MaintenanceManagerTracer::PeriodicStateSample();
+  state_tracer_sample_.evaluation_watch.begin();
+
   updateClientMaintenanceStateWrapper();
 
   ld_check(cluster_maintenance_wrapper_);
@@ -1078,12 +1081,14 @@ void MaintenanceManager::evaluate() {
         if (shouldStopProcessing()) {
           return folly::makeUnexpected<Status>(E::SHUTDOWN);
         }
+        state_tracer_sample_.pre_safety_checker_ncm_watch.begin();
         return scheduleNodesConfigUpdates();
       })
       .via(this)
       // We have heared back from NodesConfiguration update.
       .thenValue([this](NCUpdateResult&& result)
                      -> folly::SemiFuture<SafetyCheckResult> {
+        state_tracer_sample_.pre_safety_checker_ncm_watch.end();
         if (result.hasError() && result.error() != Status::EMPTY) {
           ld_warning("Couldn't perform the requested NodesConfiguration "
                      "update, reason: %s",
@@ -1111,6 +1116,7 @@ void MaintenanceManager::evaluate() {
                   "to be enabled. Returning E::RETRY so that we re-evaluate");
           return folly::makeUnexpected<Status>(E::RETRY);
         }
+        state_tracer_sample_.safety_check_watch.begin();
         return scheduleSafetyCheck();
       })
       .via(this)
@@ -1118,6 +1124,7 @@ void MaintenanceManager::evaluate() {
       // NodesConfiguration updates that were blocked on safety check.
       .thenValue([this](SafetyCheckResult&& result)
                      -> folly::SemiFuture<NCUpdateResult> {
+        state_tracer_sample_.safety_check_watch.end();
         if (result.hasError()) {
           if (result.error() == Status::EMPTY) {
             // Safety check doesn't need to run, no workflows waiting for safety
@@ -1133,11 +1140,13 @@ void MaintenanceManager::evaluate() {
           return folly::makeUnexpected<Status>(E::SHUTDOWN);
         }
         processSafetyCheckResult(result.value());
+        state_tracer_sample_.post_safety_checker_ncm_watch.begin();
         return scheduleNodesConfigUpdates();
       })
       .via(this)
       // We have heard back from NodesConfiguration update.
       .thenValue([this](NCUpdateResult&& result) {
+        state_tracer_sample_.post_safety_checker_ncm_watch.end();
         if (result.hasError()) {
           if (result.error() == Status::SHUTDOWN) {
             ld_check(shouldStopProcessing());
@@ -1145,7 +1154,6 @@ void MaintenanceManager::evaluate() {
             return;
           }
         }
-
         if (result.hasValue()) {
           nodes_config_ = std::move(result.value());
           ld_debug("Updating local copy of NodesConfig to version in "
@@ -1159,6 +1167,10 @@ void MaintenanceManager::evaluate() {
         } else {
           finishShutdown();
         }
+      })
+      .thenError(folly::tag_t<std::exception>{}, [](const std::exception& e) {
+        ld_error("Caught an exception during evaluation: %s", e.what());
+        throw e;
       });
 }
 
@@ -1176,9 +1188,11 @@ bool MaintenanceManager::shouldStopProcessing() {
 
 void MaintenanceManager::reportMaintenanceStats() {
   // For all maintenances let's figure out the progress of each maintenance.
-  folly::F14FastMap<thrift::MaintenanceProgress, size_t> maintenance_agg;
+  folly::F14FastMap<thrift::MaintenanceProgress, folly::F14FastSet<std::string>>
+      maintenance_agg;
   for (const auto& def : cluster_maintenance_wrapper_->getMaintenances()) {
-    maintenance_agg[getMaintenanceProgressInternal(def)] += 1;
+    maintenance_agg[getMaintenanceProgressInternal(def)].insert(
+        def.group_id_ref().value());
   }
   static_assert(
       apache::thrift::TEnumTraits<thrift::MaintenanceProgress>::size == 4);
@@ -1186,16 +1200,28 @@ void MaintenanceManager::reportMaintenanceStats() {
   STAT_SET(deps_->getStats(),
            admin_server.maintenance_progress_UNKNOWN,
            // will return 0 if empty
-           maintenance_agg[thrift::MaintenanceProgress::UNKNOWN]);
+           maintenance_agg[thrift::MaintenanceProgress::UNKNOWN].size());
   STAT_SET(deps_->getStats(),
            admin_server.maintenance_progress_IN_PROGRESS,
-           maintenance_agg[thrift::MaintenanceProgress::IN_PROGRESS]);
-  STAT_SET(deps_->getStats(),
-           admin_server.maintenance_progress_BLOCKED_UNTIL_SAFE,
-           maintenance_agg[thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE]);
+           maintenance_agg[thrift::MaintenanceProgress::IN_PROGRESS].size());
+  STAT_SET(
+      deps_->getStats(),
+      admin_server.maintenance_progress_BLOCKED_UNTIL_SAFE,
+      maintenance_agg[thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE].size());
   STAT_SET(deps_->getStats(),
            admin_server.maintenance_progress_COMPLETED,
-           maintenance_agg[thrift::MaintenanceProgress::COMPLETED]);
+           maintenance_agg[thrift::MaintenanceProgress::COMPLETED].size());
+  state_tracer_sample_.evaluation_watch.end();
+  state_tracer_sample_.current_maintenances =
+      cluster_maintenance_wrapper_->getMaintenances();
+  state_tracer_sample_.maintenances_progress = maintenance_agg;
+  state_tracer_sample_.ncm_version = nodes_config_->getVersion();
+  state_tracer_sample_.nc_published_time =
+      nodes_config_->getLastChangeTimestamp();
+  state_tracer_sample_.maintenance_state_version =
+      cluster_maintenance_wrapper_->getVersion();
+  state_tracer_sample_.service_discovery = nodes_config_->getServiceDiscovery();
+  deps_->getTracer()->trace(state_tracer_sample_);
 }
 
 void MaintenanceManager::processShardWorkflowResult(
@@ -1493,7 +1519,8 @@ void MaintenanceManager::updateMetadataNodesetIfRequired() {
   std::move(deps_->postNodesConfigurationUpdate(
                 std::move(storage_config_update), nullptr))
       .via(this)
-      .thenValue([&](auto&&) { metadata_nodeset_update_in_flight_ = false; });
+      .thenValue(
+          [this](auto&&) { metadata_nodeset_update_in_flight_ = false; });
 }
 
 // Schedule NodesConfiguration update for workflows.
