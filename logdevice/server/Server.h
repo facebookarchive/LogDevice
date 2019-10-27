@@ -78,6 +78,9 @@ class ServerParameters {
   ServerParameters(const ServerParameters& rhs) = delete;
   ServerParameters& operator=(const ServerParameters& rhs) = delete;
 
+  // Must be called before passing the params object to the server.
+  void init();
+
   // Not mutually exclusive.
   bool isStorageNode() const;
   bool isSequencingEnabled() const;

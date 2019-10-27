@@ -357,7 +357,9 @@ ServerParameters::ServerParameters(
       admin_server_settings_(std::move(admin_server_settings)),
       stop_handler_(std::move(stop_handler)) {
   ld_check(stop_handler_);
+}
 
+void ServerParameters::init() {
   // Note: this won't work well if there are multiple Server instances in the
   // same process: only one of them will get its error counter bumped. Also,
   // there's a data race if the following two lines are run from multiple
