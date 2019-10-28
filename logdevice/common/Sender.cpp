@@ -767,6 +767,7 @@ int Sender::closeAllClientSockets(Status reason) {
 void Sender::shutdownSockets(folly::Executor* executor) {
   Semaphore sem;
   executor->add([&] {
+    shutting_down_ = true;
     closeAllSockets();
     impl_->server_sockets_.clear();
     impl_->client_sockets_.clear();
