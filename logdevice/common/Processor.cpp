@@ -241,7 +241,7 @@ void Processor::init() {
   if (!settings_->server && settings_->enable_initial_get_cluster_state) {
     cluster_state_->refreshClusterStateAsync();
   }
-  if (settings_->server){
+  if (settings_->server) {
     // Remaining necessary steps are implemented in ServerProcessor::init().
     return;
   }

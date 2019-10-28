@@ -823,8 +823,9 @@ void FailureDetector::dumpFDState() {
   for (size_t i = 0; i < n; ++i) {
     // if i doesn't exist, generation 1 will be used
     NodeID node_id = nodes_configuration->getNodeID(i);
-    status_str +=
-        node_id.toString() + "(" + getNodeStateString(nodes_[i].state) + "), ";
+    status_str += node_id.toString() + "(" +
+        getNodeStateString(nodes_[i].state) + " : " +
+        getNodeStatusString(nodes_[i].status_) + "), ";
   }
 
   const dbg::Level level = isTracingOn() ? dbg::Level::INFO : dbg::Level::SPEW;
@@ -1109,6 +1110,21 @@ const char* FailureDetector::getNodeStateString(NodeState state) const {
   return "UNKNOWN";
 }
 
+const char*
+FailureDetector::getNodeStatusString(HealthMonitor::NodeStatus status) const {
+  switch (status) {
+    case HealthMonitor::NodeStatus::HEALTHY:
+      return "HEALTHY";
+    case HealthMonitor::NodeStatus::OVERLOADED:
+      return "OVERLOADED";
+    case HealthMonitor::NodeStatus::UNHEALTHY:
+      return "UNHEALTHY";
+    case HealthMonitor::NodeStatus::UNDEFINED:
+      return "UNDEFINED";
+  }
+  return "UNKNOWN";
+}
+
 std::string FailureDetector::getStateString(node_index_t idx) const {
   std::lock_guard<std::mutex> lock(mutex_);
   folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
@@ -1122,11 +1138,12 @@ std::string FailureDetector::getStateString(node_index_t idx) const {
     snprintf(buf,
              sizeof(buf),
              "(gossip: %u, instance-id: %lu, failover: %lu, starting: %d, "
-             "state: %s)",
+             "status: %s, state: %s)",
              nodes_.at(idx).gossip_,
              nodes_.at(idx).gossip_ts_.count(),
              nodes_.at(idx).failover_.count(),
              (int)nodes_.at(idx).is_node_starting_,
+             getNodeStatusString(nodes_.at(idx).status_),
              getNodeStateString(nodes_.at(idx).state));
   }
   return std::string(buf);
@@ -1148,6 +1165,7 @@ folly::dynamic FailureDetector::getStateJson(node_index_t idx) const {
     obj["failover"] = nodes_.at(idx).failover_.count();
     obj["starting"] = (int)nodes_.at(idx).is_node_starting_;
     obj["state"] = getNodeStateString(nodes_.at(idx).state);
+    obj["status"] = getNodeStatusString(nodes_.at(idx).status_);
   }
   return obj;
 }
