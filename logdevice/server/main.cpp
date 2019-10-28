@@ -424,20 +424,21 @@ int main(int argc, const char** argv) {
     ld_info("asserts on (NDEBUG not set)");
   }
 
-  std::unique_ptr<ServerParameters> params;
+  auto params = std::make_unique<ServerParameters>(settings_updater,
+                                                   server_settings,
+                                                   rebuilding_settings,
+                                                   locallogstore_settings,
+                                                   gossip_settings,
+                                                   settings,
+                                                   rocksdb_settings,
+                                                   admin_server_settings,
+                                                   plugin_registry,
+                                                   signal_shutdown);
   try {
-    params = std::make_unique<ServerParameters>(settings_updater,
-                                                server_settings,
-                                                rebuilding_settings,
-                                                locallogstore_settings,
-                                                gossip_settings,
-                                                settings,
-                                                rocksdb_settings,
-                                                admin_server_settings,
-                                                plugin_registry,
-                                                signal_shutdown);
+    params->init();
   } catch (const ConstructorFailed&) {
-    ld_critical("Unable to instantiate ServerParameters. Exiting.");
+    params.reset();
+    ld_critical("Unable to initialize ServerParameters. Exiting.");
     return 1;
   }
 
