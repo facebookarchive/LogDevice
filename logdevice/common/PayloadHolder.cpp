@@ -65,7 +65,7 @@ size_t PayloadHolder::size() const {
 void PayloadHolder::serialize(ProtocolWriter& writer) const {
   ld_check(size() < Message::MAX_LEN); // must have been checked
                                        // by upper layers
-  if (owner()) {
+  if (owner() && iobuf_->computeChainDataLength() > 0) {
     writer.writeWithoutCopy(iobuf_.get());
   } else {
     Payload payload = getFlatPayload();

@@ -58,8 +58,9 @@ void DO_TEST(const SomeMessage& m,
   ld_check(max_proto <= Compatibility::MAX_PROTOCOL_SUPPORTED);
 
   for (uint16_t proto = min_proto; proto <= max_proto; ++proto) {
-    struct evbuffer* evbuf = LD_EV(evbuffer_new)();
-    ProtocolWriter writer(m.type_, evbuf, proto);
+    std::unique_ptr<folly::IOBuf> iobuf =
+        folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
+    ProtocolWriter writer(m.type_, iobuf.get(), proto);
     m.serialize(writer);
     ssize_t sz = writer.result();
     ASSERT_EQ(writer.status(), proto_writer_status);
@@ -67,8 +68,7 @@ void DO_TEST(const SomeMessage& m,
       continue;
     }
     ASSERT_GT(sz, 0);
-    std::string serialized(sz, '0');
-    ASSERT_EQ(sz, LD_EV(evbuffer_copyout)(evbuf, &serialized[0], sz));
+    std::string serialized = iobuf->coalesce().str();
     std::string found_hex = hexdump_buf(&serialized[0], sz);
     std::string expected_hex = expected_fn(proto);
     if (expected_hex.empty()) {
@@ -86,14 +86,12 @@ void DO_TEST(const SomeMessage& m,
     if (!deserializer) {
       deserializer = messageDeserializers[m.type_];
     }
-    ProtocolReader reader(m.type_, evbuf, sz, proto);
+    ProtocolReader reader(m.type_, std::move(iobuf), proto);
     found = deserializer(reader).msg;
     ASSERT_NE(nullptr, found);
-    ASSERT_EQ(0, LD_EV(evbuffer_get_length)(evbuf));
     SomeMessage* found_sub = dynamic_cast<SomeMessage*>(found.get());
     ASSERT_NE(nullptr, found_sub);
     check(*found_sub, proto);
-    LD_EV(evbuffer_free)(evbuf);
   }
 }
 
@@ -103,17 +101,13 @@ static std::string getPayload(const Payload& p) {
 }
 
 static std::string getPayload(const PayloadHolder& h) {
-  struct evbuffer* evbuf = LD_EV(evbuffer_new)();
+  auto iobuf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
   ProtocolWriter writer(
-      MessageType::STORE, evbuf, Compatibility::MAX_PROTOCOL_SUPPORTED);
+      MessageType::STORE, iobuf.get(), Compatibility::MAX_PROTOCOL_SUPPORTED);
   h.serialize(writer);
   ssize_t sz = writer.result();
   EXPECT_GE(sz, 0);
-  std::string s(sz, '\0');
-  EXPECT_EQ(sz, LD_EV(evbuffer_remove)(evbuf, &s[0], sz));
-  EXPECT_EQ(0, LD_EV(evbuffer_get_length)(evbuf));
-  LD_EV(evbuffer_free)(evbuf);
-  return s;
+  return iobuf->coalesce().str();
 }
 
 class MessageSerializationTest : public ::testing::Test {
@@ -339,7 +333,7 @@ namespace {
 // Helper factory for STORE messages, including their serialized forms.
 // Provides a basic STORE header so that tests don't need to copy-paste it.
 struct TestStoreMessageFactory {
-  TestStoreMessageFactory() {
+  TestStoreMessageFactory(bool empty_payload = false) {
     header_ = STORE_Header{
         RecordID(0xc5e58b03be6504ce, logid_t(0x0fbc3a81c75251e2)),
         0xeb4925bfde9dec8e,
@@ -355,7 +349,7 @@ struct TestStoreMessageFactory {
     cs_.assign({{ShardID(1, 0), ClientID(4)},
                 {ShardID(2, 0), ClientID(5)},
                 {ShardID(3, 0), ClientID(6)}});
-    payload_ = "hi";
+    payload_ = empty_payload ? "" : "hi";
   }
 
   void setWave(uint32_t wave) {
@@ -383,7 +377,20 @@ struct TestStoreMessageFactory {
     e2e_tracing_context_serialized_ = std::move(serialized);
   }
 
-  STORE_Message message() const {
+  STORE_Message message(bool create_owned = false) const {
+    if (create_owned) {
+      return STORE_Message(
+          header_,
+          cs_.data(),
+          header_.copyset_offset,
+          0,
+          extra_,
+          optional_keys_,
+          std::make_shared<PayloadHolder>(
+              folly::IOBuf::copyBuffer(payload_.data(), payload_.size())),
+          false,
+          e2e_tracing_context_);
+    }
     return STORE_Message(
         header_,
         cs_.data(),
@@ -392,7 +399,9 @@ struct TestStoreMessageFactory {
         extra_,
         optional_keys_,
         std::make_shared<PayloadHolder>(
-            Payload(payload_.data(), payload_.size()), PayloadHolder::UNOWNED),
+            Payload(
+                payload_.size() ? payload_.data() : nullptr, payload_.size()),
+            PayloadHolder::UNOWNED),
         false,
         e2e_tracing_context_);
   }
@@ -461,7 +470,7 @@ struct TestStoreMessageFactory {
       rv += e2e_tracing_context_serialized_;
     }
 
-    rv += "6869"; // payload ("hi" in hex)
+    rv += payload_.size() ? "6869" : ""; // payload ("hi" in hex)
     return rv;
   }
 
@@ -488,6 +497,27 @@ TEST_F(MessageSerializationTest, STORE) {
   factory.setExtra(extra, "1E91FEC600585572F698F9C2");
 
   STORE_Message m = factory.message();
+  auto check = [&](const STORE_Message& m2, uint16_t proto) {
+    checkSTORE(m, m2, proto);
+  };
+  DO_TEST(m,
+          check,
+          Compatibility::MIN_PROTOCOL_SUPPORTED,
+          Compatibility::MAX_PROTOCOL_SUPPORTED,
+          std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
+          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+}
+
+TEST_F(MessageSerializationTest, EmptySTORE) {
+  STORE_Extra extra;
+  extra.recovery_id = recovery_id_t(0x72555800c6fe911e);
+  extra.recovery_epoch = epoch_t(0xc2f998f6);
+
+  TestStoreMessageFactory factory(true /* empty_payload */);
+  factory.setFlags(STORE_Header::RECOVERY);
+  factory.setExtra(extra, "1E91FEC600585572F698F9C2");
+
+  STORE_Message m = factory.message(true /* create_owned */);
   auto check = [&](const STORE_Message& m2, uint16_t proto) {
     checkSTORE(m, m2, proto);
   };
@@ -1106,7 +1136,7 @@ TEST_F(MessageSerializationTest, SEALED) {
         "22020000030200000000000018000000140000005461696C205265636F726420546573"
         "742E000000";
 
-    // this test involves contructing an evbuffer based payload holder and has
+    // this test involves contructing an payload holder and has
     // to be done on a worker thread
     auto test = [&] {
       DO_TEST(m,
@@ -1132,7 +1162,7 @@ TEST_F(MessageSerializationTest, SEALED) {
         "0000000060540DEE22020000030200000000000018000000140000005461696C205265"
         "636F726420546573742E000000";
 
-    // this test involves contructing an evbuffer based payload holder and has
+    // this test involves contructing an payload holder and has
     // to be done on a worker thread
     auto test = [&] {
       DO_TEST(m,
@@ -1435,9 +1465,9 @@ TEST_F(MessageSerializationTest, CLEAN) {
 
 namespace {
 template <typename MSG, MessageType Type>
-std::unique_ptr<MSG> deserialize(struct evbuffer* evbuf, size_t size) {
+std::unique_ptr<MSG> deserialize(std::unique_ptr<folly::IOBuf> iobuf) {
   const auto proto = Compatibility::MAX_PROTOCOL_SUPPORTED;
-  ProtocolReader reader(Type, evbuf, size, proto);
+  ProtocolReader reader(Type, std::move(iobuf), proto);
   std::unique_ptr<Message> msg = MSG::deserialize(reader).msg;
   return checked_downcast<std::unique_ptr<MSG>>(std::move(msg));
 }
@@ -1447,10 +1477,7 @@ std::unique_ptr<MSG> deserialize(struct evbuffer* evbuf, size_t size) {
 // a) the message itself is correctly deserialized (extra bytes are ignored)
 // b) the next message in the evbuffer can be successfully deserialized
 TEST_F(MessageSerializationTest, DrainExtraBytes) {
-  struct evbuffer* evbuf = LD_EV(evbuffer_new)();
-  SCOPE_EXIT {
-    LD_EV(evbuffer_free)(evbuf);
-  };
+  auto iobuf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
 
   const uint16_t proto = Compatibility::MAX_PROTOCOL_SUPPORTED;
   const std::string extra = "foo";
@@ -1461,13 +1488,13 @@ TEST_F(MessageSerializationTest, DrainExtraBytes) {
       HELLO_flags_t(0),
       request_id_t(0),
   }};
-  ProtocolWriter w1(hello_msg.type_, evbuf, proto);
+  ProtocolWriter w1(hello_msg.type_, iobuf.get(), proto);
   hello_msg.serialize(w1);
   size_t hello_size = w1.result();
   ASSERT_LT(0, hello_size);
   // write some extra bytes after the HELLO message
-
-  ASSERT_EQ(0, LD_EV(evbuffer_add)(evbuf, extra.data(), extra.size()));
+  memcpy(iobuf->writableTail(), extra.data(), extra.size());
+  iobuf->append(extra.size());
   hello_size += extra.size();
 
   // Now write a FixedSizeMessage followed by a couple of trailing bytes (this
@@ -1475,20 +1502,21 @@ TEST_F(MessageSerializationTest, DrainExtraBytes) {
   DELETE_Message delete_msg{DELETE_Header{
       RecordID(esn_t(1), epoch_t(1), logid_t(1)), 1, 0 /* shard */
   }};
-  ProtocolWriter w2(delete_msg.type_, evbuf, proto);
+  ProtocolWriter w2(delete_msg.type_, iobuf.get(), proto);
   delete_msg.serialize(w2);
   size_t delete_size = w2.result();
   ASSERT_LT(0, delete_size);
 
-  // Deserialize each message from the evbuffer and verify that they match.
+  // Deserialize each message from the iobuf and verify that they match.
   auto hello_deserialized =
-      deserialize<HELLO_Message, MessageType::HELLO>(evbuf, hello_size);
+      deserialize<HELLO_Message, MessageType::HELLO>(iobuf->clone());
   ASSERT_EQ(0,
             memcmp(&hello_msg.header_,
                    &hello_deserialized->header_,
                    sizeof(hello_msg.header_)));
+  iobuf->trimStart(hello_size);
   auto delete_deserialized =
-      deserialize<DELETE_Message, MessageType::HELLO>(evbuf, delete_size);
+      deserialize<DELETE_Message, MessageType::HELLO>(iobuf->clone());
   ASSERT_EQ(0,
             memcmp(&delete_msg.getHeader(),
                    &delete_deserialized->getHeader(),

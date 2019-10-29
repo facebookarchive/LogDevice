@@ -83,7 +83,7 @@ class IOBufDestination : public ProtocolWriter::Destination {
 
   int writeWithoutCopy(folly::IOBuf* const buffer,
                        size_t /* nwritten */) override {
-    ld_check(buffer->length());
+    ld_check(buffer->computeChainDataLength());
     auto clone = buffer->clone();
     iobuf_->prependChain(std::move(clone));
     return 0;
