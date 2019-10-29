@@ -228,6 +228,14 @@ Request::Execution StartClusterMaintenanceStateMachineRequest::execute() {
   return Request::Execution::COMPLETE;
 }
 
+Request::Execution StopClusterMaintenanceStateMachineRequest::execute() {
+  Worker* w = Worker::onThisThread();
+  if (w->cluster_maintenance_state_machine_) {
+    w->cluster_maintenance_state_machine_->stop();
+  }
+  return Request::Execution::COMPLETE;
+}
+
 Request::Execution MaintenanceLogWriteDeltaRequest::execute() {
   auto sm = Worker::onThisThread()->cluster_maintenance_state_machine_;
   if (sm) {

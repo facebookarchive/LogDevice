@@ -166,6 +166,24 @@ class StartClusterMaintenanceStateMachineRequest : public Request {
   WorkerType worker_type_;
 };
 
+class StopClusterMaintenanceStateMachineRequest : public Request {
+ public:
+  explicit StopClusterMaintenanceStateMachineRequest(WorkerType worker_type)
+      : Request(RequestType::STOP_CLUSTER_MAINTENANCE_STATE_MACHINE),
+        worker_type_(worker_type) {}
+
+  Execution execute() override;
+  int getThreadAffinity(int nthreads) override {
+    return ClusterMaintenanceStateMachine::getWorkerIndex(nthreads);
+  }
+  WorkerType getWorkerTypeAffinity() override {
+    return worker_type_;
+  }
+
+ private:
+  WorkerType worker_type_;
+};
+
 class MaintenanceLogWriteDeltaRequest : public Request {
  public:
   explicit MaintenanceLogWriteDeltaRequest(
