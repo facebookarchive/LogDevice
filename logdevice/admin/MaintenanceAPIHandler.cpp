@@ -12,6 +12,7 @@
 #include "logdevice/admin/maintenance/APIUtils.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/admin/maintenance/MaintenanceManager.h"
+#include "logdevice/admin/maintenance/MaintenanceManagerTracer.h"
 #include "logdevice/common/request_util.h"
 
 using namespace facebook::logdevice::thrift;
@@ -251,28 +252,47 @@ MaintenanceAPIHandler::semifuture_applyMaintenance(
    * manager if we have any. 6- Combine results and return.
    */
 
+  auto nodes_config = processor_->getNodesConfiguration();
+
+  MaintenanceManagerTracer::ApplyMaintenanceAPISample sample;
+  sample.ncm_version = nodes_config->getVersion();
+  sample.nc_published_time = nodes_config->getLastChangeTimestamp();
+  sample.service_discovery = nodes_config->getServiceDiscovery();
+
   // Step (1)
   auto validation = APIUtils::validateDefinition(*definition);
   if (validation) {
-    return *validation;
+    sample.error = true;
+    sample.error_reason = validation->what();
+    getTracer()->trace(std::move(sample));
+    return validation.value();
   }
-  auto nodes_config = processor_->getNodesConfiguration();
+
   // Step (2)
   folly::Expected<std::vector<MaintenanceDefinition>, InvalidRequest>
       expanded_maintenances =
           APIUtils::expandMaintenances(*definition, nodes_config);
   if (expanded_maintenances.hasError()) {
+    sample.error = true;
+    sample.error_reason = expanded_maintenances.error().what();
+    getTracer()->trace(std::move(sample));
     return expanded_maintenances.error();
   }
   // Step (3, 4, 5, and 6)
   return applyAndGetMaintenances(std::move(expanded_maintenances).value())
       .toUnsafeFuture()
-      .thenValue([](ListMaintenanceDefs&& result) {
+      .thenValue([sample = std::move(sample),
+                  this](ListMaintenanceDefs&& result) mutable {
         if (result.hasError()) {
+          sample.error = true;
+          sample.error_reason = result.error().what();
+          getTracer()->trace(std::move(sample));
           // Throw the right thrift exception.
           result.error().throwThriftException();
           ld_assert(false);
         }
+        sample.added_maintenances = result.value();
+        getTracer()->trace(std::move(sample));
         auto v = std::make_unique<MaintenanceDefinitionResponse>();
         v->set_maintenances(result.value());
         return v;
@@ -294,8 +314,7 @@ MaintenanceAPIHandler::semifuture_removeMaintenances(
   }
 
   ld_check(maintenance_manager_);
-  /*
-   */
+
   MaintenancesFilter filter = request->get_filter();
   return maintenance_manager_->getLatestMaintenanceState()
       .via(this->getThreadManager())
@@ -308,10 +327,21 @@ MaintenanceAPIHandler::semifuture_removeMaintenances(
               value.error().throwThriftException();
               ld_assert(false);
             }
+
+            auto nodes_config = processor_->getNodesConfiguration();
+
+            MaintenanceManagerTracer::RemoveMaintenanceAPISample sample;
+            sample.ncm_version = nodes_config->getVersion();
+            sample.nc_published_time = nodes_config->getLastChangeTimestamp();
+            sample.service_discovery = nodes_config->getServiceDiscovery();
+            sample.user = request->get_user();
+            sample.reason = request->get_reason();
+
             // We need to find the maintenances that we are going to remove
             // now since the returned state from the RSM will not contain them
             // after removal.
             auto filtered = APIUtils::filterMaintenances(filter, value.value());
+
             // We have the filtered results that we can return if the removal
             // is successful. Execute the remove
             MaintenanceDelta delta;
@@ -326,12 +356,19 @@ MaintenanceAPIHandler::semifuture_removeMaintenances(
                 // very simple merge.
                 .toUnsafeFuture()
                 .thenValue(
-                    [filtered = std::move(filtered)](MaintenanceOut&& value)
-                        -> std::unique_ptr<RemoveMaintenancesResponse> {
+                    [this,
+                     filtered = std::move(filtered),
+                     sample = std::move(sample)](MaintenanceOut&& value) mutable
+                    -> std::unique_ptr<RemoveMaintenancesResponse> {
                       if (value.hasError()) {
+                        sample.error = true;
+                        sample.error_reason = value.error().what();
+                        getTracer()->trace(std::move(sample));
                         value.error().throwThriftException();
                         ld_assert(false);
                       }
+                      sample.removed_maintenances = filtered;
+                      getTracer()->trace(std::move(sample));
                       auto response =
                           std::make_unique<RemoveMaintenancesResponse>();
                       response->set_maintenances(filtered);
@@ -372,4 +409,9 @@ MaintenanceAPIHandler::semifuture_markAllShardsUnrecoverable(
         return response;
       });
 }
+
+MaintenanceManagerTracer* MaintenanceAPIHandler::getTracer() const {
+  return maintenance_manager_->getTracer();
+}
+
 }} // namespace facebook::logdevice

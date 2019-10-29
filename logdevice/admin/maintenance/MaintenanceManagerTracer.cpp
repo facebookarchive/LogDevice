@@ -14,6 +14,7 @@ namespace {
 using namespace logdevice::configuration::nodes;
 
 constexpr auto kMaintenanceManagerSampleSource = "maintenance_manager";
+constexpr auto kMaintenanceAPISampleSource = "maintenance_api";
 
 std::string getNodeNameByIdx(const ServiceDiscoveryConfig& svd,
                              node_index_t idx) {
@@ -222,6 +223,79 @@ void MaintenanceManagerTracer::trace(PurgedMaintenanceSample sample) {
     trace_sample->addSetValue(
         "maintenance_ids", toStringSet(sample.removed_maintenances));
     trace_sample->addNormalValue("reason", sample.reason);
+    trace_sample->addIntValue("error", sample.error ? 1 : 0);
+    if (sample.error) {
+      trace_sample->addNormalValue("error_reason", sample.error_reason);
+    }
+    return trace_sample;
+  };
+
+  publish(kMaintenanceManagerTracer, std::move(sample_builder));
+}
+
+void MaintenanceManagerTracer::trace(ApplyMaintenanceAPISample sample) {
+  auto sample_builder =
+      [sample = std::move(sample)]() mutable -> std::unique_ptr<TraceSample> {
+    auto trace_sample = std::make_unique<TraceSample>();
+
+    // Metadata
+    trace_sample->addNormalValue("event", "APPLY_MAINTENANCE_REQUEST");
+    trace_sample->addIntValue("verbosity", static_cast<int>(Verbosity::EVENTS));
+    trace_sample->addNormalValue("sample_source", kMaintenanceAPISampleSource);
+    trace_sample->addIntValue(
+        "maintenance_state_version", sample.maintenance_state_version);
+    trace_sample->addIntValue("ncm_nc_version", sample.ncm_version.val());
+    trace_sample->addIntValue(
+        "published_nc_ctime_ms",
+        sample.nc_published_time.toMilliseconds().count());
+
+    // Added maintenances
+    populateSampleFromMaintenances(
+        *trace_sample, sample.added_maintenances, *sample.service_discovery);
+
+    // Extra fields for this request
+    if (sample.added_maintenances.size() > 0) {
+      // Pick the TTL of any of them, they all originated from the same
+      // maintenance.
+      trace_sample->addIntValue(
+          "ttl_seconds", sample.added_maintenances.at(0).ttl_seconds);
+    }
+
+    trace_sample->addIntValue("error", sample.error ? 1 : 0);
+    if (sample.error) {
+      trace_sample->addNormalValue("error_reason", sample.error_reason);
+    }
+    return trace_sample;
+  };
+
+  publish(kMaintenanceManagerTracer, std::move(sample_builder));
+}
+
+void MaintenanceManagerTracer::trace(RemoveMaintenanceAPISample sample) {
+  auto sample_builder =
+      [sample = std::move(sample)]() mutable -> std::unique_ptr<TraceSample> {
+    auto trace_sample = std::make_unique<TraceSample>();
+
+    // Metadata
+    trace_sample->addNormalValue("event", "REMOVE_MAINTENANCE_REQUEST");
+    trace_sample->addIntValue("verbosity", static_cast<int>(Verbosity::EVENTS));
+    trace_sample->addNormalValue("sample_source", kMaintenanceAPISampleSource);
+    trace_sample->addIntValue(
+        "maintenance_state_version", sample.maintenance_state_version);
+    trace_sample->addIntValue("ncm_nc_version", sample.ncm_version.val());
+    trace_sample->addIntValue(
+        "published_nc_ctime_ms",
+        sample.nc_published_time.toMilliseconds().count());
+
+    // Removed maintenances
+    populateSampleFromMaintenances(
+        *trace_sample, sample.removed_maintenances, *sample.service_discovery);
+
+    // Remove reason
+    // TODO: Add a separate field in the tracer for the actor of the remove.
+    trace_sample->addNormalValue(
+        "reason", folly::sformat("{}: {}", sample.user, sample.reason));
+
     trace_sample->addIntValue("error", sample.error ? 1 : 0);
     if (sample.error) {
       trace_sample->addNormalValue("error_reason", sample.error_reason);

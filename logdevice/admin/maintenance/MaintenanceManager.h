@@ -377,6 +377,10 @@ class MaintenanceManager : public SerialWorkContext {
     return WorkerType::GENERAL;
   }
 
+  MaintenanceManagerTracer* getTracer() const {
+    return deps_->getTracer();
+  }
+
  protected:
   // Used only in tests
   ShardWorkflow* FOLLY_NULLABLE getActiveShardWorkflow(ShardID shard) const;

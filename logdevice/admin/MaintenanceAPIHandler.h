@@ -12,6 +12,11 @@
 #include "logdevice/admin/maintenance/types.h"
 
 namespace facebook { namespace logdevice {
+
+namespace maintenance {
+class MaintenanceManagerTracer;
+}
+
 class MaintenanceAPIHandler : public virtual AdminAPIHandlerBase {
  public:
   // get a list of definitions
@@ -65,5 +70,7 @@ class MaintenanceAPIHandler : public virtual AdminAPIHandlerBase {
   folly::SemiFuture<ListMaintenanceDefs>
   applyAndMerge(std::vector<thrift::MaintenanceDefinition> new_defs,
                 std::vector<thrift::MaintenanceDefinition> existing);
+
+  maintenance::MaintenanceManagerTracer* getTracer() const;
 };
 }} // namespace facebook::logdevice

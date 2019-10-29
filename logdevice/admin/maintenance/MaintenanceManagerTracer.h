@@ -94,11 +94,27 @@ class MaintenanceManagerTracer : public SampledTracer {
     std::string reason;
   };
 
+  struct ApplyMaintenanceAPISample : public SampleBase {
+    std::vector<thrift::MaintenanceDefinition> added_maintenances;
+    std::shared_ptr<const configuration::nodes::ServiceDiscoveryConfig>
+        service_discovery;
+  };
+
+  struct RemoveMaintenanceAPISample : public SampleBase {
+    std::vector<thrift::MaintenanceDefinition> removed_maintenances;
+    std::shared_ptr<const configuration::nodes::ServiceDiscoveryConfig>
+        service_discovery;
+    std::string user;
+    std::string reason;
+  };
+
   explicit MaintenanceManagerTracer(std::shared_ptr<TraceLogger> logger);
 
   void trace(PeriodicStateSample);
   void trace(MetadataNodesetUpdateSample);
   void trace(PurgedMaintenanceSample);
+  void trace(ApplyMaintenanceAPISample);
+  void trace(RemoveMaintenanceAPISample);
 
   /**
    * The local default for this is 100% of samples unless explicity overridden
