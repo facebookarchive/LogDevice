@@ -1475,6 +1475,17 @@ void MaintenanceManager::updateMetadataNodesetIfRequired() {
     return;
   }
 
+  MaintenanceManagerTracer::MetadataNodesetUpdateSample tracer_sample;
+  tracer_sample.ncm_version = nodes_config_->getVersion();
+  tracer_sample.nc_published_time = nodes_config_->getLastChangeTimestamp();
+  if (cluster_maintenance_wrapper_) {
+    tracer_sample.maintenance_state_version =
+        cluster_maintenance_wrapper_->getVersion();
+  }
+  tracer_sample.old_metadata_node_ids = current_nodeset;
+  tracer_sample.new_metadata_node_ids = result.value();
+  tracer_sample.ncm_update_watch.begin();
+
   auto storage_membership_update =
       std::make_unique<membership::StorageMembership::Update>(
           nodes_config_->getStorageMembership()->getVersion());
@@ -1520,7 +1531,14 @@ void MaintenanceManager::updateMetadataNodesetIfRequired() {
                 std::move(storage_config_update), nullptr))
       .via(this)
       .thenValue(
-          [this](auto&&) { metadata_nodeset_update_in_flight_ = false; });
+          [this, sample = std::move(tracer_sample)](auto&& nc_result) mutable {
+            metadata_nodeset_update_in_flight_ = false;
+            sample.ncm_update_watch.end();
+            if (nc_result.hasError()) {
+              sample.ncm_update_status = nc_result.error();
+            }
+            deps_->getTracer()->trace(std::move(sample));
+          });
 }
 
 // Schedule NodesConfiguration update for workflows.

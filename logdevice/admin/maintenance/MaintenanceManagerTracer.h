@@ -82,9 +82,17 @@ class MaintenanceManagerTracer : public SampledTracer {
     StopWatch evaluation_watch;
   };
 
+  struct MetadataNodesetUpdateSample : public SampleBase {
+    std::set<node_index_t> old_metadata_node_ids;
+    std::set<node_index_t> new_metadata_node_ids;
+
+    StopWatch ncm_update_watch;
+  };
+
   explicit MaintenanceManagerTracer(std::shared_ptr<TraceLogger> logger);
 
   void trace(PeriodicStateSample);
+  void trace(MetadataNodesetUpdateSample);
 
   /**
    * The local default for this is 100% of samples unless explicity overridden

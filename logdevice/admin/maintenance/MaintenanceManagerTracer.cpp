@@ -146,4 +146,59 @@ void MaintenanceManagerTracer::trace(PeriodicStateSample sample) {
   publish(kMaintenanceManagerTracer, std::move(sample_builder));
 }
 
+void MaintenanceManagerTracer::trace(MetadataNodesetUpdateSample sample) {
+  auto sample_builder =
+      [sample = std::move(sample)]() mutable -> std::unique_ptr<TraceSample> {
+    auto trace_sample = std::make_unique<TraceSample>();
+
+    // Metadata
+    trace_sample->addNormalValue("event", "METADATA_NODESET_UPDATE");
+    trace_sample->addIntValue("verbosity", static_cast<int>(Verbosity::EVENTS));
+    trace_sample->addNormalValue(
+        "sample_source", kMaintenanceManagerSampleSource);
+    trace_sample->addIntValue(
+        "maintenance_state_version", sample.maintenance_state_version);
+    trace_sample->addIntValue("ncm_nc_version", sample.ncm_version.val());
+    trace_sample->addIntValue(
+        "published_nc_ctime_ms",
+        sample.nc_published_time.toMilliseconds().count());
+
+    // Metadata nodeset
+    folly::F14FastSet<node_index_t> added_nodes;
+    std::set_difference(sample.new_metadata_node_ids.begin(),
+                        sample.new_metadata_node_ids.end(),
+                        sample.old_metadata_node_ids.begin(),
+                        sample.old_metadata_node_ids.end(),
+                        std::inserter(added_nodes, added_nodes.begin()));
+
+    folly::F14FastSet<node_index_t> removed_nodes;
+    std::set_difference(sample.old_metadata_node_ids.begin(),
+                        sample.old_metadata_node_ids.end(),
+                        sample.new_metadata_node_ids.begin(),
+                        sample.new_metadata_node_ids.end(),
+                        std::inserter(removed_nodes, removed_nodes.begin()));
+
+    trace_sample->addSetValue(
+        "old_metadata_node_idx", toStringSet(sample.old_metadata_node_ids));
+    trace_sample->addSetValue(
+        "new_metadata_node_idx", toStringSet(sample.new_metadata_node_ids));
+    trace_sample->addSetValue("metadata_nodes_added", toStringSet(added_nodes));
+    trace_sample->addSetValue(
+        "metadata_nodes_removed", toStringSet(removed_nodes));
+
+    // The NC update
+    if (sample.ncm_update_status != Status::OK) {
+      trace_sample->addIntValue("ncm_update_error", 1);
+      trace_sample->addIntValue("error", 1);
+      trace_sample->addNormalValue(
+          "ncm_update_error_reason", error_name(sample.ncm_update_status));
+    }
+    trace_sample->addIntValue(
+        "ncm_update_latency_ms", sample.ncm_update_watch.duration.count());
+    return trace_sample;
+  };
+
+  publish(kMaintenanceManagerTracer, std::move(sample_builder));
+}
+
 }}} // namespace facebook::logdevice::maintenance
