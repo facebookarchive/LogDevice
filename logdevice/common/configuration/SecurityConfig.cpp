@@ -24,7 +24,8 @@ folly::dynamic SecurityConfig::toFollyDynamic() const {
       "allow_acl_not_found", allowIfACLNotFound)(
       "enable_acl_cache", enableAclCache)(
       "acl_cache_ttl", format_chrono_string(aclCacheTtl))(
-      "acl_cache_max_size", aclCacheMaxSize);
+      "acl_cache_max_size", aclCacheMaxSize)(
+      "enforce_cluster_node_identity", enforceClusterNodeIdentity);
 
   // This is done even is enablePermissionChecking is false, this enables
   // permission checking to be enabled/disabled without having to remove any

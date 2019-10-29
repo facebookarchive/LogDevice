@@ -102,6 +102,8 @@ void UpdateableSecurityInfo::onConfigUpdate() {
   }
 
   security_info->cluster_node_identity_ = securityConfig.clusterNodeIdentity;
+  security_info->enforce_cluster_node_identity_ =
+      securityConfig.enforceClusterNodeIdentity;
   security_info->dumpSecurityInfo();
 }
 

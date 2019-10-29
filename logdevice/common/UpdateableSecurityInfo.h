@@ -27,6 +27,10 @@ class UpdateableSecurityInfo {
     return cluster_node_identity_;
   }
 
+  bool getEnforceClusterNodeIdentity() const {
+    return enforce_cluster_node_identity_;
+  }
+
   /**
    * Logs current security information that is valid in the running processor.
    */
@@ -55,6 +59,8 @@ class UpdateableSecurityInfo {
   UpdateableSharedPtr<PrincipalParser> principal_parser_;
 
   std::string cluster_node_identity_;
+
+  bool enforce_cluster_node_identity_{false};
 
   // comes last to ensure unsubscription before rest of destruction
   ConfigSubscriptionHandle config_update_sub_;

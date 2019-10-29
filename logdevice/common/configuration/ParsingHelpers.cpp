@@ -760,6 +760,18 @@ bool parseSecurityInfo(const folly::dynamic& clusterMap,
     return false;
   }
 
+  success = getBoolFromMap(security_info,
+                           "enforce_cluster_node_identity",
+                           securityConfig.enforceClusterNodeIdentity);
+
+  // Not a required field
+  if (!success && err != E::NOTFOUND) {
+    ld_error("Invalid value of \"enforce_cluster_node_identity\" attribute "
+             "within \"security_information\", bool expected");
+    err = E::INVALID_CONFIG;
+    return false;
+  }
+
   success = getStringFromMap(security_info,
                              "cluster_node_identity",
                              securityConfig.clusterNodeIdentity);

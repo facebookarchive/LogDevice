@@ -107,6 +107,14 @@ struct SecurityConfig {
   std::string clusterNodeIdentity;
 
   /**
+   * if enabled, clients will verify the identity of servers during handshake
+   * and fail if the principal doesn't match clusterNodeIdentity. Otherwise,
+   * clients will just log a message if the identity does not match, but allow
+   * the handshake to proceed.
+   */
+  bool enforceClusterNodeIdentity{false};
+
+  /**
    * Returns whether or not the "permissions" field is allowed in the
    * configuration file. The "permissions" field should only be allowed when
    * PermissionCheckerType is set CONFIG.

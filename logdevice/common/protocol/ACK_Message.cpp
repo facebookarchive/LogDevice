@@ -67,6 +67,8 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
   Worker* w = Worker::onThisThread();
   auto cluster_node_identity =
       w->processor_->security_info_->getClusterNodeIdentity();
+  bool enforce_cluster_node_identity =
+      w->processor_->security_info_->getEnforceClusterNodeIdentity();
   auto principal_parser = w->processor_->security_info_->getPrincipalParser();
 
   // If the authentication type is set to SSL and a cluster node identity is
@@ -92,11 +94,18 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
           RATELIMIT_ERROR(std::chrono::seconds(1),
                           1,
                           "Untrusted cluster node identity (%s), expecting %s. "
-                          "Rejecting with E::ACCESS.",
+                          "%s",
                           principal.toString().c_str(),
-                          cluster_node_identity.c_str());
-          err = E::ACCESS;
-          return Message::Disposition::ERROR;
+                          cluster_node_identity.c_str(),
+                          enforce_cluster_node_identity
+                              ? "Rejecting with E::ACCESS."
+                              : "Ignoring, because "
+                                "enforce_cluster_node_identity is false.");
+          if (enforce_cluster_node_identity) {
+            // only fail if verify_cluster_node_identity is true.
+            err = E::ACCESS;
+            return Message::Disposition::ERROR;
+          }
         }
       }
     }
