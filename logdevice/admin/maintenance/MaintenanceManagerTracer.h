@@ -89,10 +89,16 @@ class MaintenanceManagerTracer : public SampledTracer {
     StopWatch ncm_update_watch;
   };
 
+  struct PurgedMaintenanceSample : public SampleBase {
+    MaintenanceIDs removed_maintenances;
+    std::string reason;
+  };
+
   explicit MaintenanceManagerTracer(std::shared_ptr<TraceLogger> logger);
 
   void trace(PeriodicStateSample);
   void trace(MetadataNodesetUpdateSample);
+  void trace(PurgedMaintenanceSample);
 
   /**
    * The local default for this is 100% of samples unless explicity overridden

@@ -201,4 +201,35 @@ void MaintenanceManagerTracer::trace(MetadataNodesetUpdateSample sample) {
   publish(kMaintenanceManagerTracer, std::move(sample_builder));
 }
 
+void MaintenanceManagerTracer::trace(PurgedMaintenanceSample sample) {
+  auto sample_builder =
+      [sample = std::move(sample)]() mutable -> std::unique_ptr<TraceSample> {
+    auto trace_sample = std::make_unique<TraceSample>();
+
+    // Metadata
+    trace_sample->addNormalValue("event", "MAINTENANCES_PURGED");
+    trace_sample->addIntValue("verbosity", static_cast<int>(Verbosity::EVENTS));
+    trace_sample->addNormalValue(
+        "sample_source", kMaintenanceManagerSampleSource);
+    trace_sample->addIntValue(
+        "maintenance_state_version", sample.maintenance_state_version);
+    trace_sample->addIntValue("ncm_nc_version", sample.ncm_version.val());
+    trace_sample->addIntValue(
+        "published_nc_ctime_ms",
+        sample.nc_published_time.toMilliseconds().count());
+
+    // Removed maintenances
+    trace_sample->addSetValue(
+        "maintenance_ids", toStringSet(sample.removed_maintenances));
+    trace_sample->addNormalValue("reason", sample.reason);
+    trace_sample->addIntValue("error", sample.error ? 1 : 0);
+    if (sample.error) {
+      trace_sample->addNormalValue("error_reason", sample.error_reason);
+    }
+    return trace_sample;
+  };
+
+  publish(kMaintenanceManagerTracer, std::move(sample_builder));
+}
+
 }}} // namespace facebook::logdevice::maintenance

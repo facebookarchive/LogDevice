@@ -2064,18 +2064,31 @@ void MaintenanceManager::purgeExpiredMaintenances(
       toString(expired_maintenances)));
   req.set_user(INTERNAL_USER.str());
 
+  MaintenanceManagerTracer::PurgedMaintenanceSample tracer_sample;
+  tracer_sample.ncm_version = nodes_config_->getVersion();
+  tracer_sample.nc_published_time = nodes_config_->getLastChangeTimestamp();
+  tracer_sample.maintenance_state_version =
+      cluster_maintenance_wrapper_->getVersion();
+  tracer_sample.removed_maintenances = {to_remove.begin(), to_remove.end()};
+  tracer_sample.reason = req.get_reason();
+
   MaintenanceDelta delta;
   delta.set_remove_maintenances(std::move(req));
   deps_->getMaintenanceLogWriter()->writeDelta(
       std::move(delta),
-      [this](Status st, lsn_t, const std::string& failure_reason) {
+      [this, sample = std::move(tracer_sample)](
+          Status st, lsn_t, const std::string& failure_reason) mutable {
         if (st != Status::OK) {
+          sample.error = true;
+          sample.error_reason =
+              folly::sformat("{}: {}", error_name(st), failure_reason);
           RATELIMIT_ERROR(std::chrono::seconds(10),
                           1,
                           "Failed remove the expired maintenances: %s",
                           failure_reason.c_str());
         }
         remove_maintenance_delta_in_flight_.store(false);
+        deps_->getTracer()->trace(std::move(sample));
       });
 }
 
