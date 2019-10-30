@@ -158,9 +158,7 @@ class AppendThread {
   std::thread append_thread_;
 };
 
-class NodeStatsControllerIntegrationTest
-    : public IntegrationTestBase,
-      public ::testing::WithParamInterface<bool /*use-rmsd*/> {
+class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
  public:
   void initializeCluster(Params params) {
     auto msString = [](std::chrono::milliseconds duration) {
@@ -169,13 +167,6 @@ class NodeStatsControllerIntegrationTest
 
     cluster =
         IntegrationTestUtils::ClusterFactory{} /* allow two controllers */
-
-            // All tests will be run twice, once with the legacy outlier
-            // detection algorithm, once with the new outlier detection
-            // algorithm from common/OutlierDetection.h.
-            .setParam(
-                "--node-stats-boycott-use-rmsd", GetParam() ? "true" : "false")
-
             // Disable delays for sequencer reactivations
             .setParam("--sequencer-reactivation-delay-secs", "0s..0s")
             .setParam("--node-stats-max-boycott-count",
@@ -524,7 +515,7 @@ class NodeStatsControllerIntegrationTest
 };
 } // namespace
 
-TEST_P(NodeStatsControllerIntegrationTest, ControllerSelection) {
+TEST_F(NodeStatsControllerIntegrationTest, ControllerSelection) {
   initializeCluster(Params{}.set_max_boycott_count(1).set_node_count(3));
   wait_until("2 controllers", [&] { return getActiveControllerCount() == 2; });
 
@@ -543,7 +534,7 @@ TEST_P(NodeStatsControllerIntegrationTest, ControllerSelection) {
              [&] { return getActiveControllerCount() == 3; });
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, BoycottNodeZeroSuccess) {
+TEST_F(NodeStatsControllerIntegrationTest, BoycottNodeZeroSuccess) {
   unsigned int node_count = 5;
   node_index_t outlier_node{3};
 
@@ -559,7 +550,7 @@ TEST_P(NodeStatsControllerIntegrationTest, BoycottNodeZeroSuccess) {
   waitUntilBoycottsOnAllNodes({outlier_node});
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, BoycottNode50PercentFail) {
+TEST_F(NodeStatsControllerIntegrationTest, BoycottNode50PercentFail) {
   unsigned int node_count = 5;
   node_index_t outlier_node{3};
 
@@ -575,7 +566,7 @@ TEST_P(NodeStatsControllerIntegrationTest, BoycottNode50PercentFail) {
   waitUntilBoycottsOnAllNodes({outlier_node});
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, Boycott1Node2Outliers) {
+TEST_F(NodeStatsControllerIntegrationTest, Boycott1Node2Outliers) {
   unsigned int node_count = 5;
   std::vector<node_index_t> outlier_nodes{1, 3};
 
@@ -589,17 +580,10 @@ TEST_P(NodeStatsControllerIntegrationTest, Boycott1Node2Outliers) {
   AppendThread appender;
   appender.start(client.get(), node_count);
 
-  if (GetParam()) {
-    // With the new outlier detection algorithm, we should not pick any outlier.
-    waitUntilBoycottsOnAllNodes({});
-  } else {
-    // 1 boycott, even though we have two outliers. Makes sure that the boycott
-    // on all nodes is the same one
-    waitUntilBoycottsOnAllNodes(outlier_nodes, 1);
-  }
+  waitUntilBoycottsOnAllNodes({});
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, Boycott2Nodes) {
+TEST_F(NodeStatsControllerIntegrationTest, Boycott2Nodes) {
   unsigned int node_count = 10;
   std::vector<node_index_t> outlier_nodes{1, 3};
 
@@ -616,7 +600,7 @@ TEST_P(NodeStatsControllerIntegrationTest, Boycott2Nodes) {
   waitUntilBoycottsOnAllNodes(outlier_nodes);
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, BoycottManyOutliersNoBoycotts) {
+TEST_F(NodeStatsControllerIntegrationTest, BoycottManyOutliersNoBoycotts) {
   unsigned int node_count = 5;
   std::vector<node_index_t> outlier_nodes{1};
 
@@ -647,7 +631,7 @@ TEST_P(NodeStatsControllerIntegrationTest, BoycottManyOutliersNoBoycotts) {
   waitUntilBoycottsOnAllNodes({}); // no boycotts anymore
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, RemoveWorstClients) {
+TEST_F(NodeStatsControllerIntegrationTest, RemoveWorstClients) {
   unsigned int node_count = 5;
   std::vector<node_index_t> outlier_nodes{3};
 
@@ -687,7 +671,7 @@ TEST_P(NodeStatsControllerIntegrationTest, RemoveWorstClients) {
   waitUntilBoycottsOnAllNodes({}); // no boycotts anymore
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, Require2Clients) {
+TEST_F(NodeStatsControllerIntegrationTest, Require2Clients) {
   unsigned int node_count = 5;
   node_index_t outlier_node{3};
 
@@ -711,7 +695,7 @@ TEST_P(NodeStatsControllerIntegrationTest, Require2Clients) {
   waitUntilBoycottsOnAllNodes({});
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, SendWorstClientCount) {
+TEST_F(NodeStatsControllerIntegrationTest, SendWorstClientCount) {
   unsigned int node_count = 5;
   std::vector<node_index_t> outlier_nodes{3};
 
@@ -753,7 +737,7 @@ TEST_P(NodeStatsControllerIntegrationTest, SendWorstClientCount) {
   waitUntilBoycottsOnAllNodes({}); // no boycotts anymore
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, Disable) {
+TEST_F(NodeStatsControllerIntegrationTest, Disable) {
   unsigned int node_count = 5;
   node_index_t outlier_node{3};
 
@@ -775,7 +759,7 @@ TEST_P(NodeStatsControllerIntegrationTest, Disable) {
   waitUntilBoycottsOnAllNodes({});
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, NoisyTest) {
+TEST_F(NodeStatsControllerIntegrationTest, NoisyTest) {
   unsigned int node_count = 5;
   node_index_t outlier_node{3};
 
@@ -811,7 +795,7 @@ TEST_P(NodeStatsControllerIntegrationTest, NoisyTest) {
   waitUntilBoycottsOnAllNodes({outlier_node});
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, Reset) {
+TEST_F(NodeStatsControllerIntegrationTest, Reset) {
   unsigned int node_count = 5;
   node_index_t outlier_node{3};
 
@@ -839,7 +823,7 @@ TEST_P(NodeStatsControllerIntegrationTest, Reset) {
 
 // This test tests that everything works correctly when AppenderRequest doesn't
 // set sequencer_node_
-TEST_P(NodeStatsControllerIntegrationTest, NoSequencerNode) {
+TEST_F(NodeStatsControllerIntegrationTest, NoSequencerNode) {
   auto cluster = IntegrationTestUtils::ClusterFactory().deferStart().create(1);
 
   std::unique_ptr<ClientSettings> settings(ClientSettings::create());
@@ -866,7 +850,7 @@ TEST_P(NodeStatsControllerIntegrationTest, NoSequencerNode) {
   });
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, AdminCommand) {
+TEST_F(NodeStatsControllerIntegrationTest, AdminCommand) {
   unsigned int node_count = 5;
   node_index_t outlier_node{3};
 
@@ -912,7 +896,7 @@ TEST_P(NodeStatsControllerIntegrationTest, AdminCommand) {
 // The secondary sequencer is preempted by the primary sequencer but the
 // primary is boycotted, so the secondary should take over on the first append.
 // A test case covering T36990448.
-TEST_P(NodeStatsControllerIntegrationTest, PreemptedByBoycottedNodeAppend) {
+TEST_F(NodeStatsControllerIntegrationTest, PreemptedByBoycottedNodeAppend) {
   node_index_t outlier_node{3};
   logid_t log_id = getDefaultLog(outlier_node);
 
@@ -929,7 +913,7 @@ TEST_P(NodeStatsControllerIntegrationTest, PreemptedByBoycottedNodeAppend) {
 // The secondary sequencer is preempted by the primary sequencer but the
 // primary is boycotted, so the secondary should take over on the first
 // GET_SEQ_STATE A test case covering T36990448.
-TEST_P(NodeStatsControllerIntegrationTest,
+TEST_F(NodeStatsControllerIntegrationTest,
        PreemptedByBoycottedNodeGetSeqState) {
   node_index_t outlier_node{3};
   logid_t log_id = getDefaultLog(outlier_node);
@@ -944,7 +928,7 @@ TEST_P(NodeStatsControllerIntegrationTest,
       });
 }
 
-TEST_P(NodeStatsControllerIntegrationTest, AdaptiveBoycottDuration) {
+TEST_F(NodeStatsControllerIntegrationTest, AdaptiveBoycottDuration) {
   unsigned int node_count = 5;
   std::vector<node_index_t> outlier_nodes{2};
 
@@ -989,7 +973,3 @@ TEST_P(NodeStatsControllerIntegrationTest, AdaptiveBoycottDuration) {
   EXPECT_GE(getBoycottDurationOfNode(/*node_idx=*/2, /*from_node=*/3),
             initial_duration * 2);
 }
-
-INSTANTIATE_TEST_CASE_P(NodeStatsControllerIntegrationTest,
-                        NodeStatsControllerIntegrationTest,
-                        ::testing::Bool());

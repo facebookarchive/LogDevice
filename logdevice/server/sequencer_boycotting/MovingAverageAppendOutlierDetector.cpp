@@ -46,11 +46,7 @@ MovingAverageAppendOutlierDetector::detectOutliers(TimePoint now) {
     updateRetentionSettingsOnTimeSeries();
   }
 
-  if (useRMSD()) {
-    updatePotentialOutliersUsingRMSD(now);
-  } else {
-    updatePotentialOutliersUsingStdDev(now);
-  }
+  updatePotentialOutliersUsingRMSD(now);
 
   std::vector<PotentialOutlier> outliers;
   const auto grace_period = getGracePeriod();
@@ -100,102 +96,6 @@ void MovingAverageAppendOutlierDetector::addStats(node_index_t node_index,
   // if old values are given, we have to re-check the potential outliers since
   // then
   check_outlier_since_ = std::min(now, check_outlier_since_);
-}
-
-void MovingAverageAppendOutlierDetector::updatePotentialOutliersUsingStdDev(
-    TimePoint now) {
-  if (aggregated_stats_.empty()) {
-    return;
-  }
-
-  const auto collection_period = getStatsCollectionPeriod();
-
-  // recursively update potential outliers
-  if (now - check_outlier_since_ > collection_period &&
-      aggregated_stats_.front().append_successes.getEarliestTime() < now) {
-    updatePotentialOutliersUsingStdDev(now - collection_period);
-  }
-
-  const auto node_count = aggregated_stats_.size();
-  // counts for this collection period
-  std::vector<uint32_t> period_successes;
-  std::vector<uint32_t> period_fails;
-  period_successes.reserve(node_count);
-  period_fails.reserve(node_count);
-
-  /**
-   * success ratio between the earliest entry in the time series (maximum
-   * getStatsRetentionDuration() time ago) and the "now" that depends on the
-   * oldest values received in the current batch being processed
-   */
-  std::vector<double> since_start_ratios;
-  since_start_ratios.reserve(node_count);
-
-  for (size_t node_index = 0; node_index < node_count; ++node_index) {
-    auto& stats = aggregated_stats_[node_index];
-    /**
-     * If now is at the same time as the latest time of the BucketedTimeSeries
-     * (which might the case when trying to reduce the amount of calls to get
-     * the current time), BucketedTimeSeries will consider the time to not cover
-     * the entire bucket and truncate values.
-     * Instead add a single nano second to have the BucketedTimeSeries consider
-     * the entire bucket in scope.
-     */
-    auto later_now = now + std::chrono::nanoseconds{1};
-
-    // Take the sum from the earliest time, until the modified now
-    since_start_ratios.emplace_back(successRatio(
-        stats.append_successes.sum(
-            TimePoint{std::chrono::nanoseconds::min()}, later_now),
-        stats.append_fails.sum(
-            TimePoint{std::chrono::nanoseconds::min()}, later_now)));
-
-    period_successes.emplace_back(
-        stats.append_successes.sum(now - collection_period, later_now));
-    period_fails.emplace_back(
-        stats.append_fails.sum(now - collection_period, later_now));
-  }
-
-  auto cluster_avg = mean(since_start_ratios);
-  double variance = 0.0;
-
-  ld_check(period_successes.size() == node_count);
-  ld_check(period_fails.size() == node_count);
-  for (size_t i = 0; i < node_count; ++i) {
-    variance += std::pow(successRatio(period_successes[i], period_fails[i]) -
-                             cluster_avg,
-                         2) /
-        node_count;
-  }
-
-  auto standard_deviation = std::sqrt(variance);
-  auto sensitivity = getSensitivity();
-  auto required_std_from_mean = getRequiredStdFromMean();
-
-  for (size_t i = 0; i < node_count; ++i) {
-    auto period_ratio = successRatio(period_successes[i], period_fails[i]);
-    // considered a potential outlier if it's outside of
-    // STD * required_std_from_mean and the sensitivity zone
-    if (period_ratio <
-            cluster_avg - required_std_from_mean * standard_deviation &&
-        period_ratio < 1 - sensitivity) {
-      auto potential_outlier_it = potential_outliers_.find(i);
-      if (potential_outlier_it == potential_outliers_.end()) {
-        PotentialOutlier potential_outlier;
-        potential_outlier.node_index = i;
-        potential_outlier.outlier_since = now;
-
-        potential_outlier_it =
-            potential_outliers_.emplace(i, std::move(potential_outlier)).first;
-      }
-      potential_outlier_it->second.successes += period_successes[i];
-      potential_outlier_it->second.fails += period_fails[i];
-    } else {
-      potential_outliers_.erase(i);
-    }
-  }
-
-  check_outlier_since_ = TimePoint{std::chrono::nanoseconds::max()};
 }
 
 void MovingAverageAppendOutlierDetector::updatePotentialOutliersUsingRMSD(
@@ -342,10 +242,6 @@ unsigned int MovingAverageAppendOutlierDetector::getMaxBoycottCount() const {
 double MovingAverageAppendOutlierDetector::getRelativeMargin() const {
   return Worker::settings()
       .sequencer_boycotting.node_stats_boycott_relative_margin;
-}
-
-bool MovingAverageAppendOutlierDetector::useRMSD() const {
-  return Worker::settings().sequencer_boycotting.node_stats_boycott_use_rmsd;
 }
 
 }} // namespace facebook::logdevice

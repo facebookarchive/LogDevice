@@ -81,8 +81,8 @@ struct SequencerBoycottingSettings {
   // away at most node_count * node_stats_send_worst_client_count
   double node_stats_remove_worst_percentage;
 
-  // (experimental) Use RMSD for outlier detection in sequencer boycotting.
-  bool node_stats_boycott_use_rmsd;
+  // (deprecated) Use RMSD for outlier detection in sequencer boycotting.
+  bool node_stats_boycott_use_rmsd_DEPRECATED;
 
   // If this value is true, sequencer boycotting will use adaptive durations
   // instead of the default fixed duration.

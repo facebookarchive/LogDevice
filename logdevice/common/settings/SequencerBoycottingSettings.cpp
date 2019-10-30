@@ -115,7 +115,7 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        "smaller than the average success ratio of all nodes in the cluster. "
        "While node-stats-boycott-sensitivity is an absolute threshold, this "
        "setting defines a sensitivity threshold relative to the average of all "
-       "success ratios. Only used if node-stats-boycott-use-rmsd is true",
+       "success ratios.",
        SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-controller-check-period",
@@ -154,11 +154,11 @@ void SequencerBoycottingSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::SequencerBoycotting);
   init("node-stats-boycott-use-rmsd",
-       &node_stats_boycott_use_rmsd,
+       &node_stats_boycott_use_rmsd_DEPRECATED,
        "true",
        nullptr, // no validation
        "Use a new outlier detection algorithm",
-       SERVER,
+       SERVER | DEPRECATED,
        SettingsCategory::SequencerBoycotting);
 
   init(

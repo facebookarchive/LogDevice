@@ -82,12 +82,8 @@ class MovingAverageAppendOutlierDetector : public AppendOutlierDetector {
 
   virtual unsigned int getMaxBoycottCount() const;
   virtual double getRelativeMargin() const;
-  virtual bool useRMSD() const;
 
  private:
-  // Look for outliers with the legacy method that uses standard deviation.
-  void updatePotentialOutliersUsingStdDev(TimePoint now);
-
   // Look for outliers with the new method that uses RMSD (@see
   // common/OutlierDetection.h)
   void updatePotentialOutliersUsingRMSD(TimePoint now);

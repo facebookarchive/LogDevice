@@ -21,12 +21,8 @@ namespace {
 static constexpr std::chrono::seconds COLLECTION_PERIOD{30};
 
 class MockOutlierDetector : public MovingAverageAppendOutlierDetector {
- private:
-  bool use_rmsd_;
-
  public:
-  MockOutlierDetector(bool use_new_outlier_detection)
-      : use_rmsd_(use_new_outlier_detection) {
+  MockOutlierDetector() {
     ON_CALL(*this, getGracePeriod()).WillByDefault(Return(0s));
     ON_CALL(*this, getSensitivity()).WillByDefault(Return(0));
     ON_CALL(*this, getStatsRetentionDuration()).WillByDefault(Return(5min));
@@ -44,10 +40,6 @@ class MockOutlierDetector : public MovingAverageAppendOutlierDetector {
     return 0.15;
   }
 
-  bool useRMSD() const override {
-    return use_rmsd_;
-  }
-
   unsigned int getMaxBoycottCount() const override {
     return 3;
   }
@@ -59,9 +51,7 @@ class MockOutlierDetector : public MovingAverageAppendOutlierDetector {
   }
 };
 
-class MovingAverageAppendOutlierDetectorTest
-    : public Test,
-      public ::testing::WithParamInterface<bool /*use-rmsd*/> {
+class MovingAverageAppendOutlierDetectorTest : public Test {
  public:
   void SetUp() override {
     now = std::chrono::steady_clock::now();
@@ -87,28 +77,28 @@ class MovingAverageAppendOutlierDetectorTest
   }
 
   std::chrono::steady_clock::time_point now;
-  MockOutlierDetector detector{GetParam()};
+  MockOutlierDetector detector{};
 };
 } // namespace
 
-TEST_P(MovingAverageAppendOutlierDetectorTest, EmptyStats) {
+TEST_F(MovingAverageAppendOutlierDetectorTest, EmptyStats) {
   EXPECT_THAT(detector.detectOutliers(now), IsEmpty());
 }
 
 // make sure not to do divide by zero anywhere
-TEST_P(MovingAverageAppendOutlierDetectorTest, ZeroValues) {
+TEST_F(MovingAverageAppendOutlierDetectorTest, ZeroValues) {
   detector.addStats(0, {0, 0}, now);
   EXPECT_THAT(detector.detectOutliers(now), IsEmpty());
 }
 
-TEST_P(MovingAverageAppendOutlierDetectorTest, NoGracePeriod) {
+TEST_F(MovingAverageAppendOutlierDetectorTest, NoGracePeriod) {
   EXPECT_CALL(detector, getGracePeriod()).WillRepeatedly(Return(0s));
 
   addManyStats({{100, 1}}, now);
   EXPECT_THAT(detector.detectOutliers(now), ElementsAre(0));
 }
 
-TEST_P(MovingAverageAppendOutlierDetectorTest, WithGracePeriod) {
+TEST_F(MovingAverageAppendOutlierDetectorTest, WithGracePeriod) {
   EXPECT_CALL(detector, getGracePeriod())
       .WillRepeatedly(Return(2 * COLLECTION_PERIOD));
 
@@ -133,30 +123,22 @@ TEST_P(MovingAverageAppendOutlierDetectorTest, WithGracePeriod) {
   EXPECT_THAT(detector.detectOutliers(now + 2 * COLLECTION_PERIOD), IsEmpty());
 }
 
-TEST_P(MovingAverageAppendOutlierDetectorTest, NoSensitivity) {
+TEST_F(MovingAverageAppendOutlierDetectorTest, NoSensitivity) {
   EXPECT_CALL(detector, getSensitivity()).WillRepeatedly(Return(0.0));
 
   addManyStats({{100, 1}}, now);
   EXPECT_THAT(detector.detectOutliers(now), ElementsAre(0));
 }
 
-TEST_P(MovingAverageAppendOutlierDetectorTest, WithSensitivity) {
+TEST_F(MovingAverageAppendOutlierDetectorTest, WithSensitivity) {
   EXPECT_CALL(detector, getSensitivity())
       .WillRepeatedly(Return(0.015)); // allow 1.5% failure rate
-
-  const bool use_rmsd = GetParam();
-  if (use_rmsd) {
-    // 1% failure rate and 2% failure rate. With RMSD, no one is deemed outlier.
-    addManyStats({{99, 1}, {98, 2}}, now);
-    EXPECT_THAT(detector.detectOutliers(now), IsEmpty());
-  } else {
-    // 1% failure rate and 2% failure rate. Only the second one should fail
-    addManyStats({{99, 1}, {98, 2}}, now);
-    EXPECT_THAT(detector.detectOutliers(now), ElementsAre(1));
-  }
+  // 1% failure rate and 2% failure rate. No one is deemed outlier.
+  addManyStats({{99, 1}, {98, 2}}, now);
+  EXPECT_THAT(detector.detectOutliers(now), IsEmpty());
 }
 
-TEST_P(MovingAverageAppendOutlierDetectorTest, OrderedByWorst) {
+TEST_F(MovingAverageAppendOutlierDetectorTest, OrderedByWorst) {
   addManyStats({{99, 1}, {98, 2}}, now);
   EXPECT_THAT(detector.detectOutliers(now), ElementsAre(1, 0));
 
@@ -168,7 +150,7 @@ TEST_P(MovingAverageAppendOutlierDetectorTest, OrderedByWorst) {
   EXPECT_THAT(detector.detectOutliers(now), ElementsAre(0, 1));
 }
 
-TEST_P(MovingAverageAppendOutlierDetectorTest, SettingsUpdate) {
+TEST_F(MovingAverageAppendOutlierDetectorTest, SettingsUpdate) {
   EXPECT_CALL(detector, getStatsRetentionDuration())
       .WillRepeatedly(Return(5min));
 
@@ -181,7 +163,3 @@ TEST_P(MovingAverageAppendOutlierDetectorTest, SettingsUpdate) {
   // even if we update the setting, should not make a difference in this case
   EXPECT_THAT(detector.detectOutliers(now), ElementsAre(0));
 }
-
-INSTANTIATE_TEST_CASE_P(MovingAverageAppendOutlierDetectorTest,
-                        MovingAverageAppendOutlierDetectorTest,
-                        ::testing::Bool());
