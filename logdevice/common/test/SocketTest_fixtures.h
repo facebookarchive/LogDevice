@@ -15,11 +15,11 @@
 #include "event2/bufferevent.h"
 #include "event2/bufferevent_struct.h"
 #include "event2/event.h"
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/Envelope.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SSLFetcher.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
@@ -370,11 +370,11 @@ class ClientSocketTest : public SocketTest {
   ClientSocketTest() : connect_throttle_(settings_.connect_throttle) {
     // Create a client socket.
     socket_ = std::unique_ptr<Socket, SocketDeleter>(
-        new Socket(server_name_,
-                   SocketType::DATA,
-                   ConnectionType::PLAIN,
-                   flow_group_,
-                   std::make_unique<TestSocketDependencies>(this)),
+        new Connection(server_name_,
+                       SocketType::DATA,
+                       ConnectionType::PLAIN,
+                       flow_group_,
+                       std::make_unique<TestSocketDependencies>(this)),
         SocketDeleter());
     socket_->setConnectThrottle(&connect_throttle_);
     cluster_name_ = "Socket_test_cluster";
@@ -407,7 +407,7 @@ class ServerSocketTest : public SocketTest {
     // because Socket will not use them directly, it will always pass them to
     // methods of TestSocketDependencies so these will remain untouched.
     socket_ = std::unique_ptr<Socket, SocketDeleter>(
-        new Socket(
+        new Connection(
             42 /* fd */,
             ClientID(client_id_) /* client_name */,
             Sockaddr(get_localhost_address_str(), 4440) /* client_addr */,

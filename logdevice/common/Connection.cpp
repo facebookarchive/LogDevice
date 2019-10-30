@@ -373,7 +373,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   auto body_clone = msg_buffer->clone();
   int rv = Socket::dispatchMessageBody(header, std::move(msg_buffer));
-  if (rv != 0 && err == E::NOBUFS) {
+  if (rv != 0 && err == E::NOBUFS && sock_) {
     // No space to push more messages on the worker, disable the read callback.
     // Retry this message and if successful it will add back the ReadCallback.
     ld_check(!retry_receipt_of_message_.isScheduled());
