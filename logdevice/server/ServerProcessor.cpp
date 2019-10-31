@@ -88,6 +88,31 @@ void ServerProcessor::init() {
           updateableSettings()->health_monitor_max_stalls_avg_ms,
           updateableSettings()->health_monitor_max_stalled_worker_percentage);
       health_monitor_->startUp();
+      applyToWorkerPool(
+          [& hm = *health_monitor_](Worker& w) {
+            w.setLongExecutionCallback(
+                [& hm = hm](
+                    int idx, std::chrono::milliseconds duration) mutable {
+                  hm.reportWorkerStall(idx, duration);
+                });
+            w.setLongQueuedCallback(
+                [& hm = hm](
+                    int idx, std::chrono::milliseconds duration) mutable {
+                  hm.reportWorkerQueueStall(idx, duration);
+                });
+          },
+          Processor::Order::FORWARD,
+          WorkerType::GENERAL);
+
+      watchdog_thread_->setSlowWatchdogLoopCallback(
+          [& hm = *health_monitor_](bool delayed) mutable {
+            hm.reportWatchdogHealth(delayed);
+          });
+      watchdog_thread_->setSlowWorkersCallback(
+          [& hm = *health_monitor_](int num_stalled) mutable {
+            hm.reportStalledWorkers(num_stalled);
+          });
+
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct ServerHealthMonitor: %s",
                error_description(err));

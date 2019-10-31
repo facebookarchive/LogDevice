@@ -232,10 +232,8 @@ void Processor::init() {
         "Initialized %d workers of type %s", count, workerTypeStr(worker_type));
     impl_->all_workers_[i] = std::move(worker_pool);
   }
-
   impl_->allSequencers_ =
       std::make_unique<AllSequencers>(this, config_, settings_);
-
   // in the context of clients, the processor triggers a cluster state refresh
   // so that appends can be routed to nodes that are alive from the start
   if (!settings_->server && settings_->enable_initial_get_cluster_state) {

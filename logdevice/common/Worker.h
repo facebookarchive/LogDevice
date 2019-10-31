@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include <folly/Function.h>
 #include <folly/IntrusiveList.h>
 #include <folly/Random.h>
 #include <folly/concurrency/UnboundedQueue.h>
@@ -795,6 +796,13 @@ class Worker : public WorkContext {
   int forcePost(std::unique_ptr<Request>& req);
 
   virtual void setupWorker();
+  // Callback functions that register worker id and duration of slow/delayed
+  // action.
+  using SlowRequestCallback =
+      folly::Function<void(int idx, std::chrono::milliseconds duration)>;
+
+  void setLongExecutionCallback(SlowRequestCallback cb);
+  void setLongQueuedCallback(SlowRequestCallback cb);
 
   // Execution probability distribution of different tasks. Hi Priority tasks
   // are called such because they have a higher chance of getting executed.
@@ -826,6 +834,10 @@ class Worker : public WorkContext {
   // Called during shutdown when there are no more pending requests; allows
   // subclasses to clear state machines that were waiting for that
   virtual void noteShuttingDownNoPendingRequests() {}
+
+  void callLongExecutionCallback(int idx, std::chrono::milliseconds duration);
+
+  void callLongQueuedCallback(int idx, std::chrono::milliseconds duration);
 
   std::shared_ptr<UpdateableConfig> config_; // cluster config to use for
   // all ops on this thread
@@ -920,6 +932,9 @@ class Worker : public WorkContext {
   // Stop on EventLogStateMachine should only be called once.
   // Set to true once stop has been called
   bool event_log_stopped_{false};
+
+  std::shared_ptr<SlowRequestCallback> long_execution_cb_{nullptr};
+  std::shared_ptr<SlowRequestCallback> long_queued_cb_{nullptr};
 
   // Error Injection settings:
   double worker_stall_error_injection_chance_;

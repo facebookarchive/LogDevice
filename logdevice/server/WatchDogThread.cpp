@@ -92,12 +92,11 @@ void WatchDogThread::detectStalls() {
                watchdog_detected_worker_stall_error_injection_chance_ > 0 &&
                folly::Random::randDouble(0, 100.0) <=
                    watchdog_detected_worker_stall_error_injection_chance_)) {
-    processor_->getHealthMonitor().reportStalledWorkers(1);
+    callSlowWorkersCallback(1);
     STAT_INCR(processor_->stats_, watchdog_fault_injection_indicator);
 
   } else {
-    processor_->getHealthMonitor().reportStalledWorkers(
-        stalled_worker_pids.size());
+    callSlowWorkersCallback(stalled_worker_pids.size());
   }
   if (stalled_worker_pids.size()) {
     ld_warning("Found %zu stalled workers", stalled_worker_pids.size());
@@ -143,9 +142,9 @@ void WatchDogThread::run() {
                      1,
                      "Entry into watchdog loop took %lums",
                      loop_entry_delay);
-      processor_->getHealthMonitor().reportWatchdogHealth(/*delayed=*/true);
+      callSlowWatchdogLoopCallback(/*delayed=*/true);
     } else {
-      processor_->getHealthMonitor().reportWatchdogHealth(/*delayed=*/false);
+      callSlowWatchdogLoopCallback(/*delayed=*/false);
     }
     detectStalls();
     last_entry_time = std::chrono::steady_clock::now();
@@ -162,6 +161,34 @@ void WatchDogThread::shutdown() {
   cv_lock.unlock();
 
   thread_.join();
+}
+
+void WatchDogThread::setSlowWatchdogLoopCallback(SlowWatchdogLoopCallback cb) {
+  std::atomic_store_explicit(
+      &slow_wd_loop_cb_,
+      std::make_shared<SlowWatchdogLoopCallback>(std::move(cb)),
+      std::memory_order_relaxed);
+}
+void WatchDogThread::setSlowWorkersCallback(SlowWorkersCallback cb) {
+  std::atomic_store_explicit(
+      &slow_workers_cb_,
+      std::make_shared<SlowWorkersCallback>(std::move(cb)),
+      std::memory_order_relaxed);
+}
+
+void WatchDogThread::callSlowWatchdogLoopCallback(bool delayed) {
+  auto cb =
+      std::atomic_load_explicit(&slow_wd_loop_cb_, std::memory_order_relaxed);
+  if (cb && *cb) {
+    (*cb)(delayed);
+  }
+}
+void WatchDogThread::callSlowWorkersCallback(int num_workers) {
+  auto cb =
+      std::atomic_load_explicit(&slow_workers_cb_, std::memory_order_relaxed);
+  if (cb && *cb) {
+    (*cb)(num_workers);
+  }
 }
 
 }} // namespace facebook::logdevice

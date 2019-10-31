@@ -983,7 +983,7 @@ void Worker::onStoppedRunning(RunContext prev_context) {
                       prev_context.describe().c_str());
     WORKER_STAT_INCR(worker_slow_requests);
     if (worker_type_ == WorkerType::GENERAL) {
-      processor_->getHealthMonitor().reportWorkerStall(
+      callLongExecutionCallback(
           idx_.val_,
           std::chrono::duration_cast<std::chrono::milliseconds>(duration));
     }
@@ -1295,8 +1295,7 @@ void Worker::processRequest(std::unique_ptr<Request> rq) {
                       priority_to_str(priority));
     if (worker_type_ == WorkerType::GENERAL &&
         priority == folly::Executor::HI_PRI) {
-      processor_->getHealthMonitor().reportWorkerQueueStall(
-          idx_.val_, queue_time);
+      callLongQueuedCallback(idx_.val_, queue_time);
       WORKER_STAT_INCR(worker_hi_pri_long_queued_requests);
     }
   }
@@ -1420,4 +1419,36 @@ void Worker::generateErrorInjection(double error_chance,
     std::this_thread::sleep_for(sleep_duration);
   }
 }
+void Worker::setLongExecutionCallback(SlowRequestCallback cb) {
+  std::atomic_store_explicit(
+      &long_execution_cb_,
+      std::make_shared<SlowRequestCallback>(std::move(cb)),
+      std::memory_order_relaxed);
+}
+
+void Worker::setLongQueuedCallback(SlowRequestCallback cb) {
+  std::atomic_store_explicit(
+      &long_queued_cb_,
+      std::make_shared<SlowRequestCallback>(std::move(cb)),
+      std::memory_order_relaxed);
+}
+
+void Worker::callLongExecutionCallback(int idx,
+                                       std::chrono::milliseconds duration) {
+  auto cb =
+      std::atomic_load_explicit(&long_execution_cb_, std::memory_order_relaxed);
+  if (cb && *cb) {
+    (*cb)(idx, duration);
+  }
+}
+
+void Worker::callLongQueuedCallback(int idx,
+                                    std::chrono::milliseconds duration) {
+  auto cb =
+      std::atomic_load_explicit(&long_queued_cb_, std::memory_order_relaxed);
+  if (cb && *cb) {
+    (*cb)(idx, duration);
+  }
+}
+
 }} // namespace facebook::logdevice

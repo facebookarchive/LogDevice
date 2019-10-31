@@ -13,6 +13,8 @@
 #include <thread>
 #include <vector>
 
+#include <folly/Function.h>
+
 #include "logdevice/common/RateLimiter.h"
 
 namespace facebook { namespace logdevice {
@@ -26,6 +28,13 @@ class WatchDogThread {
                           rate_limit_t bt_ratelimit);
 
   void shutdown();
+  // Callback functions that register if thread is delayed or number of stalled
+  // workers.
+  using SlowWatchdogLoopCallback = folly::Function<void(bool delayed)>;
+  using SlowWorkersCallback = folly::Function<void(int num_stalled)>;
+
+  void setSlowWatchdogLoopCallback(SlowWatchdogLoopCallback cb);
+  void setSlowWorkersCallback(SlowWorkersCallback cb);
 
  private:
   std::thread thread_;
@@ -49,6 +58,12 @@ class WatchDogThread {
   std::vector<std::chrono::milliseconds> total_stalled_time_ms_;
   // Error injection
   double watchdog_detected_worker_stall_error_injection_chance_;
+
+  std::shared_ptr<SlowWatchdogLoopCallback> slow_wd_loop_cb_{nullptr};
+  std::shared_ptr<SlowWorkersCallback> slow_workers_cb_{nullptr};
+
+  void callSlowWatchdogLoopCallback(bool delayed);
+  void callSlowWorkersCallback(int num_workers);
   // Main thread loop.
   void run();
 
