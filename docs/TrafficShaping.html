@@ -139,56 +139,56 @@
 </ul></li>
 </ul>
 <p>Sample <code>traffic_shaping</code> configuration:</p>
-<pre><code class="hljs">  <span class="hljs-string">"traffic_shaping"</span>: {
-    <span class="hljs-string">"default_read_traffic_class"</span>: <span class="hljs-string">"READ_TAIL"</span>,
-    <span class="hljs-string">"scopes"</span>: [
-      {
-        <span class="hljs-string">"name"</span>: <span class="hljs-string">"NODE"</span>,
-        <span class="hljs-string">"shaping_enabled"</span>: <span class="hljs-literal">false</span>
-      },
-      {
-        <span class="hljs-string">"name"</span>: <span class="hljs-string">"RACK"</span>,
-        <span class="hljs-string">"shaping_enabled"</span>: <span class="hljs-literal">false</span>
-      },
-      {
-        <span class="hljs-string">"name"</span>: <span class="hljs-string">"REGION"</span>,
-        <span class="hljs-string">"shaping_enabled"</span>: <span class="hljs-literal">true</span>,
-        <span class="hljs-string">"meters"</span>: [
-          {
-            <span class="hljs-string">"name"</span>: <span class="hljs-string">"PRIORITY_QUEUE"</span>,
-            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">58000</span>,
-            <span class="hljs-string">"max_bytes_per_second"</span>: <span class="hljs-number">75000</span>,
-            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">5800</span>
-          },
-          {
-            <span class="hljs-string">"name"</span>: <span class="hljs-string">"MAX"</span>,
-            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">2000</span>,
-            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">200</span>
-          },
-          {
-            <span class="hljs-string">"name"</span>: <span class="hljs-string">"CLIENT_HIGH"</span>,
-            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">100000</span>,
-            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">10000</span>
-          },
-          {
-            <span class="hljs-string">"name"</span>: <span class="hljs-string">"CLIENT_NORMAL"</span>,
-            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">50000</span>,
-            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">5000</span>
-          },
-          {
-            <span class="hljs-string">"name"</span>: <span class="hljs-string">"CLIENT_LOW"</span>,
-            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">25000</span>,
-            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">2500</span>
-          },
-          {
-            <span class="hljs-string">"name"</span>: <span class="hljs-string">"BACKGROUND"</span>,
-            <span class="hljs-string">"guaranteed_bytes_per_second"</span>: <span class="hljs-number">25000</span>,
-            <span class="hljs-string">"max_burst_bytes"</span>: <span class="hljs-number">2000</span>
-          },
-        ],
-      }
-   ],
-  },
+<pre><code class="hljs">  <span class="hljs-attr">"traffic_shaping":</span> <span class="hljs-string">{</span>
+    <span class="hljs-attr">"default_read_traffic_class":</span> <span class="hljs-string">"READ_TAIL"</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"scopes":</span> <span class="hljs-string">[</span>
+      <span class="hljs-string">{</span>
+        <span class="hljs-attr">"name":</span> <span class="hljs-string">"NODE"</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"shaping_enabled":</span> <span class="hljs-literal">false</span>
+      <span class="hljs-string">},</span>
+      <span class="hljs-string">{</span>
+        <span class="hljs-attr">"name":</span> <span class="hljs-string">"RACK"</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"shaping_enabled":</span> <span class="hljs-literal">false</span>
+      <span class="hljs-string">},</span>
+      <span class="hljs-string">{</span>
+        <span class="hljs-attr">"name":</span> <span class="hljs-string">"REGION"</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"shaping_enabled":</span> <span class="hljs-literal">true</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"meters":</span> <span class="hljs-string">[</span>
+          <span class="hljs-string">{</span>
+            <span class="hljs-attr">"name":</span> <span class="hljs-string">"PRIORITY_QUEUE"</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"guaranteed_bytes_per_second":</span> <span class="hljs-number">58000</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"max_bytes_per_second":</span> <span class="hljs-number">75000</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"max_burst_bytes":</span> <span class="hljs-number">5800</span>
+          <span class="hljs-string">},</span>
+          <span class="hljs-string">{</span>
+            <span class="hljs-attr">"name":</span> <span class="hljs-string">"MAX"</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"guaranteed_bytes_per_second":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"max_burst_bytes":</span> <span class="hljs-number">200</span>
+          <span class="hljs-string">},</span>
+          <span class="hljs-string">{</span>
+            <span class="hljs-attr">"name":</span> <span class="hljs-string">"CLIENT_HIGH"</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"guaranteed_bytes_per_second":</span> <span class="hljs-number">100000</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"max_burst_bytes":</span> <span class="hljs-number">10000</span>
+          <span class="hljs-string">},</span>
+          <span class="hljs-string">{</span>
+            <span class="hljs-attr">"name":</span> <span class="hljs-string">"CLIENT_NORMAL"</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"guaranteed_bytes_per_second":</span> <span class="hljs-number">50000</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"max_burst_bytes":</span> <span class="hljs-number">5000</span>
+          <span class="hljs-string">},</span>
+          <span class="hljs-string">{</span>
+            <span class="hljs-attr">"name":</span> <span class="hljs-string">"CLIENT_LOW"</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"guaranteed_bytes_per_second":</span> <span class="hljs-number">25000</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"max_burst_bytes":</span> <span class="hljs-number">2500</span>
+          <span class="hljs-string">},</span>
+          <span class="hljs-string">{</span>
+            <span class="hljs-attr">"name":</span> <span class="hljs-string">"BACKGROUND"</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"guaranteed_bytes_per_second":</span> <span class="hljs-number">25000</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"max_burst_bytes":</span> <span class="hljs-number">2000</span>
+          <span class="hljs-string">},</span>
+        <span class="hljs-string">],</span>
+      <span class="hljs-string">}</span>
+   <span class="hljs-string">],</span>
+  <span class="hljs-string">},</span>
 </code></pre>
 <p>The <code>principals</code> sections lets you assign client readers to different traffic classes, thus affecting their relative priorities.</p>
 <pre><code class="hljs">  <span class="hljs-string">"principals"</span>: [
@@ -210,26 +210,26 @@
 <p>When tuning traffic shaping, it is often convenient to limit experiments to just a single node. The easiest way to do this is via the admin interface on the node.</p>
 <p>Any changes made via the admin interface will be overwritten the next time the node receives a configuration update, even if that update doesn't change the traffic shaping section from the values in the last update.</p>
 <pre><code class="hljs">% traffic_shaping --help
-Options error: unrecognised option <span class="hljs-string">'--help'</span>
-USAGE traffic_shaping [--default_read_traffic_class=NAME][--scope=NAME|ALL [--enable|--disable] [--priority=NAME|ALL [--mbps=&lt;<span class="hljs-keyword">double</span>&gt;] [--max_burst_mb=&lt;<span class="hljs-keyword">double</span>&gt;]]]
+Options error: unrecognised option '--help'
+USAGE traffic_shaping [--default_read_traffic_class=NAME][--scope=NAME|ALL [--enable|--disable] [--priority=NAME|ALL [--mbps=&lt;double&gt;] [--max_burst_mb=&lt;double&gt;]]]
 END
 
 % traffic_shaping --default_read_traffic_class=READ_TAIL
-traffic_shaping::default_read_traffic_class READ_BACKLOG =&gt; READ_TAIL
+traffic_shaping<span class="hljs-number">::</span>default_read_traffic_class READ_BACKLOG =&gt; READ_TAIL
 END
 
 % traffic_shaping --scope=REGION --disable
-traffic_shaping::REGION enabled =&gt; disabled
+traffic_shaping<span class="hljs-number">::</span>REGION enabled =&gt; disabled
 END
 
 % traffic_shaping --scope=REGION --priority=ALL --mbps=<span class="hljs-number">100</span>
-traffic_shaping::REGION::MAX::mbps <span class="hljs-number">2.000000</span> =&gt; <span class="hljs-number">100.000000</span>
-traffic_shaping::REGION::CLIENT_HIGH::mbps <span class="hljs-number">100.000000</span> =&gt; <span class="hljs-number">100.000000</span>
-traffic_shaping::REGION::CLIENT_NORMAL::mbps <span class="hljs-number">50.000000</span> =&gt; <span class="hljs-number">100.000000</span>
-traffic_shaping::REGION::CLIENT_LOW::mbps <span class="hljs-number">25.000000</span> =&gt; <span class="hljs-number">100.000000</span>
-traffic_shaping::REGION::BACKGROUND::mbps <span class="hljs-number">25.000000</span> =&gt; <span class="hljs-number">100.000000</span>
-traffic_shaping::REGION::IDLE::mbps <span class="hljs-number">0.000000</span> =&gt; <span class="hljs-number">100.000000</span>
-traffic_shaping::REGION::PRIORITY_QUEUE::mbps <span class="hljs-number">58.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping<span class="hljs-number">::</span>REGION<span class="hljs-number">::</span>MAX<span class="hljs-number">::</span>mbps <span class="hljs-number">2.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping<span class="hljs-number">::</span>REGION<span class="hljs-number">::</span>CLIENT_HIGH<span class="hljs-number">::</span>mbps <span class="hljs-number">100.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping<span class="hljs-number">::</span>REGION<span class="hljs-number">::</span>CLIENT_NORMAL<span class="hljs-number">::</span>mbps <span class="hljs-number">50.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping<span class="hljs-number">::</span>REGION<span class="hljs-number">::</span>CLIENT_LOW<span class="hljs-number">::</span>mbps <span class="hljs-number">25.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping<span class="hljs-number">::</span>REGION<span class="hljs-number">::</span>BACKGROUN<span class="hljs-number">D::</span>mbps <span class="hljs-number">25.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping<span class="hljs-number">::</span>REGION<span class="hljs-number">::</span>IDL<span class="hljs-number">E::</span>mbps <span class="hljs-number">0.000000</span> =&gt; <span class="hljs-number">100.000000</span>
+traffic_shaping<span class="hljs-number">::</span>REGION<span class="hljs-number">::</span>PRIORITY_QUEU<span class="hljs-number">E::</span>mbps <span class="hljs-number">58.000000</span> =&gt; <span class="hljs-number">100.000000</span>
 END
 </code></pre>
 <h2><a class="anchor" aria-hidden="true" id="statistics"></a><a href="#statistics" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Statistics</h2>
@@ -248,14 +248,14 @@ info stats2
 <pre><code class="hljs">% echo stats2 |nc ::<span class="hljs-number">1</span> <span class="hljs-number">5440</span> |grep flow_group
 
 STAT flow_groups_run_deadline_exceeded <span class="hljs-number">0</span>
-STAT flow_group.direct_dispatched.NODE <span class="hljs-number">66</span>
-STAT flow_group.deferred.NODE <span class="hljs-number">0</span>
-STAT flow_group.discarded.NODE <span class="hljs-number">0</span>
-STAT flow_group.cbregistered.NODE <span class="hljs-number">0</span>
-STAT flow_group.limit.NODE <span class="hljs-number">0</span>
-STAT flow_group.bwdiscarded.NODE <span class="hljs-number">0</span>
-STAT flow_group.sent_ok.NODE <span class="hljs-number">85</span>
-STAT flow_group.sent_bytes.NODE <span class="hljs-number">6009</span>
+STAT flow_group.direct_dispatched.<span class="hljs-keyword">NODE</span> <span class="hljs-title">66</span>
+STAT flow_group.deferred.<span class="hljs-keyword">NODE</span> <span class="hljs-title">0</span>
+STAT flow_group.discarded.<span class="hljs-keyword">NODE</span> <span class="hljs-title">0</span>
+STAT flow_group.cbregistered.<span class="hljs-keyword">NODE</span> <span class="hljs-title">0</span>
+STAT flow_group.limit.<span class="hljs-keyword">NODE</span> <span class="hljs-title">0</span>
+STAT flow_group.bwdiscarded.<span class="hljs-keyword">NODE</span> <span class="hljs-title">0</span>
+STAT flow_group.sent_ok.<span class="hljs-keyword">NODE</span> <span class="hljs-title">85</span>
+STAT flow_group.sent_bytes.<span class="hljs-keyword">NODE</span> <span class="hljs-title">6009</span>
 ...
 </code></pre>
 <p>Histograms showing the latency incurred by traffic shaping are also available:</p>

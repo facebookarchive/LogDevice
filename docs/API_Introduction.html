@@ -82,7 +82,7 @@ will spawn several worker threads to enable it to scale. All <code>Client</code>
 
 <span class="hljs-comment">// ...</span>
 
-<span class="hljs-built_in">std</span>::<span class="hljs-built_in">shared_ptr</span>&lt;facebook::logdevice::Client&gt; client =
+<span class="hljs-built_in">std</span>::<span class="hljs-built_in">shared_ptr</span>&lt;facebook::logdevice::<span class="hljs-built_in">Client</span>&gt; client =
     facebook::logdevice::ClientFactory().create(
       <span class="hljs-comment">// path to the config file</span>
       <span class="hljs-string">"zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf"</span>);
@@ -128,7 +128,7 @@ Some applications use this context to include state or tracking information for 
   <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">onSuccess</span><span class="hljs-params">(<span class="hljs-keyword">logid_t</span> <span class="hljs-comment">/* unused */</span>,
                  ContextSet contexts,
                  <span class="hljs-keyword">const</span> DataRecordAttributes&amp; <span class="hljs-comment">/* unused */</span>)</span> override </span>{
-    <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"BufferedWriterCallback: a batch of "</span> &lt;&lt; contexts.size()
+    <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"BufferedWriterCallback: a batch of "</span> &lt;&lt; contexts.<span class="hljs-built_in">size</span>()
               &lt;&lt; <span class="hljs-string">" records successfully written ."</span> &lt;&lt; <span class="hljs-string">'\n'</span>;
     }
 

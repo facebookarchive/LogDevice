@@ -88,49 +88,49 @@ The same file can be used to create a client, for which it is passed in the cons
 <p>Both of these have a delta and and snapshot log. Their log ranges are hard-coded, but their replication can be <a href="/docs/Logs.html">configured dynamically</a>.
 Since a lot of LogDevice internals depend on these logs, you want higher fault-tolerance than normal data logs.</p>
 <pre><code class="hljs"><span class="hljs-attr">"internal_logs":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">    "config_log_deltas":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">        "extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">            "node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
-<span class="hljs-attr">            "rack":</span> <span class="hljs-number">3</span>
+    <span class="hljs-attr">"config_log_deltas":</span> <span class="hljs-string">{</span>
+        <span class="hljs-attr">"extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"replicate_across":</span> <span class="hljs-string">{</span>
+            <span class="hljs-attr">"node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"rack":</span> <span class="hljs-number">3</span>
         <span class="hljs-string">},</span>
-<span class="hljs-attr">        "scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "synced_copies":</span> <span class="hljs-number">0</span>
+        <span class="hljs-attr">"scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"synced_copies":</span> <span class="hljs-number">0</span>
     <span class="hljs-string">},</span>
-<span class="hljs-attr">    "config_log_snapshots":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">        "extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">            "node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
-<span class="hljs-attr">            "rack":</span> <span class="hljs-number">3</span>
+    <span class="hljs-attr">"config_log_snapshots":</span> <span class="hljs-string">{</span>
+        <span class="hljs-attr">"extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"replicate_across":</span> <span class="hljs-string">{</span>
+            <span class="hljs-attr">"node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"rack":</span> <span class="hljs-number">3</span>
         <span class="hljs-string">},</span>
-<span class="hljs-attr">        "scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "synced_copies":</span> <span class="hljs-number">0</span>
+        <span class="hljs-attr">"scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"synced_copies":</span> <span class="hljs-number">0</span>
     <span class="hljs-string">},</span>
-<span class="hljs-attr">    "event_log_deltas":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">        "extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">            "node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
-<span class="hljs-attr">            "rack":</span> <span class="hljs-number">3</span>
+    <span class="hljs-attr">"event_log_deltas":</span> <span class="hljs-string">{</span>
+        <span class="hljs-attr">"extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"replicate_across":</span> <span class="hljs-string">{</span>
+            <span class="hljs-attr">"node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"rack":</span> <span class="hljs-number">3</span>
         <span class="hljs-string">},</span>
-<span class="hljs-attr">        "scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "synced_copies":</span> <span class="hljs-number">0</span>
+        <span class="hljs-attr">"scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"synced_copies":</span> <span class="hljs-number">0</span>
     <span class="hljs-string">},</span>
-<span class="hljs-attr">    "event_log_snapshots":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">        "extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "replicate_across":</span> <span class="hljs-string">{</span>
-<span class="hljs-attr">            "node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
-<span class="hljs-attr">            "rack":</span> <span class="hljs-number">3</span>
+    <span class="hljs-attr">"event_log_snapshots":</span> <span class="hljs-string">{</span>
+        <span class="hljs-attr">"extra_copies":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"max_writes_in_flight":</span> <span class="hljs-number">2000</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"nodeset_size":</span> <span class="hljs-number">20</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"replicate_across":</span> <span class="hljs-string">{</span>
+            <span class="hljs-attr">"node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+            <span class="hljs-attr">"rack":</span> <span class="hljs-number">3</span>
         <span class="hljs-string">},</span>
-<span class="hljs-attr">        "scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
-<span class="hljs-attr">        "synced_copies":</span> <span class="hljs-number">0</span>
+        <span class="hljs-attr">"scd_enabled":</span> <span class="hljs-literal">false</span><span class="hljs-string">,</span>
+        <span class="hljs-attr">"synced_copies":</span> <span class="hljs-number">0</span>
     <span class="hljs-string">}</span>
 <span class="hljs-string">},</span>
 </code></pre>
@@ -138,32 +138,32 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
 <p>Metadata log configuration requires an explicit nodeset. This nodeset is crucial to the system and should always be read and write available. Metadata nodeset can be changed as long as a subset of the nodes is still maintained and data is overreplicated manually, but this is generally a dangerous operation.</p>
 <p>Replication constraints should <strong>not</strong> be changed without proper caution once the cluster is up and running.</p>
 <p>The metadata nodeset should contain as many failure domains as possible to ensure availability.</p>
-<pre><code class="hljs"><span class="hljs-string">"metadata_logs"</span>: {
-    <span class="hljs-string">"nodeset"</span>: [<span class="hljs-number">0</span>, <span class="hljs-number">5</span>, <span class="hljs-number">10</span>, <span class="hljs-number">15</span>, <span class="hljs-number">20</span>, <span class="hljs-number">25</span>, <span class="hljs-number">30</span>, <span class="hljs-number">35</span>, <span class="hljs-number">40</span>],
-    <span class="hljs-string">"replicate_across"</span>: {
-      <span class="hljs-string">"node"</span>: <span class="hljs-number">6</span>,
-      <span class="hljs-string">"rack"</span>: <span class="hljs-number">3</span>
-    }
-  },
+<pre><code class="hljs"><span class="hljs-attr">"metadata_logs":</span> <span class="hljs-string">{</span>
+    <span class="hljs-attr">"nodeset":</span> <span class="hljs-string">[0,</span> <span class="hljs-number">5</span><span class="hljs-string">,</span> <span class="hljs-number">10</span><span class="hljs-string">,</span> <span class="hljs-number">15</span><span class="hljs-string">,</span> <span class="hljs-number">20</span><span class="hljs-string">,</span> <span class="hljs-number">25</span><span class="hljs-string">,</span> <span class="hljs-number">30</span><span class="hljs-string">,</span> <span class="hljs-number">35</span><span class="hljs-string">,</span> <span class="hljs-number">40</span><span class="hljs-string">],</span>
+    <span class="hljs-attr">"replicate_across":</span> <span class="hljs-string">{</span>
+      <span class="hljs-attr">"node":</span> <span class="hljs-number">6</span><span class="hljs-string">,</span>
+      <span class="hljs-attr">"rack":</span> <span class="hljs-number">3</span>
+    <span class="hljs-string">}</span>
+  <span class="hljs-string">},</span>
 </code></pre>
 <h2><a class="anchor" aria-hidden="true" id="nodes-nodes"></a><a href="#nodes-nodes" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Nodes (<code>nodes</code>)</h2>
 <p>Nodes is an array of node objects. An example node object would be:</p>
-<pre><code class="hljs">{
-    <span class="hljs-string">"generation"</span>: <span class="hljs-number">1</span>,
-    <span class="hljs-string">"gossip_port"</span>: <span class="hljs-number">4441</span>,
-    <span class="hljs-string">"host"</span>: <span class="hljs-string">"127.0.0.1:4440"</span>,
-    <span class="hljs-string">"roles"</span>: [
-        <span class="hljs-string">"sequencer"</span>,
+<pre><code class="hljs"><span class="hljs-string">{</span>
+    <span class="hljs-attr">"generation":</span> <span class="hljs-number">1</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"gossip_port":</span> <span class="hljs-number">4441</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"host":</span> <span class="hljs-string">"127.0.0.1:4440"</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"roles":</span> <span class="hljs-string">[</span>
+        <span class="hljs-string">"sequencer"</span><span class="hljs-string">,</span>
         <span class="hljs-string">"storage"</span>
-    ],
-    <span class="hljs-string">"sequencer"</span>: <span class="hljs-literal">true</span>,
-    <span class="hljs-string">"storage"</span>: <span class="hljs-string">"read-write"</span>,
-    <span class="hljs-string">"storage_weight"</span>: <span class="hljs-number">2</span>,
-    <span class="hljs-string">"location"</span>: <span class="hljs-string">"abc.def.gh.ij.kl"</span>,
-    <span class="hljs-string">"node_id"</span>: <span class="hljs-number">0</span>,
-    <span class="hljs-string">"num_shards"</span>: <span class="hljs-number">15</span>,
-    <span class="hljs-string">"ssl_port"</span>: <span class="hljs-number">4443</span>,
-},
+    <span class="hljs-string">],</span>
+    <span class="hljs-attr">"sequencer":</span> <span class="hljs-literal">true</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"storage":</span> <span class="hljs-string">"read-write"</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"storage_weight":</span> <span class="hljs-number">2</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"location":</span> <span class="hljs-string">"abc.def.gh.ij.kl"</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"node_id":</span> <span class="hljs-number">0</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"num_shards":</span> <span class="hljs-number">15</span><span class="hljs-string">,</span>
+    <span class="hljs-attr">"ssl_port":</span> <span class="hljs-number">4443</span><span class="hljs-string">,</span>
+<span class="hljs-string">},</span>
 </code></pre>
 <h3><a class="anchor" aria-hidden="true" id="node-id-node_id"></a><a href="#node-id-node_id" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Node ID (<code>node_id</code>)</h3>
 <p>A unique identifier for a node. This should not be changed during the lifetime of a host.</p>
@@ -174,9 +174,9 @@ For IPv6, the <code>[::1]:4440</code> format can be used.</p>
 <p>Location is used to encode the failure domain of a the host. This is used for data placement, based on the <a href="/docs/Logs.html">log configuration</a></p>
 <p>The format of the string is: <code>region.datacenter.cluster.row.rack</code>.
 As an example, a log configuration using:</p>
-<pre><code class="hljs"><span class="hljs-string">"replicate_across"</span>: {
-      <span class="hljs-string">"rack"</span>: <span class="hljs-number">3</span>
-}
+<pre><code class="hljs"><span class="hljs-attr">"replicate_across":</span> <span class="hljs-string">{</span>
+      <span class="hljs-attr">"rack":</span> <span class="hljs-number">3</span>
+<span class="hljs-string">}</span>
 </code></pre>
 <p>can be placed on machines with 3 different rack identifiers (but could share same <code>region.datacenter.cluster.row</code>):</p>
 <ul>
