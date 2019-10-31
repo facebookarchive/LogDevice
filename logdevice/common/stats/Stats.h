@@ -1239,6 +1239,31 @@ class PerShardStatToken {
     }                                                           \
   } while (0)
 
+#define INCR_FOR_LATENCY_THRESHOLD(stats_struct, threshold, value)          \
+  do {                                                                      \
+    constexpr int usInMs = 1000;                                            \
+    if (((value)*usInMs) >= (threshold)) {                                  \
+      STAT_INCR(stats_struct, client.append_requests_over_##threshold##ms); \
+    }                                                                       \
+  } while (0)
+
+#define CLIENT_LATENCY_COUNTERS(stats_struct, value)       \
+  do {                                                     \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 2, value);    \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 4, value);    \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 8, value);    \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 16, value);   \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 32, value);   \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 64, value);   \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 128, value);  \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 256, value);  \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 512, value);  \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 1024, value); \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 2048, value); \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 4096, value); \
+    INCR_FOR_LATENCY_THRESHOLD(stats_struct, 8192, value); \
+  } while (0);
+
 #define PER_SHARD_STAT_OP(stats_struct, name, shard, value, op)         \
   do {                                                                  \
     if ((stats_struct) && (stats_struct)->get().per_shard_stats &&      \

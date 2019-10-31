@@ -145,6 +145,7 @@ AppendRequest::~AppendRequest() {
   if (stats) {
     if (client_status == E::OK) {
       CLIENT_HISTOGRAM_ADD(stats, append_latency, latency_usec);
+      CLIENT_LATENCY_COUNTERS(stats, latency_usec);
     }
 
     // bump stats to track whether REDIRECT_NOT_ALIVE flag is effective

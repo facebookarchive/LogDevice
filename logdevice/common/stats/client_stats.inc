@@ -192,4 +192,18 @@ STAT_DEFINE(metadata_api_total, SUM)
 STAT_DEFINE(append_requests, SUM)
 STAT_DEFINE(unexpected_append_failures, SUM)
 
+// Latency
+STAT_DEFINE(append_requests_over_2ms, SUM)
+STAT_DEFINE(append_requests_over_4ms, SUM)
+STAT_DEFINE(append_requests_over_8ms, SUM)
+STAT_DEFINE(append_requests_over_16ms, SUM)
+STAT_DEFINE(append_requests_over_32ms, SUM)
+STAT_DEFINE(append_requests_over_64ms, SUM)
+STAT_DEFINE(append_requests_over_128ms, SUM)
+STAT_DEFINE(append_requests_over_256ms, SUM)
+STAT_DEFINE(append_requests_over_512ms, SUM)
+STAT_DEFINE(append_requests_over_1024ms, SUM)
+STAT_DEFINE(append_requests_over_2048ms, SUM)
+STAT_DEFINE(append_requests_over_4096ms, SUM)
+STAT_DEFINE(append_requests_over_8192ms, SUM)
 #undef STAT_DEFINE
