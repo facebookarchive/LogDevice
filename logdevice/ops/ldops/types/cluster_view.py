@@ -75,6 +75,7 @@ class ClusterView:
                     )
                 )
             )
+        # pyre-fixme[7]: Expected `Tuple[int, ...]` but got `Optional[Tuple[int, ...]]`.
         return self._node_indexes_tuple
 
     @property
@@ -83,6 +84,8 @@ class ClusterView:
             self._node_index_to_node_config_dict = {
                 nc.node_index: nc for nc in self.nodes_config
             }
+        # pyre-fixme[7]: Expected `Dict[int, NodeConfig]` but got
+        #  `Optional[Dict[int, NodeConfig]]`.
         return self._node_index_to_node_config_dict
 
     @property
@@ -91,6 +94,8 @@ class ClusterView:
             self._node_index_to_node_state_dict = {
                 ns.node_index: ns for ns in self.nodes_state
             }
+        # pyre-fixme[7]: Expected `Dict[int, NodeState]` but got `Optional[Dict[int,
+        #  NodeState]]`.
         return self._node_index_to_node_state_dict
 
     @property
@@ -132,6 +137,7 @@ class ClusterView:
             self._maintenance_ids_tuple = tuple(
                 sorted(str(mnt.group_id) for mnt in self.maintenances)
             )
+        # pyre-fixme[7]: Expected `Tuple[str, ...]` but got `Optional[Tuple[str, ...]]`.
         return self._maintenance_ids_tuple
 
     @property
@@ -140,6 +146,8 @@ class ClusterView:
             self._maintenance_id_to_maintenance_dict = {
                 str(mnt.group_id): mnt for mnt in self.maintenances
             }
+        # pyre-fixme[7]: Expected `Dict[str, MaintenanceDefinition]` but got
+        #  `Optional[Dict[str, MaintenanceDefinition]]`.
         return self._maintenance_id_to_maintenance_dict
 
     @property
@@ -185,6 +193,8 @@ class ClusterView:
                 )
                 for mnt_id in self._maintenance_ids
             }
+        # pyre-fixme[7]: Expected `Dict[str, MaintenanceView]` but got
+        #  `Optional[Dict[str, MaintenanceView]]`.
         return self._maintenance_id_to_maintenance_view_dict
 
     @property
@@ -199,6 +209,8 @@ class ClusterView:
                 )
                 for ni in self._node_indexes
             }
+        # pyre-fixme[7]: Expected `Dict[int, Tuple[MaintenanceDefinition, ...]]` but
+        #  got `Optional[Dict[int, Tuple[MaintenanceDefinition, ...]]]`.
         return self._node_index_to_maintenances_dict
 
     @property
@@ -212,6 +224,8 @@ class ClusterView:
                 )
                 for ni in self._node_indexes
             }
+        # pyre-fixme[7]: Expected `Dict[int, NodeView]` but got `Optional[Dict[int,
+        #  NodeView]]`.
         return self._node_index_to_node_view_dict
 
     @property
@@ -220,6 +234,8 @@ class ClusterView:
             self._node_name_to_node_view_dict = {
                 nv.node_name: nv for nv in self._node_index_to_node_view.values()
             }
+        # pyre-fixme[7]: Expected `Dict[str, NodeView]` but got `Optional[Dict[str,
+        #  NodeView]]`.
         return self._node_name_to_node_view_dict
 
     ### Public interface
