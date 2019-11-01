@@ -26,9 +26,14 @@ struct Params {
     return *this;                      \
   }
 
-  FIELD(int, node_count, 25)
+  FIELD(int, node_count, 5)
   FIELD(int, max_boycott_count, 1)
   FIELD(std::chrono::milliseconds, controller_check_period, 100)
+  // Use short retention to make sure the variance added by boycotted nodes
+  // eventuall gets forgotten.
+  FIELD(std::chrono::milliseconds,
+        node_stats_retention_on_nodes,
+        std::chrono::seconds{20})
   FIELD(std::chrono::milliseconds,
         controller_aggregation_period,
         std::chrono::seconds{5})
@@ -38,7 +43,7 @@ struct Params {
   FIELD(std::chrono::milliseconds, boycott_grace_period, 0)
   FIELD(std::chrono::milliseconds, boycott_duration, DEFAULT_TEST_TIMEOUT)
   // use a low sensitivity to not require as many nodes
-  FIELD(unsigned int, boycott_std, 1)
+  FIELD(double, boycott_std, 1)
   FIELD(unsigned int, required_client_count, 1)
   FIELD(double, remove_worst_percentage, 0.0)
   FIELD(unsigned int, send_worst_client_count, 1)
@@ -137,9 +142,9 @@ class AppendThread {
           ++results[i][s];
           report_stats(false);
 
-          // Sleep a bit to avoid going way too fast.
+          // Send 100 appends per second.
           /* sleep override */
-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
       }
       report_stats(true);
@@ -175,6 +180,8 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
              * controllers */
             .setParam("--node-stats-controller-check-period",
                       msString(params.controller_check_period))
+            .setParam("--node-stats-retention-on-nodes",
+                      msString(params.node_stats_retention_on_nodes))
             /* Period at which controllers collect stats */
             .setParam("--node-stats-controller-aggregation-period",
                       msString(params.controller_aggregation_period))
@@ -310,7 +317,7 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
 
     // use a small timeout not to get stuck
     auto client = cluster->createClient(
-        std::chrono::milliseconds{50}, std::move(client_settings));
+        std::chrono::seconds{3}, std::move(client_settings));
 
     return client;
   }
@@ -387,51 +394,50 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
   void
   waitUntilBoycottsOnAllNodes(const std::vector<node_index_t>& outlier_nodes,
                               int boycott_count) {
-    std::string wait_until_str{"All nodes have agreed on the " +
-                               std::to_string(boycott_count) +
-                               " outliers to boycott"};
-    wait_until(wait_until_str.c_str(), [&] {
-      std::vector<std::set<node_index_t>> boycotts_on_nodes(
-          cluster->getNodes().size());
-
-      for (auto& node : cluster->getNodes()) {
-        for (auto boycott_entry : node.second->gossipBoycottState()) {
-          if (boycott_entry.second) {
-            // the node is boycotted
-            boycotts_on_nodes[node.first].emplace(
-                // names are "N" + node_index. Simply remove the N
-                std::stoi(boycott_entry.first.substr(1)));
-            ld_info("N%i thinks that %s is BOYCOTTED",
-                    node.first,
-                    boycott_entry.first.c_str());
+    wait_until(
+        folly::sformat("All nodes agreed on {} nodes to boycott from {}",
+                       boycott_count,
+                       toString(outlier_nodes))
+            .c_str(),
+        [&] {
+          std::vector<std::set<node_index_t>> boycotts_on_nodes(
+              cluster->getNodes().size());
+          for (auto& node : cluster->getNodes()) {
+            for (auto boycott_entry : node.second->gossipBoycottState()) {
+              if (boycott_entry.second) {
+                // the node is boycotted
+                boycotts_on_nodes[node.first].emplace(
+                    // names are "N" + node_index. Simply remove the N
+                    std::stoi(boycott_entry.first.substr(1)));
+              }
+            }
           }
-        }
-      }
+          ld_info("Boycotts: %s", toString(boycotts_on_nodes).c_str());
 
-      return
-          // check that the boycotted elements are part of the outlier nodes and
-          // that it's the correct size
-          std::all_of(
-              boycotts_on_nodes.cbegin(),
-              boycotts_on_nodes.cend(),
-              [&](const auto& set) {
-                return set.size() == boycott_count &&
-                    // the boycotts should all be any of the given outliers
-                    std::all_of(set.cbegin(),
-                                set.cend(),
-                                [&](const auto& boycotted_node) {
-                                  return std::find(outlier_nodes.cbegin(),
-                                                   outlier_nodes.cend(),
-                                                   boycotted_node) !=
-                                      outlier_nodes.cend();
-                                });
-              }) &&
-          // check that every element is equal to the one before => all
-          // elements are equal
-          std::equal(boycotts_on_nodes.cbegin() + 1,
-                     boycotts_on_nodes.cend(),
-                     boycotts_on_nodes.cbegin());
-    });
+          return
+              // check that the boycotted elements are part of the outlier nodes
+              // and that it's the correct size
+              std::all_of(
+                  boycotts_on_nodes.cbegin(),
+                  boycotts_on_nodes.cend(),
+                  [&](const auto& set) {
+                    return set.size() == boycott_count &&
+                        // the boycotts should all be any of the given outliers
+                        std::all_of(set.cbegin(),
+                                    set.cend(),
+                                    [&](const auto& boycotted_node) {
+                                      return std::find(outlier_nodes.cbegin(),
+                                                       outlier_nodes.cend(),
+                                                       boycotted_node) !=
+                                          outlier_nodes.cend();
+                                    });
+                  }) &&
+              // check that every element is equal to the one before => all
+              // elements are equal
+              std::equal(boycotts_on_nodes.cbegin() + 1,
+                         boycotts_on_nodes.cend(),
+                         boycotts_on_nodes.cbegin());
+        });
   }
 
   // the default log for a node is its index + 1
@@ -598,11 +604,12 @@ TEST_F(NodeStatsControllerIntegrationTest, Boycott1Node2Outliers) {
 }
 
 TEST_F(NodeStatsControllerIntegrationTest, Boycott2Nodes) {
-  unsigned int node_count = 10;
+  unsigned int node_count = 5;
   std::vector<node_index_t> outlier_nodes{1, 3};
 
   initializeCluster(
-      Params{}.set_max_boycott_count(2).set_node_count(node_count));
+      Params{}.set_max_boycott_count(2).set_boycott_std(0.5).set_node_count(
+          node_count));
 
   auto client = createClient();
 
@@ -942,7 +949,7 @@ TEST_F(NodeStatsControllerIntegrationTest,
         SequencerState state;
         auto status = IntegrationTestUtils::getSeqState(
             client.get(), log_id, state, true);
-        EXPECT_EQ(E::OK, status);
+        ASSERT_EQ(E::OK, status);
         EXPECT_NE(outlier_node, state.node.index());
       });
 }
