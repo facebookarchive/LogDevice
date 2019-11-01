@@ -38,6 +38,9 @@ class NodesConfigurationPublisher {
  private:
   void publish();
 
+  // Locked by publish(), protects all the fields below.
+  std::mutex mutex_;
+
   std::shared_ptr<UpdateableConfig> config_;
   UpdateableSettings<Settings> settings_;
   configuration::nodes::NodesConfigurationTracer tracer_;

@@ -170,9 +170,16 @@ class UpdateableConfigTmpl : public UpdateableConfigBase {
 
   /**
    * Updates this config with a Config instance, applying any
-   * existing, local, configuration overrides.  This can be called, for
+   * existing, local, configuration overrides. This can be called, for
    * example, by a background monitoring thread when it detects a change
    * in the config file.
+   *
+   * If the config can be updated by multiple entities from different threads,
+   * you probably want to use updateIfEqual() instead of update() to avoid
+   * race conditions. E.g.: config is updated from v1 to v2, a thread begins
+   * publishing the v2 config but hesitates for a bit, then config is updated
+   * to v3, and another thread quickly publishes v3, then the first thread
+   * wakes up and rolls back to v2.
    *
    * Callbacks subscribed via subscribeToServerConfigUpdates() are invoked.
    *
@@ -181,7 +188,18 @@ class UpdateableConfigTmpl : public UpdateableConfigBase {
    * @returns 0 on success, -1 on failure. Possible failures:
    *  - INVALID_CONFIG: one of the hooks rejected the config.
    */
-  int update(std::shared_ptr<Config> ptr);
+  int update(std::shared_ptr<Config> new_base_config) {
+    return updateIfEqual(std::move(new_base_config), folly::none);
+  }
+
+  /**
+   * Same as update(), but only does the update if current config pointer (as
+   * returned by get()) is equal to existing_base_config. The check is done
+   * under a mutex, atomically with the update. If pointer is not equal, returns
+   * -1 and sets err to E::STALE.
+   */
+  int updateIfEqual(std::shared_ptr<Config> new_base_config,
+                    folly::Optional<std::shared_ptr<Config>> existing_config);
 
   /**
    * Update/cancel local configuration overrides. This is typically
@@ -307,6 +325,7 @@ class UpdateableConfigTmpl : public UpdateableConfigBase {
     hooks_.erase(handle.handle_);
   }
 
+  // Updated with locked mutex_.
   UpdateableSharedPtr<Config> config_;
 
   // List of registered config hooks
@@ -376,56 +395,59 @@ int UpdateableConfigTmpl<Config, Overrides>::updateOverrides(
     // a valid config. Commit.
     config_overrides_ = std::move(new_overrides);
     base_config_ = std::move(base_config);
+
+    // Publish
+    config_.update(std::move(new_config));
   }
 
-  // Publish
-  config_.update(std::move(new_config));
   notify();
   return 0;
 }
 
 template <class Config, class Overrides>
-int UpdateableConfigTmpl<Config, Overrides>::update(
-    std::shared_ptr<Config> base_config) {
+int UpdateableConfigTmpl<Config, Overrides>::updateIfEqual(
+    std::shared_ptr<Config> new_base_config,
+    folly::Optional<std::shared_ptr<Config>> existing_config) {
   folly::stop_watch<std::chrono::milliseconds> watch;
-  uint64_t lock_acquired_ms = 0;
-  uint64_t overrides_applied_ms = 0;
-  uint64_t hooks_executed_ms = 0;
-  uint64_t config_updated_ms = 0;
-  uint64_t notifications_done_ms = 0;
-  std::shared_ptr<Config> new_config;
-  {
-    // To ensure this method can return an error leaving the existing
-    // and known valid Configuration and Overrides in effect, all updates
-    // are performed on copies and then committed only after validation
-    // succeeds.
-    //
-    // Note: We remember the configuration without overrides (committed
-    //       to base_config_) and publish the config resulting from applying
-    //       any overrides (in configuration_). These copies of the
-    //       configuration may be identical.
-    std::lock_guard<std::mutex> guard(mutex_);
-    lock_acquired_ms = watch.lap().count();
 
-    new_config = config_overrides_.apply(base_config);
-    overrides_applied_ms = watch.lap().count();
-    // Validate config.
-    for (auto& hook : hooks_) {
-      if (!hook(*new_config)) {
-        err = E::INVALID_CONFIG;
-        return -1;
-      }
-    }
-    hooks_executed_ms = watch.lap().count();
+  // To ensure this method can return an error leaving the existing
+  // and known valid Configuration and Overrides in effect, all updates
+  // are performed on copies and then committed only after validation
+  // succeeds.
+  //
+  // Note: We remember the configuration without overrides (committed
+  //       to base_config_) and publish the config resulting from applying
+  //       any overrides (in configuration_). These copies of the
+  //       configuration may be identical.
+  std::unique_lock<std::mutex> guard(mutex_);
+  uint64_t lock_acquired_ms = watch.lap().count();
 
-    base_config_ = std::move(base_config);
+  if (existing_config.hasValue() && existing_config.value() != config_.get()) {
+    err = E::STALE;
+    return -1;
   }
+
+  std::shared_ptr<Config> new_config = config_overrides_.apply(new_base_config);
+  uint64_t overrides_applied_ms = watch.lap().count();
+  // Validate config.
+  for (auto& hook : hooks_) {
+    if (!hook(*new_config)) {
+      err = E::INVALID_CONFIG;
+      return -1;
+    }
+  }
+  uint64_t hooks_executed_ms = watch.lap().count();
+
+  base_config_ = std::move(new_base_config);
 
   // Publish
   config_.update(std::move(new_config));
-  config_updated_ms = watch.lap().count();
+  uint64_t config_updated_ms = watch.lap().count();
+
+  guard.unlock();
+
   notify();
-  notifications_done_ms = watch.lap().count();
+  uint64_t notifications_done_ms = watch.lap().count();
 
   ld_info("Config updated. Timings: Acquiring lock: %lums, applying overrides: "
           "%lums, hook execution: %lums, config update: %lums, notifications: "

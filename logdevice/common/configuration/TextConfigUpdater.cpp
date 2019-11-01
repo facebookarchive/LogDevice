@@ -399,14 +399,7 @@ int TextConfigUpdaterImpl::compareServerConfig(
     auto old_metadata = old_config->getMainConfigMetadata();
     auto new_metadata = new_config->getMainConfigMetadata();
 
-    if (hashes_equal(old_metadata, new_metadata)) {
-      ld_info("Received same config as already running "
-              "(version: %u - hash: %s).",
-              new_version.val(),
-              new_metadata.hash.c_str());
-      STAT_INCR(stats_, config_update_same_version);
-      return 0;
-    } else {
+    if (!hashes_equal(old_metadata, new_metadata)) {
       // the hashes don't match. log a warning and proceed with the
       // update assuming it is newer.
       ld_warning("Received config with same version (%u) but mismatched "
@@ -415,6 +408,20 @@ int TextConfigUpdaterImpl::compareServerConfig(
                  old_metadata.hash.c_str(),
                  new_metadata.hash.c_str());
       STAT_INCR(stats_, config_update_hash_mismatch);
+    } else if (old_metadata.logs_config_may_be_outdated) {
+      ld_info("Received config with same version (%u) and hash (%s), but "
+              "updating anyway because logs config may be outdated, because "
+              "our current main config came from config synchronization, which "
+              "doesn't update logs config",
+              new_version.val(),
+              old_metadata.hash.c_str());
+    } else {
+      ld_info("Received same config as already running "
+              "(version: %u - hash: %s).",
+              new_version.val(),
+              new_metadata.hash.c_str());
+      STAT_INCR(stats_, config_update_same_version);
+      return 0;
     }
   }
 
@@ -431,35 +438,46 @@ TextConfigUpdaterImpl::pushServerConfig(
     return ConfigUpdateResult::SKIPPED;
   }
 
-  if (compareServerConfig(server_config->get(), new_config) <= 0) {
-    // ServerConfig can have extra includes (logsconfig) which might need
-    // a force update. Eventually, we'll pull LogsConfig out of the ServerConfig
-    // metadata entirely. When includes have changed, we need to return a
-    // force update
-    auto old_metadata = server_config->get()->getIncludedConfigMetadata();
-    auto new_metadata = new_config->getIncludedConfigMetadata();
-    if (hashes_equal(old_metadata, new_metadata)) {
-      return ConfigUpdateResult::SKIPPED;
-    } else {
-      return ConfigUpdateResult::FORCE_RELOAD_LOGSCONFIG;
+  // Compare-and-swap loop.
+  while (true) {
+    std::shared_ptr<ServerConfig> current_config = server_config->get();
+
+    if (compareServerConfig(current_config, new_config) <= 0) {
+      // ServerConfig can have extra includes (logsconfig) which might need
+      // a force update. Eventually, we'll pull LogsConfig out of the
+      // ServerConfig metadata entirely. When includes have changed, we need to
+      // return a force update
+      const ServerConfig::ConfigMetadata& old_metadata =
+          current_config->getIncludedConfigMetadata();
+      const ServerConfig::ConfigMetadata& new_metadata =
+          new_config->getIncludedConfigMetadata();
+      return hashes_equal(old_metadata, new_metadata)
+          ? ConfigUpdateResult::SKIPPED
+          : ConfigUpdateResult::FORCE_RELOAD_LOGSCONFIG;
     }
-  } else {
+
     // Need to increase the stat _before_ publishing config because some
     // integration tests rely on it.
     STAT_INCR(stats_, updated_config);
 
-    int rv = server_config->update(new_config);
+    int rv = server_config->updateIfEqual(new_config, current_config);
 
-    if (rv != 0) {
-      STAT_INCR(stats_, config_update_invalid);
-      ld_error("Server config update was rejected");
-      return ConfigUpdateResult::INVALID;
-    } else {
+    if (rv == 0) {
       ld_info("Updated config (version: %u - hash: %s)",
               new_config->getVersion().val(),
               new_config->getMainConfigMetadata().hash.c_str());
       return ConfigUpdateResult::UPDATED;
     }
+    if (err != E::STALE) {
+      STAT_INCR(stats_, config_update_invalid);
+      ld_error("Server config update was rejected");
+      return ConfigUpdateResult::INVALID;
+    }
+
+    // Config was changed by someone else while we were comparing versions.
+    // Try again.
+    ld_info("Config was changed during processing of a config update. "
+            "This should be rare. Retrying.");
   }
 }
 

@@ -322,8 +322,8 @@ CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
   std::string config_json = uncompressed->moveToFbString().toStdString();
 
   // Parse configuration with empty logs config
-  std::unique_ptr<ServerConfig> server_config =
-      ServerConfig::fromJson(config_json);
+  auto server_config =
+      std::shared_ptr<ServerConfig>(ServerConfig::fromJson(config_json));
   if (!server_config) {
     ld_error("Parsing CONFIG_CHANGED_Message body failed with error %s",
              error_description(err));
@@ -339,6 +339,7 @@ CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
   metadata.modified_time = milliseconds(header_.modified_time);
   metadata.loaded_time =
       duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+  metadata.logs_config_may_be_outdated = true;
   server_config->setMainConfigMetadata(metadata);
 
   server_config->setServerOrigin(header_.server_origin);
@@ -364,11 +365,42 @@ CONFIG_CHANGED_Message::handleUpdateAction(const Address& from) {
     }
   }
 
-  updateable_server_config->update(std::move(server_config));
-  WORKER_STAT_INCR(config_changed_update);
-  ld_info("Config updated to version %u by CONFIG_CHANGED_Message from %s",
-          header_.getServerConfigVersion().val(),
-          Sender::describeConnection(from).c_str());
+  // Compare-and-swap loop for publishing the received config if its version
+  // is still higher than our current config's version.
+  while (true) {
+    std::shared_ptr<ServerConfig> current_config =
+        updateable_server_config->get();
+    if (server_config->getVersion() <= current_config->getVersion()) {
+      // At first it looked like the received version is higher than anything
+      // we've seen (updateLastReceivedVersion() returned success), but by the
+      // time we went to actually pass the "new" version to
+      // UpdateableConfigTmpl, UpdateableConfigTmpl already has a higher
+      // version. This should be rare.
+      ld_info("Not updating config from version %d to version %u by "
+              "CONFIG_CHANGED_Message from %s",
+              server_config->getVersion().val(),
+              header_.getServerConfigVersion().val(),
+              Sender::describeConnection(from).c_str());
+      break;
+    }
+    int rv =
+        updateable_server_config->updateIfEqual(server_config, current_config);
+    if (rv == 0) {
+      WORKER_STAT_INCR(config_changed_update);
+      ld_info("Config updated to version %u by CONFIG_CHANGED_Message from %s",
+              header_.getServerConfigVersion().val(),
+              Sender::describeConnection(from).c_str());
+      break;
+    }
+    if (err != E::STALE) {
+      break;
+    }
+
+    // Config was updated by someone else while we were comparing versions.
+    // Try again.
+    ld_info("Config was changed during processing of a CONFIG_CHANGED_Message. "
+            "This should be rare. Retrying.");
+  }
 
   worker->sender().setPeerConfigVersion(
       from, *this, header_.getServerConfigVersion());

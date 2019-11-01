@@ -2647,6 +2647,15 @@ int Cluster::updateNodeAttributes(node_index_t index,
                                   configuration::StorageState storage_state,
                                   int sequencer_weight,
                                   folly::Optional<bool> enable_sequencing) {
+  ld_info("Updating attributes of N%d: storage_state %s, sequencer weight %d, "
+          "enable_sequencing %s",
+          (int)index,
+          storageStateToString(storage_state).c_str(),
+          sequencer_weight,
+          enable_sequencing.hasValue()
+              ? enable_sequencing.value() ? "true" : "false"
+              : "unchanged");
+
   // TODO: make it work with one config per nodes.
   ld_check(!one_config_per_node_);
   Configuration::Nodes nodes = config_->get()->serverConfig()->getNodes();

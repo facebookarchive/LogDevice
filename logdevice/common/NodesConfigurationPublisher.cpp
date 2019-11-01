@@ -41,6 +41,9 @@ NodesConfigurationPublisher::NodesConfigurationPublisher(
 }
 
 void NodesConfigurationPublisher::publish() {
+  // Different subscriptions can call publish() from different threads.
+  std::lock_guard lock(mutex_);
+
   auto settings = settings_.get();
   bool from_ncm = settings->enable_nodes_configuration_manager &&
       settings->use_nodes_configuration_manager_nodes_configuration &&
