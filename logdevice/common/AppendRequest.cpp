@@ -95,6 +95,8 @@ AppendRequest::AppendRequest(AppendRequest&& other) noexcept
               LSN_INVALID,
               std::chrono::duration_cast<std::chrono::milliseconds>(
                   std::chrono::system_clock::now().time_since_epoch())),
+      sequencer_node_(std::move(other.sequencer_node_)),
+      sequencer_router_flags_(std::move(other.sequencer_router_flags_)),
       creation_time_(other.creation_time_),
       timeout_(other.timeout_),
       callback_(std::move(other.callback_)),
@@ -105,14 +107,16 @@ AppendRequest::AppendRequest(AppendRequest&& other) noexcept
       previous_lsn_(std::move(other.previous_lsn_)),
       on_socket_close_(id_),
       router_(std::make_unique<SequencerRouter>(record_.logid, this)),
-      sequencer_node_(std::move(other.sequencer_node_)),
-      sequencer_router_flags_(std::move(other.sequencer_router_flags_)),
       append_probe_controller_(std::move(other.append_probe_controller_)),
       tracer_(std::move(other.tracer_)),
       buffered_writer_blob_flag_(std::move(other.buffered_writer_blob_flag_)),
       bypass_write_token_check_(std::move(other.bypass_write_token_check_)),
       append_redirected_to_dead_node_(
           std::move(other.append_redirected_to_dead_node_)) {
+  if (!string_payload_.empty()) {
+    // Point record_ to the new instance of string_payload_.
+    record_.payload = Payload(string_payload_.data(), string_payload_.size());
+  }
   if (!AppendRequest::clientThreadId) {
     AppendRequest::clientThreadId =
         std::max<unsigned>(1, ++AppendRequest::nextThreadId);

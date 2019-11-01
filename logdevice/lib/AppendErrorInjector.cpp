@@ -19,13 +19,14 @@ namespace {
  * an append request that simply destroys itself with the set status as soon
  * as it's executed
  */
-class DestroyWithStatusAppendRequest : public AppendRequest {
+class AppendRequestWrapper : public AppendRequest {
  public:
   // move from the request, and then let the unique_ptr go out of scope and
   // delete the original
-  DestroyWithStatusAppendRequest(std::unique_ptr<AppendRequest> original,
-                                 Status status)
-      : AppendRequest(std::move(*original)), destroy_status_(status) {}
+  AppendRequestWrapper(
+      std::unique_ptr<AppendRequest> original,
+      std::function<folly::Optional<Status>(logid_t, node_index_t)> cb)
+      : AppendRequest(std::move(*original)), cb_(cb) {}
 
  private:
   /**
@@ -37,40 +38,44 @@ class DestroyWithStatusAppendRequest : public AppendRequest {
    *  given status right away
    */
   void sendAppendMessage() override {
-    destroyWithStatus(destroy_status_);
+    folly::Optional<Status> st = cb_(getRecordLogID(), sequencer_node_.index());
+    if (st.hasValue()) {
+      if (st.value() == E::OK) {
+        // If we're injecting a success rather than an error, assign a fake
+        // non-INVALID LSN to avoid tripping an assert in ClientImpl.
+        record_.attrs.lsn = LSN_OLDEST;
+      }
+
+      destroyWithStatus(st.value());
+    } else {
+      AppendRequest::sendAppendMessage();
+    }
   }
 
-  Status destroy_status_;
+  std::function<folly::Optional<Status>(logid_t, node_index_t)> cb_;
 };
 } // namespace
 AppendErrorInjector::AppendErrorInjector(
     Status error_type,
     std::unordered_map<logid_t, double> fail_ratios)
-    : error_type_(error_type), fail_ratios_(std::move(fail_ratios)) {}
+    : cb_([error_type, fail_ratios](logid_t log,
+                                    node_index_t) -> folly::Optional<Status> {
+        auto it = fail_ratios.find(log);
+        if (it == fail_ratios.end() ||
+            folly::Random::randDouble01() >= it->second) {
+          return folly::none;
+        }
+        return error_type;
+      }) {}
 
-Status AppendErrorInjector::getErrorType() const {
-  return error_type_;
-}
-
-bool AppendErrorInjector::next(logid_t log) const {
-  auto it = fail_ratios_.find(log);
-  if (it == fail_ratios_.end()) {
-    return false;
-  }
-
-  return folly::Random::randDouble01() < it->second;
+std::function<folly::Optional<Status>(logid_t, node_index_t)>
+AppendErrorInjector::getCallback() const {
+  return cb_;
 }
 
 std::unique_ptr<AppendRequest> AppendErrorInjector::maybeReplaceRequest(
     std::unique_ptr<AppendRequest> req) const {
-  if (req && next(req->getRecordLogID())) {
-    std::unique_ptr<AppendRequest> new_req =
-        std::make_unique<DestroyWithStatusAppendRequest>(
-            std::move(req), error_type_);
-
-    return new_req;
-  }
-
-  return req;
+  return req ? std::make_unique<AppendRequestWrapper>(std::move(req), cb_)
+             : nullptr;
 }
 }} // namespace facebook::logdevice

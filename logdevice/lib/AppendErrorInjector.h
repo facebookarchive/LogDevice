@@ -11,6 +11,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include <folly/Optional.h>
+
+#include "logdevice/common/NodeID.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/types.h"
 
@@ -27,17 +30,19 @@ class AppendErrorInjector {
  public:
   AppendErrorInjector(Status error_type, logid_t log, double fail_ratio)
       : AppendErrorInjector(error_type, {{log, fail_ratio}}) {}
+  // `cb` will be called right before sending an APPEND message to a sequencer
+  // node. If `cb` returns non-folly::none, we won't send the APPEND and will
+  // complete the AppendRequest with the given status instead. E::OK is allowed,
+  // but keep in mind that the append callback will be called with LSN_OLDEST
+  // instead of a real LSN.
+  explicit AppendErrorInjector(
+      std::function<folly::Optional<Status>(logid_t, node_index_t)> cb)
+      : cb_(cb) {}
   AppendErrorInjector(Status error_type,
                       std::unordered_map<logid_t, double> fail_ratios);
-  /**
-   * @returns The status that the failed append should have
-   */
-  Status getErrorType() const;
-  /**
-   * @param log The log that is currently appended to
-   * @returns   true if this append should fail, false otherwise
-   */
-  bool next(logid_t log) const;
+
+  std::function<folly::Optional<Status>(logid_t, node_index_t)>
+  getCallback() const;
 
   /**
    * If an append is supposed to fail, the request will be replaced with an
@@ -53,8 +58,6 @@ class AppendErrorInjector {
   maybeReplaceRequest(std::unique_ptr<AppendRequest> req) const;
 
  private:
-  Status error_type_;
-
-  std::unordered_map<logid_t, double> fail_ratios_;
+  std::function<folly::Optional<Status>(logid_t, node_index_t)> cb_;
 };
 }} // namespace facebook::logdevice

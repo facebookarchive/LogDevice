@@ -18,30 +18,21 @@ TEST(AppendErrorInjectorTest, ZeroFailRatio) {
   logid_t log{1};
   AppendErrorInjector injector{Status::SEQNOBUFS, log, 0.0};
 
-  EXPECT_FALSE(injector.next(log));
+  EXPECT_FALSE(injector.getCallback()(log, 0).hasValue());
 }
 
 TEST(AppendErrorInjectorTest, OneFailRatio) {
   logid_t log{1};
-  AppendErrorInjector injector{Status::SEQNOBUFS, log, 1.0};
+  AppendErrorInjector injector{Status::NOTFOUND, log, 1.0};
 
-  EXPECT_TRUE(injector.next(log));
-}
-
-TEST(AppendErrorInjectorTest, ReturnsCorrectStatus) {
-  EXPECT_EQ(
-      Status::NOTFOUND,
-      (AppendErrorInjector{Status::NOTFOUND, logid_t{1}, 0.0}.getErrorType()));
-  EXPECT_EQ(
-      Status::TIMEDOUT,
-      (AppendErrorInjector{Status::TIMEDOUT, logid_t{1}, 0.0}.getErrorType()));
+  EXPECT_EQ(Status::NOTFOUND, injector.getCallback()(log, 0));
 }
 
 TEST(AppendErrorInjectorTest, DifferentLogs) {
   logid_t log1{1}, log2{2}, log3{3};
   AppendErrorInjector injector{Status::SEQNOBUFS, {{log1, 1.0}, {log2, 1.0}}};
 
-  EXPECT_TRUE(injector.next(log1));
-  EXPECT_TRUE(injector.next(log2));
-  EXPECT_FALSE(injector.next(log3));
+  EXPECT_EQ(Status::SEQNOBUFS, injector.getCallback()(log1, 0));
+  EXPECT_EQ(Status::SEQNOBUFS, injector.getCallback()(log2, 0));
+  EXPECT_FALSE(injector.getCallback()(log3, 0).hasValue());
 }

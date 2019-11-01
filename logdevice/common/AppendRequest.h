@@ -368,6 +368,11 @@ class AppendRequest : public AppendRequestBase,
   // this AppendRequest object was constructed on a client thread.
   DataRecord record_;
 
+  // Result of sequencer routing; this is the node we send an APPEND message
+  // to.
+  NodeID sequencer_node_;
+  SequencerRouter::flags_t sequencer_router_flags_;
+
  private:
   // Request creation time.  Latency is reported (for successful appends) from
   // this point up to just before we invoke the client callback.
@@ -409,10 +414,6 @@ class AppendRequest : public AppendRequestBase,
 
   // Router object used to find a sequencer node to send an APPEND message to.
   std::unique_ptr<SequencerRouter> router_;
-  // Result of sequencer routing; this is the node we send an APPEND message
-  // to.
-  NodeID sequencer_node_;
-  SequencerRouter::flags_t sequencer_router_flags_;
 
   AppendProbeController* append_probe_controller_ = nullptr;
 

@@ -359,7 +359,21 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
     auto raw_client = static_cast<ClientImpl*>(client);
     raw_client->setAppendErrorInjector(
         // fail every append with the status SEQNOBUFS
-        AppendErrorInjector{Status::SEQNOBUFS, std::move(outlier_logs)});
+        AppendErrorInjector{
+            [outlier_nodes = outlier_nodes, fail_ratios = fail_ratios](
+                logid_t, node_index_t node) -> folly::Optional<Status> {
+              size_t idx =
+                  std::find(outlier_nodes.begin(), outlier_nodes.end(), node) -
+                  outlier_nodes.begin();
+              if (idx == outlier_nodes.size()) {
+                // Don't return folly::none to avoid doing a real append, which
+                // might randomly fail and ruin our stats.
+                return E::OK;
+              }
+              return folly::Random::randDouble01() < fail_ratios[idx]
+                  ? E::SEQNOBUFS
+                  : E::OK;
+            }});
   }
 
   // utility function that assumes that all outliers should be boycotted
@@ -592,6 +606,11 @@ TEST_F(NodeStatsControllerIntegrationTest, Boycott2Nodes) {
 
   auto client = createClient();
 
+  // Need to only fail appends that would go to the outlier sequencer nodes.
+  // Otherwise we can get into the following situation: one of the outlier nodes
+  // gets boycotted, the sequencer moves from it to some other, non-outlier
+  // node, then that other node gets boycotted because we're failing writes to
+  // it.
   setErrorInjection(client.get(), outlier_nodes, {0.5, 0.5});
 
   AppendThread appender;
