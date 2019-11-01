@@ -90,7 +90,7 @@ class ServerHealthMonitor : public HealthMonitor {
 
   ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
       state_timer_;
-  NodeStatus node_status_{NodeStatus::HEALTHY};
+  std::atomic<NodeStatus> node_status_{NodeStatus::HEALTHY};
   bool overloaded_{false};
   StallInfo stall_info_{0, false};
 
