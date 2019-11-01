@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "logdevice/common/OutlierDetection.h"
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
@@ -47,6 +48,8 @@ MovingAverageAppendOutlierDetector::detectOutliers(TimePoint now) {
   }
 
   updatePotentialOutliersUsingRMSD(now);
+
+  ld_debug("Potential outliers: %s", toString(potential_outliers_).c_str());
 
   std::vector<PotentialOutlier> outliers;
   const auto grace_period = getGracePeriod();
@@ -101,6 +104,7 @@ void MovingAverageAppendOutlierDetector::addStats(node_index_t node_index,
 void MovingAverageAppendOutlierDetector::updatePotentialOutliersUsingRMSD(
     TimePoint now) {
   if (aggregated_stats_.empty()) {
+    ld_spew("No stats");
     return;
   }
 
@@ -242,6 +246,14 @@ unsigned int MovingAverageAppendOutlierDetector::getMaxBoycottCount() const {
 double MovingAverageAppendOutlierDetector::getRelativeMargin() const {
   return Worker::settings()
       .sequencer_boycotting.node_stats_boycott_relative_margin;
+}
+
+std::string
+MovingAverageAppendOutlierDetector::PotentialOutlier::toString() const {
+  return folly::sformat("(s:{}, f:{}, since {})",
+                        successes,
+                        fails,
+                        toSystemTimestamp(outlier_since).toString());
 }
 
 }} // namespace facebook::logdevice

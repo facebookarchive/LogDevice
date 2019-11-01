@@ -41,6 +41,8 @@ class MovingAverageAppendOutlierDetector : public AppendOutlierDetector {
     // will be accumulated each time it's considered an outlier
     uint32_t successes{0};
     uint32_t fails{0};
+
+    std::string toString() const;
   };
 
  public:

@@ -92,8 +92,7 @@ void NodeStatsController::aggregationTimerCallback() {
   received_stats_.clear();
   received_stats_.resize(node_count);
 
-  RATELIMIT_DEBUG(
-      std::chrono::seconds{10}, 1, "Collecting node stats from all nodes");
+  ld_debug("Collecting node stats from all nodes");
   sendCollectStatsMessage();
   activateResponseTimer();
 }
@@ -113,8 +112,7 @@ void NodeStatsController::activateResponseTimer() {
 }
 
 void NodeStatsController::responseTimerCallback() {
-  RATELIMIT_DEBUG(
-      std::chrono::seconds{10}, 1, "Aggregating stats received from all nodes");
+  ld_debug("Aggregating stats received from all nodes");
   aggregate();
 
   boycott(detectOutliers());
