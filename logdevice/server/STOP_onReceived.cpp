@@ -37,7 +37,7 @@ Message::Disposition STOP_onReceived(STOP_Message* msg, const Address& from) {
   if (shard_idx >= n_shards) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
-                    "Got START message from client %s with invalid shard %u, "
+                    "Got STOP message from client %s with invalid shard %u, "
                     "this node only has %u shards",
                     Sender::describeConnection(from).c_str(),
                     shard_idx,
