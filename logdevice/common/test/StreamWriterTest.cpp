@@ -33,9 +33,13 @@ enum TestCommandType {
                // epoch. Accepts second message blindly. All requests (including
                // rejected ones) received by a sequencer are stored in the
                // MessageLog.
-  TEST_SEQUENCER // Simulates a test sequencer that implements the stream
-                 // ordering logic. Requests are accepted or rejected based on
-                 // whether their sequencer numbers.
+  TEST_SEQUENCER, // Simulates a test sequencer that implements the stream
+                  // ordering logic. Requests are accepted or rejected based on
+                  // whether their sequencer numbers.
+  IGNORE // Don't callback. Add back to the queue to process in a future round.
+         // Be careful since this can lead to infinite loops if called with
+         // processTestRequests(true). Change the command type after 1st round,
+         // currently have an ld_check to ensure that.
 };
 
 struct TestCommand {
@@ -113,12 +117,19 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
         // Check if request was cancelled.
         auto it = cancelled.find(req.get());
         if (it != cancelled.end()) {
+          ld_info("Message %s cancelled", cmd.key.c_str());
           cancelled.erase(it);
           incoming_queue.pop();
           continue;
         }
 
         switch (cmd.type) {
+          case IGNORE: {
+            ld_check(round == 1);
+            ld_info("Message %s ignored in first round", cmd.key.c_str());
+            incoming_queue.push(std::move(req));
+            break;
+          }
           case DROP: {
             ld_info("Dropping message %s", cmd.key.c_str());
             if (cmd.args.size() > 0) {
@@ -210,9 +221,13 @@ class TestStreamWriterAppendSink : public StreamWriterAppendSink {
     } while (!incoming_queue.empty() && repeat_until_empty);
   }
 
-  write_stream_seq_num_t getMaxAckedSequenceNum(logid_t logid) {
+  write_stream_seq_num_t getMaxPrefixAckedSeqNum(logid_t logid) {
     auto stream = getStream(logid);
     return stream->max_prefix_acked_seq_num_;
+  }
+  write_stream_seq_num_t getMaxAckedSeqNum(logid_t logid) {
+    auto stream = getStream(logid);
+    return stream->max_acked_seq_num_;
   }
 
   // Returns the seen_epoch stored in the stream for a particular logid
@@ -352,7 +367,7 @@ void StreamWriterAppendSinkTest::singleAppend(TestCommand& cmd) {
   appendHelper(logid, cmd, callback);
   test_sink_->processTestRequests();
   ASSERT_EQ(1, num_msg_received);
-  ASSERT_EQ(1UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(1UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, AcceptRequest) {
@@ -389,7 +404,7 @@ TEST_F(StreamWriterAppendSinkTest, MultipleRequests) {
 
   test_sink_->processTestRequests();
   ASSERT_EQ(5, num_msg_received);
-  ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(5UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, MultipleLogs) {
@@ -429,8 +444,8 @@ TEST_F(StreamWriterAppendSinkTest, MultipleLogs) {
   test_sink_->processTestRequests();
   ASSERT_EQ(3, num_msg_received_log1);
   ASSERT_EQ(2, num_msg_received_log2);
-  ASSERT_EQ(3UL, test_sink_->getMaxAckedSequenceNum(logid1).val());
-  ASSERT_EQ(2UL, test_sink_->getMaxAckedSequenceNum(logid2).val());
+  ASSERT_EQ(3UL, test_sink_->getMaxPrefixAckedSeqNum(logid1).val());
+  ASSERT_EQ(2UL, test_sink_->getMaxPrefixAckedSeqNum(logid2).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, SeenEpoch) {
@@ -467,7 +482,7 @@ TEST_F(StreamWriterAppendSinkTest, SeenEpoch) {
   ASSERT_EQ(151U, test_sink_->getSeenEpochForTest(logid).val());
 
   ASSERT_EQ(4, num_msg_received);
-  ASSERT_EQ(4UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(4UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, MockSequencerCorrectStream) {
@@ -491,7 +506,7 @@ TEST_F(StreamWriterAppendSinkTest, MockSequencerCorrectStream) {
 
   test_sink_->processTestRequests();
   ASSERT_EQ(5, num_msg_received);
-  ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(5UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, MockSequencerMessageDrop) {
@@ -516,7 +531,7 @@ TEST_F(StreamWriterAppendSinkTest, MockSequencerMessageDrop) {
   }
   test_sink_->processTestRequests();
   ASSERT_EQ(5, num_msg_received);
-  ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(5UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
   ASSERT_EQ(1, test_sink_->stream_state[epoch].size());
   auto it = test_sink_->stream_state[epoch].begin();
   ASSERT_EQ(5UL, test_sink_->stream_state[epoch][it->first].val());
@@ -560,7 +575,7 @@ TEST_F(StreamWriterAppendSinkTest, PrefixAcks) {
 
   test_sink_->processTestRequests();
   ASSERT_EQ(5, num_msg_received);
-  ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(5UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, SmartRetry) {
@@ -587,7 +602,7 @@ TEST_F(StreamWriterAppendSinkTest, SmartRetry) {
 
   test_sink_->processTestRequests(false);
   ASSERT_EQ(7, num_msg_received);
-  ASSERT_EQ(7UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(7UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
 }
 
 TEST_F(StreamWriterAppendSinkTest, SmartRetryTimeout) {
@@ -616,17 +631,181 @@ TEST_F(StreamWriterAppendSinkTest, SmartRetryTimeout) {
   // "a" and "b" would be ACKed, everything else will fail. "c" would be sent.
   test_sink_->processTestRequests(false);
   ASSERT_EQ(2, num_msg_received);
-  ASSERT_EQ(2UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(2UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
   // "c" would be ACKed, "d" and "e" would be sent.
   test_sink_->processTestRequests(false);
   ASSERT_EQ(3, num_msg_received);
-  ASSERT_EQ(3UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(3UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
   // "d", "e" would be ACKed. "f" and "g" would be sent.
   test_sink_->processTestRequests(false);
   ASSERT_EQ(5, num_msg_received);
-  ASSERT_EQ(5UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(5UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
   // "f" and "g" will be ACKed.
   test_sink_->processTestRequests(false);
   ASSERT_EQ(7, num_msg_received);
-  ASSERT_EQ(7UL, test_sink_->getMaxAckedSequenceNum(logid).val());
+  ASSERT_EQ(7UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+}
+
+TEST_F(StreamWriterAppendSinkTest, SmartRetry_CheckMonotonicityFail) {
+  int num_msg_received = 0;
+  auto callback = [&num_msg_received](
+                      Status status, const DataRecord&, NodeID) {
+    ASSERT_EQ(Status::OK, status);
+    num_msg_received++;
+  };
+
+  logid_t logid(1UL);
+  epoch_t epoch(1U);
+  epoch_t larger_epoch(2U);
+  std::vector<TestCommand> cmds;
+  cmds.push_back(TestCommand::create(ACCEPT, "a", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "b", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "c", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "d", larger_epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "e", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "f", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "g", epoch));
+  for (auto& cmd : cmds) {
+    appendHelper(logid, cmd, callback);
+  }
+
+  // "a", "b", "c", "d" will be ACKed since monotonic property. "e" will violate
+  // monotonic property. So, "e" ACK is not accepted, We rewind stream until "d"
+  // i.e. "e" ACK is ignored, "f" which is inflight is forgotten. Now, we send
+  // "e" and "f" again.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(4, num_msg_received);
+  ASSERT_EQ(4UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+
+  // Changing epoch value so that when processing it returns a monotonic LSN.
+  cmds[4].epoch = larger_epoch;
+  cmds[5].epoch = larger_epoch;
+  cmds[6].epoch = larger_epoch;
+
+  // "e" and "f" would be ACKed, "g" is sent.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(6, num_msg_received);
+  ASSERT_EQ(6UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+
+  // "g" is ACKed.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(7, num_msg_received);
+  ASSERT_EQ(7UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+}
+
+TEST_F(StreamWriterAppendSinkTest,
+       SmartRetry_EnsureMonotonicityFail_PrefixAck) {
+  int num_msg_received = 0;
+  auto callback = [&num_msg_received](
+                      Status status, const DataRecord&, NodeID) {
+    ASSERT_EQ(Status::OK, status);
+    num_msg_received++;
+  };
+
+  logid_t logid(1UL);
+  epoch_t epoch(1U);
+  epoch_t larger_epoch(2U);
+  std::vector<TestCommand> cmds;
+  cmds.push_back(TestCommand::create(ACCEPT, "a", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "b", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "c", epoch));
+  cmds.push_back(TestCommand::create(IGNORE, "d", larger_epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "e", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "f", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "g", epoch));
+  for (auto& cmd : cmds) {
+    appendHelper(logid, cmd, callback);
+  }
+
+  // "a", "b", "c", "e", "f", "g" are all ACKed. All in epoch 1.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(3, num_msg_received);
+  ASSERT_EQ(3UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+  ASSERT_EQ(7UL, test_sink_->getMaxAckedSeqNum(logid).val());
+
+  // "d" will be ACKed with epoch 2. stream will be rewound until "e".
+  // "e" and "f" are posted again since "d" was accepted to prefix!
+  cmds[3].type = ACCEPT;
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(4UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+  ASSERT_EQ(4UL, test_sink_->getMaxAckedSeqNum(logid).val());
+
+  // Changing epoch value so that when processing it returns a monotonic LSN.
+  cmds[4].epoch = larger_epoch;
+  cmds[5].epoch = larger_epoch;
+  cmds[6].epoch = larger_epoch;
+
+  // "e" and "f" are ACKed. "g" is posted.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(6, num_msg_received);
+  ASSERT_EQ(6UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+  ASSERT_EQ(6UL, test_sink_->getMaxAckedSeqNum(logid).val());
+
+  // "g" is ACKed.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(7, num_msg_received);
+  ASSERT_EQ(7UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+}
+
+TEST_F(StreamWriterAppendSinkTest,
+       SmartRetry_EnsureMonotonicityFail_NonPrefixAck) {
+  int num_msg_received = 0;
+  auto callback = [&num_msg_received](
+                      Status status, const DataRecord&, NodeID) {
+    ASSERT_EQ(Status::OK, status);
+    num_msg_received++;
+  };
+
+  logid_t logid(1UL);
+  epoch_t epoch(1U);
+  epoch_t larger_epoch(2U);
+  std::vector<TestCommand> cmds;
+  cmds.push_back(TestCommand::create(ACCEPT, "a", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "b", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "c", epoch));
+  cmds.push_back(TestCommand::create(IGNORE, "d", larger_epoch));
+  cmds.push_back(TestCommand::create(IGNORE, "e", larger_epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "f", epoch));
+  cmds.push_back(TestCommand::create(ACCEPT, "g", epoch));
+  for (auto& cmd : cmds) {
+    appendHelper(logid, cmd, callback);
+  }
+
+  // "a", "b", "c", "f", "g" are all ACKed. All in epoch 1.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(3, num_msg_received);
+  ASSERT_EQ(3UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+  ASSERT_EQ(7UL, test_sink_->getMaxAckedSeqNum(logid).val());
+
+  // "e" will be ACKed with epoch 2. stream will be rewound until "e". nothing
+  // is posted, but "d" is in flight.
+  cmds[4].type = ACCEPT;
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(3UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+  ASSERT_EQ(5UL, test_sink_->getMaxAckedSeqNum(logid).val());
+
+  // Changing epoch value so that when processing it returns a monotonic LSN.
+  cmds[3].type = ACCEPT;
+
+  // "d" is ACKed with LSN at epoch 2, but a larger ESN. So, wound back and post
+  // "e" and "f".
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(4, num_msg_received);
+  ASSERT_EQ(4UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+  ASSERT_EQ(4UL, test_sink_->getMaxAckedSeqNum(logid).val());
+
+  // "f" will also get an LSN in epoch 2 now.
+  cmds[5].epoch = larger_epoch;
+
+  // "e" and "f" are ACKed. "g" is posted.
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(6, num_msg_received);
+  ASSERT_EQ(6UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+  ASSERT_EQ(6UL, test_sink_->getMaxAckedSeqNum(logid).val());
+
+  cmds[6].epoch = larger_epoch;
+  test_sink_->processTestRequests(false);
+  ASSERT_EQ(7, num_msg_received);
+  ASSERT_EQ(7UL, test_sink_->getMaxPrefixAckedSeqNum(logid).val());
+  ASSERT_EQ(7UL, test_sink_->getMaxAckedSeqNum(logid).val());
 }

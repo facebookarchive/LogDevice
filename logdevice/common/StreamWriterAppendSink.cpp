@@ -239,6 +239,13 @@ void StreamWriterAppendSink::onCallback(Stream& stream,
       // Ensure that LSN monotonicity can be maintained after LSN is accepted
       // for req_seq_num, by rewinding stream until the first instance of
       // violation in the stream (if there exists any).
+      //
+      // Note that ensureMonotonicityAfter can rewind at most until (req_seq_num
+      // + 1). There are two cases possible:
+      // (1) req_seq_num == (max_prefix_acked_seq_num_ + 1), then we know we are
+      // going to post some requests and hence no need to worry about progress.
+      // (2) req_seq_num > (max_prefix_acked_seq_num_ + 1), then by definition
+      // leftmost is inflight. So progress is guaranteed.
       ensureLsnMonotonicityAfter(stream, req_seq_num, record.attrs.lsn);
 
       // Accept the ACK.
@@ -372,7 +379,7 @@ bool StreamWriterAppendSink::checkLsnMonotonicityUntil(
     write_stream_seq_num_t prev(seq_num.val_ - 1);
     for (auto temp = prev; temp > stream.max_prefix_acked_seq_num_;
          --temp.val_) {
-      auto it = stream.pending_stream_requests_.find(seq_num);
+      auto it = stream.pending_stream_requests_.find(temp);
       ld_check(it != stream.pending_stream_requests_.end());
       auto& req_state = it->second;
       if (req_state.last_status == E::OK) {
@@ -405,6 +412,7 @@ void StreamWriterAppendSink::ensureLsnMonotonicityAfter(
     }
   }
 }
+
 void StreamWriterAppendSink::rewindStreamUntil(Stream& stream,
                                                write_stream_seq_num_t seq_num) {
   // Reset all requests in the range [seq_num, max_inflight_window_seq_num_]
