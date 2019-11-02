@@ -49,10 +49,8 @@ void GossipSettings::defineSettings(SettingEasyInit& init) {
        &gossip_failure_threshold,
        "30",
        nullptr, // no validation
-       "Specifies after how many gossip intervals of inactivity a node "
-       "is "
-       "marked as dead. Lower values reduce detection time, but make "
-       "false "
+       "Specifies after how many gossip intervals of inactivity a node is "
+       "marked as dead. Lower values reduce detection time, but make false "
        "positives more likely.",
        SERVER,
        SettingsCategory::FailureDetector);

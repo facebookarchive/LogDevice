@@ -1202,8 +1202,11 @@ bool Server::initClusterMaintenanceStateMachine() {
 bool Server::initFailureDetector() {
   if (params_->getGossipSettings()->enabled) {
     try {
-      processor_->failure_detector_ = std::make_unique<FailureDetector>(
-          params_->getGossipSettings(), processor_.get(), params_->getStats());
+      processor_->failure_detector_ =
+          std::make_unique<FailureDetector>(params_->getGossipSettings(),
+                                            processor_.get(),
+                                            params_->getStats(),
+                                            /* attach */ false);
     } catch (const ConstructorFailed&) {
       ld_error(
           "Failed to construct FailureDetector: %s", error_description(err));
@@ -1312,6 +1315,11 @@ bool Server::startListening() {
 
   if (gossip_listener_loop_ && !startConnectionListener(gossip_listener_)) {
     return false;
+  }
+
+  // Now that gossip listener is running, let's start gossiping.
+  if (processor_->failure_detector_ != nullptr) {
+    processor_->failure_detector_->start();
   }
 
   if (ssl_connection_listener_loop_ &&

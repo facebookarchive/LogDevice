@@ -72,13 +72,14 @@ class FailureDetector {
    * @param processor  processor pointer to get main settings and
    *                   pass for gossip thread(Worker class) constructor
    * @param stats      for updating FD counters
-   * @param attach     skip gossiping for certain tests(if set to false)
+   * @param attach     if true, start gossiping right away;
+   *                   if false, you'll need to call start()
    */
   FailureDetector(UpdateableSettings<GossipSettings> settings,
                   ServerProcessor* processor,
                   StatsHolder* stats,
                   bool attach = true);
-  /*
+  /**
    * For MockTest like FailureDetectorTest, which do their own mock gossips.
    * These tests don't set processor->failure_detector_
    */
@@ -87,6 +88,12 @@ class FailureDetector {
                   bool attach = false);
 
   virtual ~FailureDetector() {}
+
+  /**
+   * Bring the FailureDetector alive: start gossiping and updating cluster
+   * state and everything.
+   */
+  void start();
 
   /**
    * Checks whether a node with the given index is considered to be

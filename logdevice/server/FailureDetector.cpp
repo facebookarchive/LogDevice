@@ -160,7 +160,7 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
   start_time_ = std::chrono::steady_clock::now();
   instance_id_ = std::chrono::milliseconds(processor->getServerInstanceId());
   ld_info(
-      "Failure Detector starting with instance id: %lu", instance_id_.count());
+      "Failure Detector created with instance id: %lu", instance_id_.count());
 
   auto cs = processor->cluster_state_.get();
   for (const auto& it : nodes_) {
@@ -168,11 +168,7 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
   }
 
   if (attach) {
-    std::unique_ptr<Request> rq = std::make_unique<InitRequest>(this);
-    int rv = processor->postRequest(rq);
-    if (rv) {
-      ld_warning("Unable to post InitRequest, err=%d", rv);
-    }
+    start();
   }
 }
 
@@ -180,6 +176,12 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
                                  ServerProcessor* processor,
                                  bool attach)
     : FailureDetector(std::move(settings), processor, nullptr, attach) {}
+
+void FailureDetector::start() {
+  std::unique_ptr<Request> rq = std::make_unique<InitRequest>(this);
+  int rv = processor_->postImportant(rq);
+  ld_check(rv == 0);
+}
 
 StatsHolder* FailureDetector::getStats() {
   return stats_;
