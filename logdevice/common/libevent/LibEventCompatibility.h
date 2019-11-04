@@ -18,12 +18,7 @@ namespace facebook { namespace logdevice {
 
 class EvBase : public IEvBase {
  public:
-  enum EvBaseType {
-    UNKNOWN,
-    LEGACY_EVENTBASE,
-    FOLLY_EVENTBASE,
-    MOCK_EVENTBASE
-  };
+  enum EvBaseType { UNKNOWN, LEGACY_EVENTBASE, FOLLY_EVENTBASE };
   EvBase() {}
   EvBase(const EvBase&) = delete;
   EvBase& operator=(const EvBase&) = delete;
@@ -106,7 +101,6 @@ class EvTimer {
   getCommonTimeout(std::chrono::microseconds timeout);
 
  protected:
-  bool is_mock_{false};
   std::unique_ptr<EvTimerLegacy> evtimer_legacy_;
   std::unique_ptr<EvTimerWithFolly> evtimer_folly_;
 };

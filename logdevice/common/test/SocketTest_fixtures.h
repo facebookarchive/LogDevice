@@ -153,7 +153,6 @@ class SocketTest : public ::testing::Test {
         server_addr_(get_localhost_address_str(), 4440),
         destination_node_id_(client_id_, 1),
         flow_group_(std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr)),
-        ev_base_mock_(EvBase::MOCK_EVENTBASE),
         socket_(
             std::unique_ptr<Socket, SocketDeleter>(nullptr, SocketDeleter())) {
     input_ = LD_EV(evbuffer_new)();

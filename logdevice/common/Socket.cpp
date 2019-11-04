@@ -629,7 +629,6 @@ void Socket::onBytesAvailable(bool fresh) {
   // "bev_ is readable" if TCP socket becomes readable after
   // read_more_ was activated. If that happens this callback may find
   // fewer bytes in bev_'s input buffer than dataReadCallback() expects.
-  ld_check_ge(available, bytesExpected());
   ld_assert(!fresh || available >= bytesExpected());
 
   auto start_time = std::chrono::steady_clock::now();
@@ -650,13 +649,18 @@ void Socket::onBytesAvailable(bool fresh) {
         } else {
           auto expected_bytes = bytesExpected();
           auto iobuf = folly::IOBuf::create(expected_bytes);
-          int read_bytes = LD_EV(evbuffer_remove)(
-              inbuf, (void*)iobuf->writableData(), expected_bytes);
+          int read_bytes = LD_EV(evbuffer_copyout)(
+              inbuf, static_cast<void*>(iobuf->writableData()), expected_bytes);
           ld_check_eq(read_bytes, expected_bytes);
           iobuf->append(expected_bytes);
           rv = dispatchMessageBody(recv_message_ph_, std::move(iobuf));
           if (rv == 0) {
-            expectProtocolHeader();
+            rv = LD_EV(evbuffer_drain)(inbuf, read_bytes);
+            if (rv != 0) {
+              err = E::INTERNAL;
+            } else {
+              expectProtocolHeader();
+            }
           }
         }
         if (rv != 0) {

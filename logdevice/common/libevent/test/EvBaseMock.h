@@ -15,9 +15,11 @@ namespace facebook { namespace logdevice {
 
 class EvBaseMock : public EvBase {
  public:
-  EvBaseMock(EvBase::EvBaseType type) : EvBase() {
-    selectEvBase(type);
+  EvBaseMock(bool legacy = false) : EvBase() {
+    selectEvBase(legacy ? LEGACY_EVENTBASE : FOLLY_EVENTBASE);
+    assert(curr_selection_);
   }
+
   MOCK_METHOD1(init_mock, Status(int));
   virtual Status init(int num_priorities = static_cast<int>(
                           Priorities::NUM_PRIORITIES)) override {
@@ -36,10 +38,15 @@ class EvBaseMock : public EvBase {
   void clearRunningBase() {
     EvBase::running_base_ = nullptr;
   }
+  void
+  attachTimeoutManager(folly::AsyncTimeout* obj,
+                       folly::TimeoutManager::InternalEnum internal) override {
+    curr_selection_->attachTimeoutManager(obj, internal);
+  }
 
-  MOCK_METHOD2(attachTimeoutManager,
-               void(folly::AsyncTimeout*, folly::TimeoutManager::InternalEnum));
-  MOCK_METHOD1(detachTimeoutManager, void(folly::AsyncTimeout*));
+  void detachTimeoutManager(folly::AsyncTimeout* obj) override {
+    curr_selection_->detachTimeoutManager(obj);
+  }
   MOCK_METHOD2(scheduleTimeout,
                bool(folly::AsyncTimeout*, folly::TimeoutManager::timeout_type));
   MOCK_METHOD2(scheduleTimeoutHighRes,

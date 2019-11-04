@@ -10,7 +10,7 @@
 #include "logdevice/common/protocol/CHECK_NODE_HEALTH_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/test/SocketTest_fixtures.h"
-
+using ::testing::_;
 namespace facebook { namespace logdevice {
 
 static Envelope* create_message(Socket& s) {
@@ -637,27 +637,16 @@ TEST_F(ServerSocketTest, IncomingMessageBytesLimit) {
   // We should be handshaken now.
   EXPECT_TRUE(handshaken());
 
-  // With limit zero and prev use as zero ResourceBudget allows a single message
-  // even though we go beyond allowed limit.
+  // ResourceBudget allows a single message at zero even though we go beyond
+  // allowed limit.
+  ResourceBudget::Token token;
   on_received_hook_ = [&](Message* msg,
                           const Address&,
                           std::shared_ptr<PrincipalIdentity>,
-                          ResourceBudget::Token token) {
-    EXPECT_TRUE(token.valid());
+                          ResourceBudget::Token t) {
+    EXPECT_TRUE(t.valid());
     EXPECT_FALSE(incoming_message_bytes_limit_.acquire(msg->size()));
-    auto check_node_hdr = CHECK_NODE_HEALTH_Header{request_id_t(1), 1, 0};
-    // Try sending another message, this message should fail to send with
-    // ENOBUFS.
-    auto new_msg = new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
-                                            MessageType::CHECK_NODE_HEALTH,
-                                            TrafficClass::FAILURE_DETECTOR>(
-        check_node_hdr);
-    ev_timer_add_hook_ = [&](struct event* /* ev */) {
-      if (err != E::OK) {
-        ASSERT_EQ(err, E::NOBUFS);
-      }
-    };
-    receiveMsg(new_msg);
+    token = std::move(t);
     return Message::Disposition::NORMAL;
   };
 
@@ -666,17 +655,45 @@ TEST_F(ServerSocketTest, IncomingMessageBytesLimit) {
       new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
                                MessageType::CHECK_NODE_HEALTH,
                                TrafficClass::FAILURE_DETECTOR>(check_node_hdr);
+  auto msg_size = msg->size();
   receiveMsg(msg);
+  ASSERT_FALSE(incoming_message_bytes_limit_.acquire(msg_size));
+  bool called = false;
+  on_received_hook_ = [&](Message*,
+                          const Address&,
+                          std::shared_ptr<PrincipalIdentity>,
+                          ResourceBudget::Token) {
+    called = true;
+    return Message::Disposition::NORMAL;
+  };
+  EXPECT_CALL(
+      ev_base_mock_, scheduleTimeout(_, folly::TimeoutManager::timeout_type(0)))
+      .Times(1);
+  ASSERT_EQ(LD_EV(evbuffer_get_length)(input_), 0);
+  auto new_msg =
+      new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
+                               MessageType::CHECK_NODE_HEALTH,
+                               TrafficClass::FAILURE_DETECTOR>(check_node_hdr);
+  msg_size = new_msg->size();
+  receiveMsg(new_msg);
 
+  ASSERT_FALSE(called);
+  ASSERT_GE(
+      LD_EV(evbuffer_get_length)(input_), msg_size - sizeof(ProtocolHeader));
+  // After token is released we should be able to dispatch again.
+  token.release();
+  triggerOnDataAvailable();
+  ASSERT_TRUE(called);
   // Reset limit and make sure we do not get the callback.
   incoming_message_bytes_limit_.setLimit(std::numeric_limits<uint64_t>::max());
   msg =
       new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
                                MessageType::CHECK_NODE_HEALTH,
                                TrafficClass::FAILURE_DETECTOR>(check_node_hdr);
-  on_received_hook_ = nullptr;
-  ev_timer_add_hook_ = [&](struct event* /* ev */) { ASSERT_EQ(err, E::OK); };
+  called = false;
   receiveMsg(msg);
+  ASSERT_EQ(LD_EV(evbuffer_get_length)(input_), 0);
+  ASSERT_TRUE(called);
 }
 
 TEST_F(ClientSocketTest, RunSocketHealthCheck) {

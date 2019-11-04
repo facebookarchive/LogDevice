@@ -31,7 +31,7 @@ static EvBase::EvBaseType getType(IEvBase* base) {
 void EvBase::selectEvBase(EvBaseType base_type) {
   ld_check(!curr_selection_);
   ld_check(base_type_ == UNKNOWN);
-  ld_check_in(base_type, ({LEGACY_EVENTBASE, FOLLY_EVENTBASE, MOCK_EVENTBASE}));
+  ld_check_in(base_type, ({LEGACY_EVENTBASE, FOLLY_EVENTBASE}));
   base_type_ = base_type;
   if (base_type_ == LEGACY_EVENTBASE) {
     curr_selection_ = &ev_base_legacy_;
@@ -104,7 +104,6 @@ Event::Event(IEvBase::EventCallback callback,
   auto base_type = getType(base);
   switch (base_type) {
     case EvBase::LEGACY_EVENTBASE:
-    case EvBase::MOCK_EVENTBASE:
       event_legacy_ =
           std::make_unique<EventLegacy>(std::move(callback), events, fd, base);
       break;
@@ -129,9 +128,6 @@ EvTimer::EvTimer(IEvBase* base) {
     case EvBase::FOLLY_EVENTBASE:
       evtimer_folly_ = std::make_unique<EvTimerWithFolly>(base);
       break;
-    case EvBase::MOCK_EVENTBASE:
-      is_mock_ = true;
-      break;
     case EvBase::UNKNOWN:
       ld_check(false);
       break;
@@ -139,9 +135,6 @@ EvTimer::EvTimer(IEvBase* base) {
 }
 
 void EvTimer::attachTimeoutManager(folly::TimeoutManager* tm) {
-  if (is_mock_) {
-    return;
-  }
   if (evtimer_legacy_) {
     evtimer_legacy_->attachTimeoutManager(tm);
   } else if (evtimer_folly_) {
@@ -152,9 +145,6 @@ void EvTimer::attachTimeoutManager(folly::TimeoutManager* tm) {
 }
 
 void EvTimer::attachCallback(folly::Func callback) {
-  if (is_mock_) {
-    return;
-  }
   if (evtimer_legacy_) {
     evtimer_legacy_->attachCallback(std::move(callback));
   } else if (evtimer_folly_) {
@@ -165,9 +155,6 @@ void EvTimer::attachCallback(folly::Func callback) {
 }
 
 void EvTimer::timeoutExpired() noexcept {
-  if (is_mock_) {
-    return;
-  }
   if (evtimer_legacy_) {
     evtimer_legacy_->timeoutExpired();
   } else if (evtimer_folly_) {
@@ -178,9 +165,6 @@ void EvTimer::timeoutExpired() noexcept {
 }
 
 struct event* FOLLY_NULLABLE EvTimer::getEvent() {
-  if (is_mock_) {
-    return nullptr;
-  }
   if (evtimer_legacy_) {
     return evtimer_legacy_->getEvent();
   }
@@ -192,9 +176,6 @@ struct event* FOLLY_NULLABLE EvTimer::getEvent() {
 }
 
 bool EvTimer::scheduleTimeout(uint32_t ms) {
-  if (is_mock_) {
-    return true;
-  }
   if (evtimer_legacy_) {
     return evtimer_legacy_->scheduleTimeout(ms);
   }
@@ -206,9 +187,6 @@ bool EvTimer::scheduleTimeout(uint32_t ms) {
 }
 
 bool EvTimer::scheduleTimeout(folly::TimeoutManager::timeout_type timeout) {
-  if (is_mock_) {
-    return true;
-  }
   if (evtimer_legacy_) {
     return evtimer_legacy_->scheduleTimeout(timeout);
   }
@@ -220,9 +198,6 @@ bool EvTimer::scheduleTimeout(folly::TimeoutManager::timeout_type timeout) {
 }
 
 void EvTimer::cancelTimeout() {
-  if (is_mock_) {
-    return;
-  }
   if (evtimer_legacy_) {
     evtimer_legacy_->cancelTimeout();
   } else if (evtimer_folly_) {
@@ -233,9 +208,6 @@ void EvTimer::cancelTimeout() {
 }
 
 bool EvTimer::isScheduled() const {
-  if (is_mock_) {
-    return true;
-  }
   if (evtimer_legacy_) {
     return evtimer_legacy_->isScheduled();
   }
@@ -247,9 +219,6 @@ bool EvTimer::isScheduled() const {
 }
 
 int EvTimer::setPriority(int pri) {
-  if (is_mock_) {
-    return 0;
-  }
   if (evtimer_legacy_) {
     return evtimer_legacy_->setPriority(pri);
   }
@@ -261,9 +230,6 @@ int EvTimer::setPriority(int pri) {
 }
 
 void EvTimer::activate(int res, short ncalls) {
-  if (is_mock_) {
-    return;
-  }
   if (evtimer_legacy_) {
     evtimer_legacy_->activate(res, ncalls);
   } else if (evtimer_folly_) {
@@ -286,8 +252,6 @@ EvTimer::getCommonTimeout(std::chrono::microseconds timeout) {
       return EvTimerLegacy::getCommonTimeout(timeout);
     case EvBase::FOLLY_EVENTBASE:
       return EvTimerWithFolly::getCommonTimeout(timeout);
-    case EvBase::MOCK_EVENTBASE:
-      return nullptr;
     case EvBase::UNKNOWN:
       ld_check(false);
       break;

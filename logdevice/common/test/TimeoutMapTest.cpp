@@ -20,7 +20,7 @@ using namespace testing;
 
 TEST(TimeoutMap, Correctness) {
   auto base_fake = LD_EV(event_base_new)();
-  EvBaseMock base(EvBase::EvBaseType::LEGACY_EVENTBASE);
+  EvBaseMock base(true /* legacy */);
   base.init();
   base.setAsRunningBase();
 
