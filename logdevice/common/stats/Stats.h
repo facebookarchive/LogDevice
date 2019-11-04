@@ -1242,7 +1242,7 @@ class PerShardStatToken {
 #define INCR_FOR_LATENCY_THRESHOLD(stats_struct, threshold, value)          \
   do {                                                                      \
     constexpr int usInMs = 1000;                                            \
-    if (((value)*usInMs) >= (threshold)) {                                  \
+    if ((value) >= ((threshold)*usInMs)) {                                  \
       STAT_INCR(stats_struct, client.append_requests_over_##threshold##ms); \
     }                                                                       \
   } while (0)
