@@ -60,7 +60,7 @@ class RSMBasedVersionedConfigStore : public VersionedConfigStore {
    * The processor is used to perform RSM operations on the client side.
    */
   Processor* processor_;
-  bool ready_;
+  std::atomic<bool> ready_{false};
   std::atomic<bool> shutdown_signaled_{false};
   std::chrono::milliseconds stop_timeout_;
 };

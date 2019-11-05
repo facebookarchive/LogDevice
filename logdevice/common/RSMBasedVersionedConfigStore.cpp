@@ -27,7 +27,6 @@ RSMBasedVersionedConfigStore::RSMBasedVersionedConfigStore(
     : VersionedConfigStore(std::move(f)),
       state_machine_(std::make_unique<KeyValueStoreStateMachine>(log_id)),
       processor_(processor),
-      ready_(false),
       stop_timeout_(stop_timeout) {
   auto cb = [this](const KeyValueStoreState& state,
                    const KeyValueStoreDelta*,
@@ -40,7 +39,7 @@ RSMBasedVersionedConfigStore::RSMBasedVersionedConfigStore(
         locked_state->version = version;
       }
     }
-    ready_ = true;
+    ready_.store(true);
   };
   subscription_handle_ = state_machine_->subscribe(std::move(cb));
 
@@ -77,7 +76,7 @@ void RSMBasedVersionedConfigStore::getConfig(
     cb(Status::SHUTDOWN, "");
     return;
   }
-  if (!ready_) {
+  if (!ready_.load()) {
     cb(Status::AGAIN, "");
     return;
   }
