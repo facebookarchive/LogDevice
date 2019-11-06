@@ -1020,11 +1020,14 @@ void ClientReadStream::onDataRecord(
     // records it already delivered (since the beginning of the window is
     // next_lsn_to_deliver_, and not next_lsn; see #3368006). Ignore those
     // records.
-    ld_debug("Rejecting record from %s for log %lu because of lsn %s < %s",
-             shard.toString().c_str(),
-             log_id_.val_,
-             lsn_to_string(lsn).c_str(),
-             lsn_to_string(sender_state.getNextLsn()).c_str());
+    RATELIMIT_WARNING(
+        std::chrono::seconds(10),
+        5,
+        "Rejecting record from %s for log %lu because of lsn %s < %s",
+        shard.toString().c_str(),
+        log_id_.val_,
+        lsn_to_string(lsn).c_str(),
+        lsn_to_string(sender_state.getNextLsn()).c_str());
     return;
   }
 
