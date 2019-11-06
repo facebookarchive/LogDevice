@@ -118,7 +118,6 @@ int main(int argc, const char* argv[]) {
 }
 
 void parse_command_line(int argc, const char** argv) {
-  using boost::program_options::bool_switch;
   using boost::program_options::value;
   namespace style = boost::program_options::command_line_style;
   try {
