@@ -29,11 +29,13 @@ class InternalLogsIntegrationTest
  public:
   static const size_t NNODES = 3;
 
-  void
-  buildClusterAndClient(bool rsm_include_read_pointer_in_snapshot = false) {
+  ClusterFactory
+  clusterFactory(bool rsm_include_read_pointer_in_snapshot = false) {
     auto factory = IntegrationTestUtils::ClusterFactory()
                        .enableLogsConfigManager()
                        .allowExistingMetaData()
+                       .setParam("--loglevel-overrides",
+                                 "ReplicatedStateMachine-inl.h:debug")
                        .doPreProvisionEpochMetaData();
 
     if (rsm_include_read_pointer_in_snapshot) {
@@ -42,6 +44,10 @@ class InternalLogsIntegrationTest
       factory.setParam("--rsm-include-read-pointer-in-snapshot", "false");
     }
 
+    return factory;
+  }
+
+  void buildClusterAndClient(ClusterFactory factory) {
     cluster = factory.create(NNODES);
 
     std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
@@ -106,7 +112,7 @@ INSTANTIATE_TEST_CASE_P(InternalLogsIntegrationTest,
 
 // test that Client cannot directly write to internal logs
 TEST_F(InternalLogsIntegrationTest, ClientCannotWriteInternalLog) {
-  buildClusterAndClient();
+  buildClusterAndClient(clusterFactory());
 
   // Create arbitrary payload. This is safe since we only append to deltas logs
   size_t dataSize = 512;
@@ -121,7 +127,7 @@ TEST_F(InternalLogsIntegrationTest, ClientCannotWriteInternalLog) {
 
 // test that Client can write to internal logs with the right flags
 TEST_F(InternalLogsIntegrationTest, ClientWriteInternalLog) {
-  buildClusterAndClient();
+  buildClusterAndClient(clusterFactory());
 
   client_impl->allowWriteInternalLog();
 
@@ -157,7 +163,7 @@ TEST_F(InternalLogsIntegrationTest, ClientWriteInternalLog) {
  */
 TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
   const bool rsm_include_read_pointer_in_snapshot = GetParam();
-  buildClusterAndClient(rsm_include_read_pointer_in_snapshot);
+  buildClusterAndClient(clusterFactory(rsm_include_read_pointer_in_snapshot));
 
   /* write something to the delta log */
   auto dir = client->makeDirectorySync("/facebok_sneks", true);
@@ -171,9 +177,7 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
   const size_t NUM_EPOCHS_TO_BUMP = 5;
   auto& seq = cluster->getSequencerNode();
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
-    seq.kill();
-    seq.start();
-    seq.waitUntilStarted();
+    seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
     cluster->waitForRecovery();
   }
 
@@ -237,6 +241,8 @@ TEST_F(InternalLogsIntegrationTest,
                      .allowExistingMetaData()
                      .setInternalLogsReplicationFactor(1)
                      .enableLogsConfigManager()
+                     .setParam("--loglevel-overrides",
+                               "ReplicatedStateMachine-inl.h:debug")
                      .setNumDBShards(1)
                      .deferStart()
                      .create(NNODES);
@@ -299,4 +305,143 @@ TEST_F(InternalLogsIntegrationTest,
   /* now we should move out of the STARTING state and finish recoveries */
   cluster->waitUntilStartupComplete();
   cluster->waitForRecovery();
+}
+
+/**
+ * This test makes sure that if the replicated state machine stalls, and new
+ * snapshots are created that do not bump the base version but include a read
+ * pointer past the stalling point, the state machine resume reading and
+ * recover.
+ */
+TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
+  auto factory = clusterFactory(true);
+
+  // Configure nodes
+  Configuration::Nodes nodes;
+  for (int i = 0; i < NNODES; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole(2);
+  }
+  // Add one more node that is sequencer-only (so that we can safely isolate it
+  // without affecting internal logs reads and writes)
+  auto& node = nodes[NNODES];
+  node.generation = 1;
+  node.addSequencerRole();
+
+  factory.setNodes(nodes).oneConfigPerNode();
+
+  buildClusterAndClient(std::move(factory));
+
+  // Write something to the delta log
+  auto dir = client->makeDirectorySync("/dir1", true);
+  lsn_t last_delta = dir->version();
+
+  // Check we never trimmed
+  ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
+            LSN_INVALID);
+
+  // Bump epoch a number of times
+  const size_t NUM_EPOCHS_TO_BUMP = 5;
+  auto& seq = cluster->getSequencerNode();
+  for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
+    seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+    cluster->waitForRecovery();
+  }
+
+  // Check that the tail moved as expected
+  auto tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  ASSERT_EQ(epoch_t(lsn_to_epoch(last_delta).val_ + NUM_EPOCHS_TO_BUMP),
+            lsn_to_epoch(tail_lsn));
+
+  // Make sure logsconfig is in sync everywhere
+  cluster->waitUntilLogsConfigSynced(tail_lsn);
+
+  // Take snapshot
+  auto result =
+      cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
+  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+
+  // Trim the delta log up to N0 read pointer
+  ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
+
+  // Check we have trimmed up to delta log read ptr
+  ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
+            tail_lsn - 1);
+
+  // Isolate N<last> so that delta log read stream becomes unhealthy and the
+  // replicated state machine stalls
+  std::set<int> partition1;
+  for (int i = 0; i < NNODES; ++i) {
+    partition1.insert(i);
+  }
+  cluster->partition({partition1, {NNODES}});
+
+  // Write another record
+  dir = client->makeDirectorySync("/dir2", true);
+  last_delta = dir->version();
+
+  // Bump epoch a few more times to move the tail and cause bridge gaps
+  for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
+    seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+    cluster->waitForRecovery();
+  }
+
+  // Check that the tail moved as expected
+  auto new_tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  ASSERT_EQ(epoch_t(lsn_to_epoch(last_delta).val_ + NUM_EPOCHS_TO_BUMP),
+            lsn_to_epoch(new_tail_lsn));
+  cluster->getNode(0).waitUntilLogsConfigSynced(new_tail_lsn);
+
+  // Take another snapshot and trim the delta log
+  result = cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
+  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+  ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
+  ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
+            new_tail_lsn - 1);
+
+  // While N<last< is still isolated, check that the logsconfig delta log read
+  // stream is not healthy
+  auto info = cluster->getNode(NNODES).sendJsonCommand(
+      "info client_read_streams --json");
+  bool checked = false;
+  for (auto& rec : info) {
+    if (rec["Log ID"] ==
+        folly::to<std::string>(
+            configuration::InternalLogs::CONFIG_LOG_DELTAS.val())) {
+      EXPECT_EQ(rec["Connection health"], "UNHEALTHY");
+      checked = true;
+    }
+  }
+  EXPECT_TRUE(checked);
+
+  // Rejoin N<last> to the cluster
+  partition1.insert(NNODES);
+  cluster->partition({partition1});
+
+  // Check that N<last> is able to sycnhronize the logs config up to the tail.
+  cluster->getNode(NNODES).waitUntilLogsConfigSynced(new_tail_lsn);
+
+  // Double check that read stream is now healthy
+  info = cluster->getNode(NNODES).sendJsonCommand(
+      "info client_read_streams --json");
+  checked = false;
+  for (auto& rec : info) {
+    if (rec["Log ID"] ==
+        folly::to<std::string>(
+            configuration::InternalLogs::CONFIG_LOG_DELTAS.val())) {
+      EXPECT_EQ(rec["Connection health"], "HEALTHY_AUTHORITATIVE_COMPLETE");
+      checked = true;
+    }
+  }
+  EXPECT_TRUE(checked);
+
+  // Check logsconfig read availability on sequencer by restarting it
+  seq.kill();
+  seq.start();
+  seq.waitUntilStarted();
+  seq.waitUntilLogsConfigSynced(new_tail_lsn);
 }

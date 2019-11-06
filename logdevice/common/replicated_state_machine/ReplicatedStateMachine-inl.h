@@ -325,6 +325,29 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
                  ? lsn_to_string(last_snapshot_last_read_ptr_).c_str()
                  : "disabled",
              header.format_version);
+  } else if (header.format_version >=
+                 RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH &&
+             header.delta_log_read_ptr > last_snapshot_last_read_ptr_) {
+    // The base version did not change, however the read pointer did. This
+    // means that some deltas were ignored (or there is a gap in the delta log),
+    // but basically the snapshot covers the delta log up to the new
+    // delta_log_read_ptr. We need to update the metadata. However, we do not
+    // need to update the state or even notify subscribers since it is
+    // basically identical to previous state.
+
+    last_snapshot_last_read_ptr_ = header.delta_log_read_ptr;
+    delta_log_byte_offset_ = header.byte_offset;
+    delta_log_offset_ = header.offset;
+    snapshot_log_timestamp_ = record->attrs.timestamp;
+    rsm_info(rsm_type_,
+             "Processed snapshot record with lsn %s timestamp %lu, "
+             "base version %s, delta_log_read_ptr %s (serialization format "
+             "version was %d)",
+             lsn_to_string(record->attrs.lsn).c_str(),
+             record->attrs.timestamp.count(),
+             lsn_to_string(header.base_version).c_str(),
+             lsn_to_string(last_snapshot_last_read_ptr_).c_str(),
+             header.format_version);
   }
 
   if (rv == 0) {
@@ -341,7 +364,9 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     onBaseSnapshotRetrieved();
   }
 
-  if (version_ >= waiting_for_snapshot_) {
+  if (waiting_for_snapshot_ != LSN_INVALID &&
+      (version_ >= waiting_for_snapshot_ ||
+       last_snapshot_last_read_ptr_ >= waiting_for_snapshot_)) {
     // We were stalling reading the delta log because we saw a TRIM or
     // DATALOSS gap in it, but now we have a snapshot that accounts for the data
     // we missed, so we can resume reading the delta log.
@@ -463,7 +488,8 @@ void ReplicatedStateMachine<T, D>::onGotDeltaLogTailLSN(Status st, lsn_t lsn) {
   // lsn.
   const lsn_t until_lsn = stop_at_tail_ ? delta_sync_ : LSN_MAX;
 
-  if (version_ >= delta_sync_ || delta_read_ptr_ >= delta_sync_) {
+  if (version_ >= delta_sync_ || delta_read_ptr_ >= delta_sync_ ||
+      last_snapshot_last_read_ptr_ >= delta_sync_) {
     // The last snapshot we got already accounts for all the deltas. Or we've
     // already read up to the tail.
     // We can notify subscribers of the initial state immediately.
@@ -524,7 +550,8 @@ bool ReplicatedStateMachine<T, D>::onDeltaRecord(
     activateGracePeriodForFastForward();
   }
 
-  if (record->attrs.lsn <= version_) {
+  if (record->attrs.lsn <= version_ ||
+      record->attrs.lsn <= last_snapshot_last_read_ptr_) {
     // We already have a higher version because we read a more recent snapshot,
     // skip this delta.
     return true;
@@ -685,7 +712,7 @@ bool ReplicatedStateMachine<T, D>::onDeltaGap(const GapRecord& gap) {
   ld_check(gap.hi > delta_read_ptr_);
   delta_read_ptr_ = gap.hi;
 
-  if (gap.hi <= version_) {
+  if (gap.hi <= version_ || gap.hi <= last_snapshot_last_read_ptr_) {
     // We already have a higher version because we read a more recent snapshot,
     // skip this delta gap.
     return true;

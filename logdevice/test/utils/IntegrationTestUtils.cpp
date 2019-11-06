@@ -447,9 +447,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
 
   if (node_configs_.hasValue()) {
     nodes = node_configs_.value();
-    if (nnodes == 0) {
-      nnodes = (int)nodes.size();
-    }
+    nnodes = (int)nodes.size();
   } else if (hash_based_sequencer_assignment_) {
     // Hash based sequencer assignment is used, all nodes are both sequencers
     // and storage nodes.

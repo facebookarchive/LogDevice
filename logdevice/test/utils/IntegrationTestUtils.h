@@ -141,7 +141,7 @@ class ClusterFactory {
   /**
    * Creates a Cluster object, configured with logs 1 and 2.
    *
-   * Unless setNodes() is called (in which case nnodes must equal nodes.size()),
+   * Unless setNodes() is called (in which case nnodes is ignored),
    * Cluster will contain the specified number of nodes. If nnodes = 1, the one
    * node will act as both a sequencer and storage node.  Otherwise, there will
    * be one sequencer node and the rest will be storage nodes.
