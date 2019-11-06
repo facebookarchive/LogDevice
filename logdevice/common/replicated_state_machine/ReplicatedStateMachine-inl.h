@@ -257,6 +257,9 @@ bool ReplicatedStateMachine<T, D>::canFastForward(lsn_t lsn) {
 template <typename T, typename D>
 bool ReplicatedStateMachine<T, D>::onSnapshotRecord(
     std::unique_ptr<DataRecord>& record) {
+  rsm_debug(rsm_type_,
+            "Received record %s",
+            lsn_to_string(record->attrs.lsn).c_str());
   if (sync_state_ == SyncState::SYNC_SNAPSHOT &&
       record->attrs.lsn < snapshot_sync_) {
     // Do not deserialize this snapshot just yet. We'll look at it only when we
@@ -292,6 +295,9 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     if (sync_state_ == SyncState::TAILING &&
         waiting_for_snapshot_ == LSN_INVALID &&
         !canFastForward(header.base_version)) {
+      rsm_debug(rsm_type_,
+                "Cannot fast forward to %s",
+                lsn_to_string(header.base_version).c_str());
       return false;
     }
 
@@ -309,10 +315,6 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     delta_log_offset_ = header.offset;
     snapshot_log_timestamp_ = record->attrs.timestamp;
 
-    if (sync_state_ == SyncState::TAILING || deliver_while_replaying_) {
-      notifySubscribers();
-    }
-
     rsm_info(rsm_type_,
              "Applied snapshot record with lsn %s timestamp %lu, "
              "base version %s, delta_log_read_ptr %s (serialization format "
@@ -325,6 +327,11 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
                  ? lsn_to_string(last_snapshot_last_read_ptr_).c_str()
                  : "disabled",
              header.format_version);
+
+    if (sync_state_ == SyncState::TAILING || deliver_while_replaying_) {
+      notifySubscribers();
+    }
+
   } else if (header.format_version >=
                  RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH &&
              header.delta_log_read_ptr > last_snapshot_last_read_ptr_) {
@@ -534,9 +541,15 @@ void ReplicatedStateMachine<T, D>::onDeltaLogReadStreamHealthChange(
 template <typename T, typename D>
 bool ReplicatedStateMachine<T, D>::onDeltaRecord(
     std::unique_ptr<DataRecord>& record) {
+  rsm_debug(rsm_type_,
+            "Received record %s",
+            lsn_to_string(record->attrs.lsn).c_str());
   if (waiting_for_snapshot_ != LSN_INVALID) {
     // We are stalling reading the delta log because we missed some data and are
     // waiting for a snapshot.
+    rsm_debug(rsm_type_,
+              "Waiting for snapshot >= %s",
+              lsn_to_string(waiting_for_snapshot_).c_str());
     return false;
   }
 
@@ -554,6 +567,12 @@ bool ReplicatedStateMachine<T, D>::onDeltaRecord(
       record->attrs.lsn <= last_snapshot_last_read_ptr_) {
     // We already have a higher version because we read a more recent snapshot,
     // skip this delta.
+    rsm_debug(
+        rsm_type_,
+        "Skipping record %s (version_=%s, last_snapshot_last_read_ptr_=%s)",
+        lsn_to_string(record->attrs.lsn).c_str(),
+        lsn_to_string(version_).c_str(),
+        lsn_to_string(last_snapshot_last_read_ptr_).c_str());
     return true;
   }
 
@@ -702,9 +721,17 @@ int ReplicatedStateMachine<T, D>::deserializeDelta(const DataRecord& record,
 
 template <typename T, typename D>
 bool ReplicatedStateMachine<T, D>::onDeltaGap(const GapRecord& gap) {
+  rsm_debug(rsm_type_,
+            "Received %s gap [%s,%s]",
+            gapTypeToString(gap.type).c_str(),
+            lsn_to_string(gap.lo).c_str(),
+            lsn_to_string(gap.hi).c_str());
   if (waiting_for_snapshot_ != LSN_INVALID) {
     // We are stalling reading the delta log because we missed some data and are
     // waiting for a snapshot.
+    rsm_debug(rsm_type_,
+              "Waiting for snapshot >= %s",
+              lsn_to_string(waiting_for_snapshot_).c_str());
     return false;
   }
 
@@ -715,6 +742,14 @@ bool ReplicatedStateMachine<T, D>::onDeltaGap(const GapRecord& gap) {
   if (gap.hi <= version_ || gap.hi <= last_snapshot_last_read_ptr_) {
     // We already have a higher version because we read a more recent snapshot,
     // skip this delta gap.
+    rsm_debug(rsm_type_,
+              "Skipping %s gap [%s,%s] (version_=%s, "
+              "last_snapshot_last_read_ptr_=%s)",
+              gapTypeToString(gap.type).c_str(),
+              lsn_to_string(gap.lo).c_str(),
+              lsn_to_string(gap.hi).c_str(),
+              lsn_to_string(version_).c_str(),
+              lsn_to_string(last_snapshot_last_read_ptr_).c_str());
     return true;
   }
 
@@ -1128,6 +1163,13 @@ ReplicatedStateMachine<T, D>::SubscriptionHandle::~SubscriptionHandle() {
 
 template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::notifySubscribers(const D* delta) {
+  if (subscribers_.empty()) {
+    return;
+  }
+
+  rsm_debug(rsm_type_,
+            "Notifying subscribers of new state %s",
+            lsn_to_string(version_).c_str());
   for (auto& cb : subscribers_) {
     cb(*data_, delta, version_);
   }
