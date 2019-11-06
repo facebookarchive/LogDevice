@@ -445,3 +445,146 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   seq.waitUntilStarted();
   seq.waitUntilLogsConfigSynced(new_tail_lsn);
 }
+
+/**
+ * This test makes sure that if the replicated state machine stalls,
+ * the corresponding stat is bumped.
+ */
+TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
+  auto factory = clusterFactory(true);
+
+  // Configure nodes
+  Configuration::Nodes nodes;
+  for (int i = 0; i < NNODES; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole(2);
+  }
+  // Add one more node that is sequencer-only (so that we can safely isolate it
+  // without affecting internal logs reads and writes)
+  auto& node = nodes[NNODES];
+  node.generation = 1;
+  node.addSequencerRole();
+
+  factory.setNodes(nodes).oneConfigPerNode();
+
+  buildClusterAndClient(std::move(factory));
+
+  // Write something to the delta log
+  auto dir = client->makeDirectorySync("/dir1", true);
+  lsn_t last_delta = dir->version();
+
+  // Check we never trimmed
+  ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
+            LSN_INVALID);
+
+  // Bump epoch a number of times
+  const size_t NUM_EPOCHS_TO_BUMP = 5;
+  auto& seq = cluster->getSequencerNode();
+  for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
+    seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+    cluster->waitForRecovery();
+  }
+
+  // Check that the tail moved as expected
+  auto tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  ASSERT_EQ(epoch_t(lsn_to_epoch(last_delta).val_ + NUM_EPOCHS_TO_BUMP),
+            lsn_to_epoch(tail_lsn));
+
+  // Make sure logsconfig is in sync everywhere
+  cluster->waitUntilLogsConfigSynced(tail_lsn);
+
+  // Take snapshot
+  auto result =
+      cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
+  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+
+  // Trim the delta log up to N0 read pointer
+  ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
+
+  // Check we have trimmed up to delta log read ptr
+  ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
+            tail_lsn - 1);
+
+  // Isolate N<last> so that delta log read stream becomes unhealthy and the
+  // replicated state machine stalls
+  std::set<int> partition1;
+  for (int i = 0; i < NNODES; ++i) {
+    partition1.insert(i);
+  }
+  cluster->partition({partition1, {NNODES}});
+
+  // Write another record
+  dir = client->makeDirectorySync("/dir2", true);
+  last_delta = dir->version();
+
+  // Bump epoch a few more times to move the tail and cause bridge gaps
+  for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
+    seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+    cluster->waitForRecovery();
+  }
+
+  // Check that the tail moved as expected
+  auto new_tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  ASSERT_EQ(epoch_t(lsn_to_epoch(last_delta).val_ + NUM_EPOCHS_TO_BUMP),
+            lsn_to_epoch(new_tail_lsn));
+  cluster->getNode(0).waitUntilLogsConfigSynced(new_tail_lsn);
+
+  // Write an intermediate snapshot
+  result = cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
+  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+
+  // Bump epoch a few more times to move the tail and cause bridge gaps
+  for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
+    seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+    cluster->waitForRecovery();
+  }
+
+  // Write another record
+  dir = client->makeDirectorySync("/dir3", true);
+  last_delta = dir->version();
+
+  // Check that the tail is at the last record
+  new_tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  ASSERT_EQ(epoch_t(lsn_to_epoch(last_delta).val_), lsn_to_epoch(new_tail_lsn));
+  cluster->getNode(0).waitUntilLogsConfigSynced(new_tail_lsn);
+
+  // trim the delta log "manually" (bypassing safety checks provided
+  // by TrimRSMRequest) without taking a new snapshot
+  ASSERT_EQ(client->trimSync(
+                configuration::InternalLogs::CONFIG_LOG_DELTAS, new_tail_lsn),
+            0);
+  ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
+            new_tail_lsn);
+
+  // Rejoin N<last> to the cluster
+  partition1.insert(NNODES);
+  cluster->partition({partition1});
+
+  // Check that N<last> is stalled waiting for a newer snapshot
+  wait_until("N<last> logsconfig replicated state machine stalls", [&]() {
+    auto stats = cluster->getNode(NNODES).stats();
+    return stats["num_replicated_state_machines_stalled"] == 1;
+  });
+
+  // Write a snapshot
+  result = cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
+  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+
+  // Check that N<last> is able to sycnhronize the logs config up to the tail.
+  cluster->getNode(NNODES).waitUntilLogsConfigSynced(new_tail_lsn);
+
+  // Check that N<last> is no longer waiting for newer snapshot
+  auto stats = cluster->getNode(NNODES).stats();
+  EXPECT_EQ(stats["num_replicated_state_machines_stalled"], 0);
+
+  // Check logsconfig read availability on sequencer by restarting it
+  seq.kill();
+  seq.start();
+  seq.waitUntilStarted();
+  seq.waitUntilLogsConfigSynced(new_tail_lsn);
+}

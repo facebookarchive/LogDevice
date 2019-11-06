@@ -371,6 +371,7 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     onBaseSnapshotRetrieved();
   }
 
+  bool resume_delta_reading = false;
   if (waiting_for_snapshot_ != LSN_INVALID &&
       (version_ >= waiting_for_snapshot_ ||
        last_snapshot_last_read_ptr_ >= waiting_for_snapshot_)) {
@@ -378,7 +379,7 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
     // DATALOSS gap in it, but now we have a snapshot that accounts for the data
     // we missed, so we can resume reading the delta log.
     waiting_for_snapshot_ = LSN_INVALID;
-    resumeReadStream(delta_log_rsid_);
+    resume_delta_reading = true;
     cancelStallGracePeriod();
     if (bumped_stalled_stat_) {
       WORKER_STAT_DECR(num_replicated_state_machines_stalled);
@@ -391,6 +392,14 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
   discardSkippedPendingDeltas();
 
   cancelGracePeriodForFastForward();
+
+  if (resume_delta_reading) {
+    // Resume reading the delta log if needed, but only as the last step in
+    // this method. This may cause the stall grace period timer to be
+    // activated, as well as the fast forward grace period timer, and we don't
+    // want to cancel these timers above.
+    resumeReadStream(delta_log_rsid_);
+  }
   return true;
 }
 
