@@ -34,5 +34,7 @@ class ClientProcessor : public Processor {
   Worker* createWorker(WorkContext::KeepAlive executor,
                        worker_id_t i,
                        WorkerType type) override;
+
+  ~ClientProcessor() override;
 };
 }} // namespace facebook::logdevice

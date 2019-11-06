@@ -20,4 +20,12 @@ Worker* ClientProcessor::createWorker(WorkContext::KeepAlive executor,
   worker->add([worker] { worker->setupWorker(); });
   return worker;
 }
+
+ClientProcessor::~ClientProcessor() {
+  // Base Processor class also calls shutdown() from destructor, but we need
+  // to do it here, before vtable pointer is switched from ClientProcessor
+  // to Processor.
+  shutdown();
+}
+
 }} // namespace facebook::logdevice
