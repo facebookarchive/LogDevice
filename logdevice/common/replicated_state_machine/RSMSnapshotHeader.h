@@ -89,6 +89,8 @@ struct RSMSnapshotHeader : public SerializableData {
   }
 
   bool operator==(const RSMSnapshotHeader&) const;
+
+  std::string describe() const;
 };
 
 }} // namespace facebook::logdevice

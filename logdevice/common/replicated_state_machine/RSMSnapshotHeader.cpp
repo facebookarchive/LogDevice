@@ -91,4 +91,15 @@ bool RSMSnapshotHeader::operator==(const RSMSnapshotHeader& out) const {
        (delta_log_read_ptr == out.delta_log_read_ptr && length == out.length));
 }
 
+std::string RSMSnapshotHeader::describe() const {
+  return folly::format("RSMSnapshotHeader[format_version={}, "
+                       "flags={}, byte_offset={}, offset={}, base_version={}]",
+                       format_version,
+                       flags,
+                       byte_offset,
+                       offset,
+                       lsn_to_string(base_version).c_str())
+      .str();
+}
+
 }} // namespace facebook::logdevice
