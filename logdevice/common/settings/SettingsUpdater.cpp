@@ -633,7 +633,7 @@ void SettingsUpdater::setFromAdminCmd(std::string name, std::string value) {
   std::vector<std::pair<std::string, std::string>> v = {{name, value}};
 
   try {
-    parse(v.begin(), v.end(), Source::ADMIN_CMD, true, checker);
+    parse(v.begin(), v.end(), Source::ADMIN_OVERRIDE, true, checker);
   } catch (const boost::program_options::error& ex) {
     ld_error("%s", ex.what());
     throw;
@@ -669,7 +669,12 @@ void SettingsUpdater::unsetFromAdminCmd(std::string name) {
     }
 
     std::vector<std::string> to_unset = {name};
-    parse(0, nullptr, Source::ADMIN_CMD, /* store */ true, checker, &to_unset);
+    parse(0,
+          nullptr,
+          Source::ADMIN_OVERRIDE,
+          /* store */ true,
+          checker,
+          &to_unset);
     update(checker);
   }
 }
@@ -704,7 +709,7 @@ void SettingsUpdater::SourceNameMap::setValues() {
   SET_SOURCE_NAME(CLI);
   SET_SOURCE_NAME(CLIENT);
   SET_SOURCE_NAME(CONFIG);
-  SET_SOURCE_NAME(ADMIN_CMD);
+  SET_SOURCE_NAME(ADMIN_OVERRIDE);
   SET_SOURCE_NAME(CURRENT);
 #undef SET_SOURCE_NAME
 }

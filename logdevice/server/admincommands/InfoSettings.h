@@ -67,7 +67,7 @@ class InfoSettings : public AdminCommand {
           .set<3>(folly::join(" ", setting.second.descriptor.default_value));
       std::string cli = get(SettingsUpdater::Source::CLI);
       std::string config = get(SettingsUpdater::Source::CONFIG);
-      std::string admin_cmd = get(SettingsUpdater::Source::ADMIN_CMD);
+      std::string admin_cmd = get(SettingsUpdater::Source::ADMIN_OVERRIDE);
       if (!cli.empty()) {
         table.set<4>(std::move(cli));
       }

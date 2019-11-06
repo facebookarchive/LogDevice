@@ -48,7 +48,14 @@ class SettingsUpdater {
 
   // CURRENT is a pseudo-source. It's a cache of the effective value aggregated
   // from the other sources according to precedence rules.
-  enum class Source { INTERNAL = 0, CLI, CLIENT, CONFIG, ADMIN_CMD, CURRENT };
+  enum class Source {
+    INTERNAL = 0,
+    CLI,
+    CLIENT,
+    CONFIG,
+    ADMIN_OVERRIDE,
+    CURRENT
+  };
   using SourceNameMap =
       EnumMap<Source,
               std::string,
@@ -66,7 +73,8 @@ class SettingsUpdater {
     // The effective value of the setting is the value of the source with a
     // value that has the most priority. Order of priorities is defined by the
     // order of the values in the Source enum (CURRENT omitted). CLI is the
-    // source with the least precedence, ADMIN_CMD is the one with the most.
+    // source with the least precedence, ADMIN_OVERRIDE is the one with the
+    // most.
     using SourceMap = std::unordered_map<int, std::vector<std::string>>;
     SourceMap sources;
 

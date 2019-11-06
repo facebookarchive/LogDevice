@@ -132,7 +132,7 @@ void AdminAPIHandler::getSettings(
 
     std::string cli = get(SettingsUpdater::Source::CLI);
     std::string config = get(SettingsUpdater::Source::CONFIG);
-    std::string admin_cmd = get(SettingsUpdater::Source::ADMIN_CMD);
+    std::string admin_cmd = get(SettingsUpdater::Source::ADMIN_OVERRIDE);
 
     if (!cli.empty()) {
       s.sources[thrift::SettingSource::CLI] = std::move(cli);
