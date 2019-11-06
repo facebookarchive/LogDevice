@@ -31,6 +31,18 @@ UpdateableConfigBase::subscribeToUpdates(std::function<void()> callback) {
   return subscribeToUpdates(std::move(stored_callback));
 }
 
+ConfigSubscriptionHandle UpdateableConfigBase::callAndSubscribeToUpdates(
+    std::function<void()> callback) {
+  std::lock_guard<std::mutex> guard(mutex_);
+  callback();
+  subscription_id_t sub_id = last_id_++;
+  callbacks_[sub_id] = [callback] {
+    callback();
+    return SubscriptionStatus::KEEP;
+  };
+  return ConfigSubscriptionHandle(this, sub_id);
+}
+
 void UpdateableConfigBase::notify() {
   std::lock_guard<std::mutex> guard(mutex_);
   for (auto it = callbacks_.begin(); it != callbacks_.end();) {

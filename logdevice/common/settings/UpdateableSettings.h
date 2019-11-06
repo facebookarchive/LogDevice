@@ -174,7 +174,8 @@ class UpdateableSettings {
   // running at the same time. The returned handle can be used in
   // unsubscribeFromUpdates() or will unsubscribe automatically on destruction
   // (so save it for as long as you want to keep the subscription)
-  SubscriptionHandle subscribeToUpdates(std::function<void()> callback) {
+  FOLLY_NODISCARD SubscriptionHandle
+  subscribeToUpdates(std::function<void()> callback) {
     return ptr_->subscribeToUpdates(std::move(callback));
   }
 
@@ -184,7 +185,8 @@ class UpdateableSettings {
   // The only difference is that this method calls the callback while holding
   // a mutex that prevents background thread from calling the callback. This
   // prevents certain race conditions.
-  SubscriptionHandle callAndSubscribeToUpdates(std::function<void()> callback) {
+  FOLLY_NODISCARD SubscriptionHandle
+  callAndSubscribeToUpdates(std::function<void()> callback) {
     return ptr_->callAndSubscribeToUpdates(std::move(callback));
   }
 

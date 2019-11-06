@@ -62,7 +62,7 @@ ServerMessageDispatch::onReceivedImpl(Message* msg,
   auto params = ServerMessagePermission::computePermissionParams(msg);
 
   std::shared_ptr<PermissionChecker> permission_checker =
-      processor_->security_info_->getPermissionChecker();
+      processor_->security_info_->get()->permission_checker;
 
   if (permission_checker && params.requiresPermission &&
       processor_->settings()->require_permission_message_types.count(

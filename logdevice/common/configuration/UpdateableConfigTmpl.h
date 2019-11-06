@@ -103,6 +103,15 @@ class UpdateableConfigBase
   FOLLY_NODISCARD ConfigSubscriptionHandle
   subscribeToUpdates(std::function<void()> callback);
 
+  // Like subscribeToUpdates(), but also calls the callback right now, inside
+  // the callAndSubscribeToUpdates() call.
+  // Very similar to calling subscribeToUpdates(), then calling the callback.
+  // The only difference is that this method calls the callback while holding
+  // a mutex that prevents background thread from calling the callback.
+  // This way the callback doesn't need to be thread safe.
+  FOLLY_NODISCARD ConfigSubscriptionHandle
+  callAndSubscribeToUpdates(std::function<void()> callback);
+
  protected:
   /**
    * Protected constructor. Abstract class.

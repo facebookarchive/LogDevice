@@ -106,9 +106,9 @@ class Info : public AdminCommand {
         processor->getPluginRegistry()->getSinglePlugin<BuildInfo>(
             PluginType::BUILD_INFO);
 
-    const auto& security_info = processor->security_info_;
-    auto permission_checker = security_info->getPermissionChecker();
-    auto principal_parser = security_info->getPrincipalParser();
+    auto security_info = processor->security_info_->get();
+    auto permission_checker = security_info->permission_checker;
+    auto principal_parser = security_info->principal_parser;
 
     table.next()
         .set<0>(getpid())

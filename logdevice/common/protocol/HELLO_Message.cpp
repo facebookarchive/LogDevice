@@ -137,7 +137,8 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
                                                  const std::string& csid) {
   Worker* w = Worker::onThisThread();
 
-  auto principal_parser = w->processor_->security_info_->getPrincipalParser();
+  auto principal_parser =
+      w->processor_->security_info_->get()->principal_parser;
 
   PrincipalIdentity principal;
 

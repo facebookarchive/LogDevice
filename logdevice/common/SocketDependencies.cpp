@@ -567,8 +567,7 @@ SteadyTimestamp SocketDependencies::getCurrentTimestamp() {
 
 bool SocketDependencies::authenticationEnabled() {
   if (processor_->security_info_) {
-    auto principal_parser = processor_->security_info_->getPrincipalParser();
-    return principal_parser != nullptr;
+    return processor_->security_info_->get()->principal_parser != nullptr;
   } else {
     return false;
   }
@@ -581,7 +580,7 @@ bool SocketDependencies::allowUnauthenticated() {
 bool SocketDependencies::includeHELLOCredentials() {
   // Only include HELLOCredentials in HELLO_Message when the PrincipalParser
   // will use the data.
-  auto principal_parser = processor_->security_info_->getPrincipalParser();
+  auto principal_parser = processor_->security_info_->get()->principal_parser;
   return principal_parser != nullptr &&
       (principal_parser->getAuthenticationType() ==
        AuthenticationType::SELF_IDENTIFICATION);

@@ -1063,7 +1063,8 @@ std::shared_ptr<PermissionChecker> AppenderPrep::getPermissionChecker() {
     return nullptr;
   }
   return Worker::onThisThread()
-      ->processor_->security_info_->getPermissionChecker();
+      ->processor_->security_info_->get()
+      ->permission_checker;
 }
 
 }} // namespace facebook::logdevice

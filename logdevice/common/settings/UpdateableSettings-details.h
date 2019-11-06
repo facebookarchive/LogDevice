@@ -445,7 +445,8 @@ class UpdateableSettingsRaw : public UpdateableSettingsBase {
   };
 
   // See UpdateableSettings.h
-  SubscriptionHandle subscribeToUpdates(std::function<void()> callback) {
+  FOLLY_NODISCARD SubscriptionHandle
+  subscribeToUpdates(std::function<void()> callback) {
     std::lock_guard<std::mutex> guard(subscriber_mutex_);
     // Insert at end of list and return iterator as handle
     auto it = subscriber_callbacks_.insert(
@@ -454,7 +455,8 @@ class UpdateableSettingsRaw : public UpdateableSettingsBase {
   }
 
   // See UpdateableSettings.h
-  SubscriptionHandle callAndSubscribeToUpdates(std::function<void()> callback) {
+  FOLLY_NODISCARD SubscriptionHandle
+  callAndSubscribeToUpdates(std::function<void()> callback) {
     std::lock_guard<std::mutex> guard(subscriber_mutex_);
     callback();
     // Insert at end of list and return iterator as handle

@@ -65,19 +65,18 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
   }
 
   Worker* w = Worker::onThisThread();
-  auto cluster_node_identity =
-      w->processor_->security_info_->getClusterNodeIdentity();
-  bool enforce_cluster_node_identity =
-      w->processor_->security_info_->getEnforceClusterNodeIdentity();
-  auto principal_parser = w->processor_->security_info_->getPrincipalParser();
+  // Take a snapshot of security info.
+  auto security_info = w->processor_->security_info_->get();
+  auto& principal_parser = security_info->principal_parser;
 
   // If the authentication type is set to SSL and a cluster node identity is
   // configured, we verify that the presented certificate contains the required
   // identity.
-  if (principal_parser && !cluster_node_identity.empty() &&
+  if (principal_parser && !security_info->cluster_node_identity.empty() &&
       principal_parser->getAuthenticationType() == AuthenticationType::SSL) {
     std::string idType, identity;
-    if (folly::split(':', cluster_node_identity, idType, identity)) {
+    if (folly::split(
+            ':', security_info->cluster_node_identity, idType, identity)) {
       X509* cert = w->sender().getPeerCert(from);
       if (cert) {
         // We only support server authentication for SSL connections. If the
@@ -96,12 +95,12 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
                           "Untrusted cluster node identity (%s), expecting %s. "
                           "%s",
                           principal.toString().c_str(),
-                          cluster_node_identity.c_str(),
-                          enforce_cluster_node_identity
+                          security_info->cluster_node_identity.c_str(),
+                          security_info->enforce_cluster_node_identity
                               ? "Rejecting with E::ACCESS."
                               : "Ignoring, because "
                                 "enforce_cluster_node_identity is false.");
-          if (enforce_cluster_node_identity) {
+          if (security_info->enforce_cluster_node_identity) {
             // only fail if verify_cluster_node_identity is true.
             err = E::ACCESS;
             return Message::Disposition::ERROR;
