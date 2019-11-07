@@ -291,21 +291,16 @@ Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
         }
       }
     }
-    // Socket was already bad or it can hit error in writeChain invocation.
-    if (sock_->good()) {
-      auto& s = health_stats_;
-      // Check if bytes in socket is above idle_threshold. Accumulate active
-      // bytes sent and change state to active if necessary.
-      if (s.active_start_time_ == SteadyTimestamp::min() &&
-          getBufferedBytes() > getSettings().socket_idle_threshold) {
-        s.active_start_time_ = deps_->getCurrentTimestamp();
-      }
-      // OnSent for the message will be called immediately.
-      return Socket::SendStatus::SENT;
-    } else {
-      err = E::INTERNAL;
-      return Socket::SendStatus::ERROR;
+
+    auto& s = health_stats_;
+    // Check if bytes in socket is above idle_threshold. Accumulate active
+    // bytes sent and change state to active if necessary.
+    if (s.active_start_time_ == SteadyTimestamp::min() &&
+        getBufferedBytes() > getSettings().socket_idle_threshold) {
+      s.active_start_time_ = deps_->getCurrentTimestamp();
     }
+    // OnSent for the message will be called immediately.
+    return Socket::SendStatus::SENT;
   } else {
     return Socket::sendBuffer(
         std::forward<std::unique_ptr<folly::IOBuf>>(buffer_chain));
