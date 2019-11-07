@@ -135,7 +135,7 @@ void OverloadDetector::issueTimers() {
     decltype(period) delay{folly::Random::rand64(period.count())};
     auto [it, __] = recv_q_timer_.try_emplace(
         nid, [this, nid = nid]() { updateSampleFor(nid); });
-    it->second.activate(period);
+    it->second.activate(delay);
   }
 }
 
