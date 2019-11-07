@@ -2241,33 +2241,32 @@ size_t Socket::getTcpSendBufSize() const {
 }
 
 size_t Socket::getTcpRecvBufSize() const {
-  if (!bev_) {
+  if (isClosed()) {
     return 0;
   }
   socklen_t optlen = sizeof(int);
   size_t out = 0;
-  int fd = LD_EV(bufferevent_getfd)(bev_);
-  int rv = getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &out, &optlen);
+  int rv = getsockopt(fd_, SOL_SOCKET, SO_RCVBUF, &out, &optlen);
 
   if (rv == 0) {
     out >>= 1; // Response is double of what it really is.
   } else {
-    ld_error(
-        "Failed to get rcvbuf size for TCP socket %d: %s", fd, strerror(errno));
+    ld_error("Failed to get rcvbuf size for TCP socket %d: %s",
+             fd_,
+             strerror(errno));
   }
   return out;
 }
 
 ssize_t Socket::getTcpRecvBufOccupancy() const {
-  if (!bev_) {
+  if (isClosed()) {
     return -1;
   }
-  int fd = LD_EV(bufferevent_getfd)(bev_);
   int ret;
-  int error = ioctl(fd, FIONREAD, &ret);
+  int error = ioctl(fd_, FIONREAD, &ret);
   if (error != 0) {
     ld_error("Failed to get rcvbuf occupancy for TCP socket %d: %s",
-             fd,
+             fd_,
              strerror(error));
     return -1;
   } else {
