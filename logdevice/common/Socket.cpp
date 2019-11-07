@@ -1181,6 +1181,10 @@ void Socket::close(Status reason) {
     deps_->processDeferredMessageCompletions();
   }
 
+  // Mark next and drain pos as the same to make sure getBufferedBytesSize()
+  // returns zero going forward.
+  drain_pos_ = next_pos_;
+
   while (!pending_bw_cbs_moved.empty()) {
     auto& cb = pending_bw_cbs_moved.front();
     cb.deactivate();
@@ -1371,7 +1375,7 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
     auto& s = health_stats_;
     // Check if bytes in socket is above idle_threshold. Accumulate active bytes
     // sent and change state to active if necessary.
-    if (next_pos_ - drain_pos_ > getSettings().socket_idle_threshold &&
+    if (getBufferedBytesSize() > getSettings().socket_idle_threshold &&
         s.active_start_time_ == SteadyTimestamp::min()) {
       s.active_start_time_ = deps_->getCurrentTimestamp();
     }
@@ -1649,7 +1653,7 @@ void Socket::bytesSentCallback(struct evbuffer* buffer,
   ld_check(buffer == self->deps_->getOutput(self->bev_));
   STAT_INCR(self->deps_->getStats(), sock_write_events);
   if (info->n_deleted > 0) {
-    self->onBytesPassedToTCP(info->n_deleted);
+    self->onBytesAdmittedToSend(info->n_deleted);
   }
 }
 
@@ -1661,7 +1665,7 @@ void Socket::enqueueDeferredEvent(SocketEvent e) {
   }
 }
 
-void Socket::onBytesPassedToTCP(size_t nbytes) {
+void Socket::onBytesAdmittedToSend(size_t nbytes) {
   message_pos_t next_drain_pos = drain_pos_ + nbytes;
   ld_check(next_pos_ >= next_drain_pos);
   size_t num_messages = 0;
@@ -1707,10 +1711,20 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
 
   drain_pos_ = next_drain_pos;
 
+  auto total_time = getTimeDiff(start_time);
+  STAT_ADD(deps_->getStats(),
+           sock_time_spent_to_process_send_done,
+           total_time.count());
+  STAT_ADD(deps_->getStats(), sock_num_messages_sent, num_messages);
+  STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, nbytes);
+  onBytesPassedToTCP(nbytes);
+}
+
+void Socket::onBytesPassedToTCP(size_t nbytes) {
   // If we are in active state and bytes were written into the socket, assume
   // that they are already sent to the remote and mark the state as inactive if
   // necessary.
-  auto bytes_in_socket = next_pos_ - drain_pos_;
+  auto bytes_in_socket = getBufferedBytesSize();
   auto& s = health_stats_;
   s.num_bytes_sent_ += nbytes;
   if (s.active_start_time_ != SteadyTimestamp::min() &&
@@ -1719,13 +1733,6 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
     s.active_time_ += to_msec(diff);
     s.active_start_time_ = SteadyTimestamp::min();
   }
-
-  auto total_time = getTimeDiff(start_time);
-  STAT_ADD(deps_->getStats(),
-           sock_time_spent_to_process_send_done,
-           total_time.count());
-  STAT_ADD(deps_->getStats(), sock_num_messages_sent, num_messages);
-  STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, nbytes);
 
   deps_->noteBytesDrained(
       nbytes, getPeerType(), /* message_type */ folly::none);
@@ -2308,6 +2315,10 @@ size_t Socket::getBytesPending() const {
   return queued_bytes + buffered_bytes;
 }
 
+size_t Socket::getBufferedBytesSize() const {
+  return next_pos_ - drain_pos_;
+}
+
 void Socket::handshakeTimeoutCallback(void* arg, short) {
   reinterpret_cast<Socket*>(arg)->onHandshakeTimeout();
 }
@@ -2479,7 +2490,7 @@ SocketDrainStatusType Socket::checkSocketHealth() {
     s.active_time_ = std::chrono::milliseconds(0);
     s.num_bytes_sent_ = 0;
     s.active_start_time_ = SteadyTimestamp::min();
-    if (next_pos_ - drain_pos_ > getSettings().socket_idle_threshold) {
+    if (getBufferedBytesSize() > getSettings().socket_idle_threshold) {
       s.active_start_time_ = deps_->getCurrentTimestamp();
     }
   };
