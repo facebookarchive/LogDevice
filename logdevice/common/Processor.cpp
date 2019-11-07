@@ -247,6 +247,12 @@ void Processor::init() {
   initialized_.store(true, std::memory_order_relaxed);
 }
 
+void Processor::startRunning() {
+  for (std::unique_ptr<EventLoop>& loop : impl_->ev_loops_) {
+    loop->startRunning();
+  }
+}
+
 ReadStreamDebugInfoSamplingConfig& Processor::getDebugClientConfig() {
   return impl_->read_stream_debug_info_sampling_config_;
 }
@@ -272,7 +278,8 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
               local_settings->mid_requests_per_iteration,
               local_settings->lo_requests_per_iteration),
           local_settings->use_legacy_eventbase ? EvBase::LEGACY_EVENTBASE
-                                               : EvBase::FOLLY_EVENTBASE));
+                                               : EvBase::FOLLY_EVENTBASE,
+          /* start_running */ false));
       auto executor = folly::getKeepAliveToken(loops.back().get());
       worker.reset(createWorker(std::move(executor), worker_id_t(i), type));
     } catch (ConstructorFailed&) {

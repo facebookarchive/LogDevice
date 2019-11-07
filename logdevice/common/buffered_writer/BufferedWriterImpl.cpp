@@ -27,34 +27,39 @@ int ProcessorProxy::postWithRetrying(std::unique_ptr<Request>& rq) {
 
 namespace {
 
+// All requests used by a single BufferedWriterImpl must have the same priority
+// to avoid reordering.
+static constexpr int8_t kBufferedWriterRequestsPriority =
+    folly::Executor::HI_PRI;
+
 // Instructs the Worker to create a BufferedWriterShard instance with the
 // specified ID.
 class CreateShardRequest : public Request {
  public:
   CreateShardRequest(worker_id_t worker,
-                     std::function<BufferedWriterShard*()> factory,
-                     Semaphore* sem)
+                     std::function<BufferedWriterShard*()> factory)
       : Request(RequestType::BUFFERED_WRITER_CREATE_SHARD),
         worker_(worker),
-        factory_(std::move(factory)),
-        sem_(sem) {}
+        factory_(std::move(factory)) {}
 
   int getThreadAffinity(int /*nthreads*/) override {
     return worker_.val_;
+  }
+
+  int8_t getExecutorPriority() const override {
+    return kBufferedWriterRequestsPriority;
   }
 
   Execution execute() override {
     BufferedWriterShard* instance = factory_();
     Worker::onThisThread()->active_buffered_writers_.insert(
         std::make_pair(instance->id_, instance));
-    sem_->post();
     return Execution::COMPLETE;
   }
 
  private:
   worker_id_t worker_;
   std::function<BufferedWriterShard*()> factory_;
-  Semaphore* sem_;
 };
 } // namespace
 
@@ -129,28 +134,23 @@ BufferedWriterImpl::BufferedWriterImpl(ProcessorProxy* processor_proxy,
   }
 
   const int nworkers = processor()->getWorkerCount(WorkerType::GENERAL);
-  Semaphore sem;
   for (worker_id_t widx(0); widx.val_ < nworkers; ++widx.val_) {
     // We generate the ID here but let the Worker actually create the
     // BufferedWriterShard instance so that it's collocated with other data
     // belonging to that Worker.
     buffered_writer_id_t id = processor()->issueBufferedWriterID();
-    auto factory = [id, &get_log_options, this]() {
+    auto factory = [id, get_log_options, this]() {
       return new BufferedWriterShard(id, get_log_options, this);
     };
     std::unique_ptr<Request> req =
-        std::make_unique<CreateShardRequest>(widx, factory, &sem);
+        std::make_unique<CreateShardRequest>(widx, factory);
     int rv = processor()->postWithRetrying(req);
     ld_check(rv == 0);
     shards_.push_back(id);
   }
 
-  // Wait until all CreateShardRequest's have been processed by Workers.
-  // After this it is surely safe to process append() calls and the
-  // constructor can return.
-  for (int i = 0; i < nworkers; ++i) {
-    sem.wait();
-  }
+  // No need to wait for the requests to complete because they can't fail and
+  // can't be reordered with future append requests.
 }
 
 namespace {
@@ -165,6 +165,10 @@ class PerShardRequest : public Request {
 
   int getThreadAffinity(int /*nthreads*/) override {
     return worker_.val_;
+  }
+
+  int8_t getExecutorPriority() const override {
+    return kBufferedWriterRequestsPriority;
   }
 
   Execution execute() override {
@@ -301,7 +305,7 @@ class BufferedAppendRequest : public Request {
   }
 
   int8_t getExecutorPriority() const override {
-    return folly::Executor::HI_PRI;
+    return kBufferedWriterRequestsPriority;
   }
 
   Execution execute() override {
@@ -623,7 +627,7 @@ class FlushShardRequest : public Request {
   }
 
   int8_t getExecutorPriority() const override {
-    return folly::Executor::HI_PRI;
+    return kBufferedWriterRequestsPriority;
   }
 
   Execution execute() override {

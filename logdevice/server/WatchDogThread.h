@@ -23,15 +23,19 @@ class Processor;
 
 class WatchDogThread {
  public:
+  // Creates the object but doesn't start the thread yet.
   explicit WatchDogThread(Processor* p,
                           std::chrono::milliseconds poll_interval,
                           rate_limit_t bt_ratelimit);
 
+  // Starts the thread.
+  void startRunning();
+
   void shutdown();
   // Callback functions that register if thread is delayed or number of stalled
   // workers.
-  using SlowWatchdogLoopCallback = folly::Function<void(bool delayed)>;
-  using SlowWorkersCallback = folly::Function<void(int num_stalled)>;
+  using SlowWatchdogLoopCallback = std::function<void(bool delayed)>;
+  using SlowWorkersCallback = std::function<void(int num_stalled)>;
 
   void setSlowWatchdogLoopCallback(SlowWatchdogLoopCallback cb);
   void setSlowWorkersCallback(SlowWorkersCallback cb);
@@ -59,11 +63,9 @@ class WatchDogThread {
   // Error injection
   double watchdog_detected_worker_stall_error_injection_chance_;
 
-  std::shared_ptr<SlowWatchdogLoopCallback> slow_wd_loop_cb_{nullptr};
-  std::shared_ptr<SlowWorkersCallback> slow_workers_cb_{nullptr};
+  SlowWatchdogLoopCallback slow_wd_loop_cb_{nullptr};
+  SlowWorkersCallback slow_workers_cb_{nullptr};
 
-  void callSlowWatchdogLoopCallback(bool delayed);
-  void callSlowWorkersCallback(int num_workers);
   // Main thread loop.
   void run();
 

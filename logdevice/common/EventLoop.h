@@ -54,7 +54,8 @@ class EventLoop : public folly::Executor {
       bool enable_priority_queues = true,
       const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
           requests_per_iteration = {13, 3, 1},
-      EvBase::EvBaseType base_type = EvBase::LEGACY_EVENTBASE);
+      EvBase::EvBaseType base_type = EvBase::LEGACY_EVENTBASE,
+      bool start_running = true);
 
   // destructor has to be virtual because it is invoked by EventLoop::run()
   // as "delete this"
@@ -76,6 +77,10 @@ class EventLoop : public folly::Executor {
   uint8_t getNumPriorities() const override {
     return EventLoopTaskQueue::kNumberOfPriorities;
   }
+
+  // Tells the event loop thread to start processing requests.
+  // Must be called if `start_running = false` was passed to constructor.
+  void startRunning();
 
   /// Enqueue a function to executed by this executor. This and all
   /// variants must be threadsafe.
@@ -175,6 +180,12 @@ class EventLoop : public folly::Executor {
 
   // Main task queue; (shutting down this TaskQueue stops the event loop)
   std::unique_ptr<EventLoopTaskQueue> task_queue_;
+
+  // The thread will block on this semaphore before it starts processing
+  // requests.
+  Semaphore start_running_;
+  // True if we posted to start_running_.
+  bool started_running_ = false;
 
   Status
   init(EvBase::EvBaseType base_type,

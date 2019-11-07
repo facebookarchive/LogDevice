@@ -33,6 +33,9 @@ WatchDogThread::WatchDogThread(Processor* p,
           processor_->settings()
               ->watchdog_detected_worker_stall_error_injection_chance) {
   ld_check(processor_->getWorkerCount(WorkerType::GENERAL) != 0);
+}
+
+void WatchDogThread::startRunning() {
   thread_ = std::thread(&WatchDogThread::run, this);
 }
 
@@ -92,11 +95,14 @@ void WatchDogThread::detectStalls() {
                watchdog_detected_worker_stall_error_injection_chance_ > 0 &&
                folly::Random::randDouble(0, 100.0) <=
                    watchdog_detected_worker_stall_error_injection_chance_)) {
-    callSlowWorkersCallback(1);
+    if (slow_workers_cb_) {
+      slow_workers_cb_(1);
+    }
     STAT_INCR(processor_->stats_, watchdog_fault_injection_indicator);
-
   } else {
-    callSlowWorkersCallback(stalled_worker_pids.size());
+    if (slow_workers_cb_) {
+      slow_workers_cb_(stalled_worker_pids.size());
+    }
   }
   if (stalled_worker_pids.size()) {
     ld_warning("Found %zu stalled workers", stalled_worker_pids.size());
@@ -136,15 +142,16 @@ void WatchDogThread::run() {
       std::chrono::steady_clock::now();
   while (!shutdown_) {
     int64_t loop_entry_delay = msec_since(last_entry_time);
-    if (loop_entry_delay - poll_interval_ms_.count() > 100) {
+    bool delayed = loop_entry_delay - poll_interval_ms_.count() > 100;
+    if (delayed) {
       STAT_INCR(processor_->stats_, watchdog_num_delays);
       RATELIMIT_INFO(std::chrono::minutes(1),
                      1,
                      "Entry into watchdog loop took %lums",
                      loop_entry_delay);
-      callSlowWatchdogLoopCallback(/*delayed=*/true);
-    } else {
-      callSlowWatchdogLoopCallback(/*delayed=*/false);
+    }
+    if (slow_wd_loop_cb_) {
+      slow_wd_loop_cb_(delayed);
     }
     detectStalls();
     last_entry_time = std::chrono::steady_clock::now();
@@ -160,35 +167,18 @@ void WatchDogThread::shutdown() {
   cv_.notify_all();
   cv_lock.unlock();
 
-  thread_.join();
+  if (thread_.joinable()) {
+    thread_.join();
+  }
 }
 
 void WatchDogThread::setSlowWatchdogLoopCallback(SlowWatchdogLoopCallback cb) {
-  std::atomic_store_explicit(
-      &slow_wd_loop_cb_,
-      std::make_shared<SlowWatchdogLoopCallback>(std::move(cb)),
-      std::memory_order_relaxed);
+  ld_check(!slow_wd_loop_cb_);
+  slow_wd_loop_cb_ = cb;
 }
 void WatchDogThread::setSlowWorkersCallback(SlowWorkersCallback cb) {
-  std::atomic_store_explicit(
-      &slow_workers_cb_,
-      std::make_shared<SlowWorkersCallback>(std::move(cb)),
-      std::memory_order_relaxed);
-}
-
-void WatchDogThread::callSlowWatchdogLoopCallback(bool delayed) {
-  auto cb =
-      std::atomic_load_explicit(&slow_wd_loop_cb_, std::memory_order_relaxed);
-  if (cb && *cb) {
-    (*cb)(delayed);
-  }
-}
-void WatchDogThread::callSlowWorkersCallback(int num_workers) {
-  auto cb =
-      std::atomic_load_explicit(&slow_workers_cb_, std::memory_order_relaxed);
-  if (cb && *cb) {
-    (*cb)(num_workers);
-  }
+  ld_check(!slow_workers_cb_);
+  slow_workers_cb_ = cb;
 }
 
 }} // namespace facebook::logdevice

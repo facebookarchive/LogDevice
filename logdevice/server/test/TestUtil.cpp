@@ -74,6 +74,11 @@ TestServerProcessorBuilder::setMyNodeID(NodeID my_node_id) {
   return *this;
 }
 
+TestServerProcessorBuilder& TestServerProcessorBuilder::setDeferStart() {
+  defer_start_ = true;
+  return *this;
+}
+
 std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
   if (!config_) {
     setUpdateableConfig(UpdateableConfig::createEmpty());
@@ -89,20 +94,27 @@ std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
     gossip_settings.enabled = false;
     setGossipSettings(std::move(gossip_settings));
   }
-  return ServerProcessor::create(nullptr,
-                                 sharded_storage_thread_pool_,
-                                 std::move(server_settings_).value(),
-                                 std::move(gossip_settings_).value(),
-                                 std::move(admin_settings_).value(),
-                                 config_,
-                                 std::make_shared<NoopTraceLogger>(config_),
-                                 std::move(settings_),
-                                 stats_,
-                                 make_test_plugin_registry(),
-                                 "",
-                                 "",
-                                 "logdevice",
-                                 std::move(my_node_id_));
+  auto p = ServerProcessor::createWithoutStarting(
+      nullptr,
+      sharded_storage_thread_pool_,
+      std::move(server_settings_).value(),
+      std::move(gossip_settings_).value(),
+      std::move(admin_settings_).value(),
+      config_,
+      std::make_shared<NoopTraceLogger>(config_),
+      std::move(settings_),
+      stats_,
+      make_test_plugin_registry(),
+      "",
+      "",
+      "logdevice",
+      std::move(my_node_id_));
+
+  if (!defer_start_) {
+    p->startRunning();
+  }
+
+  return p;
 }
 
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {

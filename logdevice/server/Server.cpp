@@ -605,7 +605,8 @@ Server::Server(ServerParameters* params)
   start_time_ = std::chrono::system_clock::now();
 
   if (!(initListeners() && initStore() && initProcessor() &&
-        repopulateRecordCaches() && initSequencers() && initFailureDetector() &&
+        initFailureDetector() && startWorkers() && initNCM() &&
+        repopulateRecordCaches() && initSequencers() &&
         initSequencerPlacement() && initRebuildingCoordinator() &&
         initClusterMaintenanceStateMachine() && initLogStoreMonitor() &&
         initUnreleasedRecordDetector() && initLogsConfigManager() &&
@@ -832,70 +833,21 @@ bool Server::initStore() {
 
 bool Server::initProcessor() {
   try {
-    processor_ =
-        ServerProcessor::create(params_->getAuditLog(),
-                                sharded_storage_thread_pool_.get(),
-                                params_->getServerSettings(),
-                                params_->getGossipSettings(),
-                                params_->getAdminServerSettings(),
-                                updateable_config_,
-                                params_->getTraceLogger(),
-                                params_->getProcessorSettings(),
-                                params_->getStats(),
-                                params_->getPluginRegistry(),
-                                "",
-                                "",
-                                "ld:srv", // prefix of worker thread names
-                                params_->getMyNodeID());
-    if (params_->getProcessorSettings()->enable_nodes_configuration_manager) {
-      // create and initialize NodesConfigurationManager (NCM) and attach it to
-      // the Processor
-
-      auto my_node_id = params_->getMyNodeID().value();
-      auto node_svc_discovery =
-          updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
-              my_node_id);
-      if (node_svc_discovery == nullptr) {
-        ld_critical(
-            "NodeID '%s' doesn't exist in the NodesConfiguration of %s",
-            my_node_id.toString().c_str(),
-            updateable_config_->getServerConfig()->getClusterName().c_str());
-        throw ConstructorFailed();
-      }
-      auto roleset = node_svc_discovery->getRoles();
-
-      // TODO: get NCS from NodesConfigurationInit instead
-      auto zk_client_factory = processor_->getPluginRegistry()
-                                   ->getSinglePlugin<ZookeeperClientFactory>(
-                                       PluginType::ZOOKEEPER_CLIENT_FACTORY);
-      auto ncm = configuration::nodes::NodesConfigurationManagerFactory::create(
-          processor_.get(), nullptr, roleset, std::move(zk_client_factory));
-      if (ncm == nullptr) {
-        ld_critical("Unable to create NodesConfigurationManager during server "
-                    "creation!");
-        throw ConstructorFailed();
-      }
-      ncm->upgradeToProposer();
-
-      auto initial_nc =
-          processor_->config_->getNodesConfigurationFromNCMSource();
-      if (!initial_nc) {
-        // Currently this should only happen in tests as our boostrapping
-        // workflow should always ensure the Processor has a valid
-        // NodesConfiguration before initializing NCM. In the future we will
-        // require a valid NC for Processor construction and will turn this into
-        // a ld_check.
-        ld_warning("NodesConfigurationManager initialized without a valid "
-                   "NodesConfiguration in its Processor context. This should "
-                   "only happen in tests.");
-        initial_nc = std::make_shared<const NodesConfiguration>();
-      }
-      if (!ncm->init(std::move(initial_nc))) {
-        ld_critical(
-            "Processing initial NodesConfiguration did not finish in time.");
-        throw ConstructorFailed();
-      }
-    }
+    processor_ = ServerProcessor::createWithoutStarting(
+        params_->getAuditLog(),
+        sharded_storage_thread_pool_.get(),
+        params_->getServerSettings(),
+        params_->getGossipSettings(),
+        params_->getAdminServerSettings(),
+        updateable_config_,
+        params_->getTraceLogger(),
+        params_->getProcessorSettings(),
+        params_->getStats(),
+        params_->getPluginRegistry(),
+        "",
+        "",
+        "ld:srv", // prefix of worker thread names
+        params_->getMyNodeID());
 
     if (sharded_storage_thread_pool_) {
       sharded_storage_thread_pool_->setProcessor(processor_.get());
@@ -914,6 +866,82 @@ bool Server::initProcessor() {
              error_description(err));
     return false;
   }
+  return true;
+}
+
+bool Server::initFailureDetector() {
+  if (params_->getGossipSettings()->enabled) {
+    try {
+      processor_->failure_detector_ = std::make_unique<FailureDetector>(
+          params_->getGossipSettings(), processor_.get(), params_->getStats());
+    } catch (const ConstructorFailed&) {
+      ld_error(
+          "Failed to construct FailureDetector: %s", error_description(err));
+      return false;
+    }
+  } else {
+    ld_info("Not initializing gossip based failure detector,"
+            " since --gossip-enabled is not set");
+  }
+
+  return true;
+}
+
+bool Server::startWorkers() {
+  processor_->startRunning();
+  return true;
+}
+
+bool Server::initNCM() {
+  if (params_->getProcessorSettings()->enable_nodes_configuration_manager) {
+    // create and initialize NodesConfigurationManager (NCM) and attach it to
+    // the Processor
+
+    auto my_node_id = params_->getMyNodeID().value();
+    auto node_svc_discovery =
+        updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
+            my_node_id);
+    if (node_svc_discovery == nullptr) {
+      ld_critical(
+          "NodeID '%s' doesn't exist in the NodesConfiguration of %s",
+          my_node_id.toString().c_str(),
+          updateable_config_->getServerConfig()->getClusterName().c_str());
+      return false;
+    }
+    auto roleset = node_svc_discovery->getRoles();
+
+    // TODO: get NCS from NodesConfigurationInit instead
+    auto zk_client_factory = processor_->getPluginRegistry()
+                                 ->getSinglePlugin<ZookeeperClientFactory>(
+                                     PluginType::ZOOKEEPER_CLIENT_FACTORY);
+    auto ncm = configuration::nodes::NodesConfigurationManagerFactory::create(
+        processor_.get(), nullptr, roleset, std::move(zk_client_factory));
+    if (ncm == nullptr) {
+      ld_critical("Unable to create NodesConfigurationManager during server "
+                  "creation!");
+      return false;
+    }
+    ncm->upgradeToProposer();
+
+    auto initial_nc = processor_->config_->getNodesConfigurationFromNCMSource();
+    if (!initial_nc) {
+      // Currently this should only happen in tests as our boostrapping
+      // workflow should always ensure the Processor has a valid
+      // NodesConfiguration before initializing NCM. In the future we will
+      // require a valid NC for Processor construction and will turn this into
+      // a ld_check.
+      ld_warning("NodesConfigurationManager initialized without a valid "
+                 "NodesConfiguration in its Processor context. This should "
+                 "only happen in tests.");
+      initial_nc = std::make_shared<const NodesConfiguration>();
+    }
+    if (!ncm->init(std::move(initial_nc))) {
+      ld_critical(
+          "Processing initial NodesConfiguration did not finish in time.");
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -1196,27 +1224,6 @@ bool Server::initClusterMaintenanceStateMachine() {
       return false;
     }
   }
-  return true;
-}
-
-bool Server::initFailureDetector() {
-  if (params_->getGossipSettings()->enabled) {
-    try {
-      processor_->failure_detector_ =
-          std::make_unique<FailureDetector>(params_->getGossipSettings(),
-                                            processor_.get(),
-                                            params_->getStats(),
-                                            /* attach */ false);
-    } catch (const ConstructorFailed&) {
-      ld_error(
-          "Failed to construct FailureDetector: %s", error_description(err));
-      return false;
-    }
-  } else {
-    ld_info("Not initializing gossip based failure detector,"
-            " since --gossip-enabled is not set");
-  }
-
   return true;
 }
 

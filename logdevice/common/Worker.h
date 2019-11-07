@@ -799,7 +799,7 @@ class Worker : public WorkContext {
   // Callback functions that register worker id and duration of slow/delayed
   // action.
   using SlowRequestCallback =
-      folly::Function<void(int idx, std::chrono::milliseconds duration)>;
+      std::function<void(int idx, std::chrono::milliseconds duration)>;
 
   void setLongExecutionCallback(SlowRequestCallback cb);
   void setLongQueuedCallback(SlowRequestCallback cb);
@@ -834,10 +834,6 @@ class Worker : public WorkContext {
   // Called during shutdown when there are no more pending requests; allows
   // subclasses to clear state machines that were waiting for that
   virtual void noteShuttingDownNoPendingRequests() {}
-
-  void callLongExecutionCallback(int idx, std::chrono::milliseconds duration);
-
-  void callLongQueuedCallback(int idx, std::chrono::milliseconds duration);
 
   std::shared_ptr<UpdateableConfig> config_; // cluster config to use for
   // all ops on this thread
@@ -933,8 +929,8 @@ class Worker : public WorkContext {
   // Set to true once stop has been called
   bool event_log_stopped_{false};
 
-  std::shared_ptr<SlowRequestCallback> long_execution_cb_{nullptr};
-  std::shared_ptr<SlowRequestCallback> long_queued_cb_{nullptr};
+  SlowRequestCallback long_execution_cb_{nullptr};
+  SlowRequestCallback long_queued_cb_{nullptr};
 
   // Error Injection settings:
   double worker_stall_error_injection_chance_;

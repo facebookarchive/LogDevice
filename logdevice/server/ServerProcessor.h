@@ -40,6 +40,17 @@ class ServerProcessor : public Processor {
   static std::shared_ptr<ServerProcessor> create(Args&&... args) {
     auto p = std::make_shared<ServerProcessor>(std::forward<Args>(args)...);
     p->init();
+    p->startRunning();
+    return p;
+  }
+
+  // Like create(), but you'll have to call startRunning() on the returned
+  // Processor to start workers.
+  template <typename... Args>
+  static std::shared_ptr<ServerProcessor>
+  createWithoutStarting(Args&&... args) {
+    auto p = std::make_shared<ServerProcessor>(std::forward<Args>(args)...);
+    p->init();
     return p;
   }
 
@@ -79,6 +90,8 @@ class ServerProcessor : public Processor {
   }
 
   void init() override;
+
+  void startRunning() override;
 
   int getWorkerCount(WorkerType type = WorkerType::GENERAL) const override;
 

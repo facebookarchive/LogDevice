@@ -53,7 +53,7 @@ class MockFailureDetector : public FailureDetector {
  public:
   explicit MockFailureDetector(UpdateableSettings<GossipSettings> settings,
                                ServerProcessor* p)
-      : FailureDetector(std::move(settings), p),
+      : FailureDetector(std::move(settings), p, /* stats */ nullptr),
         my_node_id_(p->getMyNodeID()),
         config_(p->config_->get()->serverConfig()),
         cluster_state_(new ClusterState(
@@ -175,14 +175,20 @@ make_processor_with_detector(node_index_t nid,
                                .setServerSettings(server_settings)
                                .setGossipSettings(gossip_settings)
                                .setUpdateableConfig(uconfig)
-                               .setMyNodeID(NodeID(nid, 1));
+                               .setMyNodeID(NodeID(nid, 1))
+                               .setDeferStart();
   auto p = std::move(processor_builder).build();
   p->setServerInstanceId(SystemTimestamp::now().toMilliseconds().count());
   std::unique_ptr<MockFailureDetector> d =
       std::make_unique<MockFailureDetector>(
           UpdateableSettings<GossipSettings>(gossip_settings), p.get());
   MockFailureDetector* draw = d.get();
+  // Need to assign failure_detector_ before workers start.
   p->failure_detector_ = std::move(d);
+  p->startRunning();
+  // Don't call FailureDetector::startRunning(). Instead we'll be calling
+  // FailureDetector's method directly, as if it's running in main thread.
+
   return std::make_pair(std::move(p), draw);
 }
 

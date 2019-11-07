@@ -61,7 +61,6 @@ void ServerProcessor::init() {
   // because it needs to talk to all workers and wait for replies, it would
   // be suspect to deadlocks.
   sequencer_batching_.reset(new SequencerBatching(this));
-  initialized_.store(true, std::memory_order_relaxed);
   if (sharded_storage_thread_pool_ != nullptr) {
     // All shards are assumed to be waiting to be rebuilt until
     // markShardAsNotMissingData() is called.
@@ -87,17 +86,14 @@ void ServerProcessor::init() {
           updateableSettings()->health_monitor_max_overloaded_worker_percentage,
           updateableSettings()->health_monitor_max_stalls_avg_ms,
           updateableSettings()->health_monitor_max_stalled_worker_percentage);
-      health_monitor_->startUp();
       applyToWorkerPool(
           [& hm = *health_monitor_](Worker& w) {
             w.setLongExecutionCallback(
-                [& hm = hm](
-                    int idx, std::chrono::milliseconds duration) mutable {
+                [& hm = hm](int idx, std::chrono::milliseconds duration) {
                   hm.reportWorkerStall(idx, duration);
                 });
             w.setLongQueuedCallback(
-                [& hm = hm](
-                    int idx, std::chrono::milliseconds duration) mutable {
+                [& hm = hm](int idx, std::chrono::milliseconds duration) {
                   hm.reportWorkerQueueStall(idx, duration);
                 });
           },
@@ -105,11 +101,11 @@ void ServerProcessor::init() {
           WorkerType::GENERAL);
 
       watchdog_thread_->setSlowWatchdogLoopCallback(
-          [& hm = *health_monitor_](bool delayed) mutable {
+          [& hm = *health_monitor_](bool delayed) {
             hm.reportWatchdogHealth(delayed);
           });
       watchdog_thread_->setSlowWorkersCallback(
-          [& hm = *health_monitor_](int num_stalled) mutable {
+          [& hm = *health_monitor_](int num_stalled) {
             hm.reportStalledWorkers(num_stalled);
           });
 
@@ -121,6 +117,12 @@ void ServerProcessor::init() {
   } else {
     STAT_INCR(stats_, health_monitor_errors);
   }
+}
+
+void ServerProcessor::startRunning() {
+  Processor::startRunning();
+  health_monitor_->startUp();
+  watchdog_thread_->startRunning();
 }
 
 int ServerProcessor::getWorkerCount(WorkerType type) const {

@@ -43,6 +43,8 @@ class TestServerProcessorBuilder {
 
   TestServerProcessorBuilder& setMyNodeID(NodeID my_node_id);
 
+  TestServerProcessorBuilder& setDeferStart();
+
   // This is rvalue qualified to make it obvious to the caller that the object
   // will get consumed and is not reusable anymore.
   std::shared_ptr<ServerProcessor> build() &&;
@@ -58,6 +60,7 @@ class TestServerProcessorBuilder {
       folly::none};
   std::shared_ptr<UpdateableConfig> config_{nullptr};
   folly::Optional<NodeID> my_node_id_{folly::none};
+  bool defer_start_ = false;
 
   ShardedStorageThreadPool* sharded_storage_thread_pool_{nullptr};
   StatsHolder* stats_{nullptr};

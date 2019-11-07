@@ -333,10 +333,12 @@ class Server {
   bool initListeners();
   bool initStore();
   bool initProcessor();
+  bool initFailureDetector();
+  bool startWorkers();
+  bool initNCM();
   bool repopulateRecordCaches();
   bool initSequencers();
   bool initLogStoreMonitor();
-  bool initFailureDetector();
   bool initSequencerPlacement();
   bool initRebuildingCoordinator();
   bool initClusterMaintenanceStateMachine();

@@ -68,24 +68,17 @@ class FailureDetector {
   };
 
   /**
+   * Creates FailureDetector in a dormant state.
+   * Calling start() brings it to life.
+   *
    * @param settings   failure detector-specific settings
    * @param processor  processor pointer to get main settings and
    *                   pass for gossip thread(Worker class) constructor
    * @param stats      for updating FD counters
-   * @param attach     if true, start gossiping right away;
-   *                   if false, you'll need to call start()
    */
   FailureDetector(UpdateableSettings<GossipSettings> settings,
                   ServerProcessor* processor,
-                  StatsHolder* stats,
-                  bool attach = true);
-  /**
-   * For MockTest like FailureDetectorTest, which do their own mock gossips.
-   * These tests don't set processor->failure_detector_
-   */
-  FailureDetector(UpdateableSettings<GossipSettings> settings,
-                  ServerProcessor* processor,
-                  bool attach = false);
+                  StatsHolder* stats);
 
   virtual ~FailureDetector() {}
 

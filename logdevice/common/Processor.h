@@ -112,7 +112,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
  protected:
   /**
    * Second step of construction, decoupled from constructor to allow
-   * subclasses to override Worker construction.  Starts all worker threads.
+   * subclasses to override Worker construction. Creates workers but doesn't
+   * start their threads.
    *
    * @throws ConstructorFailed if one or more EventLoops failed to start. err
    *         is set to NOMEM, SYSLIMIT or INTERNAL as defined for EventLoop
@@ -121,6 +122,13 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    *         PermissionChecker or PrincipalParser could not be created.
    */
   virtual void init();
+
+  /**
+   * Start workers' event loop threads, and any background work.
+   * This is separate from init() to make it easy to ensure that worker threads
+   * don't try to access half-initialized Processor.
+   */
+  virtual void startRunning();
 
   /**
    * Creates a worker pool of the supplied type and returns the vector
@@ -167,6 +175,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   static std::shared_ptr<Processor> create(Args&&... args) {
     auto p = std::make_shared<Processor>(std::forward<Args>(args)...);
     p->init();
+    p->startRunning();
     return p;
   }
 

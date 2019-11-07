@@ -28,6 +28,7 @@ class ClientProcessor : public Processor {
   static std::shared_ptr<ClientProcessor> create(Args&&... args) {
     auto p = std::make_shared<ClientProcessor>(std::forward<Args>(args)...);
     p->init();
+    p->startRunning();
     return p;
   }
 

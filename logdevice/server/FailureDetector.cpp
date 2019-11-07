@@ -133,8 +133,7 @@ class FailureDetector::InitRequest : public Request {
 
 FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
                                  ServerProcessor* processor,
-                                 StatsHolder* stats,
-                                 bool attach)
+                                 StatsHolder* stats)
     : settings_(std::move(settings)), stats_(stats), processor_(processor) {
   size_t max_nodes = processor->settings()->max_nodes;
 
@@ -166,16 +165,7 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
   for (const auto& it : nodes_) {
     cs->setNodeState(it.first, ClusterState::NodeState::DEAD);
   }
-
-  if (attach) {
-    start();
-  }
 }
-
-FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
-                                 ServerProcessor* processor,
-                                 bool attach)
-    : FailureDetector(std::move(settings), processor, nullptr, attach) {}
 
 void FailureDetector::start() {
   std::unique_ptr<Request> rq = std::make_unique<InitRequest>(this);
