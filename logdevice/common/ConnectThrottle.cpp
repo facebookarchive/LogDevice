@@ -47,6 +47,6 @@ void ConnectThrottle::connectFailed() {
 }
 
 bool ConnectThrottle::mayConnect() const {
-  return now() > down_until_;
+  return now() >= down_until_;
 }
 }} // namespace facebook::logdevice

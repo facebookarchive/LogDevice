@@ -167,6 +167,9 @@ void UnreleasedRecordDetectorTest::SetUp() {
   settings.max_inflight_storage_tasks = NUM_INFLIGHT_STORAGE_TASKS;
   settings.per_worker_storage_task_queue_size = STORAGE_TASK_QUEUE_SIZE;
   settings.unreleased_record_detector_interval = std::chrono::seconds::zero();
+  // Someone may try and fail to connect before we start the listener. Make sure
+  // it doesn't cause connection errors later.
+  settings.connect_throttle.initial_delay = std::chrono::milliseconds(0);
   usettings_ =
       std::make_unique<UpdateableSettings<Settings>>(std::move(settings));
   ServerSettings server_settings(create_default_settings<ServerSettings>());
@@ -486,7 +489,7 @@ TEST_F(UnreleasedRecordDetectorTest, TransientSequencerFailure) {
  */
 TEST_F(UnreleasedRecordDetectorTest, HighFrequencyDetector) {
   // start accepting connections
-  acceptConnections();
+  EXPECT_TRUE(acceptConnections().get());
 
   // set a very short record detector interval, thereby enabling the unreleased
   // record detector and running it at a high frequency
