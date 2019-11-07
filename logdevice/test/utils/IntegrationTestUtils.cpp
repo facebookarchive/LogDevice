@@ -3202,6 +3202,29 @@ int Cluster::writeConfig(const Configuration& cfg, bool wait_for_update) {
       cfg.serverConfig().get(), cfg.logsConfig().get(), wait_for_update);
 }
 
+void Cluster::updateSetting(const std::string& name, const std::string& value) {
+  // Do it in parallel because this admin command is extremely slow (T56729673).
+  std::vector<std::thread> ts;
+  for (auto& kv : nodes_) {
+    ts.emplace_back([& node = *kv.second, &name, &value] {
+      node.updateSetting(name, value);
+    });
+  }
+  for (std::thread& t : ts) {
+    t.join();
+  }
+}
+
+void Cluster::unsetSetting(const std::string& name) {
+  std::vector<std::thread> ts;
+  for (auto& kv : nodes_) {
+    ts.emplace_back([& node = *kv.second, &name] { node.unsetSetting(name); });
+  }
+  for (std::thread& t : ts) {
+    t.join();
+  }
+}
+
 int dump_file_to_stderr(const char* path) {
   FILE* fp = std::fopen(path, "r");
   if (fp == nullptr) {

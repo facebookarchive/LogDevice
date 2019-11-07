@@ -1194,6 +1194,10 @@ class Cluster {
   // require @param node must exist in the cluster
   bool hasStorageRole(node_index_t node) const;
 
+  // Send admin command `set` to all nodes.
+  void updateSetting(const std::string& name, const std::string& value);
+  void unsetSetting(const std::string& name);
+
  private:
   // Private constructor.  Factory (friend class) is only caller.
   Cluster(std::string root_path,

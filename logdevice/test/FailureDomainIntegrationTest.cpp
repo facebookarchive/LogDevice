@@ -423,32 +423,33 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
   const std::chrono::seconds client_timeout(3);
   auto client = cluster->createClient(client_timeout);
   const logid_t logid(2);
+  std::vector<lsn_t> lsns;
 
   // Write some records.
   auto write_records = [&](int n, bool expect_success) {
-    std::vector<lsn_t> lsns;
     for (int i = 0; i < n; ++i) {
       lsn_t lsn;
       auto append_start_time = std::chrono::steady_clock::now();
       do {
-        lsn = client->appendSync(logid, std::to_string(i));
+        lsn = client->appendSync(logid, std::to_string(lsns.size()));
 
         if (!expect_success) {
           EXPECT_EQ(LSN_INVALID, lsn);
-          return lsns;
+          return;
         }
 
         if (lsn == LSN_INVALID) {
           // It's possible for append to fail if there's an appender that
           // started while a rack was down and hasn't yet noticed that the
           // rack is up again. Keep trying.
-          EXPECT_TRUE(err == E::SEQNOBUFS || err == E::ISOLATED) << (int)err;
+          EXPECT_TRUE(err == E::SEQNOBUFS || err == E::ISOLATED)
+              << error_name(err);
 
           if (std::chrono::steady_clock::now() - append_start_time >
               std::chrono::seconds(10)) {
             // This is not supposed to take so long.
-            ADD_FAILURE() << "Can't append";
-            return lsns;
+            ADD_FAILURE() << "Can't append " << error_name(err);
+            return;
           }
 
           /* sleep override */
@@ -458,17 +459,30 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
 
       lsns.push_back(lsn);
     }
-    return lsns;
   };
+
   ld_info("Writing with all nodes up.");
-  auto lsns1 = write_records(50, true);
-  EXPECT_EQ(50, lsns1.size()) << errorStrings()[err].name;
+  write_records(10, true);
+
+  // Make sure some records have copyset entirely in 2 racks + 1 node which
+  // we're going to stop later in the test.
+  ld_info("Writing with a forced copyset.");
+  cluster->updateSetting("test-do-not-pick-in-copysets", "0,1,2,3,10");
+  write_records(5, true);
+
+  ld_info("Writing some more.");
+  cluster->unsetSetting("test-do-not-pick-in-copysets");
+  write_records(5, true);
+
+  EXPECT_EQ(20, lsns.size());
 
   // Read them back.
   auto read_records = [&](const std::vector<lsn_t>& lsns,
-                          int restarted_at = -1) {
+                          int restarted_at = -1,
+                          std::chrono::milliseconds timeout =
+                              std::chrono::seconds(20)) {
     auto reader = client->createReader(1);
-    reader->setTimeout(std::chrono::seconds(5));
+    reader->setTimeout(timeout);
     reader->startReading(logid, LSN_OLDEST, lsns.back());
     size_t nread = 0;
     size_t expected_payload = 0;
@@ -479,15 +493,6 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
       if (n == -1) {
         EXPECT_EQ(GapType::BRIDGE, gap.type);
       } else if (n == 0) {
-        bool first = true;
-        wait_until([&first, &logid, &reader]() {
-          bool res = reader->isConnectionHealthy(logid);
-          if (!res && !first) {
-            ld_error("Got 0 records but connection still considered healthy!");
-          }
-          first = false;
-          return res;
-        });
         return false;
       } else {
         if (nread >= lsns.size()) {
@@ -498,8 +503,6 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
           // times out, the Appender keeps trying forever. After we bring some
           // nodes back, the Appender succeeds, producing an unexpected record.
           // This branch skips such records.
-          // Also resets the expected_payload counter.
-          expected_payload = 0;
         } else {
           EXPECT_EQ(lsns[nread], recs[0]->attrs.lsn);
           EXPECT_EQ(
@@ -522,7 +525,7 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
     return true;
   };
   ld_info("Reading with all nodes up.");
-  EXPECT_TRUE(read_records(lsns1));
+  EXPECT_TRUE(read_records(lsns));
 
   // Stop 2/4 racks.
   ld_info("Shutting down racks 2 and 3.");
@@ -534,11 +537,12 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
 
   // Read the records again.
   ld_info("Reading without 2/4 racks.");
-  EXPECT_TRUE(read_records(lsns1));
+  EXPECT_TRUE(read_records(lsns));
+  int records_before_failed_writes = static_cast<int>(lsns.size());
 
   // Try writing something. It should fail.
   ld_info("Writing without 2/4 racks (should fail).");
-  EXPECT_EQ(std::vector<lsn_t>(), write_records(50, false));
+  write_records(50, false);
 
   // Stop one more node. Note that the rack has 2 nodes and both are in nodeset.
   ld_info("Killing another node.");
@@ -546,8 +550,7 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
 
   // Reads should fail now.
   ld_info("Reading without 2/4 racks and one node (should fail).");
-  // TODO(T31455346) Make this an actual check which will not be flaky
-  read_records(lsns1);
+  EXPECT_FALSE(read_records(lsns, -1, std::chrono::seconds(10)));
 
   // Bring one rack back.
   ld_info("Starting rack 2.");
@@ -559,9 +562,8 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
 
   // Writes and reads should work now.
   ld_info("Writing without a rack and a node.");
-  auto lsns2 = write_records(50, true);
-  EXPECT_EQ(50, lsns2.size()) << errorStrings()[err].name;
+  write_records(20, true);
+  EXPECT_EQ(40, lsns.size());
   ld_info("Reading without a rack and a node.");
-  lsns2.insert(lsns2.begin(), lsns1.begin(), lsns1.end());
-  EXPECT_TRUE(read_records(lsns2, (int)lsns1.size()));
+  EXPECT_TRUE(read_records(lsns, records_before_failed_writes));
 }
