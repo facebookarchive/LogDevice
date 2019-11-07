@@ -341,6 +341,11 @@ class Socket : public TrafficShappingSocket {
   virtual bool isClosed() const;
 
   /**
+   * @return true iff socket is in a good state to be used for reading and
+   * writing.
+   */
+  virtual bool good() const;
+  /**
    * @return true iff close() has been called on the socket and all clients have
    * dropped references.
    */
@@ -616,9 +621,10 @@ class Socket : public TrafficShappingSocket {
 
   /**
    * Called by the output evbuffer when some bytes have been transferred from
-   * it into the underlying TCP socket (or placed in the outgoing SSL buffer).
+   * it into the underlying socket layer like evbuffer, asyncsocket (or placed
+   * in the outgoing SSL buffer).
    *
-   * @param nbytes_drained  number of bytes transferred from buffer to
+   * @param nbytes  number of bytes transferred from buffer to
    *                        the underlying TCP connection
    */
   virtual void onBytesPassedToTCP(size_t nbytes_drained);

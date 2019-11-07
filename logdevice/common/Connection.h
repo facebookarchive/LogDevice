@@ -153,6 +153,8 @@ class Connection : public Socket {
 
   bool isClosed() const override;
 
+  bool good() const override;
+
   void setSocketAdapter(std::unique_ptr<SocketAdapter> adapter);
 
   void onBytesPassedToTCP(size_t nbytes_drained) override;

@@ -1209,6 +1209,10 @@ bool Socket::isClosed() const {
   return true;
 }
 
+bool Socket::good() const {
+  return !Socket::isClosed();
+}
+
 bool Socket::sizeLimitsExceeded() const {
   return getBytesPending() > outbuf_overflow_;
 }

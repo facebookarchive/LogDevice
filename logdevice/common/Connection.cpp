@@ -116,12 +116,14 @@ int Connection::connect() {
   next_pos_ = 0;
   drain_pos_ = 0;
 
-  // enqueue hello message into the socket.
-  Socket::sendHello();
+  if (good()) {
+    // enqueue hello message into the socket.
+    Socket::sendHello();
+  }
 
   auto complete_connection = [this](Status st) {
-    err = st;
-    if (err == E::ISCONN) {
+    auto g = folly::makeGuard(getDeps()->setupContextGuard());
+    if (st == E::ISCONN) {
       Socket::transitionToConnected();
       read_cb_.reset(new MessageReader(*proto_handler_, proto_));
       sock_->setReadCB(read_cb_.get());
@@ -250,6 +252,9 @@ folly::Future<Status> Connection::asyncConnect() {
     if (err != E::ISCONN) {
       proto_handler_->notifyErrorOnSocket(ex);
     }
+    if (err == E::TIMEDOUT) {
+      STAT_INCR(deps_->getStats(), connection_timeouts);
+    }
     return err;
   };
   if (fut.isReady()) {
@@ -351,6 +356,22 @@ void Connection::flushOutputAndClose(Status reason) {
 bool Connection::isClosed() const {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   return Socket::isClosed();
+}
+
+bool Connection::good() const {
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
+  auto is_good = Socket::good();
+
+  // Even though the socket is not closed check if the socket is in a good
+  // state. Outgoing connection check at sender is the socket is closed or good
+  // before using it to send message. If the socket is already bad sender takes
+  // the decision to create a new one, hence this is a tiny optimization to help
+  // messages not getting written into a bad socket.
+  if (is_good && sock_ && proto_handler_->good()) {
+    return true;
+  }
+
+  return is_good;
 }
 
 void Connection::setSocketAdapter(std::unique_ptr<SocketAdapter> adapter) {

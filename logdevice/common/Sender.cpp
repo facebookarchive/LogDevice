@@ -957,7 +957,7 @@ Socket* Sender::initServerSocket(NodeID nid,
     //     create new connection if the existing connection is not SSL but
     //     ssl_on_gossip_port is true or the existing connection is SSL but the
     //     ssl_on_gossip_port is false.
-    const bool should_create_new = it->second->isClosed() ||
+    const bool should_create_new = !it->second->good() ||
         (sock_type != SocketType::GOSSIP && !it->second->isSSL() &&
          !allow_unencrypted && useSSLWith(nid)) ||
         (it->second->isSSL() != Worker::settings().ssl_on_gossip_port &&
@@ -967,8 +967,11 @@ Socket* Sender::initServerSocket(NodeID nid,
       // We have a plaintext connection, but now we need an encrypted one.
       // Scheduling this socket to be closed and moving it out of
       // server_sockets_ to initialize an SSL connection in its place.
-      Worker::onThisThread()->add(
-          [s = std::move(it->second)] { s->close(E::SSLREQUIRED); });
+      Worker::onThisThread()->add([s = std::move(it->second)] {
+        if (s->good()) {
+          s->close(E::SSLREQUIRED);
+        }
+      });
       impl_->server_sockets_.erase(it);
       it = impl_->server_sockets_.end();
     }
