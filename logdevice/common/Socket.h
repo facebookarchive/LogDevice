@@ -549,12 +549,6 @@ class Socket : public TrafficShappingSocket {
   virtual size_t getBytesPending() const;
 
   /**
-   * The amount of bytes buffered in the socket layer underneath this
-   * connection. For example bytes buffered in asyncsocket or evbuffer.
-   */
-  virtual size_t getBufferedBytesSize() const;
-
-  /**
    * Run checks to make sure if the socket performing as expected.
    */
 
@@ -626,22 +620,14 @@ class Socket : public TrafficShappingSocket {
   virtual void onPeerClosed();
 
   /**
-   * Called by the underlying layer implementation to indicate that the bytes
-   * have been admitted to be sent to the remote endpoint. If the underlying
-   * layer is evbuffer based, this is invoked once we have written into the tcp
-   * socket. In case of AsyncSocket based implementation, this is invoked as
-   * soon as bytes are added to the AsyncSocket. For the messages corresponding
-   * to the admitted bytes we invoke onSent at this point.
+   * Called by the output evbuffer when some bytes have been transferred from
+   * it into the underlying socket layer like evbuffer, asyncsocket (or placed
+   * in the outgoing SSL buffer).
    *
    * @param nbytes  number of bytes transferred from buffer to
    *                        the underlying TCP connection
    */
-  virtual void onBytesAdmittedToSend(size_t nbytes);
-
-  /**
-   * Update sender level stats once bytes are drained into the socket.
-   */
-  virtual void onBytesPassedToTCP(size_t nbytes);
+  virtual void onBytesPassedToTCP(size_t nbytes_drained);
 
   SocketDependencies* getDeps() const {
     return deps_.get();

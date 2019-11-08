@@ -157,16 +157,11 @@ class Connection : public Socket {
 
   void setSocketAdapter(std::unique_ptr<SocketAdapter> adapter);
 
-  void onBytesAdmittedToSend(size_t nbytes_drained) override;
-
-  void onBytesPassedToTCP(size_t nbytes) override;
-
+  void onBytesPassedToTCP(size_t nbytes_drained) override;
   int dispatchMessageBody(ProtocolHeader header,
                           std::unique_ptr<folly::IOBuf> msg_buffer) override;
 
   size_t getBytesPending() const override;
-
-  size_t getBufferedBytesSize() const override;
 
   X509* getPeerCert() const override;
 
@@ -199,6 +194,8 @@ class Connection : public Socket {
   void onError(short direction, int socket_errno) override;
 
   void onPeerClosed() override;
+
+  size_t getBufferedBytes() const;
 
   std::unique_ptr<SocketAdapter> sock_;
   std::shared_ptr<ProtocolHandler> proto_handler_;
@@ -241,51 +238,23 @@ class Connection : public Socket {
       proto_handler_->notifyErrorOnSocket(ex);
     }
 
-    /**
-     * Returns bytes buffered in asyncsocket.
-     */
     size_t bufferedBytes() const {
-      return bytes_buffered_;
-    }
-
-    void clear() {
-      write_chains_.clear();
-      num_success_ = 0;
-      bytes_buffered_ = 0;
+      size_t buffered_bytes = 0;
+      for (const size_t& len : chain_lengths_) {
+        buffered_bytes += len;
+      }
+      return buffered_bytes;
     }
 
     IProtocolHandler* proto_handler_;
-    struct WriteUnit {
-      size_t length;
-      SteadyTimestamp write_time;
-    };
-    // A single write callback is shared for all the writes. Hence , when write
-    // success is called we do not know how many bytes were written into the
-    // socket. This deque keep track of write sizes and time of write as the
-    // chain was added into the socket. Time of write helps in getting the delay
-    // in writing to the tcp socket.
-    std::deque<WriteUnit> write_chains_;
+    std::deque<size_t> chain_lengths_;
     size_t num_success_{0};
-    size_t bytes_buffered_{0};
   };
 
   SocketWriteCallback sock_write_cb_;
 
-  // This IOBuf chain buffers writes till we can add them to asyncSocket at next
-  // eventloop iteration. This helps in getting better socket performance in
-  // case very high number of small writes. Note: sendChain can grow large do
-  // not invoke computeChainDataLength on it frequently.
   std::unique_ptr<folly::IOBuf> sendChain_;
-
-  // Timer used to schedule event as soon as data is added to sendChain_.The
-  // callback of this timer add data into the asyncsocket.
-  EvTimer sched_write_chain_;
-
-  // Used to note down delays in writing into the asyncsocket.
-  SteadyTimestamp sched_start_time_;
-
-  void scheduleWriteChain();
-
   void drainSendQueue();
 };
+
 }} // namespace facebook::logdevice

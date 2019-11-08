@@ -260,8 +260,6 @@ STAT_DEFINE(sock_peer_closed_event_proc_time, SUM)
 
 STAT_DEFINE(sock_total_bytes_in_messages_written, SUM)
 STAT_DEFINE(sock_total_time_in_messages_written, SUM)
-STAT_DEFINE(sock_write_sched_delay, SUM)
-STAT_DEFINE(sock_write_sched_size, SUM)
 
 // Timer Delays
 STAT_DEFINE(wh_timer_sched_delay, SUM)

@@ -1311,8 +1311,6 @@ TEST_P(MessagingSocketTest, ReentrantOnSent) {
 
   const int fd = server.accept();
 
-  HELLO_Raw hello;
-  ASSERT_EQ(sizeof(hello), read(fd, &hello, sizeof(hello)));
   // Construct and send an ACK message in response.
   ACK_Raw ack;
   ack.ph.len = sizeof(ACK_Raw);
