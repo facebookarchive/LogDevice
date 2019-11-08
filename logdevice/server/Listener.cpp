@@ -64,7 +64,7 @@ bool Listener::setupAsyncSocket() {
   try {
     auto socket = folly::AsyncServerSocket::newSocket(base);
     iface_.bind(socket.get());
-    socket->addAcceptCallback(this, base);
+    socket->addAcceptCallback(this, nullptr);
     socket->listen(128);
     socket->startAccepting();
     socket_ = std::move(socket);
