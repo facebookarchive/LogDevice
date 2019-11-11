@@ -1054,7 +1054,7 @@ int LogRecoveryRequest::sendSeal(ShardID shard) {
 
 void LogRecoveryRequest::onSealReply(ShardID from,
                                      const SEALED_Message& reply) {
-  if (all_epochs_recovered_) {
+  if (all_epochs_recovered_ || deferredCompleteTimer_ != nullptr) {
     // Ignore this reply, we finished recovery without this node.
     return;
   }
@@ -1165,13 +1165,13 @@ void LogRecoveryRequest::onSealReply(ShardID from,
                                AuthoritativeSource::NODE);
   }
 
-  if (reply.header_.status == E::OK) {
-    // In case the sequencer metadata is already found in metadata log,
-    // as soon as the last epoch recovery machine is retired LogRecoveryRequest
-    // is destroyed. Therefore, if we are in a LogRecoveryRequest method,
-    // we must have at least one active epoch recovery machine.
-    ld_check(!seq_metadata_read_ || epoch_recovery_machines_.size() > 0);
+  // In case the sequencer metadata is already found in metadata log,
+  // as soon as the last epoch recovery machine is retired LogRecoveryRequest
+  // is destroyed. Therefore, if we are in a LogRecoveryRequest method,
+  // we must have at least one active epoch recovery machine.
+  ld_check(!seq_metadata_read_ || epoch_recovery_machines_.size() > 0);
 
+  if (reply.header_.status == E::OK) {
     ld_check(next_epoch_.val_ > 0);
     ld_check(seal_header_->last_clean_epoch.val_ < next_epoch_.val_ - 1);
 
