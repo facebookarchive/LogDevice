@@ -9,6 +9,8 @@
 
 #include <deque>
 
+#include <fizz/client/AsyncFizzClient.h>
+#include <fizz/protocol/DefaultCertificateVerifier.h>
 #include <folly/Memory.h>
 #include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/async/AsyncSocket.h>
@@ -30,35 +32,49 @@ namespace facebook { namespace logdevice {
 class AdminClientConnection
     : public folly::AsyncSocket::ConnectCallback,
       public folly::AsyncTransportWrapper::ReadCallback,
-      public folly::AsyncTransportWrapper::WriteCallback {
+      public folly::AsyncTransportWrapper::WriteCallback,
+      public fizz::client::AsyncFizzClient::HandshakeCallback {
  public:
   AdminClientConnection(EventBase* evb,
                         const AdminCommandClient::Request& rr,
-                        std::chrono::milliseconds timeout,
-                        std::shared_ptr<folly::SSLContext> context)
-      : socket_(), request_(rr), timeout_(timeout) {
-    if (request_.conntype_ == AdminCommandClient::ConnectionType::ENCRYPTED) {
-      ld_check(context);
-      socket_ = AsyncSSLSocket::newSocket(context, evb);
+                        std::chrono::milliseconds timeout)
+      : evb_(evb),
+        // both fizz and unencrypted flow use plain AsyncSocket
+        socket_(new folly::AsyncSocket(evb)),
+        request_(rr),
+        // We always try fizz (i.e. TLS 1.3) for encrypted connection first,
+        // we fallback to AsyncSSLSocket on failure
+        tryFizz_(rr.conntype_ == AdminCommandClient::ConnectionType::ENCRYPTED),
+        timeout_(timeout) {}
+
+  ~AdminClientConnection() override {
+    if (fizz_client_) {
+      fizz_client_->setReadCB(nullptr);
+      fizz_client_->closeNow();
     } else {
-      socket_ = AsyncSocket::newSocket(evb);
+      socket_->setReadCB(nullptr);
+      socket_->closeNow();
     }
   }
 
   virtual folly::SemiFuture<AdminCommandClient::Response> connect() {
-    bool ssl{request_.conntype_ ==
-             AdminCommandClient::ConnectionType::ENCRYPTED};
-    ld_debug("Connecting to %s with %s",
-             request_.sockaddr.describe().c_str(),
-             (ssl) ? "SSL" : "PLAIN");
-    tstart_ = std::chrono::steady_clock::now();
-    socket_->connect(this, request_.sockaddr, timeout_.count());
+    connectImpl();
     return promise_.getSemiFuture();
   }
 
+ private:
   void connectSuccess() noexcept override {
-    auto& request = request_.request;
     socket_->setRecvBufSize(1 * 1024 * 1024);
+    if (tryFizz_) {
+      fizzHandshake();
+    } else {
+      socketWrite();
+    }
+  }
+
+  void socketWrite() {
+    ld_check(!fizz_client_);
+    auto& request = request_.request;
     socket_->write(this, request.data(), request.size());
     if (request.back() != '\n') {
       socket_->write(this, "\n", 1);
@@ -172,7 +188,11 @@ class AdminClientConnection
       response += s;
     }
 
-    socket_->setReadCB(nullptr);
+    if (fizz_client_) {
+      fizz_client_->setReadCB(nullptr);
+    } else {
+      socket_->setReadCB(nullptr);
+    }
     promise_.setValue(response_);
     steady_clock::time_point tend = steady_clock::now();
     double d1 = std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -194,23 +214,75 @@ class AdminClientConnection
     result_.clear();
   }
 
-  ~AdminClientConnection() override {
-    // Deregister socket callback to avoid readEOF to be invoked
-    // when we close the socket.
-    socket_->setReadCB(nullptr);
-    socket_->close();
+  void connectImpl() {
+    auto* type = tryFizz_
+        ? "TLS_1.3"
+        : (request_.conntype_ == AdminCommandClient::ConnectionType::ENCRYPTED
+               ? "TLS"
+               : "PLAIN");
+    ld_debug(
+        "Connecting to %s with %s", request_.sockaddr.describe().c_str(), type);
+    tstart_ = std::chrono::steady_clock::now();
+    socket_->connect(this, request_.sockaddr, timeout_.count());
   }
 
- private:
-  std::shared_ptr<AsyncSocket> socket_;
+  void fizzHandshake() {
+    ld_check(!fizz_client_);
+    fizz_client_ = fizz::client::AsyncFizzClient::UniquePtr(
+        new fizz::client::AsyncFizzClient(
+            std::move(socket_),
+            std::make_shared<fizz::client::FizzClientContext>()));
+    fizz_client_->connect(this,
+                          std::shared_ptr<const fizz::CertificateVerifier>(),
+                          folly::none,
+                          folly::none);
+  }
+
+  void fizzHandshakeSuccess(fizz::client::AsyncFizzClient*) noexcept override {
+    ld_debug("fizzHandshakeSuccess connecting to %s",
+             request_.sockaddr.describe().c_str());
+
+    auto& request = request_.request;
+    auto cmd = std::make_unique<folly::IOBuf>();
+    folly::io::Appender output(cmd.get(), request.size() + 1);
+
+    output(request);
+    if (request.back() != '\n') {
+      output("\n");
+    }
+    fizz_client_->writeChain(nullptr, std::move(cmd));
+    fizz_client_->setReadCB(this);
+  }
+
+  /**
+   * There's no transparent fallback mechanism in fizz client,
+   * so we cannot distinguish between protocol version negotiation failure
+   * and any other failure, thus we're falling back to AsyncSSLSocket here.
+   */
+  void fizzHandshakeError(fizz::client::AsyncFizzClient*,
+                          folly::exception_wrapper ex) noexcept override {
+    ld_warning("fizzHandshakeError connecting to %s: %s",
+               request_.sockaddr.describe().c_str(),
+               ex ? ex.get_exception()->what() : "Unknown");
+    fizz_client_.reset();
+    socket_.reset(new AsyncSSLSocket(std::make_shared<SSLContext>(), evb_));
+    // make sure connectSuccess() will not go into an infinite loop
+    tryFizz_ = false;
+    connectImpl();
+  }
+
+  folly::EventBase* evb_;
+  folly::AsyncSocket::UniquePtr socket_;
   const AdminCommandClient::Request request_;
   AdminCommandClient::Response response_;
   std::vector<std::string> result_;
+  bool tryFizz_{false};
   bool success_{false};
   bool done_{false};
   folly::Promise<AdminCommandClient::Response> promise_;
   std::chrono::milliseconds timeout_;
   std::chrono::steady_clock::time_point tstart_;
+  fizz::client::AsyncFizzClient::UniquePtr fizz_client_;
 };
 
 std::vector<folly::SemiFuture<AdminCommandClient::Response>>
@@ -227,10 +299,7 @@ AdminCommandClient::asyncSend(
             .then([executor = executor_.get(), r, connect_timeout](
                       auto&&) mutable {
               auto connection = std::make_unique<AdminClientConnection>(
-                  executor->getEventBase(),
-                  r,
-                  connect_timeout,
-                  std::make_shared<folly::SSLContext>());
+                  executor->getEventBase(), r, connect_timeout);
               auto fut = connection->connect();
               return std::move(fut).via(executor).thenValue(
                   [c = std::move(connection)](AdminCommandClient::Response r) {
