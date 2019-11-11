@@ -10,6 +10,8 @@
 
 #include <folly/Format.h>
 #include <folly/Optional.h>
+#include <folly/executors/GlobalExecutor.h>
+#include <folly/io/async/EventBase.h>
 #include <folly/synchronization/Baton.h>
 #include <thrift/lib/cpp2/protocol/Serializer.h>
 
@@ -37,30 +39,58 @@ statusCallbackPostingBaton(Status* return_status, folly::Baton<>& call_baton) {
 
 CheckpointStoreImpl::CheckpointStoreImpl(
     std::unique_ptr<VersionedConfigStore> vcs)
-    : vcs_(std::move(vcs)) {}
+    : vcs_(std::move(vcs)),
+      event_base_(folly::getEventBase()),
+      timer_(folly::HHWheelTimer::newTimer(event_base_)),
+      holder_(this) {}
 
 void CheckpointStoreImpl::getLSN(const std::string& customer_id,
                                  logid_t log_id,
                                  GetCallback gcb) const {
-  auto cb = [log_id, gcb = std::move(gcb)](
-                Status status, std::string value) mutable {
-    if (status != Status::OK) {
-      gcb(status, lsn_t());
-      return;
-    }
-    auto value_thrift = ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
-        Slice::fromString(value));
-    if (value_thrift == nullptr) {
-      gcb(Status::BADMSG, LSN_INVALID);
-      return;
-    }
-    if (value_thrift->log_lsn_map.count(log_id.val())) {
-      auto lsn = value_thrift->log_lsn_map[log_id.val()];
-      gcb(Status::OK, lsn);
-    } else {
-      gcb(Status::NOTFOUND, lsn_t());
-    }
-  };
+  auto cb =
+      [this, ref = holder_.ref(), customer_id, log_id, gcb = std::move(gcb)](
+          Status status, std::string value) mutable {
+        if (status == Status::AGAIN) {
+          // Currently, if the VCS is not ready, we schedule a timer to retry
+          // getLSN function in kRetryDuration.
+          if (!ref) {
+            return;
+          }
+          auto get_lsn_no_args = [this,
+                                  ref = holder_.ref(),
+                                  customer_id,
+                                  log_id,
+                                  gcb = std::move(gcb)]() mutable {
+            if (!ref) {
+              return;
+            }
+            getLSN(customer_id, log_id, std::move(gcb));
+          };
+          event_base_->runInEventBaseThread(
+              [this, get_lsn_no_args = std::move(get_lsn_no_args)]() mutable {
+                timer_->scheduleTimeoutFn(
+                    std::move(get_lsn_no_args), kRetryDuration);
+              });
+          return;
+        }
+        if (status != Status::OK) {
+          gcb(status, lsn_t());
+          return;
+        }
+        auto value_thrift =
+            ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
+                Slice::fromString(value));
+        if (value_thrift == nullptr) {
+          gcb(Status::BADMSG, LSN_INVALID);
+          return;
+        }
+        if (value_thrift->log_lsn_map.count(log_id.val())) {
+          auto lsn = value_thrift->log_lsn_map[log_id.val()];
+          gcb(Status::OK, lsn);
+        } else {
+          gcb(Status::NOTFOUND, lsn_t());
+        }
+      };
   vcs_->getLatestConfig(customer_id, std::move(cb));
 }
 

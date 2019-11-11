@@ -7,7 +7,10 @@
  */
 #pragma once
 
+#include <folly/io/async/HHWheelTimer.h>
+
 #include "logdevice/common/VersionedConfigStore.h"
+#include "logdevice/common/WeakRefHolder.h"
 #include "logdevice/include/CheckpointStore.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/lib/checkpointing/if/gen-cpp2/Checkpoint_types.h"
@@ -62,6 +65,8 @@ class CheckpointStoreImpl : public CheckpointStore {
       extractVersion(folly::StringPiece);
 
  private:
+  static constexpr auto kRetryDuration = std::chrono::seconds(1);
+
   void updateCheckpoints(
       const std::string& customer_id,
       folly::Function<void(checkpointing::thrift::Checkpoint&) const>
@@ -69,6 +74,9 @@ class CheckpointStoreImpl : public CheckpointStore {
       StatusCallback cb);
 
   std::unique_ptr<VersionedConfigStore> vcs_;
+  folly::EventBase* event_base_;
+  folly::HHWheelTimer::UniquePtr timer_;
+  WeakRefHolder<CheckpointStoreImpl> holder_;
 };
 
 }} // namespace facebook::logdevice
