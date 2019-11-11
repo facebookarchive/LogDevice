@@ -22,7 +22,12 @@ namespace facebook { namespace logdevice {
  */
 class CheckpointStoreImpl : public CheckpointStore {
  public:
-  explicit CheckpointStoreImpl(std::unique_ptr<VersionedConfigStore> vcs);
+  /**
+   * @param prefix: the string which will be added at the beginning of every
+   *   key.
+   */
+  explicit CheckpointStoreImpl(std::unique_ptr<VersionedConfigStore> vcs,
+                               const std::string& prefix = "");
 
   void getLSN(const std::string& customer_id,
               logid_t log_id,
@@ -73,7 +78,10 @@ class CheckpointStoreImpl : public CheckpointStore {
           modify_checkpoint,
       StatusCallback cb);
 
+  std::string createKey(const std::string& customer_id) const;
+
   std::unique_ptr<VersionedConfigStore> vcs_;
+  std::string prefix_;
   folly::EventBase* event_base_;
   folly::HHWheelTimer::UniquePtr timer_;
   WeakRefHolder<CheckpointStoreImpl> holder_;

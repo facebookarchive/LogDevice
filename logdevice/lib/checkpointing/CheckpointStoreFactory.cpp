@@ -46,8 +46,12 @@ CheckpointStoreFactory::createZookeeperBasedCheckpointStore(
   }
   auto versioned_config_store = std::make_unique<ZookeeperVersionedConfigStore>(
       CheckpointStoreImpl::extractVersion, std::move(zookeeper_client));
+
+  std::string prefix = folly::sformat(
+      "/logdevice/{}/checkpoints/",
+      client_impl->getConfig()->getServerConfig()->getClusterName());
   return std::make_unique<CheckpointStoreImpl>(
-      std::move(versioned_config_store));
+      std::move(versioned_config_store), std::move(prefix));
 }
 
 std::unique_ptr<CheckpointStore>

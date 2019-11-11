@@ -38,8 +38,10 @@ statusCallbackPostingBaton(Status* return_status, folly::Baton<>& call_baton) {
 } // namespace
 
 CheckpointStoreImpl::CheckpointStoreImpl(
-    std::unique_ptr<VersionedConfigStore> vcs)
+    std::unique_ptr<VersionedConfigStore> vcs,
+    const std::string& prefix)
     : vcs_(std::move(vcs)),
+      prefix_(prefix),
       event_base_(folly::getEventBase()),
       timer_(folly::HHWheelTimer::newTimer(event_base_)),
       holder_(this) {}
@@ -91,7 +93,7 @@ void CheckpointStoreImpl::getLSN(const std::string& customer_id,
           gcb(Status::NOTFOUND, lsn_t());
         }
       };
-  vcs_->getLatestConfig(customer_id, std::move(cb));
+  vcs_->getLatestConfig(createKey(customer_id), std::move(cb));
 }
 
 Status CheckpointStoreImpl::getLSNSync(const std::string& customer_id,
@@ -223,8 +225,8 @@ void CheckpointStoreImpl::updateCheckpoints(
     }
     cb(status);
   };
-
-  vcs_->readModifyWriteConfig(customer_id, std::move(mcb), std::move(ucb));
+  vcs_->readModifyWriteConfig(
+      createKey(customer_id), std::move(mcb), std::move(ucb));
 }
 
 folly::Optional<CheckpointStore::Version>
@@ -235,6 +237,14 @@ CheckpointStoreImpl::extractVersion(folly::StringPiece value) {
     return folly::none;
   }
   return CheckpointStore::Version(value_thrift->version);
+}
+
+std::string
+CheckpointStoreImpl::createKey(const std::string& customer_id) const {
+  if (prefix_.empty()) {
+    return customer_id;
+  }
+  return prefix_ + customer_id;
 }
 
 }} // namespace facebook::logdevice

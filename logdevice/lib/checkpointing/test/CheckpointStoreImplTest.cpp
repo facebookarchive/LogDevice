@@ -46,14 +46,15 @@ class CheckpointStoreImplTest : public ::testing::Test {
 TEST_F(CheckpointStoreImplTest, GetLSN) {
   Checkpoint checkpoint;
   checkpoint.log_lsn_map = {{1, 5}, {2, 7}, {5, 9}};
-  EXPECT_CALL(*mock_versioned_config_store_, getLatestConfig("customer", _))
+  EXPECT_CALL(
+      *mock_versioned_config_store_, getLatestConfig("prefix/customer", _))
       .Times(6)
       .WillRepeatedly(Invoke([checkpoint](auto, auto cb) {
         cb(Status::OK, ThriftCodec::serialize<BinarySerializer>(checkpoint));
       }));
 
   auto checkpointStore = std::make_unique<CheckpointStoreImpl>(
-      std::move(mock_versioned_config_store_));
+      std::move(mock_versioned_config_store_), "prefix/");
 
   for (auto [log_id, lsn] : checkpoint.log_lsn_map) {
     lsn_t value_out;
@@ -76,14 +77,15 @@ TEST_F(CheckpointStoreImplTest, GetLSN) {
 TEST_F(CheckpointStoreImplTest, GetHandleInvalidCheckpoint) {
   Checkpoint checkpoint;
   checkpoint.log_lsn_map = {{1, 5}, {2, 7}, {5, 9}};
-  EXPECT_CALL(*mock_versioned_config_store_, getLatestConfig("customer", _))
+  EXPECT_CALL(
+      *mock_versioned_config_store_, getLatestConfig("prefix/customer", _))
       .Times(2)
       .WillRepeatedly(Invoke([checkpoint](auto, auto cb) {
         cb(Status::OK, "IncorrectSerializedThrift");
       }));
 
   auto checkpointStore = std::make_unique<CheckpointStoreImpl>(
-      std::move(mock_versioned_config_store_));
+      std::move(mock_versioned_config_store_), "prefix/");
 
   lsn_t value_out;
   auto status = checkpointStore->getLSNSync("customer", logid_t(1), &value_out);
@@ -149,8 +151,8 @@ TEST_F(CheckpointStoreImplTest, UpdateWhenMultipleValues) {
   correct.log_lsn_map = {{1, 2}, {2, 5}, {3, 7}, {2, 3}};
   correct.version = 4;
 
-  EXPECT_CALL(
-      *mock_versioned_config_store_, readModifyWriteConfig("customer2", _, _))
+  EXPECT_CALL(*mock_versioned_config_store_,
+              readModifyWriteConfig("prefix/customer2", _, _))
       .Times(2)
       .WillRepeatedly(Invoke([correct](auto, auto mcb, auto cb) mutable {
         auto before_update = correct;
@@ -168,7 +170,7 @@ TEST_F(CheckpointStoreImplTest, UpdateWhenMultipleValues) {
       }));
 
   auto checkpointStore = std::make_unique<CheckpointStoreImpl>(
-      std::move(mock_versioned_config_store_));
+      std::move(mock_versioned_config_store_), "prefix/");
 
   auto status = checkpointStore->updateLSNSync("customer2", logid_t(3), 7);
   EXPECT_EQ(Status::OK, status);
