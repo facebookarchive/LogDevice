@@ -13,6 +13,7 @@
 #include "logdevice/common/ProtocolHandler.h"
 #include "logdevice/common/libevent/test/EvBaseMock.h"
 #include "logdevice/common/network/MessageReader.h"
+#include "logdevice/common/protocol/CHECK_NODE_HEALTH_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/test/MockSocketAdapter.h"
 #include "logdevice/common/test/SocketTest_fixtures.h"
@@ -61,15 +62,15 @@ class ClientConnectionTest : public SocketTest {
     ev_base_folly_.loopOnce();
   }
 
-  void receiveMessage(const facebook::logdevice::Message* msg,
-                      uint16_t proto = Compatibility::MAX_PROTOCOL_SUPPORTED);
-
   void
   receiveAckMessage(Status st = E::OK,
                     facebook::logdevice::Message::Disposition disp =
                         facebook::logdevice::Message::Disposition::NORMAL,
                     uint16_t proto = Compatibility::MAX_PROTOCOL_SUPPORTED);
-  ~ClientConnectionTest() override {}
+  ~ClientConnectionTest() override {
+    conn_.reset();
+    EXPECT_EQ(bytes_pending_, 0);
+  }
   SocketDependencies* deps_;
   std::unique_ptr<Connection> conn_;
   testing::NiceMock<MockSocketAdapter>* sock_;
@@ -79,6 +80,10 @@ class ClientConnectionTest : public SocketTest {
   bool tamper_checksum_;
   bool socket_closed_{false};
   ConnectThrottle connect_throttle_;
+  template <typename T>
+  friend void receiveMessage(T& socket,
+                             const facebook::logdevice::Message* msg,
+                             uint16_t proto);
 };
 
 class ServerConnectionTest : public SocketTest {
@@ -86,6 +91,19 @@ class ServerConnectionTest : public SocketTest {
   ServerConnectionTest() {
     settings_.server = true;
     source_node_id_ = server_name_;
+    use_mock_evbase_ = false;
+    ev_base_folly_.selectEvBase(EvBase::FOLLY_EVENTBASE);
+    attachedToLegacyEventBase_ = false;
+    deps_ = new TestSocketDependencies(this);
+  }
+
+  void SetUp() override {
+    auto sock = std::make_unique<testing::NiceMock<MockSocketAdapter>>();
+    sock_ = sock.get();
+    ON_CALL(ev_base_mock_, isInTimeoutManagerThread())
+        .WillByDefault(::testing::Return(true));
+    ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
+    ON_CALL(*sock_, good()).WillByDefault(Return(!socket_closed_));
     conn_ = std::make_unique<Connection>(
         42 /* fd */,
         ClientID(client_id_) /* client_name */,
@@ -94,10 +112,30 @@ class ServerConnectionTest : public SocketTest {
         SocketType::DATA /* socket type */,
         ConnectionType::PLAIN,
         flow_group_,
-        std::make_unique<TestSocketDependencies>(this));
+        std::unique_ptr<SocketDependencies>(deps_),
+        std::move(sock));
+    socket_ = std::unique_ptr<Socket, SocketDeleter>(
+        conn_.get(), SocketDeleter(true /* skip */));
+    // A server socket is connected from the beginning.
+    EXPECT_TRUE(connected());
+    EXPECT_FALSE(handshaken());
   }
-  ~ServerConnectionTest() {}
+
+  ~ServerConnectionTest() override {
+    conn_.reset();
+    EXPECT_EQ(bytes_pending_, 0);
+  }
+  SocketDependencies* deps_;
   std::unique_ptr<Connection> conn_;
+  testing::NiceMock<MockSocketAdapter>* sock_;
+  folly::AsyncSocket::WriteCallback* wr_callback_;
+  folly::AsyncSocket::ReadCallback* rd_callback_;
+  bool tamper_checksum_;
+  bool socket_closed_{false};
+  template <typename T>
+  friend void receiveMessage(T& socket,
+                             const facebook::logdevice::Message* msg,
+                             uint16_t proto);
 };
 
 TEST_F(ClientConnectionTest, ConnectTest) {
@@ -107,11 +145,8 @@ TEST_F(ClientConnectionTest, ConnectTest) {
           WithArg<0>(Invoke([](folly::AsyncSocket::ConnectCallback* conn_cb) {
             conn_cb->connectSuccess();
           })));
-  EXPECT_CALL(*sock_, writeChain_(_, _, _))
-      .WillOnce(Invoke([](folly::AsyncSocket::WriteCallback*,
-                          folly::IOBuf* buf,
-                          folly::WriteFlags) { delete buf; }));
   EXPECT_EQ(conn_->connect(), 0);
+  ev_base_folly_.loopOnce();
 }
 
 TEST_F(ClientConnectionTest, SendBuffers) {
@@ -123,7 +158,7 @@ TEST_F(ClientConnectionTest, SendBuffers) {
           })));
   EXPECT_CALL(
       *sock_, writeChain_(NotNull(), NotNull(), folly::WriteFlags::NONE))
-      .Times(2)
+      .Times(1)
       .WillRepeatedly(Invoke([this](folly::AsyncSocket::WriteCallback* cb,
                                     folly::IOBuf* buf,
                                     folly::WriteFlags) {
@@ -133,12 +168,11 @@ TEST_F(ClientConnectionTest, SendBuffers) {
   ON_CALL(*sock_, good()).WillByDefault(Return(true));
 
   EXPECT_EQ(conn_->connect(), 0);
+  ev_base_folly_.loopOnce();
   writeSuccess();
   auto iobuf = folly::IOBuf::create(10);
   iobuf->append(10);
   conn_->sendBuffer(std::move(iobuf));
-  bytes_pending_ += 10;
-  writeSuccess();
 }
 
 TEST_F(ClientConnectionTest, ReceiveBuffers) {
@@ -165,18 +199,15 @@ TEST_F(ClientConnectionTest, CompleteConnectionSuccessfully) {
       .Times(1);
   ON_CALL(*sock_, connect_(_, _, _, _, _))
       .WillByDefault(SaveArg<0>(&conn_callback_));
-  EXPECT_CALL(*sock_, writeChain_(_, _, _))
-      .WillOnce(Invoke([](folly::AsyncSocket::WriteCallback*,
-                          folly::IOBuf* buf,
-                          folly::WriteFlags) { delete buf; }));
   EXPECT_EQ(conn_->connect(), 0);
   conn_callback_->connectSuccess();
   EXPECT_TRUE(connected());
 }
 
-void ClientConnectionTest::receiveMessage(
-    const facebook::logdevice::Message* msg,
-    uint16_t proto) {
+template <typename T>
+void receiveMessage(T& socket,
+                    const facebook::logdevice::Message* msg,
+                    uint16_t proto) {
   size_t msg_size = msg->size(proto);
   ASSERT_GT(msg_size, 0);
   size_t hdr_size = ProtocolHeader::bytesNeeded(msg->type_, proto);
@@ -194,7 +225,7 @@ void ClientConnectionTest::receiveMessage(
 
   if (!isHandshakeMessage(msg->type_)) {
     hdr->cksum = writer.computeChecksum();
-    if (tamper_checksum_) {
+    if (socket.tamper_checksum_) {
       hdr->cksum += 1;
     }
   }
@@ -205,17 +236,17 @@ void ClientConnectionTest::receiveMessage(
       "Received Message size %lu serialized body len %lu", msg_size, bodylen);
   void* buffer;
   size_t len;
-  rd_callback_->getReadBuffer(&buffer, &len);
+  socket.rd_callback_->getReadBuffer(&buffer, &len);
   ld_info("len recv %lu, io_buf->length() %lu", len, io_buf->length());
   ASSERT_LE(hdr_size, len);
   memcpy(buffer, io_buf->data(), std::min(io_buf->length(), len));
-  rd_callback_->readDataAvailable(std::min(io_buf->length(), len));
+  socket.rd_callback_->readDataAvailable(std::min(io_buf->length(), len));
   io_buf->trimStart(std::min(io_buf->length(), len));
 
   if (io_buf->length() == 0) {
     return;
   }
-  rd_callback_->getReadBuffer(&buffer, &len);
+  socket.rd_callback_->getReadBuffer(&buffer, &len);
   ld_info("len recv %lu, io_buf->length() %lu", len, io_buf->length());
   // Protocol reader detected error
   if (len == 0) {
@@ -223,7 +254,7 @@ void ClientConnectionTest::receiveMessage(
   }
   ASSERT_LE(io_buf->length(), len);
   memcpy(buffer, io_buf->data(), io_buf->length());
-  rd_callback_->readDataAvailable(io_buf->length());
+  socket.rd_callback_->readDataAvailable(io_buf->length());
   io_buf->trimStart(io_buf->length());
 }
 
@@ -246,7 +277,7 @@ void ClientConnectionTest::receiveAckMessage(
     return disp;
   };
   ACK_Message msg(ackhdr);
-  receiveMessage(&msg, proto);
+  receiveMessage(*this, &msg, proto);
 }
 
 TEST_F(ClientConnectionTest, Handshake) {
@@ -265,6 +296,7 @@ TEST_F(ClientConnectionTest, Handshake) {
   EXPECT_EQ(conn_->connect(), 0);
   conn_callback_->connectSuccess();
   EXPECT_TRUE(connected());
+  ev_base_folly_.loopOnce();
   writeSuccess();
   receiveAckMessage();
   EXPECT_TRUE(handshaken());
@@ -302,7 +334,7 @@ TEST_F(ClientConnectionTest, SerializationStages) {
   conn_callback_->connectSuccess();
   EXPECT_TRUE(connected());
   CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
-
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
   CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
@@ -310,10 +342,153 @@ TEST_F(ClientConnectionTest, SerializationStages) {
   receiveAckMessage();
   EXPECT_TRUE(handshaken());
   CHECK_SERIALIZEQ();
-
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::OK);
   CHECK_SERIALIZEQ();
+}
+
+// Verify that handshake works for a server Socket.
+TEST_F(ServerConnectionTest, Handshake) {
+  // Simulate HELLO to be received by the server.
+  HELLO_Header hdr{
+      uint16_t(max_proto_), uint16_t(max_proto_), 0, request_id_t(0), {}};
+  bool called = false;
+  on_received_hook_ = [&called](facebook::logdevice::Message* msg,
+                                const Address&,
+                                std::shared_ptr<PrincipalIdentity>,
+                                ResourceBudget::Token) {
+    EXPECT_FALSE(called);
+    EXPECT_EQ(msg->type_, MessageType::HELLO);
+    err = E::OK;
+    called = true;
+    return facebook::logdevice::Message::Disposition::NORMAL;
+  };
+  receiveMessage(
+      *this, new HELLO_Message(hdr), Compatibility::MAX_PROTOCOL_SUPPORTED);
+  EXPECT_TRUE(called);
+  // Simulate the server replying ACK.
+  ACK_Header ackhdr{
+      0, request_id_t(0), client_id_, uint16_t(max_proto_), E::OK};
+  std::unique_ptr<Message> msg = std::make_unique<ACK_Message>(ackhdr);
+  auto envelope = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*envelope);
+  // We should be handshaken now.
+  EXPECT_TRUE(handshaken());
+}
+
+TEST_F(ServerConnectionTest, IncomingMessageBytesLimitHandshake) {
+  incoming_message_bytes_limit_.setLimit(0);
+  // Simulate HELLO to be received by the server.
+  HELLO_Header hdr{
+      uint16_t(max_proto_), uint16_t(max_proto_), 0, request_id_t(0), {}};
+  bool called = false;
+  on_received_hook_ = [&called](facebook::logdevice::Message* msg,
+                                const Address&,
+                                std::shared_ptr<PrincipalIdentity>,
+                                ResourceBudget::Token) {
+    EXPECT_FALSE(called);
+    EXPECT_EQ(msg->type_, MessageType::HELLO);
+    err = E::OK;
+    called = true;
+    return facebook::logdevice::Message::Disposition::NORMAL;
+  };
+  receiveMessage(
+      *this, new HELLO_Message(hdr), Compatibility::MAX_PROTOCOL_SUPPORTED);
+  EXPECT_TRUE(called);
+  // Simulate the server replying ACK.
+  ACK_Header ackhdr{
+      0, request_id_t(0), client_id_, uint16_t(max_proto_), E::OK};
+  std::unique_ptr<Message> msg = std::make_unique<ACK_Message>(ackhdr);
+  auto envelope = socket_->registerMessage(std::move(msg));
+  socket_->releaseMessage(*envelope);
+  // We should be handshaken now.
+  EXPECT_TRUE(handshaken());
+}
+
+TEST_F(ServerConnectionTest, IncomingMessageBytesLimit) {
+  incoming_message_bytes_limit_.setLimit(0);
+  // Simulate HELLO to be received by the server.
+  HELLO_Header hdr{
+      uint16_t(max_proto_), uint16_t(max_proto_), 0, request_id_t(0), {}};
+  on_received_hook_ = [](facebook::logdevice::Message* msg,
+                         const Address&,
+                         std::shared_ptr<PrincipalIdentity>,
+                         ResourceBudget::Token) {
+    EXPECT_EQ(msg->type_, MessageType::HELLO);
+    err = E::OK;
+    return facebook::logdevice::Message::Disposition::NORMAL;
+  };
+  receiveMessage(
+      *this, new HELLO_Message(hdr), Compatibility::MAX_PROTOCOL_SUPPORTED);
+  // Simulate the server replying ACK.
+  ACK_Header ackhdr{
+      0, request_id_t(0), client_id_, uint16_t(max_proto_), E::OK};
+  auto envelope =
+      socket_->registerMessage(std::make_unique<ACK_Message>(ackhdr));
+  socket_->releaseMessage(*envelope);
+  // We should be handshaken now.
+  EXPECT_TRUE(handshaken());
+
+  // With limit zero ResourceBudget allows a single message
+  // even though we go beyond allowed limit.
+  ResourceBudget::Token token;
+  on_received_hook_ = [&](Message* msg,
+                          const Address&,
+                          std::shared_ptr<PrincipalIdentity>,
+                          ResourceBudget::Token t) {
+    EXPECT_TRUE(t.valid());
+    EXPECT_FALSE(incoming_message_bytes_limit_.acquire(msg->size()));
+    token = std::move(t);
+    return Message::Disposition::NORMAL;
+  };
+
+  auto check_node_hdr = CHECK_NODE_HEALTH_Header{request_id_t(1), 1, 0};
+  auto msg =
+      new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
+                               MessageType::CHECK_NODE_HEALTH,
+                               TrafficClass::FAILURE_DETECTOR>(check_node_hdr);
+  receiveMessage(*this, msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
+
+  // Try sending another message, this message should fail to send with
+  // ENOBUFS.
+  auto new_msg =
+      new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
+                               MessageType::CHECK_NODE_HEALTH,
+                               TrafficClass::FAILURE_DETECTOR>(check_node_hdr);
+  bool called = false;
+  on_received_hook_ = [&](Message*,
+                          const Address&,
+                          std::shared_ptr<PrincipalIdentity>,
+                          ResourceBudget::Token) {
+    called = true;
+    return Message::Disposition::NORMAL;
+  };
+  // We have captured the last token hence this message should not be received.
+  receiveMessage(*this, new_msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
+  EXPECT_FALSE(called);
+  token.release();
+  // Once the eventloop is run we should be able to accept the message as the
+  // socket token is released.
+  ev_base_folly_.loopOnce();
+  EXPECT_TRUE(called);
+
+  // Reset limit and make sure we do not get the callback.
+  incoming_message_bytes_limit_.setLimit(std::numeric_limits<uint64_t>::max());
+  msg =
+      new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
+                               MessageType::CHECK_NODE_HEALTH,
+                               TrafficClass::FAILURE_DETECTOR>(check_node_hdr);
+  called = false;
+  on_received_hook_ = [&](Message*,
+                          const Address&,
+                          std::shared_ptr<PrincipalIdentity>,
+                          ResourceBudget::Token) {
+    called = true;
+    return Message::Disposition::NORMAL;
+  };
+  receiveMessage(*this, msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
+  EXPECT_TRUE(called);
 }
 
 // Bad protocol error.
@@ -338,7 +513,7 @@ TEST_F(ClientConnectionTest, InvalidAckMessage) {
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
   conn_callback_->connectSuccess();
   CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
-
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
   CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
@@ -375,7 +550,7 @@ TEST_F(ClientConnectionTest, MessageRejectedAfterHandshakeInvalidProtocol) {
 
   conn_callback_->connectSuccess();
   CHECK_SERIALIZEQ(MessageType::TEST);
-
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
   CHECK_SERIALIZEQ(MessageType::TEST);
@@ -426,6 +601,7 @@ TEST_F(ClientConnectionTest, MessageChangesSizeAfterHandshake) {
   CHECK_SERIALIZEQ(MessageType::TEST);
 
   // HELLO is sent.
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
   CHECK_SERIALIZEQ(MessageType::TEST);
@@ -505,7 +681,7 @@ TEST_F(ClientConnectionTest, HandshakeTimeout) {
   // Socket is connected, HELLO can be serialized.
   conn_callback_->connectSuccess();
   CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
-
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
 
@@ -542,7 +718,7 @@ TEST_F(ClientConnectionTest, ConnectionResetByPeer) {
   // Socket is connected, HELLO can be serialized.
   conn_callback_->connectSuccess();
   CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
-
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
   // Simulate the socket closing.
@@ -610,6 +786,7 @@ TEST_F(ClientConnectionTest, DownRevEvbufferAccounting) {
 
   // Complete the handshake part.
   conn_callback_->connectSuccess();
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
   receiveAckMessage(
@@ -630,14 +807,17 @@ TEST_F(ClientConnectionTest, DownRevEvbufferAccounting) {
   // Therefore, we expect full ProtocolHeader
   ASSERT_EQ(bytes_pending_, msg_max_proto_size + sizeof(ProtocolHeader));
 
-  // Serialize to the evbuffer. This will add the serialization cost
+  // Serialize to the asyncsocket. This will add the serialization cost
   // to the queued cost.
   socket_->releaseMessage(*envelope);
 
-  ASSERT_EQ(bytes_pending_, protohdr_size_for_test_proto + msg_test_proto_size);
+  ASSERT_EQ(bytes_pending_,
+            msg_max_proto_size + sizeof(ProtocolHeader) +
+                protohdr_size_for_test_proto + msg_test_proto_size);
 
-  // Send the message. Both the bytes consumed in the evbuffer and the
+  // Send the message. Both the bytes consumed in the asyncsocket and the
   // "queued cost" should be released.
+  ev_base_folly_.loopOnce();
   writeSuccess();
   ASSERT_EQ(0, bytes_pending_);
 }
@@ -666,6 +846,7 @@ TEST_F(ClientConnectionTest, MaxLenRejected) {
   conn_callback_->connectSuccess();
   CHECK_SERIALIZEQ();
   //
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
   CHECK_SERIALIZEQ();
@@ -692,13 +873,13 @@ TEST_F(ClientConnectionTest, MaxLenRejected) {
   // Receive a message that's small enough to be received
   auto msg =
       new VarLengthTestMessage(Compatibility::MIN_PROTOCOL_SUPPORTED, max_size);
-  receiveMessage(msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
+  receiveMessage(*this, msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
   delete msg;
   EXPECT_TRUE(called);
   // Messages too big cause the socket to be closed
   msg = new VarLengthTestMessage(
       Compatibility::MIN_PROTOCOL_SUPPORTED, max_size + 1);
-  receiveMessage(msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
+  receiveMessage(*this, msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
   ev_base_folly_.loopOnce();
 }
 
@@ -721,6 +902,7 @@ TEST_F(ClientConnectionTest, CloseConnectionOnProtocolChecksumMismatch) {
   conn_callback_->connectSuccess();
   CHECK_SERIALIZEQ();
 
+  ev_base_folly_.loopOnce();
   writeSuccess();
   CHECK_ON_SENT(MessageType::HELLO, E::OK);
   CHECK_SERIALIZEQ();
@@ -746,6 +928,7 @@ TEST_F(ClientConnectionTest, CloseConnectionOnProtocolChecksumMismatch) {
   settings_.checksumming_enabled = false;
   tamper_checksum_ = false;
   receiveMessage(
+      *this,
       new VarLengthTestMessage(Compatibility::MIN_PROTOCOL_SUPPORTED,
                                facebook::logdevice::Message::MAX_LEN),
       Compatibility::MAX_PROTOCOL_SUPPORTED);
@@ -754,6 +937,7 @@ TEST_F(ClientConnectionTest, CloseConnectionOnProtocolChecksumMismatch) {
   //    is disabled
   tamper_checksum_ = true;
   receiveMessage(
+      *this,
       new VarLengthTestMessage(Compatibility::MIN_PROTOCOL_SUPPORTED,
                                facebook::logdevice::Message::MAX_LEN),
       Compatibility::MAX_PROTOCOL_SUPPORTED);
@@ -763,6 +947,7 @@ TEST_F(ClientConnectionTest, CloseConnectionOnProtocolChecksumMismatch) {
   settings_.checksumming_enabled = true;
   tamper_checksum_ = false;
   receiveMessage(
+      *this,
       new VarLengthTestMessage(Compatibility::MIN_PROTOCOL_SUPPORTED,
                                facebook::logdevice::Message::MAX_LEN),
       Compatibility::MAX_PROTOCOL_SUPPORTED);
@@ -771,8 +956,56 @@ TEST_F(ClientConnectionTest, CloseConnectionOnProtocolChecksumMismatch) {
   //    verify that socket gets closed
   tamper_checksum_ = true;
   receiveMessage(
+      *this,
       new VarLengthTestMessage(Compatibility::MIN_PROTOCOL_SUPPORTED,
                                facebook::logdevice::Message::MAX_LEN),
       Compatibility::MAX_PROTOCOL_SUPPORTED);
   ev_base_folly_.loopOnce();
+}
+
+TEST_F(ClientConnectionTest, SenderBytesPendingTest) {
+  std::unique_ptr<folly::IOBuf> hello_buf;
+  ON_CALL(*sock_, connect_(_, _, _, _, _))
+      .WillByDefault(SaveArg<0>(&conn_callback_));
+  ON_CALL(*sock_, writeChain_(_, _, _))
+      .WillByDefault(
+          Invoke([this, &hello_buf](folly::AsyncSocket::WriteCallback* cb,
+                                    folly::IOBuf* buf,
+                                    folly::WriteFlags) {
+            wr_callback_ = cb;
+            hello_buf.reset(buf);
+          }));
+  ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
+  EXPECT_EQ(conn_->connect(), 0);
+
+  CHECK_SERIALIZEQ(MessageType::HELLO);
+  conn_callback_->connectSuccess();
+  CHECK_SERIALIZEQ();
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  CHECK_ON_SENT(MessageType::HELLO, E::OK);
+  CHECK_SERIALIZEQ();
+
+  receiveAckMessage();
+  CHECK_SERIALIZEQ();
+  EXPECT_TRUE(handshaken());
+
+  // Send a message that requires a protocol >= 3.
+  auto raw_msg = new VarLengthTestMessage(3 /* min_proto */, 42 /* size */);
+  std::unique_ptr<facebook::logdevice::Message> msg(raw_msg);
+  auto msg_size_max_proto = msg->size();
+  auto msg_size_at_proto = msg->size(socket_->getProto());
+  auto envelope = socket_->registerMessage(std::move(msg));
+  // Message cost at max compatibility is added at registerMessage.
+  EXPECT_EQ(bytes_pending_, msg_size_max_proto);
+  socket_->releaseMessage(*envelope);
+  // Now message is added into the sendq and Connection::sendChain_ which will
+  // lead to double counting.
+  EXPECT_EQ(bytes_pending_, msg_size_max_proto + msg_size_at_proto);
+  ev_base_folly_.loopOnce();
+  // Message is now added into the asyncsocket and removed from sendq.
+  EXPECT_EQ(bytes_pending_, msg_size_at_proto);
+  writeSuccess();
+  // Message written into tcp socket.
+  EXPECT_EQ(bytes_pending_, 0);
 }

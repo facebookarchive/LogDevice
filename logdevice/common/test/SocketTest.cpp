@@ -883,4 +883,36 @@ TEST_F(ClientSocketTest, SocketThroughput) {
       int(total_msg_size * 1e3 / settings_.socket_health_check_period.count()),
       int(socket_->getSocketThroughput() * 1e3));
 }
+
+// Make sure cumulative bytes_pending tracked in Sender is correct.
+TEST_F(ClientSocketTest, SenderBytesPendingTest) {
+  int rv = socket_->connect();
+  ASSERT_EQ(0, rv);
+  CHECK_SENDQ();
+  CHECK_SERIALIZEQ(MessageType::HELLO);
+  triggerEventConnected();
+  CHECK_SENDQ(MessageType::HELLO);
+  flushOutputEvBuffer();
+  CHECK_ON_SENT(MessageType::HELLO, E::OK);
+  CHECK_SENDQ();
+  ACK_Header ackhdr{0, request_id_t(0), client_id_, max_proto_, E::OK};
+  receiveMsg(new TestACK_Message(ackhdr));
+  EXPECT_TRUE(handshaken());
+
+  // Send a message that requires a protocol >= 3.
+  auto raw_msg = new VarLengthTestMessage(3 /* min_proto */, 42 /* size */);
+  std::unique_ptr<facebook::logdevice::Message> msg(raw_msg);
+  auto msg_size_max_proto = msg->size();
+  auto msg_size_at_proto = msg->size(socket_->getProto());
+  auto envelope = socket_->registerMessage(std::move(msg));
+  // Message cost at max compatibility is added at registerMessage.
+  EXPECT_EQ(bytes_pending_, msg_size_max_proto);
+  socket_->releaseMessage(*envelope);
+  // Now message is added into the sendq and evbuffer which will
+  // lead to double counting.
+  EXPECT_EQ(bytes_pending_, msg_size_max_proto + msg_size_at_proto);
+  flushOutputEvBuffer();
+  // Message written into tcp socket.
+  EXPECT_EQ(bytes_pending_, 0);
+}
 }} // namespace facebook::logdevice

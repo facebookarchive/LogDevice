@@ -1523,10 +1523,17 @@ void Sender::queueMessageCompletion(std::unique_ptr<Message> msg,
   auto mc = std::make_unique<MessageCompletion>(std::move(msg), to, s, t);
   completed_messages_.push_back(*mc.release());
   if (!delivering_completed_messages_.exchange(true)) {
-    Worker::onThisThread()->add([this] {
+    auto exec = Worker::onThisThread();
+    auto deferred_execution = [this] {
       delivering_completed_messages_.store(false);
       deliverCompletedMessages();
-    });
+    };
+    if (exec->getNumPriorities() > 1) {
+      exec->addWithPriority(
+          std::move(deferred_execution), folly::Executor::HI_PRI);
+    } else {
+      exec->add(std::move(deferred_execution));
+    }
   }
 }
 

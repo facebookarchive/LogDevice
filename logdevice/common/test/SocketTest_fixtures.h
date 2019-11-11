@@ -161,6 +161,7 @@ class SocketTest : public ::testing::Test {
 
   ~SocketTest() {
     socket_.reset(); // before freeing the evbuffers
+    EXPECT_EQ(bytes_pending_, 0);
     LD_EV(evbuffer_free)(input_);
     LD_EV(evbuffer_free)(output_);
   }

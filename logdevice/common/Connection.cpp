@@ -26,7 +26,8 @@ Connection::Connection(NodeID server_name,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps)
     : Socket(server_name, type, conntype, flow_group, std::move(deps)),
-      retry_receipt_of_message_(getDeps()->getEvBase()) {}
+      retry_receipt_of_message_(getDeps()->getEvBase()),
+      sched_write_chain_(getDeps()->getEvBase()) {}
 
 Connection::Connection(NodeID server_name,
                        SocketType type,
@@ -40,7 +41,8 @@ Connection::Connection(NodeID server_name,
                                                        conn_description_,
                                                        getDeps()->getEvBase())),
       retry_receipt_of_message_(getDeps()->getEvBase()),
-      sock_write_cb_(proto_handler_.get()) {
+      sock_write_cb_(proto_handler_.get()),
+      sched_write_chain_(getDeps()->getEvBase()) {
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
 }
 
@@ -60,7 +62,8 @@ Connection::Connection(int fd,
              conntype,
              flow_group,
              std::move(deps)),
-      retry_receipt_of_message_(getDeps()->getEvBase()) {}
+      retry_receipt_of_message_(getDeps()->getEvBase()),
+      sched_write_chain_(getDeps()->getEvBase()) {}
 
 Connection::Connection(int fd,
                        ClientID client_name,
@@ -84,7 +87,8 @@ Connection::Connection(int fd,
                                                        conn_description_,
                                                        getDeps()->getEvBase())),
       retry_receipt_of_message_(getDeps()->getEvBase()),
-      sock_write_cb_(proto_handler_.get()) {
+      sock_write_cb_(proto_handler_.get()),
+      sched_write_chain_(getDeps()->getEvBase()) {
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
   // Set the read callback.
   read_cb_.reset(new MessageReader(*proto_handler_, proto_));
@@ -275,41 +279,44 @@ Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
   if (sock_) {
     if (sock_->good()) {
       if (sendChain_) {
+        ld_check(sched_write_chain_.isScheduled());
         sendChain_->prependChain(std::move(buffer_chain));
       } else {
         sendChain_ = std::move(buffer_chain);
-        auto schedule_write =
-            [this,
-             ref = std::weak_ptr<std::atomic<bool>>(conn_closed_)]() mutable {
-              if (ref.lock() && sock_->good()) {
-                auto chain_length = sendChain_->computeChainDataLength();
-                sock_write_cb_.chain_lengths_.push_back(chain_length);
-                sock_->writeChain(&sock_write_cb_, std::move(sendChain_));
-              }
-            };
-        auto exec = getDeps()->getExecutor();
-        if (exec->getNumPriorities() > 1) {
-          exec->addWithPriority(
-              std::move(schedule_write), folly::Executor::HI_PRI);
-        } else {
-          exec->add(std::move(schedule_write));
-        }
+        ld_check(!sched_write_chain_.isScheduled());
+        sched_write_chain_.attachCallback([this]() { scheduleWriteChain(); });
+        sched_write_chain_.scheduleTimeout(0);
+        sched_start_time_ = SteadyTimestamp::now();
       }
     }
-
-    auto& s = health_stats_;
-    // Check if bytes in socket is above idle_threshold. Accumulate active
-    // bytes sent and change state to active if necessary.
-    if (s.active_start_time_ == SteadyTimestamp::min() &&
-        getBufferedBytes() > getSettings().socket_idle_threshold) {
-      s.active_start_time_ = deps_->getCurrentTimestamp();
-    }
-    // OnSent for the message will be called immediately.
-    return Socket::SendStatus::SENT;
+    return Socket::SendStatus::SCHEDULED;
   } else {
     return Socket::sendBuffer(
         std::forward<std::unique_ptr<folly::IOBuf>>(buffer_chain));
   }
+}
+
+void Connection::scheduleWriteChain() {
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
+  if (!sock_->good()) {
+    return;
+  }
+  ld_check(sendChain_);
+  auto now = SteadyTimestamp::now();
+  STAT_ADD(deps_->getStats(),
+           sock_write_sched_delay,
+           to_msec(now - sched_start_time_).count());
+
+  // Get bytes that are added to sendq but not yet added in the asyncSocket.
+  auto bytes_in_sendq = Socket::getBufferedBytesSize();
+  sock_write_cb_.write_chains_.emplace_back(
+      SocketWriteCallback::WriteUnit{bytes_in_sendq, now});
+  // These bytes are now buffered in socket and will be removed from sendq.
+  sock_write_cb_.bytes_buffered_ += bytes_in_sendq;
+  sock_->writeChain(&sock_write_cb_, std::move(sendChain_));
+  // All the bytes will be now removed from sendq now that we have written into
+  // the asyncsocket.
+  onBytesAdmittedToSend(bytes_in_sendq);
 }
 
 void Connection::close(Status reason) {
@@ -317,18 +324,20 @@ void Connection::close(Status reason) {
   if (isClosed()) {
     return;
   }
+  // Calculate buffered bytes before clearing any member variables
+  size_t buffered_bytes = getBufferedBytesSize();
   Socket::close(reason);
   if (sock_) {
     // Clear read callback on close.
     sock_->setReadCB(nullptr);
-
-    size_t buffered_bytes = getBufferedBytes();
-    sock_write_cb_.chain_lengths_.clear();
-    sock_write_cb_.num_success_ = 0;
+    if (buffered_bytes != 0 && !deps_->shuttingDown()) {
+      getDeps()->noteBytesDrained(buffered_bytes,
+                                  getPeerType(),
+                                  /* message_type */ folly::none);
+    }
+    sock_write_cb_.clear();
     sendChain_.reset();
-    getDeps()->noteBytesDrained(buffered_bytes,
-                                getPeerType(),
-                                /* message_type */ folly::none);
+    sched_write_chain_.cancelTimeout();
     // Invoke closeNow before deleting the writing callback below.
     sock_->closeNow();
   }
@@ -344,7 +353,7 @@ void Connection::flushOutputAndClose(Status reason) {
     return;
   }
 
-  if (sendChain_ || sock_write_cb_.chain_lengths_.size() > 0) {
+  if (getBufferedBytesSize() > 0) {
     close_reason_ = reason;
     // Set the readcallback to nullptr as we know that socket is getting closed.
     sock_->setReadCB(nullptr);
@@ -406,20 +415,22 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   return rv;
 }
 
-size_t Connection::getBufferedBytes() const {
-  ld_check(sock_);
-  size_t buffered_bytes = 0;
-  if (sendChain_) {
-    buffered_bytes += sendChain_->computeChainDataLength();
+size_t Connection::getBufferedBytesSize() const {
+  // This covers the bytes in sendChain_
+  size_t buffered_bytes = Socket::getBufferedBytesSize();
+  // This covers the bytes buffered in asyncsocket.
+  if (sock_) {
+    buffered_bytes += sock_write_cb_.bufferedBytes();
   }
-  buffered_bytes += sock_write_cb_.bufferedBytes();
   return buffered_bytes;
 }
 
 size_t Connection::getBytesPending() const {
+  // Covers bytes in various queues.
   size_t bytes_pending = Socket::getBytesPending();
   if (sock_) {
-    bytes_pending += getBufferedBytes();
+    // Covers bytes in sendChain and asyncsocket.
+    bytes_pending += getBufferedBytesSize();
   }
   return bytes_pending;
 }
@@ -468,37 +479,40 @@ void Connection::onPeerClosed() {
   Socket::onPeerClosed();
 }
 
-void Connection::onBytesPassedToTCP(size_t nbytes_drained) {
+void Connection::onBytesAdmittedToSend(size_t nbytes_drained) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  if (sock_) {
-    ld_check(false);
-  } else {
-    Socket::onBytesPassedToTCP(nbytes_drained);
+  Socket::onBytesAdmittedToSend(nbytes_drained);
+}
+
+void Connection::onBytesPassedToTCP(size_t nbytes) {
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
+  if (!sock_) {
+    // In case of legacy sockets it is alright to update sender level stats at
+    // this point as the bytes are passed into the tcp socket.
+    Socket::onBytesPassedToTCP(nbytes);
   }
 }
 
 void Connection::drainSendQueue() {
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
   auto& cb = sock_write_cb_;
   size_t total_bytes_drained = 0;
   for (size_t& i = cb.num_success_; i > 0; --i) {
-    total_bytes_drained += cb.chain_lengths_.front();
-    cb.chain_lengths_.pop_front();
+    total_bytes_drained += cb.write_chains_.front().length;
+    STAT_ADD(deps_->getStats(),
+             sock_write_sched_size,
+             cb.write_chains_.front().length);
+    cb.write_chains_.pop_front();
   }
 
-  getDeps()->noteBytesDrained(total_bytes_drained, getPeerType(), folly::none);
+  ld_check(cb.bytes_buffered_ >= total_bytes_drained);
+  cb.bytes_buffered_ -= total_bytes_drained;
+  Socket::onBytesPassedToTCP(total_bytes_drained);
 
-  auto& s = health_stats_;
-  s.num_bytes_sent_ += total_bytes_drained;
-  if (s.active_start_time_ != SteadyTimestamp::min() &&
-      getBufferedBytes() <= getSettings().socket_idle_threshold) {
-    auto diff = deps_->getCurrentTimestamp() - s.active_start_time_;
-    s.active_time_ += to_msec(diff);
-    s.active_start_time_ = SteadyTimestamp::min();
-  }
   // flushOutputAndClose sets close_reason_ and waits for all buffers to drain.
   // Check if all buffers were drained here if that is the case close the
   // connection.
-  if (close_reason_ != E::UNKNOWN && cb.chain_lengths_.size() == 0 &&
+  if (close_reason_ != E::UNKNOWN && cb.write_chains_.size() == 0 &&
       !sendChain_) {
     close(close_reason_);
   }
