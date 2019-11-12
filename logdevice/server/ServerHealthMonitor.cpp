@@ -8,6 +8,8 @@
 
 #include "logdevice/server/ServerHealthMonitor.h"
 
+#include <folly/synchronization/Baton.h>
+
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/chrono_util.h"
@@ -50,11 +52,16 @@ ServerHealthMonitor::ServerHealthMonitor(
 
 void ServerHealthMonitor::startUp() {
   auto now = SteadyTimestamp::now();
-  updateVariables(now);
-  monitorLoop();
+  folly::Baton baton;
+  executor_.add([this, now, &baton]() mutable {
+    updateVariables(now);
+    monitorLoop();
+    baton.post();
+  });
+  baton.wait();
 }
 HealthMonitor::NodeStatus ServerHealthMonitor::getNodeStatus() {
-  return node_status_.load();
+  return node_status_.load(std::memory_order_relaxed);
 }
 void ServerHealthMonitor::monitorLoop() {
   last_entry_time_ = SteadyTimestamp::now();
@@ -63,7 +70,7 @@ void ServerHealthMonitor::monitorLoop() {
           .via(&executor_)
           .then([this](folly::Try<folly::Unit>) mutable {
             STAT_INCR(stats_, health_monitor_num_loops);
-            if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
+            if (shutdown_.load(std::memory_order_relaxed)) {
               shutdown_promise_.setValue();
               return;
             }
@@ -74,7 +81,7 @@ void ServerHealthMonitor::monitorLoop() {
                 ? true
                 : false;
             processReports();
-            if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
+            if (shutdown_.load(std::memory_order_relaxed)) {
               shutdown_promise_.setValue();
               return;
             }
@@ -186,20 +193,20 @@ void ServerHealthMonitor::processReports() {
   NodeStatus new_status = (sleep_period_ < state_timer_.getCurrentValue())
       ? NodeStatus::UNHEALTHY
       : overloaded_ ? NodeStatus::OVERLOADED : NodeStatus::HEALTHY;
-  node_status_.store(new_status);
+  node_status_.store(new_status, std::memory_order_relaxed);
   if (new_status == NodeStatus::HEALTHY) {
     STAT_INCR(stats_, health_monitor_state_indicator);
   }
 }
 
 folly::SemiFuture<folly::Unit> ServerHealthMonitor::shutdown() {
-  shutdown_.exchange(true, std::memory_order::memory_order_relaxed);
+  shutdown_.exchange(true, std::memory_order_relaxed);
   executor_.add([this]() mutable { sleep_semifuture_.cancel(); });
   return shutdown_promise_.getSemiFuture();
 }
 
 void ServerHealthMonitor::reportWatchdogHealth(bool delayed) {
-  if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
+  if (shutdown_.load(std::memory_order_relaxed)) {
     return;
   }
   executor_.add([this, delayed]() mutable {
@@ -213,7 +220,7 @@ void ServerHealthMonitor::reportWatchdogHealth(bool delayed) {
 }
 
 void ServerHealthMonitor::reportStalledWorkers(int num_stalled) {
-  if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
+  if (shutdown_.load(std::memory_order_relaxed)) {
     return;
   }
   executor_.add([this, num_stalled]() mutable {
@@ -224,7 +231,7 @@ void ServerHealthMonitor::reportStalledWorkers(int num_stalled) {
 void ServerHealthMonitor::reportWorkerQueueStall(
     int idx,
     std::chrono::milliseconds duration) {
-  if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
+  if (shutdown_.load(std::memory_order_relaxed)) {
     return;
   }
   auto tp = SteadyTimestamp::now();
@@ -238,7 +245,7 @@ void ServerHealthMonitor::reportWorkerQueueStall(
 void ServerHealthMonitor::reportWorkerStall(
     int idx,
     std::chrono::milliseconds duration) {
-  if (shutdown_.load(std::memory_order::memory_order_relaxed)) {
+  if (shutdown_.load(std::memory_order_relaxed)) {
     return;
   }
   auto tp = SteadyTimestamp::now();
