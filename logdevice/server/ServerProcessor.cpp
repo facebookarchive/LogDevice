@@ -11,7 +11,6 @@
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/FailureDetector.h"
-#include "logdevice/server/ServerHealthMonitor.h"
 #include "logdevice/server/storage/PurgeCoordinator.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
@@ -76,7 +75,7 @@ void ServerProcessor::init() {
     try {
       auto executor =
           getWorker(worker_id_t(0), WorkerType::FAILURE_DETECTOR).getExecutor();
-      health_monitor_ = std::make_unique<ServerHealthMonitor>(
+      health_monitor_ = std::make_unique<HealthMonitor>(
           *executor,
           updateableSettings()->health_monitor_poll_interval_ms,
           getWorkerCount(WorkerType::GENERAL),
@@ -110,8 +109,7 @@ void ServerProcessor::init() {
           });
 
     } catch (const ConstructorFailed&) {
-      ld_error("Failed to construct ServerHealthMonitor: %s",
-               error_description(err));
+      ld_error("Failed to construct HealthMonitor: %s", error_description(err));
       STAT_INCR(stats_, health_monitor_errors);
     }
   } else {
@@ -121,7 +119,9 @@ void ServerProcessor::init() {
 
 void ServerProcessor::startRunning() {
   Processor::startRunning();
-  health_monitor_->startUp();
+  if (gossip_settings_->enabled && health_monitor_.get()) {
+    health_monitor_->startUp();
+  }
   watchdog_thread_->startRunning();
 }
 

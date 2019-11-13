@@ -102,8 +102,8 @@ void serializeAndDeserializeTest(Params params) {
   }
 
   if (params.with_health_status) {
-    node_list[0].node_status_ = HealthMonitor::NodeStatus::HEALTHY;
-    node_list[1].node_status_ = HealthMonitor::NodeStatus::UNHEALTHY;
+    node_list[0].node_status_ = NodeHealthStatus::HEALTHY;
+    node_list[1].node_status_ = NodeHealthStatus::UNHEALTHY;
   }
 
   GOSSIP_Message msg(this_node,

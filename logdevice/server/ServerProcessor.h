@@ -15,6 +15,7 @@
 #include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/server/FailureDetector.h"
+#include "logdevice/server/HealthMonitor.h"
 #include "logdevice/server/LocalLogFile.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/ServerWorker.h"
@@ -149,6 +150,10 @@ class ServerProcessor : public Processor {
 
   void shutdown() override;
 
+  HealthMonitor* getHealthMonitor() {
+    return health_monitor_.get();
+  }
+
  private:
   void maybeCreateLogStorageStateMap();
 
@@ -162,5 +167,7 @@ class ServerProcessor : public Processor {
   BoycottingStatsHolder boycotting_stats_;
   // A thread running on server side to detect worker stalls
   std::unique_ptr<WatchDogThread> watchdog_thread_;
+  // HealthMonitor pointer. Used on server side to keep track of node status.
+  std::unique_ptr<HealthMonitor> health_monitor_;
 };
 }} // namespace facebook::logdevice

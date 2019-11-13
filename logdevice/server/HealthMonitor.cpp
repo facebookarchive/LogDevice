@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/ServerHealthMonitor.h"
+#include "logdevice/server/HealthMonitor.h"
 
 #include <folly/synchronization/Baton.h>
 
@@ -16,16 +16,15 @@
 
 namespace facebook { namespace logdevice {
 
-ServerHealthMonitor::ServerHealthMonitor(
-    folly::Executor& executor,
-    std::chrono::milliseconds sleep_period,
-    int num_workers,
-    StatsHolder* stats,
-    std::chrono::milliseconds max_queue_stalls_avg,
-    std::chrono::milliseconds max_queue_stall_duration,
-    double max_overloaded_worker_percentage,
-    std::chrono::milliseconds max_stalls_avg,
-    double max_stalled_worker_percentage)
+HealthMonitor::HealthMonitor(folly::Executor& executor,
+                             std::chrono::milliseconds sleep_period,
+                             int num_workers,
+                             StatsHolder* stats,
+                             std::chrono::milliseconds max_queue_stalls_avg,
+                             std::chrono::milliseconds max_queue_stall_duration,
+                             double max_overloaded_worker_percentage,
+                             std::chrono::milliseconds max_stalls_avg,
+                             double max_stalled_worker_percentage)
     : executor_(executor),
       sleep_period_(sleep_period),
       stats_(stats),
@@ -50,7 +49,7 @@ ServerHealthMonitor::ServerHealthMonitor(
       num_workers, {kNumBuckets, kNumPeriods * sleep_period_});
 }
 
-void ServerHealthMonitor::startUp() {
+void HealthMonitor::startUp() {
   auto now = SteadyTimestamp::now();
   folly::Baton baton;
   executor_.add([this, now, &baton]() mutable {
@@ -60,35 +59,35 @@ void ServerHealthMonitor::startUp() {
   });
   baton.wait();
 }
-HealthMonitor::NodeStatus ServerHealthMonitor::getNodeStatus() {
+NodeHealthStatus HealthMonitor::getNodeStatus() {
   return node_status_.load(std::memory_order_relaxed);
 }
-void ServerHealthMonitor::monitorLoop() {
+void HealthMonitor::monitorLoop() {
   last_entry_time_ = SteadyTimestamp::now();
-  sleep_semifuture_ =
-      folly::futures::sleep(sleep_period_)
-          .via(&executor_)
-          .then([this](folly::Try<folly::Unit>) mutable {
-            STAT_INCR(stats_, health_monitor_num_loops);
-            if (shutdown_.load(std::memory_order_relaxed)) {
-              shutdown_promise_.setValue();
-              return;
-            }
-            int64_t loop_entry_delay = msec_since(last_entry_time_);
-            internal_info_.health_monitor_delay_ =
-                (loop_entry_delay - sleep_period_.count() >
-                 kMaxLoopStall.count())
-                ? true
-                : false;
-            processReports();
-            if (shutdown_.load(std::memory_order_relaxed)) {
-              shutdown_promise_.setValue();
-              return;
-            }
-            monitorLoop();
-          });
+  sleep_semifuture_ = folly::futures::sleep(sleep_period_)
+                          .via(&executor_)
+                          .then([this](folly::Try<folly::Unit>) mutable {
+                            STAT_INCR(stats_, health_monitor_num_loops);
+                            if (shutdown_.load(std::memory_order_relaxed)) {
+                              shutdown_promise_.setValue();
+                              return;
+                            }
+                            int64_t loop_entry_delay =
+                                msec_since(last_entry_time_);
+                            internal_info_.health_monitor_delay_ =
+                                (loop_entry_delay - sleep_period_.count() >
+                                 kMaxLoopStall.count())
+                                ? true
+                                : false;
+                            processReports();
+                            if (shutdown_.load(std::memory_order_relaxed)) {
+                              shutdown_promise_.setValue();
+                              return;
+                            }
+                            monitorLoop();
+                          });
 }
-void ServerHealthMonitor::updateVariables(TimePoint now) {
+void HealthMonitor::updateVariables(TimePoint now) {
   std::for_each(internal_info_.worker_stalls_.begin(),
                 internal_info_.worker_stalls_.end(),
                 [now](TimeSeries& t) { t.update(now); });
@@ -98,8 +97,8 @@ void ServerHealthMonitor::updateVariables(TimePoint now) {
   state_timer_.positiveFeedback(now); // calc how much time has passed
 }
 
-bool ServerHealthMonitor::isOverloaded(TimePoint now,
-                                       std::chrono::milliseconds half_period) {
+bool HealthMonitor::isOverloaded(TimePoint now,
+                                 std::chrono::milliseconds half_period) {
   // A node is overloaded when more than max_overloaded_worker_percentage_% of
   // workers have overloaded request queues.
   return (std::count_if(
@@ -128,12 +127,11 @@ bool ServerHealthMonitor::isOverloaded(TimePoint now,
               internal_info_.worker_queue_stalls_.capacity());
 }
 
-ServerHealthMonitor::StallInfo
-ServerHealthMonitor::isStalled(TimePoint now,
-                               std::chrono::milliseconds half_period) {
+HealthMonitor::StallInfo
+HealthMonitor::isStalled(TimePoint now, std::chrono::milliseconds half_period) {
   // A node is stalled when more than max_stalled_worker_percentage_% of
   // workers have stalled requests.
-  ServerHealthMonitor::StallInfo info{0, false};
+  HealthMonitor::StallInfo info{0, false};
   info.stalled_ =
       (std::count_if(
            internal_info_.worker_stalls_.begin(),
@@ -165,7 +163,7 @@ ServerHealthMonitor::isStalled(TimePoint now,
            internal_info_.worker_stalls_.capacity());
   return info;
 }
-void ServerHealthMonitor::calculateNegativeSignal(TimePoint now) {
+void HealthMonitor::calculateNegativeSignal(TimePoint now) {
   auto half_period = sleep_period_ / 2;
   stall_info_ = isStalled(now, half_period);
   overloaded_ = isOverloaded(now, half_period);
@@ -184,28 +182,28 @@ void ServerHealthMonitor::calculateNegativeSignal(TimePoint now) {
   }
 }
 
-void ServerHealthMonitor::processReports() {
+void HealthMonitor::processReports() {
   auto now = SteadyTimestamp::now();
   updateVariables(now);
   auto start_time = now - kPeriodRange * sleep_period_;
   auto end_time = now + std::chrono::nanoseconds(1);
   calculateNegativeSignal(now);
-  NodeStatus new_status = (sleep_period_ < state_timer_.getCurrentValue())
-      ? NodeStatus::UNHEALTHY
-      : overloaded_ ? NodeStatus::OVERLOADED : NodeStatus::HEALTHY;
+  NodeHealthStatus new_status = (sleep_period_ < state_timer_.getCurrentValue())
+      ? NodeHealthStatus::UNHEALTHY
+      : overloaded_ ? NodeHealthStatus::OVERLOADED : NodeHealthStatus::HEALTHY;
   node_status_.store(new_status, std::memory_order_relaxed);
-  if (new_status == NodeStatus::HEALTHY) {
+  if (new_status == NodeHealthStatus::HEALTHY) {
     STAT_INCR(stats_, health_monitor_state_indicator);
   }
 }
 
-folly::SemiFuture<folly::Unit> ServerHealthMonitor::shutdown() {
+folly::SemiFuture<folly::Unit> HealthMonitor::shutdown() {
   shutdown_.exchange(true, std::memory_order_relaxed);
   executor_.add([this]() mutable { sleep_semifuture_.cancel(); });
   return shutdown_promise_.getSemiFuture();
 }
 
-void ServerHealthMonitor::reportWatchdogHealth(bool delayed) {
+void HealthMonitor::reportWatchdogHealth(bool delayed) {
   if (shutdown_.load(std::memory_order_relaxed)) {
     return;
   }
@@ -219,7 +217,7 @@ void ServerHealthMonitor::reportWatchdogHealth(bool delayed) {
   });
 }
 
-void ServerHealthMonitor::reportStalledWorkers(int num_stalled) {
+void HealthMonitor::reportStalledWorkers(int num_stalled) {
   if (shutdown_.load(std::memory_order_relaxed)) {
     return;
   }
@@ -228,9 +226,8 @@ void ServerHealthMonitor::reportStalledWorkers(int num_stalled) {
   });
 }
 
-void ServerHealthMonitor::reportWorkerQueueStall(
-    int idx,
-    std::chrono::milliseconds duration) {
+void HealthMonitor::reportWorkerQueueStall(int idx,
+                                           std::chrono::milliseconds duration) {
   if (shutdown_.load(std::memory_order_relaxed)) {
     return;
   }
@@ -242,9 +239,8 @@ void ServerHealthMonitor::reportWorkerQueueStall(
   });
 }
 
-void ServerHealthMonitor::reportWorkerStall(
-    int idx,
-    std::chrono::milliseconds duration) {
+void HealthMonitor::reportWorkerStall(int idx,
+                                      std::chrono::milliseconds duration) {
   if (shutdown_.load(std::memory_order_relaxed)) {
     return;
   }

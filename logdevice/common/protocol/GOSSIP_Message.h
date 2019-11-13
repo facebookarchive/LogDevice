@@ -9,7 +9,7 @@
 
 #include <vector>
 
-#include "logdevice/common/HealthMonitor.h"
+#include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/sequencer_boycotting/Boycott.h"
@@ -45,7 +45,7 @@ struct GOSSIP_Node_Legacy {
 
 struct GOSSIP_Node : public GOSSIP_Node_Legacy {
   // Health status of node
-  HealthMonitor::NodeStatus node_status_{HealthMonitor::NodeStatus::UNDEFINED};
+  NodeHealthStatus node_status_{NodeHealthStatus::UNDEFINED};
 
   bool operator<(const GOSSIP_Node& a) const {
     return node_id_ < a.node_id_;

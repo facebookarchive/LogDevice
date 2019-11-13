@@ -211,7 +211,9 @@ void shutdown_server(
     listeners_closed.emplace_back(
         ssl_connection_listener->stopAcceptingConnections());
   }
-  auto health_monitor_closed = processor->getHealthMonitor().shutdown();
+  auto health_monitor_closed = processor->getHealthMonitor() != nullptr
+      ? processor->getHealthMonitor()->shutdown()
+      : folly::makeSemiFuture();
 
   folly::collectAll(listeners_closed.begin(), listeners_closed.end()).wait();
 

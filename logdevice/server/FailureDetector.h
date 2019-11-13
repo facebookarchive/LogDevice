@@ -16,7 +16,6 @@
 #include <folly/Optional.h>
 
 #include "logdevice/common/DomainIsolationChecker.h"
-#include "logdevice/common/HealthMonitor.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SequencerPlacement.h"
@@ -27,6 +26,7 @@
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/server/HealthMonitor.h"
 #include "logdevice/server/sequencer_boycotting/BoycottTracker.h"
 
 namespace facebook { namespace logdevice {
@@ -294,7 +294,7 @@ class FailureDetector {
     bool is_node_starting_;
 
     // Health Status of node.
-    HealthMonitor::NodeStatus status_;
+    NodeHealthStatus status_;
 
     Node()
         : state(NodeState::DEAD),
@@ -304,7 +304,7 @@ class FailureDetector {
           gossip_ts_(std::chrono::milliseconds::zero()),
           failover_(std::chrono::milliseconds::zero()),
           is_node_starting_(false),
-          status_{HealthMonitor::NodeStatus::UNDEFINED} {}
+          status_{NodeHealthStatus::UNDEFINED} {}
   };
 
   // Used for restricting the logging of FD state and Gossip messages
@@ -361,7 +361,7 @@ class FailureDetector {
   const char* getNodeStateString(NodeState state) const;
 
   // Returns the node status name. Used in dbg statements.
-  const char* getNodeStatusString(HealthMonitor::NodeStatus status) const;
+  const char* getNodeStatusString(NodeHealthStatus status) const;
 
   // Dumps dead/suspect/alive status of all nodes in the cluster
   // as perceived by this node's Failure Detector.

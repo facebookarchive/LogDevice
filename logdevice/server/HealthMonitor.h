@@ -16,34 +16,33 @@
 #include <folly/stats/BucketedTimeSeries.h>
 
 #include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
-#include "logdevice/common/HealthMonitor.h"
+#include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
 
-class ServerHealthMonitor : public HealthMonitor {
+class HealthMonitor {
  public:
-  ServerHealthMonitor(folly::Executor& executor,
-                      std::chrono::milliseconds sleep_period,
-                      int num_workers,
-                      StatsHolder* stats,
-                      std::chrono::milliseconds max_queue_stalls_avg,
-                      std::chrono::milliseconds max_queue_stall_duration,
-                      double max_overloaded_worker_percentage,
-                      std::chrono::milliseconds max_stalls_avg,
-                      double max_stalled_worker_percentage);
-  ~ServerHealthMonitor() override {}
+  HealthMonitor(folly::Executor& executor,
+                std::chrono::milliseconds sleep_period,
+                int num_workers,
+                StatsHolder* stats,
+                std::chrono::milliseconds max_queue_stalls_avg,
+                std::chrono::milliseconds max_queue_stall_duration,
+                double max_overloaded_worker_percentage,
+                std::chrono::milliseconds max_stalls_avg,
+                double max_stalled_worker_percentage);
+  ~HealthMonitor() {}
 
-  void startUp() override;
-  folly::SemiFuture<folly::Unit> shutdown() override;
-  NodeStatus getNodeStatus() override;
+  void startUp();
+  folly::SemiFuture<folly::Unit> shutdown();
+  NodeHealthStatus getNodeStatus();
 
   // reporter methods
-  void reportWatchdogHealth(bool delayed) override;
-  void reportStalledWorkers(int num_stalled) override;
-  void reportWorkerStall(int idx, std::chrono::milliseconds duration) override;
-  void reportWorkerQueueStall(int idx,
-                              std::chrono::milliseconds duration) override;
+  void reportWatchdogHealth(bool delayed);
+  void reportStalledWorkers(int num_stalled);
+  void reportWorkerStall(int idx, std::chrono::milliseconds duration);
+  void reportWorkerQueueStall(int idx, std::chrono::milliseconds duration);
 
  protected:
   void monitorLoop();
@@ -51,7 +50,7 @@ class ServerHealthMonitor : public HealthMonitor {
   void processReports();
 
  private:
-  friend class ServerHealthMonitorTest;
+  friend class HealthMonitorTest;
   using TimeSeries = folly::BucketedTimeSeries<std::chrono::duration<float>,
                                                std::chrono::steady_clock>;
   using TimePoint = std::chrono::time_point<std::chrono::steady_clock,
@@ -90,7 +89,7 @@ class ServerHealthMonitor : public HealthMonitor {
 
   ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
       state_timer_;
-  std::atomic<NodeStatus> node_status_{NodeStatus::HEALTHY};
+  std::atomic<NodeHealthStatus> node_status_{NodeHealthStatus::HEALTHY};
   bool overloaded_{false};
   StallInfo stall_info_{0, false};
 

@@ -393,7 +393,7 @@ void FailureDetector::gossip() {
   node.failover_ =
       failover_.load() ? instance_id_ : std::chrono::milliseconds::zero();
   node.is_node_starting_ = !isLogsConfigLoaded();
-  node.status_ = processor_->getHealthMonitor().getNodeStatus();
+  node.status_ = processor_->getHealthMonitor()->getNodeStatus();
   // Don't trigger other nodes' state transition until we receive min number
   // of gossips. The GCS reply is not same as a regular gossip, and therefore
   // doesn't contain Node::gossip_ values. The default values of Node::gossip_
@@ -1103,15 +1103,15 @@ const char* FailureDetector::getNodeStateString(NodeState state) const {
 }
 
 const char*
-FailureDetector::getNodeStatusString(HealthMonitor::NodeStatus status) const {
+FailureDetector::getNodeStatusString(NodeHealthStatus status) const {
   switch (status) {
-    case HealthMonitor::NodeStatus::HEALTHY:
+    case NodeHealthStatus::HEALTHY:
       return "HEALTHY";
-    case HealthMonitor::NodeStatus::OVERLOADED:
+    case NodeHealthStatus::OVERLOADED:
       return "OVERLOADED";
-    case HealthMonitor::NodeStatus::UNHEALTHY:
+    case NodeHealthStatus::UNHEALTHY:
       return "UNHEALTHY";
-    case HealthMonitor::NodeStatus::UNDEFINED:
+    case NodeHealthStatus::UNDEFINED:
       return "UNDEFINED";
   }
   return "UNKNOWN";
