@@ -142,12 +142,16 @@ void SyncingStorageThread::run() {
                 /* priority */ "syncing",
                 /* thread_type */ "syncing",
                 /* task_type */ "sync(" + toString(batch[0]->getType()) + ")",
-                toSystemTimestamp(batch[0]->enqueue_time_).toMilliseconds(),
+                SteadyTimestamp(batch[0]->enqueue_time_)
+                    .approximateSystemTimestamp()
+                    .toMilliseconds(),
                 durability_to_string(batch[0]->durability()));
-            info.execution_start_time =
-                toSystemTimestamp(start_time).toMilliseconds();
-            info.execution_end_time =
-                toSystemTimestamp(end_time).toMilliseconds();
+            info.execution_start_time = SteadyTimestamp(start_time)
+                                            .approximateSystemTimestamp()
+                                            .toMilliseconds();
+            info.execution_end_time = SteadyTimestamp(end_time)
+                                          .approximateSystemTimestamp()
+                                          .toMilliseconds();
             return info;
           },
           duration_ms);

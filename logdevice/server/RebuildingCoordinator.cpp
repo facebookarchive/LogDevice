@@ -641,8 +641,8 @@ void RebuildingCoordinator::trySlideGlobalWindow(
   shard_state.globalWindowEnd = new_global_window_end;
   ld_info(
       "Moving global window from %s to %s for shard %u and rebuilding set %s",
-      format_time(old_window_end).c_str(),
-      format_time(shard_state.globalWindowEnd).c_str(),
+      old_window_end.toString().c_str(),
+      shard_state.globalWindowEnd.toString().c_str(),
       shard,
       shard_state.rebuildingSet->describe().c_str());
   PER_SHARD_STAT_SET(getStats(),

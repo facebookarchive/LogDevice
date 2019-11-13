@@ -9,6 +9,7 @@
 
 #include <algorithm>
 
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
@@ -40,9 +41,9 @@ void ConnectThrottle::connectFailed() {
 
   down_until_ = time_now + current_delay_;
 
-  ld_debug("at %ld. set down_until_ to %lu, current_delay_ to %ld",
-           to_ms(time_now),
-           to_ms(down_until_),
+  ld_debug("at %s. set down_until_ to %s, current_delay_ to %ldms",
+           SteadyTimestamp(time_now).toString().c_str(),
+           SteadyTimestamp(down_until_).toString().c_str(),
            current_delay_.count());
 }
 

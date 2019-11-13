@@ -23,11 +23,11 @@ namespace facebook { namespace logdevice {
 
 size_t to_log_entry(const TrimAuditLogEntry& data, char* buf, size_t size) {
   folly::dynamic obj = folly::dynamic::object("operation_type", "TRIM")(
-      "log_id", data.log_id.val_)("timestamp", format_time(data.timestamp))(
+      "log_id", data.log_id.val_)("timestamp", toString(data.timestamp))(
       "new_lsn", data.new_lsn)("log_group", data.log_group)(
       "host_address", data.host_address)("cluster_name", data.cluster_name)(
       "build_info", data.build_info)(
-      "partition_timestamp", format_time(data.partition_timestamp));
+      "partition_timestamp", toString(data.partition_timestamp));
 
   // Log client request or retention policy for automatic trim
   if (!data.client.empty()) {

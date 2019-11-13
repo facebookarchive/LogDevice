@@ -1708,7 +1708,7 @@ void LogRebuilding::restart() {
   ld_debug("Restarting log rebuilding for log:%lu with "
            "maxTimestamp:%s, readPointer.lsn:%s",
            logid_.val_,
-           format_time(getMaxTimestamp()).c_str(),
+           getMaxTimestamp().toString().c_str(),
            lsn_to_string(readPointer_.lsn).c_str());
 
   startReading();

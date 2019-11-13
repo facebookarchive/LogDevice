@@ -12,13 +12,6 @@
 
 namespace facebook { namespace logdevice {
 
-SystemTimestamp
-toSystemTimestamp(const std::chrono::steady_clock::time_point& time_point) {
-  SystemTimestamp timestamp(std::chrono::system_clock::now());
-  timestamp -= (std::chrono::steady_clock::now() - time_point);
-  return timestamp;
-}
-
 std::string format_time_impl(std::chrono::milliseconds timestamp) {
   const char* const err_str = "error";
 
@@ -39,25 +32,25 @@ std::string format_time_impl(std::chrono::milliseconds timestamp) {
   return buf;
 }
 
-std::string format_time_since(SteadyTimestamp timestamp) {
-  SteadyTimestamp since(SteadyTimestamp::now() - timestamp);
-  auto h = since.toHours();
-  auto m = since.toMinutes();
-  auto s = since.toSeconds();
-  auto ms = since.toMilliseconds();
-  char buf[40];
-  snprintf(buf,
-           sizeof(buf),
-           "%lu:%02lu:%02lu.%03lu",
-           h.count(),
-           m.count() % 60,
-           s.count() % 60,
-           ms.count() % 1000);
-  return buf;
-}
-
-std::string toString(const SteadyTimestamp& t) {
-  return format_time_since(t) + " ago";
-}
+// Explicit instantiations.
+template class Timestamp<std::chrono::system_clock, detail::Holder>;
+template class Timestamp<std::chrono::system_clock, detail::AtomicHolder>;
+template class Timestamp<std::chrono::steady_clock, detail::Holder>;
+template class Timestamp<std::chrono::steady_clock, detail::AtomicHolder>;
+template class Timestamp<std::chrono::steady_clock,
+                         detail::Holder,
+                         std::chrono::milliseconds>;
+template class Timestamp<std::chrono::system_clock,
+                         detail::Holder,
+                         std::chrono::milliseconds>;
+template class Timestamp<std::chrono::system_clock,
+                         detail::AtomicHolder,
+                         std::chrono::milliseconds>;
+template std::chrono::steady_clock::duration
+steady_to_system_timestamp_approximate<std::chrono::steady_clock::duration>(
+    std::chrono::steady_clock::duration steady_timestamp);
+template std::chrono::milliseconds
+steady_to_system_timestamp_approximate<std::chrono::milliseconds>(
+    std::chrono::milliseconds steady_timestamp);
 
 }} // namespace facebook::logdevice

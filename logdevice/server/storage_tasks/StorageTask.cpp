@@ -18,16 +18,20 @@ StorageTaskDebugInfo StorageTask::getDebugInfo() const {
                             toString(getPriority()),
                             storageTaskThreadTypeName(getThreadType()),
                             toString(getType()),
-                            toSystemTimestamp(enqueue_time_).toMilliseconds(),
+                            SteadyTimestamp(enqueue_time_)
+                                .approximateSystemTimestamp()
+                                .toMilliseconds(),
                             durability_to_string(durability()));
   // Fill optional fields
   if (execution_start_time_) {
-    info.execution_start_time =
-        toSystemTimestamp(execution_start_time_.value()).toMilliseconds();
+    info.execution_start_time = SteadyTimestamp(execution_start_time_.value())
+                                    .approximateSystemTimestamp()
+                                    .toMilliseconds();
   }
   if (execution_end_time_) {
-    info.execution_end_time =
-        toSystemTimestamp(execution_end_time_.value()).toMilliseconds();
+    info.execution_end_time = SteadyTimestamp(execution_end_time_.value())
+                                  .approximateSystemTimestamp()
+                                  .toMilliseconds();
   }
 
   // Fill type-specific fields

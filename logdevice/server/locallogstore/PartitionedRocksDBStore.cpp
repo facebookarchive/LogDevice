@@ -1979,8 +1979,8 @@ PartitionedRocksDBStore::getPreferredPartition(RecordTimestamp timestamp,
           1,
           "Writing a record with timestamp %s, which is older than the oldest "
           "partition %s",
-          format_time(timestamp).c_str(),
-          format_time(partitions->get(greater)->starting_timestamp).c_str());
+          timestamp.toString().c_str(),
+          partitions->get(greater)->starting_timestamp.toString().c_str());
     }
     return oldest_id;
   }
@@ -3088,8 +3088,8 @@ int PartitionedRocksDBStore::writeMultiImpl(
                 "target partition. Partition: %lu, partition timestamp: %s, "
                 "record timestamp: %s, write: %s",
                 partition->id_,
-                format_time(partition->starting_timestamp).c_str(),
-                format_time(timestamp.value()).c_str(),
+                partition->starting_timestamp.toString().c_str(),
+                timestamp.value().toString().c_str(),
                 write->toString().c_str());
           }
         }

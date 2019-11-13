@@ -113,9 +113,13 @@ TEST_F(ToStringTest, Nested) {
 
 TEST_F(ToStringTest, Timestamps) {
   std::string s = toString(SteadyTimestamp::now());
-  EXPECT_EQ(" ago", s.substr(s.size() - 4));
-  EXPECT_EQ(strlen("[0:00:00.000 ago, 0:00:00.000 ago]"),
-            toString(std::vector<SteadyTimestamp>(
-                         {SteadyTimestamp::now(), SteadyTimestamp::now()}))
-                .size());
+  std::string format = "0000-00-00 00:00:00.000";
+  ASSERT_EQ(s.size(), format.size());
+  for (size_t i = 0; i < s.size(); ++i) {
+    if (format[i] == '0') {
+      EXPECT_TRUE(s[i] >= '0' && s[i] <= '9') << i << ' ' << s;
+    } else {
+      EXPECT_EQ(s[i], format[i]);
+    }
+  }
 }

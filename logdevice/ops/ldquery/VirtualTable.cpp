@@ -180,7 +180,7 @@ int VirtualTable::xColumn(sqlite3_vtab_cursor* cur,
       if (pVtab->table->getContext().pretty_output) {
         const long long ms = folly::to<long long>(v);
         std::string str =
-            format_time(RecordTimestamp(std::chrono::milliseconds(ms)));
+            RecordTimestamp(std::chrono::milliseconds(ms)).toString();
         sqlite3_result_text(ctx, str.c_str(), str.size(), SQLITE_TRANSIENT);
       } else {
         as_long = true;

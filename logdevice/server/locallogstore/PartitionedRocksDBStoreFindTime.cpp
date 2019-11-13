@@ -68,7 +68,7 @@ int PartitionedRocksDBStore::FindTime::execute(lsn_t* lo, lsn_t* hi) {
           lsn_to_string(*hi_).c_str(),
           p ? std::to_string(p->id_).c_str() : "unpartitioned",
           p ? lsn_to_string(p_first_lsn).c_str() : "null",
-          p ? format_time(p->starting_timestamp).c_str() : "null",
+          p ? p->starting_timestamp.toString().c_str() : "null",
           lsn_to_string(min_lo_).c_str(),
           lsn_to_string(max_hi_).c_str(),
           approximate_,

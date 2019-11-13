@@ -375,16 +375,10 @@ class Timestamp {
   }
 
   /**
-   * Formats the timestamps into a std::string.
-   * Only defined for Timestamp derived from system clock for now, because it's
-   * not clear how to format steady_clock timestamps in a nice
-   * and non-misleading way.
+   * Formats the timestamps into a std::string, in format:
+   * YYYY-MM-DD HH:MM:SS.MMM
    */
-  template <typename Clock2 = Clock> // just SFINAE things
-  typename std::enable_if<
-      std::is_same<Clock2, std::chrono::system_clock>::value,
-      std::string>::type
-  toString() const;
+  std::string toString() const;
 
   /**
    * Convert steady timestamp to system timestamp. Pseudocode:
@@ -584,24 +578,51 @@ COMP_OP(==)
 COMP_OP(!=)
 #undef COMP_OP
 
+// Aliases and explicit instantiations for some commonly used types.
+//
+// TODO: This header file is included from lots of translation units, and it's
+//       pretty big and heavy on templates. For compilation speed, would be
+//       good to move all implementation to the .cpp file and make Timestamp
+//       only available in the explicitly instantiated flavors.
+
 // Timestamp based on the wall clock.
 using SystemTimestamp = Timestamp<std::chrono::system_clock, detail::Holder>;
+extern template class Timestamp<std::chrono::system_clock, detail::Holder>;
 using AtomicSystemTimestamp =
     Timestamp<std::chrono::system_clock, detail::AtomicHolder>;
+extern template class Timestamp<std::chrono::system_clock,
+                                detail::AtomicHolder>;
 
 // Timestamp based on a monotonic clock.
 using SteadyTimestamp = Timestamp<std::chrono::steady_clock, detail::Holder>;
+extern template class Timestamp<std::chrono::steady_clock, detail::Holder>;
 using AtomicSteadyTimestamp =
     Timestamp<std::chrono::steady_clock, detail::AtomicHolder>;
+extern template class Timestamp<std::chrono::steady_clock,
+                                detail::AtomicHolder>;
+
+// Timestamp based on monotomic clock, rounded to millisecond resolution.
+using SteadyMilliseconds = Timestamp<std::chrono::steady_clock,
+                                     detail::Holder,
+                                     std::chrono::milliseconds>;
+extern template class Timestamp<std::chrono::steady_clock,
+                                detail::Holder,
+                                std::chrono::milliseconds>;
 
 // RecordTimestamps are tied to the system clock,
 // but only maintain millisecond resolution.
 using RecordTimestamp = Timestamp<std::chrono::system_clock,
                                   detail::Holder,
                                   std::chrono::milliseconds>;
+extern template class Timestamp<std::chrono::system_clock,
+                                detail::Holder,
+                                std::chrono::milliseconds>;
 using AtomicRecordTimestamp = Timestamp<std::chrono::system_clock,
                                         detail::AtomicHolder,
                                         std::chrono::milliseconds>;
+extern template class Timestamp<std::chrono::system_clock,
+                                detail::AtomicHolder,
+                                std::chrono::milliseconds>;
 
 template <typename TS>
 using TimeIntervals =
@@ -617,61 +638,90 @@ inline RecordTimeInterval allRecordTimeInterval() {
 }
 
 /**
- * Converts a steady clock time point to a system timestamps
- */
-SystemTimestamp
-toSystemTimestamp(const std::chrono::steady_clock::time_point& time_point);
-
-/**
  * Formats timestamp in milliseconds since the system clock epoch.
  * Output example: "2015-12-31 23:59:59.999".
+ * Unlike format_time_since_unix_epoch(), doesn't have special treatment of
+ * min, max, and zero values.
  */
-std::string format_time_impl(std::chrono::milliseconds timestamp);
+std::string format_time_impl(std::chrono::milliseconds);
 
 /**
- * DEPRECATED
- * Accept timestamp as a duration.
+ * Accept timestamp since unix epoch as a duration.
+ * Direct usage is discouraged. Prefer SystemTimestamp(d).toString() instead,
+ * to make it more obvious that the duration is since unix epoch, as opposed
+ * to stady clock epoch.
  */
 template <typename R, typename P>
-inline std::string format_time(std::chrono::duration<R, P> duration) {
+std::string format_time(std::chrono::duration<R, P> duration) {
   using type = decltype(duration);
-  if (duration == type::min()) {
-    return "-inf";
-  } else if (duration == type::max()) {
-    return "+inf";
-  } else if (duration.count() == 0) {
-    return "0";
+  return Timestamp<std::chrono::system_clock, detail::Holder, type>(duration)
+      .toString();
+}
+
+template <typename Duration>
+Duration steady_to_system_timestamp_approximate(Duration steady_timestamp) {
+  static Duration offset =
+      std::chrono::duration_cast<Duration>(
+          std::chrono::system_clock::now().time_since_epoch()) -
+      std::chrono::duration_cast<Duration>(
+          std::chrono::steady_clock::now().time_since_epoch());
+  return steady_timestamp + offset;
+}
+
+// Explicit instantiations.
+extern template std::chrono::steady_clock::duration
+steady_to_system_timestamp_approximate<std::chrono::steady_clock::duration>(
+    std::chrono::steady_clock::duration steady_timestamp);
+extern template std::chrono::milliseconds
+steady_to_system_timestamp_approximate<std::chrono::milliseconds>(
+    std::chrono::milliseconds steady_timestamp);
+
+// We want Timestamp::toString() to convert its Duration to milliseconds
+// since unix epoch. The conversion to unix epoch is different for system_clock
+// and steady_clock. To dispatch the system_clock and steady_clock cases to
+// different pieces of code we need this artificial struct because C++ is silly.
+template <typename Clock>
+struct ToSystemDuration;
+
+template <>
+struct ToSystemDuration<std::chrono::system_clock> {
+  template <typename Duration>
+  static Duration toSystemDuration(Duration d) {
+    return d;
   }
-  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-  return format_time_impl(ms);
-}
+};
 
-/**
- * Accept any Timestamp or time_point derived from the system clock.
- */
-template <
-    typename TP,
-    typename std::enable_if<
-        std::is_same<typename TP::clock, std::chrono::system_clock>::value,
-        int>::type = 0>
-inline std::string format_time(TP tp) {
-  return format_time(tp.time_since_epoch());
-}
-
-/**
- * Subtracts ts from the current steady time and outputs
- * a string in the format of "hours:mins:sec.ms".
- */
-std::string format_time_since(SteadyTimestamp ts);
+template <>
+struct ToSystemDuration<std::chrono::steady_clock> {
+  template <typename Duration>
+  static Duration toSystemDuration(Duration d) {
+    return steady_to_system_timestamp_approximate(d);
+  }
+};
 
 template <typename Clock,
           template <typename> class DurationHolder,
           typename Duration>
-template <typename Clock2>
-typename std::enable_if<std::is_same<Clock2, std::chrono::system_clock>::value,
-                        std::string>::type
-Timestamp<Clock, DurationHolder, Duration>::toString() const {
-  return format_time(duration_.load());
+std::string Timestamp<Clock, DurationHolder, Duration>::toString() const {
+  Duration d = duration_.load();
+  if (d == Duration::min()) {
+    return "-inf";
+  } else if (d == Duration::max()) {
+    return "+inf";
+  } else if (d.count() == 0) {
+    return "0";
+  }
+  return format_time_impl(std::chrono::duration_cast<std::chrono::milliseconds>(
+      ToSystemDuration<Clock>::template toSystemDuration<Duration>(
+          duration_.load())));
+}
+
+inline std::string toString(std::chrono::system_clock::time_point t) {
+  return SystemTimestamp(t).toString();
+}
+
+inline std::string toString(std::chrono::steady_clock::time_point t) {
+  return SteadyTimestamp(t).toString();
 }
 
 template <typename Clock,
@@ -682,10 +732,8 @@ typename std::enable_if<
     std::is_same<Clock2, std::chrono::steady_clock>::value,
     Timestamp<std::chrono::system_clock, DurationHolder, Duration>>::type
 Timestamp<Clock, DurationHolder, Duration>::approximateSystemTimestamp() const {
-  auto timestamp =
-      Timestamp<std::chrono::system_clock, DurationHolder, Duration>::now();
-  timestamp -= (std::chrono::steady_clock::now() - timePoint());
-  return timestamp;
+  return Timestamp<std::chrono::system_clock, DurationHolder, Duration>(
+      steady_to_system_timestamp_approximate(duration_.load()));
 }
 
 /**
@@ -699,12 +747,6 @@ std::ostream& operator<<(std::ostream& os,
   os << ts.toString();
   return os;
 }
-
-/**
- * Overload the toString() function for steady timestamps.
- * Format: "hours:mins:sec.ms ago".
- */
-std::string toString(const SteadyTimestamp& t);
 
 /* Format like std associative containers. */
 template <typename TS>

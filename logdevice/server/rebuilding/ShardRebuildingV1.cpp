@@ -545,10 +545,10 @@ bool ShardRebuildingV1::PartitionedLocalWindowSlider::getNewLocalWindowEnd(
     ld_error("Can't slide local window of shard %u to ts %s, last partition "
              "at ts %s",
              owner_ ? owner_->shard_ : 42, // can be null in tests
-             format_time(next_ts).c_str(),
-             format_time(partition_timestamps_.size() > 0
-                             ? partition_timestamps_.back()
-                             : RecordTimestamp::min())
+             next_ts.toString().c_str(),
+             (partition_timestamps_.size() > 0 ? partition_timestamps_.back()
+                                               : RecordTimestamp::min())
+                 .toString()
                  .c_str());
     return false;
   }
@@ -649,11 +649,11 @@ void ShardRebuildingV1::trySlideLocalWindow() {
   if (localWindowEnd_ != old_window_end) {
     ld_info("Moving local window from %s to %s for shard %u and "
             "rebuilding set %s. WakeUpQueue's next timestamp is %s",
-            format_time(old_window_end).c_str(),
-            format_time(localWindowEnd_).c_str(),
+            old_window_end.toString().c_str(),
+            localWindowEnd_.toString().c_str(),
             shard_,
             rebuildingSet_->describe().c_str(),
-            format_time(next_ts).c_str());
+            next_ts.toString().c_str());
     PER_SHARD_STAT_SET(getStats(),
                        rebuilding_local_window_end,
                        shard_,

@@ -76,7 +76,7 @@ RebuildingReadStorageTask::RebuildingReadStorageTask(
           " window_high=%" PRIu64 " max_bytes_to_deliver_=%zu"
           " first_record_any_size=%d",
           read_ctx.logid_.val_,
-          seekTimestamp ? format_time(seekTimestamp.value()).c_str() : "none",
+          seekTimestamp ? seekTimestamp.value().toString().c_str() : "none",
           lsn_to_string(readCtx.read_ptr_.lsn).c_str(),
           lsn_to_string(readCtx.until_lsn_).c_str(),
           readCtx.window_high_,

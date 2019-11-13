@@ -32,7 +32,7 @@ void BoycottTracer::traceBoycott(
   publish(sample_builder);
   ld_info("Boycotted %s since %s for %lums",
           boycotted_node.toString().c_str(),
-          format_time(SystemTimestamp(start_time)).c_str(),
+          SystemTimestamp(start_time).toString().c_str(),
           boycott_duration.count());
 }
 

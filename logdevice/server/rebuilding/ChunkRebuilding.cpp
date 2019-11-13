@@ -255,7 +255,7 @@ void ChunkRebuilding::getDebugInfo(InfoRebuildingChunksTable& table) const {
       .set<8>(numInFlight_ - amend_self - amend_others)
       .set<9>(amend_others)
       .set<10>(amend_self)
-      .set<11>(toSystemTimestamp(startTime_).toMilliseconds());
+      .set<11>(startTime_.approximateSystemTimestamp().toMilliseconds());
 }
 
 StartChunkRebuildingRequest::StartChunkRebuildingRequest(

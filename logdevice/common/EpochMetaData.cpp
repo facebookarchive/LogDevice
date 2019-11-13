@@ -522,9 +522,9 @@ std::string EpochMetaData::toStringPayload() const {
 
 std::string EpochMetaData::toString() const {
   std::string out = "[E:" + std::to_string(h.epoch.val_) + " (at " +
-      format_time(epoch_incremented_at) + ")" +
+      epoch_incremented_at.toString() + ")" +
       " since:" + std::to_string(h.effective_since.val_) + " (at " +
-      format_time(replication_conf_changed_at) + ")" +
+      replication_conf_changed_at.toString() + ")" +
       " R:" + replication.toString() + " V:" + std::to_string(h.version) +
       " flags:" + flagsToString(h.flags) +
       " params:" + nodeset_params.toString() +

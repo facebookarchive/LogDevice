@@ -69,7 +69,7 @@ std::ostream& operator<<(std::ostream& os, const PostedReadStorageTask& m) {
   os << "PostedReadStorageTask{";
   os << "readPtr: " << lsn_to_string(m.readPtr) << ", ";
   os << "windowHigh: " << lsn_to_string(m.windowHigh) << ", ";
-  os << "tsWindowHigh: " << format_time(m.tsWindowHigh) << ", ";
+  os << "tsWindowHigh: " << m.tsWindowHigh.toString() << ", ";
   os << "untilLsn: " << lsn_to_string(m.untilLsn);
   os << "}";
   return os;
@@ -254,7 +254,7 @@ class MockLogRebuilding : public LogRebuilding {
 
   void notifyWindowEnd(RecordTimestamp next) override {
     ld_info(
-        "Reached end of window, next_timestamp=%s", format_time(next).c_str());
+        "Reached end of window, next_timestamp=%s", next.toString().c_str());
     received.notifyWindowEndWasCalled = true;
   }
 

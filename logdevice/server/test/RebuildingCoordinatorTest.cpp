@@ -216,7 +216,7 @@ class MockedShardRebuildingV1 : public ShardRebuildingV1 {
     ld_info("Moving window for log %lu on shard %u: %s",
             logid.val_,
             shard_,
-            format_time(end).c_str());
+            end.toString().c_str());
     received.move_window.push_back(MoveWindow{logid, end});
   }
 
@@ -235,7 +235,7 @@ class MockedShardRebuildingV1 : public ShardRebuildingV1 {
             shard_,
             rebuilding_set->describe().c_str(),
             plan.toString().c_str(),
-            format_time(end).c_str());
+            end.toString().c_str());
     received.start.push_back(Start{logid, *rebuilding_set, plan.untilLSN, end});
   }
 
@@ -457,8 +457,7 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
                                 RecordTimestamp ts,
                                 lsn_t version,
                                 double progress_estimate) override {
-    ld_info(
-        "Next timestamp for shard %u is %s", shard, format_time(ts).c_str());
+    ld_info("Next timestamp for shard %u is %s", shard, ts.toString().c_str());
     received.donor_progress.push_back(DonorProgress{shard, ts, version});
   }
 

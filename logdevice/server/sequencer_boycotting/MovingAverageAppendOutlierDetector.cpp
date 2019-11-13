@@ -253,7 +253,7 @@ MovingAverageAppendOutlierDetector::PotentialOutlier::toString() const {
   return folly::sformat("(s:{}, f:{}, since {})",
                         successes,
                         fails,
-                        toSystemTimestamp(outlier_since).toString());
+                        logdevice::toString(outlier_since));
 }
 
 }} // namespace facebook::logdevice
