@@ -8,7 +8,8 @@
 #include "logdevice/common/SequencerBatching.h"
 
 #include <chrono>
-#include <unordered_set>
+
+#include <folly/container/F14Set.h>
 
 #include "logdevice/common/AppendRequestBase.h"
 #include "logdevice/common/Appender.h"
@@ -304,7 +305,7 @@ std::pair<Status, NodeID> SequencerBatching::appendBuffered(
   // is tracked by an `AppendMessageState' instance and the context we pass to
   // BufferedWriter is pointers to those state machines, counting the number
   // of distinct contexts will give the number of APPEND messages.
-  std::unordered_set<BufferedWriter::AppendCallback::Context> unique_contexts;
+  folly::F14ValueSet<BufferedWriter::AppendCallback::Context> unique_contexts;
   for (const auto& context : contexts) {
     unique_contexts.insert(context.first);
   }
@@ -332,16 +333,13 @@ std::pair<Status, NodeID> SequencerBatching::appendBuffered(
 
 class SequencerBatching::DispatchResultsRequest : public Request {
  public:
-  DispatchResultsRequest(
-      int target_worker,
-      std::unordered_map<AppendMessageState*, uint32_t> appends,
-      Status status,
-      NodeID redirect,
-      lsn_t lsn,
-      RecordTimestamp timestamp)
+  DispatchResultsRequest(int target_worker,
+                         Status status,
+                         NodeID redirect,
+                         lsn_t lsn,
+                         RecordTimestamp timestamp)
       : Request(RequestType::SEQUENCER_BATCHING_DISPATCH_RESULTS),
         target_worker_(target_worker),
-        appends_(std::move(appends)),
         lsn_(lsn),
         timestamp_(timestamp),
         redirect_(redirect),
@@ -356,9 +354,10 @@ class SequencerBatching::DispatchResultsRequest : public Request {
   }
 
   Execution execute() override {
-    for (; !appends_.empty(); appends_.erase(appends_.begin())) {
-      std::unique_ptr<AppendMessageState> ams(appends_.begin()->first);
-      uint32_t offset = appends_.begin()->second;
+    ld_check(!appends_.empty());
+    for (auto& p : appends_) {
+      std::unique_ptr<AppendMessageState> ams(p.first);
+      uint32_t offset = p.second;
       ld_assert(ams->owner_worker.load() == target_worker_);
       Worker::onThisThread()->processor_->sequencerBatching().sendReply(
           *ams, status_, redirect_, lsn_, timestamp_, offset);
@@ -367,9 +366,11 @@ class SequencerBatching::DispatchResultsRequest : public Request {
     return Execution::COMPLETE;
   }
 
+  // Can be populated after request construction.
+  folly::F14ValueMap<AppendMessageState*, uint32_t> appends_;
+
  private:
   int target_worker_;
-  std::unordered_map<AppendMessageState*, uint32_t> appends_;
   lsn_t lsn_;
   RecordTimestamp timestamp_;
   NodeID redirect_;
@@ -391,12 +392,13 @@ void SequencerBatching::onResult(logid_t log_id,
   // Unpack the ContextSet (which are really AppendMessageState pointers) and
   // group by owner worker.
   //
-  // NOTE: Using a map not a vector because all constituent writes in an
-  // AppendMessageState will have the same context passed to BufferedWriter,
-  // but we only want to notify it once.  The value in the map is the offset
-  // in the batch, which will be included in APPENDED_Message.
-  std::vector<std::unordered_map<AppendMessageState*, uint32_t>> ptrs(
-      worker_state_machines_.size());
+  // NOTE: The inner map deduplicates AppendMessageState-s originating from
+  // the same APPEND message, since we only want to each message once.
+  // The value in the map is the offset in the batch, which will be included
+  // in APPENDED_Message.
+  folly::F14ValueMap<int, std::unique_ptr<DispatchResultsRequest>>
+      request_by_worker(
+          std::min(contexts.size(), worker_state_machines_.size()));
 
   using Context = BufferedWriter::AppendCallback::Context;
   for (int i = 0; i < contexts.size(); ++i) {
@@ -405,23 +407,27 @@ void SequencerBatching::onResult(logid_t log_id,
     // Since AppendMessageState instances get destroyed in the BufferedWriter
     // callback and our destructor tears down BufferedWriter first, `ptr' is
     // guaranteed to still exist.
-    //
-    // emplace() does not overwrite if the key already exists so the value
-    // will be the smallest offset for a key.
-    ptrs[ptr->owner_worker.load()].emplace(ptr, i);
+    int w = ptr->owner_worker.load();
+    auto ins = request_by_worker.emplace(w, nullptr);
+    auto& rq = ins.first->second;
+    if (ins.second) {
+      // Haven't seen this worker before. Create the Request.
+      rq = std::make_unique<DispatchResultsRequest>(
+          w, status, redirect, lsn, timestamp);
+    }
+    // emplace() does not overwrite if the key already exists so
+    // the value will be the smallest offset for a key.
+    rq->appends_.emplace(ptr, i);
   }
 
-  // Create Requests for all target workers to send replies to individual
-  // writes
-  for (int w = 0; w < int(ptrs.size()); ++w) {
-    if (!ptrs[w].empty()) {
-      std::unique_ptr<Request> req = std::make_unique<DispatchResultsRequest>(
-          w, std::move(ptrs[w]), status, redirect, lsn, timestamp);
-      // Need to use postWithRetrying() otherwise AppendMessageState instances
-      // would leak
-      int rv = processor_->postWithRetrying(req);
-      ld_check(rv == 0);
-    }
+  // Post Requests for all target workers to send replies to individual
+  // writes.
+  for (auto& p : request_by_worker) {
+    // Need to use postImportant(), otherwise AppendMessageState instances
+    // would leak.
+    std::unique_ptr<Request> rq(p.second.release());
+    int rv = processor_->postImportant(rq);
+    ld_check(rv == 0);
   }
 }
 

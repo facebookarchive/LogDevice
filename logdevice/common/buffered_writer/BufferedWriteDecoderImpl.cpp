@@ -146,7 +146,7 @@ int BufferedWriteDecoderImpl::decodeOne(Slice blob,
       if (rv == 0) {
         if (copy_blob_if_uncompressed) {
           pinned_buffers_.push_back(std::move(buf));
-        } else {
+        } else if (record) {
           pinned_data_records_.push_back(std::move(record));
         }
       }

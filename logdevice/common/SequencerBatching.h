@@ -192,7 +192,7 @@ class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
  private:
   Processor* processor_;
   std::atomic<bool> shutting_down_{false};
-  // Processes one incoming APPEND message / buffer() call
+  // Processes one incoming APPEND message / buffer() call.
   struct AppendMessageState {
     // Worker that received the original APPEND message over the wire, on
     // which buffer() was called and on which we need to send the reply.

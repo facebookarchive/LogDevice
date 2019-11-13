@@ -517,8 +517,8 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
     std::unique_ptr<BackoffTimer> timer_;
   };
 
-  typedef std::unordered_map<ClientID, ClientState, ClientID::Hash>
-      ClientStateMap;
+  using ClientStateMap =
+      folly::F14NodeMap<ClientID, ClientState, ClientID::Hash>;
 
   ClientStateMap client_states_;
 

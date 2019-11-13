@@ -21,6 +21,7 @@
 #include <folly/IntrusiveList.h>
 #include <folly/Random.h>
 #include <folly/concurrency/UnboundedQueue.h>
+#include <folly/container/F14Map.h>
 #include <folly/io/async/Request.h>
 
 #include "logdevice/common/ClientID.h"
@@ -395,7 +396,7 @@ class Worker : public WorkContext {
   // Needs to outlive impl_->runningAppends_ because buffered writer append
   // callbacks access this map.
   using ActiveBufferedWritersMap =
-      std::unordered_map<buffered_writer_id_t,
+      folly::F14ValueMap<buffered_writer_id_t,
                          BufferedWriterShard*,
                          buffered_writer_id_t::Hash>;
   ActiveBufferedWritersMap active_buffered_writers_;

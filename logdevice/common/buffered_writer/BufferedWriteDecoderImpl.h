@@ -11,6 +11,8 @@
 #include <memory>
 #include <vector>
 
+#include <folly/FBVector.h>
+
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/BufferedWriteDecoder.h"
 #include "logdevice/include/BufferedWriter.h"
@@ -70,9 +72,9 @@ class BufferedWriteDecoderImpl : public BufferedWriteDecoder {
                        std::vector<Payload>& payloads_out);
 
   // DataRecord instances we decoded and assumed ownership of from the client
-  std::deque<std::unique_ptr<DataRecord>> pinned_data_records_;
+  folly::fbvector<std::unique_ptr<DataRecord>> pinned_data_records_;
   // Buffers used for decompression; Payload instances we returned to the
   // client point into these buffers.
-  std::deque<std::unique_ptr<uint8_t[]>> pinned_buffers_;
+  folly::fbvector<std::unique_ptr<uint8_t[]>> pinned_buffers_;
 };
 }} // namespace facebook::logdevice

@@ -7,8 +7,7 @@
  */
 #pragma once
 
-#include <unordered_map>
-
+#include <folly/container/F14Map.h>
 #include <folly/small_vector.h>
 
 #include "logdevice/common/buffered_writer/BufferedWriterSingleLog.h"
@@ -95,6 +94,6 @@ class BufferedWriterShard {
   // ~BufferedWriterSingleLog() may access flushable_logs_. (That access is
   // pretty pointless since we're not really going to do any flushing, but
   // that's how it's implemented right now.)
-  std::unordered_map<logid_t, BufferedWriterSingleLog, logid_t::Hash> logs_;
+  folly::F14NodeMap<logid_t, BufferedWriterSingleLog, logid_t::Hash> logs_;
 };
 }} // namespace facebook::logdevice

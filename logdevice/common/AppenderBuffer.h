@@ -129,10 +129,9 @@ class AppenderBuffer {
   size_t appender_buffer_queue_cap_;
 
   // an AppenderBufferQueue for each logid, stored in a hash map
-  std::unordered_map<logid_t,
-                     std::unique_ptr<AppenderBufferQueue>,
-                     logid_t::Hash>
-      map_;
+  folly::
+      F14ValueMap<logid_t, std::unique_ptr<AppenderBufferQueue>, logid_t::Hash>
+          map_;
 };
 
 class AppenderBufferQueue {

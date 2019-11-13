@@ -15,6 +15,7 @@
 #include <folly/DynamicConverter.h>
 #include <folly/Random.h>
 #include <folly/ScopeGuard.h>
+#include <folly/container/F14Map.h>
 #include <folly/json.h>
 #include <folly/small_vector.h>
 
@@ -93,11 +94,11 @@ class SenderImpl {
   // false). The Socket object remains in the map. sendMessage() to
   // the node_index_t or NodeID of that Socket will try to reconnect.
   // The rate of reconnection attempts is controlled by a ConnectionThrottle.
-  std::unordered_map<node_index_t, std::unique_ptr<Connection>> server_sockets_;
+  folly::F14FastMap<node_index_t, std::unique_ptr<Connection>> server_sockets_;
 
   // a map of all Sockets wrapping connections that were accepted from
   // clients, keyed by 32-bit client ids. This map is empty on clients.
-  std::unordered_map<ClientID, std::unique_ptr<Connection>, ClientID::Hash>
+  folly::F14FastMap<ClientID, std::unique_ptr<Connection>, ClientID::Hash>
       client_sockets_;
 
   ClientIdxAllocator* client_id_allocator_;
