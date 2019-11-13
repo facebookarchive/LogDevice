@@ -52,14 +52,29 @@ int ShardToPathMapping::get(std::vector<fs::path>* paths_out) {
   shard_paths_.clear();
   shard_paths_.resize(nshards_);
 
-  if (!handleEmptyRoot()) {
-    std::vector<fs::path> free_slots;
-    findFixedAssignment();
-    bool success =
-        findSlots(&free_slots) && assignFreeSlots(std::move(free_slots));
-    if (!success) {
-      return -1;
+  auto type = detectAssignmentType();
+  switch (type) {
+    case DetectedAssignmentType::EMPTY:
+      ld_info(
+          "Empty local log store directory, will create shard subdirectories");
+      handleEmptyRoot();
+      break;
+    case DetectedAssignmentType::SHARDS:
+      if (!handleFixedAssignment()) {
+        return -1;
+      }
+      break;
+    case DetectedAssignmentType::SLOTS: {
+      std::vector<fs::path> free_slots;
+      bool success =
+          findSlots(&free_slots) && assignFreeSlots(std::move(free_slots));
+      if (!success) {
+        return -1;
+      }
+      break;
     }
+    case DetectedAssignmentType::ERROR:
+      return -1;
   }
 
   paths_out->clear();
@@ -69,32 +84,49 @@ int ShardToPathMapping::get(std::vector<fs::path>* paths_out) {
   return 0;
 }
 
-bool ShardToPathMapping::handleEmptyRoot() {
+ShardToPathMapping::DetectedAssignmentType
+ShardToPathMapping::detectAssignmentType() {
+  bool slots = false;
+  bool shards = false;
   for (const fs::directory_entry& entry : fs::directory_iterator(root_)) {
     const std::string filename = entry.path().filename().string();
-    // Consider the root to be nonempty if we find a slot or shard
-    // subdirectory.
-    if (isSlot(filename) || getShard(filename).hasValue()) {
-      return false;
+    if (isSlot(filename)) {
+      slots = true;
+    }
+    if (getShard(filename).hasValue()) {
+      shards = true;
     }
   }
-  ld_debug("Empty local log store directory, generating default mapping");
+  if (!slots && !shards) {
+    return DetectedAssignmentType::EMPTY;
+  }
+  if (slots && shards) {
+    ld_error("Both /slot*/ and /shard*/ directories found in local log store "
+             "directory.");
+    return DetectedAssignmentType::ERROR;
+  }
+  return slots ? DetectedAssignmentType::SLOTS : DetectedAssignmentType::SHARDS;
+}
+
+void ShardToPathMapping::handleEmptyRoot() {
   for (int idx = 0; idx < nshards_; ++idx) {
     shard_paths_[idx] = root_ / fs::path("shard" + std::to_string(idx));
   }
-  return true;
 }
 
-void ShardToPathMapping::findFixedAssignment() {
+bool ShardToPathMapping::handleFixedAssignment() {
   boost::system::error_code code;
   for (shard_index_t shard_idx = 0; shard_idx < nshards_; ++shard_idx) {
     fs::path shard_path = root_ / fs::path("shard" + std::to_string(shard_idx));
     if (fs::exists(shard_path, code)) {
       ld_check(!shard_paths_[shard_idx].hasValue());
       shard_paths_[shard_idx] = shard_path;
-      ld_debug("Found shard %d in \"%s\"", shard_idx, shard_path.c_str());
+    } else {
+      ld_error("Shard directory doesn't exist: %s", shard_path.c_str());
+      return false;
     }
   }
+  return true;
 }
 
 bool ShardToPathMapping::findSlots(std::vector<fs::path>* free_slots_out) {
@@ -133,13 +165,11 @@ bool ShardToPathMapping::findSlots(std::vector<fs::path>* free_slots_out) {
         return false;
       }
       shard_paths_[shard_idx] = shard_path;
-      ld_debug("Found shard %d in \"%s\"", shard_idx, shard_path.c_str());
     }
 
     if (shards_found == 0) {
       // This is a free slot.
       free_slots_out->push_back(slot_path);
-      ld_debug("Free slot in \"%s\"", slot_path.c_str());
     } else if (shards_found > 1) {
       ld_error(
           "Path \"%s\" contains more than one shard* subdirectory which is "

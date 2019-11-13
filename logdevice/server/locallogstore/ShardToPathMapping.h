@@ -54,17 +54,25 @@ class ShardToPathMapping {
                             std::string* out_filename);
 
  private:
+  enum class DetectedAssignmentType {
+    EMPTY,
+    SHARDS,
+    SLOTS,
+    ERROR,
+  };
+
   const boost::filesystem::path root_;
   const shard_size_t nshards_;
   // This is the assignment, incrementally built up by the private methods below
   std::vector<folly::Optional<boost::filesystem::path>> shard_paths_;
 
-  // If the root has no subdirectories, just generate a straightforward
-  // assignment with shard* subdirectories.
-  bool handleEmptyRoot();
-  // Looks for shard* under the root directory.  This is the fixed assignment.
+  // Looks at existing directories to figure out which assignment style to use.
+  DetectedAssignmentType detectAssignmentType();
+
+  void handleEmptyRoot();
+  // Looks for shard* under the root directory. This is the fixed assignment.
   // Populates `shard_paths_'.
-  void findFixedAssignment();
+  bool handleFixedAssignment();
   // Looks for slot* under the root directory, and assigned shards under them.
   // Populates `shard_paths_' and returns any free slots.
   bool findSlots(std::vector<boost::filesystem::path>* free_slots_out);
