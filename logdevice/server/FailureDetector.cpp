@@ -723,7 +723,9 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
       continue;
     }
 
-    update_min(nodes_[id].gossip_, node.gossip_);
+    if (update_min(nodes_[id].gossip_, node.gossip_)) {
+      nodes_[id].status_ = node.node_status_;
+    }
     if (has_starting_list) {
       nodes_[id].is_node_starting_ =
           nodes_[id].is_node_starting_ && node.is_node_starting_;
