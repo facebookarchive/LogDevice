@@ -18,7 +18,6 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientImpl.h"
 
-using facebook::logdevice::ClientImpl;
 using folly::SocketAddress;
 using std::chrono::steady_clock;
 

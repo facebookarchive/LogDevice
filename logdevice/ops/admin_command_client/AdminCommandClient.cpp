@@ -20,10 +20,8 @@
 
 #include "logdevice/common/debug.h"
 
-using folly::AsyncSocket;
 using folly::AsyncSocketException;
 using folly::AsyncSSLSocket;
-using folly::AsyncTimeout;
 using folly::EventBase;
 using folly::SSLContext;
 

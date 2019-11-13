@@ -21,7 +21,6 @@
 #include "logdevice/lib/ops/IsLogEmptyBatchRunner.h"
 #include "logdevice/ops/ldquery/Errors.h"
 
-using facebook::logdevice::Configuration;
 
 namespace facebook {
   namespace logdevice {

@@ -18,7 +18,6 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientImpl.h"
 
-using facebook::logdevice::Configuration;
 
 namespace facebook {
   namespace logdevice {

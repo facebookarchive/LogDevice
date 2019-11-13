@@ -156,7 +156,6 @@ void StandaloneAdminServer::initServerConfig() {
 }
 
 void StandaloneAdminServer::initNodesConfiguration() {
-  using namespace facebook::logdevice::configuration::nodes;
 
   ld_check(updateable_config_);
   ld_check(plugin_registry_);

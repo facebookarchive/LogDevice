@@ -55,8 +55,6 @@
 #include "tables/StoredLogs.h"
 #include "tables/SyncSequencerRequests.h"
 
-using facebook::logdevice::err;
-using facebook::logdevice::errorStrings;
 
 namespace facebook { namespace logdevice { namespace ldquery {
 

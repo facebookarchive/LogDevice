@@ -74,8 +74,6 @@ static void setup_signal_handler(int signum, void (*handler)(int)) {
 
 static boost::program_options::options_description
 get_options(const char* program_name) {
-  using boost::program_options::bool_switch;
-  using boost::program_options::value;
 
   boost::program_options::options_description all_options(
       folly::format("Usage: {} [options]\n\nOptions", program_name).str());

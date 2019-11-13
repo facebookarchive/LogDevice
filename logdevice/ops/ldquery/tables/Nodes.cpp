@@ -20,7 +20,6 @@
 #include "logdevice/common/membership/utils.h"
 #include "logdevice/lib/ClientImpl.h"
 
-using facebook::logdevice::Configuration;
 
 namespace facebook {
   namespace logdevice {

@@ -19,7 +19,6 @@
 #include "logdevice/lib/ops/EventLogUtils.h"
 #include "logdevice/ops/ldquery/Errors.h"
 
-using facebook::logdevice::Configuration;
 
 namespace facebook {
   namespace logdevice {

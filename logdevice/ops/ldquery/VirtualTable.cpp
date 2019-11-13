@@ -12,7 +12,6 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/util.h"
 
-using std::chrono::steady_clock;
 
 namespace facebook { namespace logdevice { namespace ldquery {
 
