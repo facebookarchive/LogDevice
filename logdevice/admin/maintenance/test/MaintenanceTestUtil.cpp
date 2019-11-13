@@ -9,7 +9,6 @@
 
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
-using facebook::logdevice::configuration::nodes::NodesConfiguration;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 

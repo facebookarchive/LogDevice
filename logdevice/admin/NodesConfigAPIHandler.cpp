@@ -15,7 +15,6 @@
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 
-using namespace facebook::logdevice;
 
 namespace facebook { namespace logdevice {
 

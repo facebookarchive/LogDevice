@@ -24,7 +24,6 @@
 using namespace ::testing;
 using namespace apache::thrift;
 using namespace facebook::logdevice;
-using namespace facebook::logdevice::configuration::nodes;
 
 class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
  protected:

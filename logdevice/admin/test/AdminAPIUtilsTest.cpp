@@ -10,8 +10,6 @@
 
 #include <gtest/gtest.h>
 
-using namespace ::testing;
-using namespace apache::thrift;
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
 

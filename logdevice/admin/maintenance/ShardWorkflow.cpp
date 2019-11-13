@@ -15,7 +15,6 @@
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
-using apache::thrift::util::enumName;
 
 folly::SemiFuture<MaintenanceStatus>
 ShardWorkflow::run(const membership::ShardState& shard_state,

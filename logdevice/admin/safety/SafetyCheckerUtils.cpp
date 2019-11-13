@@ -11,7 +11,6 @@
 #include "logdevice/common/FailureDomainNodeSet.h"
 
 using namespace facebook::logdevice::configuration;
-using namespace facebook::logdevice;
 
 namespace facebook { namespace logdevice { namespace safety {
 

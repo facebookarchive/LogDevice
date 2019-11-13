@@ -14,11 +14,9 @@
 #include "logdevice/admin/maintenance/test/MaintenanceTestUtil.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
-using namespace ::testing;
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
 using namespace facebook::logdevice::NodesConfigurationTestUtil;
-using facebook::logdevice::configuration::nodes::NodesConfiguration;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 class SafetyCheckSchedulerMock : public SafetyCheckScheduler {

@@ -18,7 +18,6 @@
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
-using apache::thrift::util::enumName;
 
 int MaintenanceDeltaTypes::applyMaintenances(
     const std::vector<thrift::MaintenanceDefinition>& defs,

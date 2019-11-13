@@ -20,9 +20,6 @@
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace ::testing;
-using namespace facebook::logdevice;
-using namespace facebook::logdevice::maintenance;
-using facebook::logdevice::configuration::nodes::NodesConfiguration;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 

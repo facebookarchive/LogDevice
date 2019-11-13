@@ -8,7 +8,6 @@
 
 #include "logdevice/admin/Conv.h"
 
-using namespace facebook::logdevice;
 using facebook::logdevice::configuration::nodes::NodeRole;
 using facebook::logdevice::membership::MetaDataStorageState;
 using TMetaDataStorageState =

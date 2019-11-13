@@ -14,7 +14,6 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
 
-using namespace facebook::logdevice;
 using facebook::logdevice::thrift::InvalidRequest;
 using facebook::logdevice::thrift::NodesFilter;
 using facebook::logdevice::thrift::NodesStateRequest;

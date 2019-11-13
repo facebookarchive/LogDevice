@@ -24,7 +24,6 @@ template class ReplicatedStateMachine<thrift::ClusterMaintenanceState,
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
-using facebook::logdevice::thrift::ClusterMaintenanceState;
 
 ClusterMaintenanceStateMachine::ClusterMaintenanceStateMachine(
     UpdateableSettings<AdminServerSettings> settings)

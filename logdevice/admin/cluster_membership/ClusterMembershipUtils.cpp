@@ -13,7 +13,6 @@
 namespace facebook { namespace logdevice { namespace admin {
 namespace cluster_membership {
 
-using namespace facebook::logdevice::membership;
 using namespace facebook::logdevice::configuration::nodes;
 
 namespace {

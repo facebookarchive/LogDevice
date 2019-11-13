@@ -12,13 +12,10 @@
 #include "logdevice/admin/maintenance/ClusterMaintenanceWrapper.h"
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
-#include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 
-using namespace ::testing;
 using namespace apache::thrift;
 using namespace facebook::logdevice;
-using namespace facebook::logdevice::thrift;
 using namespace facebook::logdevice::maintenance;
 
 MaintenanceDefinition genDefinition() {

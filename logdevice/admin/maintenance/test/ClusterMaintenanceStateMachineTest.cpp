@@ -14,11 +14,7 @@
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
-using namespace ::testing;
-using namespace apache::thrift;
-using namespace facebook::logdevice;
 using namespace facebook::logdevice::thrift;
-using namespace facebook::logdevice::maintenance;
 
 #define NUM_SHARDS 2
 
