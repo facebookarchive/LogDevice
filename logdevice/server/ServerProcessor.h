@@ -13,6 +13,7 @@
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerBatching.h"
+#include "logdevice/common/TrafficShaper.h"
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/HealthMonitor.h"
@@ -167,6 +168,11 @@ class ServerProcessor : public Processor {
   BoycottingStatsHolder boycotting_stats_;
   // A thread running on server side to detect worker stalls
   std::unique_ptr<WatchDogThread> watchdog_thread_;
+
+  // Orchestrates bandwidth policy and bandwidth releases to the Senders
+  // in each Worker.
+  std::unique_ptr<TrafficShaper> traffic_shaper_;
+
   // HealthMonitor pointer. Used on server side to keep track of node status.
   std::unique_ptr<HealthMonitor> health_monitor_;
 };

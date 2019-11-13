@@ -54,14 +54,12 @@ class PermissionChecker;
 class PluginRegistry;
 class PrincipalParser;
 class ProcessorImpl;
-class RebuildingSupervisor;
 class Request;
 class SequencerBatching;
 class ReadStreamDebugInfoSamplingConfig;
 class SequencerLocator;
 class StatsHolder;
 class TraceLogger;
-class TrafficShaper;
 class UpdateableConfig;
 class UpdateableSecurityInfo;
 class Worker;
@@ -386,11 +384,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   void markShardClean(uint32_t shard_idx);
 
   /**
-   * Maps log ID to shard index. The mapping must be the same on all nodes.
-   */
-  int getShardForLog(logid_t log);
-
-  /**
    * This MUST be called on ServerProcessor only, this lives here as an
    * transiet state until we have cleaner separation between server and
    * client code
@@ -510,10 +503,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   friend class ProcessorImpl;
   std::unique_ptr<ProcessorImpl> impl_;
 
-  // Pointer to the object responsible for requesting rebuilding. Unowned.
-  // nullptr if we're not a server or not a storage node.
-  RebuildingSupervisor* rebuilding_supervisor_ = nullptr;
-
   // Maintains state of nodes in the cluster
   std::unique_ptr<ClusterState> cluster_state_;
 
@@ -534,10 +523,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // Object used on clients and storage nodes to find which node runs the
   // sequencer for a particular log.
   std::unique_ptr<SequencerLocator> sequencer_locator_;
-
-  // Orchestrates bandwidth policy and bandwidth releases to the Senders
-  // in each Worker.
-  std::unique_ptr<TrafficShaper> traffic_shaper_;
 
   // ResourceBudget used to limit the total number of accepted connections.
   // See Settings::max_incoming_connections_.

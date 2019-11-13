@@ -28,10 +28,12 @@ namespace facebook { namespace logdevice {
 
 class MonitorRequestQueue;
 class ServerProcessor;
+class RebuildingSupervisor;
 
 class LogStoreMonitor {
  public:
   LogStoreMonitor(ServerProcessor* processor,
+                  RebuildingSupervisor* rebuilding_supervisor,
                   UpdateableSettings<LocalLogStoreSettings> settings);
   ~LogStoreMonitor();
 
@@ -42,6 +44,10 @@ class LogStoreMonitor {
   // Pointer to the Processor object for accessing other logdevice
   // components
   ServerProcessor* const processor_;
+
+  // Pointer to the Processor object for accessing other logdevice
+  // components
+  RebuildingSupervisor* const rebuilding_supervisor_;
 
   // A copy of settings from commandline
   UpdateableSettings<LocalLogStoreSettings> settings_;

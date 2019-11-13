@@ -370,6 +370,7 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
       : RebuildingCoordinator(config,
                               nullptr,
                               nullptr,
+                              nullptr,
                               settings,
                               admin_settings,
                               nullptr),

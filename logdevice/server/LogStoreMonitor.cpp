@@ -155,8 +155,10 @@ void MonitorRequestQueue::MonitorRequestCallback::operator()(Status /*st*/) {
 
 LogStoreMonitor::LogStoreMonitor(
     ServerProcessor* processor,
+    RebuildingSupervisor* rebuilding_supervisor,
     UpdateableSettings<LocalLogStoreSettings> settings)
     : processor_(processor),
+      rebuilding_supervisor_(rebuilding_supervisor),
       settings_(std::move(settings)),
       request_queue_(std::make_shared<MonitorRequestQueue>(
           processor,
@@ -371,7 +373,7 @@ void LogStoreMonitor::checkFreeSpace() {
 }
 
 void LogStoreMonitor::checkNeedRebuilding() {
-  auto supervisor = processor_->rebuilding_supervisor_;
+  auto supervisor = rebuilding_supervisor_;
   if (!supervisor) {
     // Rebuilding is disabled.
     return;

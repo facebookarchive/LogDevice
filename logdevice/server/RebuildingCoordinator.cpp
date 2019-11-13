@@ -243,12 +243,14 @@ RebuildingCoordinator::RebuildingCoordinator(
     const std::shared_ptr<UpdateableConfig>& config,
     EventLogStateMachine* event_log,
     Processor* processor,
+    RebuildingSupervisor* rebuilding_supervisor,
     UpdateableSettings<RebuildingSettings> rebuilding_settings,
     UpdateableSettings<AdminServerSettings> admin_settings,
     ShardedLocalLogStore* sharded_store)
     : config_(config),
       event_log_(event_log),
       processor_(processor),
+      rebuilding_supervisor_(rebuilding_supervisor),
       rebuildingSettings_(rebuilding_settings),
       adminSettings_(admin_settings),
       shardedStore_(sharded_store) {}
@@ -412,8 +414,8 @@ int RebuildingCoordinator::checkMarkers() {
         notifyProcessorShardRebuilt(shard);
         break;
       case RebuildingMarkerChecker::CheckResult::SHARD_MISSING_DATA:
-        ld_check(processor_->rebuilding_supervisor_);
-        processor_->rebuilding_supervisor_->myShardNeedsRebuilding(shard);
+        ld_check(rebuilding_supervisor_);
+        rebuilding_supervisor_->myShardNeedsRebuilding(shard);
         break;
       case RebuildingMarkerChecker::CheckResult::UNEXPECTED_ERROR:
         return -1;

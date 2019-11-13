@@ -37,7 +37,6 @@
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/Thread.h"
 #include "logdevice/common/TraceLogger.h"
-#include "logdevice/common/TrafficShaper.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/Worker.h"
@@ -539,10 +538,6 @@ void Processor::shutdown() {
   // First get the pthread_t for all running worker threads
   std::vector<PThread*> event_threads;
   event_threads.reserve(getAllWorkersCount());
-
-  if (traffic_shaper_) {
-    traffic_shaper_->shutdown();
-  }
 
   if (impl_->allSequencers_) {
     impl_->allSequencers_->shutdown();

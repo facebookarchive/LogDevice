@@ -7,7 +7,6 @@
  */
 #include "logdevice/server/ServerProcessor.h"
 
-#include "logdevice/common/TrafficShaper.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/FailureDetector.h"
@@ -183,6 +182,10 @@ void ServerProcessor::shutdown() {
   }
   if (watchdog_thread_) {
     watchdog_thread_->shutdown();
+  }
+
+  if (traffic_shaper_) {
+    traffic_shaper_->shutdown();
   }
 
   Processor::shutdown();

@@ -26,6 +26,7 @@
 #include "logdevice/common/event_log/EventLogWriter.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
+#include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/rebuilding/NonAuthoritativeRebuildingChecker.h"
 #include "logdevice/server/rebuilding/RebuildingPlanner.h"
 
@@ -50,6 +51,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
       const std::shared_ptr<UpdateableConfig>& config,
       EventLogStateMachine* event_log,
       Processor* processor,
+      RebuildingSupervisor* rebuilding_supervisor,
       UpdateableSettings<RebuildingSettings> rebuilding_settings,
       UpdateableSettings<AdminServerSettings> admin_settings,
       ShardedLocalLogStore* sharded_store);
@@ -444,6 +446,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   std::unique_ptr<EventLogStateMachine::SubscriptionHandle> handle_;
 
   Processor* processor_; // May be null in tests.
+
+  RebuildingSupervisor* rebuilding_supervisor_; // May be null in tests.
 
   worker_id_t my_worker_id_ = WORKER_ID_INVALID;
 
