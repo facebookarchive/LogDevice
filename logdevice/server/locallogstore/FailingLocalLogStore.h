@@ -140,6 +140,20 @@ class FailingLocalLogStore : public LocalLogStore {
     return -1;
   }
 
+  int getRebuildingRanges(RebuildingRangesMetadata& rrm,
+                          RebuildingRangesVersion& version) override {
+    rrm = RebuildingRangesMetadata();
+    version = RebuildingRangesVersion(0, 0);
+    return 0;
+  }
+
+  int writeRebuildingRanges(RebuildingRangesMetadata&,
+                            RebuildingRangesVersion /*base_version*/,
+                            RebuildingRangesVersion /*new_version*/) override {
+    err = E::NOTSUPPORTED;
+    return -1;
+  }
+
   Status acceptingWrites() const override {
     return E::DISABLED;
   }

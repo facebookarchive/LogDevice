@@ -253,23 +253,14 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
           return 0;
         }
       } else {
-        // Do nothing if rebuilding is requested but the shard either
-        // (a) has already been rebuilt, or (b) is already being rebuilt with
-        // the same time ranges. (a) may happen if there is a bug in
+        // Do nothing if rebuilding is requested but the shard has already
+        // been rebuilt. This may happen if there is a bug in
         // RebuildingSupervisor causing it to trigger rebuilding of a shard
-        // already being rebuilt. (b) can currently happens a lot in some
-        // circumstances when there are many deltas in the event log.
-        // TODO (#T23077142):
-        //   This is not really correct for time-ranged rebuildings: the node
-        //   may crash again and re-request rebuilding with the same time
-        //   ranges. Then rebuilding needs to be restarted to rebuild the newly
-        //   lost data in the same ranges.
+        // already being rebuilt.
         if (currentMode.hasValue() && currentMode.value() == requestedMode &&
-            ((flags & SHARD_NEEDS_REBUILD_Header::TIME_RANGED) == 0
-                 ? it->second.auth_status !=
-                     AuthoritativeStatus::FULLY_AUTHORITATIVE
-                 : it->second.dc_dirty_ranges ==
-                     ptr->time_ranges.getDCDirtyRanges())) {
+            (flags & SHARD_NEEDS_REBUILD_Header::TIME_RANGED) == 0 &&
+            it->second.auth_status !=
+                AuthoritativeStatus::FULLY_AUTHORITATIVE) {
           ld_warning("Found event log record with lsn %s: %s, but this shard "
                      "is already being rebuilt in this mode. Discarding.",
                      lsn_to_string(lsn).c_str(),

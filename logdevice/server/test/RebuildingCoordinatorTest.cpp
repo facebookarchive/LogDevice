@@ -398,6 +398,11 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
     }
   }
 
+  void noteRangesPublished(uint32_t shard,
+                           RebuildingRangesVersion /*version*/) override {
+    (*dirty_shard_cache_)[shard].first.setPublished(true);
+  }
+
   void writeMarkerForShard(uint32_t shard, lsn_t version) override {
     onMarkerWrittenForShard(shard, version, E::OK);
   }
@@ -502,9 +507,12 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
 
   void abortForMyShard(uint32_t shard,
                        lsn_t version,
-                       const EventLogRebuildingSet::NodeInfo*,
-                       const char*) override {
+                       const EventLogRebuildingSet::NodeInfo* node_info,
+                       const char* reason) override {
     received.abort_for_my_shard[shard] = version;
+    if (myShardIsDirty(shard)) {
+      RebuildingCoordinator::abortForMyShard(shard, version, node_info, reason);
+    }
   }
 
   bool restartIsScheduledForShard(uint32_t shard_idx) override {
@@ -1046,6 +1054,31 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     ASSERT_EQ(apply_maintenances[0].get_shard_target_state(),                \
               ShardOperationalState::DRAINED);                               \
   }
+
+// Asserts that the shard is locally dirty and has had its dirty
+// range information published to the event log.
+#define ASSERT_PUBLISHED(shard)                 \
+  {                                             \
+    ASSERT_TRUE(coordinator_);                  \
+    RebuildingCoordinator::DirtyShardMap map;   \
+    coordinator_->populateDirtyShardCache(map); \
+    auto it = map.find(shard);                  \
+    ASSERT_TRUE(it != map.end());               \
+    ASSERT_TRUE(it->second.first.published());  \
+  }
+
+// Asserts that the shard is locally dirty, but has not had its dirty
+// range information published to the event log.
+#define ASSERT_NOT_PUBLISHED(shard)             \
+  {                                             \
+    ASSERT_TRUE(coordinator_);                  \
+    RebuildingCoordinator::DirtyShardMap map;   \
+    coordinator_->populateDirtyShardCache(map); \
+    auto it = map.find(shard);                  \
+    ASSERT_TRUE(it != map.end());               \
+    ASSERT_FALSE(it->second.first.published()); \
+  }
+
 /**
  * Tests.
  */
@@ -2181,7 +2214,7 @@ TEST_F(RebuildingCoordinatorTest,
   rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
                           DataClass::APPEND,
                           RecordTimeInterval(dirtyStart, dirtyEnd));
-  dirty_shard_cache[1] = rrm;
+  dirty_shard_cache[1] = std::pair(rrm, RebuildingRangesVersion(0, 0));
   start();
 
   // RebuildingCoordinator should have requested rebuilding of our
@@ -2341,7 +2374,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShard) {
   rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
                           DataClass::APPEND,
                           RecordTimeInterval(dirtyStart, dirtyEnd));
-  dirty_shard_cache[1] = rrm;
+  dirty_shard_cache[1] = std::pair(rrm, RebuildingRangesVersion(0, 0));
 
   start();
 
@@ -2349,6 +2382,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShard) {
   // shard.
   ASSERT_SHARD_NEEDS_REBUILD(
       1, SHARD_NEEDS_REBUILD_Header::TIME_RANGED, LSN_INVALID);
+  ASSERT_NOT_PUBLISHED(1);
 
   // Receive the message.
   lsn_t v1 = onShardNeedsRebuild(my_node_id.index(),
@@ -2357,6 +2391,8 @@ TEST_F(RebuildingCoordinatorTest, DirtyShard) {
                                  folly::none,
                                  false,
                                  &rrm);
+  ASSERT_PUBLISHED(1);
+
   onShardIsRebuilt(1, 1, v1);
   onShardIsRebuilt(2, 1, v1);
   onShardIsRebuilt(3, 1, v1);
@@ -2381,7 +2417,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardNonAuthoritative) {
   rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
                           DataClass::APPEND,
                           RecordTimeInterval(dirtyStart, dirtyEnd));
-  dirty_shard_cache[1] = rrm;
+  dirty_shard_cache[1] = std::pair(rrm, RebuildingRangesVersion(0, 0));
 
   start();
 
@@ -2389,6 +2425,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardNonAuthoritative) {
   // shard.
   ASSERT_SHARD_NEEDS_REBUILD(
       1, SHARD_NEEDS_REBUILD_Header::TIME_RANGED, LSN_INVALID);
+  ASSERT_NOT_PUBLISHED(1);
 
   // Receive the message.
   lsn_t v1 = onShardNeedsRebuild(my_node_id.index(),
@@ -2397,6 +2434,8 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardNonAuthoritative) {
                                  folly::none,
                                  false,
                                  &rrm);
+  ASSERT_PUBLISHED(1);
+
   // Make sure there is at least one outstanding recoverable shard.
   lsn_t v2 = onShardNeedsRebuild(2, 1, 0, folly::none, true, &rrm);
 
@@ -2422,7 +2461,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardDrain) {
   rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
                           DataClass::APPEND,
                           RecordTimeInterval(dirtyStart, dirtyEnd));
-  dirty_shard_cache[1] = rrm;
+  dirty_shard_cache[1] = std::pair(rrm, RebuildingRangesVersion(0, 0));
 
   const auto flags = SHARD_NEEDS_REBUILD_Header::DRAIN;
 
@@ -2453,6 +2492,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardDrain) {
                    .nodes_.at(my_node_id.index())
                    .drain;
   ASSERT_FALSE(drain);
+  ASSERT_NOT_PUBLISHED(1);
 }
 
 // Verify that a dirty shard that was fully rebuilt before the node started
@@ -2472,7 +2512,7 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardAlreadyRebuilt) {
   rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
                           DataClass::APPEND,
                           RecordTimeInterval(dirtyStart, dirtyEnd));
-  dirty_shard_cache[1] = rrm;
+  dirty_shard_cache[1] = std::pair(rrm, RebuildingRangesVersion(0, 0));
 
   updateConfig();
 
@@ -2494,6 +2534,106 @@ TEST_F(RebuildingCoordinatorTest, DirtyShardAlreadyRebuilt) {
 
   onShardAckRebuilt(my_node_id.index(), 1, v1);
   ASSERT_TRUE(rebuilding_set_->getRebuildingShards().empty());
+}
+
+// Verify that dirty ranges are not republished if identical to
+// those in the event log and the store has persisted the published flag.
+TEST_F(RebuildingCoordinatorTest, ReDirtyShard) {
+  settings.local_window = RecordTimestamp::duration::max();
+  settings.global_window = RecordTimestamp::duration::max();
+  settings.max_logs_in_flight = 50;
+  num_logs = 20;
+  num_shards = 2;
+  my_shard_has_data_intact = true;
+
+  // Store identical RebuildingRangesMetadata locally and in
+  // the event log.
+  auto now = RecordTimestamp::now();
+  auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
+  auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
+  RebuildingRangesMetadata rrm;
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
+  dirty_shard_cache[1] = std::pair(rrm, RebuildingRangesVersion(0, 0));
+
+  updateConfig();
+
+  // Pre-populate rebuilding set with the dirty info for our shard.
+  lsn_t v1 = onShardNeedsRebuild(my_node_id.index(),
+                                 1,
+                                 SHARD_NEEDS_REBUILD_Header::TIME_RANGED,
+                                 folly::none,
+                                 false,
+                                 &rrm);
+
+  start();
+
+  // RebuildingCoordinator should have re-requested rebuilding of our
+  // shard.
+  ASSERT_SHARD_NEEDS_REBUILD(
+      1, SHARD_NEEDS_REBUILD_Header::TIME_RANGED, LSN_INVALID);
+  ASSERT_NOT_PUBLISHED(1);
+
+  // Receive the message.
+  lsn_t v2 = onShardNeedsRebuild(my_node_id.index(),
+                                 1,
+                                 SHARD_NEEDS_REBUILD_Header::TIME_RANGED,
+                                 folly::none,
+                                 false,
+                                 &rrm);
+  ASSERT_GT(v2, v1);
+  ASSERT_PUBLISHED(1);
+  onShardIsRebuilt(1, 1, v2);
+  onShardIsRebuilt(2, 1, v2);
+  onShardIsRebuilt(3, 1, v2);
+
+  ASSERT_SHARD_ACK_REBUILT(1);
+}
+
+// Verify that dirty ranges are republished, even if identical to
+// those in the event log, if the store has cleared the published flag
+// (ranges have been re-dirtied).
+TEST_F(RebuildingCoordinatorTest, DoNotReDirtyShard) {
+  settings.local_window = RecordTimestamp::duration::max();
+  settings.global_window = RecordTimestamp::duration::max();
+  settings.max_logs_in_flight = 50;
+  num_logs = 20;
+  num_shards = 2;
+  my_shard_has_data_intact = true;
+
+  // Store identical RebuildingRangesMetadata locally and in
+  // the event log.
+  auto now = RecordTimestamp::now();
+  auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
+  auto dirtyEnd = RecordTimestamp(now - std::chrono::minutes(5));
+  RebuildingRangesMetadata rrm;
+  rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
+                          DataClass::APPEND,
+                          RecordTimeInterval(dirtyStart, dirtyEnd));
+  rrm.setPublished(true);
+  dirty_shard_cache[1] = std::pair(rrm, RebuildingRangesVersion(0, 0));
+
+  updateConfig();
+
+  // Pre-populate rebuilding set with the dirty info for our shard.
+  lsn_t v1 = onShardNeedsRebuild(my_node_id.index(),
+                                 1,
+                                 SHARD_NEEDS_REBUILD_Header::TIME_RANGED,
+                                 folly::none,
+                                 false,
+                                 &rrm);
+
+  start();
+
+  auto it = received.shard_needs_rebuild.find(1);
+  ASSERT_TRUE(it == received.shard_needs_rebuild.end());
+
+  onShardIsRebuilt(1, 1, v1);
+  onShardIsRebuilt(2, 1, v1);
+  onShardIsRebuilt(3, 1, v1);
+
+  ASSERT_SHARD_ACK_REBUILT(1);
 }
 
 // If a drain is ongoing and we receive a SHARD_UNDRAIN message, this will

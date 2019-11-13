@@ -743,7 +743,9 @@ bool PartitionedRocksDBStore::open(
   // Use per-partition dirty information to create or update
   // RebuildingRangeMetadata.
   RebuildingRangesMetadata range_meta;
-  if (!getSettings()->read_only && getRebuildingRanges(range_meta) != 0) {
+  RebuildingRangesVersion range_meta_version;
+  if (!getSettings()->read_only &&
+      getRebuildingRanges(range_meta, range_meta_version) != 0) {
     return false;
   }
 
@@ -816,6 +818,12 @@ bool PartitionedRocksDBStore::open(
                 logdevice::toString(dti).c_str());
         range_meta.modifyTimeIntervals(
             TimeIntervalOp::ADD, DataClass::APPEND, dti);
+
+        // Even if the rebuilding ranges are unchanged from the last time
+        // they were published to the event log, publish them again. This
+        // ensures that rebuilding will restart and any newly lost copies
+        // will be re-replicated.
+        range_meta.setPublished(false);
 
         // Expand partition bounds to cover the dirty time range.
         if (dti.lower() < partition->min_timestamp) {
@@ -3433,28 +3441,6 @@ int PartitionedRocksDBStore::writeStoreMetadata(
   ld_check(!immutable_.load());
   int rv =
       writer_->writeStoreMetadata(metadata, write_options, metadata_cf_->get());
-  if (rv == 0 && metadata.getType() == StoreMetadataType::REBUILDING_RANGES) {
-    auto& rrm = static_cast<const RebuildingRangesMetadata&>(metadata);
-    if (rrm.empty()) {
-      // Any under-replicated data has been rebuilt. Persistenty clear
-      // partition under-relication flag.
-      min_under_replicated_partition_.store(PARTITION_MAX);
-      max_under_replicated_partition_.store(PARTITION_INVALID);
-      auto partitions = getPartitionList();
-      for (PartitionPtr partition : *partitions) {
-        if (partition->isUnderReplicated()) {
-          partition->setUnderReplicated(false);
-
-          // If not dirty already, mark the partition dirty so that it
-          // will be flushed the next time our background thread sees
-          // the oldest MemTable retired. If no write activity occurs
-          // before shutdown, these records will be flushed at shutdown.
-          partition->dirty_state_.noteDirtied(
-              FlushToken_MIN, currentSteadyTime());
-        }
-      }
-    }
-  }
   return rv;
 }
 
@@ -3873,77 +3859,85 @@ int PartitionedRocksDBStore::modifyUnderReplicatedTimeRange(
     TimeIntervalOp op,
     DataClass dc,
     RecordTimeInterval interval) {
-  // Lock out dirty state changes from other threads.
-  std::lock_guard<std::mutex> drop_lock(oldest_partition_mutex_);
+  for (;;) {
+    // Lock out dirty state changes from other threads.
+    std::lock_guard<std::mutex> drop_lock(oldest_partition_mutex_);
 
-  LocalLogStore::WriteOptions options;
-  RebuildingRangesMetadata range_metadata;
-  if (getRebuildingRanges(range_metadata) != 0) {
-    err = E::FAILED;
-    return -1;
-  }
-
-  if (op == TimeIntervalOp::REMOVE) {
-    if (range_metadata.empty()) {
-      // No-op.
-      return 0;
+    RebuildingRangesMetadata range_metadata;
+    RebuildingRangesVersion base_version;
+    if (getRebuildingRanges(range_metadata, base_version) != 0) {
+      return -1;
     }
-  }
 
-  // Add/Remove dirty time ranges to durable store metadata.
-  // NOTE: We allow intervals to be added even if they do not match
-  //       existing partitions. This allows the administrator to force
-  //       the cluster to re-replicate ranges where local log store data
-  //       has been corrupted or partially lost. The node will publish the
-  //       added ranges, causing any data in the ranges available on other
-  //       nodes to be re-replicated. However, the node will not self
-  //       identify under-replication to readers for ranges that are not
-  //       covered by partitions.
-  range_metadata.modifyTimeIntervals(op, dc, interval);
+    if (op == TimeIntervalOp::REMOVE) {
+      if (range_metadata.empty()) {
+        // No-op.
+        return 0;
+      }
+    }
 
-  if (range_metadata.empty() && (op == TimeIntervalOp::REMOVE)) {
-    // If removing the interval makes the entire shard clean, then
-    // expand the interval to cover all time so that even partitions that
-    // are only partially covered by the original interval will be marked
-    // clean.
-    interval =
-        RecordTimeInterval(RecordTimestamp::min(), RecordTimestamp::max());
-  }
+    // Add/Remove dirty time ranges to durable store metadata.
+    // NOTE: We allow intervals to be added even if they do not match
+    //       existing partitions. This allows the administrator to force
+    //       the cluster to re-replicate ranges where local log store data
+    //       has been corrupted or partially lost. The node will publish the
+    //       added ranges, causing any data in the ranges available on other
+    //       nodes to be re-replicated. However, the node will not self
+    //       identify under-replication to readers for ranges that are not
+    //       covered by partitions.
+    range_metadata.modifyTimeIntervals(op, dc, interval);
 
-  auto partitions = getPartitionList();
-  rocksdb::WriteBatch dirty_batch;
-  RecordTimeIntervals intervals{interval};
-  findPartitionsMatchingIntervals(
-      intervals,
-      [&](PartitionPtr partition,
-          RecordTimeInterval /* partition's time interval */) {
-        folly::SharedMutex::WriteHolder partition_lock(partition->mutex_);
-        if (op == TimeIntervalOp::ADD) {
-          setUnderReplicated(partition);
-          writePartitionDirtyState(partition, dirty_batch);
-        } else if (partition->max_timestamp != RecordTimestamp::min()) {
-          auto dirty_range = RecordTimeInterval(
-              partition->min_timestamp, partition->max_timestamp);
-          // Can we fully clear the under-replicatedness of this partition?
-          if ((interval & dirty_range) == dirty_range) {
-            setUnderReplicated(partition, false);
+    if (range_metadata.empty() && (op == TimeIntervalOp::REMOVE)) {
+      // If removing the interval makes the entire shard clean, then
+      // expand the interval to cover all time so that even partitions that
+      // are only partially covered by the original interval will be marked
+      // clean.
+      interval =
+          RecordTimeInterval(RecordTimestamp::min(), RecordTimestamp::max());
+    }
+
+    auto partitions = getPartitionList();
+    rocksdb::WriteBatch dirty_batch;
+    RecordTimeIntervals intervals{interval};
+    findPartitionsMatchingIntervals(
+        intervals,
+        [&](PartitionPtr partition,
+            RecordTimeInterval /* partition's time interval */) {
+          folly::SharedMutex::WriteHolder partition_lock(partition->mutex_);
+          if (op == TimeIntervalOp::ADD) {
+            setUnderReplicated(partition);
             writePartitionDirtyState(partition, dirty_batch);
+          } else if (partition->max_timestamp != RecordTimestamp::min()) {
+            auto dirty_range = RecordTimeInterval(
+                partition->min_timestamp, partition->max_timestamp);
+            // Can we fully clear the under-replicatedness of this partition?
+            if ((interval & dirty_range) == dirty_range) {
+              setUnderReplicated(partition, false);
+              writePartitionDirtyState(partition, dirty_batch);
+            }
           }
-        }
-      },
-      /*include empty partitions*/ true);
+        },
+        /*include empty partitions*/ true);
 
-  if (writeRebuildingRanges(range_metadata) != 0) {
-    err = E::FAILED;
-    return -1;
-  }
-  auto status = writeBatch(rocksdb::WriteOptions(), &dirty_batch);
-  if (!status.ok()) {
-    ld_error("Failed to write partition dirty data for shard %u: %s",
-             getShardIdx(),
-             status.ToString().c_str());
-    err = E::FAILED;
-    return -1;
+    auto status = writeBatch(rocksdb::WriteOptions(), &dirty_batch);
+    if (!status.ok()) {
+      ld_error("Failed to write partition dirty data for shard %u: %s",
+               getShardIdx(),
+               status.ToString().c_str());
+      err = E::FAILED;
+      return -1;
+    }
+
+    range_metadata.setPublished(false);
+    RebuildingRangesVersion new_version(/*major*/ base_version.first + 1,
+                                        /*minor*/ 0);
+    if (writeRebuildingRanges(range_metadata, base_version, new_version) == 0) {
+      break;
+    }
+    if (err != E::STALE) {
+      return -1;
+    }
+    // Lost race with metadata update on another thread. Try again.
   }
   return 0;
 }
@@ -5359,7 +5353,8 @@ void PartitionedRocksDBStore::cleanUpPartitionMetadataAfterDrop(
 
 int PartitionedRocksDBStore::trimRebuildingRangesMetadata() {
   RebuildingRangesMetadata range_meta;
-  if (getRebuildingRanges(range_meta) != 0) {
+  RebuildingRangesVersion base_version;
+  if (getRebuildingRanges(range_meta, base_version) != 0) {
     return -1;
   }
   if (range_meta.empty()) {
@@ -5377,6 +5372,14 @@ int PartitionedRocksDBStore::trimRebuildingRangesMetadata() {
           partition->min_timestamp, partition->max_timestamp));
     }
   }
+  // There's no need to track or report dataloss for regions of the log
+  // that have been trimmed away, so shrink if possible the span of partitions
+  // where records may be missing.
+  //
+  // NOTE: This is safe to do regardless of whether or not the metadata
+  //       update below is successful. A failure there leaves the current
+  //       ranges in place which lag the progress made in trimming away
+  //       dirty data.
   min_under_replicated_partition_.store(new_min_ur_partition);
   max_under_replicated_partition_.store(new_max_ur_partition);
 
@@ -5386,7 +5389,30 @@ int PartitionedRocksDBStore::trimRebuildingRangesMetadata() {
     return 0;
   }
 
-  if (writeRebuildingRanges(new_range_meta) != 0) {
+  // Whenever partiion trimming removes dirty partitions, we increment
+  // the minor version of the range metadata. This allows the
+  // RebuildingCoordinator, which is operating on an older copy of the
+  // range data, to still acknowledge successful publication of range
+  // data to the event log even though that publication now includes some
+  // ranges that have been trimmed away and need not be rebuilt. This avoids
+  // needlessly restarting rebuilding just to update the ranges - an expensive
+  // operation.
+  //
+  // When all dirty ranges are trimmed away and rebuilding is still active,
+  // we republish to the event log to cancel the rebuilding. In this case, bump
+  // the major version so that the RebuildingCoordinator will always lose the
+  // race (will get E::STALE) if it "notes published" concurrently with this
+  // new publication.
+  RebuildingRangesVersion new_version(/*major*/ base_version.first,
+                                      /*minor*/ base_version.second + 1);
+  if (new_range_meta.empty()) {
+    new_version.first++;
+    new_range_meta.setPublished(false);
+  }
+  if (writeRebuildingRanges(new_range_meta, base_version, new_version) != 0) {
+    // Trimming is performed periodically. If we lose the race with another
+    // update (admin command or RebuildingCoordinator marking ranges as
+    // published), we'll try again and eventually make progress.
     return -1;
   }
 
@@ -5758,8 +5784,11 @@ int PartitionedRocksDBStore::getApproximateTimestamp(
 }
 
 int PartitionedRocksDBStore::getRebuildingRanges(
-    RebuildingRangesMetadata& rrm) {
+    RebuildingRangesMetadata& rrm,
+    RebuildingRangesVersion& version) {
   rrm.clear();
+
+  std::lock_guard<std::mutex> lock(rebuilding_ranges_mutex_);
   int rv = readStoreMetadata(&rrm);
   if (rv != 0) {
     if (err != E::NOTFOUND) {
@@ -5770,17 +5799,68 @@ int PartitionedRocksDBStore::getRebuildingRanges(
     }
     ld_check(rrm.empty());
   }
+  version = rebuilding_ranges_version_;
   return 0;
 }
 
 int PartitionedRocksDBStore::writeRebuildingRanges(
-    RebuildingRangesMetadata& rrm) {
+    RebuildingRangesMetadata& rrm,
+    RebuildingRangesVersion base_version,
+    RebuildingRangesVersion new_version) {
+  std::unique_lock<std::mutex> lock(rebuilding_ranges_mutex_);
+  if (base_version != rebuilding_ranges_version_) {
+    lock.unlock();
+    // Because the lock is dropped and reaquired, it is possible for the
+    // values printed here to be from and update after the one we actually
+    // lost the race to. But, this avoids having to refactor
+    // getRebuildingRanges() to generate a "lock held" version just to emit
+    // some diagnostic logging.
+    RebuildingRangesVersion cur_version;
+    RebuildingRangesMetadata cur_rrm;
+    getRebuildingRanges(cur_rrm, cur_version);
+    ld_error("Modificiation using stale version rejected: "
+             "current version: %s, "
+             "update base version: %s, "
+             "update new version: %s, "
+             "current ranges: %s, "
+             "update ranges: %s",
+             logdevice::toString(cur_version).c_str(),
+             logdevice::toString(base_version).c_str(),
+             logdevice::toString(new_version).c_str(),
+             cur_rrm.toString().c_str(),
+             rrm.toString().c_str());
+    err = E::STALE;
+    return -1;
+  }
   int rv = writeStoreMetadata(rrm, LocalLogStore::WriteOptions());
   if (rv != 0) {
     ld_error("Error writing RebuildingRangesMetadata for shard %u: %s\r\n",
              getShardIdx(),
              error_description(err));
     return -1;
+  }
+  rebuilding_ranges_version_ = new_version;
+  if (rrm.empty()) {
+    // Any under-replicated data has been rebuilt. Persistenty clear
+    // partition under-relication flag.
+    min_under_replicated_partition_.store(PARTITION_MAX);
+    max_under_replicated_partition_.store(PARTITION_INVALID);
+    auto partitions = getPartitionList();
+    for (PartitionPtr partition : *partitions) {
+      if (partition->isUnderReplicated()) {
+        partition->setUnderReplicated(false);
+
+        // If not dirty already, mark the partition dirty so that
+        // partition metadata (including the under-replicated flag)
+        // will be flushed to stable storage the next time the cleaner
+        // runs. We don't perform the store directly here since the
+        // cleaner already exists and using it allows rebuilding_ranges_mutex_
+        // to remain a tail mutex.
+        partition->dirty_state_.noteDirtied(
+            FlushToken_MIN, currentSteadyTime());
+        cleaner_pass_requested_.store(true);
+      }
+    }
   }
   return 0;
 }

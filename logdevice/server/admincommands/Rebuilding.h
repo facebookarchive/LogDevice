@@ -189,25 +189,13 @@ class Rebuilding : public AdminCommand {
   }
 
   void writeCheckpointForShard(shard_index_t shard_idx, LocalLogStore* store) {
-    // Step 1/ Write the RebuildingRangeMetadata and RebuildingCompleteMetadata
-    //         to the shard so that next time we restart we don't try to
-    //         rebuild it.
+    // Step 1/ Write the RebuildingCompleteMetadata to the shard so that next
+    //         time we restart we don't try to rebuild it.
 
-    out_.printf("Clearing dirty ranges and writing checkpoint "
-                "for shard %u...\r\n",
-                shard_idx);
+    out_.printf("Writing checkpoint for shard %u...\r\n", shard_idx);
     LocalLogStore::WriteOptions options;
-    RebuildingRangesMetadata range_metadata;
-    int rv = store->writeStoreMetadata(range_metadata, options);
-    if (rv != 0) {
-      out_.printf("Error writing RebuildingRangesMetadata for shard %u: %s\r\n",
-                  shard_idx,
-                  error_description(err));
-      return;
-    }
-
     RebuildingCompleteMetadata metadata;
-    rv = store->writeStoreMetadata(metadata, options);
+    int rv = store->writeStoreMetadata(metadata, options);
     if (rv != 0) {
       out_.printf(
           "Error writing RebuildingCompleteMetadata for shard %u: %s\r\n",

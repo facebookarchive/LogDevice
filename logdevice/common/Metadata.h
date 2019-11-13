@@ -392,6 +392,26 @@ class ClusterMarkerMetadata final : public StoreMetadata {
 };
 
 /**
+ * Rebuidling ranges major and minor versions.
+ *
+ * The version is used to close races between publication and
+ * modification of the range data within a single instance of the
+ * LogDevice daemon. It is not persisted to stable storage.
+ *
+ * A bump in major version indicates a change that is incompatible
+ * with previously fetched copies of the rebuilding range data.
+ *
+ * A change in the minor version indicates a change caused by internal
+ * log store operations that do not need to be broadcast to external
+ * consumers of rebuilding range data. For example, when a rebuilding
+ * range is trimmed away due to retention, the rebuilding range data
+ * will also be trimmed, but this minor change is not pushed to the
+ * EventLog so as to avoid restarting any in-progress rebuilding.
+ */
+using RebuildingRangesVersion =
+    std::pair<uint32_t /*major*/, uint32_t /*minor*/>;
+
+/**
  * Present and non-empty on a shard if LogDevice failed to shutdown cleanly
  * with unpersisted write data. The [Append/Rebuild/...] time ranges are
  * used to trigger a cluster rebuild to restore any data that might have
@@ -427,8 +447,12 @@ class ClusterMarkerMetadata final : public StoreMetadata {
  */
 class RebuildingRangesMetadata final : public StoreMetadata {
   struct Header {
+    using FlagsType = uint8_t;
+    static constexpr FlagsType PUBLISHED = 1 << 0;
+
     uint16_t len;
-    uint8_t pad[2]{};
+    FlagsType flags{};
+    uint8_t pad{};
     uint32_t data_classes_offset;
     uint32_t data_classes_len;
   };
@@ -455,6 +479,7 @@ class RebuildingRangesMetadata final : public StoreMetadata {
                 "RebuildingRangesMetadata::TimeRange is not packed.");
 
   PerDataClassTimeRanges per_dc_dirty_ranges_;
+  bool published_{false};
   mutable std::vector<uint8_t> serialize_buffer_;
 
  public:
@@ -483,7 +508,8 @@ class RebuildingRangesMetadata final : public StoreMetadata {
   bool operator==(const RebuildingRangesMetadata& other) const {
     // Ignore the serialization buffer since serialization may
     // never have occurred or the ranges modified post serialization.
-    return per_dc_dirty_ranges_ == other.per_dc_dirty_ranges_;
+    return (per_dc_dirty_ranges_ == other.per_dc_dirty_ranges_ &&
+            published_ == other.published_);
   }
 
   RebuildingRangesMetadata& operator&=(const RecordTimeIntervals& rti_mask) {
@@ -497,6 +523,17 @@ class RebuildingRangesMetadata final : public StoreMetadata {
       }
     }
     return *this;
+  }
+
+  // Returns true if a rebuilding request for the ranges in this
+  // RebuildingRangesMetadata has been written to the event log.
+  bool published() const {
+    return published_;
+  }
+
+  // Sets or clears the "published in event log" flag.
+  void setPublished(bool published) {
+    published_ = published;
   }
 
   bool empty() const {

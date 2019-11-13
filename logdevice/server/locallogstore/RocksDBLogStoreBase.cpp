@@ -436,6 +436,21 @@ int RocksDBLogStoreBase::updatePerEpochLogMetadata(
                                             getMetadataCFHandle());
 }
 
+int RocksDBLogStoreBase::getRebuildingRanges(RebuildingRangesMetadata& rrm,
+                                             RebuildingRangesVersion& version) {
+  rrm = RebuildingRangesMetadata();
+  version = RebuildingRangesVersion(0, 0);
+  return 0;
+}
+
+int RocksDBLogStoreBase::writeRebuildingRanges(
+    RebuildingRangesMetadata&,
+    RebuildingRangesVersion /*base_version*/,
+    RebuildingRangesVersion /*new_version*/) {
+  err = E::NOTSUPPORTED;
+  return -1;
+}
+
 int RocksDBLogStoreBase::deleteStoreMetadata(
     const StoreMetadataType type,
     const WriteOptions& write_options) {

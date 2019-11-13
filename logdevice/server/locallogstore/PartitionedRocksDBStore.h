@@ -659,8 +659,11 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
       bool allow_blocking_io,
       std::chrono::milliseconds* timestamp_out) override;
 
-  int getRebuildingRanges(RebuildingRangesMetadata& rrm);
-  int writeRebuildingRanges(RebuildingRangesMetadata& rrm);
+  int getRebuildingRanges(RebuildingRangesMetadata& rrm,
+                          RebuildingRangesVersion& version) override;
+  int writeRebuildingRanges(RebuildingRangesMetadata& rrm,
+                            RebuildingRangesVersion base_version,
+                            RebuildingRangesVersion new_version) override;
 
   // Calls `cb` for every log that has at least one record stored. Note that
   // this method doesn't check trim points, so it's possible that some of the
@@ -1726,6 +1729,9 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // entries in on-disk directory with in-memory directory
   AtomicSteadyTimestamp last_directory_consistency_check_time_{
       SteadyTimestamp::min()};
+
+  std::mutex rebuilding_ranges_mutex_;
+  RebuildingRangesVersion rebuilding_ranges_version_ = {0, 0};
 
  protected:
   enum class DeferInit {

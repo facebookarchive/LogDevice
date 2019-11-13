@@ -151,6 +151,18 @@ int TemporaryLogStore::updatePerEpochLogMetadata(
       log_id, epoch, metadata, seal_preempt, write_options);
 }
 
+int TemporaryLogStore::getRebuildingRanges(RebuildingRangesMetadata& rrm,
+                                           RebuildingRangesVersion& version) {
+  return db_->getRebuildingRanges(rrm, version);
+}
+
+int TemporaryLogStore::writeRebuildingRanges(
+    RebuildingRangesMetadata& rrm,
+    RebuildingRangesVersion base_version,
+    RebuildingRangesVersion new_version) {
+  return db_->writeRebuildingRanges(rrm, base_version, new_version);
+}
+
 int TemporaryLogStore::isEmpty() const {
   return db_->isEmpty();
 }

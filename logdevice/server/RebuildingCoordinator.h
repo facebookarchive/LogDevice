@@ -10,6 +10,8 @@
 #include <memory>
 #include <queue>
 
+#include <folly/container/F14Map.h>
+
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/BackoffTimer.h"
@@ -39,6 +41,11 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
                               public RebuildingCoordinatorInterface,
                               public ShardRebuildingInterface::Listener {
  public:
+  using DirtyRanges =
+      std::pair<RebuildingRangesMetadata, RebuildingRangesVersion>;
+  using DirtyShardMap = folly::F14FastMap<shard_index_t, DirtyRanges>;
+  using PendingPublicationsMap = folly::F14FastMap<shard_index_t, lsn_t>;
+
   RebuildingCoordinator(
       const std::shared_ptr<UpdateableConfig>& config,
       EventLogStateMachine* event_log,
@@ -221,9 +228,6 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   void onDirtyStateChanged() override;
 
  protected:
-  using DirtyShardMap =
-      std::unordered_map<shard_index_t, RebuildingRangesMetadata>;
-
   // The following may be overridden by tests.
 
   virtual size_t numShards();
@@ -265,6 +269,16 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    */
   virtual void abortCleanedShards(const EventLogRebuildingSet& set,
                                   DirtyShardMap& cleaned_shards);
+
+  /**
+   * Persistently record that a shard's dirty ranges have been published
+   * to the event log.
+   *
+   * Called after dirty ranges read from the event log match those currently
+   * active for one of our shards.
+   */
+  virtual void noteRangesPublished(uint32_t shard, RebuildingRangesVersion);
+
   /**
    * Issue a storage task to write a RebuildingCompleteMetadata marker in the
    * local log store of shard `shard`.
@@ -568,6 +582,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    * stalls.
    */
   DirtyShardMap dirtyShards_;
+
+  PendingPublicationsMap pendingPubs_;
 
   node_index_t myNodeId_{-1};
 

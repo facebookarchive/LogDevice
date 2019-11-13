@@ -241,6 +241,7 @@ Slice RebuildingRangesMetadata::serialize() const {
   Header h;
 
   h.len = sizeof(h);
+  h.flags |= published_ ? Header::PUBLISHED : 0;
   h.data_classes_offset = 0;
   h.data_classes_len = per_dc_dirty_ranges_.size() * sizeof(DataClassHeader);
   uint32_t record_size = h.len;
@@ -365,6 +366,8 @@ int RebuildingRangesMetadata::deserialize(Slice blob) {
           RecordTimestamp::from(std::chrono::milliseconds(tr.end_ms))));
     }
   }
+
+  published_ = (h.flags & Header::PUBLISHED) != 0;
 
   return 0;
 }

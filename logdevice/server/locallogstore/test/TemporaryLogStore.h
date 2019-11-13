@@ -106,6 +106,12 @@ class TemporaryLogStore : public LocalLogStore {
                                 LocalLogStore::SealPreemption seal_preempt,
                                 const WriteOptions& write_options) override;
 
+  int getRebuildingRanges(RebuildingRangesMetadata& rrm,
+                          RebuildingRangesVersion& version) override;
+  int writeRebuildingRanges(RebuildingRangesMetadata& rrm,
+                            RebuildingRangesVersion base_version,
+                            RebuildingRangesVersion new_version) override;
+
   Status acceptingWrites() const override;
 
   int isEmpty() const override;

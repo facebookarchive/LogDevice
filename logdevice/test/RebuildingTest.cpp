@@ -3129,6 +3129,7 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
 
     auto base_dirty_info = node1.dirtyShardInfo();
     auto partition = find_partition(/*dirty*/ true);
+    EXPECT_EQ(partition["Under Replicated"], "1");
 
     send_cmd("clean", min_time(partition), max_time(partition));
 

@@ -38,14 +38,82 @@ class ShardedLocalLogStore;
 namespace {
 
 /**
+ * A storage task used to durably record that rebuilding ranges have been
+ * published to the event log.
+ */
+class RebuildingNoteRangesPublishedTask : public StorageTask {
+ public:
+  explicit RebuildingNoteRangesPublishedTask(RebuildingRangesVersion ver)
+      : StorageTask(StorageTask::Type::REBUILDING_NOTE_RANGES_PUBLISHED),
+        published_version_(ver) {}
+
+  Principal getPrincipal() const override {
+    return Principal::METADATA;
+  }
+
+  void execute() override {
+    auto& store = storageThreadPool_->getLocalLogStore();
+    if (store.acceptingWrites() == E::DISABLED) {
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     10,
+                     "Not writing RebuildingRangesMetadata for disabled "
+                     "shard %u",
+                     storageThreadPool_->getShardIdx());
+      status_ = E::DISABLED;
+      return;
+    }
+
+    RebuildingRangesMetadata rrm;
+    RebuildingRangesVersion cur_version;
+    for (;;) {
+      if (store.getRebuildingRanges(rrm, cur_version) != 0) {
+        status_ = err;
+        return;
+      }
+      if (cur_version.first > published_version_.first) {
+        // Publication is out of date. We will eventually
+        // republish.
+        status_ = E::STALE;
+        return;
+      }
+      rrm.setPublished(true);
+      // Bump minor version.
+      RebuildingRangesVersion new_version(cur_version);
+      ++new_version.second;
+      if (store.writeRebuildingRanges(rrm, cur_version, new_version) == 0) {
+        status_ = E::OK;
+        return;
+      }
+      if (err != E::STALE) {
+        status_ = err;
+        return;
+      }
+      // Lost the race. Try again.
+    }
+  }
+
+  void onDone() override {}
+
+  void onDropped() override {
+    ld_check(false);
+  }
+  bool isDroppable() const override {
+    return false;
+  }
+
+ private:
+  RebuildingRangesVersion published_version_;
+  Status status_{E::INTERNAL};
+};
+
+/**
  * A storage task used to write a marker in a local log store to indicate that
  * it was rebuilt.
  */
-class WriteShardRebuildingCompleteMetadataTask : public StorageTask {
+class RebuildingWriteCompleteMetadataTask : public StorageTask {
  public:
-  explicit WriteShardRebuildingCompleteMetadataTask(
-      RebuildingCoordinator* owner,
-      lsn_t version)
+  explicit RebuildingWriteCompleteMetadataTask(RebuildingCoordinator* owner,
+                                               lsn_t version)
       : StorageTask(StorageTask::Type::REBUILDING_WRITE_COMPLETE_METADATA),
         owner_(owner),
         version_(version) {}
@@ -68,24 +136,48 @@ class WriteShardRebuildingCompleteMetadataTask : public StorageTask {
 
     // With rebuilding complete, clear any dirty time ranges
     // for the shard.
-    LocalLogStore::WriteOptions options;
-    RebuildingRangesMetadata range_metadata;
-    int rv = storageThreadPool_->getLocalLogStore().writeStoreMetadata(
-        range_metadata, options);
-    if (rv != 0) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      10,
-                      "Could not write RebuildingRangesMetadata for "
-                      "shard %u: %s",
-                      storageThreadPool_->getShardIdx(),
-                      error_description(err));
-      status_ = err;
-      return;
+
+    for (;;) {
+      RebuildingRangesMetadata rrm;
+      RebuildingRangesVersion cur_version;
+      if (store.getRebuildingRanges(rrm, cur_version) != 0 &&
+          err != E::NOTFOUND) {
+        RATELIMIT_ERROR(std::chrono::seconds(10),
+                        10,
+                        "Could not fetch RebuildingRangesMetadata for "
+                        "shard %u: %s",
+                        storageThreadPool_->getShardIdx(),
+                        error_description(err));
+        status_ = err;
+        return;
+      }
+
+      if (rrm.empty()) {
+        // Already clear
+        break;
+      }
+
+      RebuildingRangesVersion new_version(cur_version.first + 1, 0);
+      if (store.writeRebuildingRanges(rrm, cur_version, new_version) == 0) {
+        break;
+      }
+      if (err != E::STALE) {
+        RATELIMIT_ERROR(std::chrono::seconds(10),
+                        10,
+                        "Could not clear RebuildingRangesMetadata for "
+                        "shard %u: %s",
+                        storageThreadPool_->getShardIdx(),
+                        error_description(err));
+        status_ = err;
+        return;
+      }
+      // Lost the race. Try again.
     }
 
     // Mark rebuilding complete.
+    LocalLogStore::WriteOptions options;
     RebuildingCompleteMetadata complete_metadata;
-    rv = storageThreadPool_->getLocalLogStore().writeStoreMetadata(
+    int rv = storageThreadPool_->getLocalLogStore().writeStoreMetadata(
         complete_metadata, options);
     if (rv != 0) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
@@ -338,8 +430,9 @@ int RebuildingCoordinator::checkMarkers() {
 void RebuildingCoordinator::populateDirtyShardCache(DirtyShardMap& map) {
   for (uint32_t shard = 0; shard < numShards(); ++shard) {
     RebuildingRangesMetadata meta;
+    RebuildingRangesVersion version;
     LocalLogStore* store = shardedStore_->getByIndex(shard);
-    int rv = store->readStoreMetadata(&meta);
+    int rv = store->getRebuildingRanges(meta, version);
     if (rv != 0) {
       if (err != E::NOTFOUND) {
         ld_error("Could not read RebuildingRangesMetadata for shard %u: %s",
@@ -351,7 +444,7 @@ void RebuildingCoordinator::populateDirtyShardCache(DirtyShardMap& map) {
       // There's no point in claiming we have dirty state to publish/rebuild.
       processor_->markShardClean(shard);
     } else if (!meta.empty()) {
-      map[shard] = meta;
+      map[shard] = std::pair(meta, version);
     } else {
       processor_->markShardClean(shard);
     }
@@ -364,12 +457,21 @@ RebuildingCoordinator::~RebuildingCoordinator() {
   ld_check(shardsRebuilding_.empty());
 }
 
+void RebuildingCoordinator::noteRangesPublished(uint32_t shard,
+                                                RebuildingRangesVersion v) {
+  ld_info("Noting dirty ranges published for shard %u", shard);
+  auto task = std::make_unique<RebuildingNoteRangesPublishedTask>(v);
+  auto task_queue =
+      ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard);
+  task_queue->putTask(std::move(task));
+}
+
 void RebuildingCoordinator::writeMarkerForShard(uint32_t shard, lsn_t version) {
   ld_info("Writing marker for shard %u, version %s",
           shard,
           lsn_to_string(version).c_str());
   auto task =
-      std::make_unique<WriteShardRebuildingCompleteMetadataTask>(this, version);
+      std::make_unique<RebuildingWriteCompleteMetadataTask>(this, version);
   auto task_queue =
       ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard);
   task_queue->putTask(std::move(task));
@@ -1292,7 +1394,7 @@ void RebuildingCoordinator::onShardUndrain(node_index_t node_idx,
     if (myShardIsDirty(shard_idx)) {
       // We still have dirty ranges and so must complete a time ranged rebuild.
       auto ds_kv = dirtyShards_.find(shard_idx);
-      restartForMyShard(shard_idx, 0, &ds_kv->second);
+      restartForMyShard(shard_idx, 0, &ds_kv->second.first);
     } else {
       // We just requested to cancel the ongoing drain on this node, and this
       // node has its data intact. This means we can simply abort rebuilding.
@@ -1505,13 +1607,14 @@ void RebuildingCoordinator::publishDirtyShards(
   ld_info("Publishing dirty shards.");
   for (auto& ds_kv : dirtyShards_) {
     auto shard_idx = ds_kv.first;
+    auto& dirty_ranges = ds_kv.second.first;
     if (!myShardHasDataIntact(shard_idx)) {
       // Action should already have been taken to schedule a full
       // rebuild of this shard.
       continue;
     }
 
-    ld_check(!ds_kv.second.empty());
+    ld_check(!dirty_ranges.empty());
     auto info = set.getNodeInfo(myNodeId_, shard_idx);
     if (info) {
       // If rebuilding completed while this node was down, the
@@ -1554,7 +1657,8 @@ void RebuildingCoordinator::publishDirtyShards(
 
       // If the time ranges all match, the cluster is already performing
       // the desired rebuild operation.
-      if (info->dc_dirty_ranges == ds_kv.second.getDCDirtyRanges()) {
+      if (info->dc_dirty_ranges == dirty_ranges.getDCDirtyRanges() &&
+          dirty_ranges.published()) {
         ld_info("Shard %u: Current dirty ranges already published: %s",
                 shard_idx,
                 toString(info->dc_dirty_ranges).c_str());
@@ -1566,7 +1670,8 @@ void RebuildingCoordinator::publishDirtyShards(
     if (adminSettings_->enable_cluster_maintenance_state_machine) {
       writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
     }
-    restartForMyShard(shard_idx, 0, &ds_kv.second);
+    pendingPubs_[shard_idx] = last_seen_event_log_version_;
+    restartForMyShard(shard_idx, 0, &dirty_ranges);
   }
 }
 
@@ -1626,24 +1731,38 @@ void RebuildingCoordinator::abortForMyShard(
     const char* reason) {
   auto ds_kv = dirtyShards_.find(shard);
   if (ds_kv != dirtyShards_.end()) {
+    auto& dirty_ranges = ds_kv->second.first;
+    auto& dirty_version = ds_kv->second.second;
     ld_info("Request to abort rebuilding of my shard %u because: %s. "
             "But shard is dirty. Downgrading to time ranged rebuild.",
             shard,
             reason);
     ld_info(
         "EventLogRebuildingSet NodeInfo: %s", node_info->toString().c_str());
-    ld_info("Local dirty ranges: %s", ds_kv->second.toString().c_str());
+    ld_info("Local dirty ranges: %s", dirty_ranges.toString().c_str());
 
     ld_check(node_info);
     if (node_info &&
-        ds_kv->second.getDCDirtyRanges() == node_info->dc_dirty_ranges) {
-      ld_info("Cluster already rebuilding the correct dirty ranges for "
-              "my shard %u. Converting abort into no-op.",
-              shard);
-    } else {
-      restartForMyShard(shard, 0, &ds_kv->second);
+        dirty_ranges.getDCDirtyRanges() == node_info->dc_dirty_ranges) {
+      if (dirty_ranges.published()) {
+        ld_info("Cluster already rebuilding the correct dirty ranges for "
+                "my shard %u. Converting abort into no-op.",
+                shard);
+      } else if (pendingPubs_.count(shard) &&
+                 last_seen_event_log_version_ > pendingPubs_[shard]) {
+        ld_info("Dirty ranges for my shard %u successfully published", shard);
+        // Update our cache.
+        dirty_ranges.setPublished(true);
+        // And the underlying store
+        noteRangesPublished(shard, dirty_version);
+      } else {
+        ld_info("Still waiting for publication of latest dirty ranges for "
+                "my shard %u. Converting abort into no-op.",
+                shard);
+      }
+      return;
     }
-    return;
+    restartForMyShard(shard, 0, &dirty_ranges);
   }
 
   ld_info("Aborting rebuilding of my shard %u because: %s.", shard, reason);

@@ -697,6 +697,34 @@ class LocalLogStore : boost::noncopyable {
                                       bool allow_blocking_io = true) const = 0;
 
   /**
+   * Fetches per-store rebuilding dirty range metadata
+   *
+   * @param rrm      The RebuildingRangesMetadata object to fill.
+   * @param version  The returned, in-core, version of the metadata.
+   *
+   * @return On success, returns 0. On failure, returns -1 and sets err to
+   *         LOCAL_LOG_STORE_READ.
+   */
+  virtual int getRebuildingRanges(RebuildingRangesMetadata& rrm,
+                                  RebuildingRangesVersion& version) = 0;
+  /**
+   * Conditionally stores a new version of per-store rebuilding dirty
+   * range metadata
+   *
+   * @param rrm           The RebuildingRangesMetadata to store.
+   * @param base_version  The expected, current metadata version.
+   * @param new_version   The new metadata version to apply along with rrm.
+   *
+   * @return On success, returns 0. On failure, returns -1 and sets err to
+   *         STALE                 if base_version does not match the current
+   *                               version of the metadata
+   *         LOCAL_LOG_STORE_READ  on any other error
+   */
+  virtual int writeRebuildingRanges(RebuildingRangesMetadata& rrm,
+                                    RebuildingRangesVersion base_version,
+                                    RebuildingRangesVersion new_version) = 0;
+
+  /**
    * Write global or per-log metadata.
    *
    * @param log_id     ID of the log to write metadata for

@@ -374,6 +374,12 @@ class RocksDBLogStoreBase : public LocalLogStore {
       LocalLogStore::SealPreemption seal_preempt,
       const WriteOptions& write_options = WriteOptions()) override;
 
+  int getRebuildingRanges(RebuildingRangesMetadata& rrm,
+                          RebuildingRangesVersion& version) override;
+  int writeRebuildingRanges(RebuildingRangesMetadata& rrm,
+                            RebuildingRangesVersion base_version,
+                            RebuildingRangesVersion new_version) override;
+
   int deleteStoreMetadata(
       const StoreMetadataType type,
       const WriteOptions& write_options = WriteOptions()) override;
