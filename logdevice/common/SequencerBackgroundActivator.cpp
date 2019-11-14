@@ -65,7 +65,6 @@ void SequencerBackgroundActivator::schedule(std::vector<logid_t> log_ids,
     queue_.push(log_id);
     ++num_scheduled;
   }
-  bumpScheduledStat(num_scheduled);
   maybeProcessQueue();
 }
 
@@ -167,7 +166,6 @@ SequencerBackgroundActivator::postponeSequencerReactivation(logid_t logid) {
   // Switch off this flag so that the next enqueue doesn't go through
   // immediately.
   state.queued_by_alarm_callback = false;
-  bumpCompletedStat();
 
   // If we already have an active alarm for this log
   // then we can piggy-back on it if we have non-urgent
@@ -182,10 +180,10 @@ SequencerBackgroundActivator::postponeSequencerReactivation(logid_t logid) {
   auto max = Worker::settings().sequencer_reactivation_delay_secs.hi.count();
   std::chrono::seconds delay_secs(folly::Random::rand32(min, max));
   auto cb = [self = this, log_id = logid]() {
-    WORKER_STAT_INCR(sequencer_reactivations_delay_completed);
     LogState& cur_state = self->logs_[log_id];
     cur_state.reactivation_delay_timer.cancel();
     self->schedule({log_id}, true /* queued_by_alarm_callback */);
+    WORKER_STAT_INCR(sequencer_reactivations_delay_completed);
   };
   RecordTimestamp delayTS = RecordTimestamp::now() + delay_secs;
   RATELIMIT_INFO(std::chrono::seconds(10),
@@ -594,7 +592,6 @@ void SequencerBackgroundActivator::notifyCompletion(logid_t logid,
 
   // If the operation that just completed was triggered by us, reclaim the
   // in-flight slot we assigned to it.
-  bool had_token = state.token.valid();
   state.token.release();
 
   // Schedule a re-check for the log, in case config was updated while sequencer
@@ -605,33 +602,28 @@ void SequencerBackgroundActivator::notifyCompletion(logid_t logid,
     queue_.push(logid);
   }
 
-  if (had_token && !inserted) {
-    bumpCompletedStat();
-  }
-  if (!had_token && inserted) {
-    bumpScheduledStat();
-  }
-
   maybeProcessQueue();
 }
 
 void SequencerBackgroundActivator::maybeProcessQueue() {
+  SCOPE_EXIT {
+    updateActivityStat();
+  };
+
   checkWorkerAsserts();
   deactivateQueueProcessingTimer();
   size_t limit =
       Worker::settings().max_sequencer_background_activations_in_flight;
-  if (!budget_) {
-    budget_ = std::make_unique<ResourceBudget>(limit);
-  } else if (budget_->getLimit() != limit) {
+  if (budget_.getLimit() != limit) {
     // in case the setting changed after initialization
-    budget_->setLimit(limit);
+    budget_.setLimit(limit);
   }
 
   std::chrono::steady_clock::time_point start_time =
       std::chrono::steady_clock::now();
   bool made_progress = false;
 
-  while (!queue_.empty() && budget_->available() > 0) {
+  while (!queue_.empty() && budget_.available() > 0) {
     // Limiting this loop to 2ms
     if (made_progress && usec_since(start_time) > 2000) {
       // This is taking a while, let's yield for a few milliseconds.
@@ -645,7 +637,7 @@ void SequencerBackgroundActivator::maybeProcessQueue() {
     LogState& state = logs_.at(log_id); // LogState must exist
     ld_check(state.in_queue);
 
-    auto token = budget_->acquireToken();
+    auto token = budget_.acquireToken();
     ld_check(token.valid());
     ProcessLogDecision decision = processOneLog(log_id, state, token);
     if (decision != ProcessLogDecision::POSTPONED) {
@@ -663,13 +655,9 @@ void SequencerBackgroundActivator::maybeProcessQueue() {
       case ProcessLogDecision::SUCCESS:
         state.in_queue = false;
 
-        if (token) {
-          // The token hasn't been moved into the LogState, presumably because
-          // nothing needs to be done for this log.
-          token.release();
-          // Since we're releasing the token, we have to bump the stat.
-          bumpCompletedStat();
-        }
+        // The token hasn't been moved into the LogState, presumably because
+        // nothing needs to be done for this log.
+        token.release();
         break;
       case ProcessLogDecision::POSTPONED:
         break;
@@ -683,6 +671,20 @@ void SequencerBackgroundActivator::maybeProcessQueue() {
         return;
     }
   }
+}
+
+void SequencerBackgroundActivator::updateActivityStat() {
+  bool active = !queue_.empty() || budget_.used() != 0;
+  if (active == has_work_in_flight_) {
+    return;
+  }
+
+  ld_spew("[sequencer_activity_in_progress%s] SequencerBackgroundActivator now "
+          "has %s work in flight",
+          active ? "++" : "--",
+          active ? "some" : "no");
+  WORKER_STAT_ADD(sequencer_activity_in_progress, active ? +1 : -1);
+  has_work_in_flight_ = active;
 }
 
 void SequencerBackgroundActivator::activateQueueProcessingTimer(
@@ -702,24 +704,32 @@ void SequencerBackgroundActivator::deactivateQueueProcessingTimer() {
   retry_timer_.cancel();
 }
 
-void SequencerBackgroundActivator::bumpScheduledStat(uint64_t val) {
-  WORKER_STAT_ADD(background_sequencer_reactivation_checks_scheduled, val);
-}
-
-void SequencerBackgroundActivator::bumpCompletedStat(uint64_t val) {
-  WORKER_STAT_ADD(background_sequencer_reactivation_checks_completed, val);
-}
-
 namespace {
 
 class SequencerBackgroundActivatorRequest : public Request {
  public:
   explicit SequencerBackgroundActivatorRequest(
       Processor* processor,
-      std::function<void(SequencerBackgroundActivator&)> func)
+      std::function<void(SequencerBackgroundActivator&)> func,
+      bool bump_activity_stat = true)
       : Request(RequestType::SEQUENCER_BACKGROUND_ACTIVATOR),
         workerType_(SequencerBackgroundActivator::getWorkerType(processor)),
-        func_(func) {}
+        func_(func),
+        stats_(processor->stats_),
+        bumpActivityStat_(bump_activity_stat) {
+    if (bumpActivityStat_) {
+      ld_spew("[sequencer_activity_in_progress++] Created a "
+              "SequencerBackgroundActivatorRequest");
+      STAT_INCR(stats_, sequencer_activity_in_progress);
+    }
+  }
+  ~SequencerBackgroundActivatorRequest() override {
+    if (bumpActivityStat_) {
+      ld_spew("[sequencer_activity_in_progress--] Destroyed a "
+              "SequencerBackgroundActivatorRequest");
+      STAT_DECR(stats_, sequencer_activity_in_progress);
+    }
+  }
 
   WorkerType getWorkerTypeAffinity() override {
     return workerType_;
@@ -739,6 +749,8 @@ class SequencerBackgroundActivatorRequest : public Request {
 
   WorkerType workerType_;
   std::function<void(SequencerBackgroundActivator&)> func_;
+  StatsHolder* stats_;
+  bool bumpActivityStat_;
 };
 
 } // namespace
@@ -1148,9 +1160,11 @@ SequencerBackgroundActivator::requestGetLogsDebugInfo(
   std::vector<LogDebugInfo> out;
   std::unique_ptr<Request> rq =
       std::make_unique<SequencerBackgroundActivatorRequest>(
-          processor, [&logs, &out](SequencerBackgroundActivator& act) {
+          processor,
+          [&logs, &out](SequencerBackgroundActivator& act) {
             out = act.getLogsDebugInfo(logs);
-          });
+          },
+          /* bump_activity_stat */ false);
   int rv = processor->blockingRequestImportant(rq);
   ld_check(rv == 0 || err == E::SHUTDOWN);
   return out;

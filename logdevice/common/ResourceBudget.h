@@ -126,6 +126,10 @@ class ResourceBudget {
     return int64_t(limit_.load()) - used_.load();
   }
 
+  uint64_t used() const {
+    return used_.load();
+  }
+
   // How much of the budget is currently used.
   // Normally between 0 and 1, but may be greater than 1 if limit was decreased
   // or if a single acquire() call was bigger than the limit.

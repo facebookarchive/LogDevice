@@ -242,6 +242,54 @@ STAT_DEFINE(epoch_recovery_success, SUM)
 // attempts to activate sequencers
 STAT_DEFINE(sequencer_activations, SUM)
 
+// Integration tests often want to wait for all sequencers to become quiescent,
+// i.e. finish all recoveries, matadata log writes, background reactivations,
+// etc, such that the test can be certain that the sequencer is not going to
+// suddenly reactivate itself.
+//
+// Currently the sequencer activation flow is complicated, making quiescence
+// difficult to detect reliably. This stat does that. If this stat is zero, it
+// is guaranteed that the existing sequencers, if not provoked (e.g. by a node
+// going down), won't reactivate or start recovery, will be releasing all
+// written records (even if there's no f-majority of available nodes or metadata
+// logs are unwritable), and will have historical metadata available (even if
+// metadata logs are unreadable). If you do some appends, they'll get
+// consecutive LSNs and readers will see them.
+//
+// Most of the complications come from the fact that the state of sequencer
+// activation/recovery/metadata-log-write/background-reactivation-check is
+// scattered across lots of obscure places: in-flight EpochStore requests,
+// in-flight WriteMetaDataLogRequest-s, Sequencer::state_, in-flight
+// LogRecoveryRequest-s, SequencerBackgroundActivator's queue, in-flight
+// SequencerBackgroundActivatorRequest-s, and more. If there's any of that in
+// flight, we can't be sure that the sequencer won't reactivate soon. This stat
+// herds the cats and counts *all* in-flight stuff associated with sequencer
+// activations. We aggregate everything into a single stat, instead
+// of e.g. polling 'info sequencers' and other commands, to avoid race
+// conditions.
+//
+// Full list of things counted by this stat:
+//  - EpochMetaDataUpdateToNextEpoch epoch store requests created by
+//    AllSequencers,
+//  - LogRecoveryRequest objects,
+//  - Sequencer::EpochSequencers::draining != nullptr,
+//  - GetHistoricalMetaDataRequest in IMMEDIATE mode,
+//  - WriteMetaDataLogRequest,
+//  - StartMetaDataLogRecoveryRequest (the actual metadata log recovery, after
+//    it's started by this request, is covered by LogRecoveryRequest),
+//  - SequencerBackgroundActivatorRequest in flight, for schedule() and
+//    notifyCompletion(),
+//  - SequencerBackgroundActivator::queue_ and budget_
+//  + does *not* count
+//    SequencerBackgroundActivator::LogState::reactivation_delay_timer;
+//    your sequencers may get reactivated ~60s after config update unless
+//    you set sequencer-reactivation-delay-secs to 0.
+//
+// TODO (#54730759): This can probably be simplified a great deal if we get rid
+//                   of the unnecessary sequencer reactivations after metadata
+//                   log writes.
+STAT_DEFINE(sequencer_activity_in_progress, SUM)
+
 // sequencer gets activated with epoch metadata incompatible with the
 // current configuration.
 STAT_DEFINE(sequencer_activations_incompatible_metadata, SUM)
@@ -296,13 +344,6 @@ STAT_DEFINE(graceful_reactivation_result_success, SUM)
 STAT_DEFINE(graceful_reactivation_result_deferred, SUM)
 // how many graceful reactivation completion procedure is started
 STAT_DEFINE(graceful_reactivation_completion_started, SUM)
-
-// How many times a job is enqueued to check whether a reactivation or
-// epoch metadata update is needed. When the actual reactivation occurs
-// then a different stat is bumped.
-STAT_DEFINE(background_sequencer_reactivation_checks_scheduled, SUM)
-// How many times such check was performed.
-STAT_DEFINE(background_sequencer_reactivation_checks_completed, SUM)
 
 // The check for sequencer reactivation resulted in no operations
 // necessary

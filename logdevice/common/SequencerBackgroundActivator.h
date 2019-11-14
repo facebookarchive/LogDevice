@@ -242,28 +242,11 @@ class SequencerBackgroundActivator {
   // deactivates the timer for queue processing
   void deactivateQueueProcessingTimer();
 
-  // Called when a log is added to the background reactivation queue_.
-  // These jobs on this queue are throttled based on the setting
-  // max-sequencer-background-activations-in-flight. When a job
-  // is taken off this queue, it may be processed immediately or
-  // further postponed.
-  void bumpScheduledStat(uint64_t val = 1);
-
-  // Called when a Token is released. One token is acquired for every log
-  // removed from queue_, so the calls to bumpScheduledStat() and
-  // bumpCompletedStat() should balance out.
-  void bumpCompletedStat(uint64_t val = 1);
-
-  // Called when a log is taken for processing from the
-  // queue_ but instead selected to be further postponed.
-  // The delay horizon of these jobs is a random time point
-  // over a window specified by the settings
-  // sequencer-reactivation-max/max-delay-secs".
-  void bumpDelayedStat(uint64_t val = 1);
-
-  // Updated when associated delay timer fires. Calls to  bumpDelayedStat()
-  // and bumpCompletedDelayStat() should balance out.
-  void bumpCompletedDelayStat(uint64_t val = 1);
+  // Looks at queue_ and budget_ and updates has_work_in_flight_ and stat
+  // sequencer_activity_in_progress accordingly.
+  // Call this after queue_ and budget_ may have changed (including
+  // token.release()).
+  void updateActivityStat();
 
   std::unordered_map<logid_t, LogState, logid_t::Hash> logs_;
 
@@ -274,7 +257,11 @@ class SequencerBackgroundActivator {
   Timer retry_timer_;
 
   // limiter on the number of concurrent activations
-  std::unique_ptr<ResourceBudget> budget_;
+  ResourceBudget budget_{0};
+
+  // Used for updating sequencer_activity_in_progress stat. True if either
+  // queue_ is nonempty or budget_ usage is nonzero.
+  bool has_work_in_flight_ = false;
 
   // Some of the settings we're using.
   // Used for detecting when settings change.

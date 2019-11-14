@@ -182,12 +182,18 @@ class UpdateableSharedPtr : boost::noncopyable {
   }
 
   void update(std::shared_ptr<T> desired) {
-    updateImpl(std::move(desired), nullptr);
+    updateImpl(std::move(desired), nullptr, nullptr);
   }
 
   bool compare_and_swap(std::shared_ptr<T>& expected,
                         std::shared_ptr<T> desired) {
-    return updateImpl(std::move(desired), &expected);
+    return updateImpl(std::move(desired), &expected, &expected);
+  }
+
+  std::shared_ptr<T> exchange(std::shared_ptr<T> desired) {
+    std::shared_ptr<T> prev;
+    updateImpl(std::move(desired), /* if_equal_to */ nullptr, &prev);
+    return prev;
   }
 
   std::shared_ptr<T> get() const {
@@ -212,13 +218,28 @@ class UpdateableSharedPtr : boost::noncopyable {
   }
 
  private:
-  bool updateImpl(std::shared_ptr<T> ptr, std::shared_ptr<T>* cmp = nullptr) {
+  // @param ptr            Value to update to.
+  // @param if_equal_to    If not nullptr, only update if current pointer is
+  //                       equal to this one.
+  // @param out_old_value  If not nullptr, the previous value will be assigned
+  //                       here. Even if it wasn't updated.
+  // `if_equal_to` and `out_old_value` are allowed to point to the same
+  // shared_ptr.
+  bool updateImpl(std::shared_ptr<T> ptr,
+                  std::shared_ptr<T>* if_equal_to,
+                  std::shared_ptr<T>* out_old_value) {
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      if (cmp && cmp->get() != masterPtr_.get()) {
-        *cmp = masterPtr_;
+
+      // The "compare" part of compare-and-swap.
+      if (if_equal_to && if_equal_to->get() != masterPtr_.get()) {
+        if (out_old_value) {
+          *out_old_value = masterPtr_;
+        }
         return false;
       }
+
+      // Make sure to not call T's destructor under the mutex.
       std::swap(masterPtr_, ptr);
     }
 
@@ -236,6 +257,11 @@ class UpdateableSharedPtr : boost::noncopyable {
         local.ptr.clear();
       }
     }
+
+    if (out_old_value) {
+      *out_old_value = std::move(ptr);
+    }
+
     return true;
   }
 

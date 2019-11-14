@@ -499,6 +499,7 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
     EXPECT_NE(LSN_INVALID, lsn3);
     auto epoch3 = lsn_to_epoch(lsn3);
     EXPECT_GE(epoch3, epoch2);
+    cluster->waitUntilAllSequencersQuiescent();
 
     updateSettings({{"node-stats-boycott-duration", "1h"}});
 

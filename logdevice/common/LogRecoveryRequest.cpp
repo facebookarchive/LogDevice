@@ -183,6 +183,10 @@ LogRecoveryRequest::LogRecoveryRequest(
   // refuse to activate
   ld_check(!seq_metadata_->disabled());
   ld_check(next_epoch == seq_metadata_->h.epoch);
+  ld_spew("[sequencer_activity_in_progress++] Created LogRecoveryRequest for "
+          "log %lu",
+          log_id.val());
+  WORKER_STAT_INCR(sequencer_activity_in_progress);
 }
 
 LogRecoveryRequest::~LogRecoveryRequest() {
@@ -193,6 +197,10 @@ LogRecoveryRequest::~LogRecoveryRequest() {
   if (meta_reader_) {
     Worker::onThisThread()->disposeOfMetaReader(std::move(meta_reader_));
   }
+  ld_spew("[sequencer_activity_in_progress--] Destroyed LogRecoveryRequest for "
+          "log %lu",
+          log_id_.val());
+  WORKER_STAT_DECR(sequencer_activity_in_progress);
 }
 
 Request::Execution LogRecoveryRequest::execute() {

@@ -1706,13 +1706,13 @@ void Node::waitUntilKnownDead(node_index_t other_node_index) {
 int Node::waitForRecovery(logid_t log,
                           std::chrono::steady_clock::time_point deadline) {
   if (stopped_) {
-    return false;
+    return 0;
   }
 
   // Wait for 'info sequencer' to output either:
   //  - last_released != LSN_INVALID, or
   //  - preempted_by.
-  int rv = wait_until(
+  return wait_until(
       ("node " + std::to_string(node_index_) + " finishes recovery of log " +
        std::to_string(log.val_))
           .c_str(),
@@ -1750,15 +1750,29 @@ int Node::waitForRecovery(logid_t log,
         return true;
       },
       deadline);
+}
 
-  if (rv == 0) {
-    ld_info("Node %d finished recovery of log %lu", node_index_, log.val_);
-  } else {
-    ld_info("Timed out waiting for node %d to finish recovery of log %lu",
-            node_index_,
-            log.val_);
+int Node::waitUntilAllSequencersQuiescent(
+    std::chrono::steady_clock::time_point deadline) {
+  if (stopped_) {
+    return 0;
   }
-  return rv;
+
+  return wait_until(
+      folly::sformat(
+          "node {} finishes all sequencer activation-related activities",
+          node_index_)
+          .c_str(),
+      [&]() {
+        auto s = stats();
+        if (s.empty()) {
+          // Node didn't reply to admin command. Keep trying.
+          return false;
+        }
+        ld_check(s.count("sequencer_activity_in_progress"));
+        return s.at("sequencer_activity_in_progress") == 0;
+      },
+      deadline);
 }
 
 std::unique_ptr<thrift::AdminAPIAsyncClient> Node::createAdminClient() {
@@ -2731,6 +2745,23 @@ int Cluster::waitForRecovery(std::chrono::steady_clock::time_point deadline) {
       if (rv) {
         return -1;
       }
+    }
+  }
+
+  return 0;
+}
+
+int Cluster::waitUntilAllSequencersQuiescent(
+    std::chrono::steady_clock::time_point deadline) {
+  std::shared_ptr<const Configuration> config = config_->get();
+  for (auto& it : nodes_) {
+    node_index_t idx = it.first;
+    if (!config->serverConfig()->getNode(idx)->isSequencingEnabled()) {
+      continue;
+    }
+
+    if (getNode(idx).waitUntilAllSequencersQuiescent(deadline) != 0) {
+      return -1;
     }
   }
 

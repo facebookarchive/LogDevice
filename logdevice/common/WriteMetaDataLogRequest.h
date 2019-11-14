@@ -29,6 +29,7 @@ class WriteMetaDataLogRequest : public FireAndForgetRequest {
       logid_t log_id,
       std::shared_ptr<const EpochMetaData> epoch_store_metadata,
       callback_t callback);
+  ~WriteMetaDataLogRequest() override;
 
   // see FireAndForgetRequest.h
   void executionBody() override;

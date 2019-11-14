@@ -33,6 +33,17 @@ WriteMetaDataLogRequest::WriteMetaDataLogRequest(
   ld_check(epoch_store_metadata_->isValid());
   ld_check(!epoch_store_metadata_->disabled());
   ld_check(!epoch_store_metadata_->writtenInMetaDataLog());
+  ld_spew("[sequencer_activity_in_progress++] Created WriteMetaDataLogRequest "
+          "for log %lu",
+          log_id.val());
+  WORKER_STAT_INCR(sequencer_activity_in_progress);
+}
+
+WriteMetaDataLogRequest::~WriteMetaDataLogRequest() {
+  ld_spew("[sequencer_activity_in_progress--] Destroyed "
+          "WriteMetaDataLogRequest for log %lu",
+          log_id_.val());
+  WORKER_STAT_DECR(sequencer_activity_in_progress);
 }
 
 void WriteMetaDataLogRequest::executionBody() {

@@ -235,7 +235,6 @@ ActivateResult Sequencer::completeActivationWithMetaData(
 
   ld_check(metadata_for_provisioning);
   ml_manager_.considerWritingMetaDataLogRecord(metadata_for_provisioning, cfg);
-
   switch (metadata_result.first) {
     case UpdateMetaDataMapResult::UPDATED: {
       ld_check(metadata_result.second != nullptr);
@@ -434,6 +433,21 @@ class GetHistoricalMetaDataRequest : public FireAndForgetRequest {
         current_epoch_(current_epoch),
         mode_(mode) {
     ld_check(!MetaDataLog::isMetaDataLog(log_id_));
+
+    if (mode_ == Sequencer::GetHistoricalMetaDataMode::IMMEDIATE) {
+      ld_spew("[sequencer_activity_in_progress++] Created "
+              "GetHistoricalMetaDataRequest for log %lu",
+              log_id.val());
+      WORKER_STAT_INCR(sequencer_activity_in_progress);
+    }
+  }
+  ~GetHistoricalMetaDataRequest() override {
+    if (mode_ == Sequencer::GetHistoricalMetaDataMode::IMMEDIATE) {
+      ld_spew("[sequencer_activity_in_progress--] Destroyed "
+              "GetHistoricalMetaDataRequest for log %lu",
+              log_id_.val());
+      WORKER_STAT_DECR(sequencer_activity_in_progress);
+    }
   }
 
   void executionBody() override {
@@ -1335,13 +1349,38 @@ const char* Sequencer::stateString(State st) {
 void Sequencer::setState(State state) {
   last_state_change_timestamp_ =
       std::chrono::steady_clock::now().time_since_epoch();
-  state_.store(state);
+
+  State prev_state = state_.exchange(state);
+
+  if ((state == State::ACTIVATING) != (prev_state == State::ACTIVATING)) {
+    ld_spew("[sequencer_activity_in_progress%s] Sequencer for log %lu changed "
+            "state from %s to %s",
+            state == State::ACTIVATING ? "++" : "--",
+            log_id_.val(),
+            stateString(prev_state),
+            stateString(state));
+    STAT_ADD(stats_,
+             sequencer_activity_in_progress,
+             state == State::ACTIVATING ? +1 : -1);
+  }
 }
 
 void Sequencer::setEpochSequencers(std::shared_ptr<EpochSequencer> current,
                                    std::shared_ptr<EpochSequencer> draining) {
-  epoch_seqs_.update(std::make_shared<EpochSequencers>(
-      EpochSequencers{std::move(current), std::move(draining)}));
+  bool have_draining = draining != nullptr;
+  std::shared_ptr<EpochSequencers> prev =
+      epoch_seqs_.exchange(std::make_shared<EpochSequencers>(
+          EpochSequencers{std::move(current), std::move(draining)}));
+
+  bool had_draining = prev != nullptr && prev->draining != nullptr;
+  if (have_draining != had_draining) {
+    ld_spew("[sequencer_activity_in_progress%s] Log %lu now has %s draining "
+            "sequencer",
+            have_draining ? "++" : "--",
+            log_id_.val(),
+            have_draining ? "a" : "no");
+    STAT_ADD(stats_, sequencer_activity_in_progress, have_draining ? +1 : -1);
+  }
 }
 
 std::shared_ptr<EpochSequencer>

@@ -194,6 +194,10 @@ int AllSequencers::getEpochMetaData(
                                   activation_reason,
                                   std::move(info),
                                   std::move(meta_properties));
+    ld_spew("[sequencer_activity_in_progress--] Got epoch metadata from epoch "
+            "store for log %lu",
+            _logid.val());
+    STAT_DECR(getStats(), sequencer_activity_in_progress);
   };
 
   // To verify metadata log being empty before provisioning the log, simply
@@ -235,6 +239,11 @@ int AllSequencers::getEpochMetaData(
     err = E::AGAIN;
     return -1;
   }
+
+  ld_spew("[sequencer_activity_in_progress++] Fetching epoch metadata from "
+          "epoch store for log %lu",
+          logid.val());
+  STAT_INCR(getStats(), sequencer_activity_in_progress);
 
   return 0;
 }
@@ -929,7 +938,7 @@ void AllSequencers::notifyMetaDataLogWriterOnActivation(Sequencer* seq,
                                                         bool bypass_recovery) {
   ld_check(seq != nullptr);
   const logid_t logid = seq->getLogID();
-  auto meta_writer = seq->getMetaDataLogWriter();
+  MetaDataLogWriter* meta_writer = seq->getMetaDataLogWriter();
   // must be a data log sequencer
   ld_check(meta_writer);
   meta_writer->onDataSequencerReactivated(epoch);

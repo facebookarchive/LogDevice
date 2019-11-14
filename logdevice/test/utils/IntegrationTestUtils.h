@@ -834,6 +834,10 @@ class Cluster {
   /**
    * Shrink the cluster by removing the given nodes.
    * @return 0 on success, -1 on error.
+   *
+   * Note that this doesn't do rebuilding. If shrink out nodes that have
+   * some records (including metadata/internal logs), you'll likely see data
+   * loss or underreplication.
    */
   int shrink(std::vector<node_index_t> indices);
 
@@ -1020,6 +1024,13 @@ class Cluster {
    */
   int waitForRecovery(std::chrono::steady_clock::time_point deadline =
                           std::chrono::steady_clock::time_point::max());
+
+  /**
+   * See Cluster::waitUntilAllSequencersQuiescent().
+   */
+  int waitUntilAllSequencersQuiescent(
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
 
   // Waits until all nodes are available through gossip (ALIVE)
   int waitUntilAllAvailable(std::chrono::steady_clock::time_point deadline =
@@ -1481,6 +1492,28 @@ class Node {
   int waitForRecovery(logid_t log,
                       std::chrono::steady_clock::time_point deadline =
                           std::chrono::steady_clock::time_point::max());
+
+  /**
+   * Wait for all nodes to complete all sequencer activation-related activity:
+   * activation, recoveries, metadata log writes, metadata log recoveries,
+   * reactivations caused by metadata log writes, nodeset updates caused by
+   * config changes, etc. If you're not making any changes to the cluster
+   * (starting/stopping nodes, updating config/settings, etc), after this call
+   * sequencers are not going to reactivate, get stuck in recovery (even if
+   * there's no f-majority of available nodes), or do other unexpected things.
+   * You'll get consecutive LSNs for appends.
+   *
+   * Note that this only applies to sequencers that have already at least
+   * started activation as of the time of this call. If static sequencer
+   * placement is used (i.e. useHashBasedSequencerAssignment() wasn't called),
+   * that's all sequencers; otherwise, that's typically only sequencers for the
+   * logs that received at least one append. Also note that, even though appends
+   * done after this call should all go to the same epoch and get consecutive
+   * LSNs, this may be a higher epoch than for appends done before the call.
+   */
+  int waitUntilAllSequencersQuiescent(
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
 
   /**
    * Waits for the node to advance its LCE of @param log to be at least

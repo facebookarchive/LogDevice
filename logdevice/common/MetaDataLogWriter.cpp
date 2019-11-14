@@ -44,6 +44,16 @@ class StartMetaDataLogRecoveryRequest : public Request {
       : Request(RequestType::START_METADATA_LOG_RECOVERY),
         meta_logid_(meta_logid) {
     ld_check(MetaDataLog::isMetaDataLog(meta_logid_));
+    ld_spew("[sequencer_activity_in_progress++] Created "
+            "StartMetaDataLogRecoveryRequest for log %lu",
+            meta_logid.val());
+    WORKER_STAT_INCR(sequencer_activity_in_progress);
+  }
+  ~StartMetaDataLogRecoveryRequest() override {
+    ld_spew("[sequencer_activity_in_progress--] Destroyed "
+            "StartMetaDataLogRecoveryRequest for log %lu",
+            meta_logid_.val());
+    WORKER_STAT_DECR(sequencer_activity_in_progress);
   }
 
   Request::Execution execute() override {
