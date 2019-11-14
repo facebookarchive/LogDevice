@@ -308,7 +308,6 @@ Request::Execution LogRecoveryRequest::execute() {
     return Execution::CONTINUE;
   }
 
-  registerForShardAuthoritativeStatusUpdates();
   start();
   return Execution::CONTINUE;
 }
@@ -364,6 +363,13 @@ void LogRecoveryRequest::skipRecovery() {
 void LogRecoveryRequest::start() {
   start_delay_timer_.reset();
 
+  if (!Worker::onThisThread()->getLogsConfig()->logExists(log_id_)) {
+    completeSoon(E::NOTINCONFIG);
+    return;
+  }
+
+  registerForShardAuthoritativeStatusUpdates();
+
   // If the log is a data log, log recovery can only complete when epoch
   // metadata for next_epoch_ can be found in the metadata log. Therefore,
   // before starting the first step of the recovery, start a MetaDataLogReader
@@ -386,6 +392,10 @@ void LogRecoveryRequest::start() {
   // begin the first step of recovery: get last clean epoch of the log from the
   // epoch store.
   getLastCleanEpoch();
+}
+
+void LogRecoveryRequest::noteLogRemovedFromConfig() {
+  completeSoon(E::NOTINCONFIG);
 }
 
 void LogRecoveryRequest::getLastCleanEpoch() {
@@ -1400,7 +1410,13 @@ void LogRecoveryRequest::allEpochsRecovered() {
 }
 
 void LogRecoveryRequest::completeSoon(Status status) {
+  if (deferredCompleteTimer_) {
+    return;
+  }
+
   epoch_recovery_machines_.clear();
+  start_delay_timer_.reset();
+
   deferredCompleteTimer_ =
       std::make_unique<Timer>([this, status] { complete(status); });
   deferredCompleteTimer_->activate(std::chrono::milliseconds(0));

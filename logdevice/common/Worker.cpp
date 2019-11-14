@@ -336,6 +336,17 @@ void Worker::onLogsConfigUpdated() {
   if (rebuilding_coordinator_) {
     rebuilding_coordinator_->noteConfigurationChanged();
   }
+
+  // Abort recoveries for removed logs.
+  auto cfg = config_->updateableLogsConfig()->get();
+  for (auto& r : runningLogRecoveries().map) {
+    if (!cfg->logExists(r.first)) {
+      ld_info("Aborting recovery of log %lu because the log was removed from "
+              "config.",
+              r.first.val());
+      r.second->noteLogRemovedFromConfig();
+    }
+  }
 }
 
 void Worker::onServerConfigUpdated() {

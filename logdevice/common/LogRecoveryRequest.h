@@ -292,6 +292,10 @@ class LogRecoveryRequest : public Request,
     recovered_lsns_->noteMutationsCompleted(er);
   }
 
+  // Called by Worker if this recovery's log is no longer in config.
+  // Aborts the recovery.
+  void noteLogRemovedFromConfig();
+
  private:
   class SocketClosedCallback : public SocketCallback {
    public:

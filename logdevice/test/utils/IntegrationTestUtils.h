@@ -1407,6 +1407,7 @@ class Node {
   std::string server_id_;
   // Stopped until start() is called, as well as between suspend() and resume()
   bool stopped_ = true;
+  bool gossip_enabled_ = true;
   // type of rocksdb local log store
   RocksDBType rocksdb_type_ = RocksDBType::PARTITIONED;
   // override cluster params for this particular node

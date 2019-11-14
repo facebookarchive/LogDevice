@@ -1074,10 +1074,7 @@ int Cluster::start(std::vector<node_index_t> indices) {
   }
 
   for (node_index_t i : indices) {
-    if (nodes_.at(i)->waitUntilStarted() != 0) {
-      return -1;
-    }
-    if (hash_based_sequencer_assignment_ &&
+    if (nodes_.at(i)->waitUntilStarted() != 0 ||
         nodes_.at(i)->waitUntilAvailable() != 0) {
       return -1;
     }
@@ -1138,6 +1135,7 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   node->num_db_shards_ = num_db_shards_;
   node->rocksdb_type_ = rocksdb_type_;
   node->server_binary_ = server_binary_;
+  node->gossip_enabled_ = hash_based_sequencer_assignment_;
 
   // Data path will be something like
   // /tmp/logdevice/IntegrationTestUtils.MkkZyS/N0:1/
@@ -1670,6 +1668,10 @@ int Node::waitUntilKnownGossipState(
     node_index_t other_node_index,
     bool alive,
     std::chrono::steady_clock::time_point deadline) {
+  if (!gossip_enabled_) {
+    return 0;
+  }
+
   const std::string key_expected =
       folly::to<std::string>("N", other_node_index);
   const std::string state_str = alive ? "ALIVE" : "DEAD";

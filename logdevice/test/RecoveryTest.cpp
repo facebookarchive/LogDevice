@@ -72,7 +72,7 @@ class RecoveryTest : public ::testing::TestWithParam<PopulateRecordCache> {
     return timeout_;
   }
   void SetUp() override {
-    dbg::currentLevel = dbg::Level::DEBUG;
+    dbg::currentLevel = getLogLevelFromEnv().value_or(dbg::Level::INFO);
     dbg::assertOnData = true;
   }
 
@@ -4190,4 +4190,79 @@ TEST_P(RecoveryTest, BasicWriteStream) {
                std::vector<esn_t>({esn_t(3), esn_t(4)}), // plugs
                std::vector<esn_t>({esn_t(6)})            // bridge
   );
+}
+
+TEST_P(RecoveryTest, LogRemovedBeforePurging) {
+  ld_info("Creating cluster.");
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setLogAttributes(
+                         logsconfig::LogAttributes().with_replicationFactor(2))
+                     .setInternalLogsReplicationFactor(2)
+                     .create(4);
+
+  // Wait for sequencer to activate and finish recovery.
+  ld_info("Waiting for sequencers.");
+  cluster->waitUntilAllSequencersQuiescent();
+  EXPECT_FALSE(cluster->getNode(0).sequencerInfo(logid_t(1)).empty());
+
+  // Stop N1, reactivate sequencer, and wait for recovery. N1 won't participate
+  // in recovery, so it'll have to purge later.
+  ld_info("Stopping N1.");
+  cluster->getNode(1).shutdown();
+  ld_info("Restarting N0.");
+  cluster->getNode(0).restart();
+  ld_info("Waiting for sequencers.");
+  cluster->waitUntilAllSequencersQuiescent();
+  EXPECT_FALSE(cluster->getNode(0).sequencerInfo(logid_t(1)).empty());
+
+  // Also stop N2 and reactivate sequencer. Recovery should get stuck.
+  ld_info("Stopping N2.");
+  cluster->getNode(2).shutdown();
+  ld_info("Restarting N0.");
+  cluster->getNode(0).restart();
+  // Check that recovery is stuck, at least for a few seconds.
+  ld_info("Checking sequencers and recoveries.");
+  wait_until("sequencer is activated", [&] {
+    return !cluster->getNode(0).sequencerInfo(logid_t(1)).empty();
+  });
+  wait_until("recovery is started", [&] {
+    return !cluster->getNode(0)
+                .sendJsonCommand("info recoveries 1 --json")
+                .empty();
+  });
+  EXPECT_NE(0,
+            cluster->waitUntilAllSequencersQuiescent(
+                std::chrono::steady_clock::now() + std::chrono::seconds(5)));
+
+  // Remove the log from config.
+  {
+    ld_info("Removing log from config.");
+    auto logs_config_changed =
+        cluster->getConfig()->getLocalLogsConfig()->copyLocal();
+    EXPECT_NE(nullptr, logs_config_changed->getLogGroupByIDShared(logid_t(1)));
+    logs_config_changed->erase("/ns/test_logs");
+    EXPECT_EQ(nullptr, logs_config_changed->getLogGroupByIDShared(logid_t(1)));
+    cluster->writeLogsConfig(logs_config_changed.get());
+    ld_info("Waiting for config propagation.");
+    cluster->waitForServersToPartiallyProcessConfigUpdate();
+  }
+
+  // Start N1.
+  ld_info("Starting N1.");
+  cluster->getNode(1).start();
+
+  // Recovery should notice that the log is no longer in config and cancel.
+  ld_info("Waiting for sequencers.");
+  EXPECT_EQ(0, cluster->waitUntilAllSequencersQuiescent());
+  EXPECT_EQ(
+      0, cluster->getNode(0).sendJsonCommand("info recoveries --json").size());
+  auto info_seq = cluster->getNode(0).sequencerInfo(logid_t(1));
+  ASSERT_FALSE(info_seq.empty());
+  EXPECT_EQ("UNAVAILABLE", info_seq.at("State"));
+
+  // Make sure N1's purging (if any) doesn't get stuck in a retry loop.
+  ld_info("Waiting for purges.");
+  wait_until("no purges on N1", [&] {
+    return cluster->getNode(1).sendJsonCommand("info purges --json").empty();
+  });
 }

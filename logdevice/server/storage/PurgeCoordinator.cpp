@@ -582,6 +582,18 @@ void PurgeCoordinator::onCleanMessage(std::unique_ptr<CLEAN_Message> clean_msg,
     return;
   }
 
+  // If the log is not in config, purging is doomed to fail. Don't start it.
+  if (!logExistsInConfig()) {
+    RATELIMIT_INFO(std::chrono::seconds(10),
+                   2,
+                   "Not processing clean message for log %lu as it does not "
+                   "exist in config",
+                   log_id_.val_);
+    sendCleanedResponse(
+        E::FAILED, std::move(clean_msg), reply_to, worker, Seal());
+    return;
+  }
+
   // Otherwise, we need to purge (or just load the last clean epoch).
   std::unique_lock<std::mutex> guard(mutex_);
 

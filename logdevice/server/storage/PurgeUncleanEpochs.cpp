@@ -279,7 +279,8 @@ void PurgeUncleanEpochs::onHistoricalMetadata(Status st) {
   ld_check(!epoch_metadata_finalized_);
   ld_check(current_last_clean_epoch_.hasValue());
 
-  if (st == E::NOTINCONFIG) {
+  if (st == E::INVALID_PARAM) {
+    // The log is not in config.
     epoch_metadata_finalized_ = true;
     complete(E::NOTFOUND);
     return;
@@ -290,7 +291,7 @@ void PurgeUncleanEpochs::onHistoricalMetadata(Status st) {
                     1,
                     "Fetch historical epoch metadata for log %lu FAILED: %s. ",
                     log_id_.val_,
-                    error_description(st));
+                    error_name(st));
     // keep retrying until success (e.g., metadata log is repaired)
     nodeset_finder_.reset();
     // clear all PurgeUncleanEpoch state machines already created
