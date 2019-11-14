@@ -63,6 +63,21 @@ bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
   return false;
 }
 
+std::vector<node_index_t>
+allMatchingNodesFromFilters(const NodesConfiguration& nodes_configuration,
+                            const std::vector<thrift::NodesFilter>& filters) {
+  std::unordered_set<node_index_t> nodes;
+
+  for (const auto& filter : filters) {
+    forFilteredNodes(nodes_configuration, &filter, [&nodes](node_index_t idx) {
+      nodes.emplace(idx);
+    });
+  }
+
+  return {std::make_move_iterator(nodes.begin()),
+          std::make_move_iterator(nodes.end())};
+}
+
 void forFilteredNodes(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
     const thrift::NodesFilter* filter,

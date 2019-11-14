@@ -15,6 +15,7 @@
 #include "logdevice/admin/AdminAPIHandlerBase.h"
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/cluster_membership/AddNodesHandler.h"
+#include "logdevice/admin/cluster_membership/BumpNodeGenerationHandler.h"
 #include "logdevice/admin/cluster_membership/MarkShardsAsProvisionedHandler.h"
 #include "logdevice/admin/cluster_membership/RemoveNodesHandler.h"
 #include "logdevice/admin/cluster_membership/UpdateNodesHandler.h"
@@ -240,6 +241,43 @@ ClusterMembershipAPIHandler::semifuture_markShardsAsProvisioned(
               resp->set_updated_shards(mkShardSet(std::move(shards)));
               resp->set_new_nodes_configuration_version(
                   new_cfg->getVersion().val());
+              return resp;
+            });
+      });
+}
+
+folly::SemiFuture<std::unique_ptr<thrift::BumpGenerationResponse>>
+ClusterMembershipAPIHandler::semifuture_bumpNodeGeneration(
+    std::unique_ptr<thrift::BumpGenerationRequest> request) {
+  if (auto failed = failIfMMDisabled(); failed) {
+    return *failed;
+  }
+  return folly::futures::retrying(
+      get_retrying_policy(),
+      [req = std::move(request),
+       processor = processor_,
+       thread_manager = getThreadManager()](size_t trial)
+          -> folly::SemiFuture<
+              std::unique_ptr<thrift::BumpGenerationResponse>> {
+        ld_info("Handling bumpNodeGeneration request (trial #%ld): %s",
+                trial,
+                debugString(*req).c_str());
+        auto nodes_configuration = processor->getNodesConfiguration();
+
+        BumpNodeGenerationHandler handler{};
+        auto bump_result = handler.buildNodesConfigurationUpdates(
+            req->node_filters, *nodes_configuration);
+
+        return applyNodesConfigurationUpdates(
+                   processor, std::move(bump_result.update))
+            .via(thread_manager)
+            .thenValue([bumped_nodes = std::move(bump_result.to_be_bumped)](
+                           std::shared_ptr<const NodesConfiguration>
+                               nodes_configuration) mutable {
+              auto resp = std::make_unique<thrift::BumpGenerationResponse>();
+              resp->set_bumped_nodes(std::move(bumped_nodes));
+              resp->set_new_nodes_configuration_version(
+                  nodes_configuration->getVersion().val());
               return resp;
             });
       });

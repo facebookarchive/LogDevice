@@ -1198,6 +1198,9 @@ class Cluster {
   void updateSetting(const std::string& name, const std::string& value);
   void unsetSetting(const std::string& name);
 
+  // Reads the nodes configuration from the cluster's NodesConfigurationStore.
+  std::shared_ptr<const NodesConfiguration> readNodesConfigurationFromStore();
+
  private:
   // Private constructor.  Factory (friend class) is only caller.
   Cluster(std::string root_path,

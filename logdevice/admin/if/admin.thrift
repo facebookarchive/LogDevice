@@ -126,6 +126,18 @@ service AdminAPI extends fb303.FacebookService {
        3: exceptions.NodesConfigurationManagerError ncm_error,
        4: exceptions.NotSupported not_supported) (cpp.coroutine);
 
+
+  /**
+   * Bump the generation of the nodes matching a list of node filters.
+   * This is a temporary API until generations are completely deprecated.
+   */
+  cluster_membership.BumpGenerationResponse bumpNodeGeneration(1:
+      cluster_membership.BumpGenerationRequest request) throws
+      (1: exceptions.NodeNotReady notready,
+       2: exceptions.InvalidRequest invalid_request,
+       3: exceptions.NodesConfigurationManagerError ncm_error,
+       4: exceptions.NotSupported not_supported) (cpp.coroutine);
+
   /**
    * Lists the maintenance by group-ids. This returns maintenances from the
    * state stored in the server which may include maintenances that were not

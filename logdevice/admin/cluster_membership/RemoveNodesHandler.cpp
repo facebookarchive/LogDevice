@@ -24,7 +24,7 @@ RemoveNodesHandler::buildNodesConfigurationUpdates(
     const std::vector<thrift::NodesFilter>& filters,
     const NodesConfiguration& nodes_configuration,
     const ClusterState& cluster_state) const {
-  auto node_idxs = findNodes(filters, nodes_configuration);
+  auto node_idxs = allMatchingNodesFromFilters(nodes_configuration, filters);
 
   auto not_met =
       checkPreconditions(node_idxs, nodes_configuration, cluster_state);
@@ -43,21 +43,6 @@ RemoveNodesHandler::buildNodesConfigurationUpdates(
 
   return RemoveNodesHandler::Result{
       std::move(to_be_removed), std::move(update)};
-}
-
-std::vector<node_index_t> RemoveNodesHandler::findNodes(
-    const std::vector<thrift::NodesFilter>& filters,
-    const NodesConfiguration& nodes_configuration) const {
-  std::unordered_set<node_index_t> nodes;
-
-  for (const auto& filter : filters) {
-    forFilteredNodes(nodes_configuration, &filter, [&nodes](node_index_t idx) {
-      nodes.emplace(idx);
-    });
-  }
-
-  return {std::make_move_iterator(nodes.begin()),
-          std::make_move_iterator(nodes.end())};
 }
 
 namespace {

@@ -196,3 +196,31 @@ struct MarkShardsAsProvisionedResponse {
    */
   2: common.unsigned64 new_nodes_configuration_version,
 }
+
+////////////////////////////////////////////////////////////////////////////
+////////////////////// Bump Generation Request /////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Request to bump the generation of all the nodes that match the passed
+ * filters.
+ */
+struct BumpGenerationRequest {
+  /**
+   * List of NodeFilters to bump their generationin the nodes configuration.
+   * Matches from each filter are union-ed together and are updated in the same
+   * nodes configuration transaction.
+   */
+  1: list<nodes.NodesFilter> node_filters,
+}
+
+struct BumpGenerationResponse {
+  /**
+   * List of nodes that we successfully bumped the generation for.
+   */
+  1: list<common.NodeID> bumped_nodes,
+  /**
+   * The version of the updated NodesConfiguration.
+   */
+  2: common.unsigned64 new_nodes_configuration_version,
+}

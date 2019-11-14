@@ -3225,6 +3225,29 @@ void Cluster::unsetSetting(const std::string& name) {
   }
 }
 
+std::shared_ptr<const NodesConfiguration>
+Cluster::readNodesConfigurationFromStore() {
+  using namespace logdevice::configuration::nodes;
+  NodesConfigurationStoreFactory::Params params;
+  params.type = NodesConfigurationStoreFactory::NCSType::File;
+  params.file_store_root_dir = ncs_path_;
+  params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
+      NodesConfigurationStoreFactory::NCSType::File, cluster_name_);
+
+  auto store = NodesConfigurationStoreFactory::create(std::move(params));
+  if (store == nullptr) {
+    return nullptr;
+  }
+  std::string serialized;
+  if (auto status = store->getConfigSync(&serialized); status != Status::OK) {
+    ld_error("Failed reading the nodes configuration from the store: %s",
+             error_name(status));
+    return nullptr;
+  }
+
+  return NodesConfigurationCodec::deserialize(std::move(serialized));
+}
+
 int dump_file_to_stderr(const char* path) {
   FILE* fp = std::fopen(path, "r");
   if (fp == nullptr) {

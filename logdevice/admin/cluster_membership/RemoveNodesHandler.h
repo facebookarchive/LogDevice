@@ -37,14 +37,6 @@ class RemoveNodesHandler {
 
  private:
   /**
-   * Given a list of NodesFilter, return a list of node indicies which is the
-   * union of the matches of each filter.
-   */
-  std::vector<node_index_t>
-  findNodes(const std::vector<thrift::NodesFilter>&,
-            const configuration::nodes::NodesConfiguration&) const;
-
-  /**
    * Checks that the precondition for the remove are respected. A single failure
    * in any of the nodes, fails the preconditions.
    * The preconditions for the node to be removed are:

@@ -16,6 +16,7 @@
 #include "logdevice/admin/if/gen-cpp2/cluster_membership_constants.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/membership/gen-cpp2/Membership_types.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
@@ -548,4 +549,33 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
             get_shard_state(nc.get_states(), mkShardID(101, 0)));
   EXPECT_EQ(membership::thrift::StorageState::PROVISIONING,
             get_shard_state(nc.get_states(), mkShardID(101, 1)));
+}
+
+// Tests that bumping the generation of the stopped node (N1) works
+TEST_F(ClusterMemebershipAPIIntegrationTest, BumpNodeGeneration) {
+  ASSERT_EQ(0, cluster_->start({0, 2, 3}));
+  cluster_->getNode(0).waitUntilNodeStateReady();
+  auto admin_client = cluster_->getNode(0).createAdminClient();
+
+  thrift::NodesFilter filter;
+  filter.set_node(mkNodeID(node_index_t(1)));
+  thrift::BumpGenerationRequest req;
+  req.set_node_filters({std::move(filter)});
+
+  thrift::BumpGenerationResponse resp;
+  admin_client->sync_bumpNodeGeneration(resp, std::move(req));
+
+  EXPECT_EQ((std::vector<thrift::NodeID>{mkNodeID(1)}), resp.bumped_nodes);
+  auto new_version = resp.new_nodes_configuration_version;
+
+  // Admin server doesn't expose an API to check node's generation. Let's read
+  // it from from the NC directly.
+  auto nc = cluster_->readNodesConfigurationFromStore();
+  ASSERT_NE(nullptr, nc);
+  ASSERT_EQ(new_version, nc->getVersion().val());
+
+  EXPECT_EQ(1, nc->getNodeStorageAttribute(0)->generation);
+  EXPECT_EQ(2, nc->getNodeStorageAttribute(1)->generation);
+  EXPECT_EQ(1, nc->getNodeStorageAttribute(2)->generation);
+  EXPECT_EQ(1, nc->getNodeStorageAttribute(3)->generation);
 }

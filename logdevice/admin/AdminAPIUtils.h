@@ -30,6 +30,14 @@ std::string toString(const thrift::SocketAddress& address);
 
 using NodeFunctor = std::function<void(node_index_t)>;
 
+/**
+ * Given a list of NodesFilter, return a list of node indicies which is the
+ * union of the matches of each filter.
+ */
+std::vector<node_index_t> allMatchingNodesFromFilters(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    const std::vector<thrift::NodesFilter>& filters);
+
 void forFilteredNodes(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
     const thrift::NodesFilter* filter,
