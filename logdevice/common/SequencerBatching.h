@@ -17,6 +17,7 @@
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
+#include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 
 namespace facebook { namespace logdevice {
@@ -83,6 +84,7 @@ namespace facebook { namespace logdevice {
  */
 
 class Appender;
+struct Settings;
 class Socket;
 class SocketProxy;
 
@@ -225,7 +227,9 @@ class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
   // sequencers.
   std::atomic<size_t> totalBufferedAppendSize_{0};
 
-  bool shouldPassthru(const Appender& appender) const;
+  bool shouldPassthru(const Appender& appender,
+                      const logsconfig::LogGroupNode* group,
+                      const Settings& settings) const;
 
   // Common handling of BufferedWriter success and failure
   class DispatchResultsRequest;

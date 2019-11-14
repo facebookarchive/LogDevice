@@ -151,15 +151,16 @@ static int prepare_batch(logid_t log_id,
 
 bool SequencerBatching::buffer(logid_t log_id,
                                std::unique_ptr<Appender>& appender_in) {
-  const std::shared_ptr<LogsConfig::LogGroupNode> group =
-      Worker::getConfig()->getLogGroupByIDShared(log_id);
+  Worker* w = Worker::onThisThread();
+  std::shared_ptr<LogsConfig::LogGroupNode> group =
+      w->getConfiguration()->getLogGroupByIDShared(log_id);
+  const Settings& settings = *w->immutable_settings_;
 
   const bool enable_batching = group
-      ? group->attrs().sequencerBatching().getValue(
-            processor_->settings()->sequencer_batching)
-      : processor_->settings()->sequencer_batching;
+      ? group->attrs().sequencerBatching().getValue(settings.sequencer_batching)
+      : settings.sequencer_batching;
 
-  if (shutting_down_.load() || !enable_batching ||
+  if (!enable_batching || shutting_down_.load() ||
       MetaDataLog::isMetaDataLog(log_id)) {
     return false;
   }
@@ -182,7 +183,7 @@ bool SequencerBatching::buffer(logid_t log_id,
     return false;
   }
 
-  if (shouldPassthru(*appender_in)) {
+  if (shouldPassthru(*appender_in, group.get(), settings)) {
     StatsHolder* stats = Worker::stats();
     const size_t payload_size = appender_in->getPayload()->size();
     // Count these as both in and out so that out/in gives an accurate
@@ -232,14 +233,13 @@ bool SequencerBatching::buffer(logid_t log_id,
   return true;
 }
 
-bool SequencerBatching::shouldPassthru(const Appender& appender) const {
-  const std::shared_ptr<LogsConfig::LogGroupNode> group =
-      Worker::getConfig()->getLogGroupByIDShared(appender.getLogID());
-
+bool SequencerBatching::shouldPassthru(const Appender& appender,
+                                       const LogsConfig::LogGroupNode* group,
+                                       const Settings& settings) const {
   const auto passthru_threshold = group
       ? group->attrs().sequencerBatchingPassthruThreshold().getValue(
-            processor_->settings()->sequencer_batching_passthru_threshold)
-      : processor_->settings()->sequencer_batching_passthru_threshold;
+            settings.sequencer_batching_passthru_threshold)
+      : settings.sequencer_batching_passthru_threshold;
 
   if (passthru_threshold < 0) {
     return false;
@@ -247,8 +247,8 @@ bool SequencerBatching::shouldPassthru(const Appender& appender) const {
 
   const auto compression = group
       ? group->attrs().sequencerBatchingCompression().getValue(
-            processor_->settings()->sequencer_batching_compression)
-      : processor_->settings()->sequencer_batching_compression;
+            settings.sequencer_batching_compression)
+      : settings.sequencer_batching_compression;
 
   bool compressing = compression != Compression::NONE;
 
@@ -473,7 +473,7 @@ void SequencerBatching::sendReply(const AppendMessageState& ams,
 }
 
 Status SequencerBatching::canSendToWorker() {
-  size_t limit = processor_->settings()->max_total_buffered_append_size;
+  size_t limit = Worker::settings().max_total_buffered_append_size;
   size_t cur_value = totalBufferedAppendSize_.load();
   if (cur_value >= limit) {
     RATELIMIT_WARNING(1s,

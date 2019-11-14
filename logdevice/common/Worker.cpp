@@ -184,11 +184,11 @@ class WorkerImpl {
   AppenderBuffer previously_redirected_appends_;
   LogIDUniqueQueue recoveryQueueDataLog_;
   LogIDUniqueQueue recoveryQueueMetaDataLog_;
-  AllClientReadStreams clientReadStreams_;
   WriteMetaDataRecordMap runningWriteMetaDataRecords_;
   AppendRequestEpochMap appendRequestEpochMap_;
   CheckNodeHealthRequestSet pendingHealthChecks_;
   SSLFetcher sslFetcher_;
+  AllClientReadStreams clientReadStreams_;
   std::unique_ptr<SequencerBackgroundActivator> sequencerBackgroundActivator_;
   std::unique_ptr<GraylistingTracker> graylistingTracker_;
   std::unique_ptr<ShapingContainer> read_shaping_container_;
