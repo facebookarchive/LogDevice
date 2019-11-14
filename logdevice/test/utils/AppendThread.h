@@ -56,7 +56,7 @@ class AppendThread {
 
   void loop() {
     while (!stopped_) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       lsn_t lsn = client_->appendSync(logid_, Payload("test", 4), attrs_);
       // Appends may fail during our tests. Count the ones that don't.
       if (lsn != LSN_INVALID) {

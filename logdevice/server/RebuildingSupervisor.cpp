@@ -130,6 +130,8 @@ void RebuildingSupervisor::shutdown() {
 }
 
 void RebuildingSupervisor::myShardNeedsRebuilding(uint32_t shard_idx) {
+  ld_info("Will request rebuilding of my shard %u", shard_idx);
+
   runOnSupervisorWorker([this, shard_idx] {
     addForRebuilding(myNodeId_.index(), shard_idx);
     scheduleNextRun();

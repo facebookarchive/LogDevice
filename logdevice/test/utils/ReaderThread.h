@@ -72,10 +72,11 @@ class ReaderThread {
    */
   void waitUntilStalled() const {
     ClientImpl& real_client = static_cast<ClientImpl&>(*client_);
-    std::string reason = "read stream to stall. State:\n";
-    reason += AllClientReadStreams::getAllReadStreamsDebugInfo(
-        true, false, real_client.getProcessor());
-    wait_until(reason.c_str(), [&]() { return !is_healthy_.load(); });
+    ld_info("Read stream debug info before waiting to stall: %s",
+            AllClientReadStreams::getAllReadStreamsDebugInfo(
+                true, false, real_client.getProcessor())
+                .c_str());
+    wait_until("read stream stalls", [&]() { return !is_healthy_.load(); });
   }
 
   /**

@@ -84,14 +84,19 @@ class NonAuthoritativeRebuildingTest
     dbg::assertOnData = true;
 
     logsconfig::LogAttributes log_attrs;
-    log_attrs.set_replicationFactor(3);
-    log_attrs.set_syncReplicationScope(NodeLocationScope::RACK);
+    log_attrs.set_replicateAcross(
+        {{NodeLocationScope::NODE, 3}, {NodeLocationScope::RACK, 2}});
     log_attrs.set_extraCopies(0);
     log_attrs.set_syncedCopies(0);
     log_attrs.set_maxWritesInFlight(30);
 
     // We want more randomness in the placement of records.
     log_attrs.set_stickyCopySets(false);
+
+    // Use replication factor 6 for event log to make sure it remains available
+    // even if we stop a rack and a node.
+    auto internal_log_attrs = log_attrs;
+    internal_log_attrs.set_replicateAcross({{NodeLocationScope::NODE, 6}});
 
     // Place metadata logs on the first 6 nodes in the cluster.
     // Tests may kill an entire rack, but they should not touch the other nodes
@@ -121,7 +126,7 @@ class NonAuthoritativeRebuildingTest
                    .useHashBasedSequencerAssignment()
                    .setLogGroupName("alog")
                    .setLogAttributes(log_attrs)
-                   .setEventLogDeltaAttributes(log_attrs)
+                   .setEventLogDeltaAttributes(internal_log_attrs)
                    .setMetaDataLogsConfig(meta_config)
                    .setNumLogs(1)
                    .deferStart()
