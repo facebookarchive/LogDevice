@@ -47,6 +47,8 @@ typedef i64 Timestamp /** UNIX time in milliseconds */
 typedef i16 NodeIndex /** node_index_t */
 typedef i16 ShardIndex /** shard_index_t */
 
+const common.ShardIndex ALL_SHARDS = -1 /** Indicates all shards in a node */
+
 /**
  * This is an identifier for a node, it can locate a node by either the
  * node_index, socket address or name. If this struct is returned by AdminAPI
@@ -65,9 +67,9 @@ struct NodeID {
 struct ShardID {
   1: NodeID node,
   /**
-   * this can be -1 which means all shards in a node.
+   * this can be ALL_SHARDS which means all shards in a node.
    */
-  2: ShardIndex shard_index = -1,
+  2: ShardIndex shard_index = ALL_SHARDS,
 }
 
 /**

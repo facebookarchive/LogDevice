@@ -40,7 +40,8 @@ enum MaintenanceProgress {
 
 struct MaintenanceDefinition {
   /**
-   * if ShardID's shard_index == -1 this maintenance targets the entire node.
+   * if ShardID's shard_index == common.ALL_SHARDS this maintenance targets the
+   * entire node.
    * Accepted values are [MAY_DISAPPEAR, DRAINED]
    */
   1: common.ShardSet shards,
