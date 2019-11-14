@@ -1020,6 +1020,13 @@ class Cluster {
   /**
    * Wait for all sequencer nodes in the cluster to finish log recovery.
    * Caller needs to ensure recovery should happen on sequencer nodes.
+   *
+   * Warning: currently the implementation is not fully correct and, when using
+   * hash-based sequencer placement, may incorrectly get stuck in rare cases
+   * if sequencers preempt each other in a somewhat unusual sequence. To avoid
+   * flakiness, prefer either waitUntilAllSequencersQuiescent()
+   * or waiting for recovery of a specific log on a specific node.
+   *
    * @return 0 if recovery is completed, -1 if the call timed out.
    */
   int waitForRecovery(std::chrono::steady_clock::time_point deadline =

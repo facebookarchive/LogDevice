@@ -59,7 +59,7 @@ TEST_F(AdminAPILowLevelTest, LogTreeReplicationInfo) {
   std::shared_ptr<Client> client = cluster->createIndependentClient(
       std::chrono::seconds(60), std::move(settings));
 
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   auto lg1 = client->makeLogGroupSync(
       "/log1",
@@ -138,7 +138,7 @@ TEST_F(AdminAPILowLevelTest, TakeLogTreeSnapshot) {
   std::shared_ptr<Client> client = cluster->createIndependentClient(
       std::chrono::seconds(60), std::move(settings));
 
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   auto lg1 = client->makeLogGroupSync(
       "/log1",
