@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include <folly/FileUtil.h>
+#include <gflags/gflags.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/test/utils/IntegrationTestBase.h"
@@ -13,6 +14,10 @@
 
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::IntegrationTestUtils;
+
+DEFINE_bool(update,
+            false,
+            "Overwrite the documentation file if it's out of date.");
 
 struct TestParams {
   std::string doc;
@@ -30,8 +35,7 @@ class DocumentationInSyncTest
 // `markdown-ldquery` matches (public_tld/)docs/ldquery.md
 // Regenerate the appropriate document if there is a mismatch.
 TEST_P(DocumentationInSyncTest, RegenAndCompare) {
-  auto params = GetParam();
-
+  TestParams params = GetParam();
   auto binary_path = findBinary(params.command);
   ASSERT_FALSE(binary_path.empty());
   params.args.insert(params.args.begin(), binary_path);
@@ -52,24 +56,43 @@ TEST_P(DocumentationInSyncTest, RegenAndCompare) {
   bool rv = folly::readFile(settings_path.c_str(), settings_file);
   ASSERT_TRUE(rv);
 
-  // Comparing line by line to make the difference clearer
-  std::vector<std::string> lines_generated;
-  folly::split('\n', outputs.first, lines_generated);
-  std::vector<std::string> lines_file;
-  folly::split('\n', settings_file, lines_file);
-
-  std::string emptystr;
-  for (int i = 0; i < lines_generated.size() || i < lines_file.size(); ++i) {
-    const std::string& generated_line =
-        i < lines_generated.size() ? lines_generated[i] : emptystr;
-    const std::string& file_line =
-        i < lines_file.size() ? lines_file[i] : emptystr;
-    if (generated_line != file_line) {
-      ld_error("Mismatch on line %d", i);
-    }
-    EXPECT_EQ(generated_line, file_line);
+  if (outputs.first == settings_file) {
+    ld_info("%s is up to date", settings_path.c_str());
+    return;
   }
-  ASSERT_EQ(lines_generated, lines_file);
+
+  if (FLAGS_update) {
+    ld_info("Overwriting %s", settings_path.c_str());
+    bool ok = folly::writeFile(outputs.first, settings_path.c_str());
+    if (!ok) {
+      ld_error("Failed to write %s", settings_path.c_str());
+    }
+  } else {
+    // Comparing line by line to make the difference clearer
+    std::vector<std::string> lines_generated;
+    folly::split('\n', outputs.first, lines_generated);
+    std::vector<std::string> lines_file;
+    folly::split('\n', settings_file, lines_file);
+
+    std::string emptystr;
+    for (int i = 0; i < lines_generated.size() || i < lines_file.size(); ++i) {
+      const std::string& generated_line =
+          i < lines_generated.size() ? lines_generated[i] : emptystr;
+      const std::string& file_line =
+          i < lines_file.size() ? lines_file[i] : emptystr;
+      if (generated_line != file_line) {
+        ld_error("Mismatch on line %d", i);
+      }
+      EXPECT_EQ(generated_line, file_line);
+    }
+
+    ld_error("%s doesn't match!", settings_path.c_str());
+    ld_error("To update it, please either:");
+    ld_error(" a. re-run this test with --update flag, or");
+    ld_error(" b. run %s > %s",
+             folly::join(" ", params.args).c_str(),
+             settings_path.c_str());
+  }
 }
 
 std::vector<TestParams> settings_test_params{
