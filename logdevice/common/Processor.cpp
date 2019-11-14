@@ -219,8 +219,8 @@ void Processor::init() {
       *getNodesConfiguration()->getServiceDiscovery());
 
   // might be used by the Workers' subcomponents so init before them.
-  security_info_ =
-      std::make_unique<UpdateableSecurityInfo>(this, settings_->server);
+  security_info_ = std::make_unique<UpdateableSecurityInfo>(
+      config_->updateableServerConfig(), plugin_registry_, settings_->server);
 
   for (int i = 0; i < numOfWorkerTypes(); i++) {
     WorkerType worker_type = workerTypeByIndex(i);
@@ -311,8 +311,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       my_node_id_(std::move(my_node_id)) {
   ld_check(settings.get());
   num_general_workers_ = settings_->num_workers;
-  security_info_ =
-      std::make_unique<UpdateableSecurityInfo>(this, settings_->server);
+  security_info_ = std::make_unique<UpdateableSecurityInfo>(
+      config_->updateableServerConfig(), plugin_registry_, settings_->server);
 }
 
 Processor::~Processor() {

@@ -18,12 +18,15 @@
 
 namespace facebook { namespace logdevice {
 
-UpdateableSecurityInfo::UpdateableSecurityInfo(Processor* processor,
-                                               bool server)
-    : processor_(processor), server_(server) {
-  config_update_sub_ =
-      processor->config_->updateableServerConfig()->callAndSubscribeToUpdates(
-          std::bind(&UpdateableSecurityInfo::onConfigUpdate, this));
+UpdateableSecurityInfo::UpdateableSecurityInfo(
+    std::shared_ptr<UpdateableServerConfig> server_config,
+    std::shared_ptr<PluginRegistry> plugin_registry,
+    bool server)
+    : server_config_(std::move(server_config)),
+      plugin_registry_(std::move(plugin_registry)),
+      server_(server) {
+  config_update_sub_ = server_config_->callAndSubscribeToUpdates(
+      std::bind(&UpdateableSecurityInfo::onConfigUpdate, this));
 };
 
 void UpdateableSecurityInfo::shutdown() {
@@ -52,9 +55,7 @@ void UpdateableSecurityInfo::onConfigUpdate() {
     return new_info_ptr;
   };
 
-  std::shared_ptr<ServerConfig> server_config =
-      processor_->config_->get()->serverConfig();
-  auto plugin_registry = processor_->getPluginRegistry();
+  std::shared_ptr<ServerConfig> server_config = server_config_->get();
   auto& securityConfig = server_config->getSecurityConfig();
 
   AuthenticationType auth_type_cur;
@@ -67,7 +68,7 @@ void UpdateableSecurityInfo::onConfigUpdate() {
     if (!first_update) {
       ld_info("PrincipalParser is changed");
     }
-    auto pp_plugin = plugin_registry->getSinglePlugin<PrincipalParserFactory>(
+    auto pp_plugin = plugin_registry_->getSinglePlugin<PrincipalParserFactory>(
         PluginType::PRINCIPAL_PARSER_FACTORY);
     new_info()->principal_parser = pp_plugin
         ? (*pp_plugin)(server_config->getAuthenticationType())
@@ -115,7 +116,7 @@ void UpdateableSecurityInfo::onConfigUpdate() {
       new_info()->permission_checker = nullptr;
     } else {
       auto pc_plugin =
-          plugin_registry->getSinglePlugin<PermissionCheckerFactory>(
+          plugin_registry_->getSinglePlugin<PermissionCheckerFactory>(
               PluginType::PERMISSION_CHECKER_FACTORY);
       new_info()->permission_checker = pc_plugin
           ? (*pc_plugin)(permission_checker_type_new, securityConfig)
@@ -149,7 +150,7 @@ void UpdateableSecurityInfo::dumpSecurityInfo() const {
   ld_debug("Authentication Enabled: %d", principal_parser != nullptr);
 
   if (principal_parser) {
-    auto server_config = processor_->config_->get()->serverConfig();
+    auto server_config = server_config_->get();
     ld_debug("Allow Unauthenticated: %d",
              server_config->getSecurityConfig().allowUnauthenticated);
     ld_debug("Authentication Type: %s",

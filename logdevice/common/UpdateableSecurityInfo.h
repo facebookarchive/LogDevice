@@ -8,8 +8,10 @@
 #pragma once
 
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/Processor.h"
+#include "logdevice/common/PrincipalParser.h"
+#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 
 namespace facebook { namespace logdevice {
@@ -28,7 +30,9 @@ class UpdateableSecurityInfo {
     bool enforce_cluster_node_identity{false};
   };
 
-  UpdateableSecurityInfo(Processor* processor, bool server = true);
+  UpdateableSecurityInfo(std::shared_ptr<UpdateableServerConfig> server_config,
+                         std::shared_ptr<PluginRegistry> plugin_registry,
+                         bool server = true);
   virtual ~UpdateableSecurityInfo() {}
 
   std::shared_ptr<const SecurityInfo> get() {
@@ -49,7 +53,8 @@ class UpdateableSecurityInfo {
   void shutdown();
 
  private:
-  Processor* processor_;
+  std::shared_ptr<UpdateableServerConfig> server_config_;
+  std::shared_ptr<PluginRegistry> plugin_registry_;
 
   // are we running on server
   const bool server_;
