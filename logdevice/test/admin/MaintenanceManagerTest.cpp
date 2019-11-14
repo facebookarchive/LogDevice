@@ -61,7 +61,7 @@ void MaintenanceManagerTest::init() {
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
-          .setParam("--min-gossips-for-stable-state", "0")
+          .setParam("--min-gossips-for-stable-state", "1")
           .setParam("--enable-cluster-maintenance-state-machine", "true")
           .setParam("--enable-nodes-configuration-manager", "true")
           .setParam(
@@ -137,9 +137,7 @@ static lsn_t writeToMaintenanceLog(Client& client,
 TEST_P(MaintenanceManagerTest, BasicDrain) {
   init();
   cluster_->start({0, 1, 2, 3, 4});
-  for (auto n : {0, 1, 2, 3, 4}) {
-    cluster_->getNode(n).waitUntilAvailable();
-  }
+  cluster_->waitUntilAllStartedAndPropagatedInGossip();
   std::shared_ptr<Client> client = cluster_->createClient();
   write_test_records(client, LOG_ID, 10);
 
@@ -293,9 +291,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
           .create(num_nodes);
 
   cluster_->start({0, 1, 2, 3, 4});
-  for (auto n : {0, 1, 2, 3, 4}) {
-    cluster_->getNode(n).waitUntilAvailable();
-  }
+  cluster_->waitUntilAllStartedAndPropagatedInGossip();
   std::shared_ptr<Client> client = cluster_->createClient();
   write_test_records(client, LOG_ID, 10);
 
@@ -469,6 +465,7 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
   std::iota(node_set.begin(), node_set.end(), 0);
 
   cluster_->start(node_set);
+  cluster_->waitUntilAllStartedAndPropagatedInGossip();
   std::shared_ptr<Client> client = cluster_->createClient();
   write_test_records(client, LOG_ID, 100);
 

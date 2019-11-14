@@ -572,7 +572,7 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
     cluster->waitUntilGossip(/* alive */ true, idx);
   }
 
-  cluster->waitUntilStartupComplete();
+  cluster->waitUntilNoOneIsInStartupState();
   cluster->waitForRecovery();
 
   /* create client */

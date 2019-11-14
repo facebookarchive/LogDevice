@@ -1006,6 +1006,65 @@ class Cluster {
       int sequencer_weight,
       folly::Optional<bool> enable_sequencing = folly::none);
 
+  // A guide to the few wait*() methods below:
+  //  - When using static sequencer placement (default),
+  //    waitUntilAllSequencersQuiescent() guarantees that subsequent appends
+  //    won't fail without a good reason and that sequencers won't reactivate
+  //    without a good reason.
+  //  - When using hash-based sequencer placement
+  //    (useHashBasedSequencerAssignment()),
+  //    waitUntilAllStartedAndPropagatedInGossip() guarantees that subsequent
+  //    appends won't fail to activate sequencer without a good reason.
+  //    If you want to wait for the newly activated sequencer to finish
+  //    recovery, metadata log write, unnecessary reactivation, etc, then you
+  //    can also call waitUntilAllSequencersQuiescent() after the append that
+  //    activated the sequencer.
+  //  - waitForConfigUpdate() is for after you updated the config file
+  //    (e.g. using writeConfig()).
+  //  - Most of the other wait methods are either obsolete or only useful for
+  //    particular test cases that want something very specific.
+  //    Many call sites are using them inappropriately (e.g. waitForRecovery()
+  //    instead of waitUntilAllSequencersQuiescent(), or waitUntilAllAvailable()
+  //    instead of waitUntilAllStartedAndPropagatedInGossip()); feel free to fix
+  //    those when they make tests flaky; I didn't dare mass-replace them.
+
+  /**
+   * Wait for all nodes to complete all sequencer activation-related activity:
+   * activation, recoveries, metadata log writes, metadata log recoveries,
+   * reactivations caused by metadata log writes, nodeset updates caused by
+   * config changes, etc. If you're not making any changes to the cluster
+   * (starting/stopping nodes, updating config/settings, etc), after this call
+   * sequencers are not going to reactivate, get stuck in recovery (even if
+   * there's no f-majority of available nodes), or do other unexpected things.
+   * You'll get consecutive LSNs for appends.
+   *
+   * Note that this only applies to sequencers that have already at least
+   * started activation as of the time of this call. If static sequencer
+   * placement is used (i.e. useHashBasedSequencerAssignment() wasn't called),
+   * that's all sequencers; otherwise, that's typically only sequencers for the
+   * logs that received at least one append. Also note that, even though appends
+   * done after this call should all go to the same epoch and get consecutive
+   * LSNs, this may be a higher epoch than for appends done before the call.
+   */
+  int waitUntilAllSequencersQuiescent(
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
+
+  /**
+   * Wait until the given nodes see each other and themselves as alive and
+   * started in gossip, and see everyone else as dead.
+   * For a freshly started cluster, until this wait is done, appends may fail
+   * with E::ISOLATED if sequencer node happens to see itself as alive but
+   * others as dead.
+   *
+   * @param nodes  The set of nodes that should be alive. If folly::none, all
+   *               running nodes (i.e. with Node::stopped_ == false).
+   */
+  int waitUntilAllStartedAndPropagatedInGossip(
+      folly::Optional<std::set<node_index_t>> nodes = folly::none,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
+
   /**
    * Waits until all live nodes have a view of the config same as getConfig().
    * This doesn't guarantees much about server behavior because the
@@ -1031,13 +1090,6 @@ class Cluster {
    */
   int waitForRecovery(std::chrono::steady_clock::time_point deadline =
                           std::chrono::steady_clock::time_point::max());
-
-  /**
-   * See Cluster::waitUntilAllSequencersQuiescent().
-   */
-  int waitUntilAllSequencersQuiescent(
-      std::chrono::steady_clock::time_point deadline =
-          std::chrono::steady_clock::time_point::max());
 
   // Waits until all nodes are available through gossip (ALIVE)
   int waitUntilAllAvailable(std::chrono::steady_clock::time_point deadline =
@@ -1068,10 +1120,10 @@ class Cluster {
 
   /**
    * Waits until nodes specified in the parameter `nodes` are alive and fully
-   * started (i.e. not in starting state). If `nodes` is folly::none,
-   * all nodes in the cluster will be checked.
+   * started (i.e. not in starting state) according to gossip. If `nodes` is
+   * folly::none, all nodes in the cluster will be checked.
    */
-  int waitUntilStartupComplete(
+  int waitUntilNoOneIsInStartupState(
       folly::Optional<std::set<uint64_t>> nodes = folly::none,
       std::chrono::steady_clock::time_point deadline =
           std::chrono::steady_clock::time_point::max());
@@ -1501,22 +1553,7 @@ class Node {
                           std::chrono::steady_clock::time_point::max());
 
   /**
-   * Wait for all nodes to complete all sequencer activation-related activity:
-   * activation, recoveries, metadata log writes, metadata log recoveries,
-   * reactivations caused by metadata log writes, nodeset updates caused by
-   * config changes, etc. If you're not making any changes to the cluster
-   * (starting/stopping nodes, updating config/settings, etc), after this call
-   * sequencers are not going to reactivate, get stuck in recovery (even if
-   * there's no f-majority of available nodes), or do other unexpected things.
-   * You'll get consecutive LSNs for appends.
-   *
-   * Note that this only applies to sequencers that have already at least
-   * started activation as of the time of this call. If static sequencer
-   * placement is used (i.e. useHashBasedSequencerAssignment() wasn't called),
-   * that's all sequencers; otherwise, that's typically only sequencers for the
-   * logs that received at least one append. Also note that, even though appends
-   * done after this call should all go to the same epoch and get consecutive
-   * LSNs, this may be a higher epoch than for appends done before the call.
+   * See Cluster::waitUntilAllSequencersQuiescent().
    */
   int waitUntilAllSequencersQuiescent(
       std::chrono::steady_clock::time_point deadline =

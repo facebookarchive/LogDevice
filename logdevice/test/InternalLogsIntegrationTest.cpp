@@ -252,7 +252,7 @@ TEST_F(InternalLogsIntegrationTest,
   for (auto nid : FIRST_NODES) {
     cluster->getNode(nid).start();
   }
-  cluster->waitUntilStartupComplete(
+  cluster->waitUntilNoOneIsInStartupState(
       std::set<uint64_t>(FIRST_NODES.begin(), FIRST_NODES.end()));
 
   client = cluster->createIndependentClient(DEFAULT_TEST_TIMEOUT);
@@ -279,7 +279,7 @@ TEST_F(InternalLogsIntegrationTest,
   cluster->waitForRecovery();
 
   // wait for node 0 to have logsconfig available
-  cluster->waitUntilStartupComplete(std::set<uint64_t>{0});
+  cluster->waitUntilNoOneIsInStartupState(std::set<uint64_t>{0});
 
   /* Take a Logsconfig snapshot that should go to one of the nodes stuck in
    * starting state. */
@@ -303,7 +303,7 @@ TEST_F(InternalLogsIntegrationTest,
   }
 
   /* now we should move out of the STARTING state and finish recoveries */
-  cluster->waitUntilStartupComplete();
+  cluster->waitUntilNoOneIsInStartupState();
   cluster->waitForRecovery();
 }
 

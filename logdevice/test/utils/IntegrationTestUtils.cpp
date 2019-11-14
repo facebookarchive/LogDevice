@@ -2768,6 +2768,61 @@ int Cluster::waitUntilAllSequencersQuiescent(
   return 0;
 }
 
+int Cluster::waitUntilAllStartedAndPropagatedInGossip(
+    folly::Optional<std::set<node_index_t>> nodes,
+    std::chrono::steady_clock::time_point deadline) {
+  if (!nodes.hasValue()) {
+    nodes.emplace();
+    for (auto& it : nodes_) {
+      if (!it.second->stopped_) {
+        nodes->insert(it.first);
+      }
+    }
+  }
+
+  for (auto& it : nodes_) {
+    if (!nodes->count(it.first)) {
+      continue;
+    }
+
+    int rv = wait_until(
+        folly::sformat(
+            "N{} sees that {} are alive", it.first, toString(nodes.value()))
+            .c_str(),
+        [&] {
+          auto cmd_result = it.second->sendCommand("info gossip --json");
+          if (cmd_result == "") {
+            return false;
+          }
+          auto obj = folly::parseJson(cmd_result);
+          for (auto& state : obj["states"]) {
+            node_index_t idx =
+                folly::to<node_index_t>(state["node_id"].getString().substr(1));
+            bool alive = state["status"].getString() == "ALIVE";
+            bool starting = state["detector"]["starting"].getInt() == 1;
+            // This is a workaround for a quirk in FailureDetector: it may mark
+            // the node as ALIVE based on GetClusterState request, then soon
+            // mark it as DEAD if we're unlicky enough to not receive enough
+            // gossip messages to declare it alive.
+            bool gossiped_recently =
+                state["detector"]["gossip"].getInt() < 1000;
+            bool expected_alive = nodes->count(idx);
+            if (expected_alive != alive ||
+                (expected_alive && (starting || !gossiped_recently))) {
+              return false;
+            }
+          }
+          return true;
+        },
+        deadline);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
+  return 0;
+}
+
 int Cluster::waitUntilAllAvailable(
     std::chrono::steady_clock::time_point deadline) {
   int rv = 0;
@@ -2852,7 +2907,7 @@ int Cluster::waitUntilGossip(bool alive,
   return 0;
 }
 
-int Cluster::waitUntilStartupComplete(
+int Cluster::waitUntilNoOneIsInStartupState(
     folly::Optional<std::set<uint64_t>> nodes,
     std::chrono::steady_clock::time_point deadline) {
   if (!nodes.hasValue()) {
