@@ -706,24 +706,24 @@ TEST_P(ReadingIntegrationTest, HealthChangeCallback) {
   // The callback will post on this semaphore every time it sees a
   // health change on LOG_ID. Every other call is a logic error.
   Semaphore sem;
-  bool currently_healthy = false;
+  std::atomic<bool> currently_healthy{false};
   auto health_change_cb = [&](const logid_t id, const HealthChangeType status) {
     const bool healthy = (status == HealthChangeType::LOG_HEALTHY);
     ld_info("Health change callback called: id %lu, currently healthy %d "
             "new health %d",
             id.val_,
-            currently_healthy,
+            currently_healthy.load(),
             healthy);
     // validate parameters
     EXPECT_EQ(LOG_ID, id);
-    if (currently_healthy) {
+    if (currently_healthy.load()) {
       EXPECT_EQ(HealthChangeType::LOG_UNHEALTHY, status);
     } else {
       EXPECT_EQ(HealthChangeType::LOG_HEALTHY, status);
     }
 
     // change internal state
-    currently_healthy = healthy;
+    currently_healthy.store(healthy);
     sem.post();
   };
 
@@ -737,7 +737,7 @@ TEST_P(ReadingIntegrationTest, HealthChangeCallback) {
 
   ld_info("Waiting for reader to connect and reach healthy state");
   sem.wait();
-  EXPECT_TRUE(currently_healthy);
+  EXPECT_TRUE(currently_healthy.load());
 
   ld_info("Waiting for reader to read at least one record");
   record_sem.wait();
@@ -747,27 +747,27 @@ TEST_P(ReadingIntegrationTest, HealthChangeCallback) {
   cluster->getNode(1).kill();
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  EXPECT_TRUE(currently_healthy);
+  EXPECT_TRUE(currently_healthy.load());
 
   ld_info("Killing sequencer node, should not affect connection health");
   ld_check(!config->serverConfig()->getNode(0)->isReadableStorageNode());
   cluster->getNode(0).kill();
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  EXPECT_TRUE(currently_healthy);
+  EXPECT_TRUE(currently_healthy.load());
 
   ld_info("Killing second storage node, should negatively affect cluster "
           "health because r=2");
   ld_check(config->serverConfig()->getNode(2)->isReadableStorageNode());
   cluster->getNode(2).kill();
   sem.wait();
-  EXPECT_FALSE(currently_healthy);
+  EXPECT_FALSE(currently_healthy.load());
 
   ld_info("Restarting second storage node, the cluster should go back to a "
           "healthy state");
   cluster->getNode(2).start();
   sem.wait();
-  EXPECT_TRUE(currently_healthy);
+  EXPECT_TRUE(currently_healthy.load());
 }
 
 // Tests AsyncReader::getBytesBuffered() and the postStatisticsRequest()
