@@ -50,37 +50,47 @@ struct SeqReactivationStats {
   }
 };
 
+void addSeqStats(IntegrationTestUtils::Node& node,
+                 SeqReactivationStats& stats) {
+  auto nodeStats = node.stats();
+  stats.activity += nodeStats.at("sequencer_activity_in_progress");
+
+  stats.delayed += nodeStats.at("sequencer_reactivations_delayed");
+  stats.delayCompleted +=
+      nodeStats.at("sequencer_reactivations_delay_completed");
+  stats.reactivations +=
+      nodeStats.at("sequencer_reactivations_for_metadata_update");
+
+  stats.activations += nodeStats.at("sequencer_activations");
+}
+
 SeqReactivationStats
 getSeqStats(const std::unique_ptr<IntegrationTestUtils::Cluster>& cluster) {
   SeqReactivationStats stats;
   for (const auto& it : cluster->getNodes()) {
-    auto nodeStats = it.second->stats();
-    stats.activity += nodeStats.at("sequencer_activity_in_progress");
-
-    stats.delayed += nodeStats.at("sequencer_reactivations_delayed");
-    stats.delayCompleted +=
-        nodeStats.at("sequencer_reactivations_delay_completed");
-    stats.reactivations +=
-        nodeStats.at("sequencer_reactivations_for_metadata_update");
-
-    stats.activations += nodeStats.at("sequencer_activations");
+    addSeqStats(*it.second, stats);
   }
   return stats;
 }
 
 void waitForReactivations(
     const std::unique_ptr<IntegrationTestUtils::Cluster>& cluster) {
-  wait_until("all reactivation are completed", [&]() {
-    auto stats = getSeqStats(cluster);
-    ld_info("activity: %lu, delayed: %lu, delayCompleted: %lu, reactivations: "
-            "%lu, activations: %lu",
-            stats.activity,
-            stats.delayed,
-            stats.delayCompleted,
-            stats.reactivations,
-            stats.activations);
-    return stats.areReactivationsDone();
-  });
+  for (const auto& it : cluster->getNodes()) {
+    wait_until(folly::sformat("reactivation complete on N{}", it.first).c_str(),
+               [&]() {
+                 SeqReactivationStats stats;
+                 addSeqStats(*it.second, stats);
+                 ld_info("activity: %lu, delayed: %lu, delayCompleted: %lu, "
+                         "reactivations: "
+                         "%lu, activations: %lu",
+                         stats.activity,
+                         stats.delayed,
+                         stats.delayCompleted,
+                         stats.reactivations,
+                         stats.activations);
+                 return stats.areReactivationsDone();
+               });
+  }
 }
 
 } // namespace
@@ -491,8 +501,10 @@ TEST_F(SequencerIntegrationTest, StorageStateChangeDelayTest) {
 // sequencer-reactivation-delay-secs if the nodeset is changed
 // due to an expand or shrink operation.
 TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
+  bool expand = folly::Random::rand32() % 2 == 0; // otherwise shrink
+
   Configuration::Nodes nodes;
-  size_t num_nodes = 10;
+  size_t num_nodes = expand ? 4 : 6;
   for (int i = 0; i < num_nodes; ++i) {
     auto& node = nodes[i];
     node.generation = 1;
@@ -503,7 +515,7 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   shard_size_t num_shards = 1;
   logsconfig::LogAttributes log_attrs;
   log_attrs.set_replicationFactor(3);
-  log_attrs.set_nodeSetSize(5);
+  log_attrs.set_nodeSetSize(4);
   uint32_t numLogs = 32;
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
@@ -540,34 +552,28 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
     }
   }
 
-  cluster->waitUntilAllSequencersQuiescent();
+  waitForReactivations(cluster);
 
   auto stats = getSeqStats(cluster);
-  const size_t initial_activations = stats.activations;
-  EXPECT_GE(initial_activations, numLogs);
+  EXPECT_GE(stats.activations, numLogs);
   EXPECT_EQ(stats.delayed, 0);
 
-  // Randomly chose to expand or shrink the cluster
   auto start = RecordTimestamp::now().toSeconds();
-  size_t numExpandNodes = 5;
-  size_t numShrinkNodes = 2;
-  if ((folly::Random::rand32() % 2) == 0) {
+  if (expand) {
     ld_info("test expanding cluster");
-    cluster->expand(numExpandNodes, true);
-    num_nodes += numExpandNodes;
+    cluster->expand(2, true);
   } else {
     ld_info("test shrinking cluster");
-    cluster->shrink(numShrinkNodes);
-    num_nodes -= numShrinkNodes;
+    cluster->shrink(2);
   }
 
   waitForReactivations(cluster);
 
-  // The delayed reactivations must result in actual reactivations
+  // At least some of the delayed reactivations must result in actual
+  // reactivations. Not all of them will because sequencer might move away from
+  // the node while waiting for reactivation.
   stats = getSeqStats(cluster);
-  uint64_t activations_after_size_change =
-      stats.activations - initial_activations;
-  EXPECT_GE(activations_after_size_change, stats.delayCompleted);
+  EXPECT_GE(stats.reactivations, 1);
   EXPECT_GE(stats.delayed, 1);
 
   // Check that reactivations completed after waiting for the specified delay in

@@ -2580,7 +2580,7 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
 // Case: shards come back wiped.
 TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
   // FIXME: Need to add a mix of retentions.
-  // Shorter than test duration.
+  // Shorter than half of the test duration.
   std::chrono::seconds maxBacklogDuration(20);
 
   ld_info("Creating cluster");
@@ -2783,7 +2783,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
 
 // Case: shards never come back.
 TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
-  // Shorter than test duration.
+  // Shorter than half of the test duration.
   std::chrono::seconds maxBacklogDuration(15);
 
   logsconfig::LogAttributes log_attrs;

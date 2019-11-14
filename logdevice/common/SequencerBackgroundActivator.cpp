@@ -163,9 +163,6 @@ SequencerBackgroundActivator::postponeSequencerReactivation(logid_t logid) {
   queue_.pop();
   state.token.release();
   state.in_queue = false;
-  // Switch off this flag so that the next enqueue doesn't go through
-  // immediately.
-  state.queued_by_alarm_callback = false;
 
   // If we already have an active alarm for this log
   // then we can piggy-back on it if we have non-urgent
@@ -554,6 +551,9 @@ SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
       // that can be delayed but it has already been delayed once.
       ProcessLogDecision dec = ProcessLogDecision::SUCCESS;
       WORKER_STAT_INCR(sequencer_reactivations_for_metadata_update);
+      // Switch off this flag so that the next enqueue doesn't go through
+      // immediately.
+      state.queued_by_alarm_callback = false;
       auto& all_seq = Worker::onThisThread()->processor_->allSequencers();
       int rv = all_seq.activateSequencer(
           logid,
@@ -572,6 +572,9 @@ SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
                       E::SYSLIMIT,
                       E::ISOLATED}));
 
+        ld_debug("Sequencer activation for log %lu was rejected: %s",
+                 logid.val(),
+                 error_name(err));
         dec = ProcessLogDecision::FAILED;
       }
       return dec;
