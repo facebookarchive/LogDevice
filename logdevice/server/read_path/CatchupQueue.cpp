@@ -861,7 +861,7 @@ void CatchupQueue::onReadTaskDone(const ReadStorageTask& task) {
   // registered again at that time. (See pushRecords() call below).
   resume_cb_.deactivate();
 
-  ServerReadStream* stream = task.stream_.get();
+  ServerReadStream* stream = task.stream_.get().get();
   onStorageTaskStopped(stream);
   if (!stream) {
     // The ServerReadStreams was erased while the storage task was in flight.

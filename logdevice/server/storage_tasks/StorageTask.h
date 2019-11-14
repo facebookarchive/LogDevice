@@ -15,6 +15,7 @@
 #include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/StorageTaskDebugInfo.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/settings/Durability.h"
 
 namespace folly {
@@ -276,6 +277,61 @@ class StorageTask {
   // Fetches fields that are specific to every task type. Should be overridden
   // in specific task implementations that want to provide this
   virtual void getDebugInfoDetailed(StorageTaskDebugInfo&) const {}
+};
+
+// Wraps a value and, on each access, asserts that we're on the same worker
+// thread that called RequireWorkerThread's constructor. If constructor is
+// called from a non-worker thread, get() doesn't assert anything.
+template <class T>
+class RequireWorkerThread {
+ public:
+  void rememberCurrentWorkerID() {
+#ifndef NDEBUG
+    Worker* w = Worker::onThisThread(false);
+    if (w) {
+      worker_type_ = w->worker_type_;
+      worker_idx_ = w->idx_;
+    }
+#endif
+  }
+
+  void assertWorkerID() const {
+#ifndef NDEBUG
+    if (worker_idx_ != WORKER_ID_INVALID) {
+      Worker* w = Worker::onThisThread();
+      ld_assert(w->worker_type_ == worker_type_);
+      ld_assert(w->idx_ == worker_idx_);
+    }
+#endif
+  }
+
+  explicit RequireWorkerThread() {
+    rememberCurrentWorkerID();
+  }
+
+  explicit RequireWorkerThread(T&& val) : val_(std::move(val)) {
+    rememberCurrentWorkerID();
+  }
+
+  T& get() {
+    assertWorkerID();
+    return val_;
+  }
+
+  const T& get() const {
+    assertWorkerID();
+    return val_;
+  }
+
+  // For situations when T is thread safe for some operations but not others.
+  T& getFromAnyThread() {
+    return val_;
+  }
+
+ private:
+  T val_{};
+  WorkerType worker_type_ = WorkerType::MAX;
+  worker_id_t worker_idx_ = WORKER_ID_INVALID;
 };
 
 // Helper macros for manipulating stats related to storage task

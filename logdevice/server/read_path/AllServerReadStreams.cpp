@@ -344,8 +344,10 @@ void AllServerReadStreams::onEpochOffsetTask(EpochOffsetStorageTask& task) {
 void AllServerReadStreams::onReadTaskDone(ReadStorageTask& task) {
   ld_check(read_storage_tasks_in_flight_ > 0);
   read_storage_tasks_in_flight_--;
-  if (task.catchup_queue_) {
-    task.catchup_queue_->onReadTaskDone(task);
+  // We're on worker thread.
+  CatchupQueue* q = task.catchup_queue_.get().get();
+  if (q) {
+    q->onReadTaskDone(task);
   } else {
     // Client disconnected.
   }
@@ -356,8 +358,10 @@ void AllServerReadStreams::onReadTaskDone(ReadStorageTask& task) {
 void AllServerReadStreams::onReadTaskDropped(ReadStorageTask& task) {
   ld_check(read_storage_tasks_in_flight_ > 0);
   read_storage_tasks_in_flight_--;
-  if (task.catchup_queue_) {
-    task.catchup_queue_->onStorageTaskDropped(task.stream_.get());
+  // We're on worker thread.
+  CatchupQueue* q = task.catchup_queue_.get().get();
+  if (q) {
+    q->onStorageTaskDropped(task.stream_.get().get());
   } else {
     // Client disconnected.
   }

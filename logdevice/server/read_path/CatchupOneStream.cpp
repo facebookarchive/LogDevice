@@ -1444,7 +1444,7 @@ std::pair<CatchupOneStream::Action, size_t>
 CatchupOneStream::onReadTaskDone(CatchupQueueDependencies& deps,
                                  ServerReadStream* stream,
                                  const ReadStorageTask& task) {
-  auto& resume_cb = task.catchup_queue_->resumeCallback();
+  auto& resume_cb = task.catchup_queue_.get()->resumeCallback();
   CatchupOneStream catchup(deps, stream, resume_cb);
   Action action = catchup.processTask(task);
   return std::make_pair(action, catchup.record_bytes_queued_);

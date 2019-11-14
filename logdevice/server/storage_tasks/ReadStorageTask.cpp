@@ -76,8 +76,7 @@ ReadStorageTask::ReadStorageTask(
       principal_(principal),
       throttling_estimate_(cost_estimate),
       rpriority_(rp) {
-  ld_check(stream_);
-  auto stream_ptr = stream_.get();
+  auto stream_ptr = stream_.get().get();
   ld_check(stream_ptr);
 
   // saving debug info
@@ -86,17 +85,20 @@ ReadStorageTask::ReadStorageTask(
   client_address_ = client_address;
   stream_start_lsn_ = stream_ptr->start_lsn_;
   stream_creation_time_ = stream_ptr->created_;
+  stream_shard_ = stream_ptr->shard_;
   stream_scd_enabled_ = stream_ptr->scdEnabled();
   stream_known_down_ = stream_ptr->getKnownDown();
 
-  // catchup_queue_ may be nullptr in tests.
+  // catchup_queue may be nullptr in tests.
 
   ld_spew("constructor client_id=%s id=%lu log_id=%" PRIu64
           " from.lsn=%s until_lsn=%s window_high=%" PRIu64
           " server_read_stream_version=%" PRIu64
           " max_bytes_to_deliver_=%zu first_record_any_size=%d",
-          catchup_queue_ ? catchup_queue_->client_id_.toString().c_str() : "",
-          stream_->id_.val_,
+          catchup_queue_.get()
+              ? catchup_queue_.get()->client_id_.toString().c_str()
+              : "",
+          stream_ptr->id_.val_,
           read_ctx.logid_.val_,
           lsn_to_string(read_ctx_.read_ptr_.lsn).c_str(),
           lsn_to_string(read_ctx_.until_lsn_).c_str(),
@@ -117,12 +119,13 @@ void ReadStorageTask::execute() {
 
   STAT_INCR(storageThreadPool_->stats(), num_in_flight_read_storage_tasks);
 
-  if (stream_) { // Only read if the ServerReadStream still exists.
+  // Only read if the ServerReadStream still exists.
+  // We're not on a worker thread, but WeakRef's operator bool() is thread safe.
+  if (stream_.getFromAnyThread()) {
     if (options_.inject_latency) {
       folly::Baton<> baton;
       auto& io_fault_injection = IOFaultInjection::instance();
-      baton.try_wait_for(
-          io_fault_injection.getLatencyToInject(stream_->shard_));
+      baton.try_wait_for(io_fault_injection.getLatencyToInject(stream_shard_));
     }
     owned_iterator_ = iterator_from_cache_.lock();
     if (!owned_iterator_) {

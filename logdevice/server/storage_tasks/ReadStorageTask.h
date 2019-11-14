@@ -100,13 +100,8 @@ class ReadStorageTask : public StorageTask {
     return principal_;
   }
 
-  // Used to track if the ServerReadStream for which this task is for has been
-  // destroyed.
-  WeakRef<ServerReadStream> stream_;
-
-  // Used to track if the CatchupQueue for which this task is for has been
-  // destroyed.
-  WeakRef<CatchupQueue> catchup_queue_;
+  RequireWorkerThread<WeakRef<ServerReadStream>> stream_;
+  RequireWorkerThread<WeakRef<CatchupQueue>> catchup_queue_;
 
   const server_read_stream_version_t server_read_stream_version_;
   const filter_version_t filter_version_;
@@ -153,6 +148,7 @@ class ReadStorageTask : public StorageTask {
   Sockaddr client_address_;
   lsn_t stream_start_lsn_;
   std::chrono::steady_clock::time_point stream_creation_time_;
+  shard_index_t stream_shard_;
   bool stream_scd_enabled_;
   small_shardset_t stream_known_down_;
   // Amount of bytes that were deducted from Read Throttling framework
