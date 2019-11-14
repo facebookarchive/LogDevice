@@ -785,10 +785,7 @@ TEST_F(SequencerIntegrationTest, SequencerIsolation) {
                                          // writes
           .create(NNODES);
 
-  for (const auto& it : nodes) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
@@ -831,10 +828,7 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationOnFailure) {
                                          // writes
           .create(NNODES);
 
-  for (const auto& it : nodes) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
@@ -901,9 +895,7 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorDead) {
                                          // writes
           .create(nodes.size());
 
-  for (const auto& it : nodes) {
-    cluster->waitUntilGossip(/* alive */ true, it.first);
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
@@ -1006,9 +998,7 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationRedirectedNotAlive) {
                                          // writes
           .create(nodes.size());
 
-  for (const auto& it : nodes) {
-    cluster->waitUntilGossip(/* alive */ true, it.first);
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient(
       DEFAULT_TEST_TIMEOUT,
@@ -1192,9 +1182,7 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorNotInConfig) {
                                          // writes
           .create(nodes.size());
 
-  for (size_t idx = 0; idx < nodes.size(); ++idx) {
-    cluster->waitUntilGossip(/* alive */ true, idx);
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
@@ -1293,9 +1281,7 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationPreemptorZeroWeight) {
           .useHashBasedSequencerAssignment(100, "10s")
           .create(nodes.size());
 
-  for (size_t idx = 0; idx < nodes.size(); ++idx) {
-    cluster->waitUntilGossip(/* alive */ true, idx);
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
@@ -1810,8 +1796,7 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioningEpochStorePreemption) {
   } while (lsn == LSN_INVALID);
 
   ld_info("Waiting for metadata log writes to complete");
-  cluster->waitForMetaDataLogWrites();
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   // metadata is written, now stop N0
   ld_info("Stopping N0");
@@ -1830,7 +1815,7 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioningEpochStorePreemption) {
     }
   } while (lsn == LSN_INVALID);
 
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   // Resume N0, stop N1
   ld_info("Stopping N1");
@@ -2958,8 +2943,7 @@ TEST_F(SequencerIntegrationTest, DynamicallyChangingWindowSize) {
     return activations;
   };
 
-  cluster->waitForRecovery();
-  cluster->waitForMetaDataLogWrites();
+  cluster->waitUntilAllSequencersQuiescent();
 
   const size_t num_activations = get_activations();
   EXPECT_GE(num_activations, 128);
@@ -3216,6 +3200,7 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
                      .setEventLogAttributes(log_attrs)
                      .setConfigLogAttributes(log_attrs)
                      .create(NNODES);
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
   std::shared_ptr<Client> client = cluster->createClient();
 
   const logid_t logid{1};

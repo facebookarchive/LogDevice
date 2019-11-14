@@ -49,6 +49,7 @@ class InternalLogsIntegrationTest
 
   void buildClusterAndClient(ClusterFactory factory) {
     cluster = factory.create(NNODES);
+    cluster->waitUntilAllSequencersQuiescent();
 
     std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
     ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
@@ -58,8 +59,6 @@ class InternalLogsIntegrationTest
     // cast the Client object back to ClientImpl and enable internal log writes
     client_impl = std::dynamic_pointer_cast<ClientImpl>(client);
     ASSERT_NE(nullptr, client);
-
-    cluster->waitForRecovery();
   }
 
   lsn_t getTrimPointFor(logid_t log) {
@@ -178,7 +177,7 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
   auto& seq = cluster->getSequencerNode();
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
-    cluster->waitForRecovery();
+    cluster->waitUntilAllSequencersQuiescent();
   }
 
   /* double check that we bumped those epochs */
@@ -252,8 +251,7 @@ TEST_F(InternalLogsIntegrationTest,
   for (auto nid : FIRST_NODES) {
     cluster->getNode(nid).start();
   }
-  cluster->waitUntilNoOneIsInStartupState(
-      std::set<uint64_t>(FIRST_NODES.begin(), FIRST_NODES.end()));
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   client = cluster->createIndependentClient(DEFAULT_TEST_TIMEOUT);
 
@@ -274,9 +272,7 @@ TEST_F(InternalLogsIntegrationTest,
     node.start();
   }
   cluster->waitUntilAllAvailable();
-
-  cluster->waitForMetaDataLogWrites();
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   // wait for node 0 to have logsconfig available
   cluster->waitUntilNoOneIsInStartupState(std::set<uint64_t>{0});
@@ -303,8 +299,8 @@ TEST_F(InternalLogsIntegrationTest,
   }
 
   /* now we should move out of the STARTING state and finish recoveries */
-  cluster->waitUntilNoOneIsInStartupState();
-  cluster->waitForRecovery();
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+  cluster->waitUntilAllSequencersQuiescent();
 }
 
 /**
@@ -347,7 +343,7 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   auto& seq = cluster->getSequencerNode();
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
-    cluster->waitForRecovery();
+    cluster->waitUntilAllSequencersQuiescent();
   }
 
   // Check that the tail moved as expected
@@ -386,7 +382,7 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   // Bump epoch a few more times to move the tail and cause bridge gaps
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
-    cluster->waitForRecovery();
+    cluster->waitUntilAllSequencersQuiescent();
   }
 
   // Check that the tail moved as expected
@@ -484,7 +480,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   auto& seq = cluster->getSequencerNode();
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
-    cluster->waitForRecovery();
+    cluster->waitUntilAllSequencersQuiescent();
   }
 
   // Check that the tail moved as expected
@@ -523,7 +519,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   // Bump epoch a few more times to move the tail and cause bridge gaps
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
-    cluster->waitForRecovery();
+    cluster->waitUntilAllSequencersQuiescent();
   }
 
   // Check that the tail moved as expected
@@ -540,7 +536,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   // Bump epoch a few more times to move the tail and cause bridge gaps
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
-    cluster->waitForRecovery();
+    cluster->waitUntilAllSequencersQuiescent();
   }
 
   // Write another record

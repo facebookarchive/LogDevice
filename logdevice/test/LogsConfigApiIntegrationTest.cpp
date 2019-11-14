@@ -851,7 +851,7 @@ TEST_F(LogsConfigIntegrationTest, SetAttributesLogGroupClash) {
                      .enableLogsConfigManager()
                      .create(node_count);
 
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   for (int node_index = 0; node_index < node_count; ++node_index) {
     IntegrationTestUtils::Node& node = cluster->getNode(node_index);

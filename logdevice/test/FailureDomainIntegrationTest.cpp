@@ -88,7 +88,7 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
           .setMaintenanceLogAttributes(log_attrs)
           .create(nodes.size());
 
-  cluster->waitForMetaDataLogWrites();
+  cluster->waitUntilAllSequencersQuiescent();
 
   std::map<lsn_t, std::string> lsn_map;
   lsn_t first_lsn = LSN_INVALID;
@@ -132,7 +132,7 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
   write_records();
 
   // recovery should finish despite one region (3 nodes) is down
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   std::vector<std::unique_ptr<DataRecord>> records;
   GapRecord gap;
@@ -284,6 +284,8 @@ TEST_F(FailureDomainIntegrationTest,
           .enableMessageErrorInjection()
           .create(nodes.size());
 
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+
   std::map<lsn_t, std::string> lsn_map;
   lsn_t first_lsn = LSN_INVALID;
   const size_t NUM_RECORDS_BATCH = 30;
@@ -335,7 +337,7 @@ TEST_F(FailureDomainIntegrationTest,
   write_records(true);
 
   // recovery should finish despite one region (3 nodes) is down
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   std::vector<std::unique_ptr<DataRecord>> records;
   GapRecord gap;
@@ -420,6 +422,8 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
                      .setParam("--rocksdb-use-copyset-index", "false")
                      .create(0);
 
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+
   const std::chrono::seconds client_timeout(3);
   auto client = cluster->createClient(client_timeout);
   const logid_t logid(2);
@@ -442,7 +446,8 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
           // It's possible for append to fail if there's an appender that
           // started while a rack was down and hasn't yet noticed that the
           // rack is up again. Keep trying.
-          EXPECT_TRUE(err == E::SEQNOBUFS || err == E::ISOLATED)
+          EXPECT_TRUE(err == E::SEQNOBUFS || err == E::ISOLATED ||
+                      err == E::TIMEDOUT)
               << error_name(err);
 
           if (std::chrono::steady_clock::now() - append_start_time >
@@ -559,6 +564,7 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
     std::iota(nodes.begin(), nodes.end(), rack_start[1]);
     EXPECT_EQ(0, cluster->start(nodes));
   }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   // Writes and reads should work now.
   ld_info("Writing without a rack and a node.");

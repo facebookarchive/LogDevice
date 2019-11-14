@@ -28,8 +28,8 @@ TEST_F(AdminAPINodeStateTest, getNodeState) {
                      .setParam("--gossip-interval", "5ms")
                      .create(3);
 
-  cluster->waitUntilAllAvailable();
-  cluster->waitForRecovery();
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+  cluster->waitUntilAllSequencersQuiescent();
   cluster->getNode(1).waitUntilNodeStateReady();
   auto admin_client = cluster->getNode(1).createAdminClient();
   ASSERT_NE(nullptr, admin_client);

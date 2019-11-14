@@ -322,8 +322,7 @@ class RebuildingTest : public IntegrationTestBase,
     NodeSetIndices node_set(end - begin + 1);
     std::iota(node_set.begin(), node_set.end(), begin);
 
-    cluster.waitForRecovery();
-    cluster.waitForMetaDataLogWrites();
+    cluster.waitUntilAllSequencersQuiescent();
 
     auto client = cluster.createClient();
 
@@ -552,7 +551,7 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
                      .setNumLogs(1)
                      .create(5);
 
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   auto client = cluster->createClient();
 
@@ -651,7 +650,7 @@ TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
                      .setEventLogAttributes(log_attrs)
                      .setNumLogs(42)
                      .create(5);
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   // Restart all nodes with an empty disk for shard 1.
   for (node_index_t node = 1; node <= 4; ++node) {
@@ -702,7 +701,7 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
                      .setNumLogs(42)
                      .create(9); // 1 sequencer node + 8 storage nodes
 
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   auto client = cluster->createClient();
   client->settings().set("gap-grace-period", "10ms");
@@ -777,7 +776,7 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
                      .setNumLogs(42)
                      .create(9); // 1 sequencer node + 8 storage nodes
 
-  cluster->waitForRecovery();
+  cluster->waitUntilAllSequencersQuiescent();
 
   auto client = cluster->createClient();
   client->settings().set("gap-grace-period", "10ms");
@@ -2309,7 +2308,7 @@ TEST_P(RebuildingTest, SkipEverything) {
                      .setParam("--rocksdb-new-partition-timestamp-margin", "0s")
                      .create(3);
 
-  cluster->waitForRecovery();
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   ld_info("Creating client");
   auto client = cluster->createClient();
@@ -2498,6 +2497,7 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
                      .setInternalLogsReplicationFactor(2)
                      .setParam("--test-stall-rebuilding", "true")
                      .create(3);
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   // Append a record, making sure that N2 is in the copyset.
   ld_info("Updating setting");

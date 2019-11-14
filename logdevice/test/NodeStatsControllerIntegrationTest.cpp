@@ -232,9 +232,7 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
 
     setOneLogPerNode();
     cluster->start();
-    // Ensure all the nodes have the same config
-    cluster->waitForServersToPartiallyProcessConfigUpdate();
-    waitForSequencersToActivate();
+    cluster->waitUntilAllStartedAndPropagatedInGossip();
 
     int controller_count = params.max_boycott_count + 1;
     // wait for controllers to activate
@@ -271,23 +269,6 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
     logs_config->markAsFullyLoaded();
 
     cluster->writeConfig(full_config->serverConfig().get(), logs_config.get());
-  }
-
-  void waitForSequencersToActivate() {
-    // make sure that this client never sends stats to make the remaining parts
-    // of the test more deterministic
-    auto client = createClient({{"node-stats-send-period", "1h"}});
-
-    wait_until(
-        "All sequencers are activated",
-        [client = client.get(), node_count = cluster->getNodes().size()] {
-          bool is_all_activated = true;
-          for (int log = 1; log <= node_count; ++log) {
-            is_all_activated = is_all_activated &&
-                client->appendSync(logid_t(log), ".") != LSN_INVALID;
-          }
-          return is_all_activated;
-        });
   }
 
   int getActiveControllerCount() {
@@ -939,7 +920,8 @@ TEST_F(NodeStatsControllerIntegrationTest, PreemptedByBoycottedNodeAppend) {
 
 // The secondary sequencer is preempted by the primary sequencer but the
 // primary is boycotted, so the secondary should take over on the first
-// GET_SEQ_STATE A test case covering T36990448.
+// GET_SEQ_STATE.
+// A test case covering T36990448.
 TEST_F(NodeStatsControllerIntegrationTest,
        PreemptedByBoycottedNodeGetSeqState) {
   node_index_t outlier_node{3};

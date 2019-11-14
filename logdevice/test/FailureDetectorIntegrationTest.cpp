@@ -365,9 +365,7 @@ TEST_F(FailureDetectorIntegrationTest, MinorityIsolation) {
           .enableMessageErrorInjection()
           .create(num_nodes);
 
-  for (size_t idx = 0; idx < num_nodes; ++idx) {
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   for (int i = 0; i < 10; ++i) {
@@ -412,11 +410,7 @@ TEST_F(FailureDetectorIntegrationTest, MinorityIsolation) {
   // resuscitate one node
   auto idx = dead_nodes.front();
   cluster->getNode(idx).resume();
-  std::string key = folly::to<std::string>("N", idx);
-  wait_until([&]() {
-    auto info = cluster->getNode(node_idx).gossipInfo();
-    return info[key] == "ALIVE";
-  });
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   lsn_t lsn = client->appendSync(logid_t(1), Payload("hello", 5));
   EXPECT_NE(LSN_INVALID, lsn);
@@ -431,6 +425,7 @@ TEST_F(FailureDetectorIntegrationTest, GetClusterState) {
                      .enableMessageErrorInjection()
                      .setNumLogs(num_logs)
                      .create(num_nodes);
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   // force client to have only one worker to make sure the same worker is going
   // to exectue all requests.
@@ -575,8 +570,8 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
     cluster->waitUntilGossip(/* alive */ true, idx);
   }
 
-  cluster->waitUntilNoOneIsInStartupState();
-  cluster->waitForRecovery();
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+  cluster->waitUntilAllSequencersQuiescent();
 
   /* create client */
   std::unique_ptr<ClientSettings> client_settings2(ClientSettings::create());
@@ -618,9 +613,7 @@ TEST_F(FailureDetectorIntegrationTest, GetClusterStatePeerUnavailable) {
                      .useTcp()
                      .create(3);
 
-  for (size_t idx = 0; idx < 3; ++idx) {
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("cluster-state-refresh-interval", "1ms"));

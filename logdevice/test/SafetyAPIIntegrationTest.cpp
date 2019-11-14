@@ -87,10 +87,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
                      .setLogAttributes(log_attrs)
                      .create(num_nodes);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   std::shared_ptr<Client> client = cluster->createClient();
   ClientImpl* client_impl = dynamic_cast<ClientImpl*>(client.get());
@@ -194,10 +191,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
 
   // double cluster size
   cluster->expand(num_nodes);
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+  cluster->waitUntilAllSequencersQuiescent();
 
   write_test_records(client, LOG_ID, 10);
 
@@ -257,10 +252,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
                      .setMetaDataLogsConfig(meta_configs)
                      .create(num_nodes);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   std::shared_ptr<Client> client = cluster->createClient();
   ClientImpl* client_impl = dynamic_cast<ClientImpl*>(client.get());
@@ -348,10 +340,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
                      .setEventLogAttributes(internal_log_attrs)
                      .create(num_nodes);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   std::shared_ptr<Client> client =
       cluster->createClient(std::chrono::seconds(10));
@@ -450,10 +439,7 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
                      .setConfigLogAttributes(internal_log_attrs)
                      .create(num_nodes);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   std::shared_ptr<Client> client = cluster->createClient();
   ClientImpl* client_impl = dynamic_cast<ClientImpl*>(client.get());
@@ -602,10 +588,7 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                      .setConfigLogAttributes(internal_log_attrs)
                      .create(num_nodes);
 
-  for (const auto& it : cluster->getNodes()) {
-    node_index_t idx = it.first;
-    cluster->getNode(idx).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   std::shared_ptr<Client> client = cluster->createClient();
   ClientImpl* client_impl = dynamic_cast<ClientImpl*>(client.get());

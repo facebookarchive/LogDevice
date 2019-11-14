@@ -3230,6 +3230,8 @@ int Cluster::shutdownNodes(const std::vector<node_index_t>& nodes) {
     int rv = getNode(i).waitUntilExited();
     if (rv != 0) {
       res = -1;
+    } else {
+      getNode(i).stopped_ = true;
     }
   }
   return res;

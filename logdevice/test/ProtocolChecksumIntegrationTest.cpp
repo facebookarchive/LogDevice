@@ -36,9 +36,7 @@ TEST_F(ProtocolChecksumIntegrationTest, ChecksummingEnabled) {
                      .setParam("--checksumming-enabled", "true")
                      .create(NNODES);
 
-  for (node_index_t i = 0; i < NNODES; ++i) {
-    cluster->getNode(i).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
@@ -64,9 +62,7 @@ TEST_F(ProtocolChecksumIntegrationTest, ChecksummingDisabled) {
                      .setParam("--checksumming-enabled", "false")
                      .create(NNODES);
 
-  for (node_index_t i = 0; i < NNODES; ++i) {
-    cluster->getNode(i).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
@@ -99,9 +95,7 @@ TEST_F(ProtocolChecksumIntegrationTest, TestBlacklistedMessages) {
           .setParam("--checksumming-blacklisted-messages", all_messages)
           .create(NNODES);
 
-  for (node_index_t i = 0; i < NNODES; ++i) {
-    cluster->getNode(i).waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   lsn_t lsn1 = client->appendSync(logid_t(1), "foo");

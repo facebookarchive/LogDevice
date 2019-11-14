@@ -723,9 +723,7 @@ TEST_F(AppendIntegrationTest, InternalLogAppendersMemoryLimitTest) {
                      .useHashBasedSequencerAssignment()
                      .create(nodes);
 
-  for (const auto& it : cluster->getNodes()) {
-    it.second->waitUntilAvailable();
-  }
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
   const logid_t LOG_ID(1);

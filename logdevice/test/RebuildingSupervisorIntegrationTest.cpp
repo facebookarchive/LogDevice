@@ -787,20 +787,9 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingExitThresholdOnAck) {
                      .create(num_nodes);
 
   cluster->start({});
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
-
-  // Wait until all nodes are seen as alive
-  for (const auto& n : cluster->getNodes()) {
-    wait_until([&]() {
-      for (const auto& it : n.second->gossipCount()) {
-        if (it.second.first != "ALIVE" || it.second.second > 1000000) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }
 
   // Write some records.
   ld_info("write some records");
@@ -1427,7 +1416,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, ReadIOError) {
                      .create(5);
 
   cluster->start({0, 1, 2, 3, 4});
-  cluster->waitForRecovery();
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
 
