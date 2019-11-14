@@ -19,6 +19,7 @@
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/util.h"
 
@@ -77,6 +78,23 @@ constructConfig(const std::vector<std::string>& hosts) {
 
 void ServerConfigSource::init(const std::string& path,
                               const std::vector<std::string>& hosts) {
+  // A note one lock order.
+  //
+  // All this config stuff involves a haphazard pile of mutexes that tend to
+  // deadlock or raise TSAN warnings. Here, TSAN used to complain about lock
+  // order inversion: init(), which is called with TextConfigUpdater's mutex
+  // locked, locks config_'s and updateable_server_config's mutexes; at the same
+  // time, server_config_subscription_, which is called with
+  // updateable_server_config's mutex locked, would call
+  // async_cb_->onAsyncGet(), which would lock TextConfigUpdater's mutex.
+  //
+  // I don't think this particular inversion can cause a deadlock:
+  // the TextConfigUpdater-then-updateable_server_config locking order is not
+  // going to happen. But let's work around it anyway, just to silence TSAN
+  // without messing with suppressions files. Let's avoid calling onAsyncGet()
+  // with locked updateable_server_config mutex, and instead schedule it to
+  // be called on processor_'s worker thread.
+
   config_ = std::make_shared<UpdateableConfig>();
   auto trace_logger = std::make_shared<NoopTraceLogger>(config_);
 
@@ -89,15 +107,25 @@ void ServerConfigSource::init(const std::string& path,
   // Set a callback to pass the received config to the AsyncCallback
   server_config_subscription_ =
       updateable_server_config->subscribeToUpdates([this, path]() {
-        auto server_config = config_->getServerConfig();
-        Output out;
-        auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
-        out.contents = server_config->toString(logs_config.get());
-        ServerConfig::ConfigMetadata metadata =
-            server_config->getMainConfigMetadata();
-        out.mtime = metadata.modified_time;
-        out.hash = metadata.hash;
-        async_cb_->onAsyncGet(this, path, E::OK, std::move(out));
+        // Post to Processor. See comment at the beginning of init().
+        std::unique_ptr<Request> rq = std::make_unique<FuncRequest>(
+            worker_id_t(0),
+            WorkerType::GENERAL,
+            RequestType::MISC,
+            [this, path] {
+              auto server_config = config_->getServerConfig();
+              Output out;
+              auto logs_config =
+                  std::make_unique<configuration::LocalLogsConfig>();
+              out.contents = server_config->toString(logs_config.get());
+              ServerConfig::ConfigMetadata metadata =
+                  server_config->getMainConfigMetadata();
+              out.mtime = metadata.modified_time;
+              out.hash = metadata.hash;
+              async_cb_->onAsyncGet(this, path, E::OK, std::move(out));
+            });
+        int rv = processor_->postImportant(rq);
+        ld_check(rv == 0);
       });
 
   // This is a hack to construct a Settings object with default settings

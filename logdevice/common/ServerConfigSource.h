@@ -23,12 +23,8 @@ class UpdateableConfig;
 
 class ServerConfigSource : public ConfigSource {
  public:
-  explicit ServerConfigSource() {}
-  ~ServerConfigSource() override {
-    // The local processor needs to shutdown its workers first, before anything
-    // else gets destroyed
-    processor_.reset();
-  }
+  ServerConfigSource() = default;
+  ~ServerConfigSource() override = default;
 
   std::string getName() override {
     return "server";
@@ -40,8 +36,9 @@ class ServerConfigSource : public ConfigSource {
   Status getConfig(const std::string& path, Output* out) override;
 
  private:
-  std::shared_ptr<Processor> processor_;
+  // Destruction order: unsubscribe, stop Processor, destroy config.
   std::shared_ptr<UpdateableConfig> config_;
+  std::shared_ptr<Processor> processor_;
   ConfigSubscriptionHandle server_config_subscription_;
 
   void init(const std::string& path, const std::vector<std::string>& hosts);
