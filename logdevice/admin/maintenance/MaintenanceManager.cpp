@@ -1787,6 +1787,7 @@ MaintenanceManager::runShardWorkflows() {
     futures.push_back(wf->run(current_storage_state.value(),
                               getShardDataHealthInternal(shard_id).value(),
                               getCurrentRebuildingMode(shard_id),
+                              isShardDraining(shard_id),
                               isRebuildingNonAuthoritative(shard_id),
                               gossip_state));
   }
@@ -1952,6 +1953,16 @@ RebuildingMode MaintenanceManager::getCurrentRebuildingMode(ShardID shard) {
   ld_check(event_log_rebuilding_set_);
   return event_log_rebuilding_set_->getRebuildingMode(
       shard.node(), shard.shard());
+}
+
+bool MaintenanceManager::isShardDraining(const ShardID& shard) const {
+  ld_check(event_log_rebuilding_set_);
+  auto node_info =
+      event_log_rebuilding_set_->getNodeInfo(shard.node(), shard.shard());
+  if (node_info == nullptr) {
+    return false;
+  }
+  return node_info->drain;
 }
 
 bool MaintenanceManager::isRebuildingNonAuthoritative(

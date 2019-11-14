@@ -720,6 +720,10 @@ class MaintenanceManager : public SerialWorkContext {
   // otherwise returns RebuildingMode::INVALID
   virtual RebuildingMode getCurrentRebuildingMode(ShardID shard);
 
+  // Returns true if the drain flag is set for this
+  // shard in the EventlogRebuildingSet
+  bool isShardDraining(const ShardID& shard) const;
+
   // Returns true if the rebuilding is *not* authoritative by looking up
   // the shard in EventLogRebuildingSet.
   // Note: If the given shard does not exist in rebuilding set, this will

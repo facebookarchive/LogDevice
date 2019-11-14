@@ -15,11 +15,11 @@
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
-
 folly::SemiFuture<MaintenanceStatus>
 ShardWorkflow::run(const membership::ShardState& shard_state,
                    ShardDataHealth data_health,
                    RebuildingMode rebuilding_mode,
+                   bool is_draining,
                    bool is_non_authoritative,
                    ClusterStateNodeState node_gossip_state) {
   ld_spew("%s",
@@ -46,6 +46,7 @@ ShardWorkflow::run(const membership::ShardState& shard_state,
   current_data_health_ = data_health;
   gossip_state_ = node_gossip_state;
   current_rebuilding_mode_ = rebuilding_mode;
+  current_is_draining_ = is_draining;
   current_rebuilding_is_non_authoritative_ = is_non_authoritative;
   event_.reset();
   if (shard_state.manual_override) {
@@ -156,16 +157,14 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
       // without waiting for transition to DATA_MIGRATION
       updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_TRANSITION);
       if (restore_mode_rebuilding_ && isNcTransitionStuck()) {
-        createRebuildEventIfRequired(RebuildingMode::RESTORE, true /*force*/);
+        createRebuildEventIfRequired(true /*force*/);
       }
       break;
     case membership::StorageState::READ_ONLY:
       // Trigger rebuilding if one wasn't already triggered
       createRebuildEventIfRequired(
-          restore_mode_rebuilding_ ? RebuildingMode::RESTORE
-                                   : RebuildingMode::RELOCATE,
           status_ !=
-              MaintenanceStatus::AWAITING_START_DATA_MIGRATION /*force*/);
+          MaintenanceStatus::AWAITING_START_DATA_MIGRATION /*force*/);
       // If a new event was created, lets wait for this to event to be written
       // to event log
       if (event_) {
@@ -180,9 +179,7 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
       }
       break;
     case membership::StorageState::DATA_MIGRATION:
-      createRebuildEventIfRequired(restore_mode_rebuilding_
-                                       ? RebuildingMode::RESTORE
-                                       : RebuildingMode::RELOCATE);
+      createRebuildEventIfRequired();
       // No new rebuild event was created. Check if the existing
       // rebuilding is complete.
       if (!event_ && current_data_health_ == ShardDataHealth::EMPTY) {
@@ -318,16 +315,22 @@ void ShardWorkflow::createAbortEventIfRequired() {
   }
 }
 
-void ShardWorkflow::createRebuildEventIfRequired(RebuildingMode new_mode,
-                                                 bool force) {
-  if (force || current_rebuilding_mode_ != new_mode) {
-    SHARD_NEEDS_REBUILD_flags_t flag{0};
-    if (new_mode == RebuildingMode::RELOCATE) {
-      flag = SHARD_NEEDS_REBUILD_Header::DRAIN;
+void ShardWorkflow::createRebuildEventIfRequired(bool force) {
+  SHARD_NEEDS_REBUILD_flags_t flag{0};
+  if (filter_relocate_shards_) {
+    flag |= SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
+  }
+  if (restore_mode_rebuilding_) {
+    if (current_rebuilding_mode_ != RebuildingMode::RESTORE || force) {
+      event_ = std::make_unique<SHARD_NEEDS_REBUILD_Event>(
+          SHARD_NEEDS_REBUILD_Header{shard_.node(),
+                                     (uint32_t)shard_.shard(),
+                                     "ShardWorkflow",
+                                     "ShardWorkflow",
+                                     flag});
     }
-    if (filter_relocate_shards_) {
-      flag |= SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
-    }
+  } else if (!current_is_draining_ || force) {
+    flag |= SHARD_NEEDS_REBUILD_Header::DRAIN;
     event_ = std::make_unique<SHARD_NEEDS_REBUILD_Event>(
         SHARD_NEEDS_REBUILD_Header{shard_.node(),
                                    (uint32_t)shard_.shard(),

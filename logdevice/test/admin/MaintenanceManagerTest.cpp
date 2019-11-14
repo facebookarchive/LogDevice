@@ -402,7 +402,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
 }
 
 TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
-  const size_t num_nodes = 5;
+  const size_t num_nodes = 6;
   const size_t num_shards = 2;
 
   Configuration::Nodes nodes;
@@ -423,7 +423,7 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
   log_attrs.set_maxWritesInFlight(2048);
 
   auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
+      createMetaDataLogsConfig({0, 1, 2, 3, 4, 5}, 2, NodeLocationScope::NODE);
 
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
@@ -465,7 +465,7 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
           .deferStart()
           .create(num_nodes);
 
-  NodeSetIndices node_set(5);
+  NodeSetIndices node_set(6);
   std::iota(node_set.begin(), node_set.end(), 0);
 
   cluster_->start(node_set);
@@ -499,6 +499,30 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
 
   // Verify that the shards are dirty
   EXPECT_FALSE(cluster_->getNode(1).dirtyShardInfo().empty());
+
+  // Add a maintenance to drain N1
+  thrift::MaintenanceDefinition def;
+  def.set_shards({mkShardID(1, -1)});
+  def.set_shard_target_state(thrift::ShardOperationalState::DRAINED);
+  def.set_user("Test");
+  def.set_reason("Integration Test");
+  def.set_skip_safety_checks(false);
+  def.set_force_restore_rebuilding(false);
+  def.set_group(true);
+  def.set_ttl_seconds(0);
+  def.set_allow_passive_drains(false);
+  def.set_group_id("N1S-1");
+  def.set_created_on(SystemTimestamp::now().toMilliseconds().count());
+  auto maintenanceDelta = std::make_unique<MaintenanceDelta>();
+  maintenanceDelta->set_apply_maintenances({def});
+  writeToMaintenanceLog(*client, *maintenanceDelta);
+
+  // Wait until maintenance completes
+  wait_until("ShardOperationalState is DRAINED", [&]() {
+    auto state = cluster_->getNode(3).sendCommand("info shardopstate 1 0");
+    const std::string expected_text = "DRAINED\r\n";
+    return state == expected_text;
+  });
 }
 
 INSTANTIATE_TEST_CASE_P(MaintenanceManagerTest,

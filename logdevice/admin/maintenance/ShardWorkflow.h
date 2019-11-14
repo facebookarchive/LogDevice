@@ -54,6 +54,7 @@ class ShardWorkflow {
    * @param shard_state           The membership ShardState in NC
    * @param data_health           ShardDataHealth for the shard
    * @param rebuilding_mode       RebuildingMode for the shard
+   * @param is_draining           Is drain flag set in event log
    * @param is_non_authoritative  Is current rebuilding non authoritative.
    * @param node_gossip_state The gossip state of the node for this shard
    *
@@ -67,6 +68,7 @@ class ShardWorkflow {
   run(const membership::ShardState& shard_state,
       ShardDataHealth data_health,
       RebuildingMode rebuilding_mode,
+      bool is_draining,
       bool is_non_authoritative,
       ClusterStateNodeState node_gossip_state);
 
@@ -158,6 +160,9 @@ class ShardWorkflow {
   // shard.
   // Gets updated every time `run` is called
   ShardDataHealth current_data_health_;
+  // True if current rebuilding has drain flag set
+  // in the event log
+  bool current_is_draining_;
   // True if current rebuilding is non authoritative
   // Gets updated every time `run` is called
   bool current_rebuilding_is_non_authoritative_;
@@ -182,10 +187,10 @@ class ShardWorkflow {
   void computeMaintenanceStatusForDrain();
   void computeMaintenanceStatusForMayDisappear();
   void computeMaintenanceStatusForEnable();
-  // Sets event_ to SHARD_NEEDS_REBUILD_Event if the mode is different from
-  // current_rebuilding_mode_. If force argument is true, a new event of `mode`
-  // will be created irrespective of the current_rebuilding_mode_.
-  void createRebuildEventIfRequired(RebuildingMode mode, bool force = false);
+  // Sets event_ to SHARD_NEEDS_REBUILD_Event with appropriate flags. If force
+  // argument is true, a new event will be created irrespective of the
+  // current_rebuilding_mode_ and current_is_draining_
+  void createRebuildEventIfRequired(bool force = false);
   // Sets event_ to SHARD_ABORT_EVENT if this is a full shard
   // rebuilding based on current_data_health_ and current_rebuilding_mode_
   void createAbortEventIfRequired();
