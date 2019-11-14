@@ -874,6 +874,10 @@ bool Server::initFailureDetector() {
     try {
       processor_->failure_detector_ = std::make_unique<FailureDetector>(
           params_->getGossipSettings(), processor_.get(), params_->getStats());
+      if (processor_->getHealthMonitor()) {
+        processor_->getHealthMonitor()->setFailureDetector(
+            processor_->failure_detector_.get());
+      }
     } catch (const ConstructorFailed&) {
       ld_error(
           "Failed to construct FailureDetector: %s", error_description(err));

@@ -185,10 +185,12 @@ make_processor_with_detector(node_index_t nid,
   MockFailureDetector* draw = d.get();
   // Need to assign failure_detector_ before workers start.
   p->failure_detector_ = std::move(d);
+  if (p->getHealthMonitor()) {
+    p->getHealthMonitor()->setFailureDetector(p->failure_detector_.get());
+  }
   p->startRunning();
   // Don't call FailureDetector::startRunning(). Instead we'll be calling
   // FailureDetector's method directly, as if it's running in main thread.
-
   return std::make_pair(std::move(p), draw);
 }
 

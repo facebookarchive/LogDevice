@@ -13,6 +13,7 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/chrono_util.h"
+#include "logdevice/server/FailureDetector.h"
 
 namespace facebook { namespace logdevice {
 
@@ -59,9 +60,6 @@ void HealthMonitor::startUp() {
   });
   baton.wait();
 }
-NodeHealthStatus HealthMonitor::getNodeStatus() {
-  return node_status_.load(std::memory_order_relaxed);
-}
 void HealthMonitor::monitorLoop() {
   last_entry_time_ = SteadyTimestamp::now();
   sleep_semifuture_ = folly::futures::sleep(sleep_period_)
@@ -69,6 +67,7 @@ void HealthMonitor::monitorLoop() {
                           .then([this](folly::Try<folly::Unit>) mutable {
                             STAT_INCR(stats_, health_monitor_num_loops);
                             if (shutdown_.load(std::memory_order_relaxed)) {
+                              removeFailureDetector();
                               shutdown_promise_.setValue();
                               return;
                             }
@@ -81,6 +80,7 @@ void HealthMonitor::monitorLoop() {
                                 : false;
                             processReports();
                             if (shutdown_.load(std::memory_order_relaxed)) {
+                              removeFailureDetector();
                               shutdown_promise_.setValue();
                               return;
                             }
@@ -188,13 +188,13 @@ void HealthMonitor::processReports() {
   auto start_time = now - kPeriodRange * sleep_period_;
   auto end_time = now + std::chrono::nanoseconds(1);
   calculateNegativeSignal(now);
-  NodeHealthStatus new_status = (sleep_period_ < state_timer_.getCurrentValue())
+  node_status_ = (sleep_period_ < state_timer_.getCurrentValue())
       ? NodeHealthStatus::UNHEALTHY
       : overloaded_ ? NodeHealthStatus::OVERLOADED : NodeHealthStatus::HEALTHY;
-  node_status_.store(new_status, std::memory_order_relaxed);
-  if (new_status == NodeHealthStatus::HEALTHY) {
+  if (node_status_ == NodeHealthStatus::HEALTHY) {
     STAT_INCR(stats_, health_monitor_state_indicator);
   }
+  updateFailureDetectorStatus(node_status_);
 }
 
 folly::SemiFuture<folly::Unit> HealthMonitor::shutdown() {
@@ -250,6 +250,25 @@ void HealthMonitor::reportWorkerStall(int idx,
       internal_info_.worker_stalls_[idx].addValue(tp, duration);
     }
   });
+}
+
+void HealthMonitor::setFailureDetector(FailureDetector* failure_detector) {
+  if (failure_detector) {
+    folly::SharedMutex::WriteHolder write_lock(mutex_);
+    failure_detector_ = failure_detector;
+  }
+}
+
+void HealthMonitor::removeFailureDetector() {
+  folly::SharedMutex::WriteHolder write_lock(mutex_);
+  failure_detector_ = nullptr;
+}
+
+void HealthMonitor::updateFailureDetectorStatus(NodeHealthStatus status) {
+  folly::SharedMutex::ReadHolder read_lock(mutex_);
+  if (failure_detector_) {
+    failure_detector_->setNodeStatus(status);
+  }
 }
 
 }} // namespace facebook::logdevice

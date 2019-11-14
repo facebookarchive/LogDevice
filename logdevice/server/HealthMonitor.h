@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <folly/Executor.h>
+#include <folly/SharedMutex.h>
 #include <folly/futures/Promise.h>
 #include <folly/stats/BucketedTimeSeries.h>
 
@@ -20,7 +21,7 @@
 #include "logdevice/common/stats/Stats.h"
 
 namespace facebook { namespace logdevice {
-
+class FailureDetector;
 class HealthMonitor {
  public:
   HealthMonitor(folly::Executor& executor,
@@ -36,7 +37,7 @@ class HealthMonitor {
 
   void startUp();
   folly::SemiFuture<folly::Unit> shutdown();
-  NodeHealthStatus getNodeStatus();
+  void setFailureDetector(FailureDetector* failure_detector);
 
   // reporter methods
   void reportWatchdogHealth(bool delayed);
@@ -89,14 +90,18 @@ class HealthMonitor {
 
   ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
       state_timer_;
-  std::atomic<NodeHealthStatus> node_status_{NodeHealthStatus::HEALTHY};
+  NodeHealthStatus node_status_{NodeHealthStatus::HEALTHY};
   bool overloaded_{false};
   StallInfo stall_info_{0, false};
+  folly::SharedMutex mutex_;
+  FailureDetector* failure_detector_{nullptr};
 
   bool isOverloaded(TimePoint now, std::chrono::milliseconds half_period);
   StallInfo isStalled(TimePoint now, std::chrono::milliseconds half_period);
   void updateVariables(TimePoint now);
   void calculateNegativeSignal(TimePoint now);
+  void updateFailureDetectorStatus(NodeHealthStatus status);
+  void removeFailureDetector();
 
   struct HMInfo {
     int num_workers_{};

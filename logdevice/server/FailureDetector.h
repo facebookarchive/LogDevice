@@ -16,6 +16,7 @@
 #include <folly/Optional.h>
 
 #include "logdevice/common/DomainIsolationChecker.h"
+#include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SequencerPlacement.h"
@@ -26,7 +27,6 @@
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
-#include "logdevice/server/HealthMonitor.h"
 #include "logdevice/server/sequencer_boycotting/BoycottTracker.h"
 
 namespace facebook { namespace logdevice {
@@ -230,6 +230,10 @@ class FailureDetector {
    */
   void getClusterDeadNodeStats(size_t* effective_dead_cnt,
                                size_t* effective_cluster_size);
+
+  void setNodeStatus(NodeHealthStatus status) {
+    node_health_status_.store(status, std::memory_order_relaxed);
+  }
 
  protected:
   // send a gossip message to some node in the cluster
@@ -442,6 +446,9 @@ class FailureDetector {
   // nodes in cluster
   size_t effective_dead_cnt_{0};
   size_t effective_cluster_size_{0};
+
+  std::atomic<NodeHealthStatus> node_health_status_{
+      NodeHealthStatus::UNDEFINED};
 
   // keep track of the time of the last gossip tick, which is when
   // the tick counters in Node::gossip_ were last updated
