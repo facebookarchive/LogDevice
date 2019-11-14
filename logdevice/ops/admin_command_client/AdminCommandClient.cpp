@@ -259,9 +259,9 @@ class AdminClientConnection
    */
   void fizzHandshakeError(fizz::client::AsyncFizzClient*,
                           folly::exception_wrapper ex) noexcept override {
-    ld_warning("fizzHandshakeError connecting to %s: %s",
-               request_.sockaddr.describe().c_str(),
-               ex ? ex.get_exception()->what() : "Unknown");
+    ld_debug("fizzHandshakeError connecting to %s: %s",
+             request_.sockaddr.describe().c_str(),
+             ex ? ex.get_exception()->what() : "Unknown");
     fizz_client_.reset();
     socket_.reset(new AsyncSSLSocket(std::make_shared<SSLContext>(), evb_));
     // make sure connectSuccess() will not go into an infinite loop
