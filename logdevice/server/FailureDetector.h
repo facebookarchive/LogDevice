@@ -170,6 +170,11 @@ class FailureDetector {
    */
   bool isIsolated() const;
 
+  /**
+   * Returns whether we received at least min_gossips_for_stable_state gossips.
+   */
+  bool isStableState() const;
+
   void shutdown();
 
   /**

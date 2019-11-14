@@ -2795,6 +2795,10 @@ int Cluster::waitUntilAllStartedAndPropagatedInGossip(
             return false;
           }
           auto obj = folly::parseJson(cmd_result);
+          if (obj["stable_state"] != "true") {
+            // The node needs to receive more gossip messages.
+            return false;
+          }
           for (auto& state : obj["states"]) {
             node_index_t idx =
                 folly::to<node_index_t>(state["node_id"].getString().substr(1));

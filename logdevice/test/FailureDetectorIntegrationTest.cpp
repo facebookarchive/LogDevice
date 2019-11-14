@@ -190,6 +190,9 @@ TEST_F(FailureDetectorIntegrationTest, DetectDomainIsolation) {
         reason.c_str(), [&]() { return noIsolatedScope(cluster.get(), idx); });
   }
 
+  // Make sure everyone receives at least min_gossips_for_stable_state gossips.
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+
   // stop node 0, 3, 4, 5, node 1 and 2 will detect themselve being isolated
   for (auto i : std::vector<int>{0, 3, 4, 5}) {
     cluster->getNode(i).suspend();

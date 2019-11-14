@@ -97,6 +97,7 @@ class InfoGossip : public AdminCommand {
       obj["domain_isolation"] = detector->getDomainIsolationString().c_str();
       // print current ISOLATION value
       obj["isolated"] = detector->isIsolated() ? "true" : "false";
+      obj["stable_state"] = detector->isStableState() ? "true" : "false";
     }
     return obj;
   }
@@ -141,6 +142,8 @@ class InfoGossip : public AdminCommand {
       out_.printf("%s", detector->getDomainIsolationString().c_str());
       // print current ISOLATION value
       out_.printf("ISOLATED %s\r\n", detector->isIsolated() ? "true" : "false");
+      out_.printf(
+          "STABLE_STATE %s\r\n", detector->isStableState() ? "true" : "false");
     }
   }
 };

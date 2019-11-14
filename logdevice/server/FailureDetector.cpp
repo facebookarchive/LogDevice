@@ -1394,6 +1394,11 @@ bool FailureDetector::isIsolated() const {
   return isolated_.load();
 }
 
+bool FailureDetector::isStableState() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return num_gossips_received_ >= settings_->min_gossips_for_stable_state;
+}
+
 bool FailureDetector::isLogsConfigLoaded() {
   if (!Worker::onThisThread(false)) {
     // we are here because we are in a test and FailureDetector is being
