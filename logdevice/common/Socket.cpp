@@ -654,14 +654,24 @@ void Socket::onBytesAvailable(bool fresh) {
           ld_check_eq(read_bytes, expected_bytes);
           iobuf->append(expected_bytes);
           rv = dispatchMessageBody(recv_message_ph_, std::move(iobuf));
-          if (rv == 0) {
-            rv = LD_EV(evbuffer_drain)(inbuf, read_bytes);
-            if (rv != 0) {
-              err = E::INTERNAL;
-            } else {
-              expectProtocolHeader();
-            }
+          if (rv != 0) {
+            read_more_.scheduleTimeout(0);
+            break;
           }
+
+          rv = LD_EV(evbuffer_drain)(inbuf, read_bytes);
+          if (rv != 0) {
+            err = E::INTERNAL;
+            ld_critical("cannot drain evbuffer. Should never happen unless "
+                        "evbuffer is frozen. "
+                        "Closing socket: %s with an error %s.",
+                        conn_description_.c_str(),
+                        error_name(err));
+            close(err);
+            break;
+          }
+
+          expectProtocolHeader();
         }
         if (rv != 0) {
           if (!peer_name_.isClientAddress()) {
