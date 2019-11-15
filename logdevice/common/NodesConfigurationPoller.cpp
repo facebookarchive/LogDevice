@@ -259,13 +259,21 @@ NodesConfigurationPoller::sendRequestToNode(Poller::RoundID round,
     conditional_poll_version_msg.assign(conditional_poll_version.value().val());
   }
 
+  // it doesn't matter where ConfigurationFetchRequest will be executed
+  // as we always route the callback back to the poller context. However,
+  // due to the current connection and worker thread model,
+  // we have to ping the request to a particular worker to reduce
+  // the number of connections.
+  // TODO: remove the thread pinning once the new threading model lands
+  ld_check(Worker::settings().num_workers > 0);
+  worker_id_t polling_worker_id =
+      worker_id_t(Worker::settings().num_workers - 1);
+
   std::unique_ptr<Request> rq = std::make_unique<ConfigurationFetchRequest>(
       nid,
       ConfigurationFetchRequest::ConfigType::NODES_CONFIGURATION,
       std::move(cb_wrapper),
-      // it doesn't matter where ConfigurationFetchRequest will be executed
-      // as we always route the callback back to the poller context
-      WORKER_ID_INVALID,
+      polling_worker_id,
       // use the full round timeout as the RPC request timeout
       options_.round_timeout,
       conditional_poll_version_msg);
