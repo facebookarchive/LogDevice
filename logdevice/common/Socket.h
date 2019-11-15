@@ -690,7 +690,7 @@ class Socket : public TrafficShappingSocket {
    * @return 0 if the message was successfully queued up for delivery. -1 on
    *         failure and err is set to E::INTERNAL.
    */
-  int serializeMessage(std::unique_ptr<Envelope>&& msg, size_t msglen);
+  int serializeMessage(std::unique_ptr<Envelope>&& msg);
 
   /**
    * Helper functions to split serializeMessage() functionality.
@@ -698,17 +698,11 @@ class Socket : public TrafficShappingSocket {
    * - SSL is enabled
    * - checksumming is disabled
    * - Message Type is ACK/HELLO
+   *
    * @return serialized buffer if no errors, returns a nullptr otherwise. err
-   * contains the actual reason.
+   *         contains the actual reason.
    */
-  std::unique_ptr<folly::IOBuf>
-  serializeMessageWithoutChecksum(const Message& msg, size_t msglen);
-  /**
-   * @return serialized buffer if no errors, returns a nullptr otherwise. err
-   * contains the actual reason.
-   */
-  std::unique_ptr<folly::IOBuf> serializeMessageWithChecksum(const Message& msg,
-                                                             size_t msglen);
+  std::unique_ptr<folly::IOBuf> serializeMessage(const Message& msg);
 
   /**
    * Allow the async message error simulator to optionally take ownership of

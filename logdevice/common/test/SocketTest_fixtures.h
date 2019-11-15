@@ -227,16 +227,15 @@ class SocketTest : public ::testing::Test {
     auto bodylen = wtmp.result();
     EXPECT_TRUE(bodylen > 0);
 
-    size_t protohdr_bytes =
-        ProtocolHeader::bytesNeeded(msg->type_, socket_->proto_);
-
     // using checksum version because some tests like
     // ClientSocketTest.CloseConnectionOnProtocolChecksumMismatch
     // need to always run irrespective of the
     // "Settings::checksumming_enabled" value
     temp_output_ = input_;
-    auto serialized_buf =
-        socket_->serializeMessageWithChecksum(*msg, protohdr_bytes + bodylen);
+    const auto old_value = settings_.checksumming_enabled;
+    settings_.checksumming_enabled = true;
+    auto serialized_buf = socket_->serializeMessage(*msg);
+    settings_.checksumming_enabled = old_value;
     ld_check(serialized_buf);
     auto status = socket_->sendBuffer(std::move(serialized_buf));
     ld_check(status == Socket::SendStatus::SCHEDULED);

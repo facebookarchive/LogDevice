@@ -1230,45 +1230,18 @@ bool Socket::isChecksummingEnabled(MessageType msgtype) {
   return msg_checksum_set.find((char)msgtype) == msg_checksum_set.end();
 }
 
-std::unique_ptr<folly::IOBuf>
-Socket::serializeMessageWithoutChecksum(const Message& msg, size_t msglen) {
-  ProtocolHeader protohdr;
-  protohdr.len = msglen;
-  protohdr.type = msg.type_;
-  size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
+std::unique_ptr<folly::IOBuf> Socket::serializeMessage(const Message& msg) {
+  const bool compute_checksum =
+      ProtocolHeader::needChecksumInHeader(msg.type_, proto_) &&
+      isChecksummingEnabled(msg.type_);
 
-  auto io_buf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
-  ld_check(protohdr_bytes <= IOBUF_ALLOCATION_UNIT);
-  memcpy(io_buf->writableData(), &protohdr, protohdr_bytes);
-  io_buf->append(protohdr_bytes);
-  ProtocolWriter writer(msg.type_, io_buf.get(), proto_);
-  msg.serialize(writer);
-  ssize_t bodylen = writer.result();
-  if (bodylen <= 0) { // unlikely
-    ld_critical("INTERNAL ERROR: failed to serialize a message of "
-                "type %s into an evbuffer",
-                messageTypeNames()[msg.type_].c_str());
-    ld_check(0);
-    close(E::INTERNAL);
-    err = E::INTERNAL;
-    return nullptr;
-  }
-  ld_check_eq(msglen, io_buf->computeChainDataLength());
-  ld_check(bodylen + protohdr_bytes == protohdr.len);
-  return io_buf;
-}
-
-std::unique_ptr<folly::IOBuf>
-Socket::serializeMessageWithChecksum(const Message& msg, size_t msglen) {
-  size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
-  ProtocolHeader protohdr;
-  protohdr.len = msglen;
-  protohdr.type = msg.type_;
+  const size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
   auto io_buf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
   ld_check(protohdr_bytes <= IOBUF_ALLOCATION_UNIT);
   io_buf->advance(protohdr_bytes);
-  // 1. Serialize the message into iobuf.
+
   ProtocolWriter writer(msg.type_, io_buf.get(), proto_);
+
   msg.serialize(writer);
   ssize_t bodylen = writer.result();
   if (bodylen <= 0) { // unlikely
@@ -1283,26 +1256,18 @@ Socket::serializeMessageWithChecksum(const Message& msg, size_t msglen) {
     return nullptr;
   }
 
-  // 2. Compute checksum
-  protohdr.cksum = writer.computeChecksum();
-  /* For Tests only */
-  if (shouldTamperChecksum()) {
-    protohdr.cksum += 1;
-  }
-
-  // 3. Add proto header to IOBUF
+  ProtocolHeader protohdr;
+  protohdr.cksum = compute_checksum ? writer.computeChecksum() : 0;
+  protohdr.cksum += shouldTamperChecksum(); // For Tests only
+  protohdr.type = msg.type_;
   io_buf->prepend(protohdr_bytes);
-  memcpy(static_cast<void*>(io_buf->writableData()), &protohdr, protohdr_bytes);
+  protohdr.len = io_buf->computeChainDataLength();
 
-  // 5. Finally move the whole serialized message from iobuf to outbuf
-  ld_check_eq(msglen, io_buf->computeChainDataLength());
-  ld_check(bodylen + protohdr_bytes == protohdr.len);
+  memcpy(static_cast<void*>(io_buf->writableData()), &protohdr, protohdr_bytes);
   return io_buf;
 }
 
-Socket::SendStatus
-Socket::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
-  std::unique_ptr<folly::IOBuf> io_buf(std::move(buffer_chain));
+Socket::SendStatus Socket::sendBuffer(std::unique_ptr<folly::IOBuf>&& io_buf) {
   struct evbuffer* outbuf =
       buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
   ld_check(outbuf);
@@ -1325,34 +1290,25 @@ Socket::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
   return Socket::SendStatus::SCHEDULED;
 }
 
-int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope,
-                             size_t msglen) {
+int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
   // We should only write to the output buffer once connected.
   ld_check(connected_);
 
   const auto& msg = envelope->message();
 
-  bool compute_checksum =
-      ProtocolHeader::needChecksumInHeader(msg.type_, proto_) &&
-      isChecksummingEnabled(msg.type_);
-
-  std::unique_ptr<folly::IOBuf> serialized_buf;
-  if (compute_checksum) {
-    serialized_buf = serializeMessageWithChecksum(msg, msglen);
-  } else {
-    serialized_buf = serializeMessageWithoutChecksum(msg, msglen);
-  }
+  std::unique_ptr<folly::IOBuf> serialized_buf = serializeMessage(msg);
 
   if (serialized_buf == nullptr) {
     return -1;
   }
 
+  const auto msglen = serialized_buf->computeChainDataLength();
   Socket::SendStatus status = sendBuffer(std::move(serialized_buf));
   if (status == Socket::SendStatus::ERROR) {
     RATELIMIT_CRITICAL(std::chrono::seconds(1),
                        2,
                        "INTERNAL ERROR: Failed to send a message of "
-                       "type %s into evbuffer",
+                       "type %s",
                        messageTypeNames()[msg.type_].c_str());
     return -1;
   }
@@ -1531,7 +1487,7 @@ void Socket::send(std::unique_ptr<Envelope> envelope) {
       return;
     }
 
-    if (serializeMessage(std::move(envelope), msglen) != 0) {
+    if (serializeMessage(std::move(envelope)) != 0) {
       ld_check(err == E::INTERNAL || err == E::PROTONOSUPPORT);
       onSent(std::move(envelope), err);
       return;
