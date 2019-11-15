@@ -56,11 +56,11 @@ TEST_P(ReadPastGlobalLastReleasedTest, RecoveryStuck) {
 
   // Create cluster, with mutable per-epoch log metadata and record cache
   // enabled or disabled, as given by test parameters.
-  logsconfig::LogAttributes log_attrs =
+  auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(NNODES -
-                                                                       1);
-  log_attrs.set_mutablePerEpochLogMetadataEnabled(
-      mutable_per_epoch_log_metadata_enabled);
+                                                                       1)
+          .with_mutablePerEpochLogMetadataEnabled(
+              mutable_per_epoch_log_metadata_enabled);
   factory.setLogAttributes(log_attrs);
   auto cluster = factory
                      .setParam("--enable-record-cache",

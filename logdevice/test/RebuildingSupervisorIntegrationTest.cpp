@@ -424,12 +424,13 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedRack) {
   int num_shards = 2;
   int num_racks = 3;
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(2);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::RACK);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(2)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::RACK);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableSelfInitiatedRebuilding("10s")
@@ -518,12 +519,13 @@ TEST_F(RebuildingSupervisorIntegrationTest, s143309) {
   int num_shards = 2;
   int num_racks = 3;
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(2);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::RACK);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(2)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::RACK);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--event-log-grace-period", "1ms")
@@ -665,12 +667,13 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThreshold) {
     nodes_config[i] = std::move(node);
   }
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(3)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -762,12 +765,12 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingExitThresholdOnAck) {
     nodes_config[i] = std::move(node);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_singleWriter(false);
-  log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_singleWriter(false)
+                       .with_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--enable-self-initiated-rebuilding", "true")
@@ -898,12 +901,13 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThresholdAtOnce) {
     nodes_config[i] = std::move(node);
   }
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(3)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -1024,12 +1028,13 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     nodes_config[i] = std::move(node);
   }
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(3)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -1140,12 +1145,13 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     nodes_config[i] = std::move(node);
   }
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(3)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -1215,12 +1221,13 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     nodes_config[i] = std::move(node);
   }
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(3)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -1325,12 +1332,13 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     nodes_config[i] = std::move(node);
   }
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(3)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -1482,12 +1490,13 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     nodes_config[i] = std::move(node);
   }
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_syncReplicationScope(NodeLocationScope::NODE);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_replicationFactor(3)
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_singleWriter(false)
+          .with_syncReplicationScope(NodeLocationScope::NODE);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()

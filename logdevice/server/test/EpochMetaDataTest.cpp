@@ -621,7 +621,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   EXPECT_EQ(initial_epoch_incremented_at, zk_record->epoch_incremented_at);
 
   // change replication factor, expect metadata to be updated
-  attrs.set_replicationFactor(1);
+  attrs = attrs.with_replicationFactor(1);
   rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   EXPECT_TRUE(zk_record->isValid());
@@ -641,7 +641,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   // change sync_replication_scope, expect metadata to be updated
   *zk_record = genValidEpochMetaData(NodeLocationScope::NODE);
   initial_epoch_incremented_at = zk_record->epoch_incremented_at;
-  attrs.set_syncReplicationScope(NodeLocationScope::RACK);
+  attrs = attrs.with_syncReplicationScope(NodeLocationScope::RACK);
   rv = updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
   EXPECT_TRUE(zk_record->isValid());
@@ -684,8 +684,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
       false /* update_if_exists */);
   zk_record.reset();
   StorageSet shards{N1, N2, N3};
-  attrs.set_replicationFactor(2);
-  attrs.set_nodeSetSize(3);
+  attrs = attrs.with_replicationFactor(2).with_nodeSetSize(3);
   selector->setStorageSet(shards);
   rv =
       provisioning_updater(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);

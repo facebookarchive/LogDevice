@@ -45,8 +45,7 @@ void MaintenanceManagerTest::init() {
     nodes[i].addStorageRole(num_shards);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
   auto meta_configs =
       createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
@@ -254,8 +253,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
   auto meta_configs =
       createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
@@ -409,14 +407,13 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  logsconfig::LogAttributes data_log_attrs;
-  data_log_attrs.set_replicationFactor(5);
+  auto data_log_attrs = logsconfig::LogAttributes().with_replicationFactor(5);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(2048);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(2048);
 
   auto meta_configs =
       createMetaDataLogsConfig({0, 1, 2, 3, 4, 5}, 2, NodeLocationScope::NODE);

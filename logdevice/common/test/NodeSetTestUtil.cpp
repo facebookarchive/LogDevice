@@ -72,13 +72,14 @@ void addLog(configuration::LocalLogsConfig* logs_config,
   // log must not already exist
   ld_check(logs_config->getLogMap().find(logid.val_) ==
            logs_config->getLogMap().end());
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_maxWritesInFlight(256);
-  log_attrs.set_replicationFactor(replication.getReplicationFactor());
-  log_attrs.set_extraCopies(extras);
-  log_attrs.set_nodeSetSize(nodeset_size);
-  log_attrs.set_backlogDuration(backlog);
-  log_attrs.set_replicateAcross(replication.getDistinctReplicationFactors());
+  auto log_attrs =
+      logsconfig::LogAttributes()
+          .with_maxWritesInFlight(256)
+          .with_replicationFactor(replication.getReplicationFactor())
+          .with_extraCopies(extras)
+          .with_nodeSetSize(nodeset_size)
+          .with_backlogDuration(backlog)
+          .with_replicateAcross(replication.getDistinctReplicationFactors());
   boost::icl::right_open_interval<logid_t::raw_type> logid_interval(
       logid.val_, logid.val_ + 1);
   logs_config->insert(

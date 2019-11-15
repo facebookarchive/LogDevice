@@ -756,40 +756,43 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     // 7-day retention for logs 300-399,
     // Infinite retention for logs 400-409.
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-    logsconfig::LogAttributes log_attrs;
-
-    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 1));
-    log_attrs.set_replicationFactor(3);
+    auto log_attrs =
+        logsconfig::LogAttributes()
+            .with_backlogDuration(std::chrono::seconds(3600 * 24 * 1))
+            .with_replicationFactor(3);
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(1, 100),
         "lg1",
         log_attrs);
-    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 2));
+    log_attrs =
+        log_attrs.with_backlogDuration(std::chrono::seconds(3600 * 24 * 2));
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(100, 200),
         "lg2",
         log_attrs);
-    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 3));
+    log_attrs =
+        log_attrs.with_backlogDuration(std::chrono::seconds(3600 * 24 * 3));
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(200, 300),
         "lg3",
         log_attrs);
 
-    log_attrs.set_backlogDuration(std::chrono::seconds(3600 * 24 * 7));
+    log_attrs =
+        log_attrs.with_backlogDuration(std::chrono::seconds(3600 * 24 * 7));
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(300, 400),
         "logs_can_disappear",
         log_attrs);
 
-    log_attrs.set_backlogDuration(folly::none);
+    log_attrs = log_attrs.with_backlogDuration(folly::none);
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(400, 410),
         "infinite_retention",
         log_attrs);
 
     // Event log.
-    log_attrs.set_backlogDuration(folly::none);
-    log_attrs.set_replicationFactor(3);
+    log_attrs =
+        log_attrs.with_backlogDuration(folly::none).with_replicationFactor(3);
     configuration::InternalLogs internal_logs;
     ld_check(internal_logs.insert("event_log_deltas", log_attrs));
 

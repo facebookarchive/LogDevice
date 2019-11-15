@@ -255,12 +255,12 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
     location.fromDomainString(domain_string);
     node.location = location;
   }
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(100);
-  log_attrs.set_syncReplicationScope(NodeLocationScope::REGION);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(100)
+                       .with_syncReplicationScope(NodeLocationScope::REGION);
   int num_logs = 100;
 
   // metadata logs are replicated cross-region as well
@@ -488,13 +488,12 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
   const int num_nodes = 10;
 
   auto cluster_factory = IntegrationTestUtils::ClusterFactory();
-  logsconfig::LogAttributes log_attrs =
-      cluster_factory.createDefaultLogAttributes(num_nodes);
-  log_attrs.set_nodeSetSize(num_nodes);
+  auto log_attrs =
+      cluster_factory.createDefaultLogAttributes(num_nodes).with_nodeSetSize(
+          num_nodes);
 
-  logsconfig::LogAttributes internal_log_attrs;
-  internal_log_attrs.set_replicationFactor(1);
-  internal_log_attrs.set_nodeSetSize(1);
+  auto internal_log_attrs =
+      logsconfig::LogAttributes().with_replicationFactor(1).with_nodeSetSize(1);
 
   auto cluster = cluster_factory.enableLogsConfigManager()
                      .deferStart()

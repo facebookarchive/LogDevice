@@ -251,9 +251,8 @@ TEST_F(AppendIntegrationTest, AbortCorruptedSequencers) {
   cluster_factory.useHashBasedSequencerAssignment(
       /*gossip_interval_ms=*/20, "10s");
   cluster_factory.setParam("--rocksdb-verify-checksum-during-store", "true");
-  logsconfig::LogAttributes log_attrs =
-      cluster_factory.createDefaultLogAttributes(NUM_NODES);
-  log_attrs.set_replicationFactor(REPLICATION_FACTOR);
+  auto log_attrs = cluster_factory.createDefaultLogAttributes(NUM_NODES)
+                       .with_replicationFactor(REPLICATION_FACTOR);
   cluster_factory.setLogAttributes(log_attrs);
   auto cluster = cluster_factory.create(NUM_NODES);
 
@@ -378,9 +377,8 @@ TEST_F(AppendIntegrationTest, GraylistCorruptedStorageNodes) {
   cluster_factory.setParam("--enable-adaptive-store-timeout", "false");
   cluster_factory.setParam("--gray-list-threshold", "0.6");
   cluster_factory.useHashBasedSequencerAssignment(/*gossip_interval_ms=*/20);
-  logsconfig::LogAttributes log_attrs =
-      cluster_factory.createDefaultLogAttributes(NUM_NODES);
-  log_attrs.set_replicationFactor(REPLICATION_FACTOR);
+  auto log_attrs = cluster_factory.createDefaultLogAttributes(NUM_NODES)
+                       .with_replicationFactor(REPLICATION_FACTOR);
   cluster_factory.setLogAttributes(log_attrs);
   auto cluster = cluster_factory.create(NUM_NODES);
 
@@ -505,8 +503,7 @@ TEST_F(AppendIntegrationTest, NoSequencer) {
   std::shared_ptr<configuration::LocalLogsConfig> logs_config =
       checked_downcast<std::unique_ptr<configuration::LocalLogsConfig>>(
           cluster_config->localLogsConfig()->copy());
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
   logs_config->insert(EXTRA_LOG_ID.val_, "test_log_log", log_attrs);
 
   auto client_config = std::make_shared<UpdateableConfig>();
@@ -552,8 +549,7 @@ TEST_F(AppendIntegrationTest, LogIdNotInServerConfig) {
   std::shared_ptr<configuration::LocalLogsConfig> logs_config =
       checked_downcast<std::unique_ptr<configuration::LocalLogsConfig>>(
           cluster_config->localLogsConfig()->copy());
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
   logs_config->insert(EXTRA_LOG_ID.val_, "test_log_log", log_attrs);
 
   auto client_config = std::make_shared<UpdateableConfig>();
@@ -880,9 +876,9 @@ TEST_F(AppendIntegrationTest, WriteAfterReplace) {
 TEST_F(AppendIntegrationTest, WriteToken) {
   const logid_t LOG_ID(1);
 
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
-  log_attrs.set_writeToken(std::string("hunter2"));
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1)
+          .with_writeToken(std::string("hunter2"));
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory().setLogAttributes(log_attrs).create(
@@ -1077,9 +1073,9 @@ static void AppendIntegrationTest_Stats_impl(bool sequencer_batching_on) {
   const int NAPPENDS = 5000;
   const int PAYLOAD_SIZE = 300;
   const int NTHREADS = 16;
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
-  log_attrs.set_maxWritesInFlight(2);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1)
+          .with_maxWritesInFlight(2);
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .doPreProvisionEpochMetaData()
                      .enableMessageErrorInjection()

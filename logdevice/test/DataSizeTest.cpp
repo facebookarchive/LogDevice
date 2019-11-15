@@ -44,17 +44,17 @@ static NodeSetIndices getFullNodeSet() {
 }
 
 static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(std::min(3, NUM_NODES - 1));
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(MAX_IN_FLIGHT);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(std::min(3, NUM_NODES - 1))
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(MAX_IN_FLIGHT);
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(std::min(4, NUM_NODES - 1));
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(100);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(std::min(4, NUM_NODES - 1))
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(100);
 
   Configuration::MetaDataLogsConfig meta_config;
   {

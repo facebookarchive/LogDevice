@@ -62,13 +62,13 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
   const logid_t logid(2);
   Configuration::Nodes nodes = createFailureDomainNodes();
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(2048);
-  // cross-region replication
-  log_attrs.set_syncReplicationScope(NodeLocationScope::REGION);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(2048)
+                       // cross-region replication
+                       .with_syncReplicationScope(NodeLocationScope::REGION);
 
   // metadata logs are replicated cross-region as well
   // this nodeset, with replication = 2, enforces cross-region replication
@@ -177,13 +177,13 @@ TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
   const logid_t LOG_ID(1);
   Configuration::Nodes nodes = createFailureDomainNodes();
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(256);
-  // cross-region replication
-  log_attrs.set_syncReplicationScope(NodeLocationScope::REGION);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(256)
+                       // cross-region replication
+                       .with_syncReplicationScope(NodeLocationScope::REGION);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig({0, 1, 3}, 2, NodeLocationScope::REGION);
@@ -257,14 +257,14 @@ TEST_F(FailureDomainIntegrationTest,
     node.addSequencerRole();
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(2048);
-  // cross-region replication
-  log_attrs.set_syncReplicationScope(NodeLocationScope::REGION);
-  log_attrs.set_nodeSetSize(3); // 3 regions
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(2048)
+                       // cross-region replication
+                       .with_syncReplicationScope(NodeLocationScope::REGION)
+                       .with_nodeSetSize(3); // 3 regions
 
   // metadata logs are replicated cross-region as well
   // this nodeset, with replication = 2, enforces cross-region replication

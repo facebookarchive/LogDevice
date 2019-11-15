@@ -60,9 +60,9 @@ void TailRecordIntegrationTest::init(bool hash_based_sequencer_placement) {
           tail_optimized_ ? "YES" : "NO",
           checksum_bits_);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(replication_);
-  log_attrs.set_tailOptimized(tail_optimized_);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(replication_)
+                       .with_tailOptimized(tail_optimized_);
 
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setLogGroupName("tail-record-test")

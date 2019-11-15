@@ -546,22 +546,22 @@ int main(int argc, const char* argv[]) {
     factory.setLogGroupName(options::range_name);
   }
   if (options::replication != -1) {
-    log_attrs.set_replicationFactor(options::replication);
+    log_attrs = log_attrs.with_replicationFactor(options::replication);
   }
   if (options::extra_copies != -1) {
-    log_attrs.set_extraCopies(options::extra_copies);
+    log_attrs = log_attrs.with_extraCopies(options::extra_copies);
   }
   if (options::synced_copies != -1) {
-    log_attrs.set_syncedCopies(options::synced_copies);
+    log_attrs = log_attrs.with_syncedCopies(options::synced_copies);
   }
   if (options::backlog.count() >= 0) {
-    log_attrs.set_backlogDuration(options::backlog);
+    log_attrs = log_attrs.with_backlogDuration(options::backlog);
   }
   if (options::scd_enabled) {
-    log_attrs.set_scdEnabled(true);
+    log_attrs = log_attrs.with_scdEnabled(true);
   }
   if (options::nodeset_size != -1) {
-    log_attrs.set_nodeSetSize(options::nodeset_size);
+    log_attrs = log_attrs.with_nodeSetSize(options::nodeset_size);
   }
   if (options::use_tcp) {
     factory.useTcp();
@@ -572,12 +572,13 @@ int main(int argc, const char* argv[]) {
 
   factory.setLogAttributes(log_attrs);
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_backlogDuration(folly::none);
-  event_log_attrs.set_replicationFactor(
-      options::nodeset_size == -1
-          ? std::min(5, (options::nnodes + 1) / 2)
-          : std::min(5, (options::nodeset_size + 1) / 2));
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_backlogDuration(folly::none)
+          .with_replicationFactor(
+              options::nodeset_size == -1
+                  ? std::min(5, (options::nnodes + 1) / 2)
+                  : std::min(5, (options::nodeset_size + 1) / 2));
   factory.setEventLogAttributes(event_log_attrs);
 
   if (!options::root.empty()) {

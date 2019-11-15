@@ -55,11 +55,11 @@ const logid_t LOG_ID(1);
 const int NUM_DB_SHARDS = 3;
 
 logsconfig::LogAttributes logAttributes(int replication) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(replication);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(300);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(replication)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(300);
   return log_attrs;
 }
 
@@ -287,12 +287,12 @@ class RebuildingTest : public IntegrationTestBase,
    */
   IntegrationTestUtils::ClusterFactory
   rollingRebuildingClusterFactory(int /*nnodes*/, int r, int x, bool trim) {
-    logsconfig::LogAttributes log_attrs;
-    log_attrs.set_replicationFactor(r);
-    log_attrs.set_extraCopies(x);
-    log_attrs.set_syncedCopies(0);
-    log_attrs.set_maxWritesInFlight(30);
-    log_attrs.set_stickyCopySets(true);
+    auto log_attrs = logsconfig::LogAttributes()
+                         .with_replicationFactor(r)
+                         .with_extraCopies(x)
+                         .with_syncedCopies(0)
+                         .with_maxWritesInFlight(30)
+                         .with_stickyCopySets(true);
 
     return IntegrationTestUtils::ClusterFactory()
         .apply(commonSetup())
@@ -536,11 +536,11 @@ TEST_P(RebuildingTest, NodeRebuiltTwice) {
 }
 
 TEST_P(RebuildingTest, OnlineDiskRepair) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
@@ -637,11 +637,11 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
 // Note that this test relies on the event log still being available, ie the
 // event log is not stored on the shard being rebuilt.
 TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
@@ -872,11 +872,11 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
 // was done as well. Killing a donor node helps ensure that rebuilding does not
 // complete until after we restart it.
 TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
@@ -946,11 +946,11 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding) {
 // config when rebuilding started. The two new nodes however will participate
 // and send such messages, which N3 will ignore.
 TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding2) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
@@ -1007,11 +1007,11 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding2) {
 // them (N5), which is removed from the config. Verify that adding N5 to the
 // rebuilding set unstalls rebuilding.
 TEST_P(RebuildingTest, DonorNodeRemovedFromConfigDuringRestoreRebuilding) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1063,14 +1063,14 @@ TEST_P(RebuildingTest, DonorNodeRemovedFromConfigDuringRestoreRebuilding) {
 }
 
 TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
-  logsconfig::LogAttributes event_log_attrs = log_attrs;
-  event_log_attrs.set_replicationFactor(4);
+  logsconfig::LogAttributes event_log_attrs =
+      log_attrs.with_replicationFactor(4);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig({1, 2, 3, 4}, 3, NodeLocationScope::NODE);
@@ -1106,11 +1106,11 @@ TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
 }
 
 TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1180,11 +1180,11 @@ TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
 }
 
 TEST_P(RebuildingTest, NodeDrain) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1227,11 +1227,11 @@ TEST_P(RebuildingTest, NodeDrain) {
 
 // Verify that writing SHARD_UNDRAIN to the event log cancels any ongoing drain.
 TEST_P(RebuildingTest, NodeDrainCanceled) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1291,11 +1291,11 @@ TEST_P(RebuildingTest, NodeDrainCanceled) {
 }
 
 TEST_P(RebuildingTest, NodeDiesAfterDrain) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1347,11 +1347,11 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
 // N5 is being drained, but it is removed from the config before the drain
 // completes. We then restart rebuilding of N5 in RELOCATE mode this time.
 TEST_P(RebuildingTest, NodeRebuildingInRelocateModeRemovedFromConfig) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1433,11 +1433,11 @@ TEST_P(RebuildingTest, NodeRebuildingInRelocateModeRemovedFromConfig) {
 // A node is removed from the config while it is rebuilding.
 // RebuildingCoordinator on donor nodes should abort rebuilding.
 TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfig) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1479,11 +1479,11 @@ TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfig) {
 // Same as RebuildingNodeRemovedFromConfig but the rebuilding node is not the
 // only node in the rebuilding set.
 TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfigButNotAlone) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   // Ensure metadata logs are not stored on the node we are about to remove from
   // the cluster.
@@ -1539,18 +1539,18 @@ TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfigButNotAlone) {
 // under-replicated. In this test we want to verify that this situation does not
 // cause rebuilding to stall.
 TEST_P(RebuildingTest, FMajorityInRebuildingSet) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
-  log_attrs.set_backlogDuration(std::chrono::seconds{6 * 3600});
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30)
+                       .with_backlogDuration(std::chrono::seconds{6 * 3600});
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(30);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(3)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
@@ -1611,18 +1611,18 @@ TEST_P(RebuildingTest, FMajorityInRebuildingSet) {
 // logs without one are scheduled for rebuilding, we rebuild shard 0 which
 // includes the event log.
 TEST_P(RebuildingTest, LocalWindow) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
-  log_attrs.set_backlogDuration(std::chrono::seconds{6 * 3600});
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30)
+                       .with_backlogDuration(std::chrono::seconds{6 * 3600});
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(30);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(3)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
@@ -1670,18 +1670,18 @@ TEST_P(RebuildingTest, LocalWindow) {
 
 // Same as `LocalWindow` but there is also a 30ms global window.
 TEST_P(RebuildingTest, LocalAndGlobalWindow) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
-  log_attrs.set_backlogDuration(std::chrono::seconds{6 * 3600});
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30)
+                       .with_backlogDuration(std::chrono::seconds{6 * 3600});
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(30);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(3)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(30);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
@@ -1775,11 +1775,11 @@ TEST_P(RebuildingTest, RollingMiniRebuilding) {
 // Verify that Mini-Rebuildings do not prevent a rebuild from being
 // considered authoritative.
 TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   NodeSetIndices node_set(5);
   std::iota(node_set.begin(), node_set.end(), 0);
@@ -2020,18 +2020,18 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
 }
 
 TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(4);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
-  log_attrs.set_backlogDuration(std::chrono::seconds{6 * 3600});
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(4)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30)
+                       .with_backlogDuration(std::chrono::seconds{6 * 3600});
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(30);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(3)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(30);
 
   ld_info("Creating cluster");
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -2179,11 +2179,11 @@ TEST_P(RebuildingTest, RebuildMetaDataLogsOfDeletedLogs) {
 // verify that a reader can successfully read without seeing
 // spurious dataloss gaps.
 TEST_P(RebuildingTest, UnderReplicatedRegions) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30);
 
   NodeSetIndices node_set(5);
   std::iota(node_set.begin(), node_set.end(), 0);
@@ -2266,17 +2266,17 @@ TEST_P(RebuildingTest, UnderReplicatedRegions) {
 // advance. Check that it skips all the records using csi and does so using
 // near-minimum number of seeks/nexts of csi iterator.
 TEST_P(RebuildingTest, SkipEverything) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(1000);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(1000);
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(2);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(30);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(2)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(30);
 
   Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
       /*nodeset=*/{0, 1},
@@ -2585,18 +2585,18 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
 
   ld_info("Creating cluster");
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
-  log_attrs.set_backlogDuration(maxBacklogDuration);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30)
+                       .with_backlogDuration(maxBacklogDuration);
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(30);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(3)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(30);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -2699,18 +2699,18 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
   // Longer than test duration.
   std::chrono::seconds maxBacklogDuration(300);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
-  log_attrs.set_backlogDuration(maxBacklogDuration);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30)
+                       .with_backlogDuration(maxBacklogDuration);
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(60);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(3)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(60);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -2786,18 +2786,18 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
   // Shorter than half of the test duration.
   std::chrono::seconds maxBacklogDuration(15);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
-  log_attrs.set_backlogDuration(maxBacklogDuration);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30)
+                       .with_backlogDuration(maxBacklogDuration);
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(30);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(3)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(30);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -2867,18 +2867,18 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
   // Longer than test duration.
   std::chrono::seconds maxBacklogDuration(300);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(30);
-  log_attrs.set_backlogDuration(maxBacklogDuration);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(30)
+                       .with_backlogDuration(maxBacklogDuration);
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(3);
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(30);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(3)
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(30);
 
   NodeSetIndices node_set(5);
   std::iota(node_set.begin(), node_set.end(), 0);

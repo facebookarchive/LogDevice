@@ -353,12 +353,12 @@ TEST_P(ReadingIntegrationTest, ReaderTest) {
 // Thin end-to-end test for single copy delivery,
 // where copyset shuffling is seeded using the client's session info
 TEST_P(ReadingIntegrationTest, SeededSCDReaderTest) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(256);
-  log_attrs.set_scdEnabled(true);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(256)
+                       .with_scdEnabled(true);
 
   auto cluster = clusterFactory()
                      .setLogGroupName("my-logs")
@@ -618,11 +618,11 @@ TEST_P(ReadingIntegrationTest, PurgingSmokeTest) {
 // enough of the cluster goes down that we expect service interruption.
 TEST_P(ReadingIntegrationTest, ReadHealth) {
   // Make sure replication factor is 2
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(256);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(256);
   auto cluster = clusterFactory()
                      .setLogGroupName("my-logs")
                      .setLogAttributes(log_attrs)
@@ -675,11 +675,11 @@ TEST_P(ReadingIntegrationTest, ReadHealth) {
 // Appropriate callbacks should be triggered at the right time.
 TEST_P(ReadingIntegrationTest, HealthChangeCallback) {
   // Make sure replication factor is 2
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(256);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(256);
   auto cluster = clusterFactory()
                      .setLogGroupName("my-logs")
                      .setLogAttributes(log_attrs)
@@ -1014,12 +1014,12 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
 // Can not remove now due to the defined functions
 #ifndef NDEBUG // This test requires fault injection.
 TEST_P(ReadingIntegrationTest, PurgingStuck) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(256);
-  log_attrs.set_scdEnabled(true);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(256)
+                       .with_scdEnabled(true);
 
   const logid_t LOG_ID(1);
 

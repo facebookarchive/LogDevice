@@ -440,9 +440,9 @@ class LogRebuildingTest : public ::testing::Test {
 
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
 
-    logsconfig::LogAttributes log_attrs;
-    log_attrs.set_replicationFactor(3);
-    log_attrs.set_scdEnabled(true);
+    auto log_attrs =
+        logsconfig::LogAttributes().with_replicationFactor(3).with_scdEnabled(
+            true);
     logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                             kLogID.val_, kLogID.val_ + 1),
                         "mylogs",

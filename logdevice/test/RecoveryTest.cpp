@@ -309,42 +309,45 @@ void RecoveryTest::init(bool can_tail_optimize) {
     use_record_cache_ = false;
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_maxWritesInFlight(max_writes_in_flight_);
-  log_attrs.set_singleWriter(false);
-  log_attrs.set_replicationFactor(replication_);
-  log_attrs.set_extraCopies(extra_);
-  log_attrs.set_syncedCopies(synced_);
-  log_attrs.set_syncReplicationScope(sync_replication_scope_);
-  log_attrs.set_stickyCopySets(true);
-  log_attrs.set_tailOptimized(tail_optimized_);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_maxWritesInFlight(max_writes_in_flight_)
+                       .with_singleWriter(false)
+                       .with_replicationFactor(replication_)
+                       .with_extraCopies(extra_)
+                       .with_syncedCopies(synced_)
+                       .with_syncReplicationScope(sync_replication_scope_)
+                       .with_stickyCopySets(true)
+                       .with_tailOptimized(tail_optimized_);
 
   // Use replication factor 3 for event log if there are enough nodes.
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_maxWritesInFlight(256);
-  event_log_attrs.set_singleWriter(false);
-  event_log_attrs.set_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul));
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_syncReplicationScope(sync_replication_scope_);
+  auto event_log_attrs =
+      logsconfig::LogAttributes()
+          .with_maxWritesInFlight(256)
+          .with_singleWriter(false)
+          .with_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul))
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_syncReplicationScope(sync_replication_scope_);
 
   // Use replication factor 3 for config-log-deltas
   // log if there are enough nodes.
-  logsconfig::LogAttributes config_attrs;
-  config_attrs.set_maxWritesInFlight(256);
-  config_attrs.set_singleWriter(false);
-  config_attrs.set_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul));
-  config_attrs.set_extraCopies(0);
-  config_attrs.set_syncedCopies(0);
-  config_attrs.set_syncReplicationScope(sync_replication_scope_);
+  auto config_attrs =
+      logsconfig::LogAttributes()
+          .with_maxWritesInFlight(256)
+          .with_singleWriter(false)
+          .with_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul))
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_syncReplicationScope(sync_replication_scope_);
 
-  logsconfig::LogAttributes maint_attrs;
-  maint_attrs.set_maxWritesInFlight(256);
-  maint_attrs.set_singleWriter(false);
-  maint_attrs.set_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul));
-  maint_attrs.set_extraCopies(0);
-  maint_attrs.set_syncedCopies(0);
-  maint_attrs.set_syncReplicationScope(sync_replication_scope_);
+  auto maint_attrs =
+      logsconfig::LogAttributes()
+          .with_maxWritesInFlight(256)
+          .with_singleWriter(false)
+          .with_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul))
+          .with_extraCopies(0)
+          .with_syncedCopies(0)
+          .with_syncReplicationScope(sync_replication_scope_);
 
   auto factory =
       IntegrationTestUtils::ClusterFactory()

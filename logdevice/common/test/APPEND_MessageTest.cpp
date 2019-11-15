@@ -97,8 +97,7 @@ class APPEND_MessageTest : public ::testing::Test {
     node.addStorageRole();
     Configuration::NodesConfig nodes({{0, std::move(node)}});
 
-    logsconfig::LogAttributes log_attrs;
-    log_attrs.set_replicationFactor(1);
+    auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(1);
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
     logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                             TEST_LOG.val_, TEST_LOG.val_ + 1),

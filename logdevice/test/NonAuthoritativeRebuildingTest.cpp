@@ -83,20 +83,19 @@ class NonAuthoritativeRebuildingTest
     dbg::currentLevel = dbg::Level::INFO;
     dbg::assertOnData = true;
 
-    logsconfig::LogAttributes log_attrs;
-    log_attrs.set_replicateAcross(
-        {{NodeLocationScope::NODE, 3}, {NodeLocationScope::RACK, 2}});
-    log_attrs.set_extraCopies(0);
-    log_attrs.set_syncedCopies(0);
-    log_attrs.set_maxWritesInFlight(30);
-
-    // We want more randomness in the placement of records.
-    log_attrs.set_stickyCopySets(false);
+    auto log_attrs = logsconfig::LogAttributes()
+                         .with_replicateAcross({{NodeLocationScope::NODE, 3},
+                                                {NodeLocationScope::RACK, 2}})
+                         .with_extraCopies(0)
+                         .with_syncedCopies(0)
+                         .with_maxWritesInFlight(30)
+                         // We want more randomness in the placement of records.
+                         .with_stickyCopySets(false);
 
     // Use replication factor 6 for event log to make sure it remains available
     // even if we stop a rack and a node.
-    auto internal_log_attrs = log_attrs;
-    internal_log_attrs.set_replicateAcross({{NodeLocationScope::NODE, 6}});
+    auto internal_log_attrs =
+        log_attrs.with_replicateAcross({{NodeLocationScope::NODE, 6}});
 
     // Place metadata logs on the first 6 nodes in the cluster.
     // Tests may kill an entire rack, but they should not touch the other nodes

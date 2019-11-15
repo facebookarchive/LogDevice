@@ -75,14 +75,13 @@ void MaintenanceAPITest::init() {
     nodes[i].addStorageRole(num_shards);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
-  logsconfig::LogAttributes internal_log_attrs;
-  internal_log_attrs.set_replicationFactor(3);
-  internal_log_attrs.set_extraCopies(0);
-  internal_log_attrs.set_syncedCopies(0);
-  internal_log_attrs.set_maxWritesInFlight(2048);
+  auto internal_log_attrs = logsconfig::LogAttributes()
+                                .with_replicationFactor(3)
+                                .with_extraCopies(0)
+                                .with_syncedCopies(0)
+                                .with_maxWritesInFlight(2048);
 
   auto meta_configs =
       createMetaDataLogsConfig({0, 1, 2, 3, 4, 5}, 3, NodeLocationScope::NODE);

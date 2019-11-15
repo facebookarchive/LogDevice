@@ -33,11 +33,11 @@ TEST_F(RecordCacheIntegrationTest, RecordCacheHitForNewAppends) {
   const int NNODES = 2;
   const int NLOGS = 1;
 
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
-  log_attrs.set_maxWritesInFlight(1024);
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
+          .with_maxWritesInFlight(1024)
+          .with_replicationFactor(2)
+          .with_extraCopies(0);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()

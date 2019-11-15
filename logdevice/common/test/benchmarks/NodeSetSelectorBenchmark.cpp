@@ -40,8 +40,7 @@ static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
     Configuration::NodesConfig nodes_config(std::move(nodes));
 
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-    logsconfig::LogAttributes log_attrs;
-    log_attrs.set_replicateAcross(
+    auto log_attrs = logsconfig::LogAttributes().with_replicateAcross(
         {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}});
     logs_config->insert(
         boost::icl::right_open_interval<logid_t::raw_type>(1, 2),

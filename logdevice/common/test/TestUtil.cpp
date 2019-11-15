@@ -237,8 +237,7 @@ createMetaDataLogsConfig(const ServerConfig::NodesConfig& nodes_config,
 
 std::shared_ptr<Configuration>
 createSimpleConfig(ServerConfig::NodesConfig nodes, size_t logs) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(1);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(1);
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
   logs_config->insert(
       boost::icl::right_open_interval<logid_t::raw_type>(1, logs + 1),

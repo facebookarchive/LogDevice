@@ -22,12 +22,12 @@ class ClientReadStreamFailureDetectorIntegrationTest
     : public IntegrationTestBase {};
 
 TEST_F(ClientReadStreamFailureDetectorIntegrationTest, Simple) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(256);
-  log_attrs.set_scdEnabled(true);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(3)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(256)
+                       .with_scdEnabled(true);
 
   const logid_t LOG_ID(1);
 

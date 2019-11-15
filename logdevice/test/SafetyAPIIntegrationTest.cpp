@@ -50,12 +50,11 @@ void write_test_records(std::shared_ptr<Client> client,
 } // namespace
 
 logsconfig::LogAttributes createInternalLogAttributes() {
-  logsconfig::LogAttributes attrs;
-  attrs.set_singleWriter(false);
-  attrs.set_replicationFactor(3);
-  attrs.set_extraCopies(0);
-  attrs.set_syncedCopies(0);
-  return attrs;
+  return logsconfig::LogAttributes()
+      .with_singleWriter(false)
+      .with_replicationFactor(3)
+      .with_extraCopies(0)
+      .with_syncedCopies(0);
 }
 
 TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
@@ -70,8 +69,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
   auto meta_configs =
       createMetaDataLogsConfig({0, 2}, 2, NodeLocationScope::NODE);
@@ -235,8 +233,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
   auto meta_configs =
       createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
@@ -325,8 +322,7 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
   const size_t num_nodes = 5;
   const size_t num_shards = 2;
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
   const auto internal_log_attrs = createInternalLogAttributes();
 
@@ -422,8 +418,7 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
 
   const auto internal_log_attrs = createInternalLogAttributes();
 
@@ -571,8 +566,7 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
     nodes[i].addStorageRole(num_shards);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
 
   const auto internal_log_attrs = createInternalLogAttributes();
 

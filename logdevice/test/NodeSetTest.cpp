@@ -101,12 +101,12 @@ class NodeSetTest : public IntegrationTestBase {
 void NodeSetTest::init() {
   ld_check(replication_ <= nodes_);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_maxWritesInFlight(256);
-  log_attrs.set_singleWriter(false);
-  log_attrs.set_replicationFactor(replication_);
-  log_attrs.set_extraCopies(extra_);
-  log_attrs.set_syncedCopies(synced_);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_maxWritesInFlight(256)
+                       .with_singleWriter(false)
+                       .with_replicationFactor(replication_)
+                       .with_extraCopies(extra_)
+                       .with_syncedCopies(synced_);
 
   auto factory =
       IntegrationTestUtils::ClusterFactory()
@@ -885,12 +885,12 @@ TEST_F(NodeSetTest, RebuildMultipleEpochs) {
 }
 
 TEST_F(NodeSetTest, EpochMetaDataCache) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_maxWritesInFlight(256);
-  log_attrs.set_singleWriter(false);
-  log_attrs.set_replicationFactor(replication_);
-  log_attrs.set_extraCopies(extra_);
-  log_attrs.set_syncedCopies(synced_);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_maxWritesInFlight(256)
+                       .with_singleWriter(false)
+                       .with_replicationFactor(replication_)
+                       .with_extraCopies(extra_)
+                       .with_syncedCopies(synced_);
 
   // we have a specific setup:
   // node 0: sequencer

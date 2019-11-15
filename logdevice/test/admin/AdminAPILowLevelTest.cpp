@@ -38,11 +38,11 @@ TEST_F(AdminAPILowLevelTest, BasicThriftClientCreation) {
 }
 
 TEST_F(AdminAPILowLevelTest, LogTreeReplicationInfo) {
-  logsconfig::LogAttributes internal_log_attrs;
-  internal_log_attrs.set_singleWriter(false);
-  internal_log_attrs.set_replicationFactor(2);
-  internal_log_attrs.set_extraCopies(0);
-  internal_log_attrs.set_syncedCopies(0);
+  auto internal_log_attrs = logsconfig::LogAttributes()
+                                .with_singleWriter(false)
+                                .with_replicationFactor(2)
+                                .with_extraCopies(0)
+                                .with_syncedCopies(0);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setConfigLogAttributes(internal_log_attrs)
                      .enableLogsConfigManager()
@@ -117,11 +117,11 @@ TEST_F(AdminAPILowLevelTest, LogTreeReplicationInfo) {
 
 TEST_F(AdminAPILowLevelTest, TakeLogTreeSnapshot) {
   const int node_count = 3;
-  logsconfig::LogAttributes internal_log_attrs;
-  internal_log_attrs.set_singleWriter(false);
-  internal_log_attrs.set_replicationFactor(2);
-  internal_log_attrs.set_extraCopies(0);
-  internal_log_attrs.set_syncedCopies(0);
+  auto internal_log_attrs = logsconfig::LogAttributes()
+                                .with_singleWriter(false)
+                                .with_replicationFactor(2)
+                                .with_extraCopies(0)
+                                .with_syncedCopies(0);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setConfigLogAttributes(internal_log_attrs)
                      .enableLogsConfigManager()

@@ -84,17 +84,17 @@ NodeSetIndices IsLogEmptyTest::getFullNodeSet() {
 
 void IsLogEmptyTest::commonSetup(
     IntegrationTestUtils::ClusterFactory& cluster) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(std::min(num_nodes - 1, 2));
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(250);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(std::min(num_nodes - 1, 2))
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(250);
 
-  logsconfig::LogAttributes event_log_attrs;
-  event_log_attrs.set_replicationFactor(std::min(num_nodes - 1, 2));
-  event_log_attrs.set_extraCopies(0);
-  event_log_attrs.set_syncedCopies(0);
-  event_log_attrs.set_maxWritesInFlight(250);
+  auto event_log_attrs = logsconfig::LogAttributes()
+                             .with_replicationFactor(std::min(num_nodes - 1, 2))
+                             .with_extraCopies(0)
+                             .with_syncedCopies(0)
+                             .with_maxWritesInFlight(250);
 
   Configuration::MetaDataLogsConfig meta_config;
   {

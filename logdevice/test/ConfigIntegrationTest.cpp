@@ -584,11 +584,11 @@ TEST_F(ConfigIntegrationTest, ConfigSyncMethodFailure) {
 }
 
 TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(100);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(2)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(100);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -1080,8 +1080,7 @@ TEST_F(ConfigIntegrationTest, MetaDataLog) {
       checked_downcast<std::unique_ptr<configuration::LocalLogsConfig>>(
           cluster_config->localLogsConfig()->copy());
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
   logs_config->insert(LOG_ID.val_, "test_log_log", log_attrs);
 
   auto client_config = std::make_shared<UpdateableConfig>();

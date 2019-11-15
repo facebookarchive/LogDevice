@@ -347,24 +347,24 @@ Cluster::Cluster(std::string root_path,
 
 logsconfig::LogAttributes
 ClusterFactory::createLogAttributesStub(int nstorage_nodes) {
-  logsconfig::LogAttributes attrs;
-  attrs.set_maxWritesInFlight(256);
-  attrs.set_singleWriter(false);
+  auto attrs =
+      logsconfig::LogAttributes().with_maxWritesInFlight(256).with_singleWriter(
+          false);
   switch (nstorage_nodes) {
     case 1:
-      attrs.set_replicationFactor(1);
-      attrs.set_extraCopies(0);
-      attrs.set_syncedCopies(0);
+      attrs =
+          attrs.with_replicationFactor(1).with_extraCopies(0).with_syncedCopies(
+              0);
       break;
     case 2:
-      attrs.set_replicationFactor(2);
-      attrs.set_extraCopies(0);
-      attrs.set_syncedCopies(0);
+      attrs =
+          attrs.with_replicationFactor(2).with_extraCopies(0).with_syncedCopies(
+              0);
       break;
     default:
-      attrs.set_replicationFactor(2);
-      attrs.set_extraCopies(0);
-      attrs.set_syncedCopies(0);
+      attrs =
+          attrs.with_replicationFactor(2).with_extraCopies(0).with_syncedCopies(
+              0);
   }
   return attrs;
 }
@@ -539,19 +539,19 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
 
   // Generic log configuration for internal logs
   logsconfig::LogAttributes internal_log_attrs =
-      createLogAttributesStub(nstorage_nodes);
-  internal_log_attrs.set_extraCopies(0);
+      createLogAttributesStub(nstorage_nodes).with_extraCopies(0);
 
   // Internal logs shouldn't have a lower replication factor than data logs
   if (log_attributes_.hasValue() &&
       log_attributes_.value().replicationFactor().hasValue() &&
       log_attributes_.value().replicationFactor().value() >
           internal_log_attrs.replicationFactor().value()) {
-    internal_log_attrs.set_replicationFactor(
+    internal_log_attrs = internal_log_attrs.with_replicationFactor(
         log_attributes_.value().replicationFactor().value());
   }
   if (internal_logs_replication_factor_ > 0) {
-    internal_log_attrs.set_replicationFactor(internal_logs_replication_factor_);
+    internal_log_attrs = internal_log_attrs.with_replicationFactor(
+        internal_logs_replication_factor_);
   }
 
   // configure the delta and snapshot logs if the user did not do so already.

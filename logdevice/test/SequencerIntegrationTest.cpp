@@ -207,9 +207,10 @@ TEST_F(SequencerIntegrationTest,
     node.addStorageRole();
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_nodeSetSize(10);
+  auto log_attrs =
+      logsconfig::LogAttributes().with_replicationFactor(2).with_nodeSetSize(
+          10);
+
   uint32_t numLogs = 32;
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -305,11 +306,11 @@ TEST_F(SequencerIntegrationTest, WinSizeChangeDelayTest) {
     node.addStorageRole();
   }
 
-  logsconfig::LogAttributes log_attrs =
+  auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
-          num_nodes);
-  // window size is initially 200
-  log_attrs.set_maxWritesInFlight(200);
+          num_nodes)
+          // window size is initially 200
+          .with_maxWritesInFlight(200);
   uint32_t numLogs = 32;
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -404,9 +405,8 @@ TEST_F(SequencerIntegrationTest, StorageStateChangeDelayTest) {
     }
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_nodeSetSize(3);
+  auto log_attrs =
+      logsconfig::LogAttributes().with_replicationFactor(3).with_nodeSetSize(3);
   uint32_t numLogs = 1;
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
@@ -513,9 +513,8 @@ TEST_F(SequencerIntegrationTest, ExpandShrinkReactivationDelayTest) {
   }
 
   shard_size_t num_shards = 1;
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_nodeSetSize(4);
+  auto log_attrs =
+      logsconfig::LogAttributes().with_replicationFactor(3).with_nodeSetSize(4);
   uint32_t numLogs = 32;
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
@@ -607,13 +606,13 @@ TEST_F(SequencerIntegrationTest, ConfigParamsAndStorageStateChangeDelayTest) {
     }
   }
 
-  logsconfig::LogAttributes log_attrs =
+  auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
-          num_nodes);
-  // window size is initially 200 and repl factor is initally 2.
-  log_attrs.set_maxWritesInFlight(200);
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_nodeSetSize(3);
+          num_nodes)
+          // window size is initially 200 and repl factor is initally 2.
+          .with_maxWritesInFlight(200)
+          .with_replicationFactor(2)
+          .with_nodeSetSize(3);
 
   uint32_t numLogs = 1;
   auto cluster =
@@ -1332,11 +1331,11 @@ std::unique_ptr<IntegrationTestUtils::Cluster> createClusterFromNodes(
     nodes[i].addStorageRole(/*num_shards*/ 2);
   }
 
-  logsconfig::LogAttributes log_attrs =
+  auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
-          num_nodes);
-  log_attrs.set_replicationFactor(num_nodes - 1);
-  log_attrs.set_extraCopies(1);
+          num_nodes)
+          .with_replicationFactor(num_nodes - 1)
+          .with_extraCopies(1);
 
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
@@ -1536,9 +1535,9 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioning) {
     nodes[i].addStorageRole(/*num_shards*/ 1);
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_nodeSetSize(10);
+  auto log_attrs =
+      logsconfig::LogAttributes().with_replicationFactor(2).with_nodeSetSize(
+          10);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
@@ -1765,9 +1764,9 @@ TEST_F(SequencerIntegrationTest, AutoLogProvisioningEpochStorePreemption) {
     }
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_nodeSetSize(10);
+  auto log_attrs =
+      logsconfig::LogAttributes().with_replicationFactor(2).with_nodeSetSize(
+          10);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
@@ -2295,11 +2294,12 @@ TEST_F(SequencerIntegrationTest, DISABLED_SilentDuplicatesCancelled) {
     node.addSequencerRole();
   }
 
-  logsconfig::LogAttributes log_attrs =
+  auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
-          num_nodes);
-  // This test relies on a replication factor of 2. Set it explicitly here.
-  log_attrs.set_replicationFactor(2);
+          num_nodes)
+          // This test relies on a replication factor of 2. Set it explicitly
+          // here.
+          .with_replicationFactor(2);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -2449,11 +2449,12 @@ TEST_F(SequencerIntegrationTest, SilentDuplicatesBypassed) {
     node.addSequencerRole();
   }
 
-  logsconfig::LogAttributes log_attrs =
+  auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
-          num_nodes);
-  // This test relies on a replication factor of 2. Set it explicitly here.
-  log_attrs.set_replicationFactor(2);
+          num_nodes)
+          // This test relies on a replication factor of 2. Set it explicitly
+          // here.
+          .with_replicationFactor(2);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -2519,11 +2520,11 @@ TEST_F(SequencerIntegrationTest, AbortEpoch) {
   // starting epoch after initial provisioning
   const epoch_t starting_epoch = epoch_t(2);
 
-  logsconfig::LogAttributes log_attrs =
+  auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
-          num_nodes);
-  log_attrs.set_replicationFactor(3);
-  log_attrs.set_maxWritesInFlight(window_size);
+          num_nodes)
+          .with_replicationFactor(3)
+          .with_maxWritesInFlight(window_size);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setLogAttributes(log_attrs)
@@ -2598,11 +2599,11 @@ TEST_F(SequencerIntegrationTest, AbortEpoch) {
 // test changing weight to 0 for a storage node would make sequencer stop
 // sending writes to the node
 TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
-  log_attrs.set_maxWritesInFlight(1024);
-  log_attrs.set_replicationFactor(1);
-  log_attrs.set_extraCopies(0);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
+          .with_maxWritesInFlight(1024)
+          .with_replicationFactor(1)
+          .with_extraCopies(0);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
@@ -2678,11 +2679,11 @@ TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
 // metadata and write to the metadata logs, while the config changes to disable
 // that sequencer.
 TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
-  log_attrs.set_maxWritesInFlight(1024);
-  log_attrs.set_replicationFactor(1);
-  log_attrs.set_extraCopies(0);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
+          .with_maxWritesInFlight(1024)
+          .with_replicationFactor(1)
+          .with_extraCopies(0);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
@@ -2750,9 +2751,8 @@ TEST_F(SequencerIntegrationTest, LogRemovalStressTest) {
     node.addStorageRole();
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_nodeSetSize(3);
+  auto log_attrs =
+      logsconfig::LogAttributes().with_replicationFactor(2).with_nodeSetSize(3);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setNodes(nodes)
@@ -2906,11 +2906,11 @@ TEST_F(SequencerIntegrationTest, DynamicallyChangingWindowSize) {
     node.addStorageRole();
   }
 
-  logsconfig::LogAttributes log_attrs =
+  auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
-          num_nodes);
-  // window size is initially 200
-  log_attrs.set_maxWritesInFlight(200);
+          num_nodes)
+          // window size is initially 200
+          .with_maxWritesInFlight(200);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
                      .useHashBasedSequencerAssignment(100, "10s")
@@ -3004,9 +3004,9 @@ TEST_F(SequencerIntegrationTest, SequencerZeroWeightWhileAppendsPending) {
                                /*max_replication=*/3,
                                NodeLocationScope::NODE);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_maxWritesInFlight(256);
-  log_attrs.set_replicationFactor(3);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_maxWritesInFlight(256)
+                       .with_replicationFactor(3);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // prevents spurious sequencer
@@ -3064,11 +3064,11 @@ TEST_F(SequencerIntegrationTest, SequencerZeroWeightWhileAppendsPending) {
 // test that existing metadata sequencer can react to weight changes in
 // metadata nodeset for completing metadata appends eventually
 TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
-  log_attrs.set_maxWritesInFlight(1024);
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
+          .with_maxWritesInFlight(1024)
+          .with_replicationFactor(2)
+          .with_extraCopies(0);
 
   const int NNODES = 5;
   Configuration::Nodes nodes;
@@ -3170,12 +3170,12 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
 
 // Test that sequencer can get the trim point from storage nodes
 TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
-  log_attrs.set_maxWritesInFlight(1024);
-  log_attrs.set_replicationFactor(2);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_nodeSetSize(4);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
+          .with_maxWritesInFlight(1024)
+          .with_replicationFactor(2)
+          .with_extraCopies(0)
+          .with_nodeSetSize(4);
 
   const int NNODES = 6;
   Configuration::Nodes nodes;
@@ -3261,11 +3261,11 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
 
 // test that preemption while writing to metadata logs, doesn't cause ping-pong
 TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2);
-  log_attrs.set_maxWritesInFlight(1024);
-  log_attrs.set_replicationFactor(1);
-  log_attrs.set_extraCopies(0);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
+          .with_maxWritesInFlight(1024)
+          .with_replicationFactor(1)
+          .with_extraCopies(0);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
@@ -3315,10 +3315,10 @@ TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
 }
 
 TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
-  log_attrs.set_backlogDuration(std::chrono::seconds(40));
-  log_attrs.set_nodeSetSize(1);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1)
+          .with_backlogDuration(std::chrono::seconds(40))
+          .with_nodeSetSize(1);
   const uint32_t num_user_logs = 1;
 
   // N0 sequencer, N1, N2 storage nodes

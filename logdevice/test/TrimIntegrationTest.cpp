@@ -228,12 +228,12 @@ TEST_F(TrimIntegrationTest, AutoLegacy) {
   const int NNODES = 2;
   const logid_t LOG_ID(1);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(1);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_backlogDuration(std::chrono::seconds(2));
-  log_attrs.set_maxWritesInFlight(NRECORDS);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(1)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_backlogDuration(std::chrono::seconds(2))
+                       .with_maxWritesInFlight(NRECORDS);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -307,12 +307,12 @@ TEST_F(TrimIntegrationTest, Auto) {
   const int NNODES = 2;
   const logid_t LOG_ID(1);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(1);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_backlogDuration(std::chrono::seconds(2));
-  log_attrs.set_maxWritesInFlight(NRECORDS);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(1)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_backlogDuration(std::chrono::seconds(2))
+                       .with_maxWritesInFlight(NRECORDS);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()

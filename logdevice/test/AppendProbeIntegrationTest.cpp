@@ -107,9 +107,9 @@ TEST_F(AppendProbeIntegrationTest, SlidingWindowFull) {
   const int NAPPENDS = 5000;
   const int PAYLOAD_SIZE = 300;
   const int NTHREADS = 16;
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
-  log_attrs.set_maxWritesInFlight(2);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1)
+          .with_maxWritesInFlight(2);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // not to throw off append counters
@@ -126,9 +126,9 @@ TEST_F(AppendProbeIntegrationTest, MaxTotalAppendersSize) {
   const int NAPPENDS = 5000;
   const int PAYLOAD_SIZE = 300;
   const int NTHREADS = 16;
-  logsconfig::LogAttributes log_attrs =
-      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1);
-  log_attrs.set_maxWritesInFlight(NAPPENDS);
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(1)
+          .with_maxWritesInFlight(NAPPENDS);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .enableMessageErrorInjection()

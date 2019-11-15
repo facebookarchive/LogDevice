@@ -259,11 +259,11 @@ TEST_F(ServerConfigSourceIntegrationTest, ServerConfigInternalLogUpdate) {
   EXPECT_EQ(0, stats.logsconfig_manager_published_server_config_update);
 
   // Now update the internal logs section of the config.
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(1);
-  log_attrs.set_extraCopies(0);
-  log_attrs.set_syncedCopies(0);
-  log_attrs.set_maxWritesInFlight(2);
+  auto log_attrs = logsconfig::LogAttributes()
+                       .with_replicationFactor(1)
+                       .with_extraCopies(0)
+                       .with_syncedCopies(0)
+                       .with_maxWritesInFlight(2);
   configuration::InternalLogs internalLogs;
   internalLogs.insert("config_log_deltas", log_attrs);
   internalLogs.insert("config_log_snapshots", log_attrs);

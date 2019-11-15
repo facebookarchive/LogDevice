@@ -539,11 +539,11 @@ class ClientReadStreamTest
       }
     }
 
-    logsconfig::LogAttributes log_attrs;
-    log_attrs.set_replicationFactor(replication_factor_);
-    log_attrs.set_syncReplicationScope(sync_replication_scope_);
-    log_attrs.set_scdEnabled(scd_enabled_);
-    log_attrs.set_maxWritesInFlight(sequencer_window_size_);
+    auto log_attrs = logsconfig::LogAttributes()
+                         .with_replicationFactor(replication_factor_)
+                         .with_syncReplicationScope(sync_replication_scope_)
+                         .with_scdEnabled(scd_enabled_)
+                         .with_maxWritesInFlight(sequencer_window_size_);
 
     Configuration::NodesConfig nodes_config(std::move(nodes));
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();

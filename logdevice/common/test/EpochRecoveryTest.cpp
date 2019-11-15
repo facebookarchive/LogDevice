@@ -303,9 +303,8 @@ void EpochRecoveryTest::initConfig() {
     }
   }
 
-  logsconfig::LogAttributes log_attrs;
   // we won't use these
-  log_attrs.set_replicationFactor(2);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
   Configuration::NodesConfig nodes_config(std::move(nodes));
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
   logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(

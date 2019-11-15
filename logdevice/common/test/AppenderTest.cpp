@@ -738,8 +738,8 @@ void AppenderTest::updateConfig() {
     node.addSequencerRole();
   }
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(replication_);
+  auto log_attrs =
+      logsconfig::LogAttributes().with_replicationFactor(replication_);
 
   Configuration::NodesConfig nodes_config(nodes);
   auto logs_config = std::make_unique<configuration::LocalLogsConfig>();

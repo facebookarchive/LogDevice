@@ -31,11 +31,11 @@ class ParametrizedLogsConfigIntegrationTest
 };
 
 TEST_P(ParametrizedLogsConfigIntegrationTest, ConnectionHandling) {
-  logsconfig::LogAttributes internal_log_attrs;
-  internal_log_attrs.set_singleWriter(false);
-  internal_log_attrs.set_replicationFactor(3);
-  internal_log_attrs.set_extraCopies(0);
-  internal_log_attrs.set_syncedCopies(0);
+  auto internal_log_attrs = logsconfig::LogAttributes()
+                                .with_singleWriter(false)
+                                .with_replicationFactor(3)
+                                .with_extraCopies(0)
+                                .with_syncedCopies(0);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableLogsConfigManager()
                      .setConfigLogAttributes(internal_log_attrs)

@@ -232,10 +232,6 @@ bool operator==(const Type& b, const Attribute<Type>& a) {
     copy.name##_ = name;                                            \
     return copy;                                                    \
   }                                                                 \
-  /* ONLY FOR TEST CASES, DO NOT USE ANYWHERE ELSE. */              \
-  void set_##name(decltype(name##_.value()) name) {                 \
-    name##_ = name;                                                 \
-  }
 
 inline bool compareReplicateAcrossKeys(std::pair<NodeLocationScope, int>& lhs,
                                        std::pair<NodeLocationScope, int>& rhs) {

@@ -123,8 +123,7 @@ void NodeSetFinderTest::setUp() {
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
 
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_replicationFactor(3);
+  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
   logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(1, 2),
                       "mylog",

@@ -754,10 +754,11 @@ TEST(WeightAwareNodeSetSelectorTest, InternalLogs) {
   addLog(lcfg, data_log, replication, 0, nodeset_size);
 
   InternalLogs il;
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_nodeSetSize(nodeset_size);
-  log_attrs.set_replicationFactor(replication.getReplicationFactor());
-  log_attrs.set_replicateAcross(replication.getDistinctReplicationFactors());
+  auto log_attrs =
+      logsconfig::LogAttributes()
+          .with_nodeSetSize(nodeset_size)
+          .with_replicationFactor(replication.getReplicationFactor())
+          .with_replicateAcross(replication.getDistinctReplicationFactors());
   auto log_group_node = il.insert("config_log_snapshots", log_attrs);
   ASSERT_NE(nullptr, log_group_node);
   log_group_node = il.insert("config_log_deltas", log_attrs);
@@ -1104,9 +1105,10 @@ TEST(WeightAwareNodeSetSelectorTest, InternalLogsConfiguredTooSmall) {
   auto logs_config = std::make_shared<LocalLogsConfig>();
 
   InternalLogs il;
-  logsconfig::LogAttributes log_attrs;
-  log_attrs.set_nodeSetSize(nodeset_size);
-  log_attrs.set_replicateAcross(replication.getDistinctReplicationFactors());
+  auto log_attrs =
+      logsconfig::LogAttributes()
+          .with_nodeSetSize(nodeset_size)
+          .with_replicateAcross(replication.getDistinctReplicationFactors());
   auto log_group_node = il.insert("event_log_snapshots", log_attrs);
   ASSERT_NE(nullptr, log_group_node);
   logs_config->setInternalLogsConfig(il);
