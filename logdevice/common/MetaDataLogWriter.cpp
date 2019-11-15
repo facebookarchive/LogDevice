@@ -224,7 +224,7 @@ std::string MetaDataLogWriter::getDebugInfo() const {
   // Only access atomic or immutable fields.
   return folly::sformat("logid: {}, state: {}, current_epoch: {}, "
                         "last_writer_epoch: {}, recovery_only: {} "
-                        "metadata_last_released: %s.",
+                        "metadata_last_released: {}.",
                         getDataLogID().val(),
                         int(state_.load()),
                         current_epoch_.load(),
