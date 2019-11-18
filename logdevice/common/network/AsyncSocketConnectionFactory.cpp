@@ -24,8 +24,9 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     std::unique_ptr<SocketDependencies> deps) {
   std::unique_ptr<AsyncSocketAdapter> sock_adapter;
   if (connection_type == ConnectionType::SSL) {
-    sock_adapter = std::make_unique<AsyncSocketAdapter>(
-        deps->getSSLContext(false /* accepting */), base_);
+    auto ssl_ctx = deps->getSSLContext(false /* accepting */);
+    ld_check(ssl_ctx);
+    sock_adapter = std::make_unique<AsyncSocketAdapter>(ssl_ctx, base_);
   } else {
     sock_adapter = std::make_unique<AsyncSocketAdapter>(base_);
   }
@@ -48,10 +49,10 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     std::unique_ptr<SocketDependencies> deps) const {
   std::unique_ptr<AsyncSocketAdapter> sock_adapter;
   if (connection_type == ConnectionType::SSL) {
+    auto ssl_ctx = deps->getSSLContext(true /* accepting */);
+    ld_check(ssl_ctx);
     sock_adapter = std::make_unique<AsyncSocketAdapter>(
-        deps->getSSLContext(true /* accepting */),
-        base_,
-        folly::NetworkSocket(fd));
+        ssl_ctx, base_, folly::NetworkSocket(fd));
   } else {
     sock_adapter =
         std::make_unique<AsyncSocketAdapter>(base_, folly::NetworkSocket(fd));
