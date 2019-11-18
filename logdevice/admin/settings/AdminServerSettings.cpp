@@ -144,7 +144,7 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
 
     ("maintenance-log-max-delta-records",
      &maintenance_log_max_delta_records,
-     "100",
+     "5000",
      nullptr,
      "How many delta records to keep in the maintenance log before we "
      "snapshot it.",
