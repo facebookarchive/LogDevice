@@ -81,6 +81,9 @@ struct Settings : public SettingsBundle {
   // Time interval after which watchdog wakes up and detects stalls
   std::chrono::milliseconds watchdog_poll_interval_ms;
 
+  // Toggle use of HealthMonitor to determine node status on server-side.
+  bool enable_health_monitor;
+
   // Time interval after which health monitor wakes up and detects
   // issues on node
   std::chrono::milliseconds health_monitor_poll_interval_ms;

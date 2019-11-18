@@ -356,7 +356,9 @@ void shutdown_processors(
   std::vector<folly::SemiFuture<folly::Unit>> to_wait;
 
   for (auto p : processors) {
-    to_wait.push_back(p->getHealthMonitor()->shutdown());
+    if (p->getHealthMonitor()) {
+      to_wait.push_back(p->getHealthMonitor()->shutdown());
+    }
 
     auto f = fulfill_on_all_workers<folly::Unit>(
         p.get(),
