@@ -59,6 +59,7 @@ else()
   # we don't want to be build against rocksdb master in legocastle.
   # find_package(RocksDB CONFIG REQUIRED)
   # set(ROCKSDB_LIBRARIES RocksDB::rocksdb)
+  find_package(fmt CONFIG REQUIRED)
   find_package(folly CONFIG REQUIRED)
   set(FOLLY_LIBRARIES Folly::folly)
   set(FOLLY_BENCHMARK_LIBRARIES Folly::follybenchmark)
