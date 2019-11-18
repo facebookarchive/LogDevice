@@ -70,7 +70,8 @@ void ServerProcessor::init() {
     }
   }
   if (gossip_settings_->enabled &&
-      getWorkerCount(WorkerType::FAILURE_DETECTOR) > 0) {
+      getWorkerCount(WorkerType::FAILURE_DETECTOR) > 0 &&
+      updateableSettings()->enable_health_monitor) {
     try {
       auto executor =
           getWorker(worker_id_t(0), WorkerType::FAILURE_DETECTOR).getExecutor();

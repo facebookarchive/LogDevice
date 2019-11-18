@@ -845,7 +845,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Maximum allowed rate of printing backtraces.",
        SERVER | CLIENT | REQUIRES_RESTART /* Passed to WatchDogThread ctor */,
        SettingsCategory::Monitoring);
-
+  init("enable-health-monitor",
+       &enable_health_monitor,
+       "true",
+       nullptr,
+       "Toggle use of HealthMonitor to determine node status on server-side.",
+       SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
+       SettingsCategory::Monitoring);
   init("health-monitor-poll-interval",
        &health_monitor_poll_interval_ms,
        "500ms",
