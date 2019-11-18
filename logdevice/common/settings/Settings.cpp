@@ -2406,7 +2406,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Testing);
   init("logsconfig-max-delta-records",
        &logsconfig_max_delta_records,
-       "4000",
+       "5000",
        nullptr,
        "How many delta records to keep in the logsconfig deltas log before we "
        "snapshot it.",
@@ -2415,7 +2415,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
   init(
       "logsconfig-max-delta-bytes",
       &logsconfig_max_delta_bytes,
-      "10485760",
+      "10485760", // 10MB
       nullptr,
       "How many bytes of deltas to keep in the logsconfig deltas log before we "
       "snapshot it.",
@@ -2567,7 +2567,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
 
   init("event-log-max-delta-records",
        &event_log_max_delta_records,
-       "100",
+       "5000",
        nullptr,
        "How many delta records to keep in the event log before we "
        "snapshot it.",
@@ -2576,7 +2576,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
 
   init("event-log-max-delta-bytes",
        &event_log_max_delta_bytes,
-       "10485760",
+       "10485760", // 10MB
        parse_nonnegative<ssize_t>(),
        "How many bytes of deltas to keep in the event log before "
        "we snapshot it.",

@@ -14,7 +14,7 @@ sidebar_label: Settings
 | enable-maintenance-manager | Start Maintenance Manager. This will automatically enable the maintenance state machine as well (--enable-cluster-maintenance-state-machine). | false | requires&nbsp;restart, server&nbsp;only |
 | enable-safety-check-periodic-metadata-update | Safety check to update its metadata cache periodically | false | server&nbsp;only |
 | maintenance-log-max-delta-bytes | How many bytes of deltas to keep in the maintenance log before we snapshot it. | 10485760 | server&nbsp;only |
-| maintenance-log-max-delta-records | How many delta records to keep in the maintenance log before we snapshot it. | 100 | server&nbsp;only |
+| maintenance-log-max-delta-records | How many delta records to keep in the maintenance log before we snapshot it. | 5000 | server&nbsp;only |
 | maintenance-log-snapshotting | Allow the maintenance log to be snapshotted onto a snapshot log. This requires the maintenance log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | false | server&nbsp;only |
 | maintenance-log-snapshotting-period | Controls time based snapshotting. New maintenancelog snapshot will be created after this period if there are new deltas | 1h | server&nbsp;only |
 | maintenance-manager-metadata-nodeset-update-period | The period of how often to check if metadata nodeset update is required | 2min | server&nbsp;only |
@@ -53,7 +53,7 @@ sidebar_label: Settings
 | initial-config-load-timeout | maximum time to wait for initial server configuration until giving up | 15s | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | logsconfig-manager-grace-period | Grace period before making a change to the logs config available to the server. | 0ms |  |
 | logsconfig-max-delta-bytes | How many bytes of deltas to keep in the logsconfig deltas log before we snapshot it. | 10485760 | server&nbsp;only |
-| logsconfig-max-delta-records | How many delta records to keep in the logsconfig deltas log before we snapshot it. | 4000 | server&nbsp;only |
+| logsconfig-max-delta-records | How many delta records to keep in the logsconfig deltas log before we snapshot it. | 5000 | server&nbsp;only |
 | logsconfig-snapshotting-period | Controls time based snapshotting. New logsconfig snapshot will be created after this period if there are new log configuration deltas | 1h | server&nbsp;only |
 | max-sequencer-background-activations-in-flight | Max number of concurrent background sequencer activations to run. Background sequencer activations perform log metadata changes (reprovisioning) when the configuration attributes of a log change. | 20 | server&nbsp;only |
 | nodes-configuration-init-retry-timeout | timeout settings for the exponential backoff retry behavior for initializing Nodes Configuration for the first time | 500ms..5s |  |
@@ -316,7 +316,7 @@ sidebar_label: Settings
 | disable-data-log-rebuilding | If set then data logs are not rebuilt. This may be enabled for clusters with very low retention, where the probability of data-loss due to a 2nd or 3rd failure is low and the work done during rebuild interferes with the primary workload. | false | requires&nbsp;restart, server&nbsp;only |
 | event-log-grace-period | grace period before considering event log caught up | 10s | server&nbsp;only |
 | event-log-max-delta-bytes | How many bytes of deltas to keep in the event log before we snapshot it. | 10485760 | server&nbsp;only |
-| event-log-max-delta-records | How many delta records to keep in the event log before we snapshot it. | 100 | server&nbsp;only |
+| event-log-max-delta-records | How many delta records to keep in the event log before we snapshot it. | 5000 | server&nbsp;only |
 | event-log-retention | How long to keep a history of snapshots and deltas for the event log. Unused if the event log has never been snapshotted or if event log trimming is disabled with disable-event-log-trimming. | 14d | server&nbsp;only |
 | event-log-snapshot-compression | Use ZSTD compression to compress event log snapshots | true |  |
 | event-log-snapshotting | Allow the event log to be snapshotted onto a snapshot log. This requires the event log group to contain two logs, the first one being the snapshot log and the second one being the delta log. | true | requires&nbsp;restart |
