@@ -11,6 +11,7 @@
 
 #include <folly/Memory.h>
 #include <folly/Random.h>
+#include <folly/executors/InlineExecutor.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/ClusterState.h"
@@ -26,6 +27,7 @@
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerSettings.h"
+#include "logdevice/server/test/MockHealthMonitor.h"
 #include "logdevice/server/test/TestUtil.h"
 
 using namespace facebook::logdevice;
@@ -157,13 +159,17 @@ std::shared_ptr<ServerConfig> gen_config(size_t num_nodes,
 std::pair<std::shared_ptr<ServerProcessor>, MockFailureDetector*>
 make_processor_with_detector(node_index_t nid,
                              size_t num_nodes,
-                             const GossipSettings& gossip_settings) {
+                             const GossipSettings& gossip_settings,
+                             bool create_monitor = true) {
   /* setup default settings */
   ServerSettings server_settings = create_default_settings<ServerSettings>();
   Settings main_settings = create_default_settings<Settings>();
   main_settings.num_workers = 1;
   main_settings.max_nodes = 1000;
   main_settings.worker_request_pipe_capacity = 1000000;
+
+  if (!create_monitor)
+    main_settings.enable_health_monitor = false;
 
   /* make config for this index */
   std::shared_ptr<UpdateableConfig> uconfig =
@@ -195,6 +201,7 @@ make_processor_with_detector(node_index_t nid,
 }
 
 using detector_list_t = std::vector<MockFailureDetector*>;
+using monitor_list_t = std::vector<std::unique_ptr<MockHealthMonitor>>;
 
 // given a list of FailureDetector objects (one per node) and a set of
 // unavailable nodes, runs several iterations of gossiping and verifies that
@@ -264,18 +271,55 @@ void simulate_single(detector_list_t& detectors,
 
 std::tuple<std::vector<std::shared_ptr<ServerProcessor>>, detector_list_t>
 create_processors_and_detectors(size_t num_nodes,
-                                const GossipSettings& settings) {
+                                const GossipSettings& settings,
+                                bool create_monitor = true) {
   std::vector<std::shared_ptr<ServerProcessor>> processors;
   detector_list_t detectors;
 
   for (node_index_t i = 0; i < num_nodes; ++i) {
     std::shared_ptr<ServerProcessor> p;
     MockFailureDetector* d;
-    std::tie(p, d) = make_processor_with_detector(i, num_nodes, settings);
+    std::tie(p, d) =
+        make_processor_with_detector(i, num_nodes, settings, create_monitor);
     processors.push_back(std::move(p));
     detectors.push_back(d);
   }
   return std::make_tuple(std::move(processors), std::move(detectors));
+}
+
+std::tuple<std::vector<std::shared_ptr<ServerProcessor>>,
+           detector_list_t,
+           monitor_list_t>
+create_processors_detectors_monitors(size_t num_nodes,
+                                     const GossipSettings& settings) {
+  std::vector<std::shared_ptr<ServerProcessor>> processors;
+  detector_list_t detectors;
+  monitor_list_t monitors;
+
+  for (node_index_t i = 0; i < num_nodes; ++i) {
+    std::shared_ptr<ServerProcessor> p;
+    MockFailureDetector* d;
+    std::tie(p, d) =
+        make_processor_with_detector(i, num_nodes, settings, false);
+    // Monitor is simulated in tests with no callbacks from
+    // Workers/WatchdogThread, values are arbitrary.
+    std::unique_ptr<MockHealthMonitor> m =
+        std::make_unique<MockHealthMonitor>(folly::InlineExecutor::instance(),
+                                            std::chrono::milliseconds(100),
+                                            1,
+                                            nullptr,
+                                            std::chrono::milliseconds(100),
+                                            std::chrono::milliseconds(100),
+                                            1,
+                                            std::chrono::milliseconds(100),
+                                            1);
+    m->setFailureDetector(d);
+    processors.push_back(std::move(p));
+    detectors.push_back(d);
+    monitors.push_back(std::move(m));
+  }
+  return std::make_tuple(
+      std::move(processors), std::move(detectors), std::move(monitors));
 }
 
 // Runs a simulation featuring N nodes gossiping. For each 0 <= i < N/2,
@@ -569,5 +613,75 @@ TEST_F(FailureDetectorTest, GossipRetry) {
   // make sure only one gossip interval elapsed
   ASSERT_TRUE(end - start >= settings.gossip_interval);
   ASSERT_TRUE(end - start < 2 * settings.gossip_interval);
+  shutdown_processors(processors);
+}
+
+// Simulates propagation of node states and statuses to ClusterStates via
+// gossip.
+TEST_F(FailureDetectorTest, ClusterStateUpdate) {
+  const int num_nodes = 2;
+
+  GossipSettings settings = create_default_settings<GossipSettings>();
+  settings.failover_blacklist_threshold = 2;
+  settings.gossip_failure_threshold = 10;
+  settings.suspect_duration = std::chrono::milliseconds(0);
+  settings.mode = GossipSettings::SelectionMode::ROUND_ROBIN;
+  UpdateableSettings<GossipSettings> updateable(settings);
+
+  std::vector<std::shared_ptr<ServerProcessor>> processors;
+  detector_list_t detectors;
+  monitor_list_t monitors;
+
+  std::tie(processors, detectors, monitors) =
+      create_processors_detectors_monitors(num_nodes, settings);
+  auto now = SteadyTimestamp::now();
+  detectors[0]->setIsLogsConfigLoaded(false);
+  detectors[1]->setIsLogsConfigLoaded(false);
+
+  for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    // Sets self to healthy and updates this in FD
+    monitors[idx]->simulateLoop(now);
+  }
+
+  // propagate state
+  for (int i = 0; i <= settings.min_gossips_for_stable_state; ++i) {
+    gossip_round(detectors[0], detectors[1]);
+  }
+  // own state is updated internally by HealthMonitor, state of others is
+  // updated through gossip
+  for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    EXPECT_TRUE(detectors[idx]->isAlive(0));
+    EXPECT_TRUE(detectors[idx]->getClusterState()->isNodeStarting(0));
+    EXPECT_EQ(NodeHealthStatus::HEALTHY,
+              detectors[idx]->getClusterState()->getNodeStatus(0));
+    EXPECT_TRUE(detectors[idx]->isAlive(1));
+    EXPECT_TRUE(detectors[idx]->getClusterState()->isNodeStarting(1));
+    EXPECT_EQ(NodeHealthStatus::HEALTHY,
+              detectors[idx]->getClusterState()->getNodeStatus(1));
+  }
+  ld_info("Second lot of gossips");
+  detectors[0]->setIsLogsConfigLoaded(true);
+  detectors[1]->setIsLogsConfigLoaded(true);
+
+  monitors[1]->updateNodeStatus(NodeHealthStatus::OVERLOADED);
+
+  for (int i = 0; i < 2; ++i) {
+    // we need at least two rounds because we only update the node state and
+    // status on the call to FailureDetector::gossip() after we get and
+    // up-to-date gossip message.
+    gossip_round(detectors[0], detectors[1]);
+  }
+  // Node 1's status is seen by all.
+  for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    EXPECT_TRUE(detectors[idx]->isAlive(0));
+    EXPECT_FALSE(detectors[idx]->getClusterState()->isNodeStarting(0));
+    EXPECT_EQ(NodeHealthStatus::HEALTHY,
+              detectors[idx]->getClusterState()->getNodeStatus(0));
+    EXPECT_TRUE(detectors[idx]->isAlive(1));
+    EXPECT_FALSE(detectors[idx]->getClusterState()->isNodeStarting(1));
+    EXPECT_EQ(NodeHealthStatus::OVERLOADED,
+              detectors[idx]->getClusterState()->getNodeStatus(1));
+  }
+
   shutdown_processors(processors);
 }

@@ -46,16 +46,28 @@ class HealthMonitor {
   void reportWorkerQueueStall(int idx, std::chrono::milliseconds duration);
 
  protected:
-  void monitorLoop();
-  // void resetInternalState(); // to be added later if needed.
-  void processReports();
-
- private:
-  friend class HealthMonitorTest;
   using TimeSeries = folly::BucketedTimeSeries<std::chrono::duration<float>,
                                                std::chrono::steady_clock>;
   using TimePoint = std::chrono::time_point<std::chrono::steady_clock,
                                             std::chrono::milliseconds>;
+  struct StallInfo {
+    int critically_stalled_{0};
+    bool stalled_{false};
+  };
+
+  void monitorLoop();
+  // void resetInternalState(); // to be added later if needed.
+  void processReports();
+
+  bool isOverloaded(TimePoint now, std::chrono::milliseconds half_period);
+  StallInfo isStalled(TimePoint now, std::chrono::milliseconds half_period);
+  void updateVariables(TimePoint now);
+  void calculateNegativeSignal(TimePoint now);
+  void updateFailureDetectorStatus(NodeHealthStatus status);
+
+ private:
+  friend class HealthMonitorTest;
+
   static constexpr int kNumBuckets = 12;
   static constexpr int kNumPeriods = 6;
   static constexpr int kMultiplier = 3;
@@ -71,36 +83,13 @@ class HealthMonitor {
   folly::SemiFuture<folly::Unit> sleep_semifuture_;
 
   folly::Executor& executor_;
-  const std::chrono::milliseconds sleep_period_;
   std::atomic_bool shutdown_{false};
   std::chrono::steady_clock::time_point last_entry_time_;
-  StatsHolder* stats_;
 
-  const std::chrono::milliseconds max_queue_stalls_avg_;
-  const std::chrono::milliseconds max_queue_stall_duration_;
-  const double max_overloaded_worker_percentage_;
-
-  const std::chrono::milliseconds max_stalls_avg_;
-  const double max_stalled_worker_percentage_;
-
-  struct StallInfo {
-    int critically_stalled_{0};
-    bool stalled_{false};
-  };
-
-  ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
-      state_timer_;
-  NodeHealthStatus node_status_{NodeHealthStatus::HEALTHY};
-  bool overloaded_{false};
   StallInfo stall_info_{0, false};
   folly::SharedMutex mutex_;
   FailureDetector* failure_detector_{nullptr};
 
-  bool isOverloaded(TimePoint now, std::chrono::milliseconds half_period);
-  StallInfo isStalled(TimePoint now, std::chrono::milliseconds half_period);
-  void updateVariables(TimePoint now);
-  void calculateNegativeSignal(TimePoint now);
-  void updateFailureDetectorStatus(NodeHealthStatus status);
   void removeFailureDetector();
 
   struct HMInfo {
@@ -112,6 +101,22 @@ class HealthMonitor {
     std::vector<TimeSeries> worker_queue_stalls_;
   };
   HMInfo internal_info_;
+
+ protected:
+  NodeHealthStatus node_status_{NodeHealthStatus::HEALTHY};
+  bool overloaded_{false};
+  const std::chrono::milliseconds sleep_period_;
+  ChronoExponentialBackoffAdaptiveVariable<std::chrono::milliseconds>
+      state_timer_;
+
+ private:
+  StatsHolder* stats_;
+  const std::chrono::milliseconds max_queue_stalls_avg_;
+  const std::chrono::milliseconds max_queue_stall_duration_;
+  const double max_overloaded_worker_percentage_;
+
+  const std::chrono::milliseconds max_stalls_avg_;
+  const double max_stalled_worker_percentage_;
 };
 
 }} // namespace facebook::logdevice
