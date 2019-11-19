@@ -50,33 +50,26 @@ class AdminCommandConnection : public folly::DelayedDestruction,
   void readDataAvailable(size_t length) noexcept override;
   void readEOF() noexcept override;
   void readErr(const folly::AsyncSocketException& ex) noexcept override;
+  bool detectTLS();
 
  private:
   ~AdminCommandConnection() override;
-  class TLSSensingCallback : public folly::AsyncReader::ReadCallback {
-   public:
-    TLSSensingCallback(AdminCommandConnection& connection,
-                       const folly::NetworkSocket& fd);
-    void getReadBuffer(void** bufReturn, size_t* lenReturn) override;
-    void readDataAvailable(size_t length) noexcept override;
-    void readEOF() noexcept override;
-    void readErr(const folly::AsyncSocketException& ex) noexcept override;
-
-   private:
-    folly::NetworkSocket fd_;
-    AdminCommandConnection& connection_;
-  };
+  void closeConnectionAndDestroyObject();
 
  private:
-  void closeConnectionAndDestroyObject();
+  class ReadEventHandler;
+  friend ReadEventHandler;
+
   size_t id_;
   const folly::SocketAddress addr_;
   folly::IOBufQueue read_buffer_{folly::IOBufQueue::cacheChainLength()};
   folly::io::QueueAppender cursor_;
   CommandListener& listener_;
   bool shutdown_{false};
+  folly::EventBase* evb_;
+  folly::NetworkSocket fd_;
   folly::AsyncSocket::UniquePtr socket_;
-  std::unique_ptr<TLSSensingCallback> tls_sensing_;
+  std::unique_ptr<ReadEventHandler> read_event_handler_;
 };
 
 class CommandListener : public Listener {
