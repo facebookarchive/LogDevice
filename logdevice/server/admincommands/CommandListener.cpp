@@ -10,7 +10,6 @@
 #include <folly/Memory.h>
 #include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/async/AsyncSocket.h>
-#include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/AsyncTransport.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/synchronization/Baton.h>
@@ -67,61 +66,48 @@ class WriteCallback : public folly::AsyncWriter::WriteCallback {
 
 } // namespace
 
-AdminCommandConnection::TLSSensingCallback::TLSSensingCallback(
-    AdminCommandConnection& connection,
-    const folly::NetworkSocket& fd)
-    : fd_(fd), connection_(connection) {}
+class AdminCommandConnection::ReadEventHandler : public folly::EventHandler {
+ public:
+  ReadEventHandler(folly::EventBase* eventBase,
+                   folly::NetworkSocket sock,
+                   AdminCommandConnection& connection)
+      : folly::EventHandler(eventBase, folly::NetworkSocket(sock)),
+        evb_(eventBase),
+        sock_(sock),
+        connection_(connection) {}
 
-void AdminCommandConnection::TLSSensingCallback::getReadBuffer(
-    void** bufReturn,
-    size_t* lenReturn) {
-  *lenReturn = 0;
-  *bufReturn = nullptr;
+  void handlerReady(uint16_t) noexcept override {
+    uint8_t byte = 0;
+    folly::netops::recv(sock_, &byte, 1, MSG_PEEK);
+    if (byte == kSSLHandshakeRecordTag) {
+      ld_debug("TLS detected");
+      auto ctx = connection_.listener_.ssl_fetcher_.getSSLContext(true, true);
+      if (!ctx) {
+        ld_error("no SSL context, dropping connection");
+        folly::netops::close(sock_);
+        connection_.closeConnectionAndDestroyObject();
+        return;
+      }
 
-  uint8_t byte = 0;
-  auto rv = folly::netops::recv(fd_, &byte, 1, MSG_PEEK);
-  if (rv != 1) {
-    ld_critical("There is no 1 byte in the socket for TLS detection.");
-    connection_.closeConnectionAndDestroyObject();
-    return;
-  }
-
-  ld_debug("read data is available for peeking");
-  if (byte == kSSLHandshakeRecordTag) {
-    ld_debug("TLS detected");
-    auto ctx = connection_.listener_.ssl_fetcher_.getSSLContext(true, true);
-    if (!ctx) {
-      ld_error("no SSL context, dropping connection");
-      connection_.closeConnectionAndDestroyObject();
+      auto ssl_socket = folly::AsyncSSLSocket::UniquePtr(
+          new folly::AsyncSSLSocket(ctx, evb_, sock_));
+      ssl_socket->setReadCB(&connection_);
+      ssl_socket->sslAccept(nullptr);
+      connection_.socket_ = std::move(ssl_socket);
       return;
     }
 
-    auto ssl_socket = folly::AsyncSSLSocket::UniquePtr(
-        new folly::AsyncSSLSocket(ctx, std::move(connection_.socket_)));
-    ssl_socket->setReadCB(&connection_);
-    ssl_socket->sslAccept(nullptr);
-    connection_.socket_ = std::move(ssl_socket);
-    connection_.tls_sensing_.reset();
-    return;
+    ld_debug("TLS is not detected");
+    connection_.socket_ =
+        folly::AsyncSocket::UniquePtr(new folly::AsyncSocket(evb_, sock_));
+    connection_.socket_->setReadCB(&connection_);
   }
 
-  ld_debug("TLS is not detected");
-  connection_.socket_ = folly::AsyncSocket::UniquePtr(
-      new folly::AsyncSocket(std::move(connection_.socket_)));
-  connection_.socket_->setReadCB(&connection_);
-}
-
-void AdminCommandConnection::TLSSensingCallback::readDataAvailable(
-    size_t) noexcept {
-  ld_check(false);
-}
-
-void AdminCommandConnection::TLSSensingCallback::readEOF() noexcept {}
-
-void AdminCommandConnection::TLSSensingCallback::readErr(
-    const folly::AsyncSocketException&) noexcept {
-  connection_.closeConnectionAndDestroyObject();
-}
+ protected:
+  folly::EventBase* evb_;
+  folly::NetworkSocket sock_;
+  AdminCommandConnection& connection_;
+};
 
 CommandListener::CommandListener(Listener::InterfaceDef iface,
                                  KeepAlive loop,
@@ -150,9 +136,13 @@ AdminCommandConnection::AdminCommandConnection(size_t id,
       addr_(addr),
       cursor_(&read_buffer_, kBufferAllocationSize),
       listener_(listener),
-      tls_sensing_(std::make_unique<TLSSensingCallback>(*this, fd)) {
-  socket_ = folly::AsyncSocket::UniquePtr(new folly::AsyncSocket(evb, fd));
-  socket_->setReadCB(tls_sensing_.get());
+      evb_(evb),
+      fd_(fd) {}
+
+bool AdminCommandConnection::detectTLS() {
+  read_event_handler_ = std::make_unique<ReadEventHandler>(evb_, fd_, *this);
+  return read_event_handler_->registerHandler(
+      ReadEventHandler::EventFlags::READ);
 }
 
 void AdminCommandConnection::getReadBuffer(void** bufReturn,
@@ -166,7 +156,7 @@ void AdminCommandConnection::getReadBuffer(void** bufReturn,
 }
 
 void AdminCommandConnection::readDataAvailable(size_t length) noexcept {
-  ld_debug("reading data, %lu", length);
+  ld_check(shutdown_ == false);
   if (read_buffer_.chainLength() > kTotalReceiveBuffer) {
     closeConnectionAndDestroyObject();
     return;
@@ -230,10 +220,19 @@ void CommandListener::connectionAccepted(
            addr.describe().c_str(),
            id,
            sock.toFd());
+  ld_check(res.second);
+
+  if (!res.first->second->detectTLS()) {
+    folly::netops::close(sock);
+    conns_.erase(res.first);
+    ld_error("Cannot register TLS detection event.");
+    return;
+  }
 
   const size_t conn_limit = server_settings_->command_conn_limit;
   while (conns_.size() >= conn_limit) {
-    // no more connections available, free the oldest one (with the smallest id)
+    // no more connections available, free the oldest one (with the smallest
+    // id)
     ld_check(conns_.begin() != conns_.end());
     conns_.erase(conns_.begin());
   }
@@ -251,7 +250,6 @@ CommandListener::~CommandListener() {
 
 AdminCommandConnection::~AdminCommandConnection() {
   shutdown_ = true;
-  socket_->close();
+  socket_->closeNow();
 }
-
 }} // namespace facebook::logdevice
