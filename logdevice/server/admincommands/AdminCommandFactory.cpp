@@ -22,6 +22,7 @@
 #include "logdevice/server/admincommands/DeprecatedStats.h"
 #include "logdevice/server/admincommands/DumpQueuedMessages.h"
 #include "logdevice/server/admincommands/Failsafe.h"
+#include "logdevice/server/admincommands/Fill.h"
 #include "logdevice/server/admincommands/GossipBlacklist.h"
 #include "logdevice/server/admincommands/Info.h"
 #include "logdevice/server/admincommands/InfoAppendOutliers.h"
@@ -82,6 +83,7 @@ TestAdminCommandFactory::TestAdminCommandFactory() : AdminCommandFactory() {
   using Restriction = AdminCommand::RestrictionLevel;
   selector_.add<commands::EraseRecord>(
       "record erase", Restriction::LOCALHOST_ONLY);
+  selector_.add<commands::Fill>("fill");
 }
 
 AdminCommandFactory::AdminCommandFactory() {
