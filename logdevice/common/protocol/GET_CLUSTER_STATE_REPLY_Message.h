@@ -55,6 +55,7 @@ class GET_CLUSTER_STATE_REPLY_Message : public Message {
   GET_CLUSTER_STATE_REPLY_Header header_;
   std::vector<uint8_t> nodes_state_;
   std::vector<node_index_t> boycotted_nodes_;
+  friend class GET_CLUSTER_STATE_REPLY_MessageTest;
 };
 
 }} // namespace facebook::logdevice
