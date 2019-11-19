@@ -369,9 +369,6 @@ class FailureDetector {
   // Returns the node state name. Used in dbg statements.
   const char* getNodeStateString(NodeState state) const;
 
-  // Returns the node status name. Used in dbg statements.
-  const char* getNodeStatusString(NodeHealthStatus status) const;
-
   // Dumps dead/suspect/alive status of all nodes in the cluster
   // as perceived by this node's Failure Detector.
   void dumpFDState();

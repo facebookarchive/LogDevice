@@ -163,6 +163,23 @@ void ClusterState::setNodeState(node_index_t idx,
     }
   }
 }
+void ClusterState::setNodeStatus(node_index_t idx, NodeHealthStatus status) {
+  ld_check(idx >= 0);
+  folly::SharedMutex::ReadHolder read_lock(mutex_);
+  auto node_status = node_status_map_.find(idx);
+  if (node_status == node_status_map_.end()) {
+    return;
+  }
+  NodeHealthStatus prev = node_status->second->exchange(status);
+  if ((prev != status) && processor_) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   10,
+                   "Status of N%d changed from %s to %s",
+                   idx,
+                   toString(prev).c_str(),
+                   toString(status).c_str());
+  }
+}
 
 void ClusterState::onGetClusterStateDone(
     Status status,
@@ -230,11 +247,15 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
   folly::SharedMutex::WriteHolder write_lock(mutex_);
   if (cluster_size_ != new_size) {
     auto new_list = new std::atomic<ClusterState::NodeState>[new_size];
+    auto new_status_map =
+        folly::F14FastMap<node_index_t,
+                          std::unique_ptr<std::atomic<NodeHealthStatus>>>{};
     bool have_failure_detector =
         processor_ && processor_->isFailureDetectorRunning();
     for (int i = 0; i < new_size; i++) {
       if (i < cluster_size_) {
         new_list[i].store(node_state_list_[i].load());
+        new_status_map.insert({i, std::move(node_status_map_.at(i))});
       } else {
         /* If we have failure detector, mark new nodes as dead by default;
          * the failure detector will then change their state as needed.
@@ -246,6 +267,14 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
             ? ClusterState::NodeState::DEAD
             : ClusterState::NodeState::FULLY_STARTED;
         new_list[i].store(state);
+        // If we have failure detector, mark new nodes as undefined by default;
+        // FD will change their state as needed. Otherwise, treat nodes as
+        // healthy by default. This maintains consistency with the way node
+        // state is treated.
+        auto status = have_failure_detector ? NodeHealthStatus::UNHEALTHY
+                                            : NodeHealthStatus::HEALTHY;
+        new_status_map.insert(
+            {i, std::make_unique<std::atomic<NodeHealthStatus>>(status)});
         if (processor_ && notifySubscribers) {
           postUpdateToWorkers(i, state);
         }
@@ -254,6 +283,7 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
     ld_info(
         "Cluster state size updated from %lu to %lu", cluster_size_, new_size);
     node_state_list_.reset(new_list);
+    node_status_map_.swap(new_status_map);
     cluster_size_ = new_size;
   }
 }

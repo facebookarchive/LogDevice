@@ -819,7 +819,7 @@ void FailureDetector::dumpFDState() {
     NodeID node_id = nodes_configuration->getNodeID(i);
     status_str += node_id.toString() + "(" +
         getNodeStateString(nodes_[i].state) + " : " +
-        getNodeStatusString(nodes_[i].status_) + "), ";
+        toString(nodes_[i].status_).c_str() + "), ";
   }
 
   const dbg::Level level = isTracingOn() ? dbg::Level::INFO : dbg::Level::SPEW;
@@ -1104,21 +1104,6 @@ const char* FailureDetector::getNodeStateString(NodeState state) const {
   return "UNKNOWN";
 }
 
-const char*
-FailureDetector::getNodeStatusString(NodeHealthStatus status) const {
-  switch (status) {
-    case NodeHealthStatus::HEALTHY:
-      return "HEALTHY";
-    case NodeHealthStatus::OVERLOADED:
-      return "OVERLOADED";
-    case NodeHealthStatus::UNHEALTHY:
-      return "UNHEALTHY";
-    case NodeHealthStatus::UNDEFINED:
-      return "UNDEFINED";
-  }
-  return "UNKNOWN";
-}
-
 std::string FailureDetector::getStateString(node_index_t idx) const {
   std::lock_guard<std::mutex> lock(mutex_);
   folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
@@ -1137,7 +1122,7 @@ std::string FailureDetector::getStateString(node_index_t idx) const {
              nodes_.at(idx).gossip_ts_.count(),
              nodes_.at(idx).failover_.count(),
              (int)nodes_.at(idx).is_node_starting_,
-             getNodeStatusString(nodes_.at(idx).status_),
+             toString(nodes_.at(idx).status_).c_str(),
              getNodeStateString(nodes_.at(idx).state));
   }
   return std::string(buf);
@@ -1159,7 +1144,7 @@ folly::dynamic FailureDetector::getStateJson(node_index_t idx) const {
     obj["failover"] = nodes_.at(idx).failover_.count();
     obj["starting"] = (int)nodes_.at(idx).is_node_starting_;
     obj["state"] = getNodeStateString(nodes_.at(idx).state);
-    obj["status"] = getNodeStatusString(nodes_.at(idx).status_);
+    obj["status"] = toString(nodes_.at(idx).status_).c_str();
   }
   return obj;
 }

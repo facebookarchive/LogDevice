@@ -17,7 +17,9 @@
 #include <vector>
 
 #include <folly/SharedMutex.h>
+#include <folly/container/F14Map.h>
 
+#include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -116,7 +118,7 @@ class ClusterState {
   NodeState getNodeState(node_index_t idx) const {
     folly::SharedMutex::ReadHolder read_lock(mutex_);
     // check the node list if the index falls within what we know
-    // otherwise fall back to considering the node dead. if the index is beyond
+    // otherwise fall back to considering the node dead. If the index is beyond
     // the size of this list, it means this node is not yet in our configuration
     // anyway.
     ld_check(idx >= 0);
@@ -124,6 +126,18 @@ class ClusterState {
       return node_state_list_[idx].load();
     }
     return NodeState::DEAD;
+  }
+
+  NodeHealthStatus getNodeStatus(node_index_t idx) const {
+    folly::SharedMutex::ReadHolder read_lock(mutex_);
+    // check the node list if the index falls within what we know
+    // otherwise fall back to considering the node undefined. If the index is
+    // beyond the size of this list, it means this node is not yet in our
+    // configuration anyway.
+    ld_check(idx >= 0);
+    auto node_status = node_status_map_.find(idx);
+    return node_status == node_status_map_.end() ? NodeHealthStatus::UNDEFINED
+                                                 : node_status->second->load();
   }
 
   const char* getNodeStateAsStr(node_index_t idx) const {
@@ -137,6 +151,8 @@ class ClusterState {
   node_index_t getFirstNodeAlive() const;
 
   void setNodeState(node_index_t idx, NodeState state);
+
+  void setNodeStatus(node_index_t idx, NodeHealthStatus status);
 
   /**
    * Asynchronously updates this ClusterState object.
@@ -202,5 +218,8 @@ class ClusterState {
   folly::SharedMutex shutdown_mutex_;
   FastUpdateableSharedPtr<std::vector<node_index_t>> boycotted_nodes_{
       std::make_shared<std::vector<node_index_t>>()};
+  folly::F14FastMap<node_index_t,
+                    std::unique_ptr<std::atomic<NodeHealthStatus>>>
+      node_status_map_{};
 };
 }} // namespace facebook::logdevice
