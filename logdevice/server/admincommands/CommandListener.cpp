@@ -157,6 +157,7 @@ void AdminCommandConnection::getReadBuffer(void** bufReturn,
 
 void AdminCommandConnection::readDataAvailable(size_t length) noexcept {
   ld_check(shutdown_ == false);
+  DestructorGuard guard(this);
   if (read_buffer_.chainLength() > kTotalReceiveBuffer) {
     closeConnectionAndDestroyObject();
     return;
