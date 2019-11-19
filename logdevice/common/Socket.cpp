@@ -112,7 +112,8 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
       num_bytes_received_(0),
       deferred_event_queue_event_(deps_->getEvBase()),
       end_stream_rewind_event_(deps_->getEvBase()),
-      buffered_output_flush_event_(deps_->getEvBase()) {
+      buffered_output_flush_event_(deps_->getEvBase()),
+      legacy_connection_(deps_->attachedToLegacyEventBase()) {
   conntype_ = conntype;
 
   if (!peer_sockaddr.valid()) {
@@ -205,7 +206,7 @@ Socket::Socket(int fd,
   // note that caller (Sender.addClient()) does not close(fd) on error.
   // If you add code here that throws ConstructorFailed you must close(fd)!
 
-  if (deps_->attachedToLegacyEventBase()) {
+  if (legacy_connection_) {
     bev_ = newBufferevent(fd,
                           client_addr.family(),
                           &tcp_sndbuf_cache_.size,
@@ -1094,7 +1095,8 @@ void Socket::close(Status reason) {
     }
   }
 
-  if (deps_->attachedToLegacyEventBase()) {
+  if (legacy_connection_) {
+    ld_check(deps_->attachedToLegacyEventBase());
     // This means that bufferevent was created and should be valid here.
     ld_check(bev_);
     size_t buffered_bytes = LD_EV(evbuffer_get_length)(deps_->getOutput(bev_));
