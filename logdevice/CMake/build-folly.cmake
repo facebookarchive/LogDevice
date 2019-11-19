@@ -18,12 +18,15 @@ ExternalProject_Add(folly
     DOWNLOAD_COMMAND ""
     CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True -DCXX_STD=gnu++17
        -DCMAKE_CXX_STANDARD=17
+       -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
        ${_folly_cmake_extra_opts}
     INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
 ExternalProject_Get_Property(folly SOURCE_DIR)
 ExternalProject_Get_Property(folly BINARY_DIR)
+
+add_dependencies(folly fmt)
 
 set(FOLLY_LIBRARIES
     ${BINARY_DIR}/libfolly.a)
