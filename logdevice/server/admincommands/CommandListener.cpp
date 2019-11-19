@@ -31,6 +31,8 @@ namespace facebook { namespace logdevice {
 constexpr static size_t kBufferAllocationSize = 1024;
 constexpr static size_t kTotalReceiveBuffer = 1024 * 1024;
 
+using fizz::server::AsyncFizzServer;
+
 namespace {
 const uint8_t kSSLHandshakeRecordTag = 0x16;
 
@@ -80,24 +82,28 @@ class AdminCommandConnection::ReadEventHandler : public folly::EventHandler {
     uint8_t byte = 0;
     folly::netops::recv(sock_, &byte, 1, MSG_PEEK);
     if (byte == kSSLHandshakeRecordTag) {
-      ld_debug("TLS detected");
-      auto ctx = connection_.listener_.ssl_fetcher_.getSSLContext(true, true);
+      ld_debug("TLS detected, trying TLS 1.3 for %s",
+               connection_.addr_.describe().c_str());
+      auto ctx = connection_.listener_.ssl_fetcher_.getFizzServerContext(
+          true /* loadCert */);
       if (!ctx) {
-        ld_error("no SSL context, dropping connection");
+        ld_error("no SSL context, dropping connection with %s",
+                 connection_.addr_.describe().c_str());
         folly::netops::close(sock_);
         connection_.closeConnectionAndDestroyObject();
         return;
       }
 
-      auto ssl_socket = folly::AsyncSSLSocket::UniquePtr(
-          new folly::AsyncSSLSocket(ctx, evb_, sock_));
-      ssl_socket->setReadCB(&connection_);
-      ssl_socket->sslAccept(nullptr);
-      connection_.socket_ = std::move(ssl_socket);
+      auto socket = folly::AsyncSocket::UniquePtr(
+          new folly::AsyncSocket(evb_, std::move(sock_)));
+      connection_.fizz_server_ = AsyncFizzServer::UniquePtr(
+          new AsyncFizzServer(std::move(socket), ctx));
+      connection_.fizz_server_->accept(&connection_);
       return;
     }
 
-    ld_debug("TLS is not detected");
+    ld_debug(
+        "TLS is not detected for %s", connection_.addr_.describe().c_str());
     connection_.socket_ =
         folly::AsyncSocket::UniquePtr(new folly::AsyncSocket(evb_, sock_));
     connection_.socket_->setReadCB(&connection_);
@@ -186,9 +192,17 @@ void AdminCommandConnection::readDataAvailable(size_t length) noexcept {
 
     auto result =
         listener_.command_processor_.processCommand(command.c_str(), addr_);
-    socket_->writeChain(WriteCallback::createWriteCallback(
-                            folly::DelayedDestruction::DestructorGuard(this)),
-                        std::move(result));
+    ld_assert(fizz_server_ || socket_);
+    if (fizz_server_) {
+      fizz_server_->writeChain(
+          WriteCallback::createWriteCallback(
+              folly::DelayedDestruction::DestructorGuard(this)),
+          std::move(result));
+    } else if (socket_) {
+      socket_->writeChain(WriteCallback::createWriteCallback(
+                              folly::DelayedDestruction::DestructorGuard(this)),
+                          std::move(result));
+    }
   }
 }
 
@@ -251,6 +265,50 @@ CommandListener::~CommandListener() {
 
 AdminCommandConnection::~AdminCommandConnection() {
   shutdown_ = true;
-  socket_->closeNow();
+  if (fizz_server_) {
+    fizz_server_->closeNow();
+  } else if (socket_) {
+    socket_->closeNow();
+  }
+}
+
+void AdminCommandConnection::fizzHandshakeSuccess(
+    AsyncFizzServer* /* fizz_server_ */) noexcept {
+  ld_debug("fizzHandshakeSuccess for %s", addr_.describe().c_str());
+  fizz_server_->setReadCB(this);
+}
+
+void AdminCommandConnection::fizzHandshakeError(
+    AsyncFizzServer* /* fizz_server_ */,
+    folly::exception_wrapper ex) noexcept {
+  ld_warning("fizzHandshakeError for %s: %s",
+             addr_.describe().c_str(),
+             ex.get_exception()->what());
+  closeConnectionAndDestroyObject();
+}
+
+void AdminCommandConnection::fizzHandshakeAttemptFallback(
+    std::unique_ptr<folly::IOBuf> clientHello) {
+  ld_debug("fizzHandshakeAttemptFallback for %s, trying AsyncSSLSocket",
+           addr_.describe().c_str());
+
+  auto socket = fizz_server_->getUnderlyingTransport<folly::AsyncSocket>();
+  auto fd = socket->detachNetworkSocket().toFd();
+  fizz_server_.reset();
+
+  auto ctx = listener_.ssl_fetcher_.getSSLContext(true, true);
+  if (!ctx) {
+    ld_error("no SSL context, dropping connection");
+    closeConnectionAndDestroyObject();
+    return;
+  }
+
+  socket_ = folly::AsyncSSLSocket::UniquePtr(
+      new folly::AsyncSSLSocket(ctx, evb_, folly::NetworkSocket::fromFd(fd)));
+  socket_->setReadCB(this);
+  socket_->setPreReceivedData(std::move(clientHello));
+
+  auto* ssl_socket = dynamic_cast<folly::AsyncSSLSocket*>(socket_.get());
+  ssl_socket->sslAccept(nullptr);
 }
 }} // namespace facebook::logdevice

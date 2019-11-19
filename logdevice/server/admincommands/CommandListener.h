@@ -13,6 +13,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include <fizz/server/AsyncFizzServer.h>
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncTransport.h>
@@ -36,8 +37,10 @@ namespace facebook { namespace logdevice {
 class Server;
 class CommandListener;
 
-class AdminCommandConnection : public folly::DelayedDestruction,
-                               public folly::AsyncReader::ReadCallback {
+class AdminCommandConnection
+    : public folly::DelayedDestruction,
+      public folly::AsyncReader::ReadCallback,
+      public fizz::server::AsyncFizzServer::HandshakeCallback {
  public:
   using UniquePtr = std::unique_ptr<AdminCommandConnection, Destructor>;
 
@@ -53,12 +56,17 @@ class AdminCommandConnection : public folly::DelayedDestruction,
   bool detectTLS();
 
  private:
-  ~AdminCommandConnection() override;
-  void closeConnectionAndDestroyObject();
-
- private:
   class ReadEventHandler;
   friend ReadEventHandler;
+
+  ~AdminCommandConnection() override;
+  void closeConnectionAndDestroyObject();
+  void fizzHandshakeSuccess(
+      fizz::server::AsyncFizzServer* transport) noexcept override;
+  void fizzHandshakeError(fizz::server::AsyncFizzServer* transport,
+                          folly::exception_wrapper ex) noexcept override;
+  void fizzHandshakeAttemptFallback(
+      std::unique_ptr<folly::IOBuf> clientHello) override;
 
   size_t id_;
   const folly::SocketAddress addr_;
@@ -70,6 +78,7 @@ class AdminCommandConnection : public folly::DelayedDestruction,
   folly::NetworkSocket fd_;
   folly::AsyncSocket::UniquePtr socket_;
   std::unique_ptr<ReadEventHandler> read_event_handler_;
+  fizz::server::AsyncFizzServer::UniquePtr fizz_server_;
 };
 
 class CommandListener : public Listener {
