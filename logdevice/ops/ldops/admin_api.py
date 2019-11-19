@@ -23,6 +23,8 @@ from logdevice.admin.clients import AdminAPI
 from logdevice.admin.cluster_membership.types import (
     AddNodesRequest,
     AddNodesResponse,
+    BumpGenerationRequest,
+    BumpGenerationResponse,
     MarkShardsAsProvisionedRequest,
     MarkShardsAsProvisionedResponse,
     RemoveNodesRequest,
@@ -133,6 +135,12 @@ async def mark_shards_as_provisioned(
     Wrapper for markShardsAsProvisionedRequest() Thrift method
     """
     return await client.markShardsAsProvisioned(req)
+
+
+async def bump_node_generation(
+    client: AdminAPI, req: BumpGenerationRequest
+) -> BumpGenerationResponse:
+    return await client.bumpNodeGeneration(req)
 
 
 async def get_maintenances(
