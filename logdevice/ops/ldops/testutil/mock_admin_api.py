@@ -244,7 +244,7 @@ class MockAdminAPI:
 
         # generate sequencer nodes
         if self.disaggregated:
-            for node_index in (
+            for node_index in range(
                 self.num_storage_nodes,
                 self.num_storage_nodes + self.num_sequencer_nodes,
             ):
