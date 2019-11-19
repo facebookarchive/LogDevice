@@ -51,5 +51,19 @@ TEST_F(ClusterStateTest, GetFirstNodeShouldLookIntoConfig) {
   cs->updateNodesInConfig(*config2->getServiceDiscovery());
   ASSERT_EQ(cs->getFirstNodeAlive(), 1);
 }
+TEST_F(ClusterStateTest, GetDefaultNodeStateAndStatus) {
+  using namespace NodesConfigurationTestUtil;
+  const ssize_t nnodes = 3;
+  std::vector<node_index_t> node_idxs(nnodes);
+  std::iota(node_idxs.begin(), node_idxs.end(), 0);
+
+  auto config = provisionNodes(node_idxs);
+  ASSERT_TRUE(config->validate());
+
+  auto cs = makeOne(*config);
+  ASSERT_EQ(cs->getFirstNodeAlive(), 0);
+  ASSERT_EQ(cs->getNodeState(0), ClusterStateNodeState::FULLY_STARTED);
+  ASSERT_EQ(cs->getNodeStatus(0), NodeHealthStatus::HEALTHY);
+}
 
 }} // namespace facebook::logdevice

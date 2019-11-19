@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace facebook { namespace logdevice {
 
@@ -23,4 +24,5 @@ enum class NodeHealthStatus {
   OVERLOADED,
   UNHEALTHY
 };
+std::string toString(NodeHealthStatus status);
 }} // namespace facebook::logdevice
