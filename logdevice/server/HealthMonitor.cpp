@@ -28,19 +28,19 @@ HealthMonitor::HealthMonitor(folly::Executor& executor,
                              double max_stalled_worker_percentage)
     : executor_(executor),
       sleep_period_(sleep_period),
-      stats_(stats),
-      max_queue_stalls_avg_(max_queue_stalls_avg),
-      max_queue_stall_duration_(max_queue_stall_duration),
-      max_overloaded_worker_percentage_(max_overloaded_worker_percentage),
-      max_stalls_avg_(max_stalls_avg),
-      max_stalled_worker_percentage_(max_stalled_worker_percentage),
       state_timer_(
           /*min=*/sleep_period, // cannot be unhealthy shorter than one loop
           /*initial=*/sleep_period,
           /*max=*/kMaxTimerValue,
           /*multiplier=*/kMultiplier,
           /*decrease_rate=*/kDecreaseRate,
-          /*fuzz_factor=*/kFuzzFactor) {
+          /*fuzz_factor=*/kFuzzFactor),
+      stats_(stats),
+      max_queue_stalls_avg_(max_queue_stalls_avg),
+      max_queue_stall_duration_(max_queue_stall_duration),
+      max_overloaded_worker_percentage_(max_overloaded_worker_percentage),
+      max_stalls_avg_(max_stalls_avg),
+      max_stalled_worker_percentage_(max_stalled_worker_percentage) {
   internal_info_.num_workers_ = num_workers;
   internal_info_.worker_stalls_.reserve(num_workers);
   internal_info_.worker_stalls_.assign(

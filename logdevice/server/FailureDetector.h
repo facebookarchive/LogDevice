@@ -191,7 +191,8 @@ class FailureDetector {
    *                    not-empty if a cluster-state update is received
    */
   void buildInitialState(const std::vector<uint8_t>& cs_update = {},
-                         std::vector<node_index_t> boycotted_nodes = {});
+                         std::vector<node_index_t> boycotted_nodes = {},
+                         const std::vector<uint8_t>& cs_status_update = {});
 
   // called by the onSent method of GOSSIP_Message to notify the
   // failure detector
@@ -357,6 +358,7 @@ class FailureDetector {
   bool isValidInstanceId(std::chrono::milliseconds id, node_index_t idx);
 
   // Detects which nodes are down based on the data in Node::gossip_
+  // Updates ClusterState with node state and status.
   void detectFailures(node_index_t self, size_t n);
 
   // Executes a state transition and updates the dead list; `dead' is used to
@@ -504,6 +506,9 @@ class FailureDetector {
         (am_i_starting ? 0 : GOSSIP_Message::STARTING_STATE_FINISHED));
     broadcasted_i_am_starting = am_i_starting;
   }
+
+  // update the ClusterState with the new node status
+  void updateNodeStatus(node_index_t idx, NodeHealthStatus status);
 
   virtual Socket* getServerSocket(node_index_t idx);
   virtual StatsHolder* getStats();

@@ -164,6 +164,7 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
   auto cs = processor->cluster_state_.get();
   for (const auto& it : nodes_) {
     cs->setNodeState(it.first, ClusterState::NodeState::DEAD);
+    cs->setNodeStatus(it.first, NodeHealthStatus::UNHEALTHY);
   }
 }
 
@@ -244,7 +245,8 @@ void FailureDetector::sendGetClusterState() {
 
 void FailureDetector::buildInitialState(
     const std::vector<uint8_t>& cs_update,
-    std::vector<node_index_t> boycotted_nodes) {
+    std::vector<node_index_t> boycotted_nodes,
+    const std::vector<uint8_t>& cs_status_update) {
   if (waiting_for_cluster_state_ == false) {
     return;
   }
@@ -253,14 +255,13 @@ void FailureDetector::buildInitialState(
   waiting_for_cluster_state_ = false;
   ld_info("Wait over%s", cs_update.size() ? " (cluster state received)" : "");
 
-  if (cs_update.size()) {
-    const auto& nodes_configuration = getNodesConfiguration();
-    node_index_t my_idx = getMyNodeID().index();
+  const auto& nodes_configuration = getNodesConfiguration();
+  node_index_t my_idx = getMyNodeID().index();
+  auto cs = getClusterState();
 
+  if (cs_update.size()) {
     // Set the correct state of nodes instead of DEAD
     FailureDetector::NodeState state;
-
-    auto cs = getClusterState();
     for (size_t i = 0; i <= nodes_configuration->getMaxNodeIndex(); ++i) {
       if (i == my_idx)
         continue;
@@ -276,6 +277,18 @@ void FailureDetector::buildInitialState(
     }
 
     cs->setBoycottedNodes(std::move(boycotted_nodes));
+  }
+
+  if (cs_status_update.size()) {
+    for (size_t i = 0; i <= nodes_configuration->getMaxNodeIndex(); ++i) {
+      if (i == my_idx) {
+        continue;
+      }
+
+      auto new_status = static_cast<NodeHealthStatus>(cs_status_update[i]);
+      cs->setNodeStatus(i, new_status);
+      nodes_[i].status_ = new_status;
+    }
   }
 
   if (!isolation_checker_) {
@@ -418,6 +431,7 @@ void FailureDetector::gossip() {
     // and change cluster_state_ accordingly.
     updateNodeState(
         this_node.index(), false /*dead*/, true /*self*/, false /*failover*/);
+    updateNodeStatus(this_node.index(), node.status_);
   }
 
   updateBoycottedNodes();
@@ -752,10 +766,12 @@ void FailureDetector::startSuspectTimer() {
   folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   nodes_[my_idx].gossip_ = 0;
   updateNodeState(my_idx, false, true, false);
+  updateNodeStatus(my_idx, nodes_[my_idx].status_);
 
   suspect_timer_.assign([=] {
     ld_info("Suspect timeout expired");
     updateNodeState(my_idx, false, true, false);
+    updateNodeStatus(my_idx, nodes_[my_idx].status_);
   });
 
   suspect_timer_.activate(settings_->suspect_duration);
@@ -871,6 +887,7 @@ void FailureDetector::detectFailures(node_index_t self, size_t n) {
     if (it.first == self) {
       // don't transition yourself to DEAD
       updateNodeState(self, false /*dead*/, true /*self*/, false /*failover*/);
+      updateNodeStatus(self, it.second.status_);
       continue;
     }
 
@@ -896,6 +913,8 @@ void FailureDetector::detectFailures(node_index_t self, size_t n) {
     }
 
     updateNodeState(it.first, dead, false, failover);
+    updateNodeStatus(
+        it.first, dead ? NodeHealthStatus::UNHEALTHY : it.second.status_);
 
     // re-check node's state as it may be suspect, in which case it is still
     // considered dead
@@ -1274,6 +1293,27 @@ void FailureDetector::onGossipMessageSent(Status st,
       gossip_timer_node_->timer->fire();
     }
   }
+}
+
+void FailureDetector::updateNodeStatus(node_index_t idx,
+                                       NodeHealthStatus status) {
+  // This is called after locking nodes_mutex_ read lock
+  if (nodes_.find(idx) == nodes_.end()) {
+    return;
+  }
+  NodeHealthStatus current = nodes_[idx].status_;
+  if (current != status) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   10,
+                   "N%hu transitioned from %s to %s,(status) FD State:"
+                   "(gossip: %u, instance-id: %lu)",
+                   idx,
+                   toString(current).c_str(),
+                   toString(status).c_str(),
+                   nodes_[idx].gossip_,
+                   nodes_[idx].gossip_ts_.count());
+  }
+  getClusterState()->setNodeStatus(idx, status);
 }
 
 void FailureDetector::updateBoycottedNodes() {
