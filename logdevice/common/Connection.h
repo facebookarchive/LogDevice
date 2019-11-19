@@ -155,8 +155,6 @@ class Connection : public Socket {
 
   bool good() const override;
 
-  void setSocketAdapter(std::unique_ptr<SocketAdapter> adapter);
-
   void onBytesAdmittedToSend(size_t nbytes_drained) override;
 
   void onBytesPassedToTCP(size_t nbytes) override;

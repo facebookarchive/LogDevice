@@ -27,7 +27,9 @@ Connection::Connection(NodeID server_name,
                        std::unique_ptr<SocketDependencies> deps)
     : Socket(server_name, type, conntype, flow_group, std::move(deps)),
       retry_receipt_of_message_(getDeps()->getEvBase()),
-      sched_write_chain_(getDeps()->getEvBase()) {}
+      sched_write_chain_(getDeps()->getEvBase()) {
+  ld_check(legacy_connection_);
+}
 
 Connection::Connection(NodeID server_name,
                        SocketType type,
@@ -43,6 +45,7 @@ Connection::Connection(NodeID server_name,
       retry_receipt_of_message_(getDeps()->getEvBase()),
       sock_write_cb_(proto_handler_.get()),
       sched_write_chain_(getDeps()->getEvBase()) {
+  ld_check(!legacy_connection_);
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
 }
 
@@ -63,7 +66,9 @@ Connection::Connection(int fd,
              flow_group,
              std::move(deps)),
       retry_receipt_of_message_(getDeps()->getEvBase()),
-      sched_write_chain_(getDeps()->getEvBase()) {}
+      sched_write_chain_(getDeps()->getEvBase()) {
+  ld_check(legacy_connection_);
+}
 
 Connection::Connection(int fd,
                        ClientID client_name,
@@ -89,6 +94,7 @@ Connection::Connection(int fd,
       retry_receipt_of_message_(getDeps()->getEvBase()),
       sock_write_cb_(proto_handler_.get()),
       sched_write_chain_(getDeps()->getEvBase()) {
+  ld_check(!legacy_connection_);
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
   // Set the read callback.
   read_cb_.reset(new MessageReader(*proto_handler_, proto_));
@@ -104,7 +110,7 @@ Connection::~Connection() {
 }
 
 int Connection::connect() {
-  if (!sock_) {
+  if (legacy_connection_) {
     return Socket::connect();
   }
 
@@ -153,7 +159,7 @@ int Connection::connect() {
                   getConnType() == ConnectionType::SSL ? "SSL" : "PLAIN",
                   peerSockaddr().toString().c_str(),
                   connected_,
-                  !sock_->good());
+                  !proto_handler_->good());
   return 0;
 }
 
@@ -276,8 +282,8 @@ folly::Future<Status> Connection::asyncConnect() {
 
 Socket::SendStatus
 Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
-  if (sock_) {
-    if (sock_->good()) {
+  if (!legacy_connection_) {
+    if (proto_handler_->good()) {
       if (sendChain_) {
         ld_check(sched_write_chain_.isScheduled());
         sendChain_->prependChain(std::move(buffer_chain));
@@ -298,7 +304,8 @@ Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
 
 void Connection::scheduleWriteChain() {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  if (!sock_->good()) {
+  ld_check(!legacy_connection_);
+  if (!proto_handler_->good()) {
     return;
   }
   ld_check(sendChain_);
@@ -327,7 +334,7 @@ void Connection::close(Status reason) {
   // Calculate buffered bytes before clearing any member variables
   size_t buffered_bytes = getBufferedBytesSize();
   Socket::close(reason);
-  if (sock_) {
+  if (!legacy_connection_) {
     // Clear read callback on close.
     sock_->setReadCB(nullptr);
     if (buffered_bytes != 0 && !deps_->shuttingDown()) {
@@ -345,7 +352,7 @@ void Connection::close(Status reason) {
 
 void Connection::flushOutputAndClose(Status reason) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  if (!sock_) {
+  if (legacy_connection_) {
     return Socket::flushOutputAndClose(reason);
   }
 
@@ -371,21 +378,16 @@ bool Connection::good() const {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   auto is_good = Socket::good();
 
-  // Even though the socket is not closed check if the socket is in a good
-  // state. Outgoing connection check at sender is the socket is closed or good
-  // before using it to send message. If the socket is already bad sender takes
-  // the decision to create a new one, hence this is a tiny optimization to help
-  // messages not getting written into a bad socket.
-  if (is_good && sock_ && proto_handler_->good()) {
-    return true;
+  // Outgoing message send checks in Sender if the socket is closed or good
+  // before using it to send message. If the socket is already bad, Sender takes
+  // the decision to create a new connection. This is a tiny optimization
+  // helps messages from being written into a bad socket only to end up with
+  // onSent error.
+  if (!legacy_connection_) {
+    return is_good && proto_handler_->good();
   }
 
   return is_good;
-}
-
-void Connection::setSocketAdapter(std::unique_ptr<SocketAdapter> adapter) {
-  ld_check(!sock_);
-  sock_ = std::move(adapter);
 }
 
 void Connection::onConnected() {
@@ -398,7 +400,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   auto body_clone = msg_buffer->clone();
   int rv = Socket::dispatchMessageBody(header, std::move(msg_buffer));
-  if (rv != 0 && err == E::NOBUFS && sock_) {
+  if (rv != 0 && err == E::NOBUFS && !legacy_connection_) {
     // No space to push more messages on the worker, disable the read callback.
     // Retry this message and if successful it will add back the ReadCallback.
     ld_check(!retry_receipt_of_message_.isScheduled());
@@ -419,7 +421,7 @@ size_t Connection::getBufferedBytesSize() const {
   // This covers the bytes in sendChain_
   size_t buffered_bytes = Socket::getBufferedBytesSize();
   // This covers the bytes buffered in asyncsocket.
-  if (sock_) {
+  if (!legacy_connection_) {
     buffered_bytes += sock_write_cb_.bufferedBytes();
   }
   return buffered_bytes;
@@ -428,7 +430,7 @@ size_t Connection::getBufferedBytesSize() const {
 size_t Connection::getBytesPending() const {
   // Covers bytes in various queues.
   size_t bytes_pending = Socket::getBytesPending();
-  if (sock_) {
+  if (!legacy_connection_) {
     // Covers bytes in sendChain and asyncsocket.
     bytes_pending += getBufferedBytesSize();
   }
@@ -436,7 +438,7 @@ size_t Connection::getBytesPending() const {
 }
 
 X509* Connection::getPeerCert() const {
-  if (!sock_) {
+  if (legacy_connection_) {
     return Socket::getPeerCert();
   }
   ld_check(isSSL());
@@ -486,7 +488,7 @@ void Connection::onBytesAdmittedToSend(size_t nbytes_drained) {
 
 void Connection::onBytesPassedToTCP(size_t nbytes) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  if (!sock_) {
+  if (legacy_connection_) {
     // In case of legacy sockets it is alright to update sender level stats at
     // this point as the bytes are passed into the tcp socket.
     Socket::onBytesPassedToTCP(nbytes);
@@ -495,6 +497,7 @@ void Connection::onBytesPassedToTCP(size_t nbytes) {
 
 void Connection::drainSendQueue() {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
+  ld_check(!legacy_connection_);
   auto& cb = sock_write_cb_;
   size_t total_bytes_drained = 0;
   for (size_t& i = cb.num_success_; i > 0; --i) {

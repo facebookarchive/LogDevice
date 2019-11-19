@@ -1215,16 +1215,15 @@ class Socket : public TrafficShappingSocket {
    */
   size_t getTotalOutbufLength();
 
-  /**
-   * The file descriptor of the underlying OS socket. Set to -1 in situations
-   * where the file descriptor is not known (e.g., before connecting).
-   */
+  // The file descriptor of the underlying OS socket. Set to -1 in situations
+  // where the file descriptor is not known (e.g., before connecting).
   int fd_;
 
-  /**
-   * Avoid invoking Socket::close on socket that is already closed.
-   */
+  // Avoid invoking Socket::close on socket that is already closed.
   std::shared_ptr<std::atomic<bool>> conn_closed_;
+
+  // Set to true for socket based on libevent otherwise this is false.
+  const bool legacy_connection_;
 
   /**
    * For Testing only!
