@@ -34,6 +34,37 @@ constexpr static size_t kTotalReceiveBuffer = 1024 * 1024;
 
 namespace {
 const uint8_t kSSLHandshakeRecordTag = 0x16;
+
+class WriteCallback : public folly::AsyncWriter::WriteCallback {
+ public:
+  static WriteCallback*
+  createWriteCallback(folly::DelayedDestruction::DestructorGuard guard) {
+    return new WriteCallback(std::move(guard));
+  }
+
+  void writeSuccess() noexcept override {
+    delete this;
+  }
+
+  void writeErr(size_t bytesWritten,
+                const folly::AsyncSocketException& ex) noexcept override {
+    ld_error("Write to admin command client after %lu bytes failed with "
+             "exception: %s",
+             bytesWritten,
+             ex.what());
+    delete this;
+  }
+
+ private:
+  explicit WriteCallback(folly::DelayedDestruction::DestructorGuard guard)
+      : guard_(std::move(guard)) {}
+  ~WriteCallback() override {
+    ld_debug("WriteCallback destroyed and destruction guard is freed");
+  }
+
+  const folly::DelayedDestruction::DestructorGuard guard_;
+};
+
 } // namespace
 
 AdminCommandConnection::TLSSensingCallback::TLSSensingCallback(
@@ -78,7 +109,6 @@ void AdminCommandConnection::TLSSensingCallback::getReadBuffer(
   connection_.socket_ = folly::AsyncSocket::UniquePtr(
       new folly::AsyncSocket(std::move(connection_.socket_)));
   connection_.socket_->setReadCB(&connection_);
-  return;
 }
 
 void AdminCommandConnection::TLSSensingCallback::readDataAvailable(
@@ -165,7 +195,9 @@ void AdminCommandConnection::readDataAvailable(size_t length) noexcept {
 
     auto result =
         listener_.command_processor_.processCommand(command.c_str(), addr_);
-    socket_->writeChain(nullptr, std::move(result));
+    socket_->writeChain(WriteCallback::createWriteCallback(
+                            folly::DelayedDestruction::DestructorGuard(this)),
+                        std::move(result));
   }
 }
 
@@ -183,6 +215,7 @@ void AdminCommandConnection::readErr(
 }
 
 void AdminCommandConnection::readEOF() noexcept {
+  ld_debug("read EOF");
   closeConnectionAndDestroyObject();
 }
 
@@ -190,10 +223,9 @@ void CommandListener::connectionAccepted(
     folly::NetworkSocket sock,
     const folly::SocketAddress& addr) noexcept {
   const size_t id = next_conn_id_++;
-  auto res =
-      conns_.emplace(std::piecewise_construct,
-                     std::forward_as_tuple(id),
-                     std::forward_as_tuple(id, sock, *this, addr, loop_.get()));
+  AdminCommandConnection::UniquePtr connection(
+      new AdminCommandConnection(id, sock, *this, addr, loop_.get()));
+  auto res = conns_.emplace(id, std::move(connection));
   ld_debug("Accepted connection from %s (id %zu, fd %d)",
            addr.describe().c_str(),
            id,

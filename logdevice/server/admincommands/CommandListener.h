@@ -16,6 +16,7 @@
 #include <folly/io/IOBuf.h>
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncTransport.h>
+#include <folly/io/async/DelayedDestruction.h>
 #include <folly/io/async/EventBase.h>
 
 #include "logdevice/common/SSLFetcher.h"
@@ -35,8 +36,11 @@ namespace facebook { namespace logdevice {
 class Server;
 class CommandListener;
 
-class AdminCommandConnection : public folly::AsyncReader::ReadCallback {
+class AdminCommandConnection : public folly::DelayedDestruction,
+                               public folly::AsyncReader::ReadCallback {
  public:
+  using UniquePtr = std::unique_ptr<AdminCommandConnection, Destructor>;
+
   AdminCommandConnection(size_t id,
                          folly::NetworkSocket fd,
                          CommandListener& listener,
@@ -47,9 +51,8 @@ class AdminCommandConnection : public folly::AsyncReader::ReadCallback {
   void readEOF() noexcept override;
   void readErr(const folly::AsyncSocketException& ex) noexcept override;
 
-  ~AdminCommandConnection() override;
-
  private:
+  ~AdminCommandConnection() override;
   class TLSSensingCallback : public folly::AsyncReader::ReadCallback {
    public:
     TLSSensingCallback(AdminCommandConnection& connection,
@@ -98,7 +101,7 @@ class CommandListener : public Listener {
 
   // a map of connections handled by this listener, indexed by their connection
   // ids.
-  std::map<size_t, AdminCommandConnection> conns_;
+  std::map<size_t, AdminCommandConnection::UniquePtr> conns_;
 
   // SSL context manager
   SSLFetcher ssl_fetcher_;
