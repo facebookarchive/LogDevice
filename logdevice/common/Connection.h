@@ -15,6 +15,7 @@
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/ProtocolHandler.h"
 #include "logdevice/common/Socket.h"
+#include "logdevice/common/network/SocketWriteCallback.h"
 
 namespace facebook { namespace logdevice {
 
@@ -206,66 +207,6 @@ class Connection : public Socket {
   // again till it succeeds. This will all stop reading more messages from the
   // socket.
   EvTimer retry_receipt_of_message_;
-
-  // This is passed to WriteCallback to activate
-  class SocketWriteCallback : public folly::AsyncSocket::WriteCallback {
-   public:
-    SocketWriteCallback(IProtocolHandler* conn = nullptr)
-        : proto_handler_(conn) {}
-    /**
-     * writeSuccess() will be invoked when all of the data has been
-     * successfully written.
-     *
-     * Note that this mainly signals that the buffer containing the data to
-     * write is no longer needed and may be freed or re-used.  It does not
-     * guarantee that the data has been fully transmitted to the remote
-     * endpoint.  For example, on socket-based transports, writeSuccess() only
-     * indicates that the data has been given to the kernel for eventual
-     * transmission.
-     */
-    void writeSuccess() noexcept override {
-      proto_handler_->notifyBytesWritten(0);
-      ++num_success_;
-    }
-
-    /**
-     * writeError() will be invoked if an error occurs writing the data.
-     *
-     * @param bytesWritten The number of bytes that were successfull
-     * @param ex           An exception describing the error that occurred.
-     */
-    void writeErr(size_t /* bytesWritten */,
-                  const folly::AsyncSocketException& ex) noexcept override {
-      proto_handler_->notifyErrorOnSocket(ex);
-    }
-
-    /**
-     * Returns bytes buffered in asyncsocket.
-     */
-    size_t bufferedBytes() const {
-      return bytes_buffered_;
-    }
-
-    void clear() {
-      write_chains_.clear();
-      num_success_ = 0;
-      bytes_buffered_ = 0;
-    }
-
-    IProtocolHandler* proto_handler_;
-    struct WriteUnit {
-      size_t length;
-      SteadyTimestamp write_time;
-    };
-    // A single write callback is shared for all the writes. Hence , when write
-    // success is called we do not know how many bytes were written into the
-    // socket. This deque keep track of write sizes and time of write as the
-    // chain was added into the socket. Time of write helps in getting the delay
-    // in writing to the tcp socket.
-    std::deque<WriteUnit> write_chains_;
-    size_t num_success_{0};
-    size_t bytes_buffered_{0};
-  };
 
   SocketWriteCallback sock_write_cb_;
 
