@@ -12,7 +12,6 @@
 #include <folly/ScopeGuard.h>
 #include <folly/io/async/AsyncTimeout.h>
 
-#include "logdevice/common/libevent/IEvBase.h"
 #include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {
@@ -46,6 +45,8 @@ EvBaseLegacy::Status EvBaseLegacy::free() {
   base_.reset(nullptr);
   return Status::OK;
 }
+
+void EvBaseLegacy::runInEventBaseThread(EventCallback /* fn */) {}
 
 EvBaseLegacy::Status EvBaseLegacy::loop() {
   if (!base_) {

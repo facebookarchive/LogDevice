@@ -48,6 +48,14 @@ EvBase::Status EvBase::free() {
   return curr_selection_->free();
 }
 
+void EvBase::runInEventBaseThread(EventCallback fn) {
+  if (base_type_ == LEGACY_EVENTBASE || base_type_ == UNKNOWN) {
+    ld_assert(false);
+    return;
+  }
+  curr_selection_->runInEventBaseThread(std::move(fn));
+}
+
 EvBase::Status EvBase::loop() {
   return curr_selection_->loop();
 }

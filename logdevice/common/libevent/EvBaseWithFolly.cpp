@@ -29,6 +29,10 @@ EvBaseWithFolly::Status EvBaseWithFolly::free() {
   return EvBaseWithFolly::Status::OK;
 }
 
+void EvBaseWithFolly::runInEventBaseThread(EventCallback fn) {
+  base_.runInEventBaseThread(std::move(fn));
+}
+
 EvBaseWithFolly::Status EvBaseWithFolly::loop() {
   running_base_ = this;
   SCOPE_EXIT {
