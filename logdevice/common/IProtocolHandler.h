@@ -35,7 +35,12 @@ class IProtocolHandler {
   virtual int dispatchMessageBody(const ProtocolHeader& hdr,
                                   std::unique_ptr<folly::IOBuf> body) = 0;
   virtual void notifyErrorOnSocket(const folly::AsyncSocketException& err) = 0;
-  virtual void notifyBytesWritten(size_t nbytes) = 0;
+
+  /**
+   * Notify proto handler bytes added into the AsyncSocket have been written
+   * into tcp socket.
+   */
+  virtual void notifyBytesWritten() = 0;
   virtual bool good() const = 0;
 };
 

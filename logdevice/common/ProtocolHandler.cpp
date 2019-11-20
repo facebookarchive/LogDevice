@@ -137,7 +137,7 @@ ProtocolHandler::translateToLogDeviceStatus(folly::AsyncSocketException ex) {
   return E::CONNFAILED;
 }
 
-void ProtocolHandler::notifyBytesWritten(size_t /* bytes_written */) {
+void ProtocolHandler::notifyBytesWritten() {
   if (!buffer_passed_to_tcp_.isScheduled()) {
     buffer_passed_to_tcp_.scheduleTimeout(0);
   }

@@ -21,7 +21,7 @@ class MockProtocolHandler : public IProtocolHandler {
                int(const ProtocolHeader& hdr,
                    std::unique_ptr<folly::IOBuf> body));
   MOCK_METHOD1(notifyErrorOnSocket, void(const folly::AsyncSocketException&));
-  MOCK_METHOD1(notifyBytesWritten, void(size_t bytes));
+  MOCK_METHOD0(notifyBytesWritten, void());
   MOCK_CONST_METHOD0(getSettings, const Settings&());
   MOCK_CONST_METHOD0(good, bool());
 };

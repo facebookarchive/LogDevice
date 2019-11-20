@@ -73,7 +73,7 @@ class ProtocolHandler : public IProtocolHandler {
   /**
    * Notify bytes written successfully into the socket.
    */
-  void notifyBytesWritten(size_t nbytes) override;
+  void notifyBytesWritten() override;
 
   /**
    * Get event used notify connection about the sent message.

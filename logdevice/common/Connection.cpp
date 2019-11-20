@@ -316,10 +316,10 @@ void Connection::scheduleWriteChain() {
 
   // Get bytes that are added to sendq but not yet added in the asyncSocket.
   auto bytes_in_sendq = Socket::getBufferedBytesSize();
-  sock_write_cb_.write_chains_.emplace_back(
+  sock_write_cb_.write_chains.emplace_back(
       SocketWriteCallback::WriteUnit{bytes_in_sendq, now});
   // These bytes are now buffered in socket and will be removed from sendq.
-  sock_write_cb_.bytes_buffered_ += bytes_in_sendq;
+  sock_write_cb_.bytes_buffered += bytes_in_sendq;
   sock_->writeChain(&sock_write_cb_, std::move(sendChain_));
   // All the bytes will be now removed from sendq now that we have written into
   // the asyncsocket.
@@ -422,7 +422,7 @@ size_t Connection::getBufferedBytesSize() const {
   size_t buffered_bytes = Socket::getBufferedBytesSize();
   // This covers the bytes buffered in asyncsocket.
   if (!legacy_connection_) {
-    buffered_bytes += sock_write_cb_.bufferedBytes();
+    buffered_bytes += sock_write_cb_.bytes_buffered;
   }
   return buffered_bytes;
 }
@@ -500,22 +500,22 @@ void Connection::drainSendQueue() {
   ld_check(!legacy_connection_);
   auto& cb = sock_write_cb_;
   size_t total_bytes_drained = 0;
-  for (size_t& i = cb.num_success_; i > 0; --i) {
-    total_bytes_drained += cb.write_chains_.front().length;
+  for (size_t& i = cb.num_success; i > 0; --i) {
+    total_bytes_drained += cb.write_chains.front().length;
     STAT_ADD(deps_->getStats(),
              sock_write_sched_size,
-             cb.write_chains_.front().length);
-    cb.write_chains_.pop_front();
+             cb.write_chains.front().length);
+    cb.write_chains.pop_front();
   }
 
-  ld_check(cb.bytes_buffered_ >= total_bytes_drained);
-  cb.bytes_buffered_ -= total_bytes_drained;
+  ld_check(cb.bytes_buffered >= total_bytes_drained);
+  cb.bytes_buffered -= total_bytes_drained;
   Socket::onBytesPassedToTCP(total_bytes_drained);
 
   // flushOutputAndClose sets close_reason_ and waits for all buffers to drain.
   // Check if all buffers were drained here if that is the case close the
   // connection.
-  if (close_reason_ != E::UNKNOWN && cb.write_chains_.size() == 0 &&
+  if (close_reason_ != E::UNKNOWN && cb.write_chains.size() == 0 &&
       !sendChain_) {
     close(close_reason_);
   }
