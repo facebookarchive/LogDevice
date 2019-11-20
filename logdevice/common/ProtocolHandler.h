@@ -52,6 +52,21 @@ class ProtocolHandler : public IProtocolHandler {
 
   ~ProtocolHandler() override {}
 
+  folly::Future<Status> asyncConnect(const folly::SocketAddress&,
+                                     const Settings&) override;
+
+  void sendBuffer(SocketObserver::observer_id_t id,
+                  std::unique_ptr<folly::IOBuf>&& buffer_chain) override;
+
+  void close(Status) override;
+
+  void closeNow(Status) override;
+
+  SocketObserver::observer_id_t
+  registerSocketObserver(SocketObserver* o) override;
+
+  void unregisterSocketObserver(SocketObserver::observer_id_t) override;
+
   /**
    * Validation of protocol header on network thread on reading a message
    * header from the socket.

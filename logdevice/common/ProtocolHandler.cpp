@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/ProtocolHandler.h"
 
+#include <folly/SocketAddress.h>
 #include <folly/io/async/AsyncSocketException.h>
 
 #include "logdevice/common/Connection.h"
@@ -22,6 +23,25 @@ ProtocolHandler::ProtocolHandler(Connection* conn,
       conn_description_(conn_description),
       buffer_passed_to_tcp_(evBase),
       set_error_on_socket_(evBase) {}
+
+folly::Future<Status> ProtocolHandler::asyncConnect(const folly::SocketAddress&,
+                                                    const Settings&) {
+  return folly::makeFuture<Status>(E::OK);
+}
+
+void ProtocolHandler::sendBuffer(SocketObserver::observer_id_t,
+                                 std::unique_ptr<folly::IOBuf>&&) {}
+
+void ProtocolHandler::close(Status) {}
+
+void ProtocolHandler::closeNow(Status) {}
+
+SocketObserver::observer_id_t
+ProtocolHandler::registerSocketObserver(SocketObserver*) {
+  return SocketObserver::kInvalidObserver;
+}
+
+void ProtocolHandler::unregisterSocketObserver(SocketObserver::observer_id_t) {}
 
 bool ProtocolHandler::validateProtocolHeader(const ProtocolHeader& hdr) const {
   static_assert(
