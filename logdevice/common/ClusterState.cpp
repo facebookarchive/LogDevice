@@ -143,24 +143,25 @@ void ClusterState::postUpdateToWorkers(node_index_t node_id, NodeState state) {
 void ClusterState::setNodeState(node_index_t idx,
                                 ClusterState::NodeState state) {
   ld_check(idx >= 0);
-
   folly::SharedMutex::ReadHolder read_lock(mutex_);
-  if (idx < cluster_size_) {
-    ClusterState::NodeState prev = node_state_list_[idx].exchange(state);
-    if ((prev != state) && processor_) {
-      if (!processor_->settings()->server) {
-        // this is a client stats
-        WORKER_STAT_INCR(client.cluster_state_updates);
-      }
-      RATELIMIT_INFO(std::chrono::seconds(1),
-                     10,
-                     "State of N%d changed from %s to %s",
-                     idx,
-                     getNodeStateString(prev),
-                     getNodeStateString(state));
-
-      postUpdateToWorkers(idx, state);
+  auto node_state = node_state_map_.find(idx);
+  if (node_state == node_state_map_.end()) {
+    return;
+  }
+  ClusterState::NodeState prev = node_state->second->exchange(state);
+  if ((prev != state) && processor_) {
+    if (!processor_->settings()->server) {
+      // this is a client stats
+      WORKER_STAT_INCR(client.cluster_state_updates);
     }
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   10,
+                   "State of N%d changed from %s to %s",
+                   idx,
+                   getNodeStateString(prev),
+                   getNodeStateString(state));
+
+    postUpdateToWorkers(idx, state);
   }
 }
 void ClusterState::setNodeStatus(node_index_t idx, NodeHealthStatus status) {
@@ -246,7 +247,9 @@ void ClusterState::onGetClusterStateDone(
 void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
   folly::SharedMutex::WriteHolder write_lock(mutex_);
   if (cluster_size_ != new_size) {
-    auto new_list = new std::atomic<ClusterState::NodeState>[new_size];
+    auto new_state_map = folly::F14FastMap<
+        node_index_t,
+        std::unique_ptr<std::atomic<ClusterState::NodeState>>>{};
     auto new_status_map =
         folly::F14FastMap<node_index_t,
                           std::unique_ptr<std::atomic<NodeHealthStatus>>>{};
@@ -254,7 +257,7 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
         processor_ && processor_->isFailureDetectorRunning();
     for (int i = 0; i < new_size; i++) {
       if (i < cluster_size_) {
-        new_list[i].store(node_state_list_[i].load());
+        new_state_map.insert({i, std::move(node_state_map_.at(i))});
         new_status_map.insert({i, std::move(node_status_map_.at(i))});
       } else {
         /* If we have failure detector, mark new nodes as dead by default;
@@ -266,7 +269,8 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
         auto state = have_failure_detector
             ? ClusterState::NodeState::DEAD
             : ClusterState::NodeState::FULLY_STARTED;
-        new_list[i].store(state);
+        new_state_map.insert(
+            {i, std::make_unique<std::atomic<ClusterState::NodeState>>(state)});
         // If we have failure detector, mark new nodes as undefined by default;
         // FD will change their state as needed. Otherwise, treat nodes as
         // healthy by default. This maintains consistency with the way node
@@ -282,7 +286,7 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
     }
     ld_info(
         "Cluster state size updated from %lu to %lu", cluster_size_, new_size);
-    node_state_list_.reset(new_list);
+    node_state_map_.swap(new_state_map);
     node_status_map_.swap(new_status_map);
     cluster_size_ = new_size;
   }
