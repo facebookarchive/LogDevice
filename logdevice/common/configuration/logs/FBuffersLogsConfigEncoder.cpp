@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/configuration/logs/FBuffersLogsConfigCodec.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice { namespace logsconfig {
 
@@ -61,6 +62,20 @@ FBuffersLogsConfigCodec::fbuffers_serialize<const std::chrono::milliseconds&,
     bool flatten) {
   return fbuffers_serialize<const int64_t&, fbuffers::Long>(
       builder, in.count(), flatten);
+}
+
+template <>
+flatbuffers::Offset<fbuffers::UInt8>
+FBuffersLogsConfigCodec::fbuffers_serialize<const monitoring_tier_t&,
+                                            fbuffers::UInt8>(
+    flatbuffers::FlatBufferBuilder& builder,
+    const monitoring_tier_t& in,
+    bool flatten) {
+  static_assert(std::is_same_v<monitoring_tier_t::raw_type, uint8_t>,
+                "monitoring_tier_t raw type is not uint8_t anymore, you must "
+                "fix serialization.");
+  return fbuffers_serialize<const uint8_t&, fbuffers::UInt8>(
+      builder, in.val(), flatten);
 }
 
 // Converts NodeLocationScope to fbuffers::UInt8
@@ -159,6 +174,9 @@ FBuffersLogsConfigCodec::fbuffers_serialize(
                       Long,
                       attributes.sequencerBatchingPassthruThreshold);
   SERIALIZE_ATTRIBUTE(TAIL_OPTIMIZED, Bool, attributes.tailOptimized);
+  SERIALIZE_ATTRIBUTE_OPT(MONITORING_TIER, UInt8, attributes.monitoringTier);
+  SERIALIZE_ATTRIBUTE(
+      SUPPRESS_LAG_MONITORING, Bool, attributes.suppressLagMonitoring);
 
   // permissions
   std::vector<flatbuffers::Offset<fbuffers::Permission>> perms;

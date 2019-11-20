@@ -290,6 +290,26 @@ _attributes = [
              """
         ),
     ),
+    argument(
+        "monitoring_tier",
+        type=int,
+        description=dedent(
+            """
+                Defines monitoring tier for readers/writes of log. Used for
+                tracking performance of readers/writers separately for each
+                tier. (Value between 0-255)
+            """
+        ),
+    ),
+    argument(
+        "suppress_lag_monitoring",
+        type=bool,
+        description=dedent(
+            """
+                Prevents detection of lagging readers for readers of this log group."
+            """
+        ),
+    ),
 ]
 
 

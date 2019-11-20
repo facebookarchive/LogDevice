@@ -28,6 +28,9 @@ LOGDEVICE_STRONG_TYPEDEF(uint64_t, logid_t);
 // Used by VersionedConfigStore
 LOGDEVICE_STRONG_TYPEDEF(uint64_t, vcs_config_version_t);
 
+// Used by Stats and client APIs
+LOGDEVICE_STRONG_TYPEDEF(uint8_t, monitoring_tier_t);
+
 constexpr logid_t LOGID_INVALID(0);
 constexpr logid_t LOGID_INVALID2(~0);
 

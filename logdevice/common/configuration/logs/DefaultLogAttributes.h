@@ -74,6 +74,11 @@ class DefaultLogAttributes : public LogAttributes {
             Attribute<Shadow>(),
             /* tailOptimized */
             false,
+            /* monitoringTier */
+            Attribute<folly::Optional<monitoring_tier_t>>(
+                folly::Optional<monitoring_tier_t>()),
+            /* suppressLagMonitoring */
+            false,
             /* extras */
             Attribute<ExtrasMap>()) {}
 };

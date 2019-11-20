@@ -58,6 +58,8 @@ constexpr char const* SHADOW = "shadow";
 constexpr char const* SHADOW_DEST = "destination";
 constexpr char const* SHADOW_RATIO = "ratio";
 constexpr char const* TAIL_OPTIMIZED = "tail_optimized";
+constexpr char const* MONITORING_TIER = "monitoring_tier";
+constexpr char const* SUPPRESS_LAG_MONITORING = "suppress_lag_monitoring";
 
 constexpr char const* EXTRAS = "extra_attributes";
 
@@ -231,7 +233,7 @@ bool operator==(const Type& b, const Attribute<Type>& a) {
     LogAttributes copy = *this;                                     \
     copy.name##_ = name;                                            \
     return copy;                                                    \
-  }                                                                 \
+  }
 
 inline bool compareReplicateAcrossKeys(std::pair<NodeLocationScope, int>& lhs,
                                        std::pair<NodeLocationScope, int>& rhs) {
@@ -330,6 +332,8 @@ class LogAttributes {
     MERGE_WITH_PARENT(attrs, sequencerBatchingPassthruThreshold)
     MERGE_WITH_PARENT(attrs, shadow)
     MERGE_WITH_PARENT(attrs, tailOptimized)
+    MERGE_WITH_PARENT(attrs, monitoringTier)
+    MERGE_WITH_PARENT(attrs, suppressLagMonitoring)
 
     MERGE_WITH_PARENT(attrs, extras)
 #undef MERGE_WITH_PARENT
@@ -491,6 +495,19 @@ class LogAttributes {
   Attribute<bool> tailOptimized_;
 
   /**
+   * Defines a monitoring tier for the log group. Each tier is kept track
+   * separately for monitoring purposes (e.g. if a tier is more important than
+   * another, there might be more strict SLAs for that tier).
+   */
+  Attribute<folly::Optional<monitoring_tier_t>> monitoringTier_;
+
+  /**
+   * If true, ClientReadersFlowTracer will not perform lag assessment for
+   * readers of that log.
+   */
+  Attribute<bool> suppressLagMonitoring_;
+
+  /**
    * Arbitrary fields that logdevice does not recognize
    */
   Attribute<ExtrasMap> extras_;
@@ -525,6 +542,8 @@ class LogAttributes {
       const Attribute<ssize_t>& sequencerBatchingPassthruThreshold,
       const Attribute<Shadow>& shadow,
       const Attribute<bool>& tailOptimized,
+      const Attribute<folly::Optional<monitoring_tier_t>>& monitoringTier,
+      const Attribute<bool>& suppressLagMonitoring,
       const Attribute<ExtrasMap>& extras)
       : replicationFactor_(replicationFactor),
         extraCopies_(extraCopies),
@@ -552,6 +571,8 @@ class LogAttributes {
         sequencerBatchingPassthruThreshold_(sequencerBatchingPassthruThreshold),
         shadow_(shadow),
         tailOptimized_(tailOptimized),
+        monitoringTier_(monitoringTier),
+        suppressLagMonitoring_(suppressLagMonitoring),
         extras_(extras) {}
 
   /**
@@ -592,6 +613,8 @@ class LogAttributes {
   ACCESSOR(sequencerBatchingPassthruThreshold)
   ACCESSOR(shadow)
   ACCESSOR(tailOptimized)
+  ACCESSOR(monitoringTier)
+  ACCESSOR(suppressLagMonitoring)
 
   ACCESSOR(extras)
 
