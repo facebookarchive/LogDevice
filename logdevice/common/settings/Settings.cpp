@@ -893,7 +893,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Monitoring);
 
   init("health-monitor-max-stalls-avg",
-       &health_monitor_max_queue_stalls_avg_ms,
+       &health_monitor_max_stalls_avg_ms,
        "90ms",
        validate_positive<ssize_t>(),
        "Maximum average of worker stalls in health-monitor-poll-interval-ms "
