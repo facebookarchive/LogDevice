@@ -94,6 +94,16 @@ SocketDependencies::getSSLContext(bool accepting) const {
       loadCert, accepting);
 }
 
+std::shared_ptr<const fizz::server::FizzServerContext>
+SocketDependencies::getFizzServerContext() const {
+  // Servers are required to have a certificate so that the client can verify
+  // them. If clients specify that they want to include their certificate, then
+  // the server will also authenticate the client certificates.
+
+  return Worker::onThisThread()->sslFetcher().getFizzServerContext(
+      true /* loadCert */);
+}
+
 bool SocketDependencies::shuttingDown() const {
   return Worker::onThisThread()->shuttingDown();
 }

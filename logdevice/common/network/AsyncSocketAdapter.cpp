@@ -16,55 +16,56 @@
 #include <folly/io/async/SSLContext.h>
 #include <folly/net/NetworkSocket.h>
 
+#include "logdevice/common/checks.h"
+#include "logdevice/common/debug.h"
+
 namespace facebook { namespace logdevice {
 
 using Destructor = folly::DelayedDestruction::Destructor;
 
 AsyncSocketAdapter::AsyncSocketAdapter()
-    : sock_(folly::AsyncSocket::UniquePtr(new folly::AsyncSocket(),
-                                          Destructor())) {}
+    : transport_(new folly::AsyncSocket(), Destructor()) {}
 
 AsyncSocketAdapter::AsyncSocketAdapter(folly::EventBase* evb)
-    : sock_(folly::AsyncSocket::UniquePtr(new folly::AsyncSocket(evb),
-                                          Destructor())) {}
+    : transport_(new folly::AsyncSocket(evb), Destructor()) {}
 
 AsyncSocketAdapter::AsyncSocketAdapter(folly::EventBase* evb,
                                        const folly::SocketAddress& address,
                                        uint32_t connectTimeout)
-    : sock_(folly::AsyncSocket::UniquePtr(
-          new folly::AsyncSocket(evb, address, connectTimeout),
-          Destructor())) {}
+    : transport_(new folly::AsyncSocket(evb, address, connectTimeout),
+                 Destructor()) {}
 
 AsyncSocketAdapter::AsyncSocketAdapter(
     const std::shared_ptr<folly::SSLContext>& ctx,
     folly::EventBase* evb)
-    : sock_(folly::AsyncSocket::UniquePtr(new folly::AsyncSSLSocket(ctx, evb),
-                                          Destructor())) {}
+    : transport_(new folly::AsyncSSLSocket(ctx, evb), Destructor()) {}
 
 AsyncSocketAdapter::AsyncSocketAdapter(folly::EventBase* evb,
                                        const std::string& ip,
                                        uint16_t port,
                                        uint32_t connectTimeout)
-    : sock_(folly::AsyncSocket::UniquePtr(
-          new folly::AsyncSocket(evb, ip, port, connectTimeout),
-          Destructor())) {}
+    : transport_(new folly::AsyncSocket(evb, ip, port, connectTimeout),
+                 Destructor()) {}
 
 AsyncSocketAdapter::AsyncSocketAdapter(folly::EventBase* evb,
                                        folly::NetworkSocket fd,
                                        uint32_t zeroCopyBufId)
-    : sock_(folly::AsyncSocket::UniquePtr(
-          new folly::AsyncSocket(evb, fd, zeroCopyBufId),
-          Destructor())) {}
+    : transport_(new folly::AsyncSocket(evb, fd, zeroCopyBufId), Destructor()) {
+}
 
 AsyncSocketAdapter::AsyncSocketAdapter(
-    const std::shared_ptr<folly::SSLContext>& ctx,
+    const std::shared_ptr<const fizz::server::FizzServerContext>& fizzCtx,
+    const std::shared_ptr<folly::SSLContext>& sslCtx,
     folly::EventBase* evb,
     folly::NetworkSocket fd)
-    : sock_(
-          folly::AsyncSocket::UniquePtr(new folly::AsyncSSLSocket(ctx, evb, fd),
-                                        Destructor())) {
-  auto sock = dynamic_cast<folly::AsyncSSLSocket*>(sock_.get());
-  sock->sslAccept(nullptr /*handshakecb*/);
+    : transport_(
+          new fizz::server::AsyncFizzServer(
+              folly::AsyncSocket::UniquePtr(new folly::AsyncSocket(evb, fd)),
+              fizzCtx),
+          Destructor()),
+      sslCtx_(sslCtx) {
+  ld_check(sslCtx_);
+  toServer()->accept(this);
 }
 
 AsyncSocketAdapter::~AsyncSocketAdapter() {}
@@ -75,88 +76,148 @@ void AsyncSocketAdapter::connect(
     int timeout,
     const folly::AsyncSocket::OptionMap& options,
     const folly::SocketAddress& bindAddr) noexcept {
-  sock_->connect(callback, address, timeout, options, bindAddr);
+  toSocket()->connect(callback, address, timeout, options, bindAddr);
 }
 
 void AsyncSocketAdapter::closeNow() {
-  sock_->closeNow();
+  transport_->closeNow();
 }
 
 void AsyncSocketAdapter::close() {
-  sock_->close();
+  transport_->close();
 }
 
 bool AsyncSocketAdapter::good() const {
-  return sock_->good();
+  return transport_->good();
 }
 
 bool AsyncSocketAdapter::readable() const {
-  return sock_->readable();
+  return transport_->readable();
 }
 
 bool AsyncSocketAdapter::connecting() const {
-  return sock_->connecting();
+  return transport_->connecting();
 }
 
 void AsyncSocketAdapter::getLocalAddress(folly::SocketAddress* address) const {
-  sock_->getLocalAddress(address);
+  transport_->getLocalAddress(address);
 }
 
 void AsyncSocketAdapter::getPeerAddress(folly::SocketAddress* address) const {
-  sock_->getPeerAddress(address);
+  transport_->getPeerAddress(address);
 }
 
 folly::NetworkSocket AsyncSocketAdapter::getNetworkSocket() const {
-  return sock_->getNetworkSocket();
+  return toSocket()->getNetworkSocket();
 }
 
 const folly::AsyncTransportCertificate*
 AsyncSocketAdapter::getPeerCertificate() const {
-  return sock_->getPeerCertificate();
+  return transport_->getPeerCertificate();
 }
 
 size_t AsyncSocketAdapter::getRawBytesWritten() const {
-  return sock_->getRawBytesWritten();
+  return transport_->getRawBytesWritten();
 }
 
 size_t AsyncSocketAdapter::getRawBytesReceived() const {
-  return sock_->getRawBytesReceived();
+  return transport_->getRawBytesReceived();
 }
 
 void AsyncSocketAdapter::setReadCB(SocketAdapter::ReadCallback* callback) {
-  sock_->setReadCB(callback);
+  return transport_->setReadCB(callback);
 }
 
 SocketAdapter::ReadCallback* AsyncSocketAdapter::getReadCallback() const {
-  return sock_->getReadCallback();
+  return transport_->getReadCallback();
 }
 
 void AsyncSocketAdapter::writeChain(WriteCallback* callback,
                                     std::unique_ptr<folly::IOBuf>&& buf,
                                     folly::WriteFlags flags) {
-  sock_->writeChain(
-      callback, std::forward<std::unique_ptr<folly::IOBuf>>(buf), flags);
+  transport_->writeChain(callback, std::move(buf), flags);
 }
 
 int AsyncSocketAdapter::setSendBufSize(size_t bufsize) {
-  return sock_->setSendBufSize(bufsize);
+  return toSocket()->setSendBufSize(bufsize);
 }
 
 int AsyncSocketAdapter::setRecvBufSize(size_t bufsize) {
-  return sock_->setRecvBufSize(bufsize);
-}
-
-int AsyncSocketAdapter::getSockOptVirtual(int level,
-                                          int optname,
-                                          void* optval,
-                                          socklen_t* optlen) {
-  return sock_->getSockOptVirtual(level, optname, optval, optlen);
+  return toSocket()->setRecvBufSize(bufsize);
 }
 
 int AsyncSocketAdapter::setSockOptVirtual(int level,
                                           int optname,
                                           void const* optval,
                                           socklen_t optlen) {
-  return sock_->setSockOptVirtual(level, optname, optval, optlen);
+  return toSocket()->setSockOptVirtual(level, optname, optval, optlen);
 }
+
+int AsyncSocketAdapter::getSockOptVirtual(int level,
+                                          int optname,
+                                          void* optval,
+                                          socklen_t* optlen) {
+  return toSocket()->getSockOptVirtual(level, optname, optval, optlen);
+}
+
+void AsyncSocketAdapter::fizzHandshakeSuccess(
+    fizz::server::AsyncFizzServer* /* fizz_server_ */) noexcept {
+  folly::SocketAddress addr;
+  getPeerAddress(&addr);
+  ld_debug("fizzHandshakeSuccess for %s", addr.describe().c_str());
+  sslCtx_.reset();
+}
+
+void AsyncSocketAdapter::fizzHandshakeError(
+    fizz::server::AsyncFizzServer* /* fizz_server_ */,
+    folly::exception_wrapper ex) noexcept {
+  folly::SocketAddress addr;
+  getPeerAddress(&addr);
+  ld_warning("fizzHandshakeError for %s: %s",
+             addr.describe().c_str(),
+             ex.get_exception()->what());
+  sslCtx_.reset();
+  transport_.reset();
+  // let the read callback propagate the error
+}
+
+void AsyncSocketAdapter::fizzHandshakeAttemptFallback(
+    std::unique_ptr<folly::IOBuf> clientHello) {
+  ld_check(sslCtx_);
+
+  auto* socket = toSocket();
+  auto evb = socket->getEventBase();
+
+  // we change transport so we need to reset the callback
+  auto* read_cb = getReadCallback();
+  setReadCB(nullptr); // don't propagate EOF, it's expected
+  auto fd = socket->detachNetworkSocket().toFd(); // results in EOF
+
+  auto* ssl_socket =
+      new folly::AsyncSSLSocket(sslCtx_, evb, folly::NetworkSocket::fromFd(fd));
+
+  transport_.reset(ssl_socket);
+  setReadCB(read_cb);
+  ssl_socket->setPreReceivedData(std::move(clientHello));
+  ssl_socket->sslAccept(nullptr /*handshakecb*/);
+}
+
+fizz::server::AsyncFizzServer* AsyncSocketAdapter::toServer() const {
+  ld_check(transport_);
+  auto* server = dynamic_cast<fizz::server::AsyncFizzServer*>(transport_.get());
+  ld_check(server);
+  return server;
+}
+
+folly::AsyncSocket* AsyncSocketAdapter::toSocket() const {
+  ld_check(transport_);
+  auto* socket = dynamic_cast<folly::AsyncSocket*>(transport_.get());
+  if (!socket) {
+    socket = toServer()->getUnderlyingTransport<folly::AsyncSocket>();
+  }
+
+  ld_check(socket);
+  return socket;
+}
+
 }} // namespace facebook::logdevice

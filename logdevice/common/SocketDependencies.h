@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <fizz/server/FizzServerContext.h>
 #include <folly/io/async/SSLContext.h>
 
 #include "event2/buffer.h"
@@ -59,6 +60,8 @@ class SocketDependencies {
 
   virtual std::shared_ptr<folly::SSLContext>
   getSSLContext(bool accepting) const;
+  virtual std::shared_ptr<const fizz::server::FizzServerContext>
+  getFizzServerContext() const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID nid,

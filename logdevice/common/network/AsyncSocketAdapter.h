@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <fizz/server/AsyncFizzServer.h>
+#include <fizz/server/FizzServerContext.h>
 #include <folly/io/async/AsyncSocket.h>
 
 #include "logdevice/common/network/SocketAdapter.h"
@@ -20,7 +22,9 @@ class SSLContext;
 
 namespace facebook { namespace logdevice {
 
-class AsyncSocketAdapter : public SocketAdapter {
+class AsyncSocketAdapter
+    : public SocketAdapter,
+      public fizz::server::AsyncFizzServer::HandshakeCallback {
  public:
   AsyncSocketAdapter();
   /**
@@ -80,8 +84,10 @@ class AsyncSocketAdapter : public SocketAdapter {
                      uint32_t zeroCopyBufId = 0);
 
   /**
-   * Create a client AsyncSSLSocket from an already connected
+   * Create a server AsyncSSLSocket from an already connected
    * socket file descriptor.
+   *
+   * Tries fizz (TLS 1.3) first, then fallbacks to openssl.
    *
    * Note that while AsyncSSLSocket enables TCP_NODELAY for sockets it creates
    * when connecting, it does not change the socket options when given an
@@ -93,9 +99,11 @@ class AsyncSocketAdapter : public SocketAdapter {
    * @param evb  EventBase that will manage this socket.
    * @param fd   File descriptor to take over (should be a connected socket).
    */
-  AsyncSocketAdapter(const std::shared_ptr<folly::SSLContext>& ctx,
-                     folly::EventBase* evb,
-                     folly::NetworkSocket fd);
+  AsyncSocketAdapter(
+      const std::shared_ptr<const fizz::server::FizzServerContext>& fizzCtx,
+      const std::shared_ptr<folly::SSLContext>& sslCtx,
+      folly::EventBase* evb,
+      folly::NetworkSocket fd);
 
   ~AsyncSocketAdapter() override;
 
@@ -277,7 +285,17 @@ class AsyncSocketAdapter : public SocketAdapter {
                         socklen_t optlen) override;
 
  private:
-  folly::AsyncSocket::UniquePtr sock_;
+  void fizzHandshakeSuccess(
+      fizz::server::AsyncFizzServer* transport) noexcept override;
+  void fizzHandshakeError(fizz::server::AsyncFizzServer* transport,
+                          folly::exception_wrapper ex) noexcept override;
+  void fizzHandshakeAttemptFallback(
+      std::unique_ptr<folly::IOBuf> clientHello) override;
+  fizz::server::AsyncFizzServer* toServer() const;
+  folly::AsyncSocket* toSocket() const;
+
+  folly::AsyncTransportWrapper::UniquePtr transport_;
+  std::shared_ptr<folly::SSLContext> sslCtx_;
 };
 
 }} // namespace facebook::logdevice
