@@ -59,6 +59,8 @@ constexpr auto logs_config_recognized_attributes = {
     SEQUENCER_BATCHING_PASSTHRU_THRESHOLD,
     SHADOW,
     TAIL_OPTIMIZED,
+    MONITORING_TIER,
+    SUPPRESS_LAG_MONITORING,
     EXTRAS};
 
 static NodeLocationScope parse_location_scope_or_throw(std::string key) {
@@ -405,6 +407,19 @@ dict LogAttributes_to_dict(const LogAttributes& attrs) {
       SHADOW,
       output);
 
+  add_log_attribute<folly::Optional<monitoring_tier_t>, object>(
+      attrs.monitoringTier(),
+      [](const auto& attr) {
+        return attr.value() ? object(attr.value().value().val()) : object();
+      },
+      MONITORING_TIER,
+      output);
+
+  add_log_attribute<bool, bool>(attrs.suppressLagMonitoring(),
+                                [](auto attr) { return attr.value(); },
+                                SUPPRESS_LAG_MONITORING,
+                                output);
+
   return output;
 }
 
@@ -570,6 +585,16 @@ LogAttributes dict_to_LogAttributes(const dict& attrs) {
     if (key_string == TAIL_OPTIMIZED) {
       bool v = convert_or_throw<bool>(value, TAIL_OPTIMIZED);
       log_attributes = log_attributes.with_tailOptimized(v);
+    }
+    if (key_string == MONITORING_TIER) {
+      static_assert(std::is_same_v<monitoring_tier_t::raw_type, uint8_t>,
+                    "monitoring_tier_t raw type is not uint8_t.");
+      uint8_t v = convert_or_throw<uint8_t>(value, MONITORING_TIER);
+      log_attributes = log_attributes.with_monitoringTier(monitoring_tier_t{v});
+    }
+    if (key_string == SUPPRESS_LAG_MONITORING) {
+      bool v = convert_or_throw<bool>(value, SUPPRESS_LAG_MONITORING);
+      log_attributes = log_attributes.with_suppressLagMonitoring(v);
     }
     if (key == EXTRAS) {
       dict v = convert_or_throw<dict>(value, EXTRAS);
