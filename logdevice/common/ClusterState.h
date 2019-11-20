@@ -122,10 +122,9 @@ class ClusterState {
     // the size of this list, it means this node is not yet in our configuration
     // anyway.
     ld_check(idx >= 0);
-    if (idx < cluster_size_) {
-      return node_state_list_[idx].load();
-    }
-    return NodeState::DEAD;
+    auto node_state = node_state_map_.find(idx);
+    return node_state == node_state_map_.end() ? NodeState::DEAD
+                                               : node_state->second->load();
   }
 
   NodeHealthStatus getNodeStatus(node_index_t idx) const {
@@ -204,7 +203,9 @@ class ClusterState {
   void notifyRefreshComplete();
 
   folly::SharedMutex mutex_;
-  std::unique_ptr<std::atomic<NodeState>[]> node_state_list_ { nullptr };
+  folly::F14FastMap<node_index_t, std::unique_ptr<std::atomic<NodeState>>>
+      node_state_map_{};
+
   std::unordered_set<node_index_t> nodes_in_config_;
   size_t cluster_size_{0};
   std::atomic<std::chrono::steady_clock::duration> last_refresh_{
