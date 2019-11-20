@@ -12,7 +12,7 @@ struct event_base;
 #include <folly/io/async/TimeoutManager.h>
 namespace folly {
 class EventBase;
-}
+} // namespace folly
 
 namespace facebook { namespace logdevice {
 
@@ -49,6 +49,7 @@ class IEvBase : public folly::TimeoutManager {
   init(int num_priorities = static_cast<int>(Priorities::NUM_PRIORITIES)) = 0;
   virtual Status free() = 0;
 
+  virtual void runInEventBaseThread(EventCallback fn) = 0;
   virtual Status loop() = 0;
   virtual Status loopOnce() = 0;
   virtual Status terminateLoop() = 0;

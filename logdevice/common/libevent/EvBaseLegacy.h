@@ -38,6 +38,7 @@ class EvBaseLegacy : public IEvBase {
                   static_cast<int>(Priorities::NUM_PRIORITIES)) override;
   Status free() override;
 
+  void runInEventBaseThread(EventCallback fn) override;
   Status loop() override;
   Status loopOnce() override;
   Status terminateLoop() override;
