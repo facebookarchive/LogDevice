@@ -377,6 +377,10 @@ void RecoveryNode::onMessageSent(MessageType type,
                      recovery_->identify().c_str(),
                      error_description(status));
 
+      if (!recovery_->getDeps().isShardAlive(shard_) &&
+          recovery_->onRecoveryNodeFailure(shard_)) {
+        return;
+      }
       resend_->activate();
   }
 
@@ -402,6 +406,10 @@ void RecoveryNode::onDisconnect(Status st) {
       read_stream_id_ = READ_STREAM_ID_INVALID;
       break;
     case State::CLEANING:
+      if (!recovery_->getDeps().isShardAlive(shard_) &&
+          recovery_->onRecoveryNodeFailure(shard_)) {
+        return;
+      }
       break;
     default:
       ld_critical("INTERNAL ERROR: lost connection to %s while waiting for a "

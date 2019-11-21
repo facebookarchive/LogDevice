@@ -1100,6 +1100,26 @@ void EpochRecovery::startMutationAndCleaningTimer() {
   mutation_and_cleaning_->activate(recovery_timeout);
 }
 
+bool EpochRecovery::onRecoveryNodeFailure(const ShardID shard) {
+  if (!recovery_set_.nodeIsInMutationAndCleaningSet(shard)) {
+    return false;
+  }
+  STAT_INCR(deps_->getStats(), epoch_recovery_restarts_on_node_failure);
+  RATELIMIT_WARNING(std::chrono::seconds(10),
+                    10,
+                    "Restarting the recovery for %s as shard %s "
+                    "failed. State: %s, nodes: %s",
+                    identify().c_str(),
+                    shard.toString().c_str(),
+                    toString(state_).c_str(),
+                    recoveryState().c_str());
+
+  ld_check(mutation_and_cleaning_->isActive());
+  mutation_and_cleaning_->cancel();
+  restart();
+  return true;
+}
+
 void EpochRecovery::onTimeout() {
   ld_check(!grace_period_->isActive());
   // timer_ is started when grace_period_ fires or right after it was cancelled
@@ -1516,6 +1536,11 @@ void EpochRecovery::onMutationComplete(esn_t esn, Status st, ShardID shard) {
       deps_->onEpochRecovered(
           epoch_, TailRecord(), Status::PREEMPTED, preempted_seal);
       // this EpochRecovery object no longer exists
+      return;
+
+    case E::DISABLED:
+      // Restart the recovery.
+      onRecoveryNodeFailure(shard);
       return;
 
     default:
@@ -1957,6 +1982,10 @@ StatsHolder* EpochRecoveryDependencies::getStats() const {
 
 logid_t EpochRecoveryDependencies::getLogID() const {
   return driver_->getLogID();
+}
+
+bool EpochRecoveryDependencies::isShardAlive(ShardID shard) const {
+  return Worker::onThisThread()->getClusterState()->isNodeAlive(shard.node());
 }
 
 namespace {
