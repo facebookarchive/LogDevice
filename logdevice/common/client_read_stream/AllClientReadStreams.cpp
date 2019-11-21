@@ -149,7 +149,7 @@ void AllClientReadStreams::getReadStreamsDebugInfo(
   }
 }
 
-void AllClientReadStreams::sampleAllReadStreamsDegubInfo() const {
+void AllClientReadStreams::sampleAllReadStreamsDebugInfo() const {
   for (const auto& stream : streams_) {
     if (stream.second) {
       stream.second->sampleDebugInfo(

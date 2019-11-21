@@ -56,7 +56,7 @@ class ClientWorker : public Worker {
    */
   NodeStatsMessageCallback* nodeStatsMessageCallback() const;
 
-  void sampleAllReadStreamsDegubInfo() const;
+  void sampleAllReadStreamsDebugInfo() const;
 
   void setupWorker() override;
 
