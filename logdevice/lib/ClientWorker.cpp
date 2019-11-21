@@ -45,9 +45,9 @@ std::unique_ptr<MessageDispatch> ClientWorker::createMessageDispatch() {
   return std::make_unique<ClientMessageDispatch>();
 }
 
-void ClientWorker::sampleAllReadStreamsDegubInfo() const {
+void ClientWorker::sampleAllReadStreamsDebugInfo() const {
   if (processor_->getDebugClientConfig().isDebugEnabled()) {
-    clientReadStreams().sampleAllReadStreamsDegubInfo();
+    clientReadStreams().sampleAllReadStreamsDebugInfo();
   }
 
   sample_read_streams_timer_->activate(
@@ -66,8 +66,8 @@ void ClientWorker::setupWorker() {
   }
 
   sample_read_streams_timer_ = std::make_unique<Timer>(
-      std::bind(&ClientWorker::sampleAllReadStreamsDegubInfo, this));
-  sampleAllReadStreamsDegubInfo();
+      std::bind(&ClientWorker::sampleAllReadStreamsDebugInfo, this));
+  sampleAllReadStreamsDebugInfo();
 }
 
 NodeStatsMessageCallback* ClientWorker::nodeStatsMessageCallback() const {
