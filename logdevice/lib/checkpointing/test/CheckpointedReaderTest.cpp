@@ -53,7 +53,7 @@ TEST_F(CheckpointedReaderTest, SyncStartReading) {
       .Times(1)
       .WillOnce(Return(0));
 
-  auto sync_reader = CheckpointedReaderFactory().createSyncCheckpointedReader(
+  auto sync_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -73,7 +73,7 @@ TEST_F(CheckpointedReaderTest, SyncStartReadingCreatesNew) {
       .Times(1)
       .WillOnce(Return(0));
 
-  auto sync_reader = CheckpointedReaderFactory().createSyncCheckpointedReader(
+  auto sync_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -91,7 +91,7 @@ TEST_F(CheckpointedReaderTest, SyncStartReadingFailedCheckpointGet) {
   auto mock_reader = std::make_unique<MockReader>();
   EXPECT_CALL(*mock_reader, startReading(_, _, _, _)).Times(0);
 
-  auto sync_reader = CheckpointedReaderFactory().createSyncCheckpointedReader(
+  auto sync_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -115,7 +115,7 @@ TEST_F(CheckpointedReaderTest, SyncStartReadingFailed) {
         return -1;
       }));
 
-  auto sync_reader = CheckpointedReaderFactory().createSyncCheckpointedReader(
+  auto sync_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -146,7 +146,7 @@ TEST_F(CheckpointedReaderTest, SyncReadSavesLSN) {
         return Status::OK;
       }));
 
-  auto sync_reader = CheckpointedReaderFactory().createSyncCheckpointedReader(
+  auto sync_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -175,7 +175,7 @@ TEST_F(CheckpointedReaderTest, SyncReadSavesLSNForGaps) {
         return Status::OK;
       }));
 
-  auto sync_reader = CheckpointedReaderFactory().createSyncCheckpointedReader(
+  auto sync_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -202,7 +202,7 @@ TEST_F(CheckpointedReaderTest, SyncReadDoesntSaveLSNMAXForGaps) {
         return Status::OK;
       }));
 
-  auto sync_reader = CheckpointedReaderFactory().createSyncCheckpointedReader(
+  auto sync_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -232,7 +232,7 @@ TEST_F(CheckpointedReaderTest, AsyncReadSavesLSN) {
         return Status::OK;
       }));
 
-  auto async_reader = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+  auto async_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -270,7 +270,7 @@ TEST_F(CheckpointedReaderTest, AsyncReadSavesLSNforGaps) {
         return Status::OK;
       }));
 
-  auto async_reader = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+  auto async_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -311,7 +311,7 @@ TEST_F(CheckpointedReaderTest, SyncErasesWhenStartReading) {
         return Status::OK;
       }));
 
-  auto sync_reader = CheckpointedReaderFactory().createSyncCheckpointedReader(
+  auto sync_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -348,7 +348,7 @@ TEST_F(CheckpointedReaderTest, AsyncErasesWhenStartReading) {
         return Status::OK;
       }));
 
-  auto async_reader = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+  auto async_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -379,7 +379,7 @@ TEST_F(CheckpointedReaderTest, AsyncStartReading) {
       .Times(1)
       .WillOnce(Return(0));
 
-  auto async_reader = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+  auto async_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -406,7 +406,7 @@ TEST_F(CheckpointedReaderTest, AsyncStartReadingCreatesNew) {
       .Times(1)
       .WillOnce(Return(0));
 
-  auto async_reader = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+  auto async_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -431,7 +431,7 @@ TEST_F(CheckpointedReaderTest, AsyncStartReadingFailedCheckpointGet) {
   auto mock_reader = std::make_unique<MockAsyncReader>();
   EXPECT_CALL(*mock_reader, startReading(log, _, _, _)).Times(0);
 
-  auto async_reader = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+  auto async_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),
@@ -460,7 +460,7 @@ TEST_F(CheckpointedReaderTest, AsyncStartReadingFailed) {
         return -1;
       }));
 
-  auto async_reader = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+  auto async_reader = CheckpointedReaderFactory().createCheckpointedReader(
       "customer",
       std::move(mock_reader),
       std::move(mock_checkpoint_store_),

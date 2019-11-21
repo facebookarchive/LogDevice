@@ -22,22 +22,22 @@ class CheckpointedReaderFactory {
    *
    * @param reader: an underlying reader.
    */
-  std::unique_ptr<SyncCheckpointedReader> createSyncCheckpointedReader(
-      const std::string& reader_name,
-      std::unique_ptr<Reader> reader,
-      std::unique_ptr<CheckpointStore> store,
-      CheckpointedReaderBase::CheckpointingOptions opts);
+  std::unique_ptr<SyncCheckpointedReader>
+  createCheckpointedReader(const std::string& reader_name,
+                           std::unique_ptr<Reader> reader,
+                           std::unique_ptr<CheckpointStore> store,
+                           CheckpointedReaderBase::CheckpointingOptions opts);
 
   /**
    * Creates an async CheckpointedReader.
    *
    * @param reader: an underlying reader.
    */
-  std::unique_ptr<AsyncCheckpointedReader> createAsyncCheckpointedReader(
-      const std::string& reader_name,
-      std::unique_ptr<AsyncReader> reader,
-      std::unique_ptr<CheckpointStore> store,
-      CheckpointedReaderBase::CheckpointingOptions opts);
+  std::unique_ptr<AsyncCheckpointedReader>
+  createCheckpointedReader(const std::string& reader_name,
+                           std::unique_ptr<AsyncReader> reader,
+                           std::unique_ptr<CheckpointStore> store,
+                           CheckpointedReaderBase::CheckpointingOptions opts);
 };
 
 }} // namespace facebook::logdevice

@@ -44,7 +44,7 @@ class CheckpointingIntegrationTest : public ::testing::Test {
     appendSampleRecords(logid_t(2), records_break);
 
     auto store = create_store();
-    reader_ = CheckpointedReaderFactory().createSyncCheckpointedReader(
+    reader_ = CheckpointedReaderFactory().createCheckpointedReader(
         "customer", std::move(reader), std::move(store), {});
     ASSERT_EQ(0,
               reader_->startReadingFromCheckpoint(
@@ -83,7 +83,7 @@ class CheckpointingIntegrationTest : public ::testing::Test {
 
     reader = client_->createReader(2);
     store = create_store();
-    reader_ = CheckpointedReaderFactory().createSyncCheckpointedReader(
+    reader_ = CheckpointedReaderFactory().createCheckpointedReader(
         "customer", std::move(reader), std::move(store), {});
 
     ASSERT_EQ(0,
@@ -110,7 +110,7 @@ class CheckpointingIntegrationTest : public ::testing::Test {
 
     auto reader = client_->createAsyncReader(2);
     auto store = create_store();
-    async_reader_ = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+    async_reader_ = CheckpointedReaderFactory().createCheckpointedReader(
         "customer", std::move(reader), std::move(store), {});
 
     std::atomic_int32_t total_read = 0;
@@ -156,7 +156,7 @@ class CheckpointingIntegrationTest : public ::testing::Test {
 
     reader = client_->createAsyncReader(2);
     store = create_store();
-    async_reader_ = CheckpointedReaderFactory().createAsyncCheckpointedReader(
+    async_reader_ = CheckpointedReaderFactory().createCheckpointedReader(
         "customer", std::move(reader), std::move(store), {});
 
     async_reader_->setRecordCallback(record_cb);

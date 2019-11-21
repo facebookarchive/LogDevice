@@ -13,7 +13,7 @@
 namespace facebook { namespace logdevice {
 
 std::unique_ptr<SyncCheckpointedReader>
-CheckpointedReaderFactory::createSyncCheckpointedReader(
+CheckpointedReaderFactory::createCheckpointedReader(
     const std::string& reader_name,
     std::unique_ptr<Reader> reader,
     std::unique_ptr<CheckpointStore> store,
@@ -23,7 +23,7 @@ CheckpointedReaderFactory::createSyncCheckpointedReader(
 }
 
 std::unique_ptr<AsyncCheckpointedReader>
-CheckpointedReaderFactory::createAsyncCheckpointedReader(
+CheckpointedReaderFactory::createCheckpointedReader(
     const std::string& reader_name,
     std::unique_ptr<AsyncReader> reader,
     std::unique_ptr<CheckpointStore> store,
