@@ -71,7 +71,7 @@ void NodeStatsHandler::prepareAndSendStats() {
   cancelRetryTimer();
   cancelClientTimeoutTimer();
 
-  ld_debug(
+  ld_spew(
       "Sending NODE_STATS_Message to node %s", destination_.toString().c_str());
 
   ++current_msg_id_;
