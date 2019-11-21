@@ -26,11 +26,13 @@ find_package(Boost 1.55.0 MODULE
     regex
     system
     thread
-    ${_boost_py_component1}
+    python
 )
 
+
 if(NOT Boost_FOUND)
-  message(STATUS "Boost Python Component ${_boost_py_component1} not found")
+
+  message(STATUS "Boost Python Component not found")
   find_package(Boost 1.55.0 MODULE
     COMPONENTS
       context
@@ -41,15 +43,33 @@ if(NOT Boost_FOUND)
       regex
       system
       thread
-      ${_boost_py_component2}
+      ${_boost_py_component1}
   )
+
   if(NOT Boost_FOUND)
-    message(FATAL_ERROR "Boost Python Component ${_boost_py_component2} is also not found, terminating. At least one is required. ${Boost_ERROR_REASON}")
+    message(STATUS "Boost Python Component ${_boost_py_component1} not found")
+    find_package(Boost 1.55.0 MODULE
+      COMPONENTS
+        context
+        chrono
+        date_time
+        filesystem
+        program_options
+        regex
+        system
+        thread
+        ${_boost_py_component2}
+    )
+    if(NOT Boost_FOUND)
+      message(FATAL_ERROR "Boost Python Component ${_boost_py_component2} is also not found, terminating. At least one is required. ${Boost_ERROR_REASON}")
+    else()
+      message(STATUS "Boost Python Component ${_boost_py_component2} found")
+    endif()
   else()
-    message(STATUS "Boost Python Component ${_boost_py_component2} found")
+    message(STATUS "Boost Python Component ${_boost_py_component1} found")
   endif()
 else()
-  message(STATUS "Boost Python Component ${_boost_py_component1} found")
+  message(STATUS "Boost Python Component found")
 endif()
 
 set(CMAKE_THREAD_PREFER_PTHREAD ON)
