@@ -15,6 +15,7 @@
 #include <folly/Optional.h>
 
 #include "logdevice/common/AdminCommandTable-fwd.h"
+#include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Digest.h"
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/Mutator.h"
@@ -103,6 +104,8 @@ class EpochRecoveryDependencies {
   virtual StatsHolder* getStats() const;
 
   virtual logid_t getLogID() const;
+
+  virtual bool isShardAlive(ShardID shard) const;
 
   virtual ~EpochRecoveryDependencies();
 
@@ -490,6 +493,15 @@ class EpochRecovery {
     return mutation_and_cleaning_.get();
   }
 
+  /**
+   * Called whenever a node state in cluster becomes unreachable
+   * during CLEANING phase. In such cases, instead of waiting for
+   * `recovery_timeout`, the recovery is restarted immediately. On
+   * successful recovery restart, this function returns
+   * `true`. Otherwise it returns `false`.
+   */
+  bool onRecoveryNodeFailure(const ShardID shard);
+
   ///////// public members
 
   const logid_t log_id_; // log we are recovering
@@ -598,7 +610,7 @@ class EpochRecovery {
   void advanceToCleaning();
 
   /**
-   * Restart epoch recovery from scratch.
+   * Try to restart epoch recovery from scratch.
    * @return true if this EpochRecovery was destroyed.
    */
   bool restart();

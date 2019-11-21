@@ -232,9 +232,14 @@ Mutator::sendSTORE(ShardID shard,
   if (err == E::NOTINCONFIG) {
     // Node was replaced or is no longer in the config, we should abort and
     // notify EpochRecovery.
-    shard_not_in_config_ = shard;
+    shard_in_trouble_ = shard;
     mutation_status_ = E::NOTINCONFIG;
     return {StorageSetAccessor::Result::PERMANENT_ERROR, err};
+  } else if (!isShardAlive(shard)) {
+    // The node is down, need to restart the recovery.
+    shard_in_trouble_ = shard;
+    mutation_status_ = E::DISABLED;
+    return {StorageSetAccessor::Result::PERMANENT_ERROR, E::DISABLED};
   }
 
   // consider all other error cases transient error and the node can
@@ -293,9 +298,30 @@ void Mutator::onMessageSent(ShardID to, Status st, const STORE_Header& header) {
     finalizeIfDone();
   };
 
-  // if the node is no longer in config, the socket will be closed and socket
-  // closed callback will handle the E::NOTINCONFIG case
-  if (st != E::OK && !done()) {
+  switch (st) {
+    case Status::OK:
+      return;
+
+    case Status::NOTINCONFIG:
+      shard_in_trouble_ = to;
+      mutation_status_ = st;
+
+      nodeset_accessor_->onShardAccessed(
+          to, {StorageSetAccessor::Result::PERMANENT_ERROR, st});
+      return;
+
+    default:
+      // Restart recovery if the node is marked down.
+      if (!isShardAlive(to)) {
+        ld_check(st != E::OK);
+        shard_in_trouble_ = to;
+        mutation_status_ = E::DISABLED;
+        nodeset_accessor_->onShardAccessed(
+            to, {StorageSetAccessor::Result::PERMANENT_ERROR, E::DISABLED});
+        return;
+      }
+  }
+  if (!done()) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
                     "Failed to send a STORE message (mutation) for record %s "
@@ -326,11 +352,18 @@ void Mutator::onConnectionClosed(ShardID to, Status status) {
                  header_.rid.toString().c_str());
 
   if (status == E::NOTINCONFIG) {
-    shard_not_in_config_ = to;
+    shard_in_trouble_ = to;
     mutation_status_ = E::NOTINCONFIG;
 
     nodeset_accessor_->onShardAccessed(
         to, {StorageSetAccessor::Result::PERMANENT_ERROR, status});
+    return;
+  } else if (!isShardAlive(to)) {
+    ld_check(status != E::OK);
+    shard_in_trouble_ = to;
+    mutation_status_ = E::DISABLED;
+    nodeset_accessor_->onShardAccessed(
+        to, {StorageSetAccessor::Result::PERMANENT_ERROR, E::DISABLED});
     return;
   }
 
@@ -347,8 +380,12 @@ void Mutator::onStorageSetAccessorComplete(Status status) {
 
 void Mutator::finalizeIfDone() {
   if (done()) {
-    finalize(mutation_status_, shard_not_in_config_);
+    finalize(mutation_status_, shard_in_trouble_);
   }
+}
+
+bool Mutator::isShardAlive(ShardID shard) const {
+  return epoch_recovery_->getDeps().isShardAlive(shard);
 }
 
 void Mutator::finalize(Status status, ShardID node_to_reseal) {
@@ -443,10 +480,16 @@ void Mutator::sendDeferredSTORE(ShardID shard,
                  error_description(err));
 
   if (err == E::NOTINCONFIG) {
-    shard_not_in_config_ = shard;
+    shard_in_trouble_ = shard;
     mutation_status_ = E::NOTINCONFIG;
     nodeset_accessor_->onShardAccessed(
         shard, {StorageSetAccessor::Result::PERMANENT_ERROR, err});
+    return;
+  } else if (!isShardAlive(shard)) {
+    shard_in_trouble_ = shard;
+    mutation_status_ = E::DISABLED;
+    nodeset_accessor_->onShardAccessed(
+        shard, {StorageSetAccessor::Result::PERMANENT_ERROR, E::DISABLED});
     return;
   }
 

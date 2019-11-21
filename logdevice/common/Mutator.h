@@ -171,6 +171,7 @@ class Mutator {
   virtual chrono_interval_t<std::chrono::milliseconds>
   getMutationTimeout() const;
 
+  virtual bool isShardAlive(ShardID shard) const;
   virtual void finalize(Status status, ShardID node_to_reseal = ShardID());
 
   std::unique_ptr<SenderBase> sender_;
@@ -236,12 +237,18 @@ class Mutator {
   // will be set to the seal record which preempted current recovery
   Seal preempted_seal_;
 
-  // When message sending fails with E::NOTINCONFIG, this will be set to the id
-  // of the shard which was removed. This is passed to EpochRecovery's
-  // onMutationComplete() method, causing it to remove the node from recovery
-  // set.
+  // Used to denote a problematic shard when it gets removed from the
+  // config or if it goes down.
+  // When message sending fails with E::NOTINCONFIG, this will be set
+  // to the id of the shard which was removed. This is passed to
+  // EpochRecovery's onMutationComplete() method, causing it to remove
+  // the node from recovery set.  When a node dies during mutation
+  // stage, this will be set to the id of the affected
+  // shard. EpochRecovery's `onMutationComplete()` method would look
+  // at this and the value of `mutation_status_` to restart the
+  // recovery.
   // Default-initiliazed to an invalid ShardID.
-  ShardID shard_not_in_config_;
+  ShardID shard_in_trouble_;
 
   // TODO 11866467: this is a workaround for pretending all MUTATED replies are
   // from the latest wave, remove this once we include wave in MUTATED messages

@@ -63,6 +63,7 @@ class EpochRecoveryTest : public ::testing::Test {
       NodeID::Hash>
       on_close_cb_map_;
 
+  std::unordered_map<ShardID, ClusterStateNodeState> node_state_map_;
   read_stream_id_t rsid_{0};
 
   // epoch recovery instance to be tested
@@ -114,6 +115,10 @@ class EpochRecoveryTest : public ::testing::Test {
 
   std::shared_ptr<const NodesConfiguration> getNodesConfiguration() const {
     return updateable_config_->getNodesConfiguration();
+  }
+
+  void setNodeState(ShardID shard, ClusterStateNodeState state) {
+    node_state_map_[shard] = state;
   }
 
   void checkRecoveryState(ERMState expect_state);
@@ -273,6 +278,10 @@ class MockEpochRecoveryDependencies : public EpochRecoveryDependencies {
     return test_->LOG_ID;
   }
 
+  bool isShardAlive(ShardID shard) const override {
+    return ClusterState::isAliveState(test_->node_state_map_[shard]);
+  }
+
  private:
   EpochRecoveryTest* const test_;
 };
@@ -301,6 +310,8 @@ void EpochRecoveryTest::initConfig() {
       ASSERT_EQ(0, rv);
       node.location = std::move(loc);
     }
+
+    node_state_map_[shard] = ClusterStateNodeState::FULLY_STARTED;
   }
 
   // we won't use these
@@ -1255,6 +1266,82 @@ TEST_F(EpochRecoveryTest, correctByteOffset) {
   OffsetMap expected_offsets =
       OffsetMap::mergeOffsets(prev_tail_.offsets_map_, offsets_to_add);
   ASSERT_EQ(expected_offsets, lce_tail_.offsets_map_);
+}
+// similar to the basic test, the recovery state machine is restarted if a node
+// dies while in mutation or cleaning state.
+TEST_F(EpochRecoveryTest, RestartWhenClusterStateChanges) {
+  setUp();
+  OffsetMap om;
+  om.setCounter(BYTE_OFFSET, 19);
+  erm_->onSealed(N1, esn_t(1), esn_t(1), om, folly::none);
+  checkRecoveryState(ERMState::SEAL_OR_INACTIVE);
+  erm_->activate(prev_tail_);
+  erm_->onSealed(N2, esn_t(1), esn_t(1), om, folly::none);
+  checkRecoveryState(ERMState::DIGEST);
+  ASSERT_NODE_STATE(NState::DIGESTING, N1, N2);
+  ASSERT_NODE_STATE(NState::SEALING, N3);
+  erm_->onMessageSent(N1, MessageType::START, E::OK, read_stream_id_t(1));
+  erm_->onMessageSent(N2, MessageType::START, E::OK, read_stream_id_t(2));
+  erm_->onDigestStreamStarted(N1, read_stream_id_t(1), lsn(epoch_, 1), E::OK);
+  erm_->onDigestStreamStarted(N2, read_stream_id_t(2), lsn(epoch_, 1), E::OK);
+  erm_->onDigestRecord(N1, read_stream_id_t(1), mockRecord(lsn(epoch_, 1), 9));
+  erm_->onDigestRecord(N2, read_stream_id_t(2), mockRecord(lsn(epoch_, 1), 9));
+  erm_->onDigestGap(
+      N1,
+      mockGap(N1, lsn(epoch_, 2), lsn(epoch_, ESN_MAX), read_stream_id_t(1)));
+  erm_->onDigestGap(
+      N2,
+      mockGap(N2, lsn(epoch_, 2), lsn(epoch_, ESN_MAX), read_stream_id_t(2)));
+
+  // N1, N2 became DIGESTED then MUTATABLE
+  ASSERT_NODE_STATE(NState::MUTATABLE, N1, N2);
+  ASSERT_NODE_STATE(NState::SEALING, N3);
+  ASSERT_TRUE(erm_->getGracePeriodTimer()->isActive());
+  static_cast<MockTimer*>(erm_->getGracePeriodTimer())->trigger();
+  checkRecoveryState(ERMState::MUTATION);
+
+  // N2 disconnects and recovery should be restarted.
+  setNodeState(N2, ClusterStateNodeState::DEAD);
+  erm_->onRecoveryNodeFailure(N2);
+
+  ASSERT_NODE_STATE(NState::DIGESTING, N1, N2);
+  ASSERT_NODE_STATE(NState::SEALING, N3);
+  checkRecoveryState(ERMState::DIGEST);
+
+  // Restore mutation stage.
+  setNodeState(N2, ClusterStateNodeState::FULLY_STARTED);
+
+  erm_->onMessageSent(N1, MessageType::START, E::OK, read_stream_id_t(3));
+  erm_->onMessageSent(N2, MessageType::START, E::OK, read_stream_id_t(4));
+  erm_->onDigestStreamStarted(N1, read_stream_id_t(3), lsn(epoch_, 1), E::OK);
+  erm_->onDigestStreamStarted(N2, read_stream_id_t(4), lsn(epoch_, 1), E::OK);
+  erm_->onDigestRecord(N1, read_stream_id_t(3), mockRecord(lsn(epoch_, 1), 9));
+  erm_->onDigestRecord(N2, read_stream_id_t(4), mockRecord(lsn(epoch_, 1), 9));
+  erm_->onDigestGap(
+      N1,
+      mockGap(N1, lsn(epoch_, 2), lsn(epoch_, ESN_MAX), read_stream_id_t(3)));
+  erm_->onDigestGap(
+      N2,
+      mockGap(N2, lsn(epoch_, 2), lsn(epoch_, ESN_MAX), read_stream_id_t(4)));
+
+  // N1, N2 became DIGESTED then MUTATABLE
+  ASSERT_NODE_STATE(NState::MUTATABLE, N1, N2);
+  ASSERT_NODE_STATE(NState::SEALING, N3);
+  ASSERT_TRUE(erm_->getGracePeriodTimer()->isActive());
+  static_cast<MockTimer*>(erm_->getGracePeriodTimer())->trigger();
+  checkRecoveryState(ERMState::MUTATION);
+
+  // mutator is done
+  erm_->onMutationComplete(esn_t(2), E::OK, ShardID());
+  checkRecoveryState(ERMState::CLEAN);
+
+  // N2 disconnects and recovery should be restarted.
+  setNodeState(N2, ClusterStateNodeState::DEAD);
+  erm_->onRecoveryNodeFailure(N2);
+
+  ASSERT_NODE_STATE(NState::DIGESTING, N1, N2);
+  ASSERT_NODE_STATE(NState::SEALING, N3);
+  checkRecoveryState(ERMState::DIGEST);
 }
 
 } // anonymous namespace

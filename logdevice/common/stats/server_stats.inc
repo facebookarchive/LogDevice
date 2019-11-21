@@ -236,6 +236,9 @@ STAT_DEFINE(mutation_started, SUM)
 STAT_DEFINE(non_auth_recovery_epochs, SUM)
 // Number of times an EpochRecovery times out during mutation and cleaning.
 STAT_DEFINE(recovery_mutation_and_cleaning_timeouts, SUM)
+// Number of times the EpochRecovery is restarted due to recovery node
+// failure during mutation and cleaning stage.
+STAT_DEFINE(epoch_recovery_restarts_on_node_failure, SUM)
 // Number of times an EpochRecovery successfully finishes
 STAT_DEFINE(epoch_recovery_success, SUM)
 
