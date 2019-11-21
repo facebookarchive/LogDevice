@@ -19,6 +19,7 @@ class AsyncSocketException;
 
 namespace facebook { namespace logdevice {
 class Connection;
+class SocketAdapter;
 /**
  * ProtocolHandler implements the functionality listed for IProtocolHandler.
  * ProtocolHandler provides thread safe method to send messages over to the
@@ -47,10 +48,11 @@ class Connection;
 class ProtocolHandler : public IProtocolHandler {
  public:
   ProtocolHandler(Connection* conn,
+                  std::unique_ptr<SocketAdapter> sock,
                   const std::string& conn_description,
                   EvBase* evBase);
 
-  ~ProtocolHandler() override {}
+  ~ProtocolHandler() override;
 
   folly::Future<Status> asyncConnect(const folly::SocketAddress&,
                                      const Settings&) override;
@@ -108,8 +110,17 @@ class ProtocolHandler : public IProtocolHandler {
    */
   static Status translateToLogDeviceStatus(folly::AsyncSocketException ex);
 
+  /**
+   * sock_ getter, TODO(gauresh) remove or will be made to return const
+   * reference once ProtocolHandler implements all the API's
+   */
+  SocketAdapter* sock() {
+    return sock_.get();
+  }
+
  private:
   Connection* const conn_;
+  std::unique_ptr<SocketAdapter> sock_;
   const std::string conn_description_;
   EvTimer buffer_passed_to_tcp_;
   EvTimer set_error_on_socket_;

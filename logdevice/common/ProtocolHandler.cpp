@@ -12,17 +12,22 @@
 
 #include "logdevice/common/Connection.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/network/SocketAdapter.h"
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 
 namespace facebook { namespace logdevice {
 ProtocolHandler::ProtocolHandler(Connection* conn,
+                                 std::unique_ptr<SocketAdapter> sock,
                                  const std::string& conn_description,
                                  EvBase* evBase)
     : conn_(conn),
+      sock_(std::move(sock)),
       conn_description_(conn_description),
       buffer_passed_to_tcp_(evBase),
       set_error_on_socket_(evBase) {}
+
+ProtocolHandler::~ProtocolHandler() {}
 
 folly::Future<Status> ProtocolHandler::asyncConnect(const folly::SocketAddress&,
                                                     const Settings&) {

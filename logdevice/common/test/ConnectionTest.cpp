@@ -175,13 +175,6 @@ TEST_F(ClientConnectionTest, SendBuffers) {
   conn_->sendBuffer(std::move(iobuf));
 }
 
-TEST_F(ClientConnectionTest, ReceiveBuffers) {
-  EvBaseMock ev_base_mock;
-  std::unique_ptr<ProtocolHandler> proto_handler =
-      std::make_unique<ProtocolHandler>(conn_.get(), "", &ev_base_mock);
-  MessageReader read_cb(*proto_handler, 1);
-}
-
 TEST_F(ClientConnectionTest, CompleteConnectionSuccessfully) {
   std::chrono::milliseconds timeout = settings_.connect_timeout;
   size_t max_retries = settings_.connection_retries;
