@@ -93,6 +93,7 @@ bool parseTraceLogger(const folly::dynamic& clusterMap,
 }
 
 bool parseInternalLogs(const folly::dynamic& clusterMap,
+                       const SecurityConfig& securityConfig,
                        configuration::InternalLogs& internalLogs) {
   auto iter = clusterMap.find("internal_logs");
   if (iter == clusterMap.items().end()) {
@@ -107,6 +108,20 @@ bool parseInternalLogs(const folly::dynamic& clusterMap,
     return false;
   }
 
+  folly::Optional<LogAttributes> default_attrs;
+  if (!parseDefaults(clusterMap, "cluster", securityConfig, default_attrs)) {
+    return false;
+  } else if (default_attrs.hasValue()) {
+    std::string failure_reason;
+    if (!internalLogs.setDefaultAttributes(
+            default_attrs.value(), failure_reason)) {
+      ld_error("Unable to set default internal logs attributes: %s",
+               failure_reason.c_str());
+      err = E::INVALID_CONFIG;
+      return false;
+    }
+  }
+
   for (auto& pair : section.items()) {
     if (!pair.first.isString()) {
       ld_error("a key in \"internal_logs\" section is not a string");
@@ -119,10 +134,13 @@ bool parseInternalLogs(const folly::dynamic& clusterMap,
       return false;
     }
     folly::Optional<LogAttributes> attrs =
-        parseAttributes(pair.second, pair.first.asString(), false);
+        parseAttributes(pair.second,
+                        pair.first.asString(),
+                        securityConfig.allowPermissionsInConfig());
     if (!attrs.hasValue()) {
       return false;
     }
+
     if (!internalLogs.insert(pair.first.asString(), attrs.value())) {
       return false;
     }

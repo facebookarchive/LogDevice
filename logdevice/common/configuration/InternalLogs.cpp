@@ -78,6 +78,13 @@ InternalLogs::InternalLogs(const InternalLogs& other) {
 InternalLogs& InternalLogs::operator=(const InternalLogs& other) {
   reset();
 
+  std::string failure_reason;
+  if (!setDefaultAttributes(other.root_->attrs(), failure_reason)) {
+    ld_error("Unable to copy default internal log attributes: %s",
+             failure_reason.c_str());
+    ld_check(false);
+  }
+
   for (auto it = other.logsBegin(); it != other.logsEnd(); ++it) {
     auto n =
         insert(it->second.log_group->name(), it->second.log_group->attrs());

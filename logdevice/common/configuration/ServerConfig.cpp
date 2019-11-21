@@ -134,7 +134,7 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
       parseMetaDataLog(parsed, securityConfig, metaDataLogsConfig) &&
       parseSettings(parsed, "server_settings", serverSettingsConfig) &&
       parseSettings(parsed, "client_settings", clientSettingsConfig) &&
-      parseInternalLogs(parsed, internalLogs) &&
+      parseInternalLogs(parsed, securityConfig, internalLogs) &&
       parseTraceLogger(parsed, traceLoggerConfig);
 
   if (!success) {

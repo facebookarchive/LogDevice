@@ -49,4 +49,9 @@ parseAttributes(const folly::dynamic& attrs,
                 bool allow_permissions,
                 bool metadata_logs = false);
 
+bool parseDefaults(const folly::dynamic& map,
+                   const std::string& scope,
+                   const SecurityConfig& securityConfig,
+                   folly::Optional<LogAttributes>& output);
+
 }}}} // namespace facebook::logdevice::configuration::parser

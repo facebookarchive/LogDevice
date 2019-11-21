@@ -190,6 +190,7 @@ class Attribute {
     value_ = folly::none;
     inherited_ = false;
   }
+
   folly::Optional<Type> value_;
   bool inherited_;
 };

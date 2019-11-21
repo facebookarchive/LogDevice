@@ -122,22 +122,11 @@ static const std::set<std::string> logs_config_recognized_keys = {
 static const std::set<std::string> logs_config_non_defaultable_keys = {"id",
                                                                        "name"};
 
-static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
-                         const LogsConfigNamespace& namespace_prefix,
-                         const std::string& ns_name,
-                         const folly::dynamic& namespaceMap,
-                         const SecurityConfig& securityConfig,
-                         std::shared_ptr<LocalLogsConfig>& output,
-                         LoadFileCallback loadFileCallback,
-                         const ConfigParserOptions& options) {
-  std::string scope = namespace_prefix.empty()
-      ? "cluster"
-      : "namespace \"" + namespace_prefix.toString() + "\"";
-
-  // start with empty set of attributes
-  LogAttributes ns_attrs;
-
-  const folly::dynamic* localDefaults = namespaceMap.get_ptr("defaults");
+bool parseDefaults(const folly::dynamic& map,
+                   const std::string& scope,
+                   const SecurityConfig& securityConfig,
+                   folly::Optional<LogAttributes>& output) {
+  const folly::dynamic* localDefaults = map.get_ptr("defaults");
   if (localDefaults) {
     if (!localDefaults->isObject()) {
       ld_error("\"defaults\" entry for %s not a JSON object", scope.c_str());
@@ -161,8 +150,33 @@ static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
       if (!attrs) {
         return false;
       }
-      ns_attrs = attrs.value();
+      output = attrs;
     }
+  }
+
+  return true;
+}
+
+static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
+                         const LogsConfigNamespace& namespace_prefix,
+                         const std::string& ns_name,
+                         const folly::dynamic& namespaceMap,
+                         const SecurityConfig& securityConfig,
+                         std::shared_ptr<LocalLogsConfig>& output,
+                         LoadFileCallback loadFileCallback,
+                         const ConfigParserOptions& options) {
+  std::string scope = namespace_prefix.empty()
+      ? "cluster"
+      : "namespace \"" + namespace_prefix.toString() + "\"";
+
+  // start with empty set of attributes
+  LogAttributes ns_attrs;
+
+  folly::Optional<LogAttributes> attrs;
+  if (!parseDefaults(namespaceMap, scope, securityConfig, attrs)) {
+    return false;
+  } else if (attrs.hasValue()) {
+    ns_attrs = attrs.value();
   }
 
   // log list could either be specified inline or included from an external
