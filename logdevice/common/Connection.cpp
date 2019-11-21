@@ -38,8 +38,8 @@ Connection::Connection(NodeID server_name,
                        std::unique_ptr<SocketDependencies> deps,
                        std::unique_ptr<SocketAdapter> sock_adapter)
     : Socket(server_name, type, conntype, flow_group, std::move(deps)),
-      sock_(std::move(sock_adapter)),
       proto_handler_(std::make_shared<ProtocolHandler>(this,
+                                                       std::move(sock_adapter),
                                                        conn_description_,
                                                        getDeps()->getEvBase())),
       retry_receipt_of_message_(getDeps()->getEvBase()),
@@ -87,8 +87,8 @@ Connection::Connection(int fd,
              conntype,
              flow_group,
              std::move(deps)),
-      sock_(std::move(sock_adapter)),
       proto_handler_(std::make_shared<ProtocolHandler>(this,
+                                                       std::move(sock_adapter),
                                                        conn_description_,
                                                        getDeps()->getEvBase())),
       retry_receipt_of_message_(getDeps()->getEvBase()),
@@ -98,7 +98,7 @@ Connection::Connection(int fd,
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
   // Set the read callback.
   read_cb_.reset(new MessageReader(*proto_handler_, proto_));
-  sock_->setReadCB(read_cb_.get());
+  proto_handler_->sock()->setReadCB(read_cb_.get());
 }
 
 Connection::~Connection() {
@@ -121,7 +121,7 @@ int Connection::connect() {
 
   auto fut = asyncConnect();
 
-  fd_ = sock_->getNetworkSocket().toFd();
+  fd_ = proto_handler_->sock()->getNetworkSocket().toFd();
   conn_closed_ = std::make_shared<std::atomic<bool>>(false);
   next_pos_ = 0;
   drain_pos_ = 0;
@@ -136,7 +136,7 @@ int Connection::connect() {
     if (st == E::ISCONN) {
       Socket::transitionToConnected();
       read_cb_.reset(new MessageReader(*proto_handler_, proto_));
-      sock_->setReadCB(read_cb_.get());
+      proto_handler_->sock()->setReadCB(read_cb_.get());
     }
   };
 
@@ -252,10 +252,10 @@ folly::Future<Status> Connection::asyncConnect() {
                                      */
   auto fut = connect_cb->getConnectStatus().toUnsafeFuture();
 
-  sock_->connect(connect_cb.get(),
-                 peer_sockaddr_.getSocketAddress(),
-                 timeout.count(),
-                 options);
+  proto_handler_->sock()->connect(connect_cb.get(),
+                                  peer_sockaddr_.getSocketAddress(),
+                                  timeout.count(),
+                                  options);
 
   auto dispatch_status = [this](const folly::AsyncSocketException& ex) mutable {
     err = ProtocolHandler::translateToLogDeviceStatus(ex);
@@ -320,7 +320,7 @@ void Connection::scheduleWriteChain() {
       SocketWriteCallback::WriteUnit{bytes_in_sendq, now});
   // These bytes are now buffered in socket and will be removed from sendq.
   sock_write_cb_.bytes_buffered += bytes_in_sendq;
-  sock_->writeChain(&sock_write_cb_, std::move(sendChain_));
+  proto_handler_->sock()->writeChain(&sock_write_cb_, std::move(sendChain_));
   // All the bytes will be now removed from sendq now that we have written into
   // the asyncsocket.
   onBytesAdmittedToSend(bytes_in_sendq);
@@ -336,7 +336,7 @@ void Connection::close(Status reason) {
   Socket::close(reason);
   if (!legacy_connection_) {
     // Clear read callback on close.
-    sock_->setReadCB(nullptr);
+    proto_handler_->sock()->setReadCB(nullptr);
     if (buffered_bytes != 0 && !deps_->shuttingDown()) {
       getDeps()->noteBytesDrained(buffered_bytes,
                                   getPeerType(),
@@ -346,7 +346,7 @@ void Connection::close(Status reason) {
     sendChain_.reset();
     sched_write_chain_.cancelTimeout();
     // Invoke closeNow before deleting the writing callback below.
-    sock_->closeNow();
+    proto_handler_->sock()->closeNow();
   }
 }
 
@@ -363,7 +363,7 @@ void Connection::flushOutputAndClose(Status reason) {
   if (getBufferedBytesSize() > 0) {
     close_reason_ = reason;
     // Set the readcallback to nullptr as we know that socket is getting closed.
-    sock_->setReadCB(nullptr);
+    proto_handler_->sock()->setReadCB(nullptr);
   } else {
     close(reason);
   }
@@ -408,11 +408,11 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
         [this, hdr = header, payload = std::move(body_clone)]() mutable {
           if (proto_handler_->dispatchMessageBody(hdr, std::move(payload)) ==
               0) {
-            sock_->setReadCB(read_cb_.get());
+            proto_handler_->sock()->setReadCB(read_cb_.get());
           }
         });
     retry_receipt_of_message_.scheduleTimeout(0);
-    sock_->setReadCB(nullptr);
+    proto_handler_->sock()->setReadCB(nullptr);
   }
   return rv;
 }
@@ -442,7 +442,7 @@ X509* Connection::getPeerCert() const {
     return Socket::getPeerCert();
   }
   ld_check(isSSL());
-  auto sock_peer_cert = sock_->getPeerCertificate();
+  auto sock_peer_cert = proto_handler_->sock()->getPeerCertificate();
   if (sock_peer_cert) {
     return sock_peer_cert->getX509().get();
   }

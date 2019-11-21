@@ -199,7 +199,6 @@ class Connection : public Socket {
 
   void onPeerClosed() override;
 
-  std::unique_ptr<SocketAdapter> sock_;
   std::shared_ptr<ProtocolHandler> proto_handler_;
   std::unique_ptr<folly::AsyncSocket::ReadCallback> read_cb_;
 
