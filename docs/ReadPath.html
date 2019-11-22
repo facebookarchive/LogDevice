@@ -62,7 +62,7 @@
                 };
               }
             });
-        </script></nav></div><div class="container mainContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Read path</h1></header><article><div><span><p>One of the design principles for LogDevice is to maximize record placement options so as to increase write availability and handle spikes in the write rate. LogDevice uses non-deterministic record placement: each individual record may potentially be stored on any storage node in the cluster.</p>
+        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Read path</h1></header><article><div><span><p>One of the design principles for LogDevice is to maximize record placement options so as to increase write availability and handle spikes in the write rate. LogDevice uses non-deterministic record placement: each individual record may potentially be stored on any storage node in the cluster.</p>
 <p>All of these placement options optimize for writing, but they complicate the read path for LogDevice. Client readers need to efficiently find and obtain the copies, and then deliver the records to the application in the correct order.</p>
 <p>Both read availability and efficiency are important to LogDevice. Let's discuss how reads work, and how we make sure data is delivered reliably and efficiently.</p>
 <p>This page has a number of topics:</p>

@@ -62,7 +62,7 @@
                 };
               }
             });
-        </script></nav></div><div class="container mainContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Log configuration</h1></header><article><div><span><p>In order to use LogDevice, you will need to create logs groups. Each log-group
+        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Log configuration</h1></header><article><div><span><p>In order to use LogDevice, you will need to create logs groups. Each log-group
 in LogDevice defines a range of log IDs, and log-groups can be further grouped into directories forming a file-system-like structure. Attributes of directories propagate to sub-directories and log-groups. Attributes of log-groups give you the control over things like the replication property, some sequencer settings, and more. Log attributes are defined below in this document for your reference.</p>
 <p>This tree structure is stored internally in a durable replicated state-machine (logdevice internal logs). This is the default storage backend that we use in production use-cases of LogDevice. This allows dynamic provisioning and decommissioning of logs using either ldshell or the LogDevice client API.</p>
 <p>Let's start by looking into the current tree of the logs config:</p>
