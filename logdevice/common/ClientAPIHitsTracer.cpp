@@ -96,6 +96,7 @@ void ClientAPIHitsTracer::traceFindTime(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(findtime, PARTIAL)
     API_HITS_STATUS_CASE(findtime, FAILED)
     API_HITS_STATUS_CASE(findtime, SHUTDOWN)
+    API_HITS_STATUS_CASE(findtime, NOTFOUND)
     API_HITS_DEFAULT(findtime)
   }
   incr_metadata_api_counters(out_status);
@@ -133,6 +134,7 @@ void ClientAPIHitsTracer::traceFindKey(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(findkey, PARTIAL)
     API_HITS_STATUS_CASE(findkey, FAILED)
     API_HITS_STATUS_CASE(findkey, SHUTDOWN)
+    API_HITS_STATUS_CASE(findkey, NOTFOUND)
     API_HITS_DEFAULT(findkey)
   }
   incr_metadata_api_counters(out_status);
@@ -172,6 +174,7 @@ void ClientAPIHitsTracer::traceGetTailAttributes(
     API_HITS_STATUS_CASE(get_tail_attributes, SHUTDOWN)
     API_HITS_STATUS_CASE(get_tail_attributes, INTERNAL)
     API_HITS_STATUS_CASE(get_tail_attributes, AGAIN)
+    API_HITS_STATUS_CASE(get_tail_attributes, NOTFOUND)
     API_HITS_DEFAULT(get_tail_attributes)
   }
   incr_metadata_api_counters(out_status);
@@ -209,6 +212,7 @@ void ClientAPIHitsTracer::traceGetHeadAttributes(
     API_HITS_STATUS_CASE(get_head_attributes, INVALID_PARAM)
     API_HITS_STATUS_CASE(get_head_attributes, SHUTDOWN)
     API_HITS_STATUS_CASE(get_head_attributes, FAILED)
+    API_HITS_STATUS_CASE(get_head_attributes, NOTFOUND)
     API_HITS_DEFAULT(get_head_attributes)
   }
   incr_metadata_api_counters(out_status);
@@ -248,6 +252,7 @@ void ClientAPIHitsTracer::traceGetTailLSN(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(get_tail_lsn, NOBUFS)
     API_HITS_STATUS_CASE(get_tail_lsn, SHUTDOWN)
     API_HITS_STATUS_CASE(get_tail_lsn, INTERNAL)
+    API_HITS_STATUS_CASE(get_tail_lsn, NOTFOUND)
     API_HITS_DEFAULT(get_tail_lsn)
   }
   incr_metadata_api_counters(out_status);
@@ -282,6 +287,7 @@ void ClientAPIHitsTracer::traceIsLogEmpty(int64_t msec_resp_time,
     API_HITS_STATUS_CASE(is_log_empty, NOBUFS)
     API_HITS_STATUS_CASE(is_log_empty, SHUTDOWN)
     API_HITS_STATUS_CASE(is_log_empty, INTERNAL)
+    API_HITS_STATUS_CASE(is_log_empty, NOTFOUND)
     API_HITS_DEFAULT(is_log_empty)
   }
   incr_metadata_api_counters(out_status);
@@ -368,6 +374,7 @@ void ClientAPIHitsTracer::traceDataSize(
     API_HITS_STATUS_CASE(data_size, NOBUFS)
     API_HITS_STATUS_CASE(data_size, SHUTDOWN)
     API_HITS_STATUS_CASE(data_size, INTERNAL)
+    API_HITS_STATUS_CASE(data_size, NOTFOUND)
     API_HITS_DEFAULT(data_size)
   }
   auto sample_builder = [=, &failed_shards]() -> std::unique_ptr<TraceSample> {
