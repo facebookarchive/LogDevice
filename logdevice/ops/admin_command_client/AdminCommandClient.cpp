@@ -294,18 +294,26 @@ AdminCommandClient::asyncSend(
   for (auto& r : rr) {
     futures.push_back(
         folly::via(executor_.get())
-            .then([executor = executor_.get(), r, connect_timeout](
-                      auto&&) mutable {
+            .then([executor = executor_.get(),
+                   r,
+                   connect_timeout,
+                   command_timeout](auto&&) mutable {
+              auto evb = executor->getEventBase();
               auto connection = std::make_unique<AdminClientConnection>(
-                  executor->getEventBase(), r, connect_timeout);
+                  evb, r, connect_timeout);
               auto fut = connection->connect();
-              return std::move(fut).via(executor).thenValue(
-                  [c = std::move(connection)](AdminCommandClient::Response r) {
-                    return r;
+              return std::move(fut)
+                  .via(evb)
+                  .onTimeout(command_timeout,
+                             [] {
+                               return AdminCommandClient::Response{
+                                   "", false, "TIMEOUT"};
+                             })
+                  // After either timing-out or getting a response, let's
+                  // destroy the connection.
+                  .thenValue([c = std::move(connection)](auto response) {
+                    return response;
                   });
-            })
-            .onTimeout(command_timeout, [] {
-              return AdminCommandClient::Response{"", false, "TIMEOUT"};
             }));
   }
 
