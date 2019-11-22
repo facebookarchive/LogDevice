@@ -326,17 +326,11 @@ TEST_F(CheckpointedReaderTest, SyncErasesWhenStartReading) {
 
 TEST_F(CheckpointedReaderTest, AsyncErasesWhenStartReading) {
   auto mock_reader = std::make_unique<MockAsyncReader>();
+  std::function<bool(std::unique_ptr<DataRecord>&)> record_callback;
   EXPECT_CALL(*mock_reader, setRecordCallback(_))
       .Times(1)
       .WillOnce(Invoke([&](auto callback) {
-        auto record = simpleDataRecord(logid_t(3), 7);
-        callback(record);
-        record = simpleDataRecord(logid_t(4), 6);
-        callback(record);
-        record = simpleDataRecord(logid_t(3), 5);
-        callback(record);
-        record = simpleDataRecord(logid_t(4), 9);
-        callback(record);
+        record_callback = callback;
         return true;
       }));
 
@@ -356,6 +350,14 @@ TEST_F(CheckpointedReaderTest, AsyncErasesWhenStartReading) {
 
   auto cb = [](auto&) { return true; };
   async_reader->setRecordCallback(cb);
+  auto record = simpleDataRecord(logid_t(3), 7);
+  record_callback(record);
+  record = simpleDataRecord(logid_t(4), 6);
+  record_callback(record);
+  record = simpleDataRecord(logid_t(3), 5);
+  record_callback(record);
+  record = simpleDataRecord(logid_t(4), 9);
+  record_callback(record);
   async_reader->startReading(logid_t(4), LSN_OLDEST);
   async_reader->syncWriteCheckpoints(std::vector<logid_t>());
 }
