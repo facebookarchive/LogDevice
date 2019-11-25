@@ -115,23 +115,17 @@ class AdminCommandConnection::ReadEventHandler : public folly::EventHandler {
   AdminCommandConnection& connection_;
 };
 
-CommandListener::CommandListener(Listener::InterfaceDef iface,
-                                 KeepAlive loop,
-                                 Server* server)
+CommandListener::CommandListener(
+    Listener::InterfaceDef iface,
+    KeepAlive loop,
+    CommandProcessor* command_processor,
+    UpdateableSettings<ServerSettings> server_settings,
+    SSLFetcher ssl_fetcher)
     : Listener(std::move(iface), loop),
-      server_(server),
-      server_settings_(server_->getServerSettings()),
-      ssl_fetcher_(
-          server_->getParameters()->getProcessorSettings()->ssl_cert_path,
-          server_->getParameters()->getProcessorSettings()->ssl_key_path,
-          server_->getParameters()->getProcessorSettings()->ssl_ca_path,
-          server_->getParameters()
-              ->getProcessorSettings()
-              ->ssl_cert_refresh_interval),
-      command_processor_(server),
-      loop_(loop) {
-  ld_check(server_);
-}
+      command_processor_(command_processor),
+      server_settings_(std::move(server_settings)),
+      ssl_fetcher_(std::move(ssl_fetcher)),
+      loop_(loop) {}
 
 AdminCommandConnection::AdminCommandConnection(size_t id,
                                                folly::NetworkSocket fd,
@@ -191,7 +185,7 @@ void AdminCommandConnection::readDataAvailable(size_t length) noexcept {
     }
 
     auto result =
-        listener_.command_processor_.processCommand(command.c_str(), addr_);
+        listener_.command_processor_->processCommand(command.c_str(), addr_);
     ld_assert(fizz_server_ || socket_);
     if (fizz_server_) {
       fizz_server_->writeChain(

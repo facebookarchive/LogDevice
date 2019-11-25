@@ -27,6 +27,7 @@
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/UnreleasedRecordDetector.h"
 #include "logdevice/server/admincommands/CommandListener.h"
+#include "logdevice/server/admincommands/CommandProcessor.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
 
@@ -274,6 +275,9 @@ class Server {
   std::shared_ptr<UpdateableConfig> updateable_config_;
   std::shared_ptr<ServerConfig> server_config_;
   std::shared_ptr<SettingsUpdater> settings_updater_;
+
+  // Must outlive the the command listener and the admin server.
+  std::unique_ptr<CommandProcessor> admin_command_processor_;
 
   // initListeners()
   std::unique_ptr<folly::EventBaseThread> connection_listener_loop_;

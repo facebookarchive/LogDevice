@@ -86,7 +86,9 @@ class CommandListener : public Listener {
   friend AdminCommandConnection;
   explicit CommandListener(Listener::InterfaceDef iface,
                            KeepAlive loop,
-                           Server* server);
+                           CommandProcessor* command_processor,
+                           UpdateableSettings<ServerSettings> server_settings,
+                           SSLFetcher ssl_fetcher);
 
   ~CommandListener() override;
 
@@ -94,8 +96,6 @@ class CommandListener : public Listener {
   void connectionAccepted(folly::NetworkSocket sock,
                           const folly::SocketAddress& addr) noexcept override;
 
-  Server* server_;
-  UpdateableSettings<ServerSettings> server_settings_;
   std::unique_ptr<AdminCommandFactory> command_factory_;
 
   // id assigned to the next connection
@@ -105,10 +105,13 @@ class CommandListener : public Listener {
   // ids.
   std::map<size_t, AdminCommandConnection::UniquePtr> conns_;
 
+  // This is owned by the server and should outlive the CommandListener
+  CommandProcessor* command_processor_;
+
+  UpdateableSettings<ServerSettings> server_settings_;
+
   // SSL context manager
   SSLFetcher ssl_fetcher_;
-
-  CommandProcessor command_processor_;
 
   KeepAlive loop_;
 };

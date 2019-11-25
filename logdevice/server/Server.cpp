@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/Server.h"
 
+#include <folly/io/Cursor.h>
 #include <folly/io/async/EventBaseThread.h>
 
 #include "logdevice/admin/SimpleAdminServer.h"
@@ -599,6 +600,7 @@ Server::Server(ServerParameters* params)
       updateable_config_(params_->getUpdateableConfig()),
       server_config_(updateable_config_->getServerConfig()),
       settings_updater_(params_->getSettingsUpdater()),
+      admin_command_processor_(std::make_unique<CommandProcessor>(this)),
       conn_budget_backlog_(server_settings_->connection_backlog),
       conn_budget_backlog_unlimited_(std::numeric_limits<uint64_t>::max()) {
   ld_check(params_);
@@ -666,7 +668,12 @@ bool Server::initListeners() {
         server_settings_->command_unix_socket,
         false,
         folly::getKeepAliveToken(command_listener_loop_->getEventBase()),
-        this);
+        admin_command_processor_.get(),
+        server_settings_,
+        SSLFetcher{params_->getProcessorSettings()->ssl_cert_path,
+                   params_->getProcessorSettings()->ssl_key_path,
+                   params_->getProcessorSettings()->ssl_ca_path,
+                   params_->getProcessorSettings()->ssl_cert_refresh_interval});
 
     auto nodes_configuration = updateable_config_->getNodesConfiguration();
     ld_check(nodes_configuration);
@@ -1313,6 +1320,16 @@ bool Server::initAdminServer() {
       admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
     }
     createAndAttachMaintenanceManager(admin_server_handle_.get());
+
+    admin_server_handle_->setAdminCommandHandler(
+        [command_processor = admin_command_processor_.get()](
+            const std::string& request,
+            const folly::SocketAddress& src_address) {
+          const auto result_buf =
+              command_processor->processCommand(request.data(), src_address);
+          return folly::io::Cursor(result_buf.get())
+              .readFixedString(result_buf->computeChainDataLength());
+        });
   } else {
     ld_info("Not initializing Admin API,"
             " since admin-enabled server setting is set to false");
