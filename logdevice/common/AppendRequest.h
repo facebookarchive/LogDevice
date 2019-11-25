@@ -223,28 +223,6 @@ class AppendRequest : public AppendRequestBase,
     return std::make_pair(record_.payload, attrs_);
   }
 
-  // Enable tracing for this request. Tracing setting should be modified
-  // according to configuration
-  void setTracingContext() {
-    is_traced_ = true;
-
-    if (e2e_tracer_) {
-      // now that tracing is enable we should create the corresponding span
-      // for this request
-      request_span_ = e2e_tracer_->StartSpan("AppendRequest_initiated");
-      request_span_->SetTag("destination_log_id", record_.logid.val_);
-      request_span_->Finish();
-    }
-  }
-
-  bool isE2ETracingOn() {
-    return is_traced_;
-  }
-
-  bool hasTracerObject() {
-    return e2e_tracer_ == nullptr ? false : true;
-  }
-
   void cancel() {
     is_active_ = false;
     destroyWithStatus(E::ABORTED);
@@ -350,14 +328,6 @@ class AppendRequest : public AppendRequestBase,
     return timeout_;
   }
 
-  bool isTraced() const {
-    return is_traced_;
-  }
-
-  const std::string& getTracingContext() const {
-    return tracing_context_;
-  }
-
   SequencerRouter::flags_t getSequencerRouterFlags() const {
     return sequencer_router_flags_;
   }
@@ -419,20 +389,6 @@ class AppendRequest : public AppendRequestBase,
 
   // Client-side append tracer
   ClientAppendTracer tracer_;
-
-  // OpenTracing tracer object used for distributed tracing.
-  std::shared_ptr<opentracing::Tracer> e2e_tracer_;
-
-  // e2e distrubuted tracing span that is created when an append request is
-  // created
-  std::unique_ptr<opentracing::Span> request_span_;
-
-  // e2e distributed tracing span that is used to trace the actual execution
-  // of the request
-  std::unique_ptr<opentracing::Span> request_execution_span_;
-
-  // encoding of the tracing context associated to the request execution span
-  std::string tracing_context_;
 
   // Appends coming from BufferedWriter should have the BUFFERED_WRITER_BLOB
   // flag set in APPEND_Header.

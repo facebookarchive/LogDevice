@@ -71,7 +71,6 @@ struct APPEND_Header {
 
   static constexpr APPEND_flags_t CUSTOM_COUNTERS = 1u << 10; // 1024
 
-  static constexpr APPEND_flags_t E2E_TRACING_ON = 1u << 11; // 2048
   // Append request belongs to a stream.
   static constexpr APPEND_flags_t WRITE_STREAM_REQUEST = 1u << 12; // 4096
   // Used by stream writer to denote that the append message is next in
@@ -86,27 +85,23 @@ class APPEND_Message : public Message {
   APPEND_Message(const APPEND_Header& header,
                  lsn_t lsn_before_redirect,
                  AppendAttributes attrs,
-                 PayloadHolder payload,
-                 std::string e2e_tracing_context = "")
+                 PayloadHolder payload)
       : Message(MessageType::APPEND, TrafficClass::APPEND),
         header_(header),
         lsn_before_redirect_(lsn_before_redirect),
         attrs_(std::move(attrs)),
-        payload_(std::move(payload)),
-        e2e_tracing_context_(std::move(e2e_tracing_context)) {}
+        payload_(std::move(payload)) {}
 
   APPEND_Message(const APPEND_Header& header,
                  lsn_t lsn_before_redirect,
                  AppendAttributes attrs,
                  PayloadHolder payload,
-                 std::string e2e_tracing_context,
                  write_stream_request_id_t req_id)
       : Message(MessageType::APPEND, TrafficClass::APPEND),
         header_(header),
         lsn_before_redirect_(lsn_before_redirect),
         attrs_(std::move(attrs)),
         payload_(std::move(payload)),
-        e2e_tracing_context_(std::move(e2e_tracing_context)),
         write_stream_request_id_(req_id) {}
 
   APPEND_Message(APPEND_Message&&) = delete;
@@ -151,9 +146,6 @@ class APPEND_Message : public Message {
   // payload size.
   // Owned either by us or by AppendRequest.
   PayloadHolder payload_;
-
-  // Need a serialization of the tracing information gathered so far
-  std::string e2e_tracing_context_;
 
   // Write stream request id
   write_stream_request_id_t write_stream_request_id_ =

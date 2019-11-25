@@ -12,7 +12,6 @@
 
 #include <folly/stats/BucketedTimeSeries.h>
 #include <folly/synchronization/Baton.h>
-#include <opentracing/tracer.h>
 
 #include "logdevice/common/AppendProbeController.h"
 #include "logdevice/common/MetaDataLog.h"
@@ -62,26 +61,12 @@ AppendRequest::AppendRequest(ClientBridge* client,
       attrs_(std::move(attrs)),
       on_socket_close_(id_),
       router_(std::move(router)),
-      tracer_(client ? client->getTraceLogger() : nullptr),
-      e2e_tracer_(client ? client->getOTTracer() : nullptr) {
+      tracer_(client ? client->getTraceLogger() : nullptr) {
   if (!AppendRequest::clientThreadId) {
     AppendRequest::clientThreadId =
         std::max<unsigned>(1, ++AppendRequest::nextThreadId);
   }
-
-  if (client && client_->shouldE2ETrace()) {
-    setTracingContext();
-  }
-
   setRequestType(SRRequestType::APPEND_REQ_TYPE);
-
-  // if it is decided that e2e tracing is on for this request, then create
-  // the corresponding span
-  if (is_traced_ && e2e_tracer_) {
-    request_span_ = e2e_tracer_->StartSpan("AppendRequest_initiated");
-    request_span_->SetTag("destination_log_id", logid.val_);
-    request_span_->Finish();
-  }
 }
 
 AppendRequest::AppendRequest(AppendRequest&& other) noexcept
@@ -172,11 +157,6 @@ AppendRequest::~AppendRequest() {
                       previous_lsn_,
                       sequencer_node_);
 
-  // finish the corresponding e2e tracing span
-  if (request_execution_span_) {
-    request_execution_span_->Finish();
-  }
-
   if (is_active_) {
     // Call back only when the request is active. If not, it has been cancelled
     // and no one is expecting the callback.
@@ -191,12 +171,6 @@ Request::Execution AppendRequest::execute() {
   // initialize a timer that'll abort this request if more than timeout_
   // milliseconds pass
   setupTimer();
-
-  if (request_span_) {
-    // start span for tracing the execution flow of the append
-    request_execution_span_ = e2e_tracer_->StartSpan(
-        "APPEND_execution", {FollowsFrom(&request_span_->context())});
-  }
 
   // kick off the state machine
   if (bypass_write_token_check_) {
@@ -295,35 +269,10 @@ void AppendRequest::sendProbe() {
   // message
   on_socket_close_.deactivate();
 
-  std::unique_ptr<opentracing::Span> probe_message_send_span;
-
-  // create span for probe message
-  if (request_execution_span_) {
-    probe_message_send_span = e2e_tracer_->StartSpan(
-        "PROBE_Message_send", {ChildOf(&request_execution_span_->context())});
-    probe_message_send_span->SetTag("log_id", record_.logid.val_);
-  }
-
-  auto set_status_span_tag =
-      [&probe_message_send_span](std::string status) -> void {
-    probe_message_send_span->SetTag("status", status);
-    probe_message_send_span->Finish();
-  };
-
   int rv =
       sender_->sendMessage(std::move(msg), sequencer_node_, &on_socket_close_);
   if (rv != 0) {
     onProbeSendError(err, sequencer_node_);
-
-    if (probe_message_send_span) {
-      probe_message_send_span->SetTag("error", error_name(err));
-      set_status_span_tag("error_sending");
-    }
-
-  } else {
-    if (probe_message_send_span) {
-      set_status_span_tag("success");
-    }
   }
 }
 
@@ -384,38 +333,11 @@ std::unique_ptr<APPEND_Message> AppendRequest::createAppendMessage() {
       // std::string contained in this class.  Do not transfer ownership to
       // APPEND_Message.
       attrs_,
-      PayloadHolder(record_.payload, PayloadHolder::UNOWNED),
-      tracing_context_);
+      PayloadHolder(record_.payload, PayloadHolder::UNOWNED));
 }
 
 void AppendRequest::sendAppendMessage() {
   const NodeID dest = sequencer_node_;
-
-  // The tracing span associated with this request
-  // Should be instantiated if this request is traced
-  std::unique_ptr<opentracing::Span> append_message_sent_span;
-
-  // If there is a request_span associated with this request, it means that
-  // e2e tracing is on for this request and so we can create tracing spans
-  if (request_execution_span_) {
-    // create tracing span for this append message
-    append_message_sent_span = e2e_tracer_->StartSpan(
-        "APPEND_Message_send", {ChildOf(&request_execution_span_->context())});
-
-    // Add append information to span
-    append_message_sent_span->SetTag("log_id", record_.logid.val_);
-    append_message_sent_span->SetTag("dest_node", dest.toString());
-  }
-
-  // Obtain tracing information
-  if (request_execution_span_) {
-    // inject the request_execution_span_ context to be propagated
-    // we want further spans (on the server side) to be childof this span
-    std::stringstream in_stream;
-
-    e2e_tracer_->Inject(request_execution_span_->context(), in_stream);
-    tracing_context_ = in_stream.str();
-  }
 
   auto msg = createAppendMessage();
 
@@ -427,30 +349,11 @@ void AppendRequest::sendAppendMessage() {
           record_.logid.val_,
           dest.toString().c_str());
 
-  // We want to set the status of the sending operation as tag to the span
-  auto set_status_span_tag =
-      [&append_message_sent_span](std::string status) -> void {
-    append_message_sent_span->SetTag("status", status);
-    append_message_sent_span->Finish();
-  };
-
   int rv = sender_->sendMessage(std::move(msg), dest, &on_socket_close_);
   if (rv != 0) {
     handleMessageSendError(MessageType::APPEND, err, dest);
     // Object may be destroyed, must return
-
-    if (append_message_sent_span) {
-      // There was an error while sending the append message, note this to
-      // corresponding span
-      append_message_sent_span->SetTag("error", error_name(err));
-      set_status_span_tag("error_sending");
-    }
-
     return;
-  }
-
-  if (append_message_sent_span) {
-    set_status_span_tag("sent");
   }
 }
 
@@ -529,24 +432,6 @@ void AppendRequest::onReplyReceived(const APPENDED_Header& reply,
   }
 
   status_ = reply.status;
-
-  auto create_reply_span = [this, from](std::string description) -> void {
-    auto reply_span = e2e_tracer_->StartSpan(
-        description, {ChildOf(&request_execution_span_->context())});
-    reply_span->SetTag("source_node_id", from.asNodeID().toString());
-    reply_span->SetTag("reply_status", error_name(status_));
-    reply_span->Finish();
-  };
-
-  // if we have a tracing span associated to the request,
-  // create tracing span for this APPENDED_message
-  if (request_execution_span_ && (source_type == ReplySource::APPEND)) {
-    create_reply_span("APPENDED_Message_receive");
-  }
-
-  if (request_execution_span_ && (source_type == ReplySource::PROBE)) {
-    create_reply_span("PROBE_Reply_receive");
-  }
 
   switch (status_) {
     case E::OK:
@@ -679,16 +564,6 @@ void AppendRequest::onReplyReceived(const APPENDED_Header& reply,
 }
 
 void AppendRequest::noReply(Status st, const Address& to, bool request_sent) {
-  if (!request_sent && request_execution_span_) {
-    // the request_sent being false means that the append_message was not sent
-    // if we have e2e tracing on for this request then we should add a new span
-    auto append_message_sent_error_span =
-        e2e_tracer_->StartSpan("APPEND_Message_sending_failure",
-                               {ChildOf(&request_execution_span_->context())});
-    append_message_sent_error_span->SetTag("destination", to.toString());
-    append_message_sent_error_span->Finish();
-  }
-
   switch (st) {
     case E::PEER_UNAVAILABLE:
     case E::CANCELLED:
@@ -795,15 +670,6 @@ void AppendRequest::onTimeout() {
                  id_.val_,
                  record_.logid.val_,
                  timeout_.count());
-
-  if (request_execution_span_) {
-    auto append_request_timeout_span =
-        e2e_tracer_->StartSpan("APPEND_Request_timeout",
-                               {ChildOf(&request_execution_span_->context())});
-    append_request_timeout_span->SetTag("dest_log_id", record_.logid.val_);
-    append_request_timeout_span->Finish();
-  }
-
   if (sequencer_node_.isNodeID()) {
     // If the node we sent an APPEND to is not responding (for example, it
     // might be overloaded, or the connection to it broken), let's ask other
@@ -871,9 +737,6 @@ APPEND_flags_t AppendRequest::getAppendFlags() {
   }
   if (previous_lsn_ != LSN_INVALID) {
     append_flags |= APPEND_Header::LSN_BEFORE_REDIRECT;
-  }
-  if (is_traced_) {
-    append_flags |= APPEND_Header::E2E_TRACING_ON;
   }
   return append_flags;
 }

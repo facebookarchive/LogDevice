@@ -35,7 +35,6 @@ std::unique_ptr<APPEND_Message> StreamAppendRequest::createAppendMessage() {
       // APPEND_Message.
       getAppendAttributes(),
       PayloadHolder(record_.payload, PayloadHolder::UNOWNED),
-      getTracingContext(),
       stream_rqid_);
 }
 

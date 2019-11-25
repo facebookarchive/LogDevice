@@ -11,9 +11,6 @@
 
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
-#include <opentracing/mocktracer/in_memory_recorder.h>
-#include <opentracing/mocktracer/tracer.h>
-#include <opentracing/value.h>
 
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SequencerRouter.h"
@@ -126,17 +123,6 @@ class AppendRequestTest : public ::testing::Test {
         log_id, config_->get(), locator_, cluster_state_.get());
   }
 
-  std::unique_ptr<MockAppendRequest>
-  createWithMockE2ETracing(logid_t log_id,
-                           std::shared_ptr<opentracing::Tracer> tracer) {
-    auto mock_request = std::make_unique<MockAppendRequest>(
-        log_id, config_->get(), locator_, cluster_state_.get());
-
-    mock_request->e2e_tracer_ = tracer;
-
-    return mock_request;
-  }
-
   bool isNodeAlive(NodeID node_id) {
     return cluster_state_->isNodeAlive(node_id.index());
   }
@@ -152,10 +138,6 @@ class AppendRequestTest : public ::testing::Test {
 
   void sendProbe(AppendRequest* req) {
     req->sendProbe();
-  }
-
-  std::string getTracingContext(AppendRequest* req) {
-    return req->tracing_context_;
   }
 
   std::shared_ptr<UpdateableConfig> config_;
@@ -366,168 +348,6 @@ TEST_F(AppendRequestTest, ShouldAddStatAppendFail) {
             << "Enum val: " << enum_val;
     }
   }
-}
-
-TEST_F(AppendRequestTest, E2ETracing) {
-  init(1, 1);
-
-  // simple request, no tracing by default
-  {
-    auto request = create(logid_t(1));
-
-    // by default e2e tracing should not be on
-    ASSERT_EQ(request->isE2ETracingOn(), false);
-
-    request->setTracingContext();
-    ASSERT_EQ(request->isE2ETracingOn(), true);
-    // the way mocktracer is created results in a nullptr e2e_tracer_ object
-    ASSERT_EQ(request->hasTracerObject(), false);
-  }
-
-  // we now create the tracer with a mock e2e_tracer_
-  auto recorder = new opentracing::mocktracer::InMemoryRecorder{};
-
-  opentracing::mocktracer::MockTracerOptions tracer_options;
-  tracer_options.recorder.reset(recorder);
-
-  auto tracer = std::make_shared<opentracing::mocktracer::MockTracer>(
-      opentracing::mocktracer::MockTracerOptions{std::move(tracer_options)});
-
-  {
-    auto request = createWithMockE2ETracing(logid_t(1), tracer);
-    ASSERT_EQ(request->isE2ETracingOn(), false);
-
-    // no spans expected
-    ASSERT_TRUE(recorder->spans().empty());
-
-    request->setTracingContext();
-    ASSERT_TRUE(request->isE2ETracingOn());
-
-    // now we should expect a tracer object
-    ASSERT_TRUE(request->hasTracerObject());
-
-    request->execute();
-  }
-
-  auto spans = recorder->spans();
-
-  // first span should be initialization one
-  auto request_init_span = spans.front();
-  auto request_span_id = request_init_span.span_context.span_id;
-  ASSERT_EQ(request_init_span.operation_name, "AppendRequest_initiated");
-
-  // last span that is finished should be the execution span
-  auto execution_span = spans.back();
-  ASSERT_EQ(execution_span.operation_name, "APPEND_execution");
-  auto execution_span_id = execution_span.span_context.span_id;
-
-  // check the reference between the append request initializaton span and the
-  // execution span
-  ASSERT_EQ(execution_span.references[0].reference_type,
-            opentracing::SpanReferenceType::FollowsFromRef);
-  ASSERT_EQ(execution_span.references[0].span_id, request_span_id);
-
-  // all the others spans should have a childof reference with the execution one
-  for (auto span = spans.begin() + 1; span != spans.end() - 1; span++) {
-    ASSERT_EQ(span->references[0].reference_type,
-              opentracing::SpanReferenceType::ChildOfRef);
-    ASSERT_EQ(span->references[0].span_id, execution_span_id);
-  }
-}
-
-TEST_F(AppendRequestTest, E2ETracingProbe) {
-  init(1, 1);
-
-  // create the tracer with a mock e2e_tracer_
-  auto recorder = new opentracing::mocktracer::InMemoryRecorder{};
-
-  opentracing::mocktracer::MockTracerOptions tracer_options;
-  tracer_options.recorder.reset(recorder);
-
-  auto tracer = std::make_shared<opentracing::mocktracer::MockTracer>(
-      opentracing::mocktracer::MockTracerOptions{std::move(tracer_options)});
-
-  {
-    auto request = createWithMockE2ETracing(logid_t(1), tracer);
-
-    // enable e2e tracing
-    request->setTracingContext();
-    request->execute();
-
-    // send probe and check span created
-    sendProbe(request.get());
-    ASSERT_EQ(recorder->spans().back().operation_name, "PROBE_Message_send");
-
-    // simple header, not used in this testing, but is necessary for the call
-    APPENDED_Header hdr{request->id_,
-                        lsn_t(5),
-                        RecordTimestamp(std::chrono::milliseconds(10)),
-                        NodeID(),
-                        E::OK,
-                        APPENDED_flags_t(0)};
-
-    // call onReplyReceived, default source of reply (APPENDED)
-    request->onReplyReceived(hdr, Address(request->dest_));
-    ASSERT_EQ(
-        recorder->spans().back().operation_name, "APPENDED_Message_receive");
-
-    // try with probe source
-    request->onReplyReceived(hdr, Address(request->dest_), ReplySource::PROBE);
-    ASSERT_EQ(recorder->spans().back().operation_name, "PROBE_Reply_receive");
-  }
-}
-
-TEST_F(AppendRequestTest, E2ETracingContextInject) {
-  init(1, 1);
-
-  auto recorder = new opentracing::mocktracer::InMemoryRecorder{};
-  auto recorder2 = new opentracing::mocktracer::InMemoryRecorder{};
-
-  opentracing::mocktracer::MockTracerOptions tracer_options, tracer_options2;
-  tracer_options.recorder.reset(recorder);
-  tracer_options2.recorder.reset(recorder2);
-
-  // use two distict tracer to test Inject and Extract using different
-  // tracer objects
-  auto tracer = std::make_shared<opentracing::mocktracer::MockTracer>(
-      opentracing::mocktracer::MockTracerOptions{std::move(tracer_options)});
-  auto tracer2 = std::make_shared<opentracing::mocktracer::MockTracer>(
-      opentracing::mocktracer::MockTracerOptions{std::move(tracer_options2)});
-
-  // we want to record what is the encoding for the tracing context within the
-  // request
-  std::string tracing_context;
-
-  {
-    auto request = createWithMockE2ETracing(logid_t(1), tracer);
-    request->setTracingContext();
-    request->execute();
-
-    // get the tracing encoding
-    tracing_context = getTracingContext(request.get());
-    ASSERT_FALSE(tracing_context.empty());
-  }
-
-  // use the other tracer to obtain the context
-  std::stringstream out_ss(tracing_context, std::ios_base::in);
-  auto new_span_context = tracer2->Extract(out_ss);
-
-  // use the extracted reference to create a new span
-  auto new_span = tracer2->StartSpan("New", {ChildOf(new_span_context->get())});
-  new_span->Finish();
-
-  // the trace id from the request_execution_span_
-  auto id = recorder->spans().back().span_context.trace_id;
-  // the trace id of the newly created span referencing the extracted context
-  auto id2 = recorder2->spans().front().span_context.trace_id;
-  // the initial span and the reconstructed one should have the same trace id
-  ASSERT_EQ(id, id2);
-
-  // The new span should have a ChildOf reference to the same span id as the
-  // original one
-  auto span_id = recorder->spans().back().span_context.span_id;
-  auto span_id2 = recorder2->spans().front().references[0].span_id;
-  ASSERT_EQ(span_id, span_id2);
 }
 
 }} // namespace facebook::logdevice

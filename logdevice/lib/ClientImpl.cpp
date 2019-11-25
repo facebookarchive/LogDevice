@@ -20,7 +20,6 @@
 #include "logdevice/common/ClientEventTracer.h"
 #include "logdevice/common/DataRecordFromTailRecord.h"
 #include "logdevice/common/DataSizeRequest.h"
-#include "logdevice/common/E2ETracer.h"
 #include "logdevice/common/EpochMetaDataCache.h"
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/FindKeyRequest.h"
@@ -2358,16 +2357,6 @@ void ClientImpl::updateStatsSettings() {
 void ClientImpl::setAppendErrorInjector(
     folly::Optional<AppendErrorInjector> injector) {
   append_error_injector_ = injector;
-}
-
-bool ClientImpl::shouldE2ETrace() {
-  // decide based on configuration/sampling rate if e2e tracing is on
-  double sampling_rate = config_->get()
-                             ->serverConfig()
-                             ->getTracerSamplePercentage(E2E_APPEND_TRACER)
-                             .value_or(DEFAULT_E2E_TRACING_RATE);
-  // flip the coin
-  return folly::Random::randDouble(0, 100) < sampling_rate;
 }
 
 void ClientImpl::registerCustomStats(StatsHolder* custom_stats) {
