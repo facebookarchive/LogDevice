@@ -39,10 +39,6 @@
 #include "logdevice/include/Record.h"
 #include "logdevice/include/types.h"
 
-namespace opentracing { inline namespace v2 {
-class Tracer;
-}} // namespace opentracing::v2
-
 namespace facebook { namespace logdevice {
 
 struct APPENDED_Header;

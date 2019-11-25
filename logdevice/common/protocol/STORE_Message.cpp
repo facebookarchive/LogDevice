@@ -45,8 +45,7 @@ STORE_Message::STORE_Message(const STORE_Header& header,
                              STORE_Extra extra,
                              std::map<KeyType, std::string> optional_keys,
                              std::shared_ptr<PayloadHolder> payload,
-                             bool appender_context,
-                             std::string e2e_tracing_context)
+                             bool appender_context)
     : Message(MessageType::STORE, calcTrafficClass(header)),
       header_(header),
       extra_(extra),
@@ -54,8 +53,7 @@ STORE_Message::STORE_Message(const STORE_Header& header,
       payload_(std::move(payload)),
       copyset_(header.copyset_size),
       optional_keys_(std::move(optional_keys)),
-      my_pos_in_copyset_(-1),
-      e2e_tracing_context_(std::move(e2e_tracing_context)) {
+      my_pos_in_copyset_(-1) {
   ld_check(header_.copyset_size > 0);
   ld_check(header_.copyset_size <= COPYSET_SIZE_MAX);
   ld_check(copyset_offset >= 0);
@@ -176,16 +174,6 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
     }
   }
 
-  if (header_.flags & STORE_Header::E2E_TRACING_ON) {
-    ld_check(e2e_tracing_context_.size() < MAX_E2E_TRACING_CONTEXT_SIZE);
-    if (e2e_tracing_context_.size() < MAX_E2E_TRACING_CONTEXT_SIZE) {
-      // only serialize the information when its size reasonable
-      writer.writeLengthPrefixedVector(e2e_tracing_context_);
-    } else {
-      writer.writeLengthPrefixedVector(std::string(""));
-    }
-  }
-
   if (payload_ && !(header_.flags & STORE_Header::AMEND)) {
     payload_->serialize(writer);
   }
@@ -264,12 +252,6 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
     }
   }
 
-  std::string tracing_context;
-
-  if (hdr.flags & STORE_Header::E2E_TRACING_ON) {
-    reader.readLengthPrefixedVector(&tracing_context);
-  }
-
   const size_t payload_size = reader.bytesRemaining();
   auto payload = PayloadHolder::deserialize(reader, payload_size);
 
@@ -283,7 +265,6 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
     m->block_starting_lsn_ = block_starting_lsn;
     m->extra_ = std::move(extra);
     m->optional_keys_ = std::move(optional_keys);
-    m->e2e_tracing_context_ = std::move(tracing_context);
     return m;
   });
 }

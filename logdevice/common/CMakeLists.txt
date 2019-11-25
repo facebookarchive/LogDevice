@@ -22,7 +22,7 @@ add_subdirectory(membership)
 add_subdirectory(replicated_state_machine/if)
 
 add_library(common STATIC ${hfiles} ${files})
-add_dependencies(common folly flatbuffers OpenTracing)
+add_dependencies(common folly flatbuffers)
 add_dependencies(common NodesConfiguration-cpp2-target)
 add_dependencies(common ConfigurationCodec-cpp2-target)
 add_dependencies(common AllReadStreamsDebugConfig-cpp2-target)
@@ -67,7 +67,7 @@ if(${BUILD_TESTS})
     ${GMOCK_LIBRARY}
   )
 
-  add_dependencies(common_test_util googletest folly rocksdb OpenTracing)
+  add_dependencies(common_test_util googletest folly rocksdb)
 
   add_executable(common_test ${test_hfiles} ${test_files})
   add_dependencies(common_test googletest folly)
