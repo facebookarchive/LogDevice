@@ -154,9 +154,6 @@ struct STORE_Header {
   // epoch of the record.
   static const STORE_flags_t EPOCH_BEGIN = 1 << 16; //=65536
 
-  // used to know weather we should expect e2e tracing information or not
-  static const STORE_flags_t E2E_TRACING_ON = 1u << 17; //=131072
-
   // used to know if contains OffsetMap or not
   static const STORE_flags_t OFFSET_MAP = 1u << 18; //=262144
 
@@ -257,8 +254,7 @@ class STORE_Message : public Message {
                 STORE_Extra extra,
                 std::map<KeyType, std::string> optional_keys,
                 std::shared_ptr<PayloadHolder> payload,
-                bool appender_context = false,
-                std::string e2e_tracing_context = "");
+                bool appender_context = false);
 
   // Movable but not copyable
   STORE_Message(STORE_Message&&) = default;
@@ -451,10 +447,6 @@ class STORE_Message : public Message {
   // if true, indicate that the STORE is preempted by only by a soft seal
   bool soft_preempted_only_{false};
 
-  // tracing context containing information about the parent context of future
-  // spans references
-  std::string e2e_tracing_context_;
-
   friend class StoreStateMachine;
   friend void STORE_onSent(const STORE_Message& msg,
                            Status st,
@@ -464,7 +456,6 @@ class STORE_Message : public Message {
   friend class AppenderTest;
   friend class TestAppender;
   friend class MessageSerializationTest;
-  friend class E2ETracingSerializationTest;
 };
 
 }} // namespace facebook::logdevice

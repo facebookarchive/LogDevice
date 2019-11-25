@@ -37,10 +37,6 @@ constexpr size_t MAX_PAYLOAD_SIZE_INTERNAL =
 // See common/test/LibeventEvbufferBenchmark.
 constexpr size_t MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE = 512;
 
-// when e2e tracing in on we should have a tracing context encoded in the
-// message, so we have to put a limit to that information size
-constexpr size_t MAX_E2E_TRACING_CONTEXT_SIZE = 64;
-
 // maximum number of bits in a log id internally, we use all bits in the
 // uint64_t integer
 constexpr size_t LOGID_BITS_INTERNAL = 64;

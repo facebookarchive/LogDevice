@@ -102,11 +102,6 @@ include(logdevice-deps)
 add_subdirectory(${LOGDEVICE_DIR}/external/gtest)
 include_directories(${GTEST_INCLUDE_DIRS} ${GMOCK_INCLUDE_DIRS})
 
-# OpenTracing Project
-
-add_subdirectory(${LOGDEVICE_DIR}/external/opentracing)
-include_directories(${OPENTRACING_INCLUDE_DIRS})
-
 # Flatbuffers Project
 add_subdirectory(${LOGDEVICE_DIR}/external/flatbuffers)
 include_directories(${FLATBUFFERS_INCLUDE_DIRS})
@@ -148,8 +143,6 @@ set(LOGDEVICE_EXTERNAL_DEPS
   ${FOLLY_BENCHMARK_LIBRARIES}
   ${FOLLY_LIBRARIES}
   ${FOLLY_TEST_UTIL_LIBRARIES}
-  ${OPENTRACING_MOCKTRACER_STATIC_LIB}
-  ${OPENTRACING_STATIC_LIB}
   ${LIBUNWIND_LIBRARIES}
   ${ZLIB_LIBRARIES}
   ${Boost_LIBRARIES}
