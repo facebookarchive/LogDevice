@@ -20,6 +20,7 @@ set(_common_libs
   "settings-cpp2"
   "nodes-cpp2"
   "cluster_membership-cpp2"
+  "admin_commands-cpp2"
   "logtree-cpp2"
   "common-cpp2"
   "exceptions-cpp2"
@@ -37,6 +38,7 @@ foreach(THRIFT_SOURCE
         logtree
         nodes
         cluster_membership
+        admin_commands
         safety
         maintenance
 )
@@ -109,6 +111,7 @@ if(thriftpy3)
     logdevice-admin-common-types-py3
     logdevice-admin-nodes-types-py3
     logdevice-admin-cluster_membership-types-py3
+    logdevice-admin-admin_commands-types-py3
     logdevice-admin-exceptions-types-py3
     logdevice-admin-logtree-types-py3
     logdevice-admin-safety-types-py3
@@ -124,6 +127,7 @@ add_dependencies(admin-${_lang}-target
                  common-${_lang}-target
                  nodes-${_lang}-target
                  cluster_membership-${_lang}-target
+                 admin_commands-${_lang}-target
                  fb303-${_lang}-target
                  exceptions-${_lang}-target
                  logtree-${_lang}-target

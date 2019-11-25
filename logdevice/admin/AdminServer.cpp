@@ -55,7 +55,7 @@ void AdminServer::setMaintenanceManager(maintenance::MaintenanceManager* mm) {
 }
 
 void AdminServer::setAdminCommandHandler(AdminCommandHandler handler) {
-  // TODO: Wire it up in the next diff
+  return admin_api_handler_->setAdminCommandHandler(std::move(handler));
 }
 
 std::shared_ptr<SafetyChecker> AdminServer::getSafetyChecker() {
