@@ -12,8 +12,6 @@
 #include <alloca.h>
 #include <cstdlib>
 
-#include <opentracing/tracer.h>
-
 #include "logdevice/common/Address.h"
 #include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/AppenderTracer.h"
@@ -70,9 +68,7 @@ Appender::Appender(Worker* worker,
                    ClientID return_address,
                    epoch_t seen_epoch,
                    size_t full_appender_size,
-                   lsn_t lsn_before_redirect,
-                   std::shared_ptr<opentracing::Tracer> e2e_tracer,
-                   std::shared_ptr<opentracing::Span> appender_span)
+                   lsn_t lsn_before_redirect)
     : sender_(std::make_unique<SenderProxy>()),
       tracer_(std::move(trace_logger)),
       created_on_(worker),
@@ -88,9 +84,7 @@ Appender::Appender(Worker* worker,
       append_request_id_(append_request_id),
       passthru_flags_(passthru_flags),
       release_type_(static_cast<ReleaseTypeRaw>(ReleaseType::GLOBAL)),
-      lsn_before_redirect_(lsn_before_redirect),
-      e2e_tracer_(std::move(e2e_tracer)),
-      appender_span_(std::move(appender_span)) {
+      lsn_before_redirect_(lsn_before_redirect) {
   // Increment the total count of Appenders. Note: created_on_ can be nullptr
   // inside tests.
   if (created_on_) {
@@ -108,9 +102,7 @@ Appender::Appender(Worker* worker,
                    logid_t log_id,
                    PayloadHolder payload,
                    epoch_t seen_epoch,
-                   size_t full_appender_size,
-                   std::shared_ptr<opentracing::Tracer> e2e_tracer,
-                   std::shared_ptr<opentracing::Span> appender_span)
+                   size_t full_appender_size)
     : Appender(worker,
                std::move(trace_logger),
                client_timeout,
@@ -122,9 +114,7 @@ Appender::Appender(Worker* worker,
                ClientID::INVALID,
                seen_epoch,
                full_appender_size,
-               LSN_INVALID,
-               std::move(e2e_tracer),
-               std::move(appender_span)) {}
+               LSN_INVALID) {}
 
 Appender::~Appender() {
   if (started()) {
@@ -169,12 +159,8 @@ Appender::~Appender() {
 int Appender::sendSTORE(const StoreChainLink copyset[],
                         copyset_off_t copyset_offset,
                         folly::Optional<lsn_t> block_starting_lsn,
-                        STORE_flags_t flags,
-                        std::shared_ptr<opentracing::Span> store_span) {
+                        STORE_flags_t flags) {
   ShardID dest = copyset[copyset_offset].destination;
-
-  // TODO(e2e tracing): serialize the info and construct store message
-
   auto store_msg = std::make_unique<STORE_Message>(
       store_hdr_,
       copyset,
@@ -200,39 +186,12 @@ int Appender::sendSTORE(const StoreChainLink copyset[],
   Recipient* r = recipients_.find(dest);
   ld_check(r);
 
-  std::unique_ptr<opentracing::Span> store_message_send_span;
-
-  if (store_span) {
-    store_message_send_span = e2e_tracer_->StartSpan(
-        "STORE_message_send", {ChildOf(&store_span->context())});
-    store_message_send_span->SetTag("dest", dest.asNodeID().toString());
-    store_message_send_span->SetTag("wave", store_hdr_.wave);
-
-    // here we know the dest so we now save the store_span in order to finish
-    // it when the stored is received
-    std::pair<uint32_t, ShardID> current_info(
-        store_msg->getHeader().wave, dest);
-    std::pair<std::pair<uint32_t, ShardID>, std::shared_ptr<opentracing::Span>>
-        current_span(current_info, store_span);
-    // save this span. we want to finish it when the reply is received
-    all_store_spans_.insert(current_span);
-  }
-
-  auto set_status_span_tag = [&store_message_send_span](E send_err) -> void {
-    if (store_message_send_span) {
-      store_message_send_span->SetTag("status", error_name(send_err));
-      store_message_send_span->Finish();
-    }
-  };
-
   int rv = sender_->sendMessage(
       std::move(store_msg), dest.asNodeID(), &r->bwAvailCB());
+
   if (rv == 0) {
-    set_status_span_tag(E::OK);
     return 1;
   }
-
-  set_status_span_tag(err);
 
   // failed to send the message
   switch (err) {
@@ -410,25 +369,8 @@ int Appender::trySendingWavesOfStores(
 
     forgetThePreviousWave(cfg_synced);
 
-    // e2e tracing span for the STORE that is to be sent
-    std::shared_ptr<opentracing::Span> store_span;
-
-    if (wave_send_span_) {
-      // if we have an wave associated, we continue tracing
-      store_span = e2e_tracer_->StartSpan(
-          "STORE", {ChildOf(&wave_send_span_->context())});
-      // this will be passed to sendStore where it is saved so that we can
-      // finish it when the corresponding reply is received
-    }
-
     int ncopies = std::min(recipients_.getReplication() + cfg_extras,
                            static_cast<int>(COPYSET_SIZE_MAX));
-
-    if (wave_send_span_ && !prev_wave_send_span_) {
-      // set ncopies tag only for first wave, as all others would have the
-      // same property
-      wave_send_span_->SetTag("ncopies", ncopies);
-    }
 
     if (!copyset) {
       copyset = (StoreChainLink*)alloca(ncopies * sizeof(StoreChainLink));
@@ -524,10 +466,6 @@ int Appender::trySendingWavesOfStores(
 
     if (chain) {
       // try to chain-send this wave of STORE messages
-      if (store_span) {
-        store_span->SetTag("way of sending", "chain");
-      }
-
       STAT_INCR(getStats(), appender_wave_chain);
 
       ld_debug(
@@ -545,11 +483,8 @@ int Appender::trySendingWavesOfStores(
         store_flags |= STORE_Header::AMEND;
       }
 
-      int rv = sendSTORE(copyset,
-                         copyset_off_t(0),
-                         block_starting_lsn,
-                         store_flags,
-                         store_span);
+      int rv =
+          sendSTORE(copyset, copyset_off_t(0), block_starting_lsn, store_flags);
       if (rv < 0) { // fatal error
         ld_check(err == E::SYSLIMIT || err == E::NOBUFS);
         return -1;
@@ -565,10 +500,6 @@ int Appender::trySendingWavesOfStores(
       }
     } else {
       // direct-send this wave of STOREs
-      if (store_span) {
-        wave_send_span_->SetTag("way of sending", "direct");
-      }
-
       store_hdr_.flags &= ~STORE_Header::CHAIN;
       STAT_INCR(getStats(), appender_wave_direct);
 
@@ -579,8 +510,7 @@ int Appender::trySendingWavesOfStores(
         int rv = sendSTORE(copyset,
                            copyset_off_t(i),
                            block_starting_lsn,
-                           store_flags | node_flags,
-                           store_span);
+                           store_flags | node_flags);
         if (rv < 0) { // fatal
           ld_check(err == E::SYSLIMIT || err == E::NOBUFS);
           return -1;
@@ -597,19 +527,6 @@ int Appender::trySendingWavesOfStores(
 }
 
 int Appender::sendWave() {
-  if (prev_wave_send_span_) {
-    // there has been another wave that was sent before, so this current wave
-    // span follows from that one
-    wave_send_span_ = e2e_tracer_->StartSpan(
-        "Wave_sending", {FollowsFrom(&prev_wave_send_span_->context())});
-  } else {
-    if (previous_span_ && e2e_tracer_) {
-      // this is the first wave attempted to be sent
-      wave_send_span_ = e2e_tracer_->StartSpan(
-          "Wave_sending", {FollowsFrom(&previous_span_->context())});
-    }
-  }
-
   // refresh copyset manager upon each wave to capture changes in configuration
   // which may change effective nodeset. This is safe because the replication
   // property is immutable for the epoch
@@ -635,13 +552,6 @@ int Appender::sendWave() {
   const copyset_size_t cfg_synced =
       std::min(getSynced(), recipients_.getReplication());
 
-  // add tracing span annotations, only for the first wave, as the information
-  // is kept for all waves
-  if (wave_send_span_ && !prev_wave_send_span_) {
-    wave_send_span_->SetTag("cfg_extras", cfg_extras);
-    wave_send_span_->SetTag("cfg_synced", cfg_synced);
-  }
-
   // Building an AppendContext object to be used by CopySetManager. If the
   // StickyCopySetManager is used, it might use this information to determine
   // if we reached the size threshold for the current block.
@@ -662,16 +572,6 @@ int Appender::sendWave() {
     // the Appender ignores replies to any STORE message we did send.
     recipients_.replace(nullptr, 0, this);
     store_hdr_.wave++;
-
-    if (wave_send_span_) {
-      // current wave failed to send all the messages so we finish the
-      // corresponding span
-      wave_send_span_->SetTag("status", "failed to send complete wave");
-      wave_send_span_->Finish();
-      // save this current span so that it can be further referenced when
-      // creating the span for the next wave
-      prev_wave_send_span_ = std::move(wave_send_span_);
-    }
   }
 
   if ((rv == 0 && deferred_stores_ == 0) || err == E::NOBUFS ||
@@ -916,13 +816,6 @@ void Appender::retire(RetireReason reason) {
         ld_check(false);
       }
     }
-
-    // as we aborted the wave, we can close the corresponding span
-    // do not save it, as we do not expect future waves
-    if (wave_send_span_) {
-      wave_send_span_->SetTag("status", error_name(st));
-      wave_send_span_->Finish();
-    }
   }
 
   Appender::Reaper reaper;
@@ -1038,34 +931,7 @@ void Appender::sendReply(lsn_t lsn, Status status, NodeID redirect) {
     return;
   }
 
-  std::unique_ptr<opentracing::Span> reply_send_span;
-  // choosing the parent reference for this reply span is tricky as there is
-  // the possibility that sendError which calls sendReply might be early and we
-  // do not have the wave span created
-
-  if (wave_send_span_) {
-    reply_send_span = e2e_tracer_->StartSpan(
-        "APPENDED_message_send", {FollowsFrom(&wave_send_span_->context())});
-  } else {
-    if (appender_span_) {
-      reply_send_span = e2e_tracer_->StartSpan(
-          "APPENDED_message_send", {ChildOf(&appender_span_->context())});
-    }
-  }
-
-  if (reply_send_span) {
-    reply_send_span->SetTag("status", error_name(status));
-    reply_send_span->SetTag("to", reply_to_.toString().c_str());
-    reply_send_span->SetTag("request_id", append_request_id_.val_);
-  }
-
   auto reply = std::make_unique<APPENDED_Message>(replyhdr);
-  auto set_status_span_tag = [&reply_send_span](E send_err) -> void {
-    if (reply_send_span) {
-      reply_send_span->SetTag("status", error_name(send_err));
-      reply_send_span->Finish();
-    }
-  };
 
   int rv = sender_->sendMessage(std::move(reply), reply_to_);
 
@@ -1078,9 +944,6 @@ void Appender::sendReply(lsn_t lsn, Status status, NodeID redirect) {
                    reply_to_.toString().c_str(),
                    append_request_id_.val_,
                    error_description(err));
-    set_status_span_tag(err);
-  } else {
-    set_status_span_tag(E::OK);
   }
 }
 
@@ -1271,13 +1134,6 @@ void Appender::onTimeout() {
     if (MetaDataLog::isMetaDataLog(store_hdr_.rid.logid)) {
       STAT_INCR(getStats(), metadata_log_appender_wave_timedout);
     }
-
-    if (wave_send_span_) {
-      wave_send_span_->SetTag("status", error_name(E::TIMEDOUT));
-      wave_send_span_->Finish();
-
-      prev_wave_send_span_ = std::move(wave_send_span_);
-    }
   }
 
   auto worker = Worker::onThisThread(false);
@@ -1349,8 +1205,6 @@ void Appender::onTimeout() {
     return;
   }
 
-  // when a new wave is sent the e2e tracing span will follow from the previous
-  // wave sending span
   sendWave();
 }
 
@@ -1487,26 +1341,6 @@ int Appender::onReply(const STORED_Header& header,
   if (worker &&
       worker->updateable_settings_->enable_store_histogram_calculations) {
     worker->getWorkerTimeoutStats().onReply(from, store_hdr_);
-  }
-
-  if (appender_span_) {
-    // having an appender span means we have e2e tracing enabled
-    std::pair<uint32_t, ShardID> current_info(header.wave, from);
-
-    // look for corresponding span in the map
-    auto it = all_store_spans_.find(current_info);
-
-    if (it != all_store_spans_.end()) {
-      auto current_store_span = it->second;
-      // we received a reply and found the store span corresponding to it
-      auto reply_recv_span = e2e_tracer_->StartSpan(
-          "STORED_Message_receive", {ChildOf(&current_store_span->context())});
-      reply_recv_span->SetTag("from", from.toString());
-      reply_recv_span->SetTag("status", error_name(header.status));
-      reply_recv_span->Finish();
-
-      current_store_span->Finish();
-    }
   }
 
   // decrement outstanding responses
@@ -1931,13 +1765,6 @@ void Appender::onRecipientSucceeded(Recipient* recipient) {
       onComplete();
     }
     return;
-  }
-
-  // here we have the recipients_.isFullyReplicated, so we received all the
-  // expected store messages, so it is time to close the current wave span
-  if (wave_send_span_) {
-    wave_send_span_->SetTag("status", error_name(E::OK));
-    wave_send_span_->Finish();
   }
 
   ld_check(!reply_sent_);

@@ -7,8 +7,6 @@
  */
 #include "logdevice/common/AppenderPrep.h"
 
-#include <opentracing/tracer.h>
-
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/AppenderBuffer.h"
 #include "logdevice/common/Checksum.h"
@@ -44,22 +42,8 @@ void AppenderPrep::sendReply(std::unique_ptr<Appender> appender,
   std::shared_ptr<Sequencer> sequencer = findSequencer(datalog_id);
   ld_check(sequencer || err == E::NOSEQUENCER);
 
-  if (permission_checking_span_) {
-    sequencer_locating_span_ = e2e_tracer_->StartSpan(
-        "Sequencer_locating",
-        {FollowsFrom(&permission_checking_span_->context())});
-  }
-
   auto appender_ptr = appender.get();
   auto cb = [=](Status status, logid_t log_id, NodeID node_id) {
-    if (sequencer_locating_span_) {
-      sequencer_locating_span_->SetTag("status", error_name(status));
-      sequencer_locating_span_->SetTag("log_id", log_id.val());
-      sequencer_locating_span_->SetTag("node_id", node_id.toString());
-
-      sequencer_locating_span_->Finish();
-      appender_ptr->setPrevTracingSpan(sequencer_locating_span_);
-    }
     onSequencerNodeFound(status,
                          log_id,
                          node_id,
@@ -172,22 +156,12 @@ void AppenderPrep::execute(std::unique_ptr<Appender> appender) {
     return;
   }
 
-  if (appender_span_) {
-    permission_checking_span_ = e2e_tracer_->StartSpan(
-        "Permission_checking", {ChildOf(&appender_span_->context())});
-  }
-
   std::shared_ptr<AppenderPrep> appender_prep = shared_from_this();
   isAllowed(permission_checker,
             *principal,
             [appender = std::move(appender),
-             appender_prep = std::move(appender_prep),
-             permission_checking_span_ = permission_checking_span_](
+             appender_prep = std::move(appender_prep)](
                 PermissionCheckStatus permission_status) mutable {
-              if (permission_checking_span_) {
-                permission_checking_span_->Finish();
-              }
-
               appender_prep->sendReply(std::move(appender), permission_status);
             });
 
@@ -447,8 +421,7 @@ std::unique_ptr<Appender> AppenderPrep::constructAppender() {
                                  from_,
                                  header_.seen,
                                  full_size,
-                                 lsn_before_redirect_,
-                                 e2e_tracer_);
+                                 lsn_before_redirect_);
   appender->setAppendMessageCount(append_message_count_);
   appender->setAcceptableEpoch(acceptable_epoch_);
   if (header_.flags & APPEND_Header::WRITE_STREAM_REQUEST) {

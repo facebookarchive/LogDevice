@@ -16,7 +16,6 @@
 #include <boost/intrusive/unordered_set.hpp>
 #include <folly/Optional.h>
 #include <folly/small_vector.h>
-#include <opentracing/tracer.h>
 
 #include "logdevice/common/AppenderTracer.h"
 #include "logdevice/common/CopySetManager.h"
@@ -127,9 +126,7 @@ class Appender : public IntrusiveUnorderedMapHook {
            ClientID return_address,
            epoch_t seen_epoch,
            size_t full_appender_size,
-           lsn_t lsn_before_redirect,
-           std::shared_ptr<opentracing::Tracer> e2e_tracer = nullptr,
-           std::shared_ptr<opentracing::Span> appender_span = nullptr);
+           lsn_t lsn_before_redirect);
 
   virtual ~Appender();
 
@@ -289,8 +286,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   int sendSTORE(const StoreChainLink copyset[],
                 copyset_off_t copyset_offset,
                 folly::Optional<lsn_t> block_starting_lsn,
-                STORE_flags_t flags,
-                std::shared_ptr<opentracing::Span> store_span = nullptr);
+                STORE_flags_t flags);
 
   /**
    * Called by a Recipient whose initial attempt to send a STORE message was
@@ -601,10 +597,6 @@ class Appender : public IntrusiveUnorderedMapHook {
     payload_->TEST_corruptPayload();
   }
 
-  void setPrevTracingSpan(std::shared_ptr<opentracing::Span> previous_span) {
-    previous_span_ = std::move(previous_span);
-  }
-
   /** Helper functions for appends that belong to a write stream. */
 
   // Checks if Appender corresponds to a write stream append.
@@ -659,15 +651,7 @@ class Appender : public IntrusiveUnorderedMapHook {
            logid_t log_id,
            PayloadHolder payload,
            epoch_t seen_epoch,
-           size_t full_appender_size,
-           std::shared_ptr<opentracing::Tracer> e2e_tracer = nullptr,
-           std::shared_ptr<opentracing::Span> appender_span = nullptr);
-
-  // I want to keep track of all stores sent, identifying a store message sent
-  // by pair (wave, dest)
-  std::unordered_map<std::pair<uint32_t, ShardID>,
-                     std::shared_ptr<opentracing::Span>>
-      all_store_spans_;
+           size_t full_appender_size);
 
   // EpochSequencer that accepted and assigned LSN for this Appender. A shared
   // reference is held here to ensure that EpochSequencer is destroyed only
@@ -900,18 +884,6 @@ class Appender : public IntrusiveUnorderedMapHook {
   static const uint8_t FINISH = 1u << 0u;
   static const uint8_t REAPED = 1u << 1u;
   static const uint8_t REPLIED = 1u << 2u;
-
-  // OpenTracing tracer object used in distributed e2e tracing
-  std::shared_ptr<opentracing::Tracer> e2e_tracer_;
-  std::shared_ptr<opentracing::Span> appender_span_;
-
-  // e2e tracing span that is received from the AppenderPrep side
-  std::shared_ptr<opentracing::Span> previous_span_;
-  // tracing span corresponding to the last wave that was attempted to be sent
-  // If another wave is to be sent, then in e2e tracing we will
-  // create a span for the new wave in a FollowsFrom relationship with previous
-  std::unique_ptr<opentracing::Span> prev_wave_send_span_;
-  std::unique_ptr<opentracing::Span> wave_send_span_;
 
   /**
    * Called when the state machine completed (record is fully replicated) or we
