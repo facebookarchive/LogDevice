@@ -180,8 +180,6 @@ class AppenderTest : public ::testing::Test {
   // Start the Appender.
   void start(bool stream_message = false);
 
-  void startWithMockE2ETracer(std::shared_ptr<opentracing::Tracer>);
-
   // takes advantage of friend declaration in STORE_Message to obtain the header
   const STORE_Header& getHeader(const STORE_Message* msg);
 
@@ -422,9 +420,9 @@ class AppenderTest::MockAppender : public Appender {
  public:
   using MockSender = SenderTestProxy<MockAppender>;
 
-  explicit MockAppender(AppenderTest* test,
-                        std::chrono::milliseconds client_timeout,
-                        request_id_t append_request_id)
+  MockAppender(AppenderTest* test,
+               std::chrono::milliseconds client_timeout,
+               request_id_t append_request_id)
       : Appender(
             Worker::onThisThread(false),
             std::make_shared<NoopTraceLogger>(UpdateableConfig::createEmpty()),
@@ -435,26 +433,6 @@ class AppenderTest::MockAppender : public Appender {
             PayloadHolder(MockAppender::dummyPayload, PayloadHolder::UNOWNED),
             epoch_t(0),
             500),
-        stats_(StatsParams().setIsServer(true)),
-        test_(test) {
-    sender_ = std::make_unique<MockSender>(this);
-  }
-
-  explicit MockAppender(AppenderTest* test,
-                        std::chrono::milliseconds client_timeout,
-                        request_id_t append_request_id,
-                        std::shared_ptr<opentracing::Tracer> e2e_tracer)
-      : Appender(
-            Worker::onThisThread(false),
-            std::make_shared<NoopTraceLogger>(UpdateableConfig::createEmpty()),
-            client_timeout,
-            append_request_id,
-            STORE_flags_t(0),
-            LOG_ID,
-            PayloadHolder(MockAppender::dummyPayload, PayloadHolder::UNOWNED),
-            epoch_t(0),
-            500,
-            e2e_tracer),
         stats_(StatsParams().setIsServer(true)),
         test_(test) {
     sender_ = std::make_unique<MockSender>(this);
@@ -565,15 +543,6 @@ class AppenderTest::MockAppender : public Appender {
     if (addr.isClientAddress()) {
       err = E::INTERNAL;
       return -1;
-    }
-
-    // used in e2e tracing test when we want to create spans for all stores
-    if (msg->type_ == MessageType::STORE && e2e_tracer_) {
-      ShardID to = ShardID(addr.id_.node_.index(), 0);
-      std::pair<uint32_t, ShardID> current_info(1, to);
-
-      std::shared_ptr<opentracing::Span> span = e2e_tracer_->StartSpan("STORE");
-      all_store_spans_[current_info] = span;
     }
 
     NodeID nid = addr.id_.node_;
@@ -714,15 +683,6 @@ void AppenderTest::start(bool stream_message) {
     write_stream_request_id_t rqid = {stream_id, seq_num};
     appender_->setWriteStreamAppendInfo(rqid, true);
   }
-  appender_->start(nullptr, LSN);
-}
-
-// Start the Appender providing a tracer object to be used in e2e tracing
-void AppenderTest::startWithMockE2ETracer(
-    std::shared_ptr<opentracing::Tracer> tracer) {
-  appender_ =
-      new MockAppender(this, std::chrono::seconds{1}, request_id_t{1}, tracer);
-  appender_->appender_span_ = tracer->StartSpan("APPENDER");
   appender_->start(nullptr, LSN);
 }
 
@@ -1703,36 +1663,6 @@ TEST_F(AppenderTest, PremptedByNormalSealWhenDraining) {
   Appender::Reaper()(appender_);
   // No release message should have been sent.
   CHECK_NO_RELEASE_MSG();
-}
-
-TEST_F(AppenderTest, E2ETracing) {
-  // check that spans corresponding to store messages are created
-  shards_ = {N0S0, N1S0, N2S0, N3S0, N4S0};
-  replication_ = 3;
-  extras_ = 0;
-  updateConfig();
-  first_candidate_idx_ = 0;
-
-  auto recorder = new opentracing::mocktracer::InMemoryRecorder{};
-  opentracing::mocktracer::MockTracerOptions tracer_options;
-  tracer_options.recorder.reset(recorder);
-  auto tracer = std::make_shared<opentracing::mocktracer::MockTracer>(
-      opentracing::mocktracer::MockTracerOptions{std::move(tracer_options)});
-
-  // send store implementation should create spans for all STOREs sent
-  startWithMockE2ETracer(tracer);
-
-  CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 1, N0S0, N1S0, N2S0);
-  // when stored is sent both store and stored spans should be finished
-  ON_STORED_SENT(E::OK, 1, N0S0, N1S0, N2S0);
-
-  ASSERT_EQ(recorder->spans().size(), replication_ * 2);
-
-  for (unsigned int i = 0; i < replication_; i += 2) {
-    auto stored_parent_span_id = recorder->spans().at(i).references[0].span_id;
-    auto store_span_id = recorder->spans().at(i + 1).span_context.span_id;
-    ASSERT_EQ(stored_parent_span_id, store_span_id);
-  }
 }
 
 Payload AppenderTest::MockAppender::dummyPayload("test", sizeof("test"));

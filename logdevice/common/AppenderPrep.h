@@ -33,35 +33,17 @@ class SequencerLocator;
 class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
  public:
   explicit AppenderPrep(PayloadHolder payload) : payload_(std::move(payload)) {}
+  virtual ~AppenderPrep() = default;
 
-  virtual ~AppenderPrep() {
-    if (appender_span_) {
-      appender_span_->Finish();
-    }
-  }
-
-  AppenderPrep& setAppendMessage(
-      const APPEND_Header& header,
-      lsn_t lsn_before_redirect,
-      ClientID from,
-      AppendAttributes attrs,
-      std::shared_ptr<opentracing::Tracer> e2e_tracer = nullptr,
-      std::unique_ptr<opentracing::Span> append_msg_recv_span = nullptr) {
+  AppenderPrep& setAppendMessage(const APPEND_Header& header,
+                                 lsn_t lsn_before_redirect,
+                                 ClientID from,
+                                 AppendAttributes attrs) {
     header_ = header;
     lsn_before_redirect_ = lsn_before_redirect;
     attrs_ = std::move(attrs);
     from_ = from;
-    e2e_tracer_ = std::move(e2e_tracer);
 
-    if (append_msg_recv_span) {
-      // receiving a span corresponding to the append message being received
-      // means we have e2e tracing on, so we continue creating spans
-      append_msg_recv_span->Finish();
-
-      ld_check(e2e_tracer_);
-      appender_span_ = e2e_tracer_->StartSpan(
-          "APPENDER", {FollowsFrom(&append_msg_recv_span->context())});
-    }
     return *this;
   }
 
@@ -96,9 +78,6 @@ class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
   }
 
  protected: // can be overridden in tests
-  // e2e tracing span corresponding to the life-time of the appender
-  std::shared_ptr<opentracing::Span> appender_span_;
-
   // Returns a pointer to the Sequencer object for a given log, if one exists.
   // See AllSequencers::findSequencer() for a description of err codes.
   virtual std::shared_ptr<Sequencer> findSequencer(logid_t log_id) const;
@@ -211,14 +190,6 @@ class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
   bool allow_batching_ = true;
   // only allow the append to go through on the following epoch, if set
   folly::Optional<epoch_t> acceptable_epoch_;
-
-  // tracer object used in e2e distributed tracing
-  std::shared_ptr<opentracing::Tracer> e2e_tracer_;
-
-  // tracing spans used for e2e tracing
-  std::shared_ptr<opentracing::Span> permission_checking_span_;
-  std::shared_ptr<opentracing::Span> sequencer_locating_span_;
-
   // Constructs an Appender after the message is received
   std::unique_ptr<Appender> constructAppender();
 

@@ -10,8 +10,6 @@
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <gtest/gtest.h>
-#include <opentracing/mocktracer/in_memory_recorder.h>
-#include <opentracing/mocktracer/tracer.h>
 
 #include "logdevice/common/AppenderPrep.h"
 #include "logdevice/common/Checksum.h"
@@ -146,13 +144,6 @@ class APPEND_MessageTest : public ::testing::Test {
          APPEND_flags_t flags = APPEND_flags_t(APPEND_Header::CHECKSUM_PARITY),
          epoch_t seen_epoch = EPOCH_INVALID);
 
-  std::shared_ptr<MockAppenderPrep> createWithMockE2ETracing(
-      logid_t log_id,
-      std::shared_ptr<opentracing::Tracer> e2e_tracer = nullptr,
-      std::unique_ptr<opentracing::Span> append_msg_recv_span = nullptr,
-      APPEND_flags_t flags = APPEND_flags_t(APPEND_Header::CHECKSUM_PARITY),
-      epoch_t seen_epoch = EPOCH_INVALID);
-
   std::shared_ptr<Sequencer> sequencer_;
   std::shared_ptr<Configuration> config_;
   epoch_t current_epoch_{1};
@@ -214,10 +205,6 @@ class MockAppenderPrep : public AppenderPrep {
   }
   void setSequencer(logid_t log_id, NodeID node_id) {
     sequencer_nodes_[log_id] = node_id;
-  }
-
-  std::shared_ptr<opentracing::Span> getAppenderSpan() {
-    return appender_span_;
   }
 
   std::shared_ptr<Sequencer> sequencer_;
@@ -412,33 +399,10 @@ const Settings& MockEpochSequencer::getSettings() const {
 
 class APPEND_MessageTest_MockAppender : public Appender {
  public:
-  explicit APPEND_MessageTest_MockAppender(
-      epoch_t seen_epoch,
-      STORE_flags_t flags = STORE_flags_t(0))
-      : Appender(
-            nullptr,
-            std::make_shared<NoopTraceLogger>(UpdateableConfig::createEmpty()),
-            std::chrono::seconds(1),
-            request_id_t(1),
-            passthru_flags(flags),
-            APPEND_MessageTest::TEST_LOG,
-            PayloadHolder(dummyPayload, PayloadHolder::UNOWNED),
-            seen_epoch,
-            50) {}
-
-  explicit APPEND_MessageTest_MockAppender(
-      STORE_flags_t flags = STORE_flags_t(0))
-      : APPEND_MessageTest_MockAppender(epoch_t(0), flags) {}
-
-  explicit APPEND_MessageTest_MockAppender(
-      const MockAppenderPrep& prep,
-      STORE_flags_t flags = STORE_flags_t(0))
-      : APPEND_MessageTest_MockAppender(prep.getSeen(), flags) {}
-
-  explicit APPEND_MessageTest_MockAppender(
-      const MockAppenderPrep& prep,
-      PayloadHolder ph,
-      STORE_flags_t flags = STORE_flags_t(0))
+  APPEND_MessageTest_MockAppender(
+      STORE_flags_t flags = STORE_flags_t(0),
+      epoch_t seen_epoch = epoch_t(0),
+      PayloadHolder ph = PayloadHolder(dummyPayload, PayloadHolder::UNOWNED))
       : Appender(
             nullptr,
             std::make_shared<NoopTraceLogger>(UpdateableConfig::createEmpty()),
@@ -447,24 +411,18 @@ class APPEND_MessageTest_MockAppender : public Appender {
             passthru_flags(flags),
             APPEND_MessageTest::TEST_LOG,
             std::move(ph),
-            prep.getSeen(),
+            seen_epoch,
             50) {}
+
+  APPEND_MessageTest_MockAppender(const MockAppenderPrep& prep,
+                                  PayloadHolder ph,
+                                  STORE_flags_t flags = STORE_flags_t(0))
+      : APPEND_MessageTest_MockAppender(flags, prep.getSeen(), std::move(ph)) {}
+
   explicit APPEND_MessageTest_MockAppender(
       const MockAppenderPrep& prep,
-      std::shared_ptr<opentracing::Tracer> e2e_tracer,
-      std::shared_ptr<opentracing::Span> appender_span)
-      : Appender(
-            nullptr,
-            std::make_shared<NoopTraceLogger>(UpdateableConfig::createEmpty()),
-            std::chrono::seconds(1),
-            request_id_t(1),
-            passthru_flags(STORE_flags_t(0)),
-            APPEND_MessageTest::TEST_LOG,
-            PayloadHolder(dummyPayload, PayloadHolder::UNOWNED),
-            prep.getSeen(),
-            50,
-            e2e_tracer,
-            appender_span) {}
+      STORE_flags_t flags = STORE_flags_t(0))
+      : APPEND_MessageTest_MockAppender(flags, prep.getSeen()) {}
 
   int start(std::shared_ptr<EpochSequencer> /*epoch_sequencer*/,
             lsn_t /*lsn*/) override {
@@ -500,33 +458,6 @@ APPEND_MessageTest::create(logid_t log_id,
   prep->setAppendMessage(header, LSN_INVALID, ClientID(1), attrs);
   prep->sequencer_ = sequencer_;
   prep->my_node_id_ = NodeID(0, 1);
-  return prep;
-}
-
-std::shared_ptr<MockAppenderPrep> APPEND_MessageTest::createWithMockE2ETracing(
-    logid_t log_id,
-    std::shared_ptr<opentracing::Tracer> tracer,
-    std::unique_ptr<opentracing::Span> append_msg_recv_span,
-    APPEND_flags_t flags,
-    epoch_t seen_epoch) {
-  APPEND_Header header{};
-  header.logid = log_id;
-  header.seen = seen_epoch;
-  header.flags = flags;
-
-  auto prep = std::make_shared<MockAppenderPrep>(this);
-
-  AppendAttributes attrs;
-  attrs.optional_keys[KeyType::FINDKEY] = "abcdefgh";
-  prep->setAppendMessage(header,
-                         LSN_INVALID,
-                         ClientID(1),
-                         attrs,
-                         tracer,
-                         std::move(append_msg_recv_span));
-  prep->sequencer_ = sequencer_;
-  prep->my_node_id_ = NodeID(0, 1);
-
   return prep;
 }
 
@@ -1011,53 +942,5 @@ TEST_F(APPEND_MessageTest, CorruptionBeforeDataStore) {
     prep->execute(std::move(a));
     ASSERT_RESULTS(prep, std::make_pair(E::BADPAYLOAD, NodeID()));
   }
-}
-
-TEST_F(APPEND_MessageTest, E2ETracing) {
-  // simple test to check that spans are created and all works as expected
-  const logid_t log(1);
-  const NodeID N0(0, 1);
-
-  auto recorder = new opentracing::mocktracer::InMemoryRecorder{};
-  opentracing::mocktracer::MockTracerOptions tracer_options;
-  tracer_options.recorder.reset(recorder);
-  auto tracer = std::make_shared<opentracing::mocktracer::MockTracer>(
-      opentracing::mocktracer::MockTracerOptions{std::move(tracer_options)});
-
-  // create a span to be used as a span coming from client side
-  auto span = tracer->StartSpan("Mock_APPEND_Message_received");
-
-  {
-    auto prep = createWithMockE2ETracing(log, tracer, std::move(span));
-
-    // the appender span created on the appender prep is passed to the appender
-    // constructor
-    auto appender_span = prep->getAppenderSpan();
-    std::unique_ptr<Appender> a(new MockAppender(*prep, tracer, appender_span));
-
-    // simple configuration for test purposes
-    prep->my_node_id_ = N0;
-    prep->setSequencer(log, N0);
-    prep->setAlive({N0});
-
-    prep->execute(std::move(a));
-  }
-
-  // so far the execution should have created span
-  // one span is created in this test
-  ASSERT_TRUE(recorder->spans().size() > 1);
-
-  // the appender span is the last one to finish
-  auto appender_span_reference_span_id =
-      recorder->spans().back().references[0].span_id;
-  auto appender_span_reference_type =
-      recorder->spans().back().references[0].reference_type;
-
-  // the span id of the append message receive (the first span created)
-  auto append_recv_span_id = recorder->spans().front().span_context.span_id;
-
-  ASSERT_EQ(appender_span_reference_span_id, append_recv_span_id);
-  ASSERT_EQ(appender_span_reference_type,
-            opentracing::SpanReferenceType::FollowsFromRef);
 }
 }} // namespace facebook::logdevice
