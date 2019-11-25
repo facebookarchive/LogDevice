@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 include "common/fb303/if/fb303.thrift"
+include "logdevice/admin/if/admin_commands.thrift"
 include "logdevice/admin/if/common.thrift"
 include "logdevice/admin/if/cluster_membership.thrift"
 include "logdevice/admin/if/exceptions.thrift"
@@ -261,4 +262,15 @@ service AdminAPI extends fb303.FacebookService {
     1: logtree.LogGroupCustomCountersRequest request) throws
     (1: exceptions.NotSupported notsupported,
      2: exceptions.InvalidRequest invalid_request) (cpp.coroutine);
+
+  /**
+   * Executes the text based admin command passed in the request. This API is
+   * meant as a replacement for the command port.
+   *
+   * NOTE: To perserve backward comptability with the toolings that used the
+   *       legacy commmand port, the response always ends with "END\r\n".
+   */
+  admin_commands.AdminCommandResponse executeAdminCommand(
+    1: admin_commands.AdminCommandRequest request) throws
+    (1: exceptions.NotSupported notsupported) (cpp.coroutine);
 }

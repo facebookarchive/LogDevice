@@ -10,6 +10,7 @@
 #include <folly/Optional.h>
 
 #include "common/fb303/cpp/FacebookBase2.h"
+#include "logdevice/admin/AdminCommandAPIHandler.h"
 #include "logdevice/admin/CheckImpactHandler.h"
 #include "logdevice/admin/ClusterMembershipAPIHandler.h"
 #include "logdevice/admin/MaintenanceAPIHandler.h"
@@ -36,7 +37,8 @@ class AdminAPIHandler : public facebook::fb303::FacebookBase2,
                         public NodesStateAPIHandler,
                         public CheckImpactHandler,
                         public MaintenanceAPIHandler,
-                        public ClusterMembershipAPIHandler {
+                        public ClusterMembershipAPIHandler,
+                        public AdminCommandAPIHandler {
  public:
   AdminAPIHandler(
       Processor* processor,
