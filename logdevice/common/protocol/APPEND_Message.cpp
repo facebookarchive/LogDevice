@@ -81,17 +81,6 @@ void APPEND_Message::serialize(ProtocolWriter& writer) const {
       writer.write(counter.second);
     }
   }
-
-  if (header_.flags & APPEND_Header::E2E_TRACING_ON) {
-    ld_check(e2e_tracing_context_.size() < MAX_E2E_TRACING_CONTEXT_SIZE);
-    if (e2e_tracing_context_.size() < MAX_E2E_TRACING_CONTEXT_SIZE) {
-      // write tracing information
-      writer.writeLengthPrefixedVector(e2e_tracing_context_);
-    } else {
-      writer.writeLengthPrefixedVector(std::string(""));
-    }
-  }
-
   // Inserting stream request information just before checksum and payload.
   if (writer.proto() >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
     if (header_.flags & APPEND_Header::WRITE_STREAM_REQUEST) {
@@ -200,12 +189,6 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
     }
   }
 
-  std::string tracing_info;
-
-  if (header.flags & APPEND_Header::E2E_TRACING_ON) {
-    reader.readLengthPrefixedVector(&tracing_info);
-  }
-
   write_stream_request_id_t req_id = WRITE_STREAM_REQUEST_ID_INVALID;
   if (reader.proto() >= Compatibility::ProtocolVersion::STREAM_WRITER_SUPPORT) {
     if (header.flags & APPEND_Header::WRITE_STREAM_REQUEST) {
@@ -218,12 +201,8 @@ MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
   PayloadHolder ph = PayloadHolder::deserialize(reader, payload_size);
 
   return reader.result([&] {
-    return new APPEND_Message(header,
-                              lsn_before_redirect,
-                              std::move(attrs),
-                              std::move(ph),
-                              std::move(tracing_info),
-                              req_id);
+    return new APPEND_Message(
+        header, lsn_before_redirect, std::move(attrs), std::move(ph), req_id);
   });
 }
 

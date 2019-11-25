@@ -164,7 +164,6 @@ class MessageSerializationTest : public ::testing::Test {
           recv.optional_keys_.find(key_pair.first)->second, key_pair.second);
     }
 
-    ASSERT_EQ(sent.e2e_tracing_context_, recv.e2e_tracing_context_);
     if (sent.header_.flags & STORE_Header::OFFSET_MAP) {
       ASSERT_EQ(
           sent.extra_.offsets_within_epoch, recv.extra_.offsets_within_epoch);
@@ -205,7 +204,6 @@ class MessageSerializationTest : public ::testing::Test {
       ASSERT_EQ(m.write_stream_request_id_.seq_num,
                 m2.write_stream_request_id_.seq_num);
     }
-    ASSERT_EQ(m.e2e_tracing_context_, m2.e2e_tracing_context_);
     ASSERT_EQ(getPayload(m.payload_), getPayload(m2.payload_));
   }
 
@@ -371,12 +369,6 @@ struct TestStoreMessageFactory {
     key_serialized_ = std::move(serialized);
   }
 
-  void setE2ETracingContext(std::string tracing_context,
-                            std::string serialized) {
-    e2e_tracing_context_ = std::move(tracing_context);
-    e2e_tracing_context_serialized_ = std::move(serialized);
-  }
-
   STORE_Message message(bool create_owned = false) const {
     if (create_owned) {
       return STORE_Message(
@@ -388,8 +380,7 @@ struct TestStoreMessageFactory {
           optional_keys_,
           std::make_shared<PayloadHolder>(
               folly::IOBuf::copyBuffer(payload_.data(), payload_.size())),
-          false,
-          e2e_tracing_context_);
+          false);
     }
     return STORE_Message(
         header_,
@@ -402,8 +393,7 @@ struct TestStoreMessageFactory {
             Payload(
                 payload_.size() ? payload_.data() : nullptr, payload_.size()),
             PayloadHolder::UNOWNED),
-        false,
-        e2e_tracing_context_);
+        false);
   }
 
   template <typename IntType>
@@ -465,11 +455,6 @@ struct TestStoreMessageFactory {
       }
       rv += key_serialized_;
     }
-
-    if (header_.flags & STORE_Header::E2E_TRACING_ON) {
-      rv += e2e_tracing_context_serialized_;
-    }
-
     rv += payload_.size() ? "6869" : ""; // payload ("hi" in hex)
     return rv;
   }
@@ -482,8 +467,6 @@ struct TestStoreMessageFactory {
   std::string extra_serialized_;
   std::map<KeyType, std::string> optional_keys_;
   std::string key_serialized_;
-  std::string e2e_tracing_context_;
-  std::string e2e_tracing_context_serialized_;
 };
 } // namespace
 
@@ -641,26 +624,6 @@ TEST_F(MessageSerializationTest, STORE_WithFirstAmendableOffset) {
   TestStoreMessageFactory factory;
   factory.setWave(2);
   factory.setExtra(extra, "55");
-
-  STORE_Message m = factory.message();
-  auto check = [&](const STORE_Message& m2, uint16_t proto) {
-    checkSTORE(m, m2, proto);
-  };
-  DO_TEST(m,
-          check,
-          Compatibility::MIN_PROTOCOL_SUPPORTED,
-          Compatibility::MAX_PROTOCOL_SUPPORTED,
-          std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
-}
-
-TEST_F(MessageSerializationTest, STORE_WithE2ETracingContext) {
-  TestStoreMessageFactory factory;
-
-  factory.setFlags(STORE_Header::E2E_TRACING_ON);
-  factory.setE2ETracingContext("abcdefgh",
-                               "0800000000000000"
-                               "6162636465666768");
 
   STORE_Message m = factory.message();
   auto check = [&](const STORE_Message& m2, uint16_t proto) {
@@ -906,23 +869,6 @@ TEST_F(MessageSerializationTest, APPEND) {
             deserializer);
   }
   {
-    h.flags |= APPEND_Header::E2E_TRACING_ON;
-    APPEND_Message m(h,
-                     LSN_INVALID,
-                     attrs,
-                     PayloadHolder(strdup("hello"), 5),
-                     "TRACING_INFORMATION");
-    auto check = [&](const APPEND_Message& m2, uint16_t proto) {
-      checkAPPEND(m, m2, proto);
-    };
-    DO_TEST(m,
-            check,
-            Compatibility::MIN_PROTOCOL_SUPPORTED,
-            Compatibility::MAX_PROTOCOL_SUPPORTED,
-            expected_fn,
-            deserializer);
-  }
-  {
     h.flags |= APPEND_Header::WRITE_STREAM_REQUEST;
     write_stream_request_id_t stream_req_id = {
         write_stream_id_t(1UL), write_stream_seq_num_t(1UL)};
@@ -930,7 +876,6 @@ TEST_F(MessageSerializationTest, APPEND) {
                      LSN_INVALID,
                      attrs,
                      PayloadHolder(strdup("hello"), 5),
-                     "TRACING_INFORMATION",
                      stream_req_id);
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
@@ -951,7 +896,6 @@ TEST_F(MessageSerializationTest, APPEND) {
                      LSN_INVALID,
                      attrs,
                      PayloadHolder(strdup("hello"), 5),
-                     "TRACING_INFORMATION",
                      stream_req_id);
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);

@@ -9,8 +9,6 @@
 
 #include <string>
 
-#include <opentracing/tracer.h>
-
 namespace facebook { namespace logdevice {
 
 class TraceLogger;
@@ -23,11 +21,7 @@ class TraceLogger;
 class ClientBridge {
  public:
   virtual const std::shared_ptr<TraceLogger> getTraceLogger() const = 0;
-  virtual const std::shared_ptr<opentracing::Tracer> getOTTracer() const = 0;
   virtual bool hasWriteToken(const std::string& required) const = 0;
-  virtual bool shouldE2ETrace() const {
-    return false;
-  }
   virtual ~ClientBridge() {}
 };
 

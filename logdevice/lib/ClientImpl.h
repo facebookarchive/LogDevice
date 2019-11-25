@@ -16,7 +16,6 @@
 #include <utility>
 
 #include <folly/SharedMutex.h>
-#include <opentracing/tracer.h>
 
 #include "logdevice/common/ClientBridge.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
@@ -443,15 +442,10 @@ class ClientImpl : public Client,
   const std::shared_ptr<TraceLogger> getTraceLogger() const {
     return trace_logger_;
   }
-  const std::shared_ptr<opentracing::Tracer> getOTTracer() const {
-    return ottracer_;
-  }
 
   void addServerConfigHookHandle(UpdateableServerConfig::HookHandle handle);
 
   void setAppendErrorInjector(folly::Optional<AppendErrorInjector> injector);
-
-  bool shouldE2ETrace();
 
   template <typename T>
   std::unique_ptr<AppendRequest>
@@ -543,9 +537,6 @@ class ClientImpl : public Client,
       settings_subscription_handle_;
 
   folly::Optional<AppendErrorInjector> append_error_injector_;
-
-  // OpenTracing tracer for client operations (append)
-  std::shared_ptr<opentracing::Tracer> ottracer_;
 };
 
 class ClientBridgeImpl : public ClientBridge {
@@ -556,16 +547,8 @@ class ClientBridgeImpl : public ClientBridge {
     return parent_->getTraceLogger();
   }
 
-  const std::shared_ptr<opentracing::Tracer> getOTTracer() const override {
-    return parent_->getOTTracer();
-  }
-
   bool hasWriteToken(const std::string& required) const override {
     return parent_->hasWriteToken(required);
-  }
-
-  bool shouldE2ETrace() const override {
-    return parent_->shouldE2ETrace();
   }
 
  private:
