@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/admin/AdminCommandHandler.h"
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"

@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/admin/AdminCommandHandler.h"
 #include "logdevice/admin/maintenance/MaintenanceManager.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
@@ -57,6 +58,12 @@ class AdminServer {
   setShardedRocksDBStore(ShardedRocksDBLocalLogStore* sharded_store);
 
   virtual void setMaintenanceManager(maintenance::MaintenanceManager* mm);
+
+  /**
+   * Sets the handler that's responsible for processing the admin command
+   * requests.
+   */
+  virtual void setAdminCommandHandler(AdminCommandHandler handler);
 
   virtual std::shared_ptr<SafetyChecker> getSafetyChecker();
 
