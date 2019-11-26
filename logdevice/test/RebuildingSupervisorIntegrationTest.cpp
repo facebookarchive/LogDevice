@@ -160,14 +160,13 @@ TEST_F(RebuildingSupervisorIntegrationTest,
 
   cluster->start({0, 1, 2, 3});
 
-  ld_info("Waiting for rebuilding of N4 to be scheduled");
-  wait_until("rebuilding scheduled", [&]() {
-    // Check N0
-    auto tmp_stats = cluster->getNode(0).stats();
-    auto n1 = tmp_stats["shard_rebuilding_scheduled"];
-    auto n2 = tmp_stats["shard_rebuilding_not_triggered_nodealive"];
-    return n1 == 8 && n2 == 6;
-  });
+  // We'd like to wait for rebuilding supervisor to schedule rebuilding of N4.
+  // There's currently no easy way to wait for that (it would make sense to
+  // add an admin command to dump rebuilding supervisor state), so we'll just
+  // wait for gossip to converge, then sleep for a bit.
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(10));
 
   // rebuilding will be initiated in 20min
   // update config to set self-initiate-rebuilding-grace-period to 1s
@@ -213,14 +212,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
 
   cluster->start({0, 1, 2, 3});
 
-  ld_info("Waiting for rebuilding of N4 to be scheduled");
-  wait_until("rebuilding scheduled", [&]() {
-    // Check N0
-    auto tmp_stats = cluster->getNode(0).stats();
-    auto n1 = tmp_stats["shard_rebuilding_scheduled"];
-    auto n2 = tmp_stats["shard_rebuilding_not_triggered_nodealive"];
-    return n1 == 8 && n2 == 6;
-  });
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+  /* sleep override */
+  std::this_thread::sleep_for(std::chrono::seconds(10));
 
   // rebuilding will be initiated in 20min
   // send admin command to set self-initiate-rebuilding-grace-period to 1s
