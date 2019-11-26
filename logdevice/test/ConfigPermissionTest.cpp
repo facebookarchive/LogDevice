@@ -79,9 +79,6 @@ TEST_F(ConfigPermissionTest, Append) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // to avoid gaps
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .useTcp() // required for ip server authentication
           .setParam("--handshake-timeout", chrono_string(this->testTimeout()))
           .setParam("--require-permission-message-types", "all")
@@ -162,9 +159,6 @@ TEST_F(ConfigPermissionTest, Trim) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // to avoid gaps
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .setParam("--require-permission-message-types", "all")
           .useTcp() // required for ip server authentication
           .create(*config);
@@ -291,9 +285,6 @@ TEST_F(ConfigPermissionTest, AsyncRead) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // to avoid gaps
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .setParam("--require-permission-message-types", "all")
           .useTcp() // required for ip server authentication
           .create(*config);
@@ -441,9 +432,6 @@ TEST_F(ConfigPermissionTest, RequireAuthentication) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData()
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .setParam("--require-permission-message-types", "all")
           .useTcp() // required for ip server authentication
           .create(*config);
@@ -519,9 +507,6 @@ TEST_F(ConfigPermissionTest, PermissionCheckingDisabled) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // to avoid gaps
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .useTcp() // required for ip server authentication
           .create(*config);
 
@@ -612,9 +597,6 @@ TEST_F(ConfigPermissionTest, ACL) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData() // to avoid gaps
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .setParam("--require-permission-message-types", "all")
           .useTcp() // required for ip server authentication
           .create(*config);
@@ -628,9 +610,6 @@ TEST_F(ConfigPermissionTest, InternalLogs) {
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .doPreProvisionEpochMetaData()        // to avoid gaps
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .useTcp() // required for ip server authentication
           .setParam("--handshake-timeout", chrono_string(this->testTimeout()))
           .setParam("--require-permission-message-types", "all")
