@@ -1187,6 +1187,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "The interval at which the graylists are refreshed",
        SERVER,
        SettingsCategory::WritePath);
+  init("graylisting-min-latency",
+       &graylisting_min_latency,
+       "0ms",
+       nullptr,
+       "Don't graylist nodes that have p95 store latency less than this.",
+       SERVER,
+       SettingsCategory::WritePath);
   init("enable-read-throttling",
        &enable_read_throttling,
        "false",

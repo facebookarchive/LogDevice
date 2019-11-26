@@ -294,6 +294,9 @@ struct Settings : public SettingsBundle {
   // The interval at which the graylists are refreshed
   std::chrono::seconds graylisting_refresh_interval;
 
+  // See .cpp
+  std::chrono::milliseconds graylisting_min_latency;
+
   // Enable adaptive store timeouts. Which will use per worker histograms to
   // estimate first wave timeout.
   bool enable_adaptive_store_timeout;

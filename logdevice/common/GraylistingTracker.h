@@ -26,7 +26,7 @@ namespace facebook { namespace logdevice {
  */
 class GraylistingTracker {
  protected:
-  using Timestamp = std::chrono::steady_clock::time_point;
+  using Timestamp = SteadyTimestamp;
   using Latencies =
       std::vector<std::pair<node_index_t, WorkerTimeoutStats::Latency>>;
   using PerRegionLatencies = std::map<std::string, Latencies>;
@@ -104,6 +104,9 @@ class GraylistingTracker {
 
   // The percentage of the nodes that are allowed to be graylisted
   virtual double getGraylistNodeThreshold() const;
+
+  // Don't graylist nodes that have p95 store latency less than this.
+  virtual std::chrono::milliseconds getGraylistingMinLatency() const;
 
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
