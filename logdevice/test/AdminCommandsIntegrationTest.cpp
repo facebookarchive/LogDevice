@@ -32,9 +32,6 @@ TEST_F(AdminCommandsIntegrationTest, AdminPortSupportsSSL) {
           .setParam("--ssl-key-path", TEST_SSL_FILE("logdevice_test.key"))
           .setParam(
               "--ssl-ca-path", TEST_SSL_FILE("logdevice_test_valid_ca.cert"))
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .useTcp()
           .create(3);
 
@@ -63,9 +60,6 @@ TEST_F(AdminCommandsIntegrationTest, AdminPortSSLErrorNoCerts) {
           .setParam("--ssl-cert-path", "")
           .setParam("--ssl-key-path", "")
           .setParam("--ssl-ca-path", "")
-          .setParam("--admin-enabled", "false") // disabling admin API with TCP
-                                                // because of port allocation
-                                                // failures in tests
           .useTcp()
           .create(3);
 
