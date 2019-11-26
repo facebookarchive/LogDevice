@@ -58,13 +58,26 @@ class AppendThread {
     stop();
 
     stop_ = false;
+    // Use 10 threads.
     for (int i = 0; i < 10; i++) {
       append_threads_.emplace_back([=] {
+        // Keep at most 10 appends in flight in each thread.
+        const int max_in_flight = 10;
+        Semaphore sem(max_in_flight);
+        append_callback_t cb = [&sem](
+                                   Status, const DataRecord&) { sem.post(); };
+        uint64_t i = 0;
         while (!stop_) {
-          for (auto i = from_logid; i <= to_logid; i++) {
-            client->appendSync(logid_t{i}, ".");
-            std::this_thread::sleep_for(100ms);
-          }
+          sem.wait();
+          logid_t log(from_logid + i % (to_logid - from_logid + 1));
+          ++i;
+          client->append(log, ".", cb);
+
+          // Send up to 10 appends per second per thread.
+          std::this_thread::sleep_for(100ms);
+        }
+        for (int i = 0; i < max_in_flight; ++i) {
+          sem.wait();
         }
       });
     }
@@ -109,6 +122,10 @@ class GraylistingTrackerIntegrationTest : public IntegrationTestBase {
                       msString(params.graylisting_duration))
             .setParam("--gray-list-threshold",
                       std::to_string(params.graylisting_threshold))
+            .setParam("--graylisting-min-latency", "100ms")
+            // Make sure the failure-injected writes are counted as full 500ms
+            // rather than the ~10ms default store timeout.
+            .setParam("--store-timeout", "500ms")
             .setParam("--enable-sticky-copysets", "false")
             .setParam("--num-workers", "2")
             /* put each node in a separate rack */
@@ -242,9 +259,10 @@ TEST_F(GraylistingTrackerIntegrationTest, EnablingGraylistWorks) {
   appender.start(client.get(), 1, 10);
 
   EXPECT_FALSE(waitUntillGraylistOnNode(
-      0, "Nothing will get graylisted on N0", [&](GraylistedNodes nodes) {
-        return nodes.size() > 0;
-      }));
+      0,
+      "Nothing will get graylisted on N0",
+      [&](GraylistedNodes nodes) { return nodes.size() > 0; },
+      20s));
 
   EXPECT_EQ(0, getGraylistedNodes(0).size());
 
@@ -261,11 +279,10 @@ TEST_F(GraylistingTrackerIntegrationTest, NumGraylisted) {
   initializeCluster(Params{}.set_graylisting_duration(1h));
   auto client = cluster->createClient();
 
-  // Inject failure in some random node
   cluster->getNode(3).injectShardFault(
-      "all", "all", "all", "latency", false, 100, (100ms).count());
+      "all", "all", "all", "latency", false, 100, (500ms).count());
   cluster->getNode(2).injectShardFault(
-      "all", "all", "all", "latency", false, 100, (100ms).count());
+      "all", "all", "all", "latency", false, 100, (500ms).count());
 
   AppendThread appender;
   appender.start(client.get(), 1, 10);
@@ -333,5 +350,5 @@ TEST_F(GraylistingTrackerIntegrationTest, NodeRecoversInGracePeriod) {
       0,
       "N0 has nothing in the graylist",
       [&](GraylistedNodes nodes) { return nodes.size() > 0; },
-      60s));
+      20s));
 }

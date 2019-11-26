@@ -11,8 +11,12 @@ namespace facebook { namespace logdevice {
 
 void GraylistingTracker::updateGraylist(Timestamp now) {
   auto latencies = getLatencyEstimationForNodes(*getNodesConfiguration());
+  ld_debug("Node latencies: %s", toString(latencies).c_str());
   auto regional_latencies = groupLatenciesPerRegion(std::move(latencies));
+  ld_debug("Region latencies: %s", toString(regional_latencies).c_str());
   auto outliers = findOutlierNodes(std::move(regional_latencies));
+
+  ld_debug("Outliers: %s", toString(outliers).c_str());
 
   // if the monitoring time is over the node will get its grace period
   removeExpiredMonitoredNodes(now);
@@ -26,6 +30,11 @@ void GraylistingTracker::updateGraylist(Timestamp now) {
   removeExpiredGraylistedNodes(now);
 
   updateActiveGraylist();
+
+  ld_debug("Confirmed outliers: %s. Deadlines: %s. Graylist: %s.",
+           toString(confirmed_outliers).c_str(),
+           toString(graylist_deadlines_).c_str(),
+           toString(graylist_).c_str());
 }
 
 const std::unordered_set<node_index_t>&
@@ -38,7 +47,7 @@ void GraylistingTracker::start() {
     return;
   }
   timer_.setCallback([this]() {
-    updateGraylist(std::chrono::steady_clock::now());
+    updateGraylist(SteadyTimestamp::now());
     timer_.activate(Worker::settings().graylisting_refresh_interval);
   });
   timer_.activate(Worker::settings().graylisting_refresh_interval);
@@ -89,7 +98,8 @@ std::chrono::seconds
 GraylistingTracker::positiveFeedbackAndGet(node_index_t node, Timestamp now) {
   ld_assert(graylist_backoffs_.count(node) == 1);
   graylist_backoffs_[node]->positiveFeedback(
-      std::chrono::time_point_cast<std::chrono::milliseconds>(now));
+      std::chrono::time_point<std::chrono::steady_clock,
+                              std::chrono::milliseconds>(now.toMilliseconds()));
   return graylist_backoffs_[node]->getCurrentValue();
 }
 
@@ -169,6 +179,12 @@ GraylistingTracker::findSortedOutlierNodesPerRegion(Latencies latencies) {
             [](const LatencySample& a, const LatencySample& b) {
               return a.second > b.second;
             });
+  // Don't graylist nodes with too small absolute latency.
+  double min_latency_ms = getGraylistingMinLatency().count();
+  while (!outlier_pairs.empty() &&
+         outlier_pairs.back().second < min_latency_ms) {
+    outlier_pairs.pop_back();
+  }
 
   std::vector<node_index_t> outliers;
   outliers.reserve(outlier_pairs.size());
@@ -312,6 +328,10 @@ int64_t GraylistingTracker::getMaxGraylistedNodes() const {
 
 double GraylistingTracker::getGraylistNodeThreshold() const {
   return Worker::settings().gray_list_nodes_threshold;
+}
+
+std::chrono::milliseconds GraylistingTracker::getGraylistingMinLatency() const {
+  return Worker::settings().graylisting_min_latency;
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>

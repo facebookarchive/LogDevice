@@ -98,6 +98,10 @@ class MockGraylistingTracker : public GraylistingTracker {
     return 0.5;
   }
 
+  std::chrono::milliseconds getGraylistingMinLatency() const override {
+    return 0s;
+  }
+
   NodesConfigurationTestUtil::NodeTemplate buildNode(node_index_t id,
                                                      std::string domain,
                                                      bool metadata = false) {
@@ -135,7 +139,7 @@ TEST(GraylistingTrackerTest, OutlierGraylisted) {
                                  {3, 500ms}, // Outlier
                                  {4, 20ms}},
                                 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
   tracker.updateGraylist(now);
@@ -151,7 +155,7 @@ TEST(GraylistingTrackerTest, MonitoredGraylisted) {
                                  {3, 500ms}, // Outlier
                                  {4, 20ms}},
                                 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
   tracker.updateGraylist(now);
@@ -188,7 +192,7 @@ TEST(GraylistingTrackerTest, MonitoredGraylistedExpire) {
                                  {3, 500ms}, // Outlier
                                  {4, 20ms}},
                                 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
   tracker.updateGraylist(now);
@@ -237,7 +241,7 @@ TEST(GraylistingTrackerTest, EjectOlderGraylists) {
                                  {4, 500ms},  // Outlier
                                  {5, 500ms}}, // Outlier
                                 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
 
@@ -272,7 +276,7 @@ TEST(GraylistingTrackerTest, MultiplicativeIncreaseAdditiveDecrease) {
                                  {4, 500ms},  // Outlier
                                  {5, 500ms}}, // Outlier
                                 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
 
@@ -342,7 +346,7 @@ TEST(GraylistingTrackerTest, FixedPotentialOutlier) {
                                  {4, 20ms},
                                  {5, 20ms}},
                                 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
 
@@ -368,7 +372,7 @@ TEST(GraylistingTrackerTest, ExpiredGraylists) {
                                  {4, 20ms},
                                  {5, 20ms}},
                                 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
 
@@ -389,7 +393,7 @@ TEST(GraylistingTrackerTest, ExpiredGraylists) {
 
 TEST(GraylistingTrackerTest, AllOutlierExceptOne) {
   auto stats = buildWorkerStats({{1, 20ms}, {2, 500ms}, {3, 500ms}}, 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
 
@@ -400,7 +404,7 @@ TEST(GraylistingTrackerTest, AllOutlierExceptOne) {
 
 TEST(GraylistingTrackerTest, AllNotOutlier) {
   auto stats = buildWorkerStats({{1, 20ms}, {2, 20ms}, {3, 20ms}}, 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
 
@@ -411,7 +415,7 @@ TEST(GraylistingTrackerTest, AllNotOutlier) {
 
 TEST(GraylistingTrackerTest, NoStoresSent) {
   auto stats = buildWorkerStats({}, 0);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
 
@@ -428,7 +432,7 @@ TEST(GraylistingTrackerTest, ResetGraylist) {
                                  {3, 500ms}, // Outlier
                                  {4, 20ms}},
                                 10);
-  auto now = std::chrono::steady_clock::now();
+  auto now = SteadyTimestamp::now();
 
   MockGraylistingTracker tracker(std::move(stats));
   tracker.updateGraylist(now);
