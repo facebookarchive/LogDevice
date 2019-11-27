@@ -132,6 +132,10 @@ class MockEventLogStateMachine : public EventLogStateMachine {
     writeDeltaHeader();
   }
 
+  virtual ~MockEventLogStateMachine() override {
+    stopped_ = true;
+  }
+
   const std::shared_ptr<ServerConfig> getServerConfig() const override {
     return config_->getServerConfig();
   }
