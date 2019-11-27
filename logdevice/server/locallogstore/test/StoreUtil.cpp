@@ -40,7 +40,8 @@ void store_fill(LocalLogStore& store,
 
     Slice payload_slice = tr.payload_.hasValue()
         ? Slice(tr.payload_.value())
-        : Slice(TestRecord::kEmptySlice.data(), TestRecord::kEmptySlice.size());
+        : Slice(TestRecord::kDefaultPayload.data(),
+                TestRecord::kDefaultPayload.size());
 
     copyset_bufs.emplace_back();
     std::string* copyset_buf = &copyset_bufs.back();

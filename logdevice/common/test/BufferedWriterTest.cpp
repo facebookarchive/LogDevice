@@ -166,11 +166,9 @@ class TestAppendSink : public BufferedWriterAppendSink {
     std::vector<std::unique_ptr<DataRecord>> blob_payloads;
     lsn_t lsn = 1;
     for (const std::string& blob : getFlushedBlobs(log)) {
-      void* buf = malloc(blob.size());
-      memcpy(buf, blob.data(), blob.size());
       blob_payloads.push_back(std::make_unique<DataRecordOwnsPayload>(
           log,
-          Payload(buf, blob.size()),
+          PayloadHolder(PayloadHolder::COPY_BUFFER, blob.data(), blob.size()),
           lsn++,
           std::chrono::milliseconds(0),
           RECORD_flags_t(RECORD_Header::BUFFERED_WRITER_BLOB)));

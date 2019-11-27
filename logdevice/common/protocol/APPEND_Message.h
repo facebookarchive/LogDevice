@@ -123,11 +123,6 @@ class APPEND_Message : public Message {
     return folly::Executor::HI_PRI;
   }
 
-  // Overload of deserialize that does not need to run in an EventLoop
-  // context
-  static MessageReadResult deserialize(ProtocolReader&,
-                                       size_t max_payload_inline);
-
   const APPEND_Header header_;
 
   virtual std::vector<std::pair<std::string, folly::dynamic>>

@@ -8,7 +8,9 @@
 #pragma once
 
 #include <memory>
+#include <variant>
 
+#include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/include/Record.h"
 
@@ -18,35 +20,35 @@ class BufferedWriteDecoder;
 struct ExtraMetadata;
 
 /**
- * Simple wrapper around DataRecord that owns the payload in one of two ways:
- * - Unique ownership, when decoder_ is null.  This is the most common;
- *   DataRecordOwnsPayload will free() the payload.
- * - Shared ownership, when decoder_ is non-null.  This record is part of a
- *   group that was decoded together; decoder_ owns the memory for all of
- *   them.
+ * Like DataRecord, but owns payload and has some additional fields not exposed
+ * through public API. Payload is pwned in one of two ways: PayloadHolder
+ * or shared_ptr<BufferedWriterDecoder>. The latter is used for records that are
+ * part of a batch; such records share ownership of the bigger record containing
+ * the whole batch.
  */
 struct DataRecordOwnsPayload : public DataRecord {
-  /**
-   * If `decoder' is null, takes ownership of the payload contained in the
-   * record.  The payload must have been allocated with malloc().
-   *
-   * If `decoder' is non-null, `payload' is expected to be a soft pointer into
-   * memory owned by the decoder.
-   */
-  explicit DataRecordOwnsPayload(logid_t log_id,
-                                 Payload&& payload,
-                                 lsn_t lsn,
-                                 std::chrono::milliseconds timestamp,
-                                 RECORD_flags_t flags,
-                                 std::unique_ptr<ExtraMetadata> extra_metadata =
-                                     std::unique_ptr<ExtraMetadata>(),
-                                 std::shared_ptr<BufferedWriteDecoder> decoder =
-                                     std::shared_ptr<BufferedWriteDecoder>(),
-                                 int batch_offset = 0,
-                                 RecordOffset offsets = RecordOffset(),
-                                 bool invalid_checksum = false);
+  DataRecordOwnsPayload(logid_t log_id,
+                        PayloadHolder&& payload_holder,
+                        lsn_t lsn,
+                        std::chrono::milliseconds timestamp,
+                        RECORD_flags_t flags,
+                        std::unique_ptr<ExtraMetadata> extra_metadata = nullptr,
+                        int batch_offset = 0,
+                        RecordOffset offsets = RecordOffset(),
+                        bool invalid_checksum = false);
 
-  ~DataRecordOwnsPayload() override;
+  DataRecordOwnsPayload(logid_t log_id,
+                        Payload payload,
+                        std::shared_ptr<BufferedWriteDecoder> decoder,
+                        lsn_t lsn,
+                        std::chrono::milliseconds timestamp,
+                        RECORD_flags_t flags,
+                        std::unique_ptr<ExtraMetadata> extra_metadata = nullptr,
+                        int batch_offset = 0,
+                        RecordOffset offsets = RecordOffset(),
+                        bool invalid_checksum = false);
+
+  ~DataRecordOwnsPayload();
 
   // flags extracted from the RECORD message
   RECORD_flags_t flags_;
@@ -58,8 +60,8 @@ struct DataRecordOwnsPayload : public DataRecord {
   // Additional metadata if part of recovery or rebuilding
   const std::unique_ptr<ExtraMetadata> extra_metadata_;
 
-  // Decoder that owns memory if sharing ownership with other instances
-  const std::shared_ptr<BufferedWriteDecoder> decoder_;
+  // Information on how to delete the payload.
+  std::variant<PayloadHolder, std::shared_ptr<BufferedWriteDecoder>> owner_;
 };
 
 }} // namespace facebook::logdevice

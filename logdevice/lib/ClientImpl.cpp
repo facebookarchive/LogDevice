@@ -335,6 +335,7 @@ int ClientImpl::append(logid_t logid,
   if (!req) {
     return -1;
   }
+  req->setClientPayload(payload);
   return postAppend(std::move(req));
 }
 
@@ -345,7 +346,7 @@ int ClientImpl::append(logid_t logid,
                        worker_id_t target_worker,
                        std::unique_ptr<std::string> per_request_token) {
   auto req = prepareRequest(logid,
-                            std::move(payload),
+                            Payload(payload.data(), payload.size()),
                             cb,
                             std::move(attrs),
                             target_worker,
@@ -536,12 +537,7 @@ int ClientImpl::append(logid_t logid,
                        const Payload& payload,
                        append_callback_t cb,
                        AppendAttributes attrs) noexcept {
-  return append(logid,
-                payload,
-                std::move(cb),
-                std::move(attrs),
-                worker_id_t{-1},
-                nullptr);
+  return append(logid, payload, cb, std::move(attrs), worker_id_t{-1}, nullptr);
 }
 
 lsn_t ClientImpl::appendSync(logid_t logid,
@@ -2276,10 +2272,9 @@ size_t ClientImpl::getMaxPayloadSize() noexcept {
   return settings_->getSettings()->max_payload_size;
 }
 
-template <typename T>
 std::unique_ptr<AppendRequest>
 ClientImpl::prepareRequest(logid_t logid,
-                           T payload,
+                           Payload payload,
                            append_callback_t cb,
                            AppendAttributes attrs,
                            worker_id_t target_worker,
@@ -2292,7 +2287,7 @@ ClientImpl::prepareRequest(logid_t logid,
       bridge_.get(),
       logid,
       std::move(attrs),
-      std::move(payload),
+      payload,
       settings_->getSettings()->append_timeout.value_or(timeout_),
       std::move(cb));
 
@@ -2306,20 +2301,6 @@ ClientImpl::prepareRequest(logid_t logid,
   }
   return req;
 }
-
-// Some compilers (e.g., gcc-7.4.0, the default compiler on Ubuntu 18) may
-// inline calls to prepareRequest<Payload>() in ClientImpl::append() below. If
-// that happens, the compiler will not generate code for
-// prepareRequest<Payload>() instantiation. However, lib/shadow/ShadowClient.cpp
-// requires that instantiation. This leads to link errors when linking examples/
-// and some tests. Adding an explicit instantiation here to fix.
-template std::unique_ptr<AppendRequest> ClientImpl::prepareRequest<Payload>(
-    logid_t logid,
-    Payload payload,
-    append_callback_t cb,
-    AppendAttributes attrs,
-    worker_id_t target_worker,
-    std::unique_ptr<std::string> per_request_token);
 
 void ClientImpl::initLogsConfigRandomSeed() {
   logsconfig_api_random_seed_ = folly::Random::rand64();

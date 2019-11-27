@@ -41,11 +41,9 @@ class LogsConfigCodec {
    *
    * @param flatten will force serializers to serialize all inherited
    *                LogAttributes.
-   *
    */
   template <typename In>
-  static facebook::logdevice::PayloadHolder serialize(const In& in,
-                                                      bool flatten);
+  static PayloadHolder serialize(const In& in, bool flatten);
 
   /**
    * Deserialize a Payload (without owning its memory life-cycle) into an object

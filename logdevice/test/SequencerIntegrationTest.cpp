@@ -1084,14 +1084,14 @@ TEST_F(SequencerIntegrationTest, SeenEpochReactivation) {
   // message.
   class MockAppendRequest : public AppendRequest {
    public:
-    MockAppendRequest(std::string payload,
+    MockAppendRequest(const std::string& payload,
                       epoch_t seen_epoch,
                       append_callback_t callback,
                       std::chrono::milliseconds timeout)
         : AppendRequest(nullptr,
                         logid_t(1),
                         AppendAttributes(),
-                        std::move(payload),
+                        Payload(payload.data(), payload.size()),
                         timeout,
                         std::move(callback)),
           seen_epoch_(seen_epoch) {

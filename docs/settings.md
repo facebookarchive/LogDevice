@@ -655,7 +655,6 @@ sidebar_label: Settings
 | nodeset-state-refresh-interval | Time interval that rate-limits how often a sequencer can refresh the states of nodes in the nodeset in use | 1s | server&nbsp;only |
 | nospace-retry-interval | Time interval during which a sequencer will not route record copies to a storage node that reported an out of disk space condition. | 60s | server&nbsp;only |
 | overloaded-retry-interval | Time interval during which a sequencer will not route record copies to a storage node that reported itself overloaded (storage task queue too long). | 1s | server&nbsp;only |
-| payload-inline | max message payload size that we store in a flat buffer after header | 1024 |  |
 | release-broadcast-interval | the time interval for periodic broadcasts of RELEASE messages by sequencers of regular logs. Such broadcasts are not essential for correct cluster operation. They are used as the last line of defence to make sure storage nodes deliver all records eventually even if a regular (point-to-point) RELEASE message is lost due to a TCP connection failure. See also --release-broadcast-interval-internal-logs. | 300s | server&nbsp;only |
 | release-broadcast-interval-internal-logs | Same as --release-broadcast-interval but instead applies to internal logs, currently the event logs and logsconfig logs | 5s | server&nbsp;only |
 | release-retry-interval | RELEASE message retry period | 20s | server&nbsp;only |

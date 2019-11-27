@@ -20,10 +20,8 @@ namespace {
 
 using namespace facebook::logdevice;
 
-std::shared_ptr<PayloadHolder> createPayload(size_t size, char fill) {
-  void* payload_flat = malloc(size);
-  memset(payload_flat, fill, size);
-  return std::make_shared<PayloadHolder>(payload_flat, size);
+PayloadHolder createPayload(size_t size, char fill) {
+  return PayloadHolder::copyString(std::string(size, fill));
 }
 
 class TailRecordTest : public ::testing::Test {
@@ -49,7 +47,7 @@ class TailRecordTest : public ::testing::Test {
             flags,
             {}},
         OffsetMap({{BYTE_OFFSET, 2349045994592}}),
-        include_payload ? createPayload(2323, 't') : nullptr);
+        createPayload(include_payload ? 2323 : 0, 't'));
   }
 };
 
@@ -109,7 +107,7 @@ TEST_F(TailRecordTest, EmptyPayload) {
       TailRecordHeader{
           LOG_ID, compose_lsn(epoch_t(933), esn_t(3347)), 1502502135, {BYTE_OFFSET_INVALID /* deprecated, offsets_within_epoch used instead */}, flags, {}},
       std::move(offsets),
-      std::make_shared<PayloadHolder>(nullptr, 0));
+      PayloadHolder());
 
   std::unique_ptr<char[]> buf1(new char[512]);
   ASSERT_TRUE(r.isValid());

@@ -330,7 +330,7 @@ void LogRecoveryRequest::skipRecovery() {
        /*flags*/ 0,
        {}},
       OffsetMap(),
-      std::shared_ptr<PayloadHolder>());
+      PayloadHolder());
 
   ld_check(tail_record.isValid());
   ld_check(!tail_record.containOffsetWithinEpoch());
@@ -1328,7 +1328,7 @@ void LogRecoveryRequest::onSealReply(ShardID from,
                TailRecordHeader::OFFSET_WITHIN_EPOCH,
                {}},
               offsets,
-              std::shared_ptr<PayloadHolder>());
+              PayloadHolder());
 
           ld_check(epoch_tail.value().isValid());
         }

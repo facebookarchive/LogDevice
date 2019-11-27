@@ -314,13 +314,12 @@ CachedDigest::shipRecord(esn_t esn,
     header.flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
   }
 
-  // We are doing zero-copies all the way here since the original STORE message
-  // is constructed from the evbuffer. However, we have to make a copy of the
-  // payload, since currently RECORD_Message owns the payload.
+  // TODO: Don't copy payload here, probably by using PayloadHolder in
+  //       Snapshot::Record, and wherever that Record comes from.
   auto msg =
       std::make_unique<RECORD_Message>(header,
                                        TrafficClass::RECOVERY,
-                                       payload_raw.toIOBuf(),
+                                       PayloadHolder::copyPayload(payload_raw),
                                        std::move(extra_metadata),
                                        RECORD_Message::Source::CACHED_DIGEST);
 

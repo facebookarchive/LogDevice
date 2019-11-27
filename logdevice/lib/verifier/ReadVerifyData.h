@@ -18,7 +18,6 @@
 
 #include <folly/SharedMutex.h>
 
-#include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/toString.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/types.h"

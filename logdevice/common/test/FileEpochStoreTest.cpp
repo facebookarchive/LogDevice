@@ -211,7 +211,7 @@ TEST_F(FileEpochStoreTest, LastCleanEpoch) {
          0,
          {}},
         OffsetMap({{BYTE_OFFSET, 100}}),
-        std::shared_ptr<PayloadHolder>());
+        PayloadHolder());
 
     store_->setLastCleanEpoch(logid,
                               epoch_t(10),
@@ -239,7 +239,7 @@ TEST_F(FileEpochStoreTest, LastCleanEpoch) {
          0,
          {}},
         OffsetMap({{BYTE_OFFSET, 50}}),
-        std::shared_ptr<PayloadHolder>());
+        PayloadHolder());
 
     // Will not make any change because new value for lce is smaller than
     // previous stored value

@@ -34,14 +34,16 @@ int MockDataSourceWriter::append(logid_t logid,
   lsn_t curr_lsn = ++append_lsn_[logid];
 
   Payload p(payload.data(), payload.size());
-  Payload p2 = p.dup();
 
   // Note: using dummy values for timestamp and record flags for now since we
   // currently don't do timestamp checking.
   records_[logid].push_back(std::make_pair(
       cb,
-      std::make_unique<DataRecordOwnsPayload>(
-          logid, std::move(p2), curr_lsn, std::chrono::milliseconds(0), 0)));
+      std::make_unique<DataRecordOwnsPayload>(logid,
+                                              PayloadHolder::copyPayload(p),
+                                              curr_lsn,
+                                              std::chrono::milliseconds(0),
+                                              0)));
 
   return 0;
 }

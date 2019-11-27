@@ -605,7 +605,7 @@ void EpochRecovery::updateEpochTailRecord() {
          flags,
          {}},
         OffsetMap(),
-        std::shared_ptr<PayloadHolder>());
+        PayloadHolder());
   };
 
   if (tail_esn_ < digest_start_esn_) {
@@ -680,13 +680,11 @@ void EpochRecovery::updateEpochTailRecord() {
         if (deps_->getSettings().enable_offset_map) {
           flags |= TailRecordHeader::OFFSET_MAP;
         }
-        std::shared_ptr<PayloadHolder> ph;
+        PayloadHolder ph;
         if (tail_optimized_) {
           // TODO T9899761: use PayloadHolder when deserializing RECORD to avoid
           // this copy
-          auto dup_payload = tail_entry->getPayload().dup();
-          ph = std::make_shared<PayloadHolder>(
-              dup_payload.data(), dup_payload.size());
+          ph = PayloadHolder::copyPayload(tail_entry->getPayload());
           flags |= TailRecordHeader::HAS_PAYLOAD;
           // TODO T31241526: support checksum flags in tail record
           flags |= TailRecordHeader::CHECKSUM_PARITY;

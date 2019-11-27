@@ -377,8 +377,8 @@ MUTATED_Header MutatorTest::createMutatedHeader(uint32_t wave,
     }                                                                      \
     if (hole_) {                                                           \
       expected_flags |= STORE_Header::HOLE;                                \
-      const auto& ph = (message)->getPayloadHolder();                      \
-      ASSERT_TRUE(ph == nullptr || ph->size() == 0);                       \
+      const PayloadHolder* ph = (message)->getPayloadHolder();             \
+      ASSERT_EQ(0, ph->size());                                            \
     } else {                                                               \
       expected_flags |= STORE_Header::OFFSET_WITHIN_EPOCH;                 \
     }                                                                      \

@@ -55,17 +55,17 @@ TEST_F(AppendIntegrationTest, AppendRequestEcho) {
 
   char data[128]; // send the contents of this array as payload
 
-  std::unique_ptr<AppendRequest> appendrq(
-      new AppendRequest(nullptr,
-                        logid_t(1),
-                        AppendAttributes(),
-                        Payload(data, sizeof(data)),
-                        std::chrono::milliseconds::max(),
-                        [&reply_sem](Status st, const DataRecord& r) {
-                          EXPECT_EQ(E::OK, st);
-                          EXPECT_EQ(esn_t(1), lsn_to_esn(r.attrs.lsn));
-                          reply_sem.post();
-                        }));
+  auto appendrq = std::make_unique<AppendRequest>(
+      nullptr,
+      logid_t(1),
+      AppendAttributes(),
+      Payload(data, sizeof(data)),
+      std::chrono::milliseconds::max(),
+      [&reply_sem](Status st, const DataRecord& r) {
+        EXPECT_EQ(E::OK, st);
+        EXPECT_EQ(esn_t(1), lsn_to_esn(r.attrs.lsn));
+        reply_sem.post();
+      });
 
   appendrq->bypassWriteTokenCheck();
   std::unique_ptr<Request> rq(std::move(appendrq));
@@ -654,16 +654,16 @@ TEST_F(AppendIntegrationTest, ThreadMapping) {
     Semaphore sem;
     std::thread::id thread_id;
 
-    std::unique_ptr<AppendRequest> appendrq(
-        new AppendRequest(nullptr,
-                          log_id,
-                          AppendAttributes(),
-                          Payload(payload.data(), payload.size()),
-                          std::chrono::milliseconds::max(),
-                          [&](Status /*st*/, const DataRecord& /*r*/) {
-                            thread_id = std::this_thread::get_id();
-                            sem.post();
-                          }));
+    auto appendrq = std::make_unique<AppendRequest>(
+        nullptr,
+        log_id,
+        AppendAttributes(),
+        Payload(payload.data(), payload.size()),
+        std::chrono::milliseconds::max(),
+        [&](Status /*st*/, const DataRecord& /*r*/) {
+          thread_id = std::this_thread::get_id();
+          sem.post();
+        });
     appendrq->bypassWriteTokenCheck();
     std::unique_ptr<Request> rq(std::move(appendrq));
     EXPECT_EQ(0, processor->postRequest(rq));

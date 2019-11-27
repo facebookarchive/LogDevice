@@ -70,7 +70,7 @@ class MockStoreStorageTask : public StoreStorageTask {
                          &chain_link,
                          LSN_INVALID,
                          std::map<KeyType, std::string>(),
-                         std::make_shared<PayloadHolder>(nullptr, 0),
+                         PayloadHolder(),
                          create_extra(recovery_id_t(1), recovery_epoch),
                          ClientID(),
                          start_time,

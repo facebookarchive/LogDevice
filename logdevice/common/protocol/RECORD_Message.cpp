@@ -36,7 +36,7 @@ static void write_extra_metadata(ProtocolWriter& writer,
 
 RECORD_Message::RECORD_Message(const RECORD_Header& header,
                                TrafficClass tc,
-                               Payload&& payload,
+                               PayloadHolder payload,
                                std::unique_ptr<ExtraMetadata> extra_metadata,
                                Source source,
                                OffsetMap offsets,
@@ -49,28 +49,7 @@ RECORD_Message::RECORD_Message(const RECORD_Header& header,
       offsets_(std::move(offsets)),
       log_group_path_(std::move(log_group_path)) {}
 
-RECORD_Message::RECORD_Message(const RECORD_Header& header,
-                               TrafficClass tc,
-                               std::unique_ptr<folly::IOBuf>&& payload,
-                               std::unique_ptr<ExtraMetadata> extra_metadata,
-                               Source source,
-                               OffsetMap offsets,
-                               std::shared_ptr<std::string> log_group_path)
-    : Message(MessageType::RECORD, tc),
-      header_(header),
-      payload_(payload && payload->length() > 0 ? payload->data() : nullptr,
-               payload && payload->length() > 0 ? payload->length() : 0),
-      buffer_(std::move(payload)),
-      extra_metadata_(std::move(extra_metadata)),
-      source_(source),
-      offsets_(std::move(offsets)),
-      log_group_path_(std::move(log_group_path)) {}
-
-RECORD_Message::~RECORD_Message() {
-  if (!buffer_) {
-    free(const_cast<void*>(payload_.data()));
-  }
-}
+RECORD_Message::~RECORD_Message() {}
 
 void RECORD_Message::serialize(ProtocolWriter& writer) const {
   // TODO: Handle protocol mismatch between peers for write stream support.
@@ -92,15 +71,14 @@ void RECORD_Message::serialize(ProtocolWriter& writer) const {
     offsets_.serialize(writer);
   }
 
-  ld_check(payload_.size() < Message::MAX_LEN); // must have been checked
-                                                // by upper layers
-  if (payload_.size() <= MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE) {
-    writer.write(payload_.data(), payload_.size());
-  } else if (buffer_) {
-    writer.writeWithoutCopy(buffer_.get());
-  } else if (payload_.size() > 0) {
-    ld_check(buffer_);
-    writer.write(payload_.data(), payload_.size());
+  // Must have been checked by upper layers.
+  ld_check(payload_.size() < Message::MAX_LEN);
+
+  Payload p = payload_.getPayload();
+  if (p.size() <= MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE) {
+    writer.write(p.data(), p.size());
+  } else {
+    payload_.serialize(writer);
   }
 }
 
@@ -170,18 +148,12 @@ MessageReadResult RECORD_Message::deserialize(ProtocolReader& reader) {
   size_t payload_size = reader.ok() ? reader.bytesRemaining() : 0;
   ld_check(payload_size < Message::MAX_LEN);
 
-  void* payload = nullptr;
-  if (payload_size > 0) {
-    payload = malloc(payload_size);
-    if (!payload) { // unlikely
-      throw std::bad_alloc();
-    }
-    reader.read(payload, payload_size);
-  }
+  PayloadHolder payload_holder =
+      PayloadHolder::deserialize(reader, payload_size);
 
   return reader.result([&] {
     auto m = std::make_unique<RECORD_Message>(
-        header, tc, Payload(payload, payload_size), std::move(extra_metadata));
+        header, tc, std::move(payload_holder), std::move(extra_metadata));
     m->expected_checksum_ = expected_checksum;
     m->offsets_ = std::move(offsets);
     return m;
@@ -252,19 +224,18 @@ Message::Disposition RECORD_Message::onReceived(const Address& from) {
 
   bool invalid_checksum = (verifyChecksum() != 0);
 
-  std::unique_ptr<DataRecordOwnsPayload> record(
-      new DataRecordOwnsPayload(header_.log_id,
-                                std::move(payload_),
-                                header_.lsn,
-                                std::chrono::milliseconds(header_.timestamp),
-                                header_.flags,
-                                std::move(extra_metadata_),
-                                std::shared_ptr<BufferedWriteDecoder>(),
-                                0, // batch_offset
-                                OffsetMap::toRecord(offsets_),
-                                invalid_checksum));
+  auto record = std::make_unique<DataRecordOwnsPayload>(
+      header_.log_id,
+      std::move(payload_),
+      lsn_t(header_.lsn),
+      std::chrono::milliseconds(header_.timestamp),
+      RECORD_flags_t(header_.flags),
+      std::move(extra_metadata_),
+      0, // batch_offset
+      OffsetMap::toRecord(offsets_),
+      invalid_checksum);
   // We have transferred ownership of the payload.
-  ld_check(!payload_.data());
+  ld_check(payload_.empty());
 
   ShardID shard(from.id_.node_.index(), header_.shard);
   if (recovery) {
@@ -332,7 +303,7 @@ int RECORD_Message::verifyChecksum() const {
 
   // If the message came with a checksum, verify it
   if (header_.flags & RECORD_Header::CHECKSUM) {
-    Slice slice{payload_};
+    Slice slice{payload_.getPayload()};
     uint64_t payload_checksum = (header_.flags & RECORD_Header::CHECKSUM_64BIT)
         ? checksum_64bit(slice)
         : checksum_32bit(slice);
@@ -340,17 +311,14 @@ int RECORD_Message::verifyChecksum() const {
     if (payload_checksum != expected_checksum_) {
       RecordID rid = {
           lsn_to_esn(header_.lsn), lsn_to_epoch(header_.lsn), header_.log_id};
-      RATELIMIT_ERROR(
-          std::chrono::seconds(1),
-          100,
-          "Checksum verification failed for record %s: "
-          "expected %lx, calculated %lx, payload: %s%s",
-          rid.toString().c_str(),
-          expected_checksum_,
-          payload_checksum,
-          hexdump_buf(payload_.data(), std::min(payload_.size(), 200lu))
-              .c_str(),
-          payload_.size() > 200lu ? "... (truncated)" : "");
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      100,
+                      "Checksum verification failed for record %s: "
+                      "expected %lx, calculated %lx, payload: %s",
+                      rid.toString().c_str(),
+                      expected_checksum_,
+                      payload_checksum,
+                      hexdump_buf(slice.data, slice.size, 200).c_str());
       return -1;
     }
   }

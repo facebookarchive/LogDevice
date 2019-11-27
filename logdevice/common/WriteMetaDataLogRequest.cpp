@@ -98,15 +98,11 @@ void WriteMetaDataLogRequest::writeRecord() {
            log_id_.val(),
            epoch_store_metadata_->toString().c_str());
 
-  // duplicate the payload, and pass the ownership to the
-  // Appender eventually
-  auto payload_dup =
-      Payload(serialized_payload_.data(), serialized_payload_.size()).dup();
   WeakRef<WriteMetaDataLogRequest> ref = ref_holder_.ref();
   auto reply = runInternalAppend(
       MetaDataLog::metaDataLogID(log_id_),
       AppendAttributes(),
-      PayloadHolder(payload_dup.data(), payload_dup.size()),
+      PayloadHolder::copyString(serialized_payload_),
       [ref, this](Status st, lsn_t lsn, NodeID, RecordTimestamp) {
         if (!ref) {
           // WriteMetaDataLogRequest was already destroyed

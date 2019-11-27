@@ -10,12 +10,12 @@
 #include <chrono>
 #include <functional>
 
-#include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-enum.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/Record.h"
 #include "logdevice/include/types.h"
 
 /**

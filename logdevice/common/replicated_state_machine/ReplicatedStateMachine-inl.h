@@ -994,11 +994,11 @@ void ReplicatedStateMachine<T, D>::postAppendRequest(
     });
   };
 
-  std::unique_ptr<AppendRequest> req =
+  auto req =
       std::make_unique<AppendRequest>(nullptr,
                                       logid,
                                       AppendAttributes(),
-                                      std::move(payload),
+                                      Payload(payload.data(), payload.size()),
                                       timeout,
                                       cb_wrapper);
 

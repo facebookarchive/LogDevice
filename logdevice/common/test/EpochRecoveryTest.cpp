@@ -83,7 +83,7 @@ class EpochRecoveryTest : public ::testing::Test {
        TailRecordHeader::CHECKSUM_PARITY,
        {}},
       OffsetMap({{BYTE_OFFSET, 237419}}),
-      std::shared_ptr<PayloadHolder>()};
+      PayloadHolder()};
 
   StorageSet all_shards_{N0, N1, N2, N3, N4, N5, N6};
 

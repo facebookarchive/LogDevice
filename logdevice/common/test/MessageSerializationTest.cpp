@@ -95,21 +95,6 @@ void DO_TEST(const SomeMessage& m,
   }
 }
 
-// TODO: now that Payload has toString(), we don't need this helper.
-static std::string getPayload(const Payload& p) {
-  return p.toString();
-}
-
-static std::string getPayload(const PayloadHolder& h) {
-  auto iobuf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
-  ProtocolWriter writer(
-      MessageType::STORE, iobuf.get(), Compatibility::MAX_PROTOCOL_SUPPORTED);
-  h.serialize(writer);
-  ssize_t sz = writer.result();
-  EXPECT_GE(sz, 0);
-  return iobuf->coalesce().str();
-}
-
 class MessageSerializationTest : public ::testing::Test {
  public:
   MessageSerializationTest() {
@@ -169,7 +154,8 @@ class MessageSerializationTest : public ::testing::Test {
           sent.extra_.offsets_within_epoch, recv.extra_.offsets_within_epoch);
     }
 
-    ASSERT_EQ(getPayload(*sent.payload_), getPayload(*recv.payload_));
+    ASSERT_EQ(sent.payload_.getPayload().toString(),
+              recv.payload_.getPayload().toString());
   }
 
   void checkAPPEND(const APPEND_Message& m,
@@ -204,7 +190,8 @@ class MessageSerializationTest : public ::testing::Test {
       ASSERT_EQ(m.write_stream_request_id_.seq_num,
                 m2.write_stream_request_id_.seq_num);
     }
-    ASSERT_EQ(getPayload(m.payload_), getPayload(m2.payload_));
+    ASSERT_EQ(m.payload_.getPayload().toString(),
+              m2.payload_.getPayload().toString());
   }
 
   void checkRECORD(const RECORD_Message& m,
@@ -221,7 +208,8 @@ class MessageSerializationTest : public ::testing::Test {
                 m2.header_.flags & ~RECORD_Header::WRITE_STREAM);
     }
 
-    ASSERT_EQ(getPayload(m.payload_), getPayload(m2.payload_));
+    ASSERT_EQ(m.payload_.getPayload().toString(),
+              m2.payload_.getPayload().toString());
 
     ld_check(m.extra_metadata_ != nullptr);
     ld_check(m2.extra_metadata_ != nullptr);
@@ -369,31 +357,15 @@ struct TestStoreMessageFactory {
     key_serialized_ = std::move(serialized);
   }
 
-  STORE_Message message(bool create_owned = false) const {
-    if (create_owned) {
-      return STORE_Message(
-          header_,
-          cs_.data(),
-          header_.copyset_offset,
-          0,
-          extra_,
-          optional_keys_,
-          std::make_shared<PayloadHolder>(
-              folly::IOBuf::copyBuffer(payload_.data(), payload_.size())),
-          false);
-    }
-    return STORE_Message(
-        header_,
-        cs_.data(),
-        header_.copyset_offset,
-        0,
-        extra_,
-        optional_keys_,
-        std::make_shared<PayloadHolder>(
-            Payload(
-                payload_.size() ? payload_.data() : nullptr, payload_.size()),
-            PayloadHolder::UNOWNED),
-        false);
+  STORE_Message message() const {
+    return STORE_Message(header_,
+                         cs_.data(),
+                         header_.copyset_offset,
+                         0,
+                         extra_,
+                         optional_keys_,
+                         PayloadHolder::copyString(payload_),
+                         false);
   }
 
   template <typename IntType>
@@ -488,7 +460,7 @@ TEST_F(MessageSerializationTest, STORE) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          nullptr);
 }
 
 TEST_F(MessageSerializationTest, EmptySTORE) {
@@ -500,7 +472,7 @@ TEST_F(MessageSerializationTest, EmptySTORE) {
   factory.setFlags(STORE_Header::RECOVERY);
   factory.setExtra(extra, "1E91FEC600585572F698F9C2");
 
-  STORE_Message m = factory.message(true /* create_owned */);
+  STORE_Message m = factory.message();
   auto check = [&](const STORE_Message& m2, uint16_t proto) {
     checkSTORE(m, m2, proto);
   };
@@ -509,7 +481,7 @@ TEST_F(MessageSerializationTest, EmptySTORE) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          [](ProtocolReader& r) { return STORE_Message::deserialize(r); });
 }
 
 TEST_F(MessageSerializationTest, STORE_WithKey) {
@@ -528,7 +500,7 @@ TEST_F(MessageSerializationTest, STORE_WithKey) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          nullptr);
 }
 
 TEST_F(MessageSerializationTest, STORE_WithFilterableKey) {
@@ -549,7 +521,7 @@ TEST_F(MessageSerializationTest, STORE_WithFilterableKey) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          nullptr);
 }
 
 TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo2) {
@@ -571,7 +543,7 @@ TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo2) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          nullptr);
 }
 
 TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
@@ -593,7 +565,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetInfo) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          nullptr);
 }
 
 TEST_F(MessageSerializationTest, STORE_WithByteOffsetMapInfo) {
@@ -614,7 +586,7 @@ TEST_F(MessageSerializationTest, STORE_WithByteOffsetMapInfo) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          nullptr);
 }
 
 TEST_F(MessageSerializationTest, STORE_WithFirstAmendableOffset) {
@@ -634,7 +606,7 @@ TEST_F(MessageSerializationTest, STORE_WithFirstAmendableOffset) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          nullptr);
 }
 
 TEST_F(MessageSerializationTest, STORE_WithWriteStreamFlagSet) {
@@ -651,7 +623,7 @@ TEST_F(MessageSerializationTest, STORE_WithWriteStreamFlagSet) {
           Compatibility::MIN_PROTOCOL_SUPPORTED,
           Compatibility::MAX_PROTOCOL_SUPPORTED,
           std::bind(&TestStoreMessageFactory::serialized, &factory, arg::_1),
-          [](ProtocolReader& r) { return STORE_Message::deserialize(r, 128); });
+          nullptr);
 }
 
 TEST_F(MessageSerializationTest, SHUTDOWN_WithServerInstanceId) {
@@ -780,13 +752,10 @@ TEST_F(MessageSerializationTest, APPEND) {
                      APPEND_Header::CHECKSUM_64BIT |
                          APPEND_Header::REACTIVATE_IF_PREEMPTED |
                          APPEND_Header::BUFFERED_WRITER_BLOB};
-  auto deserializer = [](ProtocolReader& reader) {
-    return APPEND_Message::deserialize(reader, 128);
-  };
   auto expected_fn = [](uint16_t) { return std::string(); };
   AppendAttributes attrs;
   {
-    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder(strdup("hello"), 5));
+    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder::copyString("hello"));
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
     };
@@ -795,13 +764,13 @@ TEST_F(MessageSerializationTest, APPEND) {
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
-            deserializer);
+            nullptr);
   }
   {
     h.flags |= APPEND_Header::CUSTOM_KEY;
     std::string key{"abcdefgh"};
     attrs.optional_keys[KeyType::FINDKEY] = std::move(key);
-    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder(strdup("hello"), 5));
+    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder::copyString("hello"));
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
     };
@@ -810,7 +779,7 @@ TEST_F(MessageSerializationTest, APPEND) {
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
-            deserializer);
+            nullptr);
   }
   {
     h.flags |= APPEND_Header::CUSTOM_KEY;
@@ -818,7 +787,7 @@ TEST_F(MessageSerializationTest, APPEND) {
     std::string key2{"12345678"};
     attrs.optional_keys[KeyType::FINDKEY] = std::move(key);
     attrs.optional_keys[KeyType::FILTERABLE] = std::move(key2);
-    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder(strdup("hello"), 5));
+    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder::copyString("hello"));
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
     };
@@ -827,7 +796,7 @@ TEST_F(MessageSerializationTest, APPEND) {
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
-            deserializer);
+            nullptr);
   }
   {
     h.flags |= APPEND_Header::CUSTOM_COUNTERS;
@@ -836,7 +805,7 @@ TEST_F(MessageSerializationTest, APPEND) {
     counters[2] = 2;
     counters[3] = 3;
     attrs.counters.emplace(std::move(counters));
-    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder(strdup("hello"), 5));
+    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder::copyString("hello"));
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
     };
@@ -845,7 +814,7 @@ TEST_F(MessageSerializationTest, APPEND) {
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
-            deserializer);
+            nullptr);
   }
   {
     h.flags |= APPEND_Header::CUSTOM_KEY;
@@ -857,7 +826,7 @@ TEST_F(MessageSerializationTest, APPEND) {
     counters[2] = 2;
     counters[3] = 3;
     attrs.counters.emplace(std::move(counters));
-    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder(strdup("hello"), 5));
+    APPEND_Message m(h, LSN_INVALID, attrs, PayloadHolder::copyString("hello"));
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
     };
@@ -866,7 +835,7 @@ TEST_F(MessageSerializationTest, APPEND) {
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
-            deserializer);
+            nullptr);
   }
   {
     h.flags |= APPEND_Header::WRITE_STREAM_REQUEST;
@@ -875,7 +844,7 @@ TEST_F(MessageSerializationTest, APPEND) {
     APPEND_Message m(h,
                      LSN_INVALID,
                      attrs,
-                     PayloadHolder(strdup("hello"), 5),
+                     PayloadHolder::copyString("hello"),
                      stream_req_id);
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
@@ -885,7 +854,7 @@ TEST_F(MessageSerializationTest, APPEND) {
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
-            deserializer);
+            nullptr);
   }
   {
     h.flags |= APPEND_Header::WRITE_STREAM_REQUEST;
@@ -895,7 +864,7 @@ TEST_F(MessageSerializationTest, APPEND) {
     APPEND_Message m(h,
                      LSN_INVALID,
                      attrs,
-                     PayloadHolder(strdup("hello"), 5),
+                     PayloadHolder::copyString("hello"),
                      stream_req_id);
     auto check = [&](const APPEND_Message& m2, uint16_t proto) {
       checkAPPEND(m, m2, proto);
@@ -905,7 +874,7 @@ TEST_F(MessageSerializationTest, APPEND) {
             Compatibility::MIN_PROTOCOL_SUPPORTED,
             Compatibility::MAX_PROTOCOL_SUPPORTED,
             expected_fn,
-            deserializer);
+            nullptr);
   }
 }
 
@@ -933,7 +902,7 @@ TEST_F(MessageSerializationTest, RECORD) {
   byte_offsets.setCounter(BYTE_OFFSET, 10);
   RECORD_Message m(h,
                    TrafficClass::REBUILD,
-                   Payload(payload.data(), payload.size()).dup(),
+                   PayloadHolder::copyString(payload),
                    std::make_unique<ExtraMetadata>(reb),
                    RECORD_Message::Source::LOCAL_LOG_STORE,
                    std::move(byte_offsets));
@@ -983,7 +952,7 @@ TEST_F(MessageSerializationTest, RECORD_WithWriteStream) {
   byte_offsets.setCounter(BYTE_OFFSET, 10);
   RECORD_Message m(h,
                    TrafficClass::REBUILD,
-                   Payload(payload.data(), payload.size()).dup(),
+                   PayloadHolder::copyString(payload),
                    std::make_unique<ExtraMetadata>(reb),
                    RECORD_Message::Source::LOCAL_LOG_STORE,
                    std::move(byte_offsets));
@@ -1020,9 +989,6 @@ TailRecord genTailRecord(bool include_payload) {
   TailRecordHeader::flags_t flags =
       (include_payload ? TailRecordHeader::HAS_PAYLOAD : 0);
   flags |= TailRecordHeader::OFFSET_WITHIN_EPOCH;
-  void* payload_flat = malloc(20);
-  memset(payload_flat, 0, 20);
-  std::strncpy((char*)payload_flat, "Tail Record Test.", 20);
   return TailRecord(
       TailRecordHeader{
           logid_t(0xBBC18E8AA44783D3),
@@ -1032,8 +998,9 @@ TailRecord genTailRecord(bool include_payload) {
           flags,
           {}},
       OffsetMap({{BYTE_OFFSET, 2349045994592}}),
-      include_payload ? std::make_shared<PayloadHolder>(payload_flat, 20)
-                      : nullptr);
+      include_payload ? PayloadHolder::copyString(
+                            std::string("Tail Record Test.\0\0\0", 20))
+                      : PayloadHolder());
 }
 } // namespace
 

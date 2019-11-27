@@ -17,12 +17,13 @@ create_record(logid_t logid,
               size_t payload_size,
               OffsetMap offsets_within_epoch,
               OffsetMap offsets) {
-  Payload payload;
+  std::string payload;
   if (type != RecordType::HOLE && type != RecordType::BRIDGE) {
-    char* buf = (char*)malloc(payload_size);
-    snprintf(
-        buf, payload_size, "Record with lsn %s", lsn_to_string(lsn).c_str());
-    payload = Payload{buf, payload_size};
+    payload = std::string(payload_size, '-');
+    snprintf(payload.data(),
+             payload_size,
+             "Record with lsn %s",
+             lsn_to_string(lsn).c_str());
   }
 
   RECORD_flags_t flags =
@@ -53,12 +54,11 @@ create_record(logid_t logid,
 
   auto record = std::make_unique<DataRecordOwnsPayload>(
       logid,
-      std::move(payload),
+      PayloadHolder::copyString(payload),
       lsn,
       timestamp,
       flags,
       std::move(extra_metadata),
-      nullptr /* BufferedWriteDecoder */,
       0 /* batch_offset */,
       OffsetMap::toRecord(std::move(offsets)));
 

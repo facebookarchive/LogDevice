@@ -20,7 +20,6 @@
 namespace facebook { namespace logdevice {
 
 class EpochRecordCacheDependencies;
-class PayloadHolder;
 
 namespace EpochRecordCacheSerializer {
 class EpochRecordCacheCompare;
@@ -71,7 +70,7 @@ class EpochRecordCacheEntry : public ZeroCopiedRecord {
                         const copyset_t& copyset,
                         OffsetMap offsets_within_epoch,
                         std::map<KeyType, std::string>&& keys,
-                        std::shared_ptr<PayloadHolder> payload_holder);
+                        const PayloadHolder& payload_holder);
 
  private:
   int fromLinearBuffer(lsn_t lsn, const char* buffer, size_t size);

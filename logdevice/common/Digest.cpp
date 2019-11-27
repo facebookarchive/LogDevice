@@ -230,20 +230,18 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
             RECORD_Header::HOLE | RECORD_Header::DIGEST;
 
         // create a hole record from the existing record
-        std::unique_ptr<DataRecordOwnsPayload> hole_record(
-            new DataRecordOwnsPayload(
-                existing_record->logid,
-                // empty payload
-                Payload(),
-                existing_record->attrs.lsn,
-                // using the timestamp of the existing record
-                existing_record->attrs.timestamp,
-                flags,
-                std::move(extra_metadata),
-                std::shared_ptr<BufferedWriteDecoder>(),
-                0, // batch_offset
-                std::move(existing_record->attrs.offsets),
-                /*invalid_checksum=*/false));
+        auto hole_record = std::make_unique<DataRecordOwnsPayload>(
+            existing_record->logid,
+            // empty payload
+            PayloadHolder(),
+            existing_record->attrs.lsn,
+            // using the timestamp of the existing record
+            existing_record->attrs.timestamp,
+            flags,
+            std::move(extra_metadata),
+            0, // batch_offset
+            std::move(existing_record->attrs.offsets),
+            /*invalid_checksum=*/false);
 
         // this will free the payload the previous record
         existing_record = std::move(hole_record);

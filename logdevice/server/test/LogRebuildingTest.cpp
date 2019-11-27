@@ -118,13 +118,14 @@ class MockLogRebuilding;
 class MockRecordRebuildingStore : public RecordRebuildingStore {
  public:
   MockRecordRebuildingStore(size_t block_id,
-                            RawRecord record,
+                            lsn_t lsn,
+                            folly::IOBuf record,
                             RecordRebuildingOwner* owner,
                             std::shared_ptr<ReplicationScheme> replication,
-                            lsn_t lsn,
                             Settings& settings)
       : RecordRebuildingStore(block_id,
                               /*shard=*/0,
+                              lsn,
                               std::move(record),
                               owner,
                               replication),
@@ -285,12 +286,22 @@ class MockLogRebuilding : public LogRebuilding {
 
   std::unique_ptr<RecordRebuildingStore> createRecordRebuildingStore(
       size_t block_id,
-      RawRecord record,
+      RawRecord r,
       std::shared_ptr<ReplicationScheme> replication) override {
-    lsn_t lsn = record.lsn;
+    ld_check(r.owned);
+    lsn_t lsn = r.lsn;
     received.createdRecordRebuildingStores.push_back(lsn);
-    return std::make_unique<MockRecordRebuildingStore>(
-        block_id, std::move(record), this, replication, lsn, settings_);
+    auto rr = std::make_unique<MockRecordRebuildingStore>(
+        block_id,
+        lsn,
+        folly::IOBuf(folly::IOBuf::TAKE_OWNERSHIP,
+                     const_cast<void*>(r.blob.data),
+                     r.blob.size),
+        this,
+        replication,
+        settings_);
+    r.owned = false;
+    return rr;
   }
 
   std::unique_ptr<RecordRebuildingAmend>

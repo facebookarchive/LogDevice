@@ -428,7 +428,7 @@ class AppenderTest::MockAppender : public Appender {
             append_request_id,
             STORE_flags_t(0),
             LOG_ID,
-            PayloadHolder(MockAppender::dummyPayload, PayloadHolder::UNOWNED),
+            PayloadHolder::copyString("test"),
             epoch_t(0),
             500),
         stats_(StatsParams().setIsServer(true)),
@@ -668,8 +668,6 @@ class AppenderTest::MockAppender : public Appender {
  private:
   StatsHolder stats_;
   AppenderTest* test_;
-  static Payload dummyPayload; // something to pass to Apppender constructor,
-                               // not used by the test
 };
 
 void AppenderTest::start(bool stream_message) {
@@ -1662,7 +1660,5 @@ TEST_F(AppenderTest, PremptedByNormalSealWhenDraining) {
   // No release message should have been sent.
   CHECK_NO_RELEASE_MSG();
 }
-
-Payload AppenderTest::MockAppender::dummyPayload("test", sizeof("test"));
 
 }} // namespace facebook::logdevice

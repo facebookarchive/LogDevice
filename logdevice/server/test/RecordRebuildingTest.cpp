@@ -124,13 +124,16 @@ class TestRecordRebuildingStore : public RecordRebuildingStore,
                             std::initializer_list<ShardID> rebuilding_set,
                             node_index_t my_node_index,
                             const NodeAvailabilityChecker* node_availability)
-      : RecordRebuildingStore(/*block_id=*/0,
-                              /*shard=*/0,
-                              std::move(record),
-                              this /* owner */,
-                              replication,
-                              nullptr /* scratch_payload_holder */,
-                              node_availability),
+      : RecordRebuildingStore(
+            /*block_id=*/0,
+            /*shard=*/0,
+            record.lsn,
+            folly::IOBuf(folly::IOBuf::COPY_BUFFER,
+                         record.blob.data,
+                         record.blob.size),
+            this /* owner */,
+            replication,
+            node_availability),
         my_node_index_(my_node_index),
         settings_(create_default_settings<Settings>()),
         rebuildingSettings_(create_default_settings<RebuildingSettings>()) {
@@ -404,11 +407,9 @@ class RecordRebuildingStoreTest
     EXPECT_EQ(amend, !!(m->getHeader().flags & STORE_Header::AMEND));
     const PayloadHolder* payload = m->getPayloadHolder();
     if (amend) {
-      ASSERT_EQ(nullptr, payload);
+      ASSERT_EQ(0, payload->size());
     } else {
-      ASSERT_NE(nullptr, payload);
-      ASSERT_NE(
-          nullptr, const_cast<PayloadHolder*>(payload)->getPayload().data());
+      ASSERT_NE(0, payload->size());
     }
   }
 

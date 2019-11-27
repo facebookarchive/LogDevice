@@ -50,6 +50,10 @@ struct TestCommand {
   epoch_t epoch;
   // Additional arguments that are required to execute the command.
   std::vector<std::string> args;
+
+  // Payload of the record. Equal to the 8-byte pointer to this TestCommand.
+  std::string payload;
+
   static TestCommand create(TestCommandType type,
                             std::string key,
                             epoch_t epoch = EPOCH_INVALID) {
@@ -60,10 +64,15 @@ struct TestCommand {
     return *this;
   }
   static TestCommand& parsePayload(Payload payload) {
-    return *((TestCommand*)payload.data());
+    return **((TestCommand**)payload.data());
   }
   static Payload createPayload(TestCommand& command) {
-    return Payload(&command, 64 /* dummy value */);
+    if (command.payload.empty()) {
+      TestCommand* p = &command;
+      command.payload =
+          std::string(reinterpret_cast<const char*>(&p), sizeof(void*));
+    }
+    return Payload(command.payload.data(), command.payload.size());
   }
 
  private:

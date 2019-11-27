@@ -117,7 +117,7 @@ class TestRecord {
         LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_RECOVERY;
     return *this;
   }
-  static constexpr folly::StringPiece kEmptySlice{"blah"};
+  static constexpr folly::StringPiece kDefaultPayload{"blah"};
   logid_t log_id_;
   lsn_t lsn_;
   esn_t last_known_good_{ESN_INVALID};

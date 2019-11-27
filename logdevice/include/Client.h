@@ -349,7 +349,7 @@ class Client {
    *
    * @param logid     unique id of the log to which to append a new record
    *
-   * @param payload   record payload.
+   * @param payload   record payload
    *
    * @param cb        the callback to call
    *
@@ -369,19 +369,9 @@ class Client {
                      AppendAttributes attrs = AppendAttributes()) noexcept = 0;
 
   /**
-   * Appends a new record to the log without blocking. This version doesn't
-   * transfer the ownership of the payload to LogDevice and assumes that the
-   * caller will be responsible for destroying it.
-   *
-   *  IMPORTANT: for performance reasons this function does not make
-   *  an internal copy of payload.  It just passes payload.data
-   *  pointer and payload.size value to the LogDevice client thread
-   *  pool. The caller MUST make sure that the payload is not free'd
-   *  or modified, or its memory is otherwise reused until the
-   *  callback cb() is called with the same payload as its argument. A
-   *  common pattern for sending a payload that's on the stack is to
-   *  memcpy() it into a malloc'ed buffer, then call free() on
-   *  payload.data pointer passed to cb().
+   * Appends a new record to the log without blocking. Makes a copy of the
+   * provided payload, so it's ok to deallocate `payload` after the append()
+   * call returns, without waiting for callback.
    */
   virtual int append(logid_t logid,
                      const Payload& payload,

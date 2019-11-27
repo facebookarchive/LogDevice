@@ -733,13 +733,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "maximum byte limit of unprocessed messages within the system.",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Network);
-  init("payload-inline",
-       &max_payload_inline,
-       "1024",
-       parse_positive<ssize_t>(),
-       "max message payload size that we store in a flat buffer after header",
-       SERVER | CLIENT,
-       SettingsCategory::WritePath);
   init("max-inflight-storage-tasks",
        &max_inflight_storage_tasks,
        "4096",

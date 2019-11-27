@@ -265,12 +265,12 @@ std::unique_ptr<DataRecord> ReadVerifyData::verifyRestoreRecordPayload(
   // instantiate a new DataRecordOwnsPayload with the correct payload.
   // TODO: use a shared_ptr<void> owning dr, to avoid needing to duplicate
   // the payload.
-  Payload p2 = ver.user_payload.dup();
-  return std::make_unique<DataRecordOwnsPayload>(drop_ptr->logid,
-                                                 std::move(p2),
-                                                 drop_ptr->attrs.lsn,
-                                                 drop_ptr->attrs.timestamp,
-                                                 drop_ptr->flags_);
+  return std::make_unique<DataRecordOwnsPayload>(
+      drop_ptr->logid,
+      PayloadHolder(PayloadHolder::COPY_BUFFER, ver.user_payload),
+      drop_ptr->attrs.lsn,
+      drop_ptr->attrs.timestamp,
+      drop_ptr->flags_);
 }
 
 }} // namespace facebook::logdevice

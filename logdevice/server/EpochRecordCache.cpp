@@ -112,7 +112,7 @@ EpochRecordCache::createFromSnapshot(logid_t log_id,
 
     size_t index = result->getIndex(rid.esn);
     ld_check(result->buffer_[index] == nullptr);
-    buffer_payload_bytes_cumulative += kv.second->payload_raw.size;
+    buffer_payload_bytes_cumulative += kv.second->payload.size();
 
     result->buffer_[index] = std::move(kv.second);
     ld_check(result->buffer_[index] != nullptr);
@@ -213,16 +213,15 @@ size_t EpochRecordCache::bufferedPayloadBytes() const {
   return buffer_payload_bytes_.load(std::memory_order_relaxed);
 }
 
-int EpochRecordCache::putRecord(
-    RecordID rid,
-    uint64_t timestamp,
-    esn_t lng,
-    uint32_t wave_or_recovery_epoch,
-    const copyset_t& copyset,
-    STORE_flags_t flags,
-    std::map<KeyType, std::string>&& keys,
-    const std::shared_ptr<PayloadHolder>& payload_holder,
-    OffsetMap offsets_within_epoch) {
+int EpochRecordCache::putRecord(RecordID rid,
+                                uint64_t timestamp,
+                                esn_t lng,
+                                uint32_t wave_or_recovery_epoch,
+                                const copyset_t& copyset,
+                                STORE_flags_t flags,
+                                std::map<KeyType, std::string>&& keys,
+                                const PayloadHolder& payload_holder,
+                                OffsetMap offsets_within_epoch) {
   esn_t head = esn_t(head_.load());
   if (disabled_.load() || (head != ESN_INVALID && rid.esn < head)) {
     // the record should not be put into the cache if:
@@ -815,7 +814,7 @@ EpochRecordCache::Snapshot::ConstIterator::getRecord() const {
                 e->wave_or_recovery_epoch,
                 e->copyset,
                 e->offsets_within_epoch,
-                e->payload_raw};
+                Slice(e->payload.getPayload())};
 }
 
 void EpochRecordCache::getDebugInfo(InfoRecordCacheTable& table) const {
@@ -873,15 +872,15 @@ EpochRecordCache::fromLinearBuffer(logid_t log_id,
 void EpochRecordCache::noteEntryAdded(const EpochRecordCacheEntry& entry) {
   buffer_entries_.fetch_add(1, std::memory_order_relaxed);
   buffer_payload_bytes_.fetch_add(
-      entry.payload_raw.size, std::memory_order_relaxed);
+      entry.payload.size(), std::memory_order_relaxed);
 }
 
 void EpochRecordCache::noteEntryRemoved(const EpochRecordCacheEntry& entry) {
   ld_check(buffer_entries_ > 0);
-  ld_check(buffer_payload_bytes_ >= entry.payload_raw.size);
+  ld_check_ge(buffer_payload_bytes_.load(), entry.payload.size());
   buffer_entries_.fetch_sub(1, std::memory_order_relaxed);
   buffer_payload_bytes_.fetch_sub(
-      entry.payload_raw.size, std::memory_order_relaxed);
+      entry.payload.size(), std::memory_order_relaxed);
 }
 
 EpochRecordCache::Snapshot::Snapshot(esn_t start, esn_t until)
@@ -1023,7 +1022,7 @@ EpochRecordCache::Snapshot::getRecord(esn_t esn) const {
                                e->wave_or_recovery_epoch,
                                e->copyset,
                                e->offsets_within_epoch,
-                               e->payload_raw});
+                               Slice(e->payload.getPayload())});
 }
 
 std::unique_ptr<EpochRecordCache::Snapshot::ConstIterator>
@@ -1040,8 +1039,10 @@ bool EpochRecordCacheCompare::testEntriesIdentical(
       a.copyset.size() == b.copyset.size() &&
       std::equal(a.copyset.begin(), a.copyset.end(), b.copyset.begin()) &&
       a.offsets_within_epoch == b.offsets_within_epoch && a.keys == b.keys &&
-      a.payload_raw.size == b.payload_raw.size &&
-      memcmp(a.payload_raw.data, b.payload_raw.data, a.payload_raw.size) == 0;
+      a.payload.size() == b.payload.size() &&
+      memcmp(a.payload.getPayload().data(),
+             b.payload.getPayload().data(),
+             a.payload.size()) == 0;
 }
 
 bool EpochRecordCacheCompare::testSnapshotsIdentical(

@@ -401,7 +401,7 @@ TEST(LogsConfigCodecTest, LogsConfigTreeCodecTest2) {
 
   PayloadHolder payload =
       FBuffersLogsConfigCodec::serialize<LogsConfigTree>(*tree, false);
-  ASSERT_TRUE(payload.valid());
+  ASSERT_NE(0, payload.size());
 
   std::unique_ptr<LogsConfigTree> recovered =
       FBuffersLogsConfigCodec::deserialize<LogsConfigTree>(
@@ -559,7 +559,7 @@ TEST(LogsConfigCodecTest, SerializeDirectory) {
       LogAttributes().with_replicationFactor(6).with_extraCopies(0)));
 
   PayloadHolder payload = FBuffersLogsConfigCodec::serialize(*child2, false);
-  ASSERT_TRUE(payload.valid());
+  ASSERT_NE(0, payload.size());
 
   std::unique_ptr<DirectoryNode> recovered =
       FBuffersLogsConfigCodec::deserialize<DirectoryNode>(
@@ -583,7 +583,7 @@ TEST(LogsConfigCodecTest, SerializeLogGroup) {
           .with_syncReplicationScope(NodeLocationScope::REGION),
       logid_range_t(logid_t(1), logid_t(100)));
   PayloadHolder payload = FBuffersLogsConfigCodec::serialize(*lgn, false);
-  ASSERT_TRUE(payload.valid());
+  ASSERT_NE(0, payload.size());
 
   std::unique_ptr<LogGroupNode> recovered =
       FBuffersLogsConfigCodec::deserialize<LogGroupNode>(
@@ -605,7 +605,7 @@ TEST(LogsConfigCodecTest, SerializeLogAttributesNormal) {
           .with_backlogDuration(std::chrono::seconds(15))
           .with_syncReplicationScope(NodeLocationScope::REGION);
   PayloadHolder payload = FBuffersLogsConfigCodec::serialize(attrs, false);
-  ASSERT_TRUE(payload.valid());
+  ASSERT_NE(0, payload.size());
 
   std::unique_ptr<LogAttributes> recovered =
       FBuffersLogsConfigCodec::deserialize<LogAttributes>(
@@ -654,7 +654,7 @@ TEST(LogsConfigCodecTest, SerializeLogAttributesFlattened) {
   LogAttributes combined{child_attr, attrs};
 
   PayloadHolder payload = FBuffersLogsConfigCodec::serialize(combined, true);
-  ASSERT_TRUE(payload.valid());
+  ASSERT_NE(0, payload.size());
 
   std::unique_ptr<LogAttributes> recovered =
       FBuffersLogsConfigCodec::deserialize<LogAttributes>(
@@ -691,7 +691,7 @@ TEST(LogsConfigCodecTest, SerializeLogAttributesFlattened) {
   combined = combined.with_aclsShadow(LogAttributes::ACLList());
 
   payload = FBuffersLogsConfigCodec::serialize(combined, true);
-  ASSERT_TRUE(payload.valid());
+  ASSERT_NE(0, payload.size());
 
   recovered = FBuffersLogsConfigCodec::deserialize<LogAttributes>(
       payload.getPayload(), "/");
@@ -712,7 +712,7 @@ TEST(LogsConfigPayloadCodec, MkDirectoryDeltaTest) {
   MkDirectoryDelta delta{header, path, true, attrs};
 
   PayloadHolder payload = FBuffersLogsConfigCodec::serialize(delta, false);
-  ASSERT_TRUE(payload.valid());
+  ASSERT_NE(0, payload.size());
 
   std::unique_ptr<Delta> recovered =
       FBuffersLogsConfigCodec::deserialize<Delta>(payload.getPayload(), "/");

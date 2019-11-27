@@ -210,24 +210,8 @@ int ShadowClient::append(logid_t logid,
                          bool buffered_writer_blob) noexcept {
   auto callback = [&](auto a, const auto& b) { this->appendCallback(a, b); };
 
-  // Need to copy payload, since it is technically owned by the client
-  // This will likely be a performance impact, so care should be taken
-  // to keep the ratio low and only enable shadowing on clients that
-  // can handle the impact (TODO better alternative t19772899)
-  Payload payload_copy;
-  try {
-    payload_copy = payload.dup();
-  } catch (const std::bad_alloc& e) {
-    // TODO scuba detailed stats T20416930 about which origin and shadow
-    STAT_INCR(stats_, client.shadow_payload_alloc_failed);
-    ld_warning(LD_SHADOW_PREFIX
-               "Failed to allocate memory for duplicating shadow payload");
-    err = E::NOMEM;
-    return -1;
-  }
-
   ld_spew(LD_SHADOW_PREFIX "Shadowing payload of size %zu to shadow '%s'",
-          payload_copy.size(),
+          payload.size(),
           shadow_attrs_->destination().c_str()); // TODO replace with stats
 
   // Downcast client in order to use lower level API. The reason is we need
@@ -237,7 +221,7 @@ int ShadowClient::append(logid_t logid,
   ClientImpl* client_impl = checked_downcast<ClientImpl*>(client_.get());
   int rv = -1;
   auto req = client_impl->prepareRequest(
-      logid, payload_copy, callback, attrs, worker_id_t{-1}, nullptr);
+      logid, payload, callback, attrs, worker_id_t{-1}, nullptr);
   if (req) {
     if (buffered_writer_blob) {
       req->setBufferedWriterBlobFlag();
@@ -246,8 +230,6 @@ int ShadowClient::append(logid_t logid,
   }
 
   if (rv == -1) {
-    // Payload was created via Payload.dup() which uses malloc()
-    free(const_cast<void*>(payload_copy.data()));
     RATELIMIT_WARNING(1s,
                       1,
                       LD_SHADOW_PREFIX "Shadow append failed with '%s'",
@@ -272,9 +254,6 @@ void ShadowClient::appendCallback(Status status, const DataRecord& record) {
                       record.logid.val(),
                       error_description(status));
   }
-
-  // Payload was created via Payload.dup() which uses malloc()
-  free(const_cast<void*>(record.payload.data()));
 }
 
 }} // namespace facebook::logdevice

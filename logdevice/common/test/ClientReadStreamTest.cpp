@@ -382,14 +382,8 @@ static std::unique_ptr<DataRecordOwnsPayload>
 mockRecord(lsn_t lsn, RECORD_flags_t flags = 0) {
   std::chrono::milliseconds timestamp(0);
 
-  static const char* data = "data";
-  int payload_size = strlen(data);
-  void* payload = malloc(payload_size);
-  ld_check(payload);
-  memcpy(payload, data, payload_size);
-
   return std::make_unique<DataRecordOwnsPayload>(
-      LOG_ID, Payload(payload, payload_size), lsn, timestamp, flags);
+      LOG_ID, PayloadHolder::copyString("data"), lsn, timestamp, flags);
 }
 
 static GAP_Message mockGap(ShardID shard,

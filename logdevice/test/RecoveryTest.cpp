@@ -303,7 +303,6 @@ void RecoveryTest::init(bool can_tail_optimize) {
   cache_deps_ = std::make_unique<MockRecordCacheDependencies>(this);
   populate_record_cache_ = GetParam();
 
-  populate_record_cache_ = PopulateRecordCache::YES;
   if (populate_record_cache_ == PopulateRecordCache::NO) {
     // do not use record cache at all if we don't populate data
     use_record_cache_ = false;
@@ -499,13 +498,10 @@ void RecoveryTest::prepopulateRecordCacheForLog(
   // ensure we get cache hit later
   record_cache->neverStored();
   for (const TestRecord& tr : records) {
-    auto ph = (tr.payload_.hasValue()
-                   ? std::make_shared<PayloadHolder>(
-                         tr.payload_.value(), PayloadHolder::UNOWNED)
-                   : std::make_shared<PayloadHolder>(
-                         Payload(TestRecord::kEmptySlice.data(),
-                                 TestRecord::kEmptySlice.size()),
-                         PayloadHolder::UNOWNED));
+    auto ph = PayloadHolder::copyPayload(
+        tr.payload_.hasValue() ? tr.payload_.value()
+                               : Payload(TestRecord::kDefaultPayload.data(),
+                                         TestRecord::kDefaultPayload.size()));
 
     STORE_flags_t store_flags =
         STORE_flags_t(tr.flags_ & LocalLogStoreRecordFormat::FLAG_MASK);
@@ -816,13 +812,6 @@ RecoveryTest::buildDigest(epoch_t epoch,
       ld_check(rv == 0);
       copyset.resize(copyset_size);
 
-      void* data = nullptr;
-      if (payload.size() > 0) {
-        data = malloc(payload.size());
-        ld_check(data != nullptr);
-        memcpy(data, payload.data(), payload.size());
-      }
-
       auto extra_metadata = std::make_unique<ExtraMetadata>();
       extra_metadata->header = {
           last_known_good, wave_or_recovery_epoch, copyset_size};
@@ -836,13 +825,13 @@ RecoveryTest::buildDigest(epoch_t epoch,
         record_flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
       }
 
-      auto record =
-          std::make_unique<DataRecordOwnsPayload>(LOG_ID,
-                                                  Payload(data, payload.size()),
-                                                  lsn,
-                                                  timestamp,
-                                                  record_flags,
-                                                  std::move(extra_metadata));
+      auto record = std::make_unique<DataRecordOwnsPayload>(
+          LOG_ID,
+          PayloadHolder(PayloadHolder::COPY_BUFFER, payload),
+          lsn,
+          timestamp,
+          record_flags,
+          std::move(extra_metadata));
 
       digest->onRecord(shard, std::move(record));
 
@@ -1093,9 +1082,12 @@ TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
   for (auto i = 0; i < data_.size(); ++i) {
     // each data payload is 4 bytes,
     // e1n1 as the last know good has the byteoffset 10, which we will start
-    // rebuild from
+    // rebuild froma
+    EXPECT_EQ(TestRecord::kDefaultPayload, data_[i]->payload.toString())
+        << lsn_to_string(data_[i]->attrs.lsn);
     EXPECT_EQ(
-        RecordOffset({{BYTE_OFFSET, 4 * i + 10}}), data_[i]->attrs.offsets);
+        RecordOffset({{BYTE_OFFSET, 4 * i + 10}}), data_[i]->attrs.offsets)
+        << lsn_to_string(data_[i]->attrs.lsn);
   }
 
   EXPECT_EQ(std::vector<gap_record_t>({

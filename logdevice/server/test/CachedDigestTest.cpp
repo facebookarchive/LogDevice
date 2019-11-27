@@ -283,8 +283,7 @@ void CachedDigestTest::setUp() {
                                          EpochRecordCache::StoredBefore::NEVER);
 
   auto gen_payload = [](lsn_t lsn) {
-    return std::make_shared<PayloadHolder>(
-        folly::IOBuf::copyBuffer(static_cast<void*>(&lsn), sizeof(lsn)));
+    return PayloadHolder::copyBuffer(static_cast<void*>(&lsn), sizeof(lsn));
   };
 
   auto put_record = [&](lsn_t lsn, const Snapshot::Record& r) {
@@ -381,7 +380,7 @@ void CachedDigestTest::verifyResult() {
         CachedDigest::StoreFlagsToRecordFlags(r.flags), rm->header_.flags);
     ASSERT_EQ(SHARD, rm->header_.shard);
     ASSERT_EQ(sizeof(lsn_t), rm->payload_.size());
-    ASSERT_EQ(rm->header_.lsn, *((lsn_t*)rm->payload_.data()));
+    ASSERT_EQ(rm->header_.lsn, *((lsn_t*)rm->payload_.getPayload().data()));
     itr++, itm++;
     ++record_delivered;
   }

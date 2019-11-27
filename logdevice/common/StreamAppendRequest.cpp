@@ -34,7 +34,7 @@ std::unique_ptr<APPEND_Message> StreamAppendRequest::createAppendMessage() {
       // std::string contained in this class.  Do not transfer ownership to
       // APPEND_Message.
       getAppendAttributes(),
-      PayloadHolder(record_.payload, PayloadHolder::UNOWNED),
+      payload_,
       stream_rqid_);
 }
 

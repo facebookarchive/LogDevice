@@ -127,7 +127,7 @@ class EpochSequencerTest : public ::testing::Test {
   void checkStats();
   void maybeDeleteEpochSequencer();
 
-  PayloadHolder genPayload(bool evbuffer);
+  PayloadHolder genPayload();
   void checkTailRecord(lsn_t lsn,
                        folly::Optional<OffsetMap> offsets = folly::none);
 
@@ -242,15 +242,14 @@ class MockAppender : public Appender {
   using MockSender = SenderTestProxy<MockAppender>;
 
   explicit MockAppender(EpochSequencerTest* test,
-                        std::chrono::milliseconds retire_after,
-                        bool evbuffer_payload = true)
+                        std::chrono::milliseconds retire_after)
       : Appender(Worker::onThisThread(),
                  Worker::onThisThread()->getTraceLogger(),
                  retire_after,
                  /* append_request_id= */ request_id_t(0),
                  STORE_flags_t(0),
                  test->LOG_ID,
-                 test->genPayload(evbuffer_payload),
+                 test->genPayload(),
                  epoch_t(0),
                  /*size=*/size_t(0)),
         retire_after_(retire_after),
@@ -504,15 +503,9 @@ EpochSequencerTest::createEpochSequencer(epoch_t epoch) {
 constexpr logid_t EpochSequencerTest::LOG_ID;
 constexpr epoch_t EpochSequencerTest::EPOCH;
 
-PayloadHolder EpochSequencerTest::genPayload(bool evbuffer) {
-  if (evbuffer) {
-    std::string raw(payload_size_, 'c');
-    return PayloadHolder(folly::IOBuf::copyBuffer(raw));
-  }
-
-  void* payload_flat = malloc(payload_size_);
-  memset(payload_flat, 'c', payload_size_);
-  return PayloadHolder(payload_flat, payload_size_);
+PayloadHolder EpochSequencerTest::genPayload() {
+  std::string raw(payload_size_, 'c');
+  return PayloadHolder::copyString(raw);
 }
 
 void EpochSequencerTest::checkStats() {

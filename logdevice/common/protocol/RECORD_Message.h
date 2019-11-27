@@ -13,6 +13,7 @@
 
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/OffsetMap.h"
+#include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Record.h"
@@ -57,7 +58,7 @@ struct RECORD_Header {
   static const RECORD_flags_t DIGEST = 1u << 5; //=32
 
   // The record is a plug for a hole in the numbering sequence.
-  // RECORD_Message::payload_ must be empty.
+  // Payload must be empty.
   static const RECORD_flags_t HOLE = 1u << 6; //=64
 
   // Record contains a blob composed by BufferedWriter
@@ -142,18 +143,9 @@ class RECORD_Message : public Message, boost::noncopyable {
     return "";
   }
 
-  // NOTE: populates header flags and header payload_size based on
-  // extra_metadata parameter
   RECORD_Message(const RECORD_Header& header,
                  TrafficClass tc,
-                 Payload&& payload,
-                 std::unique_ptr<ExtraMetadata> extra_metadata,
-                 Source source = Source::LOCAL_LOG_STORE,
-                 OffsetMap offsets = OffsetMap(),
-                 std::shared_ptr<std::string> log_group_path = nullptr);
-  RECORD_Message(const RECORD_Header& header,
-                 TrafficClass tc,
-                 std::unique_ptr<folly::IOBuf>&& payload,
+                 PayloadHolder payload,
                  std::unique_ptr<ExtraMetadata> extra_metadata,
                  Source source = Source::LOCAL_LOG_STORE,
                  OffsetMap offsets = OffsetMap(),
@@ -191,19 +183,7 @@ class RECORD_Message : public Message, boost::noncopyable {
 
   RECORD_Header header_;
 
-  // RECORD messages own the memory pointed to by their payload:
-  // - On the send path, transmission can be deferred due to traffic shaping.
-  //   Senders "freeze the payload" by copying it to a dedicated buffer for
-  //   the RECORD message.  This ensures the payload is still valid at the time
-  //   the message is finally sent. To avoid another copy for payloads larger
-  //   than MAX_COPY_TO_EVBUFFER_PAYLOAD_SIZE, the payload memory is added to
-  //   the evbuffer by reference. The payload is freed, along with the message,
-  //   once transfer into the socket is acknowledged.
-  // - On the read path, the payload gets malloc-d in deserialize().
-  //   onReceived() then passes its ownership to the client library where the
-  //   memory will get freed later when it is no longer needed.
-  Payload payload_;
-  std::unique_ptr<folly::IOBuf> buffer_;
+  PayloadHolder payload_;
 
   // If non-null:
   // - On the send path, the structure will be embedded in the RECORD

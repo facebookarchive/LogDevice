@@ -484,20 +484,21 @@ bool AsyncReaderImpl::handleBufferedWrite(std::unique_ptr<DataRecord>& record) {
   folly::SharedMutex::ReadHolder guard_map(nullptr);
   LogState* log_state = nullptr;
 
-  for (Payload& payload : payloads) {
-    std::unique_ptr<DataRecord> sub_record(new DataRecordOwnsPayload(
-        log_id,
-        std::move(payload),
-        attrs.lsn,
-        attrs.timestamp,
-        flags & ~RECORD_Header::BUFFERED_WRITER_BLOB,
-        nullptr, // no rebuilding metadata
-        decoder, // shared ownership of the decoder
-        batch_offset++,
-        // Report the same offsets for all subrecords. This may be
-        // confusing but we don't have better options since offsets
-        // currently count the bytes of compressed batches.
-        attrs.offsets));
+  for (const Payload& payload : payloads) {
+    std::unique_ptr<DataRecord> sub_record =
+        std::make_unique<DataRecordOwnsPayload>(
+            log_id,
+            payload,
+            decoder, // shared ownership of the decoder
+            attrs.lsn,
+            attrs.timestamp,
+            flags & ~RECORD_Header::BUFFERED_WRITER_BLOB,
+            nullptr, // no rebuilding metadata
+            batch_offset++,
+            // Report the same offsets for all subrecords. This may be
+            // confusing but we don't have better options since offsets
+            // currently count the bytes of compressed batches.
+            attrs.offsets);
     if (buffer_rest) {
       // The application already rejected a previous record in this batch,
       // just buffer for later redelivery

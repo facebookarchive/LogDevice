@@ -354,7 +354,7 @@ RecordRebuildingBase::buildStoreMessage(ShardID target_shard, bool amend) {
       add_flags,
       extra,
       amend ? std::map<KeyType, std::string>() : optional_keys_,
-      amend ? nullptr : getPayloadHolder(),
+      getPayloadHolder(),
       false);
 
   return message;

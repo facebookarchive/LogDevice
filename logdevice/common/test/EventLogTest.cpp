@@ -226,12 +226,9 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
     std::copy(uuid.begin(), uuid.end(), std::begin(h.uuid));
     std::string delta_payload = evlog_->createDeltaPayload(std::move(buf), h);
 
-    void* malloced = malloc(delta_payload.size());
-    memcpy(malloced, &delta_payload[0], delta_payload.size());
-
     return std::make_unique<DataRecordOwnsPayload>(
         configuration::InternalLogs::EVENT_LOG_DELTAS,
-        Payload(malloced, delta_payload.size()),
+        PayloadHolder::copyString(delta_payload),
         lsn,
         std::chrono::milliseconds{100},
         0 // flags
@@ -240,14 +237,12 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
 
   std::unique_ptr<DataRecord>
   genSnapshotRecord(const EventLogRebuildingSet& set, lsn_t v, lsn_t lsn) {
-    auto buf = evlog_->createSnapshotPayload(
+    std::string buf = evlog_->createSnapshotPayload(
         set, v, settings_->rsm_include_read_pointer_in_snapshot);
-    void* malloced = malloc(buf.size());
-    memcpy(malloced, &buf[0], buf.size());
 
     return std::make_unique<DataRecordOwnsPayload>(
         configuration::InternalLogs::EVENT_LOG_SNAPSHOTS,
-        Payload(malloced, buf.size()),
+        PayloadHolder::copyString(buf),
         lsn,
         std::chrono::milliseconds{100},
         0 // flags

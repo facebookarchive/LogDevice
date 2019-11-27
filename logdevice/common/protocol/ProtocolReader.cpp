@@ -41,18 +41,6 @@ class EvbufferSource : public ProtocolReader::Source {
     return rv;
   }
 
-  int readIOBuf(std::unique_ptr<folly::IOBuf>* dest,
-                size_t to_read,
-                size_t nread) override {
-    *dest = folly::IOBuf::create(to_read);
-    int rv = read(static_cast<void*>((*dest)->writableTail()), to_read, nread);
-    if (rv != to_read) {
-      return rv;
-    }
-    (*dest)->append(to_read);
-    return to_read;
-  }
-
   int drain(size_t to_drain, size_t nread) override {
     // must be checked by caller
     ld_check(nread + to_drain <= len_);
@@ -129,18 +117,6 @@ class LinearBufferSource : public ProtocolReader::Source {
     return -1;
   }
 
-  int readIOBuf(std::unique_ptr<folly::IOBuf>* dest,
-                size_t to_read,
-                size_t nread) override {
-    *dest = folly::IOBuf::create(to_read);
-    int rv = read(static_cast<void*>((*dest)->writableTail()), to_read, nread);
-    if (rv != to_read) {
-      return rv;
-    }
-    (*dest)->append(to_read);
-    return to_read;
-  }
-
   int drain(size_t to_drain, size_t nread) override {
     // must be checked by caller
     ld_check(nread + to_drain <= getLength());
@@ -195,15 +171,20 @@ class IOBufSource : public ProtocolReader::Source {
     return -1;
   }
 
-  int readIOBuf(std::unique_ptr<folly::IOBuf>* dest,
-                size_t to_read,
-                size_t /* nread */) override {
+  int readIOBuf(folly::IOBuf* dest, size_t to_read, size_t nread) override {
     ld_check(to_read <= io_buf_->length());
-    *dest = io_buf_->clone();
-    (*dest)->trimEnd(io_buf_->length() - to_read);
-    ld_check_eq((*dest)->length(), to_read);
-    io_buf_->trimStart(to_read);
-    return (*dest)->length();
+    if (to_read * 3 < io_buf_->capacity()) {
+      // The allocated size of io_buf_ is more than 3x greater than what we're
+      // reading. Let's avoid pinning the whole buffer and fall back to just
+      // making a copy.
+      return Source::readIOBuf(dest, to_read, nread);
+    } else {
+      *dest = io_buf_->cloneAsValue();
+      dest->trimEnd(io_buf_->length() - to_read);
+      ld_check_eq(dest->length(), to_read);
+      io_buf_->trimStart(to_read);
+      return dest->length();
+    }
   }
 
   int drain(size_t to_drain, size_t /* nread*/) override {
@@ -340,13 +321,12 @@ void ProtocolReader::readEvbuffer(evbuffer* out, size_t to_read) {
   }
 }
 
-std::unique_ptr<folly::IOBuf> ProtocolReader::readIntoIOBuf(size_t to_read) {
-  std::unique_ptr<folly::IOBuf> iobuf;
+void ProtocolReader::readIOBuf(folly::IOBuf* out, size_t to_read) {
+  ld_check(out);
+  ld_check(!out->isChained());
   if (ok() && isProtoVersionAllowed()) {
-    readImplCb(
-        to_read, [&] { return src_->readIOBuf(&iobuf, to_read, nread_); });
+    readImplCb(to_read, [&] { return src_->readIOBuf(out, to_read, nread_); });
   }
-  return iobuf;
 }
 
 void ProtocolReader::checkReadableBytes(size_t bytes_to_read) {

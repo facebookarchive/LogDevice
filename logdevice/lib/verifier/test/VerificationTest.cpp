@@ -400,14 +400,15 @@ TEST(VerificationTest, DuplicateDetectionTest) {
                                  all_payloads_incl_dup[*duplicated_it]);
     const std::unique_ptr<DataRecordOwnsPayload>& dup_record_ptr =
         log_records[*duplicated_it].second;
-    log_records.insert(log_records.begin() + *duplicated_it,
-                       std::make_pair(log_records[*duplicated_it].first,
-                                      std::make_unique<DataRecordOwnsPayload>(
-                                          dup_record_ptr->logid,
-                                          dup_record_ptr->payload.dup(),
-                                          dup_record_ptr->attrs.lsn,
-                                          dup_record_ptr->attrs.timestamp,
-                                          dup_record_ptr->flags_)));
+    log_records.insert(
+        log_records.begin() + *duplicated_it,
+        std::make_pair(log_records[*duplicated_it].first,
+                       std::make_unique<DataRecordOwnsPayload>(
+                           dup_record_ptr->logid,
+                           PayloadHolder::copyPayload(dup_record_ptr->payload),
+                           dup_record_ptr->attrs.lsn,
+                           dup_record_ptr->attrs.timestamp,
+                           dup_record_ptr->flags_)));
     duplicated_it++;
   }
   all_payloads_incl_dup.resize(100);
@@ -549,7 +550,8 @@ TEST(VerificationTest, ReorderingDetectionTest) {
           std::make_pair(log_records[old_idx].first,
                          std::make_unique<DataRecordOwnsPayload>(
                              log_records[old_idx].second->logid,
-                             log_records[old_idx].second->payload.dup(),
+                             PayloadHolder::copyPayload(
+                                 log_records[old_idx].second->payload),
                              log_records[old_idx].second->attrs.lsn,
                              log_records[old_idx].second->attrs.timestamp,
                              log_records[old_idx].second->flags_)));

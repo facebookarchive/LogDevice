@@ -17,59 +17,55 @@
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 namespace facebook { namespace logdevice {
-PayloadHolder::PayloadHolder(const void* buf,
+PayloadHolder::PayloadHolder(take_ownership_t,
+                             void* buf,
                              size_t size,
-                             bool ignore_size_limit) {
+                             bool ignore_size_limit)
+    : iobuf_(folly::IOBuf::TAKE_OWNERSHIP, buf, size) {
+  ld_check(!iobuf_.isChained());
+  ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
   if (!ignore_size_limit) {
     ld_check(size == 0 || buf != nullptr);
     ld_check(size < Message::MAX_LEN);
   }
-
-  if (size > 0) {
-    iobuf_ = folly::IOBuf::takeOwnership(const_cast<void*>(buf), size);
-  } else {
-    iobuf_ = folly::IOBuf::create(size);
-  }
-  ld_check(iobuf_);
 }
 
-PayloadHolder ::PayloadHolder(std::unique_ptr<folly::IOBuf> iobuf)
-    : iobuf_(std::move(iobuf)) {
+PayloadHolder::PayloadHolder(folly::IOBuf&& iobuf) : iobuf_(std::move(iobuf)) {
+  ld_check(!iobuf_.isChained());
+  ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
   if (folly::kIsDebug) {
     ld_check(size() < Message::MAX_LEN);
   }
 }
 
-PayloadHolder::PayloadHolder(const Payload& payload, unowned_t) {
-  iobuf_ = folly::IOBuf::wrapBuffer(payload.data(), payload.size());
+PayloadHolder::PayloadHolder(copy_buffer_t, const Payload& payload)
+    : iobuf_(folly::IOBuf::COPY_BUFFER, payload.data(), payload.size()) {
+  ld_check(!iobuf_.isChained());
+  ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
 }
-
-PayloadHolder& PayloadHolder::operator=(PayloadHolder&& other) noexcept {
-  if (this != &other) {
-    iobuf_ = std::move(other.iobuf_);
-    other.reset();
-  }
-  return *this;
+PayloadHolder::PayloadHolder(copy_buffer_t, const void* buf, size_t size)
+    : iobuf_(folly::IOBuf::COPY_BUFFER, buf, size) {
+  ld_check(!iobuf_.isChained());
+  ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
 }
 
 void PayloadHolder::reset() {
-  iobuf_.reset();
-  ld_check(!valid());
+  // Note that we can't use IOBuf::clear() here because it doesn't free/unlink
+  // the memory, only adjusts the data pointer and length.
+  iobuf_ = folly::IOBuf();
+  ld_check(!iobuf_.isChained());
+  ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
 }
 
 size_t PayloadHolder::size() const {
-  ld_check(valid());
-  return iobuf_->computeChainDataLength();
+  return iobuf_.computeChainDataLength();
 }
 
 void PayloadHolder::serialize(ProtocolWriter& writer) const {
   ld_check(size() < Message::MAX_LEN); // must have been checked
                                        // by upper layers
-  if (owner() && iobuf_->computeChainDataLength() > 0) {
-    writer.writeWithoutCopy(iobuf_.get());
-  } else {
-    Payload payload = getFlatPayload();
-    writer.write(payload.data(), payload.size());
+  if (size() != 0) {
+    writer.writeWithoutCopy(&iobuf_);
   }
 }
 
@@ -81,50 +77,34 @@ PayloadHolder PayloadHolder::deserialize(ProtocolReader& reader,
   }
 
   if (payload_size == 0) {
-    return PayloadHolder{nullptr, 0};
+    return PayloadHolder();
   }
 
   ld_check(payload_size > 0);
-  auto iobuf = reader.readIntoIOBuf(payload_size);
-  if (!reader.error()) {
-    return PayloadHolder(std::move(iobuf));
-  }
+  PayloadHolder p;
+  reader.readIOBuf(&p.iobuf_, payload_size);
+  ld_check_eq(p.size(), reader.error() ? 0ul : payload_size);
 
-  ld_check(reader.error());
-  return PayloadHolder();
+  return p;
 }
 
 void PayloadHolder::TEST_corruptPayload() {
-  if (!folly::kIsDebug) {
-    RATELIMIT_CRITICAL(std::chrono::seconds(60),
-                       1,
-                       "Please disable flag to corrupt STORE payloads");
+  if (size() == 0) {
+    *this = copyString("a");
     return;
   }
 
-  Payload corrupted = getPayload().dup();
+  *this = copyPayload(getPayload());
+
   // Flip the last bit, as the user defined payload is last
-  *((unsigned char*)corrupted.data() + corrupted.size() - 1) ^= 1;
-  *this = PayloadHolder(corrupted.data(), corrupted.size());
+  *(iobuf_.writableTail() - 1) ^= 1;
 }
 
 Payload PayloadHolder::getPayload() const {
-  size_t payload_size = 0;
-  if (!valid() || (payload_size = size()) == 0) {
-    return Payload();
-  }
-  return Payload(iobuf_->data(), payload_size);
-}
-
-Payload PayloadHolder::getFlatPayload() const {
-  ld_check(valid());
-  size_t payload_size = size();
-  if (payload_size == 0) {
-    return Payload();
-  }
-  iobuf_->coalesce();
-  ld_check_eq(iobuf_->length(), payload_size);
-  return Payload(iobuf_->data(), payload_size);
+  ld_check(!iobuf_.isChained());
+  ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
+  size_t payload_size = iobuf_.length();
+  return payload_size == 0 ? Payload() : Payload(iobuf_.data(), payload_size);
 }
 
 std::string PayloadHolder::toString() const {

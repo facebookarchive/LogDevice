@@ -1136,7 +1136,7 @@ int Sequencer::startRecovery(std::chrono::milliseconds delay) {
                          TailRecordHeader::CHECKSUM_PARITY, // flags
                          {}},
         OffsetMap::fromLegacy(0),
-        std::shared_ptr<PayloadHolder>()};
+        PayloadHolder()};
 
     onRecoveryCompleted(E::OK,
                         epoch,

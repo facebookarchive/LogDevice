@@ -68,7 +68,9 @@ class AppendRequest : public AppendRequestBase,
    * @param client  ClientBridge to make write token checks through, may be
    *                nullptr if bypassWriteTokenCheck() is called
    * @param logid   log to append the record to
-   * @param payload record payload
+   * @param payload record payload; the constructor will make a copy of it
+   *                TODO: change this to PayloadHolder and avoid the copying
+   *                      in some cases
    * @param timeout cancel the request and report E::TIMEDOUT to client
    *                if a reply is not received for this many milliseconds
    * @param callback functor to call when a reply is received or on timeout
@@ -86,35 +88,6 @@ class AppendRequest : public AppendRequestBase,
                       timeout,
                       std::move(callback),
                       std::make_unique<SequencerRouter>(logid, this)) {}
-  /**
-   * Constructor used by clients to submit an original AppendRequest to a
-   * Processor.
-   *
-   * @param client  ClientBridge to make write token checks through, may be
-   *                nullptr if bypassWriteTokenCheck() is called
-   * @param logid   log to append the record to
-   * @param payload record payload which becomes owned by append request and
-   *                will automatically be released after calling callback.
-   * @param timeout cancel the request and report E::TIMEDOUT to client
-   *                if a reply is not received for this many milliseconds
-   * @param callback functor to call when a reply is received or on timeout
-   */
-  AppendRequest(ClientBridge* client,
-                logid_t logid,
-                AppendAttributes attrs,
-                std::string payload,
-                std::chrono::milliseconds timeout,
-                append_callback_t callback)
-      : AppendRequest(client,
-                      logid,
-                      std::move(attrs),
-                      Payload(),
-                      timeout,
-                      std::move(callback),
-                      std::make_unique<SequencerRouter>(logid, this)) {
-    string_payload_ = std::move(payload);
-    record_.payload = Payload(string_payload_.data(), string_payload_.size());
-  }
 
   ~AppendRequest() override;
 
@@ -174,6 +147,11 @@ class AppendRequest : public AppendRequestBase,
    */
   void setTargetWorker(worker_id_t id) {
     target_worker_ = id;
+  }
+
+  // See client_payload_.
+  void setClientPayload(Payload p) {
+    client_payload_ = p;
   }
 
   void setBufferedWriterBlobFlag() {
@@ -328,6 +306,17 @@ class AppendRequest : public AppendRequestBase,
     return sequencer_router_flags_;
   }
 
+  // record_.payload points to payload_
+  PayloadHolder payload_;
+
+  // Pass this Payload to the callback. This is needed to support the legacy
+  // Client::append() API which (a) requires the user to keep the Payload alive
+  // until the callback is called, and (b) promises that the same Payload will
+  // be passed to the callback (whilch may e.g. free() it). Now (a) is obsolete
+  // because the Payload is copied into an IOBuf right away anyway, so (b) is
+  // not useful, except for the existing code that frees payload in callback.
+  folly::Optional<Payload> client_payload_;
+
   // This field contains the target log id, request creation time, and
   // payload supplied by a client. It is passed back to the client through
   // append_callback_t when the request completes. This field is used only if
@@ -354,10 +343,6 @@ class AppendRequest : public AppendRequestBase,
   AppendAttributes attrs_;
 
   std::unique_ptr<std::string> per_request_token_;
-
-  // If the ownership of the payload is transferred to LogDevice, this buffer
-  // contains that payload (and record_.payload points to it).
-  std::string string_payload_;
 
   // Here we cache the id of the worker on which this request must be running.
   // This is either set by setTargetWorker() or if setTargetWorker() was never

@@ -50,8 +50,9 @@ AppendRequest::AppendRequest(ClientBridge* client,
       sender_(std::make_unique<SenderProxy>()),
       client_(client),
       status_(E::UNKNOWN),
+      payload_(PayloadHolder::COPY_BUFFER, payload),
       record_(logid,
-              payload,
+              payload_.getPayload(),
               LSN_INVALID,
               std::chrono::duration_cast<std::chrono::milliseconds>(
                   std::chrono::system_clock::now().time_since_epoch())),
@@ -75,8 +76,9 @@ AppendRequest::AppendRequest(AppendRequest&& other) noexcept
       client_(std::move(other.client_)),
       failed_to_post_(std::move(other.failed_to_post_)),
       status_(std::move(other.status_)),
+      payload_(std::move(other.payload_)),
       record_(other.record_.logid,
-              std::move(other.record_.payload),
+              payload_.getPayload(),
               LSN_INVALID,
               std::chrono::duration_cast<std::chrono::milliseconds>(
                   std::chrono::system_clock::now().time_since_epoch())),
@@ -87,7 +89,6 @@ AppendRequest::AppendRequest(AppendRequest&& other) noexcept
       callback_(std::move(other.callback_)),
       attrs_(std::move(other.attrs_)),
       per_request_token_(std::move(other.per_request_token_)),
-      string_payload_(std::move(other.string_payload_)),
       target_worker_(std::move(other.target_worker_)),
       previous_lsn_(std::move(other.previous_lsn_)),
       on_socket_close_(id_),
@@ -98,10 +99,6 @@ AppendRequest::AppendRequest(AppendRequest&& other) noexcept
       bypass_write_token_check_(std::move(other.bypass_write_token_check_)),
       append_redirected_to_dead_node_(
           std::move(other.append_redirected_to_dead_node_)) {
-  if (!string_payload_.empty()) {
-    // Point record_ to the new instance of string_payload_.
-    record_.payload = Payload(string_payload_.data(), string_payload_.size());
-  }
   if (!AppendRequest::clientThreadId) {
     AppendRequest::clientThreadId =
         std::max<unsigned>(1, ++AppendRequest::nextThreadId);
@@ -160,7 +157,18 @@ AppendRequest::~AppendRequest() {
   if (is_active_) {
     // Call back only when the request is active. If not, it has been cancelled
     // and no one is expecting the callback.
-    callback_(client_status, record_);
+
+    if (!client_payload_.hasValue()) {
+      callback_(client_status, record_);
+    } else {
+      // Make sure to call the callback using the same Payload object as the one
+      // passed to Client::append(), even though we copied it and didn't use the
+      // original for anything.
+      Payload tmp = client_payload_.value();
+      std::swap(record_.payload, tmp);
+      callback_(client_status, record_);
+      std::swap(record_.payload, tmp);
+    }
   }
 }
 
@@ -327,13 +335,7 @@ std::unique_ptr<APPEND_Message> AppendRequest::createAppendMessage() {
       append_flags};
 
   return std::make_unique<APPEND_Message>(
-      header,
-      previous_lsn_,
-      // The key and payload may point into user-owned memory or be backed by a
-      // std::string contained in this class.  Do not transfer ownership to
-      // APPEND_Message.
-      attrs_,
-      PayloadHolder(record_.payload, PayloadHolder::UNOWNED));
+      header, previous_lsn_, attrs_, payload_);
 }
 
 void AppendRequest::sendAppendMessage() {

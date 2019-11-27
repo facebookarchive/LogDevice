@@ -77,9 +77,19 @@ class ProtocolReader {
      */
     virtual int readEvbuffer(evbuffer* dest, size_t to_read, size_t nread) = 0;
 
-    virtual int readIOBuf(std::unique_ptr<folly::IOBuf>* dest,
-                          size_t to_read,
-                          size_t nread) = 0;
+    virtual int readIOBuf(folly::IOBuf* dest, size_t to_read, size_t nread) {
+      // Default implementation just allocates an IOBuf and copies into it.
+
+      *dest = folly::IOBuf(folly::IOBuf::CREATE, to_read);
+      int rv = read(dest->writableTail(), to_read, nread);
+      if (rv < 0) {
+        return rv;
+      }
+      dest->append(rv);
+      ld_check_eq(to_read, static_cast<size_t>(rv));
+      ld_check_eq(dest->length(), to_read);
+      return rv;
+    }
 
     /**
      * Remove @param to_drain number of bytes from the beginning of the source
@@ -177,11 +187,13 @@ class ProtocolReader {
   }
 
   /**
-   * Reads into an evbuffer (for zero-copy reads of larger amounts of data).
-   * Wraps evbuffer_remove_buffer() from libevent.
+   * Reads into an evbuffer/IOBuf.
+   * Zero-copies reads of larger amounts of data when possible.
+   * If the provided buffer is not empty, it will be overwritten.
+   * In case of error leaves the output buffer empty.
    */
   void readEvbuffer(evbuffer* out, size_t to_read);
-  std::unique_ptr<folly::IOBuf> readIntoIOBuf(size_t to_read);
+  void readIOBuf(folly::IOBuf* out, size_t to_read);
 
   uint64_t computeChecksum(size_t msglen) {
     return src_ ? src_->computeChecksum(msglen) : 0;
