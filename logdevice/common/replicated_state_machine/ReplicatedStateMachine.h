@@ -121,7 +121,11 @@ class ReplicatedStateMachine {
                                   logid_t delta_log_id,
                                   logid_t snapshot_log_id = LOGID_INVALID);
 
-  virtual ~ReplicatedStateMachine() {}
+  virtual ~ReplicatedStateMachine() {
+    if (!stopped_) {
+      stop();
+    }
+  }
 
   /**
    * Stop reading (equivalent to calling stop()) once the tail of the snapshot
@@ -626,6 +630,9 @@ class ReplicatedStateMachine {
   bool write_delta_header_{true};
   bool snapshot_in_flight_{false};
 
+  // Indicates whether the state machine has stopped reading
+  bool stopped_{false};
+
  private:
   // Deserialize a record in the snapshot log. Expect a RSMSnapshotHeader
   // followed by the payload which the user provides deserialization for through
@@ -779,9 +786,6 @@ class ReplicatedStateMachine {
 
   // List of callbacks to call when the local state gets updated.
   std::list<update_cb_t> subscribers_;
-
-  // Used for debugging.
-  bool stopped_{false};
 
   // The following counters are used to provide an estimate to users of the
   // number of records and bytes in the delta log that have not been taken into
