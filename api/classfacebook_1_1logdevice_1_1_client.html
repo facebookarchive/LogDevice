@@ -334,7 +334,7 @@ Static Public Member Functions</h2></td></tr>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">logid</td><td>unique id of the log to which to append a new record</td></tr>
-    <tr><td class="paramname">payload</td><td>record payload.</td></tr>
+    <tr><td class="paramname">payload</td><td>record payload</td></tr>
     <tr><td class="paramname">cb</td><td>the callback to call</td></tr>
     <tr><td class="paramname">attrs</td><td>additional append attributes. See AppendAttributes</td></tr>
   </table>
@@ -389,8 +389,7 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>Appends a new record to the log without blocking. This version doesn't transfer the ownership of the payload to LogDevice and assumes that the caller will be responsible for destroying it.</p>
-<p>IMPORTANT: for performance reasons this function does not make an internal copy of payload. It just passes payload.data pointer and payload.size value to the LogDevice client thread pool. The caller MUST make sure that the payload is not free'd or modified, or its memory is otherwise reused until the callback cb() is called with the same payload as its argument. A common pattern for sending a payload that's on the stack is to memcpy() it into a malloc'ed buffer, then call free() on payload.data pointer passed to cb(). </p>
+<p>Appends a new record to the log without blocking. Makes a copy of the provided payload, so it's ok to deallocate <code>payload</code> after the <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">append()</a> call returns, without waiting for callback. </p>
 
 </div>
 </div>
