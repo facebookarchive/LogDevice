@@ -34,7 +34,4 @@ bool parseInternalLogs(const folly::dynamic& clusterMap,
                        const SecurityConfig& securityConfig,
                        configuration::InternalLogs& internalLogs);
 
-bool validateNodeCount(const ServerConfig& nodes_cfg,
-                       const LocalLogsConfig* logs_cfg_ptr);
-
 }}}} // namespace facebook::logdevice::configuration::parser

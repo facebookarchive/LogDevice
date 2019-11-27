@@ -169,8 +169,6 @@ class LocalLogsConfig : public LogsConfig {
   // Deletes a log group. Returns false if it doesn't exist.
   bool erase(const std::string& path);
 
-  bool isValid(const ServerConfig& server_config) const;
-
   const LogMap& getLogMap() const {
     return config_tree_->getLogMap();
   }

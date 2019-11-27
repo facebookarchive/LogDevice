@@ -153,96 +153,6 @@ bool parseInternalLogs(const folly::dynamic& clusterMap,
   return true;
 }
 
-// A copy-paste of EpochMetaData::nodesetToStorageSet(). It's a quick hack to
-// avoid having to slightly reorganize build targets.
-// TODO(TT15517759): Remove.
-static StorageSet nodesetToStorageSet(const NodeSetIndices& indices) {
-  StorageSet set;
-  set.reserve(indices.size());
-  for (node_index_t nid : indices) {
-    set.push_back(ShardID(nid, 0));
-  }
-  return set;
-}
-
-bool validateNodeCount(const ServerConfig& server_cfg,
-                       const LocalLogsConfig* logs_cfg) {
-  // number of nodes with positive weights which can be used to store records
-  int writable_node_cnt = 0;
-  // number of nodes that can run sequencers
-  int sequencer_node_cnt = 0;
-
-  for (const auto& it : server_cfg.getNodes()) {
-    const Node& node_cfg = it.second;
-    if (node_cfg.isWritableStorageNode()) {
-      writable_node_cnt++;
-    }
-    if (node_cfg.isSequencingEnabled()) {
-      sequencer_node_cnt++;
-    }
-  }
-
-  if (sequencer_node_cnt == 0) {
-    ld_error("the 'sequencer' attribute must be set to 'true' for at least "
-             "one node in the cluster. Found no such nodes.");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  if (!logs_cfg) {
-    // no log config available locally - skipping log config validation.
-    return true;
-  }
-
-  const auto& nodes = server_cfg.getNodes();
-  for (auto it = logs_cfg->getLogMap().begin();
-       it != logs_cfg->getLogMap().end();
-       it++) {
-    const LogGroupInDirectory& logcfg = it->second;
-    int replication_factor =
-        ReplicationProperty::fromLogAttributes(logcfg.log_group->attrs())
-            .getReplicationFactor();
-    if (writable_node_cnt < replication_factor) {
-      ld_error("the cluster does not have enough writable storage nodes "
-               "for logs in the interval [%lu..%lu]. The log(s) in that "
-               "interval require %d node(s). Found %i node(s).",
-               it->first.lower(),
-               it->first.upper() - 1,
-               replication_factor,
-               writable_node_cnt);
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-  }
-
-  const auto& meta_cfg = server_cfg.getMetaDataLogsConfig();
-  auto storage_set = nodesetToStorageSet(meta_cfg.metadata_nodes);
-  // ensure metadata_logs section is consistent with nodes section
-  if (!configuration::nodes::validStorageSet(
-          *server_cfg.getNodesConfigurationFromServerConfigSource(),
-          storage_set,
-          ReplicationProperty::fromLogAttributes(
-              meta_cfg.metadata_log_group->attrs()),
-          true // check the nodes exist
-          )) {
-    ld_error("Nodeset for metadata_logs is not compatible with its "
-             "configuration, please check if the metadata nodes satisfy "
-             "replication requirements on its replication scope. "
-             "nodeset size: %lu, replication property: %s, "
-             "total nodes in cluster: %lu.",
-             meta_cfg.metadata_nodes.size(),
-             ReplicationProperty::fromLogAttributes(
-                 meta_cfg.metadata_log_group->attrs())
-                 .toString()
-                 .c_str(),
-             nodes.size());
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  return true;
-}
-
 // Sets the permissions such that only an admin user can modify the the
 // metadata log, while all other users only have read permissions.
 void setMetaDataLogsPermission(MetaDataLogsConfig& config) {
@@ -409,9 +319,6 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
     err = E::INVALID_CONFIG;
     return false;
   }
-
-  // consistency of metadata nodeset and replication_factor is checked later
-  // in validateNodeCount()
 
   return true;
 }

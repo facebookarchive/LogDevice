@@ -503,21 +503,6 @@ TEST(ConfigurationTest, InvalidRolesConfig) {
 }
 
 /**
- * Attempts to load configs with properties that are only available
- * for some roles and ensure they fail with E::INVALID_CONFIG.
- */
-TEST(ConfigurationTest, InvalidPropertiesRoles) {
-  using facebook::logdevice::E;
-  using facebook::logdevice::err;
-
-  std::shared_ptr<Configuration> config;
-
-  config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("invalid_properties_storage1.conf"));
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-}
-
-/**
  * Exercises getNode().
  */
 TEST(ConfigurationTest, LookupNodeByID) {
@@ -824,22 +809,6 @@ TEST(ConfigurationTest, DupMetaNodes) {
 
   ASSERT_EQ(nullptr, config);
   EXPECT_EQ(err, E::INVALID_CONFIG);
-}
-
-TEST(ConfigurationTest, InvalidMetaDataNodeSet) {
-  using namespace facebook::logdevice;
-  std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("invalid_metadata_logs.conf")));
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-  ASSERT_EQ(nullptr, config->logsConfig());
-}
-
-TEST(ConfigurationTest, InvalidNodeInMetaDataNodeSet) {
-  using namespace facebook::logdevice;
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("bad_metadata_id.conf")));
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-  ASSERT_EQ(nullptr, config->logsConfig());
 }
 
 TEST(ConfigurationTest, Defaults) {
