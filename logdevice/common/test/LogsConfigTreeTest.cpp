@@ -147,6 +147,31 @@ TEST(LogAttributesTest, EqualityTest) {
   ASSERT_TRUE(x1 == x2);
 }
 
+TEST(LogAttributesTest, ComparisonOpTest) {
+  LogAttributes attr1 = DefaultLogAttributes();
+  LogAttributes attr2 = DefaultLogAttributes();
+
+  attr1 = attr1.with_syncedCopies(5);
+  ASSERT_NE(attr1, attr2);
+
+  attr2 = attr2.with_syncedCopies(attr1.syncedCopies());
+  ASSERT_EQ(attr1, attr2);
+
+  attr1 = attr1.with_monitoringTier(
+      folly::Optional<monitoring_tier_t>(monitoring_tier_t(17)));
+  ASSERT_NE(attr1, attr2);
+
+  attr2 = attr2.with_monitoringTier(attr1.monitoringTier());
+  ASSERT_EQ(attr1, attr2);
+
+  attr1 = attr1.with_tailOptimized(false);
+  attr2 = attr2.with_tailOptimized(true);
+  ASSERT_NE(attr1, attr2);
+
+  attr2 = attr2.with_tailOptimized(false);
+  ASSERT_EQ(attr1, attr2);
+}
+
 TEST(LogsConfigTreeTest, ImmutabilityTest) {
   auto defaults = DefaultLogAttributes();
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
@@ -342,21 +367,22 @@ TEST(LogsConfigTreeTest, TestReplaceLogGroup) {
   // /normal_logs/not-so-normal/log_group3
   ASSERT_TRUE(tree->addLogGroup("/normal_logs/not-so-normal/log_group3",
                                 logid_range_t{logid_t(21), logid_t(40)}));
-  LogGroupNode replacement = group1->withRange(
+  LogGroupNode replacement1 = group1->withRange(
       logid_range_t(logid_t(100), logid_t(1ull << LOGID_BITS)));
-  ASSERT_FALSE(tree->replaceLogGroup("/normal_logs/log_group1", replacement));
+  ASSERT_FALSE(tree->replaceLogGroup("/normal_logs/log_group1", replacement1));
   ASSERT_EQ(E::INVALID_ATTRIBUTES, err);
   ASSERT_NE(nullptr, tree->find("/normal_logs/log_group1"));
   ASSERT_TRUE(tree->getLogGroupByID(logid_t(4)));
   // try a replacement that clashes with others
-  replacement = group1->withRange(logid_range_t(logid_t(1), logid_t(22)));
-  ASSERT_FALSE(tree->replaceLogGroup("/normal_logs/log_group1", replacement));
+  auto replacement2 = group1->withRange(logid_range_t(logid_t(1), logid_t(22)));
+  ASSERT_FALSE(tree->replaceLogGroup("/normal_logs/log_group1", replacement2));
   ASSERT_EQ(E::ID_CLASH, err);
   ASSERT_NE(nullptr, tree->find("/normal_logs/log_group1"));
   ASSERT_TRUE(tree->getLogGroupByID(logid_t(4)));
   // replace with invalid attributes
-  replacement = group1->withLogAttributes(LogAttributes().with_extraCopies(-1));
-  ASSERT_FALSE(tree->replaceLogGroup("/normal_logs/log_group1", replacement));
+  auto replacement3 =
+      group1->withLogAttributes(LogAttributes().with_extraCopies(-1));
+  ASSERT_FALSE(tree->replaceLogGroup("/normal_logs/log_group1", replacement3));
   ASSERT_EQ(E::INVALID_ATTRIBUTES, err);
   ASSERT_NE(nullptr, tree->find("/normal_logs/log_group1"));
   ASSERT_TRUE(tree->getLogGroupByID(logid_t(4)));
@@ -366,8 +392,9 @@ TEST(LogsConfigTreeTest, TestReplaceLogGroup) {
                 .extraCopies()
                 .value());
   // actually replacings
-  replacement = group1->withLogAttributes(LogAttributes().with_extraCopies(20));
-  ASSERT_TRUE(tree->replaceLogGroup("/normal_logs/log_group1", replacement));
+  auto replacement4 =
+      group1->withLogAttributes(LogAttributes().with_extraCopies(20));
+  ASSERT_TRUE(tree->replaceLogGroup("/normal_logs/log_group1", replacement4));
   ASSERT_NE(nullptr, tree->find("/normal_logs/log_group1"));
   ASSERT_EQ(20,
             tree->getLogGroupByID(logid_t(4))

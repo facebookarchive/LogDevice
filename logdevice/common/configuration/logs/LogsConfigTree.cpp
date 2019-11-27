@@ -353,7 +353,7 @@ DirectoryNode::DirectoryNode(const DirectoryNode& other)
     : DirectoryNode(other, other.parent_) {}
 
 DirectoryNode::DirectoryNode(const DirectoryNode& other, DirectoryNode* parent)
-    : LogsConfigTreeNode(other.name_, other.attrs_),
+    : LogsConfigTreeNode(other.name_, other.attrs()),
       parent_(parent),
       delimiter_(other.delimiter_) {
   // a simple copy of the log groups map
@@ -377,7 +377,7 @@ ReplicationProperty DirectoryNode::getNarrowestReplication() const {
 DirectoryNode* DirectoryNode::addChild(const std::string& name,
                                        const LogAttributes& child_attrs) {
   auto child = std::make_unique<DirectoryNode>(
-      name, this, LogAttributes(child_attrs, attrs_), delimiter_);
+      name, this, LogAttributes(child_attrs, attrs()), delimiter_);
   DirectoryNode* node = child.get();
   setChild(name, std::move(child));
   return node;
@@ -408,7 +408,7 @@ DirectoryNode::addLogGroup(const std::string& name,
                            bool overwrite,
                            std::string& failure_reason) {
   auto log = std::make_shared<LogGroupNode>(
-      name, LogAttributes(log_attrs, attrs_), range);
+      name, LogAttributes(log_attrs, attrs()), range);
   if (LogGroupNode::isValid(this, log.get(), failure_reason)) {
     return addLogGroup(log, overwrite, failure_reason);
   } else {
@@ -431,7 +431,7 @@ DirectoryNode::addLogGroup(const LogGroupNode& log_group,
 bool DirectoryNode::refreshAttributesInheritance(std::string& failure_reason) {
   // create new attributes that apply the parent to the supplied attributes
   if (parent_ != nullptr) {
-    attrs_ = LogAttributes(attrs_, parent_->attrs());
+    replaceAttrs(LogAttributes(attrs(), parent_->attrs()));
   }
   // for all dirs, set new attribute
   for (auto& it : children_) {
@@ -444,8 +444,8 @@ bool DirectoryNode::refreshAttributesInheritance(std::string& failure_reason) {
   for (auto& it : logs_) {
     std::string log_path = getFullyQualifiedName() + delimiter_ + it.first;
     // create a replacement log group node that has our attributes applied
-    LogGroupNode replacement =
-        it.second->withLogAttributes(LogAttributes(it.second->attrs(), attrs_));
+    LogGroupNode replacement = it.second->withLogAttributes(
+        LogAttributes(it.second->attrs(), attrs()));
     if (!LogGroupNode::isValid(this, &replacement, failure_reason)) {
       err = E::INVALID_ATTRIBUTES;
       return false;
