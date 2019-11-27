@@ -22,23 +22,14 @@ namespace facebook { namespace logdevice {
 RecordRebuildingStore::RecordRebuildingStore(
     size_t block_id,
     shard_index_t shard,
-    RawRecord record,
+    lsn_t lsn,
+    folly::IOBuf&& raw_record,
     RecordRebuildingOwner* owner,
     std::shared_ptr<ReplicationScheme> replication,
-    std::shared_ptr<PayloadHolder> scratch_payload_holder,
     const NodeAvailabilityChecker* node_availability)
-    : RecordRebuildingBase(record.lsn,
-                           shard,
-                           owner,
-                           replication,
-                           node_availability),
+    : RecordRebuildingBase(lsn, shard, owner, replication, node_availability),
       blockID_(block_id),
-      record_(std::move(record)),
-      payloadHolder_(std::move(scratch_payload_holder)) {
-  // Record bytes need to be owned either by record_ or scratch_payload_holder,
-  // but not both.
-  ld_check(record_.owned != (payloadHolder_ != nullptr));
-}
+      recordOrPayload_(std::move(raw_record)) {}
 
 RecordRebuildingStore::~RecordRebuildingStore() {
   if (started_) {
@@ -68,22 +59,24 @@ void RecordRebuildingStore::start(bool read_only) {
 int RecordRebuildingStore::parseRecord() {
   int rv;
 
+  Slice record_slice(reinterpret_cast<const void*>(recordOrPayload_.data()),
+                     recordOrPayload_.length());
   bool verify_checksum = getSettings().verify_checksum_before_replicating;
 
   if (verify_checksum) {
-    rv = LocalLogStoreRecordFormat::checkWellFormed(record_.blob);
+    rv = LocalLogStoreRecordFormat::checkWellFormed(record_slice);
     if (rv != 0) {
       ld_error("Refusing to rebuild malformed record %lu%s. "
                "Blob: %s",
                owner_->getLogID().val_,
-               lsn_to_string(record_.lsn).c_str(),
-               hexdump_buf(record_.blob, 500).c_str());
+               lsn_to_string(lsn_).c_str(),
+               hexdump_buf(record_slice, 500).c_str());
       ld_check(err == E::MALFORMED_RECORD);
       return -1;
     }
   }
 
-  storeHeader_.rid = RecordID(record_.lsn, owner_->getLogID());
+  storeHeader_.rid = RecordID(lsn_, owner_->getLogID());
   storeHeader_.nsync = 0;
   storeHeader_.copyset_offset = -1;
   copyset_size_t copyset_size;
@@ -94,7 +87,7 @@ int RecordRebuildingStore::parseRecord() {
 
   // Call parse() twice: first time to get copyset size and everything except
   // copyset, second time to get copyset (after allocating memory for it).
-  rv = LocalLogStoreRecordFormat::parse(record_.blob,
+  rv = LocalLogStoreRecordFormat::parse(record_slice,
                                         &timestamp,
                                         &storeHeader_.last_known_good,
                                         &recordFlags_,
@@ -132,7 +125,7 @@ int RecordRebuildingStore::parseRecord() {
   // as an append if the flag is clear).
 
   existingCopyset_.resize(copyset_size);
-  rv = LocalLogStoreRecordFormat::parse(record_.blob,
+  rv = LocalLogStoreRecordFormat::parse(record_slice,
                                         nullptr,
                                         nullptr,
                                         nullptr,
@@ -146,61 +139,48 @@ int RecordRebuildingStore::parseRecord() {
                                         getMyShardID().shard());
   ld_check(rv == 0);
 
-  if (payloadHolder_ != nullptr) {
-    ld_check(!record_.owned);
-    *payloadHolder_ = PayloadHolder(payload, PayloadHolder::UNOWNED);
-  } else {
-    // We want to give STORE_Message a shared_ptr<PayloadHolder> that shares
-    // ownership of the payload. The payload is a part of record_.blob,
-    // owned by record_. Move the blob into CustomPayloadHolder and use
-    // shared_ptr aliasing constructor to make shared_ptr<PayloadHolder> own it.
-    struct CustomPayloadHolder {
-      Slice blob;
-      PayloadHolder holder;
+  // Trim recordOrPayload_ to include only the payload.
 
-      CustomPayloadHolder(Slice blob, Payload payload)
-          : blob(blob), holder(payload, PayloadHolder::UNOWNED) {}
-      ~CustomPayloadHolder() {
-        std::free(const_cast<void*>(blob.data));
-      }
-    };
-    ld_check(record_.owned);
-    auto custom_ptr =
-        std::make_shared<CustomPayloadHolder>(record_.blob, payload);
-    record_.owned = false;
-    payloadHolder_ =
-        std::shared_ptr<PayloadHolder>(custom_ptr, &custom_ptr->holder);
+  if (payload.size() == 0) {
+    recordOrPayload_ = folly::IOBuf();
+  } else {
+    // Payload must be inside the record slice.
+    const char* payload_ptr = reinterpret_cast<const char*>(payload.data());
+    const char* record_ptr = reinterpret_cast<const char*>(record_slice.data);
+    ld_check(!std::less<const char*>()(payload_ptr, record_ptr));
+    ld_check(!std::greater<const char*>()(
+        payload_ptr + payload.size(), record_ptr + record_slice.size));
+
+    recordOrPayload_.trimEnd((record_ptr + record_slice.size) -
+                             (payload_ptr + payload.size()));
+    recordOrPayload_.trimStart(payload_ptr - record_ptr);
   }
 
   return 0;
 }
 
-std::shared_ptr<PayloadHolder> RecordRebuildingStore::getPayloadHolder() const {
-  return payloadHolder_;
+PayloadHolder RecordRebuildingStore::getPayloadHolder() const {
+  return PayloadHolder(recordOrPayload_.cloneAsValue());
 }
 
 void RecordRebuildingStore::traceEvent(const char* event_type,
                                        const char* status) {
   tracer_.traceRecordRebuild(owner_->getLogID(),
-                             record_.lsn,
+                             lsn_,
                              owner_->getRebuildingVersion(),
                              usec_since(creation_time_),
                              owner_->getRebuildingSet(),
                              existingCopyset_,
                              newCopyset_,
                              rebuildingWave_,
-                             getPayloadSize(),
+                             getRecordSize(),
                              curStage_,
                              event_type,
                              status);
 }
 
-size_t RecordRebuildingStore::getPayloadSize() const {
-  if (payloadHolder_) {
-    return payloadHolder_->size();
-  }
-  // parseRecord() failed, or read-only mode.
-  return 0;
+size_t RecordRebuildingStore::getRecordSize() const {
+  return recordOrPayload_.length();
 }
 
 void RecordRebuildingStore::buildNewCopysetBase() {
@@ -211,24 +191,8 @@ void RecordRebuildingStore::buildNewCopysetBase() {
 
   const auto& storage_set = replication_->epoch_metadata.shards;
 
-  std::chrono::milliseconds timestamp;
-  LocalLogStoreRecordFormat::flags_t flags;
-  int rv = LocalLogStoreRecordFormat::parse(record_.blob,
-                                            &timestamp,
-                                            nullptr,
-                                            &flags,
-                                            nullptr,
-                                            nullptr,
-                                            nullptr,
-                                            0,
-                                            nullptr,
-                                            nullptr,
-                                            nullptr,
-                                            getMyShardID().shard());
-  // The record was successfully parsed before.
-  ld_check(rv == 0);
   const DataClass dc =
-      (flags & LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_REBUILDING)
+      (recordFlags_ & LocalLogStoreRecordFormat::FLAG_WRITTEN_BY_REBUILDING)
       ? DataClass::REBUILD
       : DataClass::APPEND;
 
@@ -250,7 +214,7 @@ void RecordRebuildingStore::buildNewCopysetBase() {
             "LSN: "
             "%s copyset: %s rebuilding set: %s, storage set: %s",
             owner_->getLogID().val_,
-            lsn_to_string(record_.lsn).c_str(),
+            lsn_to_string(lsn_).c_str(),
             toString(existingCopyset_.data(), existingCopyset_.size()).c_str(),
             owner_->getRebuildingSet().describe().c_str(),
             toString(storage_set.data(), storage_set.size()).c_str());
@@ -263,7 +227,7 @@ void RecordRebuildingStore::buildNewCopysetBase() {
             " belong to the storage set. Log: %lu LSN: %s copyset: %s "
             "rebuilding set: %s, storage set: %s",
             owner_->getLogID().val_,
-            lsn_to_string(record_.lsn).c_str(),
+            lsn_to_string(lsn_).c_str(),
             toString(existingCopyset_.data(), existingCopyset_.size()).c_str(),
             owner_->getRebuildingSet().describe().c_str(),
             toString(storage_set.data(), storage_set.size()).c_str());
@@ -273,23 +237,27 @@ void RecordRebuildingStore::buildNewCopysetBase() {
 
     if (std::find(newCopyset_.begin(), newCopyset_.end(), shard) !=
         newCopyset_.end()) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      2,
-                      "Existing copyset contains duplicates. Log: %lu LSN: %s "
-                      "copyset: %s new copyset so far: %s duplicate shard: %s "
-                      "record: %s",
-                      owner_->getLogID().val_,
-                      lsn_to_string(record_.lsn).c_str(),
-                      toString(existingCopyset_).c_str(),
-                      toString(newCopyset_).c_str(),
-                      shard.toString().c_str(),
-                      hexdump_buf(record_.blob, 100).c_str());
+      RATELIMIT_ERROR(
+          std::chrono::seconds(10),
+          2,
+          "Existing copyset contains duplicates. Log: %lu LSN: %s "
+          "copyset: %s new copyset so far: %s duplicate shard: %s "
+          "flags: %s",
+          owner_->getLogID().val_,
+          lsn_to_string(lsn_).c_str(),
+          toString(existingCopyset_).c_str(),
+          toString(newCopyset_).c_str(),
+          shard.toString().c_str(),
+          LocalLogStoreRecordFormat::flagsToString(recordFlags_).c_str());
       return false;
     }
 
     auto shard_kv = rebuilding_set.find(shard);
     return shard_kv == rebuilding_set.end() ||
-        !shard_kv->second.isUnderReplicated(dc, RecordTimestamp(timestamp)) ||
+        !shard_kv->second.isUnderReplicated(
+            dc,
+            RecordTimestamp(
+                std::chrono::milliseconds(storeHeader_.timestamp))) ||
         (shard_kv->first == getMyShardID() &&
          !replication_->relocate_local_records);
   };
@@ -325,7 +293,7 @@ int RecordRebuildingStore::pickCopyset() {
         "Encountered a record without any rebuilding shards in copyset. "
         "Log: %lu LSN: %s copyset: %s rebuilding set: %s",
         owner_->getLogID().val_,
-        lsn_to_string(record_.lsn).c_str(),
+        lsn_to_string(lsn_).c_str(),
         toString(newCopyset_.data(), newCopyset_.size()).c_str(),
         owner_->getRebuildingSet().describe().c_str());
     WORKER_STAT_INCR(rebuilding_bad_copysets);
@@ -344,7 +312,7 @@ int RecordRebuildingStore::pickCopyset() {
         "Failed to pick copyset to re-replicate record %lu%s, will retry. "
         "existing copies: %s, rebuilding set: %s",
         owner_->getLogID().val_,
-        lsn_to_string(record_.lsn).c_str(),
+        lsn_to_string(lsn_).c_str(),
         toString(amendable_copies).c_str(),
         owner_->getRebuildingSet().describe().c_str());
     err = E::FAILED;
@@ -355,7 +323,7 @@ int RecordRebuildingStore::pickCopyset() {
 
   ld_debug("Record %lu%s - old copyset: %s - new copyset: %s",
            owner_->getLogID().val_,
-           lsn_to_string(record_.lsn).c_str(),
+           lsn_to_string(lsn_).c_str(),
            toString(existingCopyset_.data(), existingCopyset_.size()).c_str(),
            toString(newCopyset_.data(), newCopyset_.size()).c_str());
 
@@ -399,7 +367,7 @@ int RecordRebuildingStore::pickCopyset() {
         "No new nodes were picked for Record %lu%s - "
         "old copyset: %s - new copyset: %s",
         owner_->getLogID().val_,
-        lsn_to_string(record_.lsn).c_str(),
+        lsn_to_string(lsn_).c_str(),
         toString(existingCopyset_.data(), existingCopyset_.size()).c_str(),
         toString(newCopyset_.data(), newCopyset_.size()).c_str());
   }
@@ -545,7 +513,7 @@ void RecordRebuildingStore::onRetryTimeout() {
                    2,
                    "Retrying picking copyset for %lu%s",
                    owner_->getLogID().val_,
-                   lsn_to_string(record_.lsn).c_str());
+                   lsn_to_string(lsn_).c_str());
     sendCurrentStage();
     return;
   }
@@ -593,7 +561,7 @@ void RecordRebuildingStore::onComplete() {
 
   ld_spew("All stores received for %lu%s",
           owner_->getLogID().val_,
-          lsn_to_string(record_.lsn).c_str());
+          lsn_to_string(lsn_).c_str());
   ld_check(owner_);
   traceEvent("STORES RECEIVED", nullptr);
 
@@ -608,7 +576,7 @@ void RecordRebuildingStore::onComplete() {
     }
   }
 
-  owner_->onAllStoresReceived(record_.lsn, std::move(flushTokenMap));
+  owner_->onAllStoresReceived(lsn_, std::move(flushTokenMap));
   // `this` is destroyed here.
 }
 

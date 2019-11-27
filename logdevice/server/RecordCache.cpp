@@ -53,7 +53,7 @@ int RecordCache::putRecord(RecordID rid,
                            const copyset_t& copyset,
                            STORE_flags_t flags,
                            std::map<KeyType, std::string>&& optional_keys,
-                           const std::shared_ptr<PayloadHolder>& payload_holder,
+                           const PayloadHolder& payload_holder,
                            OffsetMap offsets_within_epoch) {
   ld_check(rid.logid == log_id_);
 

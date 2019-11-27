@@ -22,7 +22,6 @@
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/AppendRequest.h"
-#include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/FindKeyRequest.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"

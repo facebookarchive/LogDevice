@@ -146,7 +146,7 @@ int fromLinearBuffer(const char* buf,
                        {BYTE_OFFSET_INVALID /* deprecated, offsets_within_epoch used instead */},
                        /*flags*/ 0,
                        {}},
-                      std::shared_ptr<PayloadHolder>(),
+                      PayloadHolder(),
                       std::move(offsets));
     }
   }

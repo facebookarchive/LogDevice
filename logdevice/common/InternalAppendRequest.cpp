@@ -91,25 +91,4 @@ runInternalAppend(logid_t logid,
   return folly::none;
 }
 
-folly::Optional<APPENDED_Header>
-runInternalAppend(logid_t logid,
-                  AppendAttributes attrs,
-                  const Payload& payload,
-                  InternalAppendRequest::Callback callback,
-                  APPEND_flags_t flags,
-                  int checksum_bits,
-                  uint32_t timeout_ms,
-                  uint32_t append_message_count,
-                  folly::Optional<epoch_t> acceptable_epoch) {
-  return runInternalAppend(logid,
-                           std::move(attrs),
-                           PayloadHolder(payload, PayloadHolder::UNOWNED),
-                           std::move(callback),
-                           flags,
-                           checksum_bits,
-                           timeout_ms,
-                           append_message_count,
-                           acceptable_epoch);
-}
-
 }} // namespace facebook::logdevice

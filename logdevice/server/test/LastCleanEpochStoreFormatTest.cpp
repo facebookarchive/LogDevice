@@ -32,8 +32,6 @@ class LastCleanEpochStoreFormatTest : public ::testing::Test {
   TailRecord genTailRecord(bool include_payload) {
     TailRecordHeader::flags_t flags =
         (include_payload ? TailRecordHeader::HAS_PAYLOAD : 0);
-    void* payload_flat = malloc(20);
-    std::strncpy((char*)payload_flat, "Tail Record Test.", 20);
     return TailRecord(
         TailRecordHeader{
             LOGID,
@@ -43,8 +41,8 @@ class LastCleanEpochStoreFormatTest : public ::testing::Test {
             flags,
             {}},
         OffsetMap({{BYTE_OFFSET, 2349045994592}}),
-        include_payload ? std::make_shared<PayloadHolder>(payload_flat, 20)
-                        : nullptr);
+        include_payload ? PayloadHolder::copyString("Tail Record Test.---")
+                        : PayloadHolder());
   }
 
   // original implemenetation in SetLastCleanEpochZRQ.h

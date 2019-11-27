@@ -57,7 +57,7 @@ class ProtocolWriter {
                                  size_t nbytes,
                                  size_t nwritten) = 0;
 
-    virtual int writeWithoutCopy(folly::IOBuf* const /* buffer */,
+    virtual int writeWithoutCopy(const folly::IOBuf* /* buffer */,
                                  size_t /* nwritten */) {
       ld_check(false);
       err = E::INTERNAL;
@@ -145,10 +145,11 @@ class ProtocolWriter {
    * Writes data without necessarily copying it.  The Message subclass should
    * ensure the region of memory is valid as long as it exists.
    *
-   * Wraps evbuffer_add_reference() from libevent.
+   * TODO: After we get rid of EvbufferDestination, the IOBuf overload won't
+   *       require the original IOBuf to remain alive after the call.
    */
   void writeWithoutCopy(const void* data, size_t size);
-  void writeWithoutCopy(folly::IOBuf* const buffer);
+  void writeWithoutCopy(const folly::IOBuf* buffer);
 
   /**
    * Writes a vector.  std::string also welcome as it is sufficiently

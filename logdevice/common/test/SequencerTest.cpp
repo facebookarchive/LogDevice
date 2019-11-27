@@ -102,8 +102,6 @@ class SequencerTest : public ::testing::Test {
     TailRecordHeader::flags_t flags =
         (include_payload ? TailRecordHeader::HAS_PAYLOAD : 0);
     flags |= TailRecordHeader::CHECKSUM_PARITY;
-    void* payload_flat = malloc(20);
-    std::strncpy((char*)payload_flat, "Tail Record Test.", 20);
     return TailRecord(
         TailRecordHeader{
             LOG_ID,
@@ -113,8 +111,9 @@ class SequencerTest : public ::testing::Test {
             flags,
             {}},
         OffsetMap({{BYTE_OFFSET, tail_lsn}}),
-        include_payload ? std::make_shared<PayloadHolder>(payload_flat, 20)
-                        : nullptr);
+        include_payload ? PayloadHolder::copyString(
+                              std::string("Tail Record Test.\0\0\0", 20))
+                        : PayloadHolder());
   }
 
   std::shared_ptr<Configuration> getConfig() const {
@@ -202,7 +201,7 @@ class MockAppender : public Appender {
             /* append_request_id= */ request_id_t(0),
             STORE_flags_t(0),
             test->LOG_ID,
-            PayloadHolder(MockAppender::dummyPayload, PayloadHolder::UNOWNED),
+            PayloadHolder::copyString("payload"),
             epoch_t(0),
             size),
         test_(test) {}
@@ -249,13 +248,12 @@ class MockAppender : public Appender {
                 TailRecordHeader::OFFSET_WITHIN_EPOCH,
                 {}},
             OffsetMap::fromLegacy(0),
-            std::shared_ptr<PayloadHolder>()),
+            PayloadHolder()),
         &last_released_epoch,
         &lng_changed);
   }
 
  private:
-  static Payload dummyPayload;
   std::shared_ptr<EpochSequencer> epoch_sequencer_;
   SequencerTest* const test_;
   lsn_t lsn_{LSN_INVALID};
@@ -323,7 +321,6 @@ class MockSequencer : public Sequencer {
 };
 
 constexpr logid_t SequencerTest::LOG_ID;
-Payload MockAppender::dummyPayload("payload", 8);
 
 void MockEpochSequencer::retireAppenders(esn_t start, esn_t end, bool abort) {
   ASSERT_LE(start, end);

@@ -692,15 +692,15 @@ void ReaderImpl::read_decodeBuffered(QueueEntry& entry) {
   // each original record, push them onto `pre_queue_' and let the main
   // read() loop consume them.
   int batch_offset = 0;
-  for (Payload& payload : payloads) {
+  for (const Payload& payload : payloads) {
     auto record = std::make_unique<DataRecordOwnsPayload>(
         log_id,
-        std::move(payload),
+        payload,
+        decoder, // shared ownership of the decoder
         attrs.lsn,
         attrs.timestamp,
         flags & ~RECORD_Header::BUFFERED_WRITER_BLOB,
         nullptr, // no rebuilding metadata
-        decoder, // shared ownership of the decoder
         batch_offset++);
     pre_queue_.emplace_back( // creating a QueueEntry
         entry.getReadStreamID(),

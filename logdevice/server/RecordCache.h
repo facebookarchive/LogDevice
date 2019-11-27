@@ -73,7 +73,6 @@ class RecordCache {
    *
    * @param copyset           copyset of the record as in STORE_Header
    * @param flags             store flags of the record
-   * @param payload_raw       Slice for the linearized payload
    * @param paylaod_holder    PayloadHolder object that owns the allocated
    *                          payload
    * @param offsets_within_epoch  offsets stored in the same epoch before
@@ -95,7 +94,7 @@ class RecordCache {
                 const copyset_t& copyset,
                 STORE_flags_t flags,
                 std::map<KeyType, std::string>&& optional_keys,
-                const std::shared_ptr<PayloadHolder>& payload_holder,
+                const PayloadHolder& payload_holder,
                 OffsetMap offsets_within_epoch = OffsetMap());
 
   /**

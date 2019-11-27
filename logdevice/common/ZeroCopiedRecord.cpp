@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <cstring>
 
-#include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Err.h"
@@ -19,16 +18,15 @@ namespace facebook { namespace logdevice {
 
 ZeroCopiedRecord::ZeroCopiedRecord() : flags(0) {}
 
-ZeroCopiedRecord::ZeroCopiedRecord(
-    lsn_t lsn,
-    STORE_flags_t flags,
-    uint64_t timestamp,
-    esn_t last_known_good,
-    uint32_t wave_or_recovery_epoch,
-    const copyset_t& copyset,
-    OffsetMap offsets_within_epoch,
-    std::map<KeyType, std::string>&& keys,
-    std::shared_ptr<PayloadHolder> payload_holder)
+ZeroCopiedRecord::ZeroCopiedRecord(lsn_t lsn,
+                                   STORE_flags_t flags,
+                                   uint64_t timestamp,
+                                   esn_t last_known_good,
+                                   uint32_t wave_or_recovery_epoch,
+                                   const copyset_t& copyset,
+                                   OffsetMap offsets_within_epoch,
+                                   std::map<KeyType, std::string>&& keys,
+                                   const PayloadHolder& payload_holder)
     : lsn(lsn),
       flags(flags),
       timestamp(timestamp),
@@ -37,17 +35,16 @@ ZeroCopiedRecord::ZeroCopiedRecord(
       copyset(copyset),
       offsets_within_epoch(std::move(offsets_within_epoch)),
       keys(std::move(keys)),
-      payload_raw(payload_holder ? payload_holder->getPayload() : Payload()),
-      payload_holder_(std::move(payload_holder)) {}
+      payload(payload_holder) {}
 
 /*static*/
-size_t ZeroCopiedRecord::getBytesEstimate(Slice payload_raw) {
-  return sizeof(ZeroCopiedRecord) + payload_raw.size +
+size_t ZeroCopiedRecord::getBytesEstimate(Payload payload_raw) {
+  return sizeof(ZeroCopiedRecord) + payload_raw.size() +
       /* control block size estimation*/ 32;
 }
 
 size_t ZeroCopiedRecord::getBytesEstimate() const {
-  return getBytesEstimate(payload_raw);
+  return getBytesEstimate(payload.getPayload());
 }
 
 }} // namespace facebook::logdevice

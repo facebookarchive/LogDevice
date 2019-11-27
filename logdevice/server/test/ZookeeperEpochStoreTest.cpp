@@ -129,7 +129,7 @@ TailRecord gen_tail_record(logid_t logid,
        0,
        {}},
       std::move(offsets),
-      std::shared_ptr<PayloadHolder>());
+      PayloadHolder());
 }
 
 TailRecord gen_tail_record_with_payload(logid_t logid,
@@ -137,8 +137,8 @@ TailRecord gen_tail_record_with_payload(logid_t logid,
                                         uint64_t timestamp,
                                         OffsetMap offsets) {
   TailRecordHeader::flags_t flags = TailRecordHeader::HAS_PAYLOAD;
-  void* payload_flat = malloc(333);
-  std::strncpy((char*)payload_flat, "Tail Record Test Payload", 50);
+  std::array<char, 333> payload_flat{};
+  std::strncpy(&payload_flat[0], "Tail Record Test Payload", 50);
   return TailRecord(
       {logid,
        lsn,
@@ -147,7 +147,7 @@ TailRecord gen_tail_record_with_payload(logid_t logid,
        0,
        {}},
       std::move(offsets),
-      std::make_shared<PayloadHolder>(payload_flat, 333));
+      PayloadHolder::copyBuffer(&payload_flat[0], payload_flat.size()));
 }
 } // namespace
 

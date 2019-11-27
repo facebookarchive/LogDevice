@@ -113,6 +113,10 @@ struct Payload {
     return *this;
   }
 
+  static Payload fromStringLiteral(const char* s) {
+    return Payload(s, strlen(s));
+  }
+
   Payload dup() const {
     void* data_copy = nullptr;
     if (data_) {
@@ -141,11 +145,6 @@ struct Payload {
 
   folly::StringPiece toStringPiece() const noexcept {
     return folly::StringPiece{static_cast<const char*>(data_), size_};
-  }
-
-  // Copies data into a IOBuf
-  std::unique_ptr<folly::IOBuf> toIOBuf() const {
-    return folly::IOBuf::copyBuffer(data_, size_);
   }
 
   // returns maximum payload size supported by this implementation of

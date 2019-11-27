@@ -11,10 +11,10 @@ namespace facebook { namespace logdevice {
 
 TailRecord::TailRecord(const TailRecordHeader& header_in,
                        OffsetMap offset_map,
-                       std::shared_ptr<PayloadHolder> payload)
+                       PayloadHolder payload)
     : header(header_in),
       offsets_map_(std::move(offset_map)),
-      payload_(hasPayload() ? std::move(payload) : nullptr) {}
+      payload_(hasPayload() ? std::move(payload) : PayloadHolder()) {}
 
 TailRecord::TailRecord(TailRecord&& rhs) noexcept
     : header(rhs.header),
@@ -29,7 +29,7 @@ TailRecord::TailRecord(const TailRecordHeader& header_in,
                        std::shared_ptr<ZeroCopiedRecord> record)
     : header(header_in),
       offsets_map_(std::move(offset_map)),
-      payload_(hasPayload() ? record->getPayloadHolder() : nullptr),
+      payload_(hasPayload() ? record->payload : PayloadHolder()),
       zero_copied_record_(hasPayload() ? std::move(record) : nullptr) {}
 
 TailRecord& TailRecord::operator=(TailRecord&& rhs) noexcept {
@@ -49,8 +49,7 @@ Slice TailRecord::getPayloadSlice() const {
     return Slice();
   }
 
-  ld_check(payload_);
-  return Slice(payload_->getFlatPayload());
+  return Slice(payload_.getPayload());
 }
 
 TailRecordHeader::blob_size_t TailRecord::calculateBlobSize() const {
@@ -92,25 +91,10 @@ void TailRecord::serialize(ProtocolWriter& writer) const {
   if (blob_size > 0) {
     writer.write(blob_size);
     ld_check(hasPayload());
-    auto payloadClone = payload_->clonePayload();
-    Payload flat_payload;
-    TailRecordHeader::payload_size_t payload_size = 0;
-    if (!payloadClone) {
-      flat_payload = payload_->getFlatPayload();
-      payload_size =
-          static_cast<TailRecordHeader::payload_size_t>(flat_payload.size());
-    } else {
-      payload_size = static_cast<TailRecordHeader::payload_size_t>(
-          payloadClone->computeChainDataLength());
-    }
+    TailRecordHeader::payload_size_t payload_size = payload_.size();
     writer.write(payload_size);
     if (payload_size > 0) {
-      if (payloadClone) {
-        // if possible, zero-copy write the actual payload
-        writer.writeWithoutCopy(payloadClone.get());
-      } else {
-        writer.write(flat_payload.data(), flat_payload.size());
-      }
+      payload_.serialize(writer);
     }
   }
 }
@@ -147,9 +131,8 @@ void TailRecord::deserialize(ProtocolReader& reader,
         // do not use zero-copy if payload size is 0
         evbuffer_zero_copy = false;
       }
-      payload_ = std::make_shared<PayloadHolder>(
-          PayloadHolder::deserialize(reader, payload_size));
-      if (payload_ && evbuffer_zero_copy) {
+      payload_ = PayloadHolder::deserialize(reader, payload_size);
+      if (evbuffer_zero_copy) {
         // further wraps the payload into ZeroCopiedRecord
         zero_copied_record_ = std::make_shared<ZeroCopiedRecord>(
             header.lsn,

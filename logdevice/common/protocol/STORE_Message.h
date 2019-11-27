@@ -253,7 +253,7 @@ class STORE_Message : public Message {
                 STORE_flags_t additional_flags,
                 STORE_Extra extra,
                 std::map<KeyType, std::string> optional_keys,
-                std::shared_ptr<PayloadHolder> payload,
+                const PayloadHolder& payload,
                 bool appender_context = false);
 
   // Movable but not copyable
@@ -303,9 +303,6 @@ class STORE_Message : public Message {
     std::abort();
   }
   static Message::deserializer_t deserialize;
-  // Overload of deserialize that does not need to run on a Worker thread.
-  static MessageReadResult deserialize(ProtocolReader&,
-                                       size_t max_payload_inline);
 
   /**
    * @return a human-readable representation of copyset_
@@ -367,7 +364,7 @@ class STORE_Message : public Message {
   }
 
   const PayloadHolder* getPayloadHolder() const {
-    return payload_.get();
+    return &payload_;
   }
 
   /**
@@ -390,8 +387,7 @@ class STORE_Message : public Message {
    * deserialize() uses this constructor when it reads a STORE message from
    * the input buffer of a bufferevent.
    */
-  STORE_Message(const STORE_Header& header,
-                std::shared_ptr<PayloadHolder>&& payload);
+  STORE_Message(const STORE_Header& header, const PayloadHolder& payload);
 
   // Convenience wrapper for STORED_Message::createAndSend
   void sendReply(Status status,
@@ -415,10 +411,7 @@ class STORE_Message : public Message {
   // exists before allowing the message to be serialized onto the wire
   bool appender_context_{false};
 
-  // Nullptr means empty payload.  The payload is also not serialized when the
-  // AMEND flag is set, so on the receiving side it will always be empty for
-  // amends.
-  std::shared_ptr<PayloadHolder> payload_;
+  PayloadHolder payload_;
 
   // identities of all nodes on which this record is stored
   folly::small_vector<StoreChainLink, 6> copyset_;

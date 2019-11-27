@@ -637,17 +637,17 @@ void LogRebuilding::startRecordRebuildingStores(
         current_block_id_, std::move(*curPosition_), cur_replication_scheme_);
 
     {
-      const epoch_t epoch = lsn_to_epoch(r->getRecord().lsn);
+      const epoch_t epoch = lsn_to_epoch(r->getLsn());
       const epoch_t expected_lo = epoch_t(curEpochRange_->first.lower());
       const epoch_t expected_hi = epoch_t(curEpochRange_->first.upper() - 1);
       ld_check(epoch >= expected_lo && epoch <= expected_hi);
     }
 
-    auto lsn = r->getRecord().lsn;
+    auto lsn = r->getLsn();
     const bool ro =
         rebuildingSettings_->read_only == RebuildingReadOnlyOption::ON_DONOR;
     auto rds = std::make_unique<RecordDurabilityState>(lsn);
-    rds->size = r->getRecord().blob.size;
+    rds->size = r->getRecordSize();
     rds->rr = std::move(r);
     if (!recordDurabilityState_.count(lsn)) {
       nonDurableRecordList_.push_back(*(rds.get()));
@@ -1575,10 +1575,21 @@ LogRebuilding::createRecordRebuildingStore(
     size_t block_id,
     RawRecord r,
     std::shared_ptr<ReplicationScheme> replication) {
+  ld_check(r.owned);
   ld_check(replication);
   ld_check(!replication->epoch_metadata.shards.empty());
-  return std::make_unique<RecordRebuildingStore>(
-      block_id, shard_, std::move(r), this, std::move(replication));
+  // Move the ownership of the blob into an IOBuf.
+  auto rr = std::make_unique<RecordRebuildingStore>(
+      block_id,
+      shard_,
+      r.lsn,
+      folly::IOBuf(folly::IOBuf::TAKE_OWNERSHIP,
+                   const_cast<void*>(r.blob.data),
+                   r.blob.size),
+      this,
+      std::move(replication));
+  r.owned = false;
+  return rr;
 }
 
 std::unique_ptr<RecordRebuildingAmend>

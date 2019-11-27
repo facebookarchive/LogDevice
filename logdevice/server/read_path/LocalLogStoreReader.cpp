@@ -521,11 +521,10 @@ int getTailRecord(LocalLogStore::ReadIterator& iterator,
   if (record_flags & LocalLogStoreRecordFormat::FLAG_OFFSET_MAP) {
     flags |= TailRecordHeader::OFFSET_MAP;
   }
-  std::shared_ptr<PayloadHolder> ph;
+  PayloadHolder ph;
   if (include_payload) {
     // make a private copy so that payload can be owned by the PayloadHolder
-    payload = payload.dup();
-    ph = std::make_shared<PayloadHolder>(payload.data(), payload.size());
+    ph = PayloadHolder::copyPayload(payload);
     flags |= TailRecordHeader::HAS_PAYLOAD;
     flags |= (record_flags &
               (TailRecordHeader::CHECKSUM | TailRecordHeader::CHECKSUM_64BIT |

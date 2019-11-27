@@ -33,8 +33,6 @@
 namespace facebook { namespace logdevice {
 
 void APPEND_Message::serialize(ProtocolWriter& writer) const {
-  ld_check(payload_.valid());
-
   // Only write the header without any flags corresponding to stream writer if
   // protocol does not support it.
 
@@ -98,11 +96,7 @@ void APPEND_Message::serialize(ProtocolWriter& writer) const {
       // no need to checksum anything, just add the appropriate number of bytes
       writer.write(nullptr, checksum_bits / 8);
     } else {
-      // The const_cast here is needed because getPayload() is not necessarily
-      // physically constant (it may linearize the evbuffer) but is logically
-      // constant.  APPEND message sending is not a tricky multithreaded
-      // context (this worker created the PayloadHolder) so this is fine.
-      Payload payload = const_cast<PayloadHolder&>(payload_).getPayload();
+      Payload payload = payload_.getPayload();
       char buf[8];
       Slice chkblob = checksum_bytes(Slice(payload), checksum_bits, buf);
       writer.write(chkblob.data, chkblob.size);
@@ -141,11 +135,6 @@ void APPEND_Message::onSent(Status st, const Address& to) const {
 }
 
 MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader) {
-  return deserialize(reader, Worker::settings().max_payload_inline);
-}
-
-MessageReadResult APPEND_Message::deserialize(ProtocolReader& reader,
-                                              size_t max_payload_inline) {
   APPEND_Header header;
   header.flags = 0;
   reader.read(&header);

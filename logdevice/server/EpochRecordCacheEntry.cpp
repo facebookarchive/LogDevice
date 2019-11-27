@@ -34,7 +34,7 @@ EpochRecordCacheEntry::EpochRecordCacheEntry(
     const copyset_t& copyset,
     OffsetMap offsets_within_epoch,
     std::map<KeyType, std::string>&& keys,
-    std::shared_ptr<PayloadHolder> payload_holder)
+    const PayloadHolder& payload_holder)
     : ZeroCopiedRecord(lsn,
                        flags,
                        timestamp,
@@ -43,7 +43,7 @@ EpochRecordCacheEntry::EpochRecordCacheEntry(
                        copyset,
                        std::move(offsets_within_epoch),
                        std::move(keys),
-                       std::move(payload_holder)) {}
+                       payload_holder) {}
 
 int EpochRecordCacheEntry::fromLinearBuffer(lsn_t lsn,
                                             const char* buffer,
@@ -99,17 +99,11 @@ int EpochRecordCacheEntry::fromLinearBuffer(lsn_t lsn,
 
   // reconstruct payload
   if (header.payload_size > 0) {
-    void* data = malloc(header.payload_size);
-    memcpy(data, buffer + current_size, header.payload_size);
-    // Copy payload size to local var since it's in a packed struct; else we'd
-    // be passing it by reference to make_shared
-    size_t payload_size = header.payload_size;
-    payload_holder_ = std::make_shared<PayloadHolder>(data, payload_size);
-    payload_raw = Slice(data, header.payload_size);
+    payload =
+        PayloadHolder::copyBuffer(buffer + current_size, header.payload_size);
     current_size += header.payload_size;
   } else {
-    payload_raw = Slice(nullptr, 0);
-    payload_holder_ = std::make_shared<PayloadHolder>(nullptr, 0);
+    payload = PayloadHolder();
   }
 
   return current_size;
@@ -123,7 +117,7 @@ size_t EpochRecordCacheEntry::sizeInLinearBuffer() const {
 
   return sizeof(EntryHeader) +
       (sizeof(copyset_t::value_type) * copyset.size()) + key_sizes +
-      payload_raw.size +
+      payload.size() +
       (flags & STORE_Header::OFFSET_MAP
            ? offsets_within_epoch.sizeInLinearBuffer()
            : 0);
@@ -143,7 +137,7 @@ ssize_t EpochRecordCacheEntry::toLinearBuffer(char* buffer, size_t size) const {
                      copyset_size_t(copyset.size()),
                      offsets_within_epoch.getCounter(BYTE_OFFSET),
                      {},
-                     payload_raw.size};
+                     payload.size()};
   for (const auto& kv : keys) {
     header.key_size[static_cast<int>(kv.first)] = kv.second.size();
   }
@@ -156,7 +150,7 @@ ssize_t EpochRecordCacheEntry::toLinearBuffer(char* buffer, size_t size) const {
     current_size += rv;
   }
 
-  // copyset_
+  // copyset
   size_t copyset_memsize = sizeof(copyset_t::value_type) * copyset.size();
   std::copy(copyset.begin(),
             copyset.end(),
@@ -174,11 +168,11 @@ ssize_t EpochRecordCacheEntry::toLinearBuffer(char* buffer, size_t size) const {
     // there's nothing to write.
   }
 
-  // payload_raw_
-  if (payload_raw.data) {
-    memcpy(buffer + current_size, payload_raw.data, payload_raw.size);
+  // payload
+  if (payload.size() != 0) {
+    memcpy(buffer + current_size, payload.getPayload().data(), payload.size());
   }
-  current_size += payload_raw.size;
+  current_size += payload.size();
 
   ld_assert(current_size == sizeInLinearBuffer());
   return current_size;

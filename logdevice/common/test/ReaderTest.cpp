@@ -110,12 +110,11 @@ static std::unique_ptr<DataRecordOwnsPayload> make_record(logid_t log_id,
                                                           lsn_t lsn) {
   static std::atomic<int64_t> timestamp{19850921};
   size_t nbytes = 100;
-  char* buf = (char*)malloc(nbytes);
-  snprintf(buf, nbytes, "record %ld", lsn);
-  Payload payload(buf, nbytes);
+  std::string s(nbytes, '-');
+  snprintf(&s[0], s.size(), "record %ld", lsn);
   return std::make_unique<DataRecordOwnsPayload>(
       log_id,
-      Payload(buf, 100),
+      PayloadHolder::copyString(s),
       lsn,
       std::chrono::milliseconds(timestamp++),
       (RECORD_flags_t)0);

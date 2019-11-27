@@ -186,18 +186,20 @@ convertChunks(const std::vector<std::unique_ptr<ChunkData>>& chunks) {
     for (size_t i = 0; i < c->numRecords(); ++i) {
       EXPECT_EQ(c->address.min_lsn + i, c->getLSN(i));
       Payload payload;
-      int rv = LocalLogStoreRecordFormat::parse(c->getRecordBlob(i),
-                                                nullptr,
-                                                nullptr,
-                                                nullptr,
-                                                nullptr,
-                                                nullptr,
-                                                nullptr,
-                                                0,
-                                                nullptr,
-                                                nullptr,
-                                                &payload,
-                                                shard_index_t(0));
+      folly::IOBuf blob = c->getRecordBlob(i);
+      int rv =
+          LocalLogStoreRecordFormat::parse(Slice(blob.data(), blob.length()),
+                                           nullptr,
+                                           nullptr,
+                                           nullptr,
+                                           nullptr,
+                                           nullptr,
+                                           nullptr,
+                                           0,
+                                           nullptr,
+                                           nullptr,
+                                           &payload,
+                                           shard_index_t(0));
       EXPECT_EQ(0, rv);
       std::string expected_payload;
       if (big) {

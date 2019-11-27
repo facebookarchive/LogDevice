@@ -33,10 +33,6 @@ struct ChunkData {
     // Note that this can't be a pointer because `buffer`'s data can be
     // reallocated when new records are appended to it.
     size_t offset;
-
-    // This is needed to be able to pass individual records as
-    // shared_ptr<PayloadHolder> sharing ownership of the whole chunk.
-    PayloadHolder payloadHolder;
   };
 
   ChunkAddress address;
@@ -48,17 +44,32 @@ struct ChunkData {
   std::shared_ptr<ReplicationScheme> replication;
 
   // All records concatenated together.
-  std::string buffer;
+  folly::IOBuf buffer;
   // Offset of end of each record in `buffer`.
   std::vector<RecordInfo> records;
 
   void addRecord(lsn_t lsn, Slice blob) {
-    // Check that LSNs are consecutive.
-    ld_check_eq(
-        lsn, records.empty() ? address.min_lsn : records.back().lsn + 1);
+    if (records.empty()) {
+      // Adding the first record. Create the buffer.
+      // We have to do this because reserve() doesn't work on
+      // default-initialized IOBuf.
+      buffer = folly::IOBuf(folly::IOBuf::CREATE, blob.size);
+      ld_check_eq(lsn, address.min_lsn);
+    } else {
+      // Check that LSNs are consecutive.
+      ld_check_eq(lsn, records.back().lsn + 1);
 
-    buffer.append(blob.ptr(), blob.size);
-    records.push_back({lsn, buffer.size(), PayloadHolder()});
+      if (blob.size > buffer.tailroom()) {
+        // Grow exponentially with factor 2.
+        buffer.reserve(/* minHeadroom */ 0,
+                       /* minTailroom */ std::max(blob.size, buffer.length()));
+      }
+    }
+
+    ld_check_ge(buffer.tailroom(), blob.size);
+    memcpy(buffer.writableTail(), blob.ptr(), blob.size);
+    buffer.append(blob.size);
+    records.push_back({lsn, buffer.length()});
   }
 
   size_t numRecords() const {
@@ -67,7 +78,7 @@ struct ChunkData {
 
   // Size of all records, including header.
   size_t totalBytes() const {
-    return buffer.size();
+    return buffer.length();
   }
 
   lsn_t getLSN(size_t idx) const {
@@ -76,13 +87,13 @@ struct ChunkData {
 
   // Serialized header+value combo, to be parsed
   // by LocalLogStoreRecordFormat::parse().
-  Slice getRecordBlob(size_t idx) const {
+  folly::IOBuf getRecordBlob(size_t idx) const {
     size_t off = idx ? records[idx - 1].offset : 0ul;
-    return Slice(buffer.data() + off, records[idx].offset - off);
-  }
-
-  PayloadHolder* getUninitializedPayloadHolder(size_t idx) {
-    return &records[idx].payloadHolder;
+    // Clone buffer and trim it to include just one record.
+    folly::IOBuf b = buffer;
+    b.trimEnd(b.length() - records[idx].offset);
+    b.trimStart(off);
+    return b;
   }
 
   ssize_t findLSN(lsn_t lsn) const {

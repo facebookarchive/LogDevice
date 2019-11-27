@@ -48,7 +48,7 @@ class StoreStorageTask : public WriteStorageTask {
                    const StoreChainLink* copyset,
                    folly::Optional<lsn_t> block_starting_lsn,
                    std::map<KeyType, std::string> optional_keys,
-                   const std::shared_ptr<PayloadHolder>& payload_holder,
+                   const PayloadHolder& payload_holder,
                    STORE_Extra extra,
                    ClientID reply_to,
                    std::chrono::steady_clock::time_point start_time,
@@ -141,16 +141,15 @@ class StoreStorageTask : public WriteStorageTask {
   LogStorageState& getLogStorageState();
 
   // Shared ownership of the payload.  Note that all modifications (like
-  // getPayload() and destruction) should happen on the worker thread.  The
+  // destruction) should happen on the worker thread.  The
   // storage thread should get just a raw pointer to the data.
-  std::shared_ptr<PayloadHolder> payload_holder_;
+  PayloadHolder payload_holder_;
 
   // used for record caching
   uint64_t timestamp_;
   esn_t lng_;
   copyset_t copyset_;
   STORE_flags_t flags_;
-  Slice payload_raw_;
 
   // These are used to reply
   RecordID rid_;

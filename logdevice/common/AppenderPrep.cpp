@@ -402,11 +402,9 @@ std::unique_ptr<Appender> AppenderPrep::constructAppender() {
       (APPEND_Header::CHECKSUM | APPEND_Header::CHECKSUM_64BIT |
        APPEND_Header::CHECKSUM_PARITY | APPEND_Header::BUFFERED_WRITER_BLOB);
 
-  // TODO: This does not account for Appender's
-  // std::shared_ptr<PayloadHolder>'s shared segment, or evbuffer overhead if
-  // the PayloadHolder wraps one.  There is no longer a reason to calculate
-  // this externally and pass into Appender; Appender could just calculate it
-  // itself.
+  // TODO: This does not account for Appender's PayloadHolder's shared segment.
+  //       There is no longer a reason to calculate this externally and pass
+  //       into Appender; Appender could just calculate it itself.
   size_t full_size = sizeof(Appender) + payload_.size();
 
   auto appender =

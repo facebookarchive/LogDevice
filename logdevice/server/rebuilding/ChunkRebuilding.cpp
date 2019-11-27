@@ -65,14 +65,13 @@ void ChunkRebuilding::start() {
   rrStores_.resize(data_->numRecords());
   rrAmends_.resize(data_->numRecords());
   for (size_t i = 0; i < rrStores_.size(); ++i) {
-    rrStores_[i] = std::make_unique<RecordRebuildingStore>(
-        data_->blockID,
-        shard_,
-        RawRecord(data_->getLSN(i), data_->getRecordBlob(i), /* owned */ false),
-        this,
-        data_->replication,
-        std::shared_ptr<PayloadHolder>(
-            data_, data_->getUninitializedPayloadHolder(i)));
+    rrStores_[i] =
+        std::make_unique<RecordRebuildingStore>(data_->blockID,
+                                                shard_,
+                                                data_->getLSN(i),
+                                                data_->getRecordBlob(i),
+                                                this,
+                                                data_->replication);
   }
   numInFlight_ = rrStores_.size();
   for (size_t i = 0; i < rrStores_.size(); ++i) {

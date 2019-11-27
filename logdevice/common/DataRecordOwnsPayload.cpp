@@ -16,17 +16,16 @@ namespace facebook { namespace logdevice {
 
 DataRecordOwnsPayload::DataRecordOwnsPayload(
     logid_t log_id,
-    Payload&& payload,
+    PayloadHolder&& payload_holder,
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
     RECORD_flags_t flags,
     std::unique_ptr<ExtraMetadata> extra_metadata,
-    std::shared_ptr<BufferedWriteDecoder> decoder,
     int batch_offset,
     RecordOffset offsets,
     bool invalid_checksum)
     : DataRecord(log_id,
-                 std::move(payload),
+                 payload_holder.getPayload(),
                  lsn,
                  timestamp,
                  batch_offset,
@@ -34,16 +33,30 @@ DataRecordOwnsPayload::DataRecordOwnsPayload(
       flags_(flags),
       invalid_checksum_(invalid_checksum),
       extra_metadata_(std::move(extra_metadata)),
-      decoder_(std::move(decoder)) {}
+      owner_(std::move(payload_holder)) {}
 
-DataRecordOwnsPayload::~DataRecordOwnsPayload() {
-  if (!decoder_) {
-    if (payload.data()) {
-      free(const_cast<void*>(payload.data()));
-    } else {
-      ld_check(payload.size() == 0);
-    }
-  }
-}
+DataRecordOwnsPayload::DataRecordOwnsPayload(
+    logid_t log_id,
+    Payload payload,
+    std::shared_ptr<BufferedWriteDecoder> decoder,
+    lsn_t lsn,
+    std::chrono::milliseconds timestamp,
+    RECORD_flags_t flags,
+    std::unique_ptr<ExtraMetadata> extra_metadata,
+    int batch_offset,
+    RecordOffset offsets,
+    bool invalid_checksum)
+    : DataRecord(log_id,
+                 payload,
+                 lsn,
+                 timestamp,
+                 batch_offset,
+                 std::move(offsets)),
+      flags_(flags),
+      invalid_checksum_(invalid_checksum),
+      extra_metadata_(std::move(extra_metadata)),
+      owner_(std::move(decoder)) {}
+
+DataRecordOwnsPayload::~DataRecordOwnsPayload() = default;
 
 }} // namespace facebook::logdevice

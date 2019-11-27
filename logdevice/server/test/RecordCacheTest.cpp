@@ -114,16 +114,14 @@ class DummySequencer {
 
 // for simplicity, payload of the record is a fixed 8 bytes storing the
 // lsn value of the record
-std::shared_ptr<PayloadHolder> createPayload(lsn_t lsn) {
-  return std::make_shared<PayloadHolder>(
-      folly::IOBuf::copyBuffer(static_cast<void*>(&lsn), sizeof(lsn)));
+PayloadHolder createPayload(lsn_t lsn) {
+  return PayloadHolder::copyBuffer(static_cast<void*>(&lsn), sizeof(lsn));
 }
 
-std::shared_ptr<PayloadHolder> createPayload(size_t size, char fill) {
+PayloadHolder createPayload(size_t size, char fill) {
   void* payload_flat = malloc(size);
   memset(payload_flat, fill, size);
-  return std::make_shared<PayloadHolder>(
-      folly::IOBuf::takeOwnership(payload_flat, size));
+  return PayloadHolder::takeOwnership(payload_flat, size);
 }
 
 // convenient function for putting a record in the cache
@@ -137,7 +135,7 @@ int putRecord(Cache* c,
               uint32_t wave_or_recovery_epoch = uint32_t(1),
               copyset_t copyset = copyset_t({N0, N1, N2}),
               OffsetMap offsets_within_epoch = OffsetMap()) {
-  std::shared_ptr<PayloadHolder> ph = nullptr;
+  PayloadHolder ph;
   if ((flags & STORE_Header::HOLE) || (flags & STORE_Header::AMEND)) {
     // no payload for hole plug of amends
   } else {
@@ -176,11 +174,10 @@ void verifyEntry(const Entry& entry,
   ASSERT_EQ(lsn, entry.timestamp);
   ASSERT_EQ(flags, entry.flags);
   if (entry.flags & STORE_Header::HOLE) {
-    ASSERT_EQ(nullptr, entry.payload_raw.data);
-    ASSERT_EQ(0, entry.payload_raw.size);
+    ASSERT_EQ(0, entry.payload.size());
   } else {
-    ASSERT_EQ(sizeof(lsn_t), entry.payload_raw.size);
-    ASSERT_EQ(lsn, *((lsn_t*)entry.payload_raw.data));
+    ASSERT_EQ(sizeof(lsn_t), entry.payload.size());
+    ASSERT_EQ(lsn, *((lsn_t*)entry.payload.getPayload().data()));
   }
 
   ASSERT_EQ(entry.keys, keys);
@@ -878,10 +875,10 @@ TEST_F(EpochRecordCacheTest, EntrySequencing) {
                          entry2->copyset.end(),
                          reconstructed_entry->copyset.begin()));
   ASSERT_EQ(entry2->keys, reconstructed_entry->keys);
-  ASSERT_EQ(entry2->payload_raw.size, reconstructed_entry->payload_raw.size);
-  ASSERT_EQ(memcmp(entry2->payload_raw.data,
-                   reconstructed_entry->payload_raw.data,
-                   entry2->payload_raw.size),
+  ASSERT_EQ(entry2->payload.size(), reconstructed_entry->payload.size());
+  ASSERT_EQ(memcmp(entry2->payload.getPayload().data(),
+                   reconstructed_entry->payload.getPayload().data(),
+                   entry2->payload.size()),
             0);
 
   // Compare the serializations, expect equality

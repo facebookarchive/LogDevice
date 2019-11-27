@@ -81,7 +81,13 @@ class IOBufDestination : public ProtocolWriter::Destination {
     return 0;
   }
 
-  int writeWithoutCopy(folly::IOBuf* const buffer,
+  // This behaves nicer than what ProtocolWriter requires:
+  //
+  // Writes a clone of the provided IOBuf chain. This increments refcount for
+  // the buffer's data, so it's ok to destroy the original IOBuf after this
+  // call. However, it's not ok to *modify* the IOBuf's contents after the
+  // call, as the clone points to the same data.
+  int writeWithoutCopy(const folly::IOBuf* buffer,
                        size_t /* nwritten */) override {
     ld_check(buffer->computeChainDataLength());
     auto clone = buffer->clone();
@@ -144,7 +150,7 @@ class EvbufferDestination : public ProtocolWriter::Destination {
     return rv;
   }
 
-  int writeWithoutCopy(folly::IOBuf* const buffer, size_t nwritten) override {
+  int writeWithoutCopy(const folly::IOBuf* buffer, size_t nwritten) override {
     return writeWithoutCopy(buffer->data(), buffer->length(), nwritten);
   }
 
@@ -206,12 +212,12 @@ class LinearBufferDestinationBase : public ProtocolWriter::Destination {
   int writeWithoutCopy(const void* src,
                        size_t nbytes,
                        size_t nwritten) override {
-    // currently zero copy is *not* support in linear buffer destination
-    // fallback to copy
+    // Currently zero copy is not supported in linear buffer destination.
+    // Fall back to copy.
     return write(src, nbytes, nwritten);
   }
 
-  int writeWithoutCopy(folly::IOBuf* const buffer, size_t nwritten) override {
+  int writeWithoutCopy(const folly::IOBuf* buffer, size_t nwritten) override {
     return writeWithoutCopy(buffer->data(), buffer->length(), nwritten);
   }
 
@@ -369,7 +375,7 @@ void ProtocolWriter::writeWithoutCopy(const void* data, size_t nbytes) {
   nwritten_ += nbytes;
 }
 
-void ProtocolWriter::writeWithoutCopy(folly::IOBuf* const buffer) {
+void ProtocolWriter::writeWithoutCopy(const folly::IOBuf* buffer) {
   if (!isProtoVersionAllowed()) {
     return;
   }

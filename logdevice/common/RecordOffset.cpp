@@ -72,4 +72,8 @@ operator=(const RecordOffset& record_offset) noexcept {
 
 RecordOffset::~RecordOffset() {}
 
+std::ostream& operator<<(std::ostream& os, const RecordOffset& off) {
+  return os << off.toString();
+}
+
 }} // namespace facebook::logdevice

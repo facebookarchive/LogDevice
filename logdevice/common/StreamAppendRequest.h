@@ -51,42 +51,8 @@ class StreamAppendRequest : public AppendRequest {
         stream_rqid_(stream_rqid),
         stream_resume_(stream_resume) {}
 
-  /**
-   * Constructor used by clients to submit an original StreamAppendRequest to a
-   * Processor. Mostly a wrapper around AppendRequest.
-   *
-   * @param client  ClientBridge to make write token checks through, may be
-   *                nullptr if bypassWriteTokenCheck() is called
-   * @param logid   log to append the record to
-   * @param payload record payload which becomes owned by append request and
-   *                will automatically be released after calling callback.
-   * @param timeout cancel the request and report E::TIMEDOUT to client
-   *                if a reply is not received for this many milliseconds
-   * @param callback functor to call when a reply is received or on timeout
-   * @param stream_rqid Request id that contains stream id and sequence number
-   *                    of the request within the stream.
-   * @param stream_resume Denotes if this is the first message in the stream for
-   *                      the current epoch.
-   */
-  StreamAppendRequest(ClientBridge* client,
-                      logid_t logid,
-                      AppendAttributes attrs,
-                      std::string payload,
-                      std::chrono::milliseconds timeout,
-                      append_callback_t callback,
-                      write_stream_request_id_t stream_rqid,
-                      bool stream_resume = false)
-      : AppendRequest(client,
-                      logid,
-                      std::move(attrs),
-                      std::move(payload),
-                      timeout,
-                      std::move(callback)),
-        stream_rqid_(stream_rqid),
-        stream_resume_(stream_resume) {}
-
  protected:
-  // tests can override
+  // Tests can override the SequencerRouter.
   StreamAppendRequest(ClientBridge* client,
                       logid_t logid,
                       AppendAttributes attrs,

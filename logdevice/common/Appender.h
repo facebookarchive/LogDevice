@@ -401,7 +401,7 @@ class Appender : public IntrusiveUnorderedMapHook {
               ShardID rebuildingRecipient = ShardID());
 
   const PayloadHolder* getPayload() const {
-    return payload_.get();
+    return &payload_;
   }
 
   const AppendAttributes& getAppendAttributes() {
@@ -594,7 +594,7 @@ class Appender : public IntrusiveUnorderedMapHook {
    * Used only in tests. See Settings::test_sequencer_corrupt_stores
    */
   void TEST_corruptPayload() {
-    payload_->TEST_corruptPayload();
+    payload_.TEST_corruptPayload();
   }
 
   /** Helper functions for appends that belong to a write stream. */
@@ -806,7 +806,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   AppendAttributes attrs_;
 
   // payload of record we are appending.
-  std::shared_ptr<PayloadHolder> payload_;
+  PayloadHolder payload_;
 
   // tail record for this append, will pass to sequencer when this appender
   // is reaped

@@ -81,4 +81,6 @@ class RecordOffset {
   std::unique_ptr<OffsetMap> offset_map;
 };
 
+std::ostream& operator<<(std::ostream& os, const RecordOffset& off);
+
 }} // namespace facebook::logdevice

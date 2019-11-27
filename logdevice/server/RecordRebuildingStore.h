@@ -23,43 +23,33 @@ namespace facebook { namespace logdevice {
 class RecordRebuildingStore : public RecordRebuildingBase {
  public:
   /**
-   * @param block_id              Used for seeding the rng for the copyset
-   *                              selector
-   * @param shard                 Local shard for which this state machine is
-   *                              running
-   * @param record                RawRecord object.
-   * @param owner                 Object that owns this
-   *                              RecordRebuildingStore object.
-   * @param replication           How copysets should be selected for the
-   *                              current epoch.
-   * @param scratch_payload_holder If `record` doesn't own its memory
-   *                              (owned = false) then this shared_ptr owns that
-   *                              memory (usually that memory is part of a chunk
-   *                              containing multiple records, and the
-   *                              shared_ptr owns the whole chunk), as well as
-   *                              a PayloadHolder object that
-   *                              RecordRebuildingStore needs for internal use.
-   * @param node_availability     Object to use for checking which nodes are
-   *                              alive. Only tests override it.
+   * @param block_id           Used for seeding the rng for the copyset
+   *                           selector
+   * @param shard              Local shard for which this state machine is
+   *                           running
+   * @param raw_record         Record bytes, as read from local log store,
+   *                           including header (see LocalLogStoreRecordFormat)
+   * @param owner              Object that owns this
+   *                           RecordRebuildingStore object.
+   * @param replication        How copysets should be selected for the
+   *                           current epoch.
+   * @param node_availability  Object to use for checking which nodes are
+   *                           alive. Only tests override it.
    */
-  RecordRebuildingStore(
-      size_t block_id,
-      shard_index_t shard,
-      RawRecord record,
-      RecordRebuildingOwner* owner,
-      std::shared_ptr<ReplicationScheme> replication,
-      std::shared_ptr<PayloadHolder> scratch_payload_holder = nullptr,
-      const NodeAvailabilityChecker* node_availability =
-          NodeAvailabilityChecker::instance());
+  RecordRebuildingStore(size_t block_id,
+                        shard_index_t shard,
+                        lsn_t lsn,
+                        folly::IOBuf&& raw_record,
+                        RecordRebuildingOwner* owner,
+                        std::shared_ptr<ReplicationScheme> replication,
+                        const NodeAvailabilityChecker* node_availability =
+                            NodeAvailabilityChecker::instance());
 
   ~RecordRebuildingStore() override;
 
   void start(bool read_only = false) override;
 
-  const RawRecord& getRecord() const {
-    return record_;
-  }
-  size_t getPayloadSize() const;
+  size_t getRecordSize() const;
 
   // RecordRebuildingAmendState contains all information necessary to start
   // amend state machines once stores are deemed durable.
@@ -70,12 +60,17 @@ class RecordRebuildingStore : public RecordRebuildingBase {
 
   copyset_size_t replicationFactor_;
   size_t blockID_;
-  RawRecord record_;
+
+  // Before parseRecord(): raw record, to be parsed using
+  // LocalLogStoreRecordFormat::parse().
+  // After parseRecord(): only the payload.
+  // We're being greedy and reuse the same IOBuf for these two purposes
+  // because sizeof(IOBuf) is pretty big: 56 bytes.
+  folly::IOBuf recordOrPayload_;
 
   // -1 means pick copyset, non-negative value is index in stages_.
   int curStage_ = -1;
   folly::small_vector<StageRecipients, 3> stages_;
-  std::shared_ptr<PayloadHolder> payloadHolder_;
 
   // @return -1 if record is malformed.
   int parseRecord();
@@ -104,7 +99,7 @@ class RecordRebuildingStore : public RecordRebuildingBase {
   void onStoreTimeout() override;
   void onStoreFailed() override;
   void onStageComplete() override;
-  std::shared_ptr<PayloadHolder> getPayloadHolder() const override;
+  PayloadHolder getPayloadHolder() const override;
 };
 
 }} // namespace facebook::logdevice

@@ -402,7 +402,7 @@ class APPEND_MessageTest_MockAppender : public Appender {
   APPEND_MessageTest_MockAppender(
       STORE_flags_t flags = STORE_flags_t(0),
       epoch_t seen_epoch = epoch_t(0),
-      PayloadHolder ph = PayloadHolder(dummyPayload, PayloadHolder::UNOWNED))
+      PayloadHolder ph = PayloadHolder::copyString("mirko"))
       : Appender(
             nullptr,
             std::make_shared<NoopTraceLogger>(UpdateableConfig::createEmpty()),
@@ -431,8 +431,6 @@ class APPEND_MessageTest_MockAppender : public Appender {
   }
 
  private:
-  static Payload dummyPayload;
-
   // Passthru flags from AppenderPrep to Appender
   STORE_flags_t passthru_flags(STORE_flags_t flags) {
     return flags &
@@ -441,7 +439,6 @@ class APPEND_MessageTest_MockAppender : public Appender {
   }
 };
 using MockAppender = APPEND_MessageTest_MockAppender;
-Payload MockAppender::dummyPayload("mirko", strlen("mirko"));
 
 std::shared_ptr<MockAppenderPrep>
 APPEND_MessageTest::create(logid_t log_id,
@@ -866,7 +863,7 @@ TEST_F(APPEND_MessageTest, CorruptionBeforeDataStore) {
 
     checksum_bytes(Slice(data, sizeof(data)), 32, new_data);
     memcpy(new_data + 4, data, sizeof(data));
-    PayloadHolder ph(new_data, new_size);
+    PayloadHolder ph(PayloadHolder::TAKE_OWNERSHIP, new_data, new_size);
 
     uint32_t flags2 = flags | APPEND_Header::CHECKSUM;
     auto prep = create(log, flags2);
@@ -884,7 +881,7 @@ TEST_F(APPEND_MessageTest, CorruptionBeforeDataStore) {
 
     checksum_bytes(Slice(data, sizeof(data)), 64, new_data);
     memcpy(new_data + 8, data, sizeof(data));
-    PayloadHolder ph(new_data, new_size);
+    PayloadHolder ph(PayloadHolder::TAKE_OWNERSHIP, new_data, new_size);
 
     uint32_t flags2 = flags | APPEND_Header::CHECKSUM |
         APPEND_Header::CHECKSUM_64BIT | APPEND_Header::CHECKSUM_PARITY;
@@ -906,7 +903,7 @@ TEST_F(APPEND_MessageTest, CorruptionBeforeDataStore) {
     // Copy currupted checksum bits into the data for the payload
     memcpy(new_data, &corruptedBits, 4);
     memcpy(new_data + 4, data, sizeof(data));
-    PayloadHolder ph(new_data, new_size);
+    PayloadHolder ph(PayloadHolder::TAKE_OWNERSHIP, new_data, new_size);
 
     uint32_t flags2 = flags | APPEND_Header::CHECKSUM;
     auto prep = create(log, flags2);
@@ -928,7 +925,7 @@ TEST_F(APPEND_MessageTest, CorruptionBeforeDataStore) {
     // Copy currupted checksum bits into the data for the payload
     memcpy(new_data, &corruptedBits, 8);
     memcpy(new_data + 8, data, sizeof(data));
-    PayloadHolder ph(new_data, new_size);
+    PayloadHolder ph(PayloadHolder::TAKE_OWNERSHIP, new_data, new_size);
 
     uint32_t flags2 = flags | APPEND_Header::CHECKSUM |
         APPEND_Header::CHECKSUM_64BIT | APPEND_Header::CHECKSUM_PARITY;

@@ -425,8 +425,8 @@ class RecordRebuildingBase : public RecordRebuildingInterface {
   // anymore. We need to pick a new copyset in this case.
   bool checkEveryoneStillInConfig();
 
-  virtual std::shared_ptr<PayloadHolder> getPayloadHolder() const {
-    return nullptr;
+  virtual PayloadHolder getPayloadHolder() const {
+    return PayloadHolder();
   }
 };
 

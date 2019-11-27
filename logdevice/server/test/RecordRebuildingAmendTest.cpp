@@ -364,7 +364,7 @@ class RecordRebuildingAmendTest : public ::testing::Test {
     EXPECT_TRUE(m->getHeader().flags & STORE_Header::AMEND);
     EXPECT_FALSE(m->getHeader().flags & STORE_Header::DRAINED);
     const PayloadHolder* payload = m->getPayloadHolder();
-    ASSERT_EQ(nullptr, payload);
+    ASSERT_EQ(0, payload->size());
   }
 
   copyset_t copyset;

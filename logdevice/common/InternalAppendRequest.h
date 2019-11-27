@@ -78,18 +78,4 @@ runInternalAppend(logid_t logid,
                   uint32_t append_message_count = 1,
                   folly::Optional<epoch_t> acceptable_epoch = folly::none);
 
-// overload of the above function but the caller owns the payload and needs to
-// ensure that the payload remain available until the append completes
-folly::Optional<APPENDED_Header>
-runInternalAppend(logid_t logid,
-                  AppendAttributes attrs,
-                  const Payload& payload,
-                  InternalAppendRequest::Callback callback,
-                  APPEND_flags_t flags,
-                  int checksum_bits,
-                  uint32_t timeout_ms,
-                  // Passed through to AppenderPrep::setMessageCount():
-                  uint32_t append_message_count = 1,
-                  folly::Optional<epoch_t> acceptable_epoch = folly::none);
-
 }} // namespace facebook::logdevice

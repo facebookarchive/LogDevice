@@ -36,7 +36,7 @@ StoreStorageTask::StoreStorageTask(
     const StoreChainLink* copyset,
     folly::Optional<lsn_t> block_starting_lsn,
     std::map<KeyType, std::string> optional_keys,
-    const std::shared_ptr<PayloadHolder>& payload_holder,
+    const PayloadHolder& payload_holder,
     STORE_Extra extra,
     ClientID reply_to,
     std::chrono::steady_clock::time_point start_time,
@@ -49,7 +49,6 @@ StoreStorageTask::StoreStorageTask(
       timestamp_(store_header.timestamp),
       lng_(store_header.last_known_good),
       flags_(store_header.flags),
-      payload_raw_(payload_holder->getPayload()),
       rid_(store_header.rid),
       wave_(store_header.wave),
       reply_to_(reply_to),
@@ -69,7 +68,7 @@ StoreStorageTask::StoreStorageTask(
                                                       write_shard_id_in_copyset,
                                                       optional_keys,
                                                       extra_),
-          payload_raw_,
+          Slice(payload_holder_.getPayload()),
           rebuilding_ ? copyset[0].destination.node()
                       : (store_header.sequencer_node_id.isNodeID()
                              ? folly::make_optional(
@@ -191,7 +190,7 @@ bool StoreStorageTask::isTimedout() const {
 }
 
 size_t StoreStorageTask::getPayloadSize() const {
-  return payload_holder_ ? payload_holder_->size() : 0;
+  return payload_holder_.size();
 }
 
 size_t StoreStorageTask::getNumWriteOps() const {
@@ -353,9 +352,10 @@ int StoreStorageTask::putCache() {
                             payload_holder_,
                             extra_.offsets_within_epoch);
   if (rv == 0) {
-    STAT_ADD(stats(),
-             record_cache_bytes_cached_estimate,
-             EpochRecordCacheEntry::getBytesEstimate(payload_raw_));
+    STAT_ADD(
+        stats(),
+        record_cache_bytes_cached_estimate,
+        EpochRecordCacheEntry::getBytesEstimate(payload_holder_.getPayload()));
   }
   return rv;
 }

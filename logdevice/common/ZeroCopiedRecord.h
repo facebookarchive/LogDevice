@@ -15,6 +15,7 @@
 
 #include "logdevice/common/CopySet.h"
 #include "logdevice/common/OffsetMap.h"
+#include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/WorkerType.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Record.h"
@@ -23,34 +24,14 @@ namespace facebook { namespace logdevice {
 
 /**
  * @file  ZeroCopiedRecord is an internal representation of Logdevice record
- *        originated from messages recevied from the network. In other words,
- *        the payload payload can be libevent evbuffer. The primary goal for
- *        ZeroCopiedRecord is to support efficient multi-cast in thread-safe
- *        manner, in specific:
- *         - shared pointer of ZeroCopiedRecord can be passed around among
- *           thread without worrying out evbuffer thread safety issues.
+ *        originated from messages recevied from the network.
  *
- *         - payload can be written to evbuffers in multiple worker threads for
- *           multi-casting without copy using evbuffer_add_reference (or
- *           ProtocolWriter::writeWithoutCopy).
- *
- *         - once the refcount of ZeroCopiedRecord dropped to zero, payload is
- *           guaranteed to be destroyed on the original eventloop thread that
- *           allocated the payload. This ensures the thread safety of evbuffer
- *           contained in the payload.
- *
- *        Important Note:
- *
- *         - TODO T20422519: Currently it is required that the payload used to
- *           construct ZeroCopiedRecord must be linear, which means that for
- *           evbuffer payload one must call evbuffer_pullup
- *           (i.e., PayloadHolder::getPayload). evbuffer_pullup might be
- *           expensive and can cause extra copy, in the future we should enforce
- *           libevent to always allocate contiguous buffer when receiving
- *           payloads from network sockets.
+ * This class's original purpose was dealing with thread safe destruction of
+ * libevent buffers. This purpose is gone because we now use folly::IOBuf, whose
+ * destruction is already thread safe, and we're doing zero-copying without
+ * jumping through these hoops. The class is still here because it has all the
+ * other stuff apart from payload. TODO: Rename, refactor, or remove.
  */
-
-class PayloadHolder;
 
 class ZeroCopiedRecord {
  public:
@@ -63,8 +44,7 @@ class ZeroCopiedRecord {
   OffsetMap offsets_within_epoch;
   std::map<KeyType, std::string> keys;
 
-  // Slice of the linearized payload data
-  Slice payload_raw;
+  PayloadHolder payload;
 
   // Linked list used by realtime reads.
   std::shared_ptr<ZeroCopiedRecord> next_;
@@ -74,16 +54,12 @@ class ZeroCopiedRecord {
   virtual void onDisposedOf() {}
   virtual size_t getBytesEstimate() const;
 
-  std::shared_ptr<PayloadHolder> getPayloadHolder() {
-    return payload_holder_;
-  }
-
   /**
    * Get an estimate of the amount of bytes used for the record.
-   * it is an estimate since it estimates the size of the control block
-   * of std::shared_ptr(s)
+   * It is an estimate since it estimates the size of the control block
+   * of folly::IOBuf.
    */
-  static size_t getBytesEstimate(Slice payload_raw);
+  static size_t getBytesEstimate(Payload payload_raw);
 
   ZeroCopiedRecord(const ZeroCopiedRecord&) = delete;
   ZeroCopiedRecord& operator=(const ZeroCopiedRecord&) = delete;
@@ -97,16 +73,6 @@ class ZeroCopiedRecord {
                    const copyset_t& copyset,
                    OffsetMap offsets_within_epoch,
                    std::map<KeyType, std::string>&& keys,
-                   std::shared_ptr<PayloadHolder> payload_holder);
-
- protected:
-  // Hold a reference to the actual payload.
-  // Note: destruction of the entry object does not necessarily
-  // destroy the payload since there may be other references.
-  // However, record cache makes sure that entry is destroyed on the
-  // same Worker thread that allocates the payload. Given that other
-  // references of payload are all owned by the same worker, the payload
-  // should be ultimatedly freed on the same worker thread.
-  std::shared_ptr<PayloadHolder> payload_holder_;
+                   const PayloadHolder& payload_holder);
 };
 }} // namespace facebook::logdevice

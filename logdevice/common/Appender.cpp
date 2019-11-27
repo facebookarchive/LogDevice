@@ -78,7 +78,7 @@ Appender::Appender(Worker* worker,
       reply_to_(return_address),
       log_id_(log_id),
       attrs_(std::move(attrs)),
-      payload_(std::make_shared<PayloadHolder>(std::move(payload))),
+      payload_(std::move(payload)),
       creation_time_(std::chrono::steady_clock::now()),
       client_deadline_(creation_time_ + client_timeout),
       append_request_id_(append_request_id),
@@ -161,16 +161,16 @@ int Appender::sendSTORE(const StoreChainLink copyset[],
                         folly::Optional<lsn_t> block_starting_lsn,
                         STORE_flags_t flags) {
   ShardID dest = copyset[copyset_offset].destination;
-  auto store_msg = std::make_unique<STORE_Message>(
-      store_hdr_,
-      copyset,
-      copyset_offset,
-      flags,
-      extra_,
-      attrs_.optional_keys,
-      payload_, // attaching to shared_ptr<PayloadHolder>
-      true      // appender_context
-  );
+  auto store_msg =
+      std::make_unique<STORE_Message>(store_hdr_,
+                                      copyset,
+                                      copyset_offset,
+                                      flags,
+                                      extra_,
+                                      attrs_.optional_keys,
+                                      payload_, // cloning the PayloadHolder
+                                      true      // appender_context
+      );
   if (block_starting_lsn.hasValue()) {
     store_msg->setBlockStartingLSN(block_starting_lsn.value());
   }
@@ -555,8 +555,7 @@ int Appender::sendWave() {
   // Building an AppendContext object to be used by CopySetManager. If the
   // StickyCopySetManager is used, it might use this information to determine
   // if we reached the size threshold for the current block.
-  ld_check(payload_->valid());
-  size_t append_size = (size_t)payload_->size();
+  size_t append_size = (size_t)payload_.size();
   CopySetManager::AppendContext append_ctx{append_size, getLSN()};
 
   ld_check(started());
@@ -735,30 +734,24 @@ void Appender::prepareTailRecord(bool include_payload) {
 
   if (!include_payload) {
     tail_record_ = std::make_shared<TailRecord>(
-        header, extra_.offsets_within_epoch, std::shared_ptr<PayloadHolder>());
+        header, extra_.offsets_within_epoch, PayloadHolder());
     return;
   }
 
   // tail optimized logs, include payload in the tail record
-  if (payload_->owner()) {
-    auto zero_copied_record = std::make_shared<ZeroCopiedRecord>(
-        lsn_t(store_hdr_.rid.lsn()),
-        STORE_flags_t(store_hdr_.flags),
-        uint64_t(store_hdr_.timestamp),
-        esn_t(store_hdr_.last_known_good),
-        uint32_t(store_hdr_.wave),
-        /*unused copyset*/ copyset_t{},
-        extra_.offsets_within_epoch,
-        /*unused keys*/ std::map<KeyType, std::string>{},
-        payload_);
+  auto zero_copied_record = std::make_shared<ZeroCopiedRecord>(
+      lsn_t(store_hdr_.rid.lsn()),
+      STORE_flags_t(store_hdr_.flags),
+      uint64_t(store_hdr_.timestamp),
+      esn_t(store_hdr_.last_known_good),
+      uint32_t(store_hdr_.wave),
+      /*unused copyset*/ copyset_t{},
+      extra_.offsets_within_epoch,
+      /*unused keys*/ std::map<KeyType, std::string>{},
+      payload_);
 
-    tail_record_ = std::make_shared<TailRecord>(
-        header, extra_.offsets_within_epoch, std::move(zero_copied_record));
-  } else {
-    // payload is linear buffer and can be freed on any thread
-    tail_record_ = std::make_shared<TailRecord>(
-        header, extra_.offsets_within_epoch, payload_);
-  }
+  tail_record_ = std::make_shared<TailRecord>(
+      header, extra_.offsets_within_epoch, std::move(zero_copied_record));
 }
 
 void Appender::retire(RetireReason reason) {
@@ -1069,7 +1062,7 @@ void Appender::sendError(Status reason) {
       ld_check(false);
   }
   tracer_.traceAppend(
-      payload_->size(),
+      payload_.size(),
       seen_,
       started() ? (store_hdr_.flags & STORE_Header::CHAIN) : false, // chained?
       reply_to_,
@@ -1640,7 +1633,7 @@ int Appender::onReply(const STORED_Header& header,
           should_graylist ? " Graylisting node." : "");
     } else {
       // Corruption on sequencer node, likely due to bad hardware or bug
-      Payload pl = payload_->getFlatPayload();
+      Payload pl = payload_.getPayload();
       Slice payload_slice = Slice(pl.data(), pl.size());
       RATELIMIT_CRITICAL(
           std::chrono::seconds(10),
@@ -1729,7 +1722,7 @@ bool Appender::verifyChecksum(uint64_t* payload_checksum,
     return true;
   }
 
-  Payload pl_with_checksum = payload_->getPayload();
+  Payload pl_with_checksum = payload_.getPayload();
 
   size_t checksum_byte_num =
       passthru_flags_ & APPEND_Header::CHECKSUM_64BIT ? 8 : 4;
@@ -1774,7 +1767,7 @@ void Appender::onRecipientSucceeded(Recipient* recipient) {
   const Sockaddr& client_sock_addr =
       Sender::sockaddrOrInvalid(Address(reply_to_));
   tracer_.traceAppend(
-      payload_->size(),
+      payload_.size(),
       seen_,
       started() ? (store_hdr_.flags & STORE_Header::CHAIN) : false,
       reply_to_,
@@ -1798,7 +1791,7 @@ void Appender::onRecipientSucceeded(Recipient* recipient) {
         lsn_to_string(store_hdr_.rid.lsn()).c_str(),
         latency_usec / 1e6,
         store_hdr_.wave,
-        payload_->size(),
+        payload_.size(),
         client_sock_addr.valid() ? client_sock_addr.toStringNoPort().c_str()
                                  : "invalid");
   }

@@ -447,10 +447,9 @@ class ClientImpl : public Client,
 
   void setAppendErrorInjector(folly::Optional<AppendErrorInjector> injector);
 
-  template <typename T>
   std::unique_ptr<AppendRequest>
   prepareRequest(logid_t logid,
-                 T payload,
+                 Payload payload,
                  append_callback_t cb,
                  AppendAttributes attrs,
                  worker_id_t target_worker,

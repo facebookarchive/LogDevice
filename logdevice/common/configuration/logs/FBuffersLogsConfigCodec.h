@@ -46,18 +46,11 @@ class LogsConfigCodec<CodecType::FLATBUFFERS> {
   /**
    * takes an object and serialize it to payload
    * the codec_type picks the correct encoding algorithm at compile-time
-   *
-   * This may fail if the delta log is corrupted or we have very old payloads
-   * that were added to the log before a (protocol-breaking) change was done to
-   * logdeviced's code. In general this should not happen but *IF* it happens,
-   * we will increase the stats counter for
-   * `logsconfig_manager_serialization_errors`
    * @param flatten will make sure that we don't skip inherited attributes in
    *                LogAttributes.
    */
   template <typename In>
-  static facebook::logdevice::PayloadHolder serialize(const In& in,
-                                                      bool flatten) {
+  static PayloadHolder serialize(const In& in, bool flatten) {
     flatbuffers::FlatBufferBuilder builder;
     auto buffer = fbuffers_serialize<const In&, typename TypeMapping<In>::to>(
         builder, in, flatten);
@@ -89,6 +82,7 @@ class LogsConfigCodec<CodecType::FLATBUFFERS> {
 
     // The output buffer
     uint8_t* out = (uint8_t*)malloc(out_size);
+    ld_check(out != nullptr);
     uint8_t* const beginning = out;
     uint8_t* const end = out + out_size;
 
@@ -113,8 +107,12 @@ class LogsConfigCodec<CodecType::FLATBUFFERS> {
         ld_error(
             "ZSTD_compress() failed: %s", ZSTD_getErrorName(compressed_size));
         ld_check(false);
-        free(beginning);
-        return PayloadHolder(); // contains nullptr
+
+        // This shouldn't really happen, but if it does, let's fall back to no
+        // compression.
+        *(out - 1) = 0;
+        memcpy(out, source, original_size);
+        compressed_size = original_size;
       }
       ld_spew("original size is %zu, compressed size %zu",
               original_size,
@@ -126,7 +124,8 @@ class LogsConfigCodec<CodecType::FLATBUFFERS> {
     // recalculating the actual out size after we did the encoding and
     // the compression.
     out_size = header_size + compressed_size;
-    return PayloadHolder(beginning, out_size, true /* ignore_size_limit */);
+    return PayloadHolder::takeOwnership(
+        beginning, out_size, true /* ignore_size_limit */);
   }
 
   /**

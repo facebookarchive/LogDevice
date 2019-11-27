@@ -514,9 +514,10 @@ SequencerBatching::runBufferedAppend(logid_t logid,
                                      int checksum_bits,
                                      uint32_t timeout_ms,
                                      uint32_t append_message_count) {
+  // TODO: Don't copy the payload here.
   return runInternalAppend(logid,
                            std::move(attrs),
-                           payload,
+                           PayloadHolder::copyPayload(payload),
                            std::move(callback),
                            flags,
                            checksum_bits,

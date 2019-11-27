@@ -257,12 +257,6 @@ struct Settings : public SettingsBundle {
   // The maximum number of unprocessed messages in the system.
   size_t incoming_messages_max_bytes_limit;
 
-  // if payload of a message read from an evbuffer does not exceed this size,
-  // we will malloc one buffer for both the message object and the payload
-  // immediately following it. Otherwise, we will zero-copy the payload into an
-  // evbuffer. This optimizes evbuffer allocation and initialization.
-  size_t max_payload_inline;
-
   // Maximum number of StorageTask instances that one worker thread may have
   // in flight to each database shard (waiting on the storage thread pool to
   // complete them).  This is used to size pipes and queues.

@@ -44,13 +44,13 @@ STORE_Message::STORE_Message(const STORE_Header& header,
                              STORE_flags_t flags,
                              STORE_Extra extra,
                              std::map<KeyType, std::string> optional_keys,
-                             std::shared_ptr<PayloadHolder> payload,
+                             const PayloadHolder& payload,
                              bool appender_context)
     : Message(MessageType::STORE, calcTrafficClass(header)),
       header_(header),
       extra_(extra),
       appender_context_(appender_context),
-      payload_(std::move(payload)),
+      payload_(payload),
       copyset_(header.copyset_size),
       optional_keys_(std::move(optional_keys)),
       my_pos_in_copyset_(-1) {
@@ -86,14 +86,12 @@ STORE_Message::STORE_Message(const STORE_Header& header,
 }
 
 STORE_Message::STORE_Message(const STORE_Header& header,
-                             std::shared_ptr<PayloadHolder>&& payload)
+                             const PayloadHolder& payload)
     : Message(MessageType::STORE, calcTrafficClass(header)),
       header_(header),
       payload_(std::move(payload)),
       copyset_(header.copyset_size),
-      my_pos_in_copyset_(-1) {
-  ld_check(payload_);
-}
+      my_pos_in_copyset_(-1) {}
 
 bool STORE_Message::cancelled() const {
   if (appender_context_) {
@@ -119,8 +117,6 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
     ld_check(header_.flags & STORE_Header::AMEND);
     ld_check(header_.wave > 1);
   }
-
-  ld_check(!payload_ || payload_->valid());
 
   // TODO: Handle protocol mismatch between peers for write stream support.
   STORE_Header proto_supported_header(header_);
@@ -174,17 +170,12 @@ void STORE_Message::serialize(ProtocolWriter& writer) const {
     }
   }
 
-  if (payload_ && !(header_.flags & STORE_Header::AMEND)) {
-    payload_->serialize(writer);
+  if (!payload_.empty() && !(header_.flags & STORE_Header::AMEND)) {
+    payload_.serialize(writer);
   }
 }
 
 MessageReadResult STORE_Message::deserialize(ProtocolReader& reader) {
-  return deserialize(reader, Worker::settings().max_payload_inline);
-}
-
-MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
-                                             size_t max_payload_inline) {
   STORE_Header hdr;
   STORE_Extra extra;
 
@@ -253,14 +244,12 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader,
   }
 
   const size_t payload_size = reader.bytesRemaining();
-  auto payload = PayloadHolder::deserialize(reader, payload_size);
-
-  auto payload_holder = std::make_shared<PayloadHolder>(std::move(payload));
+  PayloadHolder payload_holder =
+      PayloadHolder::deserialize(reader, payload_size);
 
   return reader.result([&] {
     // No, you can't replace this with make_unique. The constructor is private.
-    std::unique_ptr<STORE_Message> m(
-        new STORE_Message(hdr, std::move(payload_holder)));
+    std::unique_ptr<STORE_Message> m(new STORE_Message(hdr, payload_holder));
     m->copyset_ = std::move(copyset);
     m->block_starting_lsn_ = block_starting_lsn;
     m->extra_ = std::move(extra);
@@ -525,7 +514,7 @@ STORE_Message::getDebugInfo() const {
   if (extra_.first_amendable_offset != COPYSET_SIZE_MAX) {
     add("first_amendable_offset", extra_.first_amendable_offset);
   }
-  add("payload_size", payload_ ? payload_->size() : 0);
+  add("payload_size", payload_.size());
   add("copyset", toString(copyset_));
   if (block_starting_lsn_ != LSN_INVALID) {
     add("block_starting_lsn", lsn_to_string(block_starting_lsn_));

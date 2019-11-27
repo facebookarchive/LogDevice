@@ -137,7 +137,7 @@ genMetaRecord(const EpochMetaData& info, lsn_t lsn = LSN_INVALID) {
   ld_check(rv == size);
   return std::make_unique<DataRecordOwnsPayload>(
       META_LOGID,
-      Payload(buf, size),
+      PayloadHolder(PayloadHolder::TAKE_OWNERSHIP, buf, size),
       lsn == LSN_INVALID ? compose_lsn(info.h.epoch, esn_t(1)) : lsn,
       ts,
       0 // flags

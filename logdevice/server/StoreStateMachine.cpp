@@ -79,7 +79,7 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
     return Message::Disposition::ERROR;
   }
 
-  ssize_t payload_size = msg->payload_->size();
+  ssize_t payload_size = msg->payload_.size();
   if (msg->header_.flags & STORE_Header::CHECKSUM &&
       !(msg->header_.flags & STORE_Header::AMEND)) {
     payload_size -= (msg->header_.flags & STORE_Header::CHECKSUM_64BIT) ? 8 : 4;
@@ -654,7 +654,7 @@ void StoreStateMachine::storeAndForward() {
 
   // First create a storage task for the local log store.  The constructor
   // will copy any needed data from the parameters (as well as attach to the
-  // std::shared_ptr<PayloadHolder>), making the task self-sufficient.  We'll
+  // PayloadHolder), making the task self-sufficient.  We'll
   // send the task to a storage thread later (at the end of this method), to
   // avoid delaying forwarding.
   auto task = std::make_unique<StoreStorageTask>(

@@ -38,7 +38,6 @@ namespace facebook { namespace logdevice {
  */
 
 class EpochRecordCacheEntry;
-class PayloadHolder;
 struct RecordID;
 
 namespace EpochRecordCacheSerializer {
@@ -90,7 +89,7 @@ class EpochRecordCache {
                 const copyset_t& copyset,
                 STORE_flags_t flags,
                 std::map<KeyType, std::string>&& keys,
-                const std::shared_ptr<PayloadHolder>& payload_holder,
+                const PayloadHolder& payload_holder,
                 OffsetMap offsets_within_epoch = OffsetMap());
 
   /**
@@ -245,6 +244,8 @@ class EpochRecordCache {
     // the complexity of entry life cycle handling. Snapshot holds references
     // to the payload so it is safe to use raw pointers as long as the Snapshot
     // is alive.
+    // TODO: Pretty sure the lifetime concern is obsolete now, just like
+    //       ZeroCopiedRecord (see comment in ZeroCopiedRecord.h).
     struct Record {
       STORE_flags_t flags;
       uint64_t timestamp;

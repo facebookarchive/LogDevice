@@ -196,9 +196,8 @@ Mutator::sendSTORE(ShardID shard,
       additional_flags,
       store_extra_,
       std::map<KeyType, std::string>(),
-      (include_payload
-           ? std::make_shared<PayloadHolder>(payload_, PayloadHolder::UNOWNED)
-           : nullptr));
+      (include_payload ? PayloadHolder::copyPayload(payload_)
+                       : PayloadHolder()));
 
   // socket callbacks must be deactivated at the beginning of the wave
   ld_assert(node_state_.count(shard) > 0);

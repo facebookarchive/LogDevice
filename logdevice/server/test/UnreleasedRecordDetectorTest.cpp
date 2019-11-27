@@ -423,7 +423,7 @@ TEST_F(UnreleasedRecordDetectorTest, TransientSequencerFailure) {
     auto append_req(std::make_unique<AppendRequest>(nullptr,
                                                     LOG_ID,
                                                     AppendAttributes(),
-                                                    std::string("one"),
+                                                    Payload("one", 3),
                                                     std::chrono::seconds(30),
                                                     append_callback));
     append_req->bypassWriteTokenCheck();
