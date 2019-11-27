@@ -125,6 +125,7 @@ class ServerConnectionTest : public SocketTest {
     conn_.reset();
     EXPECT_EQ(bytes_pending_, 0);
   }
+
   SocketDependencies* deps_;
   std::unique_ptr<Connection> conn_;
   testing::NiceMock<MockSocketAdapter>* sock_;
@@ -460,13 +461,22 @@ TEST_F(ServerConnectionTest, IncomingMessageBytesLimit) {
   // We have captured the last token hence this message should not be received.
   receiveMessage(*this, new_msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
   EXPECT_FALSE(called);
+  EXPECT_TRUE(rd_callback_ == nullptr);
+  EXPECT_TRUE(conn_->msgRetryTimerArmed());
+
+  // Try again without releasing token and the state should remain the same.
+  ev_base_folly_.loopOnce();
+  EXPECT_FALSE(called);
+  EXPECT_TRUE(rd_callback_ == nullptr);
+  EXPECT_TRUE(conn_->msgRetryTimerArmed());
   token.release();
   // Once the eventloop is run we should be able to accept the message as the
   // socket token is released.
   ev_base_folly_.loopOnce();
   EXPECT_TRUE(called);
-
-  // Reset limit and make sure we do not get the callback.
+  EXPECT_TRUE(rd_callback_ != nullptr);
+  EXPECT_FALSE(conn_->msgRetryTimerArmed());
+  // Reset limit and make sure we get the callback.
   incoming_message_bytes_limit_.setLimit(std::numeric_limits<uint64_t>::max());
   msg =
       new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
@@ -482,6 +492,8 @@ TEST_F(ServerConnectionTest, IncomingMessageBytesLimit) {
   };
   receiveMessage(*this, msg, Compatibility::MAX_PROTOCOL_SUPPORTED);
   EXPECT_TRUE(called);
+  EXPECT_TRUE(rd_callback_ != nullptr);
+  EXPECT_FALSE(conn_->msgRetryTimerArmed());
 }
 
 // Bad protocol error.

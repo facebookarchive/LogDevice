@@ -420,6 +420,13 @@ class ServerSocketTest : public SocketTest {
     EXPECT_TRUE(connected());
     EXPECT_FALSE(handshaken());
   }
+
+  std::unique_ptr<folly::IOBuf>& getMessagePendingProcessing() {
+    return socket_->msg_pending_processing_;
+  }
+  void triggerReadMoreTimeout() {
+    socket_->read_more_.timeoutExpired();
+  }
 };
 
 // FlowGroups can be applied to any Socket type. Using the client socket
