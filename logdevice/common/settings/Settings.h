@@ -1420,6 +1420,8 @@ struct Settings : public SettingsBundle {
   //  outbuf_min_kb per socket.
   size_t outbuf_socket_min_kb;
 
+  std::vector<node_index_t> logsconfig_api_blacklist_nodes;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

@@ -894,6 +894,7 @@ class Cluster {
   }
 
   Node& getSequencerNode() {
+    ld_check(!hash_based_sequencer_assignment_);
     // For now, the first node is always the sequencer
     return getNode(0);
   }

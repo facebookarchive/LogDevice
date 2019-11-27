@@ -122,7 +122,7 @@ class LogsConfigApiRequest : public Request {
   NodeID last_selected_node_ = NodeID();
   // A list of nodes that we have tried to reach out to and failed, we don't
   // want to keep retrying on these nodes for this particular Request instance.
-  std::unordered_set<NodeID, NodeID::Hash> blacklisted_nodes_;
+  std::unordered_set<node_index_t> blacklisted_nodes_;
   // The response body can be returned in chunks
   // Keeps track of the intermediate result until completed
   size_t response_expected_size_;

@@ -8,7 +8,6 @@
 #include "logdevice/common/LogsConfigApiRequest.h"
 
 #include <folly/Memory.h>
-#include <folly/Random.h>
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
@@ -39,9 +38,11 @@ Request::Execution LogsConfigApiRequest::execute() {
 
 void LogsConfigApiRequest::start() {
   ld_debug("Starting LogsConfigApiRequest");
+  auto& settings = Worker::settings();
+  blacklisted_nodes_.insert(settings.logsconfig_api_blacklist_nodes.begin(),
+                            settings.logsconfig_api_blacklist_nodes.end());
   // Configuring timers
   timeout_timer_ = std::make_unique<Timer>(
-
       std::bind(&LogsConfigApiRequest::onTimeout, this));
 
   retry_timer_ = std::make_unique<ExponentialBackoffTimer>(
@@ -90,7 +91,7 @@ NodeID LogsConfigApiRequest::pickNode() {
   for (const auto& kv : *sd_config) {
     const node_index_t nid = kv.first;
     NodeID node_id(nid, nodes_configuration->getNodeGeneration(nid));
-    if (blacklisted_nodes_.find(node_id) == blacklisted_nodes_.end()) {
+    if (blacklisted_nodes_.find(node_id.index()) == blacklisted_nodes_.end()) {
       nodes.push_back(node_id);
       weights.push_back(cs->isNodeAlive(nid) ? 1 : 0);
     }
@@ -111,7 +112,7 @@ NodeID LogsConfigApiRequest::pickNode() {
 
 bool LogsConfigApiRequest::blacklistSelectedNode() {
   if (last_selected_node_.isNodeID()) {
-    blacklisted_nodes_.insert(last_selected_node_);
+    blacklisted_nodes_.insert(last_selected_node_.index());
     last_selected_node_ = NodeID();
   }
   const auto nodes_configuration =
