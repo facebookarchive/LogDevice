@@ -296,10 +296,6 @@ std::shared_ptr<logsconfig::LogGroupNode> LocalLogsConfig::insert(
   return added_group;
 }
 
-bool LocalLogsConfig::isValid(const ServerConfig& server_config) const {
-  return parser::validateNodeCount(server_config, this);
-}
-
 size_t LocalLogsConfig::size() const {
   return config_tree_->size() + internal_logs_.size();
 }

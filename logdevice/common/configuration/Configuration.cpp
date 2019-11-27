@@ -147,14 +147,9 @@ std::unique_ptr<Configuration> Configuration::fromJson(
     local_logs_config->setInternalLogsConfig(
         server_config->getInternalLogsConfig());
 
-    if (local_logs_config->isValid(*server_config)) {
-      // This is a fully loaded config, so we mark it as one.
-      local_logs_config->markAsFullyLoaded();
-      logs_config = std::move(local_logs_config);
-    } else {
-      return std::make_unique<Configuration>(
-          std::move(server_config), nullptr, std::move(zookeeper_config));
-    }
+    // This is a fully loaded config, so we mark it as one.
+    local_logs_config->markAsFullyLoaded();
+    logs_config = std::move(local_logs_config);
   }
   // Ensure the logs config knows about the namespace delimiter (which is
   // specified in the server config).
@@ -219,7 +214,7 @@ Configuration::loadFromString(const std::string& server,
                                               return E::OK;
                                             },
                                             ConfigParserOptions());
-    if (logs_config && logs_config->isValid(*server_config)) {
+    if (logs_config) {
       return std::make_unique<Configuration>(
           server_config, logs_config, zookeeper_config);
     }
