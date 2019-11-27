@@ -69,14 +69,21 @@ class LogsConfigTreeNode {
  public:
   explicit LogsConfigTreeNode(const LogAttributes& attrs = LogAttributes())
       : attrs_(attrs) {}
+
   LogsConfigTreeNode(const std::string& name, const LogAttributes& attrs)
       : name_(name), attrs_(attrs) {}
+
+  LogsConfigTreeNode(const LogsConfigTreeNode& other)
+      : name_(other.name_), attrs_(other.attrs_) {}
+
+  LogsConfigTreeNode& operator=(const LogsConfigTreeNode& other) = delete;
 
   virtual NodeType type() const = 0;
 
   virtual const std::string& name() const {
     return name_;
   }
+
   // Returns a the attributes associated with this node
   virtual const LogAttributes& attrs() const {
     return attrs_;
@@ -90,6 +97,12 @@ class LogsConfigTreeNode {
 
  protected:
   std::string name_;
+
+  void replaceAttrs(const LogAttributes& attrs) {
+    attrs_ = attrs;
+  }
+
+ private:
   LogAttributes attrs_;
 };
 
@@ -171,7 +184,7 @@ class DirectoryNode : public LogsConfigTreeNode {
    * accordingly by re-applying the inheritance tree
    */
   bool setAttributes(const LogAttributes& attrs, std::string& failure_reason) {
-    attrs_ = attrs;
+    replaceAttrs(attrs);
     return refreshAttributesInheritance(failure_reason);
   }
 
@@ -299,14 +312,14 @@ class LogGroupNode : public LogsConfigTreeNode {
    * Returns a copy of the LogGroupNode with a different LogRange.
    */
   LogGroupNode withRange(const logid_range_t& range) const {
-    return LogGroupNode(name_, attrs_, range);
+    return LogGroupNode(name_, attrs(), range);
   }
 
   /*
    * Returns a copy of LogGroupNode with a different name set.
    */
   LogGroupNode withName(const std::string& name) const {
-    return LogGroupNode(name, attrs_, range_);
+    return LogGroupNode(name, attrs(), range_);
   }
 
   // returns a FQN of the node (e.g, /dir1/group1)
@@ -328,9 +341,9 @@ class LogGroupNode : public LogsConfigTreeNode {
 
   bool operator==(const LogGroupNode& other) const {
     auto as_tuple = [](const LogGroupNode& l) {
-      return std::tie(l.name_, l.attrs_, l.range_);
+      return std::tie(l.name_, l.range_);
     };
-    return as_tuple(*this) == as_tuple(other);
+    return as_tuple(*this) == as_tuple(other) && attrs() == other.attrs();
   }
 
   static std::unique_ptr<LogGroupNode>
