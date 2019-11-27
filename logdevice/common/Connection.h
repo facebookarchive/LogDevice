@@ -169,6 +169,10 @@ class Connection : public Socket {
 
   X509* getPeerCert() const override;
 
+  bool msgRetryTimerArmed() {
+    return retry_receipt_of_message_.isScheduled();
+  }
+
  protected:
   folly::Future<Status> asyncConnect();
   void onConnected() override;

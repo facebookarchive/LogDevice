@@ -989,6 +989,12 @@ class Socket : public TrafficShappingSocket {
   // messages from bev_ and yielded.
   EvTimer read_more_;
 
+  // The message payload is copied into this from evbuffer. If the system
+  // cannot accept anymore data from socket, this helps in avoiding copying the
+  // message payload from the evbuffer again hence saving cpu incase of large
+  // payload and too many sockets per worker.
+  std::unique_ptr<folly::IOBuf> msg_pending_processing_;
+
   // Timer event used to give up the TCP connection if it is not established
   // within some reasonable period of time.
   EvTimer connect_timeout_event_;

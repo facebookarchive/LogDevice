@@ -621,7 +621,11 @@ void Socket::onBytesAvailable(bool fresh) {
   // process up to this many messages
   unsigned process_max = getSettings().incoming_messages_max_per_socket;
 
-  size_t available = LD_EV(evbuffer_get_length)(deps_->getInput(bev_));
+  size_t bytes_cached = msg_pending_processing_
+      ? msg_pending_processing_->computeChainDataLength()
+      : 0;
+  size_t available =
+      LD_EV(evbuffer_get_length)(deps_->getInput(bev_)) + bytes_cached;
 
   // if this function was called by bev_ in response to "input buffer
   // length is above low watermark" event, we must have at least as
@@ -631,7 +635,6 @@ void Socket::onBytesAvailable(bool fresh) {
   // read_more_ was activated. If that happens this callback may find
   // fewer bytes in bev_'s input buffer than dataReadCallback() expects.
   ld_assert(!fresh || available >= bytesExpected());
-
   auto start_time = std::chrono::steady_clock::now();
   unsigned i = 0;
   STAT_INCR(deps_->getStats(), sock_read_events);
@@ -643,23 +646,37 @@ void Socket::onBytesAvailable(bool fresh) {
         struct evbuffer* inbuf = deps_->getInput(bev_);
         int rv = 0;
         if (expectingProtocolHeader()) {
+          // We always have space for header.
+          ld_check(!msg_pending_processing_);
           rv = readMessageHeader(inbuf);
           if (rv == 0) {
             expectMessageBody();
           }
         } else {
           auto expected_bytes = bytesExpected();
-          auto iobuf = folly::IOBuf::create(expected_bytes);
-          int read_bytes = LD_EV(evbuffer_copyout)(
-              inbuf, static_cast<void*>(iobuf->writableData()), expected_bytes);
-          ld_check_eq(read_bytes, expected_bytes);
-          iobuf->append(expected_bytes);
-          rv = dispatchMessageBody(recv_message_ph_, std::move(iobuf));
-          if (rv == 0) {
-            rv = LD_EV(evbuffer_drain)(inbuf, read_bytes);
-            if (rv != 0) {
-              err = E::INTERNAL;
+          size_t read_bytes = 0;
+          if (!msg_pending_processing_) {
+            msg_pending_processing_ = folly::IOBuf::create(expected_bytes);
+            rv = LD_EV(evbuffer_remove)(
+                inbuf,
+                static_cast<void*>(msg_pending_processing_->writableData()),
+                expected_bytes);
+            if (rv > 0) {
+              read_bytes = rv;
+              msg_pending_processing_->append(expected_bytes);
             } else {
+              err = E::INTERNAL;
+            }
+          } else {
+            ld_check(msg_pending_processing_ && bytes_cached > 0);
+            read_bytes = bytes_cached;
+          }
+          if (read_bytes > 0) {
+            ld_check_eq(read_bytes, expected_bytes);
+            rv = dispatchMessageBody(
+                recv_message_ph_, msg_pending_processing_->clone());
+            if (rv == 0) {
+              msg_pending_processing_.reset();
               expectProtocolHeader();
             }
           }
@@ -674,6 +691,7 @@ void Socket::onBytesAvailable(bool fresh) {
           }
           if (err == E::NOBUFS) {
             STAT_INCR(deps_->getStats(), sock_read_event_nobufs);
+            ld_check(msg_pending_processing_);
             // Ran out of space to enqueue message into worker. Try again.
             read_more_.scheduleTimeout(0);
             break;
@@ -704,6 +722,7 @@ void Socket::onBytesAvailable(bool fresh) {
     }
 
     ld_check(!isClosed());
+    ld_check(!msg_pending_processing_);
     available = LD_EV(evbuffer_get_length)(deps_->getInput(bev_));
   }
 

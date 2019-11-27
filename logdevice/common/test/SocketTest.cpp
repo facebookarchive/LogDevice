@@ -668,7 +668,7 @@ TEST_F(ServerSocketTest, IncomingMessageBytesLimit) {
   };
   EXPECT_CALL(
       ev_base_mock_, scheduleTimeout(_, folly::TimeoutManager::timeout_type(0)))
-      .Times(1);
+      .Times(3);
   ASSERT_EQ(LD_EV(evbuffer_get_length)(input_), 0);
   auto new_msg =
       new TestFixedSizeMessage<CHECK_NODE_HEALTH_Header,
@@ -678,12 +678,25 @@ TEST_F(ServerSocketTest, IncomingMessageBytesLimit) {
   receiveMsg(new_msg);
 
   ASSERT_FALSE(called);
-  ASSERT_GE(
-      LD_EV(evbuffer_get_length)(input_), msg_size - sizeof(ProtocolHeader));
+  ASSERT_TRUE(getMessagePendingProcessing() != nullptr);
+  ASSERT_GE(getMessagePendingProcessing()->computeChainDataLength(),
+            msg_size - sizeof(ProtocolHeader));
+  ASSERT_EQ(LD_EV(evbuffer_get_length)(input_), 0);
+  // Try triggering multiple times both read_more timeout and bytes available
+  // are a fair possibility.
+  triggerReadMoreTimeout();
+  ASSERT_FALSE(called);
+  ASSERT_TRUE(getMessagePendingProcessing() != nullptr);
+  triggerOnDataAvailable();
+  ASSERT_FALSE(called);
+  ASSERT_TRUE(getMessagePendingProcessing() != nullptr);
   // After token is released we should be able to dispatch again.
   token.release();
-  triggerOnDataAvailable();
+  folly::Random::rand32() % 2 ? triggerReadMoreTimeout()
+                              : triggerOnDataAvailable();
   ASSERT_TRUE(called);
+  ASSERT_TRUE(getMessagePendingProcessing() == nullptr);
+  ASSERT_EQ(LD_EV(evbuffer_get_length)(input_), 0);
   // Reset limit and make sure we do not get the callback.
   incoming_message_bytes_limit_.setLimit(std::numeric_limits<uint64_t>::max());
   msg =
