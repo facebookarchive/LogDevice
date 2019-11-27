@@ -34,6 +34,7 @@ class MockGetClusterStateRequest : public GetClusterStateRequest {
  protected:
   void initTimers() override {}
   void activateWaveTimer() override {}
+  void activateDeferredErrorTimer() override {}
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
@@ -44,9 +45,8 @@ class MockGetClusterStateRequest : public GetClusterStateRequest {
     return cluster_state_;
   }
 
-  bool sendTo(NodeID to) override {
+  void sendTo(NodeID to) override {
     recipients_.push_back(to);
-    return false;
   }
 
   const Settings& getSettings() const override {

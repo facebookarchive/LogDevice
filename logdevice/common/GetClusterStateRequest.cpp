@@ -47,7 +47,7 @@ Request::Execution GetClusterStateRequest::execute() {
   return Execution::CONTINUE;
 }
 
-bool GetClusterStateRequest::start() {
+void GetClusterStateRequest::start() {
   ld_spew("Starting cluster state refresh");
 
   activateWaveTimer();
@@ -62,13 +62,11 @@ bool GetClusterStateRequest::start() {
   next_node_pos_ = end;
   for (; cur < end; cur++) {
     node_index_t node = nodes_[cur];
-    if (nodes_configuration->isNodeInServiceDiscoveryConfig(node) &&
-        sendTo(nodes_configuration->getNodeID(node))) {
-      return true;
+    if (nodes_configuration->isNodeInServiceDiscoveryConfig(node)) {
+      sendTo(nodes_configuration->getNodeID(node));
     }
     // Node may have been removed from config.
   }
-  return false;
 }
 
 void GetClusterStateRequest::initNodes() {
@@ -130,15 +128,16 @@ void GetClusterStateRequest::initTimers() {
   timer_->activate(timeout_);
 
   wave_timer_ = std::make_unique<Timer>([&] { onWaveTimeout(); });
+  deferred_error_timer_ =
+      std::make_unique<Timer>([this] { onDeferredError(); });
 }
 
 void GetClusterStateRequest::activateWaveTimer() {
-  if (wave_timer_) {
-    if (wave_timer_->isActive()) {
-      wave_timer_->cancel();
-    }
-    wave_timer_->activate(wave_timeout_);
-  }
+  wave_timer_->activate(wave_timeout_);
+}
+
+void GetClusterStateRequest::activateDeferredErrorTimer() {
+  deferred_error_timer_->activate(std::chrono::milliseconds(0));
 }
 
 bool GetClusterStateRequest::done(Status status,
@@ -175,7 +174,7 @@ ClusterState* GetClusterStateRequest::getClusterState() const {
   return Worker::getClusterState();
 }
 
-bool GetClusterStateRequest::sendTo(NodeID to) {
+void GetClusterStateRequest::sendTo(NodeID to) {
   ld_debug("Sending GET_CLUSTER_STATE to Node %s",
            Sender::describeConnection(to).c_str());
 
@@ -191,9 +190,14 @@ bool GetClusterStateRequest::sendTo(NodeID to) {
                     "for sending to %s: %s",
                     Sender::describeConnection(to).c_str(),
                     error_description(err));
-    return onError(err);
+    // Instead of calling onError() here, activate a zero-delay timer to call it
+    // on a different event loop iteration. This avoids the awkwardness of
+    // (a) calling error callback from inside execute() (FailureDetector
+    // wouldn't like that), (b) retrying recursively with unbounded stack
+    // depth proportional to number of retries.
+    deferred_errors_.push(err);
+    activateDeferredErrorTimer();
   }
-  return false;
 }
 
 bool GetClusterStateRequest::onError(Status status) {
@@ -240,12 +244,24 @@ bool GetClusterStateRequest::onError(Status status) {
           // In that situation, we are starting a new wave. start() may return
           // true to let the caller know that it should stop and this object
           // may get destroyed in the new wave.
-          return start();
+          start();
+          return false;
         }
       }
     }
   }
 
+  return false;
+}
+
+bool GetClusterStateRequest::onDeferredError() {
+  while (!deferred_errors_.empty()) {
+    Status error = deferred_errors_.front();
+    deferred_errors_.pop();
+    if (onError(error)) {
+      return true;
+    }
+  }
   return false;
 }
 
@@ -294,7 +310,8 @@ bool GetClusterStateRequest::onWaveTimeout() {
     // wave by a factor at every round if there is a timeout, until the message
     // has been sent to the whole cluster.
     wave_size_ *= kWaveScaleFactor;
-    return start();
+    start();
+    return false;
   }
   return false;
 }

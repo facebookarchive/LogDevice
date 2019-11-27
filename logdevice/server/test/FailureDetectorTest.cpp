@@ -62,7 +62,14 @@ class MockFailureDetector : public FailureDetector {
             1000,
             nullptr,
             *config_->getNodesConfigurationFromServerConfigSource()
-                 ->getServiceDiscovery())) {}
+                 ->getServiceDiscovery())) {
+    // Hijack the FailureDetector's startup sequence to not do anything on a
+    // worker and to not start any timers.
+    // In real code you would call FailureDetector::start(), which would
+    // run a GetClusterState request, then call buildInitialState(), which would
+    // start the periodic gossip timer. In this test none of that happens.
+    waiting_for_cluster_state_ = false;
+  }
 
   // simulate passing of time
   void advanceTime() {
@@ -126,7 +133,10 @@ namespace {
 
 class FailureDetectorTest : public testing::Test {
  public:
-  FailureDetectorTest() = default;
+  FailureDetectorTest() {
+    dbg::currentLevel = getLogLevelFromEnv().value_or(dbg::Level::INFO);
+    dbg::assertOnData = true;
+  }
 
  private:
   Alarm alarm_{DEFAULT_TEST_TIMEOUT};
@@ -254,7 +264,12 @@ void simulate_single(detector_list_t& detectors,
 
       for (node_index_t i = 0; i < num_nodes; ++i) {
         bool expected_alive = dead_nodes.find(i) == dead_nodes.end();
-        if (detectors[idx]->isAlive(i) != expected_alive) {
+        bool found_alive = detectors[idx]->isAlive(i);
+        if (found_alive != expected_alive) {
+          ld_debug("%d thinks %d is %s",
+                   static_cast<int>(idx),
+                   static_cast<int>(i),
+                   found_alive ? "alive" : "dead");
           detected = false;
           break;
         }
@@ -650,6 +665,7 @@ TEST_F(FailureDetectorTest, ClusterStateUpdate) {
   // own state is updated internally by HealthMonitor, state of others is
   // updated through gossip
   for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    SCOPED_TRACE(std::to_string(idx));
     EXPECT_TRUE(detectors[idx]->isAlive(0));
     EXPECT_TRUE(detectors[idx]->getClusterState()->isNodeStarting(0));
     EXPECT_EQ(NodeHealthStatus::HEALTHY,
@@ -673,6 +689,7 @@ TEST_F(FailureDetectorTest, ClusterStateUpdate) {
   }
   // Node 1's status is seen by all.
   for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    SCOPED_TRACE(std::to_string(idx));
     EXPECT_TRUE(detectors[idx]->isAlive(0));
     EXPECT_FALSE(detectors[idx]->getClusterState()->isNodeStarting(0));
     EXPECT_EQ(NodeHealthStatus::HEALTHY,
