@@ -24,16 +24,17 @@ PayloadHolder::PayloadHolder(take_ownership_t,
     : iobuf_(folly::IOBuf::TAKE_OWNERSHIP, buf, size) {
   ld_check(!iobuf_.isChained());
   ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
+  ld_check(size == 0 || buf != nullptr);
   if (!ignore_size_limit) {
-    ld_check(size == 0 || buf != nullptr);
     ld_check(size < Message::MAX_LEN);
   }
 }
 
-PayloadHolder::PayloadHolder(folly::IOBuf&& iobuf) : iobuf_(std::move(iobuf)) {
+PayloadHolder::PayloadHolder(folly::IOBuf&& iobuf, bool ignore_size_limit)
+    : iobuf_(std::move(iobuf)) {
   ld_check(!iobuf_.isChained());
   ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
-  if (folly::kIsDebug) {
+  if (!ignore_size_limit) {
     ld_check(size() < Message::MAX_LEN);
   }
 }
@@ -42,11 +43,13 @@ PayloadHolder::PayloadHolder(copy_buffer_t, const Payload& payload)
     : iobuf_(folly::IOBuf::COPY_BUFFER, payload.data(), payload.size()) {
   ld_check(!iobuf_.isChained());
   ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
+  ld_check(payload.size() < Message::MAX_LEN);
 }
 PayloadHolder::PayloadHolder(copy_buffer_t, const void* buf, size_t size)
     : iobuf_(folly::IOBuf::COPY_BUFFER, buf, size) {
   ld_check(!iobuf_.isChained());
   ld_check(iobuf_.data() == nullptr || iobuf_.isManaged());
+  ld_check(size < Message::MAX_LEN);
 }
 
 void PayloadHolder::reset() {

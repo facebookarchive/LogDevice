@@ -30,14 +30,14 @@ class MockStreamAppendRequest : public StreamAppendRequest {
                           std::shared_ptr<Configuration> configuration,
                           std::shared_ptr<SequencerLocator> locator,
                           ClusterState* cluster_state,
-                          Payload payload,
+                          PayloadHolder payload,
                           write_stream_request_id_t stream_rqid,
                           bool stream_resume)
       : StreamAppendRequest(
             nullptr,
             log_id,
             AppendAttributes(),
-            payload,
+            std::move(payload),
             std::chrono::milliseconds(0),
             append_callback_t(),
             std::make_unique<MockSequencerRouter>(log_id,
@@ -123,16 +123,16 @@ class MockStreamAppendRequest : public StreamAppendRequest {
     stream_id = std::stoull(stream_id_str);
     seq_num = std::stoull(seq_num_str);
   }
-  static Payload makePayload(uint64_t write_stream_id,
-                             uint64_t write_stream_seq_num,
-                             bool stream_resume) {
-    std::string* payload_string = new std::string();
-    (*payload_string) += std::to_string(write_stream_id);
-    (*payload_string) += ":";
-    (*payload_string) += std::to_string(write_stream_seq_num);
-    (*payload_string) += ":";
-    (*payload_string) += stream_resume ? "STREAM_RESUME" : "STREAM_REQUEST";
-    return Payload((void*)payload_string->c_str(), payload_string->length());
+  static PayloadHolder makePayload(uint64_t write_stream_id,
+                                   uint64_t write_stream_seq_num,
+                                   bool stream_resume) {
+    std::string payload_string;
+    payload_string += std::to_string(write_stream_id);
+    payload_string += ":";
+    payload_string += std::to_string(write_stream_seq_num);
+    payload_string += ":";
+    payload_string += stream_resume ? "STREAM_RESUME" : "STREAM_REQUEST";
+    return PayloadHolder::copyString(payload_string);
   }
 
   NodeID dest_;

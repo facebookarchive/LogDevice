@@ -104,7 +104,7 @@ class MockSequencerBatching : public SequencerBatching {
   folly::Optional<APPENDED_Header>
   runBufferedAppend(logid_t,
                     AppendAttributes,
-                    const Payload&,
+                    PayloadHolder&&,
                     InternalAppendRequest::Callback callback,
                     APPEND_flags_t,
                     int,

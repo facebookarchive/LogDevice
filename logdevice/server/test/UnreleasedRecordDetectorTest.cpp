@@ -420,12 +420,13 @@ TEST_F(UnreleasedRecordDetectorTest, TransientSequencerFailure) {
     const auto append_callback = [&promise](Status st, const DataRecord& r) {
       promise.set_value(std::make_pair(st, r.attrs.lsn));
     };
-    auto append_req(std::make_unique<AppendRequest>(nullptr,
-                                                    LOG_ID,
-                                                    AppendAttributes(),
-                                                    Payload("one", 3),
-                                                    std::chrono::seconds(30),
-                                                    append_callback));
+    auto append_req(
+        std::make_unique<AppendRequest>(nullptr,
+                                        LOG_ID,
+                                        AppendAttributes(),
+                                        PayloadHolder::copyString("one"),
+                                        std::chrono::seconds(30),
+                                        append_callback));
     append_req->bypassWriteTokenCheck();
     std::unique_ptr<Request> req(std::move(append_req));
     EXPECT_EQ(0, processor_->blockingRequest(req));

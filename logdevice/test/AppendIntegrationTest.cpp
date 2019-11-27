@@ -53,13 +53,11 @@ TEST_F(AppendIntegrationTest, AppendRequestEcho) {
 
                         make_test_plugin_registry());
 
-  char data[128]; // send the contents of this array as payload
-
   auto appendrq = std::make_unique<AppendRequest>(
       nullptr,
       logid_t(1),
       AppendAttributes(),
-      Payload(data, sizeof(data)),
+      PayloadHolder::copyString(std::string(128, '.')),
       std::chrono::milliseconds::max(),
       [&reply_sem](Status st, const DataRecord& r) {
         EXPECT_EQ(E::OK, st);
@@ -649,7 +647,6 @@ TEST_F(AppendIntegrationTest, ThreadMapping) {
 
                         make_test_plugin_registry());
 
-  const std::string payload = "foo";
   auto append = [&](logid_t log_id) -> std::thread::id {
     Semaphore sem;
     std::thread::id thread_id;
@@ -658,7 +655,7 @@ TEST_F(AppendIntegrationTest, ThreadMapping) {
         nullptr,
         log_id,
         AppendAttributes(),
-        Payload(payload.data(), payload.size()),
+        PayloadHolder::copyString("foo"),
         std::chrono::milliseconds::max(),
         [&](Status /*st*/, const DataRecord& /*r*/) {
           thread_id = std::this_thread::get_id();

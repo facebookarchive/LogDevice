@@ -326,8 +326,15 @@ int ClientImpl::append(logid_t logid,
                        AppendAttributes attrs,
                        worker_id_t target_worker,
                        std::unique_ptr<std::string> per_request_token) {
+  // Check payload size before copying it into PayloadHolder.
+  if (!AppendRequest::checkPayloadSize(payload.size(),
+                                       getMaxPayloadSize(),
+                                       /* allow_extra */ false)) {
+    return -1;
+  }
+
   auto req = prepareRequest(logid,
-                            payload,
+                            PayloadHolder::copyPayload(payload),
                             cb,
                             std::move(attrs),
                             target_worker,
@@ -345,8 +352,29 @@ int ClientImpl::append(logid_t logid,
                        AppendAttributes attrs,
                        worker_id_t target_worker,
                        std::unique_ptr<std::string> per_request_token) {
+  // We need payload to be owned by a folly::IOBuf rather than an std::string.
+  // If payload is small, let's just make a copy. If payload is large, we'll
+  // use a custom deleter function to avoid copying.
+  PayloadHolder payload_holder;
+  if (payload.size() < 256) {
+    payload_holder = PayloadHolder(
+        PayloadHolder::COPY_BUFFER, payload.data(), payload.size());
+  } else {
+    std::string* string_on_heap = new std::string(std::move(payload));
+    folly::IOBuf::FreeFunction deleter = +[](void* /* buf */, void* userData) {
+      delete reinterpret_cast<std::string*>(userData);
+    };
+    payload_holder = PayloadHolder(
+        folly::IOBuf(folly::IOBuf::TAKE_OWNERSHIP,
+                     string_on_heap->data(),
+                     string_on_heap->size(),
+                     deleter,
+                     /* userData */ reinterpret_cast<void*>(string_on_heap)),
+        /* ignore_size_limit */ true);
+  }
+
   auto req = prepareRequest(logid,
-                            Payload(payload.data(), payload.size()),
+                            std::move(payload_holder),
                             cb,
                             std::move(attrs),
                             target_worker,
@@ -361,7 +389,7 @@ std::pair<Status, NodeID> ClientImpl::appendBuffered(
     logid_t logid,
     const BufferedWriter::AppendCallback::ContextSet&,
     AppendAttributes attrs,
-    const Payload& payload,
+    PayloadHolder&& payload,
     BufferedWriterAppendSink::AppendRequestCallback buffered_writer_cb,
     worker_id_t target_worker,
     int checksum_bits) {
@@ -401,7 +429,7 @@ std::pair<Status, NodeID> ClientImpl::appendBuffered(
       bridge_.get(),
       logid,
       std::move(attrs),
-      payload,
+      std::move(payload),
       settings_->getSettings()->append_timeout.value_or(timeout_),
       std::move(wrapped_cb));
 
@@ -2274,7 +2302,7 @@ size_t ClientImpl::getMaxPayloadSize() noexcept {
 
 std::unique_ptr<AppendRequest>
 ClientImpl::prepareRequest(logid_t logid,
-                           Payload payload,
+                           PayloadHolder&& payload,
                            append_callback_t cb,
                            AppendAttributes attrs,
                            worker_id_t target_worker,
@@ -2287,7 +2315,7 @@ ClientImpl::prepareRequest(logid_t logid,
       bridge_.get(),
       logid,
       std::move(attrs),
-      payload,
+      std::move(payload),
       settings_->getSettings()->append_timeout.value_or(timeout_),
       std::move(cb));
 

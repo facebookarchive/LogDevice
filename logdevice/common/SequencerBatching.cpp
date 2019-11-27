@@ -269,7 +269,7 @@ std::pair<Status, NodeID> SequencerBatching::appendBuffered(
     logid_t logid,
     const BufferedWriter::AppendCallback::ContextSet& contexts,
     AppendAttributes attrs,
-    const Payload& payload,
+    PayloadHolder&& payload,
     AppendRequestCallback callback,
     worker_id_t target_worker,
     int checksum_bits) {
@@ -312,7 +312,7 @@ std::pair<Status, NodeID> SequencerBatching::appendBuffered(
 
   auto reply = runBufferedAppend(logid,
                                  std::move(attrs),
-                                 payload,
+                                 std::move(payload),
                                  std::move(ia_callback),
                                  flags,
                                  checksum_bits,
@@ -508,16 +508,15 @@ Status SequencerBatching::appendProbe() {
 folly::Optional<APPENDED_Header>
 SequencerBatching::runBufferedAppend(logid_t logid,
                                      AppendAttributes attrs,
-                                     const Payload& payload,
+                                     PayloadHolder&& payload,
                                      InternalAppendRequest::Callback callback,
                                      APPEND_flags_t flags,
                                      int checksum_bits,
                                      uint32_t timeout_ms,
                                      uint32_t append_message_count) {
-  // TODO: Don't copy the payload here.
   return runInternalAppend(logid,
                            std::move(attrs),
-                           PayloadHolder::copyPayload(payload),
+                           std::move(payload),
                            std::move(callback),
                            flags,
                            checksum_bits,

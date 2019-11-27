@@ -112,8 +112,7 @@ class BufferedWriterSingleLog {
     // Blob to send to LogDevice, with the entire batch serialized.
     // Constructed the first time the batch transitions from BUILDING to
     // INFLIGHT.
-    Slice blob;
-    std::unique_ptr<uint8_t[]> blob_buf;
+    folly::IOBuf blob;
     size_t blob_header_size = 0;
 
     // How many times we've retried sending this batch

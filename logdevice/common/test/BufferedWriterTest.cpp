@@ -127,7 +127,7 @@ class TestAppendSink : public BufferedWriterAppendSink {
   appendBuffered(logid_t logid,
                  const BufferedWriter::AppendCallback::ContextSet&,
                  AppendAttributes /*attrs*/,
-                 const Payload& payload,
+                 PayloadHolder&& payload,
                  AppendRequestCallback writer_callback,
                  worker_id_t target_worker,
                  int /*checksum_bits*/) override {
@@ -142,8 +142,8 @@ class TestAppendSink : public BufferedWriterAppendSink {
     // Simulate a server round trip with a Request on the Processor so that we
     // don't invoke BufferedWriter's append callback synchronously
     lsn_t lsn = lsn_t(flushed_appends_[logid].size());
-    auto wrapper_cb = [writer_callback, logid, payload, lsn]() {
-      DataRecord record(logid, payload, lsn);
+    auto wrapper_cb = [writer_callback, logid, payload = payload, lsn]() {
+      DataRecord record(logid, payload.getPayload(), lsn);
       writer_callback(E::OK, record, NodeID());
     };
     std::unique_ptr<Request> req =

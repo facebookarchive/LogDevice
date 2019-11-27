@@ -994,13 +994,13 @@ void ReplicatedStateMachine<T, D>::postAppendRequest(
     });
   };
 
-  auto req =
-      std::make_unique<AppendRequest>(nullptr,
-                                      logid,
-                                      AppendAttributes(),
-                                      Payload(payload.data(), payload.size()),
-                                      timeout,
-                                      cb_wrapper);
+  auto req = std::make_unique<AppendRequest>(
+      nullptr,
+      logid,
+      AppendAttributes(),
+      PayloadHolder::copyBuffer(payload.data(), payload.size()),
+      timeout,
+      cb_wrapper);
 
   req->bypassWriteTokenCheck();
   std::unique_ptr<Request> base_req = std::move(req);

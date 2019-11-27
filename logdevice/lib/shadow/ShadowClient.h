@@ -32,6 +32,7 @@
 
 namespace facebook { namespace logdevice {
 
+class PayloadHolder;
 class Shadow;
 class ShadowClient;
 
@@ -120,7 +121,7 @@ class ShadowClient {
   ~ShadowClient();
 
   int append(logid_t logid,
-             const Payload& payload,
+             PayloadHolder&& payload,
              AppendAttributes attrs,
              bool buffered_writer_blob) noexcept;
 

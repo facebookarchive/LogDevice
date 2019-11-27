@@ -41,7 +41,7 @@ void InternalAppendRequest::onReplyReceived(
 folly::Optional<APPENDED_Header>
 runInternalAppend(logid_t logid,
                   AppendAttributes attrs,
-                  PayloadHolder payload,
+                  PayloadHolder&& payload,
                   InternalAppendRequest::Callback callback,
                   APPEND_flags_t flags,
                   int checksum_bits,

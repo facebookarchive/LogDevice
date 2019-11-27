@@ -116,7 +116,7 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
     logid_t logid,
     const BufferedWriter::AppendCallback::ContextSet& contexts,
     AppendAttributes attrs,
-    const Payload& payload,
+    PayloadHolder&& payload,
     AppendRequestCallback callback,
     worker_id_t target_worker,
     int checksum_bits) {
@@ -164,7 +164,7 @@ std::pair<Status, NodeID> StreamWriterAppendSink::appendBuffered(
       std::forward_as_tuple(logid,
                             contexts,
                             attrs,
-                            payload,
+                            std::move(payload),
                             callback,
                             target_worker,
                             checksum_bits,
@@ -208,7 +208,7 @@ StreamWriterAppendSink::createAppendRequest(
       bridge_.get(),
       req_state.logid,
       req_state.attrs, // cannot std::move since we need this later
-      req_state.payload,
+      req_state.payload.clone(),
       getAppendRetryTimeout(),
       wrapped_callback,
       req_state.stream_req_id,
