@@ -28,7 +28,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
     logid_t logid;
     const BufferedWriter::AppendCallback::ContextSet& contexts;
     AppendAttributes attrs;
-    Payload payload;
+    PayloadHolder payload;
     AppendRequestCallback callback;
     worker_id_t target_worker;
     int checksum_bits;
@@ -49,7 +49,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
         logid_t _logid,
         const BufferedWriter::AppendCallback::ContextSet& _contexts,
         AppendAttributes _attrs,
-        const Payload& _payload,
+        PayloadHolder&& _payload,
         AppendRequestCallback _callback,
         worker_id_t _target_worker,
         int _checksum_bits,
@@ -57,7 +57,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
         : logid(_logid),
           contexts(_contexts),
           attrs(_attrs),
-          payload(_payload),
+          payload(std::move(_payload)),
           callback(_callback),
           target_worker(_target_worker),
           checksum_bits(_checksum_bits),
@@ -178,7 +178,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
             it->second.last_status == Status::OK) {
           // Invoke callback and erase all state corresponding to seq_num.
           DataRecord record(it->second.logid,
-                            it->second.payload,
+                            it->second.payload.getPayload(),
                             it->second.record_attrs.lsn,
                             it->second.record_attrs.timestamp,
                             it->second.record_attrs.batch_offset,
@@ -261,7 +261,7 @@ class StreamWriterAppendSink : public BufferedWriterAppendSink {
   appendBuffered(logid_t logid,
                  const BufferedWriter::AppendCallback::ContextSet& contexts,
                  AppendAttributes attrs,
-                 const Payload& payload,
+                 PayloadHolder&& payload,
                  AppendRequestCallback callback,
                  worker_id_t target_worker,
                  int checksum_bits) override;

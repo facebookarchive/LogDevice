@@ -49,6 +49,7 @@ class ClientSettingsImpl;
 class ConfigSubscriptionHandle;
 class EpochMetaDataCache;
 class EpochMetaDataMap;
+class PayloadHolder;
 class PluginRegistry;
 class Processor;
 struct Settings;
@@ -131,7 +132,7 @@ class ClientImpl : public Client,
   appendBuffered(logid_t logid,
                  const BufferedWriter::AppendCallback::ContextSet&,
                  AppendAttributes attrs,
-                 const Payload& payload,
+                 PayloadHolder&& payload,
                  BufferedWriterAppendSink::AppendRequestCallback cb,
                  worker_id_t target_worker,
                  int checksum_bits) override;
@@ -449,7 +450,7 @@ class ClientImpl : public Client,
 
   std::unique_ptr<AppendRequest>
   prepareRequest(logid_t logid,
-                 Payload payload,
+                 PayloadHolder&& payload,
                  append_callback_t cb,
                  AppendAttributes attrs,
                  worker_id_t target_worker,

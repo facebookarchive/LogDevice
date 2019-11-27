@@ -33,7 +33,7 @@ class MockAppendRequest : public AppendRequest {
             nullptr,
             log_id,
             AppendAttributes(),
-            Payload(),
+            PayloadHolder(),
             std::chrono::milliseconds(0),
             append_callback_t(),
             std::make_unique<MockSequencerRouter>(log_id,

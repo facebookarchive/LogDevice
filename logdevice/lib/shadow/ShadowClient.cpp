@@ -205,7 +205,7 @@ ShadowClient::ShadowClient(std::shared_ptr<Client> client,
 ShadowClient::~ShadowClient() {}
 
 int ShadowClient::append(logid_t logid,
-                         const Payload& payload,
+                         PayloadHolder&& payload,
                          AppendAttributes attrs,
                          bool buffered_writer_blob) noexcept {
   auto callback = [&](auto a, const auto& b) { this->appendCallback(a, b); };
@@ -221,7 +221,7 @@ int ShadowClient::append(logid_t logid,
   ClientImpl* client_impl = checked_downcast<ClientImpl*>(client_.get());
   int rv = -1;
   auto req = client_impl->prepareRequest(
-      logid, payload, callback, attrs, worker_id_t{-1}, nullptr);
+      logid, std::move(payload), callback, attrs, worker_id_t{-1}, nullptr);
   if (req) {
     if (buffered_writer_blob) {
       req->setBufferedWriterBlobFlag();

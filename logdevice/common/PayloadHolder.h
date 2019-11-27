@@ -38,7 +38,7 @@ class PayloadHolder {
   /**
    *  Assumes ownership of the given folly::IOBuf.
    */
-  explicit PayloadHolder(folly::IOBuf&& iobuf);
+  explicit PayloadHolder(folly::IOBuf&& iobuf, bool ignore_size_limit = false);
 
   /**
    * Assumes ownership of the given buffer.  It must have been malloc'd and
@@ -82,6 +82,11 @@ class PayloadHolder {
                                      size_t size,
                                      bool ignore_size_limit = false) {
     return PayloadHolder(TAKE_OWNERSHIP, buf, size, ignore_size_limit);
+  }
+
+  // Same as copy constructor.
+  PayloadHolder clone() const {
+    return PayloadHolder(*this);
   }
 
   /**

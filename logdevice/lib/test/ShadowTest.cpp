@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -289,9 +290,8 @@ TEST(ShadowClientTest, ShadowClientInitAppend) {
       "test", shadowAttr, std::chrono::seconds(10), nullptr);
   ASSERT_NE(shadow_client, nullptr);
 
-  std::string payload_str = "test";
-  Payload payload{payload_str.data(), payload_str.size()};
-  int rv = shadow_client->append(logid_t{1}, payload, {}, false);
+  int rv = shadow_client->append(
+      logid_t{1}, PayloadHolder::copyString("test"), {}, false);
   ASSERT_EQ(rv, 0);
 }
 

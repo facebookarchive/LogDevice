@@ -23,6 +23,7 @@ class StreamWriterTest;
 namespace facebook { namespace logdevice {
 
 class Client;
+class PayloadHolder;
 class Processor;
 class Request;
 
@@ -86,7 +87,7 @@ class BufferedWriterAppendSink {
   appendBuffered(logid_t logid,
                  const BufferedWriter::AppendCallback::ContextSet& contexts,
                  AppendAttributes attrs,
-                 const Payload& payload,
+                 PayloadHolder&& payload,
                  AppendRequestCallback callback,
                  worker_id_t target_worker,
                  int checksum_bits) = 0;

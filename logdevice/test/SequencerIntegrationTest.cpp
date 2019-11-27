@@ -1091,7 +1091,7 @@ TEST_F(SequencerIntegrationTest, SeenEpochReactivation) {
         : AppendRequest(nullptr,
                         logid_t(1),
                         AppendAttributes(),
-                        Payload(payload.data(), payload.size()),
+                        PayloadHolder::copyString(payload),
                         timeout,
                         std::move(callback)),
           seen_epoch_(seen_epoch) {

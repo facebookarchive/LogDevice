@@ -66,13 +66,9 @@ struct TestCommand {
   static TestCommand& parsePayload(Payload payload) {
     return **((TestCommand**)payload.data());
   }
-  static Payload createPayload(TestCommand& command) {
-    if (command.payload.empty()) {
-      TestCommand* p = &command;
-      command.payload =
-          std::string(reinterpret_cast<const char*>(&p), sizeof(void*));
-    }
-    return Payload(command.payload.data(), command.payload.size());
+  static PayloadHolder createPayload(TestCommand& command) {
+    TestCommand* p = &command;
+    return PayloadHolder::copyBuffer(&p, sizeof(void*));
   }
 
  private:

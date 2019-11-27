@@ -68,9 +68,7 @@ class AppendRequest : public AppendRequestBase,
    * @param client  ClientBridge to make write token checks through, may be
    *                nullptr if bypassWriteTokenCheck() is called
    * @param logid   log to append the record to
-   * @param payload record payload; the constructor will make a copy of it
-   *                TODO: change this to PayloadHolder and avoid the copying
-   *                      in some cases
+   * @param payload record payload
    * @param timeout cancel the request and report E::TIMEDOUT to client
    *                if a reply is not received for this many milliseconds
    * @param callback functor to call when a reply is received or on timeout
@@ -78,13 +76,13 @@ class AppendRequest : public AppendRequestBase,
   AppendRequest(ClientBridge* client,
                 logid_t logid,
                 AppendAttributes attrs,
-                const Payload& payload,
+                PayloadHolder&& payload,
                 std::chrono::milliseconds timeout,
                 append_callback_t callback)
       : AppendRequest(client,
                       logid,
                       std::move(attrs),
-                      payload,
+                      std::move(payload),
                       timeout,
                       std::move(callback),
                       std::make_unique<SequencerRouter>(logid, this)) {}
@@ -193,8 +191,8 @@ class AppendRequest : public AppendRequestBase,
     return record_.logid;
   }
 
-  std::pair<Payload, AppendAttributes> getShadowData() const {
-    return std::make_pair(record_.payload, attrs_);
+  std::pair<PayloadHolder, AppendAttributes> getShadowData() const {
+    return std::make_pair(payload_, attrs_);
   }
 
   void cancel() {
@@ -223,7 +221,7 @@ class AppendRequest : public AppendRequestBase,
   AppendRequest(ClientBridge* client,
                 logid_t logid,
                 AppendAttributes attrs,
-                const Payload& payload,
+                PayloadHolder&& payload,
                 std::chrono::milliseconds timeout,
                 append_callback_t callback,
                 std::unique_ptr<SequencerRouter> router);
