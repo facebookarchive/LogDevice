@@ -3483,5 +3483,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Sampling period for OverloadDetector",
        CLIENT,
        SettingsCategory::Monitoring);
+  init("logsconfig-api-blacklist-nodes",
+       &logsconfig_api_blacklist_nodes,
+       "",
+       parse_recipients_list,
+       "Comma-separated list of indices of nodes that shouldn't be picked for "
+       "executing logs config API requests (e.g. makeDirectory()). Used in "
+       "tests.",
+       CLIENT,
+       SettingsCategory::Testing);
 }
 }} // namespace facebook::logdevice

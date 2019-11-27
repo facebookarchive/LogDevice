@@ -47,12 +47,17 @@ class InternalLogsIntegrationTest
     return factory;
   }
 
-  void buildClusterAndClient(ClusterFactory factory) {
+  void buildClusterAndClient(ClusterFactory factory,
+                             std::vector<std::pair<std::string, std::string>>
+                                 additional_client_settings = {}) {
     cluster = factory.create(NNODES);
     cluster->waitUntilAllSequencersQuiescent();
 
     std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
     ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
+    for (auto& p : additional_client_settings) {
+      client_settings->set(p.first, p.second);
+    }
     client = cluster->createIndependentClient(
         DEFAULT_TEST_TIMEOUT, std::move(client_settings));
 
@@ -312,26 +317,38 @@ TEST_F(InternalLogsIntegrationTest,
 TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   auto factory = clusterFactory(true);
 
-  // Configure nodes
+  // Configure nodes. N0 is a sequencer+storage node, N1 and N2 are storage
+  // nodes.
   Configuration::Nodes nodes;
   for (int i = 0; i < NNODES; ++i) {
     auto& node = nodes[i];
     node.generation = 1;
-    node.addSequencerRole();
     node.addStorageRole(2);
   }
-  // Add one more node that is sequencer-only (so that we can safely isolate it
-  // without affecting internal logs reads and writes)
+  nodes[0].addSequencerRole();
+
+  // Add one more node N3, set up in a weird way to make sure we can safely
+  // isolate it without affecting internal logs reads and writes.
+  //
+  // We configure N0 and N3 as sequencer nodes, while using static sequencer
+  // placement. This makes both N0 and N3 activate sequencers for all logs on
+  // startup. For each log, random one of the two nodes will win the race and
+  // preempt the other. We then manually activate sequencers for all logs on N0
+  // to make sure N3 ends up with no useful sequencers at all.
   auto& node = nodes[NNODES];
   node.generation = 1;
   node.addSequencerRole();
 
   factory.setNodes(nodes).oneConfigPerNode();
 
-  buildClusterAndClient(std::move(factory));
+  // Prevent client's logsconfig API from picking N3 to execute requests, since
+  // N3 will be isolated for part of the test.
+  buildClusterAndClient(
+      std::move(factory), {{"logsconfig-api-blacklist-nodes", "3"}});
 
   // Write something to the delta log
   auto dir = client->makeDirectorySync("/dir1", true);
+  ASSERT_NE(nullptr, dir);
   lsn_t last_delta = dir->version();
 
   // Check we never trimmed
@@ -340,11 +357,14 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
 
   // Bump epoch a number of times
   const size_t NUM_EPOCHS_TO_BUMP = 5;
-  auto& seq = cluster->getSequencerNode();
+  auto& seq = cluster->getNode(0);
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
     cluster->waitUntilAllSequencersQuiescent();
   }
+  // Make sure the active snapshots sequencer ends up on N0, not N3.
+  seq.upDown(configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS);
+  cluster->waitUntilAllSequencersQuiescent();
 
   // Check that the tail moved as expected
   auto tail_lsn =
@@ -354,18 +374,40 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
 
   // Make sure logsconfig is in sync everywhere
   cluster->waitUntilLogsConfigSynced(tail_lsn);
+  client->syncLogsConfigVersion(last_delta);
 
   // Take snapshot
   auto result =
       cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
   EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
 
-  // Trim the delta log up to N0 read pointer
+  // Trim the delta log up to our client's read pointer
   ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
 
   // Check we have trimmed up to delta log read ptr
   ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
             tail_lsn - 1);
+
+  auto get_last_node_reader_health = [&]() -> std::string {
+    auto info = cluster->getNode(NNODES).sendJsonCommand(
+        "info client_read_streams --json");
+    int checked = 0;
+    std::string res = "?";
+    for (auto& rec : info) {
+      if (rec["Log ID"] ==
+          folly::to<std::string>(
+              configuration::InternalLogs::CONFIG_LOG_DELTAS.val())) {
+        res = rec["Connection health"];
+        ++checked;
+      }
+    }
+    EXPECT_EQ(1, checked);
+    return res;
+  };
+
+  wait_until("N3's config log deltas reader is healthy", [&] {
+    return get_last_node_reader_health() == "HEALTHY_AUTHORITATIVE_COMPLETE";
+  });
 
   // Isolate N<last> so that delta log read stream becomes unhealthy and the
   // replicated state machine stalls
@@ -377,6 +419,7 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
 
   // Write another record
   dir = client->makeDirectorySync("/dir2", true);
+  ASSERT_NE(nullptr, dir);
   last_delta = dir->version();
 
   // Bump epoch a few more times to move the tail and cause bridge gaps
@@ -399,20 +442,12 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
             new_tail_lsn - 1);
 
-  // While N<last< is still isolated, check that the logsconfig delta log read
-  // stream is not healthy
-  auto info = cluster->getNode(NNODES).sendJsonCommand(
-      "info client_read_streams --json");
-  bool checked = false;
-  for (auto& rec : info) {
-    if (rec["Log ID"] ==
-        folly::to<std::string>(
-            configuration::InternalLogs::CONFIG_LOG_DELTAS.val())) {
-      EXPECT_EQ(rec["Connection health"], "UNHEALTHY");
-      checked = true;
-    }
-  }
-  EXPECT_TRUE(checked);
+  // While N<last> is still isolated, check that the logsconfig delta log read
+  // stream is not healthy.
+  wait_until("N3's config log deltas reader is unhealthy", [&] {
+    std::string s = get_last_node_reader_health();
+    return s == "UNHEALTHY" || s == "READING_METADATA";
+  });
 
   // Rejoin N<last> to the cluster
   partition1.insert(NNODES);
@@ -421,19 +456,12 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   // Check that N<last> is able to sycnhronize the logs config up to the tail.
   cluster->getNode(NNODES).waitUntilLogsConfigSynced(new_tail_lsn);
 
-  // Double check that read stream is now healthy
-  info = cluster->getNode(NNODES).sendJsonCommand(
-      "info client_read_streams --json");
-  checked = false;
-  for (auto& rec : info) {
-    if (rec["Log ID"] ==
-        folly::to<std::string>(
-            configuration::InternalLogs::CONFIG_LOG_DELTAS.val())) {
-      EXPECT_EQ(rec["Connection health"], "HEALTHY_AUTHORITATIVE_COMPLETE");
-      checked = true;
-    }
-  }
-  EXPECT_TRUE(checked);
+  // Double check that read stream is now healthy. Note that the reader may
+  // deliver records while unhealthy, so we need to wait here despite the
+  // waitUntilLogsConfigSynced() above.
+  wait_until("N3's config log deltas reader is healthy again", [&] {
+    return get_last_node_reader_health() == "HEALTHY_AUTHORITATIVE_COMPLETE";
+  });
 
   // Check logsconfig read availability on sequencer by restarting it
   seq.kill();
@@ -447,28 +475,31 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
  * the corresponding stat is bumped.
  */
 TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
+  // Most of the test is copy-pasted from
+  // RecoverAfterStallingDueToTrimmingDeltaLog above. See comments there.
+
   auto factory = clusterFactory(true);
 
-  // Configure nodes
   Configuration::Nodes nodes;
   for (int i = 0; i < NNODES; ++i) {
     auto& node = nodes[i];
     node.generation = 1;
-    node.addSequencerRole();
     node.addStorageRole(2);
   }
-  // Add one more node that is sequencer-only (so that we can safely isolate it
-  // without affecting internal logs reads and writes)
+  nodes[0].addSequencerRole();
+
   auto& node = nodes[NNODES];
   node.generation = 1;
   node.addSequencerRole();
 
   factory.setNodes(nodes).oneConfigPerNode();
 
-  buildClusterAndClient(std::move(factory));
+  buildClusterAndClient(
+      std::move(factory), {{"logsconfig-api-blacklist-nodes", "3"}});
 
   // Write something to the delta log
   auto dir = client->makeDirectorySync("/dir1", true);
+  ASSERT_NE(nullptr, dir);
   lsn_t last_delta = dir->version();
 
   // Check we never trimmed
@@ -477,11 +508,14 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
 
   // Bump epoch a number of times
   const size_t NUM_EPOCHS_TO_BUMP = 5;
-  auto& seq = cluster->getSequencerNode();
+  auto& seq = cluster->getNode(0);
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
     cluster->waitUntilAllSequencersQuiescent();
   }
+  // Make sure the active snapshots sequencer ends up on N0, not N3.
+  seq.upDown(configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS);
+  cluster->waitUntilAllSequencersQuiescent();
 
   // Check that the tail moved as expected
   auto tail_lsn =
@@ -491,13 +525,14 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
 
   // Make sure logsconfig is in sync everywhere
   cluster->waitUntilLogsConfigSynced(tail_lsn);
+  client->syncLogsConfigVersion(last_delta);
 
   // Take snapshot
   auto result =
       cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
   EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
 
-  // Trim the delta log up to N0 read pointer
+  // Trim the delta log up to our client's read pointer
   ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
 
   // Check we have trimmed up to delta log read ptr
@@ -514,6 +549,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
 
   // Write another record
   dir = client->makeDirectorySync("/dir2", true);
+  ASSERT_NE(nullptr, dir);
   last_delta = dir->version();
 
   // Bump epoch a few more times to move the tail and cause bridge gaps
@@ -541,6 +577,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
 
   // Write another record
   dir = client->makeDirectorySync("/dir3", true);
+  ASSERT_NE(nullptr, dir);
   last_delta = dir->version();
 
   // Check that the tail is at the last record
