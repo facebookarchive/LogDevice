@@ -119,7 +119,7 @@ TEST_F(FileConfigSourceTest, Simple) {
   reader_thread_waiting_.store(true);
   writer_thread_waiting_.store(true);
 
-  // Start a reader thread.  It will check the config, wait a while and check
+  // Start a reader thread. It will check the config, wait a while and check
   // again.
   std::thread readerThread(readerThreadImpl, config, thread);
 
