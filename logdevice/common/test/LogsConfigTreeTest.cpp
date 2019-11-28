@@ -8,6 +8,7 @@
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 
 #include <iostream>
+#include <set>
 
 #include <gtest/gtest.h>
 
@@ -17,6 +18,260 @@
 
 using namespace facebook::logdevice::logsconfig;
 using namespace facebook::logdevice;
+
+TEST(AttributeTest, OperatorsTest) {
+  Attribute<int> attr1(1, true);
+  Attribute<int> attr2(2, true);
+
+  ASSERT_EQ(attr1, attr1);
+  ASSERT_EQ(attr2, attr2);
+  ASSERT_FALSE(attr1 == attr2);
+
+  ASSERT_TRUE(attr1 < attr2);
+  ASSERT_FALSE(attr2 < attr1);
+
+  ASSERT_FALSE(attr1 < attr1);
+
+  Attribute<int> attr3a(3, false);
+  Attribute<int> attr3b(3, true);
+
+  ASSERT_FALSE(attr3a == attr3b);
+  ASSERT_TRUE(attr3a < attr3b);
+  ASSERT_FALSE(attr3b < attr3a);
+
+  Attribute<int> attr4(4, false);
+
+  ASSERT_TRUE(attr3a < attr4);
+  ASSERT_TRUE(attr3b < attr4);
+  ASSERT_FALSE(attr4 < attr3a);
+  ASSERT_FALSE(attr4 < attr3b);
+
+  Attribute<int> empty;
+
+  ASSERT_EQ(empty, empty);
+  ASSERT_TRUE(empty < attr1);
+  ASSERT_TRUE(empty < attr2);
+  ASSERT_TRUE(empty < attr3a);
+  ASSERT_TRUE(empty < attr3b);
+  ASSERT_TRUE(empty < attr4);
+  ASSERT_FALSE(empty < empty);
+}
+
+TEST(AttributeTest, StdSet) {
+  std::set<Attribute<int>> a_set;
+
+  Attribute<int> attr1(1, true);
+  Attribute<int> attr2(2, false);
+
+  ASSERT_TRUE(a_set.emplace(attr1).second);
+  ASSERT_FALSE(a_set.emplace(attr1).second);
+  ASSERT_TRUE(a_set.emplace(attr2).second);
+  ASSERT_FALSE(a_set.emplace(attr2).second);
+
+  ASSERT_EQ(1, a_set.count(attr1));
+  ASSERT_EQ(1, a_set.count(attr2));
+
+  Attribute<int> attr3t(3, true);
+  Attribute<int> attr3f(3, false);
+
+  ASSERT_TRUE(a_set.emplace(attr3t).second);
+  ASSERT_TRUE(a_set.emplace(attr3f).second);
+
+  Attribute<int> empty;
+
+  ASSERT_TRUE(a_set.emplace(empty).second);
+  ASSERT_EQ(1, a_set.count(empty));
+
+  ASSERT_EQ(5, a_set.size());
+
+  a_set.erase(attr1);
+  a_set.erase(attr2);
+  a_set.erase(attr3f);
+  a_set.erase(attr3t);
+  a_set.erase(empty);
+  ASSERT_EQ(0, a_set.size());
+}
+
+TEST(DeduplicationTest, CommonValuesRegistry) {
+  LogAttributes::ExtrasMap extras = {{"K", "V"}};
+  auto shadow = LogAttributes::Shadow{"ld.test", 0.1};
+
+  LogAttributes attr1 =
+      LogAttributes()
+          .with_replicationFactor(14)
+          .with_stickyCopySets(true)
+          .with_extras(extras)
+          .with_extraCopies(2)
+          .with_deliveryLatency(std::chrono::milliseconds(150))
+          .with_maxWritesInFlight(15)
+          .with_writeToken(folly::Optional<std::string>("Hola"))
+          .with_shadow(shadow);
+
+  uintptr_t ptr1 =
+      reinterpret_cast<uintptr_t>(attr1.getCommonValuesPtr().get());
+  CommonValuesRegistry::get().deduplicate(attr1);
+  uintptr_t ptr2 =
+      reinterpret_cast<uintptr_t>(attr1.getCommonValuesPtr().get());
+
+  ASSERT_NE(ptr1, ptr2);
+  ASSERT_EQ(1, CommonValuesRegistry::get().localRegistrySize());
+
+  auto attr2 = attr1; // deep copy
+  ptr2 = reinterpret_cast<uintptr_t>(attr2.getCommonValuesPtr().get());
+  ASSERT_NE(ptr1, ptr2);
+
+  CommonValuesRegistry::get().deduplicate(attr2);
+  ptr2 = reinterpret_cast<uintptr_t>(attr2.getCommonValuesPtr().get());
+  ASSERT_NE(ptr1, ptr2);
+
+  ASSERT_EQ(1, CommonValuesRegistry::get().localRegistrySize());
+
+  LogAttributes attr3;
+  LogAttributes attr4;
+  ASSERT_NE(attr3.getCommonValuesPtr(), attr4.getCommonValuesPtr());
+
+  CommonValuesRegistry::get().deduplicate(attr3);
+  ASSERT_EQ(2, CommonValuesRegistry::get().localRegistrySize());
+
+  CommonValuesRegistry::get().deduplicate(attr4);
+  ASSERT_EQ(2, CommonValuesRegistry::get().localRegistrySize());
+
+  ASSERT_EQ(attr3.getCommonValuesPtr(), attr4.getCommonValuesPtr());
+
+  CommonValuesRegistry::get().deduplicate(attr4); // no-op
+  ASSERT_EQ(2, CommonValuesRegistry::get().localRegistrySize());
+
+  ASSERT_EQ(attr3.getCommonValuesPtr(), attr4.getCommonValuesPtr());
+
+  CommonValuesRegistry::get().clearAll();
+}
+
+TEST(DeduplicationTest, LogsConfigTreeNodes) {
+  ASSERT_EQ(0, CommonValuesRegistry::get().localRegistrySize());
+
+  LogAttributes attrs1 = LogAttributes().with_syncedCopies(4);
+  auto attrs2 = attrs1.with_replicationFactor(7);
+
+  auto node1a = std::make_unique<DirectoryNode>("1a", attrs1);
+  auto node1b = std::make_unique<DirectoryNode>("1b", attrs1);
+  auto node2 = std::make_unique<DirectoryNode>("2", attrs2);
+  auto node3 = std::make_unique<LogGroupNode>();
+
+  ASSERT_EQ(3, CommonValuesRegistry::get().localRegistrySize());
+
+  node1a.reset();
+  ASSERT_EQ(3, CommonValuesRegistry::get().localRegistrySize());
+
+  node2.reset();
+  ASSERT_EQ(2, CommonValuesRegistry::get().localRegistrySize());
+
+  node1b.reset();
+  ASSERT_EQ(1, CommonValuesRegistry::get().localRegistrySize());
+
+  node3.reset();
+  ASSERT_EQ(0, CommonValuesRegistry::get().localRegistrySize());
+}
+
+std::unique_ptr<LogsConfigTree> createTestTree(bool addNodesInThread) {
+  auto assert_eq = [&](size_t a, size_t b) { ASSERT_EQ(a, b); };
+  LogAttributes::ExtrasMap extras = {{"K", "V"}};
+  LogAttributes attr1 = LogAttributes()
+                            .with_replicationFactor(4)
+                            .with_extras(extras)
+                            .with_extraCopies(1);
+  LogAttributes attr2 = attr1.with_stickyCopySets(false).with_extraCopies(2);
+  LogAttributes attr3 = attr2.with_replicationFactor(1).with_extraCopies(3);
+  LogAttributes attr4 = attr3.with_singleWriter(true).with_extraCopies(4);
+
+  auto defaults = DefaultLogAttributes();
+  std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
+  assert_eq(CommonValuesRegistry::get().localRegistrySize(), 1);
+
+  auto dir1 = tree->addDirectory(tree->root(), "normal_logs", attr1);
+  assert_eq(CommonValuesRegistry::get().localRegistrySize(), 2);
+
+  tree->addLogGroup(
+      dir1, "normal_log1", logid_range_t{logid_t(1), logid_t(2)}, attr2);
+  assert_eq(CommonValuesRegistry::get().localRegistrySize(), 3);
+
+  auto addNodes = [&]() {
+    auto dir2 = tree->addDirectory(tree->root(), "normal_log2", attr3);
+    assert_eq(CommonValuesRegistry::get().localRegistrySize(),
+              1 + (addNodesInThread ? 0 : 3));
+
+    tree->addLogGroup(
+        dir2, "normal_log3", logid_range_t{logid_t(6), logid_t(9)}, attr1);
+    uint32_t expected = addNodesInThread ? 2 : 4;
+    assert_eq(CommonValuesRegistry::get().localRegistrySize(), expected);
+
+    assert_eq(
+        CommonValuesRegistry::get().totalSize(), addNodesInThread ? 5 : 4);
+  };
+
+  if (addNodesInThread) {
+    std::thread(addNodes).join();
+  } else {
+    addNodes();
+  }
+  return tree;
+}
+
+class DeduplicationTestWithParams
+    : public testing::TestWithParam<std::tuple<bool, bool, bool>> {
+  // see the test body for param details
+};
+
+INSTANTIATE_TEST_CASE_P(DeduplicationTest,
+                        DeduplicationTestWithParams,
+                        testing::Values(std::make_tuple(false, false, false),
+                                        std::make_tuple(true, false, false),
+                                        std::make_tuple(false, true, false),
+                                        std::make_tuple(true, true, false),
+                                        std::make_tuple(false, false, true),
+                                        std::make_tuple(true, false, true),
+                                        std::make_tuple(false, true, true),
+                                        std::make_tuple(true, true, true)));
+
+TEST_P(DeduplicationTestWithParams, LogsConfigTree) {
+  bool addNodesInThread = std::get<0>(GetParam());
+  bool destructInThread = std::get<1>(GetParam());
+
+  auto tree = createTestTree(addNodesInThread);
+
+  if (destructInThread) {
+    std::thread([&]() { tree.reset(); }).join();
+  } else {
+    tree.reset();
+  }
+
+  ASSERT_EQ(CommonValuesRegistry::get().totalSize(), 0);
+}
+
+TEST_P(DeduplicationTestWithParams, LogsConfigTreeCopy) {
+  bool addNodesInThread = std::get<0>(GetParam());
+  bool destructInThread = std::get<1>(GetParam());
+  bool destructCopyFirst = std::get<2>(GetParam());
+
+  auto tree1 = createTestTree(addNodesInThread);
+
+  auto tree2 = tree1->copy();
+
+  if (!destructCopyFirst) {
+    tree1.reset();
+  }
+
+  if (destructInThread) {
+    std::thread([&]() { tree2.reset(); }).join();
+  } else {
+    tree2.reset();
+  }
+
+  if (destructCopyFirst) {
+    tree1.reset();
+  }
+
+  ASSERT_EQ(CommonValuesRegistry::get().totalSize(), 0);
+}
 
 TEST(LogAttributesTest, AttributeMergeTest) {
   Attribute<int> attr1 = 22;

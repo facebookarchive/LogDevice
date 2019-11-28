@@ -11,6 +11,7 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <map>
 #include <memory>
 #include <set>
 #include <utility>
@@ -216,6 +217,20 @@ bool operator==(const Type& b, const Attribute<Type>& a) {
   return a.hasValue() && a.value() == b;
 }
 
+template <typename Type>
+bool operator<(const Attribute<Type>& a, const Attribute<Type>& b) {
+  if (a.hasValue() && b.hasValue()) {
+    return std::forward_as_tuple(a.value(), a.isInherited()) <
+        std::forward_as_tuple(b.value(), b.isInherited());
+  }
+
+  if (!a.hasValue() && !b.hasValue()) {
+    return a.isInherited() < b.isInherited();
+  }
+
+  return a.hasValue() < b.hasValue();
+}
+
 inline bool compareReplicateAcrossKeys(std::pair<NodeLocationScope, int>& lhs,
                                        std::pair<NodeLocationScope, int>& rhs) {
   return lhs.first < rhs.first;
@@ -235,8 +250,7 @@ compareReplicateAcrossValues(std::pair<NodeLocationScope, int>& lhs,
 class LogAttributes {
  public:
   using PermissionsMap =
-      folly::F14FastMap<std::string,
-                        std::array<bool, static_cast<int>(ACTION::MAX)>>;
+      std::map<std::string, std::array<bool, static_cast<int>(ACTION::MAX)>>;
 
   using ACLList = std::vector<std::string>;
 
@@ -268,6 +282,13 @@ class LogAttributes {
     bool operator==(const Shadow& other) const {
       return destination_ == other.destination_ &&
           std::fabs(ratio_ - other.ratio_) < EPSILON;
+    }
+
+    bool operator<(const Shadow& other) const {
+      if (ratio_ == other.ratio_) {
+        return destination_ < other.destination_;
+      }
+      return ratio_ < other.ratio_;
     }
 
    private:
@@ -382,8 +403,13 @@ class LogAttributes {
       return !(*this == other);
     }
 
+    bool operator<(const CommonValues& other) const {
+      return as_tuple(*this) < as_tuple(other);
+    }
+
    private:
     friend class LogAttributes;
+    friend class CommonValuesRegistry;
 
     /**
      * Number of nodes on which to persist a record ('r' in the design doc).
@@ -613,6 +639,7 @@ class LogAttributes {
 
  public:
   friend class LogsConfigTree;
+  friend class LogsConfigTreeNode;
   LogAttributes(
       const Attribute<int>& replicationFactor,
       const Attribute<int>& extraCopies,
