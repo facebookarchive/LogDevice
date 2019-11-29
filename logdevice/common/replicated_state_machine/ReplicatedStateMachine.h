@@ -120,11 +120,7 @@ class ReplicatedStateMachine {
                                   logid_t delta_log_id,
                                   logid_t snapshot_log_id = LOGID_INVALID);
 
-  virtual ~ReplicatedStateMachine() {
-    if (!stopped_) {
-      stop();
-    }
-  }
+  virtual ~ReplicatedStateMachine() {}
 
   /**
    * Stop reading (equivalent to calling stop()) once the tail of the snapshot
@@ -505,6 +501,9 @@ class ReplicatedStateMachine {
   // Resume reading a read stream on which we may have been pushing back.
   virtual void resumeReadStream(read_stream_id_t id);
 
+  // Activate timer to call stop on the next event loop iteration
+  virtual void scheduleStop();
+
   // These functions must be overridden by the user.
 
   /**
@@ -840,6 +839,10 @@ class ReplicatedStateMachine {
   //  - there are new deltas since last snapshot
   std::chrono::milliseconds snapshot_log_timestamp_{0};
   Timer snapshotting_timer_;
+
+  // Timer used to schedule deletion of client read streams, so that they
+  // are not destroyed inline inside of a callback.
+  Timer read_stream_deletion_timer_;
 };
 
 template <typename T>

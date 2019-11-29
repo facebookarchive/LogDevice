@@ -39,8 +39,18 @@ void ReplicatedStateMachine<T, D>::start() {
 }
 
 template <typename T, typename D>
+void ReplicatedStateMachine<T, D>::scheduleStop() {
+  if (!read_stream_deletion_timer_.isAssigned()) {
+    read_stream_deletion_timer_.assign([this] { stop(); });
+    read_stream_deletion_timer_.activate(std::chrono::microseconds(0));
+  }
+}
+
+template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::stop() {
-  ld_check(!stopped_);
+  if (stopped_) {
+    return;
+  }
 
   auto stop_read_stream = [](read_stream_id_t& rsid) {
     if (rsid != READ_STREAM_ID_INVALID) {
@@ -54,6 +64,7 @@ void ReplicatedStateMachine<T, D>::stop() {
 
   stopped_ = true;
   cancelGracePeriodForSnapshotting();
+  read_stream_deletion_timer_.cancel();
   // This will unblock anyone that called wait().
   sem_.post();
 }
@@ -828,8 +839,9 @@ void ReplicatedStateMachine<T, D>::onReachedDeltaLogTailLSN() {
   }
 
   if (stop_at_tail_) {
-    // This will unblock anyone that called wait().
-    sem_.post();
+    // This will schedule deletion of client read streams, and unblock any
+    // caller waiting.
+    scheduleStop();
   }
 }
 
