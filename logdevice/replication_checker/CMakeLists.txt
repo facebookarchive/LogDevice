@@ -10,9 +10,9 @@ add_library(replication_checker_lib
             "ReplicationCheckerSettings.cpp")
 add_dependencies(replication_checker_lib folly common)
 
-add_executable(replication_checker_nofb main.cpp)
+add_executable(replication_checker main.cpp)
 
-target_link_libraries(replication_checker_nofb
+target_link_libraries(replication_checker
   replication_checker_lib
   common
   ldclient_static
