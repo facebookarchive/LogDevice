@@ -271,7 +271,7 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
             : ClusterState::NodeState::FULLY_STARTED;
         new_state_map.insert(
             {i, std::make_unique<std::atomic<ClusterState::NodeState>>(state)});
-        // If we have failure detector, mark new nodes as undefined by default;
+        // If we have failure detector, mark new nodes as unhealthy by default;
         // FD will change their state as needed. Otherwise, treat nodes as
         // healthy by default. This maintains consistency with the way node
         // state is treated.
