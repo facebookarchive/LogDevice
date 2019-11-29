@@ -16,14 +16,15 @@ file(
   MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_configuration_if_include_prefix}
  )
 
-ld_thrift_py3_library(
+thrift_library(
   "AllReadStreamsDebugConfig"
   ""
+  "cpp2"
   "json"
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_BINARY_DIR}/${_configuration_if_include_prefix}"
   "${_configuration_if_include_prefix}"
-  PY3_NAMESPACE "logdevice/all_read_streams_debug_config"
+  THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
  )
 
 add_dependencies(AllReadStreamsDebugConfig-cpp2-target fbthrift)
