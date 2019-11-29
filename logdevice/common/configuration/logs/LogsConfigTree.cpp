@@ -1367,9 +1367,4 @@ LogGroupNode::createFromFollyDynamic(const folly::dynamic& log_entry,
                                      log_range));
 }
 
-CommonValuesRegistry& CommonValuesRegistry::get() {
-  static CommonValuesRegistry instance;
-  return instance;
-}
-
 }}} // namespace facebook::logdevice::logsconfig
