@@ -28,7 +28,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 project(${PACKAGE_NAME} CXX)
 
 option(PORTABLE "build a portable binary" OFF)
-option(thriftpy3 "Include Thriftpy3 in build (requires Cython 0.29)" OFF)
+option(thriftpy3 "Include Thriftpy3 in build (requires Cython 0.28)" OFF)
 
 enable_testing()
 # gtest_discover_tests was introduced in cmake 3.10
