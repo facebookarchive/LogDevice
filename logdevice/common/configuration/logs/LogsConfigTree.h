@@ -17,7 +17,6 @@
 #include <folly/Memory.h>
 #include <folly/Optional.h>
 #include <folly/String.h>
-#include <folly/ThreadLocal.h>
 #include <folly/container/F14Map.h>
 #include <folly/dynamic.h>
 
@@ -61,147 +60,6 @@ using LogMap = boost::icl::interval_map<
     boost::icl::inter_section,
     boost::icl::right_open_interval<logid_t::raw_type, std::less>>;
 
-/**
- * Keeps a collection of LogAttributes::CommonValues, so it can be reused,
- * with `deduplicate` call across LogAttributes objects.
- * CommonValues objects are kept in thread-local containers.
- * If CommonValues are destructed from a different thread than they were
- * allocated in, purgeUnused() should be called once in a while to clean up
- * any leftovers.
- */
-class CommonValuesRegistry final {
- public:
-  static CommonValuesRegistry& get();
-
-  /**
-   * If there's already a CommonValues objects in the registry with the same
-   * values assign its pointer to the given LogAttributes instance.
-   * If not, add it to the registry so it can be used later.
-   * The CommonValues content stays the same in both cases.
-   *
-   * @attrs object for which its CommonValues instance is to be deduplicated
-   */
-  void deduplicate(LogAttributes& attrs) {
-    auto* registry = registry_.get();
-    if (!registry) {
-      registry = new Registry;
-      registry_.reset(registry);
-    }
-
-    auto cv_ptr = attrs.getCommonValuesPtr();
-
-    auto it = registry->find(cv_ptr);
-    if (it == registry->end()) {
-      // Don't use the given pointer here, but make a copy.
-      // We don't want to keep track of possibly 3rd party copies,
-      // which live outside of cache.
-      auto cached_ptr = std::make_shared<LogAttributes::CommonValues>(*cv_ptr);
-      it = registry->emplace(cached_ptr).first;
-    }
-    attrs.changeCommonValuesPtr(*it);
-  }
-
-  /**
-   * Traverse the registry and remove all CommonValues objects that aren't
-   * used anymore. This needs to be called once in a while if CommonValues
-   * are destructed from different threads than there were created in.
-   *
-   * Shouldn't be called to often for performance resons.
-   */
-  void purgeUnused() {
-    auto accessor = registry_.accessAllThreads();
-    for (auto& registry : accessor) {
-      auto it = registry.begin();
-      while (it != registry.end()) {
-        if (it->use_count() == 1) {
-          it = registry.erase(it);
-        } else {
-          ++it;
-        }
-      }
-    }
-  }
-
-  /**
-   * Empty the registry. This affects deduplication but is safe because
-   * deduplicated LogAttributes still keep CommonValues object memory alive
-   * via their shared_ptrs.
-   *
-   * Shouldn't be called to often for performance resons.
-   */
-  void clearAll() {
-    auto accessor = registry_.accessAllThreads();
-    for (auto& registry : accessor) {
-      registry.clear();
-    }
-  }
-
-  /**
-   * Checks thread-local cache and removes CommonValues pointer from it
-   * if its the last one.
-   *
-   * @ptr CommonValues to be freed
-   */
-  void purgeIfLast(LogAttributes::CommonValuesPtr&& ptr) {
-    if (auto* registry = registry_.get()) {
-      auto it = registry->find(ptr);
-      if (it != registry->end() && ptr.get() == it->get()) {
-        ptr.reset();
-        if (it->use_count() == 1) {
-          registry->erase(it);
-        }
-      }
-    }
-  }
-
-  /**
-   * Returns the size of the registry collection.
-   *
-   * @return number of elements
-   */
-  size_t localRegistrySize() const {
-    if (auto* registry = registry_.get()) {
-      return registry->size();
-    }
-    return 0;
-  }
-
-  /**
-   * Returns the size of the registry collection across all threads.
-   * Shouldn't be called to often for performance resons.
-   *
-   * @return number of elements
-   */
-  size_t totalSize() const {
-    size_t size = 0;
-    auto accessor = registry_.accessAllThreads();
-    for (auto& registry : accessor) {
-      size += registry.size();
-    }
-    return size;
-  }
-
- private:
-  struct Less {
-    bool operator()(const LogAttributes::CommonValuesPtr& l,
-                    const LogAttributes::CommonValuesPtr& r) const {
-      return *l < *r;
-    }
-  };
-
-  // Why we use an associative container instead of a hash based:
-  // Computing a hash over all CommonValues attributes is cumbersome,
-  // as these are nontrivial types.
-  // Additionally, most of the time hashes would collide (b/c duplicates)
-  // and hash container would fall back to operator== anyway.
-  // We use std::set instead and rely on operator<. The number of elements
-  // in the map is expected to be small (up to hundreds),
-  // so neither performace, nor memory overhead should be a problem.
-  using Registry = std::set<LogAttributes::CommonValuesPtr, Less>;
-  struct Tag {};
-  folly::ThreadLocalPtr<Registry, Tag> registry_;
-};
-
 enum class NodeType { DIRECTORY = 0, LOG_GROUP };
 
 /*
@@ -210,19 +68,13 @@ enum class NodeType { DIRECTORY = 0, LOG_GROUP };
 class LogsConfigTreeNode {
  public:
   explicit LogsConfigTreeNode(const LogAttributes& attrs = LogAttributes())
-      : attrs_(attrs) {
-    CommonValuesRegistry::get().deduplicate(attrs_);
-  }
+      : attrs_(attrs) {}
 
   LogsConfigTreeNode(const std::string& name, const LogAttributes& attrs)
-      : name_(name), attrs_(attrs) {
-    CommonValuesRegistry::get().deduplicate(attrs_);
-  }
+      : name_(name), attrs_(attrs) {}
 
   LogsConfigTreeNode(const LogsConfigTreeNode& other)
-      : name_(other.name_), attrs_(other.attrs_) {
-    CommonValuesRegistry::get().deduplicate(attrs_);
-  }
+      : name_(other.name_), attrs_(other.attrs_) {}
 
   LogsConfigTreeNode& operator=(const LogsConfigTreeNode& other) = delete;
 
@@ -241,17 +93,13 @@ class LogsConfigTreeNode {
     return ReplicationProperty::fromLogAttributes(attrs_);
   }
 
-  virtual ~LogsConfigTreeNode() {
-    CommonValuesRegistry::get().purgeIfLast(std::move(attrs_.common_));
-  }
+  virtual ~LogsConfigTreeNode() {}
 
  protected:
   std::string name_;
 
   void replaceAttrs(const LogAttributes& attrs) {
-    CommonValuesRegistry::get().purgeIfLast(std::move(attrs_.common_));
     attrs_ = attrs;
-    CommonValuesRegistry::get().deduplicate(attrs_);
   }
 
  private:
@@ -809,12 +657,7 @@ class LogsConfigTree {
   std::unique_ptr<LogsConfigTree> copy() const {
     return std::make_unique<LogsConfigTree>(*this);
   }
-
-  virtual ~LogsConfigTree() {
-    logs_index_.clear();
-    root_.reset();
-    CommonValuesRegistry::get().purgeUnused();
-  }
+  virtual ~LogsConfigTree() {}
 
   /*
    * This creates a directory with the specified attributes, the path is a FQLGN
