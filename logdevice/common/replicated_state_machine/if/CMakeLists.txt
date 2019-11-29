@@ -16,14 +16,15 @@ file(
   MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_rsm_if_include_prefix}
  )
 
- ld_thrift_py3_library(
+thrift_library(
    "KeyValueStore"
    ""
+   "cpp2"
    "json"
    "${CMAKE_CURRENT_SOURCE_DIR}"
    "${CMAKE_BINARY_DIR}/${_rsm_if_include_prefix}"
    "${_rsm_if_include_prefix}"
-   PY3_NAMESPACE "logdevice/replicated_state_machine"
+   THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
   )
 
 add_dependencies(KeyValueStore-cpp2-target fbthrift)

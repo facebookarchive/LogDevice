@@ -82,7 +82,11 @@ ld_thrift_py3_library(
     "${CMAKE_BINARY_DIR}/fbthrift-prefix/src/fbthrift-build/thrift/lib/py3/cybld"
     "${CMAKE_BINARY_DIR}/logdevice/common/membership/gen-py3/"
 )
+
+set(_languages cpp2)
+
 if(thriftpy3)
+  list(APPEND _languages py3)
   set_source_files_properties(
     "${CMAKE_BINARY_DIR}/common/fb303/if/gen-py3/fb303/clients_wrapper.cpp"
     PROPERTIES GENERATED TRUE
@@ -98,12 +102,6 @@ if(thriftpy3)
     PRIVATE
       admin-cpp2
       ${_common_libs})
-endif()
-
-set(_languages cpp2)
-
-if(thriftpy3)
-  list(APPEND _languages py3)
 
   add_dependencies(admin-py3-target admin-cpp2)
   add_dependencies(logdevice-admin-types-py3
@@ -118,10 +116,19 @@ if(thriftpy3)
     logdevice-admin-maintenance-types-py3
     logdevice-admin-settings-types-py3)
 
-  add_dependencies(logdevice-admin-clients-py3 fb303-clients-py3)
+  add_dependencies(logdevice-admin-clients-py3
+    fb303-clients-py3
+    admin-py3-target
+  )
 endif()
 
 add_dependencies(admin-cpp2-target fbthrift)
+
+target_link_libraries(admin-cpp2
+  ${_common_libs}
+  ${THRIFT_DEPS}
+)
+
 foreach(_lang ${_languages})
 add_dependencies(admin-${_lang}-target
                  common-${_lang}-target
@@ -134,11 +141,6 @@ add_dependencies(admin-${_lang}-target
                  safety-${_lang}-target
                  maintenance-${_lang}-target
                  settings-${_lang}-target)
-
-target_link_libraries(admin-${_lang}
-  ${_common_libs}
-  ${THRIFT_DEPS}
-)
 
 add_dependencies(exceptions-${_lang}-target
                  common-${_lang}-target)

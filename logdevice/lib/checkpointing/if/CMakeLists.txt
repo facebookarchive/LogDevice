@@ -16,14 +16,15 @@ file(
   MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_checkpointing_if_include_prefix}
  )
 
- ld_thrift_py3_library(
+ thrift_library(
    "Checkpoint"
    ""
+   "cpp2"
    "json"
    "${CMAKE_CURRENT_SOURCE_DIR}"
    "${CMAKE_BINARY_DIR}/${_checkpointing_if_include_prefix}"
    "${_checkpointing_if_include_prefix}"
-   PY3_NAMESPACE "logdevice/checkpointing"
+   THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
   )
 
 add_dependencies(Checkpoint-cpp2-target fbthrift)
