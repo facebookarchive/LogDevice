@@ -16,6 +16,7 @@ ExternalProject_Add(fbthrift
         -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
         -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
         -DCMAKE_POSITION_INDEPENDENT_CODE=True
+        -BUILD_SHARED_LIBS=ON
         -DCXX_STD=gnu++17
         -DCMAKE_CXX_STANDARD=17
     INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
@@ -35,19 +36,19 @@ set(THRIFT1 ${BINARY_DIR}/bin/thrift1)
 #set(THRIFTCPP2 ${BINARY_DIR}/lib/libthriftcpp2.a)
 
 set(FBTHRIFT_LIBRARIES
-    ${BINARY_DIR}/lib/libprotocol.a
-    ${BINARY_DIR}/lib/libthriftcpp2.a
-    ${BINARY_DIR}/lib/libcompiler_ast.a
-    ${BINARY_DIR}/lib/libtransport.a
-    ${BINARY_DIR}/lib/libthriftfrozen2.a
-    ${BINARY_DIR}/lib/libcompiler_generators.a
-    ${BINARY_DIR}/lib/libcompiler_lib.a
-    ${BINARY_DIR}/lib/libmustache_lib.a
-    ${BINARY_DIR}/lib/libasync.a
-    ${BINARY_DIR}/lib/libthrift-core.a
-    ${BINARY_DIR}/lib/libcompiler_base.a
-    ${BINARY_DIR}/lib/libthriftprotocol.a
-    ${BINARY_DIR}/lib/libconcurrency.a
+    ${BINARY_DIR}/lib/libprotocol.so
+    ${BINARY_DIR}/lib/libthriftcpp2.so
+    ${BINARY_DIR}/lib/libcompiler_ast.so
+    ${BINARY_DIR}/lib/libtransport.so
+    ${BINARY_DIR}/lib/libthriftfrozen2.so
+    ${BINARY_DIR}/lib/libcompiler_generators.so
+    ${BINARY_DIR}/lib/libcompiler_lib.so
+    ${BINARY_DIR}/lib/libmustache_lib.so
+    ${BINARY_DIR}/lib/libasync.so
+    ${BINARY_DIR}/lib/libthrift-core.so
+    ${BINARY_DIR}/lib/libcompiler_base.so
+    ${BINARY_DIR}/lib/libthriftprotocol.so
+    ${BINARY_DIR}/lib/libconcurrency.so
 )
 
 set(FBTHRIFT_INCLUDE_DIR
