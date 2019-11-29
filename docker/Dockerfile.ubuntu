@@ -14,19 +14,23 @@ RUN apt-get update \
     && apt-get install --no-install-recommends \
       -y $(cat /tmp/ubuntu.deps) \
     && rm -rf /var/lib/apt/lists/* \
-    && python3 -m pip install --user --upgrade setuptools wheel cython
+    && mkdir -p /build/staging/usr/local \
+    && python3 -m pip install virtualenv
+
+# Activating the virtualenv
+ENV VIRTUAL_ENV=/build/staging/usr/local
+RUN python3 -m virtualenv --python=/usr/bin/python3 $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# We need Cython 2.28.6 because of https://github.com/cython/cython/issues/2985
+RUN python3 -m pip install --upgrade setuptools wheel cython==0.28.6
 
 COPY . LogDevice
 
-RUN mkdir /build && cd /build && \
-    cmake /LogDevice/logdevice/ && \
-    make -j $(nproc) && \
-    make install && \
-    cp /build/bin/ld* /usr/local/bin/
-
-RUN cd /LogDevice/logdevice/ops && python3 setup.py sdist bdist_wheel
-
 WORKDIR /build
+
+RUN cmake -Dthriftpy3=ON /LogDevice/logdevice/ \
+    && make -j $(nproc)
 
 CMD /bin/bash
 
@@ -36,38 +40,37 @@ FROM ubuntu:bionic
 # ldshell _requires_ utf-8
 ENV LANG C.UTF-8
 
-# Copy LogDevice development tools
+# Copy LogDevice user tools
 COPY --from=builder /build/bin/ld* \
-                  /build/bin/logdeviced /usr/local/bin/
+                  /build/bin/logdeviced \
+                  /build/bin/replication_checker \
+                  /usr/local/bin/
 
-# Python tools, ldshell, ldquery and client lib
-COPY --from=builder /LogDevice/logdevice/ops/dist/ldshell-*.whl /tmp
+# Python tools, ldshell, ldquery and libs
+# Folly python bindings
+COPY --from=builder /build/fbthrift-prefix/src/fbthrift-build/thrift/lib/py3/cybld/dist/thrift-*.whl /tmp/
+# Thrift Py3
+COPY --from=builder /build/folly-prefix/src/folly-build/folly/cybld/dist/folly-*.whl /tmp/
+# libfolly/lib(Thrift) libraries
+COPY --from=builder /build/staging/usr/local/lib/*.so /usr/local/lib/
+# LDShell, LDops, ldquery, etc.
+COPY --from=builder /build/python-out/dist/ldshell-*.whl /tmp/
+# LogDevice client library python bindings
 COPY --from=builder /build/lib/liblogdevice.so /usr/local/lib/
-COPY --from=builder /build/lib/client.so \
-    /usr/local/lib/python3.6/dist-packages/logdevice/client.so
-COPY --from=builder /build/lib/ext.so \
-    /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/internal/ext.so
-COPY --from=builder /build/lib/admin_command_client.so \
-    /usr/local/lib/python3.6/dist-packages/logdevice/ops/admin_command_client.so
-COPY --from=builder /LogDevice/logdevice/ops/ldquery/py/lib.py \
-    /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/
-COPY --from=builder /LogDevice/logdevice/ops/ldquery/py/__init__.py \
-    /usr/local/lib/python3.6/dist-packages/logdevice/ldquery/
 
 # Install runtime dependencies for ld-dev-cluster, ldshell friends.
 # To install the ldshell wheel we also need python3 build tools, as
 # we depend on python-Levenshtein for which a many-linux binary wheel is not
 # available; these are removed following install to keep docker image size low.
-
 COPY --from=builder /LogDevice/logdevice/build_tools/ubuntu_runtime.deps /tmp/logdevice_runtime.deps
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends $(cat /tmp/logdevice_runtime.deps) \
         gcc python3-setuptools python3-dev && \
-    python3 -m pip install --user --upgrade setuptools wheel && \
-    pip3 install /tmp/ldshell-*.whl && \
+    python3 -m pip install --upgrade setuptools wheel && \
+    python3 -m pip install --upgrade /tmp/folly-*.whl /tmp/ldshell-*.whl /tmp/thrift-*.whl /tmp/ldshell-*.whl && \
     apt-get remove -y --auto-remove gcc python3-setuptools python3-dev && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /tmp/*.whl /tmp/*.deps
 
 EXPOSE 4440 4441 4443 5440 6440
 

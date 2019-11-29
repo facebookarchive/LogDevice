@@ -243,6 +243,19 @@ macro(ld_thrift_py3_library file_name services options file_path output_path inc
         LIBRARY_OUTPUT_DIRECTORY
           "${output_path}/gen-py3/${_py3_namespace}${file_name}"
         LIBRARY_OUTPUT_NAME ${_src})
+
+      # Symlink the output to LOGDEVICE_PY_OUT
+      file(MAKE_DIRECTORY
+        "${LOGDEVICE_PY_OUT}/gen-py3/${_py3_namespace}${file_name}"
+      )
+
+      add_custom_command(TARGET ${_module_name} POST_BUILD
+        COMMAND
+          ${CMAKE_COMMAND} -E create_symlink
+          "${output_path}/gen-py3/${_py3_namespace}${file_name}/${_src}.so"
+          "${LOGDEVICE_PY_OUT}/gen-py3/${_py3_namespace}${file_name}/${_src}.so"
+      )
+
     endforeach()
   endif() # thriftpy3
 endmacro()
