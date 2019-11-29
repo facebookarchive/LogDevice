@@ -282,6 +282,11 @@ void FailureDetector::buildInitialState(
         auto new_status = static_cast<NodeHealthStatus>(cs_status_update[i]);
         cs->setNodeStatus(i, new_status);
         node.status_ = new_status;
+        RATELIMIT_INFO(std::chrono::seconds(1),
+                       10,
+                       "N%zu transitioned to %s(status)",
+                       i,
+                       toString(new_status).c_str());
       }
     }
 
@@ -671,6 +676,7 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
   const bool has_starting_list =
       msg.flags_ & GOSSIP_Message::HAS_STARTING_LIST_FLAG;
 
+  bool update_statuses = senderUsingHealthMonitor(sender_idx, msg.node_list_);
   for (auto node : msg.node_list_) {
     size_t id = node.node_id_;
 
@@ -716,14 +722,18 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
         if (has_starting_list) {
           node_state.is_node_starting_ = node.is_node_starting_;
         }
-        node_state.status_ = node.node_status_;
+        if (update_statuses || id == sender_idx) {
+          node_state.status_ = node.node_status_;
+        }
       }
       continue;
     }
 
     if (node.gossip_ <= nodes_[id].gossip_) {
       nodes_[id].gossip_ = node.gossip_;
-      nodes_[id].status_ = node.node_status_;
+      if (update_statuses || id == sender_idx) {
+        nodes_[id].status_ = node.node_status_;
+      }
     }
 
     if (has_starting_list) {
@@ -896,6 +906,7 @@ void FailureDetector::detectFailures(
     const folly::SharedMutex::ReadHolder& /* nodes_lock */) {
   const int threshold = settings_->gossip_failure_threshold;
   const auto& nodes_configuration = getNodesConfiguration();
+  const auto& serv_disc = nodes_configuration->getServiceDiscovery();
 
   size_t dead_cnt = 0;
   size_t effective_dead_cnt = 0;
@@ -934,9 +945,11 @@ void FailureDetector::detectFailures(
     }
 
     updateNodeState(it.first, it.second, dead, false, failover);
-    updateNodeStatus(it.first,
-                     it.second,
-                     dead ? NodeHealthStatus::UNHEALTHY : it.second.status_);
+    if (serv_disc->hasNode(it.first)) {
+      updateNodeStatus(it.first,
+                       it.second,
+                       dead ? NodeHealthStatus::UNHEALTHY : it.second.status_);
+    }
 
     // re-check node's state as it may be suspect, in which case it is still
     // considered dead
@@ -1104,6 +1117,7 @@ void FailureDetector::updateNodeStatus(node_index_t idx,
                    node.gossip_,
                    node.gossip_ts_.count());
   }
+  node.status_ = status;
   getClusterState()->setNodeStatus(idx, status);
 }
 
@@ -1337,6 +1351,19 @@ void FailureDetector::onGossipMessageSent(Status st,
       gossip_timer_node_->timer->fire();
     }
   }
+}
+
+bool FailureDetector::senderUsingHealthMonitor(
+    node_index_t sender_idx,
+    GOSSIP_Message::node_list_t node_list) {
+  bool using_health_monitor{false};
+  for (auto& node : node_list) {
+    if (node.node_id_ != sender_idx) {
+      continue;
+    }
+    using_health_monitor = node.node_status_ != NodeHealthStatus::UNDEFINED;
+  }
+  return using_health_monitor;
 }
 
 void FailureDetector::setOutliers(std::vector<NodeID> outliers) {

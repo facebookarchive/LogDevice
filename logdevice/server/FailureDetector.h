@@ -271,7 +271,7 @@ class FailureDetector {
           gossip_ts_(std::chrono::milliseconds::zero()),
           failover_(std::chrono::milliseconds::zero()),
           is_node_starting_(false),
-          status_{NodeHealthStatus::UNDEFINED} {}
+          status_{NodeHealthStatus::UNHEALTHY} {}
 
     std::string toString() const;
   };
@@ -511,6 +511,11 @@ class FailureDetector {
 
   virtual ClusterState* getClusterState() const;
   virtual int sendGossipMessage(NodeID, std::unique_ptr<GOSSIP_Message>);
+
+  // checks whether gossip sender is aware of HM. If not, node status updates
+  // from this sender should not be propagated.
+  bool senderUsingHealthMonitor(node_index_t sender_idx,
+                                GOSSIP_Message::node_list_t node_list);
 
   virtual Socket* getServerSocket(node_index_t idx);
   virtual StatsHolder* getStats();
