@@ -132,10 +132,6 @@ class MockEventLogStateMachine : public EventLogStateMachine {
     writeDeltaHeader();
   }
 
-  virtual ~MockEventLogStateMachine() override {
-    stopped_ = true;
-  }
-
   const std::shared_ptr<ServerConfig> getServerConfig() const override {
     return config_->getServerConfig();
   }
@@ -157,6 +153,7 @@ class MockEventLogStateMachine : public EventLogStateMachine {
     return read_stream_id_t{1};
   }
   void resumeReadStream(read_stream_id_t /*id*/) override {}
+  void scheduleStop() override {}
   void updateWorkerShardStatusMap() override {}
   void publishRebuildingSet() override {}
   void trim() override {}
