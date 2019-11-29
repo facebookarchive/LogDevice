@@ -229,14 +229,12 @@ macro(ld_thrift_py3_library file_name services options file_path output_path inc
           PRIVATE
           "${file_name}-cpp2"
           thriftcpp2_shared
-          folly_pic
         )
       else()
         target_link_libraries(${_module_name}
           PRIVATE
           "${file_name}-cpp2"
           FBThrift::thriftcpp2_shared
-          Folly::folly_pic
         )
       endif()
       target_include_directories(${_module_name} PUBLIC ${PYTHON_INCLUDE_DIRS})
