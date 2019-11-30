@@ -9,21 +9,33 @@ add_library(logdevice_ldquery_python SHARED "LDQueryModule.cpp")
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 target_link_libraries(logdevice_ldquery_python
-  ldquery)
+  ldquery
+)
 
 # Since CMake prepends 'lib' to each library
 # which would break the 'import logdevice' statements in Python
 # In the future, we'll have to revisit this part, since
 # we split our 'logdevice' namespace into multiple .so binaries (e.g. test)
-set_target_properties(logdevice_ldquery_python PROPERTIES PREFIX "")
-set_target_properties(logdevice_ldquery_python PROPERTIES OUTPUT_NAME "ext")
+file(MAKE_DIRECTORY "${LOGDEVICE_PY_OUT}/logdevice/ldquery/internal")
+set_target_properties(logdevice_ldquery_python
+  PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY "${LOGDEVICE_PY_OUT}/logdevice/ldquery/internal"
+    OUTPUT_NAME "ext"
+    PREFIX ""
+)
 
-install(TARGETS logdevice_ldquery_python
-  COMPONENT runtime
-  DESTINATION "${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/ldquery/internal")
-install(CODE
-  "file(WRITE
-    \"\$ENV\{DESTDIR\}${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/ldquery/internal/__init__.py\"
-    \"\")")
-install(FILES lib.py __init__.py
-        DESTINATION "${PYTHON_MODULE_INSTALL_PREFIX}/logdevice/ldquery")
+file(GLOB ldquery_py_files
+  "${CMAKE_CURRENT_SOURCE_DIR}/*.py"
+)
+
+# Emitting the libraries and python extensions into the LOGDEVICE_PY_OUT
+# directory with the correct structure
+foreach(_src ${ldquery_py_files})
+  get_filename_component(_target "${_src}" NAME)
+  add_custom_command(TARGET logdevice_ldquery_python PRE_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E create_symlink
+      "${_src}"
+      "${LOGDEVICE_PY_OUT}/logdevice/ldquery/${_target}"
+  )
+endforeach()

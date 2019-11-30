@@ -22,7 +22,7 @@ jobs:
             mkdir -p _build
             cd _build
             cmake -DPORTABLE=ON ../logdevice/
-            make -j 8
+            make -j $(($(nproc)-1))
       - run:
           name: Generate Documentation
           working_directory: _build
