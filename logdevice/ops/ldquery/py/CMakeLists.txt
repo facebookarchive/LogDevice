@@ -17,7 +17,7 @@ target_link_libraries(logdevice_ldquery_python
 # In the future, we'll have to revisit this part, since
 # we split our 'logdevice' namespace into multiple .so binaries (e.g. test)
 file(MAKE_DIRECTORY "${LOGDEVICE_PY_OUT}/logdevice/ldquery/internal")
-set_target_properties(logdevice_ldquery_python 
+set_target_properties(logdevice_ldquery_python
   PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY "${LOGDEVICE_PY_OUT}/logdevice/ldquery/internal"
     OUTPUT_NAME "ext"
@@ -25,7 +25,7 @@ set_target_properties(logdevice_ldquery_python
 )
 
 file(GLOB ldquery_py_files
-  "${CMAKE_CURRENT_SOURCE_DIR}/*.py" 
+  "${CMAKE_CURRENT_SOURCE_DIR}/*.py"
 )
 
 # Emitting the libraries and python extensions into the LOGDEVICE_PY_OUT

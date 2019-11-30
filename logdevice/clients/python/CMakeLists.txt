@@ -19,14 +19,15 @@ message(STATUS "Linking Python bindings with ${PYTHON_LIBRARIES}")
 target_link_libraries(logdevice_python
   ldclient
   ${Boost_LIBRARIES}
-  ${PYTHON_LIBRARIES})
+  ${PYTHON_LIBRARIES}
+)
 
 # Since CMake prepends 'lib' to each library
 # which would break the 'import logdevice' statements in Python
 # In the future, we'll have to revisit this part, since
 # we split our 'logdevice' namespace into multiple .so binaries (e.g. test)
 file(MAKE_DIRECTORY "${LOGDEVICE_PY_OUT}/logdevice")
-set_target_properties(logdevice_python 
+set_target_properties(logdevice_python
   PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY "${LOGDEVICE_PY_OUT}/logdevice"
     OUTPUT_NAME "client"

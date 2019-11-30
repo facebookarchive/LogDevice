@@ -4,14 +4,15 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-python_add_module(logdevice_admin_command_client_python 
+python_add_module(logdevice_admin_command_client_python
   "AdminCommandClientModule.cpp"
 )
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 target_link_libraries(logdevice_admin_command_client_python
-  admin_command_client)
+  admin_command_client
+)
 
 # Since CMake prepends 'lib' to each library
 # which would break the 'import logdevice' statements in Python
