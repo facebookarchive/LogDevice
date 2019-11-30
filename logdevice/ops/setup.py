@@ -5,7 +5,7 @@
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
-from setuptools import find_namespace_packages, setup, Extension
+from setuptools import find_packages, setup, Extension
 from distutils.file_util import copy_file
 from setuptools.command.build_ext import build_ext as _build_ext
 from pathlib import Path
@@ -48,7 +48,7 @@ setup(
     author_email="asoli@fb.com",
     description="The main tool for operating LogDevice clusters",
     url="https://github.com/facebookincubator/LogDevice",
-    packages=find_namespace_packages(
+    packages=find_packages(
         include=[
             "ldshell",
             "ldshell.*",
