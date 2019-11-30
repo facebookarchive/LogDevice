@@ -30,6 +30,13 @@ project(${PACKAGE_NAME} CXX)
 option(PORTABLE "build a portable binary" OFF)
 option(thriftpy3 "Include Thriftpy3 in build (requires Cython 0.28)" OFF)
 
+# Use the Debug build profile as default unless -DCMAKE_BUILD_TYPE is passed in.
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Debug)
+endif(NOT CMAKE_BUILD_TYPE)
+
+message(STATUS "Building with \"${CMAKE_BUILD_TYPE}\" build profile.")
+
 enable_testing()
 # gtest_discover_tests was introduced in cmake 3.10
 if(${CMAKE_VERSION} VERSION_EQUAL "3.10" OR ${CMAKE_VERSION} VERSION_GREATER "3.10")
