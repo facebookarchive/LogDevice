@@ -29,7 +29,7 @@ COPY . LogDevice
 
 WORKDIR /build
 
-RUN cmake -Dthriftpy3=ON /LogDevice/logdevice/ \
+RUN cmake -Dthriftpy3=ON --DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF /LogDevice/logdevice/ \
     && make -j $(nproc)
 
 CMD /bin/bash

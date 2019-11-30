@@ -10,16 +10,19 @@ jobs:
       - image: ubuntu:bionic
     resource_class: xlarge
     steps:
-      - checkout
       - run: apt-get update
-      - run: apt-get install -y ca-certificates doxygen $(cat logdevice/build_tools/ubuntu.deps)
+      - run: apt-get install -y ca-certificates git doxygen $(cat logdevice/build_tools/ubuntu.deps)
+      - checkout
       - run: git reset --hard HEAD
       - run: git submodule sync
       - run: git submodule update --init --recursive
       - run:
           name: Build LogDevice
           command: |
-            mkdir -p _build
+            mkdir -p _build/staging/usr/local
+            python3 -m pip install virtualenv
+            source _build/staging/usr/local/bin/activate
+            python3 -m pip install --upgrade setuptools wheel cython==0.28.6
             cd _build
             cmake -DPORTABLE=ON ../logdevice/
             make -j 5
@@ -57,9 +60,9 @@ jobs:
       - image: ubuntu:bionic
     resource_class: xlarge
     steps:
-      - checkout
       - run: apt-get update
-      - run: apt-get install -y ca-certificates doxygen xsltproc $(cat logdevice/build_tools/ubuntu.deps)
+      - run: apt-get install -y ca-certificates doxygen git xsltproc $(cat logdevice/build_tools/ubuntu.deps)
+      - checkout
       - run: git reset --hard HEAD
       - attach_workspace:
           at: .
@@ -86,18 +89,18 @@ jobs:
       - image: ubuntu:bionic
     resource_class: xlarge
     steps:
-      - checkout
       - run: apt-get update
-      - run: apt-get install -y ca-certificates docker.io
+      - run: apt-get install -y ca-certificates git docker.io
+      - checkout
       - run: git reset --hard HEAD
-      - attach_workspace:
-          at: .
+      - run: git submodule sync
+      - run: git submodule update --init --recursive
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
-          name: Assemble Docker Image
+          name: Assemble Docker Image (Ubuntu)
           command: |
-            docker build -t facebookincubator/logdevice:latest -f docker/Dockerfile.ci .
+            docker build -t facebookincubator/logdevice:latest -f docker/Dockerfile.ubuntu .
       - run:
           name: Push Image to DockerHub
           command: |
