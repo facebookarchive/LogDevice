@@ -46,6 +46,10 @@ endif()
 include (logdevice-functions)
 
 include(build-config)
+# Use the Debug build profile as default unless -DCMAKE_BUILD_TYPE is passed in.
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Debug)
+endif(NOT CMAKE_BUILD_TYPE)
 
 option(BUILD_TESTS "If enabled, compile the tests." ON)
 option(BUILD_SUBMODULES "Build using Git submodules, to fulfill dependencies" ON)
