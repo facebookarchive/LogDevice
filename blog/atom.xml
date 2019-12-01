@@ -2,8 +2,8 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://logdevice.io/blog</id>
     <title>LogDevice Blog</title>
-    <updated>2018-09-12T06:00:00Z</updated>
-    <generator>Feed for Node.js</generator>
+    <updated>2018-09-12T06:00:00.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://logdevice.io/blog"/>
     <subtitle>The best place to stay up-to-date with the latest LogDevice news and events.</subtitle>
     <logo>https://logdevice.io/img/facebook_logdevice_whitewordmark.png</logo>
@@ -11,11 +11,13 @@
     <entry>
         <title type="html"><![CDATA[Open-sourcing LogDevice, a distributed data store for sequential data]]></title>
         <id>https://logdevice.io/blog/2018/09/12/open-sourcing-announcement.html</id>
-        <link href="https://logdevice.io/blog/2018/09/12/open-sourcing-announcement.html">
-        </link>
-        <updated>2018-09-12T06:00:00Z</updated>
+        <link href="https://logdevice.io/blog/2018/09/12/open-sourcing-announcement.html"/>
+        <updated>2018-09-12T06:00:00.000Z</updated>
         <summary type="html"><![CDATA[<p>We are excited to announce that today we are open-sourcing LogDevice! The code is now <a href="https://github.com/facebookincubator/LogDevice">available on GitHub</a> under the permissive 3-clause BSD license.</p> <p>LogDevice is a distributed data store for sequential data originally developed within Facebook. <a href="https://code.fb.com/core-data/logdevice-a-distributed-data-store-for-logs/">This ...</a></p>]]></summary>
         <author>
+            <name/>
+            <email/>
+            <uri/>
         </author>
     </entry>
 </feed>
