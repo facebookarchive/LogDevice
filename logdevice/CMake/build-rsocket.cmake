@@ -12,9 +12,11 @@ ExternalProject_Add(rsocket
     # Disable configure, build and install steps: we just want the source
     PREFIX "${CMAKE_CURRENT_BINARY_DIR}"
     SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/external/rsocket-cpp"
-    CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=True
+    CMAKE_ARGS
+        -DCMAKE_POSITION_INDEPENDENT_CODE=True
         -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
         -DBUILD_TESTS=OFF
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DBUILD_BENCHMARKS=OFF
         -DBUILD_EXAMPLES=OFF
         -DCMAKE_CXX_STANDARD=17
