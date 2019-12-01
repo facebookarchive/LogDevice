@@ -21,10 +21,11 @@ jobs:
           command: |
             mkdir -p _build/staging/usr/local
             python3 -m pip install virtualenv
+            python3 -m virtualenv _build/staging/usr/local
             source _build/staging/usr/local/bin/activate
             python3 -m pip install --upgrade setuptools wheel cython==0.28.6
             cd _build
-            cmake -DPORTABLE=ON ../logdevice/
+            cmake -Dthriftpy3=ON ../logdevice/
             make -j 5
       - run:
           name: Generate Documentation
