@@ -19,6 +19,7 @@
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/toString.h"
 #include "logdevice/common/util.h"
@@ -1129,4 +1130,10 @@ For example, all these are acceptable
   def("parse_log_level", &dbg::parseLoglevel, args("value"));
   def("use_python_logging", &logdevice_use_python_logging, args("callback"));
   def("set_log_fd", &dbg::useFD, args("fd"));
+  def("is_internal_log", +[](logid_t log_id) {
+    return configuration::InternalLogs::isInternal(log_id);
+  });
+  def("get_internal_log_name", +[](logid_t log_id) {
+    return configuration::InternalLogs::lookupByID(log_id);
+  });
 }

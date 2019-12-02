@@ -57,7 +57,7 @@ class LogDevicePlugin(PluginInterface):
             "takes a list as value it look like a:1,2;b:1"
         )
         opts_parser = argparse.ArgumentParser(
-            description="Logdevice Shell Utility",
+            description="LogDevice Shell Utility",
             epilog=epilog,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
             add_help=add_help,
@@ -68,9 +68,21 @@ class LogDevicePlugin(PluginInterface):
             type=str,
             help="Connect to a cluster using config file path",
         )
+        admin = opts_parser.add_mutually_exclusive_group(required=False)
+        admin.add_argument(
+            "-s", "--admin-server-host", type=str, help="The admin server host address"
+        )
+        admin.add_argument(
+            "-u",
+            "--admin-server-unix-path",
+            type=str,
+            help="The admin server unix socket address",
+        )
+        opts_parser.add_argument(
+            "--admin-server-port", type=int, default=6440, help="The admin server port"
+        )
         opts_parser.add_argument(
             "--verbose",
-            "-v",
             action="count",
             default=0,
             help="Increase ldshell verbosity, can be specified multiple times",
@@ -85,7 +97,6 @@ class LogDevicePlugin(PluginInterface):
         )
         opts_parser.add_argument(
             "--stderr",
-            "-s",
             action="store_true",
             help="By default the logging output goes to a "
             "temporary file. This disables this feature "
