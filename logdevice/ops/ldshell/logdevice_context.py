@@ -11,6 +11,7 @@ import sys
 import textwrap
 
 from logdevice.admin.clients import AdminAPI
+from logdevice.admin.common.types import SocketAddress, SocketAddressFamily
 from logdevice.client import (
     Client,
     LoggingLevel,
@@ -82,6 +83,18 @@ class Context(context.Context):
             if not self._ldquery:
                 self._build_ldquery()
             return self._ldquery
+
+    def get_node_admin_client(self, address: SocketAddress):
+        """
+        Creates an Admin Client that connects to a given node.
+        """
+        if address.address_family == SocketAddressFamily.INET:
+            return create_thrift_client(
+                AdminAPI, host=address.address, port=address.port
+            )
+        else:
+            # SocketAddressFamily::UNIX
+            return create_thrift_client(AdminAPI, path=address.address)
 
     def get_cluster_admin_client(self):
         """
