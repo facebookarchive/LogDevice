@@ -82,8 +82,7 @@ Request::Execution TrimMetaDataLogRequest::execute() {
 
 void TrimMetaDataLogRequest::start() {
   // get backlog duration of the data log
-  const std::shared_ptr<LogsConfig::LogGroupNode> log =
-      config_->getLogGroupByIDShared(log_id_);
+  const auto log = config_->getLogGroupByIDShared(log_id_);
   if (!log) {
     ld_warning("Cannot determine backlog duration, log %lu not found in "
                "config!",

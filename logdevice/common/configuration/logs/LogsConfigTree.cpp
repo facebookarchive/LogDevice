@@ -388,10 +388,9 @@ void DirectoryNode::setChild(const std::string& name,
   children_[name] = std::move(child);
 }
 
-std::shared_ptr<LogGroupNode>
-DirectoryNode::addLogGroup(std::shared_ptr<LogGroupNode> group,
-                           bool overwrite,
-                           std::string& failure_reason) {
+LogGroupNodePtr DirectoryNode::addLogGroup(LogGroupNodePtr group,
+                                           bool overwrite,
+                                           std::string& failure_reason) {
   if (!overwrite && exists(group->name())) {
     failure_reason = "Log group already exists!";
     err = E::EXISTS;
@@ -401,13 +400,12 @@ DirectoryNode::addLogGroup(std::shared_ptr<LogGroupNode> group,
   return group;
 }
 
-std::shared_ptr<LogGroupNode>
-DirectoryNode::addLogGroup(const std::string& name,
-                           const logid_range_t& range,
-                           const LogAttributes& log_attrs,
-                           bool overwrite,
-                           std::string& failure_reason) {
-  auto log = std::make_shared<LogGroupNode>(
+LogGroupNodePtr DirectoryNode::addLogGroup(const std::string& name,
+                                           const logid_range_t& range,
+                                           const LogAttributes& log_attrs,
+                                           bool overwrite,
+                                           std::string& failure_reason) {
+  auto log = std::make_shared<const LogGroupNode>(
       name, LogAttributes(log_attrs, attrs()), range);
   if (LogGroupNode::isValid(this, log.get(), failure_reason)) {
     return addLogGroup(log, overwrite, failure_reason);
@@ -417,10 +415,9 @@ DirectoryNode::addLogGroup(const std::string& name,
   }
 }
 
-std::shared_ptr<LogGroupNode>
-DirectoryNode::addLogGroup(const LogGroupNode& log_group,
-                           bool overwrite,
-                           std::string& failure_reason) {
+LogGroupNodePtr DirectoryNode::addLogGroup(const LogGroupNode& log_group,
+                                           bool overwrite,
+                                           std::string& failure_reason) {
   return addLogGroup(log_group.name(),
                      log_group.range(),
                      log_group.attrs(),
@@ -456,11 +453,10 @@ bool DirectoryNode::refreshAttributesInheritance(std::string& failure_reason) {
   return true;
 }
 
-std::shared_ptr<LogGroupNode>
-DirectoryNode::deleteLogGroup(const std::string& name) {
+LogGroupNodePtr DirectoryNode::deleteLogGroup(const std::string& name) {
   auto iter = logs_.find(name);
   if (iter != logs_.end()) {
-    std::shared_ptr<LogGroupNode> old_node = iter->second;
+    auto old_node = iter->second;
     logs_.erase(iter);
     return old_node;
   }
@@ -514,7 +510,7 @@ LogsConfigTree::findDirectory(const std::string& path) const {
   }
 }
 
-LogsConfigTreeNode* FOLLY_NULLABLE
+const LogsConfigTreeNode* FOLLY_NULLABLE
 LogsConfigTree::find(const std::string& raw_path) const {
   std::string path = normalize_path(raw_path);
   auto tokens = tokensOfPath(path);
@@ -541,10 +537,9 @@ LogsConfigTree::find(const std::string& raw_path) const {
   return nullptr;
 }
 
-std::shared_ptr<LogGroupNode>
-LogsConfigTree::findLogGroup(const std::string& path) const {
+LogGroupNodePtr LogsConfigTree::findLogGroup(const std::string& path) const {
   DirectoryNode* parent;
-  std::shared_ptr<LogGroupNode> group;
+  LogGroupNodePtr group;
   std::tie(parent, group) = getLogGroupAndParent(path);
   if (parent == nullptr || group == nullptr) {
     err = E::NOTFOUND;
@@ -553,7 +548,7 @@ LogsConfigTree::findLogGroup(const std::string& path) const {
   return group;
 }
 
-std::pair<DirectoryNode*, std::shared_ptr<LogGroupNode>>
+std::pair<DirectoryNode*, LogGroupNodePtr>
 LogsConfigTree::getLogGroupAndParent(const std::string& raw_path) const {
   DirectoryNode* found;
   std::string path = normalize_path(raw_path);
@@ -673,11 +668,10 @@ LogsConfigTree::addDirectory(const std::string& raw_path,
   }
 }
 
-std::shared_ptr<LogGroupNode>
-LogsConfigTree::addLogGroup(const std::string& parent_path,
-                            const std::string& name,
-                            const logid_range_t& range,
-                            const LogAttributes& log_attrs) {
+LogGroupNodePtr LogsConfigTree::addLogGroup(const std::string& parent_path,
+                                            const std::string& name,
+                                            const logid_range_t& range,
+                                            const LogAttributes& log_attrs) {
   std::string failure_reason;
   auto ret = addLogGroup(parent_path, name, range, log_attrs, failure_reason);
   if (!ret) {
@@ -690,12 +684,11 @@ LogsConfigTree::addLogGroup(const std::string& parent_path,
   return ret;
 }
 
-std::shared_ptr<LogGroupNode>
-LogsConfigTree::addLogGroup(const std::string& parent_path,
-                            const std::string& name,
-                            const logid_range_t& range,
-                            const LogAttributes& log_attrs,
-                            std::string& failure_reason) {
+LogGroupNodePtr LogsConfigTree::addLogGroup(const std::string& parent_path,
+                                            const std::string& name,
+                                            const logid_range_t& range,
+                                            const LogAttributes& log_attrs,
+                                            std::string& failure_reason) {
   return addLogGroup(findDirectory(parent_path),
                      name,
                      range,
@@ -704,12 +697,11 @@ LogsConfigTree::addLogGroup(const std::string& parent_path,
                      failure_reason);
 }
 
-std::shared_ptr<LogGroupNode>
-LogsConfigTree::addLogGroup(const std::string& path,
-                            const logid_range_t& range,
-                            const LogAttributes& log_attrs,
-                            bool addIntermediateDirectories,
-                            std::string& failure_reason) {
+LogGroupNodePtr LogsConfigTree::addLogGroup(const std::string& path,
+                                            const logid_range_t& range,
+                                            const LogAttributes& log_attrs,
+                                            bool addIntermediateDirectories,
+                                            std::string& failure_reason) {
   // we now require name to be defined in all logs
 
   return addLogGroup(root_.get(),
@@ -720,11 +712,10 @@ LogsConfigTree::addLogGroup(const std::string& path,
                      failure_reason);
 }
 
-std::shared_ptr<LogGroupNode>
-LogsConfigTree::addLogGroup(const std::string& path,
-                            const logid_range_t& range,
-                            const LogAttributes& log_attrs,
-                            bool addIntermediateDirectories) {
+LogGroupNodePtr LogsConfigTree::addLogGroup(const std::string& path,
+                                            const logid_range_t& range,
+                                            const LogAttributes& log_attrs,
+                                            bool addIntermediateDirectories) {
   std::string failure_reason;
   auto ret = addLogGroup(
       path, range, log_attrs, addIntermediateDirectories, failure_reason);
@@ -737,12 +728,11 @@ LogsConfigTree::addLogGroup(const std::string& path,
   return ret;
 }
 
-std::shared_ptr<LogGroupNode>
-LogsConfigTree::addLogGroup(DirectoryNode* parent,
-                            const std::string& name,
-                            const logid_range_t& range,
-                            const LogAttributes& log_attrs,
-                            bool addIntermediateDirectories) {
+LogGroupNodePtr LogsConfigTree::addLogGroup(DirectoryNode* parent,
+                                            const std::string& name,
+                                            const logid_range_t& range,
+                                            const LogAttributes& log_attrs,
+                                            bool addIntermediateDirectories) {
   std::string failure_reason;
   auto ret = addLogGroup(parent,
                          name,
@@ -759,13 +749,12 @@ LogsConfigTree::addLogGroup(DirectoryNode* parent,
   return ret;
 }
 
-std::shared_ptr<LogGroupNode>
-LogsConfigTree::addLogGroup(DirectoryNode* parent,
-                            const std::string& name,
-                            const logid_range_t& range,
-                            const LogAttributes& log_attrs,
-                            bool addIntermediateDirectories,
-                            std::string& failure_reason) {
+LogGroupNodePtr LogsConfigTree::addLogGroup(DirectoryNode* parent,
+                                            const std::string& name,
+                                            const logid_range_t& range,
+                                            const LogAttributes& log_attrs,
+                                            bool addIntermediateDirectories,
+                                            std::string& failure_reason) {
   // make sure that name doesn't have any _delimiter_
   std::string clean_name = normalize_path(name);
   // copied since tokensOfPath references the string clean_name and changing
@@ -818,10 +807,9 @@ LogsConfigTree::addLogGroup(DirectoryNode* parent,
       parent, LogGroupNode(target_name, log_attrs, range), failure_reason);
 }
 
-std::shared_ptr<LogGroupNode>
-LogsConfigTree::addLogGroup(DirectoryNode* parent,
-                            const LogGroupNode& log_group,
-                            std::string& failure_reason) {
+LogGroupNodePtr LogsConfigTree::addLogGroup(DirectoryNode* parent,
+                                            const LogGroupNode& log_group,
+                                            std::string& failure_reason) {
   if (!parent) {
     ld_error(
         "Adding a LogGroup \"%s\" without a parent, this is possibly a code "
@@ -920,7 +908,7 @@ bool LogsConfigTree::replaceLogGroup(const std::string& raw_path,
     err = E::NOTFOUND;
     return false;
   }
-  std::shared_ptr<LogGroupNode> old_node = old_node_iter->second;
+  auto old_node = old_node_iter->second;
 
   if (!deleteLogGroupFromLookupIndex(old_node->range())) {
     return false;
@@ -949,7 +937,7 @@ bool LogsConfigTree::replaceLogGroup(const std::string& raw_path,
 }
 
 int LogsConfigTree::deleteLogGroup(DirectoryNode* parent,
-                                   std::shared_ptr<LogGroupNode> node,
+                                   LogGroupNodePtr node,
                                    std::string& failure_reason) {
   if (node == nullptr || parent == nullptr) {
     failure_reason = "Path was not found!";
@@ -978,7 +966,7 @@ int LogsConfigTree::deleteLogGroup(const std::string& raw_path) {
 
 int LogsConfigTree::deleteLogGroup(const std::string& path,
                                    std::string& failure_reason) {
-  std::shared_ptr<LogGroupNode> node;
+  LogGroupNodePtr node;
   DirectoryNode* parent;
   std::tie(parent, node) = getLogGroupAndParent(path);
   return deleteLogGroup(parent, node, failure_reason);
@@ -1098,7 +1086,7 @@ int LogsConfigTree::rename(const std::string& raw_from_path,
     return -1;
   }
   // check that the source actually exists (whether it's a dir or a log-group)
-  LogsConfigTreeNode* source = find(from_path);
+  const LogsConfigTreeNode* source = find(from_path);
   if (source == nullptr) {
     failure_reason =
         folly::format("The path '{}' does not exist!", from_path).str();
@@ -1118,12 +1106,13 @@ int LogsConfigTree::rename(const std::string& raw_from_path,
   ld_check(dest_dir != nullptr);
   if (source->type() == NodeType::DIRECTORY) {
     // rename a directory
-    static_cast<DirectoryNode*>(source)->setName(new_name);
+    auto* dir = static_cast<const DirectoryNode*>(source);
+    const_cast<DirectoryNode*>(dir)->setName(new_name);
     dest_dir->replaceChild(old_name, new_name);
   } else {
     // rename a log group node by creating a new one
     LogGroupNode new_group =
-        static_cast<LogGroupNode*>(source)->withName(new_name);
+        static_cast<const LogGroupNode*>(source)->withName(new_name);
     // should not fail since we are not changing attributes
     if (!replaceLogGroup(from_path, new_group, failure_reason)) {
       return -1;
@@ -1148,13 +1137,13 @@ int LogsConfigTree::setAttributes(const std::string& path,
 int LogsConfigTree::setAttributes(const std::string& path,
                                   const LogAttributes& attrs,
                                   std::string& failure_reason) {
-  LogsConfigTreeNode* node = find(path);
+  const LogsConfigTreeNode* node = find(path);
   if (node == nullptr) {
     err = E::NOTFOUND;
     return -1;
   }
   if (node->type() == NodeType::DIRECTORY) {
-    DirectoryNode* dir = static_cast<DirectoryNode*>(node);
+    const DirectoryNode* dir = static_cast<const DirectoryNode*>(node);
     // copy the directory
     std::unique_ptr<DirectoryNode> new_dir =
         std::make_unique<DirectoryNode>(*dir);
@@ -1182,7 +1171,7 @@ int LogsConfigTree::setAttributes(const std::string& path,
   } else {
     // Log Group
     LogGroupNode replacement =
-        static_cast<LogGroupNode*>(node)->withLogAttributes(attrs);
+        static_cast<const LogGroupNode*>(node)->withLogAttributes(attrs);
     if (!replaceLogGroup(path, replacement, failure_reason)) {
       return -1;
     }
@@ -1217,10 +1206,9 @@ bool LogsConfigTree::doesLogRangeClash(const logid_range_t& range,
   return false;
 }
 
-void LogsConfigTree::updateLookupIndex(
-    const DirectoryNode* parent,
-    const std::shared_ptr<LogGroupNode> log_group,
-    const bool delete_old) {
+void LogsConfigTree::updateLookupIndex(const DirectoryNode* parent,
+                                       const LogGroupNodePtr log_group,
+                                       const bool delete_old) {
   ld_check(log_group != nullptr);
   if (log_group == nullptr) {
     return;

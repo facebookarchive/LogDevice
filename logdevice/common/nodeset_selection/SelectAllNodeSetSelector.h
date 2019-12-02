@@ -37,7 +37,7 @@ class SelectAllNodeSetSelector : public NodeSetSelector {
       const Options* options = nullptr /* ignored */
       ) override {
     Result res;
-    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+    const LogsConfig::LogGroupNodePtr logcfg =
         cfg->getLogGroupByIDShared(log_id);
     if (!logcfg) {
       res.decision = Decision::FAILED;

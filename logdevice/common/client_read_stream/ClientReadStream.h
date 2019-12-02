@@ -444,14 +444,13 @@ class ClientReadStream : boost::noncopyable {
   void start();
 
   // Continuation of the start() method after logs config data is received.
-  void startContinuation(std::shared_ptr<LogsConfig::LogGroupNode> log_config);
+  void startContinuation(LogsConfig::LogGroupNodePtr log_config);
 
   /*
    * Attempt to go to epoch >= 1 without actually retrieving metadata for
    * EPOCH_INVALID.
    */
-  void
-  ensureSkipEpoch0(const std::shared_ptr<LogsConfig::LogGroupNode> log_config);
+  void ensureSkipEpoch0(const LogsConfig::LogGroupNodePtr log_config);
 
   /**
    * Sends START message to one sender, updating the state as necessary.
@@ -1155,8 +1154,7 @@ class ClientReadStream : boost::noncopyable {
   void updateScdStatus();
 
   // Continuation of updateScdStatus after log configuration data is received.
-  void updateScdStatusContinuation(
-      std::shared_ptr<LogsConfig::LogGroupNode> log_config);
+  void updateScdStatusContinuation(LogsConfig::LogGroupNodePtr log_config);
   /**
    * Called when (re)sending START to a shard (e.g. after reconnecting) or when
    * a shard is no longer present in the config. Updates GapState for storage

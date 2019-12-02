@@ -26,15 +26,15 @@ using std::chrono::duration;
 using std::chrono::steady_clock;
 using namespace facebook::logdevice::configuration::parser;
 using facebook::logdevice::logsconfig::LogGroupNode;
+using facebook::logdevice::logsconfig::LogGroupNodePtr;
 
 namespace facebook { namespace logdevice {
 
-std::shared_ptr<LogGroupNode>
-RemoteLogsConfig::getLogGroupByIDShared(logid_t id) const {
-  std::shared_ptr<LogsConfig::LogGroupNode> res;
+LogGroupNodePtr RemoteLogsConfig::getLogGroupByIDShared(logid_t id) const {
+  LogsConfig::LogGroupNodePtr res;
   Semaphore sem;
   this->getLogGroupByIDAsync(
-      id, [&res, &sem](const std::shared_ptr<LogsConfig::LogGroupNode> loggrp) {
+      id, [&res, &sem](const LogsConfig::LogGroupNodePtr loggrp) {
         res = loggrp;
         sem.post();
       });
@@ -88,7 +88,7 @@ int RemoteLogsConfig::postRequest(LOGS_CONFIG_API_Header::Type request_type,
 
 void RemoteLogsConfig::getLogGroupByIDAsync(
     logid_t id,
-    std::function<void(std::shared_ptr<LogGroupNode>)> cb) const {
+    std::function<void(LogGroupNodePtr)> cb) const {
   // Process internal logs and metadata logs separately since their attributes
   // are in server config, not in logs config.
   // We have server config locally, so no need to talk to servers.
@@ -96,7 +96,8 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
       configuration::InternalLogs::isInternal(id)) {
     std::shared_ptr<Processor> processor = processor_->lock();
     if (!processor) {
-      ld_critical("Attempting to post request to a processor when there is none");
+      ld_critical(
+          "Attempting to post request to a processor when there is none");
       ld_check(false);
       err = E::INTERNAL;
       cb(nullptr);
@@ -165,7 +166,7 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
       return;
     }
 
-    const std::shared_ptr<LogGroupNode> log_shared = lid->log_group;
+    const auto log_shared = lid->log_group;
 
     // Placing result in cache
     rlc->insertIntoIdCache(log_shared);
@@ -182,8 +183,7 @@ void RemoteLogsConfig::getLogGroupByIDAsync(
   }
 }
 
-void RemoteLogsConfig::insertIntoIdCache(
-    const std::shared_ptr<LogGroupNode>& log) const {
+void RemoteLogsConfig::insertIntoIdCache(const LogGroupNodePtr& log) const {
   auto range = log->range();
   boost::icl::right_open_interval<logid_t::raw_type> interval(
       range.first.val_, range.second.val_ + 1);
@@ -197,8 +197,7 @@ bool RemoteLogsConfig::logExists(logid_t id) const {
   bool res = false;
   Semaphore sem;
   this->getLogGroupByIDAsync(
-      id,
-      [&res, &sem](const std::shared_ptr<const LogsConfig::LogGroupNode> log) {
+      id, [&res, &sem](const LogsConfig::LogGroupNodePtr log) {
         res = (bool)log;
         sem.post();
       });
@@ -268,9 +267,9 @@ void RemoteLogsConfig::getLogRangeByNameAsync(
                     request_callback);
 }
 
-std::shared_ptr<logsconfig::LogGroupNode>
+logsconfig::LogGroupNodePtr
 RemoteLogsConfig::getLogGroup(const std::string& path) const {
-  std::shared_ptr<LogGroupNode> result;
+  LogGroupNodePtr result;
   Semaphore sem;
   auto range = this->getLogRangeByName(path);
   // the log range name is the last piece of the path
@@ -280,8 +279,7 @@ RemoteLogsConfig::getLogGroup(const std::string& path) const {
   boost::split(tokens, rangeName, boost::is_any_of(getNamespaceDelimiter()));
   rangeName = tokens.back();
   this->getLogGroupByIDAsync(
-      range.first,
-      [&result, &sem](const std::shared_ptr<LogsConfig::LogGroupNode> log) {
+      range.first, [&result, &sem](const LogsConfig::LogGroupNodePtr log) {
         result = log;
         sem.post();
       });

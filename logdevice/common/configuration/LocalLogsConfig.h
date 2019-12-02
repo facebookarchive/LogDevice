@@ -43,6 +43,7 @@ class LocalLogsConfig : public LogsConfig {
   using LogGroupInDirectory =
       facebook::logdevice::logsconfig::LogGroupInDirectory;
   using LogGroupNode = facebook::logdevice::logsconfig::LogGroupNode;
+  using LogGroupNodePtr = facebook::logdevice::logsconfig::LogGroupNodePtr;
   using DefaultLogAttributes =
       facebook::logdevice::logsconfig::DefaultLogAttributes;
   using LogMap = facebook::logdevice::logsconfig::LogMap;
@@ -70,12 +71,10 @@ class LocalLogsConfig : public LogsConfig {
            LoadFileCallback loadFileCallback,
            const ConfigParserOptions& options);
 
-  std::shared_ptr<LogGroupNode>
-  getLogGroupByIDShared(logid_t id) const override;
+  LogGroupNodePtr getLogGroupByIDShared(logid_t id) const override;
 
-  void getLogGroupByIDAsync(
-      logid_t id,
-      std::function<void(std::shared_ptr<LogGroupNode>)> cb) const override;
+  void getLogGroupByIDAsync(logid_t id, std::function<void(LogGroupNodePtr)> cb)
+      const override;
 
   bool logExists(logid_t id) const override;
 
@@ -83,9 +82,9 @@ class LocalLogsConfig : public LogsConfig {
       std::string name,
       std::function<void(Status, logid_range_t)> cb) const override;
 
-  std::shared_ptr<LogGroupNode> getLogGroupByName(std::string name) const;
+  LogGroupNodePtr getLogGroupByName(std::string name) const;
 
-  std::shared_ptr<logsconfig::LogGroupNode>
+  logsconfig::LogGroupNodePtr
   getLogGroup(const std::string& path) const override;
 
   void getLogRangesByNamespaceAsync(
@@ -138,22 +137,21 @@ class LocalLogsConfig : public LogsConfig {
   }
 
   // [Used only for test cases]
-  std::shared_ptr<logsconfig::LogGroupNode>
-  insert(DirectoryNode* parent,
-         const logid_range_t& logid_interval,
-         const std::string& name,
-         LogAttributes attrs = LogAttributes());
+  LogGroupNodePtr insert(DirectoryNode* parent,
+                         const logid_range_t& logid_interval,
+                         const std::string& name,
+                         LogAttributes attrs = LogAttributes());
 
   // [DEPRECATED] used only in test cases
-  std::shared_ptr<logsconfig::LogGroupNode> insert(
+  LogGroupNodePtr insert(
       const boost::icl::right_open_interval<logid_t::raw_type>& logid_interval,
       const std::string& name,
       LogAttributes attrs);
 
   // [DEPRECATED] exists only till Log is removed
-  std::shared_ptr<logsconfig::LogGroupNode> insert(logid_t::raw_type logid,
-                                                   const std::string& name,
-                                                   LogAttributes attrs);
+  LogGroupNodePtr insert(logid_t::raw_type logid,
+                         const std::string& name,
+                         LogAttributes attrs);
   // [Used only for test cases]
   // adds a new namespace in the tree
   DirectoryNode* insertNamespace(DirectoryNode* parent,
