@@ -1387,8 +1387,7 @@ std::shared_ptr<EpochSequencer>
 Sequencer::createEpochSequencer(epoch_t epoch,
                                 std::shared_ptr<Configuration> cfg,
                                 std::unique_ptr<EpochMetaData> metadata) {
-  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
-      cfg->getLogGroupByIDShared(log_id_);
+  const auto logcfg = cfg->getLogGroupByIDShared(log_id_);
   ld_check(logcfg != nullptr);
 
   auto local_settings = settings_.get();
@@ -1783,8 +1782,7 @@ void Sequencer::noteConfigurationChanged(
   // Note: nodeset and replication factor are updated upon sequencer
   // activation, with the value from the epochstore. Here we only update
   // properties that do not require an epoch bump.
-  const std::shared_ptr<LogsConfig::LogGroupNode> log =
-      cfg->getLogGroupByIDShared(log_id_);
+  const auto log = cfg->getLogGroupByIDShared(log_id_);
   if (!log) {
     // Handle deletion of logs. Drain/abort all epoches and put the Sequencer
     // into UNAVAILABLE state.

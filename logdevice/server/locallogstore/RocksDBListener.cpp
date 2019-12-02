@@ -304,8 +304,7 @@ RocksDBTablePropertiesCollector::GetReadableProperties() const {
 
     if (config_) {
       std::chrono::seconds backlog;
-      const std::shared_ptr<LogsConfig::LogGroupNode> log_config =
-          config_->getLogGroupByIDShared(p.first);
+      const auto log_config = config_->getLogGroupByIDShared(p.first);
       if (!log_config) {
         backlog = std::chrono::seconds(0);
       } else if (log_config->attrs().backlogDuration().value()) {

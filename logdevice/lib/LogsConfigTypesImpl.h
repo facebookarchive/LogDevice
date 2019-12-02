@@ -19,8 +19,8 @@ class DirectoryImpl;
 
 class LogGroupImpl : public LogGroup {
  public:
-  using LogGroupNode = facebook::logdevice::logsconfig::LogGroupNode;
-  explicit LogGroupImpl(std::shared_ptr<LogGroupNode> lgn,
+  using LogGroupNodePtr = facebook::logdevice::logsconfig::LogGroupNodePtr;
+  explicit LogGroupImpl(LogGroupNodePtr lgn,
                         const std::string& full_path,
                         uint64_t version)
       : node_(std::move(lgn)),
@@ -49,7 +49,7 @@ class LogGroupImpl : public LogGroup {
   }
 
  private:
-  std::shared_ptr<LogGroupNode> node_;
+  LogGroupNodePtr node_;
   std::string fully_qualified_name_;
   uint64_t version_;
 };

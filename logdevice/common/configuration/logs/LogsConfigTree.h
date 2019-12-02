@@ -111,8 +111,9 @@ class LogsConfigTreeNode {
 using DirectoryMap =
     folly::F14FastMap<std::string, std::unique_ptr<DirectoryNode>>;
 
-using LogGroupMap =
-    folly::F14FastMap<std::string, std::shared_ptr<LogGroupNode>>;
+using LogGroupNodePtr = std::shared_ptr<const LogGroupNode>;
+
+using LogGroupMap = folly::F14FastMap<std::string, LogGroupNodePtr>;
 /*
  * A node in the tree of logs config representing a directory (aka. Namespace)
  */
@@ -219,31 +220,30 @@ class DirectoryNode : public LogsConfigTreeNode {
    * This has to be done explicitly after calling this method
    * The name has to be without any _delimiter_
    */
-  std::shared_ptr<LogGroupNode> addLogGroup(const std::string& name,
-                                            const logid_range_t& range,
-                                            const LogAttributes& log_attrs,
-                                            bool overwrite,
-                                            std::string& failure_reason);
+  LogGroupNodePtr addLogGroup(const std::string& name,
+                              const logid_range_t& range,
+                              const LogAttributes& log_attrs,
+                              bool overwrite,
+                              std::string& failure_reason);
 
   /*
    * This doesn't update the tree interval map (LogID -> LogGroupNode)
    * This has to be done after calling this method
    */
-  std::shared_ptr<LogGroupNode> addLogGroup(const LogGroupNode& log_group,
-                                            bool overwrite,
-                                            std::string& failure_reason);
+  LogGroupNodePtr addLogGroup(const LogGroupNode& log_group,
+                              bool overwrite,
+                              std::string& failure_reason);
 
-  std::shared_ptr<LogGroupNode>
-  addLogGroup(std::shared_ptr<LogGroupNode> log_group,
-              bool overwrite,
-              std::string& failure_reason);
+  LogGroupNodePtr addLogGroup(LogGroupNodePtr log_group,
+                              bool overwrite,
+                              std::string& failure_reason);
 
   ReplicationProperty getNarrowestReplication() const;
   /*
    * Deletes and returns a log group from the direct children of this directory
    * This doesn't update the tree interval map (LogID -> LogGroupNode)
    */
-  std::shared_ptr<LogGroupNode> deleteLogGroup(const std::string& name);
+  LogGroupNodePtr deleteLogGroup(const std::string& name);
   void deleteChild(const std::string& name);
 
   // sets the log groups map directly.
@@ -365,8 +365,7 @@ class LogGroupNode : public LogsConfigTreeNode {
 // mainly used when you query the tree for a log group by ID
 struct LogGroupInDirectory {
   LogGroupInDirectory() : log_group(nullptr), parent(nullptr) {}
-  LogGroupInDirectory(const std::shared_ptr<LogGroupNode> group,
-                      const DirectoryNode* dir)
+  LogGroupInDirectory(const LogGroupNodePtr group, const DirectoryNode* dir)
       : log_group(group), parent(dir) {}
 
   LogGroupInDirectory(const LogGroupInDirectory& lgind)
@@ -378,7 +377,7 @@ struct LogGroupInDirectory {
     return *this;
   }
 
-  std::shared_ptr<LogGroupNode> log_group;
+  LogGroupNodePtr log_group;
   const DirectoryNode* parent;
 
   std::string getFullyQualifiedName() const {
@@ -461,13 +460,13 @@ class LogsConfigTree {
   DirectoryNode* findDirectory(const std::string& path) const;
 
   // searches the tree by _path_ and returns the resulting node
-  LogsConfigTreeNode* find(const std::string& path) const;
+  const LogsConfigTreeNode* find(const std::string& path) const;
 
   // searches the tree by _path_ and returns the corresponding LogGroupNode
   // instance or nullptr if not found.
   // For example, if delimiter is '/', a valid input path is
   // "/important_logs/task_queue"
-  std::shared_ptr<LogGroupNode> findLogGroup(const std::string& path) const;
+  LogGroupNodePtr findLogGroup(const std::string& path) const;
 
   static std::unique_ptr<LogsConfigTree>
   create(const std::string& delimiter = "/",
@@ -480,52 +479,49 @@ class LogsConfigTree {
    * Adding a new LogGroup to the tree given the parent path (string), name
    * (string)
    */
-  std::shared_ptr<LogGroupNode> addLogGroup(const std::string& parent,
-                                            const std::string& name,
-                                            const logid_range_t& range,
-                                            const LogAttributes& log_attrs,
-                                            std::string& failure_reason);
+  LogGroupNodePtr addLogGroup(const std::string& parent,
+                              const std::string& name,
+                              const logid_range_t& range,
+                              const LogAttributes& log_attrs,
+                              std::string& failure_reason);
 
   // Same as above except that it logs the failure reason instead.
-  std::shared_ptr<LogGroupNode>
-  addLogGroup(const std::string& parent,
-              const std::string& name,
-              const logid_range_t& range,
-              const LogAttributes& log_attrs = LogAttributes());
+  LogGroupNodePtr addLogGroup(const std::string& parent,
+                              const std::string& name,
+                              const logid_range_t& range,
+                              const LogAttributes& log_attrs = LogAttributes());
 
   /*
    * Adding a new LogGroup to the tree given the full path (string)
    */
-  std::shared_ptr<LogGroupNode> addLogGroup(const std::string& path,
-                                            const logid_range_t& range,
-                                            const LogAttributes& log_attrs,
-                                            bool addIntermediateDirectories,
-                                            std::string& failure_reason);
+  LogGroupNodePtr addLogGroup(const std::string& path,
+                              const logid_range_t& range,
+                              const LogAttributes& log_attrs,
+                              bool addIntermediateDirectories,
+                              std::string& failure_reason);
 
   // Same as above except that it logs the failure reason instead.
-  std::shared_ptr<LogGroupNode>
-  addLogGroup(const std::string& path,
-              const logid_range_t& range,
-              const LogAttributes& log_attrs = LogAttributes(),
-              bool addIntermediateDirectories = false);
+  LogGroupNodePtr addLogGroup(const std::string& path,
+                              const logid_range_t& range,
+                              const LogAttributes& log_attrs = LogAttributes(),
+                              bool addIntermediateDirectories = false);
 
   /*
    * Adding a new LogGroup to the tree given the pointer to the parent and the
    * relative path (string)
    */
-  std::shared_ptr<LogGroupNode> addLogGroup(DirectoryNode* parent,
-                                            const std::string& relative_path,
-                                            const logid_range_t& range,
-                                            const LogAttributes& log_attrs,
-                                            bool addIntermediateDirectories,
-                                            std::string& failure_reason);
+  LogGroupNodePtr addLogGroup(DirectoryNode* parent,
+                              const std::string& relative_path,
+                              const logid_range_t& range,
+                              const LogAttributes& log_attrs,
+                              bool addIntermediateDirectories,
+                              std::string& failure_reason);
   // Same as above except that it logs the failure reason instead.
-  std::shared_ptr<LogGroupNode>
-  addLogGroup(DirectoryNode* parent,
-              const std::string& relative_path,
-              const logid_range_t& range,
-              const LogAttributes& log_attrs = LogAttributes(),
-              bool addIntermediateDirectories = false);
+  LogGroupNodePtr addLogGroup(DirectoryNode* parent,
+                              const std::string& relative_path,
+                              const logid_range_t& range,
+                              const LogAttributes& log_attrs = LogAttributes(),
+                              bool addIntermediateDirectories = false);
 
   /**
    * Removes a log group from the tree and updates the interval map accordingly.
@@ -537,7 +533,7 @@ class LogsConfigTree {
   // Same as above except that it logs the failure reason instead.
   int deleteLogGroup(const std::string& path);
   int deleteLogGroup(DirectoryNode* parent,
-                     std::shared_ptr<LogGroupNode> group,
+                     LogGroupNodePtr group,
                      std::string& failure_reason);
 
   /**
@@ -628,7 +624,7 @@ class LogsConfigTree {
     return &iter->second;
   }
 
-  std::pair<DirectoryNode*, std::shared_ptr<LogGroupNode>>
+  std::pair<DirectoryNode*, LogGroupNodePtr>
   getLogGroupAndParent(const std::string& path) const;
 
   // returns true if the logid exists in the tree
@@ -732,13 +728,13 @@ class LogsConfigTree {
   /*
    * Adds a log group to a specific directory
    */
-  std::shared_ptr<LogGroupNode> addLogGroup(DirectoryNode* parent,
-                                            const LogGroupNode& log_group,
-                                            std::string& failure_reason);
+  LogGroupNodePtr addLogGroup(DirectoryNode* parent,
+                              const LogGroupNode& log_group,
+                              std::string& failure_reason);
   // This refreshes the internal lookup index with the supplied log_group
   // The lookup index is used to locate a LogGroup object using a logid_t
   void updateLookupIndex(const DirectoryNode* parent,
-                         const std::shared_ptr<LogGroupNode> log_group,
+                         const LogGroupNodePtr log_group,
                          const bool delete_old);
 
   /**
@@ -803,7 +799,7 @@ class LogsConfigTree {
 // This is only used for messaging
 struct LogGroupWithParentPath {
  public:
-  std::shared_ptr<LogGroupNode> log_group;
+  LogGroupNodePtr log_group;
   std::string parent_path;
 
   const std::string getFullyQualifiedName() const {

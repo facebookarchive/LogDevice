@@ -120,8 +120,7 @@ void ShardRebuildingV1::noteConfigurationChanged() {
       // or not
       continue;
     }
-    const std::shared_ptr<LogsConfig::LogGroupNode> l =
-        config->getLogGroupByIDShared(logid);
+    const auto l = config->getLogGroupByIDShared(logid);
     if (!l) {
       ld_info("Log:%lu marked for rebuilding was removed from config.",
               logid.val());

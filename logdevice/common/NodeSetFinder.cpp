@@ -180,7 +180,7 @@ void NodeSetFinder::readFromMetaDataLog() {
   auto cfg = Worker::getConfig();
   auto ticket = callback_helper_.ticket();
   cfg->getLogGroupByIDAsync(
-      log_id_, [ticket](std::shared_ptr<LogsConfig::LogGroupNode> logcfg) {
+      log_id_, [ticket](LogsConfig::LogGroupNodePtr logcfg) {
         if (!logcfg) {
           ticket.postCallbackRequest([=](NodeSetFinder* finder) {
             if (finder && finder->getState() != State::FINISHED) {

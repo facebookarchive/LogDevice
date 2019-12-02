@@ -36,6 +36,7 @@ class LogsConfig {
   using LogGroupInDirectory =
       facebook::logdevice::logsconfig::LogGroupInDirectory;
   using LogGroupNode = facebook::logdevice::logsconfig::LogGroupNode;
+  using LogGroupNodePtr = facebook::logdevice::logsconfig::LogGroupNodePtr;
   using LogAttributes = facebook::logdevice::logsconfig::LogAttributes;
   /**
    * the type that getLogRangesByNamespace() returns
@@ -70,8 +71,7 @@ class LogsConfig {
    * @param id                    ID of the log
    * @return                      Returns a shared_ptr to the log struct.
    */
-  virtual std::shared_ptr<LogGroupNode>
-  getLogGroupByIDShared(logid_t id) const = 0;
+  virtual LogGroupNodePtr getLogGroupByIDShared(logid_t id) const = 0;
 
   /**
    * Will call the submitted callback asynchronously with a shared_ptr to a
@@ -85,9 +85,9 @@ class LogsConfig {
    *  - NOTFOUND if the log doesn't exist.
    *  - SHUTDOWN if Client was destroyed while the request was outstanding.
    */
-  virtual void getLogGroupByIDAsync(
-      logid_t id,
-      std::function<void(std::shared_ptr<LogGroupNode>)> cb) const = 0;
+  virtual void
+  getLogGroupByIDAsync(logid_t id,
+                       std::function<void(LogGroupNodePtr)> cb) const = 0;
 
   /**
    * Checks if a log exists in the logs config.
@@ -115,8 +115,7 @@ class LogsConfig {
    *          will hold the attributes and name (not full path) for that
    *          log group.
    */
-  virtual std::shared_ptr<logsconfig::LogGroupNode>
-  getLogGroup(const std::string& path) const = 0;
+  virtual LogGroupNodePtr getLogGroup(const std::string& path) const = 0;
 
   /**
    * Looks up the boundaries of all log ranges that have a "name" attribute

@@ -30,8 +30,7 @@ void ConfigPermissionChecker::isAllowed(ACTION action,
   }
 
   auto config = Worker::onThisThread()->getConfig();
-  const std::shared_ptr<LogsConfig::LogGroupNode> log =
-      config->getLogGroupByIDShared(logid);
+  const auto log = config->getLogGroupByIDShared(logid);
 
   if (log && log->attrs().permissions()) {
     auto permissions = log->attrs().permissions().value();

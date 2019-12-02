@@ -446,7 +446,7 @@ Request::Execution LogsConfigManagerRequest::executeGetDirectoryOrLogGroup(
       break;
     }
     case LOGS_CONFIG_API_Header::Type::GET_LOG_GROUP_BY_NAME: {
-      std::shared_ptr<LogGroupNode> lg = tree.findLogGroup(blob_);
+      const auto lg = tree.findLogGroup(blob_);
       if (lg == nullptr) {
         st = E::NOTFOUND;
       } else {
@@ -526,7 +526,7 @@ std::string LogsConfigManagerRequest::calculateResponsePayload(
   } else if (delta.type() == DeltaOpType::MK_LOG_GROUP) {
     const MkLogGroupDelta& mk_log_group =
         checked_downcast<const MkLogGroupDelta&>(delta);
-    std::shared_ptr<LogGroupNode> lg = tree.findLogGroup(mk_log_group.path);
+    auto lg = tree.findLogGroup(mk_log_group.path);
     return LogsConfigStateMachine::serializeLogGroup(*lg);
   } else {
     // We don't need a payload in response of any other delta type.
