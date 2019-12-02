@@ -60,8 +60,8 @@ class LegocastleStep(namedtuple('LegocastleStepBase', ('name', 'actions'))):
 class LegocastleFBCodeBuilder(FBCodeBuilder):
 
     def setup(self):
-        return self.step('Setup', [
-            self.create_python_venv()] + [
+        return self.step('Setup',
+            self.create_python_venv() + [
             self.run(ShellQuoted("""
 case "$OSTYPE" in
   darwin*)
@@ -130,7 +130,7 @@ esac
                 ]
                 if action.name != 'Setup' and \
                         self.option("PYTHON_VENV", "OFF") == "ON":
-                    pre_actions.append(self.python_venv())
+                    pre_actions.extend(self.python_venv())
                 pre_actions.append(
                     ShellQuoted("""
 case "$OSTYPE" in
