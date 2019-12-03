@@ -537,10 +537,6 @@ void NodesConfigurationManager::onHeartBeat() {
   deps()->dcheckOnNCM();
   deps()->readFromStore(shouldDoConsistentConfigFetch());
   advanceIntermediaryShardStates();
-
-  if (deps()->processor_->settings()->server) {
-    deps()->checkAndReportConsistency();
-  }
 }
 
 void NodesConfigurationManager::advanceIntermediaryShardStates() {
