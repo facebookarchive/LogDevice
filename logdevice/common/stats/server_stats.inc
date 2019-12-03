@@ -1147,20 +1147,6 @@ STAT_DEFINE(logsconfig_api_response_toobig, SUM)
 // Size of the logsconfig snapshot record
 STAT_DEFINE(logsconfig_snapshot_size, MAX)
 
-// Determines whether the nodes configuration diverged from the server config
-// while having the same version. This means that either one of the NCs got
-// corrupted, the ServerConfig -> NC conversion was incorrect or someone changed
-// the NodesConfig section in configerator without bumping the version.
-// The value here is either 0 or 1. 1 Means that they diverged and probably
-// need immediate action.
-STAT_DEFINE(nodes_configuration_server_config_diverged_with_same_version, MAX)
-
-// Determines whether the nodes configuration diverged from the server config or
-// not. This might be ok for short durations while the config propagates and is
-// less severe than
-// nodes_configuration_server_config_diverged_with_same_version.
-STAT_DEFINE(nodes_configuration_server_config_diverged, MAX)
-
 // the amount of boycotts active by a controller
 STAT_DEFINE(boycotts_by_controller_active, SUM)
 // the amount of boycotts made by a controller
