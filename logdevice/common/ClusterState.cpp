@@ -182,10 +182,33 @@ void ClusterState::setNodeStatus(node_index_t idx, NodeHealthStatus status) {
   }
 }
 
+std::vector<std::pair<node_index_t, uint16_t>>
+ClusterState::getWholeClusterStatus() {
+  folly::SharedMutex::ReadHolder read_lock(mutex_);
+  std::vector<std::pair<node_index_t, uint16_t>> vector{};
+  for (auto& n : node_status_map_) {
+    vector.emplace_back(std::make_pair(n.first, n.second->load()));
+  }
+  std::sort(vector.begin(), vector.end());
+  return vector;
+}
+
+std::vector<std::pair<node_index_t, uint16_t>>
+ClusterState::getWholeClusterState() {
+  folly::SharedMutex::ReadHolder read_lock(mutex_);
+  std::vector<std::pair<node_index_t, uint16_t>> vector{};
+  for (auto& n : node_state_map_) {
+    vector.emplace_back(std::make_pair(n.first, n.second->load()));
+  }
+  std::sort(vector.begin(), vector.end());
+  return vector;
+}
+
 void ClusterState::onGetClusterStateDone(
     Status status,
-    const std::vector<uint8_t>& nodes_state,
-    std::vector<node_index_t> boycotted_nodes) {
+    const std::vector<std::pair<node_index_t, uint16_t>>& nodes_state,
+    std::vector<node_index_t> boycotted_nodes,
+    std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
   SCOPE_EXIT {
     notifyRefreshComplete();
   };
@@ -206,11 +229,13 @@ void ClusterState::onGetClusterStateDone(
     ld_error("Unable to refresh cluster state: %s", error_description(status));
   } else {
     std::vector<std::string> dead;
-    for (int i = 0; i < nodes_state.size(); i++) {
-      setNodeState(i, static_cast<ClusterState::NodeState>(nodes_state[i]));
-      if (nodes_configuration->isNodeInServiceDiscoveryConfig(i) &&
-          nodes_state[i] == ClusterState::NodeState::DEAD) {
-        dead.push_back("N" + std::to_string(i));
+    for (auto& node : nodes_state) {
+      auto [node_idx, new_state] =
+          static_cast<std::pair<node_index_t, uint16_t>>(node);
+      setNodeState(node_idx, static_cast<ClusterState::NodeState>(new_state));
+      if (nodes_configuration->isNodeInServiceDiscoveryConfig(node_idx) &&
+          new_state == ClusterState::NodeState::DEAD) {
+        dead.emplace_back("N" + std::to_string(node_idx));
       }
     }
 
@@ -219,15 +244,27 @@ void ClusterState::onGetClusterStateDone(
     for (auto index : boycotted_nodes) {
       boycotted_tostring.emplace_back("N" + std::to_string(index));
     }
-
     setBoycottedNodes(std::move(boycotted_nodes));
 
+    std::vector<std::string> unhealthy_tostring;
+    for (auto& node : nodes_status) {
+      auto [node_idx, new_status] =
+          static_cast<std::pair<node_index_t, uint16_t>>(node);
+      setNodeStatus(node_idx, static_cast<NodeHealthStatus>(new_status));
+      if (nodes_configuration->isNodeInServiceDiscoveryConfig(node_idx) &&
+          new_status == NodeHealthStatus::UNHEALTHY) {
+        unhealthy_tostring.emplace_back("N" + std::to_string(node_idx));
+      }
+    }
+
     ld_info("Cluster state received with %lu dead nodes (%s) and %lu boycotted "
-            "nodes (%s)",
+            "nodes (%s) and %lu unhealthy nodes (%s).",
             dead.size(),
             folly::join(',', dead).c_str(),
             boycotted_tostring.size(),
-            folly::join(',', boycotted_tostring).c_str());
+            folly::join(',', boycotted_tostring).c_str(),
+            unhealthy_tostring.size(),
+            folly::join(',', unhealthy_tostring).c_str());
 
     // notify workers of the update so they can take any action
     auto cb = [&](Worker& w) {
@@ -346,9 +383,13 @@ void ClusterState::refreshClusterStateAsync() {
   }
 
   auto cb = [&](Status status,
-                std::vector<uint8_t> node_states,
-                std::vector<node_index_t> boycotted_nodes) {
-    onGetClusterStateDone(status, node_states, std::move(boycotted_nodes));
+                std::vector<std::pair<node_index_t, uint16_t>> node_states,
+                std::vector<node_index_t> boycotted_nodes,
+                std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
+    onGetClusterStateDone(status,
+                          node_states,
+                          std::move(boycotted_nodes),
+                          std::move(nodes_status));
   };
 
   std::unique_ptr<Request> req = std::make_unique<GetClusterStateRequest>(

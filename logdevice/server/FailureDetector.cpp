@@ -198,8 +198,11 @@ void FailureDetector::startGetClusterState() {
     auto settings = w->processor_->settings();
 
     auto cb = [&](Status status,
-                  const std::vector<uint8_t>& cs_update,
-                  std::vector<node_index_t> boycotted_nodes) {
+                  const std::vector<std::pair<node_index_t, uint16_t>>&
+                      cs_update,
+                  std::vector<node_index_t> boycotted_nodes,
+                  std::vector<std::pair<node_index_t, uint16_t>>
+                      cs_status_update) {
       std::lock_guard lock(mutex_);
 
       if (status != E::OK) {
@@ -210,9 +213,9 @@ void FailureDetector::startGetClusterState() {
       }
 
       std::vector<std::string> dead;
-      for (int i = 0; i < cs_update.size(); i++) {
-        if (cs_update[i]) {
-          dead.push_back("N" + std::to_string(i));
+      for (auto& [node_idx, state] : cs_update) {
+        if (state) {
+          dead.push_back("N" + std::to_string(node_idx));
         }
       }
 
@@ -230,7 +233,8 @@ void FailureDetector::startGetClusterState() {
           boycotted_tostring.size(),
           folly::join(',', boycotted_tostring).c_str());
 
-      buildInitialState(cs_update, std::move(boycotted_nodes));
+      buildInitialState(
+          cs_update, std::move(boycotted_nodes), std::move(cs_status_update));
     };
 
     std::unique_ptr<Request> req = std::make_unique<GetClusterStateRequest>(
@@ -245,9 +249,9 @@ void FailureDetector::startGetClusterState() {
 }
 
 void FailureDetector::buildInitialState(
-    const std::vector<uint8_t>& cs_update,
+    const std::vector<std::pair<node_index_t, uint16_t>>& cs_update,
     std::vector<node_index_t> boycotted_nodes,
-    const std::vector<uint8_t>& cs_status_update) {
+    std::vector<std::pair<node_index_t, uint16_t>> cs_status_update) {
   ld_info("Wait over%s", cs_update.size() ? " (cluster state received)" : "");
 
   ld_check(waiting_for_cluster_state_);
@@ -260,33 +264,41 @@ void FailureDetector::buildInitialState(
   if (!cs_update.empty() || !cs_status_update.empty()) {
     folly::SharedMutex::ReadHolder nodes_lock(nodes_mutex_);
 
-    for (size_t i = 0; i <= nodes_configuration->getMaxNodeIndex(); ++i) {
-      if (i == my_idx) {
-        continue;
-      }
-
-      Node& node = insertOrGetNode(i, nodes_lock);
-
-      if (!cs_update.empty()) {
-        cs->setNodeState(i, static_cast<ClusterState::NodeState>(cs_update[i]));
-        auto state = cs->isNodeAlive(i) ? NodeState::ALIVE : NodeState::DEAD;
+    if (!cs_update.empty()) {
+      for (auto& [node_idx, new_state] : cs_update) {
+        if (node_idx == my_idx ||
+            node_idx > nodes_configuration->getMaxNodeIndex()) {
+          continue;
+        }
+        Node& node = insertOrGetNode(node_idx, nodes_lock);
+        cs->setNodeState(
+            node_idx, static_cast<ClusterState::NodeState>(new_state));
+        FailureDetector::NodeState state =
+            cs->isNodeAlive(node_idx) ? NodeState::ALIVE : NodeState::DEAD;
         node.state_.store(state);
         RATELIMIT_INFO(std::chrono::seconds(1),
                        10,
-                       "N%zu transitioned to %s",
-                       i,
+                       "N%d transitioned to %s",
+                       node_idx,
                        (state == NodeState::ALIVE) ? "ALIVE" : "DEAD");
       }
+    }
 
-      if (!cs_status_update.empty()) {
-        auto new_status = static_cast<NodeHealthStatus>(cs_status_update[i]);
-        cs->setNodeStatus(i, new_status);
-        node.status_ = new_status;
+    if (!cs_status_update.empty()) {
+      for (auto& [node_idx, new_status] : cs_status_update) {
+        if (node_idx == my_idx ||
+            node_idx > nodes_configuration->getMaxNodeIndex()) {
+          continue;
+        }
+        Node& node = insertOrGetNode(node_idx, nodes_lock);
+        auto status = static_cast<NodeHealthStatus>(new_status);
+        cs->setNodeStatus(node_idx, status);
+        node.status_ = status;
         RATELIMIT_INFO(std::chrono::seconds(1),
                        10,
-                       "N%zu transitioned to %s(status)",
-                       i,
-                       toString(new_status).c_str());
+                       "N%d transitioned to %s (status)",
+                       node_idx,
+                       toString(status).c_str());
       }
     }
 
@@ -384,7 +396,8 @@ void FailureDetector::gossip() {
 
   NodeID this_node = getMyNodeID();
   auto now = SteadyTimestamp::now();
-  // bump other nodes' entry in gossip list if at least 1 gossip_interval passed
+  // bump other nodes' entry in gossip list if at least 1 gossip_interval
+  // passed
   if (now >= last_gossip_tick_time_ + settings_->gossip_interval) {
     for (auto& it : nodes_) {
       if (it.first != this_node.index()) {
@@ -448,8 +461,8 @@ void FailureDetector::gossip() {
 
   // If at least one entry in the failover list is non-zero, include the
   // list in the message.
-  // In GOSSIP protocol >= HASHMAP_SUPPORT_IN_GOSSIP, this wouldn't be necessary
-  // because failover list is sent through a list of GOSSIP_Node.
+  // In GOSSIP protocol >= HASHMAP_SUPPORT_IN_GOSSIP, this wouldn't be
+  // necessary because failover list is sent through a list of GOSSIP_Node.
   for (auto& it : nodes_) {
     if (it.second.failover_ > std::chrono::milliseconds::zero()) {
       flags |= GOSSIP_Message::HAS_FAILOVER_LIST_FLAG;
@@ -457,8 +470,8 @@ void FailureDetector::gossip() {
     }
   }
 
-  // In GOSSIP protocol >= HASHMAP_SUPPORT_IN_GOSSIP, this wouldn't be necessary
-  // because starting list is sent through a list of GOSSIP_Node.
+  // In GOSSIP protocol >= HASHMAP_SUPPORT_IN_GOSSIP, this wouldn't be
+  // necessary because starting list is sent through a list of GOSSIP_Node.
   flags |= GOSSIP_Message::HAS_STARTING_LIST_FLAG;
 
   const auto boycott_map = getBoycottTracker().getBoycottsForGossip();
@@ -931,8 +944,8 @@ void FailureDetector::detectFailures(
     bool failover = (it.second.failover_ > std::chrono::milliseconds::zero());
     bool dead = (it.second.gossip_ > threshold);
     if (dead) {
-      // if the node is actually dead, clear the failover boolean, to make sure
-      // we don't mistakenly transition from DEAD to FAILING_OVER in the
+      // if the node is actually dead, clear the failover boolean, to make
+      // sure we don't mistakenly transition from DEAD to FAILING_OVER in the
       // Cluster State.
       failover = false;
     } else {
@@ -986,8 +999,8 @@ void FailureDetector::detectFailures(
   // For the purpose of this check, we consider only the effective numbers. We
   // ignore nodes that are disabled, meaning that they do not participate in
   // cluster activities. This allows the cluster to keep functioning with a
-  // subset of nodes, when the others are disabled. The reasoning is: if a node
-  // dies while being disabled, it shouldn't affect the cluster, and so
+  // subset of nodes, when the others are disabled. The reasoning is: if a
+  // node dies while being disabled, it shouldn't affect the cluster, and so
   // shouldn't trigger isolation mode.
   isolated_.store(2 * effective_dead_cnt > effective_cluster_size);
 
@@ -1469,5 +1482,4 @@ bool FailureDetector::isLogsConfigLoaded() {
   ld_check(Worker::onThisThread(false));
   return processor_->isLogsConfigLoaded();
 }
-
 }} // namespace facebook::logdevice

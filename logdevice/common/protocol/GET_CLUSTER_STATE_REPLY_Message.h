@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <utility>
 #include <vector>
 
 #include "logdevice/common/Request.h"
@@ -31,20 +32,24 @@ struct GET_CLUSTER_STATE_REPLY_Header {
 
 class GET_CLUSTER_STATE_REPLY_Message : public Message {
  public:
-  GET_CLUSTER_STATE_REPLY_Message(const GET_CLUSTER_STATE_REPLY_Header& hdr,
-                                  std::vector<uint8_t> nodes_state,
-                                  std::vector<node_index_t> boycotted_nodes)
+  GET_CLUSTER_STATE_REPLY_Message(
+      const GET_CLUSTER_STATE_REPLY_Header& hdr,
+      std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
+      std::vector<node_index_t> boycotted_nodes,
+      std::vector<std::pair<node_index_t, uint16_t>> nodes_status)
       : Message(MessageType::GET_CLUSTER_STATE_REPLY,
                 TrafficClass::FAILURE_DETECTOR),
         header_(hdr),
         nodes_state_(nodes_state),
-        boycotted_nodes_(boycotted_nodes) {}
+        boycotted_nodes_(boycotted_nodes),
+        nodes_status_(nodes_status) {}
 
   GET_CLUSTER_STATE_REPLY_Message()
       : Message(MessageType::GET_CLUSTER_STATE_REPLY,
                 TrafficClass::FAILURE_DETECTOR),
         header_({}),
-        nodes_state_() {}
+        nodes_state_(),
+        nodes_status_() {}
 
   void serialize(ProtocolWriter&) const override;
   static Message::deserializer_t deserialize;
@@ -53,8 +58,9 @@ class GET_CLUSTER_STATE_REPLY_Message : public Message {
 
  private:
   GET_CLUSTER_STATE_REPLY_Header header_;
-  std::vector<uint8_t> nodes_state_;
+  std::vector<std::pair<node_index_t, uint16_t>> nodes_state_;
   std::vector<node_index_t> boycotted_nodes_;
+  std::vector<std::pair<node_index_t, uint16_t>> nodes_status_;
   friend class GET_CLUSTER_STATE_REPLY_MessageTest;
 };
 
