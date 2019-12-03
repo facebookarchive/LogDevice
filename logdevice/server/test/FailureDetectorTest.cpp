@@ -318,16 +318,17 @@ create_processors_detectors_monitors(size_t num_nodes,
         make_processor_with_detector(i, num_nodes, settings, false);
     // Monitor is simulated in tests with no callbacks from
     // Workers/WatchdogThread, values are arbitrary.
-    std::unique_ptr<MockHealthMonitor> m =
-        std::make_unique<MockHealthMonitor>(folly::InlineExecutor::instance(),
-                                            std::chrono::milliseconds(100),
-                                            1,
-                                            nullptr,
-                                            std::chrono::milliseconds(100),
-                                            std::chrono::milliseconds(100),
-                                            1,
-                                            std::chrono::milliseconds(100),
-                                            1);
+    std::unique_ptr<MockHealthMonitor> m = std::make_unique<MockHealthMonitor>(
+        /* executor */ folly::InlineExecutor::instance(),
+        /* sleep_peroid */ std::chrono::milliseconds(100),
+        /* num_workers */ 1,
+        /* stats */ nullptr,
+        /* max_queue_stalls_avg */ std::chrono::milliseconds(100),
+        /* max_queue_stall_duration */ std::chrono::milliseconds(100),
+        /* max_overloaded_worker_percentage */ 1,
+        /* max_stalls_avg */ std::chrono::milliseconds(100),
+        /* max_stalled_worker_percentage */ 1,
+        /* max_loop_stall */ std::chrono::milliseconds(50));
     m->setFailureDetector(d);
     processors.push_back(std::move(p));
     detectors.push_back(d);
