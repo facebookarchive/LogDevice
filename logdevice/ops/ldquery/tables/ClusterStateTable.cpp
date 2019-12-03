@@ -32,19 +32,27 @@ TableColumns ClusterStateTable::getColumns() const {
            DataType::TEXT,
            "List of node IDs that this node believes "
            "to be dead."},
-          {"boycotted_nodes", DataType::TEXT, "List of boycotted nodes."}};
+          {"boycotted_nodes", DataType::TEXT, "List of boycotted nodes."},
+          {"unhealthy_nodes",
+           DataType::TEXT,
+           "List of node IDs tha this node believes to be unhealthy"},
+          {"overloaded_nodes",
+           DataType::TEXT,
+           "List of node IDs tha this node believes to be overloaded"}};
 }
 
 void ClusterStateTable::addResult(
     node_index_t node_id,
     Status status,
     std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
-    std::vector<node_index_t> boycotted_nodes) {
+    std::vector<node_index_t> boycotted_nodes,
+    std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
   ClusterStateRequestResult res;
   res.node_id = node_id;
   res.status = status;
   res.nodes_state = std::move(nodes_state);
   res.boycotted_nodes = std::move(boycotted_nodes);
+  res.nodes_status = std::move(nodes_status);
 
   {
     std::lock_guard<std::mutex> guard(mutex_);
@@ -78,6 +86,36 @@ std::string ClusterStateTable::boycottedNodesToString(
   return folly::join(',', boycotted_nodes);
 }
 
+std::string ClusterStateTable::nodesStatusToUnhealthy(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
+  auto sdc = *nodes_configuration.getServiceDiscovery();
+  std::vector<node_index_t> unhealthy_nodes;
+  if (!nodes_status.empty()) {
+    for (auto& [node_idx, status] : nodes_status) {
+      if (sdc.hasNode(node_idx) && status == 3) {
+        unhealthy_nodes.push_back(node_idx);
+      }
+    }
+  }
+  return folly::join(',', unhealthy_nodes);
+}
+
+std::string ClusterStateTable::nodesStatusToOverloaded(
+    const configuration::nodes::NodesConfiguration& nodes_configuration,
+    std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
+  auto sdc = *nodes_configuration.getServiceDiscovery();
+  std::vector<node_index_t> overloaded_nodes;
+  if (!nodes_status.empty()) {
+    for (auto& [node_idx, status] : nodes_status) {
+      if (sdc.hasNode(node_idx) && status == 2) {
+        overloaded_nodes.push_back(node_idx);
+      }
+    }
+  }
+  return folly::join(',', overloaded_nodes);
+}
+
 std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
   clearResults();
   auto client = ld_ctx_->getClient();
@@ -107,15 +145,18 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
                   Status status,
                   std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
                   std::vector<node_index_t> boycotted_nodes,
-                  std::vector<std::pair<node_index_t, uint16_t>> /* unused */) {
-      addResult(
-          node_id, status, std::move(nodes_state), std::move(boycotted_nodes));
+                  std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
+      addResult(node_id,
+                status,
+                std::move(nodes_state),
+                std::move(boycotted_nodes),
+                std::move(nodes_status));
       sem.post();
     };
 
     std::unique_ptr<Request> req = std::make_unique<GetClusterStateRequest>(
-        std::chrono::milliseconds(500), // 500ms timeout
-        std::chrono::seconds(60),       // wave timeout is useless here
+        std::chrono::milliseconds(5000), // 5s timeout
+        std::chrono::seconds(60),        // wave timeout is useless here
         std::move(cb),
         nodes_configuration->getNodeID(node_id));
 
@@ -146,9 +187,15 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
             nodesStateToString(*nodes_configuration, result.nodes_state));
         table->cols["boycotted_nodes"].push_back(
             boycottedNodesToString(result.boycotted_nodes));
+        table->cols["unhealthy_nodes"].push_back(
+            nodesStatusToUnhealthy(*nodes_configuration, result.nodes_status));
+        table->cols["overloaded_nodes"].push_back(
+            nodesStatusToOverloaded(*nodes_configuration, result.nodes_status));
       } else {
         table->cols["dead_nodes"].push_back(std::string());
         table->cols["boycotted_nodes"].push_back(std::string());
+        table->cols["unhealthy_nodes"].push_back(std::string());
+        table->cols["overloaded_nodes"].push_back(std::string());
       }
     }
   }

@@ -81,7 +81,7 @@ ClientReadStream is the state machine responsible for reading records of a log o
 | filter\_version | long | Read session version.  This is bumped every time parameters (start, until, SCD, etc.) are changed by the client. |
 
 ## cluster\_state
-Fetches the state of the gossip-based failure detector from the nodes of the cluster.  When the status column is OK, the nodes\_state column contains a string-representation of the cluster state as seen by the node, as comma-separated list of elements of the form <node\_id>:{A\|D}, where A means alive and D means dead. eg: N1:A,N2:A,N3:D,N4:A.  When the status is anything but OK, it means the request failed for this node, and it may be dead itself.
+Fetches the state of the gossip-based failure detector from the nodes of the cluster.  When the status column is OK, the dead\_nodes column contains a list of dead nodes as seen by the node in question. When status is OK, the unhealthy\_nodes column contains a list of unhealthy nodes as seen by the node in question. When status is OK, the overloaded\_nodes column contains a list of overloaded nodes as seen by the node in question. When the status is anything but OK, it means the request failed for this node, and it may be dead itself.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
@@ -89,6 +89,8 @@ Fetches the state of the gossip-based failure detector from the nodes of the clu
 | status | string | Status of the node. |
 | dead\_nodes | string | List of node IDs that this node believes to be dead. |
 | boycotted\_nodes | string | List of boycotted nodes. |
+| unhealthy\_nodes | string | List of node IDs tha this node believes to be unhealthy |
+| overloaded\_nodes | string | List of node IDs tha this node believes to be overloaded |
 
 ## epoch\_store
 EpochStore is the data store that contains epoch-related metadata for all the logs provisioned on a cluster.   This table allows querying the metadata in epoch-store for a set of logs.
