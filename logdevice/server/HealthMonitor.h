@@ -32,7 +32,8 @@ class HealthMonitor {
                 std::chrono::milliseconds max_queue_stall_duration,
                 double max_overloaded_worker_percentage,
                 std::chrono::milliseconds max_stalls_avg,
-                double max_stalled_worker_percentage);
+                double max_stalled_worker_percentage,
+                std::chrono::milliseconds max_loop_stall);
   ~HealthMonitor() {}
 
   void startUp();
@@ -77,8 +78,6 @@ class HealthMonitor {
   static constexpr int kFuzzFactor = 0;      // no uncertainty
   static constexpr std::chrono::milliseconds kMaxTimerValue =
       std::chrono::milliseconds(100000);
-  static constexpr std::chrono::milliseconds kMaxLoopStall =
-      std::chrono::milliseconds(50);
 
   folly::Promise<folly::Unit> shutdown_promise_;
   folly::SemiFuture<folly::Unit> sleep_semifuture_;
@@ -122,6 +121,7 @@ class HealthMonitor {
 
   const std::chrono::milliseconds max_stalls_avg_;
   const double max_stalled_worker_percentage_;
+  const std::chrono::milliseconds max_loop_stall_;
 };
 
 }} // namespace facebook::logdevice

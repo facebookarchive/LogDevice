@@ -84,6 +84,9 @@ struct Settings : public SettingsBundle {
   // Toggle use of HealthMonitor to determine node status on server-side.
   bool enable_health_monitor;
 
+  // Maximum tolerated delay between health monitor loops.
+  std::chrono::milliseconds health_monitor_max_delay;
+
   // Time interval after which health monitor wakes up and detects
   // issues on node
   std::chrono::milliseconds health_monitor_poll_interval_ms;

@@ -25,7 +25,8 @@ HealthMonitor::HealthMonitor(folly::Executor& executor,
                              std::chrono::milliseconds max_queue_stall_duration,
                              double max_overloaded_worker_percentage,
                              std::chrono::milliseconds max_stalls_avg,
-                             double max_stalled_worker_percentage)
+                             double max_stalled_worker_percentage,
+                             std::chrono::milliseconds max_loop_stall)
     : executor_(executor),
       sleep_period_(sleep_period),
       state_timer_(
@@ -40,7 +41,8 @@ HealthMonitor::HealthMonitor(folly::Executor& executor,
       max_queue_stall_duration_(max_queue_stall_duration),
       max_overloaded_worker_percentage_(max_overloaded_worker_percentage),
       max_stalls_avg_(max_stalls_avg),
-      max_stalled_worker_percentage_(max_stalled_worker_percentage) {
+      max_stalled_worker_percentage_(max_stalled_worker_percentage),
+      max_loop_stall_(max_loop_stall) {
   internal_info_.num_workers_ = num_workers;
   internal_info_.worker_stalls_.reserve(num_workers);
   internal_info_.worker_stalls_.assign(
@@ -77,7 +79,7 @@ void HealthMonitor::monitorLoop() {
                                 msec_since(last_entry_time_);
                             internal_info_.health_monitor_delay_ =
                                 (loop_entry_delay - sleep_period_.count() >
-                                 kMaxLoopStall.count())
+                                 max_loop_stall_.count())
                                 ? true
                                 : false;
                             processReports();
