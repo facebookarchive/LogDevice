@@ -30,11 +30,13 @@ class ClusterStateTable : public Table {
   std::string getDescription() override {
     return "Fetches the state of the gossip-based failure detector from the "
            "nodes of the cluster.  When the status column is OK, the "
-           "nodes_state column contains a string-representation of the cluster "
-           "state as seen by the node, as comma-separated list of elements of "
-           "the form <node_id>:{A|D}, where A means alive and D means dead. "
-           "eg: N1:A,N2:A,N3:D,N4:A.  When the status is anything but OK, it "
-           "means the request failed for this node, and it may be dead itself.";
+           "dead_nodes column contains a list of dead nodes as seen by the "
+           "node in question. When status is OK, the unhealthy_nodes column "
+           "contains a list of unhealthy nodes as seen by the node in "
+           "question. When status is OK, the overloaded_nodes column contains "
+           "a list of overloaded nodes as seen by the node in question. When "
+           "the status is anything but OK, it means the request failed for "
+           "this node, and it may be dead itself.";
   }
   TableColumns getColumns() const override;
   std::shared_ptr<TableData> getData(QueryContext& ctx) override;
@@ -53,13 +55,21 @@ class ClusterStateTable : public Table {
   void addResult(node_index_t node_id,
                  Status status,
                  std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
-                 std::vector<node_index_t> boycotted_nodes);
+                 std::vector<node_index_t> boycotted_nodes,
+                 std::vector<std::pair<node_index_t, uint16_t>> nodes_status);
 
   std::string nodesStateToString(
       const configuration::nodes::NodesConfiguration& nodes_configuration,
       std::vector<std::pair<node_index_t, uint16_t>> nodes_state);
 
   std::string boycottedNodesToString(std::vector<node_index_t> boycotted_nodes);
+
+  std::string nodesStatusToUnhealthy(
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      std::vector<std::pair<node_index_t, uint16_t>> nodes_status);
+  std::string nodesStatusToOverloaded(
+      const configuration::nodes::NodesConfiguration& nodes_configuration,
+      std::vector<std::pair<node_index_t, uint16_t>> nodes_status);
 
  private:
   std::mutex mutex_;
