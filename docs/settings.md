@@ -87,7 +87,7 @@ sidebar_label: Settings
 | enable-hh-wheel-backed-timers | Enables the new version of timers which run on a different thread and use HHWheelTimer backend. | true | requires&nbsp;restart |
 | enable-is-log-empty-v2 | When enabled, the V2 implementation will be used to process all isLogEmpty requests. | false | client&nbsp;only |
 | enable-store-histograms-calculations | Enables estimation of store timeouts per worker per node. | false | server&nbsp;only |
-| external-loglevel | One of the following: critical, error, warning, info, debug, none | critical | server&nbsp;only |
+| external-loglevel | One of the following: critical, error, warning, info, debug, none | critical |  |
 | findkey-timeout | Findkey API call timeout. If omitted the client timeout will be used. |  | client&nbsp;only |
 | log-file | write server error log to specified file instead of stderr |  | server&nbsp;only |
 | loglevel | One of the following: critical, error, warning, info, debug, none | info | server&nbsp;only |

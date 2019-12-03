@@ -1419,6 +1419,9 @@ struct Settings : public SettingsBundle {
 
   std::vector<node_index_t> logsconfig_api_blacklist_nodes;
 
+  // loglevel to publish to scribe and logview
+  dbg::Level external_loglevel;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.
