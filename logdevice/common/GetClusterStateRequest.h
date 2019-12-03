@@ -8,6 +8,9 @@
 #pragma once
 
 #include <queue>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/Request.h"
@@ -30,10 +33,11 @@ struct GetClusterStateRequestMap {
 
 class GetClusterStateRequest : public Request {
  public:
-  using get_cs_callback_t =
-      std::function<void(Status status,
-                         std::vector<uint8_t> nodes_state,
-                         std::vector<node_index_t> boycotted_nodes)>;
+  using get_cs_callback_t = std::function<void(
+      Status status,
+      std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
+      std::vector<node_index_t> boycotted_nodes,
+      std::vector<std::pair<node_index_t, uint16_t>> nodes_status)>;
 
   GetClusterStateRequest(std::chrono::milliseconds timeout,
                          std::chrono::milliseconds wave_timeout,
@@ -58,8 +62,9 @@ class GetClusterStateRequest : public Request {
   bool onDeferredError();
   bool onReply(const Address& from,
                Status status,
-               std::vector<uint8_t> nodes_state,
-               std::vector<node_index_t> boycotted_nodes);
+               std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
+               std::vector<node_index_t> boycotted_nodes,
+               std::vector<std::pair<node_index_t, uint16_t>> nodes_status);
   bool onError(Status status);
 
  protected:
@@ -68,8 +73,9 @@ class GetClusterStateRequest : public Request {
   virtual void activateDeferredErrorTimer();
   void initNodes();
   bool done(Status status,
-            std::vector<uint8_t> nodes_state,
-            std::vector<node_index_t> boycotted_nodes);
+            std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
+            std::vector<node_index_t> boycotted_nodes,
+            std::vector<std::pair<node_index_t, uint16_t>> nodes_status);
   void start();
 
   virtual NodeID getMyNodeID() const;

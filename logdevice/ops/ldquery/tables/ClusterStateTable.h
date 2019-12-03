@@ -8,6 +8,7 @@
 #pragma once
 
 #include <map>
+#include <utility>
 #include <vector>
 
 #include "../Context.h"
@@ -42,20 +43,21 @@ class ClusterStateTable : public Table {
   struct ClusterStateRequestResult {
     node_index_t node_id;
     Status status;
-    std::vector<uint8_t> nodes_state;
+    std::vector<std::pair<node_index_t, uint16_t>> nodes_state;
     std::vector<node_index_t> boycotted_nodes;
+    std::vector<std::pair<node_index_t, uint16_t>> nodes_status;
   };
 
   void clearResults();
 
   void addResult(node_index_t node_id,
                  Status status,
-                 std::vector<uint8_t> nodes_state,
+                 std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
                  std::vector<node_index_t> boycotted_nodes);
 
   std::string nodesStateToString(
       const configuration::nodes::NodesConfiguration& nodes_configuration,
-      std::vector<uint8_t> nodes_state);
+      std::vector<std::pair<node_index_t, uint16_t>> nodes_state);
 
   std::string boycottedNodesToString(std::vector<node_index_t> boycotted_nodes);
 

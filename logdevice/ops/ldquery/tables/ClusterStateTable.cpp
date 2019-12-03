@@ -20,7 +20,6 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientImpl.h"
 
-
 namespace facebook {
   namespace logdevice {
     namespace ldquery {
@@ -36,10 +35,11 @@ TableColumns ClusterStateTable::getColumns() const {
           {"boycotted_nodes", DataType::TEXT, "List of boycotted nodes."}};
 }
 
-void ClusterStateTable::addResult(node_index_t node_id,
-                                  Status status,
-                                  std::vector<uint8_t> nodes_state,
-                                  std::vector<node_index_t> boycotted_nodes) {
+void ClusterStateTable::addResult(
+    node_index_t node_id,
+    Status status,
+    std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
+    std::vector<node_index_t> boycotted_nodes) {
   ClusterStateRequestResult res;
   res.node_id = node_id;
   res.status = status;
@@ -59,12 +59,13 @@ void ClusterStateTable::clearResults() {
 
 std::string ClusterStateTable::nodesStateToString(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
-    std::vector<uint8_t> nodes_state) {
+    std::vector<std::pair<node_index_t, uint16_t>> nodes_state) {
+  auto sdc = *nodes_configuration.getServiceDiscovery();
   std::vector<node_index_t> dead_nodes;
   if (!nodes_state.empty()) {
-    for (auto const& kv : *nodes_configuration.getServiceDiscovery()) {
-      if (nodes_state[kv.first] != 0) {
-        dead_nodes.push_back(kv.first);
+    for (auto& [node_idx, state] : nodes_state) {
+      if (sdc.hasNode(node_idx) && state != 0) {
+        dead_nodes.push_back(node_idx);
       }
     }
   }
@@ -86,8 +87,8 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
   auto config = client_impl->getConfig();
   const auto& nodes_configuration = config->getNodesConfiguration();
 
-  // If the query contains a constraint on the node id, make sure we only query
-  // that node.
+  // If the query contains a constraint on the node id, make sure we only
+  // query that node.
   std::string expr;
   node_index_t requested_node_id = -1;
   if (columnHasEqualityConstraint(0, ctx, expr)) {
@@ -102,9 +103,11 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
       continue;
     }
 
-    auto cb = [&sem, node_id, this](Status status,
-                                    std::vector<uint8_t> nodes_state,
-                                    std::vector<node_index_t> boycotted_nodes) {
+    auto cb = [&sem, node_id, this](
+                  Status status,
+                  std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
+                  std::vector<node_index_t> boycotted_nodes,
+                  std::vector<std::pair<node_index_t, uint16_t>> /* unused */) {
       addResult(
           node_id, status, std::move(nodes_state), std::move(boycotted_nodes));
       sem.post();
@@ -152,5 +155,4 @@ std::shared_ptr<TableData> ClusterStateTable::getData(QueryContext& ctx) {
 
   return table;
 }
-
 }}}} // namespace facebook::logdevice::ldquery::tables
