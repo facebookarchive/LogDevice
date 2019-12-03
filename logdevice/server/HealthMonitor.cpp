@@ -48,6 +48,8 @@ HealthMonitor::HealthMonitor(folly::Executor& executor,
   internal_info_.worker_queue_stalls_.reserve(num_workers);
   internal_info_.worker_queue_stalls_.assign(
       num_workers, {kNumBuckets, kNumPeriods * sleep_period_});
+  internal_info_.connection_limit_reached_ = {
+      kNumBuckets, kNumPeriods * sleep_period_};
 }
 
 void HealthMonitor::startUp() {
@@ -94,37 +96,43 @@ void HealthMonitor::updateVariables(TimePoint now) {
   std::for_each(internal_info_.worker_queue_stalls_.begin(),
                 internal_info_.worker_queue_stalls_.end(),
                 [now](TimeSeries& t) { t.update(now); });
+  internal_info_.connection_limit_reached_.update(now);
   state_timer_.positiveFeedback(now); // calc how much time has passed
 }
 
 bool HealthMonitor::isOverloaded(TimePoint now,
                                  std::chrono::milliseconds half_period) {
+  auto num_fd_overloads = internal_info_.connection_limit_reached_.count(
+      now - 2 * sleep_period_, now);
+
+  auto num_overloaded_workers = std::count_if(
+      internal_info_.worker_queue_stalls_.begin(),
+      internal_info_.worker_queue_stalls_.end(),
+      [this, now, half_period](TimeSeries& t) {
+        // Detection of problematic queuing periods is done on the past
+        // 2 HM loops (2*sleep_period_), taking into account time
+        // intervals that are equivalent to sleep_period_ start and end
+        // in neighboring loops.
+        for (int p = 2; p <= 2 * kPeriodRange; ++p) {
+          // Sum of queue stalls during this period.
+          auto period_sum =
+              t.sum(now - p * half_period, now - (p - 2) * half_period);
+          // Number of queue stalls during this period.
+          auto period_count =
+              t.count(now - p * half_period, now - (p - 2) * half_period);
+          if ((period_count > 0) && (period_sum >= max_queue_stall_duration_) &&
+              (period_sum / period_count >= max_queue_stalls_avg_)) {
+            return true;
+          }
+        }
+        return false;
+      });
   // A node is overloaded when more than max_overloaded_worker_percentage_% of
-  // workers have overloaded request queues.
-  return (std::count_if(
-              internal_info_.worker_queue_stalls_.begin(),
-              internal_info_.worker_queue_stalls_.end(),
-              [this, now, half_period](TimeSeries& t) {
-                // Detection of problematic queuing periods is done on the past
-                // 2 HM loops (2*sleep_period_), taking into account time
-                // intervals that are equivalent to sleep_period_ start and end
-                // in neighboring loops.
-                for (int p = 2; p <= 2 * kPeriodRange; ++p) {
-                  // Sum of queue stalls during this period.
-                  auto period_sum =
-                      t.sum(now - p * half_period, now - (p - 2) * half_period);
-                  // Number of queue stalls during this period.
-                  auto period_count = t.count(
-                      now - p * half_period, now - (p - 2) * half_period);
-                  if ((period_count > 0) &&
-                      (period_sum >= max_queue_stall_duration_) &&
-                      (period_sum / period_count >= max_queue_stalls_avg_)) {
-                    return true;
-                  }
-                }
-                return false;
-              }) >= max_overloaded_worker_percentage_ *
-              internal_info_.worker_queue_stalls_.capacity());
+  // workers have overloaded request queues OR when the connection limit has
+  // been reached.
+  return (num_overloaded_workers >= max_overloaded_worker_percentage_ *
+                  internal_info_.worker_queue_stalls_.capacity() ||
+          num_fd_overloads > 0);
 }
 
 HealthMonitor::StallInfo
@@ -249,6 +257,16 @@ void HealthMonitor::reportWorkerStall(int idx,
     if (idx >= 0 && idx < internal_info_.worker_stalls_.capacity()) {
       internal_info_.worker_stalls_[idx].addValue(tp, duration);
     }
+  });
+}
+
+void HealthMonitor::reportConnectionLimitReached() {
+  if (shutdown_.load(std::memory_order_relaxed)) {
+    return;
+  }
+  auto tp = SteadyTimestamp::now();
+  executor_.add([this, tp]() mutable {
+    internal_info_.connection_limit_reached_.addValue(tp, 1);
   });
 }
 

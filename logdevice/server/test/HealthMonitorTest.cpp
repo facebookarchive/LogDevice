@@ -80,6 +80,26 @@ class HealthMonitorTest : public testing::Test {
     EXPECT_EQ(NodeHealthStatus::UNHEALTHY, hm->node_status_);
   }
 
+  void connectionLimitReachedTest() {
+    auto& inlineExecutor = folly::InlineExecutor::instance();
+    std::unique_ptr<MockHealthMonitor> hm = std::make_unique<MockHealthMonitor>(
+        inlineExecutor, MockHealthMonitor::kLoopDuration);
+    hm->startUp();
+    hm->reportConnectionLimitReached();
+    auto health_monitor_closed =
+        folly::futures::sleep(
+            std::chrono::milliseconds(MockHealthMonitor::kLoopDuration))
+            .via(&inlineExecutor)
+            .then([&hm](folly::Try<folly::Unit>) mutable {
+              return hm->shutdown();
+            });
+
+    health_monitor_closed.wait();
+    EXPECT_EQ(1, hm->internal_info_.connection_limit_reached_.count());
+    EXPECT_EQ(true, hm->overloaded_);
+    EXPECT_EQ(NodeHealthStatus::OVERLOADED, hm->node_status_);
+  }
+
   void stateTest() {
     const std::chrono::milliseconds delay_time{250};
     auto& inlineExecutor = folly::InlineExecutor::instance();
@@ -277,15 +297,20 @@ TEST_F(HealthMonitorTest, TotalStalledWorkersTest) {
   totalStalledWorkersTest();
 }
 
+TEST_F(HealthMonitorTest, WatchdogDelayTest) {
+  watchdogDelayTest();
+}
+
+TEST_F(HealthMonitorTest, ConnectionLimitReachedTest) {
+  connectionLimitReachedTest();
+}
+
 TEST_F(HealthMonitorTest, StateTest) {
   stateTest();
 }
 
 TEST_F(HealthMonitorTest, OverloadTest) {
   overloadTest();
-}
-TEST_F(HealthMonitorTest, WatchdogDelayTest) {
-  watchdogDelayTest();
 }
 
 }} // namespace facebook::logdevice

@@ -131,6 +131,9 @@ void ConnectionListener::connectionAccepted(
                       "has been reached.",
                       sockaddr.toString().c_str());
     folly::netops::close(fd);
+    if (conn_limit_reached_cb_) {
+      conn_limit_reached_cb_();
+    }
     return;
   }
   auto conn_backlog_token = connection_backlog_budget_.acquireToken();
@@ -204,4 +207,11 @@ folly::SemiFuture<folly::Unit> ConnectionListener::stopAcceptingConnections() {
       });
   return res;
 }
+
+void ConnectionListener::setConnectionLimitReachedCallback(
+    ConnectionLimitReachedCallback cb) {
+  ld_check(!conn_limit_reached_cb_);
+  conn_limit_reached_cb_ = cb;
+}
+
 }} // namespace facebook::logdevice

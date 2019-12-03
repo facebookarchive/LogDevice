@@ -44,6 +44,7 @@ class HealthMonitor {
   void reportStalledWorkers(int num_stalled);
   void reportWorkerStall(int idx, std::chrono::milliseconds duration);
   void reportWorkerQueueStall(int idx, std::chrono::milliseconds duration);
+  void reportConnectionLimitReached();
 
  protected:
   using TimeSeries = folly::BucketedTimeSeries<std::chrono::duration<float>,
@@ -92,6 +93,9 @@ class HealthMonitor {
 
   void removeFailureDetector();
 
+  using AlertSeries =
+      folly::BucketedTimeSeries<uint8_t, std::chrono::steady_clock>;
+
   struct HMInfo {
     int num_workers_{};
     bool health_monitor_delay_{false};
@@ -99,6 +103,7 @@ class HealthMonitor {
     int total_stalled_workers{0};
     std::vector<TimeSeries> worker_stalls_;
     std::vector<TimeSeries> worker_queue_stalls_;
+    AlertSeries connection_limit_reached_{1, std::chrono::milliseconds(0)};
   };
   HMInfo internal_info_;
 
