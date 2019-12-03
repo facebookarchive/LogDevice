@@ -270,7 +270,6 @@ static void
 on_server_settings_changed(UpdateableSettings<ServerSettings> server_settings) {
   dbg::assertOnData = server_settings->assert_on_data;
   dbg::currentLevel = server_settings->loglevel;
-  dbg::externalLoggerLogLevel = server_settings->external_loglevel;
   ZookeeperClient::setDebugLevel(server_settings->loglevel);
   dbg::setLogLevelOverrides(server_settings->loglevel_overrides);
 

@@ -106,7 +106,9 @@ class ProcessorImpl {
         nc_publisher_(processor->config_, settings, std::move(trace_logger)),
         read_stream_debug_info_sampling_config_(
             processor->getPluginRegistry(),
-            settings->all_read_streams_debug_config_path) {}
+            settings->all_read_streams_debug_config_path) {
+    dbg::externalLoggerLogLevel = settings->external_loglevel;
+  }
 
   ~ProcessorImpl() {
     for (auto& workers : all_workers_) {
@@ -147,6 +149,8 @@ void settingsUpdated(const UpdateableSettings<Settings>& settings) {
   if (dbg::abortOnFailedCatch.exchange(ca) != ca) {
     ld_info("abort-on-failed-catch is %s", ca ? "on" : "off");
   }
+
+  dbg::externalLoggerLogLevel = settings->external_loglevel;
 }
 
 std::unique_ptr<SequencerLocator>

@@ -3497,5 +3497,12 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "tests.",
        CLIENT,
        SettingsCategory::Testing);
+  init("external-loglevel",
+       &external_loglevel,
+       "critical",
+       parse_log_level,
+       "One of the following: critical, error, warning, info, debug, none",
+       SERVER | CLIENT,
+       SettingsCategory::Core);
 }
 }} // namespace facebook::logdevice
