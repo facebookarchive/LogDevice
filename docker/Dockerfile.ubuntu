@@ -34,7 +34,7 @@ WORKDIR /build
 # to reduce the total memory used during compilation.
 ARG PARALLEL
 
-RUN cmake -Dthriftpy3=ON --DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF /LogDevice/logdevice/ \
+RUN cmake -Dthriftpy3=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF /LogDevice/logdevice/ \
     && make -j ${PARALLEL:-$(nproc)}
 
 CMD /bin/bash

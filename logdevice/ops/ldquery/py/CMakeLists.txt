@@ -17,6 +17,7 @@ target_link_libraries(logdevice_ldquery_python
 # In the future, we'll have to revisit this part, since
 # we split our 'logdevice' namespace into multiple .so binaries (e.g. test)
 file(MAKE_DIRECTORY "${LOGDEVICE_PY_OUT}/logdevice/ldquery/internal")
+file(WRITE "${LOGDEVICE_PY_OUT}/logdevice/__init__.py")
 set_target_properties(logdevice_ldquery_python
   PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY "${LOGDEVICE_PY_OUT}/logdevice/ldquery/internal"

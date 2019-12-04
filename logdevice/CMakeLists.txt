@@ -32,7 +32,7 @@ option(thriftpy3 "Include Thriftpy3 in build (requires Cython 0.28)" OFF)
 
 # Use the Debug build profile as default unless -DCMAKE_BUILD_TYPE is passed in.
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Debug)
+  set(CMAKE_BUILD_TYPE None)
 endif(NOT CMAKE_BUILD_TYPE)
 
 message(STATUS "Building with \"${CMAKE_BUILD_TYPE}\" build profile.")
@@ -46,10 +46,6 @@ endif()
 include (logdevice-functions)
 
 include(build-config)
-# Use the Debug build profile as default unless -DCMAKE_BUILD_TYPE is passed in.
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Debug)
-endif(NOT CMAKE_BUILD_TYPE)
 
 option(BUILD_TESTS "If enabled, compile the tests." ON)
 option(BUILD_SUBMODULES "Build using Git submodules, to fulfill dependencies" ON)
@@ -131,6 +127,7 @@ auto_sources(hfiles "*.h" RECURSE "${LOGDEVICE_CLIENT_HEADER_DIR}")
 set (THRIFT_DEPS
   ${FBTHRIFT_LIBRARIES}
   ${WANGLE_LIBRARIES}
+  ${FOLLY_LIBRARIES}
   ${FIZZ_LIBRARIES}
   ${LIBSODIUM_LIBRARIES}
   ${RSOCKET_LIBRARIES}
