@@ -570,7 +570,7 @@ int TextConfigUpdater::waitForInitialLoad(std::chrono::milliseconds timeout) {
     err = E::TIMEDOUT;
     return -1;
   }
-  if (!impl_.wlock()->hasValidConfig()) {
+  if (!impl_->hasValidConfig()) {
     err = E::INVALID_CONFIG;
     return -1;
   }

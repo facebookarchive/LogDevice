@@ -64,7 +64,7 @@ int SetAttributesDelta::apply(LogsConfigTree& tree,
 
 int SetLogRangeDelta::apply(LogsConfigTree& tree,
                             std::string& failure_reason) const {
-  auto result = tree.findLogGroup(path);
+  std::shared_ptr<LogGroupNode> result = tree.findLogGroup(path);
   if (!result) {
     failure_reason = folly::format("Log group '{}' was not found!", path).str();
     err = E::NOTFOUND;

@@ -203,7 +203,7 @@ void AppendRequest::fetchLogConfig() {
   ld_check(client_ != nullptr);
   request_id_t rqid = id_;
   Worker::onThisThread()->getConfig()->getLogGroupByIDAsync(
-      record_.logid, [rqid](LogsConfig::LogGroupNodePtr logcfg) {
+      record_.logid, [rqid](std::shared_ptr<LogsConfig::LogGroupNode> logcfg) {
         // Callback must not bind to `this', need to go through
         // `Worker::runningAppends()' in case the AppendRequest timed out while
         // waiting for the config.
@@ -216,7 +216,8 @@ void AppendRequest::fetchLogConfig() {
       });
 }
 
-void AppendRequest::onLogConfigAvailable(LogsConfig::LogGroupNodePtr cfg) {
+void AppendRequest::onLogConfigAvailable(
+    std::shared_ptr<LogsConfig::LogGroupNode> cfg) {
   if (!cfg) {
     destroyWithStatus(E::NOTFOUND);
     return;

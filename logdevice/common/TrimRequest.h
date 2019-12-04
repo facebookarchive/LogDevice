@@ -84,7 +84,7 @@ class TrimRequest : public DistributedRequest {
   /**
    * Called when Configuration::getLogByIDAsync() returns with the log config.
    */
-  void onLogConfigAvailable(LogsConfig::LogGroupNodePtr cfg);
+  void onLogConfigAvailable(std::shared_ptr<LogsConfig::LogGroupNode> cfg);
 
   void onReply(ShardID from, Status status);
   void onMessageSent(ShardID to, Status status);

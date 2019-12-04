@@ -22,20 +22,15 @@ ENV VIRTUAL_ENV=/build/staging/usr/local
 RUN python3 -m virtualenv --python=/usr/bin/python3 $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# We need Cython 2.28.6 because of
-# https://github.com/cython/cython/issues/2985
+# We need Cython 2.28.6 because of https://github.com/cython/cython/issues/2985
 RUN python3 -m pip install --upgrade setuptools wheel cython==0.28.6
 
 COPY . LogDevice
 
 WORKDIR /build
 
-# Controls the build parallelism, it defaults to the number of cores, use this
-# to reduce the total memory used during compilation.
-ARG PARALLEL
-
-RUN cmake -Dthriftpy3=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF /LogDevice/logdevice/ \
-    && make -j ${PARALLEL:-$(nproc)}
+RUN cmake -Dthriftpy3=ON /LogDevice/logdevice/ \
+    && make -j $(nproc)
 
 CMD /bin/bash
 

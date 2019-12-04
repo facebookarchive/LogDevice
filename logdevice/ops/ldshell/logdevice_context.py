@@ -10,8 +10,6 @@ import logging
 import sys
 import textwrap
 
-from logdevice.admin.clients import AdminAPI
-from logdevice.admin.common.types import SocketAddress, SocketAddressFamily
 from logdevice.client import (
     Client,
     LoggingLevel,
@@ -23,7 +21,6 @@ from logdevice.ldquery import LDQuery
 from nubia import context, exceptions
 from nubia.internal.io.eventbus import Message
 from termcolor import cprint
-from thrift.py3 import get_client as create_thrift_client
 
 
 class Context(context.Context):
@@ -48,16 +45,11 @@ class Context(context.Context):
         self._config_path = None
         self._ldquery = None
         self._client = None
-        self._is_connected = False
 
     def _set_arguments(self, args):
         self._loglevel = args.loglevel
         self._config_path = args.config_path
         self._timeout = args.command_timeout
-        # The cluster admin server socket address
-        self._admin_server_host = args.admin_server_host
-        self._admin_server_port = args.admin_server_port
-        self._admin_server_unix_path = args.admin_server_unix_path
         self._set_log_level(args.loglevel)
 
     def on_cli(self, cmd, args):
@@ -71,9 +63,6 @@ class Context(context.Context):
         if ret:
             raise exceptions.CommandError("Failed starting interactive mode")
 
-    def is_connected(self):
-        return self._is_connected
-
     @property
     def ldquery(self):
         if not self._config_path:
@@ -84,42 +73,8 @@ class Context(context.Context):
                 self._build_ldquery()
             return self._ldquery
 
-    def get_node_admin_client(self, address: SocketAddress):
-        """
-        Creates an Admin Client that connects to a given node.
-        """
-        if address.address_family == SocketAddressFamily.INET:
-            return create_thrift_client(
-                AdminAPI, host=address.address, port=address.port
-            )
-        else:
-            # SocketAddressFamily::UNIX
-            return create_thrift_client(AdminAPI, path=address.address)
-
-    def get_cluster_admin_client(self):
-        """
-        Returns the Admin API client for the connected cluster. It uses the
-        --admin-server-hostname/port/unix-path to target a specific
-        admin server if specified.
-        """
-        client = create_thrift_client(
-            AdminAPI,
-            host=self._admin_server_host,
-            port=self._admin_server_port,
-            path=self._admin_server_unix_path,
-        )
-        return client
-
     def get_client(self):
-        with self._lock:
-            if not self._client:
-                try:
-                    self._client = self.build_client()
-                except Exception as e:
-                    cprint("Cannot connect to logdevice cluster!", "red")
-                    self._reset()
-                    raise e
-            return self._client
+        return self._client
 
     def build_client(self, settings=None):
         default_settings = {"on-demand-logs-config": "true", "num-workers": 2}
@@ -138,9 +93,7 @@ class Context(context.Context):
     def on_connected(self, *args, **kwargs):
         if args:
             self._config_path = args[0]
-        if not self._config_path and not (
-            self._admin_server_host or self._admin_server_unix_path
-        ):
+        if not self._config_path:
             cprint(
                 textwrap.dedent(
                     """
@@ -153,6 +106,11 @@ class Context(context.Context):
                 file=sys.stderr,
             )
             cprint("connect /var/shared/logdevice-cluster.conf", file=sys.stderr)
-            self._is_connected = False
-        else:
-            self._is_connected = True
+            return
+        with self._lock:
+            try:
+                self._client = self.build_client()
+            except Exception as e:
+                cprint("Cannot connect to logdevice cluster!", "red")
+                self._reset()
+                raise e

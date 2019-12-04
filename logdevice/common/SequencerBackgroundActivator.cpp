@@ -281,7 +281,8 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
 
   const auto& nodes_configuration =
       Worker::onThisThread()->getNodesConfiguration();
-  const auto logcfg = config->getLogGroupByIDShared(logid);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config->getLogGroupByIDShared(logid);
 
   LogState& state = logs_[logid];
 
@@ -451,7 +452,8 @@ SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
 
   auto config = Worker::onThisThread()->getConfig();
 
-  const auto logcfg = config->getLogGroupByIDShared(logid);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config->getLogGroupByIDShared(logid);
   if (!logcfg) {
     // logid no longer in config
     err = E::NOTFOUND;
@@ -844,7 +846,8 @@ void SequencerBackgroundActivator::maybeAdjustNodesetSize(logid_t log_id,
   }
 
   std::shared_ptr<Configuration> config = Worker::onThisThread()->getConfig();
-  const auto logcfg = config->getLogGroupByIDShared(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config->getLogGroupByIDShared(log_id);
   if (!logcfg) {
     // Log no longer in config.
     return;
@@ -945,7 +948,8 @@ void SequencerBackgroundActivator::randomizeNodeset(logid_t log_id,
   }
 
   std::shared_ptr<Configuration> config = Worker::onThisThread()->getConfig();
-  const auto logcfg = config->getLogGroupByIDShared(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config->getLogGroupByIDShared(log_id);
   if (!logcfg) {
     // Log no longer in config.
     return;
@@ -1008,7 +1012,8 @@ void SequencerBackgroundActivator::recalculateNodesetRandomizationTime(
     }
 
     auto config = Worker::onThisThread()->getConfig();
-    const auto logcfg = config->getLogGroupByIDShared(logid);
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        config->getLogGroupByIDShared(logid);
     if (!logcfg) {
       // logid no longer in config
       break;

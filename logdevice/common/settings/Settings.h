@@ -84,9 +84,6 @@ struct Settings : public SettingsBundle {
   // Toggle use of HealthMonitor to determine node status on server-side.
   bool enable_health_monitor;
 
-  // Maximum tolerated delay between health monitor loops.
-  std::chrono::milliseconds health_monitor_max_delay;
-
   // Time interval after which health monitor wakes up and detects
   // issues on node
   std::chrono::milliseconds health_monitor_poll_interval_ms;
@@ -1418,9 +1415,6 @@ struct Settings : public SettingsBundle {
   size_t outbuf_socket_min_kb;
 
   std::vector<node_index_t> logsconfig_api_blacklist_nodes;
-
-  // loglevel to publish to scribe and logview
-  dbg::Level external_loglevel;
 
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are

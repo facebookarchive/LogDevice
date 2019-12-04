@@ -496,7 +496,7 @@ void ClientReadStream::start() {
   config->getLogGroupByIDAsync(
       log_id_,
       [get_stream_by_id, rsid, logid_request_time, this](
-          const LogsConfig::LogGroupNodePtr log_config) {
+          const std::shared_ptr<LogsConfig::LogGroupNode> log_config) {
         auto ptr = get_stream_by_id(rsid);
         if (!ptr) {
           ld_warning("Got reply for ClientReadStream %lu that doesn't exist "
@@ -513,7 +513,7 @@ void ClientReadStream::start() {
 }
 
 void ClientReadStream::startContinuation(
-    const LogsConfig::LogGroupNodePtr log_config) {
+    const std::shared_ptr<LogsConfig::LogGroupNode> log_config) {
   if (!log_config) {
     deliverNoConfigGapAndDispose();
     return;
@@ -540,7 +540,7 @@ void ClientReadStream::startContinuation(
 }
 
 void ClientReadStream::ensureSkipEpoch0(
-    const LogsConfig::LogGroupNodePtr log_config) {
+    const std::shared_ptr<LogsConfig::LogGroupNode> log_config) {
   if (currentEpoch() < EPOCH_MIN) {
     // We issue a bridge gap and update next_lsn_to_deliver_:
     int res = handleEpochBegin(compose_lsn(EPOCH_MIN, ESN_MIN));
@@ -1978,7 +1978,8 @@ void ClientReadStream::updateScdStatus() {
   auto get_stream_by_id = deps_->getStreamByIDCallback();
   config->getLogGroupByIDAsync(
       log_id_,
-      [rsid, get_stream_by_id](const LogsConfig::LogGroupNodePtr log_config) {
+      [rsid, get_stream_by_id](
+          const std::shared_ptr<LogsConfig::LogGroupNode> log_config) {
         auto ptr = get_stream_by_id(rsid);
         if (!ptr) {
           ld_warning("Got reply for ClientReadStream %lu that doesn't exist "
@@ -1991,7 +1992,7 @@ void ClientReadStream::updateScdStatus() {
 }
 
 void ClientReadStream::updateScdStatusContinuation(
-    LogsConfig::LogGroupNodePtr log_config) {
+    const std::shared_ptr<LogsConfig::LogGroupNode> log_config) {
   if (!log_config) {
     deliverNoConfigGapAndDispose();
     return;

@@ -119,7 +119,7 @@ IOFaultInjection::getLatencyToInject(shard_index_t shard_idx) {
     return std::chrono::milliseconds(0);
   }
   ld_check(shard_idx < shard_settings_.size());
-  return shard_settings_[shard_idx].wlock()->latency();
+  return shard_settings_[shard_idx]->latency();
 }
 
 template <>

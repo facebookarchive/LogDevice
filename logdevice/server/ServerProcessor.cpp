@@ -84,8 +84,7 @@ void ServerProcessor::init() {
           updateableSettings()->health_monitor_max_queue_stall_duration_ms,
           updateableSettings()->health_monitor_max_overloaded_worker_percentage,
           updateableSettings()->health_monitor_max_stalls_avg_ms,
-          updateableSettings()->health_monitor_max_stalled_worker_percentage,
-          updateableSettings()->health_monitor_max_delay);
+          updateableSettings()->health_monitor_max_stalled_worker_percentage);
       applyToWorkerPool(
           [& hm = *health_monitor_](Worker& w) {
             w.setLongExecutionCallback(

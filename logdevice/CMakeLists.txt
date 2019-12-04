@@ -32,7 +32,7 @@ option(thriftpy3 "Include Thriftpy3 in build (requires Cython 0.28)" OFF)
 
 # Use the Debug build profile as default unless -DCMAKE_BUILD_TYPE is passed in.
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE None)
+  set(CMAKE_BUILD_TYPE Debug)
 endif(NOT CMAKE_BUILD_TYPE)
 
 message(STATUS "Building with \"${CMAKE_BUILD_TYPE}\" build profile.")
@@ -127,7 +127,6 @@ auto_sources(hfiles "*.h" RECURSE "${LOGDEVICE_CLIENT_HEADER_DIR}")
 set (THRIFT_DEPS
   ${FBTHRIFT_LIBRARIES}
   ${WANGLE_LIBRARIES}
-  ${FOLLY_LIBRARIES}
   ${FIZZ_LIBRARIES}
   ${LIBSODIUM_LIBRARIES}
   ${RSOCKET_LIBRARIES}

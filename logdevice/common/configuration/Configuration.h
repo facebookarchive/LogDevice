@@ -143,7 +143,8 @@ class Configuration {
    *         this config.  On failure, returns nullptr and sets err to:
    *           NOTFOUND       no log with given ID appears in config
    */
-  LogsConfig::LogGroupNodePtr getLogGroupByIDShared(logid_t id) const;
+  std::shared_ptr<LogsConfig::LogGroupNode>
+  getLogGroupByIDShared(logid_t id) const;
 
   /**
    * Looks up a log by ID and returns a raw pointer to the LogGroupInDirectory
@@ -173,7 +174,7 @@ class Configuration {
    */
   void getLogGroupByIDAsync(
       logid_t id,
-      std::function<void(LogsConfig::LogGroupNodePtr)> cb) const;
+      std::function<void(std::shared_ptr<LogsConfig::LogGroupNode>)> cb) const;
 
   /**
    * Creates a ServerConfig object from the given file.

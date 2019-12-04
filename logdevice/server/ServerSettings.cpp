@@ -148,6 +148,14 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::Core)
 
+    ("external-loglevel",
+     &external_loglevel,
+     "critical",
+     parse_log_level,
+     "One of the following: critical, error, warning, info, debug, none",
+     SERVER,
+     SettingsCategory::Core)
+
     ("loglevel-overrides", &loglevel_overrides, "",
      [](const std::string& val) {
       dbg::LogLevelMap loglevels;

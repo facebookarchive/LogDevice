@@ -115,7 +115,8 @@ int AllSequencers::activateSequencer(
   ld_check(!MetaDataLog::isMetaDataLog(logid));
 
   std::shared_ptr<Configuration> cfg = updateable_config_->get();
-  const auto logcfg = cfg->getLogGroupByIDShared(logid);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      cfg->getLogGroupByIDShared(logid);
   if (!logcfg) {
     err = E::NOTFOUND;
     return -1;
@@ -459,7 +460,8 @@ void AllSequencers::onEpochMetaDataFromEpochStore(
 
   std::shared_ptr<Configuration> cfg = updateable_config_->get();
   ld_check(cfg != nullptr);
-  const auto logcfg = cfg->getLogGroupByIDShared(logid);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      cfg->getLogGroupByIDShared(logid);
   if (!logcfg) {
     ld_info(
         "Not activating sequencer for log %lu that was removed from config.",

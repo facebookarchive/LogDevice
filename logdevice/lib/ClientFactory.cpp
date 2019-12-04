@@ -18,7 +18,6 @@
 #include "logdevice/common/checks.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
-#include "logdevice/common/plugin/Logger.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/lib/ClientImpl.h"
@@ -126,15 +125,6 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
 
   ld_info(
       "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
-
-  static folly::once_flag external_plugin_init_flag;
-  folly::call_once(external_plugin_init_flag, [&plugin_registry] {
-    std::shared_ptr<Logger> logger_plugin =
-        plugin_registry->getSinglePlugin<Logger>(PluginType::LOGGER);
-    if (logger_plugin) {
-      dbg::external_logger_plugin.swap(logger_plugin);
-    }
-  });
 
   if (!applySettingOverrides(*settings_updater)) {
     err = E::INVALID_PARAM;
@@ -299,4 +289,5 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
 
   return std::shared_ptr<Client>(impl);
 }
+
 }} // namespace facebook::logdevice

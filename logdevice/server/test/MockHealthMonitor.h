@@ -24,7 +24,6 @@ class MockHealthMonitor : public HealthMonitor {
   static constexpr double kMaxOverloadedPercentage{0.3};
   static constexpr std::chrono::milliseconds kMaxStallsAvg{45};
   static constexpr double kMaxStalledPercentage{0.3};
-  static constexpr std::chrono::milliseconds kMaxLoopStall{50};
 
   explicit MockHealthMonitor(folly::InlineExecutor& executor,
                              std::chrono::milliseconds sleep_period)
@@ -36,8 +35,7 @@ class MockHealthMonitor : public HealthMonitor {
                       kMaxQueueStallDuration,
                       kMaxOverloadedPercentage,
                       kMaxStallsAvg,
-                      kMaxStalledPercentage,
-                      kMaxLoopStall) {}
+                      kMaxStalledPercentage) {}
   explicit MockHealthMonitor(folly::Executor& executor,
                              std::chrono::milliseconds sleep_period,
                              int num_workers,
@@ -46,8 +44,7 @@ class MockHealthMonitor : public HealthMonitor {
                              std::chrono::milliseconds max_queue_stall_duration,
                              double max_overloaded_worker_percentage,
                              std::chrono::milliseconds max_stalls_avg,
-                             double max_stalled_worker_percentage,
-                             std::chrono::milliseconds max_loop_stall)
+                             double max_stalled_worker_percentage)
       : HealthMonitor(executor,
                       sleep_period,
                       num_workers,
@@ -56,8 +53,7 @@ class MockHealthMonitor : public HealthMonitor {
                       max_queue_stall_duration,
                       max_overloaded_worker_percentage,
                       max_stalls_avg,
-                      max_stalled_worker_percentage,
-                      max_loop_stall) {}
+                      max_stalled_worker_percentage) {}
 
   NodeHealthStatus
   calculateHealthMonitorState(std::chrono::milliseconds sleep_period) {

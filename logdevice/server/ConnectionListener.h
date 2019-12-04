@@ -66,11 +66,6 @@ class ConnectionListener : public Listener {
    */
   folly::SemiFuture<folly::Unit> stopAcceptingConnections() override;
 
-  // Callback functions that register connection limits reached
-  using ConnectionLimitReachedCallback = std::function<void()>;
-
-  void setConnectionLimitReachedCallback(ConnectionLimitReachedCallback cb);
-
  protected:
   friend class ConnectionListenerTest;
 
@@ -116,8 +111,6 @@ class ConnectionListener : public Listener {
     std::unique_ptr<NewConnectionRequest> connection_request_;
     ConnectionListener* connection_listener_;
   };
-
-  ConnectionLimitReachedCallback conn_limit_reached_cb_{nullptr};
 
   folly::F14FastMap<folly::NetworkSocket, std::unique_ptr<ReadEventHandler>>
       read_event_handlers_{};

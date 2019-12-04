@@ -86,8 +86,8 @@ class InternalLogs {
    * - E::EXISTS if that internal log has already been configured;
    * - E::INVALID_CONFIG if the attributes are not valid.
    */
-  logsconfig::LogGroupNodePtr insert(const std::string& name,
-                                     logsconfig::LogAttributes attrs);
+  std::shared_ptr<logsconfig::LogGroupNode>
+  insert(const std::string& name, logsconfig::LogAttributes attrs);
 
   using const_iterator = logsconfig::LogMap::element_const_iterator;
   using const_reverse_iterator =

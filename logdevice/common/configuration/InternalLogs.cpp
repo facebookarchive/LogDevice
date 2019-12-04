@@ -94,7 +94,7 @@ InternalLogs& InternalLogs::operator=(const InternalLogs& other) {
   return *this;
 }
 
-logsconfig::LogGroupNodePtr
+std::shared_ptr<logsconfig::LogGroupNode>
 InternalLogs::insert(const std::string& name, logsconfig::LogAttributes attrs) {
   const logid_t logid = lookupByName(name);
   if (logid == LOGID_INVALID) {

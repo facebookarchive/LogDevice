@@ -156,6 +156,7 @@ void StandaloneAdminServer::initServerConfig() {
 }
 
 void StandaloneAdminServer::initNodesConfiguration() {
+
   ld_check(updateable_config_);
   ld_check(plugin_registry_);
 
@@ -462,6 +463,7 @@ void StandaloneAdminServer::shutdown() {
 void StandaloneAdminServer::onSettingsUpdate() {
   dbg::assertOnData = server_settings_->assert_on_data;
   dbg::currentLevel = server_settings_->loglevel;
+  dbg::externalLoggerLogLevel = server_settings_->external_loglevel;
   ZookeeperClient::setDebugLevel(server_settings_->loglevel);
   dbg::setLogLevelOverrides(server_settings_->loglevel_overrides);
 }

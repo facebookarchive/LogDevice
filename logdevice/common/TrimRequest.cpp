@@ -184,7 +184,7 @@ void TrimRequest::fetchLogConfig() {
   ld_check(client_ != nullptr);
   request_id_t rqid = id_;
   Worker::onThisThread()->getConfig()->getLogGroupByIDAsync(
-      log_id_, [rqid](LogsConfig::LogGroupNodePtr logcfg) {
+      log_id_, [rqid](std::shared_ptr<LogsConfig::LogGroupNode> logcfg) {
         // Callback must not bind to `this', need to go through
         // `Worker::runningTrimRequests_' in case the TrimRequest timed out
         // while waiting for the config.
@@ -197,7 +197,8 @@ void TrimRequest::fetchLogConfig() {
       });
 }
 
-void TrimRequest::onLogConfigAvailable(LogsConfig::LogGroupNodePtr cfg) {
+void TrimRequest::onLogConfigAvailable(
+    std::shared_ptr<LogsConfig::LogGroupNode> cfg) {
   if (!cfg) {
     finalize(E::NOTFOUND);
     return;

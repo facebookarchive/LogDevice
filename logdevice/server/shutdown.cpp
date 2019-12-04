@@ -211,6 +211,9 @@ void shutdown_server(
     listeners_closed.emplace_back(
         ssl_connection_listener->stopAcceptingConnections());
   }
+  auto health_monitor_closed = processor->getHealthMonitor() != nullptr
+      ? processor->getHealthMonitor()->shutdown()
+      : folly::makeSemiFuture();
 
   folly::collectAll(listeners_closed.begin(), listeners_closed.end()).wait();
 
@@ -220,10 +223,6 @@ void shutdown_server(
   gossip_listener_loop.reset();
   ssl_connection_listener.reset();
   ssl_connection_listener_loop.reset();
-
-  auto health_monitor_closed = processor->getHealthMonitor() != nullptr
-      ? processor->getHealthMonitor()->shutdown()
-      : folly::makeSemiFuture();
 
   // set accepting_work to false
   ld_info("Stopping accepting work on all workers except FAILURE_DETECTOR");

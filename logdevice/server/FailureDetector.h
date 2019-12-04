@@ -11,7 +11,6 @@
 #include <memory>
 #include <random>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include <folly/Optional.h>
@@ -390,14 +389,10 @@ class FailureDetector {
    * @param
    *   boycotted_nodes: default to empty vector
    *                    not-empty if a cluster-state update is received
-   * @param
-   *   cs_status_update: default to empty vector
-   *                    not-empty if a cluster-state update is received
    */
-  void buildInitialState(
-      const std::vector<std::pair<node_index_t, uint16_t>>& cs_update = {},
-      std::vector<node_index_t> boycotted_nodes = {},
-      std::vector<std::pair<node_index_t, uint16_t>> cs_status_update = {});
+  void buildInitialState(const std::vector<uint8_t>& cs_update = {},
+                         std::vector<node_index_t> boycotted_nodes = {},
+                         const std::vector<uint8_t>& cs_status_update = {});
 
   // Don't rely on gossip() and detectFailures() to transition this node out
   // of suspect state(as it can cause 100ms race). This timer helps in making

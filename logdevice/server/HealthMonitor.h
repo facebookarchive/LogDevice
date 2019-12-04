@@ -32,8 +32,7 @@ class HealthMonitor {
                 std::chrono::milliseconds max_queue_stall_duration,
                 double max_overloaded_worker_percentage,
                 std::chrono::milliseconds max_stalls_avg,
-                double max_stalled_worker_percentage,
-                std::chrono::milliseconds max_loop_stall);
+                double max_stalled_worker_percentage);
   ~HealthMonitor() {}
 
   void startUp();
@@ -45,7 +44,6 @@ class HealthMonitor {
   void reportStalledWorkers(int num_stalled);
   void reportWorkerStall(int idx, std::chrono::milliseconds duration);
   void reportWorkerQueueStall(int idx, std::chrono::milliseconds duration);
-  void reportConnectionLimitReached();
 
  protected:
   using TimeSeries = folly::BucketedTimeSeries<std::chrono::duration<float>,
@@ -78,6 +76,8 @@ class HealthMonitor {
   static constexpr int kFuzzFactor = 0;      // no uncertainty
   static constexpr std::chrono::milliseconds kMaxTimerValue =
       std::chrono::milliseconds(100000);
+  static constexpr std::chrono::milliseconds kMaxLoopStall =
+      std::chrono::milliseconds(50);
 
   folly::Promise<folly::Unit> shutdown_promise_;
   folly::SemiFuture<folly::Unit> sleep_semifuture_;
@@ -92,9 +92,6 @@ class HealthMonitor {
 
   void removeFailureDetector();
 
-  using AlertSeries =
-      folly::BucketedTimeSeries<uint8_t, std::chrono::steady_clock>;
-
   struct HMInfo {
     int num_workers_{};
     bool health_monitor_delay_{false};
@@ -102,7 +99,6 @@ class HealthMonitor {
     int total_stalled_workers{0};
     std::vector<TimeSeries> worker_stalls_;
     std::vector<TimeSeries> worker_queue_stalls_;
-    AlertSeries connection_limit_reached_{1, std::chrono::milliseconds(0)};
   };
   HMInfo internal_info_;
 
@@ -121,7 +117,6 @@ class HealthMonitor {
 
   const std::chrono::milliseconds max_stalls_avg_;
   const double max_stalled_worker_percentage_;
-  const std::chrono::milliseconds max_loop_stall_;
 };
 
 }} // namespace facebook::logdevice

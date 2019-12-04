@@ -39,10 +39,12 @@ class RemoteLogsConfig : public LogsConfig {
     return true;
   }
 
-  LogGroupNodePtr getLogGroupByIDShared(logid_t id) const override;
+  std::shared_ptr<LogGroupNode>
+  getLogGroupByIDShared(logid_t id) const override;
 
-  void getLogGroupByIDAsync(logid_t id, std::function<void(LogGroupNodePtr)> cb)
-      const override;
+  void getLogGroupByIDAsync(
+      logid_t id,
+      std::function<void(std::shared_ptr<LogGroupNode>)> cb) const override;
 
   bool logExists(logid_t id) const override;
 
@@ -54,7 +56,7 @@ class RemoteLogsConfig : public LogsConfig {
       const std::string& ns,
       std::function<void(Status, NamespaceRangeLookupMap)> cb) const override;
 
-  logsconfig::LogGroupNodePtr
+  std::shared_ptr<logsconfig::LogGroupNode>
   getLogGroup(const std::string& path) const override;
 
   std::unique_ptr<LogsConfig> copy() const override;
@@ -75,7 +77,7 @@ class RemoteLogsConfig : public LogsConfig {
   using RangeLookupMap = LogsConfig::NamespaceRangeLookupMap;
 
   // Inserts entries into logid->log struct cache
-  void insertIntoIdCache(const LogGroupNodePtr& log) const;
+  void insertIntoIdCache(const std::shared_ptr<LogGroupNode>& log) const;
 
   // attempts to fetch results from cache into res. Returns true on success,
   // false on failure.
@@ -106,7 +108,7 @@ class RemoteLogsConfig : public LogsConfig {
 
   // log id -> log struct cache
   struct IDMapEntry {
-    LogGroupNodePtr log;
+    std::shared_ptr<LogGroupNode> log;
     std::chrono::steady_clock::time_point time_fetched;
     bool operator==(const IDMapEntry& other) const {
       return other.log.get() == this->log.get();

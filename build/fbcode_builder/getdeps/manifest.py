@@ -18,7 +18,6 @@ from .builder import (
     MakeBuilder,
     NinjaBootstrap,
     NopBuilder,
-    OpenBCMBuilder,
     OpenSSLBuilder,
     SqliteBuilder,
 )
@@ -424,9 +423,6 @@ class ManifestParser(object):
             return CargoBuilder(
                 build_options, ctx, self, src_dir, build_dir, inst_dir, build_doc
             )
-
-        if builder == "OpenBCM":
-            return OpenBCMBuilder(build_options, ctx, self, src_dir, inst_dir)
 
         raise KeyError("project %s has no known builder" % (self.name))
 

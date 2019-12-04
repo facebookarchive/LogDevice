@@ -17,7 +17,6 @@
 #include "logdevice/include/Err.h"
 
 using facebook::logdevice::logsconfig::LogGroupNode;
-using facebook::logdevice::logsconfig::LogGroupNodePtr;
 
 namespace facebook { namespace logdevice { namespace configuration {
 
@@ -104,7 +103,8 @@ bool LocalLogsConfig::logExists(logid_t id) const {
       internal_logs_.logExists(data_log_id);
 }
 
-LogGroupNodePtr LocalLogsConfig::getLogGroupByIDShared(logid_t id) const {
+std::shared_ptr<LogGroupNode>
+LocalLogsConfig::getLogGroupByIDShared(logid_t id) const {
   // LogGroupNode can be both a normal or an internal log
   const logsconfig::LogGroupInDirectory* res =
       config_tree_->getLogGroupByID(id);
@@ -117,7 +117,7 @@ LogGroupNodePtr LocalLogsConfig::getLogGroupByIDShared(logid_t id) const {
 
 void LocalLogsConfig::getLogGroupByIDAsync(
     logid_t id,
-    std::function<void(LogGroupNodePtr)> cb) const {
+    std::function<void(std::shared_ptr<LogGroupNode>)> cb) const {
   // since LocalLogsConfig does everything locally and without locking,
   // we can just call the callback immediately from here.
   cb(getLogGroupByIDShared(id));
@@ -126,7 +126,8 @@ void LocalLogsConfig::getLogGroupByIDAsync(
 void LocalLogsConfig::getLogRangeByNameAsync(
     std::string name,
     std::function<void(Status, logid_range_t)> cb) const {
-  auto result = config_tree_->findLogGroup(name);
+  std::shared_ptr<logsconfig::LogGroupNode> result =
+      config_tree_->findLogGroup(name);
   if (result == nullptr) {
     cb(E::NOTFOUND, std::make_pair(LOGID_INVALID, LOGID_INVALID));
     return;
@@ -134,13 +135,13 @@ void LocalLogsConfig::getLogRangeByNameAsync(
   cb(E::OK, result->range());
 }
 
-logsconfig::LogGroupNodePtr
+std::shared_ptr<logsconfig::LogGroupNode>
 LocalLogsConfig::getLogGroupByName(std::string name) const {
   logid_range_t res;
   return config_tree_->findLogGroup(name);
 }
 
-logsconfig::LogGroupNodePtr
+std::shared_ptr<logsconfig::LogGroupNode>
 LocalLogsConfig::getLogGroup(const std::string& path) const {
   return config_tree_->findLogGroup(path);
 }
@@ -179,10 +180,11 @@ void LocalLogsConfig::getLogRangesByNamespaceAsync(
   cb((res.empty() ? E::NOTFOUND : E::OK), res);
 }
 
-LogGroupNodePtr LocalLogsConfig::insert(DirectoryNode* parent,
-                                        const logid_range_t& logid_interval,
-                                        const std::string& name,
-                                        LogAttributes attrs) {
+std::shared_ptr<logsconfig::LogGroupNode>
+LocalLogsConfig::insert(DirectoryNode* parent,
+                        const logid_range_t& logid_interval,
+                        const std::string& name,
+                        LogAttributes attrs) {
   ld_check(config_tree_ != nullptr);
 
   was_modified_in_place_.store(true);
@@ -250,9 +252,10 @@ bool LocalLogsConfig::erase(const std::string& path) {
   return true;
 }
 
-logsconfig::LogGroupNodePtr LocalLogsConfig::insert(logid_t::raw_type logid,
-                                                    const std::string& name,
-                                                    LogAttributes attrs) {
+std::shared_ptr<logsconfig::LogGroupNode>
+LocalLogsConfig::insert(logid_t::raw_type logid,
+                        const std::string& name,
+                        LogAttributes attrs) {
   ld_check(config_tree_ != nullptr);
   was_modified_in_place_.store(true);
   std::string failure_reason;
@@ -270,7 +273,7 @@ logsconfig::LogGroupNodePtr LocalLogsConfig::insert(logid_t::raw_type logid,
   return ret;
 }
 
-logsconfig::LogGroupNodePtr LocalLogsConfig::insert(
+std::shared_ptr<logsconfig::LogGroupNode> LocalLogsConfig::insert(
     const boost::icl::right_open_interval<logid_t::raw_type>& logid_interval,
     const std::string& name,
     LogAttributes attrs) {

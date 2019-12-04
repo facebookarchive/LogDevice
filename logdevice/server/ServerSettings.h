@@ -50,6 +50,7 @@ struct ServerSettings : public SettingsBundle {
   bool admin_enabled;
   int command_conn_limit;
   dbg::Level loglevel;
+  dbg::Level external_loglevel;
   dbg::LogLevelMap loglevel_overrides;
   bool assert_on_data;
   // number of background workers

@@ -106,7 +106,7 @@ class AppendRequest : public AppendRequestBase,
   /**
    * Called when Configuration::getLogByIDAsync() returns with the log config.
    */
-  void onLogConfigAvailable(LogsConfig::LogGroupNodePtr cfg);
+  void onLogConfigAvailable(std::shared_ptr<LogsConfig::LogGroupNode> cfg);
 
   // implementation of the SequencerRouter::Handler interface
   void onSequencerKnown(NodeID dest, SequencerRouter::flags_t flags) override;

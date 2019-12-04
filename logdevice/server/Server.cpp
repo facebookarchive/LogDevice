@@ -1259,13 +1259,6 @@ bool Server::startConnectionListener(std::unique_ptr<Listener>& handle) {
   ConnectionListener* listener =
       checked_downcast<ConnectionListener*>(handle.get());
   listener->setProcessor(processor_.get());
-  // Assign callback function to listener
-  if (processor_->getHealthMonitor()) {
-    listener->setConnectionLimitReachedCallback(
-        [& hm = *(processor_->getHealthMonitor())]() {
-          hm.reportConnectionLimitReached();
-        });
-  }
   return listener->startAcceptingConnections().wait().value();
 }
 

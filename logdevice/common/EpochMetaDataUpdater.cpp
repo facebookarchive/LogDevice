@@ -134,7 +134,8 @@ UpdateResult updateMetaDataIfNeeded(
     bool provision_if_empty,
     bool update_if_exists,
     bool force_update) {
-  const auto logcfg = config.getLogGroupByIDShared(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+      config.getLogGroupByIDShared(log_id);
   if (!logcfg) {
     err = E::NOTFOUND;
     return UpdateResult::FAILED;

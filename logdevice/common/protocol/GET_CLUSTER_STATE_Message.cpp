@@ -7,9 +7,6 @@
  */
 #include "logdevice/common/protocol/GET_CLUSTER_STATE_Message.h"
 
-#include <utility>
-#include <vector>
-
 #include "logdevice/common/GetClusterStateRequest.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
@@ -22,9 +19,8 @@ template <>
 Message::Disposition
 GET_CLUSTER_STATE_Message::onReceived(const Address& from) {
   Status status = E::OK;
-  std::vector<std::pair<node_index_t, uint16_t>> nodes_state;
+  std::vector<uint8_t> nodes_state;
   std::vector<node_index_t> boycotted_nodes;
-  std::vector<std::pair<node_index_t, uint16_t>> nodes_status;
   Worker* w = Worker::onThisThread();
 
   // check if cluster state is enabled
@@ -49,24 +45,22 @@ GET_CLUSTER_STATE_Message::onReceived(const Address& from) {
           std::chrono::seconds(5), 1, "Failure detector is not ready");
       status = E::NOTREADY;
     } else {
-      nodes_state = cs->getWholeClusterState();
-
       size_t count = w->getNodesConfiguration()->getMaxNodeIndex() + 1;
+      nodes_state.resize(count);
+
       for (node_index_t i = 0; i < count; i++) {
+        nodes_state[i] = cs->getNodeState(i);
+
         if (cs->isNodeBoycotted(i)) {
           boycotted_nodes.emplace_back(i);
         }
       }
-      nodes_status = cs->getWholeClusterStatus();
     }
   }
 
   GET_CLUSTER_STATE_REPLY_Header hdr({header_.client_rqid, status});
   auto msg = std::make_unique<GET_CLUSTER_STATE_REPLY_Message>(
-      hdr,
-      std::move(nodes_state),
-      std::move(boycotted_nodes),
-      std::move(nodes_status));
+      hdr, std::move(nodes_state), std::move(boycotted_nodes));
   Worker::onThisThread()->sender().sendMessage(std::move(msg), from);
 
   return Disposition::NORMAL;

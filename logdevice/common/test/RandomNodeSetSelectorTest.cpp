@@ -56,7 +56,8 @@ verify_result(NodeSetSelector* selector,
   SCOPED_TRACE("log " + toString(logid.val_));
 
   if (!target_size.hasValue()) {
-    const auto logcfg = config->getLogGroupByIDShared(logid);
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        config->getLogGroupByIDShared(logid);
     ASSERT_NE(nullptr, logcfg);
     target_size =
         logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
@@ -85,7 +86,8 @@ verify_result(NodeSetSelector* selector,
         res.storage_set.begin(), res.storage_set.end(), std::less<ShardID>()));
 
     // must comply with the config
-    const auto logcfg = config->getLogGroupByIDShared(logid);
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        config->getLogGroupByIDShared(logid);
     ASSERT_NE(nullptr, logcfg);
     const auto& attrs = logcfg->attrs();
     const auto& nodes_config =

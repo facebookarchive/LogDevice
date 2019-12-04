@@ -46,7 +46,8 @@ static BufferedWriter::LogOptions get_log_options(logid_t log_id) {
   auto config = Worker::getConfig();
   const auto& settings = Worker::settings();
 
-  const auto group = config->getLogGroupByIDShared(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> group =
+      config->getLogGroupByIDShared(log_id);
 
   if (!group) {
     opts.time_trigger = settings.sequencer_batching_time_trigger;
@@ -151,7 +152,8 @@ static int prepare_batch(logid_t log_id,
 bool SequencerBatching::buffer(logid_t log_id,
                                std::unique_ptr<Appender>& appender_in) {
   Worker* w = Worker::onThisThread();
-  const auto group = w->getConfiguration()->getLogGroupByIDShared(log_id);
+  std::shared_ptr<LogsConfig::LogGroupNode> group =
+      w->getConfiguration()->getLogGroupByIDShared(log_id);
   const Settings& settings = *w->immutable_settings_;
 
   const bool enable_batching = group

@@ -14,7 +14,6 @@
 #include <memory>
 #include <numeric>
 #include <set>
-#include <utility>
 #include <vector>
 
 #include <folly/SharedMutex.h>
@@ -140,15 +139,6 @@ class ClusterState {
                                                  : node_status->second->load();
   }
 
-  // Returns a vectorized representation of the hashmap containing the health
-  // statuses of the cluster as seen by this node. The vector is sorted by node
-  // ids.
-  std::vector<std::pair<node_index_t, uint16_t>> getWholeClusterStatus();
-
-  // Returns a vectorized representation of the hashmap containing the states
-  // of the cluster as seen by this node. The vector is sorted by node ids.
-  std::vector<std::pair<node_index_t, uint16_t>> getWholeClusterState();
-
   const char* getNodeStateAsStr(node_index_t idx) const {
     return getNodeStateString(getNodeState(idx));
   }
@@ -169,11 +159,9 @@ class ClusterState {
    */
   virtual void refreshClusterStateAsync();
 
-  void onGetClusterStateDone(
-      Status status,
-      const std::vector<std::pair<node_index_t, uint16_t>>& nodes_state,
-      std::vector<node_index_t> boycotted_nodes,
-      std::vector<std::pair<node_index_t, uint16_t>> nodes_status);
+  void onGetClusterStateDone(Status status,
+                             const std::vector<uint8_t>& nodes_state,
+                             std::vector<node_index_t> boycotted_nodes);
 
   void noteConfigurationChanged();
   void updateNodesInConfig(const configuration::nodes::ServiceDiscoveryConfig&);

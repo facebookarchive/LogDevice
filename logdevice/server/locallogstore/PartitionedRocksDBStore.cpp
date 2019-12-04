@@ -4334,7 +4334,8 @@ PartitionedRocksDBStore::getEffectiveBacklogDuration(
     log_state->setLogRemovalTime(log_removal_time);
   }
 
-  const auto log_config = config->getLogGroupByIDShared(log_id);
+  const std::shared_ptr<LogsConfig::LogGroupNode> log_config =
+      config->getLogGroupByIDShared(log_id);
   if (!log_config) {
     std::chrono::seconds no_trim_until =
         std::chrono::seconds::max() == log_removal_time

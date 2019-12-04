@@ -25,8 +25,7 @@ HealthMonitor::HealthMonitor(folly::Executor& executor,
                              std::chrono::milliseconds max_queue_stall_duration,
                              double max_overloaded_worker_percentage,
                              std::chrono::milliseconds max_stalls_avg,
-                             double max_stalled_worker_percentage,
-                             std::chrono::milliseconds max_loop_stall)
+                             double max_stalled_worker_percentage)
     : executor_(executor),
       sleep_period_(sleep_period),
       state_timer_(
@@ -41,8 +40,7 @@ HealthMonitor::HealthMonitor(folly::Executor& executor,
       max_queue_stall_duration_(max_queue_stall_duration),
       max_overloaded_worker_percentage_(max_overloaded_worker_percentage),
       max_stalls_avg_(max_stalls_avg),
-      max_stalled_worker_percentage_(max_stalled_worker_percentage),
-      max_loop_stall_(max_loop_stall) {
+      max_stalled_worker_percentage_(max_stalled_worker_percentage) {
   internal_info_.num_workers_ = num_workers;
   internal_info_.worker_stalls_.reserve(num_workers);
   internal_info_.worker_stalls_.assign(
@@ -50,8 +48,6 @@ HealthMonitor::HealthMonitor(folly::Executor& executor,
   internal_info_.worker_queue_stalls_.reserve(num_workers);
   internal_info_.worker_queue_stalls_.assign(
       num_workers, {kNumBuckets, kNumPeriods * sleep_period_});
-  internal_info_.connection_limit_reached_ = {
-      kNumBuckets, kNumPeriods * sleep_period_};
 }
 
 void HealthMonitor::startUp() {
@@ -79,7 +75,7 @@ void HealthMonitor::monitorLoop() {
                                 msec_since(last_entry_time_);
                             internal_info_.health_monitor_delay_ =
                                 (loop_entry_delay - sleep_period_.count() >
-                                 max_loop_stall_.count())
+                                 kMaxLoopStall.count())
                                 ? true
                                 : false;
                             processReports();
@@ -98,43 +94,37 @@ void HealthMonitor::updateVariables(TimePoint now) {
   std::for_each(internal_info_.worker_queue_stalls_.begin(),
                 internal_info_.worker_queue_stalls_.end(),
                 [now](TimeSeries& t) { t.update(now); });
-  internal_info_.connection_limit_reached_.update(now);
   state_timer_.positiveFeedback(now); // calc how much time has passed
 }
 
 bool HealthMonitor::isOverloaded(TimePoint now,
                                  std::chrono::milliseconds half_period) {
-  auto num_fd_overloads = internal_info_.connection_limit_reached_.count(
-      now - 2 * sleep_period_, now);
-
-  auto num_overloaded_workers = std::count_if(
-      internal_info_.worker_queue_stalls_.begin(),
-      internal_info_.worker_queue_stalls_.end(),
-      [this, now, half_period](TimeSeries& t) {
-        // Detection of problematic queuing periods is done on the past
-        // 2 HM loops (2*sleep_period_), taking into account time
-        // intervals that are equivalent to sleep_period_ start and end
-        // in neighboring loops.
-        for (int p = 2; p <= 2 * kPeriodRange; ++p) {
-          // Sum of queue stalls during this period.
-          auto period_sum =
-              t.sum(now - p * half_period, now - (p - 2) * half_period);
-          // Number of queue stalls during this period.
-          auto period_count =
-              t.count(now - p * half_period, now - (p - 2) * half_period);
-          if ((period_count > 0) && (period_sum >= max_queue_stall_duration_) &&
-              (period_sum / period_count >= max_queue_stalls_avg_)) {
-            return true;
-          }
-        }
-        return false;
-      });
   // A node is overloaded when more than max_overloaded_worker_percentage_% of
-  // workers have overloaded request queues OR when the connection limit has
-  // been reached.
-  return (num_overloaded_workers >= max_overloaded_worker_percentage_ *
-                  internal_info_.worker_queue_stalls_.capacity() ||
-          num_fd_overloads > 0);
+  // workers have overloaded request queues.
+  return (std::count_if(
+              internal_info_.worker_queue_stalls_.begin(),
+              internal_info_.worker_queue_stalls_.end(),
+              [this, now, half_period](TimeSeries& t) {
+                // Detection of problematic queuing periods is done on the past
+                // 2 HM loops (2*sleep_period_), taking into account time
+                // intervals that are equivalent to sleep_period_ start and end
+                // in neighboring loops.
+                for (int p = 2; p <= 2 * kPeriodRange; ++p) {
+                  // Sum of queue stalls during this period.
+                  auto period_sum =
+                      t.sum(now - p * half_period, now - (p - 2) * half_period);
+                  // Number of queue stalls during this period.
+                  auto period_count = t.count(
+                      now - p * half_period, now - (p - 2) * half_period);
+                  if ((period_count > 0) &&
+                      (period_sum >= max_queue_stall_duration_) &&
+                      (period_sum / period_count >= max_queue_stalls_avg_)) {
+                    return true;
+                  }
+                }
+                return false;
+              }) >= max_overloaded_worker_percentage_ *
+              internal_info_.worker_queue_stalls_.capacity());
 }
 
 HealthMonitor::StallInfo
@@ -259,16 +249,6 @@ void HealthMonitor::reportWorkerStall(int idx,
     if (idx >= 0 && idx < internal_info_.worker_stalls_.capacity()) {
       internal_info_.worker_stalls_[idx].addValue(tp, duration);
     }
-  });
-}
-
-void HealthMonitor::reportConnectionLimitReached() {
-  if (shutdown_.load(std::memory_order_relaxed)) {
-    return;
-  }
-  auto tp = SteadyTimestamp::now();
-  executor_.add([this, tp]() mutable {
-    internal_info_.connection_limit_reached_.addValue(tp, 1);
   });
 }
 

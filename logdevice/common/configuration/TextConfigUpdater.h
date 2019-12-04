@@ -252,19 +252,19 @@ class TextConfigUpdater : public ConfigSource::AsyncCallback,
 
   template <typename... Args>
   int load(Args&&... args) {
-    return impl_.wlock()->load(std::forward<Args>(args)...);
+    return impl_->load(std::forward<Args>(args)...);
   }
   void onAsyncGet(ConfigSource* source,
                   const std::string& path,
                   Status status,
                   ConfigSource::Output config) override {
-    impl_.wlock()->onAsyncGet(source, path, status, std::move(config));
+    impl_->onAsyncGet(source, path, status, std::move(config));
   }
   int fetchFromSource() override {
-    return impl_.wlock()->fetchFromSource();
+    return impl_->fetchFromSource();
   }
   void invalidateConfig() override {
-    impl_.wlock()->invalidateConfig();
+    impl_->invalidateConfig();
   }
   int waitForInitialLoad(std::chrono::milliseconds timeout);
 

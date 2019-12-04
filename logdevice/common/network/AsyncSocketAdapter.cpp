@@ -177,6 +177,7 @@ void AsyncSocketAdapter::fizzHandshakeError(
              addr.describe().c_str(),
              ex.get_exception()->what());
   sslCtx_.reset();
+  transport_.reset();
   // let the read callback propagate the error
 }
 

@@ -41,7 +41,7 @@ Configuration::Configuration(
       logs_config_(std::move(logs_config)),
       zookeeper_config_(std::move(zookeeper_config)) {}
 
-LogsConfig::LogGroupNodePtr
+std::shared_ptr<LogsConfig::LogGroupNode>
 Configuration::getLogGroupByIDShared(logid_t id) const {
   if (MetaDataLog::isMetaDataLog(id)) {
     return server_config_->getMetaDataLogGroup();
@@ -63,7 +63,7 @@ Configuration::getLogGroupInDirectoryByIDRaw(logid_t id) const {
 
 void Configuration::getLogGroupByIDAsync(
     logid_t id,
-    std::function<void(LogsConfig::LogGroupNodePtr)> cb) const {
+    std::function<void(std::shared_ptr<LogsConfig::LogGroupNode>)> cb) const {
   if (MetaDataLog::isMetaDataLog(id)) {
     cb(server_config_->getMetaDataLogGroup());
   } else {

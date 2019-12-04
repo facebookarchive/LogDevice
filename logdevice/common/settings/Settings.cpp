@@ -853,14 +853,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
        SettingsCategory::Monitoring);
 
-  init("health-monitor-max-delay",
-       &health_monitor_max_delay,
-       "50ms",
-       validate_positive<ssize_t>(),
-       "Maximum tolerated delay inbetween health monitor loops.",
-       SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
-       SettingsCategory::Monitoring);
-
   init(
       "health-monitor-max-queue-stalls-avg",
       &health_monitor_max_queue_stalls_avg_ms,
@@ -886,12 +878,10 @@ void Settings::defineSettings(SettingEasyInit& init) {
   init("health-monitor-max-overloaded-worker-percentage",
        &health_monitor_max_overloaded_worker_percentage,
        "0.3",
-       validate_range<double>(0, 1.1),
+       validate_range<double>(0, 1),
        "Maximum tolarable percent of HM detected overloaded workers. If the "
        "percentage of overloaded workers rises above this value the whole node "
-       "transitions into an overloaded state in the HM. Setting this "
-       "percentage to a value greater than 1.0 ensures that overloaded workers "
-       "are excluded from HM decision-making.",
+       "transitions into an overloaded state in the HM.",
        SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
        SettingsCategory::Monitoring);
 
@@ -907,12 +897,10 @@ void Settings::defineSettings(SettingEasyInit& init) {
   init("health-monitor-max-stalled-worker-percentage",
        &health_monitor_max_stalled_worker_percentage,
        "0.2",
-       validate_range<double>(0, 1.1),
+       validate_range<double>(0, 1),
        "Maximum tolarable percent of HM detected stalled workers. If the "
        "percentage of stalled workers rises above this value the whole node "
-       "transitions into an UNDEALTHY state in the HM. Setting this percentage "
-       "to a value greater than 1.0 ensures that stalled workers are excluded "
-       "from HM decision-making.",
+       "transitions into an UNDEALTHY state in the HM.",
        SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
        SettingsCategory::Monitoring);
 
@@ -3497,12 +3485,5 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "tests.",
        CLIENT,
        SettingsCategory::Testing);
-  init("external-loglevel",
-       &external_loglevel,
-       "critical",
-       parse_log_level,
-       "One of the following: critical, error, warning, info, debug, none",
-       SERVER | CLIENT,
-       SettingsCategory::Core);
 }
 }} // namespace facebook::logdevice

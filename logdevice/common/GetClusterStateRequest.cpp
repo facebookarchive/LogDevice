@@ -140,11 +140,9 @@ void GetClusterStateRequest::activateDeferredErrorTimer() {
   deferred_error_timer_->activate(std::chrono::milliseconds(0));
 }
 
-bool GetClusterStateRequest::done(
-    Status status,
-    std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
-    std::vector<node_index_t> boycotted_nodes,
-    std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
+bool GetClusterStateRequest::done(Status status,
+                                  std::vector<uint8_t> nodes_state,
+                                  std::vector<node_index_t> boycotted_nodes) {
   ld_debug("Done getting cluster state from %s with status %s",
            dest_.hasValue() ? dest_.value().toString().c_str() : "<unknown>",
            error_description(status));
@@ -157,10 +155,7 @@ bool GetClusterStateRequest::done(
 
   ld_check(!callback_called_);
   callback_called_ = true;
-  callback_(status,
-            std::move(nodes_state),
-            std::move(boycotted_nodes),
-            std::move(nodes_status));
+  callback_(status, std::move(nodes_state), std::move(boycotted_nodes));
 
   destroyRequest();
   return true;
@@ -223,10 +218,7 @@ bool GetClusterStateRequest::onError(Status status) {
                       1,
                       "Retrieving the state of the cluster failed due to "
                       "feature not being supported on one server. giving up.");
-      return done(status,
-                  std::vector<std::pair<node_index_t, uint16_t>>(),
-                  std::vector<node_index_t>(),
-                  std::vector<std::pair<node_index_t, uint16_t>>());
+      return done(status, std::vector<uint8_t>(), std::vector<node_index_t>());
       break;
     default: {
       // trigger the next wave if all the nodes
@@ -241,10 +233,8 @@ bool GetClusterStateRequest::onError(Status status) {
                           10,
                           "Retrieving the state of the cluster failed. "
                           "giving up.");
-          return done(E::FAILED,
-                      std::vector<std::pair<node_index_t, uint16_t>>(),
-                      std::vector<node_index_t>(),
-                      std::vector<std::pair<node_index_t, uint16_t>>());
+          return done(
+              E::FAILED, std::vector<uint8_t>(), std::vector<node_index_t>());
         } else {
           RATELIMIT_INFO(std::chrono::seconds(1),
                          10,
@@ -278,9 +268,8 @@ bool GetClusterStateRequest::onDeferredError() {
 bool GetClusterStateRequest::onReply(
     const Address& from,
     Status status,
-    std::vector<std::pair<node_index_t, uint16_t>> nodes_state,
-    std::vector<node_index_t> boycotted_nodes,
-    std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
+    std::vector<uint8_t> nodes_state,
+    std::vector<node_index_t> boycotted_nodes) {
   if (status != E::OK) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       5,
@@ -294,10 +283,7 @@ bool GetClusterStateRequest::onReply(
            Sender::describeConnection(from).c_str());
 
   // finish and destroy request
-  return done(E::OK,
-              std::move(nodes_state),
-              std::move(boycotted_nodes),
-              std::move(nodes_status));
+  return done(E::OK, std::move(nodes_state), std::move(boycotted_nodes));
 }
 
 bool GetClusterStateRequest::onWaveTimeout() {
@@ -311,10 +297,8 @@ bool GetClusterStateRequest::onWaveTimeout() {
     // the request has been sent to every node in the cluster and we still
     // time out... giving up.
     WORKER_STAT_INCR(client.get_cluster_state_failed);
-    return done(E::TIMEDOUT,
-                std::vector<std::pair<node_index_t, uint16_t>>(),
-                std::vector<node_index_t>(),
-                std::vector<std::pair<node_index_t, uint16_t>>());
+    return done(
+        E::TIMEDOUT, std::vector<uint8_t>(), std::vector<node_index_t>());
   } else {
     // send another wave.
     RATELIMIT_INFO(std::chrono::seconds(1),
@@ -340,10 +324,7 @@ bool GetClusterStateRequest::onTimeout() {
                   "Retrieving the state of the cluster timed out.");
   WORKER_STAT_INCR(client.get_cluster_state_timeout);
   WORKER_STAT_INCR(client.get_cluster_state_failed);
-  return done(E::TIMEDOUT,
-              std::vector<std::pair<node_index_t, uint16_t>>(),
-              std::vector<node_index_t>(),
-              std::vector<std::pair<node_index_t, uint16_t>>());
+  return done(E::TIMEDOUT, std::vector<uint8_t>(), std::vector<node_index_t>());
 }
 
 const Settings& GetClusterStateRequest::getSettings() const {

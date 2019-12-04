@@ -523,7 +523,7 @@ static bool parseOneLogRange(LocalLogsConfig::DirectoryNode* parent_ns,
     return false;
   }
 
-  const auto log_group_node =
+  std::shared_ptr<LocalLogsConfig::LogGroupNode> log_group_node =
       output.insert(parent_ns, logid_interval, name, attrs.value());
   if (!log_group_node) {
     return false;

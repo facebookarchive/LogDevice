@@ -93,6 +93,7 @@ UpdateableSettings<Settings> settings;
 std::shared_ptr<const ReplicationCheckerSettings> checker_settings;
 RecordLevelError errors_to_ignore;
 std::shared_ptr<UpdateableConfig> config;
+std::shared_ptr<Client> ldclient;
 Processor* processor;
 
 std::mutex mutex;
@@ -1942,11 +1943,10 @@ int main(int argc, const char** argv) {
     errors_to_ignore |= noisy_errors;
   }
   start_time = std::chrono::steady_clock::now();
-  std::shared_ptr<Client> ldclient =
-      ClientFactory()
-          .setClientSettings(std::move(client_settings))
-          .setTimeout(checker_settings->client_timeout)
-          .create(config_path);
+  ldclient = ClientFactory()
+                 .setClientSettings(std::move(client_settings))
+                 .setTimeout(checker_settings->client_timeout)
+                 .create(config_path);
 
   if (!ldclient) {
     ld_error("Could not create client: %s", error_description(err));

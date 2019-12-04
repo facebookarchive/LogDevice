@@ -16,7 +16,7 @@ namespace facebook { namespace logdevice {
  * @file  Specify health status of a node. Determined by various factors and
  * detected on server side.
  */
-enum NodeHealthStatus {
+enum class NodeHealthStatus {
   // Used when health status detecting is disabled, node is dead or for
   // backwards compatibility.
   UNDEFINED,

@@ -183,12 +183,6 @@ class FBCodeBuilder(object):
         '''
         raise NotImplementedError
 
-    def python_deps(self):
-        return [
-            'wheel',
-            'cython==0.28.6',
-        ]
-
     def debian_deps(self):
         return [
             'autoconf-archive',
@@ -258,23 +252,18 @@ class FBCodeBuilder(object):
         return self.step('Install packages for Debian-based OS', actions)
 
     def create_python_venv(self):
-        actions = []
+        action = []
         if self.option("PYTHON_VENV", "OFF") == "ON":
-            actions.append(self.run(ShellQuoted("python3 -m venv {p}").format(
-                p=path_join(self.option('prefix'), "venv"))))
-        return(actions)
+            action = self.run(ShellQuoted("python3 -m venv {p}").format(
+                p=path_join(self.option('prefix'), "venv")))
+        return(action)
 
     def python_venv(self):
-        actions = []
+        action = []
         if self.option("PYTHON_VENV", "OFF") == "ON":
-            actions.append(ShellQuoted("source {p}").format(
-                p=path_join(self.option('prefix'), "venv", "bin", "activate")))
-
-            actions.append(self.run(
-                ShellQuoted("python3 -m pip install {deps}").format(
-                    deps=shell_join(' ', (ShellQuoted(dep) for dep in
-                        self.python_deps())))))
-        return(actions)
+            action = ShellQuoted("source {p}").format(
+                p=path_join(self.option('prefix'), "venv", "bin", "activate"))
+        return(action)
 
     def debian_ccache_setup_steps(self):
         return []  # It's ok to ship a renderer without ccache support.

@@ -345,7 +345,7 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
   // availability.
   bool update_metadata;
   bool do_broadcast;
-  const LogsConfig::LogGroupNodePtr log =
+  const std::shared_ptr<LogsConfig::LogGroupNode> log =
       header.release_type == ReleaseType::PER_EPOCH
       ? w->getConfiguration()->getLogGroupByIDShared(header.rid.logid)
       : nullptr;

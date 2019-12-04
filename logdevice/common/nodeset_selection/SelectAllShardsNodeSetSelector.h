@@ -35,7 +35,8 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
       const Options* options = nullptr /* ignored */
       ) override {
     Result res;
-    const auto logcfg = cfg->getLogGroupByIDShared(log_id);
+    const std::shared_ptr<LogsConfig::LogGroupNode> logcfg =
+        cfg->getLogGroupByIDShared(log_id);
     if (!logcfg) {
       res.decision = Decision::FAILED;
       return res;

@@ -20,7 +20,6 @@ ExternalProject_Add(folly
       -DCMAKE_POSITION_INDEPENDENT_CODE=True
       -DCXX_STD=gnu++17
       -DBUILD_SHARED_LIBS=ON
-      -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
       -DCMAKE_CXX_STANDARD=17
       -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
        ${_folly_cmake_extra_opts}
