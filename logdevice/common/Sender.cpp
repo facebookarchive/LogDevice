@@ -958,7 +958,7 @@ Socket* Sender::initServerSocket(NodeID nid,
     //     create new connection if the existing connection is not SSL but
     //     ssl_on_gossip_port is true or the existing connection is SSL but the
     //     ssl_on_gossip_port is false.
-    const bool should_create_new = !it->second->good() ||
+    const bool should_create_new = it->second->isClosed() ||
         (sock_type != SocketType::GOSSIP && !it->second->isSSL() &&
          !allow_unencrypted && useSSLWith(nid)) ||
         (it->second->isSSL() != Worker::settings().ssl_on_gossip_port &&
