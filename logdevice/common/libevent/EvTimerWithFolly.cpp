@@ -6,9 +6,9 @@
 
 namespace facebook { namespace logdevice {
 int EvTimerWithFolly::setPriority(int pri) {
-  return event_priority_set(getEvent(), pri);
+  return event_priority_set(getEvent()->getEvent(), pri);
 }
 void EvTimerWithFolly::activate(int res, short ncalls) {
-  event_active(getEvent(), res, ncalls);
+  event_active(getEvent()->getEvent(), res, ncalls);
 }
 }} // namespace facebook::logdevice

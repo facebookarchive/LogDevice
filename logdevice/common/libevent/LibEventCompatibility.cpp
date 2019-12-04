@@ -177,7 +177,7 @@ struct event* FOLLY_NULLABLE EvTimer::getEvent() {
     return evtimer_legacy_->getEvent();
   }
   if (evtimer_folly_) {
-    return evtimer_folly_->getEvent();
+    return evtimer_folly_->getEvent()->getEvent();
   }
   ld_check(false);
   return nullptr;
