@@ -91,9 +91,9 @@ jobs:
       - image: ubuntu:bionic
     resource_class: xlarge
     steps:
+      - checkout
       - run: apt-get update
       - run: apt-get install -y ca-certificates git docker.io
-      - checkout
       - run: git reset --hard HEAD
       - run: git submodule sync
       - run: git submodule update --init --recursive
