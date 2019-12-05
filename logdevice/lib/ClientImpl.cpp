@@ -197,8 +197,9 @@ ClientImpl::ClientImpl(std::string cluster_name,
         /*server_roles*/ folly::none,
         std::move(zk_client_factory));
     if (ncm == nullptr) {
-      ld_critical(
-          "Unable to create NodesConfigurationManager during Client creation!");
+      ld_critical("Unable to create NodesConfigurationManager during Client "
+                  "creation for %s!",
+                  cluster_name_.c_str());
       throw ConstructorFailed();
     }
 
@@ -215,8 +216,9 @@ ClientImpl::ClientImpl(std::string cluster_name,
       initial_nc = std::make_shared<const NodesConfiguration>();
     }
     if (!ncm->init(std::move(initial_nc))) {
-      ld_critical(
-          "Processing initial NodesConfiguration did not finish in time.");
+      ld_critical("Processing initial NodesConfiguration did not finish in "
+                  "time for %s.",
+                  cluster_name_.c_str());
       throw ConstructorFailed();
     }
   }
@@ -225,7 +227,8 @@ ClientImpl::ClientImpl(std::string cluster_name,
           *processor_, false /* is_writable */)) {
     err = E::INVALID_CONFIG;
     ld_critical("Internal LogsConfig Manager could not be started in Client. "
-                "LogsConfig will not be available!");
+                "LogsConfig will not be available for %s!",
+                cluster_name_.c_str());
     throw ConstructorFailed();
   }
 
@@ -277,15 +280,17 @@ ClientImpl::ClientImpl(std::string cluster_name,
     if (rv != 0) {
       STAT_INCR(stats_.get(), client.logsconfig_start_timeout);
       ld_critical("Timeout waiting on LogsConfig to become fully loaded "
-                  "after %.3f seconds",
-                  timeout_for_logconfig.count() / 1e3);
+                  "after %.3f seconds for %s",
+                  timeout_for_logconfig.count() / 1e3,
+                  cluster_name_.c_str());
       err = E::TIMEDOUT;
       throw ConstructorFailed();
     }
   } else {
     ld_info("Internal LogsConfig Manager is DISABLED.");
     if (!config_->getLogsConfig()) {
-      ld_critical("Could not load the LogsConfig from the config file!");
+      ld_critical("Could not load the LogsConfig from the config file on %s!",
+                  cluster_name_.c_str());
       err = E::INVALID_CONFIG;
       throw ConstructorFailed();
     }
@@ -1428,7 +1433,9 @@ bool ClientImpl::syncLogsConfigVersion(uint64_t version) noexcept {
   int rv = sem.timedwait(
       settings_->getSettings()->logsconfig_timeout.value_or(timeout_));
   if (rv != 0) {
-    ld_critical("Timeout waiting on LogsConfig to reach version %lu", version);
+    ld_critical("Timeout waiting on LogsConfig to reach version %lu on %s",
+                version,
+                cluster_name_.c_str());
     return false;
   }
   return true;
