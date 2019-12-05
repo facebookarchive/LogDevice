@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 
 # Copyright (c) Facebook, Inc. and its affiliates.
+
+
+import os
+
 # All rights reserved.
 #
+from distutils.file_util import copy_file
+from pathlib import Path
+
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
-from setuptools import find_packages, setup, Extension
-from distutils.file_util import copy_file
+from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext as _build_ext
-from pathlib import Path
-import os
 
 
 class copy_cmake_built_libs_build_ext(_build_ext):
@@ -18,10 +22,7 @@ class copy_cmake_built_libs_build_ext(_build_ext):
         # Creates the parent directory
         target_path.parent.mkdir(parents=True, exist_ok=True)
         copy_file(
-            ext.sources[0],
-            str(target_path),
-            verbose=self.verbose,
-            dry_run=self.dry_run,
+            ext.sources[0], str(target_path), verbose=self.verbose, dry_run=self.dry_run
         )
 
 
@@ -37,7 +38,7 @@ def generate_extensions(directory, include_base_dir=True):
         package_name = parent_path.replace(os.path.sep, ".")
         mod_name = "{}.{}".format(package_name, path.name[:-3])
         print("Module {} from {}".format(mod_name, str(path)))
-        exts.append(Extension(mod_name, sources=[str(path)]),)
+        exts.append(Extension(mod_name, sources=[str(path)]))
     return exts
 
 
@@ -62,7 +63,7 @@ setup(
     ext_modules=generate_extensions("gen-py3", include_base_dir=False)
     + generate_extensions("logdevice", include_base_dir=True),
     entry_points={"console_scripts": ["ldshell = ldshell.main:main"]},
-    install_requires=["python-nubia"],
+    install_requires=["python-nubia", "tabulate", "humanize"],
     python_requires=">=3.6",
     cmdclass={"build_ext": copy_cmake_built_libs_build_ext},
     classifiers=(
