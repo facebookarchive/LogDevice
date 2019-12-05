@@ -10,9 +10,9 @@ jobs:
       - image: ubuntu:bionic
     resource_class: xlarge
     steps:
+      - checkout
       - run: apt-get update
       - run: apt-get install -y ca-certificates git
-      - checkout
       - run: apt-get install -y doxygen $(cat logdevice/build_tools/ubuntu.deps)
       - run: git reset --hard HEAD
       - run: git submodule sync
@@ -62,9 +62,9 @@ jobs:
       - image: ubuntu:bionic
     resource_class: xlarge
     steps:
+      - checkout
       - run: apt-get update
       - run: apt-get install -y ca-certificates doxygen git xsltproc $(cat logdevice/build_tools/ubuntu.deps)
-      - checkout
       - run: git reset --hard HEAD
       - attach_workspace:
           at: .
