@@ -303,6 +303,23 @@ void AdminAPIHandler::getLogGroupCustomCounters(
   }
 }
 
+void AdminAPIHandler::dumpServerConfigJson(std::string& response) {
+  // We capture the shared_ptr here to ensure the lifetime of its components
+  // lives long enough to finish this request.
+  auto config = processor_->config_->get();
+  ld_check(config);
+  ld_check(config->serverConfig());
+  ld_check(config->zookeeperConfig());
+  response = config->serverConfig()->toString(
+      /* with_logs = */ nullptr,
+      config->zookeeperConfig().get(),
+      /* compress = */ false);
+}
+
+void AdminAPIHandler::getClusterName(std::string& response) {
+  response = processor_->config_->getServerConfig()->getClusterName();
+}
+
 void AdminAPIHandler::getLogGroupThroughput(
     thrift::LogGroupThroughputResponse& response,
     std::unique_ptr<thrift::LogGroupThroughputRequest> request) {

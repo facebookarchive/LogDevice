@@ -72,6 +72,9 @@ class AdminAPIHandler : public facebook::fb303::FacebookBase2,
       thrift::LogGroupCustomCountersResponse& response,
       std::unique_ptr<thrift::LogGroupCustomCountersRequest> request) override;
 
+  void dumpServerConfigJson(std::string& response) override;
+  void getClusterName(std::string& response) override;
+
  private:
   // When was the admin server started.
   std::chrono::steady_clock::time_point start_time_;
