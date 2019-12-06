@@ -10,6 +10,7 @@
 #include <chrono>
 #include <string>
 
+#include <fizz/client/FizzClientContext.h>
 #include <fizz/protocol/DefaultCertificateVerifier.h>
 #include <fizz/server/FizzServerContext.h>
 #include <folly/FileUtil.h>
@@ -112,43 +113,19 @@ class SSLFetcher {
    */
 
   std::shared_ptr<const fizz::server::FizzServerContext>
-  getFizzServerContext(bool loadCert) {
+  getFizzServerContext() {
     if (!fizz_srv_context_ ||
-        requireContextUpdate(loadCert, true /* ssl_accepting */)) {
+        requireContextUpdate(true /* loadCert */, true /* ssl_accepting */)) {
       try {
         auto context = std::make_shared<fizz::server::FizzServerContext>();
-        // Initialize CA store first
-        folly::ssl::X509StoreUniquePtr store(X509_STORE_new());
-        if (!store) {
-          throw std::runtime_error("Failed to create X509 store.");
-        }
-        if (X509_STORE_load_locations(
-                store.get(), ca_path_.c_str(), nullptr /* directory */) == 0) {
-          throw std::runtime_error(folly::SSLContext::getErrors());
-        }
-
-        context->setClientCertVerifier(
-            std::make_shared<const fizz::DefaultCertificateVerifier>(
-                fizz::VerificationContext::Server, std::move(store)));
-
-        if (loadCert) {
-          std::string cert_data;
-          if (!folly::readFile(cert_path_.c_str(), cert_data)) {
-            throw std::runtime_error("failed to load certificates");
-          }
-
-          std::string key_data;
-          if (!folly::readFile(key_path_.c_str(), key_data)) {
-            throw std::runtime_error("failed to load certificates");
-          }
-
-          auto cert = fizz::CertUtils::makeSelfCert(cert_data, key_data);
-          auto cert_mgr = std::make_unique<fizz::server::CertManager>();
-          cert_mgr->addCert(std::move(cert), true);
-          context->setCertManager(std::move(cert_mgr));
-          context->setVersionFallbackEnabled(true);
-        }
         // request client certificate, but don't force to use it
+        auto verifier = createCertVerifier<fizz::DefaultCertificateVerifier>(
+            fizz::VerificationContext::Server);
+        context->setClientCertVerifier(std::move(verifier));
+        auto cert_mgr = std::make_unique<fizz::server::CertManager>();
+        cert_mgr->addCert(createSelfCert(), true);
+        context->setCertManager(std::move(cert_mgr));
+        context->setVersionFallbackEnabled(true);
         context->setClientAuthMode(fizz::server::ClientAuthMode::Optional);
 
         fizz_srv_context_ = std::move(context);
@@ -156,10 +133,33 @@ class SSLFetcher {
       } catch (const std::exception& ex) {
         ld_error("Failed to create SSL context, ex: %s", ex.what());
         fizz_srv_context_.reset();
-        return nullptr;
       }
     }
     return fizz_srv_context_;
+  }
+
+  std::pair<std::shared_ptr<const fizz::client::FizzClientContext>,
+            std::shared_ptr<const fizz::CertificateVerifier>>
+  getFizzClientContext(bool loadCert) {
+    if (!fizz_cli_context_ ||
+        requireContextUpdate(loadCert, false /* ssl_accepting */)) {
+      try {
+        auto context = std::make_shared<fizz::client::FizzClientContext>();
+        fizz_cli_verifier_ =
+            createCertVerifier<fizz::DefaultCertificateVerifier>(
+                fizz::VerificationContext::Client);
+        if (loadCert) {
+          context->setClientCertificate(createSelfCert());
+        }
+        fizz_cli_context_ = std::move(context);
+
+      } catch (const std::exception& ex) {
+        ld_error("Failed to create client SSL context, ex: %s", ex.what());
+        fizz_cli_context_.reset();
+        fizz_cli_verifier_.reset();
+      }
+    }
+    return {fizz_cli_context_, fizz_cli_verifier_};
   }
 
  private:
@@ -168,9 +168,42 @@ class SSLFetcher {
   const std::string ca_path_;
   const std::chrono::seconds refresh_interval_;
 
+  template <class CertVerifierT>
+  std::shared_ptr<const CertVerifierT>
+  createCertVerifier(fizz::VerificationContext verCtx) const {
+    folly::ssl::X509StoreUniquePtr store(X509_STORE_new());
+    if (!store) {
+      throw std::runtime_error("Failed to create X509 store.");
+    }
+    if (X509_STORE_load_locations(
+            store.get(), ca_path_.c_str(), nullptr /* directory */) == 0) {
+      throw std::runtime_error(folly::SSLContext::getErrors());
+    }
+    return std::make_shared<const CertVerifierT>(verCtx, std::move(store));
+  }
+
+  std::unique_ptr<fizz::SelfCert> createSelfCert() const {
+    std::string cert_data;
+    if (!folly::readFile(cert_path_.c_str(), cert_data)) {
+      throw std::runtime_error("failed to load certificates");
+    }
+
+    if (cert_path_ == key_path_) {
+      return fizz::CertUtils::makeSelfCert(cert_data, cert_data);
+    }
+
+    std::string key_data;
+    if (!folly::readFile(key_path_.c_str(), key_data)) {
+      throw std::runtime_error("failed to load certificates");
+    }
+    return fizz::CertUtils::makeSelfCert(cert_data, key_data);
+  }
+
   std::shared_ptr<folly::SSLContext> context_;
-  std::shared_ptr<const fizz::server::FizzServerContext> fizz_srv_context_;
   std::chrono::time_point<std::chrono::steady_clock> last_loaded_;
+  std::shared_ptr<const fizz::client::FizzClientContext> fizz_cli_context_;
+  std::shared_ptr<const fizz::CertificateVerifier> fizz_cli_verifier_;
+  std::shared_ptr<const fizz::server::FizzServerContext> fizz_srv_context_;
   bool last_accepting_state_ = false;
   bool last_load_cert_ = false;
 

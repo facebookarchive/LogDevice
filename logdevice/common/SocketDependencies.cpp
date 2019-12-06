@@ -100,8 +100,7 @@ SocketDependencies::getFizzServerContext() const {
   // them. If clients specify that they want to include their certificate, then
   // the server will also authenticate the client certificates.
 
-  return Worker::onThisThread()->sslFetcher().getFizzServerContext(
-      true /* loadCert */);
+  return Worker::onThisThread()->sslFetcher().getFizzServerContext();
 }
 
 bool SocketDependencies::shuttingDown() const {

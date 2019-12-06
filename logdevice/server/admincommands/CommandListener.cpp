@@ -84,8 +84,7 @@ class AdminCommandConnection::ReadEventHandler : public folly::EventHandler {
     if (byte == kSSLHandshakeRecordTag) {
       ld_debug("TLS detected, trying TLS 1.3 for %s",
                connection_.addr_.describe().c_str());
-      auto ctx = connection_.listener_.ssl_fetcher_.getFizzServerContext(
-          true /* loadCert */);
+      auto ctx = connection_.listener_.ssl_fetcher_.getFizzServerContext();
       if (!ctx) {
         ld_error("no SSL context, dropping connection with %s",
                  connection_.addr_.describe().c_str());
