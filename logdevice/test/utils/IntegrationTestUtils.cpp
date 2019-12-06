@@ -89,7 +89,7 @@ std::string defaultLogdevicedPath() {
 std::string defaultMarkdownLDQueryPath() {
   return "bin/markdown-ldquery";
 }
-static const char* CHECKER_PATH = "bin/replication_checker_nofb";
+static const char* CHECKER_PATH = "bin/ld-replication-checker";
 #endif
 
 namespace fs = boost::filesystem;
