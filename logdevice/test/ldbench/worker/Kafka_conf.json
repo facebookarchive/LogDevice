@@ -1,0 +1,17 @@
+{
+  "global-config": {
+    "bootstrap.servers":"logdevicef397.prn3.facebook.com:9092",
+    "log.connection.close":false,
+    "socket.keepalive.enable":true,
+    "queue.buffering.max.kbytes":2097151,
+    "batch.num.messages":100000,
+    "queue.buffering.max.ms":60,
+    "delivery.timeout.ms":0,
+    "request.timeout.ms":60000,
+    "socket.timeout.ms":60000
+  },
+  "topic-config": {
+    "acks":-1
+  },
+  "poll-thread-count":1
+}

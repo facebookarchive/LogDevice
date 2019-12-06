@@ -1,0 +1,118 @@
+{
+  "environment": {
+    "benchmark":"read,write",
+    "hosts":[
+      "hostname0",
+      "hostname1",
+      "hostname2",
+      "hostname3",
+      "hostname4",
+      "hostname5",
+      "hostname6",
+      "hostname7",
+      "hostname8",
+      "hostname9",
+      "hostname10",
+      "hostname11",
+      "hostname12",
+      "hostname13",
+      "hostname14",
+      "hostname15",
+      "hostname16",
+      "hostname17",
+      "hostname18",
+      "hostname19",
+      "hostname20",
+      "hostname21",
+      "hostname22",
+      "hostname23",
+      "hostname24"
+    ],
+    "write-host-count": 25,
+    "read-host-count": 25,
+    "backfill-host-count":25,
+    "stop-all-runs":false,
+    "update-worker":true,
+    "update-config":true,
+    "clean-old-results":true,
+    "file-copy-instruction":"tw scp",
+    "worker-binary-local-path": "/local/path/to/worker",
+    "worker-binary-remote-path": "/remote/path/to/worker",
+    "worker-config-local-path":"/logdevice/test/ldbench/end2end_test/mpmc_example_config.json",
+    "worker-config-remote-path":"/ldbench-logs/mpmc_example_config.json",
+    "worker-execution-instruction":"ssh",
+    "test-duration-second": 60
+  },
+  "required-worker-config": {
+    "common-config": {
+      "sys-name":"logdevice",
+      "config-file": "file:path/to/logdevice.conf",
+      "log-range-name":"log_range_name",
+      "stats-interval-second": 5,
+      "event-sample-ratio": 0.001,
+      "publish-dir": "/ldbench-logs"
+    },
+    "write-config": {
+      "worker-start-delay-second": 1,
+      "use-buffered-writer": true,
+      "write-bytes-per-seconds": "60M",
+      "write-bytes-increase-type": "constant",
+      "write-bytes-increase-step": "8M",
+      "write-bytes-increase-factor": 1.1,
+      "write-bytes-increase-interval": "60s",
+      "payload-size": 140
+    },
+    "read-config": {
+      "fanout": 1
+    },
+    "backfill-config":{
+      "worker-start-delay-second": 40,
+      "fanout":1,
+      "restart-backlog-depth":"48h"
+    }
+  },
+  "extra-worker-config": {
+    "write-config": {
+      "loglevel":"info",
+      "log-hash-salt":1,
+      "log-hash-range":"0%:100%",
+      "max-appends-in-flight":"15000",
+      "payload-entropy":0.50,
+      "buffered-writer-time-trigger":"13ms",
+      "buffered-writer-size-trigger":270000,
+      "buffered-writer-compression":"none",
+      "log-write-bytes-per-sec-distribution":"constant"
+    },
+    "read-config": {},
+    "backfill-config":{}
+  },
+  "collection-config": {
+    "collect-data-only":false,
+    "plot-figure-only":true,
+    "figure-prefix": "logdevice_demo_backfill",
+    "collection-dir": "/path/to/results/0806_ld_backfill",
+    "latency-percentile":0.99,
+    "end2end-latency-and-throughput-figure": {
+      "width":20,
+      "height":10,
+      "latency-boxplot-count":50,
+      "y-logscale":true,
+      "min-latency-ms":10,
+      "max-latency-ms":1000,
+      "min-timestamp-second":30,
+      "max-timestamp-second":120,
+      "throughput-type":"mbs"
+    },
+    "backfill-and-end2end-latency-figure": {
+      "width":20,
+      "height":10,
+      "latency-boxplot-count":50,
+      "y-logscale":true,
+      "min-latency-ms":1,
+      "max-latency-ms":100000,
+      "min-timestamp-second":0,
+      "max-timestamp-second":100,
+      "throughput-type":"mbs"
+    }
+  }
+}
