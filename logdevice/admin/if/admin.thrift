@@ -273,4 +273,16 @@ service AdminAPI extends fb303.FacebookService {
   admin_commands.AdminCommandResponse executeAdminCommand(
     1: admin_commands.AdminCommandRequest request) throws
     (1: exceptions.NotSupported notsupported) (cpp.coroutine);
+
+
+  /**
+   * Returns the configured cluster name.
+   */
+  string getClusterName();
+
+  /**
+   * Generates a JSON dump of the loaded configuration file on the server. This
+   * will not include the logs config, only server config.
+   */
+  string dumpServerConfigJson();
 }
