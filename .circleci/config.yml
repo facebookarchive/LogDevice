@@ -102,7 +102,7 @@ jobs:
       - run:
           name: Assemble Docker Image (Ubuntu)
           command: |
-            docker build -t facebookincubator/logdevice:latest --build-arg PARALLEL=5 -f docker/Dockerfile.ubuntu .
+            docker build -t facebookincubator/logdevice:latest --build-arg PARALLEL=4 -f docker/Dockerfile.ubuntu .
       - run:
           name: Push Image to DockerHub
           command: |
