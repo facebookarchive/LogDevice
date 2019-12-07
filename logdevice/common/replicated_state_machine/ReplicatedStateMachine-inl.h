@@ -320,7 +320,7 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
         RSMSnapshotHeader::CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH) {
       last_snapshot_last_read_ptr_ = header.delta_log_read_ptr;
     } else {
-      last_snapshot_last_read_ptr_ = LSN_OLDEST;
+      last_snapshot_last_read_ptr_ = LSN_INVALID;
     }
     delta_log_byte_offset_ = header.byte_offset;
     delta_log_offset_ = header.offset;
@@ -464,6 +464,9 @@ void ReplicatedStateMachine<T, D>::onBaseSnapshotRetrieved() {
   activateGracePeriodForSnapshotting();
   gotInitialState(*data_);
   sync_state_ = SyncState::SYNC_DELTAS;
+  if (delta_read_ptr_ == LSN_INVALID) {
+    delta_read_ptr_ = last_snapshot_last_read_ptr_;
+  }
   getDeltaLogTailLSN();
 }
 
@@ -510,18 +513,10 @@ void ReplicatedStateMachine<T, D>::onGotDeltaLogTailLSN(Status st, lsn_t lsn) {
 
   delta_sync_ = lsn;
 
-  const lsn_t start_lsn = std::max(version_ + 1, last_snapshot_last_read_ptr_);
+  const lsn_t start_lsn = std::max(version_, last_snapshot_last_read_ptr_) + 1;
   // If stop_at_tail_ is true, we don't care about reading deltas past the tail
   // lsn.
   const lsn_t until_lsn = stop_at_tail_ ? delta_sync_ : LSN_MAX;
-
-  if (version_ >= delta_sync_ || delta_read_ptr_ >= delta_sync_ ||
-      last_snapshot_last_read_ptr_ >= delta_sync_) {
-    // The last snapshot we got already accounts for all the deltas. Or we've
-    // already read up to the tail.
-    // We can notify subscribers of the initial state immediately.
-    onReachedDeltaLogTailLSN();
-  }
 
   // It is possible to have start_lsn > until_lsn if stop_at_tail_ was used.
   // also it is possible that the readstream was already created
@@ -537,6 +532,13 @@ void ReplicatedStateMachine<T, D>::onGotDeltaLogTailLSN(Status st, lsn_t lsn) {
         [this](bool is_healthy) {
           onDeltaLogReadStreamHealthChange(is_healthy);
         });
+  }
+
+  if (version_ >= delta_sync_ || delta_read_ptr_ >= delta_sync_) {
+    // The last snapshot we got already accounts for all the deltas. Or we've
+    // already read up to the tail.
+    // We can notify subscribers of the initial state immediately.
+    onReachedDeltaLogTailLSN();
   }
 }
 
@@ -1305,6 +1307,17 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
       lsn_to_string(version_).c_str(),
       include_read_ptr ? lsn_to_string(delta_read_ptr_).c_str() : "disabled",
       snapshot_compression_ ? "enabled" : "disabled");
+
+  if (include_read_ptr && delta_read_ptr_ < version_) {
+    rsm_critical(rsm_type_,
+                 "RSM is in inconsistent state: delta_read_ptr_ = %s while "
+                 "version_ = %s. We cannot proceed with taking snapshot",
+                 lsn_to_string(delta_read_ptr_).c_str(),
+                 lsn_to_string(version_).c_str());
+    cb_or_noop(E::FAILED);
+    return;
+  }
+
   std::string payload =
       createSnapshotPayload(*data_, version_, include_read_ptr);
 

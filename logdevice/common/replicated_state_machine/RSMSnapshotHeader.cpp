@@ -93,12 +93,15 @@ bool RSMSnapshotHeader::operator==(const RSMSnapshotHeader& out) const {
 
 std::string RSMSnapshotHeader::describe() const {
   return folly::format("RSMSnapshotHeader[format_version={}, "
-                       "flags={}, byte_offset={}, offset={}, base_version={}]",
+                       "flags={}, byte_offset={}, offset={}, base_version={}, "
+                       "length={}, delta_log_read_ptr={}]",
                        format_version,
                        flags,
                        byte_offset,
                        offset,
-                       lsn_to_string(base_version).c_str())
+                       lsn_to_string(base_version).c_str(),
+                       length,
+                       lsn_to_string(delta_log_read_ptr).c_str())
       .str();
 }
 

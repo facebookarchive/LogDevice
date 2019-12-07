@@ -722,7 +722,7 @@ class ReplicatedStateMachine {
 
   // Delta log read pointer as marked by the last snapshot (this allows us to
   // skip reading deltas already applied and skip gaps).
-  lsn_t last_snapshot_last_read_ptr_{LSN_OLDEST};
+  lsn_t last_snapshot_last_read_ptr_{LSN_INVALID};
 
   // Current state of the process of syncing our local version to the last
   // version prior to this state machine starting.
