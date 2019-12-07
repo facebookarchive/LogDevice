@@ -48,7 +48,6 @@ ENV LANG C.UTF-8
 # Copy LogDevice user tools
 COPY --from=builder /build/bin/ld* \
                   /build/bin/logdeviced \
-                  /build/bin/replication_checker \
                   /usr/local/bin/
 
 # Python tools, ldshell, ldquery and libs
