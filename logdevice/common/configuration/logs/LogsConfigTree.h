@@ -60,81 +60,6 @@ using LogMap = boost::icl::interval_map<
     boost::icl::inter_section,
     boost::icl::right_open_interval<logid_t::raw_type, std::less>>;
 
-/**
- * Keeps a collection of LogAttributes::CommonValues, so it can be reused,
- * with `deduplicate` call across LogAttributes objects.
- * NOTE: Not thread safe.
- */
-class LogsConfigTree;
-using LogGroupNodePtr = std::shared_ptr<const LogGroupNode>;
-
-class CommonValuesRegistry final {
- public:
-  /**
-   * If there's already a CommonValues objects in the registry with the same
-   * values assign its pointer to the given LogAttributes instance.
-   * If not, add it to the registry so it can be used later.
-   * The CommonValues content stays the same in both cases.
-   *
-   * @attrs object for which its CommonValues instance is to be deduplicated
-   */
-  void deduplicate(LogAttributes& attrs) {
-    const auto& ptr = attrs.getCommonValuesPtr();
-    const auto& stored = findOrAdd(ptr);
-    if (ptr != stored) {
-      attrs.changeCommonValuesPtr(stored);
-    }
-  }
-
-  /**
-   * Version for const LogAttributes.
-   * @return updated copy of passed object.
-   */
-  folly::Optional<LogAttributes> deduplicate(const LogAttributes& attrs) {
-    const auto& ptr = attrs.getCommonValuesPtr();
-    const auto& stored = findOrAdd(ptr);
-    if (ptr != stored) {
-      return LogAttributes(stored, attrs.extras());
-    }
-    return folly::none;
-  }
-
-  void clear() {
-    registry_.clear();
-  }
-
-  size_t size() const {
-    return registry_.size();
-  }
-
- private:
-  struct Less {
-    bool operator()(const LogAttributes::CommonValuesPtr& l,
-                    const LogAttributes::CommonValuesPtr& r) const {
-      return *l < *r;
-    }
-  };
-
-  LogAttributes::CommonValuesPtr
-  findOrAdd(const LogAttributes::CommonValuesPtr& ptr) {
-    auto it = registry_.find(ptr);
-    if (it == registry_.end()) {
-      it = registry_.emplace(ptr).first;
-    }
-    return *it;
-  }
-
-  // Why we use an associative container instead of a hash based:
-  // Computing a hash over all CommonValues attributes is cumbersome,
-  // as these are nontrivial types.
-  // Additionally, most of the time hashes would collide (b/c duplicates)
-  // and hash container would fall back to operator== anyway.
-  // We use std::set instead and rely on operator<. The number of elements
-  // in the map is expected to be small (up to hundreds),
-  // so neither performace, nor memory overhead should be a problem.
-  std::set<LogAttributes::CommonValuesPtr, Less> registry_;
-};
-
 enum class NodeType { DIRECTORY = 0, LOG_GROUP };
 
 /*
@@ -168,10 +93,6 @@ class LogsConfigTreeNode {
     return ReplicationProperty::fromLogAttributes(attrs_);
   }
 
-  void deduplicateAttributes(CommonValuesRegistry& registry) {
-    registry.deduplicate(attrs_);
-  }
-
   virtual ~LogsConfigTreeNode() {}
 
  protected:
@@ -190,6 +111,8 @@ class LogsConfigTreeNode {
 using DirectoryMap =
     folly::F14FastMap<std::string, std::unique_ptr<DirectoryNode>>;
 
+using LogGroupNodePtr = std::shared_ptr<const LogGroupNode>;
+
 using LogGroupMap = folly::F14FastMap<std::string, LogGroupNodePtr>;
 /*
  * A node in the tree of logs config representing a directory (aka. Namespace)
@@ -200,8 +123,6 @@ class DirectoryNode : public LogsConfigTreeNode {
   friend class RenameDelta;
   template <CodecType T>
   friend class LogsConfigCodec;
-  using GroupChangeCb =
-      std::function<void(const DirectoryNode*, const LogGroupNodePtr&)>;
 
   explicit DirectoryNode(const std::string& delimiter)
       : delimiter_(delimiter) {}
@@ -352,12 +273,6 @@ class DirectoryNode : public LogsConfigTreeNode {
   void setChildren(DirectoryMap&& dirs) {
     children_ = std::move(dirs);
   }
-
-  /**
-   * Recursively deduplicates LogAttributes.
-   * Operates on both DirectoryNode's and LogGroupNode's.
-   */
-  void deduplicateRecursively(CommonValuesRegistry&, const GroupChangeCb&);
 
  private:
   DirectoryNode* parent_;
@@ -799,30 +714,11 @@ class LogsConfigTree {
   std::pair<std::string, std::string>
   splitParentPath(const std::string& path) const;
 
-  /**
-   * Recursively deduplicates LogAttributes of the tree nodes.
-   * Operates on both DirectoryNode's and LogGroupNode's.
-   */
-  void deduplicateAttributes() {
-    if (root_) {
-      auto group_changed = [this](const DirectoryNode* parent,
-                                  LogGroupNodePtr group) {
-        updateLookupIndex(parent, group, true /* delete_old */);
-      };
-      root_->deduplicateRecursively(registry_, group_changed);
-    }
-  }
-
-  size_t registrySize() const {
-    return registry_.size();
-  }
-
  protected:
   LogsConfigTree& copy(const LogsConfigTree& other) {
     delimiter_ = other.delimiter_;
     root_ = std::make_unique<DirectoryNode>(*other.root_);
     version_ = other.version_;
-    registry_ = other.registry_;
     // We cannot copy the index because the Parent pointer in
     // LogGroupInDirectory will be pointing to the old tree.
     rebuildIndex();
@@ -835,7 +731,6 @@ class LogsConfigTree {
   LogGroupNodePtr addLogGroup(DirectoryNode* parent,
                               const LogGroupNode& log_group,
                               std::string& failure_reason);
-
   // This refreshes the internal lookup index with the supplied log_group
   // The lookup index is used to locate a LogGroup object using a logid_t
   void updateLookupIndex(const DirectoryNode* parent,
@@ -898,7 +793,6 @@ class LogsConfigTree {
   // Max version seen, this is meant to be used if this tree is not backed by
   // LogsConfigManager.
   static std::atomic<uint64_t> max_version;
-  CommonValuesRegistry registry_;
 };
 
 // A flat structure that contains a Log group and a denormalized parent name
