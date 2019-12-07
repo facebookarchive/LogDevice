@@ -388,23 +388,6 @@ void DirectoryNode::setChild(const std::string& name,
   children_[name] = std::move(child);
 }
 
-void DirectoryNode::deduplicateRecursively(CommonValuesRegistry& registry,
-                                           const GroupChangeCb& callback) {
-  LogsConfigTreeNode::deduplicateAttributes(registry);
-  for (auto& child : children_) {
-    child.second->deduplicateRecursively(registry, callback);
-  }
-
-  for (auto& item : logs_) {
-    auto& log = item.second;
-    if (auto new_attrs = registry.deduplicate(log->attrs())) {
-      log = std::make_shared<const LogGroupNode>(
-          log->name(), *new_attrs, log->range());
-      callback(parent_, log);
-    }
-  }
-}
-
 LogGroupNodePtr DirectoryNode::addLogGroup(LogGroupNodePtr group,
                                            bool overwrite,
                                            std::string& failure_reason) {
