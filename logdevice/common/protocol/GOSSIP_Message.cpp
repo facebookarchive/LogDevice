@@ -28,7 +28,9 @@ GOSSIP_Message::GOSSIP_Message(NodeID this_node,
                                boycott_list_t boycott_list,
                                boycott_durations_list_t boycott_durations,
                                GOSSIP_Message::GOSSIP_flags_t flags,
-                               uint64_t msg_id)
+                               uint64_t msg_id,
+                               GOSSIP_Message::rsmtype_list_t rsm_types,
+                               GOSSIP_Message::versions_node_list_t versions)
     : Message(MessageType::GOSSIP, TrafficClass::FAILURE_DETECTOR),
       node_list_(std::move(node_list)),
       gossip_node_(this_node),
@@ -38,7 +40,9 @@ GOSSIP_Message::GOSSIP_Message(NodeID this_node,
       num_boycotts_(boycott_list.size()),
       boycott_list_(std::move(boycott_list)),
       boycott_durations_list_(std::move(boycott_durations)),
-      msg_id_(msg_id) {}
+      msg_id_(msg_id),
+      rsm_types_(rsm_types),
+      versions_(versions) {}
 
 Message::Disposition GOSSIP_Message::onReceived(const Address& /*from*/) {
   // Receipt handler lives in server/GOSSIP_onReceived.cpp; this should
@@ -68,6 +72,9 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
     writer.writeVector(legacy_node_list);
   } else {
     writer.writeVector(node_list_);
+    if (flags & HAS_VERSIONS) {
+      writeVersions(writer);
+    }
   }
 }
 
@@ -99,6 +106,13 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
                    });
   } else {
     reader.readVector(&msg->node_list_, num_nodes);
+    if (msg->flags_ & HAS_VERSIONS ||
+        msg->flags_ & HAS_DURABLE_SNAPSHOT_VERSIONS) {
+      // For future compatibility deserialize messages with durable flag.
+      // It will be discarded in this commit of the code, but will be supported
+      // in future iteration(once Local snapshot store is implemented)
+      msg->readVersions(reader, num_nodes);
+    }
   }
   return reader.resultMsg(std::move(msg));
 }
@@ -153,6 +167,67 @@ void GOSSIP_Message::readBoycottDurations(ProtocolReader& reader) {
   boycott_durations_list_.resize(list_size);
   for (auto& d : boycott_durations_list_) {
     d.deserialize(reader);
+  }
+}
+
+void GOSSIP_Message::writeVersions(ProtocolWriter& writer) const {
+  if (writer.proto() <
+      Compatibility::ProtocolVersion::INCLUDE_VERSIONS_IN_GOSSIP) {
+    return;
+  }
+  ld_check(rsm_types_.size() <= UINT8_MAX);
+
+  uint8_t num_rsms_ = rsm_types_.size();
+  writer.write(num_rsms_);
+  for (const auto& rsm_type : rsm_types_) {
+    writer.write(rsm_type);
+  }
+
+  for (const auto& node : versions_) {
+    writer.write(node.node_id_);
+    ld_check(node.rsm_versions_.size() == num_rsms_);
+    for (const auto& rsm_ver : node.rsm_versions_) {
+      writer.write(rsm_ver);
+    }
+
+    // Write NCM information
+    for (size_t i = 0; i < node.ncm_versions_.size(); ++i) {
+      writer.write(node.ncm_versions_[i]);
+    }
+  }
+}
+
+void GOSSIP_Message::readVersions(ProtocolReader& reader, uint16_t num_nodes) {
+  if (reader.proto() <
+      Compatibility::ProtocolVersion::INCLUDE_VERSIONS_IN_GOSSIP) {
+    return;
+  }
+
+  uint8_t num_rsms_;
+  reader.read(&num_rsms_);
+  if (num_rsms_ == 0) {
+    return;
+  }
+
+  rsm_types_.resize(num_rsms_);
+  for (uint8_t i = 0; i < num_rsms_; ++i) {
+    reader.read(&rsm_types_[i]);
+  }
+
+  versions_.resize(num_nodes);
+  for (size_t i = 0; i < num_nodes; ++i) {
+    reader.read(&versions_[i].node_id_);
+
+    // Read RSM information
+    versions_[i].rsm_versions_.resize(num_rsms_);
+    for (uint8_t j = 0; j < num_rsms_; ++j) {
+      reader.read(&versions_[i].rsm_versions_[j]);
+    }
+
+    // Read NCM information
+    for (size_t k = 0; k < versions_[i].ncm_versions_.size(); ++k) {
+      reader.read(&versions_[i].ncm_versions_[k]);
+    }
   }
 }
 

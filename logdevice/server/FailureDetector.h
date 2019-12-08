@@ -223,6 +223,54 @@ class FailureDetector {
     node_health_status_.store(status, std::memory_order_relaxed);
   }
 
+  /**
+   * Updates the RSM and NCM versions maintained in FD upon receiving
+   * GOSSIP Message from another node.
+   *
+   * 'node_ids_to_skip' contains nodes for which we shouldn't be applying
+   * the information present in the incoming GOSSIP, it includes this node's
+   * index plus the nodes whose instane id is stale (i.e this FailureDetector
+   * knows a better instance id for that node)
+   *
+   * 'node_ids_with_new_instances' contains nodes that have been detected
+   * to be running with a new instance id than previously known to this
+   * FailureDetector. Therefore we must apply all the updates unconditionally.
+   */
+  void updateVersions(const GOSSIP_Message& msg,
+                      std::unordered_set<size_t> node_ids_to_skip,
+                      std::unordered_set<size_t> node_ids_with_new_instances);
+
+  /* Get a RSM's version on a given cluster node
+   * @return if the Node idx is DEAD, returns E::STALE
+   *         else if the 'rsm_type' is not registered, return E::NOTSUPPORTED
+   *         else returns E::OK and populates 'result_out'
+   */
+  Status getRSMVersion(node_index_t idx, logid_t rsm_type, lsn_t& result_out);
+
+  /** Get all RSM versions for a given node
+   * @return if the Node idx is DEAD, returns E::STALE
+   *         else returns E::OK and populates 'result_out'
+   */
+  Status getRSMVersionsForNode(node_index_t idx,
+                               std::map<logid_t, lsn_t>& result_out);
+
+  /* Get a RSM's version on all cluster nodes, sorted by lsn
+   * @return if the RSM is registered, returns E::OK and populates 'result_out'
+   *         else, returns E::NOTSUPPORTED
+   */
+  Status getAllRSMVersionsInCluster(
+      logid_t rsm_type,
+      std::map<lsn_t, node_index_t, std::greater<lsn_t>>& result_out);
+
+  /* Get all NCM versions for a given node
+   * The order is mentioned in FailureDetector::Node::ncm_versions_
+   * @return if the Node idx is DEAD, returns E::STALE
+   *         else, populates 'result_out' and returns E::OK
+   */
+  Status getNCMVersionsForNode(
+      node_index_t idx,
+      std::array<membership::MembershipVersion::Type, 3>& result_out);
+
  protected:
   // send a gossip message to some node in the cluster
   void gossip();
@@ -263,6 +311,15 @@ class FailureDetector {
 
     // Health Status of node.
     NodeHealthStatus status_;
+
+    // RSM versions for a Node
+    std::map<logid_t, lsn_t> rsm_versions_;
+
+    // An array containing NCM information in the following order:
+    // - nc_version
+    // - sequencer_membership_version
+    // - storage_membership_version
+    std::array<membership::MembershipVersion::Type, 3> ncm_versions_;
 
     Node()
         : state_(NodeState::DEAD),
@@ -435,6 +492,12 @@ class FailureDetector {
                           bool failover,
                           bool starting);
 
+  /**
+   * Clear the RSM and NCM versions
+   * This is called after some cluster node sends a bringup message
+   */
+  void resetVersions(node_index_t idx);
+
   void startGossiping();
 
   // Detects which nodes are down based on the data in Node::gossip_.
@@ -508,6 +571,15 @@ class FailureDetector {
   virtual BoycottTracker& getBoycottTracker() {
     return boycott_tracker_;
   }
+
+  // Reads this node's RSM and NCM versions from Processor
+  virtual void fetchVersions();
+
+  // RSMs for which we need to distribute the versions in the cluster
+  std::vector<logid_t> registered_rsms_;
+  // keeps track of when RSM version information should be sent along with
+  // the GOSSIP_Message
+  uint32_t skip_sending_versions_{0};
 
   // these helper functions are overridden in unit tests
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>

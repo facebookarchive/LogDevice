@@ -1196,6 +1196,12 @@ void ReplicatedStateMachine<T, D>::notifySubscribers(const D* delta) {
   for (auto& cb : subscribers_) {
     cb(*data_, delta, version_);
   }
+
+  Worker* w = Worker::onThisThread(false);
+  if (w && w->settings().server) {
+    Processor* p = w->processor_;
+    p->setRSMVersion(delta_log_id_, version_);
+  }
 }
 
 template <typename T, typename D>

@@ -539,6 +539,12 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // is either, but it's not likely to be far behind.
   UpdateableSharedPtr<EventLogRebuildingSet> rebuilding_set_;
 
+  // RSM in-memory versions for this node.
+  // RSMs will write and FailureDetector will read from this map, so that
+  // the versions can be distributed to other cluster nodes
+  std::map<logid_t, lsn_t> rsm_versions_;
+  folly::SharedMutex rsm_versions_mutex_;
+
   /**
    * Tracer for API calls.
    */
@@ -580,6 +586,9 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   buffered_writer_id_t issueBufferedWriterID() {
     return buffered_writer_id_t(next_buffered_writer_id_++);
   }
+
+  std::map<logid_t, lsn_t> getAllRSMVersions();
+  void setRSMVersion(logid_t rsm_type, lsn_t ver);
 
   /**
    * Selects a worker based on hash of the given `seed` value.

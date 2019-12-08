@@ -48,6 +48,9 @@ enum ProtocolVersion : uint16_t {
   // of node states and health statuses
   NODE_STATUS_AND_HASHMAP_SUPPORT_IN_CLUSTER_STATE, // = 101
 
+  // Include RSM and NCM versions in GOSSIP Message
+  INCLUDE_VERSIONS_IN_GOSSIP, // = 102
+
   // NOTE: insert new protocol versions here
 
   // Maximum version number of the protocol this version of LogDevice
@@ -70,6 +73,7 @@ static_assert(STREAM_WRITER_SUPPORT == 98, "");
 static_assert(LOGS_CONFIG_API_MESSAGE_HAS_TIMEOUT == 99, "");
 static_assert(HEALTH_MONITOR_SUPPORT_IN_GOSSIP == 100, "");
 static_assert(NODE_STATUS_AND_HASHMAP_SUPPORT_IN_CLUSTER_STATE == 101, "");
+static_assert(INCLUDE_VERSIONS_IN_GOSSIP == 102, "");
 
 constexpr uint16_t MIN_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_LOWER_BOUND + 1;
 constexpr uint16_t MAX_PROTOCOL_SUPPORTED = PROTOCOL_VERSION_UPPER_BOUND - 1;
