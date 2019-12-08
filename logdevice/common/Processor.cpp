@@ -606,6 +606,16 @@ void Processor::waitForWorkers(size_t nworkers) {
   }
 }
 
+std::map<logid_t, lsn_t> Processor::getAllRSMVersions() {
+  folly::SharedMutex::ReadHolder rlock(rsm_versions_mutex_);
+  return rsm_versions_; // returns a copy
+}
+
+void Processor::setRSMVersion(logid_t rsm_type, lsn_t ver) {
+  folly::SharedMutex::WriteHolder wrlock(rsm_versions_mutex_);
+  rsm_versions_[rsm_type] = ver;
+}
+
 worker_id_t Processor::selectWorkerLoadAware() {
   return impl_->worker_load_balancing_.selectWorker();
 }

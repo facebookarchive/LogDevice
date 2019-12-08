@@ -10,6 +10,9 @@
 #include <iostream>
 
 #include "logdevice/common/commandline_util_chrono.h"
+#include "logdevice/common/settings/Validators.h"
+
+using namespace facebook::logdevice::setting_validators;
 
 namespace facebook { namespace logdevice {
 
@@ -146,6 +149,15 @@ void GossipSettings::defineSettings(SettingEasyInit& init) {
        "sent after this"
        " reply comes or after "
        "timeout",
+       SERVER,
+       SettingsCategory::FailureDetector);
+  init("gossip-include-rsm-versions-frequency",
+       &gossip_include_rsm_versions_frequency,
+       "10",
+       parse_positive<int32_t>(),
+       "How frequently to send RSM and NCM version information in a GOSSIP "
+       "message. If the value is 10, it means the versions will be present in "
+       "1/10th of the GOSSIP_Messages.",
        SERVER,
        SettingsCategory::FailureDetector);
 };

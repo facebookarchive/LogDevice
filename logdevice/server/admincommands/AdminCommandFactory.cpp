@@ -44,6 +44,7 @@
 #include "logdevice/server/admincommands/InfoRecordCache.h"
 #include "logdevice/server/admincommands/InfoRecoveries.h"
 #include "logdevice/server/admincommands/InfoReplication.h"
+#include "logdevice/server/admincommands/InfoRsm.h"
 #include "logdevice/server/admincommands/InfoSST.h"
 #include "logdevice/server/admincommands/InfoSequencers.h"
 #include "logdevice/server/admincommands/InfoSettings.h"
@@ -118,6 +119,7 @@ AdminCommandFactory::AdminCommandFactory() {
   selector_.add<commands::InfoLogsDBMetadata>("info logsdb metadata");
   selector_.add<commands::InfoWriteMetaDataRecord>(
       "info write_metadata_record");
+  selector_.add<commands::InfoRsm>("info rsm");
   selector_.add<commands::ListOrEraseMetadata>("info metadata",
                                                /* erase */ false);
   selector_.add<commands::ListOrEraseMetadata>("delete metadata",

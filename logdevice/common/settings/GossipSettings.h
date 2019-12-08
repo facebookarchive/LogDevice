@@ -46,6 +46,9 @@ struct GossipSettings : public SettingsBundle {
   bool ignore_isolation;
   std::chrono::milliseconds gcs_wait_duration;
 
+  // See .cpp for documentation
+  int32_t gossip_include_rsm_versions_frequency;
+
   const char* getName() const override {
     return "GossipSettings";
   }

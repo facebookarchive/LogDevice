@@ -113,6 +113,7 @@ sidebar_label: Settings
 | failover-blacklist-threshold | How many gossip intervals to ignore a node for after it performed a graceful failover | 100 | server&nbsp;only |
 | failover-wait-time | How long to wait for the failover request to be propagated to other nodes | 3s | server&nbsp;only |
 | gcs-wait-duration | How long to wait for get-cluster-state reply to come, to initialize state of cluster nodes. Bringup is sent after this reply comes or after timeout | 1s | server&nbsp;only |
+| gossip-include-rsm-versions-frequency | How frequently to send RSM and NCM version information in a GOSSIP message. If the value is 10, it means the versions will be present in 1/10th of the GOSSIP\_Messages. | 10 | server&nbsp;only |
 | gossip-interval | How often to send a gossip message. Lower values improve detection time, but make nodes more chatty. | 100ms | requires&nbsp;restart, server&nbsp;only |
 | gossip-logging-duration | How long to keep logging FailureDetector/Gossip related activity after server comes up. | 0s | server&nbsp;only |
 | gossip-mode | How to select a node to send a gossip message to. One of: 'round-robin', 'random' (default) | random | requires&nbsp;restart, server&nbsp;only |
@@ -224,7 +225,7 @@ sidebar_label: Settings
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
 | incoming-messages-max-bytes-limit | maximum byte limit of unprocessed messages within the system. | 524288000 | requires&nbsp;restart |
 | inline-message-execution | Indicates whether message should be processed right after deserialization. Usually within new worker model all messages are processed after posting them into the work context. This option works only when worker context is run with previous eventloop architecture. | false | requires&nbsp;restart |
-| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 101 |  |
+| max-protocol | maximum version of LogDevice protocol that the server/client will accept | 102 |  |
 | max-time-to-allow-socket-drain | If a socket does not drain a complete message for max-time-to-allow-socket-drain. Then the socket is closed. | 3min |  |
 | min-bytes-to-drain-per-second | Refer socket-health-check-period for details. | 1000000 |  |
 | min-socket-idle-threshold-percent | A socket is considered active if it had bytes pending in the socket above socket-idle-threshold for greater than min-socket-idle-threshold-percent of socket-health-check-period. | 50 |  |

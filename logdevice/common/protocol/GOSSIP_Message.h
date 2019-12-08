@@ -11,6 +11,7 @@
 
 #include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/membership/types.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/sequencer_boycotting/Boycott.h"
 #include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
@@ -52,6 +53,21 @@ struct GOSSIP_Node : public GOSSIP_Node_Legacy {
   }
 };
 
+struct Versions_Node {
+  size_t node_id_;
+  // RSM Versions contained here follow the order of rsm types in
+  // GOSSIP_Message::rsm_types_. This helps in reducing the Message size by
+  // preventing the repetition of same information(i.e. rsm types) in each and
+  // every Versions_Node
+  std::vector<lsn_t> rsm_versions_;
+  std::array<membership::MembershipVersion::Type, 3>
+      ncm_versions_; // sorted by the order mentioned in
+                     // FailureDetector::Node::ncm_versions_
+  bool operator<(const Versions_Node& a) const {
+    return node_id_ < a.node_id_;
+  }
+};
+
 class GOSSIP_Message : public Message {
  public:
   using legacy_node_list_t = std::vector<GOSSIP_Node_Legacy>;
@@ -63,6 +79,8 @@ class GOSSIP_Message : public Message {
   using boycott_durations_list_t = std::vector<BoycottAdaptiveDuration>;
   using starting_list_t = std::vector<NodeID>;
   using GOSSIP_flags_t = uint8_t;
+  using rsmtype_list_t = std::vector<logid_t>; // delta log of RSM
+  using versions_node_list_t = std::vector<Versions_Node>;
 
   GOSSIP_Message()
       : Message(MessageType::GOSSIP, TrafficClass::FAILURE_DETECTOR),
@@ -75,7 +93,9 @@ class GOSSIP_Message : public Message {
                  boycott_list_t boycott_list,
                  boycott_durations_list_t boycott_durations,
                  GOSSIP_Message::GOSSIP_flags_t flags,
-                 uint64_t msg_id = 0);
+                 uint64_t msg_id,
+                 GOSSIP_Message::rsmtype_list_t rsm_types,
+                 GOSSIP_Message::versions_node_list_t versions);
 
   void serialize(ProtocolWriter&) const override;
   static Message::deserializer_t deserialize;
@@ -100,6 +120,11 @@ class GOSSIP_Message : public Message {
 
   // sequence number to match message when running onSent callback
   uint64_t msg_id_;
+
+  // List of RSM delta log-ids
+  rsmtype_list_t rsm_types_;
+  // RSM and NCM versions
+  versions_node_list_t versions_;
 
   // When set in flags_, indicates that the message includes the failover list.
   static const GOSSIP_flags_t HAS_FAILOVER_LIST_FLAG = 1 << 0;
@@ -128,6 +153,12 @@ class GOSSIP_Message : public Message {
   // Flag to indicate that we have a starting list
   static const GOSSIP_flags_t HAS_STARTING_LIST_FLAG = 1 << 4;
 
+  // Only one of the two flags can be set at any time
+  // The message contains in-memory RSM versions on cluster nodes
+  static const GOSSIP_flags_t HAS_VERSIONS = 1 << 5;
+  // The message contains durable RSM versions(in local store) on cluster nodes
+  static const GOSSIP_flags_t HAS_DURABLE_SNAPSHOT_VERSIONS = 1 << 6;
+
  private:
   // flattens the matrices and then writes them
   void writeBoycottList(ProtocolWriter& writer) const;
@@ -143,5 +174,9 @@ class GOSSIP_Message : public Message {
 
   void writeStartingList(ProtocolWriter& writer) const;
   void readStartingList(ProtocolReader& reader);
+
+  // Read and Write RSM and NCM versions
+  void readVersions(ProtocolReader& reader, uint16_t num_nodes);
+  void writeVersions(ProtocolWriter& writer) const;
 };
 }} // namespace facebook::logdevice

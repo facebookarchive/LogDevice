@@ -5,7 +5,10 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 #include "logdevice/server/FailureDetector.h"
+
+#include <unordered_set>
 
 #include <folly/Memory.h>
 #include <folly/Random.h>
@@ -146,6 +149,34 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
     cs->setNodeState(it.first, ClusterState::NodeState::DEAD);
     cs->setNodeStatus(it.first, NodeHealthStatus::UNHEALTHY);
   }
+
+  registered_rsms_.push_back(configuration::InternalLogs::EVENT_LOG_DELTAS);
+  registered_rsms_.push_back(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  /* skipping maintenance log as it doesn't run on cluster */
+}
+
+void FailureDetector::fetchVersions() {
+  Worker* w = Worker::onThisThread(false);
+  if (!w) {
+    return;
+  }
+
+  /* Update RSM versions of this node */
+  Processor* p = w->processor_;
+  node_index_t my_idx = getMyNodeID().index();
+  auto& this_node = nodes_[my_idx];
+  auto rsm_versions = p->getAllRSMVersions();
+  for (auto& v : rsm_versions) {
+    this_node.rsm_versions_[v.first] = v.second;
+  }
+
+  /* Update NCM versions of this node */
+  const auto& nodes_configuration = getNodesConfiguration();
+  this_node.ncm_versions_[0] = nodes_configuration->getVersion();
+  this_node.ncm_versions_[1] =
+      nodes_configuration->getSequencerMembership()->getVersion();
+  this_node.ncm_versions_[2] =
+      nodes_configuration->getStorageMembership()->getVersion();
 }
 
 FailureDetector::Node&
@@ -384,6 +415,9 @@ void FailureDetector::noteConfigurationChanged() {
 }
 
 void FailureDetector::gossip() {
+  const auto& nodes_configuration = getNodesConfiguration();
+  const auto& serv_disc = nodes_configuration->getServiceDiscovery();
+
   folly::SharedMutex::ReadHolder nodes_lock(nodes_mutex_);
 
   NodeID dest = selector_->getNode(this);
@@ -492,30 +526,66 @@ void FailureDetector::gossip() {
                  std::back_inserter(boycott_durations),
                  [](const auto& entry) { return entry.second; });
 
-  GOSSIP_Message::node_list_t node_list;
-  for (auto& it : nodes_) {
-    GOSSIP_Node gnode;
-    gnode.node_id_ = it.first;
-    gnode.gossip_ = it.second.gossip_;
-    gnode.gossip_ts_ = it.second.gossip_ts_;
-    gnode.failover_ = it.second.failover_;
-    gnode.is_node_starting_ = it.second.is_node_starting_;
-    gnode.node_status_ = it.second.status_;
-    node_list.push_back(gnode);
+  GOSSIP_Message::node_list_t gossip_node_list;
+  GOSSIP_Message::versions_node_list_t versions_list;
+  if (!skip_sending_versions_) {
+    fetchVersions();
+    flags |= GOSSIP_Message::HAS_VERSIONS;
   }
+  for (auto serv_it = serv_disc->begin(); serv_it != serv_disc->end();
+       ++serv_it) {
+    if (nodes_.find(serv_it->first) == nodes_.end()) {
+      continue;
+    }
+    auto& fdnode = nodes_[serv_it->first];
+    // If at least one entry in the failover list is non-zero, include the
+    // list in the message.
+    // In GOSSIP protocol >= HASHMAP_SUPPORT_IN_GOSSIP, this wouldn't be
+    // necessary because failover list is sent through a list of GOSSIP_Node.
+    if (fdnode.failover_ > std::chrono::milliseconds::zero()) {
+      flags |= GOSSIP_Message::HAS_FAILOVER_LIST_FLAG;
+    }
+
+    GOSSIP_Node gnode;
+    gnode.node_id_ = serv_it->first;
+    gnode.gossip_ = fdnode.gossip_;
+    gnode.gossip_ts_ = fdnode.gossip_ts_;
+    gnode.failover_ = fdnode.failover_;
+    gnode.is_node_starting_ = fdnode.is_node_starting_;
+    gnode.node_status_ = fdnode.status_;
+    gossip_node_list.push_back(gnode);
+
+    if (flags & GOSSIP_Message::HAS_VERSIONS) {
+      Versions_Node rnode;
+      rnode.node_id_ = serv_it->first;
+      for (auto& rsm_type : registered_rsms_) {
+        lsn_t rsm_version = LSN_INVALID;
+        if (fdnode.rsm_versions_.find(rsm_type) != fdnode.rsm_versions_.end()) {
+          rsm_version = fdnode.rsm_versions_[rsm_type];
+        }
+        rnode.rsm_versions_.push_back(rsm_version);
+      }
+      rnode.ncm_versions_ = fdnode.ncm_versions_;
+      versions_list.push_back(rnode);
+    }
+  }
+  skip_sending_versions_ = (skip_sending_versions_ + 1) %
+      (settings_->gossip_include_rsm_versions_frequency);
 
   // bump the message sequence number
   ++current_msg_id_;
   int rv = sendGossipMessage(
       dest,
       std::make_unique<GOSSIP_Message>(this_node,
-                                       std::move(node_list),
+                                       std::move(gossip_node_list),
                                        instance_id_,
                                        getCurrentTimeInMillis(),
                                        std::move(boycotts),
                                        std::move(boycott_durations),
                                        flags,
-                                       current_msg_id_));
+                                       current_msg_id_,
+                                       registered_rsms_,
+                                       std::move(versions_list)));
 
   if (rv != 0) {
     RATELIMIT_DEBUG(std::chrono::seconds(1),
@@ -594,6 +664,8 @@ bool FailureDetector::processFlags(
     }
   } else if (is_node_bringup) {
     updateNodeState(sender_idx, sender_node, false, false, false);
+    // When new instance id comes up, reset all version information
+    resetVersions(sender_idx);
   } else {
     ld_check(true);
     return true;
@@ -690,11 +762,14 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
       msg.flags_ & GOSSIP_Message::HAS_STARTING_LIST_FLAG;
 
   bool update_statuses = senderUsingHealthMonitor(sender_idx, msg.node_list_);
+  std::unordered_set<size_t> node_ids_to_skip;
+  std::unordered_set<size_t> nodes_with_new_instances;
   for (auto node : msg.node_list_) {
     size_t id = node.node_id_;
 
     // Don't modify this node's state based on gossip message.
     if (id == this_index) {
+      node_ids_to_skip.insert(id);
       continue;
     }
 
@@ -722,6 +797,7 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
               id,
               node_state.gossip_ts_.count(),
               node.gossip_ts_.count());
+      node_ids_to_skip.insert(id);
       continue;
     } else if (node_state.gossip_ts_ < node.gossip_ts_) {
       // If the incoming Gossip message knows about a valid
@@ -738,6 +814,8 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
         if (update_statuses || id == sender_idx) {
           node_state.status_ = node.node_status_;
         }
+        nodes_[id].status_ = node.node_status_;
+        nodes_with_new_instances.insert(id);
       }
       continue;
     }
@@ -760,6 +838,7 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
   getBoycottTracker().updateReportedBoycotts(msg.boycott_list_);
   getBoycottTracker().updateReportedBoycottDurations(
       msg.boycott_durations_list_, std::chrono::system_clock::now());
+  updateVersions(msg, node_ids_to_skip, nodes_with_new_instances);
 
   num_gossips_received_++;
   if (num_gossips_received_ <= settings_->min_gossips_for_stable_state) {
@@ -1482,4 +1561,144 @@ bool FailureDetector::isLogsConfigLoaded() {
   ld_check(Worker::onThisThread(false));
   return processor_->isLogsConfigLoaded();
 }
+
+void FailureDetector::updateVersions(
+    const GOSSIP_Message& msg,
+    std::unordered_set<size_t> node_ids_to_skip,
+    std::unordered_set<size_t> nodes_with_new_instances) {
+  for (const auto& node : msg.versions_) {
+    size_t id = node.node_id_;
+    if (node_ids_to_skip.find(id) != node_ids_to_skip.end()) {
+      continue;
+    }
+    if (nodes_.find(id) == nodes_.end()) {
+      continue;
+    }
+
+    bool new_instance_id =
+        nodes_with_new_instances.find(id) != nodes_with_new_instances.end();
+    auto& fdnode = nodes_[id];
+    for (size_t i = 0; i < msg.rsm_types_.size(); ++i) {
+      if (std::find(registered_rsms_.begin(),
+                    registered_rsms_.end(),
+                    msg.rsm_types_[i]) == registered_rsms_.end()) {
+        ld_info("Adding RSM type:%lu to this node's FD state, because %s "
+                "included it in the Gossip message",
+                msg.rsm_types_[i].val_,
+                msg.gossip_node_.toString().c_str());
+        // To handle cases where different nodes are gossiping different rsms at
+        // the same time, e.g. during rolling-restart where old server and
+        // new server may have different rsms registered.
+        registered_rsms_.push_back(msg.rsm_types_[i]);
+        fdnode.rsm_versions_[msg.rsm_types_[i]] = LSN_INVALID;
+      }
+      lsn_t existing = fdnode.rsm_versions_[msg.rsm_types_[i]];
+      lsn_t recvd = node.rsm_versions_[i];
+      if ((recvd > existing) || new_instance_id) {
+        ld_debug("Updating RSM versions for N%zu, GOSSIP received from:%s, "
+                 "new_instance_id:%s, rsm_type:%lu, recvd:%s, existing:%s",
+                 id,
+                 msg.gossip_node_.toString().c_str(),
+                 new_instance_id ? "yes" : "no",
+                 msg.rsm_types_[i].val_,
+                 lsn_to_string(recvd).c_str(),
+                 lsn_to_string(existing).c_str());
+        fdnode.rsm_versions_[msg.rsm_types_[i]] = node.rsm_versions_[i];
+      }
+    }
+
+    // Update NCM versions
+    for (size_t i = 0; i < fdnode.ncm_versions_.size(); ++i) {
+      auto& existing = fdnode.ncm_versions_[i];
+      auto& recvd = node.ncm_versions_[i];
+      if (recvd > existing || new_instance_id) {
+        ld_debug("Updating NCM versions for N%zu, GOSSIP received from:%s, "
+                 "new_instance_id:%s, recvd:%lu, existing:%lu",
+                 id,
+                 msg.gossip_node_.toString().c_str(),
+                 new_instance_id ? "yes" : "no",
+                 recvd.val_,
+                 existing.val_);
+        existing = recvd;
+      }
+    }
+  }
+}
+
+Status FailureDetector::getRSMVersion(node_index_t idx,
+                                      logid_t rsm_type,
+                                      lsn_t& result_out) {
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+  if (std::find(registered_rsms_.begin(), registered_rsms_.end(), rsm_type) ==
+      registered_rsms_.end()) {
+    return E::NOTSUPPORTED;
+  }
+
+  if (nodes_[idx].state_.load() == NodeState::DEAD) {
+    return E::STALE;
+  }
+
+  result_out = nodes_[idx].rsm_versions_[rsm_type];
+  return E::OK;
+}
+
+Status FailureDetector::getAllRSMVersionsInCluster(
+    logid_t rsm_type,
+    std::map<lsn_t, node_index_t, std::greater<lsn_t>>& result_out) {
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+  if (std::find(registered_rsms_.begin(), registered_rsms_.end(), rsm_type) ==
+      registered_rsms_.end()) {
+    return E::NOTSUPPORTED;
+  }
+
+  for (auto& node : nodes_) {
+    if (node.second.state_.load() != NodeState::DEAD) {
+      result_out.insert(
+          std::make_pair(node.second.rsm_versions_[rsm_type], node.first));
+    }
+  }
+  return E::OK;
+}
+
+Status
+FailureDetector::getRSMVersionsForNode(node_index_t idx,
+                                       std::map<logid_t, lsn_t>& result_out) {
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+  if (nodes_[idx].state_.load() == NodeState::DEAD) {
+    return E::STALE;
+  }
+
+  result_out = nodes_[idx].rsm_versions_;
+  for (auto rsm : registered_rsms_) {
+    if (result_out.find(rsm) == result_out.end()) {
+      result_out[rsm] = LSN_INVALID;
+    }
+  }
+  return E::OK;
+}
+
+Status FailureDetector::getNCMVersionsForNode(
+    node_index_t idx,
+    std::array<membership::MembershipVersion::Type, 3>& result_out) {
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+  if (nodes_[idx].state_.load() == NodeState::DEAD) {
+    return E::STALE;
+  }
+
+  result_out = nodes_[idx].ncm_versions_;
+  return E::OK;
+}
+
+void FailureDetector::resetVersions(node_index_t idx) {
+  ld_info("Resetting RSM and NCM Versions for N%hu", idx);
+  auto& fdnode = nodes_[idx];
+  for (auto& rsm : fdnode.rsm_versions_) {
+    rsm.second = LSN_INVALID;
+  }
+
+  fdnode.ncm_versions_[0] = membership::MembershipVersion::Type(0);
+  fdnode.ncm_versions_[1] = membership::MembershipVersion::Type(0);
+  fdnode.ncm_versions_[2] = membership::MembershipVersion::Type(0);
+}
+
 }} // namespace facebook::logdevice

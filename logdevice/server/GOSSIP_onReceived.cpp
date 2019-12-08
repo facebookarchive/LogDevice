@@ -67,6 +67,11 @@ class GossipRequest : public Request {
 
 Message::Disposition GOSSIP_onReceived(GOSSIP_Message* m,
                                        const Address& /* unused */) {
+  if (m->flags_ & GOSSIP_Message::HAS_DURABLE_SNAPSHOT_VERSIONS) {
+    // skip the message for now, this will be supported in future
+    return Message::Disposition::NORMAL;
+  }
+
   ServerWorker* w = ServerWorker::onThisThread();
 
   auto failure_detector = w->processor_->failure_detector_.get();
