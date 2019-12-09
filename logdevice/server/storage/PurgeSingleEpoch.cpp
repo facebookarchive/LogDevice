@@ -29,7 +29,6 @@
 
 namespace facebook { namespace logdevice {
 
-using EpochInfo = SealStorageTask::EpochInfo;
 
 namespace {
 esn_t nextEsn(esn_t esn) {

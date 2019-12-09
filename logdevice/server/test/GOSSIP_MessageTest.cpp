@@ -27,8 +27,6 @@ using unique_evbuffer =
     std::unique_ptr<struct evbuffer, std::function<void(struct evbuffer*)>>;
 
 using node_list_t = GOSSIP_Message::node_list_t;
-using gossip_list_t = GOSSIP_Message::gossip_list_t;
-using gossip_ts_t = GOSSIP_Message::gossip_ts_t;
 using failover_list_t = GOSSIP_Message::failover_list_t;
 using boycott_list_t = GOSSIP_Message::boycott_list_t;
 using boycott_durations_list_t = GOSSIP_Message::boycott_durations_list_t;

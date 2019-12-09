@@ -16,7 +16,6 @@
 namespace facebook { namespace logdevice {
 
 using namespace facebook::logdevice::configuration;
-using namespace facebook::logdevice::configuration::nodes;
 
 NodesConfiguration buildNodesConfiguration(NodeID my_id, int num_shards) {
   NodesConfigurationTestUtil::NodeTemplate tmpl{my_id.index()};

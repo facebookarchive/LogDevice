@@ -18,7 +18,6 @@ namespace facebook { namespace logdevice {
 
 const shard_index_t SHARD_IDX = 0;
 
-using Context = SealStorageTask::Context;
 using EpochInfo = SealStorageTask::EpochInfo;
 using EpochInfoMap = SealStorageTask::EpochInfoMap;
 

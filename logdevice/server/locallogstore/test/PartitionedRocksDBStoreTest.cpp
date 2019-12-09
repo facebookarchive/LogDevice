@@ -46,7 +46,6 @@
 using namespace facebook::logdevice;
 using RocksDBKeyFormat::CopySetIndexKey;
 using RocksDBKeyFormat::DataKey;
-using RocksDBKeyFormat::LogMetaKey;
 using RocksDBKeyFormat::PartitionDirectoryKey;
 using DirectoryEntry = PartitionedRocksDBStore::DirectoryEntry;
 using Params = ServerSettings::StoragePoolParams;

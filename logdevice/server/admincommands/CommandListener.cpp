@@ -18,7 +18,6 @@
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/server/Server.h"

@@ -143,7 +143,6 @@ void UnreleasedRecordDetector::threadMain() noexcept try {
 
     // forget prev states, new states become prev states
     prev_states_.clear();
-    using std::swap;
     swap(prev_states_, new_states_);
   }
 

@@ -14,7 +14,6 @@
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
 using namespace facebook::logdevice;
-using namespace facebook::logdevice::configuration;
 using namespace facebook::logdevice::NodesConfigurationTestUtil;
 using namespace std::literals::string_literals;
 using namespace ::testing;
