@@ -9,7 +9,6 @@
 
 #include <folly/String.h>
 
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/server/admincommands/AdminCommand.h"
 
 namespace facebook { namespace logdevice {

@@ -8,7 +8,6 @@
 #define __STDC_FORMAT_MACROS
 #include "logdevice/server/storage_tasks/RecoverLogStateTask.h"
 
-#include <stdlib.h>
 
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RELEASE_Message.h"

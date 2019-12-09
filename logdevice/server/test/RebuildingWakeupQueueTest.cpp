@@ -11,7 +11,6 @@
 
 #include "logdevice/common/test/TestUtil.h"
 
-using namespace facebook::logdevice;
 
 namespace facebook { namespace logdevice {
 

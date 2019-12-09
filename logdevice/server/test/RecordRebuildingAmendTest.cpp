@@ -15,7 +15,6 @@
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/test/TestUtil.h"
 
-using namespace facebook::logdevice;
 
 // Shortcuts for writing ShardIDs
 #define N0 ShardID(0, 0)

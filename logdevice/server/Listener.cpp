@@ -14,7 +14,6 @@
 #include <folly/ScopeGuard.h>
 #include <folly/io/async/AsyncSocketException.h>
 
-#include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {

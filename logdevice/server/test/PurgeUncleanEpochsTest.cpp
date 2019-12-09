@@ -31,7 +31,6 @@ namespace facebook { namespace logdevice {
 using namespace facebook::logdevice::NodeSetTestUtil;
 
 using State = PurgeUncleanEpochs::State;
-using RecordSource = MetaDataLogReader::RecordSource;
 
 class MockPurgeUncleanEpochs;
 

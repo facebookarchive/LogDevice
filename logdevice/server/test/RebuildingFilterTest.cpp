@@ -15,7 +15,6 @@
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/RecordRebuildingStore.h"
 
-using namespace facebook::logdevice;
 
 // Convenient shortcuts for writing ShardIDs.
 #define N0S0 ShardID(0, 0)

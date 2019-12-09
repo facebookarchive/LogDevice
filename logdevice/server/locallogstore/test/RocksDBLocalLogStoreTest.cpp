@@ -25,7 +25,6 @@
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "rocksdb/db.h"
-#include "rocksdb/version.h"
 
 using namespace facebook::logdevice;
 

@@ -11,7 +11,6 @@
 #include <folly/executors/InlineExecutor.h>
 #include <gtest/gtest.h>
 
-using namespace facebook::logdevice;
 
 #include "logdevice/common/chrono_util.h"
 #include "logdevice/server/test/MockHealthMonitor.h"

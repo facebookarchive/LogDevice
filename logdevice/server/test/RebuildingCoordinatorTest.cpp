@@ -26,7 +26,6 @@
 #include "logdevice/server/rebuilding/RebuildingPlan.h"
 #include "logdevice/server/rebuilding/ShardRebuildingV1.h"
 
-using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
 
 // Convenient shortcuts for writing ShardIDs.
