@@ -184,6 +184,10 @@ int LogsConfigStateMachine::applyDelta(const logsconfig::Delta& delta,
           std::chrono::steady_clock::now() - apply_start_time)
           .count();
   if (rv == 0) {
+    if (shouldBeDeduplicated()) {
+      tree.deduplicateAttributes();
+      wasDeduplicated();
+    }
     tree.setVersion(version);
   }
   if (delta.type() == DeltaOpType::SET_TREE) {
@@ -224,6 +228,7 @@ LogsConfigStateMachine::deserializeState(
     err = E::BADMSG;
     return nullptr;
   }
+  tree->deduplicateAttributes();
   tree->setVersion(version);
   return tree;
 }
@@ -293,6 +298,18 @@ StatsHolder* FOLLY_NULLABLE LogsConfigStateMachine::getStats() {
 void LogsConfigStateMachine::snapshot(std::function<void(Status st)> cb) {
   STAT_INCR(getStats(), logsconfig_manager_snapshot_requested);
   Parent::snapshot(cb);
+}
+
+void LogsConfigStateMachine::scheduleDeduplication() {
+  ++deduplication_scheduled_;
+}
+
+bool LogsConfigStateMachine::shouldBeDeduplicated() const {
+  return deduplication_scheduled_ >= kNumDeltasBeforeDeduplication;
+}
+
+void LogsConfigStateMachine::wasDeduplicated() {
+  deduplication_scheduled_ = 0;
 }
 
 }} // namespace facebook::logdevice

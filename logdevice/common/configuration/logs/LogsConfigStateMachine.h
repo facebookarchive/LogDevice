@@ -70,7 +70,32 @@ class LogsConfigStateMachine
    */
   virtual void snapshot(std::function<void(Status st)> cb) override;
 
+  /**
+   * Mark that something about the tree received a delta and should
+   * be deduplicated at some point.
+   */
+  void scheduleDeduplication();
+
+  /**
+   * Decides if the tree's LogAttributes should be deduplicated
+   * afer certain number of deltas.
+   */
+  bool shouldBeDeduplicated() const;
+
+  /**
+   * Must be called when the tree was deduplicated.
+   */
+  void wasDeduplicated();
+
  protected:
+  // Deduplication of a whole tree is expensive,
+  // and doing it on each delta arrival is not worth it.
+  // Each LogAttributes::CommonValues weights around 1KB.
+  // The number guarantees we don't do it too often but,
+  // at the same time limits the the upper bound of not duplicated
+  // memory to ~128KB.
+  static constexpr size_t kNumDeltasBeforeDeduplication = 128;
+
   virtual bool canSnapshot() const override;
 
   bool canTrimAndSnapshot() const;
@@ -119,5 +144,6 @@ class LogsConfigStateMachine
   std::unique_ptr<TrimRSMRetryHandler> trim_retry_handler_;
   bool is_writable_;
   bool allow_snapshotting_;
+  size_t deduplication_scheduled_{0};
 };
 }} // namespace facebook::logdevice
