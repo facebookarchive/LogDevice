@@ -72,9 +72,11 @@ bool parseNodes(const folly::dynamic& clusterMap,
                 ServerConfig::NodesConfig& output) {
   auto iter = clusterMap.find("nodes");
   if (iter == clusterMap.items().end()) {
-    ld_error("missing \"nodes\" entry for cluster");
-    err = E::INVALID_CONFIG;
-    return false;
+    Nodes res;
+    output.setNodes(std::move(res));
+    // nodes section is not required, since we now have
+    // nodes-configuration-manager
+    return true;
   }
 
   const folly::dynamic& nodesList = iter->second;

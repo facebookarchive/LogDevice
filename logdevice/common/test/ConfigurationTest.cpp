@@ -499,6 +499,12 @@ TEST(ConfigurationTest, InvalidRolesConfig) {
   EXPECT_EQ(err, E::INVALID_CONFIG);
 }
 
+TEST(ConfigurationTest, NoNodesNoMetadata) {
+  std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
+      TEST_CONFIG_FILE("no_nodes_no_metadata.conf")));
+  ASSERT_NE(config, nullptr);
+}
+
 /**
  * Exercises getNode().
  */
