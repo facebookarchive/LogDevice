@@ -175,9 +175,9 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
                       MetaDataLogsConfig& output) {
   auto iter = clusterMap.find("metadata_logs");
   if (iter == clusterMap.items().end()) {
-    ld_error("missing \"metadata_logs\" entry for cluster");
-    err = E::INVALID_CONFIG;
-    return false;
+    // This section is now optional since we have nodes-configuration-manager
+    // that store that information in NCS (NodesConfigurationStore).
+    return true;
   }
 
   const folly::dynamic& metaDataLogSection = iter->second;
