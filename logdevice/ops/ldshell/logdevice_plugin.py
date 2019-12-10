@@ -10,7 +10,7 @@ import argparse
 
 from ldshell.autoload.commands.connect import Connect
 from ldshell.autoload.commands.query import SelectCommand
-from ldshell.logdevice_context import Context
+from ldshell.logdevice_context import LDShellContext as Context
 from nubia import PluginInterface
 from nubia.internal.cmdbase import AutoCommand
 from nubia.internal.constants import DEFAULT_COMMAND_TIMEOUT

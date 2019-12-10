@@ -6,7 +6,9 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
+import sys
 import textwrap
+import traceback
 from collections import Counter
 
 from nubia import context
@@ -424,13 +426,21 @@ class SelectCommand(Command):
             return "Unexpected Error"
 
     def run_interactive(self, cmd, input, query):
-        if not self.ldquery:
-            cprint(
-                "You need to be connected to a logdevice cluster. You can use"
-                " the 'connect' command to do so.",
-                "red",
-            )
+        try:
+            if not self.ldquery:
+                cprint(
+                    "You need to be connected to a logdevice cluster. You can use"
+                    " the 'connect' command to do so.",
+                    "red",
+                )
+                return 1
+        except Exception as e:
+            cprint("Error running command: {}".format(str(e)), "red")
+            cprint("-" * 60, "yellow")
+            traceback.print_exc(file=sys.stderr)
+            cprint("-" * 60, "yellow")
             return 1
+
         if not self.running_from_cli and not self._prev_query:
             # enable pretty-printing by default
             self.ldquery.pretty_output = True
