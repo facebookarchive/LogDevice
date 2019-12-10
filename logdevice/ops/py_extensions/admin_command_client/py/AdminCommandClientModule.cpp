@@ -8,7 +8,7 @@
 #include <boost/python.hpp>
 
 #include "logdevice/clients/python/util/util.h"
-#include "logdevice/ops/admin_command_client/AdminCommandClient.h"
+#include "logdevice/ops/py_extensions/admin_command_client/AdminCommandClient.h"
 
 using namespace boost::python;
 using namespace facebook::logdevice;

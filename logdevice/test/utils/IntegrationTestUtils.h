@@ -32,7 +32,7 @@
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/include/types.h"
-#include "logdevice/ops/admin_command_client/AdminCommandClient.h"
+#include "logdevice/ops/py_extensions/admin_command_client/AdminCommandClient.h"
 #include "logdevice/test/utils/MetaDataProvisioner.h"
 #include "logdevice/test/utils/port_selection.h"
 

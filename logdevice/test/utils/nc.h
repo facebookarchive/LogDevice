@@ -12,7 +12,7 @@
 
 #include <folly/SocketAddress.h>
 
-#include "logdevice/ops/admin_command_client/AdminCommandClient.h"
+#include "logdevice/ops/py_extensions/admin_command_client/AdminCommandClient.h"
 
 namespace facebook { namespace logdevice { namespace test {
 
