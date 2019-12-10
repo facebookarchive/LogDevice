@@ -397,8 +397,25 @@ int shell(Cluster& cluster) {
                         return kv.second.isReadableStorageNode();
                       });
 
+    auto& first_node = cluster.getNode(0);
+    auto first_node_admin_addr = first_node.addrs_.admin;
+    std::string ldshell_admin_arg;
+    if (first_node_admin_addr.isUnixAddress()) {
+      ldshell_admin_arg = folly::sformat(
+          "--admin-server-unix-path={}", first_node_admin_addr.getPath());
+    } else {
+      ldshell_admin_arg =
+          folly::sformat("--admin-server-host={} --admin-server-port={}",
+                         first_node_admin_addr.toStringNoPort(),
+                         first_node_admin_addr.port());
+    }
+
+    std::cout << "\033[1;31mTo connect to the cluster via ldshell:\033[1;0m"
+              << std::endl;
+    std::cout << "\tldshell " << ldshell_admin_arg << std::endl;
+
     std::cout << "\033[1;31mTo create a log range:\033[1;0m" << std::endl;
-    std::cout << "\tldshell -c " << cluster.getConfigPath() << " logs create"
+    std::cout << "\tldshell " << ldshell_admin_arg << " logs create"
               << " --from 1 --to " << options::nlogs
               << " --replicate-across \"node: " << std::min(2, nstorage_nodes)
               << "\" test_logs" << std::endl
@@ -409,8 +426,7 @@ int shell(Cluster& cluster) {
       std::cout << "(We've already created one for you)";
     }
     std::cout << "\033[1;0m" << std::endl;
-    std::cout << "\tldshell -c " << cluster.getConfigPath() << " logs show"
-              << std::endl
+    std::cout << "\tldshell " << ldshell_admin_arg << " logs show" << std::endl
               << std::endl;
   }
 

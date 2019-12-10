@@ -309,7 +309,6 @@ void AdminAPIHandler::dumpServerConfigJson(std::string& response) {
   auto config = processor_->config_->get();
   ld_check(config);
   ld_check(config->serverConfig());
-  ld_check(config->zookeeperConfig());
   response = config->serverConfig()->toString(
       /* with_logs = */ nullptr,
       config->zookeeperConfig().get(),
