@@ -44,6 +44,7 @@ class LegocastleStepError(RuntimeError):
 
 LegocastleFBCheckout = namedtuple('LegocastleFBCheckout', ['project_and_path'])
 LegocastleWorkdir = namedtuple('LegocastleWorkdir', ['dir'])
+LegocastleSetEnv = namedtuple("LegocastleSetEnv", ["key", "value"])
 
 
 class LegocastleStep(namedtuple('LegocastleStepBase', ('name', 'actions'))):
@@ -60,9 +61,13 @@ class LegocastleStep(namedtuple('LegocastleStepBase', ('name', 'actions'))):
 class LegocastleFBCodeBuilder(FBCodeBuilder):
 
     def setup(self):
-        return self.step('Setup',
-            self.create_python_venv() + [
-            self.run(ShellQuoted("""
+        return self.step(
+            "Setup",
+            self.create_python_venv()
+            + [
+                self.run(
+                    ShellQuoted(
+                        """
 case "$OSTYPE" in
   darwin*)
     http_proxy= https_proxy= ./tools/lfs/lfs.py \\
@@ -72,7 +77,12 @@ case "$OSTYPE" in
     tar xzf homebrew.tar.gz -C /var/tmp
   ;;
 esac
-"""))])
+"""
+                    )
+                )
+            ]
+            + self.rust_toolchain(),
+        )
 
     def step(self, name, actions):
         return LegocastleStep(name=name, actions=actions)
@@ -80,8 +90,30 @@ esac
     def run(self, shell_cmd):
         return shell_cmd
 
+    def set_env(self, key, value):
+        return LegocastleSetEnv(key, value)
+
     def workdir(self, dir):
         return LegocastleWorkdir(dir)
+
+    def rust_toolchain(self):
+        actions = []
+        if self.option("rust_toolchain", False):
+            (toolchain, is_bootstrap) = self.option("rust_toolchain")
+            assert toolchain == "stable", (
+                "Only stable toolchain is supported in legocastle,"
+                + " but {0} provided"
+            ).format(toolchain)
+            actions = [
+                self.set_env(
+                    "PATH", ShellQuoted("$BOX_DIR/xplat/rust/toolchain/current:$PATH")
+                ),
+                self.set_env("RUSTC_BOOTSTRAP", "1" if is_bootstrap else "0"),
+                self.run(ShellQuoted("rustc --version")),
+                self.run(ShellQuoted("rustdoc --version")),
+                self.run(ShellQuoted("cargo --version")),
+            ]
+        return actions
 
     def fb_github_project_workdir(self, project_and_path, github_org='facebook'):
         return LegocastleFBCheckout(project_and_path)
@@ -106,6 +138,7 @@ esac
         #
         # If we just replayed the last workdir('baz'), we would not end up
         # in '<github_prefix>/foo/bar/baz', but rather in `<unknown>/baz`.
+        next_set_env = []
         next_step_workdirs = []
         shipit_projects = []
         build_steps = []
@@ -124,6 +157,8 @@ esac
                 shipit_projects.append(
                     action.project_and_path.split('/', 1)[0]
                 )
+            elif isinstance(action, LegocastleSetEnv):
+                next_set_env.append(action)
             elif isinstance(action, LegocastleStep):
                 pre_actions = [
                     ShellQuoted('set -ex')
@@ -157,7 +192,10 @@ esac
                 )
                 pre_actions.extend(self.workdir(w) for w in next_step_workdirs)
 
-                shell_steps = []
+                shell_steps = [
+                    ShellQuoted("export {k}={v}").format(k=a.key, v=a.value)
+                    for a in next_set_env
+                ]
                 for a in itertools.chain(pre_actions, action.actions):
                     if isinstance(a, LegocastleWorkdir):
                         next_step_workdirs.append(a.dir)
@@ -166,6 +204,11 @@ esac
                                 # Don't evaluate {d} twice.
                                 '_wd={d} ; mkdir -p "$_wd" && cd "$_wd"'
                             ).format(d=a.dir)
+                        )
+                    elif isinstance(a, LegocastleSetEnv):
+                        next_set_env.append(a)
+                        shell_steps.append(
+                            ShellQuoted("export {k}={v}").format(k=a.key, v=a.value)
                         )
                     else:
                         shell_steps.append(a)
