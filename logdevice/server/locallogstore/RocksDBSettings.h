@@ -421,6 +421,8 @@ class RocksDBSettings : public SettingsBundle {
   int max_bytes_for_level_multiplier;
   int max_write_buffer_number;
   int num_levels;
+  int keep_log_file_num;
+  uint64_t max_log_file_size;
   uint64_t target_file_size_base;
   size_t write_buffer_size;
   uint64_t max_total_wal_size;
