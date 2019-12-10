@@ -87,7 +87,7 @@ class LDShellContext(context.Context):
         """
         self._admin_server_address = address
 
-    def _build_ldquery(self):
+    def build_ldquery(self):
         self._ldquery = LDQuery(
             config_path=self.get_config_path(), timeout=self._timeout
         )
@@ -240,7 +240,7 @@ class LDShellContext(context.Context):
         with self._lock:
             if not self._client:
                 try:
-                    self._client = self._build_client()
+                    self._client = self.build_client()
                 except Exception as e:
                     cprint("Cannot connect to logdevice cluster!", "red")
                     self._reset_cache()
