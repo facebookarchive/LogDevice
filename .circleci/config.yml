@@ -127,10 +127,13 @@ workflows:
           filters:
             branches:
               only: master
+    jobs:
+      - dockerimage:
+          filters:
+            branches:
+              only: master
             tags:
               only: /.*/
-    jobs:
-      - dockerimage
   build_and_test:
     jobs:
       - build:
@@ -145,3 +148,9 @@ workflows:
               only: master
           requires:
             - build
+      - dockerimage:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
