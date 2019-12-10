@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 add_subdirectory(ldquery)
-add_subdirectory(admin_command_client)
+add_subdirectory(py_extensions)
 
 add_custom_target(create_ldshell ALL
   DEPENDS
