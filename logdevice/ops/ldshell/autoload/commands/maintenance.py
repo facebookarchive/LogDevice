@@ -339,8 +339,8 @@ def _render_expanded(
                             current_state = colored(
                                 cur_op_state.name,
                                 _color_shard_op_state(
-                                    # pyre-ignore
                                     cur_op_state,
+                                    # pyre-ignore
                                     mv.shard_target_state,
                                 ),
                             )
@@ -451,9 +451,9 @@ def _render_expanded(
                 for ni in mv.affected_node_indexes:
                     shards.extend(mv.get_shards_by_node_index(ni))
                 impact_string = safety.check_impact_string(
-                    # pyre-ignore
                     response=response,
                     shards=shards,
+                    # pyre-ignore
                     target_state=mv.shard_target_state,
                 )
                 return f"Safety Check Impact:\n\n{impact_string}"
