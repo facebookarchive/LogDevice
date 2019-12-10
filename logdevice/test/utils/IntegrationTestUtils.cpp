@@ -1106,13 +1106,7 @@ int Cluster::updateNodesConfigurationFromServerConfig(
       server_config->getNodesConfig(),
       server_config->getMetaDataLogsConfig(),
       server_config->getVersion());
-  NodesConfigurationStoreFactory::Params params;
-  params.type = NodesConfigurationStoreFactory::NCSType::File;
-  params.file_store_root_dir = ncs_path_;
-  params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
-      NodesConfigurationStoreFactory::NCSType::File, cluster_name_);
-
-  auto store = NodesConfigurationStoreFactory::create(std::move(params));
+  auto store = buildNodesConfigurationStore();
   if (store == nullptr) {
     return -1;
   }
@@ -1126,16 +1120,14 @@ int Cluster::updateNodesConfigurationFromServerConfig(
 
 std::unique_ptr<Node> Cluster::createNode(node_index_t index,
                                           ServerAddresses addrs) const {
-  std::shared_ptr<const Configuration> config = config_->get();
-  ld_check(config != nullptr);
-
   std::unique_ptr<Node> node = std::make_unique<Node>();
   node->node_index_ = index;
+  node->name_ = folly::sformat("Node{}", index);
   node->addrs_ = std::move(addrs);
   node->num_db_shards_ = num_db_shards_;
   node->rocksdb_type_ = rocksdb_type_;
   node->server_binary_ = server_binary_;
-  node->gossip_enabled_ = hash_based_sequencer_assignment_;
+  node->gossip_enabled_ = isGossipEnabled();
 
   // Data path will be something like
   // /tmp/logdevice/IntegrationTestUtils.MkkZyS/N0:1/
@@ -1150,7 +1142,12 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
     node->config_path_ = config_path_;
   }
 
-  node->cmd_args_ = commandArgsForNode(index, *node);
+  node->is_storage_node_ =
+      config_->getNodesConfiguration()->isStorageNode(index);
+  node->is_sequencer_node_ =
+      config_->getNodesConfiguration()->isSequencerNode(index);
+  node->should_run_maintenance_manager_ = maintenance_manager_node_ == index;
+  node->cmd_args_ = commandArgsForNode(*node);
   node->admin_command_client_ = admin_command_client_;
 
   ld_info("Node N%d:%d will be started on addresses: protocol:%s, ssl: %s"
@@ -1167,7 +1164,66 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   return node;
 }
 
-ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
+std::unique_ptr<Node>
+Cluster::createSelfRegisteringNode(const std::string& name) const {
+  // We need gossip to be enabled to use self registration for the maintenance
+  // manager to enable the node.
+  ld_check(isGossipEnabled());
+  // Self registration only works with the NCM being the source of truth.
+  ld_check(nodes_configuration_sot_ == NodesConfigurationSourceOfTruth::NCM);
+  // NCM doesn't work with one_config_per_node.
+  ld_check(!one_config_per_node_);
+
+  std::unique_ptr<Node> node = std::make_unique<Node>();
+  node->name_ = name;
+  node->num_db_shards_ = num_db_shards_;
+  node->rocksdb_type_ = rocksdb_type_;
+  node->server_binary_ = server_binary_;
+  node->gossip_enabled_ = true;
+
+  // Data path will be something like
+  // /tmp/logdevice/IntegrationTestUtils.MkkZyS/<name>/
+  node->data_path_ = Cluster::getNodeDataPath(root_path_, name);
+  boost::filesystem::create_directories(node->data_path_);
+  node->config_path_ = config_path_;
+
+  // Allocate the addresses
+  ServerAddresses addrs;
+  if (use_tcp_) {
+    // This test uses TCP. Look for 6 free ports for each node.
+    std::vector<detail::PortOwner> ports;
+    if (detail::find_free_port_set(ServerAddresses::COUNT, ports) != 0) {
+      ld_error("Not enough free ports on system to allocate");
+      return nullptr;
+    }
+    node->addrs_ = ServerAddresses::withTCPPorts(std::move(ports));
+  } else {
+    node->addrs_ = ServerAddresses::withUnixSockets(node->data_path_);
+  }
+
+  // For now, let's create them always as both sequencer and storage, later on
+  // if needed we can change this function to accept the roles.
+  node->is_storage_node_ = true;
+  node->is_sequencer_node_ = true;
+  node->should_run_maintenance_manager_ = false;
+
+  node->cmd_args_ = commandArgsForNode(*node);
+  node->admin_command_client_ = admin_command_client_;
+
+  ld_info("Node %s (with self registration) will be started on addresses: "
+          "protocol:%s, ssl: %s, gossip:%s, command:%s, admin:%s (data in %s)",
+          name.c_str(),
+          node->addrs_.protocol.toString().c_str(),
+          node->addrs_.protocol_ssl.toString().c_str(),
+          node->addrs_.gossip.toString().c_str(),
+          node->addrs_.command.toString().c_str(),
+          node->addrs_.admin.toString().c_str(),
+          node->data_path_.c_str());
+
+  return node;
+}
+
+ParamMap Cluster::commandArgsForNode(const Node& node) const {
   std::shared_ptr<const Configuration> config = config_->get();
 
   const auto& p = node.addrs_.protocol;
@@ -1180,6 +1236,11 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
       ? std::make_pair("--command-unix-socket", ParamValue{c.getPath()})
       : std::make_pair("--command-port", ParamValue{std::to_string(c.port())});
 
+  const auto& g = node.addrs_.gossip;
+  auto gossip_addr_param = g.isUnixAddress()
+      ? std::make_pair("--gossip-unix-socket", ParamValue{g.getPath()})
+      : std::make_pair("--gossip-port", ParamValue{std::to_string(g.port())});
+
   const auto& admn = node.addrs_.admin;
   auto admin_addr_param = admn.isUnixAddress()
       ? std::make_pair("--admin-unix-socket", ParamValue{admn.getPath()})
@@ -1191,7 +1252,8 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
   ParamMaps default_param_map = {
     { ParamScope::ALL,
       {
-        protocol_addr_param, command_addr_param, admin_addr_param,
+        protocol_addr_param, command_addr_param, gossip_addr_param, admin_addr_param,
+        {"--name", ParamValue{node.name_}},
         {"--test-mode", ParamValue{"true"}},
         {"--config-path", ParamValue{"file:" + node.config_path_}},
         {"--epoch-store-path", ParamValue{epoch_store_path_}},
@@ -1223,7 +1285,7 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
         {"--num-workers", ParamValue{"5"}},
         {"--nodes-configuration-manager-store-polling-interval", ParamValue{"100ms"}},
         {"--enable-maintenance-manager",
-          ParamValue{i == maintenance_manager_node_?"true" : "false"}},
+          ParamValue{node.should_run_maintenance_manager_ ?"true" : "false"}},
       }
     },
     { ParamScope::SEQUENCER,
@@ -1247,6 +1309,7 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
     { ParamScope::STORAGE_NODE,
       {
         {"--local-log-store-path", ParamValue{node.getDatabasePath()}},
+        {"--num-shards", ParamValue{std::to_string(node.num_db_shards_)}},
         // Disable disk space checking by default; tests that want it can
         // override
         {"--free-disk-space-threshold", ParamValue{"0.000001"}},
@@ -1304,10 +1367,10 @@ ParamMap Cluster::commandArgsForNode(node_index_t i, const Node& node) const {
   // based on whether the current node is a sequencer and/or a storage node.
 
   std::vector<ParamScope> scopes;
-  if (config->serverConfig()->getNode(i)->isSequencingEnabled()) {
+  if (node.is_sequencer_node_) {
     scopes.push_back(ParamScope::SEQUENCER);
   }
-  if (config->serverConfig()->getNode(i)->isReadableStorageNode()) {
+  if (node.is_storage_node_) {
     scopes.push_back(ParamScope::STORAGE_NODE);
   }
   // ALL comes last so it doesn't overwrite more specific scopes.
@@ -2944,6 +3007,22 @@ int Cluster::waitUntilNoOneIsInStartupState(
   });
 }
 
+bool Cluster::isGossipEnabled() const {
+  static const std::string gossip_flag = "--gossip-enabled";
+  if (cmd_param_.find(ParamScope::ALL) == cmd_param_.end()) {
+    // Assumes the --gossip-enabled flag is explicitly set to false when passing
+    // cmdline arguments.
+    return false;
+  }
+  const auto& params = cmd_param_.at(ParamScope::ALL);
+  if (params.find(gossip_flag) == params.end()) {
+    // Assumes the --gossip-enabled flag is explicitly set to false when passing
+    // cmdline arguments.
+    return false;
+  }
+  return params.at(gossip_flag).value_or("true") == "true";
+}
+
 int Cluster::checkConsistency(argv_t additional_args) {
   folly::Subprocess::Options options;
   options.parentDeathSignal(SIGKILL); // kill children if test process dies
@@ -3319,8 +3398,8 @@ void Cluster::unsetSetting(const std::string& name) {
   }
 }
 
-std::shared_ptr<const NodesConfiguration>
-Cluster::readNodesConfigurationFromStore() {
+std::unique_ptr<configuration::nodes::NodesConfigurationStore>
+Cluster::buildNodesConfigurationStore() {
   using namespace logdevice::configuration::nodes;
   NodesConfigurationStoreFactory::Params params;
   params.type = NodesConfigurationStoreFactory::NCSType::File;
@@ -3328,7 +3407,13 @@ Cluster::readNodesConfigurationFromStore() {
   params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
       NodesConfigurationStoreFactory::NCSType::File, cluster_name_);
 
-  auto store = NodesConfigurationStoreFactory::create(std::move(params));
+  return NodesConfigurationStoreFactory::create(std::move(params));
+}
+
+std::shared_ptr<const NodesConfiguration>
+Cluster::readNodesConfigurationFromStore() {
+  using namespace logdevice::configuration::nodes;
+  auto store = buildNodesConfigurationStore();
   if (store == nullptr) {
     return nullptr;
   }

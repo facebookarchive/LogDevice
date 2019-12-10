@@ -88,6 +88,10 @@ class FileConfigSource;
 class ShardedLocalLogStore;
 class NodesConfigurationPublisher;
 
+namespace configuration { namespace nodes {
+class NodesConfigurationStore;
+}} // namespace configuration::nodes
+
 namespace test {
 struct ServerInfo;
 }
@@ -1152,6 +1156,10 @@ class Cluster {
     cmd_param_[scope].erase(key);
   }
 
+  // Returns true if gossip is enabled in the ALL scope.
+  // This assumes that the default for the --gossip-enabled flag is true.
+  bool isGossipEnabled() const;
+
   /**
    * Check that all the data in the cluster is correctly replicated.
    *
@@ -1269,8 +1277,17 @@ class Cluster {
   void updateSetting(const std::string& name, const std::string& value);
   void unsetSetting(const std::string& name);
 
+  // Build a NodesConfigurationStore to modify the NodesConfiguration directly.
+  std::unique_ptr<configuration::nodes::NodesConfigurationStore>
+  buildNodesConfigurationStore();
+
   // Reads the nodes configuration from the cluster's NodesConfigurationStore.
   std::shared_ptr<const NodesConfiguration> readNodesConfigurationFromStore();
+
+  // Create a self registering node with a given name. Does not start the
+  // process.
+  std::unique_ptr<Node>
+  createSelfRegisteringNode(const std::string& name) const;
 
  private:
   // Private constructor.  Factory (friend class) is only caller.
@@ -1292,8 +1309,16 @@ class Cluster {
   static std::string getNodeDataPath(const std::string& root,
                                      node_index_t index,
                                      int replacement_counter) {
-    return root + "/N" + std::to_string(index) + ':' +
-        std::to_string(replacement_counter);
+    return getNodeDataPath(root,
+                           "N" + std::to_string(index) + ':' +
+                               std::to_string(replacement_counter));
+  }
+
+  // Directory where to store the data for a node (logs, db, sockets) given the
+  // directory name of the node.
+  static std::string getNodeDataPath(const std::string& root,
+                                     const std::string& name) {
+    return root + "/" + name;
   }
 
   std::string getNodeDataPath(const std::string& root,
@@ -1317,7 +1342,7 @@ class Cluster {
                                    ServerAddresses addrs) const;
   // Helper for createNode().  Figures out the initial command line args for the
   // specified node
-  ParamMap commandArgsForNode(node_index_t index, const Node& node) const;
+  ParamMap commandArgsForNode(const Node& node) const;
 
   // Helper for createClient() and createIndependentClient() to populate client
   // settings.
@@ -1399,6 +1424,7 @@ class Node {
   std::string data_path_;
   std::string config_path_;
   std::string server_binary_;
+  std::string name_;
   node_index_t node_index_;
   ServerAddresses addrs_;
   int num_db_shards_ = 4; // how many shards storage nodes will use
@@ -1415,6 +1441,10 @@ class Node {
   ParamMap cmd_args_;
 
   std::shared_ptr<AdminCommandClient> admin_command_client_;
+
+  bool is_storage_node_ = true;
+  bool is_sequencer_node_ = true;
+  bool should_run_maintenance_manager_ = false;
 
   Node();
   ~Node() {
