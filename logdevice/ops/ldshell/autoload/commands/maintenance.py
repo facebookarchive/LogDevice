@@ -268,8 +268,8 @@ def _render_expanded(
                             colored(
                                 f"{cur_op_state.name}({num})",
                                 _color_shard_op_state(
-                                    # pyre-ignore
                                     cur_op_state,
+                                    # pyre-ignore
                                     mv.shard_target_state,
                                 ),
                             )
