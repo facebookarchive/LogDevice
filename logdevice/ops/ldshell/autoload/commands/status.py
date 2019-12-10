@@ -11,17 +11,19 @@ import datetime
 import json
 import sys
 from collections import Counter, OrderedDict, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import timedelta
 from ipaddress import ip_address
 from itertools import chain, zip_longest
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
+from humanize import naturaltime
 from ldops import admin_api
 from ldops.const import DEFAULT_THRIFT_PORT
 from logdevice.admin.common.types import SocketAddress, SocketAddressFamily
 from logdevice.admin.nodes.types import (
     MaintenanceStatus,
+    NodesStateResponse,
     SequencingState,
     ServiceState as DaemonState,
     ShardDataHealth,
@@ -44,7 +46,9 @@ try:
         get_additional_info,
         merge_additional_information,
         add_additional_host_tasks,
+        additional_validation,
         HostInfo,
+        NodeInfo,
     )
 except ImportError:
 
@@ -56,32 +60,30 @@ except ImportError:
         get_additional_info,
         merge_additional_information,
         add_additional_host_tasks,
-    ) = (async_noop, async_noop, async_noop, async_noop)
+        additional_validation,
+    ) = (async_noop, async_noop, async_noop, async_noop, async_noop)
 
     @dataclass
     class HostInfo:
         version: str
         uptime: int
 
-
-@dataclass
-class NodeInfo:
-    hostname: str
-    node_id: Optional[int] = None
-    package: Optional[str] = None
-    package_version: Optional[str] = None
-    ld_version: Optional[str] = None
-    uptime: Optional[int] = None
-    load: Optional[float] = None
-    is_metadata: Optional[bool] = None
-    location: Optional[str] = None
-    # Internal state variables
-    daemon_state: Optional[str] = None
-    sequencing_state: Optional[str] = None
-    shard_health_interpreted: Optional[str] = None
-    shard_storage_interpreted: Optional[str] = None
-    shard_operational_interpreted: Optional[str] = None
-    additional_info: Dict = field(default_factory=lambda: {})
+    @dataclass
+    class NodeInfo:
+        hostname: str
+        node_id: Optional[int] = None
+        package: Optional[str] = None
+        ld_version: Optional[str] = None
+        uptime: Optional[int] = None
+        is_metadata: Optional[bool] = None
+        location: Optional[str] = None
+        # Internal state variables
+        state: Optional[str] = None
+        sequencing_state: Optional[str] = None
+        shard_health_state: Optional[str] = None
+        shard_storage_state: Optional[str] = None
+        shard_operational_state: Optional[str] = None
+        additional_info: Dict = field(default_factory=lambda: {})
 
 
 def get_rpc_options() -> RpcOptions:
@@ -143,19 +145,12 @@ async def print_results_tabular(results, *args, **kwargs):
                 "PACKAGE",
                 lambda result: f"{result.package or '?'}:{result.ld_version or '?'}",
             ),
-            (
-                "STATE",
-                lambda result: result.daemon_state if result.daemon_state else "?",
-            ),
+            ("STATE", lambda result: result.state if result.state else "?"),
             (
                 "UPTIME",
-                lambda result: str(timedelta(seconds=int(result.uptime)))
+                lambda result: naturaltime(timedelta(seconds=int(result.uptime)))
                 if result.uptime
                 else "?",
-            ),
-            (
-                "LOAD",
-                lambda result: "{:.2f}".format(result.load) if result.load else "?",
             ),
             ("LOCATION", lambda result: result.location),
             (
@@ -166,26 +161,26 @@ async def print_results_tabular(results, *args, **kwargs):
             ),
             (
                 "DATA HEALTH",
-                lambda result: result.shard_health_interpreted
-                if result.shard_health_interpreted
+                lambda result: result.shard_health_state
+                if result.shard_health_state
                 else "?",
             ),
             (
                 "STORAGE STATE",
-                lambda result: result.shard_storage_interpreted
-                if result.shard_storage_interpreted
+                lambda result: result.shard_storage_state
+                if result.shard_storage_state
                 else "?",
             ),
             (
                 "SHARD OP.",
-                lambda result: result.shard_operational_interpreted
-                if result.shard_operational_interpreted
+                lambda result: result.shard_operational_state
+                if result.shard_operational_state
                 else "?",
             ),
         ]
     )
 
-    await add_additional_table_columns(columns)
+    apply_additional_changes = await add_additional_table_columns(columns)
 
     for name, lambd in columns.items():
         table.add_column(name, [lambd(result) for result in results])
@@ -193,33 +188,24 @@ async def print_results_tabular(results, *args, **kwargs):
     table.align["NAME"] = "l"
     table.align["PACKAGE"] = "l"
     table.align["UPTIME"] = "r"
-    table.align["LOAD"] = "r"
     table.align["SHARD OP."] = "l"
+
+    if apply_additional_changes is not None:
+        apply_additional_changes(table=table)
 
     print(table)
 
 
 async def print_results_json(results, *args, **kwargs):
-    output = {
-        r.hostname: {
-            "package": r.package,
-            "package_version": r.package_version,
-            "ld_version": r.ld_version,
-            "uptime": r.uptime,
-            "load": r.load,
-            "node_id": r.node_id,
-            "is_metadata": r.is_metadata,
-            "location": r.location,
-            "state": r.daemon_state,
-            "sequencing_state": r.sequencing_state,
-            "shard_health_state": r.shard_health_interpreted,
-            "shard_storage_state": r.shard_storage_interpreted,
-            "shard_operational_state": r.shard_operational_interpreted,
-            "additional_info": r.additional_info,
-        }
-        for r in results
-    }
-    print(json.dumps(output))
+    representations = {}
+
+    for result in results:
+        representation = asdict(result)
+
+        hostname = representation.pop("hostname")
+        representations[hostname] = representation
+
+    print(json.dumps(representations))
 
 
 def color_op_state(op_state: ShardOperationalState):
@@ -331,7 +317,11 @@ def filter_merged_information(status_data, nodes, hostnames):
     )
 
 
-async def merge_information(nodes_state, hosts_info, additional_info=None):
+async def merge_information(
+    nodes_state: NodesStateResponse,
+    hosts_info: List[HostInfo],
+    additional_info: List[Dict[str, Any]] = None,
+):
     if additional_info is None:
         additional_info = []
 
@@ -350,14 +340,10 @@ async def merge_information(nodes_state, hosts_info, additional_info=None):
                 if node_state.sequencer_state
                 else " "
             ),
-            daemon_state=color_service_state(node_state.daemon_state),
-            shard_health_interpreted=interpret_shard_health_states(
-                node_state.shard_states
-            ),
-            shard_storage_interpreted=interpret_shard_storage_states(
-                node_state.shard_states
-            ),
-            shard_operational_interpreted=interpret_shard_operational_states(
+            state=color_service_state(node_state.daemon_state),
+            shard_health_state=interpret_shard_health_states(node_state.shard_states),
+            shard_storage_state=interpret_shard_storage_states(node_state.shard_states),
+            shard_operational_state=interpret_shard_operational_states(
                 node_state.shard_states
             ),
         )
@@ -450,9 +436,12 @@ async def run_status(nodes, hostnames, extended, formatter, **kwargs):
                 if use_data_address
                 else config.other_addresses.admin
             )
-            additional_info.append(
-                additional_info_mapping[ip_address(socket_address.address)]
+            mapping_key = (
+                ip_address(socket_address.address)
+                if socket_address.address_family == SocketAddressFamily.INET
+                else socket_address.address
             )
+            additional_info.append(additional_info_mapping[mapping_key])
 
         merged_info = await merge_information(
             nodes_state=nodes_state,
@@ -464,17 +453,7 @@ async def run_status(nodes, hostnames, extended, formatter, **kwargs):
 
 
 FORMATTERS = {"json": print_results_json, "tabular": print_results_tabular}
-
-FIELDS = (
-    "hostname",
-    "node_id",
-    "package",
-    "package_version",
-    "ld_version",
-    "load",
-    "is_metadata",
-    "location",
-)
+FIELDS = [field.name for field in fields(NodeInfo)]
 
 
 @command
@@ -488,7 +467,7 @@ FIELDS = (
 @argument("extended", type=bool, description="Include internal node state as well")
 @argument("nodes", type=List[int], aliases=["n"], description="list of node ids")
 @argument("hostnames", type=List[str], aliases=["o"], description="list of hostnames")
-@argument("hosts", type=List[str], aliases=["u"], description="list of hostnames")
+@argument("hosts", type=List[str], description="list of hostnames")
 @argument(
     "sort",
     type=str,
@@ -509,13 +488,7 @@ async def status(
 
     hostnames = set(chain.from_iterable((hostnames or [], hosts or [])))
 
-    if not context.get_context().target:
-        cprint("Please specify a tier", "red", file=sys.stderr)
-        return 1
-
-    if format != "tabular" and sort is not None:
-        cprint("Sort is only applicable for tabular format", "red", file=sys.stderr)
-        return 3
+    await additional_validation()
 
     start = datetime.datetime.now()
 
@@ -527,6 +500,5 @@ async def status(
         sort=sort,
     )
     stop = datetime.datetime.now()
-    print(
-        "Took {}ms".format(int((stop - start).total_seconds() * 1000)), file=sys.stderr
-    )
+    duration = int((stop - start).total_seconds() * 1000)
+    print(f"Took {duration}ms", file=sys.stderr)
