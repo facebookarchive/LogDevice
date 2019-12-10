@@ -28,14 +28,18 @@ from logdevice.ldquery import LDQuery
 from nubia import context, exceptions
 from nubia.internal.io.eventbus import Message
 from pygments.token import Token
-from termcolor import cprint
+from termcolor import colored, cprint
 from thrift.py3 import get_client as create_thrift_client
 
 
-class Context(context.Context):
+class LDShellContext(context.Context):
     def __init__(self):
-        super(Context, self).__init__()
+        super().__init__()
         self._ld_level = LoggingLevel.NONE
+        self._config_file = None
+        self._temp_config_path = None
+        self._cluster_name = None
+        # Reset all cache variables
         self._reset()
 
     def _set_log_level(self, level):
@@ -51,29 +55,124 @@ class Context(context.Context):
         setLoggingLevel(ld_level)
 
     def _reset(self):
+        self._reset_cache()
+
+    def _reset_cache(self):
+        self._is_connected = False
         self._cluster_name = None
-        self._admin_server_address = None
         self._config_file = None
+        self._temp_config_path = None
         self._ldquery = None
         self._client = None
-        self._is_connected = False
 
     def _set_arguments(self, args):
         self._loglevel = args.loglevel
         self._timeout = args.command_timeout
         # The cluster admin server socket address
         if args.admin_server_host or args.admin_server_unix_path:
-            self._admin_server_address = create_socket_address(
-                server_host=args.admin_server_host,
-                server_path=args.admin_server_unix_path,
-                server_port=args.admin_server_port,
+            self._set_admin_server_socket_address(
+                create_socket_address(
+                    server_host=args.admin_server_host,
+                    server_path=args.admin_server_unix_path,
+                    server_port=args.admin_server_port,
+                )
             )
+        else:
+            self._admin_server_address = None
         self._set_log_level(args.loglevel)
 
+    def _set_admin_server_socket_address(self, address):
+        """
+        Can be called upon a connect() command to set the admin server address.
+        """
+        self._admin_server_address = address
+
+    def _build_ldquery(self):
+        self._ldquery = LDQuery(
+            config_path=self.get_config_path(), timeout=self._timeout
+        )
+
+    def build_client(self, settings=None):
+        logging.info(
+            "Creating a logdevice client using config {}", self.get_config_path()
+        )
+        default_settings = {"on-demand-logs-config": "true", "num-workers": 2}
+        default_settings.update(settings or {})
+        return Client(
+            "ldshell",
+            self.get_config_path(),
+            timeout=self._timeout,
+            settings=default_settings,
+        )
+
+    def _get_disconnected_warning(self) -> str:
+        return textwrap.dedent(
+            """
+                You are not connected to any logdevice clusters, in order to do so,
+                please use the connect command and pass the admin server
+                host or unix path as an argument, for instance:
+
+                connect 192.168.0.4:6440
+                """
+        )
+
+    async def get_config_contents(self) -> str:
+        async with self.get_cluster_admin_client() as client:
+            config = await client.dumpServerConfigJson()
+            return config.encode("utf-8")
+
+    async def _fetch_config(self) -> None:
+        config = await self.get_config_contents()
+        self._config_file = tempfile.NamedTemporaryFile()
+        # pyre-ignore
+        self._config_file.write(config)
+        # pyre-ignore
+        self._config_file.flush()
+        # pyre-ignore
+        self._temp_config_path = self._config_file.name
+        logging.info("Config downloaded and stored in {}", self._temp_config_path)
+
+    async def _fetch_cluster_name(self) -> None:
+        async with self.get_cluster_admin_client() as client:
+            self._cluster_name = await client.getClusterName()
+
+    def _initialize_after_connected(self) -> None:
+        """
+        """
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self._fetch_config())
+        loop.run_until_complete(self._fetch_cluster_name())
+
+    ### Public API
     def on_cli(self, cmd, args):
         self._set_arguments(args)
         # dispatch the on connected message
-        self.registry.dispatch_message(Message.CONNECTED, self._admin_server_address)
+        self.registry.dispatch_message(Message.CONNECTED)
+
+    def _should_we_be_connected(self):
+        """
+        Do we have the required variables set to attempt a cluster connection?
+        """
+        return self._admin_server_address is not None
+
+    def on_connected(self, *args, **kwargs):
+        """
+        Gets called after a connect() command is executed
+        """
+        with self._lock:
+            self._reset_cache()
+            if not self._should_we_be_connected():
+                cprint(self._get_disconnected_warning(), "yellow", file=sys.stderr)
+                self._is_connected = False
+            else:
+                self._is_connected = True
+                # Fetch config, and cluster name.
+                try:
+                    self._initialize_after_connected()
+                except Exception as e:
+                    cprint("{}".format(e), "red", file=sys.stderr)
+                    self._reset()
+                    self._is_connected = False
 
     def on_interactive(self, args):
         self._set_arguments(args)
@@ -92,15 +191,19 @@ class Context(context.Context):
                 "--admin-server-host/unix-path in CLI mode, or use the "
                 "connect command in interactive"
             )
-            raise Exception("A connection to a cluster is required!")
+            raise exceptions.CommandError("A connection to a cluster is required!")
 
     @property
     def ldquery(self):
         self.require_connected()
         with self._lock:
             if not self._ldquery:
-                self._build_ldquery()
+                self.build_ldquery()
             return self._ldquery
+
+    def get_config_path(self):
+        with self._lock:
+            return self._temp_config_path
 
     def get_node_admin_client(self, address: SocketAddress):
         """
@@ -137,74 +240,18 @@ class Context(context.Context):
         with self._lock:
             if not self._client:
                 try:
-                    self._client = self.build_client()
+                    self._client = self._build_client()
                 except Exception as e:
                     cprint("Cannot connect to logdevice cluster!", "red")
-                    self._reset()
+                    self._reset_cache()
                     raise e
             return self._client
 
-    async def fetch_config(self):
-        async with self.get_cluster_admin_client() as client:
-            logging.info(
-                "Fetching logdevice config via address {}", self._admin_server_address
-            )
-            config = await client.dumpServerConfigJson()
-            self._config_file = tempfile.NamedTemporaryFile()
-            self._config_file.write(config.encode("utf-8"))
-            self._config_file.flush()
-            self._config_path = self._config_file.name
-            logging.info("Config downloaded and stored in {}", self._config_path)
-
-    async def fetch_cluster_name(self):
-        async with self.get_cluster_admin_client() as client:
-            self._cluster_name = await client.getClusterName()
-
-    def build_client(self, settings=None):
-        logging.info("Creating a logdevice client using config {}", self._config_path)
-        default_settings = {"on-demand-logs-config": "true", "num-workers": 2}
-        default_settings.update(settings or {})
-        return Client(
-            "ldshell",
-            self._config_path,
-            timeout=self._timeout,
-            settings=default_settings,
-        )
-
-    def _build_ldquery(self):
-        config_path = self._config_path
-        self._ldquery = LDQuery(config_path=config_path, timeout=self._timeout)
-
-    def on_connected(self, *args, **kwargs):
-        if args:
-            self._admin_server_address = args[0]
-        if not self._admin_server_address:
-            cprint(
-                textwrap.dedent(
-                    """
-                    You are not connected to any logdevice clusters, in order to do so,
-                    please use the connect command and pass the admin server
-                    host or unix path as an argument, for instance:
-                    """
-                ),
-                "yellow",
-                file=sys.stderr,
-            )
-            cprint("connect 192.168.0.4:6440", file=sys.stderr)
-            self._is_connected = False
-        else:
-            self._is_connected = True
-            # Fetch config, and cluster name.
-            try:
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(self.fetch_config())
-                loop.run_until_complete(self.fetch_cluster_name())
-            except Exception as e:
-                cprint("{}".format(e), "red")
-                self._is_connected = False
+    def get_cluster_name(self):
+        return self._cluster_name
 
     def get_prompt_tokens(self) -> typing.List[typing.Tuple[typing.Any, str]]:
-        cluster = self._cluster_name
+        cluster = self.get_cluster_name()
 
         if cluster is not None:
             tokens = [

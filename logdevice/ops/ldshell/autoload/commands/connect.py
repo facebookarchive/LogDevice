@@ -7,6 +7,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from ldshell.helpers import create_socket_address, parse_socket_address
+from nubia import context
 from nubia.internal.cmdbase import Command
 from nubia.internal.io.eventbus import Message
 from termcolor import cprint
@@ -25,20 +26,16 @@ class Connect(Command):
             cprint(msg, "red")
             return -1
 
-        return self._run(parse_socket_address(arg_str))
+        ctx = context.get_context()
+        # Updating the context with the new socket for the admin server
+        ctx._set_admin_server_socket_address(parse_socket_address(arg_str))
+        return self._run()
 
     def run_cli(self, args):
-        address = None
-        if args.admin_server_host or args.admin_server_unix_path:
-            address = create_socket_address(
-                server_host=args.admin_server_host,
-                server_path=args.admin_server_unix_path,
-                server_port=args.admin_server_port,
-            )
-        return self._run(address)
+        return self._run()
 
-    def _run(self, address):
-        self._command_registry.dispatch_message(Message.CONNECTED, address)
+    def _run(self):
+        self._command_registry.dispatch_message(Message.CONNECTED)
         return 0
 
     def get_command_names(self):
