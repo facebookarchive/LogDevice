@@ -1276,6 +1276,24 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
+  init("rocksdb-keep-log-file-num",
+       &keep_log_file_num,
+       "100",
+       parse_positive<ssize_t>(),
+       "number of RocksDB log files to retain. A periodic scan process in "
+       "RocksDB reclaims old files.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
+  init("rocksdb-max-log-file-size",
+       &max_log_file_size,
+       "100M",
+       parse_positive<ssize_t>(),
+       "max size of a RocksDB log file. A new file is created once the limit "
+       "is reached.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
   init("rocksdb-target-file-size-base",
        &target_file_size_base,
        "67108864",
@@ -1547,6 +1565,8 @@ rocksdb::Options RocksDBSettings::passThroughRocksDBOptions() const {
   options.max_bytes_for_level_multiplier = max_bytes_for_level_multiplier;
   options.max_write_buffer_number = max_write_buffer_number;
   options.num_levels = num_levels;
+  options.keep_log_file_num = keep_log_file_num;
+  options.max_log_file_size = max_log_file_size;
   options.target_file_size_base = target_file_size_base;
   options.write_buffer_size = write_buffer_size;
   options.max_total_wal_size = max_total_wal_size;
