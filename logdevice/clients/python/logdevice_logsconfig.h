@@ -9,6 +9,7 @@
 
 #include <boost/python.hpp>
 
+#include "logdevice/clients/python/logdevice_client.h"
 #include "logdevice/clients/python/util/util.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/include/Client.h"

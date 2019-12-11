@@ -13,7 +13,7 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 add_dependencies(logdevice_nodes_configuration_manager_python fbthrift)
 
 target_link_libraries(logdevice_nodes_configuration_manager_python
-  logdevice_python
+  logdevice_python_util
   ldclient
   ${Boost_LIBRARIES}
   ${THRIFT_DEPS}

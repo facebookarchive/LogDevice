@@ -5,10 +5,11 @@
 # LICENSE file in the root directory of this source tree.
 
 add_library(admin_command_client STATIC AdminCommandClient.h AdminCommandClient.cpp)
-add_dependencies(admin_command_client common folly)
+add_dependencies(admin_command_client folly)
 
 target_link_libraries(admin_command_client
-   ${LOGDEVICE_EXTERNAL_DEPS}
+  common
+  ${LOGDEVICE_EXTERNAL_DEPS}
 )
 
 set_target_properties(admin_command_client

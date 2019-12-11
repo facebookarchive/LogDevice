@@ -12,6 +12,7 @@
 
 #include <boost/make_shared.hpp>
 
+#include "logdevice/clients/python/logdevice_client.h"
 #include "logdevice/clients/python/util/util.h"
 #include "logdevice/include/Client.h"
 

@@ -46,11 +46,6 @@ make_boost_shared_ptr_from_std_shared_ptr(std::shared_ptr<T> ptr) {
   return boost::shared_ptr<T>(ptr.get(), [ptr](T*) mutable { ptr.reset(); });
 }
 
-// raise a LogDevice error (logdevice::err) as a Python exception
-// throws, and never returns, ever.
-[[noreturn]] void throw_logdevice_exception(
-    boost::python::object extra = boost::python::object());
-
 // If `coerce` is true, converts numeric and boolean types to string.
 std::string extract_string(const boost::python::object& from,
                            const char* name,
@@ -91,21 +86,9 @@ createExceptionClass(const char* name,
                      const char* doc = nullptr,
                      PyObject* baseClass = PyExc_Exception);
 
-// helper to wrap a logdevice Reader instance for return to Python, since we
-// need to do some clever things to make it work cleanly.
-namespace facebook { namespace logdevice {
-class Reader;
-}}; // namespace facebook::logdevice
-
-boost::python::object
-    wrap_logdevice_reader(std::unique_ptr<facebook::logdevice::Reader>);
 
 template <typename T>
 inline std::vector<T> to_std_vector(const boost::python::object& iterable) {
   return std::vector<T>(boost::python::stl_input_iterator<T>(iterable),
                         boost::python::stl_input_iterator<T>());
 }
-
-// multiple C++ modules in the single end object requires registration
-void register_logdevice_reader();
-void register_logdevice_record();

@@ -13,6 +13,7 @@
 #include <boost/python.hpp>
 #include <folly/container/Array.h>
 
+#include "logdevice/clients/python/logdevice_client.h"
 #include "logdevice/clients/python/logdevice_logsconfig.h"
 #include "logdevice/clients/python/util/util.h"
 #include "logdevice/common/Semaphore.h"
