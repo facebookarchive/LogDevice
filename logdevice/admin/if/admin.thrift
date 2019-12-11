@@ -140,6 +140,24 @@ service AdminAPI extends fb303.FacebookService {
        4: exceptions.NotSupported not_supported) (cpp.coroutine);
 
   /**
+   * In a newly bootstrapped cluster, this call is needed to finalize the
+   * bootstrapping and allow the cluster to be used. This call will:
+   *   1- Enable sequencing on all the nodes that have sequencer role.
+   *   2- Transition storage nodes that are done provisioning into ReadWrite.
+   *   3- Create the initial metadata nodeset according to the passed
+   *      replication property.
+   *   4- Mark the NodesConfiguration as bootstrapped.
+   *
+   * Calls to this function will fail if the cluster is already bootstrapped
+   * or if there are not enough provisioned storage nodes to satisfy the
+   * requested replication property.
+   */
+  cluster_membership.BootstrapClusterResponse bootstrapCluster(1:
+      cluster_membership.BootstrapClusterRequest request) throws
+      (1: exceptions.OperationError error,
+       2: exceptions.NodesConfigurationManagerError ncm_error) (cpp.coroutine);
+
+  /**
    * Lists the maintenance by group-ids. This returns maintenances from the
    * state stored in the server which may include maintenances that were not
    * processed/started yet. If filter is empty, this will return all

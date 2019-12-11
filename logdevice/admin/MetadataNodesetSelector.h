@@ -18,7 +18,7 @@ namespace facebook { namespace logdevice {
 // tries to preserve the existing nodes in the nodes except for the ones that
 // need to be removed or the node whose number of writable shards has fallen
 // below a configurable threshold
-// Currently an existing node is preserved only if it hasa
+// Currently an existing node is preserved only if it has a
 // NUM_WRITEABLE_SHARDS_PER_NODE_RATIO of writeable shards.
 //
 // This selector picks nodes in a domain from a priority queue that minimizes
