@@ -12,6 +12,8 @@
 #include <tuple>
 #include <utility>
 
+#include "logdevice/common/configuration/nodes/utils.h"
+
 namespace facebook { namespace logdevice {
 
 // The percent of Shards that should be writable on a node
@@ -35,13 +37,16 @@ MetadataNodeSetSelector::getNodeSet(
   ld_check(!replication_factors.empty());
 
   auto target_nodeset_size =
-      2 * replication_property.getReplicationFactor() - 1;
+      std::min(static_cast<int>(nodes_config->getStorageNodes().size()),
+               2 * replication_property.getReplicationFactor() - 1);
 
   NodeLocationScope replication_scope;
   if (replication_factors[0].first <= NodeLocationScope::NODE) {
-    // Metadata log should really be spread across multiple racks at
-    // minimum to ensure availability.
-    replication_scope = NodeLocationScope::RACK;
+    ld_warning("Metadata nodeset is not configured to have cross domain "
+               "replication. This might be risky because the failure of a "
+               "single domain can make the metadata unaccessible.");
+    // No cross-domain replication
+    replication_scope = NodeLocationScope::ROOT;
   } else {
     replication_scope = replication_factors[0].first;
   }
@@ -140,7 +145,6 @@ MetadataNodeSetSelector::getNodeSet(
   // Keep track of number of unique domains in largest scope picked
   int num_domains_picked = 0;
 
-  //
   auto comparator = [&](Domain* a, Domain* b) {
     // Domains with existing nodes have high priority
     auto a_has_existing_nodes = a->existing_nodes.size() > 0 ? 0 : 1;
@@ -191,34 +195,43 @@ MetadataNodeSetSelector::getNodeSet(
     }
   }
 
-  if (new_nodeset.size() < target_nodeset_size) {
-    ld_error("Not enough nodes to generate a proper nodeset for metadata "
-             "logs, Replication Property:%s "
-             "Target NodeSet Size:%s "
-             "New Nodeset Size:%s "
-             "Selected nodes:%s",
-             toString(replication_property).c_str(),
-             toString(target_nodeset_size).c_str(),
-             toString(new_nodeset.size()).c_str(),
-             toString(new_nodeset).c_str());
-
-    return folly::makeUnexpected<Status>(E::FAILED);
+  {
+    // Convert it to StorageSet to check validity
+    StorageSet storage_set;
+    for (auto node : new_nodeset) {
+      auto shards = membership->getShardStates(node);
+      for (const auto& [shard, _] : shards) {
+        storage_set.push_back(ShardID(node, shard));
+      }
+    }
+    if (!configuration::nodes::validStorageSet(
+            *nodes_config, storage_set, replication_property)) {
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      5,
+                      "Not enough storage nodes to select a metadata nodeset "
+                      "replication: %s, selected: %s.",
+                      toString(replication_property).c_str(),
+                      toString(new_nodeset).c_str());
+      return folly::makeUnexpected<Status>(E::FAILED);
+    }
   }
 
   // Check that nodeset has enough racks and regions. Require at least one
   // extra domain in the largest scope in the nodeset to tolerate loss of
   // single domain
-  if (replication_factors[0].second > 1 &&
+  if (replication_factors[0].first > NodeLocationScope::NODE &&
+      replication_factors[0].second > 1 &&
       num_domains_picked <= replication_factors[0].second) {
-    ld_error("Not enough nodes to generate a proper nodeset for metadata logs, "
-             "Replication Property:%s, "
-             "Num domains picked:%s, "
-             "Num domains required:>%s , Selected nodes:%s",
-             toString(replication_property).c_str(),
-             toString(num_domains_picked).c_str(),
-             toString(replication_factors[0].second).c_str(),
-             toString(new_nodeset).c_str());
-    return folly::makeUnexpected<Status>(E::FAILED);
+    ld_warning("Not enough nodes to generate a nodeset with an extra domain in "
+               "the largest scope. This generated nodeset won't be able to "
+               "tolerate the loss of a single domain."
+               "Replication Property:%s, "
+               "Num domains picked:%s, "
+               "Num domains required:>%s , Selected nodes:%s",
+               toString(replication_property).c_str(),
+               toString(num_domains_picked).c_str(),
+               toString(replication_factors[0].second).c_str(),
+               toString(new_nodeset).c_str());
   }
 
   return new_nodeset;
