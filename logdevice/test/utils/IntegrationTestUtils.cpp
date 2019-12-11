@@ -2078,14 +2078,17 @@ std::unique_ptr<ShardedLocalLogStore> Node::createLocalLogStore() {
   // not create lots of partitions if we write a record with very old timestamp.
   rocks_settings.partition_duration_ = std::chrono::seconds(0);
 
-  return std::make_unique<ShardedRocksDBLocalLogStore>(
+  auto log_store = std::make_unique<ShardedRocksDBLocalLogStore>(
       getDatabasePath(),
       num_db_shards_,
-      create_default_settings<Settings>(),
       UpdateableSettings<RocksDBSettings>(rocks_settings),
-      UpdateableSettings<RebuildingSettings>(),
-      nullptr,
       nullptr);
+
+  log_store->init(create_default_settings<Settings>(),
+                  UpdateableSettings<RebuildingSettings>(),
+                  nullptr,
+                  nullptr);
+  return log_store;
 }
 
 void Node::corruptShards(std::vector<uint32_t> shards,
