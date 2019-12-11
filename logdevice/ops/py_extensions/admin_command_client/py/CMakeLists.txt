@@ -11,6 +11,7 @@ python_add_module(logdevice_admin_command_client_python
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 target_link_libraries(logdevice_admin_command_client_python
+  logdevice_python_util
   admin_command_client
 )
 

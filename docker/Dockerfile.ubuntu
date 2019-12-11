@@ -60,7 +60,7 @@ COPY --from=builder /build/staging/usr/local/lib/*.so /usr/local/lib/
 # LDShell, LDops, ldquery, etc.
 COPY --from=builder /build/python-out/dist/ldshell-*.whl /tmp/
 # LogDevice client library python bindings
-COPY --from=builder /build/lib/liblogdevice.so /usr/local/lib/
+COPY --from=builder /build/lib/*.so /usr/local/lib/
 
 # Install runtime dependencies for ld-dev-cluster, ldshell friends.
 # To install the ldshell wheel we also need python3 build tools, as
