@@ -152,5 +152,7 @@ workflows:
           requires:
             - build
           filters:
+            branches:
+              ignore: master
             tags:
               only: /.*/
