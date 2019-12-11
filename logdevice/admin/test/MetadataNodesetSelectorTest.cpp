@@ -158,8 +158,8 @@ TEST_F(MetadataNodesetSelectorTest, ExcludeNode) {
 
   // Say we want to exclude one of them
   auto excluded_node = *old_metadata_nodeset.begin();
-  auto result = MetadataNodeSetSelector::getNodeSet(
-      nodes_config_, {excluded_node});
+  auto result =
+      MetadataNodeSetSelector::getNodeSet(nodes_config_, {excluded_node});
   EXPECT_FALSE(result.hasError());
   EXPECT_TRUE(result.hasValue());
   EXPECT_EQ(old_metadata_nodeset.size(), result.value().size());
@@ -169,8 +169,8 @@ TEST_F(MetadataNodesetSelectorTest, ExcludeNode) {
 }
 
 TEST_F(MetadataNodesetSelectorTest, MultiScopeReplicationProperty) {
-  replication_property_ = ReplicationProperty(
-      {{NodeLocationScope::NODE, 3}, {NodeLocationScope::CLUSTER, 2}});
+  replication_property_ =
+      ReplicationProperty({{NodeLocationScope::CLUSTER, 3}});
   init();
   auto old_metadata_nodeset =
       nodes_config_->getStorageMembership()->getMetaDataNodeSet();
@@ -197,6 +197,31 @@ TEST_F(MetadataNodesetSelectorTest, MultiScopeReplicationProperty) {
   EXPECT_FALSE(result.hasError());
   EXPECT_TRUE(result.hasValue());
   EXPECT_EQ(result.value().size(), 5);
+}
+
+TEST_F(MetadataNodesetSelectorTest, NodeScopeNodeset) {
+  replication_property_ = ReplicationProperty({{NodeLocationScope::NODE, 3}});
+  // Build a cluster with three nodes in the same domain
+  std::vector<NodeTemplate> nodes;
+  for (int i = 0; i < 3; i++) {
+    NodeTemplate node;
+    node.id = i;
+    node.location = "rg1.dc1.msb3.rw1.rk1";
+    node.num_shards = 1;
+    nodes.push_back(node);
+  }
+  auto update = NodesConfigurationTestUtil::initialAddShardsUpdate(
+      nodes, replication_property_);
+  nodes_config_ =
+      NodesConfigurationTestUtil::provisionNodes(std::move(update), {});
+  ld_check(nodes_config_);
+
+  // We should be able to build a nodeset that spawns the whole cluster
+  auto result = MetadataNodeSetSelector::getNodeSet(
+      nodes_config_, std::unordered_set<node_index_t>());
+
+  ASSERT_TRUE(result.hasValue());
+  EXPECT_EQ((std::set<node_index_t>{0, 1, 2}), result.value());
 }
 
 }} // namespace facebook::logdevice
