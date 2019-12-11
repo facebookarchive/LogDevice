@@ -3,12 +3,16 @@
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
+
+add_subdirectory(util)
+
 auto_sources(hfiles "*.h" RECURSE "${LOGDEVICE_PYTHON_CLIENT_DIR}")
 auto_sources(files "*.cpp" RECURSE "${LOGDEVICE_PYTHON_CLIENT_DIR}")
 
 REMOVE_MATCHES_FROM_LISTS(files hfiles
   MATCHES
-    "test/*"
+    "/util/"
+    "/tests/"
     "logdevice_settings.cpp"  # Settings depends on server at the moment >.<
 )
 
@@ -17,6 +21,7 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 
 message(STATUS "Linking Python bindings with ${PYTHON_LIBRARIES}")
 target_link_libraries(logdevice_python
+  logdevice_python_util
   ldclient
   ${Boost_LIBRARIES}
   ${PYTHON_LIBRARIES}
