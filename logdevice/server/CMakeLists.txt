@@ -57,6 +57,9 @@ else()
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
   endif()
 
+set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES
+  ${LOGDEVICE_SERVER_DIR}/flaky_tests.cmake)
+
   target_link_libraries(server_test
     common
     common_test_util
