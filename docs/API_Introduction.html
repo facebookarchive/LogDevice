@@ -127,13 +127,13 @@ Some applications use this context to include state or tracking information for 
  <span class="hljs-keyword">public</span>:
   <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">onSuccess</span><span class="hljs-params">(<span class="hljs-keyword">logid_t</span> <span class="hljs-comment">/* unused */</span>,
                  ContextSet contexts,
-                 <span class="hljs-keyword">const</span> DataRecordAttributes&amp; <span class="hljs-comment">/* unused */</span>)</span> override </span>{
+                 <span class="hljs-keyword">const</span> DataRecordAttributes&amp; <span class="hljs-comment">/* unused */</span>)</span> <span class="hljs-keyword">override</span> </span>{
     <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"BufferedWriterCallback: a batch of "</span> &lt;&lt; contexts.<span class="hljs-built_in">size</span>()
               &lt;&lt; <span class="hljs-string">" records successfully written ."</span> &lt;&lt; <span class="hljs-string">'\n'</span>;
     }
 
   <span class="hljs-comment">// BufferedWriter exhausted all retries it was configured to do.</span>
-  <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">onFailure</span><span class="hljs-params">(<span class="hljs-keyword">logid_t</span> log_id, ContextSet contexts, Status status)</span> override </span>{
+  <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">onFailure</span><span class="hljs-params">(<span class="hljs-keyword">logid_t</span> log_id, ContextSet contexts, Status status)</span> <span class="hljs-keyword">override</span> </span>{
 
     <span class="hljs-comment">// Handle the error if needed. For example, collect the</span>
     <span class="hljs-comment">// failed payloads to retry them later.</span>
