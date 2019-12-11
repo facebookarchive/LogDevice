@@ -224,3 +224,25 @@ struct BumpGenerationResponse {
    */
   2: common.unsigned64 new_nodes_configuration_version,
 }
+
+////////////////////////////////////////////////////////////////////////////
+////////////////////// Boostrap Cluster Request ////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Request to finalize the bootstrapping of the cluster
+ */
+struct BootstrapClusterRequest {
+  /**
+   * The metadata replication property that this cluster will have. This will
+   * be used to provision the initial metadata nodeset.
+   */
+  1: common.ReplicationProperty metadata_replication_property,
+}
+
+struct BootstrapClusterResponse {
+  /**
+   * The version of the updated NodesConfiguration.
+   */
+  1: common.unsigned64 new_nodes_configuration_version,
+}

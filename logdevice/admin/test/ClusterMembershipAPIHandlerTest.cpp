@@ -21,6 +21,7 @@
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
+#include "logdevice/test/utils/SelfRegisteredCluster.h"
 
 using namespace ::testing;
 using namespace apache::thrift;
@@ -578,4 +579,82 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, BumpNodeGeneration) {
   EXPECT_EQ(2, nc->getNodeStorageAttribute(1)->generation);
   EXPECT_EQ(1, nc->getNodeStorageAttribute(2)->generation);
   EXPECT_EQ(1, nc->getNodeStorageAttribute(3)->generation);
+}
+
+TEST(ClusterMemebershipAPIIntegrationTest2, BootstrapCluster) {
+  auto cluster = IntegrationTestUtils::SelfRegisteredCluster::create();
+
+  std::vector<std::unique_ptr<IntegrationTestUtils::Node>> nodes;
+  nodes.push_back(cluster->createSelfRegisteringNode("server_1"));
+  nodes.push_back(cluster->createSelfRegisteringNode("server_2"));
+  nodes.push_back(cluster->createSelfRegisteringNode("server_3"));
+
+  // Start all the node and wait until they are all provisioned
+  for (auto& node : nodes) {
+    node->start();
+  }
+  for (auto& node : nodes) {
+    node->waitUntilStarted();
+  }
+  wait_until("All the shards are marked provisioned", [&]() {
+    auto nc = cluster->readNodesConfigurationFromStore();
+    ld_check(nc);
+    auto mem = nc->getStorageMembership();
+
+    if (mem->getMembershipNodes().size() < nodes.size()) {
+      return false;
+    }
+
+    auto all_provisioned = true;
+    for (auto& node : mem->getMembershipNodes()) {
+      for (const auto& [shard, state] : mem->getShardStates(node)) {
+        all_provisioned = all_provisioned &&
+            state.storage_state == membership::StorageState::NONE;
+      }
+    }
+    return all_provisioned;
+  });
+
+  // The cluster is ready to be marked as bootstrapped
+  auto admin_client = nodes[0]->createAdminClient();
+
+  // Replicate metadata across three nodes
+  thrift::BootstrapClusterRequest req;
+  req.set_metadata_replication_property({{thrift::LocationScope::NODE, 3}});
+  thrift::BootstrapClusterResponse resp;
+  admin_client->sync_bootstrapCluster(resp, std::move(req));
+
+  // Validate the changes that happened to NC
+  auto nc = cluster->readNodesConfigurationFromStore();
+
+  auto storage_mem = nc->getStorageMembership();
+  auto seq_mem = nc->getSequencerMembership();
+
+  // First check that NC is not bootstrapping anymore.
+  EXPECT_FALSE(seq_mem->isBootstrapping());
+  EXPECT_FALSE(storage_mem->isBootstrapping());
+
+  // All sequencers should be enabled
+  EXPECT_EQ(3, seq_mem->getMembershipNodes().size());
+  for (const auto& seq : seq_mem->getMembershipNodes()) {
+    auto state = seq_mem->getNodeState(seq);
+    EXPECT_TRUE(state->sequencer_enabled);
+    EXPECT_EQ(1, state->getConfiguredWeight());
+  }
+
+  // All storage should be enabled
+  EXPECT_EQ(3, storage_mem->getMembershipNodes().size());
+  for (auto& node : storage_mem->getMembershipNodes()) {
+    for (const auto& [shard, state] : storage_mem->getShardStates(node)) {
+      EXPECT_EQ(membership::StorageState::READ_WRITE, state.storage_state);
+    }
+  }
+
+  // Metadata replication property should be correctly set
+  auto rep_prop = nc->getMetaDataLogsReplication()->getReplicationProperty();
+  EXPECT_EQ(ReplicationProperty(3, NodeLocationScope::NODE), rep_prop);
+
+  // Nodeset must spawn the whole cluster
+  EXPECT_EQ(
+      (std::set<node_index_t>{0, 1, 2}), storage_mem->getMetaDataNodeSet());
 }

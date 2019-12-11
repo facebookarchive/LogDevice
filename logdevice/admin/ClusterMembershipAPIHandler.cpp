@@ -15,6 +15,7 @@
 #include "logdevice/admin/AdminAPIHandlerBase.h"
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/cluster_membership/AddNodesHandler.h"
+#include "logdevice/admin/cluster_membership/BootstrapClusterHandler.h"
 #include "logdevice/admin/cluster_membership/BumpNodeGenerationHandler.h"
 #include "logdevice/admin/cluster_membership/MarkShardsAsProvisionedHandler.h"
 #include "logdevice/admin/cluster_membership/RemoveNodesHandler.h"
@@ -280,6 +281,49 @@ ClusterMembershipAPIHandler::semifuture_bumpNodeGeneration(
                   nodes_configuration->getVersion().val());
               return resp;
             });
+      });
+}
+
+folly::SemiFuture<std::unique_ptr<thrift::BootstrapClusterResponse>>
+ClusterMembershipAPIHandler::semifuture_bootstrapCluster(
+    std::unique_ptr<thrift::BootstrapClusterRequest> request) {
+  return folly::futures::retrying(
+      get_retrying_policy(),
+      [req = std::move(request),
+       processor = processor_,
+       thread_manager = getThreadManager()](size_t trial)
+          -> folly::SemiFuture<
+              std::unique_ptr<thrift::BootstrapClusterResponse>> {
+        ld_info("Handling bootstrapCluster request (trial #%ld): %s",
+                trial,
+                debugString(*req).c_str());
+        auto nodes_configuration = processor->getNodesConfiguration();
+
+        BootstrapClusterHandler handler{};
+        auto res =
+            handler.buildNodesConfigurationUpdates(*req, *nodes_configuration);
+
+        if (res.hasError()) {
+          return folly::makeSemiFuture<
+              std::unique_ptr<thrift::BootstrapClusterResponse>>(
+              std::move(res).error());
+        }
+
+        auto update_result = std::move(res).value();
+
+        return applyNodesConfigurationUpdates(
+                   processor, std::move(update_result.update))
+            .via(thread_manager)
+            .thenValue(
+                [](std::shared_ptr<const NodesConfiguration> new_cfg) mutable
+                -> folly::SemiFuture<
+                    std::unique_ptr<thrift::BootstrapClusterResponse>> {
+                  auto resp =
+                      std::make_unique<thrift::BootstrapClusterResponse>();
+                  resp->set_new_nodes_configuration_version(
+                      new_cfg->getVersion().val());
+                  return std::move(resp);
+                });
       });
 }
 
