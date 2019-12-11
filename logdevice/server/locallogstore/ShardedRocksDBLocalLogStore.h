@@ -59,24 +59,32 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
    *
    * @param num_shards  number of shards to create database with, if -1
    *                    NSHARDS file must already exist
-   * @param config  current configuration; pointer is only guaranted to be
-   *                valid during the call; can be nullptr in tests
+   */
+  ShardedRocksDBLocalLogStore(const std::string& base_path,
+                              shard_size_t num_shards,
+                              UpdateableSettings<RocksDBSettings> db_settings,
+                              StatsHolder* stats = nullptr);
+
+  ~ShardedRocksDBLocalLogStore() override;
+
+  /**
+   * Initialize the local storage by opening the underlying RocksDB instances
+   * Can only be called once
+   *
+   * @param settings  settings to be used for the RocksDBLogStoreFactory
+   * @param rebuilding_settings rebuilding settings
+   * @param updateable_config  current configuration; pointer is only
+   *                guaranted to be valid during the call; can be nullptr in
+   *                tests
    * @param caches  if not null, this object will be updated with pointers to
    *                RocksDB block caches
    *
    * @throws ConstructorFailed
    */
-  ShardedRocksDBLocalLogStore(
-      const std::string& base_path,
-      shard_size_t num_shards,
-      Settings settings,
-      UpdateableSettings<RocksDBSettings> db_settings,
-      UpdateableSettings<RebuildingSettings> rebuilding_settings,
-      std::shared_ptr<UpdateableConfig> updateable_config,
-      RocksDBCachesInfo* caches,
-      StatsHolder* stats = nullptr);
-
-  ~ShardedRocksDBLocalLogStore() override;
+  void init(Settings settings,
+            UpdateableSettings<RebuildingSettings> rebuilding_settings,
+            std::shared_ptr<UpdateableConfig> updateable_config,
+            RocksDBCachesInfo* caches);
 
   int numShards() const override {
     return shards_.size();
@@ -196,6 +204,15 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   // Indicating if shards are partitioned
   const bool partitioned_;
+
+  // Base path of where the actual RocksDB folders (shards) are located
+  std::string base_path_;
+
+  // Number of shards to expect in the base folder
+  shard_size_t nshards_;
+
+  // Set to true when all RocksDB databases have been initialized
+  bool initialized_ = false;
 };
 
 }} // namespace facebook::logdevice

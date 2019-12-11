@@ -800,12 +800,13 @@ bool Server::initStore() {
       sharded_store_.reset(
           new ShardedRocksDBLocalLogStore(local_log_store_path,
                                           params_->getNumDBShards(),
-                                          *local_settings,
                                           params_->getRocksDBSettings(),
-                                          params_->getRebuildingSettings(),
-                                          updateable_config_,
-                                          &g_rocksdb_caches,
                                           params_->getStats()));
+
+      sharded_store_->init(*local_settings,
+                           params_->getRebuildingSettings(),
+                           updateable_config_,
+                           &g_rocksdb_caches);
       if (!server_settings_->ignore_cluster_marker &&
           !ClusterMarkerChecker::check(*sharded_store_,
                                        *server_config_,
