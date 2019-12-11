@@ -130,7 +130,7 @@ class LDShellContext(context.Context):
         self._config_file.flush()
         # pyre-ignore
         self._temp_config_path = self._config_file.name
-        logging.info("Config downloaded and stored in {}", self._temp_config_path)
+        logging.info("Config downloaded and stored in %s", self._temp_config_path)
 
     async def _fetch_cluster_name(self) -> None:
         async with self.get_cluster_admin_client() as client:
