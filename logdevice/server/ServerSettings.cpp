@@ -500,6 +500,14 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::NodeRegistration)
 
+    ("wipe-storage-when-storage-state-none",
+     &wipe_storage_when_storage_state_none,
+     "false",
+     nullptr,
+     "Allow wiping the local RocksDB store when its storage state is none",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::Configuration)
+
     ;
   // clang-format on
 

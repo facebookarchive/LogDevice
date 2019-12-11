@@ -803,6 +803,31 @@ bool Server::initStore() {
                                           params_->getRocksDBSettings(),
                                           params_->getStats()));
 
+      // Shards get automatically wiped when NCM marks them as
+      // storage state NONE and wipe_storage_when_storage_state_none is enabled
+      if (server_settings_->wipe_storage_when_storage_state_none &&
+          params_->getProcessorSettings()->enable_nodes_configuration_manager) {
+        std::vector<shard_index_t> shards_to_wipe;
+        auto shard_states =
+            updateable_config_->getNodesConfiguration()
+                ->getStorageMembership()
+                ->getShardStates(params_->getMyNodeID()->index());
+        for (const auto& kv : shard_states) {
+          if (kv.second.storage_state == membership::StorageState::NONE) {
+            shards_to_wipe.push_back(kv.first);
+          }
+        }
+        if (shards_to_wipe.size() > 0) {
+          ld_info("Wiping shards %s since their storage is NONE",
+                  toString(shards_to_wipe).c_str());
+
+          if (!sharded_store_->wipe(shards_to_wipe)) {
+            ld_critical("Failed to wipe log store while "
+                        "--wipe-storage-when-storage-state-none is enabled");
+            throw ConstructorFailed();
+          }
+        }
+      }
       sharded_store_->init(*local_settings,
                            params_->getRebuildingSettings(),
                            updateable_config_,

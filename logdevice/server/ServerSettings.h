@@ -85,6 +85,8 @@ struct ServerSettings : public SettingsBundle {
 
   bool test_mode;
 
+  bool wipe_storage_when_storage_state_none;
+
   // Self Registration Specific attributes
   bool enable_node_self_registration;
   std::string name;

@@ -86,6 +86,16 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
             std::shared_ptr<UpdateableConfig> updateable_config,
             RocksDBCachesInfo* caches);
 
+  /**
+   * Wipe the underlying storage layer
+   * Cannot be called when already initialized
+   *
+   * @param shard_indexes Shard indexes that can be wiped
+   *
+   * @returns true if wipe was success
+   */
+  bool wipe(const std::vector<shard_index_t>& shard_indexes);
+
   int numShards() const override {
     return shards_.size();
   }
@@ -156,6 +166,8 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
   void refreshIOTracingSettings();
 
   void onSettingsUpdated();
+
+  void createAndValidateShards();
 
   // Shutdown event to indicate that the sharded store is closing down.
   SingleEvent shutdown_event_;

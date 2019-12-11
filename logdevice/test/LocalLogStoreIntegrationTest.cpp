@@ -13,6 +13,7 @@
 
 #include "logdevice/include/Client.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
+#include "logdevice/server/locallogstore/ShardToPathMapping.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -168,4 +169,71 @@ TEST_F(LocalLogStoreIntegrationTest, IOTracingSmokeTest) {
 
   // Read again, expecting to hit disk.
   read();
+}
+
+namespace {
+namespace fs = boost::filesystem;
+void testWipeStorageIfEmpty(bool enabled) {
+  // Start a cluster with NCM enabled
+  const size_t num_nodes = 3;
+  const size_t num_shards = 2;
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setParam("--wipe-storage-when-storage-state-none",
+                    enabled ? "true" : "false")
+          .setNodesConfigurationSourceOfTruth(
+              IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
+          .setParam("--enable-nodes-configuration-manager", "true")
+          .setNumDBShards(num_shards)
+          // switches on gossip
+          .useHashBasedSequencerAssignment()
+          .create(num_nodes);
+
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+
+  // Add a random file in all shards for each node
+  for (auto node_idx = 0; node_idx < num_nodes; node_idx++) {
+    std::string database_path = cluster->getNode(node_idx).getDatabasePath();
+    std::vector<fs::path> shard_paths;
+    int rv = ShardToPathMapping(database_path, num_shards).get(&shard_paths);
+    ASSERT_EQ(0, rv);
+
+    for (const auto& path : shard_paths) {
+      fs::path touched_path = path / fs::path("TOUCHED");
+      folly::writeFile(std::string("testing123"), touched_path.c_str());
+    }
+  }
+
+  // Disable storage on node 1
+  // Restart all the nodes
+  cluster->getNode(1).kill();
+  cluster->updateNodeAttributes(1, configuration::StorageState::DISABLED, 1);
+  for (auto node_idx = 0; node_idx < num_nodes; node_idx++) {
+    cluster->getNode(node_idx).restart(
+        /* graceful */ true, /* wait_until_available */ true);
+  }
+
+  // Verify if only node 1 got a wiped shard
+  for (auto node_idx = 0; node_idx < num_nodes; node_idx++) {
+    std::string database_path = cluster->getNode(node_idx).getDatabasePath();
+    std::vector<fs::path> shard_paths;
+
+    // Verify if only node 1 got wiped if setting was enabled
+    ASSERT_EQ(
+        0, ShardToPathMapping(database_path, num_shards).get(&shard_paths));
+    for (auto it = shard_paths.begin(); it != shard_paths.end(); it++) {
+      fs::path touched_path = *it / fs::path("TOUCHED");
+      EXPECT_EQ(node_idx == 1 && enabled, !fs::exists(touched_path));
+    }
+  }
+}
+} // namespace
+
+TEST_F(LocalLogStoreIntegrationTest, WipeStorageNodeIfEmptyTest) {
+  testWipeStorageIfEmpty(true);
+}
+
+TEST_F(LocalLogStoreIntegrationTest,
+       WipeStorageNodeIfEmptySettingDisabledTest) {
+  testWipeStorageIfEmpty(false);
 }

@@ -62,36 +62,7 @@ static int create_new_sharded_db(const std::string& base_path,
 using DiskShardMappingEntry =
     ShardedRocksDBLocalLogStore::DiskShardMappingEntry;
 
-ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
-    const std::string& base_path,
-    shard_size_t nshards,
-    UpdateableSettings<RocksDBSettings> db_settings,
-    StatsHolder* stats)
-    : stats_(stats),
-      db_settings_(db_settings),
-      partitioned_(db_settings->partitioned),
-      base_path_(base_path),
-      nshards_(nshards) {}
-
-void ShardedRocksDBLocalLogStore::init(
-    Settings settings,
-    UpdateableSettings<RebuildingSettings> rebuilding_settings,
-    std::shared_ptr<UpdateableConfig> updateable_config,
-    RocksDBCachesInfo* caches) {
-  // Short circuit for when we're already initialised
-  ld_check(!initialized_);
-  if (initialized_) {
-    return;
-  }
-  initialized_ = true;
-
-  if (db_settings_->num_levels < 2 &&
-      db_settings_->compaction_style == rocksdb::kCompactionStyleLevel) {
-    ld_error("Level-style compaction requires at least 2 levels. %d given.",
-             db_settings_->num_levels);
-    throw ConstructorFailed();
-  }
-
+void ShardedRocksDBLocalLogStore::createAndValidateShards() {
   int rv = database_exists(base_path_);
   if (rv < 0) {
     throw ConstructorFailed();
@@ -123,6 +94,38 @@ void ShardedRocksDBLocalLogStore::init(
       throw ConstructorFailed();
     }
   }
+}
+
+ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
+    const std::string& base_path,
+    shard_size_t nshards,
+    UpdateableSettings<RocksDBSettings> db_settings,
+    StatsHolder* stats)
+    : stats_(stats),
+      db_settings_(db_settings),
+      partitioned_(db_settings->partitioned),
+      base_path_(base_path),
+      nshards_(nshards) {}
+
+void ShardedRocksDBLocalLogStore::init(
+    Settings settings,
+    UpdateableSettings<RebuildingSettings> rebuilding_settings,
+    std::shared_ptr<UpdateableConfig> updateable_config,
+    RocksDBCachesInfo* caches) {
+  // Short circuit for when we're already initialised
+  ld_check(!initialized_);
+  if (initialized_) {
+    return;
+  }
+  initialized_ = true;
+  if (db_settings_->num_levels < 2 &&
+      db_settings_->compaction_style == rocksdb::kCompactionStyleLevel) {
+    ld_error("Level-style compaction requires at least 2 levels. %d given.",
+             db_settings_->num_levels);
+    throw ConstructorFailed();
+  }
+
+  createAndValidateShards();
 
   std::shared_ptr<Configuration> config =
       updateable_config ? updateable_config->get() : nullptr;
@@ -166,7 +169,7 @@ void ShardedRocksDBLocalLogStore::init(
     }
   }
 
-  rv = ShardToPathMapping(base_path_, nshards_).get(&shard_paths_);
+  int rv = ShardToPathMapping(base_path_, nshards_).get(&shard_paths_);
   if (rv != 0) {
     throw ConstructorFailed();
   }
@@ -301,6 +304,57 @@ void ShardedRocksDBLocalLogStore::init(
     throw ConstructorFailed();
   }
   printDiskShardMapping();
+}
+
+bool ShardedRocksDBLocalLogStore::wipe(
+    const std::vector<shard_index_t>& shard_indexes) {
+  ld_check(!initialized_);
+  if (initialized_) {
+    ld_critical("Wipe called after RocksDB initialisation. Ignoring.");
+    return false;
+  }
+
+  try {
+    createAndValidateShards();
+  } catch (const ConstructorFailed&) {
+    ld_error("Shard validation failed.");
+    return false;
+  }
+
+  std::vector<fs::path> paths;
+  int rv = ShardToPathMapping(base_path_, nshards_).get(&paths);
+  if (rv != 0) {
+    ld_error("Failed to calculate shard path mapping");
+    return false;
+  }
+
+  ld_check(static_cast<int>(paths.size()) == nshards_);
+  for (shard_index_t shard_idx : shard_indexes) {
+    fs::path shard_path = paths.at(shard_idx);
+
+    try {
+      // Do not wipe "disabled" shards
+      if (fs::exists(shard_path) && !fs::is_directory(shard_path)) {
+        ld_info("%s exists but is not a directory. Not wiping shard %d",
+                shard_path.string().c_str(),
+                shard_idx);
+        continue;
+      }
+
+      // Recursively delete the directory contents (but not directory itself)
+      ld_info("Wiping shard %d at %s", shard_idx, shard_path.string().c_str());
+      for (fs::directory_iterator end_dir_it, dir_it(shard_path);
+           dir_it != end_dir_it;
+           ++dir_it) {
+        fs::remove_all(dir_it->path());
+      }
+    } catch (const fs::filesystem_error& e) {
+      ld_critical("Failed to wipe/validate %s. Failing safe and aborting",
+                  shard_path.string().c_str());
+      return false;
+    }
+  }
+  return true;
 }
 
 ShardedRocksDBLocalLogStore::~ShardedRocksDBLocalLogStore() {
