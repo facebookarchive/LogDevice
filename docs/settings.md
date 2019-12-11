@@ -76,6 +76,7 @@ sidebar_label: Settings
 | server\_based\_nodes\_configuration\_store\_polling\_extra\_requests | how many extra requests to send for server based Nodes Configuration Store polling in addition to the required response for each wave | 1 |  |
 | shutdown-on-my-node-id-mismatch | Gracefully shutdown whenever the server's NodeID changes | true | server&nbsp;only |
 | use-nodes-configuration-manager-nodes-configuration | If true and enable\_nodes\_configuration\_manager is set, logdevice will use the nodes configuration from the NodesConfigurationManager. | false |  |
+| wipe-storage-when-storage-state-none | Allow wiping the local RocksDB store when its storage state is none | false | requires&nbsp;restart, server&nbsp;only |
 | zk-config-polling-interval | polling and retry interval for Zookeeper config source | 1000ms | CLI&nbsp;only |
 
 ## Core settings
