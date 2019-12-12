@@ -11,6 +11,8 @@
 #include <sstream>
 #include <string>
 
+#include <folly/executors/SerialExecutor.h>
+#include <folly/futures/Future.h>
 #include <folly/io/IOBuf.h>
 
 #include "logdevice/server/ServerSettings.h"
@@ -36,10 +38,22 @@ class CommandProcessor {
   std::unique_ptr<folly::IOBuf>
   processCommand(const char* command_line, const folly::SocketAddress& address);
 
+  /**
+   * Async version of processorCommand, that are serialized under the same
+   * serial executor.
+   */
+  folly::SemiFuture<std::unique_ptr<folly::IOBuf>>
+  asyncProcessCommand(const std::string& command_line,
+                      const folly::SocketAddress& address);
+
  private:
   Server* server_;
   UpdateableSettings<ServerSettings> server_settings_;
   std::unique_ptr<AdminCommandFactory> command_factory_;
+
+  // Admin commands do all kind of weird blocking stuff. Serialize their runs to
+  // make sure they only block a single thread at a time.
+  folly::Executor::KeepAlive<folly::SerialExecutor> executor_;
 };
 
 }} // namespace facebook::logdevice

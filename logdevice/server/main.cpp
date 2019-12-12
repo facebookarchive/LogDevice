@@ -15,6 +15,8 @@
 
 #include <folly/Optional.h>
 #include <folly/Singleton.h>
+#include <folly/executors/CPUThreadPoolExecutor.h>
+#include <folly/executors/GlobalExecutor.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/resource.h>
@@ -296,6 +298,9 @@ int main(int argc, const char** argv) {
   logdeviceInit();
 
   ThreadID::set(ThreadID::Type::UTILITY, "logdeviced-main");
+
+  auto global_cpu_executor = std::make_shared<folly::CPUThreadPoolExecutor>(15);
+  folly::setCPUExecutor(global_cpu_executor);
 
   std::shared_ptr<PluginRegistry> plugin_registry =
       std::make_shared<PluginRegistry>(
