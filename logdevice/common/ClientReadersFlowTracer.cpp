@@ -391,6 +391,15 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
 
   auto update_counter_for_state = [ignore_overload = this->ignore_overload_](
                                       State state, int increment) {
+    if (state == State::STUCK || state == State::LAGGING) {
+      if (ignore_overload) {
+        WORKER_STAT_ADD(
+            read_streams_stuck_or_lagging_ignoring_overload, increment);
+      } else {
+        WORKER_STAT_ADD(read_streams_stuck_or_lagging, increment);
+      }
+    }
+
     if (state == State::STUCK) {
       if (ignore_overload) {
         WORKER_STAT_ADD(read_streams_stuck_ignoring_overload, increment);

@@ -312,8 +312,10 @@ STAT_DEFINE(read_streams_stalled, SUM)
 // read_streams_non_authoritative.
 STAT_DEFINE(read_streams_stuck, SUM)
 STAT_DEFINE(read_streams_lagging, SUM)
+STAT_DEFINE(read_streams_stuck_or_lagging, SUM)
 STAT_DEFINE(read_streams_stuck_ignoring_overload, SUM)
 STAT_DEFINE(read_streams_lagging_ignoring_overload, SUM)
+STAT_DEFINE(read_streams_stuck_or_lagging_ignoring_overload, SUM)
 
 // Number of read streams creation events.
 // Includes streams that have been destroyed.
