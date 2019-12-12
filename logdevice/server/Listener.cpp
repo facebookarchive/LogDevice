@@ -62,9 +62,15 @@ bool Listener::setupAsyncSocket() {
 
   try {
     auto socket = folly::AsyncServerSocket::newSocket(base);
+
     iface_.bind(socket.get());
     socket->addAcceptCallback(this, nullptr);
     socket->listen(128);
+
+    if (socket->getAddress().getFamily() != AF_UNIX) {
+      socket->setTosReflect(true);
+    }
+
     socket->startAccepting();
     socket_ = std::move(socket);
   } catch (const folly::AsyncSocketException& e) {
