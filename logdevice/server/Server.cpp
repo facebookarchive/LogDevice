@@ -7,7 +7,6 @@
  */
 #include "logdevice/server/Server.h"
 
-#include <folly/io/Cursor.h>
 #include <folly/io/async/EventBaseThread.h>
 
 #include "logdevice/admin/SimpleAdminServer.h"
@@ -1353,16 +1352,11 @@ bool Server::initAdminServer() {
       admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
     }
     createAndAttachMaintenanceManager(admin_server_handle_.get());
-
     admin_server_handle_->setAdminCommandHandler(
-        [command_processor = admin_command_processor_.get()](
-            const std::string& request,
-            const folly::SocketAddress& src_address) {
-          const auto result_buf =
-              command_processor->processCommand(request.data(), src_address);
-          return folly::io::Cursor(result_buf.get())
-              .readFixedString(result_buf->computeChainDataLength());
-        });
+        std::bind(&CommandProcessor::asyncProcessCommand,
+                  admin_command_processor_.get(),
+                  std::placeholders::_1,
+                  std::placeholders::_2));
   } else {
     ld_info("Not initializing Admin API,"
             " since admin-enabled server setting is set to false");

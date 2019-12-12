@@ -46,7 +46,8 @@ CommandProcessor::CommandProcessor(Server* server)
     : server_(server),
       server_settings_(server_->getServerSettings()),
       command_factory_(createAdminCommandFactory(
-          /*test_mode=*/server_settings_->test_mode)) {}
+          /*test_mode=*/server_settings_->test_mode)),
+      executor_(folly::SerialExecutor::create()) {}
 
 std::unique_ptr<folly::IOBuf>
 CommandProcessor::processCommand(const char* command_line,
@@ -147,6 +148,15 @@ CommandProcessor::processCommand(const char* command_line,
          buffer->computeChainDataLength(),
          sanitize_string(command_line).c_str());
   return buffer;
+}
+
+folly::SemiFuture<std::unique_ptr<folly::IOBuf>>
+CommandProcessor::asyncProcessCommand(const std::string& command_line,
+                                      const folly::SocketAddress& address) {
+  return folly::via(executor_.get())
+      .thenValue([command_line, address, this](auto&&) {
+        return processCommand(command_line.data(), address);
+      });
 }
 
 }} // namespace facebook::logdevice
