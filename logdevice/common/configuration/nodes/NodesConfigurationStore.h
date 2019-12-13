@@ -32,6 +32,7 @@ class NodesConfigurationStore {
   using write_callback_t = VersionedConfigStore::write_callback_t;
   using mutation_callback_t = VersionedConfigStore::mutation_callback_t;
   using extract_version_fn = VersionedConfigStore::extract_version_fn;
+  using Condition = VersionedConfigStore::Condition;
 
   virtual ~NodesConfigurationStore() = default;
 
@@ -54,12 +55,12 @@ class NodesConfigurationStore {
 
   // Read the documentation of VersionedConfigStore::updateConfig.
   virtual void updateConfig(std::string value,
-                            folly::Optional<version_t> base_version,
+                            Condition base_version,
                             write_callback_t cb = {}) = 0;
 
   // Read the documentation of VersionedConfigStore::updateConfigSync.
   virtual Status updateConfigSync(std::string value,
-                                  folly::Optional<version_t> base_version,
+                                  Condition base_version,
                                   version_t* version_out = nullptr,
                                   std::string* value_out = nullptr) = 0;
 
@@ -104,14 +105,14 @@ class VersionedNodesConfigurationStore : public NodesConfigurationStore {
   }
 
   virtual void updateConfig(std::string value,
-                            folly::Optional<version_t> base_version,
+                            Condition base_version,
                             write_callback_t cb = {}) override {
     store_->updateConfig(
         path_, std::move(value), std::move(base_version), std::move(cb));
   }
 
   virtual Status updateConfigSync(std::string value,
-                                  folly::Optional<version_t> base_version,
+                                  Condition base_version,
                                   version_t* version_out = nullptr,
                                   std::string* value_out = nullptr) override {
     return store_->updateConfigSync(path_,

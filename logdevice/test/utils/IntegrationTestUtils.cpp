@@ -1114,7 +1114,8 @@ int Cluster::updateNodesConfigurationFromServerConfig(
   if (serialized.empty()) {
     return -1;
   }
-  store->updateConfigSync(std::move(serialized), folly::none);
+  store->updateConfigSync(
+      std::move(serialized), NodesConfigurationStore::Condition::overwrite());
   return 0;
 }
 

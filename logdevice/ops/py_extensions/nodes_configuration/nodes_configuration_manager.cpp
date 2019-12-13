@@ -164,7 +164,8 @@ static void do_provision_write(const Configuration& config,
   auto store = build_nodes_configuration_store(config);
 
   // 4. Do the actual write
-  auto st = store->updateConfigSync(nc_serialized, folly::none);
+  auto st = store->updateConfigSync(
+      nc_serialized, NodesConfigurationStore::Condition::overwrite());
   if (st != Status::OK) {
     auto exception =
         folly::sformat("Writing config failed: {}", errorStrings()[st].name);

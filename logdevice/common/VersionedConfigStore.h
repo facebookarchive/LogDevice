@@ -8,6 +8,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <variant>
 
 #include <folly/Function.h>
 #include <folly/Optional.h>
@@ -22,6 +23,43 @@ namespace facebook { namespace logdevice {
 class VersionedConfigStore {
  public:
   using version_t = vcs_config_version_t;
+
+  /**
+   * A class that represents the possible values for the conditional update
+   * based version for update calls.
+   * This is kind of a union type that can have three possible values:
+   *  - VERSION: Which means that the update will only succeed if the
+   *             base_version if equal to the passed version (CompareAndSwap).
+   *  - OVERWRITE: Which means blindly overwrite whatever value there is in the
+   *               store (even if the value still doesn't exist).
+   *  - IF_NOT_EXISTS: Which means that the update will only succeed if the
+   *                   key doesn't exist in the store at the time of the write.
+   */
+  class Condition {
+   public:
+    // Create a Condition of type VERSION with the passed version.
+    /* implicit */ Condition(version_t);
+
+    // Triggers an assertion if the type of the base_version is not VERSION.
+    version_t getVersion() const;
+    bool hasVersion() const;
+
+    static Condition createIfNotExists();
+    static Condition overwrite();
+
+   private:
+    struct OverwriteTag {};
+    struct CreateIfNotExistsTag {};
+
+    bool isOverwrite() const;
+    bool isCreateIfNotExists() const;
+
+    Condition(std::variant<version_t, OverwriteTag, CreateIfNotExistsTag>);
+
+    std::variant<version_t, OverwriteTag, CreateIfNotExistsTag> condition_;
+
+    friend class VersionedConfigStore;
+  };
 
   // The status codes may be one of the following if the callback is invoked:
   //   OK
@@ -132,15 +170,7 @@ class VersionedConfigStore {
    * @param value:
    *   value to be stored. Note that the callsite need not guarantee the
    *   validity of the underlying buffer till callback is invoked.
-   * @param base_version:
-   *   base_version == folly::none =>
-   *     overwrites the corresponding config for key with value, regardless of
-   *     its current version. Also used for the initial config.
-   *     Implementation note: this is different from the Zookeeper setData call,
-   *     which would complain ZNONODE if the znode has not already been created.
-   *   base_version.hasValue() =>
-   *     strict conditional update: only update the config when the existing
-   *     version matches base_version.
+   * @param base_version: Read the documentation Condition.
    * @param cb:
    *   callback void(Status, version_t, std::string value) that will be invoked
    *   if the status is one of:
@@ -163,7 +193,7 @@ class VersionedConfigStore {
    */
   virtual void updateConfig(std::string key,
                             std::string value,
-                            folly::Optional<version_t> base_version,
+                            Condition base_version,
                             write_callback_t cb);
 
   /*
@@ -269,7 +299,7 @@ class VersionedConfigStore {
    */
   virtual Status updateConfigSync(std::string key,
                                   std::string value,
-                                  folly::Optional<version_t> base_version,
+                                  Condition base_version,
                                   version_t* version_out = nullptr,
                                   std::string* value_out = nullptr);
 
@@ -294,6 +324,23 @@ class VersionedConfigStore {
   // TODO: add subscription API
 
  protected:
+  /**
+   * Given the current version, this function compares it against the base
+   * version and according to the base version type, it decides whether the
+   * update is allowed or not.
+   *
+   * - If the base version type is OVERWRITE, the update is always allowed.
+   * - If the base version type is createIfNotExists, the update is only allowed
+   *    if the current_version is folly::none (Value is not there). Otherwise it
+   *    fails with VERSION_MISMATCH.
+   * - If the base version type is VERSION, the update is allowed only if
+   *    current_version is equal to the base_version otherwise it fails with
+   *    VERSION_MISMATCH. If current_version is folly::none, this function
+   *    returns E::NOTFOUND.
+   */
+  Status isAllowedUpdate(Condition cond,
+                         folly::Optional<version_t> current_version) const;
+
   extract_version_fn extract_fn_;
 };
 

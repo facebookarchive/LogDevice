@@ -88,18 +88,22 @@ void InMemVersionedConfigStore::readModifyWriteConfig(std::string key,
 
   version_t version;
   std::string value_out;
-  status = updateConfigSync(
-      std::move(key), std::move(write_value), cur_ver, &version, &value_out);
+  status = updateConfigSync(std::move(key),
+                            std::move(write_value),
+                            cur_ver.hasValue()
+                                ? cur_ver.value()
+                                : VersionedConfigStore::Condition::overwrite(),
+                            &version,
+                            &value_out);
 
   cb(status, version, std::move(value_out));
 }
 
-Status InMemVersionedConfigStore::updateConfigSync(
-    std::string key,
-    std::string value,
-    folly::Optional<version_t> base_version,
-    version_t* version_out,
-    std::string* value_out) {
+Status InMemVersionedConfigStore::updateConfigSync(std::string key,
+                                                   std::string value,
+                                                   Condition base_version,
+                                                   version_t* version_out,
+                                                   std::string* value_out) {
   auto opt = extract_fn_(value);
   if (!opt) {
     return Status::INVALID_PARAM;
@@ -107,43 +111,38 @@ Status InMemVersionedConfigStore::updateConfigSync(
   version_t value_version = opt.value();
   {
     auto lockedConfigs = configs_.wlock();
-    auto it = lockedConfigs->find(key);
-    if (it == lockedConfigs->end()) {
-      if (base_version) {
-        return Status::NOTFOUND;
-      }
-      set_if_not_null(version_out, value_version);
-      auto res = lockedConfigs->emplace(std::move(key), std::move(value));
-      ld_assert(res.second); // inserted
-      return Status::OK;
-    }
 
-    auto curr_version_opt = extract_fn_(it->second);
-    if (!opt) {
-      return Status::INVALID_PARAM;
+    folly::Optional<version_t> curr_version_opt;
+    auto it = lockedConfigs->find(key);
+    if (it != lockedConfigs->end()) {
+      curr_version_opt = extract_fn_(it->second);
+      if (!curr_version_opt) {
+        return Status::BADMSG;
+      }
     }
-    version_t curr_version = curr_version_opt.value();
 
     // TODO: Add stricter enforcement of monotonic increment of version.
-    if (value_version.val() <= curr_version.val()) {
+    if (curr_version_opt.hasValue() &&
+        value_version.val() <= curr_version_opt->val()) {
       RATELIMIT_WARNING(std::chrono::seconds(10),
                         5,
                         "Config value's version is not monitonically increasing"
                         "key: \"%s\". prev version: \"%lu\". version: \"%lu\"",
                         key.c_str(),
-                        curr_version.val(),
+                        curr_version_opt->val(),
                         value_version.val());
     }
 
-    if (base_version && curr_version != base_version) {
+    if (auto status = isAllowedUpdate(base_version, curr_version_opt);
+        status != E::OK) {
       // conditional update version mismatch
       // TODO: set err accordingly
-      set_if_not_null(version_out, curr_version);
-      set_if_not_null(value_out, it->second);
-      return Status::VERSION_MISMATCH;
+      set_if_not_null(version_out, curr_version_opt.value_or(version_t(0)));
+      set_if_not_null(value_out, curr_version_opt.hasValue() ? it->second : "");
+      return status;
     }
     set_if_not_null(version_out, value_version);
-    it->second = std::move(value);
+    (*lockedConfigs)[std::move(key)] = std::move(value);
   }
   return Status::OK;
 }

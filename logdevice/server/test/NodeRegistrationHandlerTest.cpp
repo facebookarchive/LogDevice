@@ -26,7 +26,8 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
 
     // Write an empty NC
     auto ser_nc = NodesConfigurationCodec::serialize(NodesConfiguration{});
-    store_->updateConfigSync(ser_nc, folly::none);
+    store_->updateConfigSync(
+        ser_nc, NodesConfigurationStore::Condition::overwrite());
   }
 
   ServerSettings buildServerSettings(std::string name) {

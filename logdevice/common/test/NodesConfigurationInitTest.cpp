@@ -86,14 +86,12 @@ class TimeControlledNCS : public NodesConfigurationStore {
     ld_check(false);
   }
 
-  void updateConfig(std::string,
-                    folly::Optional<version_t>,
-                    write_callback_t) override {
+  void updateConfig(std::string, Condition, write_callback_t) override {
     ld_check(false);
   }
 
   Status updateConfigSync(std::string,
-                          folly::Optional<version_t>,
+                          Condition,
                           version_t*,
                           std::string*) override {
     return E::INTERNAL;
@@ -147,7 +145,8 @@ TEST(NodesConfigurationInitTest, InitTest) {
   // Write it to the InMemoryStore
   auto store = std::make_unique<InMemNodesConfigurationStore>(
       "/foo", [](folly::StringPiece) { return vcs_config_version_t(2); });
-  auto status = store->updateConfigSync(serialized, folly::none);
+  auto status = store->updateConfigSync(
+      serialized, NodesConfigurationStore::Condition::overwrite());
   EXPECT_EQ(Status::OK, status);
 
   MockNodesConfigurationInit init(

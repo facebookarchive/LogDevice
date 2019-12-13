@@ -139,7 +139,9 @@ TEST_F(NodesConfigurationPublisherIntegrationTest, ClientPublish) {
           auto serialized =
               NodesConfigurationCodec::serialize(*new_nodes_configuration);
           ASSERT_EQ(Status::OK,
-                    ncs_->updateConfigSync(std::move(serialized), folly::none));
+                    ncs_->updateConfigSync(
+                        std::move(serialized),
+                        NodesConfigurationStore::Condition::overwrite()));
         },
         20);
     EXPECT_FALSE(notified);
@@ -169,7 +171,9 @@ TEST_F(NodesConfigurationPublisherIntegrationTest, ClientPublish) {
           auto serialized =
               NodesConfigurationCodec::serialize(*new_nodes_configuration);
           ASSERT_EQ(Status::OK,
-                    ncs_->updateConfigSync(std::move(serialized), folly::none));
+                    ncs_->updateConfigSync(
+                        std::move(serialized),
+                        NodesConfigurationStore::Condition::overwrite()));
         },
         21);
     EXPECT_TRUE(notified);
@@ -218,7 +222,9 @@ TEST_F(NodesConfigurationPublisherIntegrationTest, ServerPublish) {
       current_nc->withVersion(membership::MembershipVersion::Type{123});
   auto serialized = NodesConfigurationCodec::serialize(*new_nc);
   ASSERT_EQ(
-      Status::OK, ncs_->updateConfigSync(std::move(serialized), folly::none));
+      Status::OK,
+      ncs_->updateConfigSync(std::move(serialized),
+                             NodesConfigurationStore::Condition::overwrite()));
 
   // Switch the source of truth to the NCM NC and make sure that it's what
   // you get back from querying the server.

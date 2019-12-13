@@ -56,7 +56,7 @@ class FileBasedVersionedConfigStore : public VersionedConfigStore {
   void updateConfigImpl(std::string key,
                         std::string value,
                         version_t version,
-                        folly::Optional<version_t> base_version,
+                        Condition base_version,
                         write_callback_t::SharedProxy cb);
 
   std::string getDataFilePath(const std::string& key) const {

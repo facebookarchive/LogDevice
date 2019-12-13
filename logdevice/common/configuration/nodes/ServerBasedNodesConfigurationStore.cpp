@@ -140,14 +140,14 @@ void ServerBasedNodesConfigurationStore::readModifyWriteConfig(
 }
 void ServerBasedNodesConfigurationStore::updateConfig(
     std::string /* value */,
-    folly::Optional<version_t> /* base_version */,
+    Condition /* base_version */,
     write_callback_t /* callback */) {
   throw std::runtime_error("unsupported");
 }
 
 Status ServerBasedNodesConfigurationStore::updateConfigSync(
     std::string /* value */,
-    folly::Optional<version_t> /* base_version */,
+    Condition /* base_version */,
     version_t* /* version_out */,
     std::string* /* value_out */) {
   throw std::runtime_error("unsupported");

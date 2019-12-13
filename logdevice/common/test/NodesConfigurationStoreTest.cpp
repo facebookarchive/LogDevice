@@ -106,7 +106,8 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
     // initial write
     EXPECT_EQ(Status::OK,
               store->updateConfigSync(
-                  TestEntry{10, "foo123"}.serialize(), folly::none));
+                  TestEntry{10, "foo123"}.serialize(),
+                  NodesConfigurationStore::Condition::createIfNotExists()));
 
     EXPECT_EQ(Status::OK, store->getConfigSync(&value_out));
     EXPECT_EQ(TestEntry(10, "foo123"), TestEntry::fromSerialized(value_out));
@@ -130,9 +131,18 @@ void runBasicTests(std::unique_ptr<NodesConfigurationStore> store,
   }
 
   // update: blind overwrite
-  EXPECT_EQ(Status::OK,
+  EXPECT_EQ(
+      Status::OK,
+      store->updateConfigSync(TestEntry{12, "foo456"}.serialize(),
+                              NodesConfigurationStore::Condition::overwrite()));
+
+  // A write with a createIfNotExists on an object that exists should fail with
+  // a VERSION_MISMATCH
+  EXPECT_EQ(Status::VERSION_MISMATCH,
             store->updateConfigSync(
-                TestEntry{12, "foo456"}.serialize(), folly::none));
+                TestEntry{13, "foo456"}.serialize(),
+                NodesConfigurationStore::Condition::createIfNotExists()));
+
   EXPECT_EQ(Status::OK, store->getConfigSync(&value_out));
   auto e = TestEntry::fromSerialized(value_out);
   EXPECT_EQ(TestEntry(12, "foo456"), e);
@@ -282,7 +292,8 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
   // write version 0 (i.e., ~provision)
   ASSERT_EQ(
       Status::OK,
-      store->updateConfigSync(TestEntry{0, "foobar"}.serialize(), folly::none));
+      store->updateConfigSync(TestEntry{0, "foobar"}.serialize(),
+                              NodesConfigurationStore::Condition::overwrite()));
 
   {
     std::lock_guard<std::mutex> g{m};

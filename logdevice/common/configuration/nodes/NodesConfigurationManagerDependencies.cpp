@@ -240,7 +240,9 @@ void Dependencies::overwrite(OverwriteContext ctx,
     auto serialized_initial_config = std::move(ctx.data_.serialized_nc_);
     ncm_ptr->deps()->store_->updateConfig(
         std::move(serialized_initial_config),
-        /* base_version = */ current_version_opt,
+        /* base_version = */ current_version_opt.hasValue()
+            ? current_version_opt.value()
+            : NodesConfigurationStore::Condition::overwrite(),
         [callback = std::move(callback), ncm = ncm, ctx = std::move(ctx)](
             Status update_status,
             NodesConfigurationStore::version_t version,

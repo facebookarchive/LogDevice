@@ -53,16 +53,19 @@ TEST_F(RSMBasedVersionedConfigStoreIntegrationTest,
   } while (status == Status::AGAIN);
   EXPECT_EQ(Status::NOTFOUND, status);
 
-  status = vcs_->updateConfigSync("key1", "value1", folly::none);
+  status = vcs_->updateConfigSync(
+      "key1", "value1", VersionedConfigStore::Condition::overwrite());
   EXPECT_EQ(Status::OK, status);
   status = vcs_->getConfigSync("key1", &value);
   ASSERT_EQ(Status::OK, status);
   EXPECT_EQ("value1", value);
 
-  status = vcs_->updateConfigSync("key2", "value2", folly::none);
+  status = vcs_->updateConfigSync(
+      "key2", "value2", VersionedConfigStore::Condition::overwrite());
   EXPECT_EQ(Status::OK, status);
 
-  status = vcs_->updateConfigSync("key2", "value2", folly::none);
+  status = vcs_->updateConfigSync(
+      "key2", "value2", VersionedConfigStore::Condition::overwrite());
   // The version is the last character of the value. In this case, we try
   // to write the same version, which causes version mismatch.
   EXPECT_EQ(Status::VERSION_MISMATCH, status);
@@ -76,7 +79,10 @@ TEST_F(RSMBasedVersionedConfigStoreIntegrationTest,
     EXPECT_EQ(Status::OK, status);
     cb_baton.post();
   };
-  vcs_->updateConfig("key1", "value3", folly::none, std::move(cb));
+  vcs_->updateConfig("key1",
+                     "value3",
+                     VersionedConfigStore::Condition::overwrite(),
+                     std::move(cb));
   cb_baton.wait();
 
   folly::Baton<> get_cb_baton;
@@ -104,7 +110,8 @@ TEST_F(RSMBasedVersionedConfigStoreIntegrationTest,
   ASSERT_EQ(Status::OK, status);
   EXPECT_EQ("value2", value);
 
-  status = vcs_->updateConfigSync("key3", "value4", folly::none);
+  status = vcs_->updateConfigSync(
+      "key3", "value4", VersionedConfigStore::Condition::overwrite());
   EXPECT_EQ(Status::OK, status);
   auto mcb = [](folly::Optional<std::string> value) {
     EXPECT_TRUE(value.hasValue());
@@ -117,7 +124,8 @@ TEST_F(RSMBasedVersionedConfigStoreIntegrationTest,
   };
   vcs_->readModifyWriteConfig("key2", std::move(mcb), std::move(ucb));
   call_baton.wait();
-  status = vcs_->updateConfigSync("key4", "value6", folly::none);
+  status = vcs_->updateConfigSync(
+      "key4", "value6", VersionedConfigStore::Condition::overwrite());
   EXPECT_EQ(Status::OK, status);
 
   status = vcs_->getConfigSync("key3", &value);

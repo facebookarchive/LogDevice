@@ -53,13 +53,13 @@ class ServerBasedNodesConfigurationStore : public NodesConfigurationStore {
   // This is a read only NodesConfigStore. Updates are not supported.
   // It will unconditionally throw a runtime_error.
   void updateConfig(std::string value,
-                    folly::Optional<version_t> base_version,
+                    Condition base_version,
                     write_callback_t cb = {}) override;
 
   // This is a read-only NodesConfigStore. Updates are not supported.
   // It will unconditionally throw a runtime_error.
   Status updateConfigSync(std::string value,
-                          folly::Optional<version_t> base_version,
+                          Condition base_version,
                           version_t* version_out = nullptr,
                           std::string* value_out = nullptr) override;
 

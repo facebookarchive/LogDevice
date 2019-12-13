@@ -145,7 +145,7 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
     std::string key,
     std::string value,
     version_t new_version,
-    folly::Optional<version_t> base_version,
+    Condition base_version,
     write_callback_t::SharedProxy cb) {
   if (shutdown_signaled_.load()) {
     cb(E::SHUTDOWN, {}, "");
@@ -198,11 +198,7 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
   }
 
   folly::Optional<version_t> current_version_opt;
-  if (current_value.empty()) {
-    // Note: empty file means that we just created the file, perform the
-    // ondemand provisioning and assume version 0 for the current data
-    current_version_opt = version_t(0);
-  } else {
+  if (!current_value.empty()) {
     current_version_opt = (extract_fn_)(current_value);
     if (!current_version_opt) {
       RATELIMIT_WARNING(
@@ -214,12 +210,12 @@ void FileBasedVersionedConfigStore::updateConfigImpl(
       return;
     }
   }
-  version_t current_version = current_version_opt.value();
-  if (base_version.hasValue() && base_version != current_version) {
+  if (auto status = isAllowedUpdate(base_version, current_version_opt);
+      status != E::OK) {
     // version conditional update failed, invoke the callback with the
     // version and value that are more recent
-    cb(E::VERSION_MISMATCH,
-       std::move(current_version),
+    cb(std::move(status),
+       current_version_opt.value_or(version_t(0)),
        std::move(current_value));
     return;
   }
@@ -343,7 +339,9 @@ void FileBasedVersionedConfigStore::readModifyWriteConfig(
         updateConfigImpl(std::move(key),
                          std::move(value),
                          std::move(new_version),
-                         std::move(base_version),
+                         base_version.hasValue()
+                             ? base_version.value()
+                             : VersionedConfigStore::Condition::overwrite(),
                          cb_shared);
       });
   if (!success) {

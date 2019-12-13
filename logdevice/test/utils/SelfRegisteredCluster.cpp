@@ -39,8 +39,10 @@ SelfRegisteredCluster::create(ClusterFactory&& factory) {
     auto store = cluster->buildNodesConfigurationStore();
     ld_check(store);
     auto ser_nc = NodesConfigurationCodec::serialize(NodesConfiguration());
-    ld_check_eq(
-        Status::OK, store->updateConfigSync(std::move(ser_nc), folly::none));
+    ld_check_eq(Status::OK,
+                store->updateConfigSync(
+                    std::move(ser_nc),
+                    NodesConfigurationStore::Condition::overwrite()));
   }
 
   return cluster;

@@ -41,19 +41,19 @@ class MockNodesConfigurationStore : public NodesConfigurationStore {
                void(mutation_callback_t mcb, write_callback_t cb));
 
   void updateConfig(std::string value,
-                    folly::Optional<version_t> base_version,
+                    Condition base_version,
                     write_callback_t cb) {
     updateConfig_(std::move(value), std::move(base_version), cb);
   }
 
   MOCK_METHOD3(updateConfig_,
                void(std::string value,
-                    folly::Optional<version_t> base_version,
+                    Condition base_version,
                     write_callback_t& cb));
 
   MOCK_METHOD4(updateConfigSync,
                Status(std::string value,
-                      folly::Optional<version_t> base_version,
+                      Condition base_version,
                       version_t* version_out,
                       std::string* value_out));
 

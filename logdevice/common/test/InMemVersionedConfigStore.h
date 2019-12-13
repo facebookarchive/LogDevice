@@ -35,7 +35,7 @@ class InMemVersionedConfigStore : public VersionedConfigStore {
 
   Status updateConfigSync(std::string key,
                           std::string value,
-                          folly::Optional<version_t> base_version,
+                          Condition base_version,
                           version_t* version_out = nullptr,
                           std::string* value_out = nullptr) override;
 

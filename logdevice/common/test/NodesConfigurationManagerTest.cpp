@@ -399,7 +399,9 @@ class NodesConfigurationManagerTest2 : public ::testing::Test {
     auto serialized = NodesConfigurationCodec::serialize(*nc);
     ASSERT_EQ(Status::OK,
               file_ncs_->updateConfigSync(
-                  serialized, /* base_version */ folly::none));
+                  serialized,
+                  /* base_version */
+                  NodesConfigurationStore::Condition::overwrite()));
 
     Settings settings = create_default_settings<Settings>();
     settings.num_workers = 3;
@@ -447,7 +449,8 @@ class NodesConfigurationManagerTest2 : public ::testing::Test {
   void writeNewConfig(std::shared_ptr<const NodesConfiguration> new_config) {
     // overwrite; fire and forget
     file_ncs_->updateConfig(NodesConfigurationCodec::serialize(*new_config),
-                            /* base_version = */ folly::none,
+                            /* base_version = */
+                            NodesConfigurationStore::Condition::overwrite(),
                             /* cb = */ {});
   }
 
