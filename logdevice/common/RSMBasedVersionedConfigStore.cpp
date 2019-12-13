@@ -188,6 +188,7 @@ void RSMBasedVersionedConfigStore::readModifyWriteConfig(
     auto serialized_delta =
         ThriftCodec::serialize<apache::thrift::BinarySerializer>(delta);
 
+    // TODO(T58949318) handle racing writes between the mutation, and the write.
     std::unique_ptr<Request> rq =
         std::make_unique<WriteDeltaRequest<KeyValueStoreStateMachine>>(
             state_machine_.get(),

@@ -310,6 +310,35 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
             TestEntry::fromSerialized(std::move(value_out)));
   EXPECT_EQ(kIter, successCnt.load());
 }
+
+void runReadModifyWriteCreateIfNotExistTest(
+    std::unique_ptr<NodesConfigurationStore> store) {
+  folly::Baton<> b;
+  ASSERT_EQ(E::NOTFOUND, store->getConfigSync(nullptr));
+
+  std::thread t([&]() {
+    store->readModifyWriteConfig(
+        [&](auto) {
+          b.wait();
+          return std::make_pair<Status, std::string>(
+              E::OK, TestEntry{0, "foobar"}.serialize());
+        },
+        [](auto st, auto, auto) { EXPECT_EQ(E::VERSION_MISMATCH, st); });
+  });
+
+  EXPECT_EQ(
+      Status::OK,
+      store->updateConfigSync(TestEntry{0, "foobar2"}.serialize(),
+                              NodesConfigurationStore::Condition::overwrite()));
+  b.post();
+  t.join();
+
+  std::string value_out;
+  EXPECT_EQ(Status::OK, store->getConfigSync(&value_out));
+  EXPECT_EQ(
+      TestEntry(0, "foobar2"), TestEntry::fromSerialized(std::move(value_out)));
+}
+
 } // namespace
 
 TEST(NodesConfigurationStore, basic) {
@@ -320,6 +349,12 @@ TEST(NodesConfigurationStore, basic) {
 TEST(NodesConfigurationStore, basicMT) {
   runMultiThreadedTests(std::make_unique<InMemNodesConfigurationStore>(
       kConfigKey, TestEntry::extractVersionFn));
+}
+
+TEST(NodesConfigurationStore, basicRMWCreateIfNotExist) {
+  runReadModifyWriteCreateIfNotExistTest(
+      std::make_unique<InMemNodesConfigurationStore>(
+          kConfigKey, TestEntry::extractVersionFn));
 }
 
 TEST(NodesConfigurationStore, zk_basic) {
@@ -340,10 +375,23 @@ TEST(NodesConfigurationStore, zk_basicMT) {
       kConfigKey, TestEntry::extractVersionFn, std::move(z)));
 }
 
+TEST(NodesConfigurationStore, zk_basicRMWCreateIfNotExist) {
+  auto z = std::make_unique<ZookeeperClientInMemory>(
+      "unused quorum", ZookeeperClientInMemory::state_map_t{});
+  runReadModifyWriteCreateIfNotExistTest(
+      std::make_unique<ZookeeperNodesConfigurationStore>(
+          kConfigKey, TestEntry::extractVersionFn, std::move(z)));
+}
+
 TEST_F(NodesConfigurationStoreTest, file_basic) {
   runBasicTests(createFileBasedStore(TestEntry::extractVersionFn));
 }
 
 TEST_F(NodesConfigurationStoreTest, file_basicMT) {
   runMultiThreadedTests(createFileBasedStore(TestEntry::extractVersionFn));
+}
+
+TEST_F(NodesConfigurationStoreTest, file_basicRMWCreateIfNotExist) {
+  runReadModifyWriteCreateIfNotExistTest(
+      createFileBasedStore(TestEntry::extractVersionFn));
 }

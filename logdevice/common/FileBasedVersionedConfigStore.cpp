@@ -329,21 +329,21 @@ void FileBasedVersionedConfigStore::readModifyWriteConfig(
   }
 
   auto cb_shared = std::move(cb).asSharedProxy();
-  bool success =
-      task_queue_.writeIfNotFull([this,
-                                  key = std::move(key),
-                                  value = std::move(write_value),
-                                  base_version = std::move(cur_ver),
-                                  new_version = std::move(new_version),
-                                  cb_shared = cb_shared]() mutable {
-        updateConfigImpl(std::move(key),
-                         std::move(value),
-                         std::move(new_version),
-                         base_version.hasValue()
-                             ? base_version.value()
-                             : VersionedConfigStore::Condition::overwrite(),
-                         cb_shared);
-      });
+  bool success = task_queue_.writeIfNotFull([this,
+                                             key = std::move(key),
+                                             value = std::move(write_value),
+                                             base_version = std::move(cur_ver),
+                                             new_version =
+                                                 std::move(new_version),
+                                             cb_shared = cb_shared]() mutable {
+    updateConfigImpl(std::move(key),
+                     std::move(value),
+                     std::move(new_version),
+                     base_version.hasValue()
+                         ? base_version.value()
+                         : VersionedConfigStore::Condition::createIfNotExists(),
+                     cb_shared);
+  });
   if (!success) {
     // queue full, report transient error
     cb_shared(E::AGAIN, {}, "");

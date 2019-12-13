@@ -88,13 +88,13 @@ void InMemVersionedConfigStore::readModifyWriteConfig(std::string key,
 
   version_t version;
   std::string value_out;
-  status = updateConfigSync(std::move(key),
-                            std::move(write_value),
-                            cur_ver.hasValue()
-                                ? cur_ver.value()
-                                : VersionedConfigStore::Condition::overwrite(),
-                            &version,
-                            &value_out);
+  status = updateConfigSync(
+      std::move(key),
+      std::move(write_value),
+      cur_ver.hasValue() ? cur_ver.value()
+                         : VersionedConfigStore::Condition::createIfNotExists(),
+      &version,
+      &value_out);
 
   cb(status, version, std::move(value_out));
 }

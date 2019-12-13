@@ -228,6 +228,11 @@ class VersionedConfigStore {
    *          written config. The version of new value to be written should be
    *          greater than the version of the read value.
    *
+   *  This API fails E::VERSION_MISMATCH when the read value (that was passed to
+   *  the mutation callback) is changed at the time of the write. This also
+   *  includes the case when a value didn't exist during the mutation and was
+   *  written before the commit.
+   *
    * @param key: key of the config
    * @param mcb:
    *     mcb callback :

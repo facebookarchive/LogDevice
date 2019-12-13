@@ -117,123 +117,127 @@ void ZookeeperVersionedConfigStore::readModifyWriteConfig(
   ld_assert(locked_ptr && !*locked_ptr);
 
   // naive implementation of read-modify-write
-  ZookeeperClientBase::data_callback_t read_cb =
-      [this,
-       key,
-       mutation_callback = std::move(mcb),
-       write_callback = std::move(cb)](
-          int rc, std::string current_value, zk::Stat zk_stat) mutable {
-        auto locked_p = this->shutdown_completed_.tryRLock();
-        // (1) try acquiring rlock failed || (2) shutdown_completed == true
-        if (!locked_p || *locked_p) {
-          // (2) should not happen based on our assumption of ZK dtor behavior.
-          ld_assert(!*locked_p);
-          ld_assert(this->shutdownSignaled());
-          write_callback(E::SHUTDOWN, version_t{}, "");
-          return;
-        }
+  ZookeeperClientBase::data_callback_t read_cb = [this,
+                                                  key,
+                                                  mutation_callback =
+                                                      std::move(mcb),
+                                                  write_callback =
+                                                      std::move(cb)](
+                                                     int rc,
+                                                     std::string current_value,
+                                                     zk::Stat zk_stat) mutable {
+    auto locked_p = this->shutdown_completed_.tryRLock();
+    // (1) try acquiring rlock failed || (2) shutdown_completed == true
+    if (!locked_p || *locked_p) {
+      // (2) should not happen based on our assumption of ZK dtor behavior.
+      ld_assert(!*locked_p);
+      ld_assert(this->shutdownSignaled());
+      write_callback(E::SHUTDOWN, version_t{}, "");
+      return;
+    }
 
-        if (rc != ZNONODE && rc != ZOK) {
-          write_callback(ZookeeperClientBase::toStatus(rc), version_t{}, "");
-          return;
-        }
-        folly::Optional<version_t> cur_opt = folly::none;
-        if (rc != ZNONODE) {
-          cur_opt = extract_fn_(current_value);
-          if (!cur_opt) {
-            RATELIMIT_WARNING(
-                std::chrono::seconds(10),
-                5,
-                "Failed to extract version from value read from "
-                "ZookeeperVersionedConfigurationStore. key: \"%s\"",
-                key.c_str());
-          }
-        }
-        auto status_value = mutation_callback(
-            (rc == ZNONODE)
-                ? folly::none
-                : folly::Optional<std::string>(std::move(current_value)));
-        auto& write_value = status_value.second;
+    if (rc != ZNONODE && rc != ZOK) {
+      write_callback(ZookeeperClientBase::toStatus(rc), version_t{}, "");
+      return;
+    }
+    folly::Optional<version_t> cur_opt = folly::none;
+    if (rc != ZNONODE) {
+      cur_opt = extract_fn_(current_value);
+      if (!cur_opt) {
+        RATELIMIT_WARNING(std::chrono::seconds(10),
+                          5,
+                          "Failed to extract version from value read from "
+                          "ZookeeperVersionedConfigurationStore. key: \"%s\"",
+                          key.c_str());
+      }
+    }
+    auto status_value = mutation_callback(
+        (rc == ZNONODE)
+            ? folly::none
+            : folly::Optional<std::string>(std::move(current_value)));
+    auto& write_value = status_value.second;
 
-        if (status_value.first != E::OK) {
-          write_callback(
-              status_value.first, version_t{}, std::move(write_value));
-          return;
-        }
+    if (status_value.first != E::OK) {
+      write_callback(status_value.first, version_t{}, std::move(write_value));
+      return;
+    }
 
-        folly::Optional<version_t> opt = folly::none;
-        opt = extract_fn_(write_value);
-        if (!opt) {
-          RATELIMIT_WARNING(std::chrono::seconds(10),
-                            5,
-                            "Failed to extract version from value provided for "
-                            " key: \"%s\"",
-                            key.c_str());
-          err = E::INVALID_PARAM;
-          write_callback(E::INVALID_PARAM, version_t{}, "");
-          return;
-        }
-        version_t new_version = opt.value();
+    folly::Optional<version_t> opt = folly::none;
+    opt = extract_fn_(write_value);
+    if (!opt) {
+      RATELIMIT_WARNING(std::chrono::seconds(10),
+                        5,
+                        "Failed to extract version from value provided for "
+                        " key: \"%s\"",
+                        key.c_str());
+      err = E::INVALID_PARAM;
+      write_callback(E::INVALID_PARAM, version_t{}, "");
+      return;
+    }
+    version_t new_version = opt.value();
 
-        if (rc != ZNONODE) {
-          if (cur_opt) {
-            version_t cur_version = cur_opt.value();
-            if (new_version.val() <= cur_version.val()) {
-              // TODO: Add stricter enforcement of monotonic increment of
-              // version.
-              RATELIMIT_WARNING(
-                  std::chrono::seconds(10),
-                  5,
-                  "Config value's version is not monitonically increasing"
-                  "key: \"%s\". prev version: \"%lu\". version: \"%lu\"",
-                  key.c_str(),
-                  cur_version.val(),
-                  new_version.val());
+    if (rc != ZNONODE) {
+      if (cur_opt) {
+        version_t cur_version = cur_opt.value();
+        if (new_version.val() <= cur_version.val()) {
+          // TODO: Add stricter enforcement of monotonic increment of
+          // version.
+          RATELIMIT_WARNING(
+              std::chrono::seconds(10),
+              5,
+              "Config value's version is not monitonically increasing"
+              "key: \"%s\". prev version: \"%lu\". version: \"%lu\"",
+              key.c_str(),
+              cur_version.val(),
+              new_version.val());
+        }
+      }
+
+      ZookeeperClientBase::stat_callback_t completion =
+          [new_version, write_callback = std::move(write_callback)](
+              int write_rc, zk::Stat) mutable {
+            // In case of a racing write, if we get VERSION_MISMATCH
+            // here, we don't have the version or value that prevented the
+            // update.
+            write_callback(ZookeeperClientBase::toStatus(write_rc),
+                           write_rc == ZOK ? new_version : version_t{},
+                           "");
+          };
+      this->zk_->setData(std::move(key),
+                         std::move(write_value),
+                         std::move(completion),
+                         zk_stat.version_);
+    } else {
+      // For the createWithAncestors recipe, we must keep zk_ alive until
+      // create_callback is called / destroyed. We do so by capturing the
+      // SharedLockedPtr (i.e., the shared lock) by value in the callback.
+      auto keep_alive = this->shutdown_completed_.tryRLock();
+      ld_assert(keep_alive);
+      ld_assert(!*keep_alive);
+      // overwrite() when znode does not exist should rarely happen, so
+      // ld_info is OK here.
+      ld_info("Creating znode %s with NC version %lu",
+              key.c_str(),
+              new_version.val());
+      this->zk_->createWithAncestors(
+          std::move(key),
+          std::move(write_value),
+          [keep_alive = std::move(keep_alive),
+           new_version,
+           write_callback = std::move(write_callback)](
+              int write_rc, std::string /* unused znode_path */) mutable {
+            auto write_status = ZookeeperClientBase::toStatus(write_rc);
+            if (write_status == E::EXISTS) {
+              // This means that something was written to ZK between our
+              // read and write. In this case, we should fail with
+              // VERSION_MISMATCH.
+              write_status = E::VERSION_MISMATCH;
             }
-          }
-
-          ZookeeperClientBase::stat_callback_t completion =
-              [new_version, write_callback = std::move(write_callback)](
-                  int write_rc, zk::Stat) mutable {
-                // In case of a racing write, if we get VERSION_MISMATCH
-                // here, we don't have the version or value that prevented the
-                // update.
-                write_callback(ZookeeperClientBase::toStatus(write_rc),
-                               write_rc == ZOK ? new_version : version_t{},
-                               "");
-              };
-          this->zk_->setData(std::move(key),
-                             std::move(write_value),
-                             std::move(completion),
-                             zk_stat.version_);
-        } else {
-          // For the createWithAncestors recipe, we must keep zk_ alive until
-          // create_callback is called / destroyed. We do so by capturing the
-          // SharedLockedPtr (i.e., the shared lock) by value in the callback.
-          auto keep_alive = this->shutdown_completed_.tryRLock();
-          ld_assert(keep_alive);
-          ld_assert(!*keep_alive);
-          // overwrite() when znode does not exist should rarely happen, so
-          // ld_info is OK here.
-          ld_info("Creating znode %s with NC version %lu",
-                  key.c_str(),
-                  new_version.val());
-          this->zk_->createWithAncestors(
-              std::move(key),
-              std::move(write_value),
-              [keep_alive = std::move(keep_alive),
-               new_version,
-               write_callback = std::move(write_callback)](
-                  int write_rc, std::string /* unused znode_path */) mutable {
-                // In case of a racing write, if we get VERSION_MISMATCH
-                // here, we don't have the version or value that prevented the
-                // update.
-                write_callback(ZookeeperClientBase::toStatus(write_rc),
-                               write_rc == ZOK ? new_version : version_t{},
-                               "");
-              });
-        }
-      }; // read_cb
+            write_callback(
+                write_status, write_rc == ZOK ? new_version : version_t{}, "");
+          });
+    }
+  }; // read_cb
 
   zk_->getData(std::move(key), std::move(read_cb));
 }
