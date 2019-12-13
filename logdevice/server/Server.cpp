@@ -552,6 +552,12 @@ ServerParameters::buildNodesConfigurationStore() {
 
 bool ServerParameters::initNodesConfiguration(
     std::shared_ptr<configuration::nodes::NodesConfigurationStore> store) {
+  // Create an empty NC in the NCS if it doesn't exist already. Most of the
+  // time, this is a single read RTT (because the NC will be there), so it
+  // should be fine to always do it.
+  store->updateConfigSync(
+      NodesConfigurationCodec::serialize(NodesConfiguration()),
+      NodesConfigurationStore::Condition::createIfNotExists());
   NodesConfigurationInit config_init(std::move(store), getProcessorSettings());
   return config_init.initWithoutProcessor(
       updateable_config_->updateableNCMNodesConfiguration());
