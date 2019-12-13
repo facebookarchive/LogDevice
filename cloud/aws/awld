@@ -1697,6 +1697,9 @@ allocate() {
   allocated by this command will reside in a single AZ in the
   default AWS region configured in $CFGPATH config file.
 
+  AWS user that awld runs as must have AmazonEC2SpotFleetTaggingRole
+  https://docs.aws.amazon.com/batch/latest/userguide/spot_fleet_IAM_role.html
+
   FLAGS
     -c|--cluster <name>          REQUIRED
                    LogDevice cluster to which this allocation belongs.
