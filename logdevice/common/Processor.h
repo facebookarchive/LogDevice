@@ -13,7 +13,7 @@
 #include <mutex>
 #include <string>
 
-#include <folly/AtomicBitSet.h>
+#include <folly/ConcurrentBitSet.h>
 #include <folly/Function.h>
 #include <folly/Memory.h>
 #include <folly/memory/EnableSharedFromThis.h>
@@ -705,7 +705,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   std::atomic<bool> allow_post_during_shutdown_{false};
 
   // Keeps track of those workers that called noteWorkerFinished()
-  std::array<folly::AtomicBitSet<MAX_WORKERS>,
+  std::array<folly::ConcurrentBitSet<MAX_WORKERS>,
              static_cast<uint8_t>(WorkerType::MAX)>
       workers_finished_;
 
@@ -716,10 +716,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   std::atomic<buffered_writer_id_t::raw_type> next_buffered_writer_id_{1};
 
   // See isDataMissingFromShard().
-  folly::AtomicBitSet<MAX_SHARDS> shards_not_missing_data_;
+  folly::ConcurrentBitSet<MAX_SHARDS> shards_not_missing_data_;
 
   // See isShardDirty().
-  folly::AtomicBitSet<MAX_SHARDS> clean_shards_;
+  folly::ConcurrentBitSet<MAX_SHARDS> clean_shards_;
 
   std::string name_;
 

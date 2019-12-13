@@ -11,7 +11,7 @@
 #include <memory>
 #include <string>
 
-#include <folly/AtomicBitSet.h>
+#include <folly/ConcurrentBitSet.h>
 #include <folly/Optional.h>
 #include <folly/Portability.h>
 #include <folly/SharedMutex.h>
@@ -427,7 +427,7 @@ class LogStorageState {
 
   // subscribed to broadcasts of RELEASE messages.  These workers are
   // notified, for example, when a new record is released for delivery.
-  folly::AtomicBitSet<MAX_WORKERS> subscribed_workers_;
+  folly::ConcurrentBitSet<MAX_WORKERS> subscribed_workers_;
 
   // Latest time (number of microseconds since steady_clock's epoch) when
   // some storage node tried to recover the state.
