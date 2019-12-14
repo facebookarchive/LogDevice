@@ -38,6 +38,11 @@ class Worker;
  */
 class SocketDependencies {
  public:
+  using SSLCtxPtr = std::shared_ptr<folly::SSLContext>;
+  using FizzClientCtxPair =
+      std::pair<std::shared_ptr<const fizz::client::FizzClientContext>,
+                std::shared_ptr<const fizz::CertificateVerifier>>;
+
   SocketDependencies(Processor* processor, Sender* sender);
   /*
    * Indicates whether the event base on this socket is attached to legacy
@@ -58,10 +63,10 @@ class SocketDependencies {
                                 folly::Optional<MessageType>);
   virtual size_t getBytesPending() const;
 
-  virtual std::shared_ptr<folly::SSLContext>
-  getSSLContext(bool accepting) const;
+  virtual SSLCtxPtr getSSLContext(bool accepting) const;
   virtual std::shared_ptr<const fizz::server::FizzServerContext>
   getFizzServerContext() const;
+  virtual FizzClientCtxPair getFizzClientContext() const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID nid,

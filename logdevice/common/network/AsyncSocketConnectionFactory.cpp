@@ -24,9 +24,20 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     std::unique_ptr<SocketDependencies> deps) {
   std::unique_ptr<AsyncSocketAdapter> sock_adapter;
   if (connection_type == ConnectionType::SSL) {
-    auto ssl_ctx = deps->getSSLContext(false /* accepting */);
-    ld_check(ssl_ctx);
-    sock_adapter = std::make_unique<AsyncSocketAdapter>(ssl_ctx, base_);
+    const auto& sets = deps->getSettings();
+    bool use_fizz = sets.server ? sets.server_connect_with_fizz
+                                : sets.client_connect_with_fizz;
+    SocketDependencies::SSLCtxPtr ssl_ctx;
+    SocketDependencies::FizzClientCtxPair fizz_ctx;
+    if (use_fizz) {
+      fizz_ctx = deps->getFizzClientContext();
+      ld_check(fizz_ctx.first);
+    } else {
+      ssl_ctx = deps->getSSLContext(false /* accepting */);
+      ld_check(ssl_ctx);
+    }
+    sock_adapter = std::make_unique<AsyncSocketAdapter>(
+        fizz_ctx.first, fizz_ctx.second, ssl_ctx, base_);
   } else {
     sock_adapter = std::make_unique<AsyncSocketAdapter>(base_);
   }
@@ -53,6 +64,7 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     ld_check(fizz_ctx);
     auto ssl_ctx = deps->getSSLContext(true /* accepting */);
     ld_check(ssl_ctx);
+    ld_check(deps->getSettings().server);
     sock_adapter = std::make_unique<AsyncSocketAdapter>(
         fizz_ctx, ssl_ctx, base_, folly::NetworkSocket(fd));
   } else {

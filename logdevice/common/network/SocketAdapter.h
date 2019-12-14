@@ -99,7 +99,7 @@ class SocketAdapter {
   /**
    * Get the address of the local endpoint of this transport.
    *
-   * This function may throw AsyncSocketException on error.
+   * This function may throw std::runtime_error on error.
    *
    * @param address  The local address will be stored in the specified
    *                 SocketAddress.
@@ -109,7 +109,7 @@ class SocketAdapter {
    * Get the address of the remote endpoint to which this transport is
    * connected.
    *
-   * This function may throw AsyncSocketException on error.
+   * This function may throw std::runtime_error on error.
    *
    * @return         Return the local address
    */
@@ -122,7 +122,7 @@ class SocketAdapter {
    * Get the address of the remote endpoint to which this transport is
    * connected.
    *
-   * This function may throw AsyncSocketException on error.
+   * This function may throw std::runtime_error on error.
    *
    * @param address  The remote endpoint's address will be stored in the
    *                 specified SocketAddress.
@@ -138,7 +138,7 @@ class SocketAdapter {
    * Get the address of the remote endpoint to which this transport is
    * connected.
    *
-   * This function may throw AsyncSocketException on error.
+   * This function may throw std::runtime_error on error.
    *
    * @return         Return the remote endpoint's address
    */

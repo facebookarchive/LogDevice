@@ -7,10 +7,14 @@
  */
 #pragma once
 
+#include <fizz/client/AsyncFizzClient.h>
 #include <fizz/server/AsyncFizzServer.h>
 #include <fizz/server/FizzServerContext.h>
 #include <folly/io/async/AsyncSocket.h>
+#include <folly/io/async/DelayedDestruction.h>
 
+#include "logdevice/common/checks.h"
+#include "logdevice/common/debug.h"
 #include "logdevice/common/network/SocketAdapter.h"
 
 namespace folly {
@@ -47,10 +51,16 @@ class AsyncSocketAdapter
                      uint32_t connectTimeout = 0);
 
   /**
-   * Create a client AsyncSSLSocket
+   * Create a connect()'ing TLS socket. Exactly one context must not be null.
+   * If fizzClientCtx is not null use Fizz (TLS 1.3).
+   * If sslCtx is not null use folly::AsyncSSLSocket (TLS 1.2).
    */
-  AsyncSocketAdapter(const std::shared_ptr<folly::SSLContext>& ctx,
-                     folly::EventBase* evb);
+  AsyncSocketAdapter(
+      const std::shared_ptr<const fizz::client::FizzClientContext>&
+          fizzClientCtx,
+      const std::shared_ptr<const fizz::CertificateVerifier>& fizzCertVerifier,
+      const std::shared_ptr<folly::SSLContext>& sslCtx,
+      folly::EventBase* evb);
 
   /**
    * Create a new AsyncSocket and begin the connection process.
@@ -84,10 +94,9 @@ class AsyncSocketAdapter
                      uint32_t zeroCopyBufId = 0);
 
   /**
-   * Create a server AsyncSSLSocket from an already connected
-   * socket file descriptor.
-   *
-   * Tries fizz (TLS 1.3) first, then fallbacks to openssl.
+   * Create a server Fizz (TLS 1.3) socket from an already connected
+   * socket file descriptor. Fall back to AsyncSSLSocket for clients
+   * not supporting v1.3.
    *
    * Note that while AsyncSSLSocket enables TCP_NODELAY for sockets it creates
    * when connecting, it does not change the socket options when given an
@@ -169,7 +178,7 @@ class AsyncSocketAdapter
   /**
    * Get the address of the local endpoint of this transport.
    *
-   * This function may throw AsyncSocketException on error.
+   * This function may throw std::runtime_error on error.
    *
    * @param address  The local address will be stored in the specified
    *                 SocketAddress.
@@ -179,7 +188,7 @@ class AsyncSocketAdapter
    * Get the address of the remote endpoint to which this transport is
    * connected.
    *
-   * This function may throw AsyncSocketException on error.
+   * This function may throw std::runtime_error on error.
    *
    * @return         Return the local address
    */
@@ -192,7 +201,7 @@ class AsyncSocketAdapter
    * Get the address of the remote endpoint to which this transport is
    * connected.
    *
-   * This function may throw AsyncSocketException on error.
+   * This function may throw sd::runtime_error on error.
    *
    * @param address  The remote endpoint's address will be stored in the
    *                 specified SocketAddress.
@@ -203,7 +212,7 @@ class AsyncSocketAdapter
    * Get the address of the remote endpoint to which this transport is
    * connected.
    *
-   * This function may throw AsyncSocketException on error.
+   * This function may throw std::runtime_error on error.
    *
    * @return         Return the remote endpoint's address
    */
@@ -285,17 +294,56 @@ class AsyncSocketAdapter
                         socklen_t optlen) override;
 
  private:
+  class FizzClientHandshake
+      : public folly::AsyncSocket::ConnectCallback,
+        public fizz::client::AsyncFizzClient::HandshakeCallback,
+        public folly::DelayedDestruction {
+   public:
+    using UniquePtr = std::unique_ptr<FizzClientHandshake,
+                                      folly::DelayedDestruction::Destructor>;
+
+    FizzClientHandshake(
+        AsyncSocketAdapter& owner,
+        folly::AsyncSocket::ConnectCallback* cb,
+        std::shared_ptr<const fizz::client::FizzClientContext> fizzClientCtx,
+        std::shared_ptr<const fizz::CertificateVerifier> fizzCertVerifier)
+        : owner_(owner),
+          fizzClientCtx_(std::move(fizzClientCtx)),
+          fizzCertVerifier_(std::move(fizzCertVerifier)) {}
+
+   private:
+    ~FizzClientHandshake() override {}
+    void deleteThis() noexcept;
+    // AsyncSocket::ConnectCallback
+    void connectSuccess() noexcept override;
+    void connectErr(const folly::AsyncSocketException& ex) noexcept override;
+    void preConnect(folly::NetworkSocket fd) override;
+
+    // AsyncFizzClient::HandshakeCallback
+    void fizzHandshakeError(fizz::client::AsyncFizzClient*,
+                            folly::exception_wrapper ex) noexcept override;
+    void fizzHandshakeSuccess(fizz::client::AsyncFizzClient*) noexcept override;
+
+    AsyncSocketAdapter& owner_;
+    folly::AsyncSocket::ConnectCallback* user_cb_;
+    const std::shared_ptr<const fizz::client::FizzClientContext> fizzClientCtx_;
+    const std::shared_ptr<const fizz::CertificateVerifier> fizzCertVerifier_;
+  };
+
   void fizzHandshakeSuccess(
       fizz::server::AsyncFizzServer* transport) noexcept override;
   void fizzHandshakeError(fizz::server::AsyncFizzServer* transport,
                           folly::exception_wrapper ex) noexcept override;
   void fizzHandshakeAttemptFallback(
       std::unique_ptr<folly::IOBuf> clientHello) override;
-  fizz::server::AsyncFizzServer* toServer() const;
+
   folly::AsyncSocket* toSocket() const;
 
   folly::AsyncTransportWrapper::UniquePtr transport_;
   std::shared_ptr<folly::SSLContext> sslCtx_;
+  std::shared_ptr<const fizz::client::FizzClientContext> fizzClientCtx_;
+  std::shared_ptr<const fizz::CertificateVerifier> fizzCertVerifier_;
+  FizzClientHandshake::UniquePtr clientHandshake_;
 };
 
 }} // namespace facebook::logdevice

@@ -216,6 +216,7 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | checksumming-blacklisted-messages | Used to control what messages shouldn't be checksummed at the protocol layer |  | requires&nbsp;restart, **experimental** |
 | checksumming-enabled | A switch to turn on/off checksumming for all LogDevice protocol messages. If false: no checksumming is done, If true: checksumming-blacklisted-messages is consulted. | false | **experimental** |
+| client-connect-with-fizz | Use Fizz (TLS 1.3) when establishing secure connections to servers. | false | requires&nbsp;restart, client&nbsp;only |
 | command-conn-limit | Maximum number of concurrent admin connections | 32 | server&nbsp;only |
 | connect-throttle | timeout after it which two nodes retry to connect when they loose a a connection. Used in ConnectThrottle to ensure we don't retry too  often. Needs restart to load the new values. | 1ms..10s | requires&nbsp;restart |
 | connect-timeout | connection timeout when establishing a TCP connection to a node | 100ms |  |
@@ -239,6 +240,7 @@ sidebar_label: Settings
 | rcvbuf-kb | TCP socket rcvbuf size in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | -1 |  |
 | read-messages | read up to this many incoming messages before returning to libevent | 128 |  |
 | sendbuf-kb | TCP socket sendbuf size in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | -1 |  |
+| server-connect-with-fizz | Use Fizz (TLS 1.3) when establishing secure connections to other servers. | false | requires&nbsp;restart, server&nbsp;only |
 | socket-health-check-period | Time between consecutive socket health check. Every socket-health-check-period, a socket is closed, if it was not draining for max-time-to-allow-socket-drain or it was active but the throughput during the time it was active dropped belowmin-bytes-to-drain-per-second due to network congestion. | 1min |  |
 | socket-idle-threshold | A socket is considered idle if number of bytes pending in the socket is below or equal to this threshold. This is used along with min\_socket\_idle\_threshold\_percent to find active socket and select them for health check. Check socket-health-check-period for more details. | 1000000 |  |
 | tcp-keep-alive-intvl | TCP keepalive interval. The interval between successive probes.If negative the OS default will be used. | -1 |  |

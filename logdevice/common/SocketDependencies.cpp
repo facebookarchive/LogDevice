@@ -103,6 +103,14 @@ SocketDependencies::getFizzServerContext() const {
   return Worker::onThisThread()->sslFetcher().getFizzServerContext();
 }
 
+std::pair<std::shared_ptr<const fizz::client::FizzClientContext>,
+          std::shared_ptr<const fizz::CertificateVerifier>>
+SocketDependencies::getFizzClientContext() const {
+  bool loadCert = getSettings().server || getSettings().ssl_load_client_cert;
+
+  return Worker::onThisThread()->sslFetcher().getFizzClientContext(loadCert);
+}
+
 bool SocketDependencies::shuttingDown() const {
   return Worker::onThisThread()->shuttingDown();
 }

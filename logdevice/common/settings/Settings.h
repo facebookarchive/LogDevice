@@ -939,6 +939,16 @@ struct Settings : public SettingsBundle {
   // connection is rejected.
   bool include_cluster_name_on_handshake;
 
+  // If true, client uses Fizz library (TLS 1.3) when connecting
+  // to servers with TLS.
+  // use_legacy_eventbase needs to be set to true for this to have an effect.
+  bool client_connect_with_fizz;
+
+  // If true, server uses Fizz library (TLS 1.3) for connecting
+  // to other servers with TLS.
+  // use_legacy_eventbase needs to be set to true for this to have an effect.
+  bool server_connect_with_fizz;
+
   // How often to collect and submit stats upstream.
   // Set to <=0 to disable collection of stats.
   std::chrono::seconds stats_collection_interval;

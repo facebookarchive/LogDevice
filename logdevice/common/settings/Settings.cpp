@@ -2211,6 +2211,21 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "intended destination ID, the connection is terminated.",
        SERVER | CLIENT,
        SettingsCategory::Network);
+  init("client-connect-with-fizz",
+       &client_connect_with_fizz,
+       "false",
+       nullptr,
+       "Use Fizz (TLS 1.3) when establishing secure connections to servers.",
+       CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Network);
+  init("server-connect-with-fizz",
+       &server_connect_with_fizz,
+       "false",
+       nullptr,
+       "Use Fizz (TLS 1.3) when establishing secure connections to other"
+       " servers.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::Network);
   init("sequencer-batching",
        &sequencer_batching,
        "false",
