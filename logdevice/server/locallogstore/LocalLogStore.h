@@ -724,6 +724,22 @@ class LocalLogStore : boost::noncopyable {
                                     RebuildingRangesVersion base_version,
                                     RebuildingRangesVersion new_version) = 0;
 
+  using TraverseLogsMetadataCallback =
+      std::function<void(logid_t, std::unique_ptr<LogMetadata>, Status)>;
+  /**
+   * Traverse logs metadata records of given `type` and call a callback
+   * function.
+   *
+   * @param type  The type of metadata to traverse
+   * @param cb    A callback function called for each metadata record of type
+   *		  `type` encountered.
+   *
+   * @return  On success, returns 0. On failure, returns -1 with `err` set to
+   *	      the actual error.
+   */
+  virtual int traverseLogsMetadata(LogMetadataType type,
+                                   TraverseLogsMetadataCallback cb) = 0;
+
   /**
    * Write global or per-log metadata.
    *

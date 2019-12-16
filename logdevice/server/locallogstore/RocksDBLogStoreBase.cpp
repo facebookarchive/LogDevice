@@ -830,4 +830,62 @@ rocksdb::Status RocksDBIterator::getRocksdbStatus() {
   return status;
 }
 
+int RocksDBLogStoreBase::traverseLogsMetadata(
+    LogMetadataType type,
+    LocalLogStore::TraverseLogsMetadataCallback cb) {
+  using RocksDBKeyFormat::LogMetaKey;
+
+  LogMetaKey first_key(type, logid_t(0));
+  rocksdb::ReadOptions read_options;
+  RocksDBIterator it = newIterator(read_options, getMetadataCFHandle());
+
+  it.Seek(rocksdb::Slice(
+      reinterpret_cast<const char*>(&first_key), sizeof(first_key)));
+
+  for (; it.status().ok() && it.Valid(); it.Next()) {
+    Status status = E::OK;
+    auto key = it.key();
+
+    if (!(key.size() > 0 && key[0] == LogMetaKey::getHeader(type))) {
+      break;
+    }
+    // Special handling is needed for LogMetadataType::SEAL. See T39174994.
+    if (type == LogMetadataType::SEAL &&
+        it.key().compare(
+            rocksdb::Slice(RocksDBLogStoreBase::OLD_SCHEMA_VERSION_KEY)) == 0) {
+      continue;
+    }
+    auto value = it.value();
+    if (!LogMetaKey::valid(type, key.data(), key.size())) {
+      RATELIMIT_CRITICAL(std::chrono::seconds(10),
+                         10,
+                         "Malformed metadata key. Key: %s, Value: %s",
+                         hexdump_buf(key.data(), key.size()).c_str(),
+                         hexdump_buf(value.data(), value.size()).c_str());
+
+      // If the key is malformed, we won't know the `log_id` for
+      // invoking the callback function. Hence, just continue.
+      continue;
+    }
+
+    logid_t log_id = LogMetaKey::getLogID(key.data());
+    auto meta = LogMetadataFactory::create(type);
+    if (meta->deserialize(Slice(value.data(), value.size())) != 0) {
+      RATELIMIT_CRITICAL(std::chrono::seconds(10),
+                         10,
+                         "Malformed metadata value: Key: %s, Value: %s",
+                         hexdump_buf(key.data(), key.size()).c_str(),
+                         hexdump_buf(value.data(), value.size()).c_str());
+      status = E::MALFORMED_RECORD;
+    }
+    cb(log_id, status == E::OK ? std::move(meta) : nullptr, status);
+  }
+
+  if (!it.status().ok()) {
+    err = E::LOCAL_LOG_STORE_READ;
+    return -1;
+  }
+  return 0;
+}
+
 }} // namespace facebook::logdevice

@@ -398,4 +398,10 @@ std::vector<size_t> TemporaryPartitionedStore::getNumLogsPerPartition() {
   return res;
 }
 
+int TemporaryLogStore::traverseLogsMetadata(
+    LogMetadataType type,
+    LocalLogStore::TraverseLogsMetadataCallback cb) {
+  return db_->traverseLogsMetadata(type, cb);
+}
+
 }} // namespace facebook::logdevice

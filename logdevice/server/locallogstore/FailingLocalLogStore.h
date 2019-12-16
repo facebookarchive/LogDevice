@@ -97,6 +97,13 @@ class FailingLocalLogStore : public LocalLogStore {
     return -1;
   }
 
+  int traverseLogsMetadata(
+      LogMetadataType,
+      LocalLogStore::TraverseLogsMetadataCallback) override {
+    err = E::LOCAL_LOG_STORE_READ;
+    return -1;
+  }
+
   int readAllLogSnapshotBlobs(LogSnapshotBlobType,
                               LogSnapshotBlobCallback) override {
     err = E::NOTSUPPORTED;

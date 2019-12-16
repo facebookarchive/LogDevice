@@ -1234,4 +1234,49 @@ STORE_TEST(RocksDBLocalLogStoreTest, SnapshotsPersistence, store) {
   ASSERT_EQ(blob_map, snapshots_content);
 }
 
+STORE_TEST(RocksDBLocalLogStoreTest, TraverseLogsMetadata, store) {
+  TrimMetadata trim_metadata{99};
+  ASSERT_EQ(0,
+            store.writeLogMetadata(
+                logid_t(1), trim_metadata, LocalLogStore::WriteOptions()));
+
+  bool traversed = false;
+  auto trim_traverser = [trim_metadata, &traversed](
+                            logid_t id,
+                            std::unique_ptr<LogMetadata> meta,
+                            Status status) -> void {
+    EXPECT_EQ(id, logid_t(1));
+    EXPECT_EQ(status, E::OK);
+    EXPECT_EQ(dynamic_cast<TrimMetadata*>(meta.get())->trim_point_,
+              trim_metadata.trim_point_);
+    traversed = true;
+  };
+  ASSERT_EQ(
+      0,
+      store.traverseLogsMetadata(LogMetadataType::TRIM_POINT, trim_traverser));
+
+  ASSERT_TRUE(traversed);
+  LastReleasedMetadata release_metadata{100};
+  ASSERT_EQ(0,
+            store.writeLogMetadata(
+                logid_t(1), release_metadata, LocalLogStore::WriteOptions()));
+
+  traversed = false;
+  auto lrm_traverser = [release_metadata, &traversed](
+                           logid_t id,
+                           std::unique_ptr<LogMetadata> meta,
+                           Status status) -> void {
+    EXPECT_EQ(id, logid_t(1));
+    EXPECT_EQ(status, E::OK);
+    EXPECT_EQ(
+        dynamic_cast<LastReleasedMetadata*>(meta.get())->last_released_lsn_,
+        release_metadata.last_released_lsn_);
+    traversed = true;
+  };
+  ASSERT_EQ(0,
+            store.traverseLogsMetadata(
+                LogMetadataType::LAST_RELEASED, lrm_traverser));
+  ASSERT_TRUE(traversed);
+}
+
 } // namespace

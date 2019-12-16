@@ -394,6 +394,10 @@ class RocksDBLogStoreBase : public LocalLogStore {
       const PerEpochLogMetadataType type,
       const WriteOptions& write_options = WriteOptions()) override;
 
+  int traverseLogsMetadata(
+      LogMetadataType type,
+      LocalLogStore::TraverseLogsMetadataCallback cb) override;
+
   virtual void onSettingsUpdated(
       const std::shared_ptr<const RocksDBSettings> /* unused */) {}
 

@@ -135,6 +135,10 @@ class TemporaryLogStore : public LocalLogStore {
 
   int deleteAllLogSnapshotBlobs() override;
 
+  int traverseLogsMetadata(
+      LogMetadataType type,
+      LocalLogStore::TraverseLogsMetadataCallback cb) override;
+
   int findTime(logid_t log_id,
                std::chrono::milliseconds timestamp,
                lsn_t* lo,
