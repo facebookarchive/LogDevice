@@ -21,6 +21,7 @@ set(LOGDEVICE_PHONY_MAIN "${LOGDEVICE_DIR}/test/phony_main.cpp")
 
 set(LOGDEVICE_STAGING_DIR "${CMAKE_BINARY_DIR}/staging")
 set(LOGDEVICE_PYTHON_CLIENT_DIR "${LOGDEVICE_DIR}/clients/python")
+set(LOGDEVICE_C_CLIENT_DIR "${LOGDEVICE_DIR}/clients/c")
 
 
 # Setting Output
