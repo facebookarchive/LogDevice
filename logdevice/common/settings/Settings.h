@@ -84,6 +84,10 @@ struct Settings : public SettingsBundle {
   // Toggle use of HealthMonitor to determine node status on server-side.
   bool enable_health_monitor;
 
+  // Percent of UNHEALTHY nodes in the cluster at which HealthBasedHashing is no
+  // longer a viable option.
+  double maximum_percent_unhealthy_seq_nodes;
+
   // Maximum tolerated delay between health monitor loops.
   std::chrono::milliseconds health_monitor_max_delay;
 

@@ -215,6 +215,34 @@ ClusterState::getWholeClusterState() {
   return vector;
 }
 
+bool ClusterState::isClusterSeqHealthAboveThreshold() {
+  folly::SharedMutex::ReadHolder read_lock(mutex_);
+  auto sequencer_membership =
+      Worker::onThisThread()->getNodesConfiguration()->getSequencerMembership();
+  auto num_sequencers = sequencer_membership->numNodes();
+  if (num_sequencers > 0) {
+    double maximum_number_unhealthy =
+        processor_->settings()->maximum_percent_unhealthy_seq_nodes *
+        num_sequencers;
+    auto num_unhealthy = 0;
+    for (auto& n : node_status_map_) {
+      if (n.second->load() == NodeHealthStatus::UNHEALTHY &&
+          sequencer_membership->hasNode(n.first)) {
+        num_unhealthy++;
+        if (num_unhealthy >= maximum_number_unhealthy) {
+          return false;
+          RATELIMIT_INFO(std::chrono::seconds(1),
+                         10,
+                         "Maximum acceptable percent of unhealthy sequencer "
+                         "nodes exceeded.");
+        }
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 void ClusterState::onGetClusterStateDone(
     Status status,
     const std::vector<std::pair<node_index_t, uint16_t>>& nodes_state,

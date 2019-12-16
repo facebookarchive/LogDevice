@@ -116,6 +116,14 @@ class ClusterState {
     return getNodeState(idx) == NodeState::STARTING;
   }
 
+  bool isNodeOverloaded(node_index_t idx) const {
+    return getNodeStatus(idx) == NodeHealthStatus::OVERLOADED;
+  }
+
+  bool isNodeUnhealthy(node_index_t idx) const {
+    return getNodeStatus(idx) == NodeHealthStatus::UNHEALTHY;
+  }
+
   NodeState getNodeState(node_index_t idx) const {
     folly::SharedMutex::ReadHolder read_lock(mutex_);
     // check the node list if the index falls within what we know
@@ -148,6 +156,11 @@ class ClusterState {
   // Returns a vectorized representation of the hashmap containing the states
   // of the cluster as seen by this node. The vector is sorted by node ids.
   std::vector<std::pair<node_index_t, uint16_t>> getWholeClusterState();
+
+  // Verifies whether the percent of HEALTHY nodes in the cluster is above a
+  // certain threshold. If this is the case then it is acceptable to use the
+  // NodeHealthStatus for sequencer placement.
+  bool isClusterSeqHealthAboveThreshold();
 
   const char* getNodeStateAsStr(node_index_t idx) const {
     return getNodeStateString(getNodeState(idx));

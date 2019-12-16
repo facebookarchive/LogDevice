@@ -838,6 +838,16 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Maximum allowed rate of printing backtraces.",
        SERVER | CLIENT | REQUIRES_RESTART /* Passed to WatchDogThread ctor */,
        SettingsCategory::Monitoring);
+  init("maximum-percent-unhealthy-seq-nodes-hbsp",
+       &maximum_percent_unhealthy_seq_nodes,
+       "0.5",
+       validate_range<double>(0, 1.0),
+       "Percent of UNHEALTHY nodes in the cluster at which HealthBasedHashing "
+       "is no longer a viable option. This value MUST be the same on client "
+       "and server to ensure correct conditions for health based sequencer "
+       "placement.",
+       SERVER | CLIENT /* used in ClusterState */,
+       SettingsCategory::Sequencer);
   init("enable-health-monitor",
        &enable_health_monitor,
        "true",
@@ -852,7 +862,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Interval after which health monitor detects issues on node.",
        SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
        SettingsCategory::Monitoring);
-
   init("health-monitor-max-delay",
        &health_monitor_max_delay,
        "50ms",
@@ -860,7 +869,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Maximum tolerated delay inbetween health monitor loops.",
        SERVER | REQUIRES_RESTART /* used in ServerProcessor init */,
        SettingsCategory::Monitoring);
-
   init(
       "health-monitor-max-queue-stalls-avg",
       &health_monitor_max_queue_stalls_avg_ms,
