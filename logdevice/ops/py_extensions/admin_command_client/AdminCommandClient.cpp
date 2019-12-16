@@ -22,7 +22,6 @@ using folly::AsyncSocket;
 using folly::AsyncSocketException;
 using folly::AsyncSSLSocket;
 using folly::EventBase;
-using folly::SSLContext;
 
 namespace facebook { namespace logdevice {
 
