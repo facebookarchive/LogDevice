@@ -73,7 +73,7 @@ bool LogsConfigStateMachine::canTrimAndSnapshot() const {
 
   // The node responsible for trimming and snapshotting is the first node
   // that's alive according to the failure detector.
-  return cs->getFirstNodeAlive() == my_node_id.index();
+  return cs->getFirstNodeFullyStarted() == my_node_id.index();
 }
 
 bool LogsConfigStateMachine::shouldTrim() const {

@@ -107,12 +107,23 @@ void ClusterState::setBoycottedNodes(std::vector<node_index_t> boycotts) {
 }
 
 node_index_t ClusterState::getFirstNodeAlive() const {
+  return getFirstNodeWithPred(
+      [this](node_index_t nid) { return isNodeAlive(nid); });
+}
+
+node_index_t ClusterState::getFirstNodeFullyStarted() const {
+  return getFirstNodeWithPred(
+      [this](node_index_t nid) { return isNodeFullyStarted(nid); });
+}
+
+node_index_t ClusterState::getFirstNodeWithPred(
+    folly::Function<bool(node_index_t)> pred) const {
   folly::SharedMutex::ReadHolder read_lock(mutex_);
   folly::Optional<node_index_t> first_node;
 
   for (node_index_t nid = 0; nid < cluster_size_; nid++) {
     if (isNodeInConfig(nid)) {
-      if (isNodeAlive(nid)) {
+      if (pred(nid)) {
         return nid;
       } else if (!first_node.hasValue()) {
         first_node = nid;

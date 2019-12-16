@@ -154,10 +154,21 @@ class ClusterState {
   }
 
   /**
-   * @return Id of the first node seen as alive. Used to determine which node
-   * should perform some actions such as trim the event log.
+   * @return Id of the first node seen as alive.
    */
   node_index_t getFirstNodeAlive() const;
+
+  /**
+   * @return Id of the first node seen as fully started. Used to determine which
+   * node should perform some actions such as trim the event log.
+   */
+  node_index_t getFirstNodeFullyStarted() const;
+
+  /**
+   * @return Id of the first node that matches predicate function.
+   */
+  node_index_t
+  getFirstNodeWithPred(folly::Function<bool(node_index_t)> pred) const;
 
   void setNodeState(node_index_t idx, NodeState state);
 
