@@ -14,8 +14,6 @@
 #include <folly/container/Array.h>
 
 #include "logdevice/clients/c/ld_c_client.h"
-#include "logdevice/clients/python/logdevice_logsconfig.h"
-#include "logdevice/clients/python/util/util.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/commandline_util_chrono.h"
@@ -28,7 +26,7 @@
 
 namespace facebook { namespace logdevice {
 std::ostream& operator<<(std::ostream& os, ldc_logid_t logid) {
-  return os << toString(logid);
+  return os << toString((logid_t)logid);
 }
 }} // namespace facebook::logdevice
 
@@ -149,8 +147,8 @@ using namespace facebook::logdevice::logsconfig;
 using ClientSPtr = std::shared_ptr<facebook::logdevice::Client>;
 using ClientSettingsSPtr = std::shared_ptr<facebook::logdevice::ClientSettings>;
 
-#define DEREF_CLNT(A) DEREF_AS(ClientSPtr, A)
-#define DEREF_CLNT_SETTINGS(A) DEREF_AS(ClientSettingsSPtr, A)
+#define DEREF_CLNT(PSP) (*(ClientSPtr*)PSP)
+#define DEREF_CLNT_SETTINGS(PSP) (*(ClientSettingsSPtr*)PSP)
 
 ld_err ldc_make_client(const char* name,
                         const char* config,
@@ -172,19 +170,24 @@ ld_err ldc_make_client(const char* name,
       std::map<std::string,
                std::variant<int64_t, std::string>>*> (settings);
 
-  std::for_each(psettings->begin(), psettings->end(),
-                [&](std::pair<std::string, std::variant<int64_t, std::string>>& entry) {
-    auto key = entry.first;
-    auto val = entry.second;
+  for(auto it = psettings->begin(); it != psettings->end(); it++) {
+    auto key = it->first;
+    auto val = it->second;
 
     int result = LD_ERR_UNKNOWN;
 
-    result = client_settings->set(key.c_str(), std::get<val.index()>(val));
+    if (val.index() == 0) {
+      result = client_settings->set(key.c_str(), std::get<int64_t>(val));
+    } else if (val.index() == 1) {
+      result = client_settings->set(key.c_str(), std::get<std::string>(val));
+    } else {
+      return LD_ERR_UNKNOWN;
+    }
 
     if (result != 0) {
-      return result;
+      return (ld_err)err;
     }
-  });
+  };
 
   std::string client_name(name);
   std::string config_path(config);
@@ -192,7 +195,7 @@ ld_err ldc_make_client(const char* name,
   std::string csid_str(csid);
   ClientSPtr client;
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     ClientFactory factory;
     factory.setClusterName(std::move(client_name))
         .setCredentials(std::move(credentials_str))
@@ -245,7 +248,7 @@ ld_err ldc_get_log_range_by_name(PClientSPtr pclient_sp,
 ld_err ldc_get_tail_lsn(PClientSPtr pclient_sp, ldc_logid_t logid, ldc_lsn_t* plsn) {
   ldc_lsn_t lsn;
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     lsn = DEREF_CLNT(pclient_sp)->getTailLSNSync((logid_t)logid);
   }
   if (lsn != LSN_INVALID) {
@@ -262,7 +265,7 @@ ld_err ldc_get_tail_attributes(PClientSPtr pclient_sp, ldc_logid_t logid,
 
   std::unique_ptr<LogTailAttributes> attributes;
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     attributes = DEREF_CLNT(pclient_sp)->getTailAttributesSync((logid_t)logid);
   }
   if (!attributes) {
@@ -283,8 +286,8 @@ ld_err ldc_get_head_attributes(PClientSPtr pclient_sp,
                                uint64_t* trim_point_timestamp_count) {
   std::unique_ptr<LogHeadAttributes> attributes;
   {
-    gil_release_and_guard guard;
-    attributes = DEREF_CLNT(pclient_sp)->getHeadAttributesSync(logid);
+    // gil_release_and_guard guard;
+    attributes = DEREF_CLNT(pclient_sp)->getHeadAttributesSync((logid_t)logid);
   }
   if (!attributes) {
     // throw_logdevice_exception();
@@ -293,6 +296,7 @@ ld_err ldc_get_head_attributes(PClientSPtr pclient_sp,
   } else {
     *trim_point = attributes->trim_point;
     *trim_point_timestamp_count = attributes->trim_point_timestamp.count();
+    return LD_ERR_OK;
   }
 }
 
@@ -304,7 +308,7 @@ ld_err ldc_append(PClientSPtr pclient_sp,
   ldc_lsn_t lsn;
   std::string pl(data, len);
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     lsn = DEREF_CLNT(pclient_sp)->appendSync((logid_t)logid, std::move(pl));
   }
   if (lsn != LSN_INVALID) {
@@ -327,7 +331,7 @@ ld_err logdevice_find_time(PClientSPtr pclient_sp,
   ldc_lsn_t lsn;
   Status status;
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     lsn = DEREF_CLNT(pclient_sp)->findTimeSync((logid_t)logid, ts, &status);
   }
 
@@ -349,7 +353,7 @@ ld_err ldc_find_key(PClientSPtr pclient_sp,
                     ldc_lsn_t* hi) {
   FindKeyResult result;
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     result = DEREF_CLNT(pclient_sp)->findKeySync((logid_t)logid, std::move(key));
   }
   if (result.lo != LSN_INVALID || result.hi != LSN_INVALID) {
@@ -363,7 +367,7 @@ ld_err ldc_find_key(PClientSPtr pclient_sp,
 ld_err ldc_trim(PClientSPtr pclient_sp, ldc_logid_t logid, ldc_lsn_t lsn) {
   int res;
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     res = DEREF_CLNT(pclient_sp)->trimSync((logid_t)logid, lsn);
   }
   if (res != 0) {
@@ -376,7 +380,7 @@ ld_err ldc_trim(PClientSPtr pclient_sp, ldc_logid_t logid, ldc_lsn_t lsn) {
 ld_err ldc_is_log_empty(PClientSPtr pclient_sp, ldc_logid_t logid, bool* pempty) {
   int rv;
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     rv = DEREF_CLNT(pclient_sp)->isLogEmptySync((logid_t)logid, pempty);
   }
   if (rv != 0) {
@@ -400,7 +404,7 @@ ld_err ldc_data_size(PClientSPtr pclient_sp,
       : std::chrono::milliseconds(lround(end_sec * 1000));
 
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     rv = DEREF_CLNT(pclient_sp)->dataSizeSync(
       (logid_t)logid, start_ts, end_ts,
       DataSizeAccuracy::APPROXIMATE, result_size);
@@ -441,7 +445,7 @@ ld_err ldc_get_setting(PClientSettingsSPtr pclient_setting_sp,
   } else {
     size_t setting_len = val->size() + 1;
     if (setting_len > max_len) {
-      return LD_ERR_BUFFER_NOT_LARGE_ENOUGH;
+      return LD_ERR_NOBUFS;
     } else {
       strncpy(setting, val->c_str(), setting_len);
       return LD_ERR_OK;
@@ -461,7 +465,6 @@ ld_err ldc_set_setting(PClientSettingsSPtr pclient_setting_sp,
     DEREF_CLNT_SETTINGS(pclient_setting_sp)->set(key, value);
   if (result != 0) {
     return LD_ERR_UNKNOWN;
-    throw_logdevice_exception();
   } else {
     return LD_ERR_OK;
   }
@@ -471,7 +474,7 @@ ld_err ldc_make_reader(PClientSPtr pclient_sp,
                         size_t max_logs,
                         PReaderSPtr* ppreader_sp) {
 
-  std::unique_ptr<Reader> reader = DEREF_CLNT(PClientSPtr)->createReader(max_logs);
+  std::unique_ptr<Reader> reader = DEREF_CLNT(pclient_sp)->createReader(max_logs);
   *ppreader_sp = (PReaderSPtr)new std::shared_ptr<Reader>(std::move(reader));
   return LD_ERR_OK;
 }

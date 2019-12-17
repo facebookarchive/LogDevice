@@ -5,12 +5,8 @@
 
 #include <chrono>
 
-#include <boost/python.hpp>
-#include <boost/python/suite/indexing/map_indexing_suite.hpp>
-#include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 #include <cstring>
 
-#include "logdevice/clients/python/util/util.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/ops/ldquery/Errors.h"
 #include "logdevice/ops/ldquery/LDQuery.h"
@@ -18,7 +14,6 @@
 #include "logdevice/ops/ldquery/Utils.h"
 #include "logdevice/clients/c/ld_c_query.h"
 
-using namespace boost::python;
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::ldquery;
 using namespace facebook::logdevice::dbg;
@@ -26,7 +21,7 @@ using namespace facebook::logdevice::dbg;
 
 using LDQuerySPtr = std::shared_ptr<LDQuery>;
 
-#define DEREF_LDQ(A) DEREF_AS(LDQuerySPtr, A)
+#define DEREF_LDQ(PSP) (*(LDQuerySPtr*)PSP)
 
 
 ld_err ldq_make_query_engine(const char* config,
@@ -54,7 +49,7 @@ ld_err ldq_do_query(PLDQuerySPtr pldquery_sp,
   std::string query_stmt(query);
   LDQuery::QueryResults res;
   {
-    gil_release_and_guard guard;
+    // gil_release_and_guard guard;
     res = DEREF_LDQ(pldquery_sp)->query(std::move(query_stmt));
   }
 
@@ -70,13 +65,13 @@ bool ldq_tablecolumn_eq(PCTableColumn lhs, PCTableColumn rhs) {
   return llhs->name == rrhs->name && (llhs->type == rrhs->type);
 }
 
-bool ldq_tablemetadata_eq(PCTable lhs, PCTable rhs) {
-  const TableMetadata* llhs = (const TableMetadata*)llhs;
-  const TableMetadata* rrhs = (const TableMetadata*)rrhs;
-  return (llhs->name == rrhs->name)
-    && (llhs->description == rrhs->description)
-    && (llhs->columns == rrhs->columns);
-}
+// bool ldq_tablemetadata_eq(PCTable lhs, PCTable rhs) {
+//   const TableMetadata* llhs = (const TableMetadata*)lhs;
+//   const TableMetadata* rrhs = (const TableMetadata*)rhs;
+//   return (llhs->name == rrhs->name)
+//     && (llhs->description == rrhs->description)
+//     && (llhs->columns == rrhs->columns);
+// }
 
 bool ldq_query_result_eq(PQueryResult lhs, PQueryResult rhs) {
   auto llhs = (LDQuery::QueryResult*)lhs;

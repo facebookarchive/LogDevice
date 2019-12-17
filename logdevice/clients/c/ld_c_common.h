@@ -45,8 +45,6 @@ extern "C" {
   typedef CV##A##WPtr* PC##A##WPtr;
 
 
-#define DEREF_AS(B, A) (*reinterpret_cast<B*>(A))
-
 // UInt to UInt hashmap
 // Used to store logid => lsn
 LD_C_DECLARE_HANDLE(UInt2UIntHashMap)
