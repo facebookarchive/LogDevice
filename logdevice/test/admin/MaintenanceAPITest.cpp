@@ -98,6 +98,12 @@ void MaintenanceAPITest::init() {
           .setParam("--enable-safety-check-periodic-metadata-update", "true")
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
+          .setHealthMonitorParameters(
+              /*health_monitor_max_delay_ms*/ 240000,
+              /*watchdog_poll_interval*/ 10000,
+              /*worker_stall_percentage*/ 1.1,
+              /*queue_stall_percentage*/ 1.1,
+              /*enable_health_based_hashing*/ false)
           .setParam("--min-gossips-for-stable-state", "0")
           .setParam("--enable-cluster-maintenance-state-machine", "true")
           .setParam("--enable-nodes-configuration-manager", "true")
@@ -735,6 +741,8 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
     ASSERT_EQ(6, response.get_states().size());
     for (const auto& state : response.get_states()) {
       ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
+      ASSERT_NE(thrift::ServiceHealthStatus::UNKNOWN,
+                state.get_daemon_health_status());
       const thrift::SequencerState& seq_state =
           state.sequencer_state_ref().value();
       ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());
@@ -802,6 +810,8 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
     ASSERT_EQ(1, response.get_states().size());
     const auto& state = response.get_states()[0];
     ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
+    ASSERT_NE(
+        thrift::ServiceHealthStatus::UNKNOWN, state.get_daemon_health_status());
     const auto& shard_states = state.shard_states_ref().value();
     ASSERT_EQ(2, shard_states.size());
     for (const auto& shard : shard_states) {
@@ -871,6 +881,8 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
     ASSERT_EQ(6, response.get_states().size());
     for (const auto& state : response.get_states()) {
       ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
+      ASSERT_NE(thrift::ServiceHealthStatus::UNKNOWN,
+                state.get_daemon_health_status());
       const thrift::SequencerState& seq_state =
           state.sequencer_state_ref().value();
       ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());

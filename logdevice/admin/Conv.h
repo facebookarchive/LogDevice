@@ -11,6 +11,7 @@
 #include "logdevice/admin/if/gen-cpp2/admin_types.h"
 #include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/common/ClusterState.h"
+#include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/nodes/NodeRole.h"
 #include "logdevice/common/membership/StorageState.h"
@@ -62,6 +63,9 @@ thrift::Location toThrift(const folly::Optional<NodeLocation>& input);
 
 template <>
 thrift::ServiceState toThrift(const ClusterStateNodeState& input);
+
+template <>
+thrift::ServiceHealthStatus toThrift(const NodeHealthStatus& input);
 
 template <>
 thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input);

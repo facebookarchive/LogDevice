@@ -256,8 +256,12 @@ void fillNodeState(
   out.set_config(std::move(node_config));
 
   if (cluster_state) {
+    // Set node state
     out.set_daemon_state(toThrift<thrift::ServiceState>(
         cluster_state->getNodeState(node_index)));
+    // Set node health status
+    out.set_daemon_health_status(toThrift<thrift::ServiceHealthStatus>(
+        cluster_state->getNodeStatus(node_index)));
   }
 
   const auto* node_sd = nodes_configuration.getNodeServiceDiscovery(node_index);

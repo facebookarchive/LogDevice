@@ -1794,6 +1794,11 @@ int Node::waitUntilAvailable(std::chrono::steady_clock::time_point deadline) {
   return waitUntilKnownGossipState(node_index_, /* alive */ true, deadline);
 }
 
+int Node::waitUntilHealthy(std::chrono::steady_clock::time_point deadline) {
+  return waitUntilKnownGossipStatus(
+      node_index_, NodeHealthStatus::HEALTHY, deadline);
+}
+
 void Node::waitUntilKnownDead(node_index_t other_node_index) {
   int rv = waitUntilKnownGossipState(other_node_index, /* alive */ false);
   ld_check(rv == 0);
@@ -2945,6 +2950,16 @@ int Cluster::waitUntilAllAvailable(
   for (auto& it : getNodes()) {
     node_index_t idx = it.first;
     rv |= getNode(idx).waitUntilAvailable(deadline);
+  }
+  return rv;
+}
+
+int Cluster::waitUntilAllHealthy(
+    std::chrono::steady_clock::time_point deadline) {
+  int rv = 0;
+  for (auto& it : getNodes()) {
+    node_index_t idx = it.first;
+    rv |= getNode(idx).waitUntilHealthy(deadline);
   }
   return rv;
 }

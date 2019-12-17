@@ -407,8 +407,12 @@ MaintenanceManager::getNodeStateInternal(
   state.set_config(std::move(node_config));
 
   if (cluster_state) {
+    // Set node state
     state.set_daemon_state(
         toThrift<thrift::ServiceState>(cluster_state->getNodeState(node)));
+    // Set node health status
+    state.set_daemon_health_status(toThrift<thrift::ServiceHealthStatus>(
+        cluster_state->getNodeStatus(node)));
   }
 
   const auto* node_sd = nodes_config_->getNodeServiceDiscovery(node);

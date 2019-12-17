@@ -1137,6 +1137,9 @@ class Cluster {
   // Waits until all nodes are available through gossip (ALIVE)
   int waitUntilAllAvailable(std::chrono::steady_clock::time_point deadline =
                                 std::chrono::steady_clock::time_point::max());
+  // Waits until all nodes are healthy through gossip (HEALTHY)
+  int waitUntilAllHealthy(std::chrono::steady_clock::time_point deadline =
+                              std::chrono::steady_clock::time_point::max());
 
   /**
    * Wait for all sequencer nodes in the cluster to write metadata log records
@@ -1614,6 +1617,9 @@ class Node {
                              std::chrono::steady_clock::time_point::max());
 
   void waitUntilKnownDead(node_index_t other_node_index);
+
+  int waitUntilHealthy(std::chrono::steady_clock::time_point deadline =
+                           std::chrono::steady_clock::time_point::max());
 
   /**
    * Waits for the server using a gossip-based failure detector to mark another

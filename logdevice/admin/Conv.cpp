@@ -171,6 +171,21 @@ thrift::ServiceState toThrift(const ClusterStateNodeState& input) {
 }
 
 template <>
+thrift::ServiceHealthStatus toThrift(const NodeHealthStatus& input) {
+  switch (input) {
+    case NodeHealthStatus::UNHEALTHY:
+      return thrift::ServiceHealthStatus::UNHEALTHY;
+    case NodeHealthStatus::HEALTHY:
+      return thrift::ServiceHealthStatus::HEALTHY;
+    case NodeHealthStatus::OVERLOADED:
+      return thrift::ServiceHealthStatus::OVERLOADED;
+    case NodeHealthStatus::UNDEFINED:
+      return thrift::ServiceHealthStatus::UNDEFINED;
+  }
+  return thrift::ServiceHealthStatus::UNKNOWN;
+}
+
+template <>
 thrift::LocationScope toThrift(const NodeLocationScope& location_scope) {
   switch (location_scope) {
     case NodeLocationScope::INVALID:

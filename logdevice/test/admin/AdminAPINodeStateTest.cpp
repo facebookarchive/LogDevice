@@ -23,6 +23,12 @@ const int NUM_DB_SHARDS = 3;
 TEST_F(AdminAPINodeStateTest, getNodeState) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .useHashBasedSequencerAssignment()
+                     .setHealthMonitorParameters(
+                         /*health_monitor_max_delay_ms*/ 240000,
+                         /*watchdog_poll_interval*/ 10000,
+                         /*worker_stall_percentage*/ 1.1,
+                         /*queue_stall_percentage*/ 1.1,
+                         /*enable_health_based_hashing*/ false)
                      .setNumDBShards(NUM_DB_SHARDS)
                      .setParam("--disable-rebuilding", "false")
                      .setParam("--gossip-interval", "5ms")
@@ -49,6 +55,7 @@ TEST_F(AdminAPINodeStateTest, getNodeState) {
   auto node1 = response.get_states()[0];
   ASSERT_EQ(0, node1.get_node_index());
   ASSERT_EQ(ServiceState::ALIVE, node1.get_daemon_state());
+  ASSERT_EQ(ServiceHealthStatus::HEALTHY, node1.get_daemon_health_status());
   ASSERT_TRUE(node1.sequencer_state_ref().has_value());
   const SequencerState& seq_state = node1.sequencer_state_ref().value();
   ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());

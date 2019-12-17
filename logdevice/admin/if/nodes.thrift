@@ -401,6 +401,38 @@ enum ServiceState {
   DEAD = 5,
 }
 
+/**
+ * ServiceHealthStatus represents whether the daemon is HEALTHY or not from the
+ * point of view of the node you are requesting this data from. This uses the
+ * gossip information propagated through the cluster.
+ */
+enum ServiceHealthStatus {
+  /**
+   * We don't know the service health status.
+   */
+  UNKNOWN = 0,
+  /**
+   * The node is UNDEFINED according to the gossip table of the node
+   * responding with this data structure.
+   */
+  UNDEFINED = 1,
+  /**
+   * The node is HEALTHY according to the gossip table of the node
+   * responding with this data structure.
+   */
+  HEALTHY = 2,
+  /**
+   * The node is OVERLOADED according to the gossip table of the node
+   * responding with this data structure.
+   */
+  OVERLOADED = 3,
+  /**
+   * The node is UNHEALTHY according to the gossip table of the node
+   * responding with this data structure.
+   */
+  UNHEALTHY = 4,
+}
+
 struct NodeState {
   /**
    * The index of this node
@@ -424,6 +456,10 @@ struct NodeState {
    * Configuration object for this node.
    */
   5: NodeConfig config,
+  /**
+   * The gossip health status of node.
+   */
+  6: ServiceHealthStatus daemon_health_status = ServiceHealthStatus.UNKNOWN,
 }
 
 typedef list<NodeConfig> NodesConfig
