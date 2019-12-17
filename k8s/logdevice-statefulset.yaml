@@ -72,7 +72,6 @@ spec:
       name: shard0
     spec:
       accessModes: [ "ReadWriteOnce" ]
-      storageClassName: "do-block-storage"
       resources:
         requests:
-          storage: 50Gi
+          storage: 20Gi
