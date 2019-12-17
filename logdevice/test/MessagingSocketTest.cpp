@@ -982,6 +982,145 @@ TEST_P(MessagingSocketTest, OnHandshakeTimeout) {
   ASSERT_EQ(0, read(fd, &c, 1));
 }
 
+struct SendMessageOnCloseRequest : public Request {
+  explicit SendMessageOnCloseRequest(Semaphore* s)
+      : Request(RequestType::TEST_MESSAGING_SEND_MESSAGE_FROM_CLOSE_CB_REQUEST),
+        sem(s) {}
+  Request::Execution execute() override {
+    ThreadID::set(ThreadID::SERVER_WORKER, "");
+    Worker* w = Worker::onThisThread();
+    auto& sender = w->sender();
+    auto msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MAX_PROTOCOL_SUPPORTED, 10);
+    if (first_msg_) {
+      // First message connects to remote and completes the handshake.
+      msg->setOnSent([waiter = sem](Status st, const Address&) {
+        ASSERT_TRUE(st == E::OK);
+        auto onclose_req = std::make_unique<SendMessageOnCloseRequest>(waiter);
+        onclose_req->first_msg_ = false;
+        std::unique_ptr<Request> rq(std::move(onclose_req));
+        EXPECT_EQ(0, Worker::onThisThread()->tryPost(rq));
+      });
+      int rv = sender.sendMessage(std::move(msg), firstNodeID);
+      EXPECT_EQ(0, rv);
+      EXPECT_FALSE(msg);
+    } else {
+      auto on_close = new OnClose;
+      int rv = sender.sendMessage(std::move(msg), firstNodeID, on_close);
+      EXPECT_EQ(0, rv);
+      EXPECT_FALSE(msg);
+      auto s = sender.findServerSocket(firstNodeID.index());
+      EXPECT_GT(s->getBufferedBytesSize(), 0);
+      s->close(E::INTERNAL);
+      EXPECT_EQ(s->getBufferedBytesSize(), 0);
+      EXPECT_EQ(s->getBytesPending(), 0);
+      EXPECT_TRUE(s->isClosed());
+      sem->post();
+    }
+
+    return Execution::COMPLETE;
+  }
+
+  class OnClose : public SocketCallback {
+   public:
+    void operator()(Status st, const Address& /*name*/) override {
+      ASSERT_EQ(st, E::INTERNAL);
+      Worker* w = Worker::onThisThread();
+      auto& sender = w->sender();
+      auto s = sender.findServerSocket(firstNodeID.index());
+      int rv =
+          sender.sendMessage(std::make_unique<VarLengthTestMessage>(
+                                 Compatibility::MAX_PROTOCOL_SUPPORTED, 10),
+                             firstNodeID);
+      EXPECT_EQ(0, rv);
+      EXPECT_NE(s, sender.findServerSocket(firstNodeID.index()));
+      delete this;
+    }
+  };
+
+  Semaphore* sem{nullptr};
+  bool first_msg_{true};
+};
+
+TEST_P(MessagingSocketTest, SendFromCloseCB) {
+  Settings settings = create_default_settings<Settings>();
+  settings.include_cluster_name_on_handshake = true;
+  settings.include_destination_on_handshake = true;
+  settings.use_legacy_eventbase =
+      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
+  settings.connect_throttle =
+      chrono_expbackoff_t<std::chrono::milliseconds>(0, 0);
+  UpdateableSettings<Settings> updateable_settings(settings);
+
+  ServerSocket server;
+  std::shared_ptr<UpdateableConfig> config(
+      create_config(std::vector<int>{server.getPort()}));
+
+  std::shared_ptr<Processor> processor =
+      std::make_shared<Processor>(config, updateable_settings);
+
+  ld_check((bool)config);
+
+  auto out = createWorker(processor.get(), config, GetParam());
+  auto w = out.worker.get();
+  SCOPE_EXIT {
+    w->sender().shutdownSockets(w);
+  };
+  ASSERT_FALSE(out.loop->getThread().isCurrentThread());
+
+  config.reset();
+
+  Semaphore sem;
+  std::unique_ptr<Request> rq =
+      std::make_unique<SendMessageOnCloseRequest>(&sem);
+
+  EXPECT_EQ(0, w->tryPost(rq));
+
+  // Wait for worker to connect and send message.
+  int fd = server.accept();
+  ASSERT_NE(fd, -1);
+
+  // Complete the handshake so that message get written into the real socket
+  // instead of being held up in serializeq.
+  HELLO_Raw hin;
+  CONFIG_ADVISORY_Raw cin;
+  STORED_Raw r1in, r2in;
+
+  // Skip initial HELLO message.
+  ASSERT_EQ(sizeof(HELLO_Raw), read(fd, &hin, sizeof(HELLO_Raw)));
+
+  // Construct and send an ACK message in response.
+  ACK_Raw ack;
+  ack.ph.len = sizeof(ACK_Raw);
+  ack.ph.type = MessageType::ACK;
+  ack.hdr.options = 0;
+  ack.hdr.rqid = request_id_t(42);
+  ack.hdr.client_idx = 1;
+  ack.hdr.proto = Compatibility::MAX_PROTOCOL_SUPPORTED;
+  ack.hdr.status = E::OK;
+  ASSERT_EQ(sizeof(ACK_Raw), write(fd, &ack, sizeof(ACK_Raw)));
+
+  // Skip CONFIG_ADVISORY
+  size_t expected_size_of_config_advisory = sizeof(CONFIG_ADVISORY_Raw) -
+      (ProtocolHeader::needChecksumInHeader(
+           MessageType::CONFIG_ADVISORY, ack.hdr.proto)
+           ? 0
+           : sizeof(ProtocolHeader::cksum));
+  ASSERT_EQ(expected_size_of_config_advisory,
+            read(fd, &cin, expected_size_of_config_advisory));
+  EXPECT_EQ(MessageType::CONFIG_ADVISORY, cin.ph.type);
+  EXPECT_EQ(expected_size_of_config_advisory, cin.ph.len);
+
+  // Once the first socket is closed and onclose is invoked sem post will be
+  // invoked to finish this wait.
+  sem.wait();
+
+  // New message sent from onClose should create this new connection.
+  fd = server.accept();
+  // OnClose should lead to a new connection request to server.
+  ASSERT_NE(fd, -1);
+}
+
 // Used by AckProtoNoSupportClose test. Send a DummyMessage. Expect
 // DummyMessage::onSent() and the socket close callback to be called with
 // E::PROTONOSUPPORT because the other end sent ACK with E::PROTONOSUPPORT.

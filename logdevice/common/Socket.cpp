@@ -1230,7 +1230,10 @@ bool Socket::isClosed() const {
   ld_check(!connected_);
   ld_check(sendq_.empty());
   ld_check(serializeq_.empty());
-  ld_check(getBytesPending() == 0);
+  // When the socket is getting closed the getBufferedBytesSize will be
+  // incorrect as we have not cleared all the members , hence skip the
+  // getBytesPending check.
+  ld_check(closing_ || getBytesPending() == 0);
   return true;
 }
 

@@ -347,6 +347,7 @@ void Connection::close(Status reason) {
     sched_write_chain_.cancelTimeout();
     // Invoke closeNow before deleting the writing callback below.
     proto_handler_->sock()->closeNow();
+    ld_check(getBufferedBytesSize() == 0);
   }
 }
 

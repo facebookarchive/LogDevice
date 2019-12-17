@@ -588,11 +588,22 @@ class VarLengthTestMessage : public Message {
     return min_proto_;
   }
 
-  virtual Message::Disposition onReceived(const Address& /*from*/) override {
+  void setOnSent(folly::Function<void(Status, const Address&) const> f) {
+    message_onSent_ = std::move(f);
+  }
+
+  void onSent(Status st, const Address& to) const override {
+    if (message_onSent_) {
+      message_onSent_(st, to);
+    }
+  }
+
+  Message::Disposition onReceived(const Address& /*from*/) override {
     return Message::Disposition::NORMAL;
   }
 
  private:
+  folly::Function<void(Status, const Address&) const> message_onSent_;
   uint16_t min_proto_;
   std::map<uint8_t, size_t> size_map_;
 };
