@@ -15,6 +15,7 @@ using namespace facebook::logdevice::configuration::nodes;
 
 TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
   auto sd = NodeServiceDiscovery{"server-1",
+                                 /*version*/ 0,
                                  Sockaddr("127.0.0.1", 4440),
                                  Sockaddr("127.0.0.1", 4441),
                                  /*ssl address*/ folly::none,
@@ -69,6 +70,7 @@ TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
     EXPECT_TRUE(nodeMatchesID(
         node_index_t{12},
         NodeServiceDiscovery{"server-2",
+                             /*version*/ 0,
                              Sockaddr("2001:4860:4860::8888", 4440),
                              Sockaddr("2001:4860:4860::8888", 4441),
                              folly::none,
@@ -88,6 +90,7 @@ TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
     EXPECT_TRUE(
         nodeMatchesID(node_index_t{12},
                       NodeServiceDiscovery{"server-3",
+                                           /*version*/ 0,
                                            Sockaddr("/unix/socket/path"),
                                            Sockaddr("/unix/socket/path/ssl"),
                                            folly::none,

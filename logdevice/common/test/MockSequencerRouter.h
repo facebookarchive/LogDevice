@@ -43,6 +43,7 @@ class MockClusterState : public ClusterState {
       auto url = folly::sformat("127.0.0.{}", nid);
       auto nsd = std::make_unique<NodeServiceDiscovery>(
           NodeServiceDiscovery{folly::sformat("server-{}", nid),
+                               /*version=*/0,
                                Sockaddr(url, 4440),
                                Sockaddr(url, 4441),
                                /*ssl_address=*/folly::none,

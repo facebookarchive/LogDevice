@@ -195,6 +195,7 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
     serv_disc->setNodeAttributes(
         nid,
         {node.name,
+         /*version*/ 0,
          node.address,
          node.gossip_address.valid()
              ? folly::Optional<Sockaddr>(node.gossip_address)

@@ -23,6 +23,7 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
     const NodeServiceDiscovery& discovery) {
   thrift::NodeServiceDiscovery disc;
   disc.set_name(discovery.name);
+  disc.set_version(discovery.version);
   disc.set_address(discovery.address.toString());
   if (discovery.gossip_address.hasValue()) {
     disc.set_gossip_address(discovery.gossip_address->toString());
@@ -47,6 +48,7 @@ int NodesConfigurationThriftConverter::fromThrift(
   NodeServiceDiscovery result;
 
   result.name = obj.name;
+  result.version = obj.version;
 
   if (obj.address.empty()) {
     ld_error("Missing required field address.");

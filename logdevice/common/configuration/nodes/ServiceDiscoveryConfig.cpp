@@ -99,14 +99,15 @@ bool NodeServiceDiscovery::isValidForReset(
 
 std::string NodeServiceDiscovery::toString() const {
   return folly::sformat(
-      "[{} => A:{},G:{},S:{},AA:{}L:{},R:{}]",
+      "[{} => A:{},G:{},S:{},AA:{}L:{},R:{},V:{}]",
       name,
       address.toString(),
       gossip_address.hasValue() ? gossip_address->toString() : "",
       ssl_address.hasValue() ? ssl_address->toString() : "",
       admin_address.hasValue() ? admin_address->toString() : "",
       location.hasValue() ? location->toString() : "",
-      logdevice::toString(roles));
+      logdevice::toString(roles),
+      version);
 }
 
 const Sockaddr&

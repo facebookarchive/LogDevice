@@ -34,6 +34,7 @@ NodeServiceDiscovery genDiscovery(node_index_t n,
   }
   std::string addr = folly::sformat("127.0.0.{}", n);
   return NodeServiceDiscovery{folly::sformat("server-{}", n),
+                              /*version*/ 0,
                               Sockaddr(addr, 4440),
                               Sockaddr(addr, 4441),
                               /*ssl address*/ folly::none,

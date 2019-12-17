@@ -28,6 +28,15 @@ struct NodeServiceDiscovery {
    */
   std::string name{};
 
+  /*
+   * A concept of version allows a node to successfully join a cluster even if a
+   * node with the same name is already a member of the cluster.
+   * The node will be able to join if and only if it has a higher version that
+   * the existing node with the same name. The latter one will then be
+   * preempted.
+   */
+  std::uint64_t version{};
+
   /**
    * The IP (v4 or v6) address, including port number.
    */
@@ -83,7 +92,8 @@ struct NodeServiceDiscovery {
   bool operator==(const NodeServiceDiscovery& rhs) const {
     return address == rhs.address && gossip_address == rhs.gossip_address &&
         ssl_address == rhs.ssl_address && admin_address == rhs.admin_address &&
-        location == rhs.location && roles == rhs.roles && name == rhs.name;
+        location == rhs.location && roles == rhs.roles && name == rhs.name &&
+        version == rhs.version;
   }
 
   bool operator!=(const NodeServiceDiscovery& rhs) const {
