@@ -6,3 +6,5 @@ resources:
 - logdevice-statefulset.yaml
 - logdevice-service.yaml
 - logdevice-admin-server.yaml
+generatorOptions:
+  disableNameSuffixHash: true
