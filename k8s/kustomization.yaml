@@ -1,3 +1,6 @@
+# This is a configmap generator for the cluster config. It will get mounted 
+# to the daemon as a file that gets automatically updated when the config map
+# content changes.
 configMapGenerator:
 - name: logdevice-config
   files:
