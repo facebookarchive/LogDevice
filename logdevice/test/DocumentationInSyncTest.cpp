@@ -68,30 +68,60 @@ TEST_P(DocumentationInSyncTest, RegenAndCompare) {
       ld_error("Failed to write %s", settings_path.c_str());
     }
   } else {
-    // Comparing line by line to make the difference clearer
-    std::vector<std::string> lines_generated;
-    folly::split('\n', outputs.first, lines_generated);
-    std::vector<std::string> lines_file;
-    folly::split('\n', settings_file, lines_file);
-
-    std::string emptystr;
-    for (int i = 0; i < lines_generated.size() || i < lines_file.size(); ++i) {
-      const std::string& generated_line =
-          i < lines_generated.size() ? lines_generated[i] : emptystr;
-      const std::string& file_line =
-          i < lines_file.size() ? lines_file[i] : emptystr;
-      if (generated_line != file_line) {
-        ld_error("Mismatch on line %d", i);
-      }
-      EXPECT_EQ(generated_line, file_line);
-    }
-
     ld_error("%s doesn't match!", settings_path.c_str());
     ld_error("To update it, please either:");
     ld_error(" a. re-run this test with --update flag, or");
     ld_error(" b. run %s > %s",
              folly::join(" ", params.args).c_str(),
              settings_path.c_str());
+    ADD_FAILURE() << "Documentation not in sync";
+
+    // Comparing line by line to make the difference clearer
+    std::vector<std::string> lines_generated;
+    folly::split('\n', outputs.first, lines_generated);
+    std::vector<std::string> lines_file;
+    folly::split('\n', settings_file, lines_file);
+
+    // Typically the mismatch touches only a few nearby lines (when one or a few
+    // nearby settings were added/removed/updated). Let's print everything
+    // between the longest matching prefix and the longest matching suffix.
+
+    size_t matching_lines_at_start = 0;
+    while (matching_lines_at_start <
+               std::min(lines_generated.size(), lines_file.size()) &&
+           lines_generated.at(matching_lines_at_start) ==
+               lines_file.at(matching_lines_at_start)) {
+      ++matching_lines_at_start;
+    }
+
+    size_t matching_lines_at_end = 0;
+    while (matching_lines_at_end <
+               std::min(lines_generated.size(), lines_file.size()) &&
+           lines_generated.at(lines_generated.size() - 1 -
+                              matching_lines_at_end) ==
+               lines_file.at(lines_file.size() - 1 - matching_lines_at_end)) {
+      ++matching_lines_at_end;
+    }
+
+    auto print_lines = [](const std::vector<std::string>& lines,
+                          size_t omit_first,
+                          size_t omit_last) {
+      for (size_t i = 0; i < lines.size() - omit_first - omit_last; ++i) {
+        if (i > 20) {
+          ld_error("[... %lu more lines ...]",
+                   lines.size() - omit_first - omit_last - i);
+          break;
+        }
+        ld_error("%s", lines.at(omit_first + i).c_str());
+      }
+    };
+
+    ld_error("Mismatch starting from line %lu.", matching_lines_at_start + 1);
+    ld_error("Expected lines:");
+    print_lines(
+        lines_generated, matching_lines_at_start, matching_lines_at_end);
+    ld_error("Found lines:");
+    print_lines(lines_file, matching_lines_at_start, matching_lines_at_end);
   }
 }
 
