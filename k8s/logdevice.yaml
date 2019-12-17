@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: logdevice
+  labels:
+    app: logdevice
+spec:
+  clusterIP: None
+  selector:
+    app: logdevice
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: logdevice
+spec:
+  serviceName: "logdevice"
+  replicas: 4
+  selector:
+    matchLabels:
+      app: logdevice
+  template:
+    metadata:
+      labels:
+        app: logdevice
+    spec:
+      containers:
+      - name: logdevice
+        image: "facebookincubator/logdevice"
+        command: "/usr/local/bin/logdeviced"
+        args: [
+          "--config-path", "",
+          "--enable-node-self-registration",
+          "--address", "$(POD_IP)",
+          "--name", "$(POD_NAME)",
+          "--port", "4440",
+          "--gossip-port", "4441",
+        ]
+        ports:
+        - containerPort: 4440
+        - containerPort: 4441
+        imagePullPolicy: Always
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAME_PREFIX
+            value: "logdevice-"
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+        volumeMounts:
+        - name: shard0
+          mountPath: /data/logdevice/shard0
+  volumeClaimTemplates:
+  - metadata:
+      name: shard0
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "do-block-storage"
+      resources:
+        requests:
+          storage: 50Gi
