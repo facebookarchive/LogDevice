@@ -82,6 +82,10 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
 
   update_builder.setNodeIndex(my_idx).setName(server_settings_.name);
 
+  if (server_settings_.version.hasValue()) {
+    update_builder.setVersion(server_settings_.version.value());
+  }
+
   if (!server_settings_.unix_socket.empty()) {
     update_builder.setDataAddress(Sockaddr(server_settings_.unix_socket));
   } else {

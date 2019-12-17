@@ -398,11 +398,12 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::Network)
 
-    ("shutdown-on-my-node-id-mismatch",
-     &shutdown_on_my_node_id_mismatch,
+    ("shutdown-on-node-configuration-mismatch",
+     &shutdown_on_node_configuration_mismatch,
      "true",
      nullptr,
-     "Gracefully shutdown whenever the server's NodeID changes",
+     "Gracefully shutdown whenever the server's NodeID and/or service discovery "
+     "configuration changes.",
      SERVER,
      SettingsCategory::Configuration)
 
@@ -421,6 +422,23 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "any point of time, all the names in the config are unique. If a node joins "
      "with a name that's used by another running node, the new node will preempt "
      "the old one.",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("node-version", &version, "",
+     [](const std::string& val) -> decltype(version) {
+       using value_type = typename std::decay<decltype(*version)>::type;
+       if (val.empty()) {
+         return folly::none;
+       }
+       return parse_nonnegative<value_type>()("node-version", val);
+     },
+     "[Only used when node self registration is enabled] The version provides "
+     "better control over node self-registration logic. A node will only be "
+     "allowed to update its attributes on joining the cluster its version is "
+     "greater or equal than the current one. When omitted, will default to "
+     "the current version if there is another node running with the same "
+     "name, and to 0 otherwise.",
      SERVER | REQUIRES_RESTART | CLI_ONLY,
      SettingsCategory::NodeRegistration)
 

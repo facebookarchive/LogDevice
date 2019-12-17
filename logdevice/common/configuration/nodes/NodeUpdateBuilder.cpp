@@ -17,6 +17,11 @@ NodeUpdateBuilder& NodeUpdateBuilder::setNodeIndex(node_index_t idx) {
   return *this;
 }
 
+NodeUpdateBuilder& NodeUpdateBuilder::setVersion(uint64_t version) {
+  version_ = version;
+  return *this;
+}
+
 NodeUpdateBuilder& NodeUpdateBuilder::setDataAddress(Sockaddr addr) {
   data_address_ = std::move(addr);
   return *this;
@@ -117,6 +122,7 @@ NodeUpdateBuilder::buildNodeServiceDiscovery() {
   auto sd = std::make_unique<NodeServiceDiscovery>();
 
   sd->name = std::move(name_).value();
+  sd->version = version_.value();
   sd->address = std::move(data_address_).value();
   sd->gossip_address = std::move(gossip_address_);
   sd->ssl_address = std::move(ssl_address_);
@@ -164,6 +170,8 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::buildAddNodeUpdate(
   }
 
   auto node_idx = node_index_.value();
+  // If the version was omitted on daemon startup, use 0.
+  version_ = version_.value_or(0);
 
   // Service Discovery Update
   createIfNull(update.service_discovery_update)
@@ -225,6 +233,18 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::buildUpdateNodeUpdate(
   auto current_svc = nodes_configuration.getNodeServiceDiscovery(node_idx);
   if (current_svc == nullptr) {
     return {E::NOTINCONFIG, folly::sformat("N{} is not in config", node_idx)};
+  }
+
+  // If the version was omitted on daemon startup, read it from the current
+  // nodes configuration.
+  version_ = version_.value_or(current_svc->version);
+
+  if (version_.value() < current_svc->version) {
+    return {E::INVALID_PARAM,
+            folly::sformat("The version can't be decreased. Current value: {}, "
+                           "update request: {}",
+                           current_svc->version,
+                           version_.value())};
   }
 
   // Roles should be immutable

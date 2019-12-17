@@ -29,6 +29,7 @@ class NodeUpdateBuilder {
   };
 
   NodeUpdateBuilder& setNodeIndex(node_index_t);
+  NodeUpdateBuilder& setVersion(uint64_t);
   NodeUpdateBuilder& setDataAddress(Sockaddr);
   NodeUpdateBuilder& setGossipAddress(Sockaddr);
   NodeUpdateBuilder& setSSLAddress(Sockaddr);
@@ -72,6 +73,7 @@ class NodeUpdateBuilder {
  private:
   // Service Discovery
   folly::Optional<node_index_t> node_index_;
+  folly::Optional<uint64_t> version_;
   folly::Optional<Sockaddr> data_address_;
   folly::Optional<Sockaddr> gossip_address_;
   folly::Optional<Sockaddr> ssl_address_;

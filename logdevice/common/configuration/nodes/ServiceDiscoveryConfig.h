@@ -29,13 +29,12 @@ struct NodeServiceDiscovery {
   std::string name{};
 
   /*
-   * A concept of version allows a node to successfully join a cluster even if a
-   * node with the same name is already a member of the cluster.
-   * The node will be able to join if and only if it has a higher version that
-   * the existing node with the same name. The latter one will then be
-   * preempted.
+   * The version provides better control over node self-registration logic.
+   * A node will be allowed to update its attributes on joining the cluster
+   * only if the proposed version is greater or equal than the current one.
+   * The node with the lower version will then be preempted.
    */
-  std::uint64_t version{};
+  uint64_t version{};
 
   /**
    * The IP (v4 or v6) address, including port number.

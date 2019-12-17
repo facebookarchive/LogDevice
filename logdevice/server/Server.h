@@ -171,8 +171,8 @@ class ServerParameters {
   bool setConnectionLimits();
 
   // NodesConfiguration Hooks
-  bool shutdownIfMyNodeIdChanged(const NodesConfiguration& config);
-  bool isSameMyNodeID(const NodesConfiguration& config);
+  bool shutdownIfMyNodeInfoChanged(const NodesConfiguration& config);
+  bool hasMyNodeInfoChanged(const NodesConfiguration& config);
 
   // Server Config Hooks
   bool updateServerOrigin(ServerConfig& config);
@@ -324,9 +324,9 @@ class Server {
   std::atomic<bool> is_shut_down_{false};
 
   // ResourceBudget used to limit the total number of accepted connections
-  // which have not been processed by workers. It is the same as looking at the
-  // number of incomplete NewConnectionRequest
-  // See Settings::max_new_connections.
+  // which have not been processed by workers. It is the same as looking at
+  // the number of incomplete NewConnectionRequest See
+  // Settings::max_new_connections.
   ResourceBudget conn_budget_backlog_;
 
   // Similar to above but we don't want to limit for some listeners.
@@ -358,5 +358,4 @@ class Server {
   bool startCommandListener(std::unique_ptr<Listener>& handle);
   bool startConnectionListener(std::unique_ptr<Listener>& handle);
 };
-
 }} // namespace facebook::logdevice

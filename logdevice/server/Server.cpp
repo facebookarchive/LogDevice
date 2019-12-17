@@ -93,43 +93,60 @@ static void bumpErrorCounter(dbg::Level level) {
   ld_check(false);
 }
 
-bool ServerParameters::shutdownIfMyNodeIdChanged(
+bool ServerParameters::shutdownIfMyNodeInfoChanged(
     const NodesConfiguration& config) {
   if (!my_node_id_.has_value()) {
     return true;
   }
-  if (!isSameMyNodeID(config)) {
-    // If some other node took over our NodeID let's shutdown gracefully.
-    // TODO: Assert same service discovery attributes as well
-    ld_critical("MyNodeID is not the same anymore. Rejecting config.");
-    if (server_settings_->shutdown_on_my_node_id_mismatch) {
-      ld_critical("--shutdown-on-my-node-id-mismatch is set, gracefully "
-                  "shutting down.");
-      requestStop();
-    }
-    return false;
+
+  if (!hasMyNodeInfoChanged(config)) {
+    return true;
   }
-  return true;
+
+  ld_critical("Configuration mismatch detected, rejecting the config.");
+  if (server_settings_->shutdown_on_node_configuration_mismatch) {
+    ld_critical("--shutdown-on-node-configuration-mismatch is set, gracefully "
+                "shutting down.");
+    requestStop();
+  }
+  return false;
 }
 
-bool ServerParameters::isSameMyNodeID(const NodesConfiguration& config) {
+bool ServerParameters::hasMyNodeInfoChanged(const NodesConfiguration& config) {
   ld_check(my_node_id_.hasValue());
-
   ld_check(my_node_id_finder_);
 
   auto node_id = my_node_id_finder_->calculate(config);
   if (!node_id.hasValue()) {
-    ld_error("Couldn't find my node index in config.");
-    return false;
+    ld_error("Couldn't find my node ID in config.");
+    return true;
   }
-  if (my_node_id_.value() != node_id.value()) {
+
+  if (my_node_id_.value() != node_id) {
     ld_error("My node ID changed from %s to %s.",
              my_node_id_->toString().c_str(),
              node_id->toString().c_str());
-
-    return false;
+    return true;
   }
-  return true;
+
+  const auto old_service_discovery =
+      updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
+          node_id->index());
+  const auto new_service_discovery =
+      config.getNodeServiceDiscovery(node_id->index());
+
+  ld_check(old_service_discovery);
+  ld_check(new_service_discovery);
+
+  if (old_service_discovery->version != new_service_discovery->version) {
+    ld_error("My version changed from %lu to %lu.",
+             old_service_discovery->version,
+             new_service_discovery->version);
+    return true;
+  }
+
+  // No change detected
+  return false;
 }
 
 bool ServerParameters::updateServerOrigin(ServerConfig& config) {
@@ -257,16 +274,32 @@ bool ServerParameters::registerAndUpdateNodeInfo(
       updateable_config_->updateableNodesConfiguration(),
       nodes_configuration_store};
   // Find our NodeID from the published NodesConfiguration
-  if (auto my_id = my_node_id_finder_->calculate(
-          *updateable_config_->getNodesConfiguration());
-      my_id.hasValue()) {
-    ld_check(my_id->isNodeID());
-    my_node_id_ = std::move(my_id);
+  if (auto my_node_id = my_node_id_finder_->calculate(
+          *updateable_config_->getNodesConfiguration())) {
+    ld_check(my_node_id->isNodeID());
+    // We store our node ID on exiting the scope to avoid being preempted during
+    // self-registration process.
+    SCOPE_EXIT {
+      my_node_id_ = my_node_id;
+    };
 
     if (server_settings_->enable_node_self_registration) {
-      // If self registration is enabled, let's make sure that our attributes
-      // are up to date.
-      Status status = handler.updateSelf(my_node_id_->index());
+      // If self registration is enabled, let's check if our version is correct.
+      const auto service_discovery =
+          updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
+              my_node_id->index());
+      ld_check(service_discovery);
+      const auto old_version = service_discovery->version;
+      const auto new_version = server_settings_->version.value_or(old_version);
+      if (new_version < old_version) {
+        ld_error("Found the node with the same name but higher version (%lu > "
+                 "%lu) in the config",
+                 old_version,
+                 new_version);
+        return false;
+      }
+      // Now let's make sure that our attributes are up to date.
+      Status status = handler.updateSelf(my_node_id->index());
       if (status == Status::OK) {
         ld_info("Successfully updated the NodesConfiguration");
         // Refetch the NodesConfiguration to detect the modification that we
@@ -324,12 +357,12 @@ bool ServerParameters::registerAndUpdateNodeInfo(
       return false;
     }
   }
-  // Let's wait a bit for config propagation to the rest of the cluster so that
-  // they recognize us when we talk to them. It's ok if they don't, that's why
-  // we didn't implement complicated verfication logic in here.
+  // Let's wait a bit for config propagation to the rest of the cluster so
+  // that they recognize us when we talk to them. It's ok if they don't,
+  // that's why we didn't implement complicated verfication logic in here.
   //
-  // TODO(T53579322): Harden the startup of the node to avoid crashing when it's
-  // still unknown to the rest of the cluster
+  // TODO(T53579322): Harden the startup of the node to avoid crashing when
+  // it's still unknown to the rest of the cluster
   /* sleep override */ std::this_thread::sleep_for(std::chrono::seconds(5));
   return true;
 }
@@ -389,7 +422,7 @@ void ServerParameters::init() {
                 std::placeholders::_1)));
   nodes_configuration_hook_handles_.push_back(
       updateable_config_->updateableNodesConfiguration()->addHook(
-          std::bind(&ServerParameters::shutdownIfMyNodeIdChanged,
+          std::bind(&ServerParameters::shutdownIfMyNodeInfoChanged,
                     this,
                     std::placeholders::_1)));
 
@@ -435,8 +468,8 @@ void ServerParameters::init() {
       std::make_shared<NoopTraceLogger>(updateable_config_));
   ld_check(updateable_config_->getNodesConfiguration() != nullptr);
 
-  // Initialize the MyNodeIDFinder that will be used to find our NodeID from the
-  // config.
+  // Initialize the MyNodeIDFinder that will be used to find our NodeID from
+  // the config.
   if (!initMyNodeIDFinder()) {
     ld_error("Failed to construct MyNodeIDFinder");
     throw ConstructorFailed();
@@ -460,10 +493,14 @@ void ServerParameters::init() {
       config->serverConfig()->getInternalLogsConfig());
 
   NodeID node_id = my_node_id_.value();
-  ld_info("My NodeID is %s", node_id.toString().c_str());
+  ld_info("My Node ID is %s", node_id.toString().c_str());
   const auto& nodes_configuration = updateable_config_->getNodesConfiguration();
   ld_check(
       nodes_configuration->isNodeInServiceDiscoveryConfig(node_id.index()));
+
+  ld_info(
+      "My version is %lu",
+      nodes_configuration->getNodeServiceDiscovery(node_id.index())->version);
 
   if (!setConnectionLimits()) {
     throw ConstructorFailed();
@@ -999,9 +1036,9 @@ bool Server::repopulateRecordCaches() {
     status_counts[status].push_back(shard_idx);
   };
 
-  // Start RecordCacheRepopulationRequest. Only try to deserialize record cache
-  // snapshot if record cache is enabled _and_ persisting record cache is
-  // allowed. Otherwise, just drop all previous snapshots.
+  // Start RecordCacheRepopulationRequest. Only try to deserialize record
+  // cache snapshot if record cache is enabled _and_ persisting record cache
+  // is allowed. Otherwise, just drop all previous snapshots.
   std::unique_ptr<Request> req =
       std::make_unique<RepopulateRecordCachesRequest>(
           callback, params_->getProcessorSettings()->enable_record_cache);
@@ -1238,8 +1275,8 @@ bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
     admin_server->setMaintenanceManager(maintenance_manager_.get());
     maintenance_manager_->start();
   } else {
-    ld_info(
-        "Not initializing MaintenanceManager since it is disabled in settings");
+    ld_info("Not initializing MaintenanceManager since it is disabled in "
+            "settings");
   }
   return true;
 }
@@ -1332,7 +1369,8 @@ bool Server::initAdminServer() {
       ld_warning(
           "The admin-enabled setting is true, but "
           "admin_address/admin_port are missing from the config. Will use "
-          "default address (%s) instead. Please consider setting a port in the "
+          "default address (%s) instead. Please consider setting a port in "
+          "the "
           "config",
           admin_listen_addr->toString().c_str());
     }
@@ -1487,5 +1525,4 @@ void Server::rotateLocalLogs() {
 Server::~Server() {
   shutdownWithTimeout();
 }
-
 }} // namespace facebook::logdevice

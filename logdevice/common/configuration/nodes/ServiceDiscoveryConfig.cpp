@@ -73,6 +73,15 @@ bool NodeServiceDiscovery::isValid() const {
 
 bool NodeServiceDiscovery::isValidForReset(
     const NodeServiceDiscovery& current) const {
+  // The proposed version can't be less than the current one
+  if (current.version > version) {
+    ld_error("A node can't decrease its version. Current value: %lu, "
+             "requested update: %lu",
+             current.version,
+             version);
+    return false;
+  }
+
   // Roles are immutable
   if (current.roles != roles) {
     ld_error("Node's roles are assumed to be immutable. Current value: '%s', "
@@ -82,8 +91,11 @@ bool NodeServiceDiscovery::isValidForReset(
     return false;
   }
 
-  // Storage nodes can't change their location, but sequencer-only nodes can.
-  if (current.location != location && hasRole(NodeRole::STORAGE)) {
+  // The node can't change its location if it's a storage node AND its version
+  // remains the same.
+  // TODO(T57564225): Agree on location string update policy
+  if (current.version == version && current.location != location &&
+      hasRole(NodeRole::STORAGE)) {
     ld_error(
         "Storage nodes' location is assumed to be immutable to maintain the "
         "correctness of the replication property of the historical nodesets. "
@@ -93,7 +105,7 @@ bool NodeServiceDiscovery::isValidForReset(
     return false;
   }
 
-  // All other fields can be mutated freely.
+  // If we reached this point, all the eligible fields can be mutated freely.
   return true;
 }
 

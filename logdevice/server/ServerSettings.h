@@ -76,7 +76,7 @@ struct ServerSettings : public SettingsBundle {
   // All changes to Trim points are stored in this log.
   std::string audit_log;
 
-  bool shutdown_on_my_node_id_mismatch;
+  bool shutdown_on_node_configuration_mismatch;
 
   // (server-only setting) Maximum number of incoming connections that have been
   // accepted by listener (have an open FD) but have not been processed by
@@ -90,6 +90,7 @@ struct ServerSettings : public SettingsBundle {
   // Self Registration Specific attributes
   bool enable_node_self_registration;
   std::string name;
+  folly::Optional<uint64_t> version;
   // TODO(mbassem): This is the IP, do we need a better name?
   std::string address;
   int ssl_port;
