@@ -1,0 +1,8 @@
+configMapGenerator:
+- name: logdevice-config
+  files:
+  - config.json
+resources:
+- logdevice-statefulset.yaml
+- logdevice-service.yaml
+- logdevice-admin-server.yaml

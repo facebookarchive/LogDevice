@@ -1,10 +1,16 @@
 {
   "server_settings": {
     "enable-nodes-configuration-manager": "true",
-    "use-nodes-configuration-manager-nodes-configuration": "true"
+    "use-nodes-configuration-manager-nodes-configuration": "true",
+    "enable-node-self-registration": "true",
+    "enable-cluster-maintenance-state-machine": "true"
   },
-  "cluster": "test",
-  "nodes": [],
+  "client_settings": {
+    "enable-nodes-configuration-manager": "true",
+    "use-nodes-configuration-manager-nodes-configuration": "true",
+    "admin-client-capabilities": "true"
+  },
+  "cluster": "logdevice",
   "internal_logs": {
     "config_log_deltas": {
       "replicate_across": {
@@ -22,6 +28,16 @@
       }
     },
     "event_log_snapshots": {
+      "replicate_across": {
+        "node": 3
+      }
+    },
+    "maintenance_log_deltas": {
+      "replicate_across": {
+        "node": 3
+      }
+    },
+    "maintenance_log_snapshots": {
       "replicate_across": {
         "node": 3
       }

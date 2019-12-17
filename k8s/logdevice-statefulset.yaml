@@ -1,13 +1,9 @@
 apiVersion: v1
-kind: Service
+kind: ConfigMap
 metadata:
-  name: logdevice
-  labels:
-    app: logdevice
-spec:
-  clusterIP: None
-  selector:
-    app: logdevice
+    name: nshards
+data:
+    NSHARDS: "1"
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -15,7 +11,7 @@ metadata:
   name: logdevice
 spec:
   serviceName: "logdevice"
-  replicas: 4
+  replicas: 3
   selector:
     matchLabels:
       app: logdevice
@@ -27,26 +23,26 @@ spec:
       containers:
       - name: logdevice
         image: "facebookincubator/logdevice"
-        command: "/usr/local/bin/logdeviced"
-        args: [
-          "--config-path", "",
-          "--enable-node-self-registration",
-          "--address", "$(POD_IP)",
-          "--name", "$(POD_NAME)",
-          "--port", "4440",
-          "--gossip-port", "4441",
-        ]
+        command:
+          - "/usr/local/bin/logdeviced"
+          - "--config-path"
+          - "/etc/logdevice/config.json"
+          - "--address"
+          - "$(POD_IP)"
+          - "--name"
+          - "$(POD_NAME)"
+          - "--local-log-store-path"
+          - "/data/logdevice"
         ports:
         - containerPort: 4440
         - containerPort: 4441
-        imagePullPolicy: Always
+        - containerPort: 5440
+        - containerPort: 6440
         env:
           - name: POD_NAME
             valueFrom:
               fieldRef:
                 fieldPath: metadata.name
-          - name: POD_NAME_PREFIX
-            value: "logdevice-"
           - name: POD_IP
             valueFrom:
               fieldRef:
@@ -54,6 +50,23 @@ spec:
         volumeMounts:
         - name: shard0
           mountPath: /data/logdevice/shard0
+        - name: config
+          mountPath: /etc/logdevice
+        - name: nshards
+          mountPath: /data/logdevice
+      volumes:
+      - name: config
+        configMap:
+          name: logdevice-config
+          items:
+            - key: config.json
+              path: config.json
+      - name: nshards
+        configMap:
+          name: nshards
+          items:
+            - key: NSHARDS
+              path: NSHARDS
   volumeClaimTemplates:
   - metadata:
       name: shard0
