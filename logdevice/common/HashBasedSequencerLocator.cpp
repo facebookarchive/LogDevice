@@ -60,6 +60,7 @@ void HashBasedSequencerLocator::locateContinuation(
       nodes_configuration.get(),
       getSettings().use_sequencer_affinity ? log_attrs : nullptr,
       cs,
+      getSettings().enable_health_based_sequencer_placement,
       &res,
       std::move(sequencers));
   if (rv == 0) {
@@ -78,6 +79,7 @@ node_index_t HashBasedSequencerLocator::getPrimarySequencerNode(
                             &nodes_configuration,
                             log_attrs,
                             /* cs */ nullptr,
+                            /* bool use_health_based_hashing */ false,
                             &res);
   if (rv == 0) {
     return res.index();
@@ -92,6 +94,7 @@ int HashBasedSequencerLocator::locateSequencer(
     const configuration::nodes::NodesConfiguration* nodes_configuration,
     const logsconfig::LogAttributes* log_attrs,
     ClusterState* cs,
+    bool use_health_based_hashing,
     NodeID* out_sequencer,
     std::shared_ptr<configuration::SequencersConfig> sequencersconfig) {
   ld_check(nodes_configuration != nullptr);
@@ -118,13 +121,20 @@ int HashBasedSequencerLocator::locateSequencer(
     }
   }
 
+  if (cs && use_health_based_hashing &&
+      !cs->isClusterSeqHealthAboveThreshold()) {
+    use_health_based_hashing = false;
+  }
   // Use weighted consistent hashing to pick a sequencer node for log_id.
   // Weights are also used here as a blacklisting mechanism: upper layers may
   // pass in a SequencersConfig with weights of nodes that should be excluded
   // from the search (e.g. those that were determined to be unavailable) set to
   // zero.
 
-  auto can_we_route_to = [&sequencers, cs, log_id](uint64_t node, double w) {
+  auto can_we_route_to = [&sequencers, cs, log_id](
+                             uint64_t node,
+                             double w,
+                             bool use_health_based_hashing) {
     if (w <= 0.0) {
       return false;
     } else if (!cs) {
@@ -138,7 +148,9 @@ int HashBasedSequencerLocator::locateSequencer(
           // internal log).
           (is_internal_log &&
            cs->isNodeStarting(sequencers->nodes[node].index()));
-      return is_node_ready && !cs->isNodeBoycotted(node);
+      bool is_node_unhealthy =
+          (use_health_based_hashing && cs->isNodeUnhealthy(node));
+      return is_node_ready && !is_node_unhealthy && !cs->isNodeBoycotted(node);
     }
   };
 
@@ -148,7 +160,7 @@ int HashBasedSequencerLocator::locateSequencer(
     // trying to find sequencer according to location affinity
     auto weight_fn_with_loc = [&](uint64_t node) {
       double w = sequencers->weights[node];
-      if (can_we_route_to(node, w)) {
+      if (can_we_route_to(node, w, use_health_based_hashing)) {
         const auto* serv_disc =
             nodes_configuration->getNodeServiceDiscovery(node);
         if (serv_disc != nullptr) {
@@ -178,7 +190,7 @@ int HashBasedSequencerLocator::locateSequencer(
     // trying to find sequencer regardless of location
     auto weight_fn = [&](uint64_t node) {
       double w = sequencers->weights[node];
-      if (can_we_route_to(node, w)) {
+      if (can_we_route_to(node, w, use_health_based_hashing)) {
         return w;
       }
       return 0.0;

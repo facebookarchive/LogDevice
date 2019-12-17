@@ -35,6 +35,7 @@
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/LegacyLogToShard.h"
+#include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Sockaddr.h"
@@ -1760,6 +1761,35 @@ int Node::waitUntilKnownGossipState(
   return rv;
 }
 
+int Node::waitUntilKnownGossipStatus(
+    node_index_t other_node_index,
+    uint8_t health_status,
+    std::chrono::steady_clock::time_point deadline) {
+  const std::string key_expected =
+      folly::to<std::string>("N", other_node_index);
+  const std::string status_str = toString(NodeHealthStatus(health_status));
+  int rv = wait_until(
+      ("node " + std::to_string(node_index_) +
+       " learns through gossip that node " + std::to_string(other_node_index) +
+       " is " + status_str)
+          .c_str(),
+      [&]() { return gossipStatusInfo()[key_expected] == status_str; },
+      deadline);
+  if (rv == 0) {
+    ld_info("Node %d transitioned to %s according to node %d",
+            other_node_index,
+            status_str.c_str(),
+            node_index_);
+  } else {
+    ld_info(
+        "Timed out waiting for node %d to see that node %d transitioned to %s",
+        node_index_,
+        other_node_index,
+        status_str.c_str());
+  }
+  return rv;
+}
+
 int Node::waitUntilAvailable(std::chrono::steady_clock::time_point deadline) {
   return waitUntilKnownGossipState(node_index_, /* alive */ true, deadline);
 }
@@ -2268,6 +2298,19 @@ Node::gossipCount() const {
 
 std::map<std::string, std::string> Node::gossipInfo() const {
   return parse<std::string>(sendCommand("info gossip"), "GOSSIP");
+}
+
+std::map<std::string, std::string> Node::gossipStatusInfo() const {
+  std::map<std::string, std::string> out;
+  auto cmd_result = sendCommand("info gossip --json");
+  if (cmd_result == "") {
+    return out;
+  }
+  auto obj = folly::parseJson(cmd_result);
+  for (auto& state : obj["states"]) {
+    out[state["node_id"].getString()] = state["health_status"].getString();
+  }
+  return out;
 }
 
 std::map<std::string, bool> Node::gossipStarting() const {
@@ -2973,6 +3016,26 @@ int Cluster::waitUntilGossip(bool alive,
       continue;
     }
     int rv = it.second->waitUntilKnownGossipState(targetNode, alive, deadline);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+  return 0;
+}
+
+int Cluster::waitUntilGossipStatus(
+    uint8_t health_status,
+    uint64_t targetNode,
+    std::set<uint64_t> nodesToSkip,
+    std::chrono::steady_clock::time_point deadline) {
+  for (const auto& it : getNodes()) {
+    if (((health_status == 0 || health_status == 3) &&
+         it.first == targetNode) ||
+        nodesToSkip.count(it.first) != 0 || it.second->stopped_) {
+      continue;
+    }
+    int rv = it.second->waitUntilKnownGossipStatus(
+        targetNode, health_status, deadline);
     if (rv != 0) {
       return rv;
     }

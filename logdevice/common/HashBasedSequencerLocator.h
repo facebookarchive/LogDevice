@@ -63,6 +63,7 @@ class HashBasedSequencerLocator : public SequencerLocator {
       const configuration::nodes::NodesConfiguration* nodes_configuration,
       const logsconfig::LogAttributes* log_attrs, // if null, no affinity
       ClusterState* cs, // if null, all nodes considered available
+      bool use_health_based_hashing,
       NodeID* out_sequencer,
       std::shared_ptr<configuration::SequencersConfig> sequencers = nullptr);
 

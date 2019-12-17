@@ -848,6 +848,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "placement.",
        SERVER | CLIENT /* used in ClusterState */,
        SettingsCategory::Sequencer);
+  init("enable-health-based-sequencer-placement",
+       &enable_health_based_sequencer_placement,
+       "false",
+       nullptr,
+       "Toggle use of HealthMonitor determined node status in sequencer "
+       "location. This value MUST be the same on client and server to ensure "
+       "correct conditions for health based sequencer placement.",
+       SERVER | CLIENT /* used in HashBasedSequencerLocator  */,
+       SettingsCategory::Sequencer);
   init("enable-health-monitor",
        &enable_health_monitor,
        "true",

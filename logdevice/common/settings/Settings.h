@@ -83,6 +83,8 @@ struct Settings : public SettingsBundle {
 
   // Toggle use of HealthMonitor to determine node status on server-side.
   bool enable_health_monitor;
+  // Toggle use of HealthMonitor determined node status in sequencer location.
+  bool enable_health_based_sequencer_placement;
 
   // Percent of UNHEALTHY nodes in the cluster at which HealthBasedHashing is no
   // longer a viable option.

@@ -3466,3 +3466,180 @@ TEST_F(SequencerIntegrationTest, NodeSetAdjustment) {
   EXPECT_GT(lsn_to_epoch(lsn3).val(), lsn_to_epoch(lsn2).val());
   ld_info("Got lsn %s", lsn_to_string(lsn3).c_str());
 }
+
+// Simulate sequencer location based on node health status.
+// Unhealthy nodes are treated as undesirable locations when health based
+// hashing is allowed. Creates a cluster consisting of 2 sequencer nodes - nodes
+// 0 and 1. Health based hashing is turned off and logs are appended to primary
+// seqencer node. Transitions primary node to `UNHEALTHY'. When health based
+// hashing is activated, log 1 sequencer changes to other sequencer node.
+// When secondary sequencer node is transitioned to `UNHEALTHY` check that
+// log1 sequencer is once again on primary node.
+// Health based hasing is not used in this case as percent if unhealthy
+// sequencer nodes exceed the maximum. Revert to previous version of hashing
+// without health status consideration, check that log1 sequencer is still on
+// primary node.
+TEST_F(SequencerIntegrationTest, HealthBasedHashingUnhealthy) {
+  const int NNODES = 4;
+  Configuration::Nodes nodes;
+  for (node_index_t i = 0; i < NNODES; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addStorageRole(/*num_shards*/ 2);
+  }
+  // Only two sequencer nodes
+  nodes[0].addSequencerRole();
+  nodes[1].addSequencerRole();
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setNodes(nodes)
+          .useHashBasedSequencerAssignment(100, "10s")
+          .setHealthMonitorParameters(
+              /*health_monitor_max_delay_ms*/ 240000,
+              /*watchdog_poll_interval*/ 5000,
+              /*worker_stall_percentage*/ 1.1,
+              /*queue_stall_percentage*/ 1.1,
+              /*enable_health_based_sequencer_placement*/ false)
+          .setParam("--maximum-percent-unhealthy-seq-nodes-hbsp", "1.0")
+          .enableMessageErrorInjection()
+          .doPreProvisionEpochMetaData() // prevents spurious sequencer
+                                         // reactivations due to metadata log
+                                         // writes
+          .create(NNODES);
+  for (const auto& it : nodes) {
+    node_index_t idx = it.first;
+    cluster->getNode(idx).waitUntilAvailable();
+  }
+  auto client = cluster->createClient();
+  lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
+  ASSERT_NE(LSN_INVALID, lsn1);
+
+  // figure out which node is running a sequencer for log 1 (primary)
+  // and transition it to UNHEALTHY
+  std::vector<double> weights = {1.0, 1.0, 0.0, 0.0};
+  auto primary = hashing::weighted_ch(1, weights);
+  weights[primary] = 0;
+  auto secondary = hashing::weighted_ch(1, weights);
+  ASSERT_NE(primary, secondary);
+  ASSERT_EQ(
+      "ACTIVE", cluster->getNode(primary).sequencerInfo(logid_t(1))["State"]);
+
+  cluster->getNode(primary).setParam(
+      "--health-monitor-max-stalled-worker-percentage", "0.0");
+  cluster->getNode(primary).restart();
+  cluster->waitUntilGossip(/* alive */ true, primary);
+
+  cluster->waitUntilGossipStatus(
+      /* health_status */ NodeHealthStatus::UNHEALTHY, primary);
+  cluster->waitUntilGossipStatus(
+      /* health_status */ NodeHealthStatus::HEALTHY, secondary);
+
+  cluster->updateSetting("enable-health-based-sequencer-placement", "true");
+  lsn_t lsn2 = client->appendSync(logid_t(1), "bar");
+  ASSERT_NE(LSN_INVALID, lsn2);
+  ASSERT_EQ(
+      "ACTIVE", cluster->getNode(secondary).sequencerInfo(logid_t(1))["State"]);
+  ASSERT_GT(lsn2, lsn1);
+
+  cluster->getNode(secondary).setParam(
+      "--health-monitor-max-stalled-worker-percentage", "0.0");
+  cluster->getNode(secondary).restart();
+  cluster->waitUntilGossip(/* alive */ true, secondary);
+  cluster->waitUntilGossipStatus(
+      /* health_status */ NodeHealthStatus::UNHEALTHY, secondary);
+
+  lsn_t lsn3 = client->appendSync(logid_t(1), Payload("test", 4));
+  // because all sequencer nodes are UNHEALTHY, health based hashing is
+  // automatically turned off.
+  ASSERT_NE(LSN_INVALID, lsn3);
+  ASSERT_EQ(
+      "ACTIVE", cluster->getNode(primary).sequencerInfo(logid_t(1))["State"]);
+  ASSERT_GT(lsn3, lsn2);
+
+  cluster->updateSetting("enable-health-based-sequencer-placement", "false");
+  lsn_t lsn4 = client->appendSync(logid_t(1), "baz");
+  ASSERT_NE(LSN_INVALID, lsn4);
+  ASSERT_EQ(
+      "ACTIVE", cluster->getNode(primary).sequencerInfo(logid_t(1))["State"]);
+  ASSERT_GT(lsn4, lsn3);
+}
+
+// Simulate sequencer location based on node health status.
+// Overloaded nodes are CURRENTLY treated an equally desirable location as
+// HEALTHY nodes when health based hashing is allowed. Similar to
+// HealthBasedHashingUnhealthy. Creates a cluster consisting of 2 sequencer
+// nodes - nodes 0 and 1. Health based hashing is turned off and logs are
+// appended to primary seqencer node. Transitions primary to `OVERLOADED'. When
+// health based hashing is activated, log 1 sequencer does not change to other
+// sequencer node. Revert to previous version of hashing without health status
+// consideration, check that log1 sequencer is still on primary node.
+TEST_F(SequencerIntegrationTest, HealthBasedHashingOverloaded) {
+  const int NNODES = 4;
+  Configuration::Nodes nodes;
+  for (node_index_t i = 0; i < NNODES; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addStorageRole(/*num_shards*/ 2);
+  }
+  // Only two sequencer nodes
+  nodes[0].addSequencerRole();
+  nodes[1].addSequencerRole();
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setNodes(nodes)
+          .useHashBasedSequencerAssignment(100, "10s")
+          .setHealthMonitorParameters(
+              /*health_monitor_max_delay_ms*/ 240000,
+              /*watchdog_poll_interval*/ 5000,
+              /*worker_stall_percentage*/ 1.1,
+              /*queue_stall_percentage*/ 1.1,
+              /*enable_health_based_sequencer_placement*/ false)
+          .enableMessageErrorInjection()
+          .doPreProvisionEpochMetaData() // prevents spurious sequencer
+                                         // reactivations due to metadata log
+                                         // writes
+          .create(NNODES);
+  for (const auto& it : nodes) {
+    node_index_t idx = it.first;
+    cluster->getNode(idx).waitUntilAvailable();
+  }
+  auto client = cluster->createClient();
+  lsn_t lsn1 = client->appendSync(logid_t(1), "foo");
+  ASSERT_NE(LSN_INVALID, lsn1);
+
+  // figure out which node is running a sequencer for log 1 (primary)
+  // and overload it
+  std::vector<double> weights = {1.0, 1.0, 0.0, 0.0};
+  auto primary = hashing::weighted_ch(1, weights);
+  weights[primary] = 0;
+  auto secondary = hashing::weighted_ch(1, weights);
+  ASSERT_NE(primary, secondary);
+  ASSERT_EQ(
+      "ACTIVE", cluster->getNode(primary).sequencerInfo(logid_t(1))["State"]);
+
+  cluster->getNode(primary).setParam(
+      "--health-monitor-max-overloaded-worker-percentage", "0.0");
+  cluster->getNode(primary).restart();
+  cluster->waitUntilGossip(/* alive */ true, primary);
+
+  cluster->waitUntilGossipStatus(
+      /* health_status */ NodeHealthStatus::OVERLOADED, primary);
+  cluster->waitUntilGossipStatus(
+      /* health_status */ NodeHealthStatus::HEALTHY, secondary);
+
+  cluster->updateSetting("enable-health-based-sequencer-placement", "true");
+  lsn_t lsn2 = client->appendSync(logid_t(1), "bar");
+  ASSERT_NE(LSN_INVALID, lsn2);
+  ASSERT_EQ(
+      "ACTIVE", cluster->getNode(primary).sequencerInfo(logid_t(1))["State"]);
+  ASSERT_GT(lsn2, lsn1);
+
+  cluster->updateSetting("enable-health-based-sequencer-placement", "false");
+  lsn_t lsn3 = client->appendSync(logid_t(1), "baz");
+  ASSERT_NE(LSN_INVALID, lsn3);
+  ASSERT_EQ(
+      "ACTIVE", cluster->getNode(primary).sequencerInfo(logid_t(1))["State"]);
+  ASSERT_GT(lsn3, lsn2);
+}

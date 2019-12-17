@@ -510,7 +510,8 @@ class ClusterFactory {
    */
   ClusterFactory&
   useHashBasedSequencerAssignment(uint32_t gossip_interval_ms = 100,
-                                  std::string suspect_duration = "0ms") {
+                                  std::string suspect_duration = "0ms",
+                                  bool use_health_based_hashing = false) {
     setParam("--gossip-enabled", ParamScope::ALL);
     setParam("--gossip-interval",
              std::to_string(gossip_interval_ms) + "ms",
@@ -519,6 +520,43 @@ class ClusterFactory {
     // lazy sequencer bringup
     setParam("--sequencers", "lazy", ParamScope::SEQUENCER);
     hash_based_sequencer_assignment_ = true;
+    if (!use_health_based_hashing) {
+      setParam("--enable-health-based-sequencer-placement",
+               "false",
+               ParamScope::ALL);
+    }
+    return *this;
+  }
+
+  // Modify default HM parameters to avoid false positive detection of stalls or
+  // unhealthy states. In many tests gossip interval is modified to be more
+  // frequent causing delays in HM activation that is then detected and an
+  // unhealthy status of tha node is propagated. Modifying the maximum tolerated
+  // stalled percentages is due to the number of workers on each node being
+  // reduced to a very small number (5).
+  // Health based sequencer hashing is disabled by calling
+  // useHashBasedSequencerAssignment, but in HM related tests its behaviour is
+  // often needed, so this method handles toggling this setting too.
+  ClusterFactory& setHealthMonitorParameters(
+      uint32_t health_monitor_max_delay_ms = 240000,
+      uint32_t watchdog_poll_interval = 50000,
+      double worker_stall_percentage = 1.1,
+      double queue_stall_percentage = 1.1,
+      bool enable_health_based_sequencer_placement = true) {
+    setParam("--health-monitor-max-delay",
+             std::to_string(health_monitor_max_delay_ms) + "ms",
+             ParamScope::ALL);
+    setParam("--watchdog-poll-interval",
+             std::to_string(watchdog_poll_interval) + "ms");
+    setParam("--health-monitor-max-stalled-worker-percentage",
+             std::to_string(worker_stall_percentage),
+             ParamScope::ALL);
+    setParam("--health-monitor-max-overloaded-worker-percentage",
+             std::to_string(queue_stall_percentage),
+             ParamScope::ALL);
+    setParam("--enable-health-based-sequencer-placement",
+             std::to_string(enable_health_based_sequencer_placement),
+             ParamScope::ALL);
     return *this;
   }
 
@@ -1124,6 +1162,19 @@ class Cluster {
                           std::chrono::steady_clock::time_point::max());
 
   /**
+   * Wait for all nodes in the cluster except the ones specified in the skip
+   * list to see the specified node in a certain health status (depending on
+   * what is submitted as the `health_status` arg
+   */
+
+  int waitUntilGossipStatus(
+      uint8_t health_status, /* set to 3 for waiting for unhealthy */
+      uint64_t targetNode,
+      std::set<uint64_t> nodesToSkip = {},
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
+
+  /**
    * Waits until nodes specified in the parameter `nodes` are alive and fully
    * started (i.e. not in starting state) according to gossip. If `nodes` is
    * folly::none, all nodes in the cluster will be checked.
@@ -1577,6 +1628,18 @@ class Node {
           std::chrono::steady_clock::time_point::max());
 
   /**
+   * Waits for the server using a gossip-based failure detector to mark another
+   * node as having a certain health status.
+   *
+   * @return 0 if succeeded, -1 if timed out while waiting
+   */
+  int waitUntilKnownGossipStatus(
+      node_index_t other_node_index,
+      uint8_t health_status,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
+
+  /**
    * Waits for the node to activate a sequencer for this log and finish
    * recovery.
    */
@@ -1801,6 +1864,15 @@ class Node {
    * Cluster has to be started with the --gossip-enable option.
    */
   std::map<std::string, std::string> gossipInfo() const;
+
+  /**
+   * Issues an INFO GOSSIP command to the node's command port to collect info
+   * about the health status of other nodes. Results are stored in the map, with
+   * keys corresponding to nodes, and values being "UNDEFINED", "HEALTHY",
+   * "OVERLOADED" or "UNHEALTHY". Cluster has to be started with the
+   * --gossip-enable option.
+   */
+  std::map<std::string, std::string> gossipStatusInfo() const;
 
   /**
    * Issues an INFO GOSSIP command to collect information about whether the node
