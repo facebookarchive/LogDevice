@@ -15,7 +15,14 @@ At this time, the only supported platform is Ubuntu 18 LTS "Bionic Beaver". Supp
 git clone --recurse-submodules git://github.com/facebookincubator/LogDevice
 ```
 
-This creates a top-level `LogDevice` directory, with the source code in `LogDevice/logdevice`. There are two git submodules in the tree: `logdevice/external/folly` and `logdevice/external/rocksdb`.
+This creates a top-level `LogDevice` directory, with the source code in `LogDevice/logdevice`. There are six git submodules in the tree:
+```
+logdevice/external/fbthrift
+logdevice/external/fizz
+logdevice/external/folly
+logdevice/external/rocksdb
+logdevice/external/wangle
+```
 
 **Install packages that LogDevice depends on.**
 
