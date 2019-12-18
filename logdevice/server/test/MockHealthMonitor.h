@@ -67,15 +67,19 @@ class MockHealthMonitor : public HealthMonitor {
                       : NodeHealthStatus::HEALTHY;
   }
 
-  void updateNodeStatus(NodeHealthStatus status) {
+  void updateNodeStatus(NodeHealthStatus status, NodeHealthStats stats) {
     node_status_ = status;
+    stats.curr_state_timer_value_ms = state_timer_.getCurrentValue().count();
     updateFailureDetectorStatus(node_status_);
+    updateNodeHealthStats(stats);
   }
 
   void simulateLoop(HealthMonitor::TimePoint now) {
     updateVariables(now);
-    calculateNegativeSignal(now);
-    updateNodeStatus(calculateHealthMonitorState(kExtraLongLoopDuration));
+    NodeHealthStats stats = calculateGlobalNodeHealthStats();
+    calculateNegativeSignal(now, stats);
+    updateNodeStatus(
+        calculateHealthMonitorState(kExtraLongLoopDuration), stats);
   }
 };
 }} // namespace facebook::logdevice

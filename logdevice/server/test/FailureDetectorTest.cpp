@@ -679,8 +679,8 @@ TEST_F(FailureDetectorTest, ClusterStateUpdate) {
   ld_info("Second lot of gossips");
   detectors[0]->setIsLogsConfigLoaded(true);
   detectors[1]->setIsLogsConfigLoaded(true);
-
-  monitors[1]->updateNodeStatus(NodeHealthStatus::OVERLOADED);
+  NodeHealthStats tmp;
+  monitors[1]->updateNodeStatus(NodeHealthStatus::OVERLOADED, tmp);
 
   for (int i = 0; i < 2; ++i) {
     // we need at least two rounds because we only update the node state and

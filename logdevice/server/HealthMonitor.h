@@ -17,6 +17,7 @@
 #include <folly/stats/BucketedTimeSeries.h>
 
 #include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"
+#include "logdevice/common/NodeHealthStats.h"
 #include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/stats/Stats.h"
 
@@ -39,6 +40,7 @@ class HealthMonitor {
   void startUp();
   folly::SemiFuture<folly::Unit> shutdown();
   void setFailureDetector(FailureDetector* failure_detector);
+  NodeHealthStats getNodeHealthStats();
 
   // reporter methods
   void reportWatchdogHealth(bool delayed);
@@ -61,11 +63,20 @@ class HealthMonitor {
   // void resetInternalState(); // to be added later if needed.
   void processReports();
 
-  bool isOverloaded(TimePoint now, std::chrono::milliseconds half_period);
-  StallInfo isStalled(TimePoint now, std::chrono::milliseconds half_period);
+  bool isOverloaded(TimePoint now,
+                    std::chrono::milliseconds half_period,
+                    NodeHealthStats& stats);
+  StallInfo isStalled(TimePoint now,
+                      std::chrono::milliseconds half_period,
+                      NodeHealthStats& stats);
   void updateVariables(TimePoint now);
-  void calculateNegativeSignal(TimePoint now);
+  void calculateNegativeSignal(TimePoint now, NodeHealthStats& stats);
   void updateFailureDetectorStatus(NodeHealthStatus status);
+  NodeHealthStats calculateGlobalNodeHealthStats();
+  void updateNodeHealthStats(NodeHealthStats stats);
+  WorkerTimeSeriesStats createWorkerTimeSeriesStats(int worker_id,
+                                                    TimeSeries t,
+                                                    TimePoint now);
 
  private:
   friend class HealthMonitorTest;
@@ -122,6 +133,9 @@ class HealthMonitor {
   const std::chrono::milliseconds max_stalls_avg_;
   const double max_stalled_worker_percentage_;
   const std::chrono::milliseconds max_loop_stall_;
+
+  folly::SharedMutex stats_mutex_;
+  NodeHealthStats health_stats_;
 };
 
 }} // namespace facebook::logdevice
