@@ -5,7 +5,7 @@ sidebar_label: Build LogDevice
 ---
 Follow these instructions to build LogDevice components including `logdeviced` (the LogDevice server), `ld-admin-server` the standalone administration server, the client library, and `ldshell`, an administrative shell utility. See the [Build artifacts](#built-binaries-and-libraries-build-artifacts) for the full list.
 
-At this time, the only supported platform is **Ubuntu 18 LTS "Bionic Beaver"**. LogDevice relies on some *C++17* features, so building LogDevice requires a compiler that supports *C++17*.
+At this time, the only supported platform is **Ubuntu 18 LTS "Bionic Beaver"**. LogDevice relies on some *C++17* features, so building LogDevice requires a compiler that supports at least *C++17*.
 
 ## Clone the repo and build from the source
 
@@ -124,6 +124,14 @@ use to install LDShell on your system (requires the next two wheel to be
 installed and the Runtime libraries (see above) to be installed)
 * `_build/folly-prefix/src/folly-build/folly/cybld/dist/folly-*.whl` is folly's Python3 wheel that you can install on your system (already installed on the virtualenv).
 * `_build/fbthrift-prefix/src/fbthrift-build/thrift/lib/py3/cybld/dist/thrift-*.whl` is thrift's Python3 wheel that you can install on your system (already installed on the virtualenv).
+
+### Installation
+
+You can use the standard `make install` inside the build directory to install
+logdevice components on your system (including ldshell). But note the following:
+
+> This will *not* install thrift and folly shared libararies. For these you need
+> to manually copy them over onto your `/usr/local/lib/` directory.
 
 ## Debug and release builds
 
