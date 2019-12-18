@@ -1,0 +1,49 @@
+# This is the spec defining the standalone admin server and its service.
+# Standalone admin server is a stateless sidecar service and requires only
+# a single instance running at a time (in the normal mode of operations).
+apiVersion: v1
+kind: Service
+metadata:
+  name: logdevice-admin-server-service
+spec:
+  ports:
+    - name: admin
+      protocol: TCP
+      port: 6440
+  selector:
+    app: logdevice-admin-server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logdevice-admin-server-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logdevice-admin-server
+  template:
+    metadata:
+      labels:
+        app: logdevice-admin-server
+    spec:
+      containers:
+      - name: admin-server
+        image: "facebookincubator/logdevice"
+        command:
+          - "/usr/local/bin/ld-admin-server"
+          - "--config-path"
+          - "/etc/logdevice/config.json"
+          - "--enable-maintenance-manager"
+        ports:
+        - containerPort: 6440
+        volumeMounts:
+        - name: config
+          mountPath: /etc/logdevice
+      volumes:
+      - name: config
+        configMap:
+          name: logdevice-config
+          items:
+            - key: config.json
+              path: config.json

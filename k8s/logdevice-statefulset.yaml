@@ -1,0 +1,85 @@
+# This is a dummy config map that gets mounted to logdeviced container as the
+# NSHARDS file required by LogDevice. The value of NSHARDS should be equal
+# to the number of shards that a single daemon will use. Defaults to 1.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: nshards
+data:
+    NSHARDS: "1"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: logdevice
+spec:
+  serviceName: "logdevice"
+  # Change this to increase the number of nodes in the cluster.
+  replicas: 3
+  selector:
+    matchLabels:
+      app: logdevice
+  template:
+    metadata:
+      labels:
+        app: logdevice
+    spec:
+      containers:
+      - name: logdevice
+        image: "facebookincubator/logdevice"
+        command:
+          - "/usr/local/bin/logdeviced"
+          - "--config-path"
+          - "/etc/logdevice/config.json"
+          - "--address"
+          - "$(POD_IP)"
+          - "--name"
+          - "$(POD_NAME)"
+          - "--local-log-store-path"
+          - "/data/logdevice"
+        ports:
+        # Plain text data port
+        - containerPort: 4440
+        # Gossip port
+        - containerPort: 4441
+        # Command Port
+        - containerPort: 5440
+        # Admin Port
+        - containerPort: 6440
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+        volumeMounts:
+        - name: shard0
+          mountPath: /data/logdevice/shard0
+        - name: config
+          mountPath: /etc/logdevice
+        - name: nshards
+          mountPath: /data/logdevice
+      volumes:
+      - name: config
+        configMap:
+          name: logdevice-config
+          items:
+            - key: config.json
+              path: config.json
+      - name: nshards
+        configMap:
+          name: nshards
+          items:
+            - key: NSHARDS
+              path: NSHARDS
+  volumeClaimTemplates:
+  - metadata:
+      name: shard0
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 20Gi
