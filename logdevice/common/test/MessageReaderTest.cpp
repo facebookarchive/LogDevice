@@ -39,14 +39,13 @@ TEST(MessageReaderTest, EntireMessageReceivedTest) {
   read_cb.readDataAvailable(lenReturn);
   read_cb.getReadBuffer(&bufReturn, &lenReturn);
   ASSERT_NE(nullptr, bufReturn);
-  ASSERT_EQ(sizeof(ProtocolHeader) + store_msg_size, lenReturn);
+  ASSERT_EQ(store_msg_size, lenReturn);
   read_cb.readDataAvailable(store_msg_size);
   // This test knowns something about the implementation and would need to
   // change once implementation changes. Don't like it but it's ok I guess.
   void* prev_buf_ptr = bufReturn;
   read_cb.getReadBuffer(&bufReturn, &lenReturn);
   ASSERT_NE(nullptr, bufReturn);
-  ASSERT_EQ((uint8_t*)prev_buf_ptr + store_msg_size, (uint8_t*)bufReturn);
   ASSERT_EQ(sizeof(ProtocolHeader), lenReturn);
   // Calling it again should get the same buffer.
   prev_buf_ptr = bufReturn;
@@ -63,7 +62,7 @@ TEST(MessageReaderTest, EntireMessageReceivedTest) {
   // sizeof(ProtocolHeader).
   read_cb.getReadBuffer(&bufReturn, &lenReturn);
   ASSERT_NE(nullptr, bufReturn);
-  ASSERT_EQ(sizeof(ProtocolHeader) + store_msg_size, lenReturn);
+  ASSERT_EQ(store_msg_size, lenReturn);
 }
 
 TEST(MessageReaderTest, PartialHeaderReceived) {
@@ -100,15 +99,7 @@ TEST(MessageReaderTest, PartialHeaderReceived) {
 
   read_cb.getReadBuffer(&bufReturn, &lenReturn);
   ASSERT_NE(nullptr, bufReturn);
-  ASSERT_EQ(sizeof(ProtocolHeader) + store_msg_size, lenReturn);
-
-  // Make ">" store_msg_size bytes and "<" store_msg_size +
-  // sizeof(ProtocolHeader) bytes available.
-  EXPECT_CALL(mock_conn, dispatchMessageBody(_, _)).Times(1);
-  const size_t half_header_size = sizeof(ProtocolHeader) / 2;
-  read_cb.readDataAvailable(store_msg_size + half_header_size);
-  read_cb.getReadBuffer(&bufReturn, &lenReturn);
-  ASSERT_EQ(sizeof(ProtocolHeader) - half_header_size, lenReturn);
+  ASSERT_EQ(store_msg_size, lenReturn);
 }
 
 TEST(MessageReaderTest, PartialMessageReceived) {
@@ -132,8 +123,7 @@ TEST(MessageReaderTest, PartialMessageReceived) {
   bufReturn = nullptr;
   void* prev_buf_ptr = bufReturn;
   EXPECT_CALL(mock_conn, dispatchMessageBody(_, _)).Times(1);
-  for (size_t total_buffer_size = sizeof(ProtocolHeader) + store_msg_size;
-       total_buffer_size > sizeof(ProtocolHeader);
+  for (size_t total_buffer_size = store_msg_size; total_buffer_size > 0;
        total_buffer_size--) {
     read_cb.getReadBuffer(&bufReturn, &lenReturn);
     if (prev_buf_ptr != nullptr) {
@@ -145,7 +135,7 @@ TEST(MessageReaderTest, PartialMessageReceived) {
   }
   // Get the last byte so that we can write the header contents.
   read_cb.getReadBuffer(&bufReturn, &lenReturn);
-  ASSERT_EQ((uint8_t*)prev_buf_ptr + 1, (uint8_t*)bufReturn);
+  ASSERT_NE(nullptr, bufReturn);
   ASSERT_EQ(lenReturn, sizeof(ProtocolHeader));
   hdr = (ProtocolHeader*)bufReturn;
   hdr->type = MessageType::STORE;
@@ -154,7 +144,7 @@ TEST(MessageReaderTest, PartialMessageReceived) {
   read_cb.readDataAvailable(sizeof(ProtocolHeader));
   read_cb.getReadBuffer(&bufReturn, &lenReturn);
   ASSERT_NE(nullptr, bufReturn);
-  ASSERT_EQ(sizeof(ProtocolHeader) + store_msg_size, lenReturn);
+  ASSERT_EQ(store_msg_size, lenReturn);
 }
 
 TEST(MessageReaderTest, HitErrorWhenProcessingMessageOrHeader) {
@@ -167,7 +157,8 @@ TEST(MessageReaderTest, HitErrorWhenProcessingMessageOrHeader) {
   EXPECT_CALL(mock_conn, good())
       .Times(3)
       .WillOnce(Return(true))
-      .WillOnce(Return(true));
+      .WillOnce(Return(true))
+      .WillOnce(Return(false));
 
   void* bufReturn = nullptr;
   size_t lenReturn = 0;
@@ -185,14 +176,18 @@ TEST(MessageReaderTest, HitErrorWhenProcessingMessageOrHeader) {
   ASSERT_EQ(0, lenReturn);
 }
 
-TEST(MessageReaderTest, ReadMessagePlusProtocolHeader) {
+TEST(MessageReaderTest, FailProtocolHeaderValidation) {
   MockProtocolHandler mock_conn;
   MessageReader read_cb(mock_conn, Compatibility::MAX_PROTOCOL_SUPPORTED);
   EXPECT_CALL(mock_conn, validateProtocolHeader(_))
+      .Times(1)
+      .WillRepeatedly(Return(false));
+  EXPECT_CALL(mock_conn, good())
       .Times(3)
-      .WillRepeatedly(Return(true));
-  EXPECT_CALL(mock_conn, dispatchMessageBody(_, _)).Times(2);
-  ON_CALL(mock_conn, good()).WillByDefault(Return(true));
+      .WillOnce(Return(true))
+      .WillOnce(Return(true))
+      .WillOnce(Return(false));
+  EXPECT_CALL(mock_conn, notifyErrorOnSocket(_)).Times(1);
   void* bufReturn = nullptr;
   size_t lenReturn = 0;
   read_cb.getReadBuffer(&bufReturn, &lenReturn);
@@ -205,23 +200,6 @@ TEST(MessageReaderTest, ReadMessagePlusProtocolHeader) {
   hdr->cksum = 0;
   read_cb.readDataAvailable(lenReturn);
   read_cb.getReadBuffer(&bufReturn, &lenReturn);
-  ASSERT_NE(nullptr, bufReturn);
-  // Read the entire store message plus the next message's store header.
-  ASSERT_EQ(sizeof(ProtocolHeader) + store_msg_size, lenReturn);
-  hdr = (ProtocolHeader*)(static_cast<char*>(bufReturn) + store_msg_size);
-  hdr->type = MessageType::STORE;
-  hdr->len = store_msg_size + sizeof(ProtocolHeader);
-  hdr->cksum = 0;
-  read_cb.readDataAvailable(store_msg_size + sizeof(ProtocolHeader));
-  read_cb.getReadBuffer(&bufReturn, &lenReturn);
-  ASSERT_NE(nullptr, bufReturn);
-  ASSERT_EQ(sizeof(ProtocolHeader) + store_msg_size, lenReturn);
-  hdr = (ProtocolHeader*)(static_cast<char*>(bufReturn) + store_msg_size);
-  hdr->type = MessageType::STORE;
-  hdr->len = store_msg_size + sizeof(ProtocolHeader);
-  hdr->cksum = 0;
-  read_cb.readDataAvailable(store_msg_size + sizeof(ProtocolHeader));
-  read_cb.getReadBuffer(&bufReturn, &lenReturn);
-  ASSERT_NE(nullptr, bufReturn);
-  ASSERT_EQ(sizeof(ProtocolHeader) + store_msg_size, lenReturn);
+  ASSERT_EQ(nullptr, bufReturn);
+  ASSERT_EQ(0, lenReturn);
 }

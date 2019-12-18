@@ -22,44 +22,49 @@ MessageReader::MessageReader(IProtocolHandler& proto_handler, uint16_t proto)
       proto_(proto) {}
 
 void MessageReader::getReadBuffer(void** bufReturn, size_t* lenReturn) {
-  if (proto_handler_.good()) {
-    *bufReturn = read_buf_->writableTail();
-    *lenReturn = std::min(read_buf_->tailroom(), next_buffer_allocation_size_);
-  } else {
+  if (!proto_handler_.good()) {
     *bufReturn = nullptr;
     *lenReturn = 0;
+    return;
   }
-}
-size_t MessageReader::bytesExpected() {
-  size_t protohdr_bytes =
-      ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-
   if (expecting_protocol_header_) {
-    return protohdr_bytes;
+    ld_check_le(next_buffer_allocation_size_, sizeof(recv_message_ph_));
+    auto offset = sizeof(recv_message_ph_) - next_buffer_allocation_size_;
+    void* ptr =
+        static_cast<uint8_t*>(static_cast<void*>(&recv_message_ph_)) + offset;
+    *bufReturn = ptr;
+    *lenReturn = next_buffer_allocation_size_;
   } else {
-    return recv_message_ph_.len - protohdr_bytes;
+    *bufReturn = read_buf_->writableTail();
+    *lenReturn = std::min(read_buf_->tailroom(), next_buffer_allocation_size_);
   }
 }
 
-void MessageReader::readMessageHeader() {
-  // Read the minimum fields of the header. If checksum is present read it out,
-  // otherwise those 8 bytes belong to the message body. Validate the header. If
-  // no errors, allocate the next read buffer to include current message's  body
-  // and next message's header. Copy in the 8 bytes read earlier as part of
-  // ProtocolHeader if necessary, into this newly allocated buffer. Move this
-  // buffer into read_buf_.
-  ProtocolHeader* hdr = (ProtocolHeader*)read_buf_->data();
-  recv_message_ph_.len = hdr->len;
-  recv_message_ph_.type = hdr->type;
-  size_t trim_header =
+void MessageReader::prepareMessageBody() {
+  // Allocate the next read buffer to include current
+  // message's body. If checksum is not present in header,those 8 bytes in
+  // header belong to the message body. Copy the 8 bytes read earlier as part
+  // of ProtocolHeader if necessary, into this newly allocated buffer.
+  expecting_protocol_header_ = false;
+  auto payload_size = recv_message_ph_.len -
       ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-  bool checksum_in_header =
-      ProtocolHeader::needChecksumInHeader(recv_message_ph_.type, proto_);
-  if (checksum_in_header) {
-    recv_message_ph_.cksum = hdr->cksum;
+  next_buffer_allocation_size_ = payload_size;
+  read_buf_ = folly::IOBuf::create(next_buffer_allocation_size_);
+  // Add the 8 byte of message read if cksum is absent into the read_buf and
+  // move the writableTail().
+  if (!ProtocolHeader::needChecksumInHeader(recv_message_ph_.type, proto_)) {
+    memcpy(read_buf_->writableTail(),
+           &recv_message_ph_.cksum,
+           sizeof(recv_message_ph_.cksum));
+    read_buf_->append(sizeof(recv_message_ph_.cksum));
+    next_buffer_allocation_size_ -= read_buf_->length();
+    recv_message_ph_.cksum = 0;
   }
-  read_buf_->trimStart(trim_header);
-  // Do basic checks on protocol header before proceeding.
+  ld_check_le(next_buffer_allocation_size_, read_buf_->capacity());
+}
+
+bool MessageReader::validateHeader() {
+  // Validate the read header.
   auto retval = proto_handler_.validateProtocolHeader(recv_message_ph_);
   if (!retval) {
     next_buffer_allocation_size_ = 0;
@@ -67,61 +72,35 @@ void MessageReader::readMessageHeader() {
                                    "Invalid Protocol Header received.",
                                    -1);
     proto_handler_.notifyErrorOnSocket(ex);
-    return;
+    return false;
   }
-  expecting_protocol_header_ = false;
-  next_buffer_allocation_size_ = bytesExpected() + sizeof(ProtocolHeader);
-  auto new_read_buf = folly::IOBuf::create(next_buffer_allocation_size_);
-  // Add the 8 byte of message read if cksum is absent into the read_buf and
-  // move the writableTail().
-  ld_check_ge(new_read_buf->capacity(), read_buf_->length());
-  memcpy(new_read_buf->writableTail(), read_buf_->data(), read_buf_->length());
-  new_read_buf->append(read_buf_->length());
-  read_buf_->trimStart(new_read_buf->length());
-  // There should be nothing left in the buffer once the header is read.
-  ld_check_eq(read_buf_->length(), 0);
-  next_buffer_allocation_size_ -= new_read_buf->length();
-  read_buf_ = std::move(new_read_buf);
-  ld_check_le(next_buffer_allocation_size_, read_buf_->capacity());
+
+  return true;
 }
 
 void MessageReader::readDataAvailable(size_t len) noexcept {
   ld_check(proto_handler_.good());
-  read_buf_->append(len);
+  ld_check_ge(next_buffer_allocation_size_, len);
   next_buffer_allocation_size_ -= len;
   if (!expecting_protocol_header_) {
-    auto message_len = bytesExpected();
+    read_buf_->append(len);
+    if (next_buffer_allocation_size_ > 0) {
+      return;
+    }
+    auto message_len = recv_message_ph_.len -
+        ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
+    // read_buf_ capacity can be greater than message len but that capacity
+    // should not be used.
     ld_check_le(message_len, read_buf_->capacity());
-    if (read_buf_->length() < message_len) {
-      return;
-    }
-    // Clone the read buffer, trim end of the buffer to get just message body.
-    // Forward the message body to connection for further processing. Check if
-    // next message header is already available in the buffer.
-    auto msg_body = read_buf_->clone();
-    if (msg_body->length() > message_len) {
-      msg_body->trimEnd(read_buf_->length() - message_len);
-    }
-    int rv = proto_handler_.dispatchMessageBody(
-        recv_message_ph_, std::move(msg_body));
-    read_buf_->trimStart(message_len);
+    ld_check(read_buf_->length() == message_len);
+    proto_handler_.dispatchMessageBody(recv_message_ph_, std::move(read_buf_));
     expecting_protocol_header_ = true;
-    // dispatchMessageBody can close the socket if it hits a error return
-    // rightaway. Continue to see if we already have header in the readbuffer.
-    // If that is the case read the header.
-    if (rv != 0 && err != E::NOBUFS) {
-      return;
+    next_buffer_allocation_size_ = sizeof(ProtocolHeader);
+    recv_message_ph_ = ProtocolHeader();
+  } else {
+    if (next_buffer_allocation_size_ == 0 && validateHeader()) {
+      prepareMessageBody();
     }
-    if (read_buf_->length() == 0) {
-      return;
-    }
-    // fallthrough to check if next header is already read in buffer if it is
-    // the case then continue to process that.
   }
-
-  if (read_buf_->length() < sizeof(ProtocolHeader)) {
-    return;
-  }
-  readMessageHeader();
 }
 }} // namespace facebook::logdevice

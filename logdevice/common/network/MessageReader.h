@@ -26,23 +26,17 @@ namespace facebook { namespace logdevice {
  * Reader maintains a buffer which it shares with AsyncSocket and all the
  * data is read into this buffer. The size of this buffer allocation depends on
  * the state we are in currently. The first buffer allocated has size equal to
- * the protocol header size. Once a protocol header is received, we allocate
- * another buffer which equals the size of message plus the next protocol
- * header. Once the message is completely read we create a clone of this buffer
- * and forward just the message body to connection for further processing. Once
- * the next message's header is received completely we create another buffer of
- * size next message's body + another protocol header and drop reference to this
- * existing buffer.
+ * the protocol header size. Once a protocol header is read, we save it in the
+ * member variable and allocate a buffer to read in the message payload.
  *
- * On invoking getReadBuffer, get the read_buf_ writableTail and remaining
- * message length or protocol header length to be read into the buffer.
+ * On invoking getReadBuffer,  based on the state whether we are reading the
+ * header or the tail , return the right buffer and remaining message
+ * length or protocol header length to be read into the buffer to asyncsocket.
  *
  * On invoking readDataAvailable, check if the header or message body was read
- * completely. If we were expecting header and it was read completely, save the
- * header, drop existing read_buf_ and allocate a new buffer using the message
- * len in header. If the message was read completely, clone the buffer adjust
- * the pointers to align with message body length and forward the protocol
- * header and message body to connection for further processing.
+ * completely. If we were expecting header and it was read completely allocate a
+ * new buffer using the message len in header. If the message was read
+ * completely, dispatch the message forward for processing.
  */
 class MessageReader : public folly::AsyncSocket::ReadCallback {
  public:
@@ -74,8 +68,8 @@ class MessageReader : public folly::AsyncSocket::ReadCallback {
  private:
   void expectProtocolHeader();
   void expectMessageBody();
-  size_t bytesExpected();
-  void readMessageHeader();
+  bool validateHeader();
+  void prepareMessageBody();
 
   bool expecting_protocol_header_{true};
   size_t next_buffer_allocation_size_;
