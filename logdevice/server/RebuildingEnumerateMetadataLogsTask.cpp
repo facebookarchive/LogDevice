@@ -19,12 +19,14 @@ void RebuildingEnumerateMetadataLogsTask::execute() {
   shard_index_t shard_idx = storageThreadPool_->getShardIdx();
 
   auto it = storageThreadPool_->getLocalLogStore().readAllLogs(
-      LocalLogStore::ReadOptions("RebuildingEnumerateMetadataLogsTask", true));
+      LocalLogStore::ReadOptions("RebuildingEnumerateMetadataLogsTask", true),
+      /* data_logs_filter */
+      std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>{});
   logid_t prev = LOGID_INVALID;
-  for (it->seek(*it->metadataLogsBegin());
+  for (it->seek(*it->metadataLogsBegin(), nullptr, nullptr);
        it->state() == IteratorState::AT_RECORD &&
        MetaDataLog::isMetaDataLog(it->getLogID());
-       it->next()) {
+       it->next(nullptr, nullptr)) {
     logid_t l = it->getLogID();
     if (l == LOGID_INVALID) {
       // finish with an error

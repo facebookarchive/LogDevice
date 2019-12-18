@@ -253,7 +253,8 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
       const PartitionedRocksDBStore* pstore,
       const LocalLogStore::ReadOptions& options,
       const folly::Optional<
-          std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>& logs);
+          std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>&
+          data_logs_filter);
 
   IteratorState state() const override;
 
@@ -261,8 +262,6 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   lsn_t getLSN() const override;
   Slice getRecord() const override;
   std::unique_ptr<Location> getLocation() const override;
-  // Only supported if filter_using_directory_ is true (i.e. if `logs` parameter
-  // was passed to constructor).
   double getProgress() const override;
 
   void seek(const Location& location,
@@ -284,15 +283,11 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
  private:
   // This implements the "move until valid"-style logic of stepping through
   // directory and partitions until we find a suitable record or reach a limit.
-  //
-  // The initial seek target is given by `seek_to` and either
-  // current_entry_ (if filter_using_directory_ is true) or
-  // current_partition_id (if filter_using_directory_ is false).
+  // The initial seek target is given by `seek_to` and current_entry_.
   //
   // This method only reads from partitions. The unpartitioned column family is
   // handled by seek() and next() directly.
-  void seekToCurrentEntry(partition_id_t current_partition_id,
-                          PartitionedLocation seek_to,
+  void seekToCurrentEntry(PartitionedLocation seek_to,
                           ReadFilter* filter,
                           ReadStats* stats);
 
@@ -304,23 +299,12 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   const PartitionedRocksDBStore* pstore_;
   const LocalLogStore::ReadOptions options_;
 
-  // Latest partition at the time of iterator creation. This is just an
-  // optimization to prevent rebuilding from unnecessarily reading partitions
-  // that were created after the rebuilding started.
-  const partition_id_t last_partition_id_;
-
   // Used by getProgress(). Same length as directory_. If the iterator is
   // on directory entry i, getProgress() reports progress_lookup_[i].
   // Precalculated based on data size estimates in directory.
-  // If filter_using_directory_, progress estimation is not supported.
   std::vector<double> progress_lookup_;
 
-  // If true, we'll keep a copy of logsdb directory and call
-  // ReadFilter::shouldProcessRecordRange() based on it.
-  const bool filter_using_directory_;
-
-  // Copy of the logsdb directory for the requested logs. Only populated if
-  // filter_using_directory_ is true.
+  // Copy of the logsdb directory for the requested data logs.
   std::vector<LogDirectoryEntry> directory_;
   // Index in directory_ at which we're currently positioned.
   std::vector<LogDirectoryEntry>::iterator current_entry_;

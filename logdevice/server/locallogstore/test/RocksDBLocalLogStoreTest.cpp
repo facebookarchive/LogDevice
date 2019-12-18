@@ -327,11 +327,12 @@ STORE_TEST(RocksDBLocalLogStoreTest, AllLogsIterators, store) {
 
   auto iterator = store.readAllLogs(
       LocalLogStore::ReadOptions("AllLogsIterators"), folly::none);
+  LocalLogStore::ReadStats stats;
   std::map<std::pair<logid_t::raw_type, lsn_t>, std::string> read_records;
   const size_t header_size = getHeader().size;
-  for (iterator->seek(*iterator->minLocation());
+  for (iterator->seek(*iterator->minLocation(), nullptr, &stats);
        iterator->state() == IteratorState::AT_RECORD;
-       iterator->next()) {
+       iterator->next(nullptr, &stats)) {
     auto p = std::make_pair(iterator->getLogID().val_, iterator->getLSN());
     EXPECT_EQ(0, read_records.count(p));
     ASSERT_GE(iterator->getRecord().size, header_size);
@@ -343,7 +344,7 @@ STORE_TEST(RocksDBLocalLogStoreTest, AllLogsIterators, store) {
 
   // Read only the metadata log record.
 
-  iterator->seek(*iterator->metadataLogsBegin());
+  iterator->seek(*iterator->metadataLogsBegin(), nullptr, &stats);
   ASSERT_EQ(IteratorState::AT_RECORD, iterator->state());
   EXPECT_EQ(MetaDataLog::metaDataLogID(logid_t(1)), iterator->getLogID());
   EXPECT_EQ(1, iterator->getLSN());
@@ -352,7 +353,7 @@ STORE_TEST(RocksDBLocalLogStoreTest, AllLogsIterators, store) {
                 std::make_pair(MetaDataLog::metaDataLogID(logid_t(1)).val_, 1)),
             std::string(iterator->getRecord().ptr() + header_size,
                         iterator->getRecord().size - header_size));
-  iterator->next();
+  iterator->next(nullptr, &stats);
   EXPECT_TRUE(iterator->state() == IteratorState::AT_END ||
               !MetaDataLog::isMetaDataLog(iterator->getLogID()));
 }

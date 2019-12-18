@@ -136,11 +136,11 @@ class LocalLogStore : boost::noncopyable {
    *
    * Note about filtering in seek() and next() (typically implmented using
    * copyset index):
-   * If non-null `ReadFilter` and `ReadStats` are provided, the operation calls
+   * If non-null `ReadFilter` is provided, the operation calls
    * `ReadFilter::operator()` on every record it encounters to determine which
-   * record should the iterator end up at. `ReadFilter` and `ReadStats` must
-   * either both be nullptr or both non-nullptr. `ReadStats` is used
-   * for accounting for records that have been read during an operation.
+   * record should the iterator end up at. `ReadStats` is used for accounting
+   * for records that have been read during an operation, as well as for
+   * additional stopping conditions, like byte limit.
    * There are 3 possible outcomes of a filtered operation:
    * 1) iterator positioned on a record that passes the filter:
    *    state() == AT_RECORD, or
@@ -269,11 +269,12 @@ class LocalLogStore : boost::noncopyable {
     }
 
     // The filtering works the same way as in ReadIterator; see comment above.
+    // `filter` can be null. `stats` can be null if `data_logs_filter` passed
+    // to readAllLogs() was an empty map.
     virtual void seek(const Location& location,
-                      ReadFilter* filter = nullptr,
-                      ReadStats* stats = nullptr) = 0;
-    virtual void next(ReadFilter* filter = nullptr,
-                      ReadStats* stats = nullptr) = 0;
+                      ReadFilter* filter,
+                      ReadStats* stats) = 0;
+    virtual void next(ReadFilter* filter, ReadStats* stats) = 0;
 
     // To read everything, seek to minLocation() and iterate
     // until state() == AT_END.
@@ -632,26 +633,37 @@ class LocalLogStore : boost::noncopyable {
 
   /**
    * Creates a new AllLogsIterator.
-   * May wait for blocking IO, don't call from worker threads.
-   * @param logs
-   *    If not folly::none, read only the given LSN ranges of the given logs
-   *    and use shouldProcessRecordRange() to filter out groups of records.
-   *    Current implementation has some limitations:
-   *     1. If `logs` is not folly::none, all calls to seek() and next()
-   *        require non-null `filter` and `stats` arguments.
-   *     2. Nonempty `logs` may make readAllLogs() call somewhat slow because it
-   *        makes a copy of the logsdb directory, locking per-log mutexes along
-   *        the way.
-   *     3. The set of logs and LSN ranges are just a hint. The iterator may
-   *        still return records for logs that are not on the list or for LSNs
-   *        that are outside the range. Use ReadFilter to filter out records
-   *        of undesired logs.
+   * May wait for blocking IO; don't call from worker threads.
+   *
+   * There a few ways to use this:
+   *  - Use data_logs_filter = empty map (not folly::none). Then the iterator
+   *    will visit only internal logs and metadata logs.
+   *    ReadFilter and ReadStats are not required in this case.
+   *  - Use data_logs_filter = folly::none. Then the iterator will visit all
+   *    logs. For an awkward implementation reason, ReadStats is required for
+   *    all seek() and next() calls (even if you're not interested in any
+   *    stats), and the ReadStats object passed to next() calls must be the
+   *    same as the one passed to the preceding seek() call.
+   *    (This mode is not currently used anywhere. It only
+   *    exists because it was easy to implement, and speculatively might be
+   *    useful you want to dump all records without knowing the set of logs in
+   *    advance. Feel free to remove if needed.)
+   *  - Use nonempty data_logs_filter. Then the iterator will visit the given
+   *    logs and LSN ranges, but may also visit other logs/LSNs.
+   *    I.e. data_logs_filter is only a hint; you can use ReadFilter to filter
+   *    out unneeded logs and records. ReadStats is required.
+   *
+   * For PartitionedRocksDBStore (logsdb), if data_logs_filter is big
+   * or folly::none, readAllLogs() call may be slow because it makes a copy of
+   * the logsdb directory, locking all per-log mutexes one at a time.
+   * The iterator then uses ReadFilter::shouldProcessRecordRange() (if provided)
+   * to skip groups of records during iteration.
    */
   virtual std::unique_ptr<AllLogsIterator>
   readAllLogs(const ReadOptions& options,
               const folly::Optional<
-                  std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>& logs =
-                  folly::none) const = 0;
+                  std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>>&
+                  data_logs_filter) const = 0;
 
   /**
    * Reads per-store or per-log metadata.
