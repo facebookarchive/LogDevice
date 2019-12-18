@@ -12,7 +12,6 @@
 
 #include <boost/algorithm/string.hpp>
 #include <folly/Memory.h>
-#include <folly/Random.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/include/Record.h"

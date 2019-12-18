@@ -17,7 +17,6 @@
 
 namespace facebook { namespace logdevice {
 
-using LogOptions = BufferedWriter::LogOptions;
 
 std::unique_ptr<BufferedWriter>
 BufferedWriter::create(std::shared_ptr<Client> client,

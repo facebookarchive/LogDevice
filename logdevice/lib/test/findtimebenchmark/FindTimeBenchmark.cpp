@@ -31,10 +31,7 @@
 #include "logdevice/include/types.h"
 #include "logdevice/lib/ClientSettingsImpl.h"
 
-using namespace facebook;
 using namespace facebook::logdevice;
-using std::make_unique;
-using std::chrono::steady_clock;
 
 namespace {
 struct CommandLineSettings {
@@ -52,7 +49,6 @@ static void parse_command_line(int argc,
                                const char* argv[],
                                CommandLineSettings& command_line_settings,
                                ClientSettingsImpl* client_settings) {
-  using boost::program_options::bool_switch;
   using boost::program_options::value;
 
   // clang-format off

@@ -63,14 +63,9 @@
 #include "logdevice/lib/shadow/Shadow.h"
 
 using facebook::logdevice::logsconfig::FBuffersLogsConfigCodec;
-using std::chrono::duration;
-using std::chrono::steady_clock;
 
 namespace facebook { namespace logdevice {
 
-using NodesConfigurationManager =
-    configuration::nodes::NodesConfigurationManager;
-using NCSType = configuration::nodes::NodesConfigurationStoreFactory::NCSType;
 
 // Implementing the member function of Client inside ClientImpl.cpp sounds
 // confusing, but this is not an error. This is for the purpose of moving

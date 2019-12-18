@@ -11,7 +11,6 @@
 #include <unordered_map>
 
 #include <boost/algorithm/string.hpp>
-#include <folly/Memory.h>
 #include <folly/Random.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"

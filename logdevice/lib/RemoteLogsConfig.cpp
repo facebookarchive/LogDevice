@@ -22,10 +22,7 @@
 #include "logdevice/include/LogAttributes.h"
 
 using folly::RWSpinLock;
-using std::chrono::duration;
 using std::chrono::steady_clock;
-using namespace facebook::logdevice::configuration::parser;
-using facebook::logdevice::logsconfig::LogGroupNode;
 using facebook::logdevice::logsconfig::LogGroupNodePtr;
 
 namespace facebook { namespace logdevice {
