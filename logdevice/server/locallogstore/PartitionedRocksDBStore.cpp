@@ -6398,12 +6398,14 @@ void PartitionedRocksDBStore::flushBackgroundThreadRun() {
         evaluator.pickCFsToFlush(now, metadata_cf_data, non_zero_size_cf);
     auto evaluate_time = watch.lap();
 
-    std::vector<rocksdb::ColumnFamilyHandle*> handles_to_flush;
-    handles_to_flush.reserve(to_flush.size());
-    for (auto& cf_data : to_flush) {
-      handles_to_flush.push_back(cf_data.cf->get());
+    if (!to_flush.empty()) {
+      std::vector<rocksdb::ColumnFamilyHandle*> handles_to_flush;
+      handles_to_flush.reserve(to_flush.size());
+      for (auto& cf_data : to_flush) {
+        handles_to_flush.push_back(cf_data.cf->get());
+      }
+      flushMemtablesAtomically(handles_to_flush, false /* wait */);
     }
-    flushMemtablesAtomically(handles_to_flush, false /* wait */);
 
     auto flush_time = watch.lap();
 
