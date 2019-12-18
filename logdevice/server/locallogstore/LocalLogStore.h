@@ -336,9 +336,22 @@ class LocalLogStore : boost::noncopyable {
     // data.
     bool csi_data_only = false;
 
-    // Whether to inject a synthetic latency in read requests; Makes sense only
+    // Whether to inject a synthetic latency in read requests. Makes sense only
     // if blocking I/O is allowed.
     bool inject_latency = false;
+
+    // Only affects AllLogsIterator. If set to true, iterate over partitions
+    // in reverse order. Inside each partition, still go in order of
+    // *increasing* pair [log ID, LSN], and metadata+internal logs still go
+    // before data logs.
+    // (We don't move in reverse inside partition because
+    //   (a) it doesn't seem useful, especially since the iteration order inside
+    //       partition is not chronological anyway,
+    //   (b) rocksdb's Iterator::Prev() is slow,
+    //   (c) it would require a bunch more code in CSIWrapper
+    //       and PartitionedAllLogsIterator,
+    //   (d) it would require a little more code RebuildingReadStorageTaskV2.)
+    bool new_to_old = false;
   };
 
   // Stats and limits of an iterator read. Passed to filtered iterator
@@ -384,6 +397,7 @@ class LocalLogStore : boost::noncopyable {
     // Lower bound of max timestamp read. This is only filled by the
     // partitioned iterator from the partition directory, and doesn't
     // necessarily reflect the max timestamp of all records that were read.
+    // Not supported by AllLogsIterator.
     folly::Optional<std::chrono::milliseconds> max_read_timestamp_lower_bound;
 
     // True if we went outside the requested range of records, either by

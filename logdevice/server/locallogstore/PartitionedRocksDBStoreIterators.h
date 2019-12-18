@@ -294,6 +294,16 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   // Fills out progress_lookup_. Called once in constructor.
   void buildProgressLookupTable();
 
+  // Defines the order in which the iterator should go over partitions.
+  // If new_to_old is true, partitions with higher ID are visited earlier,
+  // if false - later.
+  // Returns:
+  //  0  if lhs == rhs,
+  //  -1 if we should visit lhs before rhs,
+  //  +1 if we should visit rhs before lhs.
+  int whichPartitionToVisitEarlier(partition_id_t lhs,
+                                   partition_id_t rhs) const;
+
   using LogDirectoryEntry = std::pair<logid_t, DirectoryEntry>;
 
   const PartitionedRocksDBStore* pstore_;

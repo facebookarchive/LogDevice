@@ -771,13 +771,8 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
   bool current_is_filtered_out = false;
 
   if (stats) {
-    // We are executing a seek/next that may land us on an LSN that is less than
-    // stats->last_read.second. This can happen if the caller has previously
-    // seen a record with LSN above read limit but for some reason proceeded to
-    // make another seek anyway, usually using a different iterator.
-    // (As of the time of writing the only way this can happen is when logsdb
-    // iterator discards an "orphaned" record and has to seek an iterator in
-    // the next partition even if the orphaned record was over the limit.)
+    // Reset last_read on each operation, to allow reusing ReadStats for
+    // different seeks.
     stats->last_read = std::make_pair(LOGID_INVALID, LSN_INVALID);
   }
 

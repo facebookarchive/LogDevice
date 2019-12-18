@@ -8514,6 +8514,109 @@ TEST_F(PartitionedRocksDBStoreTest, AllLogsIter) {
   EXPECT_EQ(IteratorState::AT_END, it->state());
   EXPECT_EQ(std::vector<C>({C::timeRange(410, 410)}), filter.history);
   filter.history.clear();
+
+  ld_info("New to old.");
+  read_options.new_to_old = true;
+  it = store_->readAllLogs(read_options,
+                           std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>(
+                               {{log1, {201, LSN_MAX}},
+                                {log2, {LSN_INVALID, LSN_MAX}},
+                                {log3, {LSN_INVALID, LSN_MAX}}}));
+  filter.time_ranges = {C::FULL_TIME_RANGE, 10, 210, 410};
+  filter.record_ranges = {std::pair(log2, 100),
+                          std::pair(log1, 300),
+                          std::pair(log2, 200),
+                          std::pair(log1, 400)};
+  filter.records = {3, 21, 22, 41, 2001};
+  it->seek(*it->minLocation(), &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(meta_log1, it->getLogID());
+  EXPECT_EQ(100, it->getLSN());
+  EXPECT_EQ(std::vector<C>({C::fullRange(),
+                            C::call(1001),
+                            C::call(1002),
+                            C::call(2001),
+                            C::call(2001, true),
+                            IF_DEBUG(C::call(2001))}),
+            filter.history);
+  filter.history.clear();
+
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log1, it->getLogID());
+  EXPECT_EQ(400, it->getLSN());
+  EXPECT_EQ(std::vector<C>({C::call(2002),
+                            C::call(3001),
+                            C::timeRange(410, 410),
+                            C::recordRange(log1, 400, 400),
+                            C::call(41),
+                            C::call(41, true),
+                            IF_DEBUG(C::call(41))}),
+            filter.history);
+  filter.history.clear();
+
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log1, it->getLogID());
+  EXPECT_EQ(300, it->getLSN());
+  EXPECT_EQ(std::vector<C>({C::timeRange(310, 320),
+                            C::timeRange(210, 230),
+                            C::recordRange(log1, 300, 300),
+                            C::call(21),
+                            C::call(21, true),
+                            IF_DEBUG(C::call(21))}),
+            filter.history);
+  filter.history.clear();
+
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log2, it->getLogID());
+  EXPECT_EQ(200, it->getLSN());
+  EXPECT_EQ(std::vector<C>({C::recordRange(log2, 200, 300),
+                            C::call(22),
+                            C::call(22, true),
+                            IF_DEBUG(C::call(22))}),
+            filter.history);
+  filter.history.clear();
+
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log2, it->getLogID());
+  EXPECT_EQ(100, it->getLSN());
+  EXPECT_EQ(std::vector<C>({C::call(23),
+                            C::timeRange(10, 30),
+                            C::recordRange(log2, 100, 100),
+                            C::call(3),
+                            C::call(3, true),
+                            IF_DEBUG(C::call(3))}),
+            filter.history);
+  filter.history.clear();
+
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({}), filter.history);
+  filter.history.clear();
+
+  ld_info("New-to-old seek to a location taken from an old-to-new iterator.");
+  it->seek(*mid_location, &filter, &stats);
+  EXPECT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(log2, it->getLogID());
+  EXPECT_EQ(100, it->getLSN());
+  EXPECT_EQ(std::vector<C>({C::timeRange(210, 230),
+                            C::recordRange(log2, 200, 300),
+                            C::call(23),
+                            C::timeRange(10, 30),
+                            C::recordRange(log2, 100, 100),
+                            C::call(3),
+                            C::call(3, true),
+                            IF_DEBUG(C::call(3))}),
+            filter.history);
+  filter.history.clear();
+
+  it->next(&filter, &stats);
+  EXPECT_EQ(IteratorState::AT_END, it->state());
+  EXPECT_EQ(std::vector<C>({}), filter.history);
+  filter.history.clear();
 }
 
 // Reproduces a former bug where time-based-trimmed records weren't compacted

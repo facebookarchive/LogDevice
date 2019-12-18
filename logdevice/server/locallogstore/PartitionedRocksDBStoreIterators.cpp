@@ -872,6 +872,16 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
                    IteratorType::PARTITIONED_ALL_LOGS,
                    options.tracking_ctx);
 
+  // Grab a copy of logsdb directory (or the requested parts of it).
+  //
+  // Note that, for each log, this is done while holding the log's mutex, which
+  // guarantees that LSN ranges of different directory entries of the same log
+  // don't intersect, which guarantees that the iterator will visit each record
+  // no more than once. Without such consistent directory read we could get
+  // duplicates e.g. if a record is written to one partition, then we read it,
+  // then the partition is dropped, the record is written again to a
+  // different partition (can be either higher or lower), then we read the
+  // record again from that different partition.
   if (!data_logs_filter.hasValue()) {
     // Read all data logs.
     pstore_->getLogsDBDirectories({}, {}, directory_);
@@ -903,9 +913,14 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
   // Sort by tuple (partition, log, lsn).
   std::sort(directory_.begin(),
             directory_.end(),
-            [](const LogDirectoryEntry& lhs, LogDirectoryEntry& rhs) {
-              return std::tie(lhs.second.id, lhs.first, lhs.second.first_lsn) <
-                  std::tie(rhs.second.id, rhs.first, rhs.second.first_lsn);
+            [this](const LogDirectoryEntry& lhs, LogDirectoryEntry& rhs) {
+              int p =
+                  whichPartitionToVisitEarlier(lhs.second.id, rhs.second.id);
+              if (p != 0) {
+                return p < 0;
+              }
+              return std::tie(lhs.first, lhs.second.first_lsn) <
+                  std::tie(rhs.first, rhs.second.first_lsn);
             });
 
   buildProgressLookupTable();
@@ -980,17 +995,28 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seek(
     // No unpartitioned records passed filter. Move on to partitions.
   }
 
-  // Look up the `location` in directory.
-  // More precisely, find the first directory entry having tuple
-  // (partition, log, max_lsn) >= location.
-  current_entry_ = std::lower_bound(
-      directory_.begin(),
-      directory_.end(),
-      location,
-      [](const LogDirectoryEntry& entry, const PartitionedLocation& loc) {
-        return std::tie(entry.second.id, entry.first, entry.second.max_lsn) <
-            std::tie(loc.partition, loc.log, loc.lsn);
-      });
+  if (location.partition == PARTITION_INVALID) {
+    // After unpartitioned column family proceed to the first directory entry.
+    // This special case is needed because the lower_bound() below wouldn't
+    // handle PARTITION_INVALID correctly in new-to-old mode.
+    current_entry_ = directory_.begin();
+  } else {
+    // Look up the `location` in directory.
+    // More precisely, find the first directory entry having tuple
+    // (partition, log, max_lsn) >= location.
+    current_entry_ = std::lower_bound(
+        directory_.begin(),
+        directory_.end(),
+        location,
+        [this](const LogDirectoryEntry& entry, const PartitionedLocation& loc) {
+          int p = whichPartitionToVisitEarlier(entry.second.id, loc.partition);
+          if (p != 0) {
+            return p < 0;
+          }
+          return std::tie(entry.first, entry.second.max_lsn) <
+              std::tie(loc.log, loc.lsn);
+        });
+  }
 
   seekToCurrentEntry(location, filter, stats);
 }
@@ -1013,11 +1039,10 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::next(
   if (s == IteratorState::AT_END) {
     // End of partition.
     if (current_partition_) {
-      // Go to directory entry in a higher partition.
+      // Go to directory entry in a different partition.
       partition_id_t id = current_entry_->second.id;
       while (current_entry_ != directory_.end() &&
-             current_entry_->second.id <= id) {
-        ld_check(current_entry_->second.id == id); // should be sorted
+             current_entry_->second.id == id) {
         ++current_entry_;
       }
     } else {
@@ -1055,7 +1080,8 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seekToCurrentEntry(
     ld_check(stats != nullptr);
 
     // Latest partition ID never decreases.
-    ld_check(partitions->nextID() > directory_.back().second.id);
+    ld_check_gt(partitions->nextID(), directory_.back().second.id);
+    ld_check_gt(partitions->nextID(), directory_.front().second.id);
   }
 
   RecordTimestamp min_ts, max_ts;
@@ -1074,17 +1100,10 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seekToCurrentEntry(
     }
   }
 
-  // Skip dropped partitions.
-  while (current_entry_ != directory_.end() &&
-         current_entry_->second.id < partitions->firstID()) {
-    ++current_entry_;
-  }
-
   auto go_to_next_partition = [&] {
     partition_id_t id = current_entry_->second.id;
     while (current_entry_ != directory_.end() &&
-           current_entry_->second.id <= id) {
-      ld_check(current_entry_->second.id == id); // directory_ is sorted
+           current_entry_->second.id == id) {
       ++current_entry_;
     }
   };
@@ -1093,6 +1112,16 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::seekToCurrentEntry(
     if (current_entry_ == directory_.end()) {
       // Reached end of directory.
       break;
+    }
+
+    if (current_entry_->second.id < partitions->firstID()) {
+      // Partition is dropped.
+      if (options_.new_to_old) {
+        break;
+      } else {
+        ++current_entry_;
+        continue;
+      }
     }
 
     if (!current_partition_ ||
@@ -1220,6 +1249,14 @@ void PartitionedRocksDBStore::PartitionedAllLogsIterator::
       x /= sum_so_far;
     }
   }
+}
+
+int PartitionedRocksDBStore::PartitionedAllLogsIterator::
+    whichPartitionToVisitEarlier(partition_id_t lhs, partition_id_t rhs) const {
+  if (lhs == rhs) {
+    return 0;
+  }
+  return (options_.new_to_old == (lhs < rhs)) ? +1 : -1;
 }
 
 double
