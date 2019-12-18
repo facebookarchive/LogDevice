@@ -98,7 +98,6 @@ void WatchDogThread::detectStalls() {
     if (slow_workers_cb_) {
       slow_workers_cb_(1);
     }
-    STAT_INCR(processor_->stats_, watchdog_fault_injection_indicator);
   } else {
     if (slow_workers_cb_) {
       slow_workers_cb_(stalled_worker_pids.size());

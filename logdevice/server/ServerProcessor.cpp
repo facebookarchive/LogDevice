@@ -111,10 +111,7 @@ void ServerProcessor::init() {
 
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct HealthMonitor: %s", error_description(err));
-      STAT_INCR(stats_, health_monitor_errors);
     }
-  } else {
-    STAT_INCR(stats_, health_monitor_errors);
   }
 }
 

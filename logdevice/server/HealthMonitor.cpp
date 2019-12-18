@@ -69,7 +69,6 @@ void HealthMonitor::monitorLoop() {
   sleep_semifuture_ = folly::futures::sleep(sleep_period_)
                           .via(&executor_)
                           .then([this](folly::Try<folly::Unit>) mutable {
-                            STAT_INCR(stats_, health_monitor_num_loops);
                             if (shutdown_.load(std::memory_order_relaxed)) {
                               removeFailureDetector();
                               shutdown_promise_.setValue();
@@ -217,10 +216,6 @@ void HealthMonitor::calculateNegativeSignal(TimePoint now,
   auto half_period = sleep_period_ / 2;
   stall_info_ = isStalled(now, half_period, stats);
   overloaded_ = isOverloaded(now, half_period, stats);
-  // temporary
-  STAT_ADD(
-      stats_, health_monitor_stall_indicator, stall_info_.stalled_ ? 1 : 0);
-  STAT_ADD(stats_, health_monitor_overload_indicator, overloaded_ ? 1 : 0);
   if (internal_info_.health_monitor_delay_ || internal_info_.watchdog_delay_ ||
       internal_info_.total_stalled_workers > 0 || stall_info_.stalled_) {
     state_timer_.negativeFeedback();
@@ -242,12 +237,13 @@ void HealthMonitor::processReports() {
   node_status_ = (sleep_period_ < state_timer_.getCurrentValue())
       ? NodeHealthStatus::UNHEALTHY
       : overloaded_ ? NodeHealthStatus::OVERLOADED : NodeHealthStatus::HEALTHY;
-  if (node_status_ == NodeHealthStatus::HEALTHY) {
-    STAT_INCR(stats_, health_monitor_state_indicator);
-  }
   stats.curr_state_timer_value_ms = state_timer_.getCurrentValue().count();
   updateFailureDetectorStatus(node_status_);
   updateNodeHealthStats(stats);
+  STAT_ADD(stats_,
+           health_monitor_unhealthy,
+           node_status_ == NodeHealthStatus::UNHEALTHY ? 1 : 0);
+  STAT_ADD(stats_, health_monitor_overloaded, overloaded_ ? 1 : 0);
 }
 
 NodeHealthStats HealthMonitor::calculateGlobalNodeHealthStats() {
