@@ -125,7 +125,7 @@ class EventLogRebuildingSet {
   struct RebuildingShardInfo {
     // LSN of the last SHARD_NEEDS_REBUILD event that affected `rebuilding_set`.
     // Donors restart rebuilding each time this changes.
-    lsn_t version;
+    lsn_t version = LSN_INVALID;
     // List of nodes for which there is state to maintain. Note that even nodes
     // that acked rebuilding are maintained here because the moment the node
     // acked helps determine if the node is supposed to be a donor for another
@@ -137,7 +137,7 @@ class EventLogRebuildingSet {
     // its local window according to global window deduced from the progress of
     // each donor. This is the union of `donors_remaining` for each node in
     // `nodes_`.
-    folly::F14FastMap<node_index_t, ts_type> donor_progress;
+    folly::F14FastMap<node_index_t, RecordTimestamp> donor_progress;
     // The time intervals across all nodes to process.
     // NOTE: The intervals included here may differ between storage nodes
     //       since each storage node will exclude ranges on itself for which

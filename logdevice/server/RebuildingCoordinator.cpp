@@ -610,8 +610,7 @@ void RebuildingCoordinator::trySlideGlobalWindow(
   // Recompute the minimum next timestamp across all nodes.
   RecordTimestamp min_next_timestamp = RecordTimestamp::max();
   for (auto& n : rsi->donor_progress) {
-    min_next_timestamp =
-        std::min(min_next_timestamp, RecordTimestamp(n.second));
+    min_next_timestamp = std::min(min_next_timestamp, n.second);
   }
 
   // Calculate new_global_window_end = min_next_timestamp + global_window,

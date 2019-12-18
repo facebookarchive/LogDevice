@@ -200,8 +200,17 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
   bool is_recoverable = true;
   bool drain = false;
   folly::Optional<RebuildingMode> currentMode;
-  auto it = shards_[shardIdx].nodes_.find(nodeIdx);
-  if (it != shards_[shardIdx].nodes_.end()) {
+  RebuildingShardInfo& shard_info = shards_[shardIdx];
+
+  dd_assert(lsn > shard_info.version,
+            "Delta record LSN %s is <= than current rebuilding version %s of "
+            "shard %u. Unexpected, please investigate.",
+            lsn_to_string(lsn).c_str(),
+            lsn_to_string(shard_info.version).c_str(),
+            shardIdx);
+
+  auto it = shard_info.nodes_.find(nodeIdx);
+  if (it != shard_info.nodes_.end()) {
     if (!it->second.dc_dirty_ranges.empty()) {
       // Switching from time-ranged rebuilding to a full rebuilding.
       // Reset recoverable to true since the time-ranged rebuilding implied that
@@ -322,11 +331,10 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
     ld_check(ptr->time_ranges.empty());
   }
 
-  shards_[shardIdx].nodes_.insert(
-      std::make_pair(nodeIdx, std::move(node_info)));
-  shards_[shardIdx].version = lsn;
-  shards_[shardIdx].donor_progress.clear();
-  shards_[shardIdx].filter_relocate_shards =
+  shard_info.nodes_.insert(std::make_pair(nodeIdx, std::move(node_info)));
+  shard_info.version = lsn;
+  shard_info.donor_progress.clear();
+  shard_info.filter_relocate_shards =
       flags & SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
 
   setShardRecoverable(nodeIdx, shardIdx, is_recoverable);
@@ -681,21 +689,22 @@ int EventLogRebuildingSet::onShardDonorProgress(
     return -1;
   }
 
-  const auto cur_ts = shard_info.donor_progress[donor_node_id].count();
+  RecordTimestamp& cur_ts = shard_info.donor_progress[donor_node_id];
+  RecordTimestamp new_ts(std::chrono::milliseconds(ptr->header.nextTimestamp));
 
-  if (ptr->header.nextTimestamp <= cur_ts) {
+  if (new_ts <= cur_ts) {
     ld_warning("Node %u notifies us that it moved its local window for "
-               "shard %u up to timestamp %ld but it had previously moved it "
-               "to a greater timestamp %ld",
+               "shard %u up to timestamp %s but it had previously moved it "
+               "to a greater timestamp %s",
                donor_node_id,
                shard_id,
-               ptr->header.nextTimestamp,
-               cur_ts);
+               new_ts.toString().c_str(),
+               cur_ts.toString().c_str());
     err = E::FAILED;
     return -1;
   }
 
-  shard_info.donor_progress[donor_node_id] = ts_type(ptr->header.nextTimestamp);
+  cur_ts = new_ts;
 
   return 0;
 }
@@ -906,7 +915,7 @@ void EventLogRebuildingSet::recomputeAuthoritativeStatus(
   for (auto& it_node : shard_info.nodes_) {
     for (node_index_t nid : it_node.second.donors_remaining) {
       if (!shard_info.donor_progress.count(nid)) {
-        shard_info.donor_progress[nid] = ts_type::min();
+        shard_info.donor_progress[nid] = RecordTimestamp::min();
       }
     }
   }
