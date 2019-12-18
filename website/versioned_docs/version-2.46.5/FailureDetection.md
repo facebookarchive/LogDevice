@@ -1,5 +1,5 @@
 ---
-id: version-2.46-FailureDetection
+id: version-2.46.5-FailureDetection
 title: Failure detection
 sidebar_label: Failure detection
 original_id: FailureDetection

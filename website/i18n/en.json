@@ -96,91 +96,91 @@
         "title": "Writing plugins",
         "sidebar_label": "Writing plugins"
       },
-      "version-2.46/version-2.46-API_Introduction": {
+      "version-2.46.5/version-2.46.5-API_Introduction": {
         "title": "Client library API",
         "sidebar_label": "Client library API"
       },
-      "version-2.46/version-2.46-Concepts": {
+      "version-2.46.5/version-2.46.5-Concepts": {
         "title": "Architecture",
         "sidebar_label": "Architecture"
       },
-      "version-2.46/version-2.46-Config": {
+      "version-2.46.5/version-2.46.5-Config": {
         "title": "Cluster configuration",
         "sidebar_label": "Cluster configuration"
       },
-      "version-2.46/version-2.46-Consensus": {
+      "version-2.46.5/version-2.46.5-Consensus": {
         "title": "Distributed consensus",
         "sidebar_label": "Distributed consensus"
       },
-      "version-2.46/version-2.46-API_Doxygen": {
+      "version-2.46.5/version-2.46.5-API_Doxygen": {
         "title": "Reference",
         "sidebar_label": "Reference"
       },
-      "version-2.46/version-2.46-FailureDetection": {
+      "version-2.46.5/version-2.46.5-FailureDetection": {
         "title": "Failure detection",
         "sidebar_label": "Failure detection"
       },
-      "version-2.46/version-2.46-FirstCluster": {
+      "version-2.46.5/version-2.46.5-FirstCluster": {
         "title": "Creating your first cluster",
         "sidebar_label": "Creating your first cluster"
       },
-      "version-2.46/version-2.46-Installation": {
+      "version-2.46.5/version-2.46.5-Installation": {
         "title": "Build LogDevice",
         "sidebar_label": "Build LogDevice"
       },
-      "version-2.46/version-2.46-LDQuery": {
+      "version-2.46.5/version-2.46.5-LDQuery": {
         "title": "LDQuery",
         "sidebar_label": "LDQuery"
       },
-      "version-2.46/version-2.46-LDShell": {
+      "version-2.46.5/version-2.46.5-LDShell": {
         "title": "LogDevice Shell (LDShell)",
         "sidebar_label": "LogDevice Shell"
       },
-      "version-2.46/version-2.46-LocalCluster": {
+      "version-2.46.5/version-2.46.5-LocalCluster": {
         "title": "Run a local cluster in Docker",
         "sidebar_label": "Quickstart"
       },
-      "version-2.46/version-2.46-Logs": {
+      "version-2.46.5/version-2.46.5-Logs": {
         "title": "Log configuration",
         "sidebar_label": "Log configuration"
       },
-      "version-2.46/version-2.46-LogsDB": {
+      "version-2.46.5/version-2.46.5-LogsDB": {
         "title": "LogsDB",
         "sidebar_label": "LogsDB"
       },
-      "version-2.46/version-2.46-Overview": {
+      "version-2.46.5/version-2.46.5-Overview": {
         "title": "Overview",
         "sidebar_label": "Overview"
       },
-      "version-2.46/version-2.46-ReadPath": {
+      "version-2.46.5/version-2.46.5-ReadPath": {
         "title": "Read path",
         "sidebar_label": "Read path"
       },
-      "version-2.46/version-2.46-Rebuilding": {
+      "version-2.46.5/version-2.46.5-Rebuilding": {
         "title": "Rebuilding",
         "sidebar_label": "Rebuilding"
       },
-      "version-2.46/version-2.46-Recovery": {
+      "version-2.46.5/version-2.46.5-Recovery": {
         "title": "Recovery after the failure of a sequencer",
         "sidebar_label": "Recovery after the failure of a sequencer"
       },
-      "version-2.46/version-2.46-Replication": {
+      "version-2.46.5/version-2.46.5-Replication": {
         "title": "Log replication configuration",
         "sidebar_label": "Log replication configuration"
       },
-      "version-2.46/version-2.46-Settings": {
+      "version-2.46.5/version-2.46.5-Settings": {
         "title": "Configuration settings",
         "sidebar_label": "Settings"
       },
-      "version-2.46/version-2.46-TrafficShaping": {
+      "version-2.46.5/version-2.46.5-TrafficShaping": {
         "title": "Traffic shaping",
         "sidebar_label": "Traffic shaping"
       },
-      "version-2.46/version-2.46-Writepath": {
+      "version-2.46.5/version-2.46.5-Writepath": {
         "title": "Write path",
         "sidebar_label": "Write path"
       },
-      "version-2.46/version-2.46-WritingPlugins": {
+      "version-2.46.5/version-2.46.5-WritingPlugins": {
         "title": "Writing plugins",
         "sidebar_label": "Writing plugins"
       }

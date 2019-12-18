@@ -1,5 +1,5 @@
 ---
-id: version-2.46-Logs
+id: version-2.46.5-Logs
 title: Log configuration
 sidebar_label: Log configuration
 original_id: Logs

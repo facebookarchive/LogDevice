@@ -1,5 +1,5 @@
 ---
-id: version-2.46-Consensus
+id: version-2.46.5-Consensus
 title: Distributed consensus
 sidebar_label: Distributed consensus
 original_id: Consensus

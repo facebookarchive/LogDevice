@@ -1,5 +1,5 @@
 ---
-id: version-2.46-TrafficShaping
+id: version-2.46.5-TrafficShaping
 title: Traffic shaping
 sidebar_label: Traffic shaping
 original_id: TrafficShaping

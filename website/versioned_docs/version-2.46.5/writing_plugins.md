@@ -1,5 +1,5 @@
 ---
-id: version-2.46-WritingPlugins
+id: version-2.46.5-WritingPlugins
 title: Writing plugins
 sidebar_label: Writing plugins
 original_id: WritingPlugins

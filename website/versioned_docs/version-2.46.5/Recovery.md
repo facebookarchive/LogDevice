@@ -1,5 +1,5 @@
 ---
-id: version-2.46-Recovery
+id: version-2.46.5-Recovery
 title: Recovery after the failure of a sequencer
 sidebar_label: Recovery after the failure of a sequencer
 original_id: Recovery

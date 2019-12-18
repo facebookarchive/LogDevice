@@ -1,5 +1,5 @@
 ---
-id: version-2.46-Concepts
+id: version-2.46.5-Concepts
 title: Architecture
 sidebar_label: Architecture
 original_id: Concepts

@@ -1,5 +1,5 @@
 ---
-id: version-2.46-LocalCluster
+id: version-2.46.5-LocalCluster
 title: Run a local cluster in Docker
 sidebar_label: Quickstart
 original_id: LocalCluster

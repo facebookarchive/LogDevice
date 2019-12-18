@@ -1,5 +1,5 @@
 ---
-id: version-2.46-FirstCluster
+id: version-2.46.5-FirstCluster
 title: Creating your first cluster
 sidebar_label: Creating your first cluster
 original_id: FirstCluster

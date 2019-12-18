@@ -1,5 +1,5 @@
 ---
-id: version-2.46-Settings
+id: version-2.46.5-Settings
 title: Configuration settings
 sidebar_label: Settings
 original_id: Settings

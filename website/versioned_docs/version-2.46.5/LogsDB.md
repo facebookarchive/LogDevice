@@ -1,5 +1,5 @@
 ---
-id: version-2.46-LogsDB
+id: version-2.46.5-LogsDB
 title: LogsDB
 sidebar_label: LogsDB
 original_id: LogsDB

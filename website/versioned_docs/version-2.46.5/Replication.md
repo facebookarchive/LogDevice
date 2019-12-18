@@ -1,5 +1,5 @@
 ---
-id: version-2.46-Replication
+id: version-2.46.5-Replication
 title: Log replication configuration
 sidebar_label: Log replication configuration
 original_id: Replication

@@ -1,5 +1,5 @@
 ---
-id: version-2.46-Config
+id: version-2.46.5-Config
 title: Cluster configuration
 sidebar_label: Cluster configuration
 original_id: Config
