@@ -25,6 +25,7 @@ from logdevice.admin.nodes.types import (
     MaintenanceStatus,
     NodesStateResponse,
     SequencingState,
+    ServiceHealthStatus as DaemonHealthStatus,
     ServiceState as DaemonState,
     ShardDataHealth,
     ShardOperationalState,
@@ -79,6 +80,7 @@ except ImportError:
         location: Optional[str] = None
         # Internal state variables
         state: Optional[str] = None
+        health_status: Optional[str] = None
         sequencing_state: Optional[str] = None
         shard_health_state: Optional[str] = None
         shard_storage_state: Optional[str] = None
@@ -177,6 +179,10 @@ async def print_results_tabular(results, *args, **kwargs):
                 if result.shard_operational_state
                 else "?",
             ),
+            (
+                "HEALTH STATUS",
+                lambda result: result.health_status if result.health_status else "?",
+            ),
         ]
     )
 
@@ -260,6 +266,18 @@ def color_service_state(service_state: DaemonState):
     elif service_state == DaemonState.DEAD:
         return colored(service_state.name, "red")
     return service_state.name
+
+
+def color_service_health_status(service_health_status: DaemonHealthStatus):
+    if service_health_status == DaemonHealthStatus.UNKNOWN:
+        return colored(service_health_status.name, "red")
+    elif service_health_status == DaemonHealthStatus.UNDEFINED:
+        return colored(service_health_status.name, "white")
+    elif service_health_status == DaemonHealthStatus.OVERLOADED:
+        return colored(service_health_status.name, "yellow")
+    elif service_health_status == DaemonHealthStatus.UNHEALTHY:
+        return colored(service_health_status.name, "red")
+    return service_health_status.name
 
 
 def interpret_by_frequency(items):
@@ -346,6 +364,7 @@ async def merge_information(
             shard_operational_state=interpret_shard_operational_states(
                 node_state.shard_states
             ),
+            health_status=color_service_health_status(node_state.daemon_health_status),
         )
 
         for shard in node_state.shard_states or []:
