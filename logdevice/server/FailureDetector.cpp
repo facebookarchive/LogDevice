@@ -1002,6 +1002,9 @@ void FailureDetector::detectFailures(
 
   size_t dead_cnt = 0;
   size_t effective_dead_cnt = 0;
+  size_t overloaded_cnt = 0;
+  size_t unhealthy_cnt = 0;
+  size_t effective_unhealthy_cnt = 0;
   size_t cluster_size = nodes_configuration->clusterSize();
   size_t effective_cluster_size = cluster_size;
 
@@ -1012,6 +1015,17 @@ void FailureDetector::detectFailures(
       updateNodeState(
           self, it.second, false /*dead*/, true /*self*/, false /*failover*/);
       updateNodeStatus(self, it.second, it.second.status_);
+      switch (it.second.status_) {
+        case NodeHealthStatus::UNHEALTHY:
+          ++unhealthy_cnt;
+          ++effective_unhealthy_cnt;
+          break;
+        case NodeHealthStatus::OVERLOADED:
+          ++overloaded_cnt;
+          break;
+        default:
+          break;
+      };
       continue;
     }
 
@@ -1057,10 +1071,24 @@ void FailureDetector::detectFailures(
       }
       if (dead) {
         ++dead_cnt;
+        ++unhealthy_cnt;
         if (!node_disabled) {
           // only active nodes matter for isolation. see comment below.
           ++effective_dead_cnt;
+          ++effective_unhealthy_cnt;
         }
+      } else {
+        switch (it.second.status_) {
+          case NodeHealthStatus::UNHEALTHY:
+            ++unhealthy_cnt;
+            ++effective_unhealthy_cnt;
+            break;
+          case NodeHealthStatus::OVERLOADED:
+            ++overloaded_cnt;
+            break;
+          default:
+            break;
+        };
       }
     }
   }
@@ -1071,6 +1099,10 @@ void FailureDetector::detectFailures(
   STAT_SET(getStats(), num_dead_nodes, dead_cnt);
   STAT_SET(getStats(), effective_num_nodes, effective_cluster_size);
   STAT_SET(getStats(), effective_dead_nodes, effective_dead_cnt);
+  // HealthMonitor stats
+  STAT_SET(getStats(), num_overloaded_nodes, overloaded_cnt);
+  STAT_SET(getStats(), num_unhealthy_nodes, unhealthy_cnt);
+  STAT_SET(getStats(), effective_unhealthy_nodes, effective_unhealthy_cnt);
 
   // Check whether more than half of the nodes are dead. This may mean that
   // there is a network partitioning and we are in a minority. We record this

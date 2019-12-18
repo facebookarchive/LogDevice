@@ -1061,6 +1061,14 @@ STAT_DEFINE(watchdog_num_delays, SUM)
 // Num workers detected as stalled by watchdog
 STAT_DEFINE(num_stalled_workers, SUM)
 
+// How many nodes are marked OVERLOADED by the FailureDetector.
+STAT_DEFINE(num_overloaded_nodes, SUM)
+
+// How many nodes are marked UNHEALTHY by the FailureDetector.
+STAT_DEFINE(num_unhealthy_nodes, SUM)
+// Effective number of unhealthy nodes, excluding disabled nodes
+STAT_DEFINE(effective_unhealthy_nodes, SUM)
+
 // Increases for every HM loop in which the node is found to be overloaded
 STAT_DEFINE(health_monitor_overloaded, SUM)
 // Increases for every HM loop in which the node is found to be unhealthy
