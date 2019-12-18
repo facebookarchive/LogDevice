@@ -22,6 +22,7 @@
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/plugin/AdminServerFactory.h"
 #include "logdevice/common/plugin/LocationProvider.h"
@@ -156,6 +157,7 @@ void StandaloneAdminServer::initServerConfig() {
 }
 
 void StandaloneAdminServer::initNodesConfiguration() {
+  using namespace facebook::logdevice::configuration::nodes;
   ld_check(updateable_config_);
   ld_check(plugin_registry_);
 
@@ -165,7 +167,14 @@ void StandaloneAdminServer::initNodesConfiguration() {
     return;
   }
 
-  NodesConfigurationInit config_init(buildNodesConfigurationStore(), settings_);
+  auto store = buildNodesConfigurationStore();
+  // Create an empty NC in the NCS if it doesn't exist already. Most of the
+  // time, this is a single read RTT (because the NC will be there), so it
+  // should be fine to always do it.
+  store->updateConfigSync(
+      NodesConfigurationCodec::serialize(NodesConfiguration()),
+      NodesConfigurationStore::Condition::createIfNotExists());
+  NodesConfigurationInit config_init(std::move(store), settings_);
   // The store used by the standalone admin server shouldn't require a
   // procoessor. It's either a ZK NCS or a FileBasedNCS.
   auto success = config_init.initWithoutProcessor(
