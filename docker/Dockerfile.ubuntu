@@ -78,4 +78,4 @@ RUN apt-get update && \
 
 EXPOSE 4440 4441 4443 5440 6440
 
-CMD /usr/local/bin/ld-dev-cluster --use-tcp
+CMD /usr/local/bin/ld-dev-cluster
