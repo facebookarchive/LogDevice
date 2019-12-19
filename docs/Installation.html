@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Build LogDevice · LogDevice</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="Follow these instructions to build LogDevice components including `logdeviced` (the LogDevice server), `ld-admin-server` the standalone administration server, the client library, and `ldshell`, an administrative shell utility. See the [Build artifacts](#built-binaries-and-libraries-build-artifacts) for the full list."/><meta name="docsearch:language" content="en"/><meta property="og:title" content="Build LogDevice · LogDevice"/><meta property="og:type" content="website"/><meta property="og:url" content="https://logdevice.io/index.html"/><meta property="og:description" content="Follow these instructions to build LogDevice components including `logdeviced` (the LogDevice server), `ld-admin-server` the standalone administration server, the client library, and `ldshell`, an administrative shell utility. See the [Build artifacts](#built-binaries-and-libraries-build-artifacts) for the full list."/><meta property="og:image" content="https://logdevice.io/img/logdevice_og.png"/><meta name="twitter:card" content="summary"/><meta name="twitter:image" content="https://logdevice.io/img/logdevice.png"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><link rel="alternate" type="application/atom+xml" href="https://logdevice.io/blog/atom.xml" title="LogDevice Blog ATOM Feed"/><link rel="alternate" type="application/rss+xml" href="https://logdevice.io/blog/feed.xml" title="LogDevice Blog RSS Feed"/><script>
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>Build LogDevice · LogDevice</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="Follow these instructions to build LogDevice components including `logdeviced` (the LogDevice server), the client library, and `ldshell`, an administrative shell utility."/><meta name="docsearch:version" content="2.46.5"/><meta name="docsearch:language" content="en"/><meta property="og:title" content="Build LogDevice · LogDevice"/><meta property="og:type" content="website"/><meta property="og:url" content="https://logdevice.io/index.html"/><meta property="og:description" content="Follow these instructions to build LogDevice components including `logdeviced` (the LogDevice server), the client library, and `ldshell`, an administrative shell utility."/><meta property="og:image" content="https://logdevice.io/img/logdevice_og.png"/><meta name="twitter:card" content="summary"/><meta name="twitter:image" content="https://logdevice.io/img/logdevice.png"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><link rel="alternate" type="application/atom+xml" href="https://logdevice.io/blog/atom.xml" title="LogDevice Blog ATOM Feed"/><link rel="alternate" type="application/rss+xml" href="https://logdevice.io/blog/feed.xml" title="LogDevice Blog RSS Feed"/><script>
               (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
               (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
               m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
@@ -6,197 +6,76 @@
 
               ga('create', 'UA-137238014-1', 'auto');
               ga('send', 'pageview');
-            </script><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/help.html" target="_self">Support</a></li><li class=""><a href="https://github.com/facebookincubator/LogDevice" target="_self">GitHub</a></li><li class=""><a href="/blog/" target="_self">Blog</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Getting started</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Getting started<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/Overview.html">Overview</a></li><li class="navListItem"><a class="navItem" href="/docs/LocalCluster.html">Quickstart</a></li><li class="navListItem"><a class="navItem" href="/docs/Concepts.html">Architecture</a></li><li class="navListItem navListItemActive"><a class="navItem" href="/docs/Installation.html">Build LogDevice</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Configuration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/FirstCluster.html">Creating your first cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/Config.html">Cluster configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/Settings.html">Settings</a></li><li class="navListItem"><a class="navItem" href="/docs/Logs.html">Log configuration</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Administration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/LDShell.html">LogDevice Shell</a></li><li class="navListItem"><a class="navItem" href="/docs/LDQuery.html">LDQuery</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Concepts<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/Writepath.html">Write path</a></li><li class="navListItem"><a class="navItem" href="/docs/ReadPath.html">Read path</a></li><li class="navListItem"><a class="navItem" href="/docs/Terminology.html">Terminology</a></li><li class="navListItem"><a class="navItem" href="/docs/Consensus.html">Distributed consensus</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Designs<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/FailureDetection.html">Failure detection</a></li><li class="navListItem"><a class="navItem" href="/docs/Replication.html">Log replication configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/Recovery.html">Recovery after the failure of a sequencer</a></li><li class="navListItem"><a class="navItem" href="/docs/TrafficShaping.html">Traffic shaping</a></li><li class="navListItem"><a class="navItem" href="/docs/Rebuilding.html">Rebuilding</a></li><li class="navListItem"><a class="navItem" href="/docs/LogsDB.html">LogsDB</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">API<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/API_Introduction.html">Client library API</a></li><li class="navListItem"><a class="navItem" href="/docs/API_Doxygen.html">Reference</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Extending LogDevice<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/WritingPlugins.html">Writing plugins</a></li></ul></div></div></section></div><script>
-            var coll = document.getElementsByClassName('collapsible');
-            var checkActiveCategory = true;
-            for (var i = 0; i < coll.length; i++) {
-              var links = coll[i].nextElementSibling.getElementsByTagName('*');
-              if (checkActiveCategory){
-                for (var j = 0; j < links.length; j++) {
-                  if (links[j].classList.contains('navListItemActive')){
-                    coll[i].nextElementSibling.classList.toggle('hide');
-                    coll[i].childNodes[1].classList.toggle('rotate');
-                    checkActiveCategory = false;
-                    break;
-                  }
-                }
-              }
-
-              coll[i].addEventListener('click', function() {
-                var arrow = this.childNodes[1];
-                arrow.classList.toggle('rotate');
-                var content = this.nextElementSibling;
-                content.classList.toggle('hide');
-              });
-            }
-
-            document.addEventListener('DOMContentLoaded', function() {
-              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
-              createToggler('#tocToggler', 'body', 'tocActive');
-
-              var headings = document.querySelector('.toc-headings');
-              headings && headings.addEventListener('click', function(event) {
-                var el = event.target;
-                while(el !== headings){
-                  if (el.tagName === 'A') {
-                    document.body.classList.remove('tocActive');
-                    break;
-                  } else{
-                    el = el.parentNode;
-                  }
-                }
-              }, false);
-
-              function createToggler(togglerSelector, targetSelector, className) {
-                var toggler = document.querySelector(togglerSelector);
-                var target = document.querySelector(targetSelector);
-
-                if (!toggler) {
-                  return;
-                }
-
-                toggler.onclick = function(event) {
-                  event.preventDefault();
-
-                  target.classList.toggle(className);
-                };
-              }
-            });
-        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Build LogDevice</h1></header><article><div><span><p>Follow these instructions to build LogDevice components including <code>logdeviced</code> (the LogDevice server), <code>ld-admin-server</code> the standalone administration server, the client library, and <code>ldshell</code>, an administrative shell utility. See the <a href="#built-binaries-and-libraries-build-artifacts">Build artifacts</a> for the full list.</p>
-<p>At this time, the only supported platform is <strong>Ubuntu 18 LTS &quot;Bionic Beaver&quot;</strong>. LogDevice relies on some <em>C++17</em> features, so building LogDevice requires a compiler that supports at least <em>C++17</em>.</p>
+            </script><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><a href="/versions.html"><h3>2.46.5</h3></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class=""><a href="/docs/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/help.html" target="_self">Support</a></li><li class=""><a href="https://github.com/facebookincubator/LogDevice" target="_self">GitHub</a></li><li class=""><a href="/blog/" target="_self">Blog</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">Build LogDevice</h1></header><article><div><span><p>Follow these instructions to build LogDevice components including <code>logdeviced</code> (the LogDevice server), the client library, and <code>ldshell</code>, an administrative shell utility.</p>
+<p>At this time, the only supported platform is Ubuntu 18 LTS &quot;Bionic Beaver&quot;. Support for Fedora is experimental. LogDevice relies on some c++17 features, so building LogDevice requires a compiler that supports c++17.</p>
 <h2><a class="anchor" aria-hidden="true" id="clone-the-repo-and-build-from-the-source"></a><a href="#clone-the-repo-and-build-from-the-source" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Clone the repo and build from the source</h2>
-<p>Clone the LogDevice GitHub repository, <strong>including its submodules</strong>.</p>
-<pre><code class="hljs css language-shell-session">git <span class="hljs-keyword">clone</span> <span class="hljs-title">--recurse-submodules</span> git://github.com/facebookincubator/LogDevice
+<p><strong>Clone the LogDevice GitHub repository, including its submodules.</strong></p>
+<pre><code class="hljs css language-shell">git clone --recurse-submodules git://github.com/facebookincubator/LogDevice
 </code></pre>
-<blockquote>
-<p>Tip: If you already have a logdevice clone locally, we recommend that every time you
-pull updates that you make sure that the submodules are synchronized. Inside the
-<em>LogDevice</em> directory you can run this: <code>git submodule update --recursive</code></p>
-</blockquote>
-<p>This creates a top-level <code>LogDevice</code> directory, with the source code in <code>LogDevice/logdevice</code>. There are several git submodules in the tree: <code>LogDevice/logdevice/external/</code>.</p>
-<h2><a class="anchor" aria-hidden="true" id="install-build-dependencies"></a><a href="#install-build-dependencies" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Install build dependencies</h2>
-<p>Key dependencies that you need to build LogDevice:</p>
-<ul>
-<li>CMake (minimum <em>3.4.0</em>)</li>
-<li>C++ compiler that support <em>C++17</em> or higher (We will require C++20 soon!)</li>
-<li>Python <em>3.6+</em> and virtualenv</li>
-<li>Cython <em>0.28.6</em> (due to <a href="https://github.com/cython/cython/issues/2985">https://github.com/cython/cython/issues/2985</a>)</li>
-<li>Boost C++ Libraries (minimum <em>1.55.0</em>)</li>
-<li>LibEvent</li>
-<li>Zookeeper MT C++ client library</li>
-<li>Other packages in <code>LogDevice/logdevice/build_tools/ubuntu.deps</code></li>
-</ul>
-<pre><code class="hljs css language-shell-session">sudo apt-get install -y <span class="hljs-constructor">$(<span class="hljs-params">cat</span> LogDevice<span class="hljs-operator">/</span><span class="hljs-params">logdevice</span><span class="hljs-operator">/</span><span class="hljs-params">build_tools</span><span class="hljs-operator">/</span><span class="hljs-params">ubuntu</span>.<span class="hljs-params">deps</span>)</span>
+<p>This creates a top-level <code>LogDevice</code> directory, with the source code in <code>LogDevice/logdevice</code>. There are two git submodules in the tree: <code>logdevice/external/folly</code> and <code>logdevice/external/rocksdb</code>.</p>
+<p><strong>Install packages that LogDevice depends on.</strong></p>
+<pre><code class="hljs css language-shell">sudo apt-get install -y $(cat LogDevice/logdevice/build_tools/ubuntu.deps)
 </code></pre>
-<blockquote>
-<p>If the command fails with <code>Unable to locate package</code>, run <code>sudo apt-get update</code> to update the package list.</p>
-</blockquote>
-<h2><a class="anchor" aria-hidden="true" id="create-a-build-directory"></a><a href="#create-a-build-directory" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Create a build directory</h2>
-<p>This directory will contain the build artifacts and the staging environment at
-which we will some of the dependenciees that <code>cmake</code> will fetch during build. It
-will also be the home for a Python virtual environment that can run <code>ldshell</code>
-and has all the neecessary libraries and dependencies ready for use. This
-staging environment will be created in <code>staging/usr/local/</code> under the build
-directory.</p>
-<blockquote>
-<p>Make sure that you have <code>virtualenv</code> available by running <code>python3 -m pip install virtualenv</code> before proceeding.</p>
-</blockquote>
-<pre><code class="hljs css language-shell-session"><span class="hljs-comment"># The top-level build directory</span>
-<span class="hljs-attr">mkdir</span> <span class="hljs-string">-p LogDevice/_build</span>
-<span class="hljs-comment"># The home for the virtualenv</span>
-<span class="hljs-attr">mkdir</span> <span class="hljs-string">-p LogDevice/_build/staging/usr/local</span>
-<span class="hljs-comment"># You need to run the next build commands</span>
-<span class="hljs-attr">cd</span> <span class="hljs-string">LogDevice/_build</span>
-<span class="hljs-comment"># Create the virtualenv</span>
-<span class="hljs-attr">python3</span> <span class="hljs-string">-m virtualenv staging/usr/local</span>
-<span class="hljs-comment"># Use the virtualenv</span>
-<span class="hljs-attr">source</span> <span class="hljs-string">./staging/usr/local/bin/activate</span>
+<p>If the command fails with &quot;Unable to locate package&quot;, run <code>sudo apt-get update</code> to update the package list.</p>
+<p>** Fedora only - Install packages. **</p>
+<pre><code class="hljs css language-shell">sudo yum install $(cat LogDevice/logdevice/build_tools/fedora.deps)
 </code></pre>
-<h3><a class="anchor" aria-hidden="true" id="install-the-python-dependencies-in-the-virtualenv"></a><a href="#install-the-python-dependencies-in-the-virtualenv" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Install the python dependencies in the virtualenv</h3>
-<blockquote>
-<p>Make sure that you are (in) the virtualenv before running the next commands
-<code>source ./staging/usr/local/bin/activate</code></p>
-</blockquote>
-<pre><code class="hljs css language-shell-session">python3 -m pip install --upgrade setuptools wheel cython==<span class="hljs-number">0.28</span><span class="hljs-number">.6</span>
+<p>You also need mstch, which is not shipped with Fedora, so clone and build it:</p>
+<pre><code class="hljs css language-shell">git clone https://github.com/no1msd/mstch.git
+cd mstch
+mkdir build
+cd build
+cmake ..
+make &amp;&amp; make install
+cd
 </code></pre>
-<h2><a class="anchor" aria-hidden="true" id="start-the-build"></a><a href="#start-the-build" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Start the build</h2>
-<pre><code class="hljs css language-shell-session">cmake <span class="hljs-attribute">-Dthriftpy3</span>=ON <span class="hljs-built_in">..</span>/logdevice/
+<p><strong>Create a build directory.</strong></p>
+<pre><code class="hljs css language-shell">mkdir -p LogDevice/_build
+cd LogDevice/_build
+</code></pre>
+<p><strong>Run cmake to configure the build.</strong></p>
+<pre><code class="hljs css language-shell">cmake ../logdevice/
 </code></pre>
 <p><strong>Run make from <code>LogDevice/_build</code> directory.</strong></p>
-<pre><code class="hljs css language-shell-session">make -j <span class="hljs-constructor">$(<span class="hljs-params">nproc</span>)</span>
+<pre><code class="hljs css language-shell">make -j $(nproc)
 </code></pre>
 <p><code>-j $(nproc)</code> sets building concurrency equal to the number of processor cores.</p>
-<p>If the build does not complete successfully, particularly if you get an <code>internal compiler error</code>,
+<p>If the build does not complete successfully, particularly if you get an internal compiler error,
 you may need to reduce the number of parallel jobs. In the above make command, try <code>make -j 4</code> or <code>make -j 2</code>.</p>
-<h2><a class="anchor" aria-hidden="true" id="built-binaries-and-libraries-build-artifacts"></a><a href="#built-binaries-and-libraries-build-artifacts" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Built binaries and libraries (Build Artifacts)</h2>
-<p>Upon successful completion, the build process creates the following binaries and libraries:</p>
-<h3><a class="anchor" aria-hidden="true" id="daemon-binaries"></a><a href="#daemon-binaries" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Daemon binaries</h3>
+<h2><a class="anchor" aria-hidden="true" id="built-binaries-and-libraries"></a><a href="#built-binaries-and-libraries" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Built binaries and libraries</h2>
+<p>On successful completion, the build process creates the following binaries and libraries:</p>
 <ul>
-<li><code>_build/bin/logdeviced</code> The LogDevice server</li>
-<li><code>_build/bin/ld-admin-server</code> The LogDevice server admin server</li>
+<li><code>_build/bin/logdeviced</code> -- the LogDevice server</li>
+<li><code>_build/lib/liblogdevice.{a,so}</code> -- the LogDevice client library</li>
+<li><code>_build/bin/ld{write,cat,tail,trim}</code> -- simple utilities for writing into a log, reading from a log, tailing a log, and trimming a log.</li>
+<li><code>_build/bin/ld-dev-cluster</code> -- a test utility that configures and runs a test LogDevice cluster on the local machine</li>
 </ul>
-<h3><a class="anchor" aria-hidden="true" id="logdevice-shared-libraries"></a><a href="#logdevice-shared-libraries" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>LogDevice Shared Libraries</h3>
-<ul>
-<li><code>_build/lib/liblogdevice.{a,so}</code> The logdevice client library for C++ clients.</li>
-<li><code>_build/lib/liblogdevice_python_util.so</code> A utility library used by our Python bindings.</li>
-</ul>
-<h3><a class="anchor" aria-hidden="true" id="utilities"></a><a href="#utilities" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Utilities</h3>
-<ul>
-<li><code>_build/bin/ld-replication-checker</code> A data consistency checker.</li>
-<li><code>_build/bin/ld-dev-cluster</code> A utility that runs three node cluster locally
-with minimal dependencies. Useful for testing and development.</li>
-<li><code>_build/bin/ldcat</code> A utility to read a LogDevice log.  Records are printed to stdout, one per line.</li>
-<li><code>_build/bin/ldtail</code> A utility to tail a LogDevice log.  Records are printed to stdout, one per line.</li>
-<li><code>_build/bin/ldtrim</code> A utility to manually trim a LogDevice log.</li>
-</ul>
-<h3><a class="anchor" aria-hidden="true" id="runtime-dependency-libraries"></a><a href="#runtime-dependency-libraries" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Runtime dependency libraries:</h3>
-<ul>
-<li><code>_build/staging/usr/local/lib/*.so</code> Folly and thrift libraries. Copy these
-over to your system if you want to run outside
-the virtualenv.</li>
-</ul>
-<h3><a class="anchor" aria-hidden="true" id="administrative-tooling"></a><a href="#administrative-tooling" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Administrative Tooling</h3>
-<ul>
-<li><code>_build/staging/usr/local/bin/ldshell</code> LDShell has to run from the python
-virtualenv. Or use <code>make install</code> to install everything on your system.</li>
-<li><code>_build/python-out/dist/ldshell-*.whl</code> LDShell's Python3 wheel that you can
-use to install LDShell on your system (requires the next two wheel to be
-installed and the Runtime libraries (see above) to be installed)</li>
-<li><code>_build/folly-prefix/src/folly-build/folly/cybld/dist/folly-*.whl</code> is folly's Python3 wheel that you can install on your system (already installed on the virtualenv).</li>
-<li><code>_build/fbthrift-prefix/src/fbthrift-build/thrift/lib/py3/cybld/dist/thrift-*.whl</code> is thrift's Python3 wheel that you can install on your system (already installed on the virtualenv).</li>
-</ul>
-<h3><a class="anchor" aria-hidden="true" id="installation"></a><a href="#installation" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Installation</h3>
-<p>You can use the standard <code>make install</code> inside the build directory to install
-logdevice components on your system (including ldshell). But note the following:</p>
-<blockquote>
-<p>This will <em>not</em> install thrift and folly shared libararies. For these you need
-to manually copy them over onto your <code>/usr/local/lib/</code> directory.</p>
-</blockquote>
+<p>To install these binaries and <a href="/docs/LDShell.html">LDShell</a> into your system, run:</p>
+<pre><code class="hljs css language-shell">sudo make install
+</code></pre>
 <h2><a class="anchor" aria-hidden="true" id="debug-and-release-builds"></a><a href="#debug-and-release-builds" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Debug and release builds</h2>
 <p>If you prefer to keep separate debug and release builds, create <code>_build/debug</code> and <code>_build/release</code> subdirectories and run CMake in them with a flag to request the desired build type. For example:</p>
-<pre><code class="hljs css language-shell-session">cd LogDevice/_build/<span class="hljs-builtin-name">debug</span>
-cmake <span class="hljs-attribute">-Dthriftpy3</span>=ON <span class="hljs-attribute">-DCMAKE_BUILD_TYPE</span>=Debug <span class="hljs-built_in">..</span>/<span class="hljs-built_in">..</span>/logdevice
+<pre><code class="hljs css language-shell">cd LogDevice/_build/debug
+cmake -DCMAKE_BUILD_TYPE=Debug ../../logdevice
 make -j$(nproc)
 </code></pre>
 <h2><a class="anchor" aria-hidden="true" id="build-docker-image"></a><a href="#build-docker-image" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Build Docker image</h2>
-<p>You can build a Docker container that runs LogDevice using the Dockerfile under the <code>docker</code> directory. We build nightly docker images available on dockerhub so that you don't need to build them yourself. You can pull these with:</p>
-<pre><code class="hljs css language-shell-sssion">docker pull facebookincubator/<span class="hljs-string">logdevice:</span>latest
-</code></pre>
-<p>But if you want to build your own, make sure that you install and launch Docker. You may need to increase the number of resources available to Docker to avoid a build failure.</p>
-<p>You can build a <strong>production</strong> Docker image or a <strong>development</strong> one.
+<p>You can build a Docker container that runs LogDevice using the Dockerfile under the <code>docker</code> directory.</p>
+<p>First, install and launch Docker. You may need to increase the number of resources available to Docker to avoid a build failure.</p>
+<p>You can build a production Docker image or a development one.
 The development image is the container with all the development packages, including compiler tools, against which LogDevice developers compile.
 The binaries generated from the packages are combined with the run-time image to produce a Docker image.</p>
 <p>The production image is a few hundred megabytes in size while the development image is many gigabytes.</p>
 <p><strong>To build a production Docker image,</strong> from the root directory of the repo, enter the following command:</p>
-<pre><code class="hljs css language-shell-session">docker build -t logdevice-ubuntu -f docker/<span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">Dockerfile</span>.</span></span>ubuntu .
+<pre><code class="hljs css language-shell">docker build -t logdevice-ubuntu -f docker/Dockerfile.ubuntu .
 </code></pre>
 <p><strong>To build a development Docker image,</strong> from the root directory of the repo, enter the following command:</p>
-<pre><code class="hljs css language-shell-session">docker build -t logdevice-ubuntu -f docker/<span class="hljs-module-access"><span class="hljs-module"><span class="hljs-identifier">Dockerfile</span>.</span></span>ubuntu --target=builder .
+<pre><code class="hljs css language-shell">docker build -t logdevice-ubuntu -f docker/Dockerfile.ubuntu --target=builder .
 </code></pre>
 <p>This builds the Docker image, tags it with <code>logdevice-ubuntu</code>, and puts the binaries under <code>/usr/local/bin/</code> of the Docker image. So you can, for example, start the test cluster utility by running:</p>
-<pre><code class="hljs css language-shell-session">docker <span class="hljs-keyword">run</span> -it --<span class="hljs-keyword">rm</span> logdevice-ubuntu /usr/<span class="hljs-keyword">local</span>/bin/ld-dev-<span class="hljs-keyword">cluster</span>
+<pre><code class="hljs css language-shell">docker run -it logdevice-ubuntu /usr/local/bin/ld-dev-cluster
 </code></pre>
-</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/Concepts.html"><span class="arrow-prev">← </span><span>Architecture</span></a><a class="docs-next button" href="/docs/FirstCluster.html"><span>Creating your first cluster</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#clone-the-repo-and-build-from-the-source">Clone the repo and build from the source</a></li><li><a href="#install-build-dependencies">Install build dependencies</a></li><li><a href="#create-a-build-directory">Create a build directory</a><ul class="toc-headings"><li><a href="#install-the-python-dependencies-in-the-virtualenv">Install the python dependencies in the virtualenv</a></li></ul></li><li><a href="#start-the-build">Start the build</a></li><li><a href="#built-binaries-and-libraries-build-artifacts">Built binaries and libraries (Build Artifacts)</a><ul class="toc-headings"><li><a href="#daemon-binaries">Daemon binaries</a></li><li><a href="#logdevice-shared-libraries">LogDevice Shared Libraries</a></li><li><a href="#utilities">Utilities</a></li><li><a href="#runtime-dependency-libraries">Runtime dependency libraries:</a></li><li><a href="#administrative-tooling">Administrative Tooling</a></li><li><a href="#installation">Installation</a></li></ul></li><li><a href="#debug-and-release-builds">Debug and release builds</a></li><li><a href="#build-docker-image">Build Docker image</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2019 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+</span></div></article></div><div class="docs-prevnext"></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#clone-the-repo-and-build-from-the-source">Clone the repo and build from the source</a></li><li><a href="#built-binaries-and-libraries">Built binaries and libraries</a></li><li><a href="#debug-and-release-builds">Debug and release builds</a></li><li><a href="#build-docker-image">Build Docker image</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2019 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
                 document.addEventListener('keyup', function(e) {
                   if (e.target !== document.body) {
                     return;
