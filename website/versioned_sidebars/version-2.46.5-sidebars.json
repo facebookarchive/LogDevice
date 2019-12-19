@@ -1,41 +1,41 @@
 {
-  "version-2.46-docs": {
+  "version-2.46.5-docs": {
     "Getting started": [
-      "version-2.46-Overview",
-      "version-2.46-LocalCluster",
-      "version-2.46-Concepts",
-      "version-2.46-Installation"
+      "version-2.46.5-Overview",
+      "version-2.46.5-LocalCluster",
+      "version-2.46.5-Concepts",
+      "version-2.46.5-Installation"
     ],
     "Configuration": [
-      "version-2.46-FirstCluster",
-      "version-2.46-Config",
-      "version-2.46-Settings",
-      "version-2.46-Logs"
+      "version-2.46.5-FirstCluster",
+      "version-2.46.5-Config",
+      "version-2.46.5-Settings",
+      "version-2.46.5-Logs"
     ],
     "Administration": [
-      "version-2.46-LDShell",
-      "version-2.46-LDQuery"
+      "version-2.46.5-LDShell",
+      "version-2.46.5-LDQuery"
     ],
     "Concepts": [
-      "version-2.46-Writepath",
-      "version-2.46-ReadPath",
-      "version-2.46-Terminology",
-      "version-2.46-Consensus"
+      "version-2.46.5-Writepath",
+      "version-2.46.5-ReadPath",
+      "version-2.46.5-Terminology",
+      "version-2.46.5-Consensus"
     ],
     "Designs": [
-      "version-2.46-FailureDetection",
-      "version-2.46-Replication",
-      "version-2.46-Recovery",
-      "version-2.46-TrafficShaping",
-      "version-2.46-Rebuilding",
-      "version-2.46-LogsDB"
+      "version-2.46.5-FailureDetection",
+      "version-2.46.5-Replication",
+      "version-2.46.5-Recovery",
+      "version-2.46.5-TrafficShaping",
+      "version-2.46.5-Rebuilding",
+      "version-2.46.5-LogsDB"
     ],
     "API": [
-      "version-2.46-API_Introduction",
-      "version-2.46-API_Doxygen"
+      "version-2.46.5-API_Introduction",
+      "version-2.46.5-API_Doxygen"
     ],
     "Extending LogDevice": [
-      "version-2.46-WritingPlugins"
+      "version-2.46.5-WritingPlugins"
     ]
   }
 }
