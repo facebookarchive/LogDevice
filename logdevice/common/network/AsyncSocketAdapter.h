@@ -308,6 +308,7 @@ class AsyncSocketAdapter
         std::shared_ptr<const fizz::client::FizzClientContext> fizzClientCtx,
         std::shared_ptr<const fizz::CertificateVerifier> fizzCertVerifier)
         : owner_(owner),
+          user_cb_(cb),
           fizzClientCtx_(std::move(fizzClientCtx)),
           fizzCertVerifier_(std::move(fizzCertVerifier)) {}
 
@@ -325,7 +326,7 @@ class AsyncSocketAdapter
     void fizzHandshakeSuccess(fizz::client::AsyncFizzClient*) noexcept override;
 
     AsyncSocketAdapter& owner_;
-    folly::AsyncSocket::ConnectCallback* user_cb_;
+    folly::AsyncSocket::ConnectCallback* user_cb_{nullptr};
     const std::shared_ptr<const fizz::client::FizzClientContext> fizzClientCtx_;
     const std::shared_ptr<const fizz::CertificateVerifier> fizzCertVerifier_;
   };
