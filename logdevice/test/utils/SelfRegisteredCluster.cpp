@@ -13,11 +13,8 @@ using namespace facebook::logdevice::configuration::nodes;
 
 /* static */ std::unique_ptr<Cluster>
 SelfRegisteredCluster::create(ClusterFactory&& factory) {
-  return factory
-      // Dummy metadata to satisfy the parser
-      // TODO: Get rid of requiring the metadata config for NCM enabled
-      // clusters.
-      .setMetaDataLogsConfig(createMetaDataLogsConfig({1, 2}, 1))
+  // Don't write the metadata logs section to config.
+  return factory.setMetaDataLogsConfig(Configuration::MetaDataLogsConfig())
       .setNodesConfigurationSourceOfTruth(
           IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
       .useHashBasedSequencerAssignment()

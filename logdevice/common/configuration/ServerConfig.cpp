@@ -570,24 +570,8 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
     meta_nodeset.push_back(index);
   }
 
-  folly::dynamic metadata_logs =
-      getMetaDataLogGroupInDir().toFollyDynamic(true /*is_metadata*/);
-
-  metadata_logs["nodeset"] = meta_nodeset;
-  metadata_logs["nodeset_selector"] =
-      NodeSetSelectorTypeToString(metaDataLogsConfig_.nodeset_selector_type);
-  metadata_logs["sequencers_write_metadata_logs"] =
-      metaDataLogsConfig_.sequencers_write_metadata_logs;
-  metadata_logs["sequencers_provision_epoch_store"] =
-      metaDataLogsConfig_.sequencers_provision_epoch_store;
-  auto& metadata_version = metaDataLogsConfig_.metadata_version_to_write;
-  if (metadata_version.hasValue()) {
-    metadata_logs["metadata_version"] = metadata_version.value();
-  }
-
   folly::dynamic json_all = folly::dynamic::object("cluster", clusterName_)(
       "version", version_.val())("nodes", nodesConfig_.toJson())(
-      "metadata_logs", std::move(metadata_logs))(
       "internal_logs", internalLogs_.toDynamic())(
       "principals", principalsConfig_.toFollyDynamic())(
       "read_throttling", readIOShapingConfig_.toFollyDynamic())(
@@ -595,6 +579,27 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
       "server_settings", folly::toDynamic(serverSettingsConfig_))(
       "client_settings", folly::toDynamic(clientSettingsConfig_))(
       "trace-logger", traceLoggerConfig_.toFollyDynamic());
+
+  // In the NCM world, the metadata_logs section won't exit. Let's only
+  // serialize it if it exists.
+  if (getMetaDataLogGroup() != nullptr) {
+    folly::dynamic metadata_logs =
+        getMetaDataLogGroupInDir().toFollyDynamic(true /*is_metadata*/);
+
+    metadata_logs["nodeset"] = meta_nodeset;
+    metadata_logs["nodeset_selector"] =
+        NodeSetSelectorTypeToString(metaDataLogsConfig_.nodeset_selector_type);
+    metadata_logs["sequencers_write_metadata_logs"] =
+        metaDataLogsConfig_.sequencers_write_metadata_logs;
+    metadata_logs["sequencers_provision_epoch_store"] =
+        metaDataLogsConfig_.sequencers_provision_epoch_store;
+    auto& metadata_version = metaDataLogsConfig_.metadata_version_to_write;
+    if (metadata_version.hasValue()) {
+      metadata_logs["metadata_version"] = metadata_version.value();
+    }
+
+    json_all["metadata_logs"] = std::move(metadata_logs);
+  }
 
   if (clusterCreationTime_.hasValue()) {
     json_all["cluster_creation_time"] = clusterCreationTime_.value().count();

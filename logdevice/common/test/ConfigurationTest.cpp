@@ -503,6 +503,8 @@ TEST(ConfigurationTest, NoNodesNoMetadata) {
   std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
       TEST_CONFIG_FILE("no_nodes_no_metadata.conf")));
   ASSERT_NE(config, nullptr);
+  // Assert that serializing the config back doesn't crash.
+  config->toString();
 }
 
 /**
