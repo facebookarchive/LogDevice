@@ -43,14 +43,8 @@
       }
     }
   },
-  "metadata_logs": {
-    "nodeset": [],
-    "replicate_across": { "node": 3 }
-  },
   "zookeeper": {
-    "quorum": [
-      ""
-    ],
+    "zookeeper_uri": "ip://zookeeper-0.zookeeper-headless:2181,zookeeper-1.zookeeper-headless:2181,zookeeper-2.zookeeper-headless:2181",
     "timeout": "30s"
   }
 }
