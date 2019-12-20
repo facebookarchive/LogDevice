@@ -1,0 +1,324 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><title>LogDevice Admin Server (Control Plane) · LogDevice</title><meta name="viewport" content="width=device-width"/><meta name="generator" content="Docusaurus"/><meta name="description" content="The standalone Admin Server (`bin/ld-admin-server`) is a side-car service that runs next to any LogDevice cluster. It extracts the necessary components that are needed to serve the [Admin API](https://github.com/facebookincubator/LogDevice/blob/master/logdevice/admin/if/admin.thrift) requests into its own daemon that can be deployed with its own release cadence."/><meta name="docsearch:version" content="next"/><meta name="docsearch:language" content="en"/><meta property="og:title" content="LogDevice Admin Server (Control Plane) · LogDevice"/><meta property="og:type" content="website"/><meta property="og:url" content="https://logdevice.io/index.html"/><meta property="og:description" content="The standalone Admin Server (`bin/ld-admin-server`) is a side-car service that runs next to any LogDevice cluster. It extracts the necessary components that are needed to serve the [Admin API](https://github.com/facebookincubator/LogDevice/blob/master/logdevice/admin/if/admin.thrift) requests into its own daemon that can be deployed with its own release cadence."/><meta property="og:image" content="https://logdevice.io/img/logdevice_og.png"/><meta name="twitter:card" content="summary"/><meta name="twitter:image" content="https://logdevice.io/img/logdevice.png"/><link rel="shortcut icon" href="/img/favicon.png"/><link rel="stylesheet" href="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.css"/><link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css"/><link rel="alternate" type="application/atom+xml" href="https://logdevice.io/blog/atom.xml" title="LogDevice Blog ATOM Feed"/><link rel="alternate" type="application/rss+xml" href="https://logdevice.io/blog/feed.xml" title="LogDevice Blog RSS Feed"/><script>
+              (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+              (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+              m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+              })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+              ga('create', 'UA-137238014-1', 'auto');
+              ga('send', 'pageview');
+            </script><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><a href="/versions.html"><h3>next</h3></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/next/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/help.html" target="_self">Support</a></li><li class=""><a href="https://github.com/facebookincubator/LogDevice" target="_self">GitHub</a></li><li class=""><a href="/blog/" target="_self">Blog</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Administration</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Getting started<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/next/Overview.html">Overview</a></li><li class="navListItem"><a class="navItem" href="/docs/next/LocalCluster.html">Quickstart</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Concepts.html">Architecture</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Installation.html">Build LogDevice</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Configuration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/next/FirstCluster.html">Creating your first cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Config.html">Cluster configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Settings.html">Settings</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Logs.html">Log configuration</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Administration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem navListItemActive"><a class="navItem" href="/docs/next/administration/AdminServer.html">Admin Server (Control Plane)</a></li><li class="navListItem"><a class="navItem" href="/docs/next/administration/LDShell.html">LogDevice Shell</a></li><li class="navListItem"><a class="navItem" href="/docs/next/administration/LDQuery.html">LDQuery</a></li><li class="navListItem"><a class="navItem" href="/docs/next/administration/ClusterMaintenance.html">Cluster Maintenance</a></li><li class="navListItem"><a class="navItem" href="/docs/next/administration/SafetyChecker.html">Operations Safety Checker</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Concepts<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/next/Writepath.html">Write path</a></li><li class="navListItem"><a class="navItem" href="/docs/next/ReadPath.html">Read path</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Terminology.html">Terminology</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Consensus.html">Distributed consensus</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Designs<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/next/FailureDetection.html">Failure detection</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Replication.html">Log replication configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Recovery.html">Recovery after the failure of a sequencer</a></li><li class="navListItem"><a class="navItem" href="/docs/next/TrafficShaping.html">Traffic shaping</a></li><li class="navListItem"><a class="navItem" href="/docs/next/Rebuilding.html">Rebuilding</a></li><li class="navListItem"><a class="navItem" href="/docs/next/LogsDB.html">LogsDB</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">API<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/next/API_Introduction.html">Client library API</a></li><li class="navListItem"><a class="navItem" href="/docs/next/API_Doxygen.html">Reference</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Extending LogDevice<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/next/WritingPlugins.html">Writing plugins</a></li></ul></div></div></section></div><script>
+            var coll = document.getElementsByClassName('collapsible');
+            var checkActiveCategory = true;
+            for (var i = 0; i < coll.length; i++) {
+              var links = coll[i].nextElementSibling.getElementsByTagName('*');
+              if (checkActiveCategory){
+                for (var j = 0; j < links.length; j++) {
+                  if (links[j].classList.contains('navListItemActive')){
+                    coll[i].nextElementSibling.classList.toggle('hide');
+                    coll[i].childNodes[1].classList.toggle('rotate');
+                    checkActiveCategory = false;
+                    break;
+                  }
+                }
+              }
+
+              coll[i].addEventListener('click', function() {
+                var arrow = this.childNodes[1];
+                arrow.classList.toggle('rotate');
+                var content = this.nextElementSibling;
+                content.classList.toggle('hide');
+              });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              var headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                var el = event.target;
+                while(el !== headings){
+                  if (el.tagName === 'A') {
+                    document.body.classList.remove('tocActive');
+                    break;
+                  } else{
+                    el = el.parentNode;
+                  }
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">LogDevice Admin Server (Control Plane)</h1></header><article><div><span><p>The standalone Admin Server (<code>bin/ld-admin-server</code>) is a side-car service that runs next to any LogDevice cluster. It extracts the necessary components that are needed to serve the <a href="https://github.com/facebookincubator/LogDevice/blob/master/logdevice/admin/if/admin.thrift">Admin API</a> requests into its own daemon that can be deployed with its own release cadence.</p>
+<p>The admin server also runs embedded in every <code>logdeviced</code> instance but with a
+lot of the features disabled. This gives the flexibility of running a separate
+administrative service that runs on its own host (for reliability and separation
+of concerns purposes) or you can pick one of the nodes of the cluster and
+enable the necessary features on the admin server component of this <code>logdeviced</code> instance. (e.g, by passing to enable maintenance manager <code>--enable-maintenance-manager</code>).</p>
+<p>Note that the temporary unavailability of the standalone admin server will not
+affect the critical path of the service. LogDevice storage nodes and sequencers
+will continue to be operational but you will lose the ability to introspect some
+of the state and all <a href="/docs/next/administration/ClusterMaintenance.html">maintenance operations</a> will wait until
+the standalone admin server is started again.</p>
+<blockquote>
+<p>Recommendation: We prefer running a separate admin server (standalone service)
+per cluster which can be updated and pushed with a different release train
+than the storage daemons.</p>
+</blockquote>
+<h2><a class="anchor" aria-hidden="true" id="running-the-admin-server"></a><a href="#running-the-admin-server" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Running the Admin Server</h2>
+<p>The following is the recommended set of arguments to pass to the admin server:</p>
+<pre><code class="hljs css language-shell-session">ld-admin-server <span class="hljs-string">\</span>
+    --config-path &lt;path&gt; <span class="hljs-string">\</span>
+    --enable-maintenance-manager <span class="hljs-string">\</span>
+    --enable-safety-check-periodic-metadata-update <span class="hljs-string">\</span>
+    --safety-check-metadata-update-period=<span class="hljs-number">1min</span> <span class="hljs-string">\</span>
+    --maintenance-log-snapshotting=<span class="hljs-literal">true</span> <span class="hljs-string">\</span>
+</code></pre>
+<blockquote>
+<p>Some of these arguments will be the default soon but for now we need to set
+them explicitly.</p>
+</blockquote>
+<h2><a class="anchor" aria-hidden="true" id="what-is-the-admin-api"></a><a href="#what-is-the-admin-api" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>What is the Admin API?</h2>
+<p>The Admin API is a thrift RPC service that offers a gateway for tooling and
+automation to perform introspection queries or maintenance operations on a given
+cluster. The <a href="https://github.com/facebookincubator/LogDevice/blob/master/logdevice/admin/if/admin.thrift">thrift IDL file</a> is well documented.</p>
+<p>Most of the command that you see in <a href="/docs/next/administration/LDShell.html">LDShell</a> use the Admin API
+behind the scenes to offer the functionality but you can write your own client
+in your favorite language if you need to build automation on top of it.</p>
+<p><img src="/docs/assets/admin_server_overview.png" alt="Admin Server Overview" title="Admin Server Overview"></p>
+<h2><a class="anchor" aria-hidden="true" id="why-do-we-need-admin-server"></a><a href="#why-do-we-need-admin-server" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Why do we need Admin Server?</h2>
+<p>The admin server hosts a critical event-driven orchestration component called
+the <a href="#the-maintenance-manager">Maintenance Manager</a>. It's the component that powers the automatic
+execution and tracking of <a href="/docs/next/administration/ClusterMaintenance.html">maintenance operations</a> in a safe
+and convergent fashion. Later in this document we will explain all of that in
+details.</p>
+<p>The admin server is also a great non-intrusive way to simulate outages via the
+internal <a href="/docs/next/administration/SafetyChecker.html">Safety Checker</a> that will give you confidence in
+whether an operation can be done safely or not.</p>
+<blockquote>
+<p>Note that <strong>Maintenance Manager</strong> will make sure that any maintenance request
+is safe before performing any action on the cluster, so in most cases if you
+don't need to run the safety checker simulations manually. But it can be
+useful if you just want to test a scenario without applying it.</p>
+</blockquote>
+<h2><a class="anchor" aria-hidden="true" id="the-maintenance-manager"></a><a href="#the-maintenance-manager" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>The Maintenance Manager</h2>
+<p>The maintenane manager is a central event-driven orchestration system for
+LogDevice clusters. It is responsible for guaranteeing safety of maintenance
+operations and automatic sequencing and resolution of maintenance requests
+coming from different actors or users.</p>
+<p><img src="/docs/assets/maintenance-manager-design.jpg" alt="Maintenance Manager Internals" title="Maintenance Manager Internals"></p>
+<h3><a class="anchor" aria-hidden="true" id="key-features"></a><a href="#key-features" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Key Features</h3>
+<ol>
+<li><strong>Cluster membership management</strong>: In conjunction with the
+<code>node-self-registration</code> feature in logdeviced and the zookeeper-backed nodes
+configuration store. Maintenance manager orchestrates cluster toplogy changes
+by driving the maintenance transitions necessary to get the new nodes ready
+to serve production traffic or drain them cleanly to ensure safety of node
+removal if a cluster shrink operation is needed.</li>
+<li><strong>Data durability management</strong>: Upon requesting maintenance operations that
+will result in long-term unavailability of a storage node or in cases where
+data can be under-replicated for periods that go beyond the
+<code>self-initiated-rebuilding-grace-period</code>, Maintenance manager will trigger
+data re-replication/rebuilding to restore the durability requirements and
+apply internal maintenance automatically.</li>
+<li><strong>Maintenance operations management</strong>: It's responsible for storing
+maintenance requests along with metadata information in a couple of internal
+logdevice logs. The maintenance requests represent maintenance <em>targets</em> that
+will be stored and asynchronously evaluated. The maintenance manager will
+only attempt to change the current status to the target it it's safe to do so
+via the <a href="/docs/next/administration/SafetyChecker.html">Safety Checker</a>. If an operation is unsafe, it
+will block the maintenance until it's safe. It will continuously evaluate all
+blocked maintenances and allow some of them to proceed if it became safe.
+There is no need to manually retry maintenances externally since this is an
+automatic convergent system.</li>
+<li><strong>Metadata logs nodeset management</strong>: As the user drains more nodes, the
+maintenance manager will attempt to extend the internal nodeset for metadata
+logs with nodes that are <code>ENABLED</code>. This increases the chances of future
+maintenances succeeding by reducing internal dependency on nodes that are
+already drained.</li>
+<li><strong>Operational observability</strong>: The maintenance manager offers great
+introspection abilities into the internals (available via ldshell's
+<code>maintenance</code> set of commands). It helps users understand why maintenances
+are blocked and what is the current state of the system.</li>
+</ol>
+<h3><a class="anchor" aria-hidden="true" id="per-shard-maintenances"></a><a href="#per-shard-maintenances" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Per-shard maintenances</h3>
+<p>Maintenance manager supports performing maintenance on the granularity of a single
+shard/disk attached to a single <code>logdeviced</code> storage node. You can apply the
+maintenance on all shards for a given node as well or multiple nodes in a
+single maintenance. The API and ldshell commands give you the control to perform
+any type of maintenance that you require.</p>
+<p>A maintenance for a given shard means that you want to change it's
+<code>ShardOperationalState</code> from <code>ENABLED</code> to one of the following possible targets:</p>
+<ul>
+<li><code>MAY_DISAPPEAR</code>: A shard/node in this state means that it's safe to unplug the
+disk or if all shards on a given logdeviced have reached that state it means
+that it's safe to stop the <code>logdeviced</code> hosting these shards. <code>MAY_DISAPPEAR</code>
+means that it's <em>safe to take this shard/node down</em> but it also means that we
+don't expect this shard/node to be taken down for too long. This is due to the
+fact that in this state we accept a temporary under-replication of data as long
+as we have enough copies left to maintain read/write/rebuilding availability
+(see <a href="/docs/next/administration/SafetyChecker.html">Safety Checker</a> for details). The shard/node in this
+state will internally switch itself to <code>READ_ONLY</code> storage state, so as long as
+the daemon is <code>ALIVE</code> we will be serving read traffic. If the node/shard is
+stopped (became unavailable by any means) a timer will kick in against the
+configured <code>self-initiated-rebuilding-grace-period</code> setting. If the node didn't
+come back <code>ALIVE</code> within this grace period, the system will apply an internal
+maintenance with a target <code>DRAINED</code> on this shard/node to restore the
+replication factor automatically. See <a href="#stacking-maintenances">Stacking
+Maintenances</a> on how this works.</li>
+<li><code>DRAINED</code>: a shard/node in this state means that we don't need the data on
+this node anymore. Taking this node down, wiping it, or even removing it
+completely from the cluster won't affect availability nor replication factor
+(data durability). It also implies that a <code>DRAINED</code> node also matches the
+<code>MAY_DISAPPEAR</code> state. So, any node/shard that is in <code>DRAINED</code> is considered
+safe to disappear at any time. Internally, we will stop serving reads or writes
+from this node.</li>
+</ul>
+<p>Note that in maintenances you have to choose between <code>MAY_DISAPPEAR</code> and
+<code>DRAINED</code> only. The list of other possible values for <code>ShardOperationalState</code>
+are not valid targets but they can represent transitional states that the
+system uses to describe the internal transitions.</p>
+<p>Checkout the documentation in the <a href="https://github.com/facebookincubator/LogDevice/blob/master/logdevice/admin/if/nodes.thrift">thrift IDL file</a> with
+a description on each possible value for <code>ShardOperationalState</code>.</p>
+<h3><a class="anchor" aria-hidden="true" id="sequencer-maintenances"></a><a href="#sequencer-maintenances" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Sequencer maintenances</h3>
+<p>Maintenance manager also supports applying maintenance on the sequencers running
+on nodes. Sequencers are much simpler in the sense that you can only <strong>disable</strong>
+sequencers on a given node. Assuming that safety checker allows this transition,
+the node will stop being a target for running sequencers and the active
+sequencers running on that node will move away to another node.</p>
+<h3><a class="anchor" aria-hidden="true" id="stacking-maintenances"></a><a href="#stacking-maintenances" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Stacking Maintenances</h3>
+<p>Maintenance manager supports the notion of maintenance stacking. For any given
+storage node or sequencer node, multiple maintenances with different targets can
+be applied at the same time. There are a few rules around this design, if the
+maintenances being created didn't match the rules, you will receive a
+<code>MaintenanceClash</code> exception.</p>
+<p>The set of rules are:</p>
+<ul>
+<li>You cannot apply multiple maintenances by the same <code>user</code> (as defined in
+<code>MaintenanceDefinition</code>) on nodes/shards that overlap with existing
+maintenances unless the new maintenance and the existing maintenance are
+<strong>identical</strong>. In this case, the system will return the existing maintenance
+progress instead of creating a new one. So, applying the exact maintenance
+multiple times is a no-op and will return the progress for the existing
+maintenance instead of creating a new one. However, if the <code>user</code> is different,
+a new maintenance is created.</li>
+<li>A shard/node/sequencer that has reached the maintenance target (<code>DRAINED</code> or
+<code>DISABLED</code> for sequencers) <strong>will remain</strong> in that state as long as the
+maintenance is <strong>not</strong> removed. This is the system guarantee that allows users
+to take actions on a shard/node <strong>after</strong> the <em>current</em> state reaches the
+<em>target</em>. You can think of it as a lease acquisition on the resource. However,
+applying the maintenance on its own without waiting for the maintenance to be
+applied (current &lt; target) is not a guarantee by any means.</li>
+<li>The shard/node will not switch themselves into <code>ENABLED</code> unless <strong>all</strong>
+maintenances have been removed from a shard/node. However, a shard/node may go
+from <code>DRAINED</code> to <code>MAY_DISAPPEAR</code> if all maintenances that need this shard/node
+to in <code>DRAINED</code> state are removed, given that we still have maintenances that
+require the shard/node to be in <code>MAY_DISAPPEAR</code>. This works since <code>DRAINED</code> &gt;
+<code>MAY_DISAPPEAR</code>.</li>
+</ul>
+<p>As a general rule, users of the maintenance manager will need to do the
+following to guarantee safety of external operations:</p>
+<ol>
+<li>Apply a maintenance with the appropriate <code>user</code> on the given set of
+shards/nodes/sequencers. This is <strong>always</strong> required even if we know that the
+<em>current</em> operational state matches what we need. It's needed because we
+don't have any guarantees that the existing maintenances will not be removed
+while we are performing our own operations, so we need to apply our own
+maintenances to acquire a lease that protect safety.</li>
+<li>Monitor the current operational state of the nodes/shards until all of them
+reach <strong>at least</strong> the target that we are waiting. For
+<code>ShardOperationalState</code> it means that <code>DRAINED</code> is the strongest guarantee
+and <code>DRAINED</code> &gt; <code>MIGRATING_DATA</code> &gt; <code>MAY_DISAPPEAR</code>. So, if the shard is in
+<code>MIGRATING_DATA</code> then it <strong>must</strong> be safe to take it down. In order to
+reduce th complexity behind this reasoning, the <code>MaintenanceDefinition</code> (and
+also in ldshell output for maintenance commands) includes
+<code>MaintenanceProgress</code> that sums all of that up. If <code>MaintenanceProgress</code> for
+your maintenance is <code>COMPLETED</code> then this is all what you need to know to go
+ahead and apply your operations.</li>
+<li>After you finish your operations (restarts, wiping, etc.). You <strong>must</strong>
+remove the maintenance that you applied. You shouldn't remove other
+maintenances applied on the shard/node unless this is <em>really</em> what you want.</li>
+</ol>
+<blockquote>
+<p>Note that if all nodes/shards in a given maintenance have been removed from
+the cluster, the maintenance will be automatically purged asynchronously.</p>
+</blockquote>
+<h2><a class="anchor" aria-hidden="true" id="maintenance-ttl"></a><a href="#maintenance-ttl" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Maintenance TTL</h2>
+<p>Maintenance manager supports applying a <code>time-to-live</code> value in seconds after
+which the maintenance will automatically be removed regardless of its progress
+or status. This is set to <code>0</code> by default (never expire). It's generally used to
+set an upper bound on maintenance durations to avoid dangling maintenances that
+are left over by automation or tooling.</p>
+<h2><a class="anchor" aria-hidden="true" id="grouped-maintenances"></a><a href="#grouped-maintenances" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Grouped Maintenances</h2>
+<p>When applying a new <code>MaintenanceDefinition</code> to the maintenance manager, the
+scheduling, order of execution, and the safety evalution are dependent on
+whether the user accepts whether it's okay to have partial progress on
+maintenances or not.</p>
+<p>In order to explain this, let's run through a set of example scenarios:</p>
+<h3><a class="anchor" aria-hidden="true" id="all-or-nothing-maintenances"></a><a href="#all-or-nothing-maintenances" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>All-or-nothing Maintenances</h3>
+<p>A user <code>Foo</code> applies a <code>MAY_DISAPPEAR</code> maintenance on <strong>all</strong> nodes of the
+cluster. By default we have <code>group = true</code> set on the <code>MaintenanceDefinition</code>.
+This is also true in <code>ldshell</code> maintenance commands.</p>
+<p>In this scenario, since <code>group</code> is set to <code>true</code>. Maintenance manager assumes
+that the user cannot accept partial results, so it passes the entire set of
+nodes of the cluster to <a href="/docs/next/administration/SafetyChecker.html">Safety Checker</a> which will
+definitely <strong>reject</strong> this maintenance request since we will lose availability,
+capacity, and data. So, <strong>none</strong> of the nodes will proceed into <code>MAY_DISAPPEAR</code>
+and this maintenance will appear as <code>BLOCKED_UNTIL_SAFE</code>. The entire maintenance
+is considered as a transactional unit. It's all or nothing.</p>
+<h3><a class="anchor" aria-hidden="true" id="exploded-maintenances"></a><a href="#exploded-maintenances" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Exploded Maintenances</h3>
+<p>For the previous scenario, if the user supplies <code>group=false</code>. The maintenance
+manager will explode the maintenance request into <code>N</code> requests where <code>N</code> equals
+the total number of nodes that this maintenance references. It will group
+sequencer and shard maintenances for every node into its own maintenance, so you
+get exploded <code>N</code> maintenancees that can do progress on their own without waiting
+on the rest of the exploded maintenances.</p>
+<p>What this means for the scenario above is that we will allow the <em>maximum</em>
+number of nodes to go into <code>MAY_DISAPPEAR</code> safely before rejecting the rest of
+the created maintenances with <code>BLOCKED_UNTIL_SAFE</code>. In this case, the result of
+the operation is a <em>set</em> of maintenances, some will be allowed to be <code>COMPLETED</code>
+while others will be <code>BLOCKED_UNTIL_SAFE</code>. The user can decide to finish
+operations on the nodes that are good to go.</p>
+<p>After finishing the operation, the user is allowed to <em>remove the individual</em>
+maintenances for these nodes. Since this is a convergent system, the next batch
+of maintenances will be allowed to unblock and again we will see a new set of
+maintenances going into <code>COMPLETED</code>.</p>
+<p>This can be used to perform something like a <em>rolling operation</em> on the cluster
+(maybe a rolling restart). Since you are not sure what is the maximum number of
+nodes that we can restart at the same time safely, you will need to apply a
+<code>group=false</code> maintenancen to <code>MAY_DISAPPEAR</code> the entire cluster. Then start
+polling for maintenances that get <code>COMPLETED</code>, restart these nodes and remove
+the maintenances for these nodes. Then keep doing this until all maintenances
+that you created are removed.</p>
+</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/next/Logs.html"><span class="arrow-prev">← </span><span>Log configuration</span></a><a class="docs-next button" href="/docs/next/administration/LDShell.html"><span class="function-name-prevnext">LogDevice Shell</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#running-the-admin-server">Running the Admin Server</a></li><li><a href="#what-is-the-admin-api">What is the Admin API?</a></li><li><a href="#why-do-we-need-admin-server">Why do we need Admin Server?</a></li><li><a href="#the-maintenance-manager">The Maintenance Manager</a><ul class="toc-headings"><li><a href="#key-features">Key Features</a></li><li><a href="#per-shard-maintenances">Per-shard maintenances</a></li><li><a href="#sequencer-maintenances">Sequencer maintenances</a></li><li><a href="#stacking-maintenances">Stacking Maintenances</a></li></ul></li><li><a href="#maintenance-ttl">Maintenance TTL</a></li><li><a href="#grouped-maintenances">Grouped Maintenances</a><ul class="toc-headings"><li><a href="#all-or-nothing-maintenances">All-or-nothing Maintenances</a></li><li><a href="#exploded-maintenances">Exploded Maintenances</a></li></ul></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2019 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+                document.addEventListener('keyup', function(e) {
+                  if (e.target !== document.body) {
+                    return;
+                  }
+                  // keyCode for '/' (slash)
+                  if (e.keyCode === 191) {
+                    const search = document.getElementById('search_input_react');
+                    search && search.focus();
+                  }
+                });
+              </script><script>
+              var search = docsearch({
+                
+                apiKey: 'f0ece773627cb7003a57c0edd6ec7dd8',
+                indexName: 'logdevice',
+                inputSelector: '#search_input_react'
+              });
+            </script></body></html>
