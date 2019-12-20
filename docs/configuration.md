@@ -129,6 +129,7 @@ include it always in your configuration file.
 "server_settings": {
   "enable-node-self-registration": "true",
   "enable-nodes-configuration-manager": "true",
+  "enable-cluster-maintenance-state-machine": "true",
   "use-nodes-configuration-manager-nodes-configuration": "true"
 },
 "client_settings": {

@@ -35,6 +35,7 @@ spec:
           - "--config-path"
           - "/etc/logdevice/config.json"
           - "--enable-maintenance-manager"
+          - "--maintenance-log-snapshotting"
           - "--enable-safety-check-periodic-metadata-update"
         ports:
         - containerPort: 6440
