@@ -150,6 +150,9 @@ int Connection::connect() {
   }
 
   STAT_INCR(deps_->getStats(), num_connections);
+  if (isSSL()) {
+    STAT_INCR(deps_->getStats(), num_ssl_connections);
+  }
 
   RATELIMIT_DEBUG(std::chrono::seconds(1),
                   10,
