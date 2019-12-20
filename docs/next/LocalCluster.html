@@ -67,46 +67,52 @@
 <pre><code class="hljs css language-shell">docker pull facebookincubator/logdevice
 </code></pre>
 <p>Once you have downloaded the Docker image, launch a container named mycluster to start a local cluster.</p>
-<pre><code class="hljs css language-shell">docker run -it --name mycluster facebookincubator/logdevice
+<pre><code class="hljs css language-shell">docker run --rm -ti --name dev-cluster facebookincubator/logdevice ld-dev-cluster --root /data/logdevice
 </code></pre>
 <p>You'll see the output of the ld-dev-cluster utility, which the container starts if no command is specified.</p>
 <p>Or, if you did a full LogDevice build, from the root directory of the repo, run the ld-dev-cluster utility:</p>
-<pre><code class="hljs css language-shell">./_build/bin/ld-dev-cluster
+<pre><code class="hljs css language-shell">./_build/bin/ld-dev-cluster --root /data/logdevice
 </code></pre>
 <p><code>ld-dev-cluster</code> creates temporary directories, which it deletes on a clean exit, and starts 5 nodes. It also writes a config file that includes all of these nodes, and starts an instance of the <code>logdeviced</code> daemon for each node.</p>
 <p>You should see output similar to this:</p>
-<pre><code class="hljs css language-text">...
-Cluster running. ^C or type "quit" or "q" to stop. Commands:
+<pre><code class="hljs css language-text">LogDevice Cluster running. ^C or type "quit" or "q" to stop. Commands:
 
-        replace &lt;nid&gt;   Replace a node (kill the old node, wipe the existing data, start a replacement). Do not wait for rebuilding.
-        start &lt;nid&gt;     Start a node if it is not already started.
-        stop &lt;nid&gt;      Pause logdeviced by sending SIGSTOP. Waits for the process to stop accepting connections.
-        resume &lt;nid&gt;    Resume logdeviced by sending SIGCONT. Waits for the process to start accepting connections again.
-        kill &lt;nid&gt;      Kill a node.
-        expand &lt;n&gt;      Add new nodes to the cluster.
-        shrink &lt;n&gt;      Remove nodes from the cluster.
+        replace <nid>   Replace a node (kill the old node, wipe the existing data, start a replacement). Do not wait for rebuilding.
+        start <nid>     Start a node if it is not already started.
+        stop <nid>      Pause logdeviced by sending SIGSTOP. Waits for the process to stop accepting connections.
+        resume <nid>    Resume logdeviced by sending SIGCONT. Waits for the process to start accepting connections again.
+        kill <nid>      Kill a node.
+        expand <nid>    Add new nodes to the cluster.
+        shrink <nid>    Remove nodes from the cluster.
 
-
+To connect to the cluster via ldshell:
+        ldshell --admin-server-unix-path=/data/logdevice/N0:1/socket_admin
 To create a log range:
-        ldshell -c /dev/shm/tmp/logdevice/IntegrationTestUtils.8b62-42b5-1e7a-7cec/logdevice.conf logs create --from 1 --to 100 --replicate-across "node: 2" test_logs
+        ldshell --admin-server-unix-path=/data/logdevice/N0:1/socket_admin logs create --from 1 --to 100 --replicate-across "node: 2" test_logs
+
+To view existing log ranges: (We've already created one for you)
+        ldshell --admin-server-unix-path=/data/logdevice/N0:1/socket_admin logs show
 
 To write to log 1:
-         echo hello | _build/bin/ldwrite /dev/shm/tmp/logdevice/IntegrationTestUtils.8b62-42b5-1e7a-7cec/logdevice.conf 1
+         echo hello | usr/local/bin/ldwrite /data/logdevice/logdevice.conf 1
 
 To start a tailer for log 1:
-        _build/bin/ldtail /dev/shm/tmp/logdevice/IntegrationTestUtils.8b62-42b5-1e7a-7cec/logdevice.conf 1 --follow
+        usr/local/bin/ldtail /data/logdevice/logdevice.conf 1 --follow
 
 To tail the error log of a node:
-        tail -f /dev/shm/tmp/logdevice/IntegrationTestUtils.8b62-42b5-1e7a-7cec/N0:1/log
+        tail -f /data/logdevice/N0:1/log
 
 To send an admin command to a node:
-        echo info | nc -U /dev/shm/tmp/logdevice/IntegrationTestUtils.8b62-42b5-1e7a-7cec/N0:1/socket_command  
-cluster&gt;
+        echo info | nc -U /data/logdevice/N0:1/socket_command
+cluster>
 </code></pre>
 <p>To inspect the config file that <code>ld-dev-cluster</code> generated, start a new terminal session and run bash in the Docker container. Substitute your own directory in the cat command.</p>
-<pre><code class="hljs css language-bash"> docker <span class="hljs-built_in">exec</span> -it mycluster bash
+<pre><code class="hljs css language-bash">docker <span class="hljs-built_in">exec</span> -it dev-cluster /bin/bash
 
- cat /dev/shm/tmp/logdevice/IntegrationTestUtils.8b62-42b5-1e7a-7cec/logdevice.conf
+$ cat /data/logdevice/logdevice.conf
+</code></pre>
+<p>You can connect ldshell to this cluster from within the container:</p>
+<pre><code class="hljs css language-bash">ldshell --admin-server-unix-path=/data/logdevice/N0:1/socket_admin
 </code></pre>
 <p>The <code>ld-dev-cluster</code> output suggests several steps. Copy and paste those steps to another terminal to create a log range, write data to
 it, and read it using a tailer.</p>

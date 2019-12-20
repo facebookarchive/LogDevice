@@ -66,28 +66,30 @@
 <p>The recommended minimum for running a fully functional LogDevice cluster is 4 servers. If you want to try out LogDevice on a single machine for development or experimental purposes, you can follow a much simpler process to <a href="/docs/next/LocalCluster.html">run a local cluster</a> instead.</p>
 <p>Each LogDevice server should have at least 4GB of RAM. For best results the network latency between the servers in the cluster should be low.</p>
 <p>The only platform currently supported is Ubuntu 18 LTS &quot;Bionic Beaver&quot;.</p>
-<p>Make sure that network ports specified in the config (<code>16111</code> and <code>16112</code> for the config file listed below) and the command port (<code>5440</code> by default, it's also the only value currently supported by <code>ldshell</code>) are open. Also, the nodes have to be able to communicate with ZooKeeper.</p>
+<p>Make sure that network ports that you choose are open. We recommend that you use the default ports (<code>4440</code>, <code>4441</code>, <code>4443</code>, <code>5440</code>, <code>6440</code>) Also, the nodes have to be able to communicate with ZooKeeper.</p>
 <p><strong>Note:</strong> This simple tutorial sets up a cluster without any security controls. You should restrict network access to these ports using other means (like a firewall or NAT) to prevent your cluster being open to the world.</p>
 <h2><a class="anchor" aria-hidden="true" id="2-set-up-a-zookeeper-ensemble"></a><a href="#2-set-up-a-zookeeper-ensemble" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>2. Set up a ZooKeeper ensemble</h2>
 <p>LogDevice requires ZooKeeper in order to store minimal per-log metadata accessed during sequencer activation and failover.  ZooKeeper can also be used as a mechanism for distributing the config file (see the <a href="#5-create-a-configuration-file">Configuration section</a> below).</p>
+<blockquote>
 <p>You can re-use an existing ZooKeeper ensemble, or create a new one. Different LogDevice clusters can use the same ZooKeeper ensemble as long as they have different values in the <code>cluster</code> attribute in the LogDevice configuration file.</p>
+</blockquote>
 <p>You can run ZooKeeper on the same system as LogDevice or on separate hardware. For best results, latency from the LogDevice cluster to the ZooKeeper ensemble should be minimal. However, LogDevice doesn't communicate with ZooKeeper outside of config loading / sequencer activation / failover scenarios, so having higher latency to ZooKeeper shouldn't affect performance in steady state.</p>
-<p>You can find a tutorial online on how to set up a proper Zookeeper ensemble. Note that if the metadata in the ZooKeeper ensemble is lost, the data in the cluster will be corrupted and unreadable.</p>
+<blockquote>
+<p>You can find a tutorial online on how to set up a proper Zookeeper ensemble. Note that <strong>if the metadata in the ZooKeeper ensemble is lost, the data in the cluster will be corrupted and unreadable</strong>.</p>
+</blockquote>
 <h4><a class="anchor" aria-hidden="true" id="unsafe-single-node-zookeeper-setup-on-ubuntu"></a><a href="#unsafe-single-node-zookeeper-setup-on-ubuntu" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Unsafe single-node ZooKeeper setup on Ubuntu</h4>
 <p>If you are just setting up a test LogDevice cluster and are OK with it becoming unusable and losing all your data if you lose your ZooKeeper node, you can set up a single-node Zookeeper ensemble easily on Ubuntu by running this:</p>
 <pre><code class="hljs css language-sh">sudo apt-get update &amp;&amp; sudo apt-get install zookeeper zookeeperd
 </code></pre>
 <h2><a class="anchor" aria-hidden="true" id="3-distribute-logdevice-to-the-servers"></a><a href="#3-distribute-logdevice-to-the-servers" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>3. Distribute LogDevice to the servers</h2>
 <p>You can use the Docker image or build LogDevice yourself.</p>
-<h3><a class="anchor" aria-hidden="true" id="option-1-use-docker-image"></a><a href="#option-1-use-docker-image" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Option 1. Use Docker image</h3>
-<p>Get the LogDevice Docker image.</p>
+<h3><a class="anchor" aria-hidden="true" id="option-1-use-docker-image-recommended"></a><a href="#option-1-use-docker-image-recommended" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Option 1. Use Docker image [Recommended]</h3>
+<p>Get the LogDevice Docker image. You can use the default <code>latest</code> tag for the
+nightly build. Or pull the latest stable release</p>
 <pre><code class="hljs css language-sh">docker pull facebookincubator/logdevice
 </code></pre>
 <h3><a class="anchor" aria-hidden="true" id="option-2-build-logdevice"></a><a href="#option-2-build-logdevice" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Option 2. Build LogDevice</h3>
 <p>Follow the steps at <a href="/docs/next/Installation.html">Build LogDevice</a> to build and install LogDevice.</p>
-<p>If you are building binaries on one machine and distributing them to the others, make sure every server has dependencies installed. On Ubuntu, you can run this command from the root of the git checkout to install them:</p>
-<pre><code class="hljs css language-sh">sudo apt-get update &amp;&amp; sudo apt-get install -y $(cat logdevice/build_tools/ubuntu.deps)
-</code></pre>
 <h2><a class="anchor" aria-hidden="true" id="4-create-data-folders-on-storage-nodes"></a><a href="#4-create-data-folders-on-storage-nodes" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>4. Create data folders on storage nodes</h2>
 <p>Storage nodes store data in shards. Typically each shard maps to a different physical disk. The example commands below create a user and a typical folder structure for LogDevice, and should be run on each storage node. They assume that your data disk is mounted on <code>/mnt/data0</code>. The recommended filesystem to be used for data storage in LogDevice is XFS.</p>
 <pre><code class="hljs css language-sh"><span class="hljs-comment"># creates the root folder for data</span>
@@ -107,166 +109,106 @@ sudo chown -R logdevice /data/logdevice/
 sudo chown -R logdevice /mnt/data0/
 </code></pre>
 <h2><a class="anchor" aria-hidden="true" id="5-create-a-configuration-file"></a><a href="#5-create-a-configuration-file" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>5. Create a configuration file</h2>
-<p>An example of a minimal configuration file for 4 nodes and a 3-node ZooKeeper ensemble hosted on the same machine can be found below (and is also included in the source tree under <code>logdevice/examples/logdevice.conf</code>).</p>
-<p>Modify it to adapt it to your situation and save it to a file somewhere (e.g. <code>~/logdevice_test.conf</code>). The parts that you need to modify are:</p>
+<p>An example of a minimal configuration file with a 3-node ZooKeeper
+ensemble hosted on the same machine can be found below (and is also included
+in the source tree under <code>logdevice/examples/logdevice.conf</code>).</p>
+<p>Modify it to adapt it to your situation and save it to a file somewhere
+(e.g. <code>~/logdevice_test.conf</code>). The parts that you need to modify are:</p>
 <ol>
-<li><code>host</code> attribute for every node. It should be an <code>IPv4:port</code> or <code>[IPv6]:port</code> pair. Hostnames are not supported.</li>
-<li><code>quorum</code> in the <code>zookeeper</code> section - list of ZooKeeper ensemble nodes and ports.</li>
-<li>(optional) The <code>cluster</code> attribute if you are creating several clusters - it has to be unique for each cluster sharing a ZooKeeper ensemble!</li>
-<li>(optional) <code>gossip_port</code> for every node if you intend to use a different one.</li>
-<li>(optional) <code>num_shards</code> for every node if you intend to use more than one disk for data on that machine.</li>
+<li><code>cluster</code> attribute to reflect your cluster name.</li>
+<li><code>zookeeper_uri</code> in the <code>zookeeper</code> section - list of ZooKeeper ensemble nodes and ports.</li>
+<li><code>internal_logs</code> make sure that you are comfortable with the replication
+policy for these critical logs and adjust if necessary.</li>
 </ol>
-<p>If you are adding more nodes to the cluster, make sure they all have unique <code>node_id</code> values and consider expanding the <code>nodeset</code> under the <code>metadata_logs</code> section to include them as well.</p>
-<p>Detailed explanations of all the attributes can be found in the <a href="/docs/next/Config.html">Cluster configuration</a> docs.</p>
-<pre><code class="hljs css language-js">{
-    <span class="hljs-string">"cluster"</span>: <span class="hljs-string">"test"</span>,
-    <span class="hljs-string">"nodes"</span>: [
-        {
-            <span class="hljs-string">"node_id"</span>: <span class="hljs-number">0</span>,
-            <span class="hljs-string">"host"</span>: <span class="hljs-string">"10.0.0.1:16111"</span>,
-            <span class="hljs-string">"gossip_port"</span>: <span class="hljs-number">16112</span>,
-            <span class="hljs-string">"generation"</span>: <span class="hljs-number">1</span>,
-            <span class="hljs-string">"roles"</span>: [ <span class="hljs-string">"sequencer"</span>, <span class="hljs-string">"storage"</span> ],
-            <span class="hljs-string">"sequencer"</span>: <span class="hljs-literal">true</span>,
-            <span class="hljs-string">"storage"</span>: <span class="hljs-string">"read-write"</span>,
-            <span class="hljs-string">"num_shards"</span>: <span class="hljs-number">1</span>
-        },
-        {
-            <span class="hljs-string">"node_id"</span>: <span class="hljs-number">1</span>,
-            <span class="hljs-string">"host"</span>: <span class="hljs-string">"10.0.0.2:16111"</span>,
-            <span class="hljs-string">"gossip_port"</span>: <span class="hljs-number">16112</span>,
-            <span class="hljs-string">"generation"</span>: <span class="hljs-number">1</span>,
-            <span class="hljs-string">"roles"</span>: [ <span class="hljs-string">"sequencer"</span>, <span class="hljs-string">"storage"</span> ],
-            <span class="hljs-string">"sequencer"</span>: <span class="hljs-literal">true</span>,
-            <span class="hljs-string">"storage"</span>: <span class="hljs-string">"read-write"</span>,
-            <span class="hljs-string">"num_shards"</span>: <span class="hljs-number">1</span>
-        },
-        {
-            <span class="hljs-string">"node_id"</span>: <span class="hljs-number">2</span>,
-            <span class="hljs-string">"host"</span>: <span class="hljs-string">"10.0.0.3:16111"</span>,
-            <span class="hljs-string">"gossip_port"</span>: <span class="hljs-number">16112</span>,
-            <span class="hljs-string">"generation"</span>: <span class="hljs-number">1</span>,
-            <span class="hljs-string">"roles"</span>: [ <span class="hljs-string">"sequencer"</span>, <span class="hljs-string">"storage"</span> ],
-            <span class="hljs-string">"sequencer"</span>: <span class="hljs-literal">true</span>,
-            <span class="hljs-string">"storage"</span>: <span class="hljs-string">"read-write"</span>,
-            <span class="hljs-string">"num_shards"</span>: <span class="hljs-number">1</span>
-        },
-        {
-            <span class="hljs-string">"node_id"</span>: <span class="hljs-number">3</span>,
-            <span class="hljs-string">"host"</span>: <span class="hljs-string">"10.0.0.4:16111"</span>,
-            <span class="hljs-string">"gossip_port"</span>: <span class="hljs-number">16112</span>,
-            <span class="hljs-string">"generation"</span>: <span class="hljs-number">1</span>,
-            <span class="hljs-string">"roles"</span>: [ <span class="hljs-string">"sequencer"</span>, <span class="hljs-string">"storage"</span> ],
-            <span class="hljs-string">"sequencer"</span>: <span class="hljs-literal">true</span>,
-            <span class="hljs-string">"storage"</span>: <span class="hljs-string">"read-write"</span>,
-            <span class="hljs-string">"num_shards"</span>: <span class="hljs-number">1</span>
-        }
-    ],
-    <span class="hljs-string">"internal_logs"</span>: {
-        <span class="hljs-string">"config_log_deltas"</span>: {
-            <span class="hljs-string">"replicate_across"</span>: {
-                <span class="hljs-string">"node"</span>: <span class="hljs-number">3</span>
-            }
-        },
-        <span class="hljs-string">"config_log_snapshots"</span>: {
-            <span class="hljs-string">"replicate_across"</span>: {
-                <span class="hljs-string">"node"</span>: <span class="hljs-number">3</span>
-            }
-        },
-        <span class="hljs-string">"event_log_deltas"</span>: {
-            <span class="hljs-string">"replicate_across"</span>: {
-                <span class="hljs-string">"node"</span>: <span class="hljs-number">3</span>
-            }
-        },
-        <span class="hljs-string">"event_log_snapshots"</span>: {
-            <span class="hljs-string">"replicate_across"</span>: {
-                <span class="hljs-string">"node"</span>: <span class="hljs-number">3</span>
-            }
-        }
-    },
-    <span class="hljs-string">"metadata_logs"</span>: {
-        <span class="hljs-string">"nodeset"</span>: [<span class="hljs-number">0</span>,<span class="hljs-number">1</span>,<span class="hljs-number">2</span>,<span class="hljs-number">3</span>],
-        <span class="hljs-string">"replicate_across"</span>: { <span class="hljs-string">"node"</span>: <span class="hljs-number">3</span> }
-    },
-    <span class="hljs-string">"zookeeper"</span>: {
-        <span class="hljs-string">"quorum"</span>: [
-            <span class="hljs-string">"10.0.0.1:2181"</span>,
-            <span class="hljs-string">"10.0.0.2:2181"</span>,
-            <span class="hljs-string">"10.0.0.3:2181"</span>
-        ],
-        <span class="hljs-string">"timeout"</span>: <span class="hljs-string">"30s"</span>
-    }
-}
-</code></pre>
+<p>Detailed explanations of all the attributes can be found in the
+<a href="/docs/next/Config.html">Cluster configuration</a> docs.</p>
 <h2><a class="anchor" aria-hidden="true" id="6-store-the-configuration-file"></a><a href="#6-store-the-configuration-file" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>6. Store the configuration file</h2>
-<p>All LogDevice nodes have to have access to the same configuration file when starting. They monitor the file for changes and pick up (most) changes without being restarted, so ideally they should have access to it while running as well. There are different ways to ensure this. One option is to store the file on a shared network filesystem. The simplest way is to store the configuration file in ZooKeeper.</p>
-<p>You can save the config file you created to ZooKeeper by running the following (paths assumed from previous steps):</p>
-<pre><code class="hljs css language-sh">/usr/share/zookeeper/bin/zkCli.sh create /logdevice_test.conf <span class="hljs-string">"`cat ~/logdevice_test.conf`"</span>
+<p>All LogDevice nodes have to have access to the configuration file when starting.
+They monitor the file for changes and pick up (most) changes without being restarted,
+so ideally they should have access to it while running as well.
+There are different ways to ensure this. One option is to store the file on a
+shared network filesystem or distribute with chef, ansible, or similar methods.</p>
+<p>LogDevice <em>currently</em> have support for loading configuration files from
+zookeeper. In this case you can manually put the configuration file in zookeeper
+via the <code>zkCli.sh</code> utility that comes with zookeeper.</p>
+<pre><code class="hljs css language-shell-session"><span class="hljs-regexp">/usr/</span>share<span class="hljs-regexp">/zookeeper/</span>bin<span class="hljs-regexp">/zkCli.sh create /</span>logdevice_test.conf <span class="hljs-string">"`cat ~/logdevice_test.conf`"</span>
 </code></pre>
 <p>If you need to modify the config in ZooKeeper after you've created it, use the <code>set</code> command instead of <code>create</code>:</p>
-<pre><code class="hljs css language-sh">/usr/share/zookeeper/bin/zkCli.sh <span class="hljs-built_in">set</span> /logdevice_test.conf <span class="hljs-string">"`cat ~/logdevice_test.conf`"</span>
+<pre><code class="hljs css language-shell-session"><span class="hljs-regexp">/usr/</span>share<span class="hljs-regexp">/zookeeper/</span>bin<span class="hljs-regexp">/zkCli.sh set /</span>logdevice_test.conf <span class="hljs-string">"`cat ~/logdevice_test.conf`"</span>
 </code></pre>
-<h2><a class="anchor" aria-hidden="true" id="7-optional-install-logdevice-as-a-service"></a><a href="#7-optional-install-logdevice-as-a-service" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>7. (optional) Install LogDevice as a service</h2>
-<p><strong>Note:</strong> This step is not needed if you are using the Docker image.</p>
-<p>Under Ubuntu Bionic, you can install the service by populating <code>/etc/systemd/system/logdevice.service</code> on every node.
-Change the Zookeeper quorum, the port, and data storage paths to your values as needed.</p>
-<pre><code class="hljs css language-text">[Unit]
-Description=LogDevice
-
-[Service]
-ExecStart=/usr/local/bin/logdeviced --config-path zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf --port=16111 --local-log-store-path=/data/logdevice/
-StandardError=journal
-Restart=always
-TimeoutStopSec=120
-Type=simple
-KillMode=process
-User=logdevice
-
-[Install]
-WantedBy=multi-user.target
+<p>In this case, wherever a config-file is expected in logdevice binaries, you can
+instead use this:</p>
+<pre><code class="hljs css language-shell-session">zk:<span class="hljs-number">10.0</span><span class="hljs-number">.0</span><span class="hljs-number">.1</span>:<span class="hljs-number">2181</span>,<span class="hljs-number">10.0</span><span class="hljs-number">.0</span><span class="hljs-number">.2</span>:<span class="hljs-number">2181</span>,<span class="hljs-number">10.0</span><span class="hljs-number">.0</span><span class="hljs-number">.3</span>:<span class="hljs-number">2181</span>/logdevice_test.conf
+# Example
+--config-path /etc/logdevice.conf
+# Becomes
+--config-path zk:<span class="hljs-number">10.0</span><span class="hljs-number">.0</span><span class="hljs-number">.1</span>:<span class="hljs-number">2181</span>,<span class="hljs-number">10.0</span><span class="hljs-number">.0</span><span class="hljs-number">.2</span>:<span class="hljs-number">2181</span>,<span class="hljs-number">10.0</span><span class="hljs-number">.0</span><span class="hljs-number">.3</span>:<span class="hljs-number">2181</span>/logdevice_test.conf
 </code></pre>
-<p>Next, enable the service by running:</p>
-<pre><code class="hljs css language-sh">sudo systemctl daemon-reload
-sudo systemctl <span class="hljs-built_in">enable</span> logdevice
-</code></pre>
+<p>For the purposes of this tutorial, we will assume that you have distributed that
+configuration file via some automation to all nodes and it lives under
+<code>/etc/logdevice.conf</code> if you are using the binary setup, if you are using
+docker, we assume here that the configuration file lives under
+<code>/data/logdevice/logdevice.conf</code> and is mounted on all containers as shown in
+the example commanda.</p>
+<h2><a class="anchor" aria-hidden="true" id="7-start-the-admin-server-on-a-single-node"></a><a href="#7-start-the-admin-server-on-a-single-node" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>7. Start the admin server on a single node</h2>
+<div class="tabs"><div class="nav-tabs"><div id="tab-group-19-tab-20" class="nav-link active" data-group="group_19" data-tab="tab-group-19-content-20">Docker</div><div id="tab-group-19-tab-21" class="nav-link" data-group="group_19" data-tab="tab-group-19-content-21">Binary</div></div><div class="tab-content"><div id="tab-group-19-content-20" class="tab-pane active" data-group="group_19" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session"><span class="hljs-comment"># Also assumes that the configuration file is in /data/logdevice/logdevice.conf</span><br />docker run <span class="hljs-params">--rm</span> -d <span class="hljs-params">--network</span> host <span class="hljs-params">--name</span> logdevice-0 \<br />         -v <span class="hljs-string">/data/logdevice</span>:<span class="hljs-string">/data/logdevice</span> \<br />        facebookincubator/logdevice ld-admin-server \<br />          <span class="hljs-params">--config-path</span> <span class="hljs-string">/data/logdevice/logdevice.conf</span><br />          <span class="hljs-params">--enable-maintenance-manager</span><br />          <span class="hljs-params">--enable-safety-check-periodic-metadata-update</span><br />          <span class="hljs-params">--maintenance-log-snapshotting</span><br /></code></pre>
+</span></div></div><div id="tab-group-19-content-21" class="tab-pane" data-group="group_19" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session"># Assuming that the <span class="hljs-keyword">configuration</span> file <span class="hljs-keyword">is</span> <span class="hljs-keyword">in</span> /etc/logdevice.conf<br />ld-<span class="hljs-keyword">admin</span>-<span class="hljs-keyword">server</span> <span class="hljs-comment">-- \</span><br />    <span class="hljs-comment">--config-path /etc/logdevice.conf \</span><br />    <span class="hljs-comment">--enable-maintenance-manager \</span><br />    <span class="hljs-comment">--enable-safety-check-periodic-metadata-update \</span><br />    <span class="hljs-comment">--maintenance-log-snapshotting</span><br /></code></pre>
+</span></div></div></div></div>
 <h2><a class="anchor" aria-hidden="true" id="8-start-logdeviced-on-every-node-3-options"></a><a href="#8-start-logdeviced-on-every-node-3-options" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>8. Start logdeviced on every node (3 options)</h2>
-<p><strong>If you are using the Docker image:</strong></p>
-<pre><code class="hljs css language-sh">docker run -d -p 16111:16111 -p 16112:16112 -p 5440:5440 -v /data/logdevice:/data/logdevice facebookincubator/logdevice /usr/<span class="hljs-built_in">local</span>/bin/logdeviced --config-path zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf --port=16111 --<span class="hljs-built_in">local</span>-log-store-path=/data/logdevice/
-</code></pre>
-<ul>
-<li><code>-p</code> exports the ports that LogDevice uses outside the container</li>
-<li><code>-v</code> mounts the host data volume inside the container.</li>
-</ul>
-<p>Change the Zookeeper quorum, the port, and data storage paths to your values as needed.</p>
-<p><strong>If you installed LogDevice as a service,</strong> you can run</p>
-<pre><code class="hljs css language-sh">sudo systemctl start logdevice
-</code></pre>
-<p><strong>If neither of the above,</strong> you can start LogDevice like this:</p>
-<pre><code class="hljs css language-sh"><span class="hljs-built_in">cd</span> /data/logdevice/
-sudo -u logdevice nohup /usr/<span class="hljs-built_in">local</span>/bin/logdeviced --config-path zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf --port=16111 --<span class="hljs-built_in">local</span>-log-store-path=/data/logdevice/ &amp;
-</code></pre>
+<div class="tabs"><div class="nav-tabs"><div id="tab-group-22-tab-23" class="nav-link active" data-group="group_22" data-tab="tab-group-22-content-23">Docker</div><div id="tab-group-22-tab-24" class="nav-link" data-group="group_22" data-tab="tab-group-22-content-24">Binary</div></div><div class="tab-content"><div id="tab-group-22-content-23" class="tab-pane active" data-group="group_22" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session"><span class="hljs-comment"># Assuming that data dir is at host's /data/logdevice (where shard0 lives)</span><br /><span class="hljs-comment"># Also assumes that the configuration file is in /data/logdevice/logdevice.conf</span><br /><span class="hljs-comment"># Assumes that docker host IP address is 172.16.0.2</span><br /><br />docker run <span class="hljs-params">--rm</span> -d <span class="hljs-params">--network</span> host <span class="hljs-params">--name</span> logdevice-0 \<br />         -v <span class="hljs-string">/data/logdevice</span>:<span class="hljs-string">/data/logdevice</span> \<br />        facebookincubator/logdevice logdeviced \<br />          <span class="hljs-params">--config-path</span> <span class="hljs-string">/data/logdevice/logdevice.conf</span> \<br />          <span class="hljs-params">--name</span> logdevice-0 \<br />          <span class="hljs-params">--address</span> 172.16.0.2 \<br />          <span class="hljs-params">--local-log-store-path</span> <span class="hljs-string">/data/logdevice</span><br /></code></pre>
+</span></div></div><div id="tab-group-22-content-24" class="tab-pane" data-group="group_22" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session"><span class="hljs-comment"># Assuming that the configuration file is in /etc/logdevice.conf</span><br /><span class="hljs-comment"># Assumes that the host IP address is 172.16.0.2</span><br /><span class="hljs-comment"># Uses the hostname as the logdevice node name</span><br />logdeviced \<br />  <span class="hljs-params">--config-path</span> <span class="hljs-string">/etc/logdevice.conf</span> \<br />  <span class="hljs-params">--name</span> $<span class="hljs-params">(hostname)</span> \<br />  <span class="hljs-params">--address</span> 172.16.0.2 \<br />  <span class="hljs-params">--local-log-store-path</span> <span class="hljs-string">/data/logdevice</span><br /></code></pre>
+</span></div></div></div></div>
 <h2><a class="anchor" aria-hidden="true" id="9-see-if-its-running"></a><a href="#9-see-if-its-running" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>9. See if it's running</h2>
-<p><code>ldshell</code> is a utility to introspect and mutate the state of LogDevice. One of its most powerful commands is <code>query</code>, which allows you to run SQL <code>SELECT</code> queries against <a href="ldquery.md">various virtual SQL tables</a> that expose the state of the cluster and some of its internals. The following command queries the <code>info</code> table. The output displays the start time of the nodes that are up, their pids and a couple more fields:</p>
-<pre><code class="hljs css language-sh"><span class="hljs-comment"># export the config path (change the Zookeeper quorum to yours here) so it's available for subsequent commands</span>
-<span class="hljs-built_in">export</span> LOGDEVICE_CONFIG=zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf
-ldshell -c <span class="hljs-variable">$LOGDEVICE_CONFIG</span> query <span class="hljs-string">'SELECT * FROM info'</span>
+<p><code>ldshell</code> is a utility to introspect and mutate the state of LogDevice. One of
+its most powerful commands is <code>query</code>, which allows you to run SQL <code>SELECT</code>
+queries against <a href="/docs/next/administration/LDQuery.html">various virtual SQL tables</a> that
+expose the state of the cluster and some of its internals. The following command
+queries the <code>info</code> table. The output displays the start time of the nodes that
+are up, their pids and a couple more fields:</p>
+<div class="tabs"><div class="nav-tabs"><div id="tab-group-25-tab-26" class="nav-link active" data-group="group_25" data-tab="tab-group-25-content-26">Docker</div><div id="tab-group-25-tab-27" class="nav-link" data-group="group_25" data-tab="tab-group-25-content-27">Binary</div></div><div class="tab-content"><div id="tab-group-25-content-26" class="tab-pane active" data-group="group_25" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session"># Assumes that the admin server host IP address <span class="hljs-keyword">is</span> <span class="hljs-number">172.16</span><span class="hljs-number">.0</span><span class="hljs-number">.1</span><br />docker run --rm -ti --network host facebookincubator/logdevice \<br />         ldshell --admin-server-host <span class="hljs-number">172.16</span><span class="hljs-number">.0</span><span class="hljs-number">.1</span><br /></code></pre>
+</span></div></div><div id="tab-group-25-content-27" class="tab-pane" data-group="group_25" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session"># Assumes that the admin server host IP address <span class="hljs-keyword">is</span> <span class="hljs-number">172.16</span><span class="hljs-number">.0</span><span class="hljs-number">.1</span><br />ldshell --admin-server-host <span class="hljs-number">172.16</span><span class="hljs-number">.0</span><span class="hljs-number">.1</span><br /></code></pre>
+</span></div></div></div></div>
+<p>Then inside the interactive session of ldshell you can run:</p>
+<pre><code class="hljs css language-sh">ubuntu@logdevice1&gt; SELECT * FROM info
 </code></pre>
-<h2><a class="anchor" aria-hidden="true" id="10-create-log-ranges-using-ldshell"></a><a href="#10-create-log-ranges-using-ldshell" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>10. Create log ranges using ldshell</h2>
+<h2><a class="anchor" aria-hidden="true" id="10-bootstrap-the-cluster"></a><a href="#10-bootstrap-the-cluster" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>10. Bootstrap the cluster</h2>
+<p>Following the cluster <a href="/docs/next/administration/ClusterMaintenance.html#bootstrapping-the-cluster">bootstrapping
+instructions</a>. We
+should be able to bootstrap the nodes and configure the metadata logs
+replication property.</p>
+<blockquote>
+<p>In this example setup, we are assuming that we will replicate the metadata
+logs on 3 nodes without location awareness.</p>
+</blockquote>
+<p>In ldshell's interactive session, run:</p>
+<pre><code class="hljs css language-shell-session">ubuntu@logdevice1&gt; nodes-config bootstrap <span class="hljs-attr">metadata-replicate-across=</span>{<span class="hljs-keyword">node</span><span class="hljs-title">:3</span>}
+</code></pre>
+<h2><a class="anchor" aria-hidden="true" id="11-check-cluster-status"></a><a href="#11-check-cluster-status" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>11. Check cluster status</h2>
+<p>In a few seconds the cluster bootstrapping process should complete, and you
+should see the output of the following command:</p>
+<pre><code class="hljs css language-shell-session"><span class="hljs-symbol">ubuntu@</span>logdevice1&gt; status
+</code></pre>
+<p>It should look similar to this:</p>
+<p><img src="/docs/assets/ldshell-status-1.png" alt="LDShell Screenshot" title="LDShell status example"></p>
+<h2><a class="anchor" aria-hidden="true" id="11-create-log-ranges-using-ldshell"></a><a href="#11-create-log-ranges-using-ldshell" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>11. Create log ranges using ldshell</h2>
 <p>Before you can write any data to LogDevice logs, you need to create them. By default, the cluster starts with an empty log list. To add a log range called <code>test_logs</code> with 100 logs where the data would be replicated across 2 nodes and trimmed after 3 days, run this command:</p>
-<pre><code class="hljs css language-sh">ldshell -c <span class="hljs-variable">$LOGDEVICE_CONFIG</span> logs create --replicate-across <span class="hljs-string">"node: 2"</span> --backlog <span class="hljs-string">"259200s"</span> --from 1 --to 100 /test_logs
+<pre><code class="hljs css language-shell-session"># Assumes that the admin server host IP address <span class="hljs-keyword">is</span> <span class="hljs-number">172.16</span><span class="hljs-number">.0</span><span class="hljs-number">.1</span>
+ldshell -s <span class="hljs-number">172.16</span><span class="hljs-number">.0</span><span class="hljs-number">.1</span> logs create --replicate-across <span class="hljs-string">"node: 2"</span> --backlog <span class="hljs-string">"259200s"</span> --<span class="hljs-keyword">from</span> <span class="hljs-number">1</span> --to <span class="hljs-number">100</span> /test_logs
 </code></pre>
 <p>More information about managing your log configuration is available <a href="/docs/next/Logs.html">here</a>.</p>
-<h2><a class="anchor" aria-hidden="true" id="11-write-data-into-a-log"></a><a href="#11-write-data-into-a-log" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>11. Write data into a log</h2>
+<h2><a class="anchor" aria-hidden="true" id="12-write-data-into-a-log"></a><a href="#12-write-data-into-a-log" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>12. Write data into a log</h2>
 <p>All ready to go! You can now write your first payload into log 1:</p>
-<pre><code class="hljs css language-sh"><span class="hljs-built_in">echo</span> payload | ./LogDevice/_build/bin/ldwrite <span class="hljs-variable">$LOGDEVICE_CONFIG</span> -l 1
-</code></pre>
+<div class="tabs"><div class="nav-tabs"><div id="tab-group-28-tab-29" class="nav-link active" data-group="group_28" data-tab="tab-group-28-content-29">Docker</div><div id="tab-group-28-tab-30" class="nav-link" data-group="group_28" data-tab="tab-group-28-content-30">Binary</div></div><div class="tab-content"><div id="tab-group-28-content-29" class="tab-pane active" data-group="group_28" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session">docker run <span class="hljs-params">--rm</span> -ti <span class="hljs-params">--network</span> host facebookincubator/logdevice <span class="hljs-string">/bin/bash</span><br /><br />$ <span class="hljs-keyword">echo</span> payload | ldwrite <span class="hljs-string">/data/logdevice/logdevice.conf</span> -l 1<br /></code></pre>
+</span></div></div><div id="tab-group-28-content-30" class="tab-pane" data-group="group_28" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session"><span class="hljs-keyword">echo</span> payload | ldwrite <span class="hljs-string">/etc/logdevice.conf</span> -l 1<br /></code></pre>
+</span></div></div></div></div>
 <h2><a class="anchor" aria-hidden="true" id="12-read-data-from-a-log"></a><a href="#12-read-data-from-a-log" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>12. Read data from a log</h2>
 <p>This command runs the tailer for log 1. If you did the write above, it should print out &quot;payload&quot;.</p>
-<pre><code class="hljs css language-sh">./LogDevice/_build/bin/ldtail <span class="hljs-variable">$LOGDEVICE_CONFIG</span> -l 1 --follow
-</code></pre>
+<div class="tabs"><div class="nav-tabs"><div id="tab-group-31-tab-32" class="nav-link active" data-group="group_31" data-tab="tab-group-31-content-32">Docker</div><div id="tab-group-31-tab-33" class="nav-link" data-group="group_31" data-tab="tab-group-31-content-33">Binary</div></div><div class="tab-content"><div id="tab-group-31-content-32" class="tab-pane active" data-group="group_31" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session">docker run <span class="hljs-params">--rm</span> -ti <span class="hljs-params">--network</span> host facebookincubator/logdevice <span class="hljs-string">/bin/bash</span><br /><br />$ ldtail <span class="hljs-string">/data/logdevice/logdevice.conf</span> -l 1<br /></code></pre>
+</span></div></div><div id="tab-group-31-content-33" class="tab-pane" data-group="group_31" tabindex="-1"><div><span><pre><code class="hljs css language-shell-session">ldtail /etc/logdevice.conf -l <span class="hljs-number">1</span><br /></code></pre>
+</span></div></div></div></div>
 <h2><a class="anchor" aria-hidden="true" id="all-done"></a><a href="#all-done" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>All done!</h2>
 <p>Congratulations! You have a running LogDevice cluster! Read the <a href="/docs/next/API_Introduction.html">Introduction to the API</a> to learn how to use it.</p>
-</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/next/Installation.html"><span class="arrow-prev">← </span><span class="function-name-prevnext">Build LogDevice</span></a><a class="docs-next button" href="/docs/next/Config.html"><span>Cluster configuration</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#1-provision-the-servers">1. Provision the servers</a></li><li><a href="#2-set-up-a-zookeeper-ensemble">2. Set up a ZooKeeper ensemble</a></li><li><a href="#3-distribute-logdevice-to-the-servers">3. Distribute LogDevice to the servers</a><ul class="toc-headings"><li><a href="#option-1-use-docker-image">Option 1. Use Docker image</a></li><li><a href="#option-2-build-logdevice">Option 2. Build LogDevice</a></li></ul></li><li><a href="#4-create-data-folders-on-storage-nodes">4. Create data folders on storage nodes</a></li><li><a href="#5-create-a-configuration-file">5. Create a configuration file</a></li><li><a href="#6-store-the-configuration-file">6. Store the configuration file</a></li><li><a href="#7-optional-install-logdevice-as-a-service">7. (optional) Install LogDevice as a service</a></li><li><a href="#8-start-logdeviced-on-every-node-3-options">8. Start logdeviced on every node (3 options)</a></li><li><a href="#9-see-if-its-running">9. See if it's running</a></li><li><a href="#10-create-log-ranges-using-ldshell">10. Create log ranges using ldshell</a></li><li><a href="#11-write-data-into-a-log">11. Write data into a log</a></li><li><a href="#12-read-data-from-a-log">12. Read data from a log</a></li><li><a href="#all-done">All done!</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2019 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/next/Installation.html"><span class="arrow-prev">← </span><span class="function-name-prevnext">Build LogDevice</span></a><a class="docs-next button" href="/docs/next/Config.html"><span>Cluster configuration</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#1-provision-the-servers">1. Provision the servers</a></li><li><a href="#2-set-up-a-zookeeper-ensemble">2. Set up a ZooKeeper ensemble</a></li><li><a href="#3-distribute-logdevice-to-the-servers">3. Distribute LogDevice to the servers</a><ul class="toc-headings"><li><a href="#option-1-use-docker-image-recommended">Option 1. Use Docker image [Recommended]</a></li><li><a href="#option-2-build-logdevice">Option 2. Build LogDevice</a></li></ul></li><li><a href="#4-create-data-folders-on-storage-nodes">4. Create data folders on storage nodes</a></li><li><a href="#5-create-a-configuration-file">5. Create a configuration file</a></li><li><a href="#6-store-the-configuration-file">6. Store the configuration file</a></li><li><a href="#7-start-the-admin-server-on-a-single-node">7. Start the admin server on a single node</a></li><li><a href="#8-start-logdeviced-on-every-node-3-options">8. Start logdeviced on every node (3 options)</a></li><li><a href="#9-see-if-its-running">9. See if it's running</a></li><li><a href="#10-bootstrap-the-cluster">10. Bootstrap the cluster</a></li><li><a href="#11-check-cluster-status">11. Check cluster status</a></li><li><a href="#11-create-log-ranges-using-ldshell">11. Create log ranges using ldshell</a></li><li><a href="#12-write-data-into-a-log">12. Write data into a log</a></li><li><a href="#12-read-data-from-a-log">12. Read data from a log</a></li><li><a href="#all-done">All done!</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2019 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
                 document.addEventListener('keyup', function(e) {
                   if (e.target !== document.body) {
                     return;
