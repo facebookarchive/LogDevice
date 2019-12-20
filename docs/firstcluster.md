@@ -110,7 +110,10 @@ zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf
 
 For the purposes of this tutorial, we will assume that you have distributed that
 configuration file via some automation to all nodes and it lives under
-`/etc/logdevice.conf`
+`/etc/logdevice.conf` if you are using the binary setup, if you are using
+docker, we assume here that the configuration file lives under
+`/data/logdevice/logdevice.conf` and is mounted on all containers as shown in
+the example commanda.
 
 ## 7. Start the admin server on a single node
 <!--DOCUSAURUS_CODE_TABS-->
