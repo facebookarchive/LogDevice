@@ -40,7 +40,7 @@ See [Log replication configuration](Replication.md) for more about epoch configu
 
 ### Replication property
 
-The replication property for a log includes the location scope, the region replication factor, and some constraints on the location. It's set on a per-log basis (see `replication_property` in [LDQuery](ldquery.md#log-\_groups).
+The replication property for a log includes the location scope, the region replication factor, and some constraints on the location. It's set on a per-log basis (see `replication_property` in [LDQuery](administration/ldquery.md#log-\_groups).
 
 ![replication property](assets/writepath/replication_property.png)
 

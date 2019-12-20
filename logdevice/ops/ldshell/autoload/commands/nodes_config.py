@@ -20,8 +20,12 @@ import nubia
 import pygments
 import termcolor
 from ldshell.helpers import ask_prompt, confirm_prompt
-from logdevice.admin.cluster_membership.types import BootstrapClusterRequest
-from logdevice.admin.common.types import LocationScope, ReplicationProperty
+from logdevice.admin.cluster_membership.types import (
+    BootstrapClusterRequest,
+    RemoveNodesRequest,
+)
+from logdevice.admin.common.types import LocationScope, NodeID, ReplicationProperty
+from logdevice.admin.nodes.types import NodesFilter
 from logdevice.admin.settings.types import SettingsRequest
 from logdevice.ops import nodes_configuration_manager as ncm
 from pygments import formatters, lexers
@@ -281,3 +285,29 @@ class NodesConfig:
             termcolor.cprint(str(e), "red")
             return 1
         return 0
+
+    @nubia.command
+    @nubia.argument("node_indexes", description="Apply maintenance to specified nodes")
+    async def shrink(self, node_indexes: typing.List[int]):
+        """
+        Shrinks the cluster by removing nodes from the NodesConfig. This
+        operation requires that the removed nodes are empty (storage state:
+        NONE) and dead.
+        """
+
+        ctx = nubia.context.get_context()
+        async with ctx.get_cluster_admin_client() as client:
+            try:
+                await client.removeNodes(
+                    request=RemoveNodesRequest(
+                        node_filters=[
+                            NodesFilter(node=NodeID(node_index=idx))
+                            for idx in node_indexes
+                        ]
+                    ),
+                    rpc_options=RpcOptions(timeout=60),
+                )
+                termcolor.cprint("Successfully removed the nodes", "green")
+            except Exception as e:
+                termcolor.cprint(str(e), "red")
+                return 1

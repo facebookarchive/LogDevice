@@ -411,7 +411,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      nullptr,
      "If set, the node will register itself in the config if it doesn't find "
      "itself there. Otherwise it will crash. This requires "
-     "--enable-nodes-configuration=true",
+     "--enable-nodes-configuration-manager=true",
      SERVER | REQUIRES_RESTART | EXPERIMENTAL,
      SettingsCategory::Configuration)
 

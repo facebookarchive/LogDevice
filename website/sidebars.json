@@ -14,14 +14,19 @@
         "Logs"
     ],
       "Administration": [
-          "LDShell",
-          "LDQuery"
+          "administration/AdminServer",
+          "administration/LDShell",
+          "administration/LDQuery",
+          "administration/ClusterMaintenance",
+          "administration/SafetyChecker"
       ],
       "Concepts": [
           "Writepath",
           "ReadPath",
           "Terminology",
-          "Consensus"
+          "Consensus",
+          "AdminServer",
+          "SafetyChecker"
         ],
       "Designs": [
           "FailureDetection",

@@ -14,10 +14,6 @@ A simple config file structure looks as follows:
   "server_settings": {},
   "cluster": "your_cluster_name",
   "internal_logs": {},
-  "metadata_logs": {},
-  "nodes": [],
-  "traffic_shaping": {},
-  "version": 123,
   "zookeeper": {}
 }
 ```
@@ -29,8 +25,9 @@ The cluster name is used for handshaking between clients and servers. This will 
 Internal logs are used for:
 - Logs configuration
 - Event log
+- Maintenances
 
-Both of these have a delta and and snapshot log. Their log ranges are hard-coded, but their replication can be [configured dynamically](log_configuration.md).
+Both of these have a delta and and snapshot log. Their log ranges are hard-coded.
 Since a lot of LogDevice internals depend on these logs, you want higher fault-tolerance than normal data logs.
 
 ```
@@ -79,53 +76,115 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
         "scd_enabled": false,
         "synced_copies": 0
     }
+    "maintenance_log_deltas": {
+        "extra_copies": 0,
+        "max_writes_in_flight": 2000,
+        "nodeset_size": 20,
+        "replicate_across": {
+            "node": 6,
+            "rack": 3
+        },
+        "scd_enabled": false,
+        "synced_copies": 0
+    },
+    "maintenance_log_snapshots": {
+        "extra_copies": 0,
+        "max_writes_in_flight": 2000,
+        "nodeset_size": 20,
+        "replicate_across": {
+            "node": 6,
+            "rack": 3
+        },
+        "scd_enabled": false,
+        "synced_copies": 0
+    }
 },
 ```
 
 ## Metadata logs (`metadata logs`)
-Metadata log configuration requires an explicit nodeset. This nodeset is crucial to the system and should always be read and write available. Metadata nodeset can be changed as long as a subset of the nodes is still maintained and data is overreplicated manually, but this is generally a dangerous operation.
+Metadata log configuration requires an explicit nodeset. This nodeset is crucial
+to the system and should always be read and write available. Metadata nodeset is
+dynamically reconfigured by the [Maintenance
+Manager](administration/admin_server.md#the-maintenance-manager) and the
+replication property cannot be modified after the initial bootstrapping of the
+server via ldshell.
 
-Replication constraints should **not** be changed without proper caution once the cluster is up and running.
+```shell-session
+ldshell -s localhost nodes-config bootstrap --metadata-replicate-across="node:3"
+```
 
 The metadata nodeset should contain as many failure domains as possible to ensure availability.
 
-```
-"metadata_logs": {
-    "nodeset": [0, 5, 10, 15, 20, 25, 30, 35, 40],
-    "replicate_across": {
-      "node": 6,
-      "rack": 3
-    }
-  },
-```
 
 ## Nodes (`nodes`)
-Nodes is an array of node objects. An example node object would be:
+The nodes configuration is dynamically stored in Zookeeper should not be
+modified directly, however, `ldshell nodes-config edit` command is available in
+case of emergency.
+
+LogDevice nodes register themselves dynamically into the cluster on startup
+using a feature that's enabled by the server setting 
+`--enable-node-self-registration`. In general, we strongly advise that you
+include it always in your configuration file.
 ```
-{
-    "generation": 1,
-    "gossip_port": 4441,
-    "host": "127.0.0.1:4440",
-    "roles": [
-        "sequencer",
-        "storage"
-    ],
-    "sequencer": true,
-    "storage": "read-write",
-    "storage_weight": 2,
-    "location": "abc.def.gh.ij.kl",
-    "node_id": 0,
-    "num_shards": 15,
-    "ssl_port": 4443,
+"server_settings": {
+  "enable-node-self-registration": "true",
+  "enable-nodes-configuration-manager": "true",
+  "enable-cluster-maintenance-state-machine": "true",
+  "use-nodes-configuration-manager-nodes-configuration": "true"
 },
+"client_settings": {
+  "enable-nodes-configuration-manager": "true",
+  "use-nodes-configuration-manager-nodes-configuration": "true",
+  "admin-client-capabilities": "true"
+}
 ```
+
+The following is a comprehensive example on `logdeviced` arguments that can be
+used to configure the node on startup
+
+```shell-session
+logdeviced \
+    # required arguments
+    --config-path <path> \
+    --name <node-name> \ # must be unique in the cluster
+    --address <IP Address> \ # Used by others to connect to this node
+    --local-log-store-path /data/logdevice \ # Where should we store data
+    # optional arguments
+    --roles storage,sequencer
+    --port 4440
+    --gossip-port 4441
+    --admin-port 6440
+    --location us1.west1
+    --storage-capacity 1
+    --sequencer-weight 1
+    --num-shards 1 # MUST be the same value for all nodes in the cluster
+```
+
+The self-registration works by first looking up the nodes configuration by
+node `name`. If the node exists, then the rest of the properties of the node
+will be updated from the supplied command-line arguments. If the node `name`
+is new, a new [Node ID](#node-id-node_id) is automatically assigned to this node
+and the cluster will automatically expand to include this node.
+
+> Note that the newly added node will by default be added with the state
+> `PROVISIONING` until the daemon finishes its self-test on startup, then the
+> state will be `NONE`. The [Maintenance
+> Manager](administration/admin_server.md#the-maintenance-manager) will notice
+> that we have a newly added node to the cluster and since there are no
+> maintenances applied, it will drive its operational state to `ENABLED`. Only
+> then it will start receiving reads and writes.
+
+Nodes can be removed from the cluster **only** if the have a `COMPLETED`
+maintenance that sets all the shards of that node to `DRAINED`. See
+[Cluster Maintenance](administration/maintenances.md) for reference.
 
 ### Node ID (`node_id`)
-A unique identifier for a node. This should not be changed during the lifetime of a host.
-
-### Host (`host`)
-Host is an IP:port pair. The port is the data port (non-ssl) to which both nodes and clients connect when SSL is disabled.
-For IPv6, the `[::1]:4440` format can be used.
+A unique identifier for a node. This should not be changed during the lifetime 
+of a host. The nodes ID is sometime referred to as the `node-index`, this is
+particularly true in ldshell. You may also see this is written in the format
+`N0` where `0` is the `node-index`/`node_id`. We also use this notation in cases
+where referencing a certain shard is necessary. In that case you will see
+something like this `N0:S0`. This is shard `0` of node `0`.
 
 ### Location (`location`)
 Location is used to encode the failure domain of a the host. This is used for data placement, based on the [log configuration](log_configuration.md)
@@ -154,45 +213,22 @@ A distinction should be made between roles and state:
 - `sequencer`
 - `storage`
 
-`storage_weight` defines a proportional value for the amount of data to be stored compared to other machines. When e.g. total disk size is used as weight for machines with variable disk sizes, the storage will be used proportionally.
-`sequencer_weight` can similarly define a proportional value for the number of sequencers to be placed on the machine.
-
-#### State
-The following variables can be used to perform maintenances / temporarily change the state of a node:
-
-`storage` can have the following values:
-- `disabled`: This node does not serve reads nor writes
-- `read-only`: This node still serves reads, but not writes
-- `read-write`: This node takes both reads and writes
-
-`sequencer` is a boolean value that can be toggled to temporarily disable or enable the sequencer (if the node has the `sequencer` role).
+`storage-capacity` defines a proportional value for the amount of data to be stored compared to other machines. When e.g. total disk size is used as weight for machines with variable disk sizes, the storage will be used proportionally.
+`sequencer-weight` can similarly define a proportional value for the number of sequencers to be placed on the machine.
 
 ### Gossip port (`gossip_port`)
 The (TCP) port LogDevice uses to gossip node state internally. This is required when `gossip-enabled` is `true`.
 Gossip is only used between nodes and is not required to be exposed to clients.
 
-### Generation (`generation`)
-Generation should be increased when node ids are reused, but IP addresses are changed. Generation is used by LogDevice to infer whether the host is a physically new machine and forces clients to reconnect when bumped.
-
-## Version (`version`)
-`version` should be bumped whenever the `node` section has been changed. This property is used to determine whether configuration needs to be synchronized to clients or not (when `enable-config-synchronization` is `true`).
-Generally, using current unix epoch timestamp is an easy way to provide incremental version numbers.
-
 ## Zookeeper settings (`zookeeper`)
 ```
 "zookeeper": {
-    "quorum": [
-        "192.168.0.5:2181",
-        "192.168.0.6:2181",
-        "192.168.0.7:2181",
-        "192.168.0.8:2181",
-        "192.168.0.9:2181"
-    ],
+    "zookeeper_uri": "ip://192.168.0.5:2181,192.168.0.6:2181",
     "timeout": "30s"
 }
 ```
 
-- `quorum` defines the list of IP+port pairs of all the Zookeeper nodes. For IPv6, square brackets can be used (e.g.`[::1]:2183`)
+- `zookeeper_uri` defines the list of IP/Name+port pairs of the Zookeeper nodes. For IPv6, square brackets can be used (e.g.`[::1]:2183`)
 - `timeout` defines the connection timeout.
 
 ## Settings (`client_settings` and `server_settings`)
@@ -204,4 +240,4 @@ For boolean-like values, any of the following can be used:
 - `0`, `false`, `False`
 
 ## Traffic shaping (`traffic_shaping`)
-TODO
+See [Traffic Shaping](TrafficShaping.md) detailed documentation on how to configure this.
