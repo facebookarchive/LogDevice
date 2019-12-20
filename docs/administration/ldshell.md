@@ -19,7 +19,8 @@ path if you store the config file there. You can also start ldshell in a
 "disconnected" mode by not supplying any arguments. This will start the
 interactive mode where you can use the `connect` command to establish a
 connection to a running cluster. The `connect` command needs to establish a
-connection to the admin server (`ld-admin-server`) but can alternatively connect
+connection to the [admin server](administration/admin_server.md) 
+(`ld-admin-server`) but can alternatively connect
 to any node on the cluster via the admin port (default admin port for nodes is `6440`).
 
 Alternatively, it can connect via a unix-socket to the admin server or admin

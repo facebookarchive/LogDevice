@@ -4,8 +4,8 @@ title: Operations Safety Checker
 sidebar_label: Operations Safety Checker
 ---
 The safety checker is an internal component that runs as part of the [Admin
-Server](admin_server.md) and is used extensively by the [Maintenance
-Manager](admin_server.md#the-maintenance-manager) to decide whether maintenance
+Server](administration/admin_server.md) and is used extensively by the [Maintenance
+Manager](administration/admin_server.md#the-maintenance-manager) to decide whether maintenance
 requests should proceed or not.
 
 ## Why do we need a safety checker?
@@ -19,9 +19,16 @@ which nodes can safely be taken down in a cluster in LogDevice:
    the historical data since we **require** that we rebuild the data on the
    same historical nodeset. As of now we don't support amending historical
    nodesets (Immutable historical nodesets).
-2. [Log attributes can change](log_configuration.md#updating-attributes) at any time: This means that you might think that the current log attributes show that your logs are replicated across multiple racks but this doesn't tell you anything about the historical/old data that was written before you perform that change. As part of the LogDevice design, we only apply log attribute changes on the newly written data. This means that you need to perform a check on the historical epochs to be truly sure.
+2. [Log attributes can change](log_configuration.md#updating-attributes) at any
+   time: This means that you might think that the current log attributes show
+   that your logs are replicated across multiple racks but this doesn't tell
+   you anything about the historical/old data that was written before you
+   perform that change. As part of the LogDevice design, we only apply log
+   attribute changes on the newly written data. This means that you need to
+   perform a check on the historical epochs to be truly sure.
 3. There might be a temporary under-replication on the cluster at the moment:
-   LogDevice will perform what we refer to as _mini rebuilding_ in case we
+   LogDevice will perform what we refer to as [mini
+   rebuilding](../Rebuilding.md#mini-rebuilding) in case we
    detect that `logdeviced` has crashed and _might_ have not performed a
    _flush_ on the last partition (rocksdb's memtable). In this case we
    need to run a time-range quick rebuilding to re-replicate that data to
@@ -43,7 +50,7 @@ periodically on the admin server (controlled by
 not set to `true`, safety checker will consider its metadata stale and will
 perform a re-scan after `safety-check-metadata-update-period` (defaults to 10
 minutes). We recommend enabling `enable-safety-check-periodic-metadata-update`
-on the standalone [Admin Server](admin_server.md) to amortise the cost of this
+on the standalone [Admin Server](administration/admin_server.md) to amortise the cost of this
 operation.
 
 When asked for a safety check (e.g., ldshell's `check-impact`), the safety
@@ -122,9 +129,18 @@ Let's break this down line by line:
 epoch
 - `Replication: {rack: 3}`: The replication property configured for **this
 epoch**
-- `Write/Rebuilding availability: 13 → 10  (we need at least 3 nodes in 3 racks that are healthy, writable, and alive.)`: This tells you that our write or rebuilding availability requirement. We are reducing the number of nodes from `13` to `10` but this doesn't violate our write availability requirement. In order for us to form a correct copyset in this epoch, we need 3 nodes to be write-available in 3 different racks. We are good.
+- `Write/Rebuilding availability: 13 → 10  (we need at least 3 nodes in 3 racks
+  that are healthy, writable, and alive.)`: This tells you that our write or
+  rebuilding availability requirement. We are reducing the number of nodes from
+  `13` to `10` but this doesn't violate our write availability requirement.
+  In order for us to form a correct copyset in this epoch, we need 3 nodes to
+  be write-available in 3 different racks. We are good.
 - `Read availability: We can't afford losing more than 2 nodes across more than
-2 (actual 3) racks. Nodes must be healthy, readable, and alive.`: This is our read-availability requirement, as you can see as a result of the operation we will lose more nodes across racks than we can afford. The result of the test is that we will lose nodes across **3** racks but we can't afford losing more than **2**.
+2 (actual 3) racks. Nodes must be healthy, readable, and alive.`: This is our
+  read-availability requirement, as you can see as a result of the operation
+  we will lose more nodes across racks than we can afford. The result of the
+  test is that we will lose nodes across **3** racks but we can't afford losing
+  more than **2**.
 - `Impact: READ_AVAILABILITY_LOSS`: This is the summary of the impact. We will
 lose read availability.
 
@@ -133,6 +149,10 @@ nodeset that we are checking. The nodes are grouped according to the biggest
 replication domain as configured in this epoch. In this case, we are grouping
 nodes per rack identifier. Note that we split the output on multiple
 tables/lines for readability.
+
+> Note that if you don't specify a [`location`](../configuration.md#location-location)
+> string for your storage nodes, the shards in this nodeset table will be
+> grouped under `UNKNOWN` header.
 
 This shows that our nodeset has one shard (e.g., `N5:S10`) per rack. And we
 highlight the nodes such that:

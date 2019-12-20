@@ -21,6 +21,22 @@ the standalone admin server is started again.
 > per cluster which can be updated and pushed with a different release train 
 > than the storage daemons.
 
+
+## Running the Admin Server
+The following is the recommended set of arguments to pass to the admin server:
+
+```shell-session
+ld-admin-server \
+    --config-path <path> \
+    --enable-maintenance-manager \
+    --enable-safety-check-periodic-metadata-update \
+    --safety-check-metadata-update-period=1min \
+    --maintenance-log-snapshotting=true \
+```
+
+> Some of these arguments will be the default soon but for now we need to set
+> them explicitly.
+
 ## What is the Admin API?
 The Admin API is a thrift RPC service that offers a gateway for tooling and
 automation to perform introspection queries or maintenance operations on a given
@@ -55,7 +71,7 @@ LogDevice clusters. It is responsible for guaranteeing safety of maintenance
 operations and automatic sequencing and resolution of maintenance requests
 coming from different actors or users.
 
-![LDShell Screenshot](assets/maintenance-manager-design.jpg "Maintenance Manager Internals")
+![Maintenance Manager Internals](assets/maintenance-manager-design.jpg "Maintenance Manager Internals")
 
 ### Key Features
 1. **Cluster membership management**: In conjunction with the
