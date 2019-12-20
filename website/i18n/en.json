@@ -37,6 +37,10 @@
         "title": "Build LogDevice",
         "sidebar_label": "Build LogDevice"
       },
+      "Kubernetes": {
+        "title": "Running on Kubernetes",
+        "sidebar_label": "Running on Kubernetes"
+      },
       "LDQuery": {
         "title": "LDQuery",
         "sidebar_label": "LDQuery"
