@@ -240,4 +240,4 @@ For boolean-like values, any of the following can be used:
 - `0`, `false`, `False`
 
 ## Traffic shaping (`traffic_shaping`)
-TODO
+See [Traffic Shaping](TrafficShaping.md) detailed documentation on how to configure this.
