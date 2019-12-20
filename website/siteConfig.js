@@ -58,6 +58,9 @@ const siteConfig = {
     primaryColor: '#20232a',
     secondaryColor: '#3C5B9A',
   },
+  stylesheets: [
+  'https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,400i,700',
+  ],
 
   // This copyright info is used in /core/Footer.js and blog rss/atom feeds.
   copyright:
@@ -67,7 +70,7 @@ const siteConfig = {
 
   highlight: {
     // Highlight.js theme to use for syntax highlighting in code blocks
-    theme: 'default',
+    theme: 'dracula',
   },
 
   gaTrackingId: 'UA-137238014-1',
