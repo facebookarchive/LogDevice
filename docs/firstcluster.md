@@ -85,6 +85,29 @@ so ideally they should have access to it while running as well.
 There are different ways to ensure this. One option is to store the file on a
 shared network filesystem or distribute with chef, ansible, or similar methods.
 
+LogDevice _currently_ have support for loading configuration files from
+zookeeper. In this case you can manually put the configuration file in zookeeper
+via the `zkCli.sh` utility that comes with zookeeper.
+
+```shell-session
+/usr/share/zookeeper/bin/zkCli.sh create /logdevice_test.conf "`cat ~/logdevice_test.conf`"
+```
+
+If you need to modify the config in ZooKeeper after you've created it, use the `set` command instead of `create`:
+```shell-session
+/usr/share/zookeeper/bin/zkCli.sh set /logdevice_test.conf "`cat ~/logdevice_test.conf`"
+```
+
+In this case, wherever a config-file is expected in logdevice binaries, you can
+instead use this:
+```shell-session
+zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf
+# Example
+--config-path /etc/logdevice.conf
+# Becomes
+--config-path zk:10.0.0.1:2181,10.0.0.2:2181,10.0.0.3:2181/logdevice_test.conf
+```
+
 For the purposes of this tutorial, we will assume that you have distributed that
 configuration file via some automation to all nodes and it lives under
 `/etc/logdevice.conf`
