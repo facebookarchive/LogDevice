@@ -11,7 +11,7 @@ add_custom_target(settings.md
 
 add_custom_target(ldquery.md
 	COMMAND markdown-ldquery > ldquery.md
-	WORKING_DIRECTORY ${LOGDEVICE_DIR}/../docs
+	WORKING_DIRECTORY ${LOGDEVICE_DIR}/../docs/administration
 	DEPENDS markdown-ldquery)
 
 add_custom_target(client-api-doxy
