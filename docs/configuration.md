@@ -129,6 +129,7 @@ include it always in your configuration file.
 "server_settings": {
   "enable-node-self-registration": "true",
   "enable-nodes-configuration-manager": "true",
+  "enable-cluster-maintenance-state-machine": "true",
   "use-nodes-configuration-manager-nodes-configuration": "true"
 },
 "client_settings": {
@@ -239,4 +240,4 @@ For boolean-like values, any of the following can be used:
 - `0`, `false`, `False`
 
 ## Traffic shaping (`traffic_shaping`)
-TODO
+See [Traffic Shaping](TrafficShaping.md) detailed documentation on how to configure this.
