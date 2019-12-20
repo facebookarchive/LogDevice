@@ -15,6 +15,8 @@ The first step is to have a running kubernetes cluster. You can use a managed cl
 LogDevice depends on Zookeeper for storing per-log metadata and its nodes configuration. So we will need to provision a zookeeper ensemble that LogDevice will be able to access. For this demo, we will use [helm](https://helm.sh/) (A package manager for kubernetes) to install zookeeper. After installing helm run:
 
 ```shell-session
+helm repo add incubator http://storage.googleapis.com/kubernetes-charts-incubator
+helm repo update
 helm install zookeeper incubator/zookeeper
 ```
 
@@ -77,6 +79,8 @@ $ cat config.json  | grep -A 3 zookeeper
 
 By default, this spec installs a 3 nodes LogDevice cluster. If you want a bigger cluster, modify the `logdevice-statefulset.yaml` file, and increase the number of replicas to the number of nodes you want in the cluster. Also by default, we attach a 20GB persistent storage to the nodes, if you want more you can change that under the `volumeClaimTemplates` section.
 
+Check out [our configuration docs](configuration.md) for more details about the configuration file.
+
 ### Starting the Cluster
 
 Once you're done configuring the cluster, you can deploy it using:
@@ -123,7 +127,7 @@ $ kubectl run ldshell -it --rm --restart=Never --image=facebookincubator/logdevi
    bootstrap --metadata-replicate-across 'NODE: 3'
 ```
 
-This will start a ldshell pod, that connects to the admin server and invokes the `nodes-config bootstrap` ldshell command and sets the metadata replication property of the cluster to be replicated across three different nodes. On success, you should see something like:
+This will start a ldshell pod, that connects to the admin server and invokes the `nodes-config bootstrap` ldshell command and sets the metadata replication property of the cluster to be replicated across three different nodes (more on metadata logs [here](configuration.md#metadata-logs-metadata-logs)). On success, you should see something like:
 
 ```shell-session
 Logging to /tmp/ldshell-amfk8ock
@@ -136,7 +140,7 @@ pod "ldshell" deleted
 
 ### LDshell
 
-Now the cluster should be up and running and ready to receive reads and writes. To be able to get an interactive [ldshell](https://logdevice.io/docs/LDShell.html) instance on this cluster run:
+Now the cluster should be up and running and ready to receive reads and writes. To be able to get an interactive [ldshell](administration/ldshell.md) instance on this cluster run:
 
 ```shell-session
 $ kubectl run ldshell -it --rm --restart=Never --image=facebookincubator/logdevice -- \
@@ -171,8 +175,12 @@ kubectl scale statefulsets logdevice --replicas=<new_size>
 statefulset.apps/logdevice scaled
 ```
 
-Or you can modify the spec file, increase the number of replicas and then reapply it using `kubectl apply -k .`.
+Or you can modify the spec file, increase the number of replicas and then reapply it using `kubectl apply -k .`. You can then check if the pods are up by running `kubectl get pods`. Once the pods are started, they will auto register to the cluster and maintenance manager will enable them to be able to start serving traffic.
 
 ### Shrinking the Cluster
 
-TODO: Document shrinking the cluster when the `nodes-config remove` ldshell command is implemented.
+To be able to safely remove a node from a cluster, you first need to drain it (move all the data on this node, to other nodes). Check the [maintenance docs](adminstration/maintenances.md#draining-a-couple-of-nodes) to learn how to drain a node.
+
+> Note: kubernetes only allows you to shrink nodes from the end, so the nodes with the highest IDs in their name are the ones that you should drain.
+
+Once the drain is done (maintenance state is COMPLETED), decrease the number of replicas to the desired number using the same commands from the expand sections. Once the pod is deleted, you can then remove the node from the config using the `nodes-config shrink` ldshell command.
