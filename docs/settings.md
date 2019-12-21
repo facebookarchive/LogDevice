@@ -47,7 +47,7 @@ sidebar_label: Settings
 | client-default-dscp | Use default DSCP to setup to client sockets at Sender.Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4 | 0 | requires&nbsp;restart |
 | config-path | location of the cluster config file to use. Format: [file:]<path-to-config-file> or configerator:<configerator-path> |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | enable-logsconfig-manager | If true, logdeviced will load the logs configuration from the internal replicated storage and will ignore the logs section in the config file. This also enables the remote management API for logs config. | true |  |
-| enable-node-self-registration | If set, the node will register itself in the config if it doesn't find itself there. Otherwise it will crash. This requires --enable-nodes-configuration=true | false | requires&nbsp;restart, **experimental**, server&nbsp;only |
+| enable-node-self-registration | If set, the node will register itself in the config if it doesn't find itself there. Otherwise it will crash. This requires --enable-nodes-configuration-manager=true | false | requires&nbsp;restart, **experimental**, server&nbsp;only |
 | enable-nodes-configuration-manager | If set, NodesConfigurationManager and its workflow will be enabled. | false | requires&nbsp;restart |
 | file-config-update-interval | interval at which to poll config file for changes (if reading config from file on disk | 10000ms |  |
 | initial-config-load-timeout | maximum time to wait for initial server configuration until giving up | 15s | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
