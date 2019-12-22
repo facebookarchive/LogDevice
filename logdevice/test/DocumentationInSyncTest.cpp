@@ -127,7 +127,7 @@ TEST_P(DocumentationInSyncTest, RegenAndCompare) {
 
 std::vector<TestParams> settings_test_params{
     {"settings.md", defaultLogdevicedPath(), {"--markdown-settings"}},
-    {"ldquery.md", defaultMarkdownLDQueryPath(), {}}};
+    {"administration/ldquery.md", defaultMarkdownLDQueryPath(), {}}};
 
 INSTANTIATE_TEST_CASE_P(ServerSettingsTest,
                         DocumentationInSyncTest,
