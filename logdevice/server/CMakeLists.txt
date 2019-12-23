@@ -46,19 +46,19 @@ if(${BUILD_TESTS})
     ${test_files}
   )
 
-enable_testing()
-if(HAVE_CMAKE_GTEST)
-  gtest_discover_tests(server_test
+  enable_testing()
+  if(HAVE_CMAKE_GTEST)
+    gtest_discover_tests(server_test
                      WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-else()
-  add_test(
-    NAME ServerTest
-    COMMAND ${UNIT_TEST_OUTPUT_DIRECTORY}/server_test
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+  else()
+    add_test(
+      NAME ServerTest
+      COMMAND ${UNIT_TEST_OUTPUT_DIRECTORY}/server_test
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
   endif()
 
-set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES
-  ${LOGDEVICE_SERVER_DIR}/flaky_tests.cmake)
+  set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES
+    ${LOGDEVICE_SERVER_DIR}/flaky_tests.cmake)
 
   target_link_libraries(server_test
     common
