@@ -208,7 +208,7 @@ static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
       // Resetting the LogsConfig pointer to signal that we aren't able to
       // resolve log configuration locally.
       output.reset();
-      return true;
+      return false;
     }
     std::string json_file;
     Status rv =
