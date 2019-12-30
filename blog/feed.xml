@@ -5,7 +5,7 @@
         <link>https://logdevice.io/blog</link>
         <description>The best place to stay up-to-date with the latest LogDevice news and events.</description>
         <lastBuildDate>Wed, 12 Sep 2018 06:00:00 GMT</lastBuildDate>
-        <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <image>
             <title>LogDevice Blog</title>
