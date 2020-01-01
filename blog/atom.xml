@@ -7,7 +7,7 @@
     <link rel="alternate" href="https://logdevice.io/blog"/>
     <subtitle>The best place to stay up-to-date with the latest LogDevice news and events.</subtitle>
     <logo>https://logdevice.io/img/facebook_logdevice_whitewordmark.png</logo>
-    <rights>Copyright © 2019 Facebook</rights>
+    <rights>Copyright © 2020 Facebook</rights>
     <entry>
         <title type="html"><![CDATA[Open-sourcing LogDevice, a distributed data store for sequential data]]></title>
         <id>https://logdevice.io/blog/2018/09/12/open-sourcing-announcement.html</id>
