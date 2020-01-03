@@ -34,7 +34,7 @@ class MockClusterState : public ClusterState {
   createConfigFor(size_t nnodes) {
     using configuration::nodes::NodeServiceDiscovery;
     using configuration::nodes::ServiceDiscoveryConfig;
-    constexpr NodeServiceDiscovery::RoleSet both_roles{3};
+    constexpr NodeServiceDiscovery::RoleSet kBothRoles{3};
     ServiceDiscoveryConfig sdconfig;
 
     ServiceDiscoveryConfig::Update update;
@@ -49,7 +49,7 @@ class MockClusterState : public ClusterState {
                                /*ssl_address=*/folly::none,
                                /*admin_address=*/Sockaddr(url, 6440),
                                /*location=*/folly::none,
-                               both_roles});
+                               kBothRoles});
       NodeUpdate nup{
           ServiceDiscoveryConfig::UpdateType::PROVISION, std::move(nsd)};
       update.addNode(nid, std::move(nup));

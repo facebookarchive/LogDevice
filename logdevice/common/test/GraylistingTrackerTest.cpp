@@ -106,7 +106,7 @@ class MockGraylistingTracker : public GraylistingTracker {
                                                      std::string domain,
                                                      bool metadata = false) {
     return {
-        id, NodesConfigurationTestUtil::both_role, domain, 1.0, 2, metadata};
+        id, NodesConfigurationTestUtil::kBothRoles, domain, 1.0, 2, metadata};
   }
 
   void addNode(node_index_t id, std::string domain) {

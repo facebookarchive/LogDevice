@@ -20,9 +20,9 @@ using namespace configuration::nodes;
 using namespace membership;
 using RoleSet = NodeServiceDiscovery::RoleSet;
 
-constexpr configuration::nodes::NodeServiceDiscovery::RoleSet seq_role{1};
-constexpr configuration::nodes::NodeServiceDiscovery::RoleSet storage_role{2};
-constexpr configuration::nodes::NodeServiceDiscovery::RoleSet both_role{3};
+constexpr configuration::nodes::NodeServiceDiscovery::RoleSet kSeqRole{1};
+constexpr configuration::nodes::NodeServiceDiscovery::RoleSet kStorageRole{2};
+constexpr configuration::nodes::NodeServiceDiscovery::RoleSet kBothRoles{3};
 
 NodeServiceDiscovery genDiscovery(node_index_t n,
                                   RoleSet roles,
@@ -242,7 +242,7 @@ initialAddShardsUpdate(std::vector<node_index_t> node_idxs) {
   std::vector<NodeTemplate> nodes;
   for (auto nid : node_idxs) {
     nodes.push_back({nid,
-                     both_role,
+                     kBothRoles,
                      "aa.bb.cc.dd.ee",
                      1.0,
                      /* num_shard=*/1,
@@ -254,12 +254,12 @@ initialAddShardsUpdate(std::vector<node_index_t> node_idxs) {
 
 NodesConfiguration::Update initialAddShardsUpdate() {
   std::vector<NodeTemplate> nodes;
-  std::map<node_index_t, RoleSet> role_map = {{1, both_role},
-                                              {2, storage_role},
-                                              {7, seq_role},
-                                              {9, storage_role},
-                                              {11, storage_role},
-                                              {13, storage_role}};
+  std::map<node_index_t, RoleSet> role_map = {{1, kBothRoles},
+                                              {2, kStorageRole},
+                                              {7, kSeqRole},
+                                              {9, kStorageRole},
+                                              {11, kStorageRole},
+                                              {13, kStorageRole}};
   for (node_index_t n : NodeSetIndices({1, 2, 7, 9, 11, 13})) {
     nodes.push_back({n,
                      role_map[n],
@@ -338,7 +338,7 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
   // is something a user could do and we'd want to test for. In that case, when
   // the user tries to apply / propose the update, they'll get an error.
   return addNewNodeUpdate(
-      existing, {new_node_idx, both_role, "aa.bb.cc.dd.ee", 0.0, 1});
+      existing, {new_node_idx, kBothRoles, "aa.bb.cc.dd.ee", 0.0, 1});
 }
 
 NodesConfiguration::Update

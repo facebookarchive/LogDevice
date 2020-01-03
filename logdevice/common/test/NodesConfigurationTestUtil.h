@@ -13,13 +13,13 @@ namespace facebook {
   namespace logdevice {
     namespace NodesConfigurationTestUtil {
 
-extern const configuration::nodes::NodeServiceDiscovery::RoleSet seq_role;
-extern const configuration::nodes::NodeServiceDiscovery::RoleSet storage_role;
-extern const configuration::nodes::NodeServiceDiscovery::RoleSet both_role;
+extern const configuration::nodes::NodeServiceDiscovery::RoleSet kSeqRole;
+extern const configuration::nodes::NodeServiceDiscovery::RoleSet kStorageRole;
+extern const configuration::nodes::NodeServiceDiscovery::RoleSet kBothRoles;
 
 struct NodeTemplate {
   node_index_t id;
-  configuration::nodes::NodeServiceDiscovery::RoleSet roles{both_role};
+  configuration::nodes::NodeServiceDiscovery::RoleSet roles{kBothRoles};
   std::string location{};
   double sequencer_weight{1.0};
   shard_size_t num_shards{2};

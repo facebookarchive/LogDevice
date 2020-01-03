@@ -48,7 +48,7 @@ class NodeStatsControllerLocatorTest : public Test {
       }
       templates.emplace_back(NodeTemplate{
           idx,
-          both_role,
+          kBothRoles,
           *location_str,
       });
     }
