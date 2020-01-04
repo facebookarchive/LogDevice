@@ -941,6 +941,9 @@ class Cluster {
     return getNode(0);
   }
 
+  // Returns the list of non-stopped storage nodes.
+  std::vector<node_index_t> getRunningStorageNodes() const;
+
   // When using hash-based sequencer assignment, the above is not sufficient.
   // Hash-based sequencer assignment is necessary to have failover.
   // Returns -1 if there is no sequencer for the log or it is unavailable.
@@ -1486,7 +1489,8 @@ class Node {
   // server.  waitUntilStarted() looks for this to verify that we are talking
   // to the right process.
   std::string server_id_;
-  // Stopped until start() is called, as well as between suspend() and resume()
+  // Stopped until start() is called, as well as between suspend() and resume(),
+  // or shutdown() and start().
   bool stopped_ = true;
   bool gossip_enabled_ = true;
   // type of rocksdb local log store

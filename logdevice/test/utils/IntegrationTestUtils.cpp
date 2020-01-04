@@ -3400,6 +3400,16 @@ int Cluster::shutdownNodes(const std::vector<node_index_t>& nodes) {
   return res;
 }
 
+std::vector<node_index_t> Cluster::getRunningStorageNodes() const {
+  std::vector<node_index_t> r;
+  for (const auto& it : nodes_) {
+    if (!it.second->stopped_ && it.second->is_storage_node_) {
+      r.push_back(it.first);
+    }
+  }
+  return r;
+}
+
 int Cluster::getHashAssignedSequencerNodeId(logid_t log_id, Client* client) {
   SequencerState seq_state;
   Status s = getSeqState(client, log_id, seq_state, true);

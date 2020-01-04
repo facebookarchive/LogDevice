@@ -332,7 +332,7 @@ int read_records_swallow_gaps(
   size_t total_read = 0;
   ld_info("Reading %zu records ...", nrecords);
   int ngaps = 0;
-  while (1) {
+  while (reader.isReadingAny()) {
     GapRecord gap;
     int nread = reader.read(nrecords - total_read, data_out, &gap);
     if (nread < 0) {
@@ -347,6 +347,7 @@ int read_records_swallow_gaps(
     ld_info("Read %zu of %zu records ...", total_read, nrecords);
   }
   ld_info("Finished reading");
+  ld_check_ge(total_read, nrecords);
   reader.setTimeout(timeout_stash);
   return ngaps;
 }

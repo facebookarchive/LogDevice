@@ -184,7 +184,7 @@ inline void read_records_no_gaps(
     size_t nrecords,
     std::vector<std::unique_ptr<DataRecord>>* data_out = nullptr) {
   int ngaps = read_records_swallow_gaps(reader, nrecords, data_out);
-  ld_check(ngaps == 0);
+  ld_check_eq(ngaps, 0);
 }
 
 void PrintTo(MessageType type, ::std::ostream* os);
