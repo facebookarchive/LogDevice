@@ -25,6 +25,7 @@
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
+#include "logdevice/server/storage/PurgeCoordinator.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 #include "logdevice/server/storage_tasks/RecoverLogStateTask.h"
 #include "logdevice/server/storage_tasks/RecoverSealTask.h"
@@ -54,10 +55,7 @@ LogStorageState::LogStorageState(logid_t log_id,
       owner_(owner) {
   retry_release_.timer_scheduled_ = false;
   retry_release_.force_ = false;
-  if (owner_->getProcessor() != nullptr) { // may be null in tests
-    purge_coordinator_ =
-        owner_->getProcessor()->createPurgeCoordinator(log_id, shard_, this);
-  }
+  purge_coordinator_ = std::make_unique<PurgeCoordinator>(log_id, shard, this);
 }
 
 LogStorageState::~LogStorageState() = default;

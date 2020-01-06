@@ -808,6 +808,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     processor_ = ServerProcessor::createNoInit(
         /* audit log */ nullptr,
         /* sharded storage thread pool */ nullptr,
+        /* log storage state map */ nullptr,
         UpdateableSettings<ServerSettings>(
             create_default_settings<ServerSettings>()),
         std::move(ugossip_settings),

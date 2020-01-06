@@ -120,12 +120,10 @@ class ServerProcessor : public Processor {
   // (nullptr if not).  Unowned.
   ShardedStorageThreadPool* const sharded_storage_thread_pool_;
 
-  std::unique_ptr<LogStorageState_PurgeCoordinator_Bridge>
-  createPurgeCoordinator(logid_t, shard_index_t, LogStorageState*);
-
   template <typename... Args>
   ServerProcessor(std::shared_ptr<LocalLogFile> audit_log,
                   ShardedStorageThreadPool* const sharded_storage_thread_pool,
+                  std::unique_ptr<LogStorageStateMap> log_storage_state_map,
                   UpdateableSettings<ServerSettings> server_settings,
                   UpdateableSettings<GossipSettings> gossip_settings,
                   UpdateableSettings<AdminServerSettings> admin_server_settings,
@@ -136,10 +134,11 @@ class ServerProcessor : public Processor {
         server_settings_(std::move(server_settings)),
         gossip_settings_(std::move(gossip_settings)),
         admin_server_settings_(std::move(admin_server_settings)),
+        log_storage_state_map_(std::move(log_storage_state_map)),
         boycotting_stats_(
             updateableSettings()
                 ->sequencer_boycotting.node_stats_retention_on_nodes) {
-    maybeCreateLogStorageStateMap();
+    fixupLogStorageStateMap();
   }
 
   ~ServerProcessor() override;
@@ -156,7 +155,7 @@ class ServerProcessor : public Processor {
   }
 
  private:
-  void maybeCreateLogStorageStateMap();
+  void fixupLogStorageStateMap();
 
   std::shared_ptr<LocalLogFile> audit_log_;
   UpdateableSettings<ServerSettings> server_settings_;

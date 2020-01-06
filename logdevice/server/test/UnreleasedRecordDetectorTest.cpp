@@ -231,6 +231,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
   processor_ =
       ServerProcessor::create(/* audit log */ nullptr,
                               sharded_storage_thread_pool_.get(),
+                              /* log storage state map */ nullptr,
                               *userver_settings_,
                               *ugossip_settings_,
                               *uadmin_server_settings_,

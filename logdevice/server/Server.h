@@ -292,6 +292,11 @@ class Server {
 
   // initStore()
   std::unique_ptr<ShardedRocksDBLocalLogStore> sharded_store_;
+
+  // initLogStorageStateMap()
+  std::unique_ptr<LogStorageStateMap> log_storage_state_map_ = nullptr;
+
+  // initStorageThreadPool()
   std::unique_ptr<ShardedStorageThreadPool> sharded_storage_thread_pool_;
 
   // initProcessor()
@@ -336,6 +341,8 @@ class Server {
   // In case of error, log it and return false.
   bool initListeners();
   bool initStore();
+  bool initLogStorageStateMap();
+  bool initStorageThreadPool();
   bool initProcessor();
   bool initFailureDetector();
   bool startWorkers();

@@ -25,23 +25,22 @@ ServerWorker* ServerProcessor::createWorker(WorkContext::KeepAlive executor,
   return worker;
 }
 
-std::unique_ptr<LogStorageState_PurgeCoordinator_Bridge>
-ServerProcessor::createPurgeCoordinator(logid_t log_id,
-                                        shard_index_t shard,
-                                        LogStorageState* parent) {
-  return std::make_unique<PurgeCoordinator>(log_id, shard, parent);
-}
-
-void ServerProcessor::maybeCreateLogStorageStateMap() {
-  if (runningOnStorageNode()) {
-    // sharded_storage_thread_pool_ may be nullptr in tests, in that case
-    // assume there is one shard only.
+void ServerProcessor::fixupLogStorageStateMap() {
+  if (!runningOnStorageNode()) {
+    ld_check(log_storage_state_map_ == nullptr);
+    return;
+  }
+  if (log_storage_state_map_ == nullptr) {
+    // sharded_storage_thread_pool_ & log_storage_state_map may be
+    // nullptr in tests, in that case assume there is one shard only
+    // and allocate `log_storage_state_map_`.
     const shard_size_t num_shards = sharded_storage_thread_pool_
         ? sharded_storage_thread_pool_->numShards()
         : 1;
     log_storage_state_map_ = std::make_unique<LogStorageStateMap>(
-        num_shards, updateableSettings()->log_state_recovery_interval, this);
+        num_shards, updateableSettings()->log_state_recovery_interval);
   }
+  log_storage_state_map_->setProcessor(this);
 }
 
 void ServerProcessor::init() {

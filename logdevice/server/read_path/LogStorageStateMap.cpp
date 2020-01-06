@@ -19,27 +19,6 @@
 
 namespace facebook { namespace logdevice {
 
-LogStorageStateMap::LogStorageStateMap(
-    shard_size_t num_shards,
-    std::chrono::microseconds recovery_interval,
-    ServerProcessor* processor)
-    : cache_disposal_(processor != nullptr &&
-                              processor->settings()->enable_record_cache
-                          ? std::make_unique<RecordCacheDisposal>(processor)
-                          : nullptr),
-      num_shards_(num_shards),
-      processor_(processor),
-      shard_map_(makeMap(num_shards)),
-      state_recovery_interval_(recovery_interval) {
-  if (processor != nullptr && processor->settings()->enable_record_cache &&
-      processor->runningOnStorageNode()) {
-    // only starts the record cache monitor thread if record cache
-    // is enabled
-    record_cache_monitor_ =
-        std::make_unique<RecordCacheMonitorThread>(processor);
-  }
-}
-
 LogStorageState* LogStorageStateMap::insertOrGet(logid_t log_id,
                                                  shard_index_t shard_idx) {
   Map& map = *shard_map_[shard_idx];
@@ -159,6 +138,23 @@ void LogStorageStateMap::shutdownRecordCacheMonitor() {
 ServerProcessor* LogStorageStateMap::getProcessor() {
   return processor_;
 }
+
+void LogStorageStateMap::setProcessor(ServerProcessor* processor) {
+  ld_check_eq(processor_, nullptr);
+  ld_check(processor != nullptr);
+  processor_ = processor;
+
+  if (processor->settings()->enable_record_cache) {
+    cache_disposal_ = std::make_unique<RecordCacheDisposal>(processor);
+    if (processor->runningOnStorageNode()) {
+      // only starts the record cache monitor thread if record cache
+      // is enabled
+      record_cache_monitor_ =
+          std::make_unique<RecordCacheMonitorThread>(processor);
+    }
+  }
+}
+
 StatsHolder* LogStorageStateMap::getStats() {
   return processor_ ? processor_->stats_ : nullptr;
 }

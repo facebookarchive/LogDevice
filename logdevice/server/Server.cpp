@@ -648,13 +648,13 @@ Server::Server(ServerParameters* params)
   ld_check(params_);
   start_time_ = std::chrono::system_clock::now();
 
-  if (!(initListeners() && initStore() && initProcessor() &&
-        initFailureDetector() && startWorkers() && initNCM() &&
-        repopulateRecordCaches() && initSequencers() &&
-        initSequencerPlacement() && initRebuildingCoordinator() &&
-        initClusterMaintenanceStateMachine() && initLogStoreMonitor() &&
-        initUnreleasedRecordDetector() && initLogsConfigManager() &&
-        initAdminServer())) {
+  if (!(initListeners() && initStore() && initLogStorageStateMap() &&
+        initStorageThreadPool() && initProcessor() && initFailureDetector() &&
+        startWorkers() && initNCM() && repopulateRecordCaches() &&
+        initSequencers() && initSequencerPlacement() &&
+        initRebuildingCoordinator() && initClusterMaintenanceStateMachine() &&
+        initLogStoreMonitor() && initUnreleasedRecordDetector() &&
+        initLogsConfigManager() && initAdminServer())) {
     _exit(EXIT_FAILURE);
   }
 }
@@ -837,8 +837,8 @@ bool Server::initStore() {
                   "set ");
       return false;
     }
-    auto local_settings = params_->getProcessorSettings().get();
     try {
+      auto local_settings = params_->getProcessorSettings().get();
       sharded_store_.reset(
           new ShardedRocksDBLocalLogStore(local_log_store_path,
                                           params_->getNumDBShards(),
@@ -883,17 +883,6 @@ bool Server::initStore() {
       }
       auto& io_fault_injection = IOFaultInjection::instance();
       io_fault_injection.init(sharded_store_->numShards());
-      // Size the storage thread pool task queue to never fill up.
-      size_t task_queue_size = local_settings->num_workers *
-          local_settings->max_inflight_storage_tasks;
-      sharded_storage_thread_pool_.reset(
-          new ShardedStorageThreadPool(sharded_store_.get(),
-                                       server_settings_->storage_pool_params,
-                                       server_settings_,
-                                       params_->getProcessorSettings(),
-                                       task_queue_size,
-                                       params_->getStats(),
-                                       params_->getTraceLogger()));
     } catch (const ConstructorFailed& ex) {
       ld_critical("Failed to initialize local log store");
       return false;
@@ -906,11 +895,32 @@ bool Server::initStore() {
   return true;
 }
 
+bool Server::initStorageThreadPool() {
+  if (!params_->isStorageNode()) {
+    return true;
+  }
+  auto local_settings = params_->getProcessorSettings().get();
+  // Size the storage thread pool task queue to never fill up.
+  size_t task_queue_size =
+      local_settings->num_workers * local_settings->max_inflight_storage_tasks;
+  sharded_storage_thread_pool_.reset(
+      new ShardedStorageThreadPool(sharded_store_.get(),
+                                   server_settings_->storage_pool_params,
+                                   server_settings_,
+                                   params_->getProcessorSettings(),
+                                   task_queue_size,
+                                   params_->getStats(),
+                                   params_->getTraceLogger()));
+  return true;
+}
+
 bool Server::initProcessor() {
+  ld_check(!params_->isStorageNode() || log_storage_state_map_);
   try {
     processor_ = ServerProcessor::createWithoutStarting(
         params_->getAuditLog(),
         sharded_storage_thread_pool_.get(),
+        std::move(log_storage_state_map_),
         params_->getServerSettings(),
         params_->getGossipSettings(),
         params_->getAdminServerSettings(),
@@ -941,6 +951,16 @@ bool Server::initProcessor() {
              error_description(err));
     return false;
   }
+  return true;
+}
+
+bool Server::initLogStorageStateMap() {
+  if (!params_->isStorageNode()) {
+    return true;
+  }
+  shard_size_t nshards = sharded_store_->numShards();
+  log_storage_state_map_ = std::make_unique<LogStorageStateMap>(
+      nshards, params_->getProcessorSettings()->log_state_recovery_interval);
   return true;
 }
 
