@@ -335,6 +335,7 @@ std::string SHARD_DONOR_PROGRESS_Header::describe() const {
   res += ", shardIdx=" + folly::to<std::string>(shardIdx);
   res += ", timestamp=" + folly::to<std::string>(nextTimestamp);
   res += ", version=" + lsn_to_string(version);
+  res += ", flags=" + folly::to<std::string>(flags);
   res += ")";
   return res;
 }

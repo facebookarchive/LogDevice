@@ -8,7 +8,16 @@
 namespace facebook.logdevice.logsconfig.fbuffers;
 
 // Important: regenerate flatbuffer structure definitions if you change this:
-// flatc --cpp --scoped-enums <your-flatbuffer.fbs>
+//
+// flatc --cpp --scoped-enums -o logdevice/common/configuration/logs/ logdevice/common/configuration/logs/LogsConfigStructures.fbs
+//
+// And add "// @""generated", without quotes, at the top of
+// LogsConfigStructures_generated.h, to avoid lint warnings. (The extra double
+// quotes in previous sentence are to prevent *this* file from being considered
+// generated :/ )
+//
+// If you're a Facebook employee, path to flatc binary can be found at
+// P124036606, at least as of December 2019.
 
 /*
  * A schema file for our LogsConfigTree representation in flatbuffers. The key

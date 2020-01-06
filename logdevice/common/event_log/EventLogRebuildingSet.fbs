@@ -7,7 +7,16 @@
  */
 
 // Important: regenerate flatbuffer structure definitions if you change this:
-// flatc --cpp --scoped-enums <your-flatbuffer.fbs>
+//
+// flatc --cpp --scoped-enums -o logdevice/common/event_log/ logdevice/common/event_log/EventLogRebuildingSet.fbs
+//
+// And add "// @""generated", without quotes, at the top of
+// EventLogRebuildingSet_generated.h, to avoid lint warnings. (The extra double
+// quotes in previous sentence are to prevent *this* file from being considered
+// generated :/ )
+//
+// If you're a Facebook employee, path to flatc binary can be found at
+// P124036606, at least as of December 2019.
 
 namespace facebook.logdevice.event_log_rebuilding_set;
 
@@ -16,9 +25,14 @@ table DonorComplete {
   version: ulong;
 }
 
+enum DonorProgressFlags : ubyte (bit_flags) {
+  NewToOld = 0, // 1 << 0
+}
+
 table DonorProgress {
   idx: ulong;
   ts: ulong;
+  flags: DonorProgressFlags;
 }
 
 table RecordTimeRange {

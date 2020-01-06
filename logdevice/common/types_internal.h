@@ -344,6 +344,7 @@ const uint32_t WAVE_MAX = std::numeric_limits<uint32_t>::max();
 
 typedef uint32_t SHARD_NEEDS_REBUILD_flags_t;
 typedef uint32_t SHARD_IS_REBUILT_flags_t;
+typedef uint32_t SHARD_DONOR_PROGRESS_flags_t;
 
 // Used for requesting the findTime index to be written in RocksDB.
 constexpr char FIND_TIME_INDEX = 'f';

@@ -376,6 +376,47 @@ T atomic_fetch_min(Atom& a, const T val) {
 }
 
 /**
+ * Returns the sum of two integers, but if the addition overflows the result is
+ * clamped to nearest representable number. Pseudocode:
+ * max(MIN, min(MAX, a + b)),
+ * where MIN/MAX = std::numeric_limits<T>::min()/max().
+ */
+template <typename T>
+T clamped_add(T a, T b) {
+  if (a >= 0) {
+    const T mx = std::numeric_limits<T>::max();
+    // a + b > mx  <=>  b > mx - a
+    return b > mx - a ? mx : a + b;
+  } else {
+    const T mn = std::numeric_limits<T>::min();
+    // a + b < mn  <=>  b < mn - a
+    return b < mn - a ? mn : a + b;
+  }
+}
+
+/**
+ * Returns the difference of two integers, but if the subtraction overflows the
+ * result is clamped to nearest representable number. Pseudocode:
+ * max(MIN, min(MAX, a - b)),
+ * where MIN/MAX = std::numeric_limits<T>::min()/max().
+ */
+template <typename T>
+T clamped_subtract(T a, T b) {
+  if (b >= 0) {
+    const T mn = std::numeric_limits<T>::min();
+    // a - b < mn  <=>  a < mn + b
+    return a < mn + b ? mn : a - b;
+  } else {
+    const T mx = std::numeric_limits<T>::max();
+    // a - b > mx  <=>  a > mx + b
+    // Note that this correctly handles the fun case 0 - INT_MIN > INT_MAX.
+    // (That case is why we can't implement clamped_subtract() as just
+    //  clamped_add(a, -b) even for signed types.)
+    return a > mx + b ? mx : a - b;
+  }
+}
+
+/**
  * Replaces all unprintable characters (including newlines) in @param
  * str with spaces. Use this function when writing unknown strings
  * into logdeviced error log. It will help us maintain the error log

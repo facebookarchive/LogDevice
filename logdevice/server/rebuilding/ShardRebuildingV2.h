@@ -89,9 +89,10 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
   NodeID my_node_id_;
   Listener* listener_;
+  RebuildingDirectionHelper direction_;
   bool completed_ = false;
 
-  RecordTimestamp globalWindowEnd_{RecordTimestamp::max()};
+  RecordTimestamp globalWindowEnd_;
 
   // There's at most one RebuildingReadStorageTaskV2 in flight at any time.
   bool storageTaskInFlight_ = false;
@@ -108,8 +109,8 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   size_t bytesInReadBuffer_ = 0;
 
   // Information about in-flight ChunkRebuildings.
-  // Used for finding the timestamp of the oldest record being rebuilt, to make
-  // sure it's not too far behind.
+  // Used for finding the timestamp of the oldest/newest record being rebuilt,
+  // to make sure it's not too far behind.
   // The ChunkRebuildings themselves are not directly accessible from here
   // because they live on different worker threads.
   std::map<ChunkRebuildingKey, ChunkRebuildingInfo> chunkRebuildings_;
@@ -189,7 +190,7 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // In particular, if we're filtering out very long ranges of data, this
   // iterator will show progress of the filtering, while any record-based
   // indicators would stand still until we find a record that passes filter.
-  RecordTimestamp readingProgressTimestamp_ = RecordTimestamp::min();
+  RecordTimestamp readingProgressTimestamp_;
   // Value between 0 and 1 indicating approximately what fraction of the data
   // we have read. -1 means not supported.
   double readingProgress_ = 0;

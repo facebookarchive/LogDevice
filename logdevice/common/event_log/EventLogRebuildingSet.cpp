@@ -689,22 +689,28 @@ int EventLogRebuildingSet::onShardDonorProgress(
     return -1;
   }
 
-  RecordTimestamp& cur_ts = shard_info.donor_progress[donor_node_id];
-  RecordTimestamp new_ts(std::chrono::milliseconds(ptr->header.nextTimestamp));
+  DonorProgress& cur = shard_info.donor_progress.at(donor_node_id);
+  RecordTimestamp ts(std::chrono::milliseconds(ptr->header.nextTimestamp));
+  bool new_to_old =
+      ptr->header.flags & SHARD_DONOR_PROGRESS_Header::FLAG_NEW_TO_OLD;
 
-  if (new_ts <= cur_ts) {
+  if (new_to_old == cur.new_to_old &&
+      (ts == cur.timestamp || new_to_old != (ts < cur.timestamp))) {
     ld_warning("Node %u notifies us that it moved its local window for "
-               "shard %u up to timestamp %s but it had previously moved it "
-               "to a greater timestamp %s",
+               "shard %u %s to timestamp %s but it had previously moved it "
+               "to a %s timestamp %s",
                donor_node_id,
                shard_id,
-               new_ts.toString().c_str(),
-               cur_ts.toString().c_str());
+               new_to_old ? "down" : "up",
+               ts.toString().c_str(),
+               new_to_old ? "smaller" : "greater",
+               cur.timestamp.toString().c_str());
     err = E::FAILED;
     return -1;
   }
 
-  cur_ts = new_ts;
+  cur.new_to_old = new_to_old;
+  cur.timestamp = ts;
 
   return 0;
 }
@@ -915,7 +921,7 @@ void EventLogRebuildingSet::recomputeAuthoritativeStatus(
   for (auto& it_node : shard_info.nodes_) {
     for (node_index_t nid : it_node.second.donors_remaining) {
       if (!shard_info.donor_progress.count(nid)) {
-        shard_info.donor_progress[nid] = RecordTimestamp::min();
+        shard_info.donor_progress[nid] = DonorProgress();
       }
     }
   }
@@ -1200,6 +1206,17 @@ bool EventLogRebuildingSet::canTrimEventLog(
     }
   }
   return true;
+}
+
+bool EventLogRebuildingSet::DonorProgress::
+operator==(const DonorProgress& rhs) const {
+  return std::tie(timestamp, new_to_old) ==
+      std::tie(rhs.timestamp, rhs.new_to_old);
+}
+
+std::string EventLogRebuildingSet::DonorProgress::toString() const {
+  return timestamp.toString() + " [" +
+      (new_to_old ? "new-to-old" : "old-to-new") + "]";
 }
 
 }} // namespace facebook::logdevice

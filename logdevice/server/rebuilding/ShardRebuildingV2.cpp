@@ -36,6 +36,10 @@ ShardRebuildingV2::ShardRebuildingV2(
       rebuildingSettings_(rebuilding_settings),
       my_node_id_(my_node_id),
       listener_(listener),
+      direction_(rebuildingSettings_->new_to_old),
+      // If advanceGlobalWindow() is never called, assume global window is
+      // disabled. This only happens in tests.
+      globalWindowEnd_(direction_.lastTimestamp()),
       callbackHelper_(this) {}
 
 ShardRebuildingV2::~ShardRebuildingV2() {
@@ -61,6 +65,7 @@ void ShardRebuildingV2::start(
     std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan) {
   numLogs_ = plan.size();
   startTime_ = SteadyTimestamp::now();
+  readingProgressTimestamp_ = direction_.firstTimestamp();
   readRateLimiter_ = RateLimiter(rebuildingSettings_->rate_limit);
   readContext_ = std::make_shared<RebuildingReadStorageTaskV2::Context>();
   readContext_->onDone = [this, this_ref = callbackHelper_.getHolder().ref()](
@@ -84,8 +89,8 @@ void ShardRebuildingV2::start(
   delayedReadTimer_ = createTimer([this] { tryMakeProgress(); });
   iteratorInvalidationTimer_ = createTimer([this] { invalidateIterator(); });
   profilingTimer_ = createTimer([this] {
-    profilingTimer_->activate(PROFILING_TIMER_PERIOD);
     flushCurrentStateTime();
+    profilingTimer_->activate(PROFILING_TIMER_PERIOD);
   });
 
   profilingTimer_->activate(PROFILING_TIMER_PERIOD);
@@ -189,16 +194,17 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
       rebuildingSettings_->max_records_in_flight;
   const size_t max_bytes_in_flight =
       rebuildingSettings_->max_record_bytes_in_flight;
+  const bool new_to_old = rebuildingSettings_->new_to_old;
 
   auto is_log_exempted_from_window = [&](logid_t log) {
     // Don't use timestamp window (both local and global) for metadata/internal
-    // logs. As far as global window is concerned, these records all have
-    // timestamp negative infinity. This is needed because we rebuild all
-    // internal logs before any data logs, and their timestamps are all over the
-    // place, while global window needs timestamps to approximately increase.
-    // It's ok to not use timestamp window for internal logs because they're not
-    // stored in partitions, so storage nodes don't care how spread out their
-    // timestamps are.
+    // logs. These logs are not stored in partitions and are read in log-by-log
+    // order rather than roughly chronological (partition-by-partition) order,
+    // so timestamp windows make no sense for these logs. The recipient storage
+    // nodes also don't care how spread out the timestamps of these records are,
+    // since they're all going to the same "unpartitioned" column family, unlike
+    // data log records that go to many different partitions.
+    // All metadata/internal logs are read before any data logs.
     return MetaDataLog::isMetaDataLog(log) ||
         configuration::InternalLogs::isInternal(log);
   };
@@ -210,19 +216,17 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
     if (is_log_exempted_from_window(readBuffer_.front()->address.log)) {
       return false;
     }
-    // Note that chunkRebuildings_.begin() might be exempted from window,
-    // but that's ok.
-    // Also note that timestamps in readBuffer_ are not always monotonic - they
+    // How far ahead is the next record in read buffer compared to the ~oldest
+    // in-flight ChunkRebuilding.
+    // Note that timestamps in readBuffer_ are not always monotonic - they
     // go up and down multiple times inside each partition (once for each log),
     // so these timestamps should be considered to be at roughly partition
     // granularity, and `diff` may be negative.
     std::chrono::milliseconds diff;
-    if (rebuildingSettings_->new_to_old) {
-      // ~Highest in-flight timestamp - ~highest timestamp in read buffer.
+    if (new_to_old) {
       diff = chunkRebuildings_.rbegin()->first.oldestTimestamp -
           readBuffer_.front()->oldestTimestamp;
     } else {
-      // ~Lowest timestamp in read buffer - ~lowest in-flight timestamp.
       diff = readBuffer_.front()->oldestTimestamp -
           chunkRebuildings_.begin()->first.oldestTimestamp;
     }
@@ -234,8 +238,17 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
          chunkRebuildingBytesInFlight_ < max_bytes_in_flight &&
          !record_rebuildings_are_too_spread_out()) {
     if (!is_log_exempted_from_window(readBuffer_.front()->address.log) &&
-        // TODO (#56003423): Support new-to-old + global window.
-        readBuffer_.front()->oldestTimestamp > globalWindowEnd_) {
+        direction_.timestampCmp(
+            readBuffer_.front()->oldestTimestamp, globalWindowEnd_) > 0) {
+      // The next record in readBuffer_ is below global window end.
+      // Wait for global window to advance.
+      //
+      // Note that we'll eventually make progress even if global window is very
+      // small; worst case is: eventually we'll finish in-flight chunk
+      // rebuildings, the code below will report
+      // progress_timestamp = readBuffer_.front()->oldestTimestamp, other donors
+      // will rebuild up to that timestamp, and global window will advance past
+      // it.
       break;
     }
 
@@ -266,24 +279,33 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
     chunkRebuildings_.emplace(key, info);
   }
 
-  // Find the oldest timestamp of a chunk that we're going to rebuild but
-  // haven't rebuilt yet, and publish this timestamp for other donors to slide
-  // global window based on it.
-  // TODO (#56003423): Support new-to-old + global window.
-  RecordTimestamp oldest_timestamp = RecordTimestamp::min();
+  // Find the chunk with the least advanced timestamp that is in the process
+  // of being rebuilt, and publish this chunk's timestamp so other donors
+  // can update the position of the global window.
+  // If no chunks are in flight, and we're blocked on global window, report the
+  // exact timestamp to which global window has to slide to unblock us
+  // (readBuffer_.front()->oldestTimestamp).
+  // Note that progress_timestamp is not always monotonic: it can go backwards
+  // a little, usually within one partition; that's ok, RebuildingCoordinator
+  // ignores progress reports that don't move forward.
+  RecordTimestamp progress_timestamp = direction_.firstTimestamp();
   if (!chunkRebuildings_.empty()) {
     // If there are some records in flight, use the oldest one.
-    if (!is_log_exempted_from_window(
-            chunkRebuildings_.begin()->second.address.log)) {
-      oldest_timestamp = chunkRebuildings_.begin()->first.oldestTimestamp;
+    const auto& chunk =
+        new_to_old ? *chunkRebuildings_.rbegin() : *chunkRebuildings_.begin();
+    if (!is_log_exempted_from_window(chunk.second.address.log)) {
+      progress_timestamp = chunk.first.oldestTimestamp;
     } else {
-      // We're still rebuilding internal logs, leave oldest_timestamp at
+      // We're still rebuilding internal logs, leave progress_timestamp at
       // negative infinity.
     }
   } else if (!readBuffer_.empty()) {
     // If there are some records in buffer, use the first one.
     if (!is_log_exempted_from_window(readBuffer_.front()->address.log)) {
-      oldest_timestamp = readBuffer_.front()->oldestTimestamp;
+      progress_timestamp = readBuffer_.front()->oldestTimestamp;
+    } else {
+      // We're still rebuilding internal/metadata logs. Don't report progress
+      // until that is done.
     }
   } else {
     // Otherwise, either we're just starting, or we're filtering everything we
@@ -291,10 +313,10 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
     // anyway, because reading can be slow even if we're filtering everything.
     // Reporting the progress allows other donors to make progress (if global
     // window is enabled), and keeps progress stat up to date.
-    oldest_timestamp = readingProgressTimestamp_;
+    progress_timestamp = readingProgressTimestamp_;
   }
   listener_->notifyShardDonorProgress(
-      shard_, oldest_timestamp, rebuildingVersion_, readingProgress_);
+      shard_, progress_timestamp, rebuildingVersion_, readingProgress_);
 }
 
 worker_id_t
@@ -397,10 +419,11 @@ void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
   // TODO (#24665001):
   //   This doesn't match the current column name "local_window_end".
   //   When rebuilding v2 becomes the default, rename the column.
-  // TODO (#56003423): Support new-to-old + global window.
   if (!chunkRebuildings_.empty()) {
-    table.set<4>(
-        chunkRebuildings_.begin()->first.oldestTimestamp.toMilliseconds());
+    table.set<4>((rebuildingSettings_->new_to_old
+                      ? chunkRebuildings_.rbegin()->first
+                      : chunkRebuildings_.begin()->first)
+                     .oldestTimestamp.toMilliseconds());
   } else if (!readBuffer_.empty()) {
     table.set<4>(readBuffer_.front()->oldestTimestamp.toMilliseconds());
   } else {
@@ -508,7 +531,6 @@ void ShardRebuildingV2::updateProfilingState() {
                 shard_,
                 readBuffer_.empty()
                     ? "none"
-                    // TODO (#56003423): Support new-to-old + global window.
                     : readBuffer_.front()->oldestTimestamp.toString().c_str(),
                 globalWindowEnd_.toString().c_str(),
                 totalTimeByState_[(int)ProfilingState::STALLED].count() / 1e3);

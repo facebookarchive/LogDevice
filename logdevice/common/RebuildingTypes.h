@@ -230,4 +230,55 @@ class ShardRebuildingInterface {
   virtual void getDebugInfo(InfoRebuildingShardsTable& table) const = 0;
 };
 
+// Encapsulates the difference between new-to-old and old-to-new rebuilding.
+//
+// In particular, defines the order on timestamps:
+// if new_to_old = false, higher timestamps are "more advanced",
+// if new_to_old = true , lower  timestamps are "more advanced".
+// "More advanced" means it should be rebuilt later than "less advanced"
+// partitions/timestamps.
+//
+// Note that rebuilding doesn't go exactly in order of timestamps, so this
+// order is applied loosely. This struct is mostly used for global/local window.
+struct RebuildingDirectionHelper {
+  const bool new_to_old;
+
+  explicit RebuildingDirectionHelper(bool new_to_old)
+      : new_to_old(new_to_old) {}
+
+  // Returns -1 if timestamp lhs should be rebuilt earlier than timestamp rhs,
+  // +1 if later, 0 if lhs == rhs.
+  int timestampCmp(RecordTimestamp lhs, RecordTimestamp rhs) const {
+    if (new_to_old) {
+      std::swap(lhs, rhs);
+    }
+    return lhs == rhs ? 0 : (lhs < rhs ? -1 : +1);
+  }
+
+  RecordTimestamp firstTimestamp(RecordTimestamp lhs,
+                                 RecordTimestamp rhs) const {
+    return new_to_old ? std::max(lhs, rhs) : std::min(lhs, rhs);
+  }
+  RecordTimestamp lastTimestamp(RecordTimestamp lhs,
+                                RecordTimestamp rhs) const {
+    return new_to_old ? std::min(lhs, rhs) : std::max(lhs, rhs);
+  }
+
+  RecordTimestamp firstTimestamp() const {
+    return new_to_old ? RecordTimestamp::max() : RecordTimestamp::min();
+  }
+  RecordTimestamp lastTimestamp() const {
+    return new_to_old ? RecordTimestamp::min() : RecordTimestamp::max();
+  }
+
+  RecordTimestamp advanceTimestamp(RecordTimestamp ts,
+                                   std::chrono::milliseconds delta) const {
+    int64_t ts_raw = ts.toMilliseconds().count();
+    int64_t delta_raw = delta.count();
+    return RecordTimestamp(std::chrono::milliseconds(
+        new_to_old ? clamped_subtract(ts_raw, delta_raw)
+                   : clamped_add(ts_raw, delta_raw)));
+  }
+};
+
 }} // namespace facebook::logdevice

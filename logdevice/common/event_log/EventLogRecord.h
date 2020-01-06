@@ -81,7 +81,12 @@ class EventLogRecord {
  */
 template <class Header,
           EventType Type,
-          event_log_record_version_t FormatVersion = INITIAL_VERSION>
+          // Default version number to write to payload.
+          event_log_record_version_t FormatVersion = INITIAL_VERSION,
+          // Number of first bytes of Header that must be present for payload
+          // to be considered valid. Can be used for backwards compatibility.
+          // The remaining fields of Header, if any, are default-initialized.
+          size_t MinAllowedSize = sizeof(Header)>
 class FixedEventLogRecord : public EventLogRecord {
  public:
   explicit FixedEventLogRecord(
@@ -101,7 +106,8 @@ class FixedEventLogRecord : public EventLogRecord {
                          std::unique_ptr<EventLogRecord>& out);
   int toPayload(void* payload, size_t size) const override;
   bool operator==(
-      const FixedEventLogRecord<Header, Type, FormatVersion>& other) const;
+      const FixedEventLogRecord<Header, Type, FormatVersion, MinAllowedSize>&
+          other) const;
   std::string describe() const override {
     return header.describe();
   }
@@ -296,12 +302,27 @@ struct SHARD_DONOR_PROGRESS_Header {
   uint32_t shardIdx;
   int64_t nextTimestamp;
   lsn_t version;
+
+  SHARD_IS_REBUILT_flags_t flags = 0;
+
+  // This donor is rebuilding in new-to-old order, so the `nextTimestamp`
+  // reported by it will be decreasing rather than increasing over time.
+  // In steady state all donors have the same value of this flag. Donors are
+  // only expected to disagree briefly during a restart after an update or
+  // settings change; during this period, if global window is enabled,
+  // rebuilding stalls waiting for donors to converge on one direction.
+  static const SHARD_DONOR_PROGRESS_flags_t FLAG_NEW_TO_OLD = 1 << 0;
+
   std::string describe() const;
 } __attribute__((__packed__));
 
 using SHARD_DONOR_PROGRESS_Event =
     FixedEventLogRecord<SHARD_DONOR_PROGRESS_Header,
-                        EventType::SHARD_DONOR_PROGRESS>;
+                        EventType::SHARD_DONOR_PROGRESS,
+                        INITIAL_VERSION,
+                        // `flags` field was added recently; older versions
+                        // of the server may not write it
+                        offsetof(SHARD_DONOR_PROGRESS_Header, flags)>;
 
 /**
  * SHARD_UNDRAIN

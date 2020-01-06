@@ -124,14 +124,23 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   void restartForShard(uint32_t shard_idx, const EventLogRebuildingSet& set);
 
   /**
-   * Write to the event log to notify that we slid our local timestamp window.
+   * ShardRebuilding calls this method to report how far it has advanced,
+   * in terms of approximate timestamp and bytes read.
    *
-   * If this donor node was the most behind among all donor nodes in the
-   * cluster, this will cause every node to slide its view of the global
-   * timestamp window and make more progress.
+   * If the timestamp moved far enough, we write a SHARD_DONOR_PROGRESS record
+   * to the event log; if this donor node was the most behind among all donor
+   * nodes in the cluster, this will cause every node to slide its view of the
+   * global timestamp window and make more progress.
    *
    * @param shard    Shard for which we slid the local timestamp window.
-   * @param ts       Timestamp of the next record to be rebuilt.
+   * @param next_ts  Approximate timestamp of the next data record to be
+   *                 rebuilt. If global window's end advances above this
+   *                 timestamp, ShardRebuilding must be able to make progress
+   *                 (i.e. eventually call either notifyShardDonorProgress()
+   *                 with a higher next_ts, or onShardRebuildingComplete());
+   *                 this ensures that rebuilding will never get stuck waiting
+   *                 on global window forever, even if global window size is
+   *                 unreasonably small.
    * @param version  LSN of the last SHARD_NEEDS_REBUILD event log record that
    *                 was taken into account for rebuilding this shard.
    * @param progress_estimate  A number between 0 and 1 estimating the
@@ -456,6 +465,9 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   UpdateableSettings<RebuildingSettings>::SubscriptionHandle
       rebuildingSettingsSubscription_;
 
+  // A helper wrapping all the `if`s for new-to-old vs old-to-new rebuilding.
+  RebuildingDirectionHelper direction_;
+
   ShardedLocalLogStore* shardedStore_;
 
   struct RequestedPlans {
@@ -502,12 +514,12 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
     std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> logsWithPlan;
 
     // End of the global timestamp window for this shard.
-    RecordTimestamp globalWindowEnd = RecordTimestamp::min();
+    RecordTimestamp globalWindowEnd;
     // How far rebuilding has progressed on this node. This gets reported in
     // SHARD_DONOR_PROGRESS messages periodically.
-    RecordTimestamp myProgress = RecordTimestamp::min();
+    RecordTimestamp myProgress;
     // Last SHARD_DONOR_PROGRESS message we've written out.
-    RecordTimestamp lastReportedProgress = RecordTimestamp::min();
+    RecordTimestamp lastReportedProgress;
 
     // Set of nodes that we are rebuilding this shard for.
     std::shared_ptr<const RebuildingSet> rebuildingSet;
@@ -682,8 +694,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    *
    * The donor node inform of the next timestamp it needs to rebuild. All nodes
    * read the event log and deduce a global timestamp window whose left bound is
-   * the minimum of all last timestamps reported by each donor node and the
-   * right bound is the left bound plus the window length.
+   * the least advanced of all last timestamps reported by each donor node and
+   * the right bound is the left bound plus the window length.
    *
    * @param donor_node_idx  Donor node that made progress.
    * @param shard_idx       Shard for which the node made progress.

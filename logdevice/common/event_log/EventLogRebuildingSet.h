@@ -122,6 +122,14 @@ class EventLogRebuildingSet {
     NodeInfo() = default;
   };
 
+  struct DonorProgress {
+    RecordTimestamp timestamp = RecordTimestamp::min();
+    bool new_to_old = false;
+
+    bool operator==(const DonorProgress& rhs) const;
+    std::string toString() const;
+  };
+
   struct RebuildingShardInfo {
     // LSN of the last SHARD_NEEDS_REBUILD event that affected `rebuilding_set`.
     // Donors restart rebuilding each time this changes.
@@ -137,7 +145,7 @@ class EventLogRebuildingSet {
     // its local window according to global window deduced from the progress of
     // each donor. This is the union of `donors_remaining` for each node in
     // `nodes_`.
-    folly::F14FastMap<node_index_t, RecordTimestamp> donor_progress;
+    folly::F14FastMap<node_index_t, DonorProgress> donor_progress;
     // The time intervals across all nodes to process.
     // NOTE: The intervals included here may differ between storage nodes
     //       since each storage node will exclude ranges on itself for which

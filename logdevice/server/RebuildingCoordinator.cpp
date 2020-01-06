@@ -253,6 +253,7 @@ RebuildingCoordinator::RebuildingCoordinator(
       rebuilding_supervisor_(rebuilding_supervisor),
       rebuildingSettings_(rebuilding_settings),
       adminSettings_(admin_settings),
+      direction_(rebuildingSettings_->new_to_old),
       shardedStore_(sharded_store) {}
 
 int RebuildingCoordinator::start() {
@@ -604,31 +605,56 @@ void RebuildingCoordinator::trySlideGlobalWindow(
   const RecordTimestamp::duration global_window =
       rebuildingSettings_->global_window;
 
-  const auto* rsi = set.getForShardOffset(shard);
-  ld_check(rsi);
-
-  // Recompute the minimum next timestamp across all nodes.
-  RecordTimestamp min_next_timestamp = RecordTimestamp::max();
-  for (auto& n : rsi->donor_progress) {
-    min_next_timestamp = std::min(min_next_timestamp, n.second);
-  }
-
-  // Calculate new_global_window_end = min_next_timestamp + global_window,
-  // but avoid overflow.
   RecordTimestamp new_global_window_end;
   if (global_window == RecordTimestamp::duration::max()) {
     // Treat global_window = max() as infinity.
-    new_global_window_end = RecordTimestamp::max();
-  } else if (min_next_timestamp == RecordTimestamp::min()) {
-    // If some donors haven't made any progress yet, don't bother moving global
-    // window from min() to min() + window.
-    new_global_window_end = RecordTimestamp::min();
-  } else if (min_next_timestamp.toMilliseconds().count() > 0 &&
-             RecordTimestamp::max() - min_next_timestamp < global_window) {
-    // Addition would overflow, clamp to max().
-    new_global_window_end = RecordTimestamp::max();
+    // In this case we don't need to look at donor progress.
+    new_global_window_end = direction_.lastTimestamp();
   } else {
-    new_global_window_end = min_next_timestamp + global_window;
+    const auto* rsi = set.getForShardOffset(shard);
+    ld_check(rsi);
+
+    // Recompute the minimum next timestamp across all nodes.
+    RecordTimestamp most_behind_timestamp = direction_.lastTimestamp();
+    for (auto& [node_idx, progress] : rsi->donor_progress) {
+      if (progress.new_to_old != rebuildingSettings_->new_to_old) {
+        // This donor disagrees with us on whether rebuilding should go
+        // new-to-old or old-to-new; or, more likely, this donor hasn't reported
+        // any progress yet, so its donor_progress defaulted to
+        // new_to_old=false. Either way, let's not slide window until either
+        // this donor reports progress with the new_to_old value that we expect,
+        // or we get restarted with an updated new_to_old setting.
+        if (progress.new_to_old ||
+            progress.timestamp != RecordTimestamp::min()) {
+          RATELIMIT_WARNING(
+              std::chrono::seconds(10),
+              2,
+              "Rebuilding donor N%hd:S%u seems to be rebuilding in %s order, "
+              "while I'm rebuilding in %s order. Did you change "
+              "rebuilding-new-to-old setting during this rebuilding? If yes, "
+              "this warning is probably benign, but make sure all servers were "
+              "restarted after the change was made. If you haven't changed "
+              "rebuilding-new-to-old, something's broken, please investigate.",
+              node_idx,
+              shard,
+              progress.new_to_old ? "new-to-old" : "old-to-new",
+              rebuildingSettings_->new_to_old ? "new-to-old" : "old-to-new");
+        }
+        return;
+      }
+      most_behind_timestamp =
+          direction_.firstTimestamp(most_behind_timestamp, progress.timestamp);
+    }
+
+    // Calculate new_global_window_end = min_next_timestamp +/- global_window.
+    if (most_behind_timestamp == direction_.firstTimestamp()) {
+      // If some donors haven't made any progress yet, don't bother moving
+      // global window from min() to min() + window.
+      new_global_window_end = direction_.firstTimestamp();
+    } else {
+      new_global_window_end =
+          direction_.advanceTimestamp(most_behind_timestamp, global_window);
+    }
   }
 
   if (new_global_window_end == shard_state.globalWindowEnd) {
@@ -650,16 +676,17 @@ void RebuildingCoordinator::trySlideGlobalWindow(
                      rebuilding_global_window_end,
                      shard,
                      shard_state.globalWindowEnd.toMilliseconds().count());
-  if (old_window_end != RecordTimestamp::min()) {
+  if (std::min(old_window_end, shard_state.globalWindowEnd) !=
+          RecordTimestamp::min() &&
+      std::max(old_window_end, shard_state.globalWindowEnd) !=
+          RecordTimestamp::max()) {
     PER_SHARD_STAT_ADD(
         getStats(), rebuilding_global_window_slide_num, shard, 1);
     PER_SHARD_STAT_ADD(
         getStats(),
         rebuilding_global_window_slide_total,
         shard,
-        RecordTimestamp(shard_state.globalWindowEnd - old_window_end)
-            .toMilliseconds()
-            .count());
+        std::abs((shard_state.globalWindowEnd - old_window_end).count()));
   }
 
   if (shard_state.shardRebuilding != nullptr) {
@@ -810,7 +837,7 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
   ld_check(!rebuildingSet->shards.empty());
 
   // Create a new ShardState object.
-  shardsRebuilding_[shard_idx] = ShardState{};
+  shardsRebuilding_[shard_idx] = ShardState();
   auto& shard_state = getShardState(shard_idx);
   shard_state.rebuildingSet = rebuildingSet;
   shard_state.restartVersion = set.getLastSeenLSN();
@@ -951,9 +978,9 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
   auto settings = rebuildingSettings_.get();
 
   shard_state.participating = true;
-  shard_state.globalWindowEnd = RecordTimestamp::min();
-  shard_state.myProgress = RecordTimestamp::min();
-  shard_state.lastReportedProgress = RecordTimestamp::min();
+  shard_state.globalWindowEnd = direction_.firstTimestamp();
+  shard_state.myProgress = direction_.firstTimestamp();
+  shard_state.lastReportedProgress = direction_.firstTimestamp();
   shard_state.progressStat.setValue(1);
   trySlideGlobalWindow(shard_idx, set);
 
@@ -1856,20 +1883,17 @@ void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
 
   // Note that we can't return early if next_ts == myProgress, because
   // window size setting may have been decreased.
-  shard_state.myProgress = std::max(shard_state.myProgress, next_ts);
+  shard_state.myProgress =
+      direction_.lastTimestamp(shard_state.myProgress, next_ts);
 
   // To avoid flooding the event log, report progress only if we moved by
   // at least 1/3 of global window size since previous report.
   std::chrono::milliseconds threshold = window_size / 3;
-  // timestamp_to_slide_window = lastReportedProgress + threshold,
-  // but avoiding overflow. (No you can't swap threshold and
-  // lastReportedProgress because lastReportedProgress can be negative.)
-  RecordTimestamp timestamp_to_slide_window{
-      threshold +
-      std::min(std::chrono::milliseconds::max() - threshold,
-               shard_state.lastReportedProgress.toMilliseconds())};
+  RecordTimestamp timestamp_to_slide_window =
+      direction_.advanceTimestamp(shard_state.lastReportedProgress, threshold);
 
-  if (shard_state.myProgress <= timestamp_to_slide_window) {
+  if (direction_.timestampCmp(
+          shard_state.myProgress, timestamp_to_slide_window) <= 0) {
     return;
   }
 
@@ -1879,7 +1903,10 @@ void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
       myNodeId_,
       shard,
       shard_state.myProgress.toMilliseconds().count(),
-      version);
+      version,
+      rebuildingSettings_->new_to_old
+          ? SHARD_DONOR_PROGRESS_Header::FLAG_NEW_TO_OLD
+          : 0u);
   writer_->writeEvent(std::move(event));
 }
 

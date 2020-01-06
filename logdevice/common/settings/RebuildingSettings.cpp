@@ -567,7 +567,8 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "specifically, rebuilding iterates over partitions in reverse order, "
        "but within each partition it goes in order of increasing tuple [log "
        "ID, LSN]. If set to false, we iterate over partitions in old-to-new "
-       "order.",
+       "order. If global window is enabled, all nodes must have the same value "
+       "of new-to-old setting; if they don't, rebuilding stalls until they do.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::Rebuilding);
 }

@@ -28,9 +28,12 @@ EventLogRebuildingSetCodec::serialize(flatbuffers::FlatBufferBuilder& b,
     auto nodes_vector = b.CreateVector(nodes);
 
     offset_vector<event_log_rebuilding_set::DonorProgress> donors;
-    for (const auto& it_donor : it_shard.second.donor_progress) {
+    for (const auto& [node_idx, progress] : it_shard.second.donor_progress) {
+      auto flags = progress.new_to_old
+          ? event_log_rebuilding_set::DonorProgressFlags::NewToOld
+          : event_log_rebuilding_set::DonorProgressFlags::NONE;
       auto donorProgress = event_log_rebuilding_set::CreateDonorProgress(
-          b, it_donor.first, it_donor.second.toMilliseconds().count());
+          b, node_idx, progress.timestamp.toMilliseconds().count(), flags);
       donors.push_back(donorProgress);
     }
     auto donors_vector = b.CreateVector(donors);
@@ -132,7 +135,7 @@ EventLogRebuildingSet::RebuildingShardInfo
 EventLogRebuildingSetCodec::deserialize(
     const event_log_rebuilding_set::ShardInfo* shard_info) {
   folly::F14FastMap<node_index_t, EventLogRebuildingSet::NodeInfo> node_map;
-  folly::F14FastMap<node_index_t, RecordTimestamp> donors;
+  folly::F14FastMap<node_index_t, EventLogRebuildingSet::DonorProgress> donors;
 
   auto nodes = shard_info->nodes();
   if (nodes) {
@@ -148,7 +151,14 @@ EventLogRebuildingSetCodec::deserialize(
     for (size_t i = 0; i < donor_progress->Length(); ++i) {
       auto donor = donor_progress->Get(i);
       node_index_t nid = donor->idx();
-      donors[nid] = RecordTimestamp(std::chrono::milliseconds(donor->ts()));
+      EventLogRebuildingSet::DonorProgress progress;
+      progress.timestamp =
+          RecordTimestamp(std::chrono::milliseconds(donor->ts()));
+      progress.new_to_old =
+          static_cast<uint8_t>(donor->flags()) &
+          static_cast<uint8_t>(
+              event_log_rebuilding_set::DonorProgressFlags::NewToOld);
+      donors[nid] = progress;
     }
   }
 
