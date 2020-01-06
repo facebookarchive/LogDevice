@@ -33,6 +33,10 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
       RebuildingPlan plan;
       lsn_t trimPoint = LSN_INVALID;
 
+      // LSN of the last record we've seen for this log. When reading in
+      // old-to-new mode, this LSN monotonically increases. In new-to-old mode
+      // this LSN is going back and forth: it increases within a partition, then
+      // jumps backwards to previous partition, then increases again, etc.
       lsn_t lastSeenLSN = LSN_INVALID;
 
       // The copyset of the last record we've read.

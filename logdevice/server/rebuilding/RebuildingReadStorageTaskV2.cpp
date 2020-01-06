@@ -51,6 +51,7 @@ void RebuildingReadStorageTaskV2::execute() {
         "RebuildingReadStorageTaskV2", /* rebuilding */ true);
     opts.fill_cache = context->rebuildingSettings->use_rocksdb_cache;
     opts.allow_copyset_index = true;
+    opts.new_to_old = context->rebuildingSettings->new_to_old;
 
     std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>> logs;
     for (const auto& p : context->logs) {
@@ -218,19 +219,6 @@ void RebuildingReadStorageTaskV2::execute() {
       start_new_chunk = true;
     }
 
-    if (lsn <= log_state->lastSeenLSN) {
-      RATELIMIT_WARNING(
-          std::chrono::seconds(10),
-          10,
-          "AllLogsIterator's LSN went backwards. This should be rare. Log: "
-          "%lu, last seen lsn: %s, current lsn: %s, location: %s",
-          log.val(),
-          lsn_to_string(log_state->lastSeenLSN).c_str(),
-          lsn_to_string(lsn).c_str(),
-          iterator->getLocation()->toString().c_str());
-      continue;
-    }
-
     // Bump currentBlockID if needed.
     RecordTimestamp timestamp;
     int rv = checkRecordForBlockChange(
@@ -247,7 +235,7 @@ void RebuildingReadStorageTaskV2::execute() {
           context->rebuildingSettings->max_malformed_records_to_tolerate) {
         // Suspiciously many records are malformed. Escalate and stall.
         ld_critical("Rebuilding saw too many (%lu) malformed records. "
-                    "Stopping rebuilding just in case. Please investigate.",
+                    "Stopping rebuilding. Please investigate.",
                     context->numMalformedRecordsSeen);
         context->persistentError = true;
         return;
@@ -261,7 +249,15 @@ void RebuildingReadStorageTaskV2::execute() {
       // same copyset and same block ID.
       // The consecutive LSN requirement is not necessary currently,
       // but may be useful in future for donor-driven rebuilding without WAL.
-      start_new_chunk |= lsn > log_state->lastSeenLSN + 1 ||
+      //
+      // We start a new chunk whenever LSN increases by more than 1, or
+      // decreases (it may decrease when rebuilding new-to-old). This is correct
+      // regardless of iteration order, but to get reasonably big chunks we
+      // want iterator to visit reasonably big ranges (like a megabyte, I guess)
+      // of consecutive records consecutively. The iterator does indeed do that:
+      // it visits all records of a given log in given partition consecutively,
+      // in order of increasing LSN (even in new-to-old mode).
+      start_new_chunk |= lsn != log_state->lastSeenLSN + 1 ||
           log_state->currentBlockID != chunk->blockID;
     }
     log_state->lastSeenLSN = lsn;
@@ -372,7 +368,24 @@ int RebuildingReadStorageTaskV2::checkRecordForBlockChange(
   size_t max_block_size = getSettings().get()->sticky_copysets_block_size * 2;
   bool byte_limit_exceeded = log_state->bytesInCurrentBlock > max_block_size;
   if (copyset_changed || epoch_changed || byte_limit_exceeded) {
-    // end of the block reached, bump block counter and save the new copyset
+    // End of the block reached. Bump block counter and save the new copyset.
+    //
+    // Note that in new-to-old mode we may unnecessarily split sticky copyset
+    // block at partition boundary: if first record B of partition P has the
+    // same copyset as last record A of partition P-1, but partition P also has
+    // records with different copyset, the new-to-old rebuilding will assign
+    // different block ID to A and B even though they are consecutive and have
+    // the same copyset. (Old-to-new will assign the same block ID and therefore
+    // the same new copyset, preserving the block, even if it's rebuilt in
+    // multiple chunks).
+    // Since split blocks are basically never merged, and partition
+    // boundaries are different on different nodes, new-to-old mode may cause
+    // significant fragmentation over multiple rebuildings.
+    // TODO: This fragmentation can be avoided by more careful and complicated
+    //       block ID assignment. (Keeping track of copyset and block ID of
+    //       first record in current and next partition, to detect sticky
+    //       copyset blocks crossing partition boundary and assign them the same
+    //       block ID.)
     ++log_state->currentBlockID;
     log_state->bytesInCurrentBlock = 0;
     std::swap(log_state->lastSeenCopyset, *temp_copyset);
@@ -572,8 +585,8 @@ bool RebuildingReadStorageTaskV2::Filter::shouldProcessTimeRange(
     return true;
   }
 
-  if (min != RecordTimestamp::min()) {
-    context->progressTimestamp = min;
+  if (min != RecordTimestamp::min() && max != RecordTimestamp::max()) {
+    context->progressTimestamp = min + (max - min) / 2;
   }
 
   cache.minTs = min;

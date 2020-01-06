@@ -92,7 +92,10 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
          }
        },
        "Rebuilding will try to keep the difference between max and min "
-       "in-flight records' timestamps less than this value.",
+       "in-flight records' timestamps less than this value. For best results, "
+       "this should be considerably larger than rocksdb-partition-duration "
+       "since records of each partition are rebuilt in a non-chronological "
+       "order.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuilding-global-window",
@@ -555,6 +558,17 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "outside the server by external tools. These tools need to add the "
        "FILTER_RELOCATE_SHARDS flag for that purpose. Experimental.",
        SERVER,
+       SettingsCategory::Rebuilding);
+  init("rebuilding-new-to-old",
+       &new_to_old,
+       "false",
+       nullptr,
+       "Rebuild records in order of approximately increasing age. More "
+       "specifically, rebuilding iterates over partitions in reverse order, "
+       "but within each partition it goes in order of increasing tuple [log "
+       "ID, LSN]. If set to false, we iterate over partitions in old-to-new "
+       "order.",
+       SERVER | REQUIRES_RESTART,
        SettingsCategory::Rebuilding);
 }
 

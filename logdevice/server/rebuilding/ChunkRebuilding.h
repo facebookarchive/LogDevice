@@ -39,6 +39,9 @@ struct ChunkData {
   // Used for seeding the rng for the copyset selector.
   size_t blockID;
   // Timestamp of the first record in the chunk.
+  // (Rebuilding expects that each chunk is not very spread out in time, so
+  //  it's not important that this timestamp is oldest instead of e.g. newest or
+  //  average or something.)
   RecordTimestamp oldestTimestamp;
   // Information about records' epoch.
   std::shared_ptr<ReplicationScheme> replication;

@@ -45,7 +45,8 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // the returned function to some non-worker thread and call it from there.
   // This is needed because the per-log states may be in use by the storage
   // task; in this case the returned function waits for the storage task to
-  // complete, which is not a good thing to do on a worker thread.
+  // complete, which is not a good thing to do on a worker thread but ok on
+  // admin command thread.
   std::function<void(InfoRebuildingLogsTable&)> beginGetLogsDebugInfo() const;
 
  protected:
@@ -110,7 +111,7 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // Used for finding the timestamp of the oldest record being rebuilt, to make
   // sure it's not too far behind.
   // The ChunkRebuildings themselves are not directly accessible from here
-  // because live on different worker threads.
+  // because they live on different worker threads.
   std::map<ChunkRebuildingKey, ChunkRebuildingInfo> chunkRebuildings_;
 
   // Sum of numRecords and totalBytes in chunkRebuildings_.

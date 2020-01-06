@@ -15,7 +15,7 @@
 
 namespace facebook { namespace logdevice {
 
-// Hard coded because it's very unlikely that anyone would want to change it.
+// Hard coded because it's unlikely that anyone would want to change it.
 static constexpr std::chrono::milliseconds PROFILING_TIMER_PERIOD =
     std::chrono::minutes(1);
 
@@ -212,9 +212,21 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
     }
     // Note that chunkRebuildings_.begin() might be exempted from window,
     // but that's ok.
-    return readBuffer_.front()->oldestTimestamp -
-        chunkRebuildings_.begin()->first.oldestTimestamp >
-        rebuildingSettings_->local_window;
+    // Also note that timestamps in readBuffer_ are not always monotonic - they
+    // go up and down multiple times inside each partition (once for each log),
+    // so these timestamps should be considered to be at roughly partition
+    // granularity, and `diff` may be negative.
+    std::chrono::milliseconds diff;
+    if (rebuildingSettings_->new_to_old) {
+      // ~Highest in-flight timestamp - ~highest timestamp in read buffer.
+      diff = chunkRebuildings_.rbegin()->first.oldestTimestamp -
+          readBuffer_.front()->oldestTimestamp;
+    } else {
+      // ~Lowest timestamp in read buffer - ~lowest in-flight timestamp.
+      diff = readBuffer_.front()->oldestTimestamp -
+          chunkRebuildings_.begin()->first.oldestTimestamp;
+    }
+    return diff > rebuildingSettings_->local_window;
   };
 
   while (!readBuffer_.empty() &&
@@ -222,6 +234,7 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
          chunkRebuildingBytesInFlight_ < max_bytes_in_flight &&
          !record_rebuildings_are_too_spread_out()) {
     if (!is_log_exempted_from_window(readBuffer_.front()->address.log) &&
+        // TODO (#56003423): Support new-to-old + global window.
         readBuffer_.front()->oldestTimestamp > globalWindowEnd_) {
       break;
     }
@@ -256,6 +269,7 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
   // Find the oldest timestamp of a chunk that we're going to rebuild but
   // haven't rebuilt yet, and publish this timestamp for other donors to slide
   // global window based on it.
+  // TODO (#56003423): Support new-to-old + global window.
   RecordTimestamp oldest_timestamp = RecordTimestamp::min();
   if (!chunkRebuildings_.empty()) {
     // If there are some records in flight, use the oldest one.
@@ -383,6 +397,7 @@ void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
   // TODO (#24665001):
   //   This doesn't match the current column name "local_window_end".
   //   When rebuilding v2 becomes the default, rename the column.
+  // TODO (#56003423): Support new-to-old + global window.
   if (!chunkRebuildings_.empty()) {
     table.set<4>(
         chunkRebuildings_.begin()->first.oldestTimestamp.toMilliseconds());
@@ -493,6 +508,7 @@ void ShardRebuildingV2::updateProfilingState() {
                 shard_,
                 readBuffer_.empty()
                     ? "none"
+                    // TODO (#56003423): Support new-to-old + global window.
                     : readBuffer_.front()->oldestTimestamp.toString().c_str(),
                 globalWindowEnd_.toString().c_str(),
                 totalTimeByState_[(int)ProfilingState::STALLED].count() / 1e3);

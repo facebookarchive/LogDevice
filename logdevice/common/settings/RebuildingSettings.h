@@ -76,6 +76,7 @@ struct RebuildingSettings : public SettingsBundle {
   uint64_t max_malformed_records_to_tolerate;
   rate_limit_t rate_limit;
   bool filter_relocate_shards;
+  bool new_to_old;
 
  private:
   // Only UpdateableSettings can create this bundle.

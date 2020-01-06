@@ -47,10 +47,13 @@ enum class FlushMode { ROCKSDB, LD };
 // Enable/Disable --filter-relocate-shards
 enum class FilterMode { DEFAULT, FILTER_RELOCATE };
 
+enum class RebuildingDirection { OLD_TO_NEW, NEW_TO_OLD };
+
 struct TestMode {
   DurabilityMode m;
   FlushMode f;
   FilterMode filter_mode;
+  RebuildingDirection d;
 };
 
 const int NUM_DB_SHARDS = 2;
@@ -334,6 +337,9 @@ class RebuildingTest : public IntegrationTestBase,
                     test_param.filter_mode == FilterMode::FILTER_RELOCATE
                         ? "true"
                         : "false")
+          .setParam("--rebuilding-new-to-old",
+                    test_param.d == RebuildingDirection::NEW_TO_OLD ? "true"
+                                                                    : "false")
           // Reduce the copyset block size so we get a copyset shuffle every ~6
           // records.
           .setParam("--sticky-copysets-block-size", "128");
@@ -3328,14 +3334,30 @@ TEST_P(RebuildingTest, UndrainDeadNode) {
   }
 }
 
-std::vector<TestMode> test_params{
-    {DurabilityMode::V1_WITH_WAL, FlushMode::ROCKSDB, FilterMode::DEFAULT},
-    {DurabilityMode::V1_WITH_WAL, FlushMode::LD, FilterMode::DEFAULT},
-    {DurabilityMode::V1_WITHOUT_WAL, FlushMode::ROCKSDB, FilterMode::DEFAULT},
-    {DurabilityMode::V1_WITHOUT_WAL, FlushMode::LD, FilterMode::DEFAULT},
-    {DurabilityMode::V2_WITH_WAL, FlushMode::ROCKSDB, FilterMode::DEFAULT},
-    {DurabilityMode::V2_WITH_WAL, FlushMode::LD, FilterMode::DEFAULT},
-    {DurabilityMode::V2_WITH_WAL, FlushMode::LD, FilterMode::FILTER_RELOCATE}};
+std::vector<TestMode> test_params{{DurabilityMode::V1_WITH_WAL,
+                                   FlushMode::LD,
+                                   FilterMode::DEFAULT,
+                                   RebuildingDirection::OLD_TO_NEW},
+                                  {DurabilityMode::V1_WITHOUT_WAL,
+                                   FlushMode::ROCKSDB,
+                                   FilterMode::DEFAULT,
+                                   RebuildingDirection::OLD_TO_NEW},
+                                  {DurabilityMode::V1_WITHOUT_WAL,
+                                   FlushMode::LD,
+                                   FilterMode::DEFAULT,
+                                   RebuildingDirection::OLD_TO_NEW},
+                                  {DurabilityMode::V2_WITH_WAL,
+                                   FlushMode::LD,
+                                   FilterMode::DEFAULT,
+                                   RebuildingDirection::OLD_TO_NEW},
+                                  {DurabilityMode::V2_WITH_WAL,
+                                   FlushMode::LD,
+                                   FilterMode::FILTER_RELOCATE,
+                                   RebuildingDirection::OLD_TO_NEW},
+                                  {DurabilityMode::V2_WITH_WAL,
+                                   FlushMode::LD,
+                                   FilterMode::FILTER_RELOCATE,
+                                   RebuildingDirection::NEW_TO_OLD}};
 INSTANTIATE_TEST_CASE_P(RebuildingTest,
                         RebuildingTest,
                         ::testing::ValuesIn(test_params));
