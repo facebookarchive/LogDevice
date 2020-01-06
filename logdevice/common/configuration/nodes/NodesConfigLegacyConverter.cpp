@@ -202,6 +202,7 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
              : folly::none,
          node.ssl_address,
          node.admin_address,
+         folly::none,
          node.location,
          node.roles});
 

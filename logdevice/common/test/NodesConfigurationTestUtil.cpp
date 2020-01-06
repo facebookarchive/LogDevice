@@ -39,6 +39,7 @@ NodeServiceDiscovery genDiscovery(node_index_t n,
                               Sockaddr(addr, 4441),
                               /*ssl address*/ folly::none,
                               /*admin address*/ Sockaddr(addr, 6440),
+                              /*internal address*/ Sockaddr(addr, 4442),
                               l,
                               roles};
 }

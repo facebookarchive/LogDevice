@@ -27,6 +27,7 @@ typedef u16 node_idx
   7: string name;
   8: optional string admin_address;
   9: u64 version;
+  10: optional string internal_address;
 }
 
 struct ServiceDiscoveryConfig {

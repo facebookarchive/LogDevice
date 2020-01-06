@@ -20,6 +20,7 @@ TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
                                  Sockaddr("127.0.0.1", 4441),
                                  /*ssl address*/ folly::none,
                                  /*admin_address*/ Sockaddr("127.0.0.1", 6440),
+                                 /*internal_address*/ folly::none,
                                  /* location */ folly::none,
                                  /* roles */ 0};
   {
@@ -75,6 +76,7 @@ TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
                              Sockaddr("2001:4860:4860::8888", 4441),
                              folly::none,
                              Sockaddr("/unix/socket/path/admin"),
+                             /*internal_address*/ folly::none,
                              folly::none,
                              0},
         id));
@@ -95,6 +97,7 @@ TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
                                            Sockaddr("/unix/socket/path/ssl"),
                                            folly::none,
                                            Sockaddr("/unix/socket/path/admin"),
+                                           /*internal_address*/ folly::none,
                                            folly::none,
                                            0},
                       id));

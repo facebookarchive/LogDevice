@@ -196,6 +196,46 @@ TEST_F(NodesConfigurationTest, TestGossipDefaultingToDataAddress) {
             new_config->getNodeServiceDiscovery(20)->getGossipAddress());
 }
 
+TEST_F(NodesConfigurationTest, TestInternalDefaultingToDataAddress) {
+  auto config = provisionNodes();
+  ASSERT_TRUE(config->validate());
+  NodesConfiguration::Update update{};
+
+  update.service_discovery_update =
+      std::make_unique<ServiceDiscoveryConfig::Update>();
+
+  // Add one node with internal address
+  auto desc1 = genDiscovery(10, kBothRoles, "aa.bb.cc.dd.ee");
+  // For the correctness of the test, assert that both addresses are different.
+  ASSERT_NE(desc1.address, desc1.internal_address.value());
+
+  update.service_discovery_update->addNode(
+      10,
+      ServiceDiscoveryConfig::NodeUpdate{
+          ServiceDiscoveryConfig::UpdateType::PROVISION,
+          std::make_unique<NodeServiceDiscovery>(desc1)});
+
+  // Add one node with internal address
+  auto desc2 = genDiscovery(20, kBothRoles, "aa.bb.cc.dd.ef");
+  desc2.internal_address.reset();
+  update.service_discovery_update->addNode(
+      20,
+      ServiceDiscoveryConfig::NodeUpdate{
+          ServiceDiscoveryConfig::UpdateType::PROVISION,
+          std::make_unique<NodeServiceDiscovery>(desc2)});
+
+  auto new_config = config->applyUpdate(update);
+  ASSERT_NE(nullptr, new_config);
+
+  // Internal address is set on N10, should return the passed internal address.
+  EXPECT_EQ(desc1.internal_address,
+            new_config->getNodeServiceDiscovery(10)->getInternalAddress());
+
+  // Internal address is not set on N20, should return data address.
+  EXPECT_EQ(desc2.address,
+            new_config->getNodeServiceDiscovery(20)->getInternalAddress());
+}
+
 TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
