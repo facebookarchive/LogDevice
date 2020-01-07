@@ -176,10 +176,8 @@ bool StoreStorageTask::isLsnBeforeTrimPoint() {
   const auto& log_state = getLogStorageState();
   auto trim_point = log_state.getTrimPoint();
   // err on the side of caution
-  if (!trim_point.hasValue()) {
-    return false;
-  }
-  if (rid_.lsn() <= trim_point.value()) {
+
+  if (rid_.lsn() <= trim_point) {
     return true;
   }
   return false;

@@ -88,24 +88,12 @@ Message::Disposition GET_TRIM_POINT_onReceived(GET_TRIM_POINT_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
-  folly::Optional<lsn_t> trim_point = log_state->getTrimPoint();
-  if (!trim_point.hasValue()) {
-    // Trim point is unknown. Try to find it...
-    int rv =
-        map.recoverLogState(header.log_id,
-                            shard_idx,
-                            LogStorageState::RecoverContext::GET_TRIM_POINT);
-
-    // And in the meantime tell the client to try again in a bit
-    send_reply(from, header, rv == 0 ? E::AGAIN : E::FAILED, LSN_INVALID);
-    return Message::Disposition::NORMAL;
-  }
+  lsn_t trim_point = log_state->getTrimPoint();
 
   // normal case
-  ld_debug("GET_TRIM_POINT(%lu): trim_point=%lu",
-           header.log_id.val_,
-           trim_point.value());
-  send_reply(from, header, E::OK, trim_point.value());
+  ld_debug(
+      "GET_TRIM_POINT(%lu): trim_point=%lu", header.log_id.val_, trim_point);
+  send_reply(from, header, E::OK, trim_point);
   return Message::Disposition::NORMAL;
 }
 

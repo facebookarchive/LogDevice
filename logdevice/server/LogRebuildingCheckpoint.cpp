@@ -18,7 +18,6 @@ namespace facebook { namespace logdevice {
 
 void ReadLogRebuildingCheckpointTask::execute() {
   RebuildingCheckpointMetadata checkpoint;
-  TrimMetadata trim;
 
   int rv = storageThreadPool_->getLocalLogStore().readLogMetadata(
       log_id_, &checkpoint);
@@ -30,24 +29,6 @@ void ReadLogRebuildingCheckpointTask::execute() {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
                     "Could not read RebuildingCheckpointMetadata for "
-                    "log %lu: %s",
-                    log_id_.val_,
-                    error_description(err));
-    return;
-  }
-
-  if (!read_trim_point_) {
-    return;
-  }
-
-  rv = storageThreadPool_->getLocalLogStore().readLogMetadata(log_id_, &trim);
-  if (rv == 0) {
-    trim_point_ = trim.trim_point_;
-  } else if (err != E::NOTFOUND) {
-    status_ = err;
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    10,
-                    "Could not read TrimMetadata for "
                     "log %lu: %s",
                     log_id_.val_,
                     error_description(err));

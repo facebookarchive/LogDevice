@@ -339,12 +339,10 @@ int ReadingCallback::processRecord(
 
   LogStorageState& log_state = catchup_->deps_.getLogStorageStateMap().get(
       stream_->log_id_, stream_->shard_);
-  folly::Optional<lsn_t> trim_point = log_state.getTrimPoint();
-  if (trim_point.hasValue() &&
-      stream_->last_delivered_lsn_ < trim_point.value() &&
+  lsn_t trim_point = log_state.getTrimPoint();
+  if (stream_->last_delivered_lsn_ < trim_point &&
       lsn > stream_->last_delivered_lsn_ + 1) {
-    int rv = catchup_->sendGAP(
-        std::min(trim_point.value(), lsn - 1), GapReason::TRIM);
+    int rv = catchup_->sendGAP(std::min(trim_point, lsn - 1), GapReason::TRIM);
 
     if (rv != 0) {
       if (err == E::NOBUFS || err == E::SHUTDOWN) {
@@ -766,7 +764,7 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
       deps_.getLogStorageStateMap().get(stream_->log_id_, stream_->shard_);
   LogStorageState::LastReleasedLSN last_released_lsn =
       log_state.getLastReleasedLSN();
-  folly::Optional<lsn_t> trim_point = log_state.getTrimPoint();
+  lsn_t trim_point = log_state.getTrimPoint();
 
   if (sendStarted(last_released_lsn) != 0) {
     ld_check(err != E::CBREGISTERED);
@@ -775,11 +773,10 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
   }
 
   bool needs_recover =
-      (!last_released_lsn.hasValue() && !stream_->ignore_released_status_) ||
-      !trim_point.hasValue();
+      !last_released_lsn.hasValue() && !stream_->ignore_released_status_;
 
   if (needs_recover) {
-    // If either trim_point or last_released_lsn (in case we care about it)
+    // If last_released_lsn (in case we care about it)
     // is not initialized, try to recover it first.
     int rv = deps_.recoverLogState(stream_->log_id_, stream_->shard_);
     if (rv == 0) {
@@ -800,22 +797,22 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
     return Action::DEQUEUE_AND_CONTINUE;
   }
 
-  if (stream_->getReadPtr().lsn <= trim_point.value() ||
+  if (stream_->getReadPtr().lsn <= trim_point ||
       stream_->need_to_deliver_lsn_zero_) {
     // Next requested LSN is not past the trim point. We'll inform the
     // client and fast-forward the stream (we'll keep reading if trim_point+1
     // is still inside client's window).
-    int rv = sendGAP(trim_point.value(), GapReason::TRIM);
+    int rv = sendGAP(trim_point, GapReason::TRIM);
     if (rv != 0) {
       ld_check(err != E::CBREGISTERED);
       stream_ld_debug(*stream_,
                       "Failed to send a gap up to %s",
-                      lsn_to_string(trim_point.value()).c_str());
+                      lsn_to_string(trim_point).c_str());
       stream_->last_batch_status_ = "failed to send gap";
       return Action::TRANSIENT_ERROR;
     }
 
-    if (trim_point.value() >= LSN_MAX) {
+    if (trim_point >= LSN_MAX) {
       // log was fully trimmed, there's nothing more to read
       stream_ld_debug(*stream_, "trim_point >= LSN_MAX. Erasing stream.");
       stream_->last_batch_status_ = "trim_point >= LSN_MAX";
@@ -823,8 +820,8 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
     }
 
     // fast forward the stream....
-    if (stream_->getReadPtr().lsn <= trim_point.value()) {
-      stream_->setReadPtr(trim_point.value() + 1);
+    if (stream_->getReadPtr().lsn <= trim_point) {
+      stream_->setReadPtr(trim_point + 1);
     }
   }
 
@@ -1596,23 +1593,21 @@ int CatchupOneStream::sendGapNoRecords(lsn_t no_records_upto) {
 
   LogStorageState& log_state =
       deps_.getLogStorageStateMap().get(stream_->log_id_, stream_->shard_);
-  folly::Optional<lsn_t> trim_point = log_state.getTrimPoint();
+  lsn_t trim_point = log_state.getTrimPoint();
 
   int rv = 0;
 
   // First send a TRIM gap (if any).
-  if (trim_point.hasValue() &&
-      stream_->last_delivered_lsn_ < trim_point.value()) {
+  if (stream_->last_delivered_lsn_ < trim_point) {
     // Trim point was set after the check in pushRecords().
-    rv =
-        sendGAP(std::min(trim_point.value(), no_records_upto), GapReason::TRIM);
+    rv = sendGAP(std::min(trim_point, no_records_upto), GapReason::TRIM);
     if (rv != 0) {
       return rv;
     }
   }
 
   // If there is a filtered out gap, we need to send it out first.
-  if (trim_point.value_or(LSN_INVALID) < stream_->filtered_out_end_lsn_ &&
+  if (trim_point < stream_->filtered_out_end_lsn_ &&
       sendGapFilteredOutIfNeeded(trim_point) != 0) {
     return rv;
   }
@@ -1626,9 +1621,8 @@ int CatchupOneStream::sendGapNoRecords(lsn_t no_records_upto) {
   return rv;
 }
 
-int CatchupOneStream::sendGapFilteredOutIfNeeded(
-    folly::Optional<lsn_t> trim_point) {
-  if (trim_point.value_or(LSN_INVALID) < stream_->filtered_out_end_lsn_ &&
+int CatchupOneStream::sendGapFilteredOutIfNeeded(lsn_t trim_point) {
+  if (trim_point < stream_->filtered_out_end_lsn_ &&
       sendGAP(stream_->filtered_out_end_lsn_, GapReason::FILTERED_OUT) != 0) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     3,

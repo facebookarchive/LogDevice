@@ -864,8 +864,9 @@ int RocksDBLogStoreBase::traverseLogsMetadata(
                          hexdump_buf(value.data(), value.size()).c_str());
 
       // If the key is malformed, we won't know the `log_id` for
-      // invoking the callback function. Hence, just continue.
-      continue;
+      // invoking the callback function. Hence, abandon this shard.
+      err = E::LOCAL_LOG_STORE_READ;
+      return -1;
     }
 
     logid_t log_id = LogMetaKey::getLogID(key.data());
@@ -876,6 +877,8 @@ int RocksDBLogStoreBase::traverseLogsMetadata(
                          "Malformed metadata value: Key: %s, Value: %s",
                          hexdump_buf(key.data(), key.size()).c_str(),
                          hexdump_buf(value.data(), value.size()).c_str());
+      // If the value is malformed, we at least know the `log_id`. Let
+      // caller know about it.
       status = E::MALFORMED_RECORD;
     }
     cb(log_id, status == E::OK ? std::move(meta) : nullptr, status);

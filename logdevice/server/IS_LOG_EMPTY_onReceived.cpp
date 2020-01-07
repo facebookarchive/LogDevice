@@ -111,19 +111,7 @@ IS_LOG_EMPTY_onReceived(IS_LOG_EMPTY_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
-  folly::Optional<lsn_t> trim_point = log_state->getTrimPoint();
-  if (!trim_point.hasValue()) {
-    // Trim point is unknown. Try to find it...
-    int rv = map.recoverLogState(
-        header.log_id,
-        shard_idx,
-        LogStorageState::RecoverContext::IS_LOG_EMPTY_MESSAGE);
-
-    // And in the meantime tell the client to try again in a bit
-    send_reply(from, header, rv == 0 ? E::AGAIN : E::FAILED, false);
-    return Message::Disposition::NORMAL;
-  }
-
+  lsn_t trim_point = log_state->getTrimPoint();
   ShardedStorageThreadPool* sstp = processor->sharded_storage_thread_pool_;
   LocalLogStore& store = sstp->getByIndex(shard_idx).getLocalLogStore();
   lsn_t last_lsn;
@@ -150,9 +138,9 @@ IS_LOG_EMPTY_onReceived(IS_LOG_EMPTY_Message* msg,
   ld_debug("IS_LOG_EMPTY(%lu): last_lsn=%lu, trim_point=%lu",
            header.log_id.val_,
            last_lsn,
-           trim_point.value());
+           trim_point);
 
-  bool empty = (last_lsn == LSN_INVALID || last_lsn <= trim_point.value());
+  bool empty = (last_lsn == LSN_INVALID || last_lsn <= trim_point);
 
   if (empty) {
     // Make sure we're not waiting for, or in, mini-rebuilding.

@@ -989,10 +989,102 @@ bool Server::initLogStorageStateMap() {
   if (!params_->isStorageNode()) {
     return true;
   }
+
   shard_size_t nshards = sharded_store_->numShards();
   log_storage_state_map_ = std::make_unique<LogStorageStateMap>(
       nshards, params_->getProcessorSettings()->log_state_recovery_interval);
-  return true;
+
+  /*
+   * It is important to differentiate between the following cases
+   * while loading the `LogStorageState`.
+   *
+   * 1. The metadata is not present.
+   * 2. The metadata is present but could not be read due to some error.
+   *
+   * E.g. `TRIM_POINT` would be set to `LSN_INVALID` in both such
+   * cases.
+   *
+   * Case 1 is simple. However, case 2 needs some special handling as
+   * below.
+   *
+   * - If the `log_id` of the problematic metadata is known, the
+   *   `LogStorageState` could be marked in error with
+   *   `notePermanentError`. Any consumers of `LogStorageState` would
+   *   then check for the permanent error before trusting its
+   *   content.
+   *   This case could arise if the metadata `key` is intact but its
+   *   `value` is malformed.
+   *
+   * - If the `log_id` of the metadata could not be read, then the
+   *   contents for such UNKNOWN log in that shard cannot be served
+   *   correctly. Therefore, any future IO to that shard is disabled
+   *   by switching its storage backend to `FailingLocalLogStore`. It
+   *   is safe to switch the backend at this stage in the startup as
+   *   no one else has access to it.  If switching the backend fails
+   *   for some reason, the server startup is aborted.
+   */
+
+  auto make_traverser =
+      [& lsmap = log_storage_state_map_](
+          shard_index_t shard,
+          std::function<void(LogStorageState*, std::unique_ptr<LogMetadata>)>
+              fn) {
+        return [shard, fn, &lsmap](logid_t log_id,
+                                   std::unique_ptr<LogMetadata> meta,
+                                   Status status) {
+          auto log_state = lsmap->insertOrGet(log_id, shard);
+          if (log_state->hasPermanentError()) {
+            return;
+          }
+          if (status == E::OK) {
+            fn(log_state, std::move(meta));
+          } else {
+            ld_check_eq(status, E::MALFORMED_RECORD);
+            log_state->notePermanentError("Populating LogStorageState");
+          }
+        };
+      };
+
+  std::vector<std::future<bool>> futures;
+  for (shard_index_t shard = 0; shard < nshards; ++shard) {
+    futures.push_back(std::async(
+        std::launch::async,
+        [shard, &make_traverser, &sharded_store = sharded_store_]() {
+          ThreadID::set(ThreadID::UTILITY,
+                        folly::sformat("ld:populateLogState{}", shard));
+          auto store = sharded_store->getByIndex(shard);
+          auto trim_point_traverser = make_traverser(
+              shard,
+              [](LogStorageState* log_state,
+                 std::unique_ptr<LogMetadata> meta) {
+                log_state->updateTrimPoint(
+                    dynamic_cast<TrimMetadata*>(meta.get())->trim_point_);
+              });
+
+          int rv = store->traverseLogsMetadata(
+              LogMetadataType::TRIM_POINT, trim_point_traverser);
+          if (rv != 0) {
+            ld_error("Failed to populate Trim Points from shard %d: %s.",
+                     shard,
+                     error_name(err));
+            if (!sharded_store->switchToFailingLocalLogStore(shard)) {
+              ld_critical("Failed to disable shard %d.", shard);
+              return false;
+            }
+          }
+          return true;
+        }));
+  }
+
+  bool ret = true;
+  for (auto& f : futures) {
+    if (!f.get()) {
+      ret = false;
+    }
+  }
+  ld_info(
+      "Populating log storage state map %s.", ret ? "successful" : "failed");
+  return ret;
 }
 
 bool Server::initFailureDetector() {
@@ -1071,7 +1163,6 @@ bool Server::initNCM() {
       return false;
     }
   }
-
   return true;
 }
 

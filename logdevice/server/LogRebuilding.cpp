@@ -1405,22 +1405,16 @@ void LogRebuilding::readCheckpoint() {
   auto& map = ServerWorker::onThisThread()->processor_->getLogStorageStateMap();
   LogStorageState* log_state = map.insertOrGet(logid_, getMyShardID().shard());
 
-  // Try to read the trim point immediately if it's cached. If we can't find it,
-  // ReadLogRebuildingCheckpointTask will read it.
-  bool need_trim_point = true;
   if (log_state) {
-    folly::Optional<lsn_t> trim_point = log_state->getTrimPoint();
-    if (trim_point.hasValue()) {
-      readPointer_.lsn = std::max(readPointer_.lsn, trim_point.value() + 1);
-      ld_debug("LogID %ju: Have trimpoint. Setting lsn to 0x%jx.",
-               (uintmax_t)logid_.val(),
-               (uintmax_t)readPointer_.lsn);
-      need_trim_point = false;
-    }
+    lsn_t trim_point = log_state->getTrimPoint();
+    readPointer_.lsn = std::max(readPointer_.lsn, trim_point + 1);
+    ld_debug("LogID %ju: Have trimpoint. Setting lsn to 0x%jx.",
+             (uintmax_t)logid_.val(),
+             (uintmax_t)readPointer_.lsn);
   }
 
   auto task = std::make_unique<ReadLogRebuildingCheckpointTask>(
-      logid_, restartVersion_, need_trim_point);
+      logid_, restartVersion_);
   auto task_queue =
       ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard_);
   task_queue->putTask(std::move(task));

@@ -1025,7 +1025,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       // lifetime is a superset of DB lifelime.
       return LSN_INVALID;
     }
-    return state->getTrimPoint().value_or(LSN_INVALID);
+    return state->getTrimPoint();
   }
 
   epoch_t getPerEpochLogMetadataTrimPoint(logid_t log_id) {

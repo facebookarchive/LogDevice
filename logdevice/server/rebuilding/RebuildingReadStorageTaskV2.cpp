@@ -42,9 +42,8 @@ void RebuildingReadStorageTaskV2::execute() {
   STAT_INCR(stats, read_streams_num_ops_rebuilding);
 
   if (context->iterator == nullptr) {
-    if (!fetchTrimPoints(context.get())) {
-      context->persistentError = true;
-      return;
+    for (auto& p : context->logs) {
+      updateTrimPoint(p.first, context.get(), &p.second);
     }
 
     LocalLogStore::ReadOptions opts(
@@ -506,49 +505,17 @@ RebuildingReadStorageTaskV2::createIterator(
   return storageThreadPool_->getLocalLogStore().readAllLogs(opts, logs);
 }
 
-bool RebuildingReadStorageTaskV2::fetchTrimPoints(Context* context) {
-  LogStorageStateMap& log_state_map =
-      storageThreadPool_->getProcessor().getLogStorageStateMap();
-  for (auto& p : context->logs) {
-    LogStorageState* s =
-        log_state_map.insertOrGet(p.first, context->myShardID.shard());
-    ld_check(s != nullptr);
-    folly::Optional<lsn_t> t = s->getTrimPoint();
-    if (t.hasValue()) {
-      // Got trim point in memory.
-      p.second.trimPoint = t.value();
-      continue;
-    }
-
-    // Need to load trim point from rocksdb.
-    TrimMetadata meta{LSN_INVALID};
-    int rv =
-        storageThreadPool_->getLocalLogStore().readLogMetadata(p.first, &meta);
-    if (rv == 0 || err == E::NOTFOUND) {
-      s->updateTrimPoint(meta.trim_point_);
-      p.second.trimPoint = meta.trim_point_;
-    } else {
-      storageThreadPool_->getLocalLogStore().enterFailSafeMode(
-          "RebuildingReadStorageTaskV2::fetchTrimPoints()",
-          "Failed to read TrimMetadata");
-      s->notePermanentError(
-          "Reading trim point (in RebuildingReadStorageTaskV2)");
-      return false;
-    }
-  }
-  return true;
-}
 void RebuildingReadStorageTaskV2::updateTrimPoint(
     logid_t log,
     Context* context,
     Context::LogState* log_state) {
   LogStorageStateMap& log_state_map =
       storageThreadPool_->getProcessor().getLogStorageStateMap();
-  LogStorageState* s = log_state_map.find(log, context->myShardID.shard());
-  ld_check(s != nullptr); // fetchTrimPoints() should have created it
-  folly::Optional<lsn_t> t = s->getTrimPoint();
-  ld_check(t.hasValue()); // fetchTrimPoints() should have set it
-  log_state->trimPoint = t.value();
+  LogStorageState* s =
+      log_state_map.insertOrGet(log, context->myShardID.shard());
+  ld_check(s != nullptr);
+  lsn_t t = s->getTrimPoint();
+  log_state->trimPoint = t;
 }
 
 RebuildingReadStorageTaskV2::Filter::Filter(Context* context)

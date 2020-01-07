@@ -62,9 +62,6 @@ class RebuildingReadStorageTaskTest : public ::testing::Test {
         override {
       return test->store->readAllLogs(opts, logs);
     }
-    bool fetchTrimPoints(Context* context) override {
-      return true;
-    }
     void updateTrimPoint(logid_t log,
                          Context* context,
                          Context::LogState* log_state) override {}

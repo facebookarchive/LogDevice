@@ -28,12 +28,10 @@ namespace facebook { namespace logdevice {
 class ReadLogRebuildingCheckpointTask : public StorageTask {
  public:
   explicit ReadLogRebuildingCheckpointTask(logid_t log_id,
-                                           lsn_t restart_version,
-                                           bool read_trim_point)
+                                           lsn_t restart_version)
       : StorageTask(StorageTask::Type::READ_LOG_REBUILDING_CHECKPOINT),
         log_id_(log_id),
-        restart_version_(restart_version),
-        read_trim_point_(read_trim_point) {}
+        restart_version_(restart_version) {}
 
   StorageTaskPriority getPriority() const override {
     // Rebuilding reads should be lo-pri compared to regular reads
@@ -54,7 +52,6 @@ class ReadLogRebuildingCheckpointTask : public StorageTask {
  private:
   logid_t log_id_;
   lsn_t restart_version_;
-  bool read_trim_point_;
 
   // These are populated when the task comes back successfully.
 

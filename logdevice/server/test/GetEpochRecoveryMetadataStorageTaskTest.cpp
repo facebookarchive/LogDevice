@@ -72,11 +72,13 @@ TEST(GetEpochRecoveryMetadataStorageTask, EmptyLogWhileClean) {
 TEST(GetEpochRecoveryMetadataStorageTask, RangeBelowTrimPoint) {
   TemporaryRocksDBStore store;
   LogStorageStateMap map(1);
+  LogStorageState* log_state = map.insertOrGet(LOG_ID, 0);
+  lsn_t trim_point = compose_lsn(epoch_t(50), ESN_INVALID);
   store.writeLogMetadata(
       LOG_ID, LastCleanMetadata(epoch_t(70)), LocalLogStore::WriteOptions());
-  store.writeLogMetadata(LOG_ID,
-                         TrimMetadata(compose_lsn(epoch_t(50), ESN_INVALID)),
-                         LocalLogStore::WriteOptions());
+  store.writeLogMetadata(
+      LOG_ID, TrimMetadata(trim_point), LocalLogStore::WriteOptions());
+  log_state->updateTrimPoint(trim_point);
   auto task = create_task(LOG_ID, epoch_t(5), epoch_t(7));
   EXPECT_EQ(E::EMPTY, task.executeImpl(store, map));
   EXPECT_TRUE(task.getEpochRecoveryStateMap().empty());

@@ -4496,22 +4496,7 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
     LogStorageState* log_state = state_map.insertOrGet(log_id, getShardIdx());
     ld_check(log_state != nullptr);
 
-    if (!log_state->getTrimPoint().hasValue()) {
-      // If the trim point is not known yet, just read it from metadata CF.
-      TrimMetadata meta{LSN_INVALID};
-      int rv = readLogMetadata(log_id, &meta);
-      if (rv == 0 || err == E::NOTFOUND) {
-        log_state->updateTrimPoint(meta.trim_point_);
-      } else {
-        enterFailSafeMode("PartitionedRocksDBStore::trimLogsBasedOnTime()",
-                          "Failed to read TrimMetadata");
-        log_state->notePermanentError(
-            "Reading trim point (in trimLogsBasedOnTime)");
-        err = E::LOCAL_LOG_STORE_READ;
-        return -1;
-      }
-    }
-    lsn_t existing_trim_point = log_state->getTrimPoint().value();
+    lsn_t existing_trim_point = log_state->getTrimPoint();
 
     // Iterate over partitions.
 
@@ -4643,14 +4628,9 @@ partition_id_t PartitionedRocksDBStore::findObsoletePartitions() {
       return PARTITION_INVALID;
     }
     auto trim_point = log_state->getTrimPoint();
-    if (!trim_point.hasValue()) {
-      // trimLogs* will initialise trim point.
-      return PARTITION_INVALID;
-    }
-
     while (iterator.nextPartition()) {
       partition_id_t partition = iterator.getPartitionID();
-      if (iterator.getLastLSN() > trim_point.value()) {
+      if (iterator.getLastLSN() > trim_point) {
         // This is first partition that has non-trimmed records for this log.
         oldest_to_keep = std::min(oldest_to_keep, partition);
         break;
@@ -4933,17 +4913,11 @@ bool PartitionedRocksDBStore::performStronglyFilteredCompactionInternal(
       continue;
     }
     auto trim_point = log_state->getTrimPoint();
-    if (!trim_point.hasValue()) {
-      // Ditto.
-      compaction_context.logs_to_keep->push_back(log_id);
-      continue;
-    }
-
     while (iterator.nextPartition()) {
       partition_id_t id = iterator.getPartitionID();
       if (id == partition->id_) {
         ++logs_seen;
-        if (iterator.getLastLSN() > trim_point.value()) {
+        if (iterator.getLastLSN() > trim_point) {
           // This log has records above trim point in this partition.
           compaction_context.logs_to_keep->push_back(log_id);
         }
@@ -5145,7 +5119,7 @@ void PartitionedRocksDBStore::cleanUpDirectory(
     LogStorageState* log_storage_state =
         log_state_map ? log_state_map->find(log_id, getShardIdx()) : nullptr;
     if (log_storage_state) {
-      trim_point = log_storage_state->getTrimPoint().value_or(LSN_INVALID);
+      trim_point = log_storage_state->getTrimPoint();
     }
     auto res = should_delete_current_entry(log_id, trim_point);
     if (res == Decision::ERROR) {

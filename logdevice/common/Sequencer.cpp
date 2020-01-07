@@ -274,7 +274,7 @@ void Sequencer::startGetTrimPointRequest() {
 
 void Sequencer::updateTrimPoint(Status status, lsn_t tp) {
   if (status == E::OK) {
-    trim_point_.fetchMax(tp);
+    atomic_fetch_max(trim_point_, tp);
   }
 }
 
@@ -284,11 +284,11 @@ std::pair<Status, bool> Sequencer::isLogEmpty() {
   // Tell the client to try again in a bit if
   // 1) activation or recovery haven't finished,
   // 2) we're in some error state. Client should get routed elsewhere.
-  if (!tail_record || !tail_record->isValid() || !getTrimPoint().hasValue()) {
+  if (!tail_record || !tail_record->isValid()) {
     return {E::AGAIN, false};
   }
 
-  return {E::OK, tail_record->header.lsn <= getTrimPoint().value()};
+  return {E::OK, tail_record->header.lsn <= getTrimPoint()};
 }
 
 void Sequencer::noteDrainingCompleted(epoch_t epoch, Status drain_status) {

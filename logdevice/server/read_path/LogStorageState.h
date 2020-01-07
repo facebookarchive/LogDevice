@@ -179,7 +179,7 @@ class LogStorageState {
   /**
    * Gets the trim point, if initialized.
    */
-  folly::Optional<lsn_t> getTrimPoint() const;
+  lsn_t getTrimPoint() const;
 
   /**
    * Gets the per-epoch log metadata trim point, if initialized.
@@ -391,16 +391,13 @@ class LogStorageState {
   std::atomic<bool> recover_log_state_task_in_flight_{false};
 
   // Trim point of log.  Allows the local log store to delete trimmed
-  // records and read paths to recognize that records are missing because of
-  // trimming.  All records up to (and including) this LSN are scheduled for
-  // deletion and should not be exposed to clients.
-  // If uninitialized, the current thread may try to schedule recovery.
-  //
-  // Initialized by one of:
-  // (1) A TRIM message received by this process
-  // (2) A saved trim point lazily read from the local log store metadata
-  //     section
-  AtomicOptional<lsn_t> trim_point_{LSN_INVALID, EMPTY_OPTIONAL};
+  // records and read paths to recognize that records are missing
+  // because of trimming. All records up to (and including) this LSN
+  // are scheduled for deletion and should not be exposed to clients.
+  // The trim point is kept in-sync with TrimMetadata of the local log
+  // store.
+
+  std::atomic<lsn_t> trim_point_{LSN_INVALID};
 
   // Trim point of per-epoch log metadata. This is of type epoch_t instead
   // of lsn_t since these metadata are stored per-epoch. PerEpochLogMetadata

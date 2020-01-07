@@ -321,7 +321,7 @@ class CatchupOneStream {
    * @return   -1   when failed
    *            0   when success or there is no FILTERED_OUT gap pending
    */
-  int sendGapFilteredOutIfNeeded(folly::Optional<lsn_t> trim_point);
+  int sendGapFilteredOutIfNeeded(lsn_t trim_point);
 
   CatchupQueueDependencies& deps_;
   ServerReadStream* stream_{nullptr};

@@ -123,8 +123,8 @@ GET_EPOCH_RECOVERY_METADATA_onReceived(GET_EPOCH_RECOVERY_METADATA_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
-  folly::Optional<lsn_t> trim_point = log_state->getTrimPoint();
-  if (trim_point.hasValue() && lsn_to_epoch(trim_point.value()) > header.end) {
+  lsn_t trim_point = log_state->getTrimPoint();
+  if (lsn_to_epoch(trim_point) > header.end) {
     // the epoch is already been trimmed, consider it empty
     // Note: since trim point move asynchronously on storage nodes, purging
     //       may aggressively treat the epoch as empty while the epoch

@@ -159,7 +159,7 @@ FINDKEY_onReceived(FINDKEY_Message* msg,
 
   auto flags = msg->header_.flags;
   lsn_t last_per_epoch_released_lsn = LSN_INVALID;
-  folly::Optional<lsn_t> trim_point;
+  lsn_t trim_point{LSN_INVALID};
 
   if (!(flags & FINDKEY_Header::USER_KEY)) {
     LogStorageState* log_state = processor->getLogStorageStateMap().insertOrGet(
@@ -183,7 +183,7 @@ FINDKEY_onReceived(FINDKEY_Message* msg,
     // LSN in case recovery is running and per-epoch releases are enabled.
     last_per_epoch_released_lsn = log_state->getLastPerEpochReleasedLSN();
     trim_point = log_state->getTrimPoint();
-    if (last_per_epoch_released_lsn == LSN_INVALID || !trim_point.hasValue()) {
+    if (last_per_epoch_released_lsn == LSN_INVALID) {
       // Last per-epoch released LSN or trim point are unknown.  Try to find
       // them...
       processor->getLogStorageStateMap().recoverLogState(
@@ -203,7 +203,7 @@ FINDKEY_onReceived(FINDKEY_Message* msg,
       send_reply(from,
                  msg->header_.client_rqid,
                  E::OK,
-                 std::max(last_per_epoch_released_lsn, trim_point.value()),
+                 std::max(last_per_epoch_released_lsn, trim_point),
                  LSN_MAX,
                  shard_idx,
                  tracer);
@@ -219,10 +219,9 @@ FINDKEY_onReceived(FINDKEY_Message* msg,
   // The trim point and last released lsn are only used as initial bounds for
   // the binary search inside a partition in findTime(), so we do not need them
   // for findKey().
-  lsn_t trim_point_value = trim_point.value_or(LSN_INVALID);
 
   if (runNonBlockingFindKey(*msg,
-                            trim_point_value,
+                            trim_point,
                             last_per_epoch_released_lsn,
                             from,
                             shard_idx,
@@ -243,7 +242,7 @@ FINDKEY_onReceived(FINDKEY_Message* msg,
           timestamp,
           std::move(msg->key_),
           std::min(last_per_epoch_released_lsn, msg->header_.hint_hi),
-          std::max(trim_point_value, msg->header_.hint_lo),
+          std::max(trim_point, msg->header_.hint_lo),
           flags,
           task_deadline,
           std::move(tracer),

@@ -530,12 +530,8 @@ class Sequencer {
 
   ////////////////////////// Get Log Property ////////////////////////////
 
-  folly::Optional<lsn_t> getTrimPoint() const {
-    folly::Optional<lsn_t> result; // initially empty
-    if (trim_point_.hasValue()) {
-      result.assign(trim_point_.load());
-    }
-    return result;
+  lsn_t getTrimPoint() const {
+    return trim_point_.load();
   }
 
   logid_t getLogID() const {
@@ -806,7 +802,7 @@ class Sequencer {
 
   // indicate if GetTrimPointRequest has been running or not
   std::atomic<bool> get_trim_point_running_{false};
-  AtomicOptional<lsn_t> trim_point_{LSN_INVALID, EMPTY_OPTIONAL};
+  std::atomic<lsn_t> trim_point_{LSN_INVALID};
 
   UpdateableSettings<Settings> settings_;
 

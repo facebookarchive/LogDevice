@@ -105,12 +105,8 @@ int LogStorageState::updateLastPerEpochReleasedLSN(lsn_t new_val) {
   return 0;
 }
 
-folly::Optional<lsn_t> LogStorageState::getTrimPoint() const {
-  folly::Optional<lsn_t> result; // initially empty
-  if (trim_point_.hasValue()) {
-    result.assign(trim_point_.load());
-  }
-  return result;
+lsn_t LogStorageState::getTrimPoint() const {
+  return trim_point_.load();
 }
 
 folly::Optional<epoch_t>
@@ -163,7 +159,7 @@ void LogStorageState::updateEpochOffsetMap(
 }
 
 int LogStorageState::updateTrimPoint(lsn_t new_val) {
-  lsn_t prev = trim_point_.fetchMax(new_val);
+  lsn_t prev = atomic_fetch_max(trim_point_, new_val);
   if (prev >= new_val) {
     err = E::UPTODATE;
     return -1;
@@ -260,7 +256,6 @@ int LogStorageState::recover(std::chrono::microseconds interval,
   ServerWorker* w = ServerWorker::onThisThread();
   ld_check(w->processor_->sequencer_locator_ != nullptr);
 
-  folly::Optional<lsn_t> trim_point = getTrimPoint();
   LogStorageState::LastReleasedLSN last_released = getLastReleasedLSN();
 
   // Do we need to ask the sequencer for any of the missing information?
@@ -270,8 +265,8 @@ int LogStorageState::recover(std::chrono::microseconds interval,
       force_ask_sequencer;
 
   // should we attempt to read it from the local log store?
-  bool recover_from_store = !last_released.hasValue() ||
-      !trim_point.hasValue() || !getLastCleanEpoch().hasValue();
+  bool recover_from_store =
+      !last_released.hasValue() || !getLastCleanEpoch().hasValue();
 
   if (!ask_sequencer && !recover_from_store) {
     // nothing needs to be recovered

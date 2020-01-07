@@ -517,17 +517,7 @@ void SealStorageTask::onDone() {
       auto log_state = map.find(log_id_, getShardIdx());
       ld_check(log_state != nullptr);
 
-      folly::Optional<lsn_t> trim_point = log_state->getTrimPoint();
-      if (!trim_point.hasValue()) {
-        int rv = map.recoverLogState(
-            log_id_,
-            getShardIdx(),
-            LogStorageState::RecoverContext::SEAL_STORAGE_TASK);
-        std::ignore = rv;
-
-        // In the manwhile, return LSN_INVALID
-        trim_point = LSN_INVALID;
-      }
+      lsn_t trim_point = log_state->getTrimPoint();
       getAllEpochInfo(
           epoch_lng, epoch_offset_map, last_timestamp, max_seen_lsn);
       SEALED_Message::createAndSend(reply_to_,
@@ -535,7 +525,7 @@ void SealStorageTask::onDone() {
                                     getShardIdx(),
                                     seal_epoch_,
                                     status_,
-                                    trim_point.value(),
+                                    trim_point,
                                     epoch_lng,
                                     seal,
                                     epoch_offset_map,

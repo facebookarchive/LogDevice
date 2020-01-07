@@ -50,7 +50,7 @@ class GetHeadAttributesStorageTask : public StorageTask {
   // from LogStorageState.
   GetHeadAttributesStorageTask(const GET_HEAD_ATTRIBUTES_Header& header,
                                const Address& reply_to,
-                               folly::Optional<lsn_t> trim_point)
+                               lsn_t trim_point)
       : StorageTask(StorageTask::Type::GET_HEAD_ATTRIBUTES),
         header_(header),
         reply_to_(reply_to),
@@ -64,34 +64,9 @@ class GetHeadAttributesStorageTask : public StorageTask {
 
   void execute() override {
     LocalLogStore& store = storageThreadPool_->getLocalLogStore();
-
-    // Read trim point from store because it was not available in
-    // LogStorageState.
-    if (!trim_point_.hasValue()) {
-      // Update trim point in LogStorageState so that next time this request
-      // doesn't have to read from store again.
-      LogStorageStateMap& map =
-          storageThreadPool_->getProcessor().getLogStorageStateMap();
-      LogStorageState* log_state =
-          map.find(header_.log_id, storageThreadPool_->getShardIdx());
-      // LogStorageState should have been initialized in
-      // GET_HEAD_ATTRIBUTES_Message::onReceived
-      ld_check(log_state != nullptr);
-
-      TrimMetadata trim_metadata{LSN_INVALID};
-      int rv = store.readLogMetadata(header_.log_id, &trim_metadata);
-      if (rv != 0 && err != E::NOTFOUND) {
-        log_state->notePermanentError("Reading trim point");
-        status_ = E::FAILED;
-        return;
-      }
-      trim_point_.assign(trim_metadata.trim_point_);
-      log_state->updateTrimPoint(trim_point_.value());
-    }
-    ld_check(trim_point_.hasValue());
     trim_point_timestamp_ = std::chrono::milliseconds::max();
     int rv = store.getApproximateTimestamp(header_.log_id,
-                                           trim_point_.value() + 1,
+                                           trim_point_ + 1,
                                            true, // allow_blocking_io
                                            &trim_point_timestamp_);
     if (rv == 0) {
@@ -111,10 +86,8 @@ class GetHeadAttributesStorageTask : public StorageTask {
   }
 
   void onDone() override {
-    send_reply(reply_to_,
-               header_,
-               status_,
-               {trim_point_.value(), trim_point_timestamp_});
+    send_reply(
+        reply_to_, header_, status_, {trim_point_, trim_point_timestamp_});
   }
 
   void onDropped() override {
@@ -124,7 +97,7 @@ class GetHeadAttributesStorageTask : public StorageTask {
  private:
   GET_HEAD_ATTRIBUTES_Header header_;
   Address reply_to_;
-  folly::Optional<lsn_t> trim_point_;
+  lsn_t trim_point_;
   Status status_;
   std::chrono::milliseconds trim_point_timestamp_;
 };
@@ -186,17 +159,23 @@ GET_HEAD_ATTRIBUTES_onReceived(GET_HEAD_ATTRIBUTES_Message* msg,
   LogStorageStateMap& map = processor->getLogStorageStateMap();
   LogStorageState* log_state = map.insertOrGet(header.log_id, shard_idx);
 
-  folly::Optional<lsn_t> trim_point = log_state->getTrimPoint();
-  if (trim_point.hasValue() && Worker::settings().allow_reads_on_workers) {
+  if (log_state->hasPermanentError()) {
+    // Trim point data can not be trusted.
+    send_reply(from, header, E::FAILED);
+    return Message::Disposition::NORMAL;
+  }
+
+  lsn_t trim_point = log_state->getTrimPoint();
+  if (Worker::settings().allow_reads_on_workers) {
     // Try to read approximate timestamp of trim point without reading from
     // disk as well.
     std::chrono::milliseconds timestamp;
     int rv = store.getApproximateTimestamp(header.log_id,
-                                           trim_point.value() + 1,
+                                           trim_point + 1,
                                            false, // not allow_blocking_io
                                            &timestamp);
     if (rv == 0) {
-      send_reply(from, header, E::OK, {trim_point.value(), timestamp});
+      send_reply(from, header, E::OK, {trim_point, timestamp});
       return Message::Disposition::NORMAL;
     }
     if (err != E::WOULDBLOCK) {
@@ -206,7 +185,7 @@ GET_HEAD_ATTRIBUTES_onReceived(GET_HEAD_ATTRIBUTES_Message* msg,
         send_reply(from,
                    header,
                    E::OK,
-                   {trim_point.value(), std::chrono::milliseconds::max()});
+                   {trim_point, std::chrono::milliseconds::max()});
         return Message::Disposition::NORMAL;
       } else if (err == E::NOTSUPPORTED) {
         send_reply(from, header, E::NOTSUPPORTED);

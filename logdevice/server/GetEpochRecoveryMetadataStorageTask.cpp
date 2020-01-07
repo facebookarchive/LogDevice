@@ -78,22 +78,7 @@ GetEpochRecoveryMetadataStorageTask::executeImpl(LocalLogStore& store,
     return E::NOTREADY;
   }
 
-  lsn_t trim_point;
-  folly::Optional<lsn_t> tp = log_state->getTrimPoint();
-  if (!tp.hasValue()) {
-    TrimMetadata meta{LSN_INVALID};
-    rv = store.readLogMetadata(log_id_, &meta);
-    if (rv != 0 && err != E::NOTFOUND) {
-      log_state->notePermanentError(
-          "Reading trim point (in GetEpochRecoveryMetadataStorageTask)");
-      return E::FAILED;
-    }
-    // trim point read or not found
-    trim_point = meta.trim_point_;
-    log_state->updateTrimPoint(trim_point);
-  } else {
-    trim_point = tp.value();
-  }
+  lsn_t trim_point = log_state->getTrimPoint();
 
   if (lsn_to_epoch(trim_point) > end_) {
     // epoch is completely trimmed, consider it empty

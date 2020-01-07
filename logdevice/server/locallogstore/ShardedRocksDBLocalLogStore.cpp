@@ -103,9 +103,9 @@ ShardedRocksDBLocalLogStore::ShardedRocksDBLocalLogStore(
     StatsHolder* stats)
     : stats_(stats),
       db_settings_(db_settings),
-      partitioned_(db_settings->partitioned),
       base_path_(base_path),
-      nshards_(nshards) {}
+      nshards_(nshards),
+      partitioned_(db_settings->partitioned) {}
 
 void ShardedRocksDBLocalLogStore::init(
     Settings settings,
@@ -750,11 +750,37 @@ void ShardedRocksDBLocalLogStore::setSequencerInitiatedSpaceBasedRetention(
 
 void ShardedRocksDBLocalLogStore::setShardedStorageThreadPool(
     const ShardedStorageThreadPool* sharded_pool) {
+  ld_check(!storage_thread_pool_assigned_);
+  storage_thread_pool_assigned_ = true;
   for (size_t i = 0; i < shards_.size(); ++i) {
     filters_[i]->setStorageThreadPool(&sharded_pool->getByIndex(i));
     shards_[i]->setProcessor(checked_downcast<Processor*>(
         &sharded_pool->getByIndex(i).getProcessor()));
   }
+}
+
+bool ShardedRocksDBLocalLogStore::switchToFailingLocalLogStore(
+    shard_index_t shard) {
+  ld_check(initialized_);
+  if (storage_thread_pool_assigned_) {
+    // too late.
+    return false;
+  }
+  auto store = getByIndex(shard);
+  if (store == nullptr) {
+    return false;
+  }
+  if (dynamic_cast<FailingLocalLogStore*>(store) != nullptr) {
+    // Do nothing.
+    return true;
+  }
+
+  shards_[shard].reset(new FailingLocalLogStore());
+  failing_log_store_shards_.insert(shard);
+  PER_SHARD_STAT_INCR(stats_, failing_log_stores, shard);
+  ld_info("Opened FailingLocalLogStore instance for shard %d", shard);
+
+  return true;
 }
 
 const std::unordered_map<dev_t, DiskShardMappingEntry>&

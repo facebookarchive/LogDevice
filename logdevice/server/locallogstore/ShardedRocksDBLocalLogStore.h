@@ -110,6 +110,22 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   void setShardedStorageThreadPool(const ShardedStorageThreadPool*);
 
+  /**
+   * Set the storage backend of the `shard` to `FailingLocallogStore`.
+   *
+   * If an error is encountered while loading log metadata from a
+   * shard after its initialization, the storage backend for that
+   * shard can be set to `FailinginLocalLogStore` so that all the
+   * future operation from that shard would fail. This can only be
+   * done before anyone, other than the start up sequence, could
+   * access the shard.
+   *
+   * @param shard Index of the shard to act on.
+   *
+   * @returns true only if the operation was successful.
+   */
+  bool switchToFailingLocalLogStore(shard_index_t shard);
+
   struct DiskShardMappingEntry {
     // Canonical path to one of the shards.  The path can be used to find the
     // free space on the device.
@@ -214,17 +230,20 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
   // Mapping between shard idx, and the disk on which it resides
   std::unordered_map<dev_t, DiskShardMappingEntry> fspath_to_dsme_;
 
-  // Indicating if shards are partitioned
-  const bool partitioned_;
-
   // Base path of where the actual RocksDB folders (shards) are located
   std::string base_path_;
 
   // Number of shards to expect in the base folder
   shard_size_t nshards_;
 
+  // Indicating if shards are partitioned
+  const bool partitioned_;
+
   // Set to true when all RocksDB databases have been initialized
   bool initialized_ = false;
+
+  // Set to true when processor and storage thread pool is assigned to shards.
+  bool storage_thread_pool_assigned_ = false;
 };
 
 }} // namespace facebook::logdevice

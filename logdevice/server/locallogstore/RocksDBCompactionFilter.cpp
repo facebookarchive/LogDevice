@@ -448,8 +448,7 @@ void RocksDBCompactionFilter::getTrimInfo(logid_t log_id) {
     return;
   }
 
-  // initially empty
-  folly::Optional<lsn_t> trim_point;
+  lsn_t trim_point{LSN_INVALID};
   folly::Optional<std::chrono::milliseconds> cutoff_timestamp;
   folly::Optional<epoch_t> per_epoch_log_metadata_trim_point;
 
@@ -469,9 +468,7 @@ void RocksDBCompactionFilter::getTrimInfo(logid_t log_id) {
     trim_point = log_state->getTrimPoint();
     per_epoch_log_metadata_trim_point =
         log_state->getPerEpochLogMetadataTrimPoint();
-  }
-
-  if (!trim_point.hasValue()) {
+  } else {
     noteLogSkipped(log_id);
   }
 
