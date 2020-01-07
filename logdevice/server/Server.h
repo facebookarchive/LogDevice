@@ -284,11 +284,13 @@ class Server {
   std::unique_ptr<folly::EventBaseThread> ssl_connection_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> command_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> gossip_listener_loop_;
+  std::unique_ptr<folly::EventBaseThread> server_to_server_listener_loop_;
   std::unique_ptr<AdminServer> admin_server_handle_;
   std::unique_ptr<Listener> connection_listener_;
   std::unique_ptr<Listener> ssl_connection_listener_;
   std::unique_ptr<Listener> command_listener_;
   std::unique_ptr<Listener> gossip_listener_;
+  std::unique_ptr<Listener> server_to_server_listener_;
 
   // initStore()
   std::unique_ptr<ShardedRocksDBLocalLogStore> sharded_store_;

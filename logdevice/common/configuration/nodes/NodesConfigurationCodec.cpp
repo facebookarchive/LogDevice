@@ -34,8 +34,9 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
   if (discovery.admin_address.hasValue()) {
     disc.set_admin_address(discovery.admin_address.value().toString());
   }
-  if (discovery.internal_address.hasValue()) {
-    disc.set_internal_address(discovery.internal_address.value().toString());
+  if (discovery.server_to_server_address.hasValue()) {
+    disc.set_server_to_server_address(
+        discovery.server_to_server_address.value().toString());
   }
   if (discovery.location.hasValue()) {
     disc.set_location(discovery.location.value().toString());
@@ -92,13 +93,14 @@ int NodesConfigurationThriftConverter::fromThrift(
     result.admin_address = sock.value();
   }
 
-  if (obj.internal_address_ref().has_value()) {
-    auto sock = Sockaddr::fromString(obj.internal_address_ref().value());
+  if (obj.server_to_server_address_ref().has_value()) {
+    auto sock =
+        Sockaddr::fromString(obj.server_to_server_address_ref().value());
     if (!sock.hasValue()) {
-      ld_error("malformed socket addr field internal_address.");
+      ld_error("malformed socket addr field server_to_server_address.");
       return -1;
     }
-    result.internal_address = sock.value();
+    result.server_to_server_address = sock.value();
   }
 
   if (obj.location_ref().has_value()) {

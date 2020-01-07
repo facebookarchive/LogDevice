@@ -42,8 +42,9 @@ const Sockaddr& NodeServiceDiscovery::getGossipAddress() const {
   return gossip_address.hasValue() ? gossip_address.value() : address;
 }
 
-const Sockaddr& NodeServiceDiscovery::getInternalAddress() const {
-  return internal_address.hasValue() ? internal_address.value() : address;
+const Sockaddr& NodeServiceDiscovery::getServerToServerAddress() const {
+  return server_to_server_address.hasValue() ? server_to_server_address.value()
+                                             : address;
 }
 
 bool NodeServiceDiscovery::isValid() const {
@@ -51,7 +52,8 @@ bool NodeServiceDiscovery::isValid() const {
       !isOptionalFieldValid(gossip_address, "gossip_address") ||
       !isOptionalFieldValid(ssl_address, "ssl_address") ||
       !isOptionalFieldValid(admin_address, "admin_address") ||
-      !isOptionalFieldValid(internal_address, "internal_address")) {
+      !isOptionalFieldValid(
+          server_to_server_address, "server_to_server_address")) {
     return false;
   }
 
@@ -116,13 +118,14 @@ bool NodeServiceDiscovery::isValidForReset(
 
 std::string NodeServiceDiscovery::toString() const {
   return folly::sformat(
-      "[{} => A:{},G:{},S:{},AA:{},IA:{},L:{},R:{},V:{}]",
+      "[{} => A:{},G:{},S:{},AA:{},S2SA:{},L:{},R:{},V:{}]",
       name,
       address.toString(),
       gossip_address.hasValue() ? gossip_address->toString() : "",
       ssl_address.hasValue() ? ssl_address->toString() : "",
       admin_address.hasValue() ? admin_address->toString() : "",
-      internal_address.hasValue() ? internal_address->toString() : "",
+      server_to_server_address.hasValue() ? server_to_server_address->toString()
+                                          : "",
       location.hasValue() ? location->toString() : "",
       logdevice::toString(roles),
       version);

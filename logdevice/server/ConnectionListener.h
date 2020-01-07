@@ -37,12 +37,13 @@ class ConnectionListener : public Listener {
   };
 
   /*
-   * Indicates whether this is a gossip, data, or admin api listener
+   * Represents the listener type.
    */
   enum class ListenerType : uint8_t {
     DATA,
     DATA_SSL,
     GOSSIP,
+    SERVER_TO_SERVER,
     MAX,
   };
 

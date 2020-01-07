@@ -42,11 +42,12 @@ const SimpleEnumMap<ConnectionListener::ListenerType, std::string>&
 ConnectionListener::listenerTypeNames() {
   // Note that thread names are limited to 16 characters. Use them wisely.
   static SimpleEnumMap<ConnectionListener::ListenerType, std::string>
-      listener_names({
-          {ConnectionListener::ListenerType::DATA, "ld:conn-listen"},
-          {ConnectionListener::ListenerType::DATA_SSL, "ld:sconn-listen"},
-          {ConnectionListener::ListenerType::GOSSIP, "ld:gossip"},
-      });
+      listener_names(
+          {{ConnectionListener::ListenerType::DATA, "ld:conn-listen"},
+           {ConnectionListener::ListenerType::DATA_SSL, "ld:sconn-listen"},
+           {ConnectionListener::ListenerType::GOSSIP, "ld:gossip"},
+           {ConnectionListener::ListenerType::SERVER_TO_SERVER,
+            "ld:s2s-listen"}});
   return listener_names;
 }
 

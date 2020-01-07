@@ -819,6 +819,37 @@ bool Server::initListeners() {
               gossip_addr_str.c_str());
     }
 
+    folly::Optional<Sockaddr> server_to_server_addr_opt =
+        node_svc->server_to_server_address;
+    if (server_to_server_addr_opt.hasValue()) {
+      std::string server_to_server_socket;
+      int server_to_server_port = -1;
+      if (!getSocketOrPort(server_to_server_addr_opt.value().getSocketAddress(),
+                           server_to_server_socket,
+                           server_to_server_port)) {
+        ld_error("Server-to-server port/address couldn't be parsed for this "
+                 "node(%s)",
+                 node_id.toString().c_str());
+        return false;
+      }
+
+      server_to_server_listener_loop_ =
+          std::make_unique<folly::EventBaseThread>(
+              /* autostart */ true,
+              /* eventBaseManager */ nullptr,
+              ConnectionListener::listenerTypeNames()
+                  [ConnectionListener::ListenerType::SERVER_TO_SERVER]);
+      server_to_server_listener_ = initListener<ConnectionListener>(
+          server_to_server_port,
+          server_to_server_socket,
+          /* ssl */ true,
+          folly::getKeepAliveToken(
+              server_to_server_listener_loop_->getEventBase()),
+          conn_shared_state,
+          ConnectionListener::ListenerType::SERVER_TO_SERVER,
+          conn_budget_backlog_unlimited_);
+    }
+
   } catch (const ConstructorFailed&) {
     // failed to initialize listeners
     return false;
@@ -1452,6 +1483,11 @@ bool Server::startListening() {
     return false;
   }
 
+  if (server_to_server_listener_loop_ &&
+      !startConnectionListener(server_to_server_listener_)) {
+    return false;
+  }
+
   // start command listener last, so that integration test framework
   // cannot connect to the command port in the event that any other port
   // failed to open.
@@ -1475,10 +1511,12 @@ void Server::gracefulShutdown() {
                   command_listener_,
                   gossip_listener_,
                   ssl_connection_listener_,
+                  server_to_server_listener_,
                   connection_listener_loop_,
                   command_listener_loop_,
                   gossip_listener_loop_,
                   ssl_connection_listener_loop_,
+                  server_to_server_listener_loop_,
                   logstore_monitor_,
                   processor_,
                   sharded_storage_thread_pool_,

@@ -65,11 +65,11 @@ struct NodeServiceDiscovery {
   folly::Optional<Sockaddr> admin_address;
 
   /**
-   * The IP (v4 or v6) address, including port number, for internal traffic.
-   * If it's folly::none, it means that internal traffic doesn't have a
-   * dedicated address.
+   * The IP (v4 or v6) address, including port number, for server-to-server
+   * traffic. If it's folly::none, it means that server-to-server traffic
+   * doesn't have a dedicated address.
    */
-  folly::Optional<Sockaddr> internal_address;
+  folly::Optional<Sockaddr> server_to_server_address;
 
   /**
    * Location information of the node.
@@ -83,7 +83,7 @@ struct NodeServiceDiscovery {
 
   const Sockaddr& getGossipAddress() const;
 
-  const Sockaddr& getInternalAddress() const;
+  const Sockaddr& getServerToServerAddress() const;
 
   bool hasRole(NodeRole role) const {
     auto id = static_cast<size_t>(role);
@@ -100,8 +100,9 @@ struct NodeServiceDiscovery {
   bool operator==(const NodeServiceDiscovery& rhs) const {
     return address == rhs.address && gossip_address == rhs.gossip_address &&
         ssl_address == rhs.ssl_address && admin_address == rhs.admin_address &&
-        internal_address == rhs.internal_address && location == rhs.location &&
-        roles == rhs.roles && name == rhs.name && version == rhs.version;
+        server_to_server_address == rhs.server_to_server_address &&
+        location == rhs.location && roles == rhs.roles && name == rhs.name &&
+        version == rhs.version;
   }
 
   bool operator!=(const NodeServiceDiscovery& rhs) const {
