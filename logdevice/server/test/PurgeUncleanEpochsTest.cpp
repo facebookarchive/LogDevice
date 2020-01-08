@@ -115,7 +115,7 @@ class PurgeUncleanEpochsTest : public ::testing::Test {
 
   logid_t log_id_{222};
   const shard_index_t shard_{0};
-  folly::Optional<epoch_t> current_last_clean_epoch_;
+  epoch_t current_last_clean_epoch_;
   epoch_t purge_to_{EPOCH_INVALID};
   epoch_t new_last_clean_epoch_{EPOCH_INVALID};
   NodeID node_{1, 1};
@@ -188,7 +188,7 @@ class MockPurgeUncleanEpochs : public PurgeUncleanEpochs {
     ASSERT_EQ(E::UNKNOWN, test_->completion_);
     ld_info("PurgeUncleanEpochs for epoch [%u, %u] for log %lu completed "
             "with status %s.",
-            current_last_clean_epoch_.value().val_,
+            current_last_clean_epoch_.val_,
             purge_to_.val_,
             log_id_.val_,
             error_name(status));
@@ -262,6 +262,7 @@ TEST_F(PurgeUncleanEpochsTest, BasicWorkFlow) {
   // non-empty epochs: 7, 13, 18, 19
   // epoch metadata interval: [2, 14] [15, 15],[16, 18], [19, 210]
   purge_to_ = epoch_t(200);
+  current_last_clean_epoch_ = epoch_t(5);
   new_last_clean_epoch_ = epoch_t(201);
   setUp();
 
@@ -270,13 +271,6 @@ TEST_F(PurgeUncleanEpochsTest, BasicWorkFlow) {
 
   ASSERT_NE(nullptr, getRetryTimer());
   ASSERT_FALSE(getRetryTimer()->isActive());
-
-  // current LCE is unknown, we should read the LCE
-  ASSERT_EQ(State::READ_LAST_CLEAN, getState());
-  CHECK_STORAGE_TASK(PurgeReadLastCleanTask);
-
-  // local lce is read from the local log store
-  purge_->onLastCleanRead(E::OK, epoch_t(5));
 
   // state machine should advance to the next state
   ASSERT_EQ(State::GET_PURGE_EPOCHS, getState());
@@ -465,7 +459,7 @@ TEST_F(PurgeUncleanEpochsTest, EmptyEpochs) {
   // should perform purge in epochs [6, 20] then set the LCE to 20
   // non-empty epochs: none
   purge_to_ = epoch_t(20);
-  current_last_clean_epoch_.assign(epoch_t(6));
+  current_last_clean_epoch_ = epoch_t(6);
   new_last_clean_epoch_ = epoch_t(20);
   setUp();
 
@@ -544,7 +538,7 @@ TEST_F(PurgeUncleanEpochsTest, EmptyEpochsMetaDataLog) {
   // non-empty epochs: none
   test_metadata_log_ = true;
   purge_to_ = epoch_t(20);
-  current_last_clean_epoch_.assign(epoch_t(6));
+  current_last_clean_epoch_ = epoch_t(6);
   new_last_clean_epoch_ = epoch_t(20);
   setUp();
 
@@ -616,7 +610,7 @@ TEST_F(PurgeUncleanEpochsTest, EmptyEpochsDoNotFetchERM) {
   // should perform purge in epochs [6, 20] then set the LCE to 20
   // non-empty epochs: 15,16,19
   purge_to_ = epoch_t(20);
-  current_last_clean_epoch_.assign(epoch_t(6));
+  current_last_clean_epoch_ = epoch_t(6);
   new_last_clean_epoch_ = epoch_t(20);
   setUp();
   settings_.get_erm_for_empty_epoch = false;
@@ -700,7 +694,7 @@ TEST_F(PurgeUncleanEpochsTest, NoPurgeNeededButAdvanceLCE) {
   // new lce: 7
   // should NOT perform any purge but set the LCE to 7
   purge_to_ = epoch_t(6);
-  current_last_clean_epoch_.assign(epoch_t(6));
+  current_last_clean_epoch_ = epoch_t(6);
   new_last_clean_epoch_ = epoch_t(7);
   setUp();
 
@@ -726,7 +720,7 @@ TEST_F(PurgeUncleanEpochsTest, NoOp) {
   // new lce: 6
   // should complete synchronously
   purge_to_ = epoch_t(6);
-  current_last_clean_epoch_.assign(epoch_t(6));
+  current_last_clean_epoch_ = epoch_t(6);
   new_last_clean_epoch_ = epoch_t(6);
   setUp();
 
@@ -741,7 +735,7 @@ TEST_F(PurgeUncleanEpochsTest, DoNotPurgeBeyondPurgeTo) {
   // but there are data written in epoch 8 and 9
   // should perform purge in epochs [6, 6] then set the LCE to 7
   // should not purge epoch 8 or 9
-  current_last_clean_epoch_.assign(epoch_t(5));
+  current_last_clean_epoch_ = epoch_t(5);
   purge_to_ = epoch_t(6);
   new_last_clean_epoch_ = epoch_t(7);
   setUp();
@@ -815,7 +809,7 @@ TEST_F(PurgeUncleanEpochsTest, BadEpochMetadata) {
   // should perform purge in epochs [6, 200] then set the LCE to 201
   // non-empty epochs: 7, 13, 18, 19
   // epoch metadata interval: [7, 14] [15, 15],[16, 18], [19, 200]
-  current_last_clean_epoch_.assign(epoch_t(5));
+  current_last_clean_epoch_ = epoch_t(5);
   purge_to_ = epoch_t(200);
   new_last_clean_epoch_ = epoch_t(201);
   setUp();

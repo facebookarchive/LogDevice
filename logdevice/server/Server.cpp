@@ -1060,17 +1060,34 @@ bool Server::initLogStorageStateMap() {
                 log_state->updateTrimPoint(
                     dynamic_cast<TrimMetadata*>(meta.get())->trim_point_);
               });
-
+          auto lce_traverser = make_traverser(
+              shard,
+              [](LogStorageState* log_state,
+                 std::unique_ptr<LogMetadata> meta) {
+                log_state->updateLastCleanEpoch(
+                    dynamic_cast<LastCleanMetadata*>(meta.get())->epoch_);
+              });
           int rv = store->traverseLogsMetadata(
               LogMetadataType::TRIM_POINT, trim_point_traverser);
           if (rv != 0) {
             ld_error("Failed to populate Trim Points from shard %d: %s.",
                      shard,
                      error_name(err));
-            if (!sharded_store->switchToFailingLocalLogStore(shard)) {
-              ld_critical("Failed to disable shard %d.", shard);
-              return false;
-            }
+            goto out;
+          }
+
+          rv = store->traverseLogsMetadata(
+              LogMetadataType::LAST_CLEAN, lce_traverser);
+          if (rv != 0) {
+            ld_error("Failed to populate Last Clean Epochs from shard %d: %s",
+                     shard,
+                     error_name(err));
+          }
+
+        out:
+          if (rv != 0 && !sharded_store->switchToFailingLocalLogStore(shard)) {
+            ld_critical("Failed to disable shard %d.", shard);
+            return false;
           }
           return true;
         }));

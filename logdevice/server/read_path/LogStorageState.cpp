@@ -128,12 +128,8 @@ LogStorageState::getSeal(LogStorageState::SealType type) const {
   return result;
 }
 
-folly::Optional<epoch_t> LogStorageState::getLastCleanEpoch() const {
-  folly::Optional<epoch_t> result; // initially empty
-  if (last_clean_epoch_.hasValue()) {
-    result.assign(epoch_t(last_clean_epoch_.load()));
-  }
-  return result;
+epoch_t LogStorageState::getLastCleanEpoch() const {
+  return epoch_t(last_clean_epoch_.load());
 }
 
 folly::Optional<std::pair<epoch_t, OffsetMap>>
@@ -143,7 +139,7 @@ LogStorageState::getEpochOffsetMap() const {
 }
 
 void LogStorageState::updateLastCleanEpoch(epoch_t epoch) {
-  last_clean_epoch_.fetchMax(epoch.val_);
+  atomic_fetch_max(last_clean_epoch_, epoch.val_);
 }
 
 void LogStorageState::updateEpochOffsetMap(
@@ -265,8 +261,7 @@ int LogStorageState::recover(std::chrono::microseconds interval,
       force_ask_sequencer;
 
   // should we attempt to read it from the local log store?
-  bool recover_from_store =
-      !last_released.hasValue() || !getLastCleanEpoch().hasValue();
+  bool recover_from_store = !last_released.hasValue();
 
   if (!ask_sequencer && !recover_from_store) {
     // nothing needs to be recovered
@@ -399,11 +394,7 @@ void LogStorageState::getDebugInfo(InfoLogStorageStateTable& table) const {
        last_recovery_time_.load())));
 
   table.set<11>(log_removal_time_.load());
-
-  folly::Optional<epoch_t> last_clean = getLastCleanEpoch();
-  if (last_clean.hasValue()) {
-    table.set<12>(last_clean.value());
-  }
+  table.set<12>(getLastCleanEpoch());
 
   auto latest_epoch = getEpochOffsetMap();
   if (latest_epoch.hasValue()) {

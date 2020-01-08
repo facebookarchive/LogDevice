@@ -29,15 +29,14 @@ namespace facebook { namespace logdevice {
 const std::chrono::milliseconds PurgeUncleanEpochs::INITIAL_RETRY_DELAY{1000};
 const std::chrono::milliseconds PurgeUncleanEpochs::MAX_RETRY_DELAY{30000};
 
-PurgeUncleanEpochs::PurgeUncleanEpochs(
-    PurgeCoordinator* parent,
-    logid_t log_id,
-    shard_index_t shard,
-    folly::Optional<epoch_t> current_last_clean_epoch,
-    epoch_t purge_to,
-    epoch_t new_last_clean_epoch,
-    NodeID node,
-    StatsHolder* stats)
+PurgeUncleanEpochs::PurgeUncleanEpochs(PurgeCoordinator* parent,
+                                       logid_t log_id,
+                                       shard_index_t shard,
+                                       epoch_t current_last_clean_epoch,
+                                       epoch_t purge_to,
+                                       epoch_t new_last_clean_epoch,
+                                       NodeID node,
+                                       StatsHolder* stats)
     : ref_holder_(this),
       parent_(parent),
       log_id_(log_id),
@@ -73,11 +72,6 @@ void PurgeUncleanEpochs::start() {
                    shard_,
                    new_last_clean_epoch_.val_);
 
-    // when skipping recovery and LCE is not in memory, just use EPOCH_INVALID
-    // as the current LCE so that LCE will always be updated
-    if (!current_last_clean_epoch_.hasValue()) {
-      current_last_clean_epoch_ = EPOCH_INVALID;
-    }
     // It is not safe to call allEpochsPurged() directly as this may cause more
     // PurgeUncleanEpochs state machines to be started. Ensure we trigger this
     // in the next iteration of the event loop.
@@ -87,64 +81,13 @@ void PurgeUncleanEpochs::start() {
     return;
   }
 
-  if (current_last_clean_epoch_.hasValue()) {
-    state_ = State::GET_PURGE_EPOCHS;
-    getPurgeEpochs();
-  } else {
-    // last clean epoch is unknown, read it from the local log store
-    state_ = State::READ_LAST_CLEAN;
-    readLastCleanEpoch();
-  }
-}
-
-void PurgeUncleanEpochs::readLastCleanEpoch() {
-  ld_check(state_ == State::READ_LAST_CLEAN);
-  ld_debug("Reading last clean epoch for log %lu purge upto epoch %u.",
-           log_id_.val_,
-           purge_to_.val_);
-
-  startStorageTask(
-      std::make_unique<PurgeReadLastCleanTask>(log_id_, ref_holder_.ref()));
-}
-
-void PurgeUncleanEpochs::onLastCleanRead(Status status, epoch_t last_clean) {
-  ld_check(state_ == State::READ_LAST_CLEAN);
-  if (status != E::OK) {
-    if (status == E::FAILED) {
-      // enter persisent error state, EpochRecovery should retry after a
-      // timeout and the node will be excluded in the next round of digest.
-      // In the meantime, this purging state machine will stay inactive until
-      // the shard is repaired and logdeviced is restarted.
-      onPermanentError("PurgeLCEEpochTask", status);
-      return;
-    }
-
-    // for transient errors (e.g., task dropped) retry after a timeout
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    2,
-                    "PurgeReadLastCleanTask failed with status %s, "
-                    "starting timer",
-                    error_description(status));
-    retry_timer_->setCallback(
-        std::bind(&PurgeUncleanEpochs::readLastCleanEpoch, this));
-    retry_timer_->activate();
-    return;
-  }
-
-  ld_spew("log %lu last clean epoch is %u", log_id_.val_, last_clean.val_);
-  if (parent_) {
-    parent_->updateLastCleanInMemory(last_clean);
-  }
-  current_last_clean_epoch_ = last_clean;
-
   state_ = State::GET_PURGE_EPOCHS;
   getPurgeEpochs();
 }
 
 void PurgeUncleanEpochs::getPurgeEpochs() {
   ld_check(state_ == State::GET_PURGE_EPOCHS);
-  ld_check(current_last_clean_epoch_.hasValue());
-  epoch_t last_clean = current_last_clean_epoch_.value();
+  epoch_t last_clean = current_last_clean_epoch_;
 
   if (last_clean >= purge_to_) {
     RATELIMIT_INFO(std::chrono::seconds(10),
@@ -197,8 +140,7 @@ void PurgeUncleanEpochs::onGetPurgeEpochsDone(
   if (!epoch_info_->empty()) {
     // SealStorageTask should guarantee that the epochs in epoch_info_ must in
     // range of [lce + 1, new_last_clean_epoch]
-    epoch_t last_clean = current_last_clean_epoch_.value();
-    ld_check(epoch_info_->begin()->first >= last_clean.val_ + 1);
+    ld_check(epoch_info_->begin()->first >= current_last_clean_epoch_.val_ + 1);
     ld_check(epoch_info_->rbegin()->first <= new_last_clean_epoch_.val_);
 
     // remove epochs _larger_ than purge_to_ from epoch_info since we should
@@ -213,7 +155,7 @@ void PurgeUncleanEpochs::onGetPurgeEpochsDone(
                      10,
                      "All epochs in [%u, %u] in log %lu are empty. Consider "
                      "them all purged.",
-                     current_last_clean_epoch_.value().val_ + 1,
+                     current_last_clean_epoch_.val_ + 1,
                      purge_to_.val_,
                      log_id_.val_);
 
@@ -232,14 +174,14 @@ void PurgeUncleanEpochs::onGetPurgeEpochsDone(
              epoch_info_->begin()->first,
              epoch_info_->rbegin()->first,
              log_id_.val_,
-             current_last_clean_epoch_.value().val_,
+             current_last_clean_epoch_.val_,
              purge_to_.val_,
              SealStorageTask::EpochInfoSourceNames()[src].c_str());
   }
 
   state_ = State::GET_EPOCH_METADATA;
   first_epoch_to_purge_ = (getSettings().get_erm_for_empty_epoch)
-      ? epoch_t(current_last_clean_epoch_.value().val_ + 1)
+      ? epoch_t(current_last_clean_epoch_.val_ + 1)
       : epoch_t(epoch_info_->begin()->first);
   last_epoch_to_purge_ = (getSettings().get_erm_for_empty_epoch)
       ? purge_to_
@@ -250,7 +192,6 @@ void PurgeUncleanEpochs::onGetPurgeEpochsDone(
 void PurgeUncleanEpochs::getEpochMetaData() {
   ld_check(state_ == State::GET_EPOCH_METADATA);
   ld_check(!epoch_metadata_finalized_);
-  ld_check(current_last_clean_epoch_.hasValue());
   // there should be no PurgeSingleEpoch machine already created
   ld_check(purge_epochs_.empty());
 
@@ -277,7 +218,6 @@ void PurgeUncleanEpochs::getEpochMetaData() {
 void PurgeUncleanEpochs::onHistoricalMetadata(Status st) {
   ld_check(state_ == State::GET_EPOCH_METADATA);
   ld_check(!epoch_metadata_finalized_);
-  ld_check(current_last_clean_epoch_.hasValue());
 
   if (st == E::INVALID_PARAM) {
     // The log is not in config.
@@ -595,8 +535,7 @@ const Settings& PurgeUncleanEpochs::getSettings() const {
 }
 
 void PurgeUncleanEpochs::allEpochsPurged() {
-  ld_check(current_last_clean_epoch_.hasValue());
-  if (current_last_clean_epoch_.value() >= new_last_clean_epoch_) {
+  if (current_last_clean_epoch_ >= new_last_clean_epoch_) {
     complete(E::UPTODATE);
     return;
   }
@@ -649,7 +588,7 @@ void PurgeUncleanEpochs::complete(Status status) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
                    "Successfully purged epochs [%u, %u] for log %lu.",
-                   current_last_clean_epoch_.value().val_,
+                   current_last_clean_epoch_.val_,
                    purge_to_.val_,
                    log_id_.val_);
   } else if (status == E::UPTODATE) {
@@ -732,8 +671,6 @@ const char* PurgeUncleanEpochs::stateString(State state) {
   switch (state) {
     case State::UNKNOWN:
       return "UNKNOWN";
-    case State::READ_LAST_CLEAN:
-      return "READ_LAST_CLEAN";
     case State::GET_PURGE_EPOCHS:
       return "GET_PURGE_EPOCHS";
     case State::GET_EPOCH_METADATA:
@@ -769,10 +706,7 @@ std::string PurgeUncleanEpochs::getActiveEpochsStr() const {
 void PurgeUncleanEpochs::getDebugInfo(InfoPurgesTable& table) {
   table.next().set<0>(log_id_).set<1>(std::string(stateString(state_)));
 
-  if (current_last_clean_epoch_.hasValue()) {
-    table.set<2>(current_last_clean_epoch_.value());
-  }
-
+  table.set<2>(current_last_clean_epoch_);
   table.set<3>(purge_to_);
   table.set<4>(new_last_clean_epoch_);
   table.set<5>(node_.toString());
@@ -795,46 +729,6 @@ void PurgeUncleanEpochs::onShutdown() {
 }
 
 PurgeUncleanEpochs::~PurgeUncleanEpochs() {}
-
-//
-// Implementation of PurgeReadLastCleanTask
-//
-
-void PurgeReadLastCleanTask::execute() {
-  executeImpl(storageThreadPool_->getLocalLogStore());
-}
-
-void PurgeReadLastCleanTask::executeImpl(LocalLogStore& store) {
-  LastCleanMetadata meta;
-  int rv = store.readLogMetadata(log_id_, &meta);
-  if (rv == 0) {
-    status_ = E::OK;
-    result_ = meta.epoch_;
-  } else if (err == E::NOTFOUND) {
-    status_ = E::OK;
-    result_ = epoch_t(0);
-  } else {
-    status_ = E::FAILED;
-    result_ = EPOCH_INVALID;
-  }
-}
-
-void PurgeReadLastCleanTask::onDone() {
-  PurgeUncleanEpochs* driver = driver_.get();
-  if (driver != nullptr) {
-    driver->onLastCleanRead(status_, result_);
-  }
-}
-
-void PurgeReadLastCleanTask::onDropped() {
-  PurgeUncleanEpochs* driver = driver_.get();
-  if (driver != nullptr) {
-    STAT_INCR(driver->getStats(), purging_task_dropped);
-  }
-  status_ = E::DROPPED;
-  result_ = EPOCH_INVALID;
-  onDone();
-}
 
 //
 // Implementation of PurgeWriteLastCleanTask

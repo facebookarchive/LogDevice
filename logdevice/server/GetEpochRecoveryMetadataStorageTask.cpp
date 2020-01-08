@@ -45,33 +45,16 @@ GetEpochRecoveryMetadataStorageTask::executeImpl(LocalLogStore& store,
                                                  LogStorageStateMap& state_map,
                                                  StatsHolder* /*stats*/) {
   LogStorageState* log_state = state_map.insertOrGet(log_id_, shard_);
-  if (log_state == nullptr) {
+  if (log_state->hasPermanentError()) {
     RATELIMIT_ERROR(std::chrono::seconds(5),
                     1,
-                    "Unable get LogStorageState for log %lu: %s",
-                    log_id_.val_,
-                    error_description(err));
+                    "Permanent error set on LogStorageState for log %lu",
+                    log_id_.val_);
     return E::FAILED;
   }
 
   int rv = 0;
-  epoch_t last_clean = EPOCH_INVALID;
-  folly::Optional<epoch_t> lce = log_state->getLastCleanEpoch();
-  if (!lce.hasValue()) {
-    LastCleanMetadata meta{epoch_t(0)};
-    rv = store.readLogMetadata(log_id_, &meta);
-    if (rv != 0 && err != E::NOTFOUND) {
-      log_state->notePermanentError("Reading LCE");
-      return E::FAILED;
-    }
-    ld_check(rv == 0 || meta.epoch_.val_ == 0);
-
-    // lce read or not found
-    last_clean = meta.epoch_;
-    log_state->updateLastCleanEpoch(last_clean);
-  } else {
-    last_clean = lce.value();
-  }
+  epoch_t last_clean = log_state->getLastCleanEpoch();
 
   if (last_clean < start_) {
     // the epoch is not clean on the node, should reply E::NOTREADY

@@ -116,8 +116,13 @@ GET_EPOCH_RECOVERY_METADATA_onReceived(GET_EPOCH_RECOVERY_METADATA_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
-  folly::Optional<epoch_t> last_clean = log_state->getLastCleanEpoch();
-  if (last_clean.hasValue() && last_clean.value() < header.start) {
+  if (log_state->hasPermanentError()) {
+    send_reply(from, header, E::FAILED);
+    return Message::Disposition::NORMAL;
+  }
+
+  epoch_t last_clean = log_state->getLastCleanEpoch();
+  if (last_clean < header.start) {
     // the epoch is not clean on the node, send E::NOTREADY directly
     send_reply(from, header, E::NOTREADY);
     return Message::Disposition::NORMAL;
@@ -130,11 +135,6 @@ GET_EPOCH_RECOVERY_METADATA_onReceived(GET_EPOCH_RECOVERY_METADATA_Message* msg,
     //       may aggressively treat the epoch as empty while the epoch
     //       still has data on other storage nodes.
     send_reply(from, header, E::EMPTY);
-    return Message::Disposition::NORMAL;
-  }
-
-  if (log_state->hasPermanentError()) {
-    send_reply(from, header, E::FAILED);
     return Message::Disposition::NORMAL;
   }
 

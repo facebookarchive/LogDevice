@@ -96,7 +96,7 @@ class PurgeUncleanEpochs : public IntrusiveUnorderedMapHook {
   PurgeUncleanEpochs(PurgeCoordinator* parent,
                      logid_t log_id,
                      shard_index_t shard,
-                     folly::Optional<epoch_t> current_last_clean_epoch,
+                     epoch_t current_last_clean_epoch,
                      epoch_t purge_to,
                      epoch_t new_last_clean_epoch,
                      NodeID node,
@@ -104,7 +104,6 @@ class PurgeUncleanEpochs : public IntrusiveUnorderedMapHook {
 
   enum class State {
     UNKNOWN,
-    READ_LAST_CLEAN,
     GET_PURGE_EPOCHS,
     GET_EPOCH_METADATA,
     GET_EPOCH_RECOVERY_METADATA,
@@ -137,11 +136,6 @@ class PurgeUncleanEpochs : public IntrusiveUnorderedMapHook {
   }
 
   void start();
-
-  /**
-   * Called after PurgeReadLastCleanTask completes.
-   */
-  void onLastCleanRead(Status, epoch_t last_clean);
 
   using EpochInfoMap = SealStorageTask::EpochInfoMap;
   using EpochInfoSource = SealStorageTask::EpochInfoSource;
@@ -242,7 +236,7 @@ class PurgeUncleanEpochs : public IntrusiveUnorderedMapHook {
   const logid_t log_id_;
   const shard_index_t shard_;
 
-  folly::Optional<epoch_t> current_last_clean_epoch_;
+  epoch_t current_last_clean_epoch_;
   // purge upto this epoch
   const epoch_t purge_to_;
   // New "last clean epoch" entry to write into the local log store once we
@@ -300,8 +294,6 @@ class PurgeUncleanEpochs : public IntrusiveUnorderedMapHook {
                                      Status status,
                                      EpochRecoveryMetadata erm);
 
-  void readLastCleanEpoch();
-
   // start SealStorageTask to seal the log and get information about all
   // non-empty epochs needs to be purged
   void getPurgeEpochs();
@@ -331,28 +323,6 @@ class PurgeUncleanEpochs : public IntrusiveUnorderedMapHook {
 
   friend class PurgeUncleanEpochsTest;
   friend class MockPurgeUncleanEpochs;
-};
-
-class PurgeReadLastCleanTask : public StorageTask {
- public:
-  PurgeReadLastCleanTask(logid_t log_id, WeakRef<PurgeUncleanEpochs> driver)
-      : StorageTask(StorageTask::Type::PURGE_READ_LAST_CLEAN),
-        log_id_(log_id),
-        driver_(std::move(driver)) {}
-
-  void execute() override;
-  void executeImpl(LocalLogStore& store);
-  void onDone() override;
-  void onDropped() override;
-  StorageTaskPriority getPriority() const override {
-    return StorageTaskPriority::HIGH;
-  }
-
- private:
-  const logid_t log_id_;
-  WeakRef<PurgeUncleanEpochs> driver_;
-  Status status_;
-  epoch_t result_;
 };
 
 class PurgeWriteLastCleanTask : public StorageTask {

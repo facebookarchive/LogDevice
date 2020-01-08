@@ -51,9 +51,11 @@ TEST(GetEpochRecoveryMetadataStorageTask, EmptyLogButUnclean) {
 TEST(GetEpochRecoveryMetadataStorageTask, EmptyLogWhileClean) {
   TemporaryRocksDBStore store;
   LogStorageStateMap map(1);
+  LogStorageState* log_state = map.insertOrGet(LOG_ID, 0);
 
   store.writeLogMetadata(
       LOG_ID, LastCleanMetadata(START_EPOCH), LocalLogStore::WriteOptions());
+  log_state->updateLastCleanEpoch(START_EPOCH);
   auto task = create_task();
   EXPECT_EQ(E::OK, task.executeImpl(store, map));
   EXPECT_TRUE(!task.getEpochRecoveryStateMap().empty());
@@ -65,8 +67,7 @@ TEST(GetEpochRecoveryMetadataStorageTask, EmptyLogWhileClean) {
 
   auto lce = map.get(LOG_ID, /*shard_idx=*/0).getLastCleanEpoch();
   // map should also be populated
-  EXPECT_TRUE(lce.hasValue());
-  EXPECT_EQ(START_EPOCH, lce.value());
+  EXPECT_EQ(START_EPOCH, lce);
 }
 
 TEST(GetEpochRecoveryMetadataStorageTask, RangeBelowTrimPoint) {
@@ -74,8 +75,10 @@ TEST(GetEpochRecoveryMetadataStorageTask, RangeBelowTrimPoint) {
   LogStorageStateMap map(1);
   LogStorageState* log_state = map.insertOrGet(LOG_ID, 0);
   lsn_t trim_point = compose_lsn(epoch_t(50), ESN_INVALID);
+  epoch_t lce = epoch_t(70);
   store.writeLogMetadata(
-      LOG_ID, LastCleanMetadata(epoch_t(70)), LocalLogStore::WriteOptions());
+      LOG_ID, LastCleanMetadata(lce), LocalLogStore::WriteOptions());
+  log_state->updateLastCleanEpoch(lce);
   store.writeLogMetadata(
       LOG_ID, TrimMetadata(trim_point), LocalLogStore::WriteOptions());
   log_state->updateTrimPoint(trim_point);
@@ -97,15 +100,19 @@ TEST(GetEpochRecoveryMetadataStorageTask, RangeAbovLastCleanEpoch) {
 TEST(GetEpochRecoveryMetadataStorageTask, GetMetadata) {
   TemporaryRocksDBStore store;
   LogStorageStateMap map(1);
+  LogStorageState* log_state = map.insertOrGet(LOG_ID, 0);
+  lsn_t trim_point = compose_lsn(epoch_t(1), ESN_INVALID);
+  epoch_t lce = epoch_t(10);
 
   // lce = epoch 10
   store.writeLogMetadata(
-      LOG_ID, LastCleanMetadata(epoch_t(10)), LocalLogStore::WriteOptions());
+      LOG_ID, LastCleanMetadata(lce), LocalLogStore::WriteOptions());
+  log_state->updateLastCleanEpoch(lce);
 
   // trimmed epoch - 1
-  store.writeLogMetadata(LOG_ID,
-                         TrimMetadata(compose_lsn(epoch_t(1), ESN_INVALID)),
-                         LocalLogStore::WriteOptions());
+  store.writeLogMetadata(
+      LOG_ID, TrimMetadata(trim_point), LocalLogStore::WriteOptions());
+  log_state->updateTrimPoint(trim_point);
 
   // empty epochs 1(trimmed),3,5,7,9
   // non empty epochs  2, 4, 6, 8, 10

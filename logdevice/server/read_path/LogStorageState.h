@@ -191,7 +191,7 @@ class LogStorageState {
    */
   folly::Optional<Seal> getSeal(SealType type) const;
 
-  folly::Optional<epoch_t> getLastCleanEpoch() const;
+  epoch_t getLastCleanEpoch() const;
 
   folly::Optional<std::pair<epoch_t, OffsetMap>> getEpochOffsetMap() const;
 
@@ -418,9 +418,7 @@ class LogStorageState {
   // atomic so that on incoming RELEASE messages we can decide without locking
   // if purging is necessary (most often it is not).
   // Initialized by reading the value from the local log store.
-  // If uninitialized, we kick off PurgeUncleanEpochs which reads the last clean
-  // epoch as its first step and reports back.
-  AtomicOptional<epoch_t::raw_type> last_clean_epoch_{0, EMPTY_OPTIONAL};
+  std::atomic<epoch_t::raw_type> last_clean_epoch_{EPOCH_INVALID.val_};
 
   // subscribed to broadcasts of RELEASE messages.  These workers are
   // notified, for example, when a new record is released for delivery.

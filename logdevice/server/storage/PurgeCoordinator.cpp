@@ -431,16 +431,12 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
     // clean epoch (LCE), in fact, reading ahead past the LCE is the whole
     // motivation behind per-epoch releases.
     release_now = true;
-  } else if (folly::Optional<epoch_t> last_clean =
-                 parent_->getLastCleanEpoch()) {
+  } else {
+    epoch_t last_clean = parent_->getLastCleanEpoch();
     // We can immediately process this RELEASE if its epoch is at most
     // last_clean + 1.  The + 1 allows RELEASEs in the currently active epoch.
-    epoch_t max_epoch_immediate = epoch_t(last_clean.value().val_ + 1);
+    epoch_t max_epoch_immediate = epoch_t(last_clean.val_ + 1);
     release_now = release_epoch <= max_epoch_immediate;
-  } else {
-    // Not a per-epoch release, and there is a preceding epoch that is unclean.
-    // Cannot release immediately.
-    release_now = false;
   }
   if (release_now) {
     this->doRelease(lsn, release_type, do_broadcast, std::move(epoch_offsets));
@@ -550,29 +546,27 @@ void PurgeCoordinator::onCleanMessage(std::unique_ptr<CLEAN_Message> clean_msg,
                                       worker_id_t worker) {
   ld_check(clean_msg != nullptr);
   const epoch_t epoch = clean_msg->header_.epoch;
-  folly::Optional<epoch_t> last_clean = parent_->getLastCleanEpoch();
-  if (last_clean.hasValue()) {
-    if (epoch <= last_clean.value()) {
-      // We can immediately initiate a cleaned response if we already know this
-      // epoch is clean
+  epoch_t last_clean = parent_->getLastCleanEpoch();
+  if (epoch <= last_clean) {
+    // We can immediately initiate a cleaned response if we already know this
+    // epoch is clean
 
-      // If the epoch of the recovering sequencer is included in the received
-      // CLEAN message, check for preemption again before sending the response.
-      // It is possible that another sequencer with higher epoch has started
-      // and seals the epoch. In such case, it is better to inform the sequencer
-      // that sent the CLEAN regarding the preemption so that it can deactivate
-      // and send redirects in a more prompt manner.
-      Status status = Status::OK;
-      Seal preempted_by = Seal();
-      const epoch_t seq_epoch = clean_msg->header_.sequencer_epoch;
-      if (seq_epoch > EPOCH_INVALID) { // running old protocol
-        std::tie(status, preempted_by) = checkPreemption(seq_epoch);
-      }
-
-      sendCleanedResponse(
-          status, std::move(clean_msg), reply_to, worker, preempted_by);
-      return;
+    // If the epoch of the recovering sequencer is included in the received
+    // CLEAN message, check for preemption again before sending the response.
+    // It is possible that another sequencer with higher epoch has started
+    // and seals the epoch. In such case, it is better to inform the sequencer
+    // that sent the CLEAN regarding the preemption so that it can deactivate
+    // and send redirects in a more prompt manner.
+    Status status = Status::OK;
+    Seal preempted_by = Seal();
+    const epoch_t seq_epoch = clean_msg->header_.sequencer_epoch;
+    if (seq_epoch > EPOCH_INVALID) { // running old protocol
+      std::tie(status, preempted_by) = checkPreemption(seq_epoch);
     }
+
+    sendCleanedResponse(
+        status, std::move(clean_msg), reply_to, worker, preempted_by);
+    return;
   }
   if (parent_->hasPermanentError()) {
     // The purge is unlikely to succeed because LocalLogStore is broken.

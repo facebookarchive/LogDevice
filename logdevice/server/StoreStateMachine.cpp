@@ -430,8 +430,7 @@ void StoreStateMachine::execute() {
   auto& map = ServerWorker::onThisThread()->processor_->getLogStorageStateMap();
   LogStorageState* log_state =
       map.insertOrGet(message_->header_.rid.logid, shard_);
-  if (log_state == nullptr) {
-    // unlikely
+  if (log_state->hasPermanentError()) {
     message_->sendReply(E::DISABLED);
     return;
   }
@@ -447,8 +446,7 @@ void StoreStateMachine::execute() {
     auto last_released_lsn = log_state->getLastReleasedLSN();
     if ((last_released_lsn.hasValue() &&
          message_->header_.rid.lsn() <= last_released_lsn.value()) ||
-        (last_clean_epoch.hasValue() &&
-         message_->header_.rid.epoch <= last_clean_epoch.value())) {
+        message_->header_.rid.epoch <= last_clean_epoch) {
       deleter.dismiss();
       storeAndForward();
     } else {
@@ -477,7 +475,7 @@ void StoreStateMachine::execute() {
             "current last_released_lsn: %s, sequencer: %s",
             message_->header_.rid.logid.val(),
             lsn_to_string(message_->header_.rid.lsn()).c_str(),
-            last_clean_epoch.hasValue() ? last_clean_epoch.value().val_ : 0,
+            last_clean_epoch.val_,
             lsn_to_string(last_released_lsn.hasValue()
                               ? last_released_lsn.value()
                               : LSN_INVALID)
