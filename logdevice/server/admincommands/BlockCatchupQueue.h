@@ -11,8 +11,8 @@
 
 #include <folly/ScopeGuard.h>
 
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/request_util.h"

@@ -13,8 +13,8 @@
 #include <folly/compression/Compression.h>
 
 #include "logdevice/common/ConfigurationFetchRequest.h"
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ServerConfig.h"

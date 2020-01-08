@@ -9,7 +9,6 @@
 #include "logdevice/common/Connection.h"
 
 #include "folly/ScopeGuard.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/network/MessageReader.h"
 #include "logdevice/common/network/SocketAdapter.h"

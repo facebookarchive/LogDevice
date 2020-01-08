@@ -7,8 +7,8 @@
  */
 #include "logdevice/common/Envelope.h"
 
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/FlowGroup.h"
-#include "logdevice/common/Socket.h"
 
 namespace facebook { namespace logdevice {
 

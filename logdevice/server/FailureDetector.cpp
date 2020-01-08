@@ -15,10 +15,10 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/ClusterState.h"
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/GetClusterStateRequest.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/request_util.h"

@@ -21,7 +21,6 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/Worker.h"

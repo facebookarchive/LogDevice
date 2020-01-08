@@ -8,11 +8,11 @@
 #pragma once
 
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/Socket.h"
 
 namespace facebook { namespace logdevice {
 

@@ -10,8 +10,8 @@
 #include <algorithm>
 
 #include "folly/Random.h"
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/stats/Stats.h"
 

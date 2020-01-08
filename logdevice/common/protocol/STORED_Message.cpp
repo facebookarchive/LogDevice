@@ -11,12 +11,12 @@
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/ClientIdxAllocator.h"
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/ProtocolReader.h"

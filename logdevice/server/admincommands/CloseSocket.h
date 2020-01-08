@@ -7,9 +7,9 @@
  */
 #pragma once
 
+#include "logdevice/common/Connection.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
-#include "logdevice/common/Socket.h"
 #include "logdevice/common/WorkerType.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/server/admincommands/AdminCommand.h"
