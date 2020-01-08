@@ -13,111 +13,123 @@
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
 
-TEST(AdminAPIUtilsTest, TestNodeMatchesID) {
-  auto sd = NodeServiceDiscovery{"server-1",
-                                 /*version*/ 0,
-                                 Sockaddr("127.0.0.1", 4440),
-                                 Sockaddr("127.0.0.1", 4441),
-                                 /*ssl address*/ folly::none,
-                                 /*admin_address*/ Sockaddr("127.0.0.1", 6440),
-                                 /*internal_address*/ folly::none,
-                                 /* location */ folly::none,
-                                 /* roles */ 0};
-  {
-    // Simple match by name
-    thrift::NodeID id;
-    id.set_name("server-1");
-    EXPECT_TRUE(nodeMatchesID(node_index_t{0}, sd, id));
+namespace {
 
-    id.set_name("server-2");
-    EXPECT_FALSE(nodeMatchesID(node_index_t{0}, sd, id));
-  }
+const std::string kTestAddress = "127.0.0.1";
+const std::string kTestNodeName = "test-server";
+const std::string kAnotherTestNodeName = "another-test-server";
+const std::string kTestUnixPath = "/unix/socket/path";
+const node_index_t kTestNodeIndex = 1337;
+const node_index_t kAnotherTestNodeIndex = 1007;
+const in_port_t kTestDataPort = 4440;
+const in_port_t kTestSSLPort = 4443;
+const Sockaddr kTestSocketAddress = Sockaddr{kTestAddress, kTestDataPort};
+const Sockaddr kAnotherTestSocketAddress = Sockaddr{kTestAddress, kTestSSLPort};
 
-  {
-    // Simple match by index
-    thrift::NodeID id;
-    id.set_node_index(node_index_t{12});
-    EXPECT_TRUE(nodeMatchesID(node_index_t{12}, sd, id));
+thrift::SocketAddress toThrift(const Sockaddr& address) {
+  facebook::logdevice::thrift::SocketAddress result;
+  result.set_address(address.getAddress().str());
+  result.set_port(address.port());
+  return result;
+}
 
-    id.set_node_index(node_index_t{2});
-    EXPECT_FALSE(nodeMatchesID(node_index_t{12}, sd, id));
-  }
+} // namespace
 
-  {
-    // IPv4 match by address
-    thrift::SocketAddress address;
-    address.set_address("127.0.0.1");
-    address.set_port(4440);
+TEST(AdminAPIUtilsTest, MatchNodeByName) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.name = kTestNodeName;
 
-    thrift::NodeID id;
-    id.set_address(address);
-    EXPECT_TRUE(nodeMatchesID(node_index_t{12}, sd, id));
+  thrift::NodeID thriftNodeId;
 
-    address.set_port(4441);
-    id.set_address(address);
-    EXPECT_FALSE(nodeMatchesID(node_index_t{12}, sd, id));
-  }
+  thriftNodeId.set_name(kTestNodeName);
+  EXPECT_TRUE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
 
-  {
-    // IPv6 match by address
-    thrift::SocketAddress address;
+  thriftNodeId.set_name(kAnotherTestNodeName);
+  EXPECT_FALSE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+}
 
-    // Test uncompressed address against compressed
-    address.set_address("2001:4860:4860:0000:0000:0000:0000:8888");
-    address.set_port(4440);
+TEST(AdminAPIUtilsTest, MatchNodeByIndex) {
+  NodeServiceDiscovery nodeServiceDiscovery;
 
-    thrift::NodeID id;
-    id.set_address(address);
-    EXPECT_TRUE(nodeMatchesID(
-        node_index_t{12},
-        NodeServiceDiscovery{"server-2",
-                             /*version*/ 0,
-                             Sockaddr("2001:4860:4860::8888", 4440),
-                             Sockaddr("2001:4860:4860::8888", 4441),
-                             folly::none,
-                             Sockaddr("/unix/socket/path/admin"),
-                             /*internal_address*/ folly::none,
-                             folly::none,
-                             0},
-        id));
-  }
+  thrift::NodeID thriftNodeId;
+  thriftNodeId.set_node_index(kTestNodeIndex);
 
-  {
-    // Unix socket match by address
-    thrift::SocketAddress address;
-    address.set_address("/unix/socket/path");
-    address.set_address_family(thrift::SocketAddressFamily::UNIX);
-    thrift::NodeID id;
-    id.set_address(address);
-    EXPECT_TRUE(
-        nodeMatchesID(node_index_t{12},
-                      NodeServiceDiscovery{"server-3",
-                                           /*version*/ 0,
-                                           Sockaddr("/unix/socket/path"),
-                                           Sockaddr("/unix/socket/path/ssl"),
-                                           folly::none,
-                                           Sockaddr("/unix/socket/path/admin"),
-                                           /*internal_address*/ folly::none,
-                                           folly::none,
-                                           0},
-                      id));
-  }
+  EXPECT_TRUE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
 
-  {
-    // Match by the name AND index
-    thrift::NodeID id;
-    id.set_name("server-1");
-    id.set_node_index(node_index_t{12});
-    EXPECT_TRUE(nodeMatchesID(node_index_t{12}, sd, id));
+  EXPECT_FALSE(
+      nodeMatchesID(kAnotherTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+}
 
-    // Make sure it's an AND
-    id.set_name("server-2");
-    EXPECT_FALSE(nodeMatchesID(node_index_t{12}, sd, id));
-  }
+TEST(AdminAPIUtilsTest, MatchNodeByAddressIpV4) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.address = kTestSocketAddress;
 
-  {
-    // Emtpy ID matches everything
-    thrift::NodeID id;
-    EXPECT_TRUE(nodeMatchesID(node_index_t{12}, sd, id));
-  }
+  thrift::NodeID thriftNodeId;
+
+  thriftNodeId.set_address(toThrift(kTestSocketAddress));
+  EXPECT_TRUE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+
+  thriftNodeId.set_address(toThrift(kAnotherTestSocketAddress));
+  EXPECT_FALSE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+}
+
+TEST(AdminAPIUtilsTest, MatchNodeByAddressIpV6WithCompression) {
+  std::string compressedV6Address = "2001:4860:4860::8888";
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.address = Sockaddr{compressedV6Address, kTestDataPort};
+
+  std::string uncompressedV6Address = "2001:4860:4860:0000:0000:0000:0000:8888";
+  thrift::NodeID thriftNodeId;
+  thriftNodeId.set_address(
+      toThrift(Sockaddr{uncompressedV6Address, kTestDataPort}));
+
+  EXPECT_TRUE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+}
+
+TEST(AdminAPIUtilsTest, MatchNodeByAddressUnixSocket) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.address = Sockaddr{kTestUnixPath};
+
+  thrift::SocketAddress thriftSocketAddress;
+  thriftSocketAddress.set_address(kTestUnixPath);
+  thriftSocketAddress.set_address_family(thrift::SocketAddressFamily::UNIX);
+  thrift::NodeID thriftNodeId;
+  thriftNodeId.set_address(thriftSocketAddress);
+
+  EXPECT_TRUE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+}
+
+TEST(AdminAPIUtilsTest, MatchByNameAndIndex) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.name = kTestNodeName;
+
+  thrift::NodeID thriftNodeId;
+  thriftNodeId.set_name(kTestNodeName);
+  thriftNodeId.set_node_index(kTestNodeIndex);
+
+  EXPECT_TRUE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+}
+
+TEST(AdminAPIUtilsTest, EmptyIDMatchesAnything) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.name = kTestNodeName;
+  nodeServiceDiscovery.address = Sockaddr{kTestAddress, kTestDataPort};
+
+  thrift::NodeID thriftNodeId;
+
+  EXPECT_TRUE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+
+  // Also matches any unix path
+  nodeServiceDiscovery.address = Sockaddr{kTestUnixPath};
+  EXPECT_TRUE(
+      nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
 }
