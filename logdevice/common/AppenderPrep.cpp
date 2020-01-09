@@ -149,9 +149,6 @@ void AppenderPrep::execute(std::unique_ptr<Appender> appender) {
                 Sender::describeConnection(from_).c_str(),
                 header_.logid.val_,
                 Sender::describeConnection(from_).c_str());
-    // This should never happen. We are invoking onReceived from the socket
-    // that has already performed the hello/ack handshake.
-    ld_check(false);
     sendError(appender.get(), E::ACCESS);
     return;
   }
