@@ -276,10 +276,6 @@ class LogStorageState {
     subscribed_workers_.reset(id.val_);
   }
 
-  void noteLogStateRecovered() {
-    recover_log_state_task_in_flight_.store(false);
-  }
-
   /**
    * Implementation of LogStorageStateMap::recoverLogState().
    */
@@ -359,8 +355,7 @@ class LogStorageState {
   // likely will never be fully up-to-date. If true, we should avoid creating
   // ServerReadStreams for this log because they are likely to get stuck waiting
   // for this LogStorageState to be updated. In particular this flag is set if:
-  //  * RecoverLogStateTask failed for this log. Things like trim_point_ will
-  //    most likely never be populated.
+  //  * Things like trim_point_ most likely will never be populated.
   //  * Purging was unable to complete due to a permanent error in the local
   //    log store. If a read stream is blocked on last_released_lsn_ being
   //    advanced and this flag is set, it knows it will be permanently stalled
@@ -387,8 +382,6 @@ class LogStorageState {
   // Is there a GetSeqStateRequest inflight for this log?  If so, we avoid
   // creating new ones until it comes back.
   std::atomic<bool> get_seq_state_inflight_{false};
-
-  std::atomic<bool> recover_log_state_task_in_flight_{false};
 
   // Trim point of log.  Allows the local log store to delete trimmed
   // records and read paths to recognize that records are missing

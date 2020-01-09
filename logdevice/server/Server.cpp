@@ -1067,6 +1067,15 @@ bool Server::initLogStorageStateMap() {
                 log_state->updateLastCleanEpoch(
                     dynamic_cast<LastCleanMetadata*>(meta.get())->epoch_);
               });
+          auto last_released_traverser = make_traverser(
+              shard,
+              [](LogStorageState* log_state,
+                 std::unique_ptr<LogMetadata> meta) {
+                log_state->updateLastReleasedLSN(
+                    dynamic_cast<LastReleasedMetadata*>(meta.get())
+                        ->last_released_lsn_,
+                    LogStorageState::LastReleasedSource::LOCAL_LOG_STORE);
+              });
           int rv = store->traverseLogsMetadata(
               LogMetadataType::TRIM_POINT, trim_point_traverser);
           if (rv != 0) {
@@ -1080,6 +1089,15 @@ bool Server::initLogStorageStateMap() {
               LogMetadataType::LAST_CLEAN, lce_traverser);
           if (rv != 0) {
             ld_error("Failed to populate Last Clean Epochs from shard %d: %s",
+                     shard,
+                     error_name(err));
+            goto out;
+          }
+
+          rv = store->traverseLogsMetadata(
+              LogMetadataType::LAST_RELEASED, last_released_traverser);
+          if (rv != 0) {
+            ld_error("Failed to populate Last Released LSN from shard %d: %s",
                      shard,
                      error_name(err));
           }

@@ -183,18 +183,6 @@ FINDKEY_onReceived(FINDKEY_Message* msg,
     // LSN in case recovery is running and per-epoch releases are enabled.
     last_per_epoch_released_lsn = log_state->getLastPerEpochReleasedLSN();
     trim_point = log_state->getTrimPoint();
-    if (last_per_epoch_released_lsn == LSN_INVALID) {
-      // Last per-epoch released LSN or trim point are unknown.  Try to find
-      // them...
-      processor->getLogStorageStateMap().recoverLogState(
-          msg->header_.log_id,
-          shard_idx,
-          LogStorageState::RecoverContext::FINDKEY_MESSAGE);
-
-      // And in the meantime tell the client to try again in a bit
-      send_error(from, msg->header_.client_rqid, E::AGAIN, shard_idx, tracer);
-      return Message::Disposition::NORMAL;
-    }
 
     if (timestamp == std::chrono::milliseconds::max()) {
       // max() is normally used with findTime() to determine the sequence number

@@ -27,7 +27,6 @@
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/storage/PurgeCoordinator.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
-#include "logdevice/server/storage_tasks/RecoverLogStateTask.h"
 #include "logdevice/server/storage_tasks/RecoverSealTask.h"
 #include "logdevice/server/storage_tasks/StorageTask.h"
 
@@ -260,10 +259,7 @@ int LogStorageState::recover(std::chrono::microseconds interval,
                             LogStorageState::LastReleasedSource::RELEASE) ||
       force_ask_sequencer;
 
-  // should we attempt to read it from the local log store?
-  bool recover_from_store = !last_released.hasValue();
-
-  if (!ask_sequencer && !recover_from_store) {
+  if (!ask_sequencer) {
     // nothing needs to be recovered
     return 0;
   }
@@ -294,7 +290,7 @@ int LogStorageState::recover(std::chrono::microseconds interval,
   // GetSeqStateRequest's internal coalescing mechanism to avoid accumulating
   // callbacks; this method may be called many times quickly on server
   // startup.)
-  if (ask_sequencer && !get_seq_state_inflight_.exchange(true)) {
+  if (!get_seq_state_inflight_.exchange(true)) {
     GetSeqStateRequest::Options opts;
     opts.wait_for_recovery = true;
     opts.include_epoch_offset = true;
@@ -314,13 +310,6 @@ int LogStorageState::recover(std::chrono::microseconds interval,
                error_name(err),
                rv);
     }
-  }
-
-  // If we haven't yet tried to read from the local log store, try that.
-  if (recover_from_store && !recover_log_state_task_in_flight_.exchange(true)) {
-    std::unique_ptr<StorageTask> task =
-        std::make_unique<RecoverLogStateTask>(log_id_);
-    w->getStorageTaskQueueForShard(shard_)->putTask(std::move(task));
   }
 
   return 0;

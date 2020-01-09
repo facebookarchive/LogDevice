@@ -99,9 +99,8 @@ class LogStorageStateMap {
   ReleaseStates getAllLastReleasedLSNs(shard_index_t shard) const;
 
   /**
-   * If last released LSN or trim point for log_id is not known, this function
-   * tries to recover it by reading it from the local log store and (for last
-   * released LSN) asking the sequencer to resend it.
+   * If last released LSN is not known, this function tries to recover
+   * it by asking the sequencer to resend it.
    *
    * This method should be called on a worker thread.
    *
