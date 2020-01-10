@@ -39,13 +39,15 @@ class LogStorageStateMap {
    *                           log state
    */
   explicit LogStorageStateMap(shard_size_t num_shards,
+                              StatsHolder* stats,
                               std::chrono::microseconds recovery_interval =
                                   std::chrono::microseconds(500000))
       : cache_disposal_(nullptr),
         num_shards_(num_shards),
         processor_(nullptr),
         shard_map_(makeMap(num_shards)),
-        state_recovery_interval_(recovery_interval) {}
+        state_recovery_interval_(recovery_interval),
+        stats_(stats) {}
 
   LogStorageStateMap(const LogStorageStateMap&) = delete;
   LogStorageStateMap& operator=(const LogStorageStateMap&) = delete;
@@ -188,6 +190,7 @@ class LogStorageStateMap {
    * if needed.
    */
   std::unique_ptr<RecordCacheMonitorThread> record_cache_monitor_;
+  StatsHolder* stats_;
 };
 
 template <typename Func>

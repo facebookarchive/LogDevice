@@ -992,7 +992,9 @@ bool Server::initLogStorageStateMap() {
 
   shard_size_t nshards = sharded_store_->numShards();
   log_storage_state_map_ = std::make_unique<LogStorageStateMap>(
-      nshards, params_->getProcessorSettings()->log_state_recovery_interval);
+      nshards,
+      params_->getStats(),
+      params_->getProcessorSettings()->log_state_recovery_interval);
 
   /*
    * It is important to differentiate between the following cases

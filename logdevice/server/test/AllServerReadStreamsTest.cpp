@@ -81,7 +81,7 @@ class TestAllServerReadStreams : public AllServerReadStreams {
  * messages.
  */
 TEST(AllServerReadStreamsTest, Subscriptions) {
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
   const worker_id_t worker_id(1);
   Settings settings = create_default_settings<Settings>();
   AllServerReadStreams streams(
@@ -124,7 +124,7 @@ TEST(AllServerReadStreamsTest, Subscriptions) {
  * construction time.
  */
 TEST(AllServerReadStreamsTest, Capacity) {
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
   const worker_id_t worker_id(1);
   Settings settings = create_default_settings<Settings>();
   settings.max_server_read_streams = 4;
@@ -179,7 +179,7 @@ TEST(AllServerReadStreams, OnReleaseUseAfterFree) {
     }
   };
 
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
   Settings settings = create_default_settings<Settings>();
   settings.max_server_read_streams = 4;
   TestAllServerReadStreams streams(
@@ -204,7 +204,7 @@ TEST(AllServerReadStreams, OnReleaseUseAfterFree) {
 // Verify that AllServerReadStreams ensures that we do not reach the limit of
 // bytes allocated by ReadStorageTasks.
 TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
   const worker_id_t worker_id(1);
   Settings settings = create_default_settings<Settings>();
 

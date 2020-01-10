@@ -107,7 +107,7 @@ class MockCatchupQueueDependencies;
 class CatchupQueueTest : public ::testing::Test {
  public:
   CatchupQueueTest()
-      : log_storage_state_map_(1),
+      : log_storage_state_map_(1, /*stats*/ nullptr),
         streams_(&log_storage_state_map_, &tasks_),
         flow_group_(std::make_unique<FlowGroup>(
             std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr))) {

@@ -58,7 +58,7 @@ struct StressTestLSNUpdatingThread : boost::noncopyable {
  * However, it is a useful stress test for the map's implementation.
  */
 TEST(LogStorageStateMapTest, StressTestLSNUpdating) {
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   // Initialize LogStorageState instances for all logs
   for (int log_id = 1; log_id <= STRESS_TEST_LOGS; ++log_id) {
@@ -107,7 +107,7 @@ TEST(LogStorageStateMapTest, StressTestLSNUpdating) {
  * Basic test for worker subscriptions.
  */
 TEST(LogStorageStateMapTest, WorkerSubscriptions) {
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
   LogStorageState log_state(logid_t(22), THIS_SHARD, &map);
   const int nworkers = 8;
 
@@ -131,7 +131,7 @@ TEST(LogStorageStateMapTest, WorkerSubscriptions) {
 }
 
 TEST(LogStorageStateMapTest, LastReleasedLSNSource) {
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
   LogStorageState log_state(logid_t(42), THIS_SHARD, &map);
 
   int rv = log_state.updateLastReleasedLSN(

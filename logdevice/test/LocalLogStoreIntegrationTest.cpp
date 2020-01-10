@@ -126,6 +126,69 @@ TEST_F(LocalLogStoreIntegrationTest, StartWithCorruptDB) {
   }
 }
 
+TEST_F(LocalLogStoreIntegrationTest, StartWithCorruptMetadataValue) {
+  constexpr int NNODES = 4;
+  constexpr int NSHARDS = 4;
+  constexpr logid_t LOG_ID{1};
+
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setNumDBShards(NSHARDS)
+                     .deferStart()
+                     .create(NNODES);
+
+  using RocksDBKeyFormat::LogMetaKey;
+  std::vector<RocksDBKeyFormat::LogMetaKey> meta_keys{
+      LogMetaKey{LogMetadataType::TRIM_POINT, LOG_ID},
+      LogMetaKey{LogMetadataType::LAST_CLEAN, LOG_ID},
+      LogMetaKey{LogMetadataType::LAST_RELEASED, LOG_ID}};
+  ld_check(NSHARDS >= meta_keys.size());
+
+  // Corrupt a shard on each node by writing an incorrect value to one
+  // of the metadata keys.
+  for (int n = 1; n < NNODES; ++n) {
+    ld_check(cluster->getConfig()
+                 ->get()
+                 ->serverConfig()
+                 ->getNode(n)
+                 ->isReadableStorageNode());
+    IntegrationTestUtils::Node& node = cluster->getNode(n);
+
+    auto sharded_store = node.createLocalLogStore();
+    auto i = n % meta_keys.size();
+    RocksDBLogStoreBase* store = dynamic_cast<RocksDBLogStoreBase*>(
+        sharded_store->getByIndex(n % NSHARDS));
+    ld_check(store != nullptr);
+    auto cf = store->getMetadataCFHandle();
+    rocksdb::WriteBatch batch;
+    batch.Put(cf,
+              rocksdb::Slice(reinterpret_cast<const char*>(&meta_keys[i]),
+                             sizeof(meta_keys[i])),
+              rocksdb::Slice(reinterpret_cast<const char*>(&meta_keys[i]),
+                             sizeof(meta_keys[i])));
+    auto status = store->writeBatch(rocksdb::WriteOptions(), &batch);
+    ASSERT_TRUE(status.ok());
+  }
+
+  ASSERT_EQ(0, cluster->start());
+
+  // The shards with corrupt metadata value should be marked with
+  // permanent error.
+  for (int n = 1; n < NNODES; ++n) {
+    EXPECT_EQ(1, cluster->getNode(n).stats()["logs_with_permanent_error"]);
+  }
+
+  std::array<char, 128> data{}; // send the contents of this array as payload
+  const Payload payload(data.data(), data.size());
+
+  std::shared_ptr<Client> client = cluster->createClient();
+  for (logid_t log_id(LOG_ID); log_id.val_ <= LOG_ID.val_ + 1; ++log_id.val_) {
+    for (int i = 0; i < 20; ++i) {
+      lsn_t lsn = client->appendSync(log_id, payload);
+      ASSERT_NE(lsn, LSN_INVALID);
+    }
+  }
+}
+
 TEST_F(LocalLogStoreIntegrationTest, IOTracingSmokeTest) {
   // Run a cluster with IO tracing enabled and check that it doesn't crash.
   auto cluster = IntegrationTestUtils::ClusterFactory()

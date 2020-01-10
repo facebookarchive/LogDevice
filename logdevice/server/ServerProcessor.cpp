@@ -38,7 +38,7 @@ void ServerProcessor::fixupLogStorageStateMap() {
         ? sharded_storage_thread_pool_->numShards()
         : 1;
     log_storage_state_map_ = std::make_unique<LogStorageStateMap>(
-        num_shards, updateableSettings()->log_state_recovery_interval);
+        num_shards, stats_, updateableSettings()->log_state_recovery_interval);
   }
   log_storage_state_map_->setProcessor(this);
 }

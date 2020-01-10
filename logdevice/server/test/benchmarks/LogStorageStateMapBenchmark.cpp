@@ -71,7 +71,7 @@ BENCHMARK(LogStorageStateMapWithDataLogs, iters) {
   std::unique_ptr<LogStorageStateMap> map = nullptr;
 
   BENCHMARK_SUSPEND {
-    map.reset(new LogStorageStateMap(1));
+    map.reset(new LogStorageStateMap(1, /*stats*/ nullptr));
     populateLogs(map.get(), false);
   }
 
@@ -82,7 +82,7 @@ BENCHMARK(LogStorageStateMapWithMetaDataLogs, iters) {
   std::unique_ptr<LogStorageStateMap> map = nullptr;
 
   BENCHMARK_SUSPEND {
-    map.reset(new LogStorageStateMap(1));
+    map.reset(new LogStorageStateMap(1, /*stats*/ nullptr));
     populateLogs(map.get(), true);
   }
 

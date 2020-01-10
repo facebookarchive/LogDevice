@@ -156,7 +156,7 @@ void LogStorageStateMap::setProcessor(ServerProcessor* processor) {
 }
 
 StatsHolder* LogStorageStateMap::getStats() {
-  return processor_ ? processor_->stats_ : nullptr;
+  return stats_;
 }
 
 std::vector<std::unique_ptr<LogStorageStateMap::Map>>

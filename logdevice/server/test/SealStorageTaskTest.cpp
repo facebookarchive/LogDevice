@@ -66,7 +66,7 @@ static lsn_t lsn(int epoch, int esn) {
 
 TEST(SealStorageTaskTest, UpdateSeal) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   {
     TestSealStorageTask task =
@@ -83,7 +83,7 @@ TEST(SealStorageTaskTest, UpdateSeal) {
 
 TEST(SealStorageTaskTest, UpdateSealSmaller) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   // local log store already contains a seal record with epoch 2
   store.writeLogMetadata(logid_t(1),
@@ -101,7 +101,7 @@ TEST(SealStorageTaskTest, UpdateSealSmaller) {
 
 TEST(SealStorageTaskTest, LastKnownGood) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   std::vector<TestRecord> records = {
       TestRecord(logid_t(1), lsn(1, 1), ESN_INVALID),
@@ -177,7 +177,7 @@ TEST(SealStorageTaskTest, LastKnownGood) {
 // it also recovers soft seals if it is not in memory
 TEST(SealStorageTaskTest, SoftSeal) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   {
     // local log store already contains a normal seal record with epoch 2
@@ -234,7 +234,7 @@ TEST(SealStorageTaskTest, SoftSeal) {
 
 TEST(SealStorageTaskTest, EpochInfoWithByteOffset) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   std::vector<TestRecord> records = {
       TestRecord(logid_t(1), lsn(2, 1), ESN_INVALID)
@@ -256,7 +256,7 @@ TEST(SealStorageTaskTest, EpochInfoWithByteOffset) {
 
 TEST(SealStorageTaskTest, EpochInfo) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   std::vector<TestRecord> records = {
       TestRecord(logid_t(1), lsn(2, 1), ESN_INVALID),
@@ -318,7 +318,7 @@ TEST(SealStorageTaskTest, EpochInfo) {
 
 TEST(SealStorageTaskTest, PurgeStillGetEpochInfoOnPreemption) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   std::vector<TestRecord> records = {
       TestRecord(logid_t(1), lsn(7, 21), esn_t(5))};
@@ -368,7 +368,7 @@ TEST(SealStorageTaskTest, PurgeStillGetEpochInfoOnPreemption) {
 // to get a more accurate tail record
 TEST(SealStorageTaskTest, TailRecordWithMutablePerEpochLogMetadata) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   std::vector<TestRecord> records = {
       TestRecord(logid_t(1), lsn(2, 1), ESN_INVALID),
@@ -416,7 +416,7 @@ TEST(SealStorageTaskTest, TailRecordWithMutablePerEpochLogMetadata) {
 
 TEST(SealStorageTaskTest, TailRecordWithEpochOffset) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   bool tail_optimized = true;
 
@@ -495,7 +495,7 @@ TEST(SealStorageTaskTest, TailRecordWithEpochOffset) {
 // the first attempt requires sync
 TEST(SealStorageTaskTest, RetrySealingAndDurability) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1);
+  LogStorageStateMap map(1, /*stats*/ nullptr);
 
   std::vector<TestRecord> records = {
       TestRecord(logid_t(1), lsn(1, 2), esn_t(1)),
