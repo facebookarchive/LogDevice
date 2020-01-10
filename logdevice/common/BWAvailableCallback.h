@@ -19,7 +19,7 @@ class FlowGroup;
 
 /**
  * @file BWAvailableCallback is a pure virtual parent of all callback classes
- *       used to queue up for bandwidth becoming available on a Socket. A
+ *       used to queue up for bandwidth becoming available on a Connection. A
  *       callback object is an element of an intrusive priority queue of
  *       callbacks maintained by a FlowGroup. A BWAvailableCallback instance
  *       can be on not more than one such queue at a time. An attempt to insert
@@ -50,7 +50,7 @@ class BWAvailableCallback {
   virtual void operator()(FlowGroup&, std::mutex& flow_meters_mutex) = 0;
 
   /**
-   * Called by a Socket when the callback must be cancelled due to an
+   * Called by a Connection when the callback must be cancelled due to an
    * error. Currently only called when the socket is closed before the
    * callback is invoked.
    */
@@ -73,17 +73,17 @@ class BWAvailableCallback {
 
   /**
    * @return true iff this SocketCallback is currently on a callback list
-   *              of some Socket and will be called when the event of interest
-   *              occurs on the Socket (such as the Socket is closed).
+   *              of some Connection and will be called when the event of
+   * interest occurs on the Connection (such as the Socket is closed).
    */
   bool active() const {
     return flow_group_links_.is_linked();
   }
 
   /**
-   * If this SocketCallback is on a callback list of a Socket, removes
+   * If this SocketCallback is on a callback list of a Connection, removes
    * it from the list (makes inactive). Otherwise does nothing. A
-   * callback can only be registered with a Socket if it is inactive.
+   * callback can only be registered with a Connection if it is inactive.
    */
   void deactivate();
 
@@ -104,7 +104,7 @@ class BWAvailableCallback {
   FlowGroup* flow_group_ = nullptr;
   folly::IntrusiveListHook flow_group_links_;
 
-  // The callback is also tracked by the Socket so that it can be cleaned
+  // The callback is also tracked by the Connection so that it can be cleaned
   // up when a socket is closed.
   folly::IntrusiveListHook links_;
 

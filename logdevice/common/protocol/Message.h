@@ -32,7 +32,7 @@ struct MessageReadResult;
 
 /**
  * @file  an object of class Message represents a message that was received
- *        from a Socket, was composed locally, or was copy-constructed from
+ *        from a Connection, was composed locally, or was copy-constructed from
  *        another Message. A Message can be sent into a socket by placing
  *        it in an Envelope. A Message can be placed in exactly one Envelope,
  *        at which point the Envelope takes ownership of the Message and is
@@ -56,9 +56,9 @@ struct Message {
 
   /**
    * The type of a static factory that constructs a Message from a
-   * ProtocolReader (which wraps a read evbuffer of a bufferevent managed by a
-   * Socket). Every subclass of Message representing a particular message type
-   * must define a deserialize() method with this signature.
+   * ProtocolReader (which wraps a read input buffer managed by a
+   * Connection). Every subclass of Message representing a particular message
+   * type must define a deserialize() method with this signature.
    */
   using deserializer_t = MessageReadResult(ProtocolReader&);
 
@@ -99,7 +99,7 @@ struct Message {
   }
 
   /**
-   * This enum lists actions that a Socket may take after calling
+   * This enum lists actions that a Connection may take after calling
    * Message::onReceived() on a newly received message.
    */
   enum class Disposition {
@@ -115,7 +115,7 @@ struct Message {
     KEEP,
 
     // The message is invalid or unexpected. The sender has violated the
-    // LogDevice protocol. Delete the message and close the Socket from
+    // LogDevice protocol. Delete the message and close the Connection from
     // which it was read.
     // When returning this status, assign to `err` one of: E::ACCESS,
     // E::PROTONOSUPPORT, E::PROTO, E::BADMSG, E::DESTINATION_MISMATCH,
@@ -124,9 +124,9 @@ struct Message {
   };
 
   /**
-   * A Socket calls this function on a new Message after a deserialize()
+   * A Connection calls this function on a new Message after a deserialize()
    * function of a Message subclass constructed the Message from an
-   * evbuffer that reads from a TCP connection managed by the Socket.
+   * input buffer that reads from a TCP connection managed by the Connection.
    *
    * At the time of this call the message is not owned by any other
    * object. The method is responsible for destroying the message or storing
@@ -138,18 +138,19 @@ struct Message {
    * ServerMessageDispatch or ClientMessageDispatch.
    *
    * @param from   address this message was read from. This is the peer address
-   *               of the socket that read the message.
+   *               of the Connection that read the message.
    *
    * @return one of Disposition values defined above. 0 on success. If
    *         Disposition::ERROR is returned, the caller will pass err to
-   *         Socket::close(). See enum Disposition for allowed values of err.
+   *         Connection::close(). See enum Disposition for allowed values of
+   * err.
    */
   virtual Disposition onReceived(const Address& from) = 0;
 
   /**
-   * A Socket calls this virtual function when it removes this message's
+   * A Connection calls this virtual function when it removes this message's
    * Envelope from the send queue because either the message has been sent, or
-   * the Socket has determined that the message cannot be sent at all (e.g.,
+   * the Connection has determined that the message cannot be sent at all (e.g.,
    * because the other end closed connection).
    *
    * NOTE: We also support decentralised message event handlers to allow the
@@ -157,8 +158,8 @@ struct Message {
    * this method but have their handlers dispatched through
    * ServerMessageDispatch or ClientMessageDispatch.
    *
-   * NOTE: during Worker destruction Sockets residing in that Worker's Sender
-   *       do NOT call onSent() for messages that are still pending on their
+   * NOTE: during Worker destruction Connections residing in that Worker's
+   * Sender do NOT call onSent() for messages that are still pending on their
    *       send queues. This is done to avoid accidentally referencing members
    *       of Worker that may be already destroyed. Because of this Messages
    *       should not rely on onSent() to release any resources they may own.
@@ -178,7 +179,7 @@ struct Message {
    *             E::BADMSG   connection was closed before this message was
    *                         fully sent because the other end sent an invalid
    *                         message
-   *             E::PROTO    if the Socket on which this message was pending
+   *             E::PROTO    if the Connection on which this message was pending
    *                         to be sent was closed because the other side
    *                         sent a valid but unexpected message
    *             E::ACCESS   if the other side denied access during
@@ -193,7 +194,7 @@ struct Message {
    *             E::PROTONOSUPPORT   if this message could not be sent because
    *                                 the other end does not understand the
    *                                 version of the protocol this message is
-   *                                 for. The Socket was either closed if we
+   *                                 for. The Connection was either closed if we
    *                                 could not negociate a protocol version with
    *                                 the other end, or it is connected using a
    *                                 lower protocol version.
@@ -202,12 +203,12 @@ struct Message {
    *                                      receiving the message
    *             E::CANCELLED cancelled() method of the message returned true
    *             E::INTERNAL an internal error occurred
-   *             E::TIMEDOUT Timed out connecting to the socket.
+   *             E::TIMEDOUT Timed out connecting to the remote.
    *             E::TOOBIG message is too big (exceeds payload size limit)
    *             E::SHUTDOWN The connection is closed because other end did
    *                         a graceful shutdown.
    *
-   * @param to            peer address of Socket this message was pending on
+   * @param to            peer address of Connection this message was pending on
    * @param enqueue_time  When the message was submitted for transmission.
    */
   virtual void onSent(Status st,
@@ -221,9 +222,9 @@ struct Message {
 
   /**
    * Get the minimum protocol version that is compatible with this message.
-   * Socket will verify this against the protocol negotiated with the other end.
-   * If the protocol version negotiated is lower than the value returned by this
-   * function, onSent(E::PROTONOSUPPORT) will be called on that Message.
+   * Connection will verify this against the protocol negotiated with the other
+   * end. If the protocol version negotiated is lower than the value returned by
+   * this function, onSent(E::PROTONOSUPPORT) will be called on that Message.
    *
    * Subclasses of Message are expected to override this method if the Message
    * is not compatible with all protocol versions that can be negotiated.

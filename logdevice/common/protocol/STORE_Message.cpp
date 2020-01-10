@@ -289,7 +289,7 @@ void STORE_Message::onSentCommon(Status st, const Address& to) const {
   if (!appender) {
     // Appender had received enough STORED replies and retired by
     // the time this STORE was passed to TCP. This can happen if we
-    // sent into an unconnected Socket and the handshake took too long.
+    // sent into an unconnected Connection and the handshake took too long.
     ld_debug("Appender for record %s sent to %s not found",
              header_.rid.toString().c_str(),
              Sender::describeConnection(to).c_str());

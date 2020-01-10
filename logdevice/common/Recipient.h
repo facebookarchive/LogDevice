@@ -211,7 +211,7 @@ class Recipient {
   // one-byte field indicating the state of the recipient.
   State state_ = State::REQUEST_PENDING;
 
-  // this functor is called when a Socket through which we sent a
+  // this functor is called when a Connection through which we sent a
   // STORE messages to this recipient closes before a reply is
   // received. The effect is to decrement Appender's count of copies
   // outstanding, and if that falls below R, send another wave of

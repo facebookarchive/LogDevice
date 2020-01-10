@@ -243,7 +243,7 @@ STAT_DEFINE(get_seq_state_unique_context_reader_monitoring, SUM)
 STAT_DEFINE(get_seq_state_unique_context_is_log_empty_v2, SUM)
 STAT_DEFINE(get_seq_state_unique_context_rsm, SUM)
 
-// Socket stats.
+// Connection stats.
 STAT_DEFINE(sock_read_events, SUM)
 STAT_DEFINE(sock_time_spent_reading_message, SUM)
 STAT_DEFINE(sock_num_messages_read, SUM)
@@ -404,7 +404,7 @@ STAT_DEFINE(config_update_same_version, SUM)
 STAT_DEFINE(durability_failures, SUM)
 STAT_DEFINE(durability_total, SUM)
 
-// Socket health check stats. Not accumulated for destroyed threads.
+// Connection health check stats. Not accumulated for destroyed threads.
 STAT_DEFINE(num_sockets, SUM)
 STAT_DEFINE(sock_active, SUM)
 STAT_DEFINE(sock_stalled, SUM)

@@ -55,8 +55,8 @@ using namespace configuration::nodes;
 namespace {
 
 // An object of this functor class is registered with every
-// client Socket managed by this Sender and is called when the
-// Socket closes.
+// client Connection  managed by this Sender and is called when the
+// Connection  closes.
 class DisconnectedClientCallback : public SocketCallback {
  public:
   // calls noteDisconnectedClient() of the current thread's Sender
@@ -84,19 +84,13 @@ class SenderImpl {
   explicit SenderImpl(ClientIdxAllocator* client_id_allocator)
       : client_id_allocator_(client_id_allocator) {}
 
-  // a map of all Sockets that have been created on this Worker thread
-  // in order to talk to LogDevice servers. Sockets are removed from this map
-  // only when the corresponding server is no longer in the config (the
-  // generation count of the Server's config record has
-  // increased). Sockets are not removed when the connection breaks.
-  // When a server goes down, its Socket's state changes to indicate
-  // that it is now disconnected (.bev_ is nullptr, .connected_ is
-  // false). The Socket object remains in the map. sendMessage() to
-  // the node_index_t or NodeID of that Socket will try to reconnect.
-  // The rate of reconnection attempts is controlled by a ConnectionThrottle.
+  // a map of all Connections that have been created on this Worker thread
+  // in order to talk to LogDevice servers. sendMessage() to the node_index_t or
+  // NodeID of that Connection will try to reconnect. The rate of reconnection
+  // attempts is controlled by a ConnectionThrottle.
   folly::F14FastMap<node_index_t, std::unique_ptr<Connection>> server_sockets_;
 
-  // a map of all Sockets wrapping connections that were accepted from
+  // a map of all Connections wrapping connections that were accepted from
   // clients, keyed by 32-bit client ids. This map is empty on clients.
   folly::F14FastMap<ClientID, std::unique_ptr<Connection>, ClientID::Hash>
       client_sockets_;
@@ -262,7 +256,7 @@ int Sender::addClient(int fd,
       delete cb;
     }
   } catch (const ConstructorFailed&) {
-    ld_error("Failed to construct a client socket: error %d (%s)",
+    ld_error("Failed to construct a client Connection: error %d (%s)",
              static_cast<int>(err),
              error_description(err));
     return -1;
@@ -302,7 +296,7 @@ void Sender::noteBytesDrained(size_t nbytes,
 ssize_t Sender::getTcpSendBufSizeForClient(ClientID client_id) const {
   auto it = impl_->client_sockets_.find(client_id);
   if (it == impl_->client_sockets_.end()) {
-    ld_error("client socket %s not found", client_id.toString().c_str());
+    ld_error("client Connection %s not found", client_id.toString().c_str());
     ld_check(false);
     return -1;
   }
@@ -319,8 +313,8 @@ void Sender::eraseDisconnectedClients() {
     ld_assert(pos != impl_->client_sockets_.end());
     ld_assert(pos->second->isClosed());
     ++it;
-    // Check if there are users that still have reference to the socket. If
-    // yes, wait for the clients to drop the socket instead of reclaiming it
+    // Check if there are users that still have reference to the Connection. If
+    // yes, wait for the clients to drop the Connection instead of reclaiming it
     // here.
     if (!pos->second->isZombie()) {
       impl_->client_sockets_.erase(pos);
@@ -340,7 +334,7 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
     // The peer config is more recent. nothing to do here.
     return 0;
   }
-  // The peer config version on the socket is outdated, so we need to notify
+  // The peer config version on the Connection is outdated, so we need to notify
   // the peer and update it.
   std::unique_ptr<Message> msg;
   const Address& addr = sock.peer_name_;
@@ -349,7 +343,7 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
     // connection. It may very well be a node however.
 
     if (peer_config_version == CONFIG_VERSION_INVALID) {
-      // We never received a CONFIG_ADVISORY message on this socket, so we
+      // We never received a CONFIG_ADVISORY message on this Connection, so we
       // can assume that config synchronization is disabled on this client
       // or it hasn't got a chance to send the message yet. either way,
       // don't do anything yet.
@@ -398,7 +392,7 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
   }
   // Message was sent successfully. Peer should now have a version
   // greater than or equal to config_version.
-  // Update peer version in socket to avoid sending CONFIG_ADVISORY or
+  // Update peer version in Connection to avoid sending CONFIG_ADVISORY or
   // CONFIG_CHANGED again on the same connection.
   sock.setPeerConfigVersion(config_version);
   return 0;
@@ -454,7 +448,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   }
 
   // If the message is neither a handshake message nor a config sychronization
-  // message, we need to update the client config version on the socket.
+  // message, we need to update the client config version on the Connection.
   if (!isHandshakeMessage(msg->type_) &&
       !isConfigSynchronizationMessage(msg->type_) &&
       settings_->enable_config_synchronization) {
@@ -491,7 +485,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
                             SocketCallback* onclose) {
   ld_check(!shutting_down_);
 
-  /* verify that we only send allowed messages via gossip socket */
+  /* verify that we only send allowed messages via gossip Connection */
   if (is_gossip_sender_) {
     if (!allowedOnGossipConnection(msg->type_)) {
       RATELIMIT_WARNING(std::chrono::seconds(1),
@@ -505,7 +499,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   }
 
   if (!isHandshakeMessage(msg->type_) &&
-      // Return ENOBUFS error Sender's outbuf limit and the socket's minimum
+      // Return ENOBUFS error Sender's outbuf limit and the Connection's minimum
       // out buf limit is reached.
       bytesPendingLimitReached(sock.getPeerType()) &&
       sock.minOutBufLimitReached()) {
@@ -542,7 +536,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
       folly::Random::randDouble01() <
           Worker::settings().message_error_injection_chance_percent / 100.) {
     // Leak the envelope.
-    // It'll stay in Socket's pendingq_ and will never be sent.
+    // It'll stay in Connection's pendingq_ and will never be sent.
     ld_debug("Dropping message %s of size %lu",
              messageTypeNames()[envelope->message().type_].c_str(),
              envelope->cost());
@@ -694,7 +688,7 @@ void Sender::flushOutputAndClose(Status reason) {
   }
 
   ld_log(open_socket_count ? dbg::Level::INFO : dbg::Level::SPEW,
-         "Number of open sockets : %d",
+         "Number of open Connections : %d",
          open_socket_count);
 }
 int Sender::closeSocket(Address addr, Status reason) {
@@ -778,8 +772,8 @@ void Sender::shutdownSockets(folly::Executor* executor) {
 }
 
 bool Sender::isClosed() const {
-  // Go over all sockets at shutdown to find pending work. This could help in
-  // figuring which sockets are slow in draining buffers.
+  // Go over all Connections at shutdown to find pending work. This could help
+  // in figuring which Connections are slow in draining buffers.
   bool go_over_all_sockets = !Worker::onThisThread()->isAcceptingWork();
 
   int num_open_server_sockets = 0;
@@ -822,23 +816,24 @@ bool Sender::isClosed() const {
     }
   }
 
-  // None of the sockets are open return true.
+  // None of the Connections are open return true.
   if (!num_open_client_sockets && !num_open_server_sockets) {
     return true;
   }
 
-  RATELIMIT_INFO(std::chrono::seconds(5),
-                 5,
-                 "Sockets still open: Server socket count %d (max pending "
-                 "bytes: %lu in socket 0x%p), Client socket count %d (max "
-                 "pending bytes: %lu for client %s socket 0x%p)",
-                 num_open_server_sockets,
-                 server_with_max_pending_bytes,
-                 (void*)max_pending_work_server,
-                 num_open_client_sockets,
-                 client_with_max_pending_bytes,
-                 max_pending_work_clientID.toString().c_str(),
-                 (void*)max_pending_work_client);
+  RATELIMIT_INFO(
+      std::chrono::seconds(5),
+      5,
+      "Connections still open: Server Connection count %d (max pending "
+      "bytes: %lu in Connection 0x%p), Client Connection count %d (max "
+      "pending bytes: %lu for client %s Connection 0x%p)",
+      num_open_server_sockets,
+      server_with_max_pending_bytes,
+      (void*)max_pending_work_server,
+      num_open_client_sockets,
+      client_with_max_pending_bytes,
+      max_pending_work_clientID.toString().c_str(),
+      (void*)max_pending_work_client);
 
   return false;
 }
@@ -879,7 +874,7 @@ int Sender::checkConnection(NodeID nid,
     return -1;
   }
 
-  // check if the socket to destination has reached its buffer limit
+  // check if the Connection to destination has reached its buffer limit
   if (s->sizeLimitsExceeded()) {
     err = E::NOBUFS;
     return -1;
@@ -919,7 +914,7 @@ bool Sender::useSSLWith(NodeID nid,
       *nodes_, my_location_, nid.index(), diff_level);
 
   auto server_config = Worker::onThisThread()->getServerConfig();
-  // Determine whether we need to use an SSL socket for authentication.
+  // Determine whether we need to use an SSL Connection for authentication.
   bool authentication =
       (server_config->getAuthenticationType() == AuthenticationType::SSL);
 
@@ -940,7 +935,7 @@ Socket* Sender::initServerSocket(NodeID nid,
   const auto node_cfg = nodes_->getNodeServiceDiscovery(nid.index());
 
   // Don't try to connect if the node is not in config.
-  // If the socket was already connected but the node removed from config,
+  // If the Connection was already connected but the node removed from config,
   // it will be closed once noteConfigurationChanged() executes.
   if (!node_cfg) {
     err = E::NOTINCONFIG;
@@ -966,7 +961,7 @@ Socket* Sender::initServerSocket(NodeID nid,
 
     if (should_create_new) {
       // We have a plaintext connection, but now we need an encrypted one.
-      // Scheduling this socket to be closed and moving it out of
+      // Scheduling this Connection to be closed and moving it out of
       // server_sockets_ to initialize an SSL connection in its place.
       Worker::onThisThread()->add([s = std::move(it->second)] {
         if (s->good()) {
@@ -1036,7 +1031,7 @@ Socket* Sender::initServerSocket(NodeID nid,
       auto res = impl_->server_sockets_.emplace(nid.index(), std::move(sock));
       it = res.first;
     } catch (ConstructorFailed& exp) {
-      ld_critical("Could not create server socket to node %s sock_type %s "
+      ld_critical("Could not create server Connection to node %s sock_type %s "
                   "use_ssl %d. %s",
                   toString(nid).c_str(),
                   socketTypeToString(sock_type),
@@ -1128,7 +1123,7 @@ Socket* FOLLY_NULLABLE Sender::getSocket(const NodeID& nid,
   int rv = sock->connect();
 
   if (rv != 0 && err != E::ALREADY && err != E::ISCONN) {
-    // err can't be UNREACHABLE because sock must be a server socket
+    // err can't be UNREACHABLE because sock must be a server Connection
     ld_check(err == E::UNROUTABLE || err == E::DISABLED || err == E::SYSLIMIT ||
              err == E::NOMEM || err == E::INTERNAL);
     return nullptr;
@@ -1192,7 +1187,7 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
     if (pos != impl_->client_sockets_.end()) {
       ld_check(pos->second->peer_name_ == addr);
 
-      // Whenever a HELLO_Message is sent, a new client socket is
+      // Whenever a HELLO_Message is sent, a new client Connection is
       // created on the server side. Meaning that whenever this function is
       // called, the principal should be empty.
       ld_check(pos->second->principal_->type == "");
@@ -1257,7 +1252,7 @@ int Sender::setCSID(const Address& addr, std::string csid) {
     if (pos != impl_->client_sockets_.end()) {
       ld_check(pos->second->peer_name_ == addr);
 
-      // Whenever a HELLO_Message is sent, a new client socket is
+      // Whenever a HELLO_Message is sent, a new client Connection is
       // created on the server side. Meaning that whenever this function is
       // called, the principal should be empty.
       ld_check(pos->second->csid_ == "");
@@ -1284,7 +1279,7 @@ std::string Sender::getClientLocation(const ClientID& cid) {
   if (!sock) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
-                    "Could not find socket for connection: %s",
+                    "Could not find Connection: %s",
                     describeConnection(cid).c_str());
     return "";
   }
@@ -1297,7 +1292,7 @@ void Sender::setClientLocation(const ClientID& cid,
   if (!sock) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
-                    "Could not find socket for connection: %s",
+                    "Could not find Connection: %s",
                     describeConnection(cid).c_str());
     return;
   }
@@ -1427,9 +1422,10 @@ int Sender::noteDisconnectedClient(ClientID client_name) {
   }
 
   if (impl_->client_sockets_.count(client_name) == 0) {
-    ld_critical("INTERNAL ERROR: the name of a disconnected client socket %s "
-                "is not in the client map",
-                client_name.toString().c_str());
+    ld_critical(
+        "INTERNAL ERROR: the name of a disconnected client Connection  %s "
+        "is not in the client map",
+        client_name.toString().c_str());
     ld_check(0);
     err = E::NOTFOUND;
     return -1;
@@ -1441,7 +1437,7 @@ int Sender::noteDisconnectedClient(ClientID client_name) {
 }
 
 void DisconnectedClientCallback::operator()(Status st, const Address& name) {
-  ld_debug("Sender's DisconnectedClientCallback called for socket %s "
+  ld_debug("Sender's DisconnectedClientCallback called for Connection  %s "
            "with status %s",
            Sender::describeConnection(name).c_str(),
            error_name(st));
@@ -1475,18 +1471,19 @@ void Sender::noteConfigurationChanged(
         ++it;
         continue;
       } else {
-        ld_info("Configuration change detected for node %s. New generation "
-                "count is %d. New IP address is %s. Destroying old socket.",
-                Sender::describeConnection(Address(s->peer_name_.id_.node_))
-                    .c_str(),
-                generation,
-                newaddr.toString().c_str());
+        ld_info(
+            "Configuration change detected for node %s. New generation "
+            "count is %d. New IP address is %s. Destroying old Connection .",
+            Sender::describeConnection(Address(s->peer_name_.id_.node_))
+                .c_str(),
+            generation,
+            newaddr.toString().c_str());
       }
 
     } else {
       ld_info(
           "Node %s is no longer in cluster configuration. New cluster "
-          "size is %zu. Destroying old socket.",
+          "size is %zu. Destroying old Connection .",
           Sender::describeConnection(Address(s->peer_name_.id_.node_)).c_str(),
           nodes_->clusterSize());
     }
@@ -1557,7 +1554,7 @@ std::string Sender::dumpQueuedMessages(Address addr) const {
     if (socket == nullptr) {
       // Unexpected but not worth asserting on (crashing the server) since
       // this is debugging code
-      return "<socket not found>";
+      return "<Connection  not found>";
     }
     socket->dumpQueuedMessages(&counts);
   } else {
@@ -1634,8 +1631,8 @@ void Sender::closeSlowSockets() {
     RATELIMIT_WARNING(
         std::chrono::seconds(10),
         10,
-        "Sender closed %lu sockets of which %lu had slow network , "
-        "Found %lu socket with slow receiver",
+        "Sender closed %lu Connection s of which %lu had slow network , "
+        "Found %lu Connection  with slow receiver",
         sockets_closed,
         reason_net_slow,
         reason_recv_slow);

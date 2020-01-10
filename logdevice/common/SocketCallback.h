@@ -18,9 +18,9 @@ class Socket;
 
 /**
  * @file SocketCallback is a pure virtual parent of all callback classes
- *       instances of which can be registered with Sockets. A callback object
- *       is an element of an intrusive list of callbacks maintained by a
- *       Socket. A SocketCallback instance can be on not more than one such
+ *       instances of which can be registered with Connections. A callback
+ * object is an element of an intrusive list of callbacks maintained by a
+ *       Connection. A SocketCallback instance can be on not more than one such
  *       list at a time. An attempt to insert a SocketCallback that's already
  *       on some callback list triggers an assert.
  */
@@ -28,13 +28,13 @@ class Socket;
 class SocketCallback {
  public:
   /**
-   * Called by Socket when an event for which this callback is registered
+   * Called by Connection when an event for which this callback is registered
    * occurs. Currently callbacks can be only registered to be called when
    * the socket is closed.
    *
    * @param st    status code associated with the state transition (e.g.,
-   *              why the Socket was closed)
-   * @param name  LD-level identifier of Socket object
+   *              why the Connection was closed)
+   * @param name  LD-level identifier of Connection object
    */
   virtual void operator()(Status st, const Address& name) = 0;
 
@@ -46,17 +46,18 @@ class SocketCallback {
 
   /**
    * @return true iff this SocketCallback is currently on a callback list
-   *              of some Socket and will be called when the event of interest
-   *              occurs on the Socket (such as the Socket is closed).
+   *              of some Connection and will be called when the event of
+   *              interest occurs on the Connection (such as the tcp socket is
+   *              closed).
    */
   bool active() const {
     return listHook_.is_linked();
   }
 
   /**
-   * If this SocketCallback is on a callback list of a Socket, removes
+   * If this SocketCallback is on a callback list of a Connection, removes
    * it from the list (makes inactive). Otherwise does nothing. A
-   * callback can only be registered with a Socket if it is inactive.
+   * callback can only be registered with a Connection if it is inactive.
    */
   void deactivate() {
     if (listHook_.is_linked())
@@ -68,7 +69,7 @@ class SocketCallback {
   }
 
   folly::IntrusiveListHook listHook_; // links this SocketCallback in a
-                                      // list of callbacks off a Socket
+                                      // list of callbacks off a Connection
                                       // This is an auto-unlink hook.
 };
 

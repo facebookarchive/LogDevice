@@ -203,18 +203,18 @@ class FlowGroup {
     ld_check(s <= NodeLocationScope::ROOT);
     scope_ = s;
     // The FlowGroups for NODE and ROOT scopes are automatically
-    // configured. The configuration of ROOT guarantees that all Sockets
+    // configured. The configuration of ROOT guarantees that all Connections
     // can be assigned to a configured FlowGroup even when no FlowGroups
     // are explicitly defined in the configuration. The configuration
     // of NODE is for convenience since very few configurations will need
     // to restrict traffic where source and destination are the same node.
     //
     // Note: configured_ and enabled_ mean different things. A
-    //       configured_ FlowGroup accepts the Socket assignments. An
+    //       configured_ FlowGroup accepts the Connection assignments. An
     //       enabled_ FlowGroup wll apply its configured traffic
     //       shaping restrictions.  Both configured_ and enabled_
     //       default to off. This means the actions here will result
-    //       in a default configuration with Sockets assigned to either
+    //       in a default configuration with Connection assigned to either
     //       the NODE or ROOT FlowGroup, both of which will pass traffic
     //       unconditionally.
     if (scope_ == NodeLocationScope::NODE ||

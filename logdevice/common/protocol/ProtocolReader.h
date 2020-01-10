@@ -36,8 +36,8 @@ namespace facebook { namespace logdevice {
  *
  * If ProtocolReader encounters an error (such as running out of bytes in the
  * input evbuffer), it moves into an error state which makes subsequent read()
- * calls no-ops.  The error is reported to the socket later, when result*() is
- * called.
+ * calls no-ops.  The error is reported to the Connection later, when result*()
+ * is called.
  *
  * Note that the error-swallowing/deferring comes with caveats.  For example,
  * after read(&x), `x' may not contain a valid value (if an error was
@@ -271,7 +271,7 @@ class ProtocolReader {
 
   /**
    * Gate all subsequent read*() calls to protocol `proto' or newer.  If the
-   * socket protocol is older, subsequent read*() calls will be no-ops, with
+   * Connection protocol is older, subsequent read*() calls will be no-ops, with
    * zero side effects.
    */
   void protoGate(uint16_t proto) {
@@ -302,7 +302,7 @@ class ProtocolReader {
   }
 
   /**
-   * Creates a MessageReadResult for the socket layer.
+   * Creates a MessageReadResult for the Connection layer.
    *
    * If the reader has not encountered an error, invokes the given callback to
    * create a Message subclass.  The callback must return a Message*,
@@ -310,7 +310,7 @@ class ProtocolReader {
    * std::unique_ptr<DerivedMessage>.
    *
    * If there was an error during message reading, the callback is not
-   * invoked and the error is propagated to the socket layer through `err'.
+   * invoked and the error is propagated to the Connection layer through `err'.
    * Possible errors:
    *      BADMSG    message is too small (ran out of bytes on the wire)
    *      INTERNAL  `src' had fewer than `to_read' bytes available (see ctor)
@@ -440,7 +440,7 @@ class ProtocolReader {
   // Points to either context_owned_ or to an unowned string.
   const char* context_;
 
-  // Socket protocol
+  // Connection protocol
   folly::Optional<uint16_t> proto_;
 
   size_t src_left_;

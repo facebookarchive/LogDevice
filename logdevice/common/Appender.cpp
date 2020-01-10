@@ -256,7 +256,7 @@ int Appender::sendSTORE(const StoreChainLink copyset[],
         // to wait for a while before retrying
         return -1;
       } else {
-        // reached per-Socket output buffer space limit. It's ok for the
+        // reached per-Connection output buffer space limit. It's ok for the
         // caller to send a copy immediately to a different socket.
         return 0;
       }

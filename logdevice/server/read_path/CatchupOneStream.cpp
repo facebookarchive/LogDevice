@@ -416,9 +416,9 @@ int ReadingCallback::processRecord(
     // the success case we obviously need to update the read stream state.  As
     // for the failure case (RECORD message gets dropped), the messaging layer
     // guarantees this only happens when there is miscommunication or the
-    // client disconnects, and the Socket is getting closed.  Since the
-    // ClientID is tied to the Socket, it means the read stream will also get
-    // destroyed and it doesn't matter what we do.
+    // client disconnects, and the Connection is getting closed.  Since the
+    // ClientID is tied to the Connection, it means the read stream will also
+    // get destroyed and it doesn't matter what we do.
 
     ld_check(!stream_->storage_task_in_flight_);
     stream_->last_delivered_lsn_ = lsn;

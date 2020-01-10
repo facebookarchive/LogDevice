@@ -591,7 +591,7 @@ LogsConfigManagerReply::sendChunks(Worker* w) {
 
     if (rv != 0) {
       if (err == E::NOBUFS) {
-        ld_debug("Socket buffer full");
+        ld_debug("Connection buffer full");
 
         // we should continue later
         return sent == 0 ? LogsConfigManagerReply::SendResult::SENT_NONE

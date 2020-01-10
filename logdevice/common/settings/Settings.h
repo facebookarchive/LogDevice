@@ -181,34 +181,35 @@ struct Settings : public SettingsBundle {
   // setsockopt(TCP_NODELAY).
   bool nagle;
 
-  // Set outbuf_overflow_ limit of new Socket objects to this number of
-  // KILOBYTES. See Socket.h.
+  // Set outbuf_overflow_ limit of new Connection objects to this number of
+  // KILOBYTES. See Connection.h.
   size_t outbuf_overflow_kb;
 
-  // If the socket does not drain message for this long then it is closed.
+  // If the Connection does not drain message for this long then it is closed.
   // socket-health-check-period needs to be always less than or equal to this
   // value.
   std::chrono::milliseconds max_time_to_allow_socket_drain;
 
-  // A socket is considered idle if number of bytes pending in sendq is below
-  // or equal to this threshold. This is used to find active socket and select
-  // them for health check. Check socket-health-check-period for more details.
+  // A Connection is considered idle if number of bytes pending in sendq is
+  // below or equal to this threshold. This is used to find active Connection
+  // and select them for health check. Check socket-health-check-period for more
+  // details.
   size_t socket_idle_threshold;
 
-  // A socket is considered active if it had bytes pending in the socket above
-  // socket-idle-threshold for greater than min-socket-idle-threshold-percent of
-  // socket-health-check-period.
+  // A Connection is considered active if it had bytes pending in the Connection
+  // above socket-idle-threshold for greater than
+  // min-socket-idle-threshold-percent of socket-health-check-period.
   size_t min_socket_idle_threshold_percent;
 
   // Check socket_check_period for details.
   size_t min_bytes_to_drain_per_second;
 
-  // Socket health check period.
+  // Connection health check period.
   std::chrono::milliseconds socket_health_check_period;
 
-  // This setting is used to express limit on the number of socket closed per
-  // socket per socket-health-check-period because their throughput dropped
-  // below expected value.
+  // This setting is used to express limit on the number of connections closed
+  // per socket-health-check-period because their throughput dropped below
+  // expected value.
   size_t rate_limit_socket_closed;
 
   // How many kilobytes of RECORD messages the delivery code tries to push
@@ -391,7 +392,7 @@ struct Settings : public SettingsBundle {
   chrono_expbackoff_t<std::chrono::milliseconds> store_timeout;
 
   // Timeout after it which two nodes retry to connect when they loose a
-  // a connection. Backoff for throttling socket re-connection attempts.
+  // a connection. Backoff for throttling Connection reinitiation attempts.
   chrono_expbackoff_t<std::chrono::milliseconds> connect_throttle;
 
   // If set, sequencer will never attempt to send STORE messages through a
@@ -459,7 +460,7 @@ struct Settings : public SettingsBundle {
   // handshake to be completed before giving up. Unlimited if set to 0.
   std::chrono::milliseconds handshake_timeout;
 
-  // Message read from socket and push into worker task queue for further
+  // Message read from tcp socket and push into worker task queue for further
   // processing. Setting this true all messages would be processed
   // as soon as they are deserialized.
   bool inline_message_execution;
@@ -580,7 +581,7 @@ struct Settings : public SettingsBundle {
   // This value captures number of iterations that are countdown before
   // initiating force abort. This is counted twice first before starting force
   // abort of pending requests. Once pending requests go down to zero this is
-  // counted down again before force closing all sockets. Currently this is
+  // counted down again before force closing all Connections. Currently this is
   // approximately 20seconds of wait before starting force abort.
   uint64_t time_delay_before_force_abort;
 
@@ -1430,7 +1431,7 @@ struct Settings : public SettingsBundle {
   bool outbufs_limit_per_peer_type_enabled;
 
   // If the sender's global outbufs limit is reached , allow a minimum budget of
-  //  outbuf_min_kb per socket.
+  //  outbuf_min_kb per Connection.
   size_t outbuf_socket_min_kb;
 
   std::vector<node_index_t> logsconfig_api_blacklist_nodes;

@@ -34,7 +34,7 @@ Request::Execution NewConnectionRequest::execute() {
   } else {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,
-                    "Failed to create a logdevice::Socket for a new client "
+                    "Failed to create a logdevice::Connection for a new client "
                     "connection from %s on worker #%d: %s",
                     client_addr_.toString().c_str(),
                     int(w->idx_),

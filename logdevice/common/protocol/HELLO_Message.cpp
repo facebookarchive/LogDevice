@@ -98,7 +98,7 @@ static bool isValidServerConnection(const NodeID& peer_nid,
                 "HELLO_Message from %s",
                 Sender::describeConnection(from).c_str());
     // This should never happen as we are calling getSockAddr of the
-    // calling socket object.
+    // calling Connection object.
     ld_check(false);
     return false;
   }
@@ -106,7 +106,7 @@ static bool isValidServerConnection(const NodeID& peer_nid,
   // Only do IP authentication for real IP addresses
   if (!peer_svc->address.isUnixAddress() && !conn_addr.isUnixAddress()) {
     // If the IP addresses of the sender matches the IP address of the
-    // peer_node_id_ in the socket, then we can be reasonably assured that
+    // peer_node_id_ in the Connection, then we can be reasonably assured that
     // the connection is from that server node.
     if (peer_svc->address.getAddress() == conn_addr.getAddress() ||
         (peer_svc->ssl_address &&
@@ -121,7 +121,7 @@ static bool isValidServerConnection(const NodeID& peer_nid,
 /**
  * Gets the authentication data for the connection and verifies that the
  * connection is allowed. If the connection is permitted a principal will
- * be assigned to the calling Socket Object. If it is not, the status
+ * be assigned to the calling Connection Object. If it is not, the status
  * in the ackhdr will be set to E::ACCESS or E::INTERNAL.
  *
  * @param hellohdr      Header of the HELLO/HELLO message.
@@ -161,7 +161,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
 
     // If enable_server_ip_authentication is set, we ignore the credentials
     // that were provided by servers. Connections are identified as server
-    // nodes if the peer_node_id_ is set in the calling socket object, and
+    // nodes if the peer_node_id_ is set in the calling Connection object, and
     // the IP address of the connection matches the IP address of that node
     // in the configuration file.
     if (Worker::getConfig()->serverConfig()->authenticateServersByIP()) {
@@ -247,7 +247,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
                   "received from %s",
                   Sender::describeConnection(from).c_str());
       // This should never happen. We are invoking onReceived and thus
-      // this function from the Socket that needs its principal set.
+      // this function from the Connection that needs its principal set.
       ld_check(false);
       ackhdr.status = E::INTERNAL;
     }

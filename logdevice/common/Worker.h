@@ -103,9 +103,9 @@ namespace facebook { namespace logdevice {
 
 /**
  * @file A Worker executes LogDevice requests, keeps track of active Request
- *       objects, and manages a collection of Sockets. All LogDevice requests
- *       are executed on Executor threads. Worker objects directly receive and
- *       execute requests from client threads, the listener thread, and the
+ *       objects, and manages a collection of Connections. All LogDevice
+ * requests are executed on Executor threads. Worker objects directly receive
+ * and execute requests from client threads, the listener thread, and the
  *       command port thread. These other threads use Processor object to
  *       pass the requests to a Worker.
  */
@@ -191,7 +191,7 @@ class Worker : public WorkContext {
    *
    * @param processor         processor that created this Worker, required.
    * @param idx               see .idx_
-   * @param config            cluster configuration that Sockets and other
+   * @param config            cluster configuration that Connections and other
    *                          objects running on this Worker thread will use
    *
    * @throws ConstructorFailed on error, sets err to
@@ -364,7 +364,7 @@ class Worker : public WorkContext {
 
   const std::shared_ptr<TraceLogger> getTraceLogger() const;
 
-  // Socket close callbacks for each storage node used by PeriodicReleases.
+  // Connection close callbacks for each storage node used by PeriodicReleases.
   // These are used to invalidate last released lsn to a storage node
   // when the connection b/w sequencer and storage node breaks.
   std::vector<std::unique_ptr<SocketCallback>>
@@ -379,9 +379,9 @@ class Worker : public WorkContext {
   // pool this worker lives.
   const WorkerType worker_type_{WorkerType::GENERAL};
 
-  // MessageDispatch instance which the Socket layer uses to dispatch message
-  // events.  Subclasses of Worker can override createMessageDispatch() to
-  // make this a MessageDispatch subclass.  Intentionally here to outlive
+  // MessageDispatch instance which the Connection layer uses to dispatch
+  // message events.  Subclasses of Worker can override createMessageDispatch()
+  // to make this a MessageDispatch subclass.  Intentionally here to outlive
   // `impl_' (Sender, importantly).
   std::unique_ptr<MessageDispatch> message_dispatch_;
 
@@ -406,7 +406,7 @@ class Worker : public WorkContext {
   std::unique_ptr<WorkerImpl> impl_;
 
   // An interface for sending Messages on this Worker. This object owns all
-  // Sockets on this Worker.
+  // Connections on this Worker.
   Sender& sender() const;
 
   // a map of all currently running LogRebuildings.
@@ -618,8 +618,8 @@ class Worker : public WorkContext {
   void forceAbortPendingWork();
 
   /**
-   * This method closes all the sockets during shutdown if the sockets don't
-   * drain in given time.
+   * This method closes all the Connections during shutdown if connections did
+   * not drain in given time.
    */
   void forceCloseSockets();
 
@@ -855,7 +855,7 @@ class Worker : public WorkContext {
   // Storage for getTimeoutCommon().
   mutable struct timeval get_common_tv_buf_;
 
-  // Methods of Sockets and other objects managed by this Worker check
+  // Connection member functions and other objects managed by this Worker check
   // this to see if they are executing in a Worker destructor where
   // some members of Worker may have already been destroyed.
   bool shutting_down_;
@@ -879,12 +879,13 @@ class Worker : public WorkContext {
   // down work forcefully.
   size_t force_abort_pending_requests_counter_{0};
 
-  // Close open sockets. This is a derived timer based on requests_pending_timer
-  // to close sockets if they don't drain in given time. The shutdown code
-  // starts flush on all sockets. If the sockets are taking too long to drain,
-  // instead of allowing them to continue forever, close the sockets right away.
-  // This is initialized once we start waiting for sockets to close.
-  size_t force_close_sockets_counter_{0};
+  // Close open connections. This is a derived timer based on
+  // requests_pending_timer to close connections if they don't drain in given
+  // time. The shutdown code initiates flush on all connections. If the
+  // connections are taking too long to drain, instead of allowing them to
+  // continue forever, idea is to force close the connections. This is
+  // initialized once we start waiting for connection to close.
+  size_t force_close_conns_counter_{0};
 
   // timer that checks stuck requests and update counter if there are some
   // stuck requests

@@ -12,7 +12,7 @@
 #define STAT_DEFINE(...)
 #endif
 
-// Sender was able to release a registered message to the Socket without
+// Sender was able to release a registered message to the Connection without
 // any traffic shaping induced delay.
 STAT_DEFINE(direct_dispatched, SUM)
 // Sender was unable to direct dispatch a registered message. It will

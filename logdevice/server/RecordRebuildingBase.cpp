@@ -418,7 +418,7 @@ void RecordRebuildingBase::onDeferredStoreCancelled(
                    shard.toString().c_str(),
                    error_name(st));
 
-    // The socket for this recipient has been closed. Since this stage
+    // The Connection for this recipient has been closed. Since this stage
     // cannot succeed, schedule a retry.
     activateRetryTimer();
   } else if (deferredStores_ == 0) {
@@ -627,12 +627,12 @@ void RecordRebuildingBase::onConnectionClosed(ShardID shard) {
   ld_check(!r->succeeded);
   ld_check(!r->on_socket_close.active()); // we're inside this callback
 
-  RATELIMIT_INFO(
-      std::chrono::seconds(10),
-      2,
-      "Socket to %s closed after we sent a STORE to it. Will try to reconnect "
-      "after a timeout.",
-      shard.toString().c_str());
+  RATELIMIT_INFO(std::chrono::seconds(10),
+                 2,
+                 "Connection to %s closed after we sent a STORE to it. Will "
+                 "try to reconnect "
+                 "after a timeout.",
+                 shard.toString().c_str());
   activateRetryTimer();
 }
 

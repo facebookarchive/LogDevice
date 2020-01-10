@@ -106,7 +106,7 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
    * START message, to set up a new read stream or update an existing one.
    *
    * If running on a worker thread, this method will register a SocketCallback
-   * on the client's Socket to notify us if the client disconnects, and will
+   * on the client's Connection to notify us if the client disconnects, and will
    * initialize the iterator cache.
    *
    * @return On success, returns an STL-map-like pair with a pointer to the
@@ -495,8 +495,8 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
 
   /**
    * For every Client that we see, we register a callback on the client's
-   * Socket so that we get notified when the client disconnects and can free
-   * resources.
+   * Connection, so that we get notified when the client disconnects and can
+   * free resources.
    */
   struct ClientDisconnectedCallback : public SocketCallback {
     void operator()(Status st, const Address& name) override;

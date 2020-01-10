@@ -670,7 +670,7 @@ void Worker::finishWorkAndCloseSockets() {
     sender().beginShutdown();
     waiting_for_sockets_to_close_ = true;
     // Initialize timer to force close sockets.
-    force_close_sockets_counter_ = settings().time_delay_before_force_abort;
+    force_close_conns_counter_ = settings().time_delay_before_force_abort;
   }
 
   if (requestsPending() == 0 && sender().isClosed()) {
@@ -698,9 +698,9 @@ void Worker::finishWorkAndCloseSockets() {
           }
         }
 
-        if (force_close_sockets_counter_ > 0) {
-          --force_close_sockets_counter_;
-          if (force_close_sockets_counter_ == 0) {
+        if (force_close_conns_counter_ > 0) {
+          --force_close_conns_counter_;
+          if (force_close_conns_counter_ == 0) {
             forceCloseSockets();
           }
         }

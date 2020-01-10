@@ -86,7 +86,7 @@ class RecoveryNode {
    * This function must be called only if this RecoveryNode is in
    * state DIGESTING or CLEANING. Moreover, it must have sent a START
    * (or CLEAN respectively) to nid_ and must be waiting for a
-   * reply. The Socket to nid_ must still be connected.
+   * reply. The Connection to nid_ must still be valid.
    *
    * The function activates the resend_ timer. Upon expiration the
    * timer will try to resend the START or CLEAN, depending on the
@@ -166,11 +166,11 @@ class RecoveryNode {
   void changeState(State to);
 
   /**
-   * Called by socket_callback_ when the Socket to the node represented by
+   * Called by socket_callback_ when the Connection to the node represented by
    * this RecoveryNode object closes and.
    *
    * @param reason   reason for disconnection, this is the value passed to
-   *                 Socket::close(). See Socket.h.
+   *                 Connection::close(). See Connection.h.
    */
   void onDisconnect(Status reason);
 
@@ -224,7 +224,7 @@ class RecoveryNode {
     RecoveryNode* owner_;
   };
 
-  // calls onDisconnect() when a Socket to nid_ into which we have
+  // calls onDisconnect() when a Connection to nid_ into which we have
   // successfully sent a START or CLEAN closes.
   RecoverySocketCallback socket_callback_;
 

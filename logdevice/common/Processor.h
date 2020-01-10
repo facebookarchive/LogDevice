@@ -91,7 +91,7 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * @param sequencer_locator           used on clients and storage nodes to
    *                                    map from log ids to sequencer nodes
    * @param credentials                 an optional field used in the initial
-   *                                    handshake of a Socket connection. Used
+   *                                    handshake of a Connection. Used
    *                                    only when the configuration file has set
    *                                    authentication_type to be
    *                                    "self_identification"

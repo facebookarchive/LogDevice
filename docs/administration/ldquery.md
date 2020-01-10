@@ -677,26 +677,26 @@ Show information about all shards in a cluster.
 | default\_cf\_version | long | Returns current version of the data.  if LogsDB is  enabled, this will return the version of the default column familiy. |
 
 ## sockets
-Tracks all sockets on all nodes in the cluster.
+Tracks all Connections on all nodes in the cluster.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
 | node\_id | int | Node ID this row is for. |
-| state | string | State of the socket.   I: The socket is Inactive;   C: The socket is connecting;   H: The socket is doing the handshake at the LD protocol level;   A: The socket is active. |
-| name | string | Name of the socket. If the other end is a client, the format is similar to the column "client" of the table "catchup\_queues" and the column "client" of the table "readers". If the other end is another node in the cluster, describes that's node's id and ip. |
-| pending\_kb | real | Number of bytes that are available for writing on the socket's output evbuffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writing them. |
-| available\_kb | real | Number of bytes that are available for reading on the socket's input evbuffer.  If this value is high this usually means that the other end is writing faster than this node is able to read. |
-| read\_mb | real | Number of bytes that were read from the socket. |
-| write\_mb | real | Number of bytes that were written to the socket. |
-| read\_cnt | int | Number of messages that were read from the socket. |
-| write\_cnt | int | Number of messages that were written to the socket. |
-| bytes\_per\_second | real | Socket throughput in the last health check period. |
-| rwnd\_limited\_pct | real | Portion of last health check period, when socket throughput was limited by receiver. |
-| sndbuf\_limited\_pct | real | Protion of last health check peiod, when socket throughput was limited by send buffer. |
-| proto | int | Protocol that was handshaken. Do not trust this value if the socket's state is not active. |
+| state | string | State of the Connection.   I: The connection is Inactive;   C: The connection is connecting;   H: The connection is doing the handshake at the LD protocol level;   A: The connection is active. |
+| name | string | Name of the Connection. If the other end is a client, the format is similar to the column "client" of the table "catchup\_queues" and the column "client" of the table "readers". If the other end is another node in the cluster, describes that's node's id and ip. |
+| pending\_kb | real | Number of bytes that are available for writing on the Connection's output buffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writing them. |
+| available\_kb | real | Number of bytes that are available for reading on the Connection's input buffer.  If this value is high this usually means that the other end is writing faster than this node is able to read. |
+| read\_mb | real | Number of bytes that were read from the Connection. |
+| write\_mb | real | Number of bytes that were written to the Connection. |
+| read\_cnt | int | Number of messages that were read from the Connection. |
+| write\_cnt | int | Number of messages that were written to the Connection. |
+| bytes\_per\_second | real | Connection throughput in the last health check period. |
+| rwnd\_limited\_pct | real | Portion of last health check period, when Connection throughput was limited by receiver. |
+| sndbuf\_limited\_pct | real | Portion of last health check peiod, when Connection throughput was limited by send buffer. |
+| proto | int | Protocol that was handshaken. Do not trust this value if the Connection's state is not active. |
 | sendbuf | int | Size of the send buffer of the underlying TCP socket. |
 | peer\_config\_version | int | Last config version that the peer advertised |
-| is\_ssl | int | Set to true if this socket uses SSL. |
+| is\_ssl | int | Set to true if this Connection uses SSL. |
 | fd | int | The file descriptor of the underlying os socket. |
 
 ## stats

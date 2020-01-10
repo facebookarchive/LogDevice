@@ -32,7 +32,7 @@ namespace facebook { namespace logdevice {
  *
  * If ProtocolWriter encounters an internal error, it moves into an error
  * state which makes subsequent write() calls no-ops.  The error is reported
- * to the socket later, when result*() is called.
+ * to the Connection later, when result*() is called.
  */
 
 class ProtocolWriter {
@@ -126,7 +126,7 @@ class ProtocolWriter {
   }
 
   /**
-   * Writes the specified range into the socket.
+   * Writes the specified range into the Connection.
    *
    * No-op if the writer has previously encountered an error.
    */
@@ -192,7 +192,7 @@ class ProtocolWriter {
 
   /**
    * Gate all subsequent write*() calls to protocol `proto' or newer.  If the
-   * socket protocol is older, subsequent write*() calls will be no-ops.
+   * Connection protocol is older, subsequent write*() calls will be no-ops.
    */
   void protoGate(uint16_t proto) {
     // It would be very strange to allow a lower protocol after previously
@@ -303,7 +303,7 @@ class ProtocolWriter {
   const char* context_;
 
   size_t nwritten_ = 0;
-  // Socket protocol
+  // Connection protocol
   folly::Optional<uint16_t> proto_;
   // Protocol gate; write calls are ignored if `proto_' < `proto_gate_'
   uint16_t proto_gate_ = 0;

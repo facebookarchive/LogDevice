@@ -167,7 +167,7 @@ class ShapingContainer {
   //       be run. For this reason, the flow_meters_mutex_ does not
   //       need to be held during operations that remove elements from
   //       a FlowGroup's priority queue. Operations such as trim or
-  //       the cleanup of queued messages when a Socket is closed take
+  //       the cleanup of queued messages when a Connection is closed take
   //       advantage of this property to avoid having to reach up into
   //       the Sender to acquire this lock which, in many error paths,
   //       is already held.

@@ -169,11 +169,12 @@ void OverloadDetector::updateSampleFor(node_index_t nid) {
   auto rcvd_bytes = deps_->getNumBytesReceived(nid);
   if (occupancy >= 0 && capacity > 0) {
     if (100 * occupancy >= capacity * deps_->getOverloadThreshold()) {
-      ld_spew("Socket for nid %u has recv-q with %ld bytes unread and capacity "
-              "of %lu bytes.",
-              nid,
-              occupancy,
-              capacity);
+      ld_spew(
+          "Connection for nid %u has recv-q with %ld bytes unread and capacity "
+          "of %lu bytes.",
+          nid,
+          occupancy,
+          capacity);
     }
     if (capacity < occupancy) {
       occupancy = capacity;

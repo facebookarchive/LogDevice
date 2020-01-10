@@ -33,10 +33,10 @@ class Principal {
   // Used to assign default permissions to a resource
   static constexpr const char* DEFAULT = "default";
 
-  // Assigned to Socket connections that did not provide any authentication data
+  // Assigned to Connections that did not provide any authentication data
   static constexpr const char* UNAUTHENTICATED = "unauthenticated";
 
-  // Assigned to Socket connections that provide any authentication data
+  // Assigned to Connections that provide any authentication data
   static constexpr const char* AUTHENTICATED = "authenticated";
 
   // Assigned to internal cluster nodes

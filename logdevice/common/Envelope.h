@@ -24,12 +24,12 @@ namespace facebook { namespace logdevice {
 
 /**
  * An Envelope is a control block that manages sending a Message via a
- * Socket for delivery to a LogDevice node or to a client. It is created
- * and owned by the Socket, but is also known to the Socket's associated
+ * Connection for delivery to a LogDevice node or to a client. It is created
+ * and owned by the Connection, but is also known to the Connection's associated
  * FlowGroup (within the Sender) until the Envelope is released for
  * transmission after any delay imposed by traffic shaping.
  *
- * An Envelope cannot be shared among several Sockets, and the Socket is
+ * An Envelope cannot be shared among several Connections, and the Connection is
  * responsible for deleting it. However, since the Envelope is known to
  * the FlowGroup before the Envelope is released, any Envelope waiting for
  * release must be removed from the FlowGroup before the Envelope is
@@ -50,7 +50,7 @@ class Envelope : public BWAvailableCallback {
         birth_time_(std::chrono::steady_clock::now()),
         cost_(msg_->size()) {}
 
-  // Used to track an Envelope on various queued in the Socket as
+  // Used to track an Envelope on various queued in the Connection as
   // an Envelope is transmitted.
   folly::IntrusiveListHook links_;
 
@@ -112,9 +112,9 @@ class Envelope : public BWAvailableCallback {
   std::chrono::steady_clock::time_point enq_time_;
 
   // offset of the first byte after this Envelope's Message in the logical
-  // stream of bytes written into the output evbuffer of the Socket whose send
+  // stream of bytes written into the output buffer of the Connection whose send
   // queue this Envelope is on. That's the logical byte stream counted from
-  // the time the Socket was created.
+  // the time the Connection was created.
   message_pos_t drain_pos_;
 
   // When this envelope was created.

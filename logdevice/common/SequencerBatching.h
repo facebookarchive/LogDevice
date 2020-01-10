@@ -203,7 +203,7 @@ class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
     std::atomic<int> owner_worker;
     ClientID reply_to;
     // Socket proxy instance which ensures that clientID does not get reused
-    // even if the socket closes.
+    // even if the connection closes.
     std::unique_ptr<SocketProxy> socket_proxy;
     logid_t log_id;
     request_id_t append_request_id;

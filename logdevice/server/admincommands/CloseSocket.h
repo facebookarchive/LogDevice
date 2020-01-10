@@ -122,7 +122,7 @@ class CloseSocket : public AdminCommand {
           server_->getProcessor(), worker_id_.val_, worker_type_, cb);
     }
 
-    out_.printf("closed %d sockets\r\n", count);
+    out_.printf("closed %d Connections\r\n", count);
   }
 };
 
