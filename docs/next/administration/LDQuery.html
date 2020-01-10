@@ -843,28 +843,28 @@
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="sockets"></a><a href="#sockets" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>sockets</h2>
-<p>Tracks all sockets on all nodes in the cluster.</p>
+<p>Tracks all Connections on all nodes in the cluster.</p>
 <table>
 <thead>
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
 <tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
-<tr><td>state</td><td style="text-align:center">string</td><td>State of the socket.   I: The socket is Inactive;   C: The socket is connecting;   H: The socket is doing the handshake at the LD protocol level;   A: The socket is active.</td></tr>
-<tr><td>name</td><td style="text-align:center">string</td><td>Name of the socket. If the other end is a client, the format is similar to the column &quot;client&quot; of the table &quot;catchup_queues&quot; and the column &quot;client&quot; of the table &quot;readers&quot;. If the other end is another node in the cluster, describes that's node's id and ip.</td></tr>
-<tr><td>pending_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for writing on the socket's output evbuffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writing them.</td></tr>
-<tr><td>available_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for reading on the socket's input evbuffer.  If this value is high this usually means that the other end is writing faster than this node is able to read.</td></tr>
-<tr><td>read_mb</td><td style="text-align:center">real</td><td>Number of bytes that were read from the socket.</td></tr>
-<tr><td>write_mb</td><td style="text-align:center">real</td><td>Number of bytes that were written to the socket.</td></tr>
-<tr><td>read_cnt</td><td style="text-align:center">int</td><td>Number of messages that were read from the socket.</td></tr>
-<tr><td>write_cnt</td><td style="text-align:center">int</td><td>Number of messages that were written to the socket.</td></tr>
-<tr><td>bytes_per_second</td><td style="text-align:center">real</td><td>Socket throughput in the last health check period.</td></tr>
-<tr><td>rwnd_limited_pct</td><td style="text-align:center">real</td><td>Portion of last health check period, when socket throughput was limited by receiver.</td></tr>
-<tr><td>sndbuf_limited_pct</td><td style="text-align:center">real</td><td>Protion of last health check peiod, when socket throughput was limited by send buffer.</td></tr>
-<tr><td>proto</td><td style="text-align:center">int</td><td>Protocol that was handshaken. Do not trust this value if the socket's state is not active.</td></tr>
+<tr><td>state</td><td style="text-align:center">string</td><td>State of the Connection.   I: The connection is Inactive;   C: The connection is connecting;   H: The connection is doing the handshake at the LD protocol level;   A: The connection is active.</td></tr>
+<tr><td>name</td><td style="text-align:center">string</td><td>Name of the Connection. If the other end is a client, the format is similar to the column &quot;client&quot; of the table &quot;catchup_queues&quot; and the column &quot;client&quot; of the table &quot;readers&quot;. If the other end is another node in the cluster, describes that's node's id and ip.</td></tr>
+<tr><td>pending_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for writing on the Connection's output buffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writing them.</td></tr>
+<tr><td>available_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for reading on the Connection's input buffer.  If this value is high this usually means that the other end is writing faster than this node is able to read.</td></tr>
+<tr><td>read_mb</td><td style="text-align:center">real</td><td>Number of bytes that were read from the Connection.</td></tr>
+<tr><td>write_mb</td><td style="text-align:center">real</td><td>Number of bytes that were written to the Connection.</td></tr>
+<tr><td>read_cnt</td><td style="text-align:center">int</td><td>Number of messages that were read from the Connection.</td></tr>
+<tr><td>write_cnt</td><td style="text-align:center">int</td><td>Number of messages that were written to the Connection.</td></tr>
+<tr><td>bytes_per_second</td><td style="text-align:center">real</td><td>Connection throughput in the last health check period.</td></tr>
+<tr><td>rwnd_limited_pct</td><td style="text-align:center">real</td><td>Portion of last health check period, when Connection throughput was limited by receiver.</td></tr>
+<tr><td>sndbuf_limited_pct</td><td style="text-align:center">real</td><td>Portion of last health check peiod, when Connection throughput was limited by send buffer.</td></tr>
+<tr><td>proto</td><td style="text-align:center">int</td><td>Protocol that was handshaken. Do not trust this value if the Connection's state is not active.</td></tr>
 <tr><td>sendbuf</td><td style="text-align:center">int</td><td>Size of the send buffer of the underlying TCP socket.</td></tr>
 <tr><td>peer_config_version</td><td style="text-align:center">int</td><td>Last config version that the peer advertised</td></tr>
-<tr><td>is_ssl</td><td style="text-align:center">int</td><td>Set to true if this socket uses SSL.</td></tr>
+<tr><td>is_ssl</td><td style="text-align:center">int</td><td>Set to true if this Connection uses SSL.</td></tr>
 <tr><td>fd</td><td style="text-align:center">int</td><td>The file descriptor of the underlying os socket.</td></tr>
 </tbody>
 </table>
