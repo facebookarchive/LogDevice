@@ -78,6 +78,8 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
     sample->addNormalValue(
         "read_stream_id",
         std::to_string(owner_->deps_->getReadStreamID().val()));
+    sample->addIntValue(
+        "read_stream_pointer", reinterpret_cast<intptr_t>(owner_));
     sample->addNormalValue("csid", owner_->deps_->getClientSessionID());
     sample->addNormalValue("from_lsn", lsn_to_string(owner_->start_lsn_));
     sample->addNormalValue("until_lsn", lsn_to_string(owner_->until_lsn_));
