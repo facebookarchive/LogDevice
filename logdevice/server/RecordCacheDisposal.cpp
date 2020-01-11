@@ -21,16 +21,16 @@
 
 namespace facebook { namespace logdevice {
 
-RecordCacheDisposal::RecordCacheDisposal(ServerProcessor* processor)
-    : processor_(processor) {
-  ld_check(processor_ != nullptr);
-}
+RecordCacheDisposal::RecordCacheDisposal(LogStorageStateMap* owner)
+    : owner_(owner) {}
 
 void RecordCacheDisposal::disposeOfCacheEntry(
     std::unique_ptr<EpochRecordCacheEntry> entry) {
   // Since we're going to enqueue the destruction on the disposal thread, this
   // method must be called while the event loop of that worker is still running.
-  ld_check(!processor_->isShuttingDown());
+  auto processor = owner_->getProcessor();
+  ld_check(processor);
+  ld_check(!processor->isShuttingDown());
 
   // If we don't do this here, but let the destructor do this instead, then in
   // the case where we're freeing a whole linked list, each element will only be
@@ -39,10 +39,10 @@ void RecordCacheDisposal::disposeOfCacheEntry(
   // for all of them.
   entry->next_.reset();
 
-  STAT_SUB(getStatsHolder(),
-           record_cache_bytes_cached_estimate,
-           entry->getBytesEstimate());
-  STAT_INCR(getStatsHolder(), record_cache_records_evicted);
+  auto stats = owner_->getStats();
+  STAT_SUB(
+      stats, record_cache_bytes_cached_estimate, entry->getBytesEstimate());
+  STAT_INCR(stats, record_cache_records_evicted);
 
   // Free the payload so that it can deallocated on the right thread.
   // Rest of the record is freed here.
@@ -53,7 +53,9 @@ void RecordCacheDisposal::onRecordsReleased(const EpochRecordCache& cache,
                                             lsn_t begin,
                                             lsn_t end,
                                             const ReleasedVector& entries) {
-  if (!processor_->settings()->real_time_reads_enabled) {
+  auto processor = owner_->getProcessor();
+  ld_check(processor);
+  if (!processor->settings()->real_time_reads_enabled) {
     return;
   }
 
@@ -66,13 +68,13 @@ void RecordCacheDisposal::onRecordsReleased(const EpochRecordCache& cache,
   size_t bytes_estimate =
       ReleasedRecords::computeBytesEstimate(entries_list.get());
 
-  LogStorageState& log_state = processor_->getLogStorageStateMap().get(
+  LogStorageState& log_state = processor->getLogStorageStateMap().get(
       cache.getLogId(), cache.getShardIndex());
 
-  processor_->applyToWorkerIdxs([&](worker_id_t index, WorkerType type) {
+  processor->applyToWorkerIdxs([&](worker_id_t index, WorkerType type) {
     if (log_state.isWorkerSubscribed(index)) {
       AllServerReadStreams& streams =
-          processor_->getWorker(index, type).serverReadStreams();
+          processor->getWorker(index, type).serverReadStreams();
       streams.appendReleasedRecords(std::make_unique<ReleasedRecords>(
           cache.getLogId(), begin, end, entries_list, bytes_estimate));
     }
@@ -83,8 +85,7 @@ folly::Optional<Seal> RecordCacheDisposal::getSeal(logid_t logid,
                                                    shard_index_t shard,
                                                    bool soft) const {
   // log storage state for logid must exist
-  LogStorageState& log_state =
-      processor_->getLogStorageStateMap().get(logid, shard);
+  LogStorageState& log_state = owner_->get(logid, shard);
   return log_state.getSeal(soft ? LogStorageState::SealType::SOFT
                                 : LogStorageState::SealType::NORMAL);
 }
@@ -93,7 +94,11 @@ int RecordCacheDisposal::getHighestInsertedLSN(logid_t log_id,
                                                shard_index_t shard,
                                                lsn_t* highest_lsn) const {
   ld_check(highest_lsn);
-  ShardedStorageThreadPool* spool = processor_->sharded_storage_thread_pool_;
+
+  auto processor = owner_->getProcessor();
+  ld_check(processor);
+
+  ShardedStorageThreadPool* spool = processor->sharded_storage_thread_pool_;
   ld_check(spool != nullptr);
   LocalLogStore& store = spool->getByIndex(shard).getLocalLogStore();
   return store.getHighestInsertedLSN(log_id, highest_lsn);
@@ -105,8 +110,10 @@ size_t RecordCacheDisposal::getEpochRecordCacheSize(logid_t logid) const {
     // (despite their sequencer sliding window size is 2)
     return 1;
   }
+  auto processor = owner_->getProcessor();
+  ld_check(processor);
 
-  auto config = processor_->config_->get();
+  auto config = processor->config_->get();
   const auto log = config->getLogGroupByIDShared(logid);
   if (log == nullptr) {
     // log does not exist in config, use default fallback value
@@ -126,17 +133,16 @@ bool RecordCacheDisposal::tailOptimized(logid_t logid) const {
     // metadata logs should be always be tail optimized
     return true;
   }
-  auto config = processor_->config_->get();
+  auto processor = owner_->getProcessor();
+  ld_check(processor);
+
+  auto config = processor->config_->get();
   const auto log = config->getLogGroupByIDShared(logid);
   if (log == nullptr) {
     return false;
   }
 
   return log->attrs().tailOptimized().value();
-}
-
-StatsHolder* RecordCacheDisposal::getStatsHolder() const {
-  return processor_->stats_;
 }
 
 }} // namespace facebook::logdevice

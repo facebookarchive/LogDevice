@@ -994,6 +994,7 @@ bool Server::initLogStorageStateMap() {
   log_storage_state_map_ = std::make_unique<LogStorageStateMap>(
       nshards,
       params_->getStats(),
+      params_->getProcessorSettings()->enable_record_cache,
       params_->getProcessorSettings()->log_state_recovery_interval);
 
   /*

@@ -145,7 +145,7 @@ void LogStorageStateMap::setProcessor(ServerProcessor* processor) {
   processor_ = processor;
 
   if (processor->settings()->enable_record_cache) {
-    cache_disposal_ = std::make_unique<RecordCacheDisposal>(processor);
+    ld_check(cache_disposal_ != nullptr);
     if (processor->runningOnStorageNode()) {
       // only starts the record cache monitor thread if record cache
       // is enabled

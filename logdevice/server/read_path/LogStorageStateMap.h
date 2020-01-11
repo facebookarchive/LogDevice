@@ -40,9 +40,12 @@ class LogStorageStateMap {
    */
   explicit LogStorageStateMap(shard_size_t num_shards,
                               StatsHolder* stats,
+                              bool enable_record_cache,
                               std::chrono::microseconds recovery_interval =
                                   std::chrono::microseconds(500000))
-      : cache_disposal_(nullptr),
+      : cache_disposal_(enable_record_cache
+                            ? std::make_unique<RecordCacheDisposal>(this)
+                            : nullptr),
         num_shards_(num_shards),
         processor_(nullptr),
         shard_map_(makeMap(num_shards)),

@@ -20,11 +20,11 @@
 
 namespace facebook { namespace logdevice {
 
-class ServerProcessor;
+class LogStorageStateMap;
 
 class RecordCacheDisposal : public RecordCacheDependencies {
  public:
-  explicit RecordCacheDisposal(ServerProcessor* processor);
+  explicit RecordCacheDisposal(LogStorageStateMap* owner);
 
   // see RecordCacheDependencies for docs of the following methods
   void
@@ -46,10 +46,8 @@ class RecordCacheDisposal : public RecordCacheDependencies {
 
   bool tailOptimized(logid_t logid) const override;
 
-  StatsHolder* getStatsHolder() const override;
-
  private:
-  ServerProcessor* const processor_;
+  LogStorageStateMap* const owner_;
 };
 
 }} // namespace facebook::logdevice

@@ -41,7 +41,7 @@ GetEpochRecoveryMetadataStorageTask create_task() {
 
 TEST(GetEpochRecoveryMetadataStorageTask, EmptyLogButUnclean) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
 
   auto task = create_task();
   EXPECT_EQ(E::NOTREADY, task.executeImpl(store, map));
@@ -50,7 +50,7 @@ TEST(GetEpochRecoveryMetadataStorageTask, EmptyLogButUnclean) {
 
 TEST(GetEpochRecoveryMetadataStorageTask, EmptyLogWhileClean) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   LogStorageState* log_state = map.insertOrGet(LOG_ID, 0);
 
   store.writeLogMetadata(
@@ -72,7 +72,7 @@ TEST(GetEpochRecoveryMetadataStorageTask, EmptyLogWhileClean) {
 
 TEST(GetEpochRecoveryMetadataStorageTask, RangeBelowTrimPoint) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   LogStorageState* log_state = map.insertOrGet(LOG_ID, 0);
   lsn_t trim_point = compose_lsn(epoch_t(50), ESN_INVALID);
   epoch_t lce = epoch_t(70);
@@ -89,7 +89,7 @@ TEST(GetEpochRecoveryMetadataStorageTask, RangeBelowTrimPoint) {
 
 TEST(GetEpochRecoveryMetadataStorageTask, RangeAbovLastCleanEpoch) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   store.writeLogMetadata(
       LOG_ID, LastCleanMetadata(epoch_t(2)), LocalLogStore::WriteOptions());
   auto task = create_task(LOG_ID, epoch_t(5), epoch_t(7));
@@ -99,7 +99,7 @@ TEST(GetEpochRecoveryMetadataStorageTask, RangeAbovLastCleanEpoch) {
 
 TEST(GetEpochRecoveryMetadataStorageTask, GetMetadata) {
   TemporaryRocksDBStore store;
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   LogStorageState* log_state = map.insertOrGet(LOG_ID, 0);
   lsn_t trim_point = compose_lsn(epoch_t(1), ESN_INVALID);
   epoch_t lce = epoch_t(10);

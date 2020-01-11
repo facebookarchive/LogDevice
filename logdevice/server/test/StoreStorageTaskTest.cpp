@@ -189,7 +189,7 @@ size_t get_task_idx(WriteStorageTask* task) {
 // Simulate processing a few STORE message. Make sure that stores for sealed
 // epochs fail.
 TEST(StoreStorageTaskTest, StoreRecords) {
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   MockWriteBatchStorageTask write_task;
 
   write_task.add(std::make_unique<MockStoreStorageTask>(
@@ -246,7 +246,7 @@ TEST(StoreStorageTaskTest, StoreRecords) {
 // Mutations from recovery should fail if another sequencer starts recovery for
 // the same log and is finished sealing.
 TEST(StoreStorageTaskTest, RecoveryMutation) {
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   MockWriteBatchStorageTask write_task;
 
   // A sequencer seals epoch 1, then performs a mutation in it
@@ -279,7 +279,7 @@ TEST(StoreStorageTaskTest, RecoveryMutation) {
 }
 
 TEST(StoreStorageTaskTest, SoftSeals) {
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   MockWriteBatchStorageTask write_task;
 
   // log 1 has soft seal to epoch 3 from N1, normal seal to epoch 2 from N2
@@ -358,7 +358,7 @@ TEST(StoreStorageTaskTest, SoftSeals) {
 }
 
 TEST(StoreStorageTaskTest, ValidBuffers) {
-  LogStorageStateMap map(1, /*stats*/ nullptr);
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   MockStoreStorageTask task(
       0, logid_t(1), compose_lsn(epoch_t(1), esn_t(1)), epoch_t(555), &map);
 
