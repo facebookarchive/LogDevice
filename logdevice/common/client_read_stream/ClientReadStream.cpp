@@ -592,6 +592,8 @@ void ClientReadStream::sendStart(ShardID shard_id, SenderState& state) {
   onclose->deactivate();
 
   resetGapParametersForSender(state);
+  // expect data starting at next_lsn_to_deliver_
+  state.setNextLsn(next_lsn_to_deliver_);
 
   // If we just encountered an epoch bump, window_high will be below start_lsn.
   // This is fine, the storage shards will wait for the WINDOW message we'll
