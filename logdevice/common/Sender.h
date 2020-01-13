@@ -815,7 +815,7 @@ class Sender : public SenderBase {
   /**
    * Invokes a callback for each Connection.  Used to gather debug info.
    */
-  void forEachSocket(std::function<void(const Socket&)> cb) const;
+  void forEachConnection(std::function<void(const Connection&)> cb) const;
 
   /**
    * @param addr    peer name of a client or server Connection expected to be
@@ -844,7 +844,7 @@ class Sender : public SenderBase {
 
   void setClientLocation(const ClientID& cid, const std::string& location);
 
-  void forAllClientSockets(std::function<void(Socket&)> fn);
+  void forAllClientConnections(std::function<void(Connection&)> fn);
 
  private:
   std::shared_ptr<const Settings> settings_;

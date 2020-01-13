@@ -68,8 +68,8 @@ class InfoSockets : public AdminCommand {
 
  private:
   void getSocketsDebugInfo(Sender& sender, InfoSocketsTable& table) {
-    sender.forEachSocket(
-        [&table](const Socket& socket) { socket.getDebugInfo(table); });
+    sender.forEachConnection(
+        [&table](const Connection& conn) { conn.getDebugInfo(table); });
   }
 };
 

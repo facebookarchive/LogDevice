@@ -802,12 +802,12 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
     sem = Semaphore();
     srv_w->add([&]() {
       auto* worker = Worker::onThisThread();
-      worker->sender().forAllClientSockets([&](Socket& s) {
-        ClientID c = s.peer_name_.asClientID();
-        bool h = s.isHandshaken();
+      worker->sender().forAllClientConnections([&](Connection& c) {
+        ClientID cid = c.peer_name_.asClientID();
+        bool h = c.isHandshaken();
         all_handshaken &= h;
-        clientIDs.push_back(s.peer_name_.asClientID());
-        ld_debug("%s is %shandshaken", c.toString().c_str(), h ? "" : "not ");
+        clientIDs.push_back(c.peer_name_.asClientID());
+        ld_debug("%s is %shandshaken", cid.toString().c_str(), h ? "" : "not ");
       });
       sem.post();
       return true;

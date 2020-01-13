@@ -1572,7 +1572,8 @@ std::string Sender::dumpQueuedMessages(Address addr) const {
   return folly::toJson(folly::toDynamic(strmap));
 }
 
-void Sender::forEachSocket(std::function<void(const Socket&)> cb) const {
+void Sender::forEachConnection(
+    std::function<void(const Connection&)> cb) const {
   for (const auto& entry : impl_->server_sockets_) {
     cb(*entry.second);
   }
@@ -1591,7 +1592,7 @@ std::unique_ptr<SocketProxy> Sender::getSocketProxy(const ClientID cid) const {
   return pos->second->getSocketProxy();
 }
 
-void Sender::forAllClientSockets(std::function<void(Socket&)> fn) {
+void Sender::forAllClientConnections(std::function<void(Connection&)> fn) {
   for (auto& it : impl_->client_sockets_) {
     fn(*it.second);
   }
