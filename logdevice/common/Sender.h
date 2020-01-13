@@ -50,6 +50,7 @@ class NodesConfiguration;
 
 class BWAvailableCallback;
 class ClientIdxAllocator;
+class Connection;
 class FlowGroup;
 class FlowGroupsUpdate;
 class SenderImpl;
@@ -760,7 +761,7 @@ class Sender : public SenderBase {
    *         Deprecated : Do not use this API to get Connection. Use of
    * Connection outside Sender is deprecated.
    */
-  Socket* findServerSocket(node_index_t idx) const;
+  Connection* findServerConnection(node_index_t idx) const;
 
   /**
    * @return protocol version of the Connection.

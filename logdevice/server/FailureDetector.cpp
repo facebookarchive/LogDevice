@@ -1197,9 +1197,9 @@ void FailureDetector::updateNodeState(node_index_t idx,
       // Node's state is no longer DEAD. Reset connection throttling
       // on a server socket to that node to allow subsequent gossip
       // messages to be immediately sent to it.
-      Socket* socket = getServerSocket(idx);
-      if (socket) {
-        socket->resetConnectThrottle();
+      Connection* conn = getServerConnection(idx);
+      if (conn) {
+        conn->resetConnectThrottle();
       }
     } else {
       // This node should transition itself to DEAD.
@@ -1261,14 +1261,14 @@ bool FailureDetector::isValidDestination(node_index_t node_idx) {
     }
   }
 
-  Socket* socket = getServerSocket(node_idx);
-  if (!socket) {
+  Connection* conn = getServerConnection(node_idx);
+  if (!conn) {
     // If a connection to the node doesn't exist yet, consider it as a valid
     // destination.
     return true;
   }
 
-  int rv = socket->checkConnection(nullptr);
+  int rv = conn->checkConnection(nullptr);
   if (rv != 0) {
     if (err == E::DISABLED || err == E::NOBUFS) {
       ld_spew("Can't gossip to N%u: %s", node_idx, error_description(err));
@@ -1515,8 +1515,8 @@ FailureDetector::getNodeBoycottObject(node_index_t node_index) {
   return it->second;
 }
 
-Socket* FailureDetector::getServerSocket(node_index_t idx) {
-  return Worker::onThisThread()->sender().findServerSocket(idx);
+Connection* FailureDetector::getServerConnection(node_index_t idx) {
+  return Worker::onThisThread()->sender().findServerConnection(idx);
 }
 
 void FailureDetector::setBlacklisted(node_index_t idx, bool blacklisted) {

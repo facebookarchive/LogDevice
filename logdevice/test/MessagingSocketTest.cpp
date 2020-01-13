@@ -1008,12 +1008,12 @@ struct SendMessageOnCloseRequest : public Request {
       int rv = sender.sendMessage(std::move(msg), firstNodeID, on_close);
       EXPECT_EQ(0, rv);
       EXPECT_FALSE(msg);
-      auto s = sender.findServerSocket(firstNodeID.index());
-      EXPECT_GT(s->getBufferedBytesSize(), 0);
-      s->close(E::INTERNAL);
-      EXPECT_EQ(s->getBufferedBytesSize(), 0);
-      EXPECT_EQ(s->getBytesPending(), 0);
-      EXPECT_TRUE(s->isClosed());
+      auto conn = sender.findServerConnection(firstNodeID.index());
+      EXPECT_GT(conn->getBufferedBytesSize(), 0);
+      conn->close(E::INTERNAL);
+      EXPECT_EQ(conn->getBufferedBytesSize(), 0);
+      EXPECT_EQ(conn->getBytesPending(), 0);
+      EXPECT_TRUE(conn->isClosed());
       sem->post();
     }
 
@@ -1026,13 +1026,13 @@ struct SendMessageOnCloseRequest : public Request {
       ASSERT_EQ(st, E::INTERNAL);
       Worker* w = Worker::onThisThread();
       auto& sender = w->sender();
-      auto s = sender.findServerSocket(firstNodeID.index());
+      auto conn = sender.findServerConnection(firstNodeID.index());
       int rv =
           sender.sendMessage(std::make_unique<VarLengthTestMessage>(
                                  Compatibility::MAX_PROTOCOL_SUPPORTED, 10),
                              firstNodeID);
       EXPECT_EQ(0, rv);
-      EXPECT_NE(s, sender.findServerSocket(firstNodeID.index()));
+      EXPECT_NE(conn, sender.findServerConnection(firstNodeID.index()));
       delete this;
     }
   };

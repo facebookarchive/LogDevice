@@ -26,7 +26,7 @@ class OverloadDetectorDependencies {
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration();
 
-  Socket* getSocketFor(node_index_t nid);
+  Connection* getConnectionFor(node_index_t nid);
   virtual size_t getTcpRecvBufSize(node_index_t nid);
   virtual ssize_t getTcpRecvBufOccupancy(node_index_t nid);
   virtual uint64_t getNumBytesReceived(node_index_t nid);

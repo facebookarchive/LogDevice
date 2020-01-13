@@ -92,7 +92,7 @@ class MockFailureDetector : public FailureDetector {
     return cluster_state_.get();
   }
 
-  Socket* getServerSocket(node_index_t /*idx*/) override {
+  Connection* getServerConnection(node_index_t /*idx*/) override {
     return nullptr;
   }
 

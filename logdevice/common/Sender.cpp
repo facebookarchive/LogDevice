@@ -585,7 +585,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   return -1;
 }
 
-Socket* Sender::findServerSocket(node_index_t idx) const {
+Connection* Sender::findServerConnection(node_index_t idx) const {
   ld_check(idx >= 0);
 
   auto it = impl_->server_sockets_.find(idx);
@@ -593,25 +593,24 @@ Socket* Sender::findServerSocket(node_index_t idx) const {
     return nullptr;
   }
 
-  auto s = it->second.get();
-  ld_check(s);
-  ld_check(!s->peer_name_.isClientAddress());
-  ld_check(s->peer_name_.asNodeID().index() == idx);
+  auto c = it->second.get();
+  ld_check(c);
+  ld_check(!c->peer_name_.isClientAddress());
+  ld_check(c->peer_name_.asNodeID().index() == idx);
 
-  return s;
+  return c;
 }
 
 folly::Optional<uint16_t>
 Sender::getSocketProtocolVersion(node_index_t idx) const {
-  auto socket = findServerSocket(idx);
-  return socket != nullptr && socket->isHandshaken()
-      ? socket->getProto()
-      : folly::Optional<uint16_t>();
+  auto conn = findServerConnection(idx);
+  return conn != nullptr && conn->isHandshaken() ? conn->getProto()
+                                                 : folly::Optional<uint16_t>();
 }
 
 ClientID Sender::getOurNameAtPeer(node_index_t node_index) const {
-  Socket* socket = findServerSocket(node_index);
-  return socket != nullptr ? socket->getOurNameAtPeer() : ClientID::INVALID;
+  Connection* conn = findServerConnection(node_index);
+  return conn != nullptr ? conn->getOurNameAtPeer() : ClientID::INVALID;
 }
 
 void Sender::deliverCompletedMessages() {
@@ -628,23 +627,23 @@ void Sender::deliverCompletedMessages() {
 void Sender::resetServerSocketConnectThrottle(NodeID node_id) {
   ld_check(node_id.isNodeID());
 
-  auto socket = findServerSocket(node_id.index());
-  if (socket != nullptr) {
-    socket->resetConnectThrottle();
+  auto conn = findServerConnection(node_id.index());
+  if (conn != nullptr) {
+    conn->resetConnectThrottle();
   }
 }
 
 void Sender::setPeerShuttingDown(NodeID node_id) {
   ld_check(node_id.isNodeID());
 
-  auto socket = findServerSocket(node_id.index());
-  if (socket != nullptr) {
-    socket->setPeerShuttingDown();
+  auto conn = findServerConnection(node_id.index());
+  if (conn != nullptr) {
+    conn->setPeerShuttingDown();
   }
 }
 
 int Sender::registerOnSocketClosed(const Address& addr, SocketCallback& cb) {
-  Socket* sock;
+  Connection* conn;
 
   if (addr.isClientAddress()) {
     auto pos = impl_->client_sockets_.find(addr.id_.client_);
@@ -652,20 +651,20 @@ int Sender::registerOnSocketClosed(const Address& addr, SocketCallback& cb) {
       err = E::NOTFOUND;
       return -1;
     }
-    sock = pos->second.get();
-    if (sock->isClosed()) {
+    conn = pos->second.get();
+    if (conn->isClosed()) {
       err = E::NOTFOUND;
       return -1;
     }
   } else { // addr is a server address
-    sock = findServerSocket(addr.asNodeID().index());
-    if (!sock) {
+    conn = findServerConnection(addr.asNodeID().index());
+    if (!conn) {
       err = E::NOTFOUND;
       return -1;
     }
   }
 
-  return sock->pushOnCloseCallback(cb);
+  return conn->pushOnCloseCallback(cb);
 }
 
 void Sender::flushOutputAndClose(Status reason) {
@@ -713,14 +712,14 @@ int Sender::closeClientSocket(ClientID cid, Status reason) {
 }
 
 int Sender::closeServerSocket(NodeID peer, Status reason) {
-  Socket* s = findServerSocket(peer.index());
-  if (!s) {
+  Connection* c = findServerConnection(peer.index());
+  if (!c) {
     err = E::NOTFOUND;
     return -1;
   }
 
-  if (!s->isClosed()) {
-    s->close(reason);
+  if (!c->isClosed()) {
+    c->close(reason);
   }
 
   return 0;
@@ -845,8 +844,8 @@ bool Sender::isClosed(const Address& addr) const {
       return true;
     }
   } else { // addr is a server address
-    Socket* sock = findServerSocket(addr.asNodeID().index());
-    if (!sock || sock->isClosed()) {
+    Connection* conn = findServerConnection(addr.asNodeID().index());
+    if (!conn || conn->isClosed()) {
       return true;
     }
   }
@@ -862,25 +861,25 @@ int Sender::checkConnection(NodeID nid,
     return -1;
   }
 
-  Socket* s = findServerSocket(nid.index());
-  if (!s || !s->peer_name_.asNodeID().equalsRelaxed(nid)) {
+  Connection* c = findServerConnection(nid.index());
+  if (!c || !c->peer_name_.asNodeID().equalsRelaxed(nid)) {
     err = E::NOTFOUND;
     return -1;
   }
 
-  if (!s->isSSL() && !allow_unencrypted && useSSLWith(nid)) {
+  if (!c->isSSL() && !allow_unencrypted && useSSLWith(nid)) {
     // We have a plaintext connection, but we need an encrypted one.
     err = E::SSLREQUIRED;
     return -1;
   }
 
   // check if the Connection to destination has reached its buffer limit
-  if (s->sizeLimitsExceeded()) {
+  if (c->sizeLimitsExceeded()) {
     err = E::NOBUFS;
     return -1;
   }
 
-  return s->checkConnection(our_name_at_peer);
+  return c->checkConnection(our_name_at_peer);
 }
 
 int Sender::connect(NodeID nid, bool allow_unencrypted) {
@@ -1076,9 +1075,9 @@ ConnectionType Sender::getSockConnType(const Address& addr) {
       return pos->second->getConnType();
     }
   } else { // addr is a server address
-    Socket* s = findServerSocket(addr.asNodeID().index());
-    if (s && s->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
-      return s->getConnType();
+    Connection* c = findServerConnection(addr.asNodeID().index());
+    if (c && c->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
+      return c->getConnType();
     }
   }
 

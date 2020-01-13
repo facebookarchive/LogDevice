@@ -42,23 +42,23 @@ OverloadDetectorDependencies::getNodesConfiguration() {
   return Worker::onThisThread()->getNodesConfiguration();
 }
 
-Socket* OverloadDetectorDependencies::getSocketFor(node_index_t nid) {
-  return Worker::onThisThread()->sender().findServerSocket(nid);
+Connection* OverloadDetectorDependencies::getConnectionFor(node_index_t nid) {
+  return Worker::onThisThread()->sender().findServerConnection(nid);
 }
 
 ssize_t OverloadDetectorDependencies::getTcpRecvBufOccupancy(node_index_t nid) {
-  auto s = getSocketFor(nid);
-  return s ? s->getTcpRecvBufOccupancy() : -1;
+  auto c = getConnectionFor(nid);
+  return c ? c->getTcpRecvBufOccupancy() : -1;
 }
 
 size_t OverloadDetectorDependencies::getTcpRecvBufSize(node_index_t nid) {
-  auto s = getSocketFor(nid);
-  return s ? s->getTcpRecvBufSize() : 0;
+  auto c = getConnectionFor(nid);
+  return c ? c->getTcpRecvBufSize() : 0;
 }
 
 uint64_t OverloadDetectorDependencies::getNumBytesReceived(node_index_t nid) {
-  auto s = getSocketFor(nid);
-  return s ? s->getNumBytesReceived() : 0;
+  auto c = getConnectionFor(nid);
+  return c ? c->getNumBytesReceived() : 0;
 }
 
 OverloadDetector::OverloadDetector(
