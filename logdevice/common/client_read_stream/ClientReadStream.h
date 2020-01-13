@@ -50,6 +50,7 @@ class EpochMetaDataCache;
 class ShardAuthoritativeStatusMap;
 class STARTED_Message;
 class UpdateableConfig;
+class Worker;
 enum class AuthoritativeStatus : uint8_t;
 enum class ClientReadStreamBufferType : uint8_t;
 
@@ -1625,6 +1626,8 @@ class ClientReadStream : boost::noncopyable {
   std::unique_ptr<RewindScheduler> rewind_scheduler_;
 
   ReadStreamAttributes attrs_ = ReadStreamAttributes();
+
+  Worker* worker_;
 
   friend class ClientReadStreamTest;
   friend class ClientReadStreamScd;

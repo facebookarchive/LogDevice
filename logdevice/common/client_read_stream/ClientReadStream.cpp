@@ -335,7 +335,7 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
 
 void ClientReadStream::sampleDebugInfo(
     const ClientReadStream::ClientReadStreamDebugInfo& info) const {
-  Worker* w = Worker::onThisThread(false);
+  Worker* w = worker_;
   if (!(w && w->processor_ &&
         w->processor_->getDebugClientConfig()
             .isReadStreamDebugInfoSamplingAllowed(info.csid))) {
@@ -384,7 +384,7 @@ void ClientReadStream::sampleDebugInfo(
     sample->addNormalValue("lag_record", info.lag_record.value());
   }
 
-  Worker::onThisThread()->getTraceLogger()->pushSample(
+  worker_->getTraceLogger()->pushSample(
       "all_read_streams", 0, std::move(sample));
   return;
 }
@@ -436,31 +436,29 @@ void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
 void ClientReadStream::start() {
   ld_check(!started_);
   started_ = true;
+  worker_ = Worker::onThisThread(false);
 
   rewind_scheduler_ = std::make_unique<RewindScheduler>(this);
 
   gap_tracer_ = std::make_unique<ClientGapTracer>(
-      Worker::onThisThread(false) ? Worker::onThisThread()->getTraceLogger()
-                                  : nullptr);
+      worker_ ? worker_->getTraceLogger() : nullptr);
 
   read_tracer_ = std::make_unique<ClientReadTracer>(
-      Worker::onThisThread(false) ? Worker::onThisThread()->getTraceLogger()
-                                  : nullptr);
+      worker_ ? worker_->getTraceLogger() : nullptr);
 
   events_tracer_ = std::make_unique<ClientReadStreamTracer>(
-      Worker::onThisThread(false) ? Worker::onThisThread()->getTraceLogger()
-                                  : nullptr);
+      worker_ ? worker_->getTraceLogger() : nullptr);
 
   connection_health_tracker_ =
       std::make_unique<ClientReadStreamConnectionHealth>(this);
 
-  if (Worker::onThisThread(false) &&
+  if (worker_ &&
       !MetaDataLog::isMetaDataLog(
           log_id_) // Don't create tracer for metadata logs to avoid issues in
                    // SyncSequencerRequest.
   ) {
     readers_flow_tracer_ = std::make_unique<ClientReadersFlowTracer>(
-        Worker::onThisThread()->getTraceLogger(), this);
+        worker_->getTraceLogger(), this);
   }
 
   auto gap_grace_period = deps_->computeGapGracePeriod();
