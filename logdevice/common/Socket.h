@@ -351,7 +351,7 @@ class Socket : public TrafficShappingSocket {
    */
   bool isZombie() const {
     ld_check(isClosed());
-    if (socket_ref_holder_.use_count() > 1) {
+    if (conn_closed_.use_count() > 1) {
       return true;
     }
 
@@ -359,16 +359,23 @@ class Socket : public TrafficShappingSocket {
   }
 
   /**
-   * @return SocketProxy, this guarantees the encapsulated socket stays around
-   * till returned instance does not go out of scope. One use case of this is to
-   * stop ClientID from getting reused.
+   * State machines can use ClientID to send replies to client when made a
+   * request. But ClientId space is 32bit which means long running state machine
+   * can acccidentally send a message to incorrect client if the id's wrapped
+   * around. Such long running state machines can get socket token to make sure
+   * that the socket exists before trying to use the clientId to send message.
+   * The check should be performed on the same thread on which the socket was
+   * created to avoid socket getting closed between check and actually sending
+   * the message.
+   * @return conn_closed_ which gets the socket closed status for clients to
+   * cache.
    */
-  std::unique_ptr<SocketProxy> getSocketProxy() {
+  std::shared_ptr<const std::atomic<bool>> getSocketToken() {
     if (isClosed()) {
-      return std::unique_ptr<SocketProxy>();
+      return nullptr;
     }
 
-    return std::make_unique<SocketProxy>(socket_ref_holder_);
+    return conn_closed_;
   }
 
   /**
@@ -1245,45 +1252,6 @@ class Socket : public TrafficShappingSocket {
   friend class ServerSocketTest;
   friend class ClientConnectionTest;
   friend class Connection;
-};
-
-/**
- * SocketProxy is a simple reference to the socket that makes sure that the
- * socket instance stays around till there is some one in the system is still
- * holding this object. It also lets the holders of proxy know that the socket
- * was closed. It also captures logic to safely decrement the ref count on the
- * socket once the user goes out of scope. This class is non-copyable or
- * assignable so that users explicitly have to get an instance if they want
- * the socket to stay around.  Once the users holding socket ref come to know
- * that socket is closed it is expected that they drop the corresponding ref
- * as soon as possible, so that the zombie socket is reclaimed.
- *
- */
-class SocketProxy {
- public:
-  explicit SocketProxy(std::shared_ptr<Socket> socket_ref_holder)
-      : socket_ref_holder_(std::move(socket_ref_holder)) {}
-
-  SocketProxy(const SocketProxy&) = delete;
-  SocketProxy& operator=(const SocketProxy&) = delete;
-
-  bool isClosed() {
-    auto socket = socket_ref_holder_.get();
-    if (!socket || socket->isClosed()) {
-      return true;
-    }
-
-    return false;
-  }
-
-  const Socket* get() const {
-    return socket_ref_holder_.get();
-  }
-  // TODO: Add proxy methods here that allow messages to be enqueued to
-  // network threadpool which will eventually be written to network socket.
-
- private:
-  std::shared_ptr<Socket> socket_ref_holder_;
 };
 
 }} // namespace facebook::logdevice

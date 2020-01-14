@@ -388,17 +388,10 @@ class Sender : public SenderBase {
                       SocketCallback* onclose) override;
 
   /**
-   * Get client SocketProxy for the Connection associated with client-id 'cid'.
-   *
-   * This socket proxy makes sure Conection instance stays even after it
-   * is closed. By doing this life of the Connection and consequetively the life
-   * of ClientID is extended until all the proxy references go away.
-   * SocketProxy can get the underlying Connection if it's not closed. It is
-   * expected to drop proxy immediately once it is detected that connection was
-   * closed so that we don't have too many zombie connections and zombie
-   * clientIds in the system.
+   * Get client socket token for the socket associated with client-id 'cid'.
    */
-  std::unique_ptr<SocketProxy> getSocketProxy(const ClientID cid) const;
+  std::shared_ptr<const std::atomic<bool>>
+  getSocketToken(const ClientID cid) const;
 
   /**
    * Dispatch any accumulated message completions. Must be called from
@@ -531,6 +524,18 @@ class Sender : public SenderBase {
   int checkConnection(NodeID nid,
                       ClientID* our_name_at_peer,
                       bool allow_unencrypted);
+
+  /**
+   * Check if a working connection to a give client exists. If peer_is_client is
+   * set extra checks is made to make sure peer is logdevice client.
+   * @return   0 if a connection to nid is already established and handshake
+   *          completed, -1 otherwise with err set to
+   *          NOTFOUND     cid does not exist the socket must be closed.
+   *          NOTCONN      The socket is not connected or not hanshaken.
+   *          NOTANODE     If check_peer_is_node is set, peer is not a
+   *                       logdevice node.
+   */
+  int checkConnection(ClientID cid, bool check_peer_is_node = false);
 
   /**
    * Initiate an asynchronous attempt to connect to a given node unless a

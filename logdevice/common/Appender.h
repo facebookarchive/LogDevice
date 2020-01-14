@@ -446,7 +446,9 @@ class Appender : public IntrusiveUnorderedMapHook {
     return reply_to_;
   }
 
-  std::unique_ptr<SocketProxy> getClientSocketProxy() const;
+  // Return socket closed status for clients to cache. If true the socket is
+  // closed.
+  std::shared_ptr<const std::atomic<bool>> getClientSocketToken() const;
 
   request_id_t getClientRequestID() const {
     return append_request_id_;

@@ -882,6 +882,27 @@ int Sender::checkConnection(NodeID nid,
   return c->checkConnection(our_name_at_peer);
 }
 
+int Sender::checkConnection(ClientID cid, bool check_peer_is_node) {
+  ld_check(cid.valid());
+  auto pos = impl_->client_sockets_.find(cid);
+  if (pos == impl_->client_sockets_.end() || pos->second->isClosed()) {
+    err = E::NOTFOUND;
+    return -1;
+  }
+
+  if (!pos->second->isHandshaken()) {
+    err = E::NOTCONN;
+    return -1;
+  }
+
+  if (check_peer_is_node && pos->second->peerIsClient()) {
+    err = E::NOTANODE;
+    return -1;
+  }
+
+  return 0;
+}
+
 int Sender::connect(NodeID nid, bool allow_unencrypted) {
   if (shutting_down_) {
     err = E::SHUTDOWN;
@@ -1582,14 +1603,15 @@ void Sender::forEachConnection(
   }
 }
 
-std::unique_ptr<SocketProxy> Sender::getSocketProxy(const ClientID cid) const {
+std::shared_ptr<const std::atomic<bool>>
+Sender::getSocketToken(const ClientID cid) const {
   ld_check(cid.valid());
   auto pos = impl_->client_sockets_.find(cid);
   if (pos == impl_->client_sockets_.end()) {
-    return std::unique_ptr<SocketProxy>();
+    return nullptr;
   }
 
-  return pos->second->getSocketProxy();
+  return pos->second->getSocketToken();
 }
 
 void Sender::forAllClientConnections(std::function<void(Connection&)> fn) {

@@ -85,8 +85,6 @@ namespace facebook { namespace logdevice {
 
 class Appender;
 struct Settings;
-class Socket;
-class SocketProxy;
 
 class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
                           public BufferedWriterAppendSink {
@@ -202,9 +200,9 @@ class SequencerBatching : public BufferedWriterImpl::AppendCallbackInternal,
     // right thread.
     std::atomic<int> owner_worker;
     ClientID reply_to;
-    // Socket proxy instance which ensures that clientID does not get reused
-    // even if the connection closes.
-    std::unique_ptr<SocketProxy> socket_proxy;
+    // Socket token instance which ensures that clientID does not get reused
+    // even if the socket closes.
+    std::shared_ptr<const std::atomic<bool>> socket_token;
     logid_t log_id;
     request_id_t append_request_id;
     folly::IntrusiveListHook list_hook;

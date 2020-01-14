@@ -200,7 +200,7 @@ bool SequencerBatching::buffer(logid_t log_id,
   std::unique_ptr<AppendMessageState> machine(new AppendMessageState());
   machine->owner_worker = Worker::onThisThread()->idx_.val_;
   machine->reply_to = appender->getReplyTo();
-  machine->socket_proxy = appender->getClientSocketProxy();
+  machine->socket_token = appender->getClientSocketToken();
   machine->log_id = log_id;
   machine->append_request_id = appender->getClientRequestID();
   // Passing the pointer to the state machine as context to BufferedWriter
@@ -435,8 +435,7 @@ void SequencerBatching::sendReply(const AppendMessageState& ams,
                                   lsn_t lsn,
                                   RecordTimestamp timestamp,
                                   uint32_t offset) {
-  if (ams.reply_to.valid() &&
-      (!ams.socket_proxy || ams.socket_proxy->isClosed())) {
+  if (ams.reply_to.valid() && (!ams.socket_token || ams.socket_token->load())) {
     // Release the proxy so that socket can be reclaimed and released.
     ld_debug("Not sending reply to client %s, socket has disconnected.",
              ams.reply_to.toString().c_str());

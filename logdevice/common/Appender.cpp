@@ -917,8 +917,8 @@ void Appender::sendReply(lsn_t lsn, Status status, NodeID redirect) {
     return;
   }
 
-  auto socket_proxy = getClientSocketProxy();
-  if (!socket_proxy || socket_proxy->isClosed()) {
+  auto socket_token = getClientSocketToken();
+  if (!socket_token || socket_token->load()) {
     ld_debug("Not sending reply to client %s, socket has disconnected.",
              reply_to_.toString().c_str());
     return;
@@ -2402,11 +2402,9 @@ bool Appender::isNodeAlive(NodeID node) {
   return (cs == nullptr || cs->isNodeAlive(node.index()));
 }
 
-std::unique_ptr<SocketProxy> Appender::getClientSocketProxy() const {
-  if (created_on_) {
-    return created_on_->sender().getSocketProxy(reply_to_);
-  }
-
-  return std::unique_ptr<SocketProxy>();
+std::shared_ptr<const std::atomic<bool>>
+Appender::getClientSocketToken() const {
+  return created_on_ ? created_on_->sender().getSocketToken(reply_to_)
+                     : nullptr;
 }
 }} // namespace facebook::logdevice
