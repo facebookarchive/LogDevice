@@ -88,12 +88,12 @@ class SenderImpl {
   // in order to talk to LogDevice servers. sendMessage() to the node_index_t or
   // NodeID of that Connection will try to reconnect. The rate of reconnection
   // attempts is controlled by a ConnectionThrottle.
-  folly::F14FastMap<node_index_t, std::unique_ptr<Connection>> server_sockets_;
+  folly::F14FastMap<node_index_t, std::unique_ptr<Connection>> server_conns_;
 
   // a map of all Connections wrapping connections that were accepted from
   // clients, keyed by 32-bit client ids. This map is empty on clients.
   folly::F14FastMap<ClientID, std::unique_ptr<Connection>, ClientID::Hash>
-      client_sockets_;
+      client_conns_;
 
   ClientIdxAllocator* client_id_allocator_;
 
@@ -223,7 +223,7 @@ int Sender::addClient(int fd,
 
     auto& flow_group = nw_shaping_container_->selectFlowGroup(flow_group_scope);
 
-    auto socket = connection_factory_->createConnection(
+    auto conn = connection_factory_->createConnection(
         fd,
         client_name,
         client_addr,
@@ -234,7 +234,7 @@ int Sender::addClient(int fd,
         std::make_unique<SocketDependencies>(
             Worker::onThisThread()->processor_, this));
 
-    auto res = impl_->client_sockets_.emplace(client_name, std::move(socket));
+    auto res = impl_->client_conns_.emplace(client_name, std::move(conn));
 
     if (!res.second) {
       ld_critical("INTERNAL ERROR: attempt to add client %s (%s) that is "
@@ -294,8 +294,8 @@ void Sender::noteBytesDrained(size_t nbytes,
 }
 
 ssize_t Sender::getTcpSendBufSizeForClient(ClientID client_id) const {
-  auto it = impl_->client_sockets_.find(client_id);
-  if (it == impl_->client_sockets_.end()) {
+  auto it = impl_->client_conns_.find(client_id);
+  if (it == impl_->client_conns_.end()) {
     ld_error("client Connection %s not found", client_id.toString().c_str());
     ld_check(false);
     return -1;
@@ -309,15 +309,15 @@ void Sender::eraseDisconnectedClients() {
   for (auto it = disconnected_clients_.begin();
        it != disconnected_clients_.end();) {
     const ClientID& cid = *it;
-    const auto pos = impl_->client_sockets_.find(cid);
-    ld_assert(pos != impl_->client_sockets_.end());
+    const auto pos = impl_->client_conns_.find(cid);
+    ld_assert(pos != impl_->client_conns_.end());
     ld_assert(pos->second->isClosed());
     ++it;
     // Check if there are users that still have reference to the Connection. If
     // yes, wait for the clients to drop the Connection instead of reclaiming it
     // here.
     if (!pos->second->isZombie()) {
-      impl_->client_sockets_.erase(pos);
+      impl_->client_conns_.erase(pos);
       impl_->client_id_allocator_->releaseClientIdx(cid);
       disconnected_clients_.erase_after(prev);
     } else {
@@ -326,10 +326,10 @@ void Sender::eraseDisconnectedClients() {
   }
 }
 
-int Sender::notifyPeerConfigUpdated(Socket& sock) {
+int Sender::notifyPeerConfigUpdated(Connection& conn) {
   auto server_config = Worker::onThisThread()->getServerConfig();
   config_version_t config_version = server_config->getVersion();
-  config_version_t peer_config_version = sock.getPeerConfigVersion();
+  config_version_t peer_config_version = conn.getPeerConfigVersion();
   if (peer_config_version >= config_version) {
     // The peer config is more recent. nothing to do here.
     return 0;
@@ -337,7 +337,7 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
   // The peer config version on the Connection is outdated, so we need to notify
   // the peer and update it.
   std::unique_ptr<Message> msg;
-  const Address& addr = sock.peer_name_;
+  const Address& addr = conn.peer_name_;
   if (addr.isClientAddress()) {
     // The peer is a client, in the sense that it is the client-side of the
     // connection. It may very well be a node however.
@@ -380,7 +380,7 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
     CONFIG_ADVISORY_Header hdr = {config_version};
     msg = std::make_unique<CONFIG_ADVISORY_Message>(hdr);
   }
-  int rv = sendMessageImpl(std::move(msg), sock);
+  int rv = sendMessageImpl(std::move(msg), conn);
   if (rv != 0) {
     RATELIMIT_INFO(
         std::chrono::seconds(10),
@@ -394,7 +394,7 @@ int Sender::notifyPeerConfigUpdated(Socket& sock) {
   // greater than or equal to config_version.
   // Update peer version in Connection to avoid sending CONFIG_ADVISORY or
   // CONFIG_CHANGED again on the same connection.
-  sock.setPeerConfigVersion(config_version);
+  conn.setPeerConfigVersion(config_version);
   return 0;
 }
 
@@ -403,9 +403,9 @@ bool Sender::canSendToImpl(const Address& addr,
                            BWAvailableCallback& on_bw_avail) {
   ld_check(!on_bw_avail.active());
 
-  Socket* sock = findSocket(addr);
+  Connection* conn = findConnection(addr);
 
-  if (!sock) {
+  if (!conn) {
     if (addr.isClientAddress()) {
       // With no current client connection, the send is
       // guaranteeed to fail.
@@ -427,10 +427,10 @@ bool Sender::canSendToImpl(const Address& addr,
   Priority p = PriorityMap::fromTrafficClass()[tc];
 
   auto lock = nw_shaping_container_->lock();
-  if (!sock->flow_group_.canDrain(p)) {
-    sock->flow_group_.push(on_bw_avail, p);
+  if (!conn->flow_group_.canDrain(p)) {
+    conn->flow_group_.push(on_bw_avail, p);
     err = E::CBREGISTERED;
-    FLOW_GROUP_STAT_INCR(Worker::stats(), sock->flow_group_, cbregistered);
+    FLOW_GROUP_STAT_INCR(Worker::stats(), conn->flow_group_, cbregistered);
     return false;
   }
 
@@ -441,9 +441,9 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
                             const Address& addr,
                             BWAvailableCallback* on_bw_avail,
                             SocketCallback* onclose) {
-  Socket* sock = getSocket(addr, *msg);
-  if (!sock) {
-    // err set by getSocket()
+  Connection* conn = getConnection(addr, *msg);
+  if (!conn) {
+    // err set by getConnection()
     return -1;
   }
 
@@ -452,13 +452,13 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   if (!isHandshakeMessage(msg->type_) &&
       !isConfigSynchronizationMessage(msg->type_) &&
       settings_->enable_config_synchronization) {
-    int rv = notifyPeerConfigUpdated(*sock);
+    int rv = notifyPeerConfigUpdated(*conn);
     if (rv != 0) {
       return -1;
     }
   }
 
-  int rv = sendMessageImpl(std::move(msg), *sock, on_bw_avail, onclose);
+  int rv = sendMessageImpl(std::move(msg), *conn, on_bw_avail, onclose);
   ld_check(rv != 0 ? (bool)msg : !msg); // take ownership on success only
   if (rv != 0) {
     bool no_warning =
@@ -480,7 +480,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
 }
 
 int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
-                            Socket& sock,
+                            Connection& conn,
                             BWAvailableCallback* on_bw_avail,
                             SocketCallback* onclose) {
   ld_check(!shutting_down_);
@@ -501,21 +501,21 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   if (!isHandshakeMessage(msg->type_) &&
       // Return ENOBUFS error Sender's outbuf limit and the Connection's minimum
       // out buf limit is reached.
-      bytesPendingLimitReached(sock.getPeerType()) &&
-      sock.minOutBufLimitReached()) {
+      bytesPendingLimitReached(conn.getPeerType()) &&
+      conn.minOutBufLimitReached()) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       10,
                       "ENOBUFS for Sender. Peer type: %s. "
                       "Current sender outbuf usage: %zu. "
                       "Current sender peer outbuf usage : %zu",
-                      peerTypeToString(sock.getPeerType()),
+                      peerTypeToString(conn.getPeerType()),
                       getBytesPending(),
-                      getBytesPending(sock.getPeerType()));
+                      getBytesPending(conn.getPeerType()));
     err = E::NOBUFS;
     return -1;
   }
 
-  auto envelope = sock.registerMessage(std::move(msg));
+  auto envelope = conn.registerMessage(std::move(msg));
   if (!envelope) {
     ld_check(err == E::INTERNAL || err == E::NOBUFS || err == E::NOTCONN ||
              err == E::PROTONOSUPPORT || err == E::UNREACHABLE);
@@ -524,7 +524,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   ld_check(!msg);
 
   if (onclose) {
-    sock.pushOnCloseCallback(*onclose);
+    conn.pushOnCloseCallback(*onclose);
   }
 
   auto lock = nw_shaping_container_->lock();
@@ -544,20 +544,20 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   }
   auto inject_shaping_event = [&]() -> bool {
     return error_to_inject == E::CBREGISTERED &&
-        sock.flow_group_.injectShapingEvent(
+        conn.flow_group_.injectShapingEvent(
             envelope->priority(),
             Worker::settings().message_error_injection_chance_percent);
   };
 
-  if (!inject_shaping_event() && sock.flow_group_.drain(*envelope)) {
+  if (!inject_shaping_event() && conn.flow_group_.drain(*envelope)) {
     lock.unlock();
-    FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, direct_dispatched);
+    FLOW_GROUP_STAT_INCR(Worker::stats(), conn.flow_group_, direct_dispatched);
     // Note: Some errors can only be detected during message
     // serialization.
     //       If this occurs just after releaseMessage() and the onSent()
     //       handler for the message responds to the error by queuing
     //       another message, Sender::sendMessage() can be reentered.
-    sock.releaseMessage(*envelope);
+    conn.releaseMessage(*envelope);
     return 0;
   }
 
@@ -565,22 +565,22 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   if (on_bw_avail == nullptr) {
     // Sender/FlowGroup will release the message once bandwidth is
     // available.
-    FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, deferred);
+    FLOW_GROUP_STAT_INCR(Worker::stats(), conn.flow_group_, deferred);
     FLOW_GROUP_MSG_STAT_INCR(
-        Worker::stats(), sock.flow_group_, &envelope->message(), deferred);
-    sock.flow_group_.push(*envelope);
+        Worker::stats(), conn.flow_group_, &envelope->message(), deferred);
+    conn.flow_group_.push(*envelope);
     return 0;
   }
 
   // Message retransmission is the responsibility of the caller.  Return
   // message ownership to them.
-  msg = sock.discardEnvelope(*envelope);
+  msg = conn.discardEnvelope(*envelope);
 
-  FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, discarded);
-  FLOW_GROUP_MSG_STAT_INCR(Worker::stats(), sock.flow_group_, msg, discarded);
-  FLOW_GROUP_STAT_INCR(Worker::stats(), sock.flow_group_, cbregistered);
-  sock.flow_group_.push(*on_bw_avail, msg->priority());
-  sock.pushOnBWAvailableCallback(*on_bw_avail);
+  FLOW_GROUP_STAT_INCR(Worker::stats(), conn.flow_group_, discarded);
+  FLOW_GROUP_MSG_STAT_INCR(Worker::stats(), conn.flow_group_, msg, discarded);
+  FLOW_GROUP_STAT_INCR(Worker::stats(), conn.flow_group_, cbregistered);
+  conn.flow_group_.push(*on_bw_avail, msg->priority());
+  conn.pushOnBWAvailableCallback(*on_bw_avail);
   err = E::CBREGISTERED;
   return -1;
 }
@@ -588,8 +588,8 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
 Connection* Sender::findServerConnection(node_index_t idx) const {
   ld_check(idx >= 0);
 
-  auto it = impl_->server_sockets_.find(idx);
-  if (it == impl_->server_sockets_.end()) {
+  auto it = impl_->server_conns_.find(idx);
+  if (it == impl_->server_conns_.end()) {
     return nullptr;
   }
 
@@ -646,8 +646,8 @@ int Sender::registerOnSocketClosed(const Address& addr, SocketCallback& cb) {
   Connection* conn;
 
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos == impl_->client_sockets_.end()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos == impl_->client_conns_.end()) {
       err = E::NOTFOUND;
       return -1;
     }
@@ -669,14 +669,14 @@ int Sender::registerOnSocketClosed(const Address& addr, SocketCallback& cb) {
 
 void Sender::flushOutputAndClose(Status reason) {
   auto open_socket_count = 0;
-  for (const auto& it : impl_->server_sockets_) {
+  for (const auto& it : impl_->server_conns_) {
     if (it.second && !it.second->isClosed()) {
       it.second->flushOutputAndClose(reason);
       ++open_socket_count;
     }
   }
 
-  for (auto& it : impl_->client_sockets_) {
+  for (auto& it : impl_->client_conns_) {
     if (it.second && !it.second->isClosed()) {
       if (reason == E::SHUTDOWN) {
         it.second->sendShutdown();
@@ -701,8 +701,8 @@ int Sender::closeSocket(Address addr, Status reason) {
 int Sender::closeClientSocket(ClientID cid, Status reason) {
   ld_check(cid.valid());
 
-  auto pos = impl_->client_sockets_.find(cid);
-  if (pos == impl_->client_sockets_.end()) {
+  auto pos = impl_->client_conns_.find(cid);
+  if (pos == impl_->client_conns_.end()) {
     err = E::NOTFOUND;
     return -1;
   }
@@ -728,14 +728,14 @@ int Sender::closeServerSocket(NodeID peer, Status reason) {
 std::pair<uint32_t, uint32_t> Sender::closeAllSockets() {
   std::pair<uint32_t, uint32_t> sockets_closed = {0, 0};
 
-  for (auto& entry : impl_->server_sockets_) {
+  for (auto& entry : impl_->server_conns_) {
     if (entry.second && !entry.second->isClosed()) {
       sockets_closed.first++;
       entry.second->close(E::SHUTDOWN);
     }
   }
 
-  for (auto& entry : impl_->client_sockets_) {
+  for (auto& entry : impl_->client_conns_) {
     if (!entry.second->isClosed()) {
       sockets_closed.second++;
       entry.second->close(E::SHUTDOWN);
@@ -748,7 +748,7 @@ std::pair<uint32_t, uint32_t> Sender::closeAllSockets() {
 int Sender::closeAllClientSockets(Status reason) {
   int sockets_closed = 0;
 
-  for (auto& it : impl_->client_sockets_) {
+  for (auto& it : impl_->client_conns_) {
     if (!it.second->isClosed()) {
       sockets_closed++;
       it.second->close(reason);
@@ -763,8 +763,8 @@ void Sender::shutdownSockets(folly::Executor* executor) {
   executor->add([&] {
     shutting_down_ = true;
     closeAllSockets();
-    impl_->server_sockets_.clear();
-    impl_->client_sockets_.clear();
+    impl_->server_conns_.clear();
+    impl_->client_conns_.clear();
     sem.post();
   });
   sem.wait();
@@ -776,19 +776,19 @@ bool Sender::isClosed() const {
   bool go_over_all_sockets = !Worker::onThisThread()->isAcceptingWork();
 
   int num_open_server_sockets = 0;
-  Socket* max_pending_work_server = nullptr;
+  Connection* max_pending_work_server = nullptr;
   size_t server_with_max_pending_bytes = 0;
-  for (const auto& it : impl_->server_sockets_) {
+  for (const auto& it : impl_->server_conns_) {
     if (it.second && !it.second->isClosed()) {
       if (!go_over_all_sockets) {
         return false;
       }
 
       ++num_open_server_sockets;
-      const auto socket = it.second.get();
-      size_t pending_bytes = socket->getBytesPending();
+      const auto conn = it.second.get();
+      size_t pending_bytes = conn->getBytesPending();
       if (server_with_max_pending_bytes < pending_bytes) {
-        max_pending_work_server = socket;
+        max_pending_work_server = conn;
         server_with_max_pending_bytes = pending_bytes;
       }
     }
@@ -796,19 +796,19 @@ bool Sender::isClosed() const {
 
   int num_open_client_sockets = 0;
   ClientID max_pending_work_clientID;
-  Socket* max_pending_work_client = nullptr;
+  Connection* max_pending_work_client = nullptr;
   size_t client_with_max_pending_bytes = 0;
-  for (auto& it : impl_->client_sockets_) {
+  for (auto& it : impl_->client_conns_) {
     if (!it.second->isClosed()) {
       if (!go_over_all_sockets) {
         return false;
       }
 
       ++num_open_client_sockets;
-      const auto socket = it.second.get();
-      const size_t pending_bytes = socket->getBytesPending();
+      const auto conn = it.second.get();
+      const size_t pending_bytes = conn->getBytesPending();
       if (client_with_max_pending_bytes < pending_bytes) {
-        max_pending_work_client = socket;
+        max_pending_work_client = conn;
         max_pending_work_clientID = it.first;
         client_with_max_pending_bytes = pending_bytes;
       }
@@ -839,8 +839,8 @@ bool Sender::isClosed() const {
 
 bool Sender::isClosed(const Address& addr) const {
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos == impl_->client_sockets_.end() || pos->second->isClosed()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos == impl_->client_conns_.end() || pos->second->isClosed()) {
       return true;
     }
   } else { // addr is a server address
@@ -884,8 +884,8 @@ int Sender::checkConnection(NodeID nid,
 
 int Sender::checkConnection(ClientID cid, bool check_peer_is_node) {
   ld_check(cid.valid());
-  auto pos = impl_->client_sockets_.find(cid);
-  if (pos == impl_->client_sockets_.end() || pos->second->isClosed()) {
+  auto pos = impl_->client_conns_.find(cid);
+  if (pos == impl_->client_conns_.end() || pos->second->isClosed()) {
     err = E::NOTFOUND;
     return -1;
   }
@@ -909,12 +909,13 @@ int Sender::connect(NodeID nid, bool allow_unencrypted) {
     return -1;
   }
 
-  Socket* s = initServerSocket(nid, SocketType::DATA, allow_unencrypted);
-  if (!s) {
+  Connection* c =
+      initServerConnection(nid, SocketType::DATA, allow_unencrypted);
+  if (!c) {
     return -1;
   }
 
-  return s->connect();
+  return c->connect();
 }
 
 bool Sender::useSSLWith(NodeID nid,
@@ -948,9 +949,9 @@ bool Sender::useSSLWith(NodeID nid,
   return cross_boundary || authentication;
 }
 
-Socket* Sender::initServerSocket(NodeID nid,
-                                 SocketType sock_type,
-                                 bool allow_unencrypted) {
+Connection* Sender::initServerConnection(NodeID nid,
+                                         SocketType sock_type,
+                                         bool allow_unencrypted) {
   ld_check(!shutting_down_);
   const auto node_cfg = nodes_->getNodeServiceDiscovery(nid.index());
 
@@ -962,8 +963,8 @@ Socket* Sender::initServerSocket(NodeID nid,
     return nullptr;
   }
 
-  auto it = impl_->server_sockets_.find(nid.index());
-  if (it != impl_->server_sockets_.end()) {
+  auto it = impl_->server_conns_.find(nid.index());
+  if (it != impl_->server_conns_.end()) {
     // for all connections :
     //     create new connection if the existing connection is closed.
     // for DATA connection:
@@ -982,18 +983,18 @@ Socket* Sender::initServerSocket(NodeID nid,
     if (should_create_new) {
       // We have a plaintext connection, but now we need an encrypted one.
       // Scheduling this Connection to be closed and moving it out of
-      // server_sockets_ to initialize an SSL connection in its place.
+      // server_conns_ to initialize an SSL connection in its place.
       Worker::onThisThread()->add([s = std::move(it->second)] {
         if (s->good()) {
           s->close(E::SSLREQUIRED);
         }
       });
-      impl_->server_sockets_.erase(it);
-      it = impl_->server_sockets_.end();
+      impl_->server_conns_.erase(it);
+      it = impl_->server_conns_.end();
     }
   }
 
-  if (it == impl_->server_sockets_.end()) {
+  if (it == impl_->server_conns_.end()) {
     // Activate slow_socket_timer if not active already.
     if (!impl_->detect_slow_socket_timer_.isActive()) {
       auto prev_context = Worker::packRunContext();
@@ -1040,7 +1041,7 @@ Socket* Sender::initServerSocket(NodeID nid,
       auto& flow_group =
           nw_shaping_container_->selectFlowGroup(flow_group_scope);
 
-      auto sock = connection_factory_->createConnection(
+      auto conn = connection_factory_->createConnection(
           nid,
           sock_type,
           use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
@@ -1048,7 +1049,7 @@ Socket* Sender::initServerSocket(NodeID nid,
           std::make_unique<SocketDependencies>(
               Worker::onThisThread()->processor_, this));
 
-      auto res = impl_->server_sockets_.emplace(nid.index(), std::move(sock));
+      auto res = impl_->server_conns_.emplace(nid.index(), std::move(conn));
       it = res.first;
     } catch (ConstructorFailed& exp) {
       ld_critical("Could not create server Connection to node %s sock_type %s "
@@ -1072,14 +1073,14 @@ Socket* Sender::initServerSocket(NodeID nid,
 
 Sockaddr Sender::getSockaddr(const Address& addr) {
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos != impl_->client_sockets_.end()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos != impl_->client_conns_.end()) {
       ld_check(pos->second->peer_name_ == addr);
       return pos->second->peer_sockaddr_;
     }
   } else { // addr is a server address
-    auto pos = impl_->server_sockets_.find(addr.asNodeID().index());
-    if (pos != impl_->server_sockets_.end() &&
+    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
+    if (pos != impl_->server_conns_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.asNodeID())) {
       return pos->second->peer_sockaddr_;
     }
@@ -1090,8 +1091,8 @@ Sockaddr Sender::getSockaddr(const Address& addr) {
 
 ConnectionType Sender::getSockConnType(const Address& addr) {
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos != impl_->client_sockets_.end()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos != impl_->client_conns_.end()) {
       ld_check(pos->second->peer_name_ == addr);
       return pos->second->getConnType();
     }
@@ -1105,22 +1106,22 @@ ConnectionType Sender::getSockConnType(const Address& addr) {
   return ConnectionType::NONE;
 }
 
-Socket* FOLLY_NULLABLE Sender::getSocket(const ClientID& cid) {
+Connection* FOLLY_NULLABLE Sender::getConnection(const ClientID& cid) {
   if (shutting_down_) {
     err = E::SHUTDOWN;
     return nullptr;
   }
 
-  auto pos = impl_->client_sockets_.find(cid);
-  if (pos == impl_->client_sockets_.end()) {
+  auto pos = impl_->client_conns_.find(cid);
+  if (pos == impl_->client_conns_.end()) {
     err = E::UNREACHABLE;
     return nullptr;
   }
   return pos->second.get();
 }
 
-Socket* FOLLY_NULLABLE Sender::getSocket(const NodeID& nid,
-                                         const Message& msg) {
+Connection* FOLLY_NULLABLE Sender::getConnection(const NodeID& nid,
+                                                 const Message& msg) {
   if (shutting_down_) {
     err = E::SHUTDOWN;
     return nullptr;
@@ -1134,13 +1135,14 @@ Socket* FOLLY_NULLABLE Sender::getSocket(const NodeID& nid,
     sock_type = SocketType::DATA;
   }
 
-  Socket* sock = initServerSocket(nid, sock_type, msg.allowUnencrypted());
-  if (!sock) {
-    // err set by initServerSocket()
+  Connection* conn =
+      initServerConnection(nid, sock_type, msg.allowUnencrypted());
+  if (!conn) {
+    // err set by initServerConnection()
     return nullptr;
   }
 
-  int rv = sock->connect();
+  int rv = conn->connect();
 
   if (rv != 0 && err != E::ALREADY && err != E::ISCONN) {
     // err can't be UNREACHABLE because sock must be a server Connection
@@ -1149,48 +1151,48 @@ Socket* FOLLY_NULLABLE Sender::getSocket(const NodeID& nid,
     return nullptr;
   }
 
-  // sock is now connecting or connected, send msg
-  ld_assert(sock->connect() == -1 && (err == E::ALREADY || err == E::ISCONN));
-  return sock;
+  // conn is now connecting or connected, send msg
+  ld_assert(conn->connect() == -1 && (err == E::ALREADY || err == E::ISCONN));
+  return conn;
+}
+Connection* FOLLY_NULLABLE Sender::getConnection(const Address& addr,
+
+                                                 const Message& msg) {
+  return addr.isClientAddress() ? getConnection(addr.asClientID())
+                                : getConnection(addr.asNodeID(), msg);
 }
 
-Socket* FOLLY_NULLABLE Sender::getSocket(const Address& addr,
-                                         const Message& msg) {
-  return addr.isClientAddress() ? getSocket(addr.asClientID())
-                                : getSocket(addr.asNodeID(), msg);
-}
-
-Socket* FOLLY_NULLABLE Sender::findSocket(const Address& addr) {
+Connection* FOLLY_NULLABLE Sender::findConnection(const Address& addr) {
   if (addr.isClientAddress()) {
-    // err, if any, set by getSocket().
-    return getSocket(addr.asClientID());
+    // err, if any, set by getConnection().
+    return getConnection(addr.asClientID());
   }
 
-  Socket* sock = nullptr;
+  Connection* conn = nullptr;
   NodeID nid = addr.asNodeID();
-  auto it = impl_->server_sockets_.find(nid.index());
-  if (it != impl_->server_sockets_.end()) {
-    sock = it->second.get();
+  auto it = impl_->server_conns_.find(nid.index());
+  if (it != impl_->server_conns_.end()) {
+    conn = it->second.get();
   }
-  if (!sock) {
+  if (!conn) {
     err = E::NOTINCONFIG;
   }
-  return sock;
+  return conn;
 }
 
 const PrincipalIdentity* Sender::getPrincipal(const Address& addr) {
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos != impl_->client_sockets_.end()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos != impl_->client_conns_.end()) {
       ld_check(pos->second->peer_name_ == addr);
       return pos->second->principal_.get();
     }
   } else { // addr is a server address
-    auto pos = impl_->server_sockets_.find(addr.asNodeID().index());
-    if (pos != impl_->server_sockets_.end() &&
+    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
+    if (pos != impl_->server_conns_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.asNodeID())) {
-      // server_sockets_ principals should all be empty, this is because
-      // the server_sockets_ will always be on the sender side, as in they
+      // server_conns_ principals should all be empty, this is because
+      // the server_conns_ will always be on the sender side, as in they
       // send the initial HELLO_Message. This means that they will never have
       // receive a HELLO_Message thus never have their principal set.
       ld_check(pos->second->principal_->type == "");
@@ -1203,8 +1205,8 @@ const PrincipalIdentity* Sender::getPrincipal(const Address& addr) {
 
 int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos != impl_->client_sockets_.end()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos != impl_->client_conns_.end()) {
       ld_check(pos->second->peer_name_ == addr);
 
       // Whenever a HELLO_Message is sent, a new client Connection is
@@ -1229,10 +1231,10 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
       return 0;
     }
   } else { // addr is a server address
-    auto pos = impl_->server_sockets_.find(addr.asNodeID().index());
-    if (pos != impl_->server_sockets_.end() &&
+    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
+    if (pos != impl_->server_conns_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
-      // server_sockets_ should never have setPrincipal called as they
+      // server_conns_ should never have setPrincipal called as they
       // should always be the calling side, as in they always send the
       // initial HELLO_Message.
       ld_check(false);
@@ -1245,17 +1247,17 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
 
 const std::string* Sender::getCSID(const Address& addr) {
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos != impl_->client_sockets_.end()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos != impl_->client_conns_.end()) {
       ld_check(pos->second->peer_name_ == addr);
       return &pos->second->csid_;
     }
   } else { // addr is a server address
-    auto pos = impl_->server_sockets_.find(addr.asNodeID().index());
-    if (pos != impl_->server_sockets_.end() &&
+    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
+    if (pos != impl_->server_conns_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
-      // server_sockets_ csid should all be empty, this is because
-      // the server_sockets_ will always be on the sender side, as in they
+      // server_conns_ csid should all be empty, this is because
+      // the server_conns_ will always be on the sender side, as in they
       // send the initial HELLO_Message. This means that they will never
       // have receive a HELLO_Message thus never have their csid set.
       ld_check(pos->second->csid_ == "");
@@ -1268,8 +1270,8 @@ const std::string* Sender::getCSID(const Address& addr) {
 
 int Sender::setCSID(const Address& addr, std::string csid) {
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos != impl_->client_sockets_.end()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos != impl_->client_conns_.end()) {
       ld_check(pos->second->peer_name_ == addr);
 
       // Whenever a HELLO_Message is sent, a new client Connection is
@@ -1280,10 +1282,10 @@ int Sender::setCSID(const Address& addr, std::string csid) {
       return 0;
     }
   } else { // addr is a server address
-    auto pos = impl_->server_sockets_.find(addr.asNodeID().index());
-    if (pos != impl_->server_sockets_.end() &&
+    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
+    if (pos != impl_->server_conns_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
-      // server_sockets_ should never have setCSID called as they
+      // server_conns_ should never have setCSID called as they
       // should always be the calling side, as in they always send the
       // initial HELLO_Message.
       ld_check(false);
@@ -1295,54 +1297,54 @@ int Sender::setCSID(const Address& addr, std::string csid) {
 }
 
 std::string Sender::getClientLocation(const ClientID& cid) {
-  Socket* sock = getSocket(cid);
-  if (!sock) {
+  Connection* conn = getConnection(cid);
+  if (!conn) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
                     "Could not find Connection: %s",
                     describeConnection(cid).c_str());
     return "";
   }
-  return sock->peer_location_;
+  return conn->peer_location_;
 }
 
 void Sender::setClientLocation(const ClientID& cid,
                                const std::string& location) {
-  Socket* sock = getSocket(cid);
-  if (!sock) {
+  Connection* conn = getConnection(cid);
+  if (!conn) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
                     "Could not find Connection: %s",
                     describeConnection(cid).c_str());
     return;
   }
-  sock->peer_location_ = location;
+  conn->peer_location_ = location;
 }
 
 void Sender::setPeerConfigVersion(const Address& addr,
                                   const Message& msg,
                                   config_version_t version) {
-  Socket* sock = getSocket(addr, msg);
-  if (!sock) {
+  Connection* conn = getConnection(addr, msg);
+  if (!conn) {
     ld_check(err == E::SHUTDOWN);
     ld_info("Shutting down. Cannot set peer config version.");
     return;
   }
-  sock->setPeerConfigVersion(version);
+  conn->setPeerConfigVersion(version);
 }
 
 X509* Sender::getPeerCert(const Address& addr) {
   if (addr.isClientAddress()) {
-    auto pos = impl_->client_sockets_.find(addr.id_.client_);
-    if (pos != impl_->client_sockets_.end()) {
+    auto pos = impl_->client_conns_.find(addr.id_.client_);
+    if (pos != impl_->client_conns_.end()) {
       ld_check(pos->second->peer_name_ == addr);
       if (pos->second->isSSL()) {
         return pos->second->getPeerCert();
       }
     }
   } else { // addr is a server address
-    auto pos = impl_->server_sockets_.find(addr.asNodeID().index());
-    if (pos != impl_->server_sockets_.end() &&
+    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
+    if (pos != impl_->server_conns_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
       if (pos->second->isSSL()) {
         X509* cert = pos->second->getPeerCert();
@@ -1376,14 +1378,14 @@ NodeID Sender::getNodeID(const Address& addr) const {
     return addr.id_.node_;
   }
 
-  auto it = impl_->client_sockets_.find(addr.id_.client_);
-  return it != impl_->client_sockets_.end() ? it->second->peer_node_id_
-                                            : NodeID();
+  auto it = impl_->client_conns_.find(addr.id_.client_);
+  return it != impl_->client_conns_.end() ? it->second->peer_node_id_
+                                          : NodeID();
 }
 
 void Sender::setPeerNodeID(const Address& addr, NodeID node_id) {
-  auto it = impl_->client_sockets_.find(addr.id_.client_);
-  if (it != impl_->client_sockets_.end()) {
+  auto it = impl_->client_conns_.find(addr.id_.client_);
+  if (it != impl_->client_conns_.end()) {
     it->second->setPeerNodeId(node_id);
     if (node_id.isNodeID()) {
       it->second->setDSCP(settings_->server_dscp_default);
@@ -1441,7 +1443,7 @@ int Sender::noteDisconnectedClient(ClientID client_name) {
     return 0;
   }
 
-  if (impl_->client_sockets_.count(client_name) == 0) {
+  if (impl_->client_conns_.count(client_name) == 0) {
     ld_critical(
         "INTERNAL ERROR: the name of a disconnected client Connection  %s "
         "is not in the client map",
@@ -1473,8 +1475,8 @@ void Sender::noteConfigurationChanged(
     std::shared_ptr<const NodesConfiguration> nodes_configuration) {
   nodes_ = std::move(nodes_configuration);
 
-  auto it = impl_->server_sockets_.begin();
-  while (it != impl_->server_sockets_.end()) {
+  auto it = impl_->server_conns_.begin();
+  while (it != impl_->server_conns_.end()) {
     auto& s = it->second;
     auto i = it->first;
     ld_check(!s->peer_name_.isClientAddress());
@@ -1509,7 +1511,7 @@ void Sender::noteConfigurationChanged(
     }
 
     s->close(E::NOTINCONFIG);
-    it = impl_->server_sockets_.erase(it);
+    it = impl_->server_conns_.erase(it);
   }
 }
 
@@ -1558,31 +1560,31 @@ void Sender::queueMessageCompletion(std::unique_ptr<Message> msg,
 std::string Sender::dumpQueuedMessages(Address addr) const {
   std::map<MessageType, int> counts;
   if (addr.valid()) {
-    const Socket* socket = nullptr;
+    const Connection* conn = nullptr;
     if (addr.isClientAddress()) {
-      const auto it = impl_->client_sockets_.find(addr.id_.client_);
-      if (it != impl_->client_sockets_.end()) {
-        socket = it->second.get();
+      const auto it = impl_->client_conns_.find(addr.id_.client_);
+      if (it != impl_->client_conns_.end()) {
+        conn = it->second.get();
       }
     } else {
       const auto idx = addr.asNodeID().index();
-      const auto it = impl_->server_sockets_.find(idx);
-      if (it != impl_->server_sockets_.end()) {
-        socket = it->second.get();
+      const auto it = impl_->server_conns_.find(idx);
+      if (it != impl_->server_conns_.end()) {
+        conn = it->second.get();
       }
     }
-    if (socket == nullptr) {
+    if (conn == nullptr) {
       // Unexpected but not worth asserting on (crashing the server) since
       // this is debugging code
       return "<Connection  not found>";
     }
-    socket->dumpQueuedMessages(&counts);
+    conn->dumpQueuedMessages(&counts);
   } else {
-    for (const auto& entry : impl_->server_sockets_) {
+    for (const auto& entry : impl_->server_conns_) {
       entry.second->dumpQueuedMessages(&counts);
     }
 
-    for (const auto& entry : impl_->client_sockets_) {
+    for (const auto& entry : impl_->client_conns_) {
       entry.second->dumpQueuedMessages(&counts);
     }
   }
@@ -1595,10 +1597,10 @@ std::string Sender::dumpQueuedMessages(Address addr) const {
 
 void Sender::forEachConnection(
     std::function<void(const Connection&)> cb) const {
-  for (const auto& entry : impl_->server_sockets_) {
+  for (const auto& entry : impl_->server_conns_) {
     cb(*entry.second);
   }
-  for (const auto& entry : impl_->client_sockets_) {
+  for (const auto& entry : impl_->client_conns_) {
     cb(*entry.second);
   }
 }
@@ -1606,8 +1608,8 @@ void Sender::forEachConnection(
 std::shared_ptr<const std::atomic<bool>>
 Sender::getSocketToken(const ClientID cid) const {
   ld_check(cid.valid());
-  auto pos = impl_->client_sockets_.find(cid);
-  if (pos == impl_->client_sockets_.end()) {
+  auto pos = impl_->client_conns_.find(cid);
+  if (pos == impl_->client_conns_.end()) {
     return nullptr;
   }
 
@@ -1615,7 +1617,7 @@ Sender::getSocketToken(const ClientID cid) const {
 }
 
 void Sender::forAllClientConnections(std::function<void(Connection&)> fn) {
-  for (auto& it : impl_->client_sockets_) {
+  for (auto& it : impl_->client_conns_) {
     fn(*it.second);
   }
 }
@@ -1626,9 +1628,9 @@ void Sender::closeSlowSockets() {
   size_t reason_net_slow = 0, reason_recv_slow = 0, app_limited = 0;
   size_t max_closures_allowed = settings_->rate_limit_socket_closed;
   auto startTime = SteadyTimestamp::now();
-  auto close_if_slow = [&](Socket& sock) {
+  auto close_if_slow = [&](Connection& conn) {
     ++num_sockets;
-    auto status = sock.checkSocketHealth();
+    auto status = conn.checkSocketHealth();
     bool close_socket = status == SocketDrainStatusType::STALLED ||
         (status == SocketDrainStatusType::NET_SLOW &&
          reason_net_slow < max_closures_allowed);
@@ -1639,14 +1641,14 @@ void Sender::closeSlowSockets() {
     reason_net_slow += status == SocketDrainStatusType::NET_SLOW ? 1 : 0;
     if (close_socket) {
       ++sockets_closed;
-      sock.close(E::TIMEDOUT);
+      conn.close(E::TIMEDOUT);
     }
   };
 
-  for (auto& entry : impl_->server_sockets_) {
+  for (auto& entry : impl_->server_conns_) {
     close_if_slow(*entry.second);
   }
-  for (auto& entry : impl_->client_sockets_) {
+  for (auto& entry : impl_->client_conns_) {
     close_if_slow(*entry.second);
   }
   if (sockets_closed) {

@@ -577,7 +577,7 @@ class Sender : public SenderBase {
    *
    * @return 0 on success, -1 otherwise
    */
-  int notifyPeerConfigUpdated(Socket& sock);
+  int notifyPeerConfigUpdated(Connection& conn);
 
   /**
    * @param addr    peer name of a client or server Connection expected to be
@@ -902,7 +902,7 @@ class Sender : public SenderBase {
    *
    * @param msg   message to send. Ownership is not transferred unless the call
    *              succeeds.
-   * @param sock  client server Connection to send the message into
+   * @param conn  client server Connection to send the message into
    * @param onclose an optional callback to push onto the list of callbacks
    *                that the Connection through which the message gets sent will
    *                call when that Connection is closed. The callback will NOT
@@ -917,7 +917,7 @@ class Sender : public SenderBase {
    *                 unexpected error from socket(2).
    */
   int sendMessageImpl(std::unique_ptr<Message>&& msg,
-                      Socket& sock,
+                      Connection& conn,
                       BWAvailableCallback* on_bw_avail = nullptr,
                       SocketCallback* onclose = nullptr);
 
@@ -935,9 +935,9 @@ class Sender : public SenderBase {
    *                      configured for nid
    *         INTERNAL     internal error (debug builds assert)
    */
-  Socket* initServerSocket(NodeID nid,
-                           SocketType sock_type,
-                           bool allow_unencrypted);
+  Connection* initServerConnection(NodeID nid,
+                                   SocketType sock_type,
+                                   bool allow_unencrypted);
 
   /**
    * This method gets the Connection associated with a given ClientID. The
@@ -947,7 +947,7 @@ class Sender : public SenderBase {
    *             management of this Sender.
    * @return the Connection connected to cid or nullptr if an error occured
    */
-  Socket* FOLLY_NULLABLE getSocket(const ClientID& cid);
+  Connection* FOLLY_NULLABLE getConnection(const ClientID& cid);
 
   /**
    * This method gets the Connection associated with a given NodeID. It will
@@ -959,7 +959,8 @@ class Sender : public SenderBase {
    *                   Connection.
    * @return the Connection connected to nid or nullptr if an error occured
    */
-  Socket* FOLLY_NULLABLE getSocket(const NodeID& nid, const Message& msg);
+  Connection* FOLLY_NULLABLE getConnection(const NodeID& nid,
+                                           const Message& msg);
 
   /**
    * This method gets the Connection associated with a given Address. If addr is
@@ -972,7 +973,8 @@ class Sender : public SenderBase {
    *                   Connection.
    * @return the Connection connected to nid or nullptr if an error occured
    */
-  Socket* FOLLY_NULLABLE getSocket(const Address& addr, const Message& msg);
+  Connection* FOLLY_NULLABLE getConnection(const Address& addr,
+                                           const Message& msg);
 
   /**
    * This method finds any existing Connection associated with a given Address.
@@ -982,17 +984,7 @@ class Sender : public SenderBase {
    * @return the Connection connected to addr or nullptr, with err set, if
    *         the Connection couldn't be found.
    */
-  Socket* FOLLY_NULLABLE findSocket(const Address& addr);
-
-  /**
-   * Determine the server Connection table location where either an existing
-   * connection is already recorded, or a new connection should be placed.
-   *
-   * @param addr       peer name of the existing or new Connection.
-   * @return a pointer into the server Connection table, or nullptr if the
-   *         provided NodeID is not in the currnt config.
-   */
-  std::unique_ptr<Socket>* FOLLY_NULLABLE findSocketSlot(const NodeID& addr);
+  Connection* FOLLY_NULLABLE findConnection(const Address& addr);
 
   /**
    * @return true iff called on the thread that is running this Sender's
