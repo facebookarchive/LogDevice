@@ -520,7 +520,7 @@ class Socket : public TrafficShappingSocket {
    * @return should only be called if the socket is SSL enabled. Returns
    *         the peers certificate if one was provided and nullptr otherwise.
    */
-  virtual X509* getPeerCert() const;
+  virtual folly::ssl::X509UniquePtr getPeerCert() const;
 
   void setPeerShuttingDown() {
     peer_shuttingdown_ = true;

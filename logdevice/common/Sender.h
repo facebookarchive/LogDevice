@@ -19,6 +19,7 @@
 #include <folly/CppAttributes.h>
 #include <folly/IntrusiveList.h>
 #include <folly/Optional.h>
+#include <folly/ssl/OpenSSLPtrTypes.h>
 #include <openssl/ossl_typ.h>
 
 #include "logdevice/common/Address.h"
@@ -623,7 +624,7 @@ class Sender : public SenderBase {
    *              was presented. Returns a nullptr if no certificate was found,
    *              or if no Connections known to this sender match addr.
    */
-  X509* getPeerCert(const Address& addr);
+  folly::ssl::X509UniquePtr getPeerCert(const Address& addr);
 
   /**
    * Returns the NodeID of the peer with the given address.

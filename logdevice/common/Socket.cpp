@@ -2392,7 +2392,7 @@ bool Socket::peerIsClient() const {
   return peer_type_ == PeerType::CLIENT;
 }
 
-X509* Socket::getPeerCert() const {
+folly::ssl::X509UniquePtr Socket::getPeerCert() const {
   ld_check(isSSL());
 
   // This function should only be called when the socket is SSL enabled.
@@ -2400,7 +2400,7 @@ X509* Socket::getPeerCert() const {
   SSL* ctx = bufferevent_openssl_get_ssl(bev_);
   ld_check(ctx);
 
-  return SSL_get_peer_certificate(ctx);
+  return folly::ssl::X509UniquePtr(SSL_get_peer_certificate(ctx));
 }
 
 SocketDrainStatusType Socket::getSlowSocketReason(unsigned* net_ltd_pct,

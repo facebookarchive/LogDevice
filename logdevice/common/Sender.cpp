@@ -1333,7 +1333,7 @@ void Sender::setPeerConfigVersion(const Address& addr,
   conn->setPeerConfigVersion(version);
 }
 
-X509* Sender::getPeerCert(const Address& addr) {
+folly::ssl::X509UniquePtr Sender::getPeerCert(const Address& addr) {
   if (addr.isClientAddress()) {
     auto pos = impl_->client_conns_.find(addr.id_.client_);
     if (pos != impl_->client_conns_.end()) {
@@ -1347,7 +1347,7 @@ X509* Sender::getPeerCert(const Address& addr) {
     if (pos != impl_->server_conns_.end() &&
         pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
       if (pos->second->isSSL()) {
-        X509* cert = pos->second->getPeerCert();
+        folly::ssl::X509UniquePtr cert = pos->second->getPeerCert();
 
         // Logdevice server nodes are required to send their certificate
         // to the client when creating an SSL socket.

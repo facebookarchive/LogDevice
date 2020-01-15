@@ -196,12 +196,10 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
           break;
         }
         case AuthenticationType::SSL: {
-          X509* cert = w->sender().getPeerCert(from);
+          folly::ssl::X509UniquePtr cert = w->sender().getPeerCert(from);
           // cert can be nullptr. it is handled by getPrincipal
           // use 1 as size as is not used for SSL cetficate
-          principal = principal_parser->getPrincipal(cert, 1);
-          // X509_free handles nullptr
-          X509_free(cert);
+          principal = principal_parser->getPrincipal(cert.get(), 1);
           break;
         }
         case AuthenticationType::NONE:

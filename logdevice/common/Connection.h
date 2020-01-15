@@ -167,7 +167,7 @@ class Connection : public Socket {
 
   size_t getBufferedBytesSize() const override;
 
-  X509* getPeerCert() const override;
+  folly::ssl::X509UniquePtr getPeerCert() const override;
 
   bool msgRetryTimerArmed() {
     return retry_receipt_of_message_.isScheduled();

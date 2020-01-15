@@ -77,7 +77,7 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
     std::string idType, identity;
     if (folly::split(
             ':', security_info->cluster_node_identity, idType, identity)) {
-      X509* cert = w->sender().getPeerCert(from);
+      folly::ssl::X509UniquePtr cert = w->sender().getPeerCert(from);
       if (cert) {
         // We only support server authentication for SSL connections. If the
         // server presents a certificate, we verify that the bundled identity
@@ -87,8 +87,8 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
         // otherwise the SSL handshake would have failed already at this point
         // since we set SSL_VERIFY_PEER option in the SSL context.
         // Note we use 1 as size as it is ignored anyway for SSL certficate
-        PrincipalIdentity principal = principal_parser->getPrincipal(cert, 1);
-        X509_free(cert);
+        PrincipalIdentity principal =
+            principal_parser->getPrincipal(cert.get(), 1);
         if (!principal.match(idType, identity)) {
           RATELIMIT_ERROR(std::chrono::seconds(1),
                           1,

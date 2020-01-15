@@ -440,14 +440,14 @@ size_t Connection::getBytesPending() const {
   return bytes_pending;
 }
 
-X509* Connection::getPeerCert() const {
+folly::ssl::X509UniquePtr Connection::getPeerCert() const {
   if (legacy_connection_) {
     return Socket::getPeerCert();
   }
   ld_check(isSSL());
   auto sock_peer_cert = proto_handler_->sock()->getPeerCertificate();
   if (sock_peer_cert) {
-    return sock_peer_cert->getX509().get();
+    return sock_peer_cert->getX509();
   }
   return nullptr;
 }
