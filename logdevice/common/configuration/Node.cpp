@@ -21,6 +21,7 @@ Node::Node(const Node& other) {
   gossip_address = other.gossip_address;
   ssl_address = other.ssl_address;
   admin_address = other.admin_address;
+  server_to_server_address = other.server_to_server_address;
   generation = other.generation;
   location = other.location;
   roles = other.roles;

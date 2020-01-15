@@ -782,12 +782,13 @@ class ClusterFactory {
 
 // All ports logdeviced can listen on.
 struct ServerAddresses {
-  static constexpr size_t COUNT = 6;
+  static constexpr size_t COUNT = 7;
 
   Sockaddr protocol;
   Sockaddr command;
   Sockaddr gossip;
   Sockaddr admin;
+  Sockaddr server_to_server;
   Sockaddr protocol_ssl;
   Sockaddr command_ssl;
 
@@ -803,6 +804,7 @@ struct ServerAddresses {
       node.ssl_address.assign(protocol_ssl);
     }
     node.admin_address.assign(admin);
+    node.server_to_server_address.assign(server_to_server);
   }
 
   static ServerAddresses withTCPPorts(std::vector<detail::PortOwner> ports) {
@@ -815,6 +817,7 @@ struct ServerAddresses {
     r.admin = Sockaddr(addr, ports[3].port);
     r.protocol_ssl = Sockaddr(addr, ports[4].port);
     r.command_ssl = Sockaddr(addr, ports[5].port);
+    r.server_to_server = Sockaddr(addr, ports[6].port);
 
     r.owners = std::move(ports);
 
@@ -827,6 +830,7 @@ struct ServerAddresses {
     r.command = Sockaddr(path + "/socket_command");
     r.gossip = Sockaddr(path + "/socket_gossip");
     r.admin = Sockaddr(path + "/socket_admin");
+    r.server_to_server = Sockaddr(path + "/socket_server_to_server");
     r.protocol_ssl = Sockaddr(path + "/ssl_socket_main");
     r.command_ssl = Sockaddr(path + "/ssl_socket_command");
     return r;

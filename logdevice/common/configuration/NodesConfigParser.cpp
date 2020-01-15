@@ -34,12 +34,14 @@ static bool parseOneNode(const folly::dynamic&,
 // Common to all node roles
 static bool parseNodeID(const folly::dynamic&, node_index_t&);
 static bool parseGeneration(const folly::dynamic&, Configuration::Node&);
-static bool parseHostFields(const folly::dynamic&,
-                            std::string& /* name */,
-                            Sockaddr&, /* host address */
-                            Sockaddr&, /* gossip address */
-                            folly::Optional<Sockaddr>& /* ssl address */,
-                            folly::Optional<Sockaddr>& /* admin_address */);
+static bool
+parseHostFields(const folly::dynamic&,
+                std::string& /* name */,
+                Sockaddr&, /* host address */
+                Sockaddr&, /* gossip address */
+                folly::Optional<Sockaddr>& /* ssl address */,
+                folly::Optional<Sockaddr>& /* admin_address */,
+                folly::Optional<Sockaddr>& /* server_to_server_address */);
 static bool parseLocation(const folly::dynamic&, Configuration::Node&);
 static bool parseRoles(const folly::dynamic&, Configuration::Node&);
 using RoleParser = bool(const folly::dynamic&, Configuration::Node&);
@@ -211,7 +213,8 @@ static bool parseOneNode(const folly::dynamic& nodeMap,
                          output.address,
                          output.gossip_address,
                          output.ssl_address,
-                         output.admin_address) &&
+                         output.admin_address,
+                         output.server_to_server_address) &&
       parseLocation(nodeMap, output) && parseRoles(nodeMap, output);
 }
 
@@ -281,16 +284,18 @@ bool parseHostString(const std::string& hostStr,
   return true;
 }
 
-static bool parseHostFields(const folly::dynamic& nodeMap,
-                            std::string& name,
-                            Sockaddr& addr_out,
-                            Sockaddr& gossip_addr_out,
-                            folly::Optional<Sockaddr>& ssl_addr_out,
-                            folly::Optional<Sockaddr>& admin_addr_out) {
+static bool
+parseHostFields(const folly::dynamic& nodeMap,
+                std::string& name,
+                Sockaddr& addr_out,
+                Sockaddr& gossip_addr_out,
+                folly::Optional<Sockaddr>& ssl_addr_out,
+                folly::Optional<Sockaddr>& admin_addr_out,
+                folly::Optional<Sockaddr>& server_to_server_addr_out) {
   std::string hostStr;
-  std::string gossipAddressStr, adminAddressStr;
+  std::string gossipAddressStr, adminAddressStr, serverToServerAddressStr;
   std::string sslHostStr;
-  int sslPort, gossipPort, adminPort;
+  int sslPort, gossipPort, adminPort, serverToServerPort;
 
   // Parse the name of the node, if it's there
   // TODO(T44427489): Make the name field a required field.
@@ -392,6 +397,34 @@ static bool parseHostFields(const folly::dynamic& nodeMap,
     }
     admin_addr_out.assign(admin_addr);
   }
+
+  if (getIntFromMap<int>(
+          nodeMap, "server_to_server_port", serverToServerPort)) {
+    size_t posn = hostStr.find_last_of(":");
+    std::string host_prefix = hostStr.substr(0, posn + 1);
+    serverToServerAddressStr = host_prefix;
+    serverToServerAddressStr += folly::to<std::string>(serverToServerPort);
+  } else {
+    // Port not found, looking for unix domain socket / full address
+    if (!getStringFromMap(
+            nodeMap, "server_to_server_address", serverToServerAddressStr)) {
+      // we don't have a server-to-server address in this case
+      serverToServerAddressStr = "";
+    }
+  }
+  if (!serverToServerAddressStr.empty()) {
+    Sockaddr server_to_server_addr;
+    if (!parseHostString(serverToServerAddressStr,
+                         server_to_server_addr,
+                         "server_to_server_address")) {
+      ld_warning("parseHostString() failed for server_to_server_address:%s",
+                 serverToServerAddressStr.c_str());
+      // err set by parseHostString()
+      return false;
+    }
+    server_to_server_addr_out.assign(server_to_server_addr);
+  }
+
   return true;
 }
 

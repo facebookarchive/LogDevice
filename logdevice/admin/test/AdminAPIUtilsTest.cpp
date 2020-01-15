@@ -10,27 +10,49 @@
 
 #include <gtest/gtest.h>
 
+#include "logdevice/admin/Conv.h"
+
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
 
 namespace {
 
+NodeLocation locationFromDomainString(const std::string&);
+
 const std::string kTestAddress = "127.0.0.1";
 const std::string kTestNodeName = "test-server";
 const std::string kAnotherTestNodeName = "another-test-server";
 const std::string kTestUnixPath = "/unix/socket/path";
+const std::string kTestDomainString = "test.domain.string.five.scopes";
 const node_index_t kTestNodeIndex = 1337;
 const node_index_t kAnotherTestNodeIndex = 1007;
 const in_port_t kTestDataPort = 4440;
-const in_port_t kTestSSLPort = 4443;
+const in_port_t kTestGossipPort = 4441;
+const in_port_t kTestServerToServerPort = 4442;
+const in_port_t kTestSslPort = 4443;
+const in_port_t kTestAdminPort = 6440;
 const Sockaddr kTestSocketAddress = Sockaddr{kTestAddress, kTestDataPort};
-const Sockaddr kAnotherTestSocketAddress = Sockaddr{kTestAddress, kTestSSLPort};
+const Sockaddr kTestGossipSocketAddress =
+    Sockaddr{kTestAddress, kTestGossipPort};
+const Sockaddr kTestServerToServerSocketAddress =
+    Sockaddr{kTestAddress, kTestServerToServerPort};
+const Sockaddr kTestSslSocketAddress = Sockaddr{kTestAddress, kTestSslPort};
+const Sockaddr kTestAdminSocketAddress = Sockaddr{kTestAddress, kTestAdminPort};
+const uint64_t kTestUpdateVersion = 3147;
+const NodeLocation kTestNodeLocation =
+    locationFromDomainString(kTestDomainString);
 
 thrift::SocketAddress toThrift(const Sockaddr& address) {
   facebook::logdevice::thrift::SocketAddress result;
   result.set_address(address.getAddress().str());
   result.set_port(address.port());
   return result;
+}
+
+NodeLocation locationFromDomainString(const std::string& domainString) {
+  NodeLocation location;
+  location.fromDomainString(domainString);
+  return location;
 }
 
 } // namespace
@@ -73,7 +95,7 @@ TEST(AdminAPIUtilsTest, MatchNodeByAddressIpV4) {
   EXPECT_TRUE(
       nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
 
-  thriftNodeId.set_address(toThrift(kAnotherTestSocketAddress));
+  thriftNodeId.set_address(toThrift(kTestSslSocketAddress));
   EXPECT_FALSE(
       nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
 }
@@ -132,4 +154,61 @@ TEST(AdminAPIUtilsTest, EmptyIDMatchesAnything) {
   nodeServiceDiscovery.address = Sockaddr{kTestUnixPath};
   EXPECT_TRUE(
       nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
+}
+
+TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
+  // Build an input NodesConfiguration instance
+  RoleSet roleSet;
+  roleSet.set(static_cast<uint8_t>(NodeRole::STORAGE));
+  roleSet.set(static_cast<uint8_t>(NodeRole::SEQUENCER));
+
+  NodeServiceDiscovery nodeServiceDiscovery{kTestNodeName,
+                                            kTestUpdateVersion,
+                                            kTestSocketAddress,
+                                            kTestGossipSocketAddress,
+                                            kTestSslSocketAddress,
+                                            kTestAdminSocketAddress,
+                                            kTestServerToServerSocketAddress,
+                                            kTestNodeLocation,
+                                            std::move(roleSet)};
+
+  ServiceDiscoveryConfig::NodeUpdate nodeUpdate{
+      ServiceDiscoveryConfig::UpdateType::PROVISION,
+      std::make_unique<NodeServiceDiscovery>(std::move(nodeServiceDiscovery))};
+
+  ServiceDiscoveryConfig::Update serviceDiscoveryUpdate;
+  serviceDiscoveryUpdate.addNode(kTestNodeIndex, std::move(nodeUpdate));
+
+  NodesConfiguration::Update nodesConfigUpdate{
+      std::make_unique<ServiceDiscoveryConfig::Update>(
+          std::move(serviceDiscoveryUpdate))};
+
+  std::shared_ptr<const NodesConfiguration> nodesConfiguration =
+      NodesConfiguration().applyUpdate(std::move(nodesConfigUpdate));
+
+  // Build expected Thrift NodeConfig
+  thrift::NodeConfig expected;
+  expected.set_node_index(kTestNodeIndex);
+  expected.set_name(kTestNodeName);
+  expected.set_data_address(toThrift(kTestSocketAddress));
+
+  thrift::Addresses otherAddresses;
+  otherAddresses.set_gossip(toThrift(kTestGossipSocketAddress));
+  otherAddresses.set_ssl(toThrift(kTestSslSocketAddress));
+  otherAddresses.set_admin(toThrift(kTestAdminSocketAddress));
+  otherAddresses.set_server_to_server(
+      toThrift(kTestServerToServerSocketAddress));
+  expected.set_other_addresses(std::move(otherAddresses));
+
+  expected.set_location(kTestDomainString);
+  expected.set_location_per_scope(
+      toThrift<thrift::Location>(folly::make_optional(kTestNodeLocation)));
+  expected.roles.emplace(thrift::Role::STORAGE);
+  expected.roles.emplace(thrift::Role::SEQUENCER);
+
+  // Test
+  thrift::NodeConfig actual;
+  fillNodeConfig(actual, kTestNodeIndex, *nodesConfiguration);
+
+  EXPECT_EQ(expected, actual);
 }

@@ -106,6 +106,10 @@ struct Addresses {
    * The socket address for admin connections to the server.
    */
   3: optional SocketAddress admin;
+  /**
+   * The socket address for server-to-server connections.
+   */
+  4: optional SocketAddress server_to_server;
 }
 
 /**

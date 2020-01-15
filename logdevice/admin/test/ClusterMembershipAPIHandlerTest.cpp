@@ -67,7 +67,10 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
   }
 
   thrift::AddNodesRequest buildAddNodesRequest(std::vector<int32_t> idxs) {
-    ld_assert(idxs.size() < 50);
+    ld_assert(idxs.size() < 25);
+    for (int32_t idx : idxs) {
+      ld_assert(idx < 150);
+    }
 
     auto make_address = [](int addr, int port) {
       thrift::SocketAddress ret;
@@ -86,9 +89,11 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
 
       {
         thrift::Addresses other_addresses;
-        other_addresses.set_gossip(make_address(50 + idx, 2000 + idx));
-        other_addresses.set_ssl(make_address(100 + idx, 3000 + idx));
-        other_addresses.set_admin(make_address(150 + idx, 4000 + idx));
+        other_addresses.set_gossip(make_address(25 + idx, 2000 + idx));
+        other_addresses.set_ssl(make_address(50 + idx, 3000 + idx));
+        other_addresses.set_admin(make_address(75 + idx, 4000 + idx));
+        other_addresses.set_server_to_server(
+            make_address(100 + idx, 5000 + idx));
         cfg.set_other_addresses(other_addresses);
       }
 
@@ -387,6 +392,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
   cfg.data_address.set_address("/test1");
   cfg.other_addresses_ref()->gossip_ref()->set_address("/test2");
   cfg.other_addresses_ref()->ssl_ref()->set_address("/test3");
+  cfg.other_addresses_ref()->server_to_server_ref()->set_address("/test4");
   cfg.storage_ref()->set_weight(123);
   cfg.sequencer_ref()->set_weight(122);
 

@@ -186,6 +186,13 @@ struct Node {
   folly::Optional<Sockaddr> admin_address;
 
   /**
+   * The IP (v4 or v6) address, including port number, for server-to-server
+   * communication. It can also be a unix socket. If it's folly::none, it means
+   * that the node doesn't have a dedicated server-to-server address.
+   */
+  folly::Optional<Sockaddr> server_to_server_address;
+
+  /**
    * Generation number of this slot.  Hosts in a cluster are uniquely
    * identified by (index, generation) where index is into the array of
    * nodes.

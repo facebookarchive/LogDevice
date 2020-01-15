@@ -229,6 +229,12 @@ void fillNodeConfig(
     fillSocketAddress(admin_address, node_sd->admin_address.value());
     other_addresses.set_admin(std::move(admin_address));
   }
+  if (node_sd->server_to_server_address) {
+    thrift::SocketAddress server_to_server_address;
+    fillSocketAddress(
+        server_to_server_address, node_sd->server_to_server_address.value());
+    other_addresses.set_server_to_server(std::move(server_to_server_address));
+  }
   out.set_other_addresses(std::move(other_addresses));
 }
 

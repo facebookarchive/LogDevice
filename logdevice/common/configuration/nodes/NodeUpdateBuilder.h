@@ -34,6 +34,7 @@ class NodeUpdateBuilder {
   NodeUpdateBuilder& setGossipAddress(Sockaddr);
   NodeUpdateBuilder& setSSLAddress(Sockaddr);
   NodeUpdateBuilder& setAdminAddress(Sockaddr);
+  NodeUpdateBuilder& setServerToServerAddress(Sockaddr);
   NodeUpdateBuilder& setLocation(NodeLocation);
   NodeUpdateBuilder& setName(std::string);
   NodeUpdateBuilder& isSequencerNode();
@@ -78,6 +79,7 @@ class NodeUpdateBuilder {
   folly::Optional<Sockaddr> gossip_address_;
   folly::Optional<Sockaddr> ssl_address_;
   folly::Optional<Sockaddr> admin_address_;
+  folly::Optional<Sockaddr> server_to_server_address_;
   folly::Optional<NodeLocation> location_;
   configuration::nodes::RoleSet roles_;
   folly::Optional<std::string> name_;

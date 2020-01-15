@@ -124,6 +124,16 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
     }
   }
 
+  // Dedicated server-to-server address is optional, so only set it if the unix
+  // socket is passed or if the port is greater than the default 0.
+  if (!server_settings_.server_to_server_unix_socket.empty()) {
+    update_builder.setServerToServerAddress(
+        Sockaddr(server_settings_.server_to_server_unix_socket));
+  } else if (server_settings_.server_to_server_port > 0) {
+    update_builder.setServerToServerAddress(Sockaddr(
+        server_settings_.address, server_settings_.server_to_server_port));
+  }
+
   if (!server_settings_.location.isEmpty()) {
     update_builder.setLocation(server_settings_.location);
   }

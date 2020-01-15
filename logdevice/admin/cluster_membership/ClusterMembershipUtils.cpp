@@ -69,6 +69,10 @@ nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
       update_builder.setAdminAddress(
           convert_thrift_address(other_addresses.admin_ref().value()));
     }
+    if (other_addresses.server_to_server_ref().has_value()) {
+      update_builder.setServerToServerAddress(convert_thrift_address(
+          other_addresses.server_to_server_ref().value()));
+    }
   }
 
   if (cfg.location_ref().has_value()) {

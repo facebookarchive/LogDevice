@@ -94,7 +94,9 @@ struct ServerSettings : public SettingsBundle {
   // TODO(mbassem): This is the IP, do we need a better name?
   std::string address;
   int ssl_port;
+  int server_to_server_port;
   std::string ssl_unix_socket;
+  std::string server_to_server_unix_socket;
   int gossip_port;
   std::string gossip_unix_socket;
   configuration::nodes::RoleSet roles;

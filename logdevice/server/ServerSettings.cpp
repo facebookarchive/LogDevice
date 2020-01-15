@@ -478,6 +478,19 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::NodeRegistration)
 
+    ("server-to-server-unix-socket", &server_to_server_unix_socket, "", validate_unix_socket,
+     "[Only used when node self registration is enabled] Path to the unix "
+     "domain socket the server will use to listen for other servers.",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("server-to-server-port", &server_to_server_port, "0", validate_optional_port,
+     "[Only used when node self registration is enabled] TCP port on which the "
+     "server listens for server-to-server connections. A value of zero means that "
+     "the server listens for other servers on the base address.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
+
     ("roles", &roles, "sequencer,storage",
      parse_roles,
      "[Only used when node self registration is enabled] Defines whether the "

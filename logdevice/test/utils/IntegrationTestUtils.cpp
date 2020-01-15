@@ -876,7 +876,7 @@ int Cluster::pickAddressesForServers(
     const std::map<node_index_t, node_gen_t>& node_replacement_counters,
     std::vector<ServerAddresses>& out) {
   if (use_tcp) {
-    // This test uses TCP. Look for 6 free ports for each node.
+    // This test uses TCP. Look for enough free ports for each node.
     std::vector<detail::PortOwner> ports;
     if (detail::find_free_port_set(
             indices.size() * ServerAddresses::COUNT, ports) != 0) {
@@ -1152,8 +1152,8 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   node->cmd_args_ = commandArgsForNode(*node);
   node->admin_command_client_ = admin_command_client_;
 
-  ld_info("Node N%d:%d will be started on addresses: protocol:%s, ssl: %s"
-          ", gossip:%s, command:%s, admin:%s (data in %s)",
+  ld_info("Node N%d:%d will be started on addresses: protocol:%s, ssl:%s"
+          ", gossip:%s, command:%s, admin:%s (data in %s), server-to-server:%s",
           index,
           getNodeReplacementCounter(index),
           node->addrs_.protocol.toString().c_str(),
@@ -1161,7 +1161,8 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
           node->addrs_.gossip.toString().c_str(),
           node->addrs_.command.toString().c_str(),
           node->addrs_.admin.toString().c_str(),
-          node->data_path_.c_str());
+          node->data_path_.c_str(),
+          node->addrs_.server_to_server.toString().c_str());
 
   return node;
 }
@@ -1192,7 +1193,7 @@ Cluster::createSelfRegisteringNode(const std::string& name) const {
   // Allocate the addresses
   ServerAddresses addrs;
   if (use_tcp_) {
-    // This test uses TCP. Look for 6 free ports for each node.
+    // This test uses TCP. Look for enough free ports for each node.
     std::vector<detail::PortOwner> ports;
     if (detail::find_free_port_set(ServerAddresses::COUNT, ports) != 0) {
       ld_error("Not enough free ports on system to allocate");
@@ -1213,14 +1214,16 @@ Cluster::createSelfRegisteringNode(const std::string& name) const {
   node->admin_command_client_ = admin_command_client_;
 
   ld_info("Node %s (with self registration) will be started on addresses: "
-          "protocol:%s, ssl: %s, gossip:%s, command:%s, admin:%s (data in %s)",
+          "protocol:%s, ssl: %s, gossip:%s, command:%s, admin:%s (data in %s), "
+          "server-to-server:%s",
           name.c_str(),
           node->addrs_.protocol.toString().c_str(),
           node->addrs_.protocol_ssl.toString().c_str(),
           node->addrs_.gossip.toString().c_str(),
           node->addrs_.command.toString().c_str(),
           node->addrs_.admin.toString().c_str(),
-          node->data_path_.c_str());
+          node->data_path_.c_str(),
+          node->addrs_.server_to_server.toString().c_str());
 
   return node;
 }
@@ -1248,13 +1251,20 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
       ? std::make_pair("--admin-unix-socket", ParamValue{admn.getPath()})
       : std::make_pair("--admin-port", ParamValue{std::to_string(admn.port())});
 
+  const auto& s2s = node.addrs_.server_to_server;
+  auto s2s_addr_param = s2s.isUnixAddress()
+      ? std::make_pair(
+            "--server-to-server-unix-socket", ParamValue{s2s.getPath()})
+      : std::make_pair(
+            "--server-to-server-port", ParamValue{std::to_string(s2s.port())});
+
   // clang-format off
 
   // Construct the default parameters.
   ParamMaps default_param_map = {
     { ParamScope::ALL,
       {
-        protocol_addr_param, command_addr_param, gossip_addr_param, admin_addr_param,
+        protocol_addr_param, command_addr_param, gossip_addr_param, admin_addr_param, s2s_addr_param,
         {"--name", ParamValue{node.name_}},
         {"--test-mode", ParamValue{"true"}},
         {"--config-path", ParamValue{"file:" + node.config_path_}},

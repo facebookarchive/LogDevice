@@ -158,6 +158,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     node.gossip_address = serv.getGossipAddress();
     node.ssl_address = serv.ssl_address;
     node.admin_address = serv.admin_address;
+    node.server_to_server_address = serv.server_to_server_address;
     node.location = serv.location;
     node.roles = serv.roles;
   }
@@ -202,7 +203,7 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
              : folly::none,
          node.ssl_address,
          node.admin_address,
-         folly::none,
+         node.server_to_server_address,
          node.location,
          node.roles});
 

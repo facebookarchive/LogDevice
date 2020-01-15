@@ -38,6 +38,8 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
     settings.ssl_unix_socket = folly::format("/{}/ssl", name).str();
     settings.gossip_unix_socket = folly::format("/{}/gossip", name).str();
     settings.command_unix_socket = folly::format("/{}/command", name).str();
+    settings.server_to_server_unix_socket =
+        folly::format("/{}/server-to-server", name).str();
     settings.roles = 3 /* sequencer + storage */;
     settings.sequencer_weight = 12;
     settings.storage_capacity = 13;
@@ -94,6 +96,8 @@ TEST_F(NodeRegistrationHandlerTest, testAddNode) {
   EXPECT_EQ("/node1/ssl", svd->ssl_address->toString());
   EXPECT_EQ("/node1/gossip", svd->gossip_address->toString());
   EXPECT_EQ("/node1/admin", svd->admin_address->toString());
+  EXPECT_EQ(
+      "/node1/server-to-server", svd->server_to_server_address->toString());
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
 
@@ -125,6 +129,7 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   settings.unix_socket = "/new/address";
   settings.ssl_unix_socket = "/new/ssl";
   settings.gossip_unix_socket = "/new/gossip";
+  settings.server_to_server_unix_socket = "/new/s2s";
   settings.sequencer_weight = 22;
   settings.storage_capacity = 23;
   settings.admin_enabled = false;
@@ -144,6 +149,7 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   EXPECT_EQ("/new/address", svd->address.toString());
   EXPECT_EQ("/new/ssl", svd->ssl_address->toString());
   EXPECT_EQ("/new/gossip", svd->gossip_address->toString());
+  EXPECT_EQ("/new/s2s", svd->server_to_server_address->toString());
   EXPECT_FALSE(svd->admin_address.hasValue());
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
