@@ -90,12 +90,12 @@ struct SocketConnectRequest : public Request {
     auto& base = Worker::onThisThread()->getEvBase();
     auto base_type = base.getType();
 
-    if (SocketConnectRequest::sock) {
+    if (SocketConnectRequest::conn) {
       // This is the second request. Test is done. Clean up. Simulate
-      // Worker shutdown here to avoid tripping asserts in Socket that
+      // Worker shutdown here to avoid tripping asserts in Connection that
       // expects to be destroyed only when Worker shuts down.
       Worker::onThisThread()->shutting_down_ = true;
-      SocketConnectRequest::sock.reset();
+      SocketConnectRequest::conn.reset();
       return Execution::COMPLETE;
     }
 
@@ -133,14 +133,14 @@ struct SocketConnectRequest : public Request {
       const auto throttle_settings = deps->getSettings().connect_throttle;
       connect_throttle = std::make_unique<ConnectThrottle>(throttle_settings);
       if (base_type == EvBase::LEGACY_EVENTBASE) {
-        SocketConnectRequest::sock =
+        SocketConnectRequest::conn =
             std::make_unique<Connection>(firstNodeID,
                                          SocketType::DATA,
                                          ConnectionType::PLAIN,
                                          flow_group,
                                          std::move(deps));
       } else {
-        SocketConnectRequest::sock = std::make_unique<Connection>(
+        SocketConnectRequest::conn = std::make_unique<Connection>(
             firstNodeID,
             SocketType::DATA,
             ConnectionType::PLAIN,
@@ -148,19 +148,19 @@ struct SocketConnectRequest : public Request {
             std::move(deps),
             std::make_unique<AsyncSocketAdapter>(base.getEventBase()));
       }
-      SocketConnectRequest::sock->setConnectThrottle(connect_throttle.get());
+      SocketConnectRequest::conn->setConnectThrottle(connect_throttle.get());
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
     }
 
     EXPECT_FALSE(constructor_failed);
 
-    EXPECT_NE(nullptr, SocketConnectRequest::sock);
+    EXPECT_NE(nullptr, SocketConnectRequest::conn);
 
-    rv = SocketConnectRequest::sock->connect();
+    rv = SocketConnectRequest::conn->connect();
     EXPECT_EQ(0, rv) << "Socket::connect() failed: " << error_description(err);
 
-    rv = SocketConnectRequest::sock->connect(); // this should fail because s is
+    rv = SocketConnectRequest::conn->connect(); // this should fail because s is
     EXPECT_EQ(-1, rv); // already connected or connecting
     EXPECT_TRUE(err == E::ISCONN || err == E::ALREADY);
 
@@ -168,12 +168,12 @@ struct SocketConnectRequest : public Request {
   }
 
   static std::unique_ptr<ConnectThrottle> connect_throttle;
-  static std::unique_ptr<Socket> sock; // socket we are connecting
+  static std::unique_ptr<Connection> conn;
   static FlowGroup flow_group;
 };
 
 std::unique_ptr<ConnectThrottle> SocketConnectRequest::connect_throttle{};
-std::unique_ptr<Socket> SocketConnectRequest::sock{};
+std::unique_ptr<Connection> SocketConnectRequest::conn{};
 FlowGroup SocketConnectRequest::flow_group{nullptr};
 
 } // namespace testing
@@ -300,8 +300,8 @@ class ReentrantDummyMessage : public DummyMessage {
   }
 };
 
-// A utility class for tests to spawn a server socket they can use to talk with
-// the client.
+// A utility class for tests to spawn a connection listener they can use to talk
+// with the client.
 class ServerSocket {
  public:
   explicit ServerSocket() {
@@ -387,11 +387,11 @@ WorkerAndEventLoop createWorker(Processor* p,
 }
 
 /**
- * A basic Socket connection test.
+ * A basic connection test.
  *
  * Executes nc to listen on a predefined port. Starts a
  * Worker. Posts a SocketConnectRequest that creates a new
- * server socket. Connects the socket. Sends HELLO.
+ * server connection. Connects to the remote and Sends HELLO.
  */
 TEST_P(MessagingSocketTest, SocketConnect) {
   int rv;
@@ -511,7 +511,7 @@ STORED_Header SenderBasicSendRequest::hdr1out =
  * sends two STORED messages to node 0, and attempts to send a message
  * to a bad address.  Reads the two messages back from nc's stdout.
  * Validates headers and payloads. Destroys the Worker handle. This
- * must lead to the destruction of Socket connected to nc, closing the
+ * must lead to the destruction of Connection to nc, closing the
  * underlying TCP socket, and nc exiting. pclose() will block until nc
  * exits.
  */
@@ -721,7 +721,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   EXPECT_EQ(0, cl_w->tryPost(rq));
   sem.wait();
 
-  // Send to a different server node and expect success due to new socket's
+  // Send to a different server node and expect success due to new connection's
   // outbuf_socket_min_kb  guaranteed budget.
   ld_info("Sending 2K to second node");
   sem = Semaphore();
@@ -732,8 +732,8 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   EXPECT_EQ(0, cl_w->tryPost(rq3));
   sem.wait();
 
-  // Expect message over new socket fail with ENOBUF as this is over both
-  //  sender's outbuf limit and socket's outbuf_socket_min_kb.
+  // Expect message over new connection to fail with ENOBUF as this is over both
+  //  sender's outbuf limit and connections's outbuf_socket_min_kb.
   ld_info("Sending another 2K to second node");
   sem = Semaphore();
   auto msg4 = std::make_unique<VarLengthTestMessage>(
@@ -865,7 +865,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
     sem.wait();
   }
 
-  // Send to a different client and expect success due to new socket's
+  // Send to a different client and expect success due to new connection's
   // outbuf_socket_min_kb  guaranteed budget.
   ld_info("Sending 400K to second client");
   sem = Semaphore();
@@ -876,8 +876,8 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   EXPECT_EQ(0, srv_w->tryPost(rq7));
   sem.wait();
 
-  // Expect message over new socket fail with ENOBUF as this is over both
-  //  sender's outbuf limit and socket's outbuf_socket_min_kb.
+  // Expect message over new connection to fail with ENOBUF as this is over both
+  //  sender's outbuf limit and connection's outbuf_socket_min_kb.
   ld_info("Sending 1K to second client");
   sem = Semaphore();
   auto msg8 = std::make_unique<VarLengthTestMessage>(
@@ -889,13 +889,14 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
 }
 
 /**
- * Tests to verify Sender and socket outbuf limits.
+ * Tests to verify Sender and Connection outbuf limits.
  *   Tests the CLIENT outbufs budget by
  *     -  sending the client messages and using up sender's
  *        outbufs_mb_max_per_thread / 2 budget for NODE connections.
  *     - Verifies that ENOBUF error is received after NODE output buffer is full
  *     - Verified that messages of upto outbuf_socket_min_kb can be sent over
- *       a different server socket while the sender's NODE output buf is full.
+ *       a different server connection while the sender's NODE output buf is
+ * full.
  *
  *   The above set of tests are repeated for CLIENT output buffer budget as
  *   well ( by having server node sending to two client end points).
@@ -905,10 +906,10 @@ TEST_P(MessagingSocketTest, SenderOutBufLimitsPerPeerType) {
 }
 
 /**
- * Tests to verify Sender and socket outbuf limits.
+ * Tests to verify Sender and Connection outbuf limits.
  *   This test verifies the sender outbuf limit without the per peer-type
  *   limit.
- *  It also verifies the per socket minimum guaranteed budget.
+ *  It also verifies the per connection minimum guaranteed budget.
  */
 TEST_P(MessagingSocketTest, SenderOutBufPerPeerLimitsDisabled) {
   testOutBufsLimit(true, GetParam());
@@ -1110,7 +1111,7 @@ TEST_P(MessagingSocketTest, SendFromCloseCB) {
   EXPECT_EQ(MessageType::CONFIG_ADVISORY, cin.ph.type);
   EXPECT_EQ(expected_size_of_config_advisory, cin.ph.len);
 
-  // Once the first socket is closed and onclose is invoked sem post will be
+  // Once the first connection is closed and onclose is invoked sem post will be
   // invoked to finish this wait.
   sem.wait();
 
@@ -1121,7 +1122,7 @@ TEST_P(MessagingSocketTest, SendFromCloseCB) {
 }
 
 // Used by AckProtoNoSupportClose test. Send a DummyMessage. Expect
-// DummyMessage::onSent() and the socket close callback to be called with
+// DummyMessage::onSent() and the connection close callback to be called with
 // E::PROTONOSUPPORT because the other end sent ACK with E::PROTONOSUPPORT.
 struct SendMessageOnCloseProtoNoSupport : public Request {
   explicit SendMessageOnCloseProtoNoSupport(Semaphore& sem)
@@ -1132,7 +1133,7 @@ struct SendMessageOnCloseProtoNoSupport : public Request {
     ThreadID::set(ThreadID::SERVER_WORKER, "");
     Worker* w = Worker::onThisThread();
 
-    // Since the socket will be closed with E::PROTONOSUPPORT, the message
+    // Since the connection will be closed with E::PROTONOSUPPORT, the message
     // should be rejected with that error code as well.
     auto msg = std::make_unique<DummyMessage>(sem_, E::PROTONOSUPPORT);
     const int rv =
@@ -1160,7 +1161,7 @@ struct SendMessageOnCloseProtoNoSupport : public Request {
 };
 
 // Used by MessageProtoNoSupportOnSent. Here the other end sends ACK with proto
-// equal to Compatibility::MIN_PROTOCOL_SUPPORTED. The socket does not close
+// equal to Compatibility::MIN_PROTOCOL_SUPPORTED. The connection does not close
 // since we support that prototocol. However, two messages were enqueued. One
 // that is not compatible with this protocol, and one that is compatible. We
 // verify that the first one gets its onSent() method called with
@@ -1179,10 +1180,10 @@ struct SendMessageExpectBadProtoRequest : public Request {
     // false, we are not yet connected, and sendMessage() should return
     // success for both of these requests. The success status indicates all
     // checks that can be performed pre-handshake were successful and the
-    // message was queued at the socket layer to await completion of connection
-    // processing. If synchronous_error_ is true, we are running after
-    // handshake negotiation and so should see a synchronous E::PROTONOSUPPORT
-    // error for the first message.
+    // message was queued at the connection layer to await completion of
+    // connection processing. If synchronous_error_ is true, we are running
+    // after handshake negotiation and so should see a synchronous
+    // E::PROTONOSUPPORT error for the first message.
 
     // first send a message that should be rejected.
     auto msg = std::make_unique<DummyMessage>(sem_, E::PROTONOSUPPORT);
@@ -1258,7 +1259,7 @@ TEST_P(MessagingSocketTest, AckProtoNoSupportClose) {
 }
 
 // Test a case where the other end sends ACK with proto equal to
-// Compatibility::MIN_PROTOCOL_SUPPORTED. The socket does not close since we
+// Compatibility::MIN_PROTOCOL_SUPPORTED. The connection does not close since we
 // support that prototocol. However, two messages were enqueued. One that is
 // not compatible with this protocol, and one that is compatible. We verify
 // that the first one gets its onSent() method called with E::PROTONOSUPPORT
@@ -1328,7 +1329,7 @@ struct SendMessageOnCloseInvalidCluster : public Request {
     ThreadID::set(ThreadID::SERVER_WORKER, "");
     Worker* w = Worker::onThisThread();
 
-    // Since the socket will be closed with E::INVALID_CLUSTER, the message
+    // Since the connection will be closed with E::INVALID_CLUSTER, the message
     // should be rejected with that error code as well.
     auto msg = std::make_unique<DummyMessage>(sem_, E::INVALID_CLUSTER);
     const int rv =
@@ -1750,7 +1751,7 @@ TEST_P(MessagingSocketTest, ServerShutdownWithOpenConnections) {
 }
 
 // Verifies that messages that have different sizes when they're queued by the
-// socket layer (put into serializeq_) as opposed to being flushed to the
+// connection layer (put into serializeq_) as opposed to being flushed to the
 // output evbuffer (when the protocol version of the peer is finally known)
 // don't cause crashes. See t6281298 for more details.
 TEST_P(MessagingSocketTest, DifferentProtocolsT6281298) {

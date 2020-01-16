@@ -24,7 +24,11 @@ Connection::Connection(NodeID server_name,
                        ConnectionType conntype,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps)
-    : Socket(server_name, type, conntype, flow_group, std::move(deps)),
+    : Socket_DEPRECATED(server_name,
+                        type,
+                        conntype,
+                        flow_group,
+                        std::move(deps)),
       retry_receipt_of_message_(getDeps()->getEvBase()),
       sched_write_chain_(getDeps()->getEvBase()) {
   ld_check(legacy_connection_);
@@ -36,7 +40,11 @@ Connection::Connection(NodeID server_name,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps,
                        std::unique_ptr<SocketAdapter> sock_adapter)
-    : Socket(server_name, type, conntype, flow_group, std::move(deps)),
+    : Socket_DEPRECATED(server_name,
+                        type,
+                        conntype,
+                        flow_group,
+                        std::move(deps)),
       proto_handler_(std::make_shared<ProtocolHandler>(this,
                                                        std::move(sock_adapter),
                                                        conn_description_,
@@ -56,14 +64,14 @@ Connection::Connection(int fd,
                        ConnectionType conntype,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps)
-    : Socket(fd,
-             client_name,
-             client_addr,
-             std::move(conn_token),
-             type,
-             conntype,
-             flow_group,
-             std::move(deps)),
+    : Socket_DEPRECATED(fd,
+                        client_name,
+                        client_addr,
+                        std::move(conn_token),
+                        type,
+                        conntype,
+                        flow_group,
+                        std::move(deps)),
       retry_receipt_of_message_(getDeps()->getEvBase()),
       sched_write_chain_(getDeps()->getEvBase()) {
   ld_check(legacy_connection_);
@@ -78,14 +86,14 @@ Connection::Connection(int fd,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps,
                        std::unique_ptr<SocketAdapter> sock_adapter)
-    : Socket(fd,
-             client_name,
-             client_addr,
-             std::move(conn_token),
-             type,
-             conntype,
-             flow_group,
-             std::move(deps)),
+    : Socket_DEPRECATED(fd,
+                        client_name,
+                        client_addr,
+                        std::move(conn_token),
+                        type,
+                        conntype,
+                        flow_group,
+                        std::move(deps)),
       proto_handler_(std::make_shared<ProtocolHandler>(this,
                                                        std::move(sock_adapter),
                                                        conn_description_,
@@ -110,7 +118,7 @@ Connection::~Connection() {
 
 int Connection::connect() {
   if (legacy_connection_) {
-    return Socket::connect();
+    return Socket_DEPRECATED::connect();
   }
 
   int rv = preConnectAttempt();
@@ -127,13 +135,13 @@ int Connection::connect() {
 
   if (good()) {
     // enqueue hello message into the socket.
-    Socket::sendHello();
+    Socket_DEPRECATED::sendHello();
   }
 
   auto complete_connection = [this](Status st) {
     auto g = folly::makeGuard(getDeps()->setupContextGuard());
     if (st == E::ISCONN) {
-      Socket::transitionToConnected();
+      Socket_DEPRECATED::transitionToConnected();
       read_cb_.reset(new MessageReader(*proto_handler_, proto_));
       proto_handler_->sock()->setReadCB(read_cb_.get());
     }
@@ -282,7 +290,7 @@ folly::Future<Status> Connection::asyncConnect() {
       });
 }
 
-Socket::SendStatus
+Socket_DEPRECATED::SendStatus
 Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
   if (!legacy_connection_) {
     if (proto_handler_->good()) {
@@ -297,9 +305,9 @@ Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) {
         sched_start_time_ = SteadyTimestamp::now();
       }
     }
-    return Socket::SendStatus::SCHEDULED;
+    return Socket_DEPRECATED::SendStatus::SCHEDULED;
   } else {
-    return Socket::sendBuffer(
+    return Socket_DEPRECATED::sendBuffer(
         std::forward<std::unique_ptr<folly::IOBuf>>(buffer_chain));
   }
 }
@@ -317,7 +325,7 @@ void Connection::scheduleWriteChain() {
            to_msec(now - sched_start_time_).count());
 
   // Get bytes that are added to sendq but not yet added in the asyncSocket.
-  auto bytes_in_sendq = Socket::getBufferedBytesSize();
+  auto bytes_in_sendq = Socket_DEPRECATED::getBufferedBytesSize();
   sock_write_cb_.write_chains.emplace_back(
       SocketWriteCallback::WriteUnit{bytes_in_sendq, now});
   // These bytes are now buffered in socket and will be removed from sendq.
@@ -335,7 +343,7 @@ void Connection::close(Status reason) {
   }
   // Calculate buffered bytes before clearing any member variables
   size_t buffered_bytes = getBufferedBytesSize();
-  Socket::close(reason);
+  Socket_DEPRECATED::close(reason);
   if (!legacy_connection_) {
     // Clear read callback on close.
     proto_handler_->sock()->setReadCB(nullptr);
@@ -356,7 +364,7 @@ void Connection::close(Status reason) {
 void Connection::flushOutputAndClose(Status reason) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   if (legacy_connection_) {
-    return Socket::flushOutputAndClose(reason);
+    return Socket_DEPRECATED::flushOutputAndClose(reason);
   }
 
   if (isClosed()) {
@@ -374,12 +382,12 @@ void Connection::flushOutputAndClose(Status reason) {
 
 bool Connection::isClosed() const {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  return Socket::isClosed();
+  return Socket_DEPRECATED::isClosed();
 }
 
 bool Connection::good() const {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  auto is_good = Socket::good();
+  auto is_good = Socket_DEPRECATED::good();
 
   // Outgoing message send checks in Sender if the socket is closed or good
   // before using it to send message. If the socket is already bad, Sender takes
@@ -395,14 +403,15 @@ bool Connection::good() const {
 
 void Connection::onConnected() {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onConnected();
+  Socket_DEPRECATED::onConnected();
 }
 
 int Connection::dispatchMessageBody(ProtocolHeader header,
                                     std::unique_ptr<folly::IOBuf> msg_buffer) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   auto body_clone = msg_buffer->clone();
-  int rv = Socket::dispatchMessageBody(header, std::move(msg_buffer));
+  int rv =
+      Socket_DEPRECATED::dispatchMessageBody(header, std::move(msg_buffer));
   if (rv != 0 && err == E::NOBUFS && !legacy_connection_) {
     // No space to push more messages on the worker, disable the read callback.
     // Retry this message and if successful it will add back the ReadCallback.
@@ -422,7 +431,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
 
 size_t Connection::getBufferedBytesSize() const {
   // This covers the bytes in sendChain_
-  size_t buffered_bytes = Socket::getBufferedBytesSize();
+  size_t buffered_bytes = Socket_DEPRECATED::getBufferedBytesSize();
   // This covers the bytes buffered in asyncsocket.
   if (!legacy_connection_) {
     buffered_bytes += sock_write_cb_.bytes_buffered;
@@ -432,7 +441,7 @@ size_t Connection::getBufferedBytesSize() const {
 
 size_t Connection::getBytesPending() const {
   // Covers bytes in various queues.
-  size_t bytes_pending = Socket::getBytesPending();
+  size_t bytes_pending = Socket_DEPRECATED::getBytesPending();
   if (!legacy_connection_) {
     // Covers bytes in sendChain and asyncsocket.
     bytes_pending += getBufferedBytesSize();
@@ -442,7 +451,7 @@ size_t Connection::getBytesPending() const {
 
 folly::ssl::X509UniquePtr Connection::getPeerCert() const {
   if (legacy_connection_) {
-    return Socket::getPeerCert();
+    return Socket_DEPRECATED::getPeerCert();
   }
   ld_check(isSSL());
   auto sock_peer_cert = proto_handler_->sock()->getPeerCertificate();
@@ -454,39 +463,39 @@ folly::ssl::X509UniquePtr Connection::getPeerCert() const {
 
 void Connection::onConnectTimeout() {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onConnectTimeout();
+  Socket_DEPRECATED::onConnectTimeout();
 }
 
 void Connection::onHandshakeTimeout() {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onHandshakeTimeout();
+  Socket_DEPRECATED::onHandshakeTimeout();
 }
 
 void Connection::onConnectAttemptTimeout() {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onConnectAttemptTimeout();
+  Socket_DEPRECATED::onConnectAttemptTimeout();
 }
 
 void Connection::onSent(std::unique_ptr<Envelope> e,
                         Status st,
                         Message::CompletionMethod cm) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onSent(std::move(e), st, cm);
+  Socket_DEPRECATED::onSent(std::move(e), st, cm);
 }
 
 void Connection::onError(short direction, int socket_errno) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onError(direction, socket_errno);
+  Socket_DEPRECATED::onError(direction, socket_errno);
 }
 
 void Connection::onPeerClosed() {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onPeerClosed();
+  Socket_DEPRECATED::onPeerClosed();
 }
 
 void Connection::onBytesAdmittedToSend(size_t nbytes_drained) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket::onBytesAdmittedToSend(nbytes_drained);
+  Socket_DEPRECATED::onBytesAdmittedToSend(nbytes_drained);
 }
 
 void Connection::onBytesPassedToTCP(size_t nbytes) {
@@ -494,7 +503,7 @@ void Connection::onBytesPassedToTCP(size_t nbytes) {
   if (legacy_connection_) {
     // In case of legacy sockets it is alright to update sender level stats at
     // this point as the bytes are passed into the tcp socket.
-    Socket::onBytesPassedToTCP(nbytes);
+    Socket_DEPRECATED::onBytesPassedToTCP(nbytes);
   }
 }
 
@@ -513,7 +522,7 @@ void Connection::drainSendQueue() {
 
   ld_check(cb.bytes_buffered >= total_bytes_drained);
   cb.bytes_buffered -= total_bytes_drained;
-  Socket::onBytesPassedToTCP(total_bytes_drained);
+  Socket_DEPRECATED::onBytesPassedToTCP(total_bytes_drained);
 
   // flushOutputAndClose sets close_reason_ and waits for all buffers to drain.
   // Check if all buffers were drained here if that is the case close the

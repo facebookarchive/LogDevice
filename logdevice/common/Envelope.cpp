@@ -20,7 +20,7 @@ void Envelope::operator()(FlowGroup& fg, std::mutex& flow_meters_mutex) {
     fg.push(*this, priority());
     return;
   }
-  socket().releaseMessage(*this);
+  conn().releaseMessage(*this);
 }
 
 }} // namespace facebook::logdevice

@@ -45,7 +45,7 @@ class ClientConnectionTest : public SocketTest {
                                      flow_group_,
                                      std::unique_ptr<SocketDependencies>(deps_),
                                      std::move(sock));
-    socket_ = std::unique_ptr<Socket, SocketDeleter>(
+    socket_ = std::unique_ptr<Socket_DEPRECATED, SocketDeleter>(
         conn_.get(), SocketDeleter(true /* skip */));
     csid_ = "client_uuid";
     EXPECT_FALSE(connected());
@@ -114,7 +114,7 @@ class ServerConnectionTest : public SocketTest {
         flow_group_,
         std::unique_ptr<SocketDependencies>(deps_),
         std::move(sock));
-    socket_ = std::unique_ptr<Socket, SocketDeleter>(
+    socket_ = std::unique_ptr<Socket_DEPRECATED, SocketDeleter>(
         conn_.get(), SocketDeleter(true /* skip */));
     // A server socket is connected from the beginning.
     EXPECT_TRUE(connected());
@@ -295,7 +295,7 @@ TEST_F(ClientConnectionTest, Handshake) {
   receiveAckMessage();
   EXPECT_TRUE(handshaken());
 }
-static Envelope* create_message(Socket& s) {
+static Envelope* create_message(Socket_DEPRECATED& s) {
   GET_SEQ_STATE_flags_t flags = 0;
   auto msg = std::make_unique<GET_SEQ_STATE_Message>(
       logid_t(42),

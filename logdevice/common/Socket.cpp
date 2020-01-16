@@ -73,12 +73,12 @@ getTimeDiff(std::chrono::steady_clock::time_point& start_time) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(diff);
 }
 
-Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
-               Address peer_name,
-               const Sockaddr& peer_sockaddr,
-               SocketType type,
-               ConnectionType conntype,
-               FlowGroup& flow_group)
+Socket_DEPRECATED::Socket_DEPRECATED(std::unique_ptr<SocketDependencies>& deps,
+                                     Address peer_name,
+                                     const Sockaddr& peer_sockaddr,
+                                     SocketType type,
+                                     ConnectionType conntype,
+                                     FlowGroup& flow_group)
     : peer_name_(peer_name),
       peer_sockaddr_(peer_sockaddr),
       conn_description_(peer_name.toString() + "(" +
@@ -173,32 +173,32 @@ Socket::Socket(std::unique_ptr<SocketDependencies>& deps,
   });
 }
 
-Socket::Socket(NodeID server_name,
-               SocketType sock_type,
-               ConnectionType conntype,
-               FlowGroup& flow_group,
-               std::unique_ptr<SocketDependencies> deps)
-    : Socket(deps,
-             Address(server_name),
-             deps->getNodeSockaddr(server_name, sock_type, conntype),
-             sock_type,
-             conntype,
-             flow_group) {}
+Socket_DEPRECATED::Socket_DEPRECATED(NodeID server_name,
+                                     SocketType sock_type,
+                                     ConnectionType conntype,
+                                     FlowGroup& flow_group,
+                                     std::unique_ptr<SocketDependencies> deps)
+    : Socket_DEPRECATED(deps,
+                        Address(server_name),
+                        deps->getNodeSockaddr(server_name, sock_type, conntype),
+                        sock_type,
+                        conntype,
+                        flow_group) {}
 
-Socket::Socket(int fd,
-               ClientID client_name,
-               const Sockaddr& client_addr,
-               ResourceBudget::Token conn_token,
-               SocketType type,
-               ConnectionType conntype,
-               FlowGroup& flow_group,
-               std::unique_ptr<SocketDependencies> deps)
-    : Socket(deps,
-             Address(client_name),
-             client_addr,
-             type,
-             conntype,
-             flow_group) {
+Socket_DEPRECATED::Socket_DEPRECATED(int fd,
+                                     ClientID client_name,
+                                     const Sockaddr& client_addr,
+                                     ResourceBudget::Token conn_token,
+                                     SocketType type,
+                                     ConnectionType conntype,
+                                     FlowGroup& flow_group,
+                                     std::unique_ptr<SocketDependencies> deps)
+    : Socket_DEPRECATED(deps,
+                        Address(client_name),
+                        client_addr,
+                        type,
+                        conntype,
+                        flow_group) {
   ld_check(fd >= 0);
   ld_check(client_name.valid());
   ld_check(client_addr.valid());
@@ -239,10 +239,11 @@ Socket::Socket(int fd,
   }
 }
 
-void Socket::onBufferedOutputWrite(struct evbuffer* buffer,
-                                   const struct evbuffer_cb_info* info,
-                                   void* arg) {
-  Socket* self = reinterpret_cast<Socket*>(arg);
+void Socket_DEPRECATED::onBufferedOutputWrite(
+    struct evbuffer* buffer,
+    const struct evbuffer_cb_info* info,
+    void* arg) {
+  Socket_DEPRECATED* self = reinterpret_cast<Socket_DEPRECATED*>(arg);
 
   ld_check(self);
   ld_check(!self->isClosed());
@@ -254,7 +255,7 @@ void Socket::onBufferedOutputWrite(struct evbuffer* buffer,
   }
 }
 
-void Socket::flushBufferedOutput() {
+void Socket_DEPRECATED::flushBufferedOutput() {
   ld_check(buffered_output_);
   ld_check(!isClosed());
   // Moving buffer chains into bev's output
@@ -274,23 +275,24 @@ void Socket::flushBufferedOutput() {
   }
 }
 
-void Socket::onBufferedOutputTimerEvent(void* instance, short) {
-  auto self = reinterpret_cast<Socket*>(instance);
+void Socket_DEPRECATED::onBufferedOutputTimerEvent(void* instance, short) {
+  auto self = reinterpret_cast<Socket_DEPRECATED*>(instance);
   ld_check(self);
   self->flushBufferedOutput();
 }
 
-Socket::~Socket() {
+Socket_DEPRECATED::~Socket_DEPRECATED() {
   ld_debug("Destroying Socket %s", conn_description_.c_str());
   close(E::SHUTDOWN);
 }
 
-struct bufferevent* Socket::newBufferevent(int sfd,
-                                           sa_family_t sa_family,
-                                           size_t* sndbuf_size_out,
-                                           size_t* rcvbuf_size_out,
-                                           bufferevent_ssl_state ssl_state,
-                                           const uint8_t default_dcsp) {
+struct bufferevent*
+Socket_DEPRECATED::newBufferevent(int sfd,
+                                  sa_family_t sa_family,
+                                  size_t* sndbuf_size_out,
+                                  size_t* rcvbuf_size_out,
+                                  bufferevent_ssl_state ssl_state,
+                                  const uint8_t default_dcsp) {
   int rv;
 
   ld_check(sa_family == AF_INET || sa_family == AF_INET6 ||
@@ -356,7 +358,9 @@ struct bufferevent* Socket::newBufferevent(int sfd,
   ld_check(outbuf);
 
   struct evbuffer_cb_entry* outbuf_cbe = LD_EV(evbuffer_add_cb)(
-      outbuf, &EvBufferEventHandler<Socket::bytesSentCallback>, (void*)this);
+      outbuf,
+      &EvBufferEventHandler<Socket_DEPRECATED::bytesSentCallback>,
+      (void*)this);
 
   if (!outbuf_cbe) { // unlikely
     ld_error("evbuffer_add_cb() failed. errno=%d (%s)", errno, strerror(errno));
@@ -382,11 +386,12 @@ struct bufferevent* Socket::newBufferevent(int sfd,
     }
   }
 
-  deps_->buffereventSetCb(bev,
-                          BufferEventHandler<Socket::dataReadCallback>,
-                          nullptr,
-                          BufferEventHandler<Socket::eventCallback>,
-                          (void*)this);
+  deps_->buffereventSetCb(
+      bev,
+      BufferEventHandler<Socket_DEPRECATED::dataReadCallback>,
+      nullptr,
+      BufferEventHandler<Socket_DEPRECATED::eventCallback>,
+      (void*)this);
 
   if (isSSL()) {
     // The buffer may already exist if we're making another attempt at a
@@ -396,7 +401,7 @@ struct bufferevent* Socket::newBufferevent(int sfd,
       buffered_output_ = LD_EV(evbuffer_new)();
       LD_EV(evbuffer_add_cb)
       (buffered_output_,
-       &EvBufferEventHandler<Socket::onBufferedOutputWrite>,
+       &EvBufferEventHandler<Socket_DEPRECATED::onBufferedOutputWrite>,
        (void*)this);
     }
   } else {
@@ -408,7 +413,7 @@ struct bufferevent* Socket::newBufferevent(int sfd,
   return bev;
 }
 
-int Socket::preConnectAttempt() {
+int Socket_DEPRECATED::preConnectAttempt() {
   if (peer_name_.isClientAddress()) {
     if (!isClosed()) {
       ld_check(connected_);
@@ -442,7 +447,7 @@ int Socket::preConnectAttempt() {
   return 0;
 }
 
-int Socket::connect() {
+int Socket_DEPRECATED::connect() {
   int rv = preConnectAttempt();
   if (rv != 0) {
     return rv;
@@ -483,7 +488,7 @@ int Socket::connect() {
   return 0;
 }
 
-int Socket::doConnectAttempt() {
+int Socket_DEPRECATED::doConnectAttempt() {
   const uint8_t default_dscp = getSettings().server
       ? getSettings().server_dscp_default
       : getSettings().client_dscp_default;
@@ -567,7 +572,7 @@ int Socket::doConnectAttempt() {
   return 0;
 }
 
-size_t Socket::getTotalOutbufLength() {
+size_t Socket_DEPRECATED::getTotalOutbufLength() {
   auto pending_bytes = LD_EV(evbuffer_get_length)(deps_->getOutput(bev_));
   if (buffered_output_) {
     pending_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
@@ -575,8 +580,8 @@ size_t Socket::getTotalOutbufLength() {
   return pending_bytes;
 }
 
-void Socket::onOutputEmpty(struct bufferevent*, void* arg, short) {
-  Socket* self = reinterpret_cast<Socket*>(arg);
+void Socket_DEPRECATED::onOutputEmpty(struct bufferevent*, void* arg, short) {
+  Socket_DEPRECATED* self = reinterpret_cast<Socket_DEPRECATED*>(arg);
   ld_check(self);
   // Write watermark has been set to zero so the output buffer should be
   // empty when this callback gets called, but we could still have bytes
@@ -590,7 +595,7 @@ void Socket::onOutputEmpty(struct bufferevent*, void* arg, short) {
   }
 }
 
-void Socket::flushOutputAndClose(Status reason) {
+void Socket_DEPRECATED::flushOutputAndClose(Status reason) {
   auto pending_bytes = getTotalOutbufLength();
 
   if (pending_bytes == 0) {
@@ -612,12 +617,12 @@ void Socket::flushOutputAndClose(Status reason) {
   deps_->buffereventSetWatermark(bev_, EV_WRITE, 0, 0);
   deps_->buffereventSetCb(bev_,
                           nullptr,
-                          BufferEventHandler<Socket::onOutputEmpty>,
-                          BufferEventHandler<Socket::eventCallback>,
+                          BufferEventHandler<Socket_DEPRECATED::onOutputEmpty>,
+                          BufferEventHandler<Socket_DEPRECATED::eventCallback>,
                           (void*)this);
 }
 
-void Socket::onBytesAvailable(bool fresh) {
+void Socket_DEPRECATED::onBytesAvailable(bool fresh) {
   // process up to this many messages
   unsigned process_max = getSettings().incoming_messages_max_per_socket;
 
@@ -732,8 +737,10 @@ void Socket::onBytesAvailable(bool fresh) {
       deps_->getStats(), sock_time_spent_reading_message, total_time.count());
 }
 
-void Socket::dataReadCallback(struct bufferevent* bev, void* arg, short) {
-  Socket* self = reinterpret_cast<Socket*>(arg);
+void Socket_DEPRECATED::dataReadCallback(struct bufferevent* bev,
+                                         void* arg,
+                                         short) {
+  Socket_DEPRECATED* self = reinterpret_cast<Socket_DEPRECATED*>(arg);
 
   ld_check(self);
   ld_check(bev == self->bev_);
@@ -741,8 +748,8 @@ void Socket::dataReadCallback(struct bufferevent* bev, void* arg, short) {
   self->onBytesAvailable(/*fresh=*/true);
 }
 
-void Socket::readMoreCallback(void* arg, short what) {
-  Socket* self = reinterpret_cast<Socket*>(arg);
+void Socket_DEPRECATED::readMoreCallback(void* arg, short what) {
+  Socket_DEPRECATED* self = reinterpret_cast<Socket_DEPRECATED*>(arg);
   ld_check(what & EV_TIMEOUT);
   ld_check(!self->isClosed());
   ld_spew(
@@ -750,7 +757,7 @@ void Socket::readMoreCallback(void* arg, short what) {
   self->onBytesAvailable(/*fresh=*/false);
 }
 
-size_t Socket::bytesExpected() {
+size_t Socket_DEPRECATED::bytesExpected() {
   size_t protohdr_bytes =
       ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
 
@@ -761,8 +768,10 @@ size_t Socket::bytesExpected() {
   }
 }
 
-void Socket::eventCallback(struct bufferevent* bev, void* arg, short what) {
-  Socket* self = reinterpret_cast<Socket*>(arg);
+void Socket_DEPRECATED::eventCallback(struct bufferevent* bev,
+                                      void* arg,
+                                      short what) {
+  Socket_DEPRECATED* self = reinterpret_cast<Socket_DEPRECATED*>(arg);
 
   ld_check(self);
   ld_check(bev == self->bev_);
@@ -785,7 +794,7 @@ void Socket::eventCallback(struct bufferevent* bev, void* arg, short what) {
   }
 }
 
-void Socket::eventCallbackImpl(SocketEvent e) {
+void Socket_DEPRECATED::eventCallbackImpl(SocketEvent e) {
   STAT_INCR(deps_->getStats(), sock_misc_socket_events);
   auto start_time = std::chrono::steady_clock::now();
   if (e.what & BEV_EVENT_CONNECTED) {
@@ -812,7 +821,7 @@ void Socket::eventCallbackImpl(SocketEvent e) {
   }
 }
 
-void Socket::flushNextInSerializeQueue() {
+void Socket_DEPRECATED::flushNextInSerializeQueue() {
   ld_check(!serializeq_.empty());
 
   std::unique_ptr<Envelope> next_envelope(&serializeq_.front());
@@ -820,13 +829,13 @@ void Socket::flushNextInSerializeQueue() {
   send(std::move(next_envelope));
 }
 
-void Socket::flushSerializeQueue() {
+void Socket_DEPRECATED::flushSerializeQueue() {
   while (!serializeq_.empty()) {
     flushNextInSerializeQueue();
   }
 }
 
-void Socket::transitionToConnected() {
+void Socket_DEPRECATED::transitionToConnected() {
   addHandshakeTimeoutEvent();
   connected_ = true;
   peer_shuttingdown_ = false;
@@ -838,7 +847,7 @@ void Socket::transitionToConnected() {
   flushNextInSerializeQueue();
 }
 
-void Socket::onConnected() {
+void Socket_DEPRECATED::onConnected() {
   ld_check(!isClosed());
   if (expecting_ssl_handshake_) {
     ld_check(connected_);
@@ -857,9 +866,9 @@ void Socket::onConnected() {
   transitionToConnected();
 }
 
-void Socket::onSent(std::unique_ptr<Envelope> e,
-                    Status reason,
-                    Message::CompletionMethod cm) {
+void Socket_DEPRECATED::onSent(std::unique_ptr<Envelope> e,
+                               Status reason,
+                               Message::CompletionMethod cm) {
   // Do not call onSent() of pending messages if our Worker is getting
   // destroyed. This is to guarantee that onSent() code and the methods
   // it calls do not try to access a partially destroyed Worker, with some
@@ -883,7 +892,7 @@ void Socket::onSent(std::unique_ptr<Envelope> e,
   }
 }
 
-void Socket::onError(short direction, int socket_errno) {
+void Socket_DEPRECATED::onError(short direction, int socket_errno) {
   // DeferredEventQueue is cleared as part of socket close which can call
   // onError recursively. Check if this is recursive call and skip the check.
   if (closing_) {
@@ -956,7 +965,7 @@ void Socket::onError(short direction, int socket_errno) {
   close(E::CONNFAILED);
 }
 
-void Socket::onPeerClosed() {
+void Socket_DEPRECATED::onPeerClosed() {
   // This method can be called recursively as part of Socket::close when
   // deferred event queue is cleared. Return rightaway if this a recursive call.
   if (closing_) {
@@ -981,13 +990,13 @@ void Socket::onPeerClosed() {
   close(reason);
 }
 
-void Socket::onConnectTimeout() {
+void Socket_DEPRECATED::onConnectTimeout() {
   ld_spew("Connection timeout connecting to %s", conn_description_.c_str());
 
   close(E::TIMEDOUT);
 }
 
-void Socket::onHandshakeTimeout() {
+void Socket_DEPRECATED::onHandshakeTimeout() {
   RATELIMIT_WARNING(std::chrono::seconds(10),
                     10,
                     "Handshake timeout occurred (peer: %s).",
@@ -996,7 +1005,7 @@ void Socket::onHandshakeTimeout() {
   STAT_INCR(deps_->getStats(), handshake_timeouts);
 }
 
-void Socket::onConnectAttemptTimeout() {
+void Socket_DEPRECATED::onConnectAttemptTimeout() {
   ld_check(!connected_);
 
   RATELIMIT_DEBUG(std::chrono::seconds(5),
@@ -1032,7 +1041,7 @@ void Socket::onConnectAttemptTimeout() {
   }
 }
 
-void Socket::setDSCP(uint8_t dscp) {
+void Socket_DEPRECATED::setDSCP(uint8_t dscp) {
   int rc = 0;
   rc = deps_->setDSCP(fd_, peer_sockaddr_.family(), dscp);
 
@@ -1047,7 +1056,7 @@ void Socket::setDSCP(uint8_t dscp) {
   }
 }
 
-void Socket::setSoMark(uint32_t so_mark) {
+void Socket_DEPRECATED::setSoMark(uint32_t so_mark) {
   const int rc = deps_->setSoMark(fd_, so_mark);
 
   if (rc != 0) {
@@ -1059,7 +1068,7 @@ void Socket::setSoMark(uint32_t so_mark) {
   }
 }
 
-void Socket::close(Status reason) {
+void Socket_DEPRECATED::close(Status reason) {
   ld_debug("Closing Socket %s, reason %s ",
            conn_description_.c_str(),
            error_name(reason));
@@ -1222,7 +1231,7 @@ void Socket::close(Status reason) {
   }
 }
 
-bool Socket::isClosed() const {
+bool Socket_DEPRECATED::isClosed() const {
   if (conn_closed_ != nullptr &&
       !conn_closed_->load(std::memory_order_relaxed)) {
     return false;
@@ -1237,15 +1246,15 @@ bool Socket::isClosed() const {
   return true;
 }
 
-bool Socket::good() const {
-  return !Socket::isClosed();
+bool Socket_DEPRECATED::good() const {
+  return !Socket_DEPRECATED::isClosed();
 }
 
-bool Socket::sizeLimitsExceeded() const {
+bool Socket_DEPRECATED::sizeLimitsExceeded() const {
   return getBytesPending() > outbuf_overflow_;
 }
 
-bool Socket::isChecksummingEnabled(MessageType msgtype) {
+bool Socket_DEPRECATED::isChecksummingEnabled(MessageType msgtype) {
   if (!getSettings().checksumming_enabled) {
     return false;
   }
@@ -1254,7 +1263,8 @@ bool Socket::isChecksummingEnabled(MessageType msgtype) {
   return msg_checksum_set.find((char)msgtype) == msg_checksum_set.end();
 }
 
-std::unique_ptr<folly::IOBuf> Socket::serializeMessage(const Message& msg) {
+std::unique_ptr<folly::IOBuf>
+Socket_DEPRECATED::serializeMessage(const Message& msg) {
   const bool compute_checksum =
       ProtocolHeader::needChecksumInHeader(msg.type_, proto_) &&
       isChecksummingEnabled(msg.type_);
@@ -1291,7 +1301,8 @@ std::unique_ptr<folly::IOBuf> Socket::serializeMessage(const Message& msg) {
   return io_buf;
 }
 
-Socket::SendStatus Socket::sendBuffer(std::unique_ptr<folly::IOBuf>&& io_buf) {
+Socket_DEPRECATED::SendStatus
+Socket_DEPRECATED::sendBuffer(std::unique_ptr<folly::IOBuf>&& io_buf) {
   struct evbuffer* outbuf =
       buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
   ld_check(outbuf);
@@ -1308,13 +1319,13 @@ Socket::SendStatus Socket::sendBuffer(std::unique_ptr<folly::IOBuf>&& io_buf) {
                          outbuf_size);
       err = E::INTERNAL;
       close(err);
-      return Socket::SendStatus::ERROR;
+      return Socket_DEPRECATED::SendStatus::ERROR;
     }
   }
-  return Socket::SendStatus::SCHEDULED;
+  return Socket_DEPRECATED::SendStatus::SCHEDULED;
 }
 
-int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
+int Socket_DEPRECATED::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
   // We should only write to the output buffer once connected.
   ld_check(connected_);
 
@@ -1327,8 +1338,8 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
   }
 
   const auto msglen = serialized_buf->computeChainDataLength();
-  Socket::SendStatus status = sendBuffer(std::move(serialized_buf));
-  if (status == Socket::SendStatus::ERROR) {
+  Socket_DEPRECATED::SendStatus status = sendBuffer(std::move(serialized_buf));
+  if (status == Socket_DEPRECATED::SendStatus::ERROR) {
     RATELIMIT_CRITICAL(std::chrono::seconds(1),
                        2,
                        "INTERNAL ERROR: Failed to send a message of "
@@ -1345,7 +1356,7 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
   ld_check(next_pos_ >= drain_pos_);
 
   deps_->noteBytesQueued(msglen, getPeerType(), /* message_type */ folly::none);
-  if (status == Socket::SendStatus::SCHEDULED) {
+  if (status == Socket_DEPRECATED::SendStatus::SCHEDULED) {
     next_pos_ += msglen;
     envelope->setDrainPos(next_pos_);
 
@@ -1360,10 +1371,10 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
       s.active_start_time_ = deps_->getCurrentTimestamp();
     }
   }
-  if (status == Socket::SendStatus::SENT) {
+  if (status == Socket_DEPRECATED::SendStatus::SENT) {
     STAT_INCR(deps_->getStats(), sock_num_messages_sent);
     STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, msglen);
-    ld_check(status == Socket::SendStatus::SENT);
+    ld_check(status == Socket_DEPRECATED::SendStatus::SENT);
     // Some state machines expect onSent for success scenarios to be called
     // after completion of sendMessage invocation. Hence, we need to post a
     // function to invoke onSent later.
@@ -1388,7 +1399,7 @@ int Socket::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
   return 0;
 }
 
-bool Socket::injectAsyncMessageError(std::unique_ptr<Envelope>&& e) {
+bool Socket_DEPRECATED::injectAsyncMessageError(std::unique_ptr<Envelope>&& e) {
   auto error_chance_percent =
       getSettings().message_error_injection_chance_percent;
   auto error_status = getSettings().message_error_injection_status;
@@ -1420,7 +1431,7 @@ bool Socket::injectAsyncMessageError(std::unique_ptr<Envelope>&& e) {
   return false;
 }
 
-int Socket::preSendCheck(const Message& msg) {
+int Socket_DEPRECATED::preSendCheck(const Message& msg) {
   if (isClosed()) {
     err = E::NOTCONN;
     return -1;
@@ -1470,7 +1481,7 @@ int Socket::preSendCheck(const Message& msg) {
   return 0;
 }
 
-void Socket::send(std::unique_ptr<Envelope> envelope) {
+void Socket_DEPRECATED::send(std::unique_ptr<Envelope> envelope) {
   const auto& msg = envelope->message();
 
   if (preSendCheck(msg)) {
@@ -1521,7 +1532,7 @@ void Socket::send(std::unique_ptr<Envelope> envelope) {
   }
 }
 
-Envelope* Socket::registerMessage(std::unique_ptr<Message>&& msg) {
+Envelope* Socket_DEPRECATED::registerMessage(std::unique_ptr<Message>&& msg) {
   if (preSendCheck(*msg) != 0) {
     return nullptr;
   }
@@ -1558,7 +1569,7 @@ Envelope* Socket::registerMessage(std::unique_ptr<Message>&& msg) {
   return envelope.release();
 }
 
-void Socket::releaseMessage(Envelope& envelope) {
+void Socket_DEPRECATED::releaseMessage(Envelope& envelope) {
   // This envelope should be in the pendingq_.
   ld_check(envelope.links_.is_linked());
 
@@ -1576,7 +1587,8 @@ void Socket::releaseMessage(Envelope& envelope) {
   send(std::move(pending_envelope));
 }
 
-std::unique_ptr<Message> Socket::discardEnvelope(Envelope& envelope) {
+std::unique_ptr<Message>
+Socket_DEPRECATED::discardEnvelope(Envelope& envelope) {
   // This envelope should be in the pendingq_.
   ld_check(envelope.links_.is_linked());
 
@@ -1591,7 +1603,7 @@ std::unique_ptr<Message> Socket::discardEnvelope(Envelope& envelope) {
   return pending_envelope->moveMessage();
 }
 
-void Socket::sendHello() {
+void Socket_DEPRECATED::sendHello() {
   ld_check(!isClosed());
   ld_check(!connected_);
   ld_check(next_pos_ == 0);
@@ -1606,7 +1618,7 @@ void Socket::sendHello() {
   releaseMessage(*envelope);
 }
 
-void Socket::sendShutdown() {
+void Socket_DEPRECATED::sendShutdown() {
   ld_check(!isClosed());
 
   auto shutdown = deps_->createShutdownMessage(deps_->getServerInstanceId());
@@ -1619,14 +1631,14 @@ void Socket::sendShutdown() {
   }
 }
 
-const Settings& Socket::getSettings() {
+const Settings& Socket_DEPRECATED::getSettings() {
   return deps_->getSettings();
 }
 
-void Socket::bytesSentCallback(struct evbuffer* buffer,
-                               const struct evbuffer_cb_info* info,
-                               void* arg) {
-  Socket* self = reinterpret_cast<Socket*>(arg);
+void Socket_DEPRECATED::bytesSentCallback(struct evbuffer* buffer,
+                                          const struct evbuffer_cb_info* info,
+                                          void* arg) {
+  Socket_DEPRECATED* self = reinterpret_cast<Socket_DEPRECATED*>(arg);
 
   ld_check(self);
   ld_check(!self->isClosed());
@@ -1637,7 +1649,7 @@ void Socket::bytesSentCallback(struct evbuffer* buffer,
   }
 }
 
-void Socket::enqueueDeferredEvent(SocketEvent e) {
+void Socket_DEPRECATED::enqueueDeferredEvent(SocketEvent e) {
   deferred_event_queue_.push_back(e);
 
   if (!deferred_event_queue_event_.isScheduled()) {
@@ -1645,7 +1657,7 @@ void Socket::enqueueDeferredEvent(SocketEvent e) {
   }
 }
 
-void Socket::onBytesAdmittedToSend(size_t nbytes) {
+void Socket_DEPRECATED::onBytesAdmittedToSend(size_t nbytes) {
   message_pos_t next_drain_pos = drain_pos_ + nbytes;
   ld_check(next_pos_ >= next_drain_pos);
   size_t num_messages = 0;
@@ -1700,7 +1712,7 @@ void Socket::onBytesAdmittedToSend(size_t nbytes) {
   onBytesPassedToTCP(nbytes);
 }
 
-void Socket::onBytesPassedToTCP(size_t nbytes) {
+void Socket_DEPRECATED::onBytesPassedToTCP(size_t nbytes) {
   // If we are in active state and bytes were written into the socket, assume
   // that they are already sent to the remote and mark the state as inactive if
   // necessary.
@@ -1724,12 +1736,12 @@ void Socket::onBytesPassedToTCP(size_t nbytes) {
           deps_->getBytesPending());
 }
 
-void Socket::deferredEventQueueEventCallback(void* instance, short) {
-  auto self = reinterpret_cast<Socket*>(instance);
+void Socket_DEPRECATED::deferredEventQueueEventCallback(void* instance, short) {
+  auto self = reinterpret_cast<Socket_DEPRECATED*>(instance);
   self->processDeferredEventQueue();
 }
 
-void Socket::processDeferredEventQueue() {
+void Socket_DEPRECATED::processDeferredEventQueue() {
   auto& queue = deferred_event_queue_;
   ld_check(!queue.empty());
 
@@ -1752,12 +1764,12 @@ void Socket::processDeferredEventQueue() {
   ld_assert(!deferred_event_queue_event_.isScheduled());
 }
 
-void Socket::endStreamRewindCallback(void* instance, short) {
-  auto self = reinterpret_cast<Socket*>(instance);
+void Socket_DEPRECATED::endStreamRewindCallback(void* instance, short) {
+  auto self = reinterpret_cast<Socket_DEPRECATED*>(instance);
   self->endStreamRewind();
 }
 
-void Socket::endStreamRewind() {
+void Socket_DEPRECATED::endStreamRewind() {
   if (message_error_injection_rewinding_stream_) {
     ld_error("Ending Error Injection on Socket (%p) - %jd diverted",
              this,
@@ -1767,7 +1779,7 @@ void Socket::endStreamRewind() {
   }
 }
 
-void Socket::expectProtocolHeader() {
+void Socket_DEPRECATED::expectProtocolHeader() {
   ld_check(!isClosed());
   if (bev_) {
     size_t protohdr_bytes =
@@ -1785,7 +1797,7 @@ void Socket::expectProtocolHeader() {
   expecting_header_ = true;
 }
 
-void Socket::expectMessageBody() {
+void Socket_DEPRECATED::expectMessageBody() {
   ld_check(!isClosed());
   ld_check(expecting_header_);
 
@@ -1804,7 +1816,7 @@ void Socket::expectMessageBody() {
   expecting_header_ = false;
 }
 
-int Socket::readMessageHeader(struct evbuffer* inbuf) {
+int Socket_DEPRECATED::readMessageHeader(struct evbuffer* inbuf) {
   ld_check(expectingProtocolHeader());
   static_assert(sizeof(recv_message_ph_) == sizeof(ProtocolHeader),
                 "recv_message_ph_ type is not ProtocolHeader");
@@ -1878,7 +1890,8 @@ int Socket::readMessageHeader(struct evbuffer* inbuf) {
   return 0;
 }
 
-bool Socket::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
+bool Socket_DEPRECATED::verifyChecksum(ProtocolHeader ph,
+                                       ProtocolReader& reader) {
   size_t protocol_bytes_already_read =
       ProtocolHeader::bytesNeeded(ph.type, proto_);
 
@@ -1924,7 +1937,7 @@ bool Socket::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
   return true;
 }
 
-bool Socket::validateReceivedMessage(const Message* msg) const {
+bool Socket_DEPRECATED::validateReceivedMessage(const Message* msg) const {
   if (isHandshakeMessage(msg->type_)) {
     if (handshaken_) {
       ld_error("PROTOCOL ERROR: got a duplicate %s from %s",
@@ -1952,7 +1965,7 @@ bool Socket::validateReceivedMessage(const Message* msg) const {
   return true;
 }
 
-bool Socket::processHandshakeMessage(const Message* msg) {
+bool Socket_DEPRECATED::processHandshakeMessage(const Message* msg) {
   switch (msg->type_) {
     case MessageType::ACK: {
       deps_->processACKMessage(msg, &our_name_at_peer_, &proto_);
@@ -2003,8 +2016,9 @@ bool Socket::processHandshakeMessage(const Message* msg) {
   return true;
 }
 
-int Socket::dispatchMessageBody(ProtocolHeader header,
-                                std::unique_ptr<folly::IOBuf> inbuf) {
+int Socket_DEPRECATED::dispatchMessageBody(
+    ProtocolHeader header,
+    std::unique_ptr<folly::IOBuf> inbuf) {
   recv_message_ph_ = header;
   ProtocolHeader& ph = recv_message_ph_;
   // Tell the Worker that we're processing a message, so it can time it.
@@ -2160,7 +2174,7 @@ int Socket::dispatchMessageBody(ProtocolHeader header,
   return 0;
 }
 
-int Socket::pushOnCloseCallback(SocketCallback& cb) {
+int Socket_DEPRECATED::pushOnCloseCallback(SocketCallback& cb) {
   if (cb.active()) {
     RATELIMIT_CRITICAL(
         std::chrono::seconds(1),
@@ -2177,7 +2191,7 @@ int Socket::pushOnCloseCallback(SocketCallback& cb) {
   return 0;
 }
 
-int Socket::pushOnBWAvailableCallback(BWAvailableCallback& cb) {
+int Socket_DEPRECATED::pushOnBWAvailableCallback(BWAvailableCallback& cb) {
   if (cb.links_.is_linked()) {
     RATELIMIT_CRITICAL(std::chrono::seconds(1),
                        10,
@@ -2193,7 +2207,7 @@ int Socket::pushOnBWAvailableCallback(BWAvailableCallback& cb) {
   return 0;
 }
 
-size_t Socket::getTcpSendBufSize() const {
+size_t Socket_DEPRECATED::getTcpSendBufSize() const {
   if (isClosed()) {
     return 0;
   }
@@ -2227,7 +2241,7 @@ size_t Socket::getTcpSendBufSize() const {
   return tcp_sndbuf_cache_.size;
 }
 
-size_t Socket::getTcpRecvBufSize() const {
+size_t Socket_DEPRECATED::getTcpRecvBufSize() const {
   if (isClosed()) {
     return 0;
   }
@@ -2245,7 +2259,7 @@ size_t Socket::getTcpRecvBufSize() const {
   return out;
 }
 
-ssize_t Socket::getTcpRecvBufOccupancy() const {
+ssize_t Socket_DEPRECATED::getTcpRecvBufOccupancy() const {
   if (isClosed()) {
     return -1;
   }
@@ -2261,18 +2275,18 @@ ssize_t Socket::getTcpRecvBufOccupancy() const {
   }
 }
 
-uint64_t Socket::getNumBytesReceived() const {
+uint64_t Socket_DEPRECATED::getNumBytesReceived() const {
   return num_bytes_received_;
 }
 
-void Socket::addHandshakeTimeoutEvent() {
+void Socket_DEPRECATED::addHandshakeTimeoutEvent() {
   std::chrono::milliseconds timeout = getSettings().handshake_timeout;
   if (timeout.count() > 0) {
     handshake_timeout_event_.scheduleTimeout(timeout);
   }
 }
 
-void Socket::addConnectAttemptTimeoutEvent() {
+void Socket_DEPRECATED::addConnectAttemptTimeoutEvent() {
   std::chrono::milliseconds timeout = getSettings().connect_timeout;
   if (timeout.count() > 0) {
     timeout *=
@@ -2281,7 +2295,7 @@ void Socket::addConnectAttemptTimeoutEvent() {
   }
 }
 
-size_t Socket::getBytesPending() const {
+size_t Socket_DEPRECATED::getBytesPending() const {
   size_t queued_bytes = pendingq_.cost() + serializeq_.cost() + sendq_.cost();
 
   size_t buffered_bytes = 0;
@@ -2295,19 +2309,19 @@ size_t Socket::getBytesPending() const {
   return queued_bytes + buffered_bytes;
 }
 
-size_t Socket::getBufferedBytesSize() const {
+size_t Socket_DEPRECATED::getBufferedBytesSize() const {
   return next_pos_ - drain_pos_;
 }
 
-void Socket::handshakeTimeoutCallback(void* arg, short) {
-  reinterpret_cast<Socket*>(arg)->onHandshakeTimeout();
+void Socket_DEPRECATED::handshakeTimeoutCallback(void* arg, short) {
+  reinterpret_cast<Socket_DEPRECATED*>(arg)->onHandshakeTimeout();
 }
 
-void Socket::connectAttemptTimeoutCallback(void* arg, short) {
-  reinterpret_cast<Socket*>(arg)->onConnectAttemptTimeout();
+void Socket_DEPRECATED::connectAttemptTimeoutCallback(void* arg, short) {
+  reinterpret_cast<Socket_DEPRECATED*>(arg)->onConnectAttemptTimeout();
 }
 
-int Socket::checkConnection(ClientID* our_name_at_peer) {
+int Socket_DEPRECATED::checkConnection(ClientID* our_name_at_peer) {
   if (!our_name_at_peer_.valid()) {
     // socket is either not connected or we're still waiting for a handshake
     // to complete
@@ -2340,13 +2354,14 @@ int Socket::checkConnection(ClientID* our_name_at_peer) {
   return 0;
 }
 
-void Socket::dumpQueuedMessages(std::map<MessageType, int>* out) const {
+void Socket_DEPRECATED::dumpQueuedMessages(
+    std::map<MessageType, int>* out) const {
   for (const Envelope& e : sendq_) {
     ++(*out)[e.message().type_];
   }
 }
 
-void Socket::getDebugInfo(InfoSocketsTable& table) const {
+void Socket_DEPRECATED::getDebugInfo(InfoSocketsTable& table) const {
   std::string state;
   // Connection state of the socket.
   if (isClosed()) {
@@ -2388,11 +2403,11 @@ void Socket::getDebugInfo(InfoSocketsTable& table) const {
       .set<15>(fd_);
 }
 
-bool Socket::peerIsClient() const {
+bool Socket_DEPRECATED::peerIsClient() const {
   return peer_type_ == PeerType::CLIENT;
 }
 
-folly::ssl::X509UniquePtr Socket::getPeerCert() const {
+folly::ssl::X509UniquePtr Socket_DEPRECATED::getPeerCert() const {
   ld_check(isSSL());
 
   // This function should only be called when the socket is SSL enabled.
@@ -2403,9 +2418,10 @@ folly::ssl::X509UniquePtr Socket::getPeerCert() const {
   return folly::ssl::X509UniquePtr(SSL_get_peer_certificate(ctx));
 }
 
-SocketDrainStatusType Socket::getSlowSocketReason(unsigned* net_ltd_pct,
-                                                  unsigned* rwnd_ltd_pct,
-                                                  unsigned* sndbuf_ltd_pct) {
+SocketDrainStatusType
+Socket_DEPRECATED::getSlowSocketReason(unsigned* net_ltd_pct,
+                                       unsigned* rwnd_ltd_pct,
+                                       unsigned* sndbuf_ltd_pct) {
   TCPInfo tcp_info;
   int rv = deps_->getTCPInfo(&tcp_info, fd_);
   if (rv != 0) {
@@ -2457,7 +2473,7 @@ SocketDrainStatusType Socket::getSlowSocketReason(unsigned* net_ltd_pct,
 //    throughput because of network.
 // 4. If network is congested, then we can close the socket if rate limiter
 //    allows to do so. In all other cases, socket is not closed.
-SocketDrainStatusType Socket::checkSocketHealth() {
+SocketDrainStatusType Socket_DEPRECATED::checkSocketHealth() {
   // Close the active window if open.
   auto& s = health_stats_;
   if (s.active_start_time_ != SteadyTimestamp::min()) {

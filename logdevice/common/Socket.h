@@ -104,7 +104,7 @@ class TrafficShappingSocket : public SocketBase {
  */
 class ConnectionNegotiator {};
 
-class Socket : public TrafficShappingSocket {
+class Socket_DEPRECATED : public TrafficShappingSocket {
  public:
   /**
    * Constructs a new Socket, to be connected to a LogDevice
@@ -125,11 +125,11 @@ class Socket : public TrafficShappingSocket {
    *     NOTINCONFIG     server_name does not appear in cluster config
    *     INTERNAL        failed to initialize a libevent timer (unlikely)
    */
-  Socket(NodeID server_name,
-         SocketType type,
-         ConnectionType conntype,
-         FlowGroup& flow_group,
-         std::unique_ptr<SocketDependencies> deps);
+  Socket_DEPRECATED(NodeID server_name,
+                    SocketType type,
+                    ConnectionType conntype,
+                    FlowGroup& flow_group,
+                    std::unique_ptr<SocketDependencies> deps);
 
   /**
    * Constructs a new Socket from a TCP socket fd that was returned by accept().
@@ -155,24 +155,24 @@ class Socket : public TrafficShappingSocket {
    *     INTERNAL        failed to set fd non-blocking (unlikely) or failed to
    *                     initialize a libevent timer (unlikely).
    */
-  Socket(int fd,
-         ClientID client_name,
-         const Sockaddr& client_addr,
-         ResourceBudget::Token conn_token,
-         SocketType type,
-         ConnectionType conntype,
-         FlowGroup& flow_group,
-         std::unique_ptr<SocketDependencies> deps);
+  Socket_DEPRECATED(int fd,
+                    ClientID client_name,
+                    const Sockaddr& client_addr,
+                    ResourceBudget::Token conn_token,
+                    SocketType type,
+                    ConnectionType conntype,
+                    FlowGroup& flow_group,
+                    std::unique_ptr<SocketDependencies> deps);
 
   /**
    * Disconnects, deletes the underlying bufferevent, and closes the TCP socket.
    */
-  virtual ~Socket();
+  virtual ~Socket_DEPRECATED();
 
-  Socket(const Socket&) = delete;
-  Socket(Socket&&) = delete;
-  Socket& operator=(const Socket&) = delete;
-  Socket& operator=(Socket&&) = delete;
+  Socket_DEPRECATED(const Socket_DEPRECATED&) = delete;
+  Socket_DEPRECATED(Socket_DEPRECATED&&) = delete;
+  Socket_DEPRECATED& operator=(const Socket_DEPRECATED&) = delete;
+  Socket_DEPRECATED& operator=(Socket_DEPRECATED&&) = delete;
 
   Sockaddr peerSockaddr() const {
     return peer_sockaddr_;
@@ -663,12 +663,12 @@ class Socket : public TrafficShappingSocket {
    * @param peer_sockaddr sockaddr of the other endpoint
    * @param type          type of socket
    */
-  explicit Socket(std::unique_ptr<SocketDependencies>& deps,
-                  Address peer_name,
-                  const Sockaddr& peer_sockaddr,
-                  SocketType type,
-                  ConnectionType conntype,
-                  FlowGroup& flow_group);
+  explicit Socket_DEPRECATED(std::unique_ptr<SocketDependencies>& deps,
+                             Address peer_name,
+                             const Sockaddr& peer_sockaddr,
+                             SocketType type,
+                             ConnectionType conntype,
+                             FlowGroup& flow_group);
 
   /**
    * Perform Message and connection validation that is possible from
@@ -893,7 +893,7 @@ class Socket : public TrafficShappingSocket {
   // socket instance itself is not reclaimed till all the references on the
   // ref_holder go away.  This way we guarantee that the ClientID if valid
   // does not get reclaimed.
-  std::shared_ptr<Socket> socket_ref_holder_;
+  std::shared_ptr<Socket_DEPRECATED> socket_ref_holder_;
 
   friend class SocketImpl;
   std::unique_ptr<SocketImpl> impl_;

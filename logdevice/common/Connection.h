@@ -25,7 +25,7 @@ class SocketAdapter;
  * this will we a wrapper around our socket which knows about protocol and
  * serialization
  */
-class Connection : public Socket {
+class Connection : public Socket_DEPRECATED {
  public:
   /**
    * Constructs a new Connection, to be connected to a LogDevice
@@ -145,7 +145,7 @@ class Connection : public Socket {
    */
   int connect() override;
 
-  Socket::SendStatus
+  Socket_DEPRECATED::SendStatus
   sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) override;
 
   void close(Status reason) override;
