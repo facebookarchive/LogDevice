@@ -1764,6 +1764,115 @@ TEST_P(ReadingIntegrationTest, GuaranteedEfficiencyWithNodeDown) {
   EXPECT_EQ(0, s.scd_shard_underreplicated_region_promoted);
 }
 
+TEST_P(ReadingIntegrationTest, EmptyPayload) {
+  auto cluster = clusterFactory()
+                     .setNumDBShards(1)
+                     // Disable checksums because in some places they're
+                     // treated as part of payload.
+                     .setParam("--checksum-bits", "0")
+                     .create(1);
+  cluster->waitUntilAllSequencersQuiescent();
+
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  int rv = client_settings->set("checksum-bits", "0");
+  ASSERT_EQ(0, rv) << err;
+  auto client = cluster->createClient(
+      getDefaultTestTimeout(), std::move(client_settings));
+
+  auto lsn = client->appendSync(logid_t(1), "");
+  ASSERT_NE(LSN_INVALID, lsn);
+
+  auto reader = client->createReader(1);
+  reader->startReading(logid_t(1), lsn, lsn);
+  ASSERT_TRUE(reader->isReadingAny());
+  std::vector<std::unique_ptr<DataRecord>> recs;
+  GapRecord gap;
+  ssize_t n = reader->read(1, &recs, &gap);
+  ASSERT_EQ(1, n);
+  EXPECT_EQ(lsn, recs[0]->attrs.lsn);
+  EXPECT_EQ("", recs[0]->payload.toString());
+  EXPECT_FALSE(reader->isReadingAny());
+
+  // Now try that with buffered writer.
+  class CB : public BufferedWriter::AppendCallback {
+   public:
+    bool done = false;
+    lsn_t lsn = LSN_INVALID;
+    Semaphore sem;
+
+    void onSuccess(logid_t,
+                   ContextSet,
+                   const DataRecordAttributes& attrs) override {
+      EXPECT_FALSE(done);
+      done = true;
+      lsn = attrs.lsn;
+      sem.post();
+    }
+    void onFailure(logid_t, ContextSet, Status) override {
+      ADD_FAILURE(); // appends are not supposed to fail
+      EXPECT_FALSE(done);
+      done = true;
+      sem.post();
+    }
+
+    void reset() {
+      ld_check(!sem.try_wait());
+      done = false;
+      lsn = LSN_INVALID;
+    }
+  };
+
+  CB cb;
+  std::unique_ptr<BufferedWriter> writer = BufferedWriter::create(client, &cb);
+  rv = writer->append(logid_t(1), "", nullptr);
+  ASSERT_EQ(0, rv) << err;
+  // BufferedWriter will write this batch without compression because
+  // compression won't make the empty string shorter (varint-length-prefixed
+  // empty string, to be precise).
+  rv = writer->flushAll();
+  ASSERT_EQ(0, rv) << err;
+  cb.sem.wait();
+  lsn = cb.lsn;
+
+  reader->startReading(logid_t(1), lsn, lsn);
+  ASSERT_TRUE(reader->isReadingAny());
+  recs.clear();
+  n = reader->read(1, &recs, &gap);
+  ASSERT_EQ(1, n);
+  EXPECT_EQ(lsn, recs[0]->attrs.lsn);
+  EXPECT_EQ("", recs[0]->payload.toString());
+  EXPECT_FALSE(reader->isReadingAny());
+
+  // Now try with compression.
+  cb.reset();
+  rv = writer->append(logid_t(1), "", nullptr);
+  ASSERT_EQ(0, rv) << err;
+  // Add a compressible payload to make BufferedWriter decide to compress the
+  // batch.
+  rv = writer->append(logid_t(1), std::string(1000, '\0'), nullptr);
+  ASSERT_EQ(0, rv) << err;
+  // There'll be no compression because compression won't make the empty string
+  // shorter.
+  rv = writer->flushAll();
+  ASSERT_EQ(0, rv) << err;
+  cb.sem.wait();
+  lsn = cb.lsn;
+
+  reader->startReading(logid_t(1), lsn, lsn);
+  ASSERT_TRUE(reader->isReadingAny());
+  recs.clear();
+  n = reader->read(1, &recs, &gap);
+  ASSERT_EQ(1, n);
+  EXPECT_EQ(lsn, recs[0]->attrs.lsn);
+  EXPECT_EQ("", recs[0]->payload.toString());
+  recs.clear();
+  n = reader->read(1, &recs, &gap);
+  ASSERT_EQ(1, n);
+  EXPECT_EQ(lsn, recs[0]->attrs.lsn);
+  EXPECT_EQ(std::string(1000, '\0'), recs[0]->payload.toString());
+  EXPECT_FALSE(reader->isReadingAny());
+}
+
 INSTANTIATE_TEST_CASE_P(ReadingIntegrationTest,
                         ReadingIntegrationTest,
                         ::testing::Values(false, true));

@@ -216,7 +216,7 @@ int BufferedWriteDecoderImpl::decodeUnowned(
                       end - ptr);
       return -1;
     }
-    payloads_out.push_back(Payload(ptr, len));
+    payloads_out.push_back(Payload(len ? ptr : nullptr, len));
     ptr += len;
   }
   ld_check(ptr == end);
