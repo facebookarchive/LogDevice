@@ -104,7 +104,7 @@ loaded.</p>
 <p>Build your plugin into a static library and link it to the binary.  Define a
 <code>logdevice_plugin()</code> function in the global namespace that returns a raw pointer
 to the heap-allocated plugin instance and export it, e.g., like this:</p>
-<pre><code class="hljs css language-c++"><span class="hljs-keyword">extern</span> <span class="hljs-string">"C"</span> __attribute__((__used__)) facebook::logdevice::<span class="hljs-function">Plugin*
+<pre><code class="hljs css language-c++"><span class="hljs-keyword">extern</span> <span class="hljs-string">"C"</span> __attribute__((__used__)) facebook::<span class="hljs-function">logdevice::Plugin*
 <span class="hljs-title">logdevice_plugin</span><span class="hljs-params">()</span> </span>{
   <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> MySpecialPlugin();
 }

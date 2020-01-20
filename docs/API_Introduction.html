@@ -147,7 +147,7 @@ Some applications use this context to include state or tracking information for 
     <span class="hljs-comment">// ...</span>
 };
 
-facebook::logdevice::<span class="hljs-keyword">logid_t</span> logid(<span class="hljs-number">1</span>);
+facebook::<span class="hljs-function">logdevice::<span class="hljs-keyword">logid_t</span> <span class="hljs-title">logid</span><span class="hljs-params">(<span class="hljs-number">1</span>)</span></span>;
 facebook::logdevice::BufferedWriter::Options options;
 BufferedWriterCallback cb;
 <span class="hljs-built_in">std</span>::<span class="hljs-built_in">unique_ptr</span>&lt;facebook::logdevice::BufferedWriter&gt; buffered_writer;
@@ -215,8 +215,8 @@ The callback is invoked when the append completes, whether it is successful or n
 }
 <span class="hljs-comment">// ...</span>
 
-facebook::logdevice::<span class="hljs-keyword">logid_t</span> logid(<span class="hljs-number">1</span>);
-<span class="hljs-built_in">std</span>::<span class="hljs-function"><span class="hljs-built_in">string</span> <span class="hljs-title">payload</span><span class="hljs-params">(<span class="hljs-string">"data"</span>)</span></span>;
+facebook::<span class="hljs-function">logdevice::<span class="hljs-keyword">logid_t</span> <span class="hljs-title">logid</span><span class="hljs-params">(<span class="hljs-number">1</span>)</span></span>;
+<span class="hljs-function"><span class="hljs-built_in">std</span>::<span class="hljs-built_in">string</span> <span class="hljs-title">payload</span><span class="hljs-params">(<span class="hljs-string">"data"</span>)</span></span>;
 
 <span class="hljs-keyword">int</span> rv = client-&gt;append(logid, payload, &amp;append_callback);
 <span class="hljs-keyword">if</span> (rv != <span class="hljs-number">0</span>) {
@@ -323,7 +323,7 @@ reader-&gt;setRecordCallback(recordCallback);
 reader-&gt;setGapCallback(gapCallback);
 reader-&gt;setDoneCallback(doneCallback);
 
-facebook::logdevice::<span class="hljs-keyword">logid_t</span> logid(<span class="hljs-number">1</span>);
+facebook::<span class="hljs-function">logdevice::<span class="hljs-keyword">logid_t</span> <span class="hljs-title">logid</span><span class="hljs-params">(<span class="hljs-number">1</span>)</span></span>;
 facebook::logdevice::<span class="hljs-keyword">lsn_t</span> from_lsn = facebook::logdevice::LSN_OLDEST;
 
 <span class="hljs-keyword">int</span> rv = reader-&gt;startReading(logid, from_lsn);
@@ -362,9 +362,9 @@ To discover which LSN corresponds to that timestamp, use the <code>findTime()</c
   }
 }
 
-facebook::logdevice::<span class="hljs-keyword">logid_t</span> logid(<span class="hljs-number">1</span>);
+facebook::<span class="hljs-function">logdevice::<span class="hljs-keyword">logid_t</span> <span class="hljs-title">logid</span><span class="hljs-params">(<span class="hljs-number">1</span>)</span></span>;
 <span class="hljs-comment">// Find LSN for records written 30 seconds ago</span>
-<span class="hljs-built_in">std</span>::chrono::<span class="hljs-function">milliseconds <span class="hljs-title">timestamp</span><span class="hljs-params">(
+<span class="hljs-built_in">std</span>::<span class="hljs-function">chrono::milliseconds <span class="hljs-title">timestamp</span><span class="hljs-params">(
  <span class="hljs-built_in">std</span>::chrono::duration_cast&lt;<span class="hljs-built_in">std</span>::chrono::milliseconds&gt;(
    <span class="hljs-built_in">std</span>::chrono::system_clock::now().time_since_epoch() -
        <span class="hljs-built_in">std</span>::chrono::seconds(<span class="hljs-number">30</span>)))</span></span>;
@@ -392,7 +392,7 @@ by a lot, the results of <code>findTime()</code> calls may be inconsistent.</p>
   }
 }
 
-facebook::logdevice::<span class="hljs-keyword">logid_t</span> logid(<span class="hljs-number">1</span>);
+facebook::<span class="hljs-function">logdevice::<span class="hljs-keyword">logid_t</span> <span class="hljs-title">logid</span><span class="hljs-params">(<span class="hljs-number">1</span>)</span></span>;
 <span class="hljs-keyword">int</span> rv = client-&gt;getTailLSN(logid, tailLSNCallback);
 <span class="hljs-keyword">if</span> (rv != <span class="hljs-number">0</span>) {
   <span class="hljs-built_in">std</span>::<span class="hljs-built_in">cout</span> &lt;&lt; <span class="hljs-string">"Couldn't run getTailLSN(): "</span>
