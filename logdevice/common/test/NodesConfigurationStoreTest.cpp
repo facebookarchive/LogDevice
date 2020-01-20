@@ -313,24 +313,26 @@ void runMultiThreadedTests(std::unique_ptr<NodesConfigurationStore> store) {
 
 void runReadModifyWriteCreateIfNotExistTest(
     std::unique_ptr<NodesConfigurationStore> store) {
-  folly::Baton<> b;
+  folly::Baton<> value_read, value_written;
   ASSERT_EQ(E::NOTFOUND, store->getConfigSync(nullptr));
 
   std::thread t([&]() {
     store->readModifyWriteConfig(
         [&](auto) {
-          b.wait();
+          value_read.post();
+          value_written.wait();
           return std::make_pair<Status, std::string>(
               E::OK, TestEntry{0, "foobar"}.serialize());
         },
         [](auto st, auto, auto) { EXPECT_EQ(E::VERSION_MISMATCH, st); });
   });
+  value_read.wait();
 
   EXPECT_EQ(
       Status::OK,
       store->updateConfigSync(TestEntry{0, "foobar2"}.serialize(),
                               NodesConfigurationStore::Condition::overwrite()));
-  b.post();
+  value_written.post();
   t.join();
 
   std::string value_out;
