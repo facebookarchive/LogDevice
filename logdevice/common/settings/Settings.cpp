@@ -681,7 +681,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Execution);
   init("use-legacy-eventbase",
        &use_legacy_eventbase,
-       "true",
+       "false",
        nullptr,
        "Use libevent2 based event base to create EventLoop threadpool in "
        "logdevice.",
