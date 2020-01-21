@@ -27,7 +27,6 @@ namespace facebook { namespace logdevice { namespace maintenance {
  *      build an external maintenance record
  * 5.   For all shards that are rebuilding in Relocate mode
  *      build an external maintenance record
- * 6.   Update NCM to set Storage State to DATA_MIGRATION forcefully
  *
  * Note: This migration method is racy as RebuildingSupervisor could add new
  * shards to rebuilding set after this method has read the event log. One can
