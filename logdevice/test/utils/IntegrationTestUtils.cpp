@@ -19,6 +19,7 @@
 #include <folly/String.h>
 #include <folly/Subprocess.h>
 #include <folly/dynamic.h>
+#include <folly/io/async/EventBaseManager.h>
 #include <folly/json.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -1558,17 +1559,30 @@ void Node::wipeShard(uint32_t shard) {
 }
 
 std::string Node::sendCommand(const std::string& command,
-                              bool ssl,
                               std::chrono::milliseconds command_timeout) const {
-  std::string error;
-  std::string response = test::nc(admin_command_client_,
-                                  addrs_.command.getSocketAddress(),
-                                  command,
-                                  &error,
-                                  ssl,
-                                  command_timeout);
-  if (!error.empty()) {
-    ld_debug("Failed to send command: %s", error.c_str());
+  auto client = createAdminClient();
+
+  if (client == nullptr) {
+    ld_debug("Failed to send admin command %s to node %d, because admin "
+             "command client creation failed.",
+             command.c_str(),
+             node_index_);
+    return "";
+  }
+
+  apache::thrift::RpcOptions rpc_options;
+  rpc_options.setTimeout(command_timeout);
+
+  thrift::AdminCommandRequest req;
+  req.request = command;
+
+  thrift::AdminCommandResponse resp;
+  client->sync_executeAdminCommand(rpc_options, resp, std::move(req));
+  std::string response = resp.response;
+
+  // Strip the trailing END
+  if (folly::StringPiece(response).endsWith("END\r\n")) {
+    response.resize(response.size() - 5);
   }
   ld_debug(
       "Received response to \"%s\": %s", command.c_str(), response.c_str());
@@ -1582,8 +1596,8 @@ std::string Node::sendCommand(const std::string& command,
 }
 
 std::vector<std::map<std::string, std::string>>
-Node::sendJsonCommand(const std::string& command, bool ssl) const {
-  std::string response = sendCommand(command, ssl);
+Node::sendJsonCommand(const std::string& command) const {
+  std::string response = sendCommand(command);
   return parseJsonAdminCommand(response, node_index_, command);
 }
 
@@ -1643,7 +1657,7 @@ std::string Node::getIfaceAddr(const std::string ifname) const {
 
 folly::Optional<test::ServerInfo>
 Node::getServerInfo(std::chrono::milliseconds command_timeout) const {
-  auto data = sendCommand("info --json", /* ssl */ false, command_timeout);
+  auto data = sendCommand("info --json", command_timeout);
   if (data.empty()) {
     return folly::Optional<test::ServerInfo>();
   }
@@ -1886,24 +1900,19 @@ int Node::waitUntilAllSequencersQuiescent(
       deadline);
 }
 
-std::unique_ptr<thrift::AdminAPIAsyncClient> Node::createAdminClient() {
-  // This is a very bad way of handling Folly AsyncSocket flakiness in
-  // combination with unix sockets.
-  for (auto i = 0; i < 20; i++) {
-    folly::SocketAddress address = getAdminAddress();
-    auto transport =
-        apache::thrift::async::TAsyncSocket::newSocket(&event_base_, address);
-    auto channel = apache::thrift::HeaderClientChannel::newChannel(transport);
-    channel->setTimeout(5000);
-    if (channel->good()) {
-      return std::make_unique<thrift::AdminAPIAsyncClient>(std::move(channel));
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+std::unique_ptr<thrift::AdminAPIAsyncClient> Node::createAdminClient() const {
+  folly::SocketAddress address = getAdminAddress();
+  auto transport = apache::thrift::async::TAsyncSocket::newSocket(
+      folly::EventBaseManager::get()->getEventBase(), address);
+  auto channel = apache::thrift::HeaderClientChannel::newChannel(transport);
+  channel->setTimeout(5000);
+  if (!channel->good()) {
+    ld_debug("Couldn't create a thrift client for the Admin server for node "
+             "%d. It might mean that the node is down.",
+             node_index_);
+    return nullptr;
   }
-  ld_critical(
-      "Couldn't create a thrift client for the Admin server for node %d",
-      node_index_);
-  return nullptr;
+  return std::make_unique<thrift::AdminAPIAsyncClient>(std::move(channel));
 }
 
 int Node::waitUntilNodeStateReady() {

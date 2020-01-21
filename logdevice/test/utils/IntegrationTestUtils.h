@@ -1592,7 +1592,7 @@ class Node {
   int shutdown();
 
   // Creates a thrift client for admin server running on this node.
-  std::unique_ptr<thrift::AdminAPIAsyncClient> createAdminClient();
+  std::unique_ptr<thrift::AdminAPIAsyncClient> createAdminClient() const;
 
   /**
    * Waits until the admin API is able to answer requests that need the event
@@ -1727,10 +1727,8 @@ class Node {
 
   /**
    * Sends admin command `command' to command port and returns the result.
-   * Connect through SSL if requested.
    */
   std::string sendCommand(const std::string& command,
-                          bool ssl = false,
                           std::chrono::milliseconds command_timeout =
                               std::chrono::milliseconds(30000)) const;
 
@@ -1741,7 +1739,7 @@ class Node {
    * json nor error message, crashes.
    */
   std::vector<std::map<std::string, std::string>>
-  sendJsonCommand(const std::string& command, bool ssl = false) const;
+  sendJsonCommand(const std::string& command) const;
 
   /**
    * Returns the admin API address for this node
@@ -1957,9 +1955,6 @@ class Node {
   }
 
   std::vector<std::string> commandLine() const;
-
-  // Folly event-base to be used for Admin API operations
-  folly::EventBase event_base_;
 };
 
 /**

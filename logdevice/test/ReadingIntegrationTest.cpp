@@ -1378,7 +1378,7 @@ TEST_P(ReadingIntegrationTest,
                                 shard_idx,
                                 logid.val_,
                                 lsn_to_string(lsn2));
-      std::string response = n.sendCommand(cmd, true);
+      std::string response = n.sendCommand(cmd);
       // Strip the trailing "\r\n".
       ld_info("N%d replied: %s",
               (int)n.node_index_,
