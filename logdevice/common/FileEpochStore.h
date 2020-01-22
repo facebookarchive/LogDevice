@@ -154,9 +154,10 @@ class FileEpochStore : public EpochStore, boost::noncopyable {
   // Cluster config.
   std::shared_ptr<UpdateableNodesConfiguration> config_;
 
-  // Locked in shared mode while a file lock is held. Locked in exclusive mode
-  // between pause() and unpause() calls.
-  folly::SharedMutex flock_mutex_;
+  // A condition_variable used to pause/unpause epoch store via admin commands.
+  std::mutex paused_mutex_;
+  std::condition_variable paused_cv_;
+  bool paused_{false};
 };
 
 }} // namespace facebook::logdevice

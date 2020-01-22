@@ -473,7 +473,10 @@ int FileEpochStore::updateEpochStore(logid_t log_id,
     return -1;
   }
 
-  folly::SharedMutex::ReadHolder lock(flock_mutex_);
+  {
+    std::unique_lock<std::mutex> lk(paused_mutex_);
+    paused_cv_.wait(lk, [&] { return !paused_; });
+  }
 
   if (flock(lock_fd, LOCK_EX) < 0) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
@@ -558,17 +561,28 @@ int FileEpochStore::updateEpochStore(logid_t log_id,
 }
 
 bool FileEpochStore::pause() {
-  flock_mutex_.lock();
-  return true;
+  bool was_paused;
+  {
+    std::lock_guard<std::mutex> lk(paused_mutex_);
+    was_paused = paused_;
+    paused_ = true;
+  }
+
+  // Return true if the store wasn't already paused.
+  return was_paused == false;
 }
 
 bool FileEpochStore::unpause() {
-  if (flock_mutex_.try_lock()) {
-    flock_mutex_.unlock();
-    return false;
+  bool was_paused;
+  {
+    std::lock_guard<std::mutex> lk(paused_mutex_);
+    was_paused = paused_;
+    paused_ = false;
   }
-  flock_mutex_.unlock();
-  return true;
+  paused_cv_.notify_all();
+
+  // Return true if the store was paused.
+  return was_paused == true;
 }
 
 }} // namespace facebook::logdevice
