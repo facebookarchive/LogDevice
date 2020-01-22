@@ -1577,7 +1577,21 @@ std::string Node::sendCommand(const std::string& command,
   req.request = command;
 
   thrift::AdminCommandResponse resp;
-  client->sync_executeAdminCommand(rpc_options, resp, std::move(req));
+  try {
+    client->sync_executeAdminCommand(rpc_options, resp, std::move(req));
+  } catch (const folly::AsyncSocketException& e) {
+    ld_debug("Failed to send admin command %s to node %d: %s",
+             command.c_str(),
+             node_index_,
+             e.what());
+    return "";
+  } catch (const apache::thrift::transport::TTransportException& e) {
+    ld_debug("Failed to send admin command %s to node %d: %s",
+             command.c_str(),
+             node_index_,
+             e.what());
+    return "";
+  }
   std::string response = resp.response;
 
   // Strip the trailing END
