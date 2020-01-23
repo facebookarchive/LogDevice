@@ -6,8 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 include "common/fb303/if/fb303.thrift"
+include "logdevice/common/if/common.thrift"
 include "logdevice/admin/if/admin_commands.thrift"
-include "logdevice/admin/if/common.thrift"
 include "logdevice/admin/if/cluster_membership.thrift"
 include "logdevice/admin/if/exceptions.thrift"
 include "logdevice/admin/if/logtree.thrift"

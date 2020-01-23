@@ -15,6 +15,7 @@ REMOVE_MATCHES_FROM_LISTS(files hfiles
 )
 
 
+add_subdirectory(if)
 add_subdirectory(configuration/if)
 add_subdirectory(configuration/utils)
 add_subdirectory(configuration/nodes)
@@ -31,6 +32,7 @@ set_target_properties(common
   PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(common
+  common-cpp2
   Membership-cpp2
   NodesConfiguration-cpp2
   ConfigurationCodec-cpp2

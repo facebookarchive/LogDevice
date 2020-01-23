@@ -15,7 +15,7 @@ from unittest import TestCase
 
 from ldops.const import ALL_SHARDS
 from ldops.util import helpers
-from logdevice.admin.common.types import NodeID, ShardID
+from logdevice.common.types import NodeID, ShardID
 
 
 class HelpersTestCase(TestCase):

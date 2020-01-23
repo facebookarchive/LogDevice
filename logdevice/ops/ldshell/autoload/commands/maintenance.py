@@ -27,12 +27,12 @@ from ldops.types.shard_maintenance_progress import ShardMaintenanceProgress
 from ldops.util.helpers import parse_shards
 from ldshell.autoload.commands import safety
 from ldshell.helpers import confirm_prompt
-from logdevice.admin.common.types import ShardID
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MarkAllShardsUnrecoverableResponse,
 )
 from logdevice.admin.nodes.types import MaintenanceStatus, ShardOperationalState
+from logdevice.common.types import ShardID
 from nubia import argument, command, context
 from tabulate import tabulate
 from termcolor import colored, cprint

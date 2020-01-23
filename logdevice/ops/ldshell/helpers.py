@@ -9,7 +9,7 @@ import sys
 from typing import Optional
 
 from ldops.const import DEFAULT_THRIFT_PORT
-from logdevice.admin.common.types import SocketAddress, SocketAddressFamily
+from logdevice.common.types import SocketAddress, SocketAddressFamily
 
 
 def confirm_prompt(prompt, stream=sys.stdout):

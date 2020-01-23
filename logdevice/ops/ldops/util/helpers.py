@@ -10,7 +10,7 @@ import re
 from typing import Collection, Set
 
 from ldops.const import ALL_SHARDS
-from logdevice.admin.common.types import NodeID, ShardID
+from logdevice.common.types import NodeID, ShardID
 
 
 def parse_shards(src: Collection[str]) -> Set[ShardID]:

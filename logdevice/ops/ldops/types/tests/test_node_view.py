@@ -19,7 +19,6 @@ from ldops.testutil.async_test import async_test
 from ldops.testutil.mock_admin_api import MockAdminAPI, gen_SocketAddress
 from ldops.types.node_view import NodeView
 from ldops.types.socket_address import SocketAddress
-from logdevice.admin.common.types import NodeID, Role, ShardID, SocketAddressFamily
 from logdevice.admin.maintenance.types import MaintenanceDefinition, MaintenancesFilter
 from logdevice.admin.nodes.types import (
     NodeConfig,
@@ -27,6 +26,7 @@ from logdevice.admin.nodes.types import (
     NodesStateRequest,
     NodeState,
 )
+from logdevice.common.types import NodeID, Role, ShardID, SocketAddressFamily
 
 
 class TestNodeView(TestCase):

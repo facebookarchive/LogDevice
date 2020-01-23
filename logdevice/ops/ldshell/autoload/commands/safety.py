@@ -14,13 +14,6 @@ from ldops.cluster import get_cluster_view
 from ldops.types.cluster_view import ClusterView
 from ldops.util import convert
 from ldops.util.helpers import parse_shards
-from logdevice.admin.common.types import (
-    Location,
-    LocationScope,
-    NodeID,
-    ReplicationProperty,
-    ShardID,
-)
 from logdevice.admin.exceptions.types import OperationError
 from logdevice.admin.nodes.types import ShardDataHealth, ShardStorageState
 from logdevice.admin.safety.types import (
@@ -30,6 +23,13 @@ from logdevice.admin.safety.types import (
     OperationImpact,
 )
 from logdevice.client import get_internal_log_name, is_internal_log
+from logdevice.common.types import (
+    Location,
+    LocationScope,
+    NodeID,
+    ReplicationProperty,
+    ShardID,
+)
 from nubia import context
 from nubia.internal.typing import argument, command
 from termcolor import colored, cprint

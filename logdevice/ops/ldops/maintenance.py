@@ -22,7 +22,6 @@ from ldops import admin_api
 from ldops.const import ALL_SHARDS
 from ldops.exceptions import LDOpsError
 from logdevice.admin.clients import AdminAPI
-from logdevice.admin.common.types import NodeID, ShardID
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MaintenanceDefinitionResponse,
@@ -38,6 +37,7 @@ from logdevice.admin.nodes.types import (
     ShardStorageState,
 )
 from logdevice.admin.safety.types import CheckImpactRequest, CheckImpactResponse
+from logdevice.common.types import NodeID, ShardID
 
 
 class SafetyError(LDOpsError):

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-include "logdevice/admin/if/common.thrift"
+include "logdevice/common/if/common.thrift"
 include "logdevice/admin/if/nodes.thrift"
 include "logdevice/admin/if/safety.thrift"
 

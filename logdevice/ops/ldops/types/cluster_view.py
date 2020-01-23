@@ -15,7 +15,6 @@ from ldops.const import ALL_SHARDS
 from ldops.exceptions import NodeNotFoundError
 from ldops.types.maintenance_view import MaintenanceView
 from ldops.types.node_view import NodeView
-from logdevice.admin.common.types import NodeID, ShardID
 from logdevice.admin.maintenance.types import MaintenanceDefinition, MaintenanceProgress
 from logdevice.admin.nodes.types import (
     NodeConfig,
@@ -23,6 +22,7 @@ from logdevice.admin.nodes.types import (
     SequencingState,
     ShardOperationalState,
 )
+from logdevice.common.types import NodeID, ShardID
 
 
 @dataclass

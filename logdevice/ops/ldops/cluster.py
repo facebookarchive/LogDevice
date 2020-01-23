@@ -24,7 +24,6 @@ from ldops.types.cluster_view import ClusterView
 from ldops.types.node import Node
 from ldops.types.socket_address import SocketAddress
 from logdevice.admin.clients import AdminAPI
-from logdevice.admin.common.types import NodeID
 from logdevice.admin.exceptions.types import NotSupported
 from logdevice.admin.nodes.types import (
     NodeConfig,
@@ -33,6 +32,7 @@ from logdevice.admin.nodes.types import (
     NodesStateResponse,
     NodeState,
 )
+from logdevice.common.types import NodeID
 
 
 DEFAULT_THRIFT_PORT = 6440

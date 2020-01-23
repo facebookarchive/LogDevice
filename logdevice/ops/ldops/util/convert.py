@@ -18,13 +18,8 @@ import re
 from typing import Dict, List, Mapping, Optional, Pattern
 
 from ldops.const import ALL_SHARDS
-from logdevice.admin.common.types import (
-    LocationScope,
-    NodeID,
-    ReplicationProperty,
-    ShardID,
-)
 from logdevice.admin.nodes.types import ShardStorageState
+from logdevice.common.types import LocationScope, NodeID, ReplicationProperty, ShardID
 
 
 __all__: List[str] = ["to_shard_id", "to_storage_state", "to_replication"]

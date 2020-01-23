@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ldops.types.socket_address import SocketAddress
-from logdevice.admin.common.types import NodeID
+from logdevice.common.types import NodeID
 
 
 @dataclass(frozen=True)

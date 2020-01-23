@@ -24,9 +24,9 @@ from logdevice.admin.cluster_membership.types import (
     BootstrapClusterRequest,
     RemoveNodesRequest,
 )
-from logdevice.admin.common.types import LocationScope, NodeID, ReplicationProperty
 from logdevice.admin.nodes.types import NodesFilter
 from logdevice.admin.settings.types import SettingsRequest
+from logdevice.common.types import LocationScope, NodeID, ReplicationProperty
 from logdevice.ops import nodes_configuration_manager as ncm
 from pygments import formatters, lexers
 from thrift.py3 import RpcOptions

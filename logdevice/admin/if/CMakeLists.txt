@@ -32,7 +32,6 @@ if(NOT ${BUILD_SUBMODULES})
 endif()
 
 foreach(THRIFT_SOURCE
-        common
         exceptions
         settings
         logtree
@@ -52,6 +51,7 @@ foreach(THRIFT_SOURCE
     "${_adminapi_if_include_prefix}"
     PY3_NAMESPACE "logdevice/admin"
     CYTHON_INCLUDES
+      "${CMAKE_BINARY_DIR}/logdevice/common/gen-py3/"
       "${CMAKE_BINARY_DIR}/logdevice/admin/if/gen-py3/"
       "${CMAKE_BINARY_DIR}/logdevice/common/membership/gen-py3/"
   )
@@ -76,6 +76,7 @@ ld_thrift_py3_library(
   "logdevice/admin/if"
   PY3_NAMESPACE "logdevice"
   CYTHON_INCLUDES "${CMAKE_BINARY_DIR}/logdevice/admin/if/gen-py3/"
+    "${CMAKE_BINARY_DIR}/logdevice/common/gen-py3/"
     "${CMAKE_BINARY_DIR}/common/fb303/if/gen-py3"
     "${CMAKE_BINARY_DIR}/logdevice/admin/gen-py3"
     "${CMAKE_BINARY_DIR}/logdevice"
@@ -106,7 +107,6 @@ if(thriftpy3)
   add_dependencies(admin-py3-target admin-cpp2)
   add_dependencies(logdevice-admin-types-py3
     fb303-types-py3
-    logdevice-admin-common-types-py3
     logdevice-admin-nodes-types-py3
     logdevice-admin-cluster_membership-types-py3
     logdevice-admin-admin_commands-types-py3
@@ -131,7 +131,6 @@ target_link_libraries(admin-cpp2
 
 foreach(_lang ${_languages})
 add_dependencies(admin-${_lang}-target
-                 common-${_lang}-target
                  nodes-${_lang}-target
                  cluster_membership-${_lang}-target
                  admin_commands-${_lang}-target

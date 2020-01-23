@@ -16,14 +16,6 @@ from typing import Dict, List, Optional, Type
 
 from ldops.const import ALL_SHARDS
 from ldops.types.cluster import Cluster
-from logdevice.admin.common.types import (
-    LocationScope,
-    NodeID,
-    Role,
-    ShardID,
-    SocketAddress,
-    SocketAddressFamily,
-)
 from logdevice.admin.exceptions.types import MaintenanceMatchError
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
@@ -51,6 +43,14 @@ from logdevice.admin.nodes.types import (
     ShardState,
     ShardStorageState,
     StorageConfig,
+)
+from logdevice.common.types import (
+    LocationScope,
+    NodeID,
+    Role,
+    ShardID,
+    SocketAddress,
+    SocketAddressFamily,
 )
 from logdevice.membership.Membership.types import MetaDataStorageState, StorageState
 

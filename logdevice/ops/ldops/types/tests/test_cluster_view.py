@@ -20,7 +20,6 @@ from ldops.testutil.async_test import async_test
 from ldops.testutil.mock_admin_api import MockAdminAPI, gen_word
 from ldops.types.cluster_view import ClusterView
 from ldops.types.node_view import NodeView
-from logdevice.admin.common.types import NodeID, ShardID
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MaintenanceProgress,
@@ -35,6 +34,7 @@ from logdevice.admin.nodes.types import (
     ShardOperationalState,
     StorageConfig,
 )
+from logdevice.common.types import NodeID, ShardID
 
 
 class TestClusterView(TestCase):

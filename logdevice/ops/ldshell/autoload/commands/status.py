@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional
 from humanize import naturaltime
 from ldops import admin_api
 from ldops.const import DEFAULT_THRIFT_PORT
-from logdevice.admin.common.types import SocketAddress, SocketAddressFamily
 from logdevice.admin.nodes.types import (
     MaintenanceStatus,
     NodesStateResponse,
@@ -30,6 +29,7 @@ from logdevice.admin.nodes.types import (
     ShardDataHealth,
     ShardOperationalState,
 )
+from logdevice.common.types import SocketAddress, SocketAddressFamily
 from logdevice.membership.Membership.types import MetaDataStorageState
 from nubia import argument, command, context
 from prettytable import PLAIN_COLUMNS, PrettyTable

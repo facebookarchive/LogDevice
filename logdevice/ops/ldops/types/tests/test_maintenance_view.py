@@ -21,13 +21,13 @@ from ldops.types.maintenance_view import MaintenanceView
 from ldops.types.node_view import NodeView
 from ldops.types.sequencer_maintenance_progress import SequencerMaintenanceProgress
 from ldops.types.shard_maintenance_progress import ShardMaintenanceProgress
-from logdevice.admin.common.types import ShardID
 from logdevice.admin.maintenance.types import MaintenanceDefinition
 from logdevice.admin.nodes.types import (
     MaintenanceStatus,
     SequencingState,
     ShardOperationalState,
 )
+from logdevice.common.types import ShardID
 
 
 class TestMaintenanceView(TestCase):

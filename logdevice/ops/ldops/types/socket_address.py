@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from ipaddress import AddressValueError, IPv4Address, IPv6Address
 from typing import Any, List, Optional, Tuple, Union
 
-from logdevice.admin.common.types import (
+from logdevice.common.types import (
     SocketAddress as ThriftSocketAddress,
     SocketAddressFamily,
 )

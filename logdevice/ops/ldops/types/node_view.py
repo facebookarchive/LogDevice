@@ -14,12 +14,6 @@ from dataclasses import dataclass
 from typing import AbstractSet, Counter, Mapping, Optional, Tuple
 
 from ldops.types.socket_address import SocketAddress
-from logdevice.admin.common.types import (
-    LocationScope,
-    NodeID,
-    Role,
-    SocketAddressFamily,
-)
 from logdevice.admin.maintenance.types import MaintenanceDefinition
 from logdevice.admin.nodes.types import (
     MaintenanceStatus,
@@ -35,6 +29,7 @@ from logdevice.admin.nodes.types import (
     ShardStorageState,
     StorageConfig,
 )
+from logdevice.common.types import LocationScope, NodeID, Role, SocketAddressFamily
 from logdevice.membership.Membership.types import MetaDataStorageState, StorageState
 
 

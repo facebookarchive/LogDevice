@@ -13,7 +13,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from ldops.types.socket_address import SocketAddress
-from logdevice.admin.common.types import (
+from logdevice.common.types import (
     SocketAddress as ThriftSocketAddress,
     SocketAddressFamily,
 )

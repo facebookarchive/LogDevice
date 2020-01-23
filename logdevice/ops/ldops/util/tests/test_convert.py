@@ -15,8 +15,8 @@ from unittest import TestCase
 
 from ldops.const import ALL_SHARDS
 from ldops.util import convert
-from logdevice.admin.common.types import LocationScope, ReplicationProperty
 from logdevice.admin.nodes.types import ShardStorageState
+from logdevice.common.types import LocationScope, ReplicationProperty
 
 
 class ConvertTestCase(TestCase):

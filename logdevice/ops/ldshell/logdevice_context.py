@@ -16,7 +16,6 @@ import typing
 
 from ldshell.helpers import create_socket_address
 from logdevice.admin.clients import AdminAPI
-from logdevice.admin.common.types import SocketAddress, SocketAddressFamily
 from logdevice.client import (
     Client,
     LoggingLevel,
@@ -24,6 +23,7 @@ from logdevice.client import (
     set_log_fd,
     setLoggingLevel,
 )
+from logdevice.common.types import SocketAddress, SocketAddressFamily
 from logdevice.ldquery import LDQuery
 from nubia import context, exceptions
 from nubia.internal.io.eventbus import Message
