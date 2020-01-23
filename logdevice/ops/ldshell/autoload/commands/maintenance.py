@@ -105,10 +105,12 @@ def _render_compact(
         else:
             sequencer_progress = "-"
 
+        created_by = mv.user
+
         if mv.reason:
-            created_by = shorten(f"{mv.user} ({mv.reason})", 40, placeholder="...")
+            created_reason = shorten(mv.reason, 40, placeholder="...")
         else:
-            created_by = f"{mv.user}"
+            created_reason = "-"
 
         if mv.created_on:
             created_on = str(mv.created_on)
@@ -127,6 +129,7 @@ def _render_compact(
             shard_progress,
             sequencer_progress,
             created_by,
+            created_reason,
             created_on,
             expires_on,
         )
@@ -139,6 +142,7 @@ def _render_compact(
             "SHARDS",
             "SEQUENCERS",
             "CREATED BY",
+            "REASON",
             "CREATED AT",
             "EXPIRES IN",
         ],
@@ -190,11 +194,14 @@ def _render_expanded(
                     ]
                 )
 
-            if mv.reason:
-                created_by = f"{mv.user} ({mv.reason})"
-            else:
-                created_by = mv.user
+            created_by = mv.user
             tbl.append(["Created By", created_by])
+
+            if mv.reason:
+                created_reason = mv.reason
+            else:
+                created_reason = "-"
+            tbl.append(["Reason", created_reason])
 
             if mv.extras:
                 extras = "\n".join(f"{k}={v}" for k, v in mv.extras.items())
