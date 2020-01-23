@@ -19,6 +19,7 @@ add_subdirectory(if)
 add_subdirectory(configuration/if)
 add_subdirectory(configuration/utils)
 add_subdirectory(configuration/nodes)
+add_subdirectory(configuration/logs/if)
 add_subdirectory(membership)
 add_subdirectory(replicated_state_machine/if)
 
@@ -33,6 +34,7 @@ set_target_properties(common
 
 target_link_libraries(common
   common-cpp2
+  logsconfig-cpp2
   Membership-cpp2
   NodesConfiguration-cpp2
   ConfigurationCodec-cpp2
