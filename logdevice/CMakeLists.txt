@@ -49,6 +49,8 @@ include(build-config)
 
 option(BUILD_TESTS "If enabled, compile the tests." ON)
 option(BUILD_SUBMODULES "Build using Git submodules, to fulfill dependencies" ON)
+option(BUILD_PLUGINS "If enabled, build standard plugins." ON)
+
 if(${BUILD_SUBMODULES})
   message("Building with submodules enabled")
   include(build-fmt)
@@ -226,3 +228,7 @@ endif()
 add_subdirectory(examples)
 add_subdirectory(clients/python)
 add_subdirectory(ops)
+
+if (${BUILD_PLUGINS})
+  add_subdirectory(plugins/prometheus)
+endif()
