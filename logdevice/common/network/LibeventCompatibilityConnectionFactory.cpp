@@ -50,17 +50,22 @@ LibeventCompatibilityConnectionFactory::LibeventCompatibilityConnectionFactory(
 std::unique_ptr<Connection>
 LibeventCompatibilityConnectionFactory::createConnection(
     NodeID node_id,
-    SocketType type,
+    SocketType socket_type,
     ConnectionType connection_type,
+    PeerType peer_type,
     FlowGroup& flow_group,
     std::unique_ptr<SocketDependencies> deps) {
   const auto throttle_setting = deps->getSettings().connect_throttle;
   if (connection_type != ConnectionType::SSL &&
-      (forceSSLSockets() && type != SocketType::GOSSIP)) {
+      (forceSSLSockets() && socket_type != SocketType::GOSSIP)) {
     connection_type = ConnectionType::SSL;
   }
-  auto connection = concrete_factory_->createConnection(
-      node_id, type, connection_type, flow_group, std::move(deps));
+  auto connection = concrete_factory_->createConnection(node_id,
+                                                        socket_type,
+                                                        connection_type,
+                                                        peer_type,
+                                                        flow_group,
+                                                        std::move(deps));
   auto it = connect_throttle_map_.find(node_id);
   if (it == connect_throttle_map_.end()) {
     auto res = connect_throttle_map_.emplace(

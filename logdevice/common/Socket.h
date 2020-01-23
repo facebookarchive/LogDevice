@@ -111,7 +111,9 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * server. The calling thread must be a Worker thread.
    *
    * @param server_name     id of server to connect to
-   * @param type            type of socket
+   * @param socketType      type of socket
+   * @param connectionType  type of connection
+   * @param peerType        type of peer
    * @param flow_group      traffic shaping state shared between sockets
    *                        with the same bandwidth constraints.
    *
@@ -126,11 +128,11 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    *     INTERNAL        failed to initialize a libevent timer (unlikely)
    */
   Socket_DEPRECATED(NodeID server_name,
-                    SocketType type,
-                    ConnectionType conntype,
+                    SocketType socketType,
+                    ConnectionType connectionType,
+                    PeerType peerType,
                     FlowGroup& flow_group,
                     std::unique_ptr<SocketDependencies> deps);
-
   /**
    * Constructs a new Socket from a TCP socket fd that was returned by accept().
    * The thread must run a Worker. On success the socket is emplaced on this

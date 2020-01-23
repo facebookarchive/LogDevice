@@ -119,23 +119,31 @@ std::string SocketDependencies::dumpQueuedMessages(Address addr) const {
   return sender_->dumpQueuedMessages(addr);
 }
 
-const Sockaddr& SocketDependencies::getNodeSockaddr(NodeID nid,
-                                                    SocketType type,
-                                                    ConnectionType conntype) {
+const Sockaddr&
+SocketDependencies::getNodeSockaddr(NodeID node_id,
+                                    SocketType socket_type,
+                                    ConnectionType connection_type,
+                                    PeerType peer_type) {
   auto nodes_configuration = getNodesConfiguration();
   ld_check(nodes_configuration != nullptr);
 
   // note: we don't check for generation here, if the generation has changed in
   // the future, Sender will reset the connection
   const auto* node_service_discovery =
-      nodes_configuration->getNodeServiceDiscovery(nid.index());
+      nodes_configuration->getNodeServiceDiscovery(node_id.index());
 
   if (node_service_discovery) {
-    if (type == SocketType::GOSSIP && !getSettings().send_to_gossip_port) {
-      return node_service_discovery->getSockaddr(SocketType::DATA, conntype);
-    } else {
-      return node_service_discovery->getSockaddr(type, conntype);
+    if (socket_type == SocketType::GOSSIP &&
+        !getSettings().send_to_gossip_port) {
+      return node_service_discovery->getSockaddr(
+          SocketType::DATA, connection_type, peer_type);
     }
+
+    return node_service_discovery->getSockaddr(
+        socket_type,
+        connection_type,
+        peer_type,
+        getSettings().use_dedicated_server_to_server_address);
   }
 
   return Sockaddr::INVALID;

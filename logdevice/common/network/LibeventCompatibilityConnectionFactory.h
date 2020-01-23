@@ -27,8 +27,9 @@ class LibeventCompatibilityConnectionFactory : public IConnectionFactory {
 
   std::unique_ptr<Connection>
   createConnection(NodeID node_id,
-                   SocketType type,
+                   SocketType socket_type,
                    ConnectionType connection_type,
+                   PeerType peer_type,
                    FlowGroup& flow_group,
                    std::unique_ptr<SocketDependencies> deps) override;
 
@@ -37,7 +38,7 @@ class LibeventCompatibilityConnectionFactory : public IConnectionFactory {
                    ClientID client_name,
                    const Sockaddr& client_address,
                    ResourceBudget::Token connection_token,
-                   SocketType type,
+                   SocketType socket_type,
                    ConnectionType conntype,
                    FlowGroup& flow_group,
                    std::unique_ptr<SocketDependencies> deps) const override;

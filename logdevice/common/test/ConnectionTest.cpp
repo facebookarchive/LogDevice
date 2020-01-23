@@ -42,6 +42,7 @@ class ClientConnectionTest : public SocketTest {
         std::make_unique<Connection>(server_name_,
                                      SocketType::DATA,
                                      ConnectionType::PLAIN,
+                                     PeerType::CLIENT,
                                      flow_group_,
                                      std::unique_ptr<SocketDependencies>(deps_),
                                      std::move(sock));

@@ -32,7 +32,9 @@ class Connection : public Socket_DEPRECATED {
    * server. The calling thread must be a Worker thread.
    *
    * @param server_name     id of server to connect to
-   * @param type            type of socket
+   * @param socket_type     type of socket
+   * @param connection_type type of connection
+   * @param peer_type       type of peer
    * @param flow_group      traffic shaping state shared between sockets
    *                        with the same bandwidth constraints.
    * @params deps           SocketDependencies provides a way to callback into
@@ -51,14 +53,16 @@ class Connection : public Socket_DEPRECATED {
    *     INTERNAL        failed to initialize a libevent timer (unlikely)
    */
   Connection(NodeID server_name,
-             SocketType type,
-             ConnectionType conntype,
+             SocketType socket_type,
+             ConnectionType connection_type,
+             PeerType peer_type,
              FlowGroup& flow_group,
              std::unique_ptr<SocketDependencies> deps);
 
   Connection(NodeID server_name,
-             SocketType type,
-             ConnectionType conntype,
+             SocketType socket_type,
+             ConnectionType connection_type,
+             PeerType peer_type,
              FlowGroup& flow_group,
              std::unique_ptr<SocketDependencies> deps,
              std::unique_ptr<SocketAdapter> sock_adapter);

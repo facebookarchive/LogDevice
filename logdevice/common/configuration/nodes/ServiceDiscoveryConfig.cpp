@@ -131,26 +131,36 @@ std::string NodeServiceDiscovery::toString() const {
       version);
 }
 
-const Sockaddr&
-NodeServiceDiscovery::getSockaddr(SocketType type,
-                                  ConnectionType conntype) const {
-  switch (type) {
+const Sockaddr& NodeServiceDiscovery::getSockaddr(
+    SocketType socket_type,
+    ConnectionType connection_type,
+    PeerType peer_type,
+    bool use_dedicated_server_to_server_address) const {
+  if (peer_type == PeerType::NODE && use_dedicated_server_to_server_address) {
+    if (!server_to_server_address.hasValue()) {
+      return Sockaddr::INVALID;
+    }
+    return server_to_server_address.value();
+  }
+
+  switch (socket_type) {
     case SocketType::GOSSIP:
       return getGossipAddress();
 
     case SocketType::DATA:
-      if (conntype == ConnectionType::SSL) {
+      if (connection_type == ConnectionType::SSL) {
         if (!ssl_address.hasValue()) {
           return Sockaddr::INVALID;
         }
         return ssl_address.value();
-      } else {
-        return address;
       }
+      return address;
 
     default:
-      RATELIMIT_CRITICAL(
-          std::chrono::seconds(1), 2, "Unexpected Socket Type:%d!", (int)type);
+      RATELIMIT_CRITICAL(std::chrono::seconds(1),
+                         2,
+                         "Unexpected Socket Type:%d!",
+                         (int)socket_type);
       ld_check(false);
   }
 

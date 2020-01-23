@@ -1155,6 +1155,12 @@ struct Settings : public SettingsBundle {
   // available locally. Related to Settings::on_demand_logs_config
   bool force_on_demand_logs_config;
 
+  // (server-only setting) Temporary switch to roll out dedicated
+  // server-to-server address to running clusters with minor disruption. This
+  // setting will be removed soon in a future release as soon as the rollout is
+  // complete.
+  bool use_dedicated_server_to_server_address;
+
   // If set, sequencers will not automatically run recovery upon
   // activation. Recovery can be started using the 'startrecovery' admin
   // command.  Note that last released lsn won't get advanced without

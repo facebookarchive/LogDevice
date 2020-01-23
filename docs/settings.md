@@ -247,6 +247,7 @@ sidebar_label: Settings
 | tcp-keep-alive-probes | TCP keepalive probes. How many unacknowledged probes before the connection is considered broken. If negative the OS default will be used. | -1 |  |
 | tcp-keep-alive-time | TCP keepalive time. This is the time, in seconds, before the first probe will be sent. If negative the OS default will be used. | -1 |  |
 | tcp-user-timeout | The time in milliseconds that transmitted data may remain unacknowledged before TCP will close the connection. 0 for system default. -1 to disable. default is 5min = 300000 | 300000 |  |
+| use-dedicated-server-to-server-address | Temporary switch to roll out dedicated server-to-server address to running clusters with minor disruption. This setting will be removed soon in a future release as soon as the rollout is completed. | false | server&nbsp;only |
 | use-tcp-keep-alive | Enable TCP keepalive for all connections | true |  |
 
 ## Node Registration

@@ -1045,6 +1045,8 @@ Connection* Sender::initServerConnection(NodeID nid,
           nid,
           sock_type,
           use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
+          my_node_index_ == NODE_INDEX_INVALID ? PeerType::CLIENT
+                                               : PeerType::NODE,
           flow_group,
           std::make_unique<SocketDependencies>(
               Worker::onThisThread()->processor_, this));
@@ -1487,7 +1489,7 @@ void Sender::noteConfigurationChanged(
     if (node_service_discovery != nullptr) {
       node_gen_t generation = nodes_->getNodeGeneration(i);
       const Sockaddr& newaddr = node_service_discovery->getSockaddr(
-          s->getSockType(), s->getConnType());
+          s->getSockType(), s->getConnType(), s->getPeerType());
       if (s->peer_name_.asNodeID().generation() == generation &&
           s->peer_sockaddr_ == newaddr) {
         ++it;

@@ -104,6 +104,7 @@ struct SocketConnectRequest : public Request {
         Connection s(badNodeID,
                      SocketType::DATA,
                      ConnectionType::PLAIN,
+                     PeerType::CLIENT,
                      flow_group,
                      std::make_unique<SocketDependencies>(
                          Worker::onThisThread()->processor_,
@@ -112,6 +113,7 @@ struct SocketConnectRequest : public Request {
         Connection s(badNodeID,
                      SocketType::DATA,
                      ConnectionType::PLAIN,
+                     PeerType::CLIENT,
                      flow_group,
                      std::make_unique<SocketDependencies>(
                          Worker::onThisThread()->processor_,
@@ -137,6 +139,7 @@ struct SocketConnectRequest : public Request {
             std::make_unique<Connection>(firstNodeID,
                                          SocketType::DATA,
                                          ConnectionType::PLAIN,
+                                         PeerType::CLIENT,
                                          flow_group,
                                          std::move(deps));
       } else {
@@ -144,6 +147,7 @@ struct SocketConnectRequest : public Request {
             firstNodeID,
             SocketType::DATA,
             ConnectionType::PLAIN,
+            PeerType::CLIENT,
             flow_group,
             std::move(deps),
             std::make_unique<AsyncSocketAdapter>(base.getEventBase()));

@@ -174,30 +174,34 @@ Socket_DEPRECATED::Socket_DEPRECATED(std::unique_ptr<SocketDependencies>& deps,
 }
 
 Socket_DEPRECATED::Socket_DEPRECATED(NodeID server_name,
-                                     SocketType sock_type,
-                                     ConnectionType conntype,
+                                     SocketType socket_type,
+                                     ConnectionType connection_type,
+                                     PeerType peer_type,
                                      FlowGroup& flow_group,
                                      std::unique_ptr<SocketDependencies> deps)
     : Socket_DEPRECATED(deps,
                         Address(server_name),
-                        deps->getNodeSockaddr(server_name, sock_type, conntype),
-                        sock_type,
-                        conntype,
+                        deps->getNodeSockaddr(server_name,
+                                              socket_type,
+                                              connection_type,
+                                              peer_type),
+                        socket_type,
+                        connection_type,
                         flow_group) {}
 
 Socket_DEPRECATED::Socket_DEPRECATED(int fd,
                                      ClientID client_name,
                                      const Sockaddr& client_addr,
                                      ResourceBudget::Token conn_token,
-                                     SocketType type,
-                                     ConnectionType conntype,
+                                     SocketType socket_type,
+                                     ConnectionType connection_type,
                                      FlowGroup& flow_group,
                                      std::unique_ptr<SocketDependencies> deps)
     : Socket_DEPRECATED(deps,
                         Address(client_name),
                         client_addr,
-                        type,
-                        conntype,
+                        socket_type,
+                        connection_type,
                         flow_group) {
   ld_check(fd >= 0);
   ld_check(client_name.valid());

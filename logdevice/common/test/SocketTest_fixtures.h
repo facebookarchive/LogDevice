@@ -56,9 +56,10 @@ class TestSocketDependencies : public SocketDependencies {
   virtual std::shared_ptr<folly::SSLContext> getSSLContext(bool) const override;
   virtual bool shuttingDown() const override;
   virtual std::string dumpQueuedMessages(Address addr) const override;
-  virtual const Sockaddr& getNodeSockaddr(NodeID nid,
-                                          SocketType type,
-                                          ConnectionType conntype) override;
+  virtual const Sockaddr& getNodeSockaddr(NodeID node_id,
+                                          SocketType socket_type,
+                                          ConnectionType connection_type,
+                                          PeerType peer_type) override;
   EvBase* getEvBase() override;
   virtual const struct timeval*
   getCommonTimeout(std::chrono::milliseconds t) override;
@@ -373,6 +374,7 @@ class ClientSocketTest : public SocketTest {
         new Connection(server_name_,
                        SocketType::DATA,
                        ConnectionType::PLAIN,
+                       PeerType::CLIENT,
                        flow_group_,
                        std::make_unique<TestSocketDependencies>(this)),
         SocketDeleter());

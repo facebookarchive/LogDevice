@@ -18,8 +18,9 @@
 namespace facebook { namespace logdevice {
 std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     NodeID node_id,
-    SocketType type,
+    SocketType socket_type,
     ConnectionType connection_type,
+    PeerType peer_type,
     FlowGroup& flow_group,
     std::unique_ptr<SocketDependencies> deps) {
   std::unique_ptr<AsyncSocketAdapter> sock_adapter;
@@ -42,8 +43,9 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     sock_adapter = std::make_unique<AsyncSocketAdapter>(base_);
   }
   return std::make_unique<Connection>(node_id,
-                                      type,
+                                      socket_type,
                                       connection_type,
+                                      peer_type,
                                       flow_group,
                                       std::move(deps),
                                       std::move(sock_adapter));

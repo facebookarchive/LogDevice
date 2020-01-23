@@ -2532,6 +2532,16 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER | CLIENT | REQUIRES_RESTART | DEPRECATED,
        SettingsCategory::Configuration);
 
+  init("use-dedicated-server-to-server-address",
+       &use_dedicated_server_to_server_address,
+       "false",
+       nullptr,
+       "Temporary switch to roll out dedicated server-to-server address to "
+       "running clusters with minor disruption. This setting will be removed "
+       "soon in a future release as soon as the rollout is completed.",
+       SERVER,
+       SettingsCategory::Network);
+
   init("test-bypass-recovery",
        &bypass_recovery,
        "false",

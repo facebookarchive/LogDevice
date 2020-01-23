@@ -69,9 +69,10 @@ class SocketDependencies {
   virtual FizzClientCtxPair getFizzClientContext() const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
-  virtual const Sockaddr& getNodeSockaddr(NodeID nid,
-                                          SocketType type,
-                                          ConnectionType conntype);
+  virtual const Sockaddr& getNodeSockaddr(NodeID node_id,
+                                          SocketType socket_type,
+                                          ConnectionType connection_type,
+                                          PeerType peer_type);
   virtual EvBase* getEvBase();
   virtual const struct timeval* getCommonTimeout(std::chrono::milliseconds t);
   virtual const timeval*

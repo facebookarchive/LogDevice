@@ -29,8 +29,9 @@ class AsyncSocketConnectionFactory : public IConnectionFactory {
 
   std::unique_ptr<Connection>
   createConnection(NodeID node_id,
-                   SocketType type,
+                   SocketType socket_type,
                    ConnectionType connection_type,
+                   PeerType peer_type,
                    FlowGroup& flow_group,
                    std::unique_ptr<SocketDependencies> deps) override;
 

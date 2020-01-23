@@ -57,11 +57,12 @@ std::string TestSocketDependencies::dumpQueuedMessages(Address /*addr*/) const {
 }
 
 const Sockaddr&
-TestSocketDependencies::getNodeSockaddr(NodeID nid,
-                                        SocketType /*type*/,
-                                        ConnectionType /*conntype*/) {
+TestSocketDependencies::getNodeSockaddr(NodeID node_id,
+                                        SocketType /* socket_type */,
+                                        ConnectionType /* connection_type */,
+                                        PeerType /* peer_type */) {
   // Socket should only call this function on owner_->server_name_.
-  EXPECT_EQ(owner_->server_name_, nid);
+  EXPECT_EQ(owner_->server_name_, node_id);
   EXPECT_TRUE(owner_->server_addr_.valid());
   return owner_->server_addr_;
 }
