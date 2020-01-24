@@ -154,6 +154,7 @@ ProtocolHandler::translateToLogDeviceStatus(folly::AsyncSocketException ex) {
     case folly::AsyncSocketException::INTERNAL_ERROR:
     case folly::AsyncSocketException::NETWORK_ERROR:
     case folly::AsyncSocketException::SSL_ERROR:
+    case folly::AsyncSocketException::EARLY_DATA_REJECTED:
       return E::CONNFAILED;
     default:
       ld_check(false);
