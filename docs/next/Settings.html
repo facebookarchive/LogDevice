@@ -336,6 +336,7 @@
 <tr><td>tcp-keep-alive-probes</td><td>TCP keepalive probes. How many unacknowledged probes before the connection is considered broken. If negative the OS default will be used.</td><td style="text-align:center">-1</td><td></td></tr>
 <tr><td>tcp-keep-alive-time</td><td>TCP keepalive time. This is the time, in seconds, before the first probe will be sent. If negative the OS default will be used.</td><td style="text-align:center">-1</td><td></td></tr>
 <tr><td>tcp-user-timeout</td><td>The time in milliseconds that transmitted data may remain unacknowledged before TCP will close the connection. 0 for system default. -1 to disable. default is 5min = 300000</td><td style="text-align:center">300000</td><td></td></tr>
+<tr><td>use-dedicated-server-to-server-address</td><td>Temporary switch to roll out dedicated server-to-server address to running clusters with minor disruption. This setting will be removed soon in a future release as soon as the rollout is completed.</td><td style="text-align:center">false</td><td>server only</td></tr>
 <tr><td>use-tcp-keep-alive</td><td>Enable TCP keepalive for all connections</td><td style="text-align:center">true</td><td></td></tr>
 </tbody>
 </table>
