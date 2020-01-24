@@ -48,11 +48,6 @@ TEST(APIUtilsTest, Validate) {
   failed = APIUtils::validateDefinition(def1);
   ASSERT_EQ(folly::none, failed);
 
-  def1.set_user("bun ny");
-  failed = APIUtils::validateDefinition(def1);
-  ASSERT_TRUE(failed.hasValue());
-  ASSERT_EQ("user cannot contain whitespaces", failed->get_message());
-
   def1.set_user("bunny");
   def1.set_sequencer_nodes({node1});
   failed = APIUtils::validateDefinition(def1);

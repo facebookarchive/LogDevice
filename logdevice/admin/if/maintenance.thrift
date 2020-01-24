@@ -58,9 +58,6 @@ struct MaintenanceDefinition {
    * The user associated with this maintenance request. The same user cannot
    * request multiple maintenances with different targets for the same shards.
    * This will trigger MaintenanceClash exception (see exceptions.thrift)
-   *
-   * `user` cannot contain whitespaces. Otherwise, an InvalidRequest exception
-   * will be thrown.
    */
   5: string user,
   /**

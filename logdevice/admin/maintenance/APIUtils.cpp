@@ -41,11 +41,6 @@ validateDefinition(const MaintenanceDefinition& definition) {
     return InvalidRequest(
         "This is a reserved user, cannot be used through the API");
   }
-  // does user has whitespaces?
-  const std::string& user = definition.get_user();
-  if (contains_whitespaces(user)) {
-    return InvalidRequest("user cannot contain whitespaces");
-  }
 
   // sequencer_target_state must be set if sequencer_nodes is non-empty
   if (!definition.get_sequencer_nodes().empty() &&
