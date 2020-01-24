@@ -278,7 +278,6 @@ Cluster::Cluster(std::string root_path,
                  bool enable_logsconfig_manager,
                  bool one_config_per_node,
                  dbg::Level default_log_level,
-                 bool write_logs_config_file_separately,
                  bool sync_server_config_to_nodes_configuration,
                  NodesConfigurationSourceOfTruth nodes_configuration_sot)
     : root_path_(std::move(root_path)),
@@ -292,7 +291,6 @@ Cluster::Cluster(std::string root_path,
       nodes_configuration_sot_(nodes_configuration_sot),
       one_config_per_node_(one_config_per_node),
       default_log_level_(default_log_level),
-      write_logs_config_file_separately_(write_logs_config_file_separately),
       sync_server_config_to_nodes_configuration_(
           sync_server_config_to_nodes_configuration),
       admin_command_client_(std::make_shared<AdminCommandClient>()) {
@@ -775,8 +773,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   std::string config_path = root_path + "/logdevice.conf";
   if (overwriteConfig(config_path.c_str(),
                       config->serverConfig().get(),
-                      config->logsConfig().get(),
-                      write_logs_config_file_separately_) != 0) {
+                      config->logsConfig().get()) != 0) {
     return nullptr;
   }
 
@@ -791,7 +788,6 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
                   enable_logsconfig_manager_,
                   one_config_per_node_,
                   default_log_level_,
-                  write_logs_config_file_separately_,
                   sync_server_config_to_nodes_configuration_,
                   nodes_configuration_sot_.value()));
   if (use_tcp_) {
@@ -3469,10 +3465,7 @@ bool Cluster::hasStorageRole(node_index_t node) const {
 int Cluster::writeConfig(const ServerConfig* server_cfg,
                          const LogsConfig* logs_cfg,
                          bool wait_for_update) {
-  int rv = overwriteConfig(config_path_.c_str(),
-                           server_cfg,
-                           logs_cfg,
-                           write_logs_config_file_separately_);
+  int rv = overwriteConfig(config_path_.c_str(), server_cfg, logs_cfg);
   if (rv != 0) {
     return rv;
   }
@@ -3486,7 +3479,7 @@ int Cluster::writeConfig(const ServerConfig* server_cfg,
     return 0;
   }
   config_source_->thread()->advisePollingIteration();
-  ld_check(write_logs_config_file_separately_ || server_cfg != nullptr);
+  ld_check(server_cfg != nullptr);
   std::string expected_text =
       (server_cfg ? server_cfg : config_->get()->serverConfig().get())
           ->toString(logs_cfg);

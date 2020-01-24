@@ -21,17 +21,9 @@ using facebook::logdevice::logsconfig::LogGroupNodePtr;
 
 namespace facebook { namespace logdevice { namespace configuration {
 
-/**
- * @param alternative_logs_config   an alternative log configuration fetcher,
- *                                  in case log data isn't included in the
- *                                  main config file. If null, log config
- *                                  will be read from the file specified in
- *                                  "include_log_config".
- */
 std::shared_ptr<LocalLogsConfig>
 LocalLogsConfig::fromJson(const std::string& jsonPiece,
                           const ServerConfig& server_config,
-                          LoadFileCallback loadFileCallback,
                           const ConfigParserOptions& options) {
   auto parsed = parser::parseJson(jsonPiece);
   // Make sure the parsed string is actually an object
@@ -40,20 +32,18 @@ LocalLogsConfig::fromJson(const std::string& jsonPiece,
     err = E::INVALID_CONFIG;
     return nullptr;
   }
-  return fromJson(parsed, server_config, loadFileCallback, options);
+  return fromJson(parsed, server_config, options);
 }
 
 std::shared_ptr<LocalLogsConfig>
 LocalLogsConfig::fromJson(const folly::dynamic& parsed,
                           const ServerConfig& server_config,
-                          LoadFileCallback loadFileCallback,
                           const ConfigParserOptions& options) {
   auto local_logs_config = std::make_shared<LocalLogsConfig>();
   const auto& ns_delimiter = server_config.getNamespaceDelimiter();
   bool success = parser::parseLogs(parsed,
                                    local_logs_config,
                                    server_config.getSecurityConfig(),
-                                   loadFileCallback,
                                    ns_delimiter,
                                    options);
 

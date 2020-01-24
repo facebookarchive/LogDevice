@@ -962,137 +962,6 @@ TEST(ConfigurationTest, Serialization) {
 }
 
 /**
- * Reads configs/included_logs.conf and checks if the log list from
- * configs/included_logs.inc was included.
- */
-TEST(ConfigurationTest, IncludeLogs) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("included_logs.conf")));
-  ASSERT_NE(nullptr, config);
-
-  ASSERT_EQ(
-      true,
-      (bool)std::dynamic_pointer_cast<LocalLogsConfig>(config->logsConfig()));
-  ASSERT_TRUE(config->logsConfig()->isLocal());
-  auto& logs_config = config->localLogsConfig();
-  {
-    const int NLOGS = 6;
-    logid_t::raw_type logids[NLOGS] = {1, 2, 3, 8, 9, 10};
-    int i = 0;
-
-    for (auto it = logs_config->logsBegin(); it != logs_config->logsEnd();
-         ++it) {
-      ASSERT_LT(i, NLOGS);
-      EXPECT_EQ(it->first, logids[i]);
-
-      if (logids[i] >= 8 && logids[i] <= 10) {
-        const logsconfig::LogGroupInDirectory& log = it->second;
-        const Configuration::LogAttributes& log_attrs = log.log_group->attrs();
-        EXPECT_EQ(3, log_attrs.replicationFactor());
-        EXPECT_EQ(2, log_attrs.extraCopies());
-        EXPECT_EQ(0, log_attrs.syncedCopies());
-        EXPECT_EQ(10, log_attrs.maxWritesInFlight());
-      }
-
-      i++;
-    }
-    ASSERT_EQ(NLOGS, i);
-  }
-
-  EXPECT_NE(config->serverConfig()->getCustomFields(), nullptr);
-  EXPECT_EQ(config->serverConfig()->getCustomFields().size(), 0);
-  auto timestamp = config->serverConfig()->getClusterCreationTime();
-  EXPECT_FALSE(timestamp.hasValue());
-}
-
-/*
- * Reads configs/included_logs.conf but doesn't include the log list.
- */
-
-using RangeLookupMap = LogsConfig::NamespaceRangeLookupMap;
-
-class TestLogsConfigStub : public LogsConfig {
-  bool isLocal() const override {
-    return false;
-  }
-
-  LogsConfig::LogGroupNodePtr
-  getLogGroupByIDShared(logid_t /* unused */) const override {
-    return nullptr;
-  }
-
-  void getLogGroupByIDAsync(
-      logid_t /* unused */,
-      std::function<void(LogsConfig::LogGroupNodePtr)> cb) const override {
-    cb(nullptr);
-  }
-
-  bool logExists(logid_t /*id*/) const override {
-    return false;
-  }
-
-  void getLogRangeByNameAsync(
-      std::string,
-      std::function<void(Status, std::pair<logid_t, logid_t>)> cb)
-      const override {
-    cb(E::NOTFOUND, std::make_pair(logid_t(0), logid_t(0)));
-  }
-
-  logsconfig::LogGroupNodePtr
-  getLogGroup(const std::string& /*path*/) const override {
-    err = E::NOTFOUND;
-    return nullptr;
-  };
-
-  void getLogRangesByNamespaceAsync(
-      const std::string&,
-      std::function<void(Status, RangeLookupMap)> cb) const override {
-    cb(E::NOTFOUND, RangeLookupMap());
-  }
-
-  std::unique_ptr<LogsConfig> copy() const override {
-    return std::unique_ptr<LogsConfig>(new TestLogsConfigStub(*this));
-  }
-};
-
-TEST(ConfigurationTest, SkipIncludeLogs) {
-  std::unique_ptr<LogsConfig> logs_config(new TestLogsConfigStub());
-  std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("included_logs.conf"), std::move(logs_config)));
-  ASSERT_NE(nullptr, config);
-  ASSERT_FALSE(
-      (bool)std::dynamic_pointer_cast<LocalLogsConfig>(config->logsConfig()));
-  ASSERT_FALSE(config->logsConfig()->isLocal());
-
-  bool callback_called = false;
-  // This will actually get called synchronously
-  config->getLogGroupByIDAsync(
-      logid_t(1), [&](const LogsConfig::LogGroupNodePtr ptr) {
-        callback_called = true;
-        ASSERT_EQ(nullptr, ptr.get());
-      });
-  ASSERT_TRUE(callback_called);
-}
-
-/**
- * Reads configs/invalid_included_logs1.conf and checks that the test fails
- */
-TEST(ConfigurationTest, DoubleLogSpec) {
-  std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("invalid_included_logs1.conf")));
-  ASSERT_EQ(nullptr, config->logsConfig());
-}
-
-/**
- * Reads configs/invalid_included_logs2.conf and checks that the test fails
- */
-TEST(ConfigurationTest, NonExistentIncludeLog) {
-  std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("invalid_included_logs2.conf")));
-  ASSERT_EQ(nullptr, config->logsConfig());
-}
-
-/**
  * Checks that logs with a hierarchical namespace structure work
  */
 TEST(ConfigurationTest, LogsWithNamespaces) {
@@ -1651,8 +1520,7 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
       auto json = parser::parseJson(str);
       // Make sure the parsed string is actually an object
       ld_check(json.isObject());
-      return Configuration::fromJson(
-          json, nullptr, nullptr, ConfigParserOptions());
+      return Configuration::fromJson(json, nullptr, ConfigParserOptions());
     };
     auto config = config_from_json_str(conf_str);
     if (!config) {

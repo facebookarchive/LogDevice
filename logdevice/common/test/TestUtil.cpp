@@ -95,37 +95,9 @@ int overwriteConfigFile(const char* path, const std::string& contents) {
 
 int overwriteConfig(const char* path,
                     const ServerConfig* server_cfg,
-                    const LogsConfig* logs_cfg,
-                    bool write_separately) {
-  if (!write_separately) {
-    ld_check(server_cfg);
-    return overwriteConfigFile(path, server_cfg->toString(logs_cfg));
-  }
-  ld_check(server_cfg || logs_cfg);
-  auto json_to_string = [](const folly::dynamic& json) {
-    folly::json::serialization_opts opts;
-    opts.pretty_formatting = true;
-    opts.sort_keys = true;
-    return folly::json::serialize(json, opts);
-  };
-  auto include_path =
-      boost::filesystem::path(path).parent_path() / "included_logs.conf";
-  if (logs_cfg) {
-    folly::dynamic logs_config_json =
-        folly::dynamic::object("logs", logs_cfg->toJson());
-    int rv = overwriteConfigFile(
-        include_path.string().c_str(), json_to_string(logs_config_json));
-    if (rv != 0) {
-      return rv;
-    }
-  }
-  if (server_cfg) {
-    auto json = server_cfg->toJson();
-    json["include_log_config"] = include_path.string();
-
-    return overwriteConfigFile(path, json_to_string(json));
-  }
-  return 0;
+                    const LogsConfig* logs_cfg) {
+  ld_check(server_cfg);
+  return overwriteConfigFile(path, server_cfg->toString(logs_cfg));
 }
 
 TemporaryDirectory::TemporaryDirectory(const std::string& name_prefix) {

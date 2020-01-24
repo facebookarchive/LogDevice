@@ -42,7 +42,6 @@ class LogsConfig {
    * the type that getLogRangesByNamespace() returns
    */
   typedef std::map<std::string, logid_range_t> NamespaceRangeLookupMap;
-  using LoadFileCallback = std::function<Status(const char*, std::string*)>;
 
   LogsConfig() {
     version_ = ++max_version;

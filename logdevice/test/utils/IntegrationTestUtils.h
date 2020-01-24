@@ -623,15 +623,6 @@ class ClusterFactory {
   }
 
   /**
-   * Write logs config to a file separately and include this file from the main
-   * config file
-   */
-  ClusterFactory& writeLogsConfigFileSeparately() {
-    write_logs_config_file_separately_ = true;
-    return *this;
-  }
-
-  /**
    * Value of the cluster_name property in config.
    * Affects how stats are exported.
    */
@@ -750,9 +741,6 @@ class ClusterFactory {
   // See setLogLevel().
   dbg::Level default_log_level_ =
       getLogLevelFromEnv().value_or(dbg::Level::INFO);
-
-  // See writeLogsConfigFileSeparately()
-  bool write_logs_config_file_separately_{false};
 
   // Helper method, one attempt in create(), repeated up to outer_tries_ times
   std::unique_ptr<Cluster> createOneTry(const Configuration& config);
@@ -1362,7 +1350,6 @@ class Cluster {
           bool enable_logsconfig_manager,
           bool one_config_per_node,
           dbg::Level default_log_level,
-          bool write_logs_config_file_separately,
           bool sync_server_config_to_nodes_configuration,
           NodesConfigurationSourceOfTruth nodes_configuration_sot);
 
@@ -1458,8 +1445,6 @@ class Cluster {
   bool hash_based_sequencer_assignment_{false};
 
   dbg::Level default_log_level_ = dbg::Level::INFO;
-
-  bool write_logs_config_file_separately_{false};
 
   // Controls whether the cluster should also update the NodesConfiguration
   // whenver the ServerConfig change. This is there only during the migration

@@ -160,7 +160,7 @@ class TextConfigUpdaterImpl {
     std::string path;
     std::chrono::milliseconds last_loaded_time;
     folly::Optional<ConfigSource::Output> output;
-  } main_config_state_, included_config_state_;
+  } main_config_state_;
 
   // Helper method called by load() and onAsyncGet() when a source provides
   // contents of a config, synchronously or asynchronously.  Logs and
@@ -173,24 +173,6 @@ class TextConfigUpdaterImpl {
   // regardless of whether the main config has changed.
   void update(bool force_reload_logsconfig = false);
 
-  // Parses a location of the form "scheme:path" and finds the appropriate
-  // registered config source.  If none is found, returns nullptr.
-  std::pair<ConfigSource*, std::string>
-  parseLocation(const std::string& location);
-  // Similar to parseMaybeRelativeLocation(), but if the scheme is absent,
-  // interprets the location relative to another config source+path.
-  std::pair<ConfigSource*, std::string>
-  parseMaybeRelativeLocation(const std::string& location,
-                             ConfigSource* ref_source,
-                             const std::string& ref_path);
-  // Based on the file extension, attempts to decompress the contents.
-  //
-  // NOTE: We decompress as soon as we receive text from sources.  The
-  // uncompressed text is cached and hashed.
-  //
-  // Supported extensions: .gz
-  std::string maybeDecompress(const std::string& path,
-                              std::string raw_contents);
   // Update local config stat and set last_config_invalid stats to 0 or 1
   // depending on validity of most recent received config.
   // Supposed to be called synchronously since update() is locked under mutex
@@ -213,14 +195,11 @@ class TextConfigUpdaterImpl {
    * - SKIPPED:                   the config was already up to date and update
    *                                was skipped
    * - INVALID:                   the config update is invalid and was rejected
-   * - FORCE_RELOAD_LOGSCONFIG:   the config is updated and also requires an
-   *                                extra refresh of the log configuration
    */
   enum class ConfigUpdateResult {
     UPDATED,
     SKIPPED,
     INVALID,
-    FORCE_RELOAD_LOGSCONFIG
   };
   ConfigUpdateResult
   pushZookeeperConfig(const std::shared_ptr<ZookeeperConfig>& new_config);

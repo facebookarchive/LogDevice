@@ -93,23 +93,21 @@ folly::dynamic stringToJsonObj(const std::string& json) {
   return parsed;
 }
 
-std::unique_ptr<Configuration> Configuration::fromJson(
-    const std::string& jsonPiece,
-    std::shared_ptr<LogsConfig> alternative_logs_config,
-    std::function<Status(const char*, std::string*)> loadFileCallback,
-    const ConfigParserOptions& options) {
+std::unique_ptr<Configuration>
+Configuration::fromJson(const std::string& jsonPiece,
+                        std::shared_ptr<LogsConfig> alternative_logs_config,
+                        const ConfigParserOptions& options) {
   auto parsed = stringToJsonObj(jsonPiece);
   if (parsed == nullptr || jsonPiece.empty()) {
     return nullptr;
   }
-  return fromJson(parsed, alternative_logs_config, loadFileCallback, options);
+  return fromJson(parsed, alternative_logs_config, options);
 }
 
-std::unique_ptr<Configuration> Configuration::fromJson(
-    const folly::dynamic& parsed,
-    std::shared_ptr<LogsConfig> alternative_logs_config,
-    std::function<Status(const char*, std::string*)> loadFileCallback,
-    const ConfigParserOptions& options) {
+std::unique_ptr<Configuration>
+Configuration::fromJson(const folly::dynamic& parsed,
+                        std::shared_ptr<LogsConfig> alternative_logs_config,
+                        const ConfigParserOptions& options) {
   auto server_config = ServerConfig::fromJson(parsed);
   if (!server_config) {
     // hopefully fromJson will correctly set err to INVALID_CONFIG
@@ -128,10 +126,8 @@ std::unique_ptr<Configuration> Configuration::fromJson(
   if (alternative_logs_config) {
     logs_config = alternative_logs_config;
   } else {
-    auto cb = !alternative_logs_config ? loadFileCallback
-                                       : LogsConfig::LoadFileCallback();
     auto local_logs_config =
-        LocalLogsConfig::fromJson(parsed, *server_config, cb, options);
+        LocalLogsConfig::fromJson(parsed, *server_config, options);
     if (!local_logs_config) {
       if (err != E::LOGS_SECTION_MISSING) {
         // we don't want to mangle the err if it's LOGS_SECTION_MISSING because
@@ -173,16 +169,7 @@ Configuration::fromJsonFile(const char* path,
     return nullptr;
   }
   auto parsed = stringToJsonObj(json_blob);
-  return fromJson(parsed,
-                  std::move(alternative_logs_config),
-                  [path_prefix](const char* filename, std::string* out) {
-                    std::string full_path = filename[0] == '/'
-                        ? filename
-                        : (path_prefix / filename).string();
-                    out->assign(readFileIntoString(full_path.c_str()));
-                    return out->empty() ? err : E::OK;
-                  },
-                  options);
+  return fromJson(parsed, std::move(alternative_logs_config), options);
 }
 
 std::unique_ptr<Configuration>
@@ -207,13 +194,8 @@ Configuration::loadFromString(const std::string& server,
       }
     }
 
-    logs_config = LocalLogsConfig::fromJson(server,
-                                            *server_config,
-                                            [&](const char*, std::string* out) {
-                                              out->assign(logs);
-                                              return E::OK;
-                                            },
-                                            ConfigParserOptions());
+    logs_config =
+        LocalLogsConfig::fromJson(logs, *server_config, ConfigParserOptions());
     if (logs_config) {
       return std::make_unique<Configuration>(
           server_config, logs_config, zookeeper_config);

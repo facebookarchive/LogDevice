@@ -61,8 +61,6 @@ class InfoConfig : public AdminCommand {
   void metadata(const Configuration& config) {
     const ServerConfig::ConfigMetadata& main_config_metadata =
         config.serverConfig()->getMainConfigMetadata();
-    const ServerConfig::ConfigMetadata& included_config_metadata =
-        config.serverConfig()->getIncludedConfigMetadata();
 
     InfoConfigTable table(
         !json_, "URI", "Source", "Hash", "Last Modified", "Last Loaded");
@@ -75,16 +73,6 @@ class InfoConfig : public AdminCommand {
         .set<2>(main_config_metadata.hash)
         .set<3>(main_config_metadata.modified_time)
         .set<4>(main_config_metadata.loaded_time);
-    if (!included_config_metadata.uri.empty()) {
-      table.next()
-          .set<0>(included_config_metadata.uri)
-          // included config doesn't get propagated through config
-          // synchronization set source to my node id
-          .set<1>(server_->getProcessor()->getMyNodeID().index())
-          .set<2>(included_config_metadata.hash)
-          .set<3>(included_config_metadata.modified_time)
-          .set<4>(included_config_metadata.loaded_time);
-    }
     json_ ? table.printJson(out_) : table.print(out_);
   }
 
@@ -93,8 +81,6 @@ class InfoConfig : public AdminCommand {
 
     const ServerConfig::ConfigMetadata& main_config_metadata =
         config.serverConfig()->getMainConfigMetadata();
-    const ServerConfig::ConfigMetadata& included_config_metadata =
-        config.serverConfig()->getIncludedConfigMetadata();
 
     std::string combined_hash;
     std::string main_uri = main_config_metadata.uri;
@@ -103,17 +89,6 @@ class InfoConfig : public AdminCommand {
     std::string main_source = main_uri.substr(0, pos);
     combined_hash += main_source + ':';
     combined_hash += main_config_metadata.hash;
-    if (!included_config_metadata.uri.empty()) {
-      combined_hash += '+';
-      std::string included_uri = included_config_metadata.uri;
-      pos = included_uri.find(SOURCE_DELIMITER);
-      ld_check(pos != std::string::npos);
-      std::string included_source = included_uri.substr(0, pos);
-      if (included_source != main_source) {
-        combined_hash += included_source + ':';
-      }
-      combined_hash += included_config_metadata.hash;
-    }
 
     out_.printf("%s", combined_hash.c_str());
     out_.printf("\r\n");

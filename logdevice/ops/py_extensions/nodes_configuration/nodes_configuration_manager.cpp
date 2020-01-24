@@ -175,7 +175,7 @@ static void do_provision_write(const Configuration& config,
 
 static void provision_empty_nodes_configuration(std::string config_json) {
   // 1. Parse the passed config json
-  auto config = Configuration::fromJson(config_json, nullptr, nullptr);
+  auto config = Configuration::fromJson(config_json, nullptr);
   if (config == nullptr) {
     auto exception = folly::sformat(
         "Failed to parse config json: {}", errorStrings()[err].name);
@@ -189,7 +189,7 @@ static void provision_empty_nodes_configuration(std::string config_json) {
 
 static void provision_initial_nodes_configuration(std::string config_json) {
   // 1. Parse the passed config json
-  auto config = Configuration::fromJson(config_json, nullptr, nullptr);
+  auto config = Configuration::fromJson(config_json, nullptr);
   if (config == nullptr) {
     auto exception = folly::sformat(
         "Failed to parse config json: {}", errorStrings()[err].name);
@@ -210,7 +210,7 @@ static void provision_initial_nodes_configuration(std::string config_json) {
 
 static bool nodes_configuration_exists(std::string config_json) {
   // 1. Parse the passed config json
-  auto config = Configuration::fromJson(config_json, nullptr, nullptr);
+  auto config = Configuration::fromJson(config_json, nullptr);
   if (config == nullptr) {
     auto exception = folly::sformat(
         "Failed to parse config json: {}", errorStrings()[err].name);
@@ -233,7 +233,7 @@ static bool nodes_configuration_exists(std::string config_json) {
 static std::string update_server_config_with_nodes_configuration(
     std::string server_config_str,
     std::string binary_nodes_configuration) {
-  auto config = Configuration::fromJson(server_config_str, nullptr, nullptr);
+  auto config = Configuration::fromJson(server_config_str, nullptr);
   if (config == nullptr) {
     auto exception = folly::sformat(
         "Failed to parse config json: {}", errorStrings()[err].name);
@@ -257,7 +257,7 @@ static std::string update_server_config_with_nodes_configuration(
 }
 
 static std::string normalize_server_config(std::string server_config_str) {
-  auto config = Configuration::fromJson(server_config_str, nullptr, nullptr);
+  auto config = Configuration::fromJson(server_config_str, nullptr);
   if (config == nullptr) {
     auto exception = folly::sformat(
         "Failed to parse config json: {}", errorStrings()[err].name);

@@ -163,7 +163,6 @@ static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
                          const folly::dynamic& namespaceMap,
                          const SecurityConfig& securityConfig,
                          std::shared_ptr<LocalLogsConfig>& output,
-                         LoadFileCallback loadFileCallback,
                          const ConfigParserOptions& options) {
   std::string scope = namespace_prefix.empty()
       ? "cluster"
@@ -179,66 +178,7 @@ static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
     ns_attrs = attrs.value();
   }
 
-  // log list could either be specified inline or included from an external
-  // file.
   auto inline_iter = namespaceMap.find("logs");
-  auto include_iter = namespaceMap.find("include_log_config");
-
-  if (include_iter != namespaceMap.items().end() &&
-      inline_iter != namespaceMap.items().end()) {
-    ld_error("both \"logs\" and \"include_log_config\" "
-             "entries specified for cluster");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  folly::dynamic included_json = folly::dynamic::object;
-  if (include_iter != namespaceMap.items().end()) {
-    if (!namespace_prefix.empty()) {
-      ld_error("include_log_config only supported for the whole logs config, "
-               "not allowed under %s",
-               scope.c_str());
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-
-    if (!loadFileCallback) {
-      // found valid include_log_config entry, but no callback passed -
-      // indicates that we shouldn't follow up with the actual include.
-      // Resetting the LogsConfig pointer to signal that we aren't able to
-      // resolve log configuration locally.
-      output.reset();
-      return false;
-    }
-    std::string json_file;
-    Status rv =
-        loadFileCallback(include_iter->second.asString().c_str(), &json_file);
-    if (rv == E::NOTREADY) {
-      // Callback indicated that the included config isn't ready yet.
-      // Silently abort parsing.
-      err = E::NOTREADY;
-      return false;
-    }
-    if (rv != E::OK) {
-      ld_error("unable to load includable file \"%s\": %s",
-               include_iter->second.asString().c_str(),
-               error_name(rv));
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    included_json = parseJson(json_file);
-    if (included_json == nullptr) {
-      // assuming parseJson() set the error code and message already.
-      return false;
-    }
-    auto sub_iter = included_json.find("logs");
-    if (sub_iter != included_json.items().end()) {
-      inline_iter = sub_iter;
-    }
-  }
-
-  // This will be triggered if there is no entry in the included config file
-  // above.
   if (inline_iter == namespaceMap.items().end()) {
     ld_debug("missing \"logs\" entry for %s", scope.c_str());
     err = E::LOGS_SECTION_MISSING;
@@ -295,7 +235,6 @@ static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
 bool parseLogs(const folly::dynamic& clusterMap,
                std::shared_ptr<LocalLogsConfig>& output,
                const SecurityConfig& securityConfig,
-               LoadFileCallback loadFileCallback,
                const std::string& ns_delimiter,
                const ConfigParserOptions& options) {
   ld_check(output->logsBegin() == output->logsEnd());
@@ -307,7 +246,6 @@ bool parseLogs(const folly::dynamic& clusterMap,
           clusterMap,
           securityConfig,
           output,
-          loadFileCallback,
           options)) {
     return false;
   }
@@ -557,7 +495,6 @@ static bool parseOneLogEntry(LocalLogsConfig::DirectoryNode* parent_dir,
                         logMap,
                         securityConfig,
                         output,
-                        LoadFileCallback(),
                         options);
   }
 }

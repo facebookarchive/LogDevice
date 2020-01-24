@@ -47,15 +47,9 @@ constexpr std::chrono::seconds DEFAULT_TEST_TIMEOUT(90);
 int overwriteConfigFile(const char* path, const std::string& contents);
 
 /**
- * Write config file(s) for the ServerConfig and LogsConfig. If
- * write_logs_config_separately is true, then writes the logs config into a
- * separate file that's in the same directory as the main config and includes
- * it from the main config. Otherwise dumps everything to the file specified.
+ * Write config file(s) for the ServerConfig and LogsConfig.
  */
-int overwriteConfig(const char* path,
-                    const ServerConfig*,
-                    const LogsConfig*,
-                    bool write_logs_config_separately);
+int overwriteConfig(const char* path, const ServerConfig*, const LogsConfig*);
 
 inline void writeSimpleConfig(const char* path, int server_generation) {
   std::string contents = "{\n"

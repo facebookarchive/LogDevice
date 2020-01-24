@@ -26,7 +26,6 @@ struct dynamic;
 namespace facebook { namespace logdevice { namespace configuration {
 namespace parser {
 
-using LoadFileCallback = std::function<Status(const char*, std::string*)>;
 using LogAttributes = facebook::logdevice::logsconfig::LogAttributes;
 using LogGroupNode = facebook::logdevice::logsconfig::LogGroupNode;
 
@@ -34,7 +33,6 @@ bool parseLogs(
     const folly::dynamic&,
     std::shared_ptr<facebook::logdevice::configuration::LocalLogsConfig>&,
     const SecurityConfig& securityConfig,
-    LoadFileCallback loadFileCallback,
     const std::string& ns_delimiter,
     const ConfigParserOptions& options);
 

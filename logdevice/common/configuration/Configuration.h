@@ -185,9 +185,7 @@ class Configuration {
    *                                  config
    * @param alternative_logs_config   an alternative log configuration fetcher,
    *                                  in case log data isn't included in the
-   *                                  main config file. If null, log config
-   *                                  will be read from the file specified in
-   *                                  "include_log_config".
+   *                                  main config file.
    * @return On success, returns a new ServerConfig instance.  On
    * failure, returns nullptr and sets err to:
    *           FILE_OPEN       file could not be opened
@@ -202,13 +200,11 @@ class Configuration {
   static std::unique_ptr<Configuration>
   fromJson(const std::string& jsonPiece,
            std::shared_ptr<LogsConfig> alternative_logs_config,
-           std::function<Status(const char*, std::string*)> loadFileCallback,
            const ConfigParserOptions& options = ConfigParserOptions());
 
   static std::unique_ptr<Configuration>
   fromJson(const folly::dynamic& jsonPiece,
            std::shared_ptr<LogsConfig> alternative_logs_config,
-           std::function<Status(const char*, std::string*)> loadFileCallback,
            const ConfigParserOptions& options = ConfigParserOptions());
 
   /**

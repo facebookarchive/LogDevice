@@ -51,7 +51,6 @@ static const std::set<std::string> config_recognized_keys = {
     "cluster",
     "cluster_creation_time",
     "defaults",
-    "include_log_config",
     "log_namespace_delimiter",
     "logs",
     "nodes",
@@ -381,7 +380,6 @@ std::unique_ptr<ServerConfig> ServerConfig::copy() const {
   config->setVersion(version_);
   config->setServerOrigin(server_origin_);
   config->setMainConfigMetadata(main_config_metadata_);
-  config->setIncludedConfigMetadata(included_config_metadata_);
   return config;
 }
 
@@ -420,7 +418,6 @@ std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
                                                   ns_delimiter_);
   config->setVersion(version_);
   config->setMainConfigMetadata(main_config_metadata_);
-  config->setIncludedConfigMetadata(included_config_metadata_);
   return config;
 }
 
@@ -447,7 +444,6 @@ std::shared_ptr<ServerConfig> ServerConfig::withMetaDataLogsConfig(
                                                   ns_delimiter_);
   config->setVersion(version_);
   config->setMainConfigMetadata(main_config_metadata_);
-  config->setIncludedConfigMetadata(included_config_metadata_);
   return config;
 }
 
@@ -470,7 +466,6 @@ ServerConfig::withVersion(config_version_t version) const {
   config->setVersion(version);
   config->setNodesConfigurationVersion(version);
   config->setMainConfigMetadata(main_config_metadata_);
-  config->setIncludedConfigMetadata(included_config_metadata_);
   return config;
 }
 

@@ -257,22 +257,13 @@ class ServerConfig {
   void setMainConfigMetadata(const ConfigMetadata& metadata) {
     main_config_metadata_ = metadata;
   }
-  void setIncludedConfigMetadata(const ConfigMetadata& metadata) {
-    included_config_metadata_ = metadata;
-  }
 
   /**
-   * Expose the metadata of the main config and included config (URI, hash,
-   * last modified, last loaded).
-   *
-   * If there is no included config, all fields in the included config metadata
-   * will be uninitialized.
+   * Expose the metadata of the main config (URI, hash, last modified, last
+   * loaded).
    */
   const ConfigMetadata& getMainConfigMetadata() const {
     return main_config_metadata_;
-  }
-  const ConfigMetadata& getIncludedConfigMetadata() const {
-    return included_config_metadata_;
   }
 
   /**
@@ -572,9 +563,8 @@ class ServerConfig {
   // The LogsConfig version at the last time toString() was called
   mutable uint64_t last_to_string_logs_config_version_{0};
 
-  // Metadata for the main config and included config
+  // Metadata for the main config
   ConfigMetadata main_config_metadata_;
-  ConfigMetadata included_config_metadata_;
 };
 
 }} // namespace facebook::logdevice

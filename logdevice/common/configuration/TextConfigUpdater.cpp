@@ -20,9 +20,6 @@
 using namespace facebook::logdevice::configuration;
 namespace facebook { namespace logdevice {
 
-// This assumes all sources use '/' for path delimiters which won't
-// necessarily be universally true.  Refactor as needed.
-static const char PATH_DELIMITER = '/';
 // Calculates a 10-character hash of the config (used when the source doesn't
 // provide one), exposed by the "info config --hash" admin command
 static std::string hash_contents(const std::string& str);
@@ -96,9 +93,6 @@ void TextConfigUpdaterImpl::onAsyncGet(ConfigSource* source,
   State* affected_state;
   if (source == main_config_state_.source && path == main_config_state_.path) {
     affected_state = &main_config_state_;
-  } else if (source == included_config_state_.source &&
-             path == included_config_state_.path) {
-    affected_state = &included_config_state_;
   } else {
     ld_info("Fetched config data from %s for path \"%s\" but not interested; "
             "may be a stale request but should be unlikely",
@@ -113,18 +107,11 @@ void TextConfigUpdaterImpl::onAsyncGet(ConfigSource* source,
 void TextConfigUpdaterImpl::onContents(State* state,
                                        ConfigSource::Output output,
                                        bool call_update) {
-  output.contents = maybeDecompress(state->path, std::move(output.contents));
-
-  // NOTE: If decompression failed, `output.contents' is now empty and will
-  // soon fail to parse.  This could be handled more gracefully with extra
-  // code but probably not worth it.
-
   if (output.hash.empty()) {
     output.hash = hash_contents(output.contents);
   }
 
-  ld_info("%s config from %s, hash = %s",
-          state == &main_config_state_ ? "Main" : "Included log",
+  ld_info("Main config from %s, hash = %s",
           state->source->getName().c_str(),
           output.hash.c_str());
 
@@ -145,59 +132,9 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
   auto sem_post_guard =
       folly::makeGuard([this]() { initial_config_sem_.post(); });
 
-  // Wipe `included_config_state_' in case the main config no longer refers to
-  // it.  (If it does, the callback will repopulate it.)
-  State previous_included_state;
-  std::swap(previous_included_state, included_config_state_);
-
-  bool waiting_for_included = false;
-  auto parse_include_callback = [&](const char* path,
-                                    std::string* contents_out) {
-    // This is the callback that the ServerConfig parser invokes when it
-    // detects that the main config refers to another location for the logs
-    // config.
-
-    std::tie(included_config_state_.source, included_config_state_.path) =
-        parseMaybeRelativeLocation(
-            path, main_config_state_.source, main_config_state_.path);
-
-    if (!included_config_state_.source) {
-      return E::FAILED;
-    }
-
-    // If we've already fetched the correct included log config (for example
-    // with an async request), return that.
-    if (previous_included_state.source == included_config_state_.source &&
-        previous_included_state.path == included_config_state_.path &&
-        previous_included_state.output.hasValue()) {
-      std::swap(included_config_state_, previous_included_state);
-      *contents_out = included_config_state_.output->contents;
-      return E::OK;
-    }
-
-    // Otherwise, request the config from the source.
-    ld_info("Requesting included log config \"%s\" (source: %s)",
-            included_config_state_.path.c_str(),
-            included_config_state_.source->getName().c_str());
-
-    ConfigSource::Output output;
-    Status rv = included_config_state_.source->getConfig(
-        included_config_state_.path, &output);
-    if (rv == E::OK) {
-      onContents(&included_config_state_, std::move(output), false);
-      // Copy the contents to return to Configuration parser.  Note that this
-      // may not be the same as `output.contents' above; onContents() tries to
-      // decompress when applicable.
-      *contents_out = included_config_state_.output->contents;
-    }
-    waiting_for_included = rv == E::NOTREADY;
-    return rv;
-  };
-
   std::shared_ptr<Configuration> config = Configuration::fromJson(
       main_config_state_.output->contents,
       alternative_logs_config_ ? alternative_logs_config_->copy() : nullptr,
-      parse_include_callback,
       config_parser_options_);
   Status config_parse_status = err;
 
@@ -207,31 +144,7 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
     return;
   }
 
-  if (!config->logsConfig() && waiting_for_included) {
-    // The main config refers to another location for the log config but the
-    // contents have not been fetched yet.  Silently ignore.  There is a
-    // request for the logs config inflight with some source; when that
-    // comes back, we'll be able to form the full `ServerConfig' object.
-
-    // Don't wake the main thread until then, though.
-    sem_post_guard.dismiss();
-    return;
-  }
-
-  ServerConfig::ConfigMetadata main_config_metadata, included_config_metadata;
-  if (included_config_state_.source) {
-    included_config_metadata.uri = included_config_state_.source->getName() +
-        ':' + included_config_state_.path;
-    ConfigSource::Output& included_output =
-        included_config_state_.output.value();
-    if (included_output.hash.empty()) {
-      included_output.hash = hash_contents(included_output.contents);
-    }
-    included_config_metadata.hash = included_output.hash;
-    included_config_metadata.modified_time = included_output.mtime;
-    included_config_metadata.loaded_time =
-        included_config_state_.last_loaded_time;
-  }
+  ServerConfig::ConfigMetadata main_config_metadata;
   main_config_metadata.uri =
       main_config_state_.source->getName() + ':' + main_config_state_.path;
   main_config_metadata.hash = main_config_state_.output->hash;
@@ -239,7 +152,6 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
   main_config_metadata.loaded_time = main_config_state_.last_loaded_time;
 
   config->serverConfig()->setMainConfigMetadata(main_config_metadata);
-  config->serverConfig()->setIncludedConfigMetadata(included_config_metadata);
 
   ConfigUpdateResult server_config_update, zookeeper_config_update,
       logs_config_update;
@@ -248,11 +160,8 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
 
   // LogsConfig is a special snowflake. We need to update when:
   // - ServerConfig is changed
-  // - Included config (in ServerConfig) has changed (based on hash)
-  //   and requests a force update
   // - Force reload flag for LogsConfig is set
   if (server_config_update == ConfigUpdateResult::UPDATED ||
-      server_config_update == ConfigUpdateResult::FORCE_RELOAD_LOGSCONFIG ||
       force_reload_logsconfig) {
     logs_config_update = pushLogsConfig(config->logsConfig());
   } else {
@@ -274,58 +183,6 @@ void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
                           zookeeper_config_update !=
                               ConfigUpdateResult::INVALID &&
                           logs_config_update != ConfigUpdateResult::INVALID);
-}
-
-std::pair<ConfigSource*, std::string>
-TextConfigUpdaterImpl::parseMaybeRelativeLocation(const std::string& location,
-                                                  ConfigSource* ref_source,
-                                                  const std::string& ref_path) {
-  if (location.find(
-          ConfigSourceLocationParser::kLocationSchemeDelimiter.toString()) !=
-      std::string::npos) {
-    // Scheme explicitly specified in location, parse as absolute
-    ConfigSource* source = nullptr;
-    auto src = ConfigSourceLocationParser::parse(sources_, location);
-    if (src.first != sources_.end()) {
-      source = src.first->get();
-    }
-    return {source, src.second};
-  }
-
-  std::string full_path;
-  if (!location.empty() && location[0] == PATH_DELIMITER) {
-    // Absolute path.
-    full_path = location;
-  } else {
-    // Relative path.  Extract path prefix from `ref_path' and attach
-    // `location' to it.
-    boost::filesystem::path path_prefix(ref_path);
-    path_prefix.remove_filename();
-    full_path = (path_prefix / location).string();
-  }
-  return std::make_pair(ref_source, std::move(full_path));
-}
-
-std::string TextConfigUpdaterImpl::maybeDecompress(const std::string& path,
-                                                   std::string raw_contents) {
-  using folly::IOBuf;
-  boost::filesystem::path ext = boost::filesystem::path(path).extension();
-  if (ext == ".gz") {
-    std::unique_ptr<IOBuf> input =
-        IOBuf::wrapBuffer(raw_contents.data(), raw_contents.size());
-    auto codec = folly::io::getCodec(folly::io::CodecType::GZIP);
-    std::unique_ptr<IOBuf> uncompressed;
-    try {
-      uncompressed = codec->uncompress(input.get());
-    } catch (const std::runtime_error& ex) {
-      ld_error(
-          "gzip decompression of \"%s\" failed: %s", path.c_str(), ex.what());
-      return "";
-    }
-    return std::string(uncompressed->moveToFbString().toStdString());
-  } else {
-    return raw_contents;
-  }
 }
 
 static std::string hash_contents(const std::string& str) {
@@ -364,8 +221,6 @@ std::string TextConfigUpdaterImpl::updateResultToString(
       return "invalid";
     case ConfigUpdateResult::UPDATED:
       return "updated";
-    case ConfigUpdateResult::FORCE_RELOAD_LOGSCONFIG:
-      return "force_reload_logsconfig";
     default:
       ld_assert(false);
       return "";
@@ -443,17 +298,7 @@ TextConfigUpdaterImpl::pushServerConfig(
     std::shared_ptr<ServerConfig> current_config = server_config->get();
 
     if (compareServerConfig(current_config, new_config) <= 0) {
-      // ServerConfig can have extra includes (logsconfig) which might need
-      // a force update. Eventually, we'll pull LogsConfig out of the
-      // ServerConfig metadata entirely. When includes have changed, we need to
-      // return a force update
-      const ServerConfig::ConfigMetadata& old_metadata =
-          current_config->getIncludedConfigMetadata();
-      const ServerConfig::ConfigMetadata& new_metadata =
-          new_config->getIncludedConfigMetadata();
-      return hashes_equal(old_metadata, new_metadata)
-          ? ConfigUpdateResult::SKIPPED
-          : ConfigUpdateResult::FORCE_RELOAD_LOGSCONFIG;
+      return ConfigUpdateResult::SKIPPED;
     }
 
     // Need to increase the stat _before_ publishing config because some

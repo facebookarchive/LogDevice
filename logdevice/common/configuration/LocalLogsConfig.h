@@ -62,13 +62,11 @@ class LocalLogsConfig : public LogsConfig {
   static std::shared_ptr<LocalLogsConfig>
   fromJson(const std::string& jsonPiece,
            const ServerConfig& server_config,
-           LoadFileCallback loadFileCallback,
            const ConfigParserOptions& options);
 
   static std::shared_ptr<LocalLogsConfig>
   fromJson(const folly::dynamic& parsed,
            const ServerConfig& server_config,
-           LoadFileCallback loadFileCallback,
            const ConfigParserOptions& options);
 
   LogGroupNodePtr getLogGroupByIDShared(logid_t id) const override;

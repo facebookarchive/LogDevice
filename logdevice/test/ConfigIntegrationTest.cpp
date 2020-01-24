@@ -479,59 +479,6 @@ TEST_F(ConfigIntegrationTest, ClientConfigSubscription) {
   ASSERT_EQ(0, sem.value());
 }
 
-TEST_F(ConfigIntegrationTest, IncludedConfigUpdated) {
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setParam("--file-config-update-interval", "10ms")
-          // TODO(#8466255): remove.
-          .eventLogMode(
-              IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
-          .writeLogsConfigFileSeparately()
-          .create(2);
-
-  auto client = ClientFactory()
-                    .setSetting("file-config-update-interval", "10ms")
-                    .setTimeout(testTimeout())
-                    .create(cluster->getConfigPath());
-
-  boost::filesystem::path config_path(cluster->getConfigPath());
-  auto included_path = config_path.parent_path() / "included_logs.conf";
-  Semaphore sem;
-  auto handle = client->subscribeToConfigUpdates([&]() { sem.post(); });
-
-  auto changed_logs_config =
-      cluster->getConfig()->getLocalLogsConfig()->copyLocal();
-
-  for (int i = 0; i < 3; ++i) {
-    ld_check(changed_logs_config->isLocal());
-    auto& tree = const_cast<logsconfig::LogsConfigTree&>(
-        changed_logs_config->getLogsConfigTree());
-    auto& logs =
-        const_cast<logsconfig::LogMap&>(changed_logs_config->getLogMap());
-    auto log_in_directory = logs.begin()->second;
-    auto new_log_id =
-        logid_t(log_in_directory.log_group->range().first.val() + 1);
-    bool res = changed_logs_config->replaceLogGroup(
-        log_in_directory.getFullyQualifiedName(),
-        log_in_directory.log_group->withRange(
-            logid_range_t({new_log_id, new_log_id})));
-    ASSERT_TRUE(res);
-    // Setting the newer tree version
-    tree.setVersion(tree.version() + 1);
-    // writing new config
-    int rv = cluster->writeConfig(
-        /* server_cfg */ nullptr, changed_logs_config.get());
-    ASSERT_EQ(0, rv);
-
-    ld_info("Waiting for config change to be picked up ...");
-    sem.wait();
-    // server config hasn't changed. only logs config update should
-    // initiate a callback.
-    ASSERT_EQ(0, sem.value());
-  }
-  ASSERT_EQ(0, sem.value());
-}
-
 // Tries to fetch log config on a worker thread with synchronous methods.
 // Verifies it fails.
 TEST_F(ConfigIntegrationTest, ConfigSyncMethodFailure) {

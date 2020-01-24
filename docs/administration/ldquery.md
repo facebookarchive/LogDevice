@@ -198,7 +198,7 @@ A general information table about the nodes in the cluster, like server start ti
 | rocksdb\_version | string | Version of RocksDB. |
 
 ## info\_config
-A table that dumps information about all the configurations loaded by each node in the cluster.   For each node, there will be one row for the node's configuration which is in the main config.  A second row will be present for each node if they load the log configuration from a separate config file (see "include\_log\_config" section in the main config).
+A table that dumps information about all the configurations loaded by each node in the cluster.   For each node, there will be one row for the node's configuration which is in the main config.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|

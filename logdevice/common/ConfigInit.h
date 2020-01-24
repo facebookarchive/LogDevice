@@ -57,9 +57,7 @@ class ConfigInit {
    * @param updateable_config         UpdateableConfig instance
    * @param alternative_logs_config   an alternative log configuration fetcher,
    *                                  in case log data isn't included in the
-   *                                  main config file. If null, log config
-   *                                  will be read from the file specified in
-   *                                  "include_log_config".
+   *                                  main config file.
    * @param updateable_settings       Server/Client settings will read from this
    *                                  updateable to enable/disable reading the
    *                                  logsconfig from the attached config
