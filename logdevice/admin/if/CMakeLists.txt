@@ -51,12 +51,13 @@ foreach(THRIFT_SOURCE
     "${_adminapi_if_include_prefix}"
     PY3_NAMESPACE "logdevice/admin"
     CYTHON_INCLUDES
-      "${CMAKE_BINARY_DIR}/logdevice/common/gen-py3/"
+      "${CMAKE_BINARY_DIR}/logdevice/common/if/gen-py3/"
       "${CMAKE_BINARY_DIR}/logdevice/admin/if/gen-py3/"
       "${CMAKE_BINARY_DIR}/logdevice/common/membership/gen-py3/"
   )
 
   add_dependencies(${THRIFT_SOURCE}-cpp2-target fbthrift)
+  target_link_libraries(${THRIFT_SOURCE}-cpp2 common-cpp2)
 
   if(thriftpy3)
     target_link_libraries(
@@ -76,7 +77,7 @@ ld_thrift_py3_library(
   "logdevice/admin/if"
   PY3_NAMESPACE "logdevice"
   CYTHON_INCLUDES "${CMAKE_BINARY_DIR}/logdevice/admin/if/gen-py3/"
-    "${CMAKE_BINARY_DIR}/logdevice/common/gen-py3/"
+    "${CMAKE_BINARY_DIR}/logdevice/common/if/gen-py3/"
     "${CMAKE_BINARY_DIR}/common/fb303/if/gen-py3"
     "${CMAKE_BINARY_DIR}/logdevice/admin/gen-py3"
     "${CMAKE_BINARY_DIR}/logdevice"

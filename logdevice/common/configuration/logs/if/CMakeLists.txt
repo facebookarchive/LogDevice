@@ -25,7 +25,7 @@ ld_thrift_py3_library(
   "${_logsconfig_if_include_prefix}"
   PY3_NAMESPACE "logdevice"
   CYTHON_INCLUDES
-    "${CMAKE_BINARY_DIR}/logdevice/common/gen-py3/"
+    "${CMAKE_BINARY_DIR}/logdevice/common/if/gen-py3/"
  )
 
 add_dependencies(logsconfig-cpp2-target fbthrift)
