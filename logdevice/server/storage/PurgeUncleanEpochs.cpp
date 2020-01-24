@@ -339,7 +339,7 @@ void PurgeUncleanEpochs::postEpochRecoveryMetadataRequest(
         return;
       }
 
-      ld_check(status == E::OK || status == E::ABORTED);
+      ld_check(status == E::OK);
       driver->onGetEpochRecoveryMetadataComplete(status, epochRecoveryStateMap);
     });
   };
@@ -369,7 +369,7 @@ void PurgeUncleanEpochs::onGetEpochRecoveryMetadataComplete(
     const EpochRecoveryStateMap& epochRecoveryStateMap) {
   ld_check(num_running_get_erm_requests_ > 0);
   num_running_get_erm_requests_--;
-  ld_check(status == E::OK || status == E::ABORTED);
+  ld_check(status == E::OK);
   ld_check(state_ == State::GET_EPOCH_RECOVERY_METADATA);
 
   for (auto& entry : epochRecoveryStateMap) {
@@ -378,9 +378,8 @@ void PurgeUncleanEpochs::onGetEpochRecoveryMetadataComplete(
     ld_check(erm.first == E::OK || erm.first == E::EMPTY ||
              erm.first == E::UNKNOWN);
 
-    if (status != E::ABORTED && erm.first == E::UNKNOWN) {
-      // If the GetEpochRecoveryMetadataRequest was not aborted and
-      // the status for this epoch could not be determined, skip purging the
+    if (erm.first == E::UNKNOWN) {
+      // If the status for this epoch could not be determined, skip purging the
       // epoch.
       ld_info("GetEpochRecoveryMetadataRequest for log %lu did not get a valid "
               "response for epoch %u. Skipping purging for this epoch",

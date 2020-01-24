@@ -71,89 +71,9 @@ void PurgeSingleEpoch::start() {
     retry_timer_ = createRetryTimer();
   }
 
-  state_ = State::GET_RECOVERY_METADATA;
-  if (get_epoch_recovery_metadata_status_ != E::UNKNOWN) {
-    ld_check(get_epoch_recovery_metadata_status_ == E::EMPTY ||
-             recovery_metadata_.valid());
-    // We already have the epoch recovery metadata.
-    // Proceed to next stage.
-    state_ = State::PURGE_RECORDS;
-    purgeRecords();
-  } else {
-    postGetEpochRecoveryMetadataRequest();
-  }
-}
-
-void PurgeSingleEpoch::postGetEpochRecoveryMetadataRequest() {
-  ld_check(state_ == State::GET_RECOVERY_METADATA);
-  auto callback_ticket = callbackHelper_.ticket();
-  auto cb = [=](Status status, std::unique_ptr<EpochRecoveryStateMap> map) {
-    EpochRecoveryStateMap epochRecoveryStateMap = *map;
-
-    callback_ticket.postCallbackRequest([=](PurgeSingleEpoch* driver) {
-      if (!driver) {
-        ld_debug(
-            "GetEpochRecoveryMetadataRequest finished after "
-            "PurgeSingleEpoch was destroyed, log:%lu, shard:%u, purge_to:%u, "
-            "epoch:%u",
-            log_id_.val_,
-            shard_,
-            purge_to_.val_,
-            epoch_.val_);
-        return;
-      }
-
-      ld_check(status == E::OK);
-      driver->onGetEpochRecoveryMetadataComplete(status, epochRecoveryStateMap);
-    });
-  };
-
-  ServerWorker* worker = ServerWorker::onThisThread();
-
-  std::unique_ptr<Request> rq =
-      std::make_unique<GetEpochRecoveryMetadataRequest>(worker->idx_,
-                                                        log_id_,
-                                                        shard_,
-                                                        epoch_,
-                                                        epoch_,
-                                                        purge_to_,
-                                                        epoch_metadata_,
-                                                        cb);
-
-  worker->processor_->postWithRetrying(rq);
-}
-
-void PurgeSingleEpoch::onGetEpochRecoveryMetadataComplete(
-    Status status,
-    const EpochRecoveryStateMap& epochRecoveryStateMap) {
-  ld_check(!epochRecoveryStateMap.empty() && epochRecoveryStateMap.size() == 1);
-  ld_check(status == E::OK);
-  auto const it = epochRecoveryStateMap.begin();
-  ld_check(epoch_t(it->first) == epoch_);
-
-  const std::pair<Status, EpochRecoveryMetadata>& erm = it->second;
-
-  if (erm.first != E::OK && erm.first != E::EMPTY) {
-    // Any other response means that we heard from
-    // all authoritative nodes but could not make a
-    // decision. Skip purging this epoch.
-    complete(E::OK);
-    finalizeIfDone();
-    return;
-  }
-  get_epoch_recovery_metadata_status_ = erm.first;
-  if (get_epoch_recovery_metadata_status_ == E::OK) {
-    ld_check(erm.second.valid());
-    recovery_metadata_ = erm.second;
-  }
-
-  // we must get a valid status from the reply, current only two status codes
-  // are considered success: E::OK and E::EMPTY
-  ld_check(get_epoch_recovery_metadata_status_ == E::OK ||
-           get_epoch_recovery_metadata_status_ == E::EMPTY);
   ld_check(get_epoch_recovery_metadata_status_ == E::EMPTY ||
-           recovery_metadata_.valid());
-
+           (get_epoch_recovery_metadata_status_ == E::OK &&
+            recovery_metadata_.valid()));
   state_ = State::PURGE_RECORDS;
   purgeRecords();
 }
@@ -378,8 +298,6 @@ const char* PurgeSingleEpoch::getStateString(State state, bool shorter) {
   switch (state) {
     case State::UNKNOWN:
       return shorter ? "U" : "UNKNOWN";
-    case State::GET_RECOVERY_METADATA:
-      return shorter ? "G" : "GET_RECOVERY_METADATA";
     case State::PURGE_RECORDS:
       return shorter ? "P" : "PURGE_RECORDS";
     case State::WRITE_RECOVERY_METADATA:

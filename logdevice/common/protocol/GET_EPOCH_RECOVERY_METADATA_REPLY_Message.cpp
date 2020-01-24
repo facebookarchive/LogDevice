@@ -62,15 +62,7 @@ void GET_EPOCH_RECOVERY_METADATA_REPLY_Message::serialize(
 MessageReadResult
 GET_EPOCH_RECOVERY_METADATA_REPLY_Message::deserialize(ProtocolReader& reader) {
   GET_EPOCH_RECOVERY_METADATA_REPLY_Header hdr{};
-  // Defaults for old protocols
-  hdr.shard = -1;
-  hdr.purging_shard = -1;
-  hdr.end = EPOCH_INVALID;
-  hdr.id = REQUEST_ID_INVALID;
-  hdr.num_non_empty_epochs = 0;
-  reader.read(
-      &hdr,
-      GET_EPOCH_RECOVERY_METADATA_REPLY_Header::headerSize(reader.proto()));
+  reader.read(&hdr);
 
   std::vector<Status> status;
   std::vector<epoch_t> epochs;

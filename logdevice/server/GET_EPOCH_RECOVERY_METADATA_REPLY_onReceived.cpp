@@ -51,64 +51,26 @@ Message::Message::Disposition GET_EPOCH_RECOVERY_METADATA_REPLY_onReceived(
 
   GetEpochRecoveryMetadataRequest* request = nullptr;
 
-  if (header.id != REQUEST_ID_INVALID) {
-    const auto& index =
-        worker->runningGetEpochRecoveryMetadata()
-            .requests.get<GetEpochRecoveryMetadataRequestMap::RequestIndex>();
+  ld_check(header.id != REQUEST_ID_INVALID);
 
-    auto it = index.find(header.id);
-    if (it == index.end()) {
-      // state machine no longer exist, stale reply
-      RATELIMIT_DEBUG(std::chrono::seconds(2),
-                      1,
-                      "Receive GET_EPOCH_RECOVERY_METADATA_REPLY_Message from "
-                      "client %s for log %lu, purge_to %u, epoch %u, but "
-                      "no active GetEpochRecoveryMetadataRequest state machine "
-                      "found. This is probably a stale reply.",
-                      Sender::describeConnection(from).c_str(),
-                      header.log_id.val_,
-                      header.purge_to.val_,
-                      header.start.val_);
+  const auto& rqmap = worker->runningGetEpochRecoveryMetadata().requests;
+  auto it = rqmap.find(header.id);
+  if (it == rqmap.end()) {
+    // state machine no longer exist, stale reply
+    RATELIMIT_DEBUG(std::chrono::seconds(2),
+                    1,
+                    "Receive GET_EPOCH_RECOVERY_METADATA_REPLY_Message from "
+                    "client %s for log %lu, purge_to %u, epoch %u, but "
+                    "no active GetEpochRecoveryMetadataRequest state machine "
+                    "found. This is probably a stale reply.",
+                    Sender::describeConnection(from).c_str(),
+                    header.log_id.val_,
+                    header.purge_to.val_,
+                    header.start.val_);
 
-      return Message::Disposition::NORMAL;
-    }
-    request = it->get();
+    return Message::Disposition::NORMAL;
   }
 
-  if (request == nullptr) {
-    // This is only possible if we sent a GET_EPOCH_RECOVERY_METADATA to a
-    // node which does not know about range support in
-    // GET_EPOCH_RECOVERY_METADATA_Message and it should have
-    // originated from PurgeSinlgeEpoch state machine
-    // TODO: T23693338 Remove this once all servers are at
-    // GET_EPOCH_RECOVERY_RANGE_SUPPORT protocol version
-    ld_check(header.id == REQUEST_ID_INVALID);
-
-    auto key = std::make_tuple(
-        header.log_id, header.purge_to, header.shard, header.start);
-    const auto& index =
-        worker->runningGetEpochRecoveryMetadata()
-            .requests.get<GetEpochRecoveryMetadataRequestMap::PurgeIndex>();
-
-    auto it = index.find(key);
-    if (it == index.end()) {
-      // state machine no longer exist, stale reply
-      RATELIMIT_DEBUG(std::chrono::seconds(2),
-                      1,
-                      "Receive GET_EPOCH_RECOVERY_METADATA_REPLY_Message from "
-                      "client %s for log %lu, purge_to %u, epoch %u, but "
-                      "no active GetEpochRecoveryMetadataRequest state "
-                      "machine found. This is probably a stale reply.",
-                      Sender::describeConnection(from).c_str(),
-                      header.log_id.val_,
-                      header.purge_to.val_,
-                      header.start.val_);
-      return Message::Disposition::NORMAL;
-    }
-    request = it->get();
-  }
-
-  ld_check(request);
   EpochRecoveryStateMap epochRecoveryStateMap;
 
   if (header.status == E::OK) {
@@ -221,7 +183,7 @@ Message::Message::Disposition GET_EPOCH_RECOVERY_METADATA_REPLY_onReceived(
   shard_index_t remote_shard_idx = header.shard;
   ld_check(remote_shard_idx != -1);
 
-  request->onReply(
+  it->second->onReply(
       ShardID(from.id_.node_.index(), remote_shard_idx),
       header.status,
       header.status == E::OK

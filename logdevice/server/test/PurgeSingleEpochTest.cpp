@@ -81,7 +81,6 @@ class PurgeSingleEpochTest : public ::testing::Test {
   ReplicationProperty replication_{{NodeLocationScope::NODE, 3}};
   StorageSet nodes_{N0S0, N1S0, N2S0, N3S0, N4S0};
   bool complete_{false};
-  bool GetERMRequestPosted_{false};
   TailRecord tail_record;
   OffsetMap epoch_size_map;
   OffsetMap epoch_end_offsets;
@@ -112,11 +111,6 @@ class MockPurgeSingleEpoch : public PurgeSingleEpoch {
 
   void startStorageTask(std::unique_ptr<StorageTask>&& task) override {
     test_->tasks_.push_back(std::move(task));
-  }
-
-  void postGetEpochRecoveryMetadataRequest() override {
-    ld_check(!test_->GetERMRequestPosted_);
-    test_->GetERMRequestPosted_ = true;
   }
 
   void deferredComplete() override {
@@ -159,21 +153,19 @@ TEST_F(PurgeSingleEpochTest, Basic) {
   epoch_ = epoch_t(8);
   local_lng_ = esn_t(10);
   local_last_record_ = esn_t(20);
-  setUp();
-  purge_->start();
-  ASSERT_TRUE(GetERMRequestPosted_);
   epoch_size_map.setCounter(BYTE_OFFSET, 0);
   epoch_end_offsets.setCounter(BYTE_OFFSET, 0);
   tail_record.offsets_map_.setCounter(BYTE_OFFSET, 0);
-  EpochRecoveryMetadata md(epoch_t(9),
-                           esn_t(10),
-                           esn_t(11),
-                           0,
-                           tail_record,
-                           epoch_size_map,
-                           epoch_end_offsets);
-  EpochRecoveryStateMap map{{8, {E::OK, md}}};
-  purge_->onGetEpochRecoveryMetadataComplete(E::OK, map);
+  erm_ = EpochRecoveryMetadata(epoch_t(9),
+                               esn_t(10),
+                               esn_t(11),
+                               0,
+                               tail_record,
+                               epoch_size_map,
+                               epoch_end_offsets);
+  status_ = E::OK;
+  setUp();
+  purge_->start();
   CHECK_STORAGE_TASK(PurgeDeleteRecordsStorageTask);
   purge_->onPurgeRecordsTaskDone(E::OK);
   CHECK_STORAGE_TASK(PurgeWriteEpochRecoveryMetadataStorageTask);
@@ -198,7 +190,6 @@ TEST_F(PurgeSingleEpochTest, ERMKnown) {
   status_ = E::OK;
   setUp();
   purge_->start();
-  ASSERT_FALSE(GetERMRequestPosted_);
   CHECK_STORAGE_TASK(PurgeDeleteRecordsStorageTask);
   purge_->onPurgeRecordsTaskDone(E::OK);
   CHECK_STORAGE_TASK(PurgeWriteEpochRecoveryMetadataStorageTask);
@@ -223,7 +214,6 @@ TEST_F(PurgeSingleEpochTest, EpochEmptyLocally) {
   status_ = E::OK;
   setUp();
   purge_->start();
-  ASSERT_FALSE(GetERMRequestPosted_);
   CHECK_STORAGE_TASK(PurgeWriteEpochRecoveryMetadataStorageTask);
   purge_->onWriteEpochRecoveryMetadataDone(E::OK);
   ASSERT_TRUE(complete_);
@@ -237,7 +227,6 @@ TEST_F(PurgeSingleEpochTest, EpochEmptyGlobally) {
   status_ = E::EMPTY;
   setUp();
   purge_->start();
-  ASSERT_FALSE(GetERMRequestPosted_);
   ASSERT_TRUE(complete_);
 }
 

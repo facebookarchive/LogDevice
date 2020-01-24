@@ -40,11 +40,6 @@ struct GET_EPOCH_RECOVERY_METADATA_Header {
   // Request id of the GetEpochRecoveryMetadataRequest where
   // this message originated from
   request_id_t id;
-
-  // size of the header in message given the protocol version
-  static size_t headerSize(uint16_t proto) {
-    return sizeof(GET_EPOCH_RECOVERY_METADATA_Header);
-  }
 } __attribute__((__packed__));
 
 class GET_EPOCH_RECOVERY_METADATA_Message : public Message {

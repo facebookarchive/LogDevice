@@ -35,9 +35,6 @@ class PurgeSingleEpoch {
  public:
   enum class State {
     UNKNOWN,
-    // TODO: T23693338 remove this stage once
-    // all servers are running version >= GET_EPOCH_RECOVERY_RANGE_SUPPORT
-    GET_RECOVERY_METADATA,
     PURGE_RECORDS,
     WRITE_RECOVERY_METADATA,
     FINISHED
@@ -55,10 +52,6 @@ class PurgeSingleEpoch {
                    PurgeUncleanEpochs* driver);
 
   void start();
-
-  void onGetEpochRecoveryMetadataComplete(
-      Status status,
-      const EpochRecoveryStateMap& epochRecoveryStateMap);
 
   void onPurgeRecordsTaskDone(Status status);
 
@@ -85,8 +78,6 @@ class PurgeSingleEpoch {
   virtual std::unique_ptr<BackoffTimer> createRetryTimer();
 
   virtual void startStorageTask(std::unique_ptr<StorageTask>&& task);
-
-  virtual void postGetEpochRecoveryMetadataRequest();
 
   virtual void deferredComplete();
 

@@ -80,11 +80,6 @@ struct GET_EPOCH_RECOVERY_METADATA_REPLY_Header {
 
   // Request id from GET_EPOCH_RECOVERY_METADATA_Message
   request_id_t id;
-
-  // size of the header in message given the protocol version
-  static size_t headerSize(uint16_t proto) {
-    return sizeof(GET_EPOCH_RECOVERY_METADATA_REPLY_Header);
-  }
 } __attribute__((__packed__));
 
 class GET_EPOCH_RECOVERY_METADATA_REPLY_Message : public Message {

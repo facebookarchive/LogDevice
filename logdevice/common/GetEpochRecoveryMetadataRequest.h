@@ -7,13 +7,7 @@
  */
 #pragma once
 
-#include <boost/multi_index/composite_key.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/identity.hpp>
-#include <boost/multi_index/mem_fun.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index_container.hpp>
+#include <folly/container/F14Map.h>
 
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/Metadata.h"
@@ -233,58 +227,10 @@ class GetEpochRecoveryMetadataRequest
   friend class GetEpochRecoveryMetadataRequestTest;
 };
 
-// It is a multi index map only to maintain backward compatibility
-// with servers running an older verion of the protocol.
-// TODO:T23693338 remove once all servers are running new protocol
 struct GetEpochRecoveryMetadataRequestMap {
-  struct RequestIndex {};
-  struct PurgeIndex {};
-
-  using request_id_member = boost::multi_index::const_mem_fun<
-      GetEpochRecoveryMetadataRequest,
-      request_id_t,
-      &GetEpochRecoveryMetadataRequest::getRequestId>;
-
-  using log_id_member = boost::multi_index::const_mem_fun<
-      GetEpochRecoveryMetadataRequest,
-      logid_t,
-      &GetEpochRecoveryMetadataRequest::getLogId>;
-
-  using purge_to_member = boost::multi_index::const_mem_fun<
-      GetEpochRecoveryMetadataRequest,
-      epoch_t,
-      &GetEpochRecoveryMetadataRequest::getPurgeTo>;
-
-  using shard_member = boost::multi_index::const_mem_fun<
-      GetEpochRecoveryMetadataRequest,
-      shard_index_t,
-      &GetEpochRecoveryMetadataRequest::getShard>;
-
-  using epoch_member = boost::multi_index::const_mem_fun<
-      GetEpochRecoveryMetadataRequest,
-      epoch_t,
-      &GetEpochRecoveryMetadataRequest::getStartEpoch>;
-
-  boost::multi_index::multi_index_container<
-      std::unique_ptr<GetEpochRecoveryMetadataRequest>,
-      boost::multi_index::indexed_by<
-          // Index by request_id
-          boost::multi_index::hashed_unique<
-              boost::multi_index::tag<RequestIndex>,
-              request_id_member,
-              request_id_t::Hash>,
-          // Index by (log_id, purge_to, shard, epoch)
-          boost::multi_index::hashed_unique<
-              boost::multi_index::tag<PurgeIndex>,
-              boost::multi_index::composite_key<GetEpochRecoveryMetadataRequest,
-                                                log_id_member,
-                                                purge_to_member,
-                                                shard_member,
-                                                epoch_member>,
-              boost::multi_index::composite_key_hash<logid_t::Hash,
-                                                     epoch_t::Hash,
-                                                     std::hash<shard_index_t>,
-                                                     epoch_t::Hash>>>>
+  std::unordered_map<request_id_t,
+                     std::unique_ptr<GetEpochRecoveryMetadataRequest>,
+                     request_id_t::Hash>
       requests;
 };
 

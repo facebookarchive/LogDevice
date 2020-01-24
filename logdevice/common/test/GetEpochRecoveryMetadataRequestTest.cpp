@@ -526,32 +526,4 @@ TEST_F(GetEpochRecoveryMetadataRequestTest, SingleEmpty2) {
   cb_.assertCalled(E::OK, map2);
 }
 
-TEST_F(GetEpochRecoveryMetadataRequestTest, NodeWithOldProtocol_Single) {
-  init(4);
-  destinationRunningOldProto = node_index_t(3);
-  auto request = createRequest(epoch_t(1), epoch_t(1));
-  request->execute();
-  ASSERT_FALSE(deferredCompleteCalled_);
-  cb_.assertNotCalled();
-  EpochRecoveryStateMap map{{1, {E::EMPTY, EpochRecoveryMetadata()}}};
-  request->onReply(N3S0, E::OK, std::make_unique<EpochRecoveryStateMap>(map));
-  ASSERT_TRUE(deferredCompleteCalled_);
-  ASSERT_TRUE(deferredCompleteTimerCreated_);
-  fireDeferredCompleteTimer();
-  cb_.assertCalled(E::OK, map);
-}
-
-TEST_F(GetEpochRecoveryMetadataRequestTest, NodeWithOldProtocol_Range) {
-  init(4);
-  destinationRunningOldProto = node_index_t(3);
-  auto request = createRequest(epoch_t(1), epoch_t(2));
-  request->execute();
-  EpochRecoveryStateMap map{{1, {E::UNKNOWN, EpochRecoveryMetadata()}},
-                            {2, {E::UNKNOWN, EpochRecoveryMetadata()}}};
-  ASSERT_TRUE(deferredCompleteCalled_);
-  ASSERT_TRUE(deferredCompleteTimerCreated_);
-  fireDeferredCompleteTimer();
-  cb_.assertCalled(E::ABORTED, map);
-}
-
 }} // namespace facebook::logdevice

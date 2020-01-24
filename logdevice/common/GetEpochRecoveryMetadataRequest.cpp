@@ -60,10 +60,10 @@ Request::Execution GetEpochRecoveryMetadataRequest::execute() {
 }
 
 void GetEpochRecoveryMetadataRequest::registerWithWorker() {
-  auto worker = Worker::onThisThread();
-  auto& runningERM = worker->runningGetEpochRecoveryMetadata().requests;
-  auto insert_it =
-      runningERM.insert(std::unique_ptr<GetEpochRecoveryMetadataRequest>(this));
+  auto& runningERM =
+      Worker::onThisThread()->runningGetEpochRecoveryMetadata().requests;
+  auto insert_it = runningERM.insert(std::make_pair(
+      id_, std::unique_ptr<GetEpochRecoveryMetadataRequest>(this)));
   ld_check(insert_it.second);
 }
 
@@ -110,9 +110,7 @@ GetEpochRecoveryMetadataRequest::makeStorageSetAccessor(
       node_access,
       completion,
       // TODO 10237599, 11866467 Improve availability of purging
-      // TODO: T23693338 Change this to ANY after all servers
-      // are confirmed to running the latest version
-      StorageSetAccessor::Property::REPLICATION
+      StorageSetAccessor::Property::ANY
       // no timeout
   );
 }
@@ -212,8 +210,7 @@ void GetEpochRecoveryMetadataRequest::buildEpochRecoveryStateMap() {
 
     // If the operation was not aborted and we got atleast one reply
     // with E::EMPTY, consider the epoch as empty.
-    if (epochRecoveryMetadataResponses_[epoch].second.size() > 0 &&
-        result_ != E::ABORTED) {
+    if (epochRecoveryMetadataResponses_[epoch].second.size() > 0) {
       WORKER_STAT_INCR(purging_v2_purge_epoch_empty_all_responsed);
       RATELIMIT_INFO(
           std::chrono::seconds(10),
@@ -285,19 +282,6 @@ GetEpochRecoveryMetadataRequest::sendGetEpochRecoveryMetadataRequest(
     case E::SHUTDOWN:
     case E::INTERNAL:
       return {StorageSetAccessor::Result::PERMANENT_ERROR, err};
-
-    case E::PROTONOSUPPORT:
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      1,
-                      "GET_EPOCH_RECOVERY_METADATA_Message for range of epochs"
-                      "is not supported by the recipient server at %s",
-                      Sender::describeConnection(send_to).c_str());
-      // If the messgae was for a range of epochs and the socket does
-      // not support this message, abort the operation
-      if (isRangeRequest()) {
-        return {StorageSetAccessor::Result::ABORT, err};
-      }
-      break;
     // all other errors are considered transient
     default:
       break;
@@ -314,15 +298,13 @@ void GetEpochRecoveryMetadataRequest::onSent(
   // forward to the state machine
   const GET_EPOCH_RECOVERY_METADATA_Header& header = msg.getHeader();
   Worker* worker = Worker::onThisThread();
-  const auto& index =
-      worker->runningGetEpochRecoveryMetadata()
-          .requests.get<GetEpochRecoveryMetadataRequestMap::RequestIndex>();
+  const auto& rqmap = worker->runningGetEpochRecoveryMetadata().requests;
 
-  auto it = index.find(header.id);
+  auto it = rqmap.find(header.id);
 
-  if (it != index.end()) {
+  if (it != rqmap.end()) {
     ShardID to_shard(to.id_.node_.index(), header.shard);
-    (*it)->onSent(to_shard, status);
+    it->second->onSent(to_shard, status);
   }
 }
 
@@ -332,19 +314,9 @@ void GetEpochRecoveryMetadataRequest::onSent(ShardID to, Status st) {
   }
 
   ld_check(storage_set_accessor_ != nullptr);
-  auto result = StorageSetAccessor::Result::TRANSIENT_ERROR;
   if (st != E::OK) {
-    if (isRangeRequest() && st == E::PROTONOSUPPORT) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      2,
-                      "GET_EPOCH_RECOVERY_METADATA_Message for range of epochs"
-                      "not supported by the recipient server at %s",
-                      to.toString().c_str());
-      result = StorageSetAccessor::Result::ABORT;
-    }
-
-    // all error conditions are considered as transient error
-    storage_set_accessor_->onShardAccessed(to, {result, st});
+    storage_set_accessor_->onShardAccessed(
+        to, {StorageSetAccessor::Result::TRANSIENT_ERROR, st});
   }
 }
 
@@ -520,7 +492,7 @@ void GetEpochRecoveryMetadataRequest::onStorageSetAccessorComplete(
     Status status) {
   ld_check(retry_timer_ != nullptr);
 
-  if (status != E::OK && status != E::ABORTED) {
+  if (status != E::OK) {
     // If request failed with anything other than E:ABORTED,
     // schedule a retry
     retry_timer_->setCallback(
@@ -531,14 +503,12 @@ void GetEpochRecoveryMetadataRequest::onStorageSetAccessorComplete(
 
   //  nodeset_accessor is not needed anymore
   storage_set_accessor_.reset();
-  ld_check(status == E::OK || (status == E::ABORTED && isRangeRequest()));
+  ld_check(status == E::OK);
   complete(status);
 }
 
 void GetEpochRecoveryMetadataRequest::complete(Status status) {
-  // currently only allowed failure is if operation was aborted
-  // becasue the protocol is not supported
-  ld_check(status == E::OK || status == E::ABORTED);
+  ld_check(status == E::OK);
 
   // the state machine should only complete once
   ld_check(result_ == E::UNKNOWN);
@@ -551,9 +521,7 @@ void GetEpochRecoveryMetadataRequest::complete(Status status) {
 
 void GetEpochRecoveryMetadataRequest::deleteThis() {
   auto& rqmap =
-      Worker::onThisThread()
-          ->runningGetEpochRecoveryMetadata()
-          .requests.get<GetEpochRecoveryMetadataRequestMap::RequestIndex>();
+      Worker::onThisThread()->runningGetEpochRecoveryMetadata().requests;
   auto it = rqmap.find(id_);
   ld_check(it != rqmap.end());
   rqmap.erase(it);
@@ -606,8 +574,7 @@ NodeID GetEpochRecoveryMetadataRequest::getMyNodeID() {
 
 void GetEpochRecoveryMetadataRequest::deferredComplete() {
   ld_check(!deferredCompleteTimer_);
-  ld_check(result_ != E::UNKNOWN);
-  ld_check(result_ == E::OK || result_ == E::ABORTED);
+  ld_check(result_ == E::OK);
   // Start a timer with zero delay.
   deferredCompleteTimer_ = createDeferredCompleteTimer([this] { done(); });
   activateDeferredCompleteTimer();
