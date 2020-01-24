@@ -15,7 +15,9 @@ Implements cluster-specific operations.
 """
 
 import asyncio
-from typing import Dict, FrozenSet, Optional
+import operator
+from collections import defaultdict
+from typing import Dict, FrozenSet, Optional, Tuple
 
 from ldops import admin_api
 from ldops.exceptions import NodeNotFoundError
@@ -174,4 +176,31 @@ async def get_cluster_view(client: AdminAPI) -> ClusterView:
         nodes_config=nodes_config_resp.nodes,
         nodes_state=nodes_state_resp.states,
         maintenances=maintenances,
+    )
+
+
+async def group_nodes_by_scope(client: AdminAPI) -> Tuple[Tuple[NodeID, ...], ...]:
+    (replication_info, nodes_config) = await asyncio.gather(
+        admin_api.get_replication_info(client), admin_api.get_nodes_config(client)
+    )
+    scope = replication_info.tolerable_failure_domains.domain
+    ret = defaultdict(set)
+
+    for node_config in nodes_config.nodes:
+        ret[node_config.location_per_scope[scope]].add(
+            NodeID(
+                node_index=node_config.node_index,
+                address=node_config.data_address,
+                name=node_config.name,
+            )
+        )
+
+    return tuple(
+        sorted(
+            (
+                tuple(sorted(v, key=operator.attrgetter("node_index")))
+                for k, v in ret.items()
+            ),
+            key=lambda x: x[0].node_index,
+        )
     )

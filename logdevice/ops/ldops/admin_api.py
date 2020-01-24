@@ -37,6 +37,7 @@ from logdevice.admin.logtree.types import (
     LogGroupCustomCountersResponse,
     LogGroupThroughputRequest,
     LogGroupThroughputResponse,
+    ReplicationInfo,
 )
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
@@ -186,6 +187,13 @@ async def check_impact(
     Wrapper for checkImpact() Thrift method
     """
     return await client.checkImpact(req or CheckImpactRequest())
+
+
+async def get_replication_info(client: AdminAPI) -> ReplicationInfo:
+    """
+    Wrapper for getReplicationInfo() Thrift method
+    """
+    return await client.getReplicationInfo()
 
 
 async def get_settings(
