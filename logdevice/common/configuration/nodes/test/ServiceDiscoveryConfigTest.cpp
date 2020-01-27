@@ -22,9 +22,13 @@ namespace {
 
 constexpr StringPiece kTestAddress = "127.0.0.1";
 constexpr in_port_t kTestDataPort = 4440;
+constexpr in_port_t kTestGossipPort = 4441;
 constexpr in_port_t kTestServerToServerPort = 4442;
+constexpr ConnectionType kTestConnectionType = ConnectionType::SSL;
 const Sockaddr kTestDefaultAddress =
     Sockaddr{kTestAddress.toString(), kTestDataPort};
+const Sockaddr kTestGossipAddress =
+    Sockaddr{kTestAddress.toString(), kTestGossipPort};
 const Sockaddr kTestServerToServerAddress =
     Sockaddr{kTestAddress.toString(), kTestServerToServerPort};
 
@@ -62,9 +66,21 @@ TEST(ServiceDiscoveryConfigTest,
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE, true);
+      SocketType::DATA, kTestConnectionType, PeerType::NODE, true);
 
   EXPECT_EQ(actual, kTestServerToServerAddress);
+}
+
+TEST(ServiceDiscoveryConfigTest, getSockaddr_gossipAddressOverridesData) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.gossip_address = kTestGossipAddress;
+  nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
+
+  const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
+      SocketType::GOSSIP, kTestConnectionType, PeerType::NODE, true);
+
+  EXPECT_EQ(actual, kTestGossipAddress);
 }
 
 } // namespace

@@ -136,18 +136,19 @@ const Sockaddr& NodeServiceDiscovery::getSockaddr(
     ConnectionType connection_type,
     PeerType peer_type,
     bool use_dedicated_server_to_server_address) const {
-  if (peer_type == PeerType::NODE && use_dedicated_server_to_server_address) {
-    if (!server_to_server_address.hasValue()) {
-      return Sockaddr::INVALID;
-    }
-    return server_to_server_address.value();
-  }
-
   switch (socket_type) {
     case SocketType::GOSSIP:
       return getGossipAddress();
 
     case SocketType::DATA:
+      if (peer_type == PeerType::NODE &&
+          use_dedicated_server_to_server_address) {
+        if (!server_to_server_address.hasValue()) {
+          return Sockaddr::INVALID;
+        }
+        return server_to_server_address.value();
+      }
+
       if (connection_type == ConnectionType::SSL) {
         if (!ssl_address.hasValue()) {
           return Sockaddr::INVALID;
