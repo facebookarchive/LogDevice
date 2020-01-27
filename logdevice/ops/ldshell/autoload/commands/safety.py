@@ -104,10 +104,12 @@ async def check_impact(
     node_indexes: Optional[List[int]] = None,
     node_names: Optional[List[str]] = None,
     target_state: str = "disabled",
+    # pyre-fixme[9]: safety_margin has type `Mapping[str, int]`; used as `None`.
     safety_margin: Mapping[str, int] = None,
     timeout: int = 600,
     skip_metadata_logs: bool = False,
     skip_internal_logs: bool = False,
+    # pyre-fixme[9]: logs has type `List[int]`; used as `None`.
     logs: List[int] = None,
     short: bool = False,
     max_unavailable_storage_capacity_pct=25,
@@ -149,13 +151,18 @@ async def check_impact(
 
     cprint("Starting, this may take a while...", "yellow")
 
+    # pyre-fixme[9]: target_state has type `str`; used as `ShardStorageState`.
     target_state = convert.to_storage_state(target_state)
 
     async with ctx.get_cluster_admin_client() as client:
         try:
             cv = await get_cluster_view(client)
+            # pyre-fixme[9]: shards has type `Optional[List[str]]`; used as
+            #  `Tuple[ShardID, ...]`.
             shards = _combine(cv, shards, node_names, node_indexes)
             req = CheckImpactRequest(
+                # pyre-fixme[6]: Expected `Optional[Sequence[ShardID]]` for 1st
+                #  param but got `List[str]`.
                 shards=shards,
                 target_storage_state=target_state,
                 log_ids_to_check=logs,

@@ -118,7 +118,7 @@ class MaintenanceView:
         if self._maintenance.created_on is None:
             return None
         else:
-            # pyre-fixme[16]: `Optional` has no attribute `__floordiv__`.
+            # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
             return datetime.fromtimestamp(self._maintenance.created_on // 1000)
 
     @property
@@ -126,7 +126,7 @@ class MaintenanceView:
         if self._maintenance.expires_on is None:
             return None
         else:
-            # pyre-fixme[16]: `Optional` has no attribute `__floordiv__`.
+            # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
             return datetime.fromtimestamp(self._maintenance.expires_on // 1000)
 
     @property

@@ -211,7 +211,11 @@ class LDShellContext(context.Context):
         """
         if address.address_family == SocketAddressFamily.INET:
             return create_thrift_client(
-                AdminAPI, host=address.address, port=address.port
+                AdminAPI,
+                # pyre-fixme[6]: Expected `Union[ipaddress.IPv4Address,
+                #  ipaddress.IPv6Address, str]` for 2nd param but got `Optional[str]`.
+                host=address.address,
+                port=address.port,
             )
         else:
             # SocketAddressFamily::UNIX

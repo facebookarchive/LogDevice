@@ -113,7 +113,9 @@ class TestNodeView(TestCase):
 
             self.assertEqual(nv.thrift_address.port, 6440)
             self.assertEqual(
-                nv.thrift_address.address.compressed, from_nc.address.compressed
+                # pyre-fixme[16]: Optional type has no attribute `compressed`.
+                nv.thrift_address.address.compressed,
+                from_nc.address.compressed,
             )
 
         self.assertEqual(
@@ -137,10 +139,12 @@ class TestNodeView(TestCase):
         if Role.SEQUENCER in nc.roles:
             assert nc.sequencer is not None
             self.assertEqual(nv.sequencer_config, nc.sequencer)
+            # pyre-fixme[16]: Optional type has no attribute `weight`.
             self.assertEqual(nv.sequencer_weight, nc.sequencer.weight)
 
             assert ns.sequencer_state is not None
             self.assertEqual(nv.sequencer_state, ns.sequencer_state)
+            # pyre-fixme[16]: Optional type has no attribute `state`.
             self.assertEqual(nv.sequencing_state, ns.sequencer_state.state)
         else:
             self.assertIsNone(nv.sequencer_config)
@@ -152,12 +156,16 @@ class TestNodeView(TestCase):
             assert nc.storage is not None
             assert ns.shard_states is not None
             self.assertEqual(nv.storage_config, nc.storage)
+            # pyre-fixme[16]: Optional type has no attribute `weight`.
             self.assertEqual(nv.storage_weight, nc.storage.weight)
+            # pyre-fixme[16]: Optional type has no attribute `num_shards`.
             self.assertEqual(nv.num_shards, nc.storage.num_shards)
             self.assertEqual(nv.shard_states, ns.shard_states)
 
             self.assertTupleEqual(
-                nv.shards_data_health, tuple(s.data_health for s in ns.shard_states)
+                nv.shards_data_health,
+                # pyre-fixme[16]: Optional type has no attribute `__iter__`.
+                tuple(s.data_health for s in ns.shard_states),
             )
             self.assertEqual(
                 nv.shards_data_health_count,

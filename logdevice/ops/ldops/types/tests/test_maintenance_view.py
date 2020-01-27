@@ -208,6 +208,7 @@ class TestMaintenanceView(TestCase):
             self.assertAlmostEqual(
                 # pyre-fixme[16]: Optional type has no attribute `timestamp`.
                 maintenance_view.created_on.timestamp() * 1000,
+                # pyre-fixme[6]: Expected `float` for 2nd param but got `Optional[int]`.
                 maintenance.created_on,
                 1,
             )
@@ -218,6 +219,7 @@ class TestMaintenanceView(TestCase):
             assert maintenance_view.expires_on is not None
             self.assertAlmostEqual(
                 maintenance_view.expires_on.timestamp() * 1000,
+                # pyre-fixme[6]: Expected `float` for 2nd param but got `Optional[int]`.
                 maintenance.expires_on,
                 1,
             )

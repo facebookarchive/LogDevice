@@ -247,10 +247,16 @@ class NodesConfig:
         requested replication property.
         """
 
+        # pyre-fixme[9]: replication_property has type `Map__LocationScope_i32`;
+        #  used as `Dict[Variable[_KT], Variable[_VT]]`.
         replication_property: ReplicationProperty = {}
         for scope_str, factor in metadata_replicate_across.items():
             try:
+                # pyre-fixme[24]: Non-generic type `LocationScope` cannot take
+                #  parameters.
                 scope = LocationScope[scope_str.upper()]
+                # pyre-fixme[16]: `Map__LocationScope_i32` has no attribute
+                #  `__setitem__`.
                 replication_property[scope] = factor
             except KeyError:
                 termcolor.cprint(f"{scope_str} is not a valid scope", "red")
@@ -263,6 +269,7 @@ class NodesConfig:
                     request=BootstrapClusterRequest(
                         metadata_replication_property=replication_property
                     ),
+                    # pyre-fixme[28]: Unexpected keyword argument `timeout`.
                     rpc_options=RpcOptions(timeout=60),
                 )
                 termcolor.cprint("Successfully bootstrapped the cluster", "green")
@@ -305,6 +312,7 @@ class NodesConfig:
                             for idx in node_indexes
                         ]
                     ),
+                    # pyre-fixme[28]: Unexpected keyword argument `timeout`.
                     rpc_options=RpcOptions(timeout=60),
                 )
                 termcolor.cprint("Successfully removed the nodes", "green")

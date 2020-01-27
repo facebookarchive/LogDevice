@@ -891,9 +891,13 @@ class MaintenanceCommand:
                 maintenances = await apply_maintenance(
                     client=client,
                     shards=shard_ids,
+                    # pyre-fixme[6]: Expected `str` for 1st param but got
+                    #  `Optional[str]`.
                     shard_target_state=_parse_shard_target_state(shard_target_state),
                     sequencer_nodes=list(sequencer_nodes),
                     group=group,
+                    # pyre-fixme[6]: Expected `float` for 1st param but got
+                    #  `Optional[int]`.
                     ttl=timedelta(seconds=ttl),
                     user=user or getuser(),
                     reason=reason,
@@ -909,6 +913,8 @@ class MaintenanceCommand:
         print(
             _render(
                 [
+                    # pyre-fixme[6]: Expected `str` for 1st param but got
+                    #  `Optional[str]`.
                     cv.get_maintenance_view_by_id(id)
                     for id in [mnt.group_id for mnt in maintenances]
                 ],

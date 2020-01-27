@@ -338,6 +338,8 @@ def filter_merged_information(status_data, nodes, hostnames):
 async def merge_information(
     nodes_state: NodesStateResponse,
     hosts_info: List[HostInfo],
+    # pyre-fixme[9]: additional_info has type `List[Dict[str, typing.Any]]`; used as
+    #  `None`.
     additional_info: List[Dict[str, Any]] = None,
 ):
     if additional_info is None:
@@ -368,12 +370,14 @@ async def merge_information(
         )
 
         for shard in node_state.shard_states or []:
+            # pyre-fixme[16]: `Optional` has no attribute `__ior__`.
             info.is_metadata |= shard.metadata_state == MetaDataStorageState.METADATA
 
         if host_info:
             info.ld_version = host_info.version.split(" ")[0]
             info.uptime = host_info.uptime
 
+        # pyre-fixme[16]: Module `ldshell` has no attribute `fb`.
         await merge_additional_information(
             info=info,
             node_state=node_state,
