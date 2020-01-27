@@ -11,8 +11,6 @@
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
-using namespace ::testing;
-using namespace apache::thrift;
 using namespace facebook::logdevice;
 
 TEST(AdminCommandAPIHandlerTest, testExecuteAdminCommand) {
