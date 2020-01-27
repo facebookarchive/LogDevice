@@ -1648,10 +1648,29 @@ void Sender::closeSlowSockets() {
   };
 
   for (auto& entry : impl_->server_conns_) {
+    Connection* conn = entry.second.get();
+    if (conn) {
+      close_if_slow(*conn);
+    } else {
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          1,
+          "Unexpected null server socket found for nid %u. T59653729",
+          entry.first);
+    }
     close_if_slow(*entry.second);
   }
   for (auto& entry : impl_->client_conns_) {
-    close_if_slow(*entry.second);
+    Connection* conn = entry.second.get();
+    if (conn) {
+      close_if_slow(*conn);
+    } else {
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          1,
+          "Unexpected null client socket found for cid %s. T59653729",
+          entry.first.toString().c_str());
+    }
   }
   if (sockets_closed) {
     RATELIMIT_WARNING(
