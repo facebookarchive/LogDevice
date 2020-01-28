@@ -9,6 +9,7 @@
 #include "logdevice/common/Connection.h"
 
 #include "folly/ScopeGuard.h"
+#include "logdevice/common/ProtocolHandler.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/network/MessageReader.h"
 #include "logdevice/common/network/SocketAdapter.h"
@@ -30,9 +31,7 @@ Connection::Connection(NodeID server_name,
                         connection_type,
                         peer_type,
                         flow_group,
-                        std::move(deps)),
-      retry_receipt_of_message_(getDeps()->getEvBase()),
-      sched_write_chain_(getDeps()->getEvBase()) {
+                        std::move(deps)) {
   ld_check(legacy_connection_);
 }
 
@@ -48,15 +47,12 @@ Connection::Connection(NodeID server_name,
                         connection_type,
                         peer_type,
                         flow_group,
-                        std::move(deps)),
-      proto_handler_(std::make_shared<ProtocolHandler>(this,
-                                                       std::move(sock_adapter),
-                                                       conn_description_,
-                                                       getDeps()->getEvBase())),
-      retry_receipt_of_message_(getDeps()->getEvBase()),
-      sock_write_cb_(proto_handler_.get()),
-      sched_write_chain_(getDeps()->getEvBase()) {
+                        std::move(deps),
+                        nullptr) {
   ld_check(!legacy_connection_);
+  proto_handler_ = std::make_shared<ProtocolHandler>(
+      this, std::move(sock_adapter), conn_description_, getDeps()->getEvBase());
+  sock_write_cb_ = SocketWriteCallback(proto_handler_.get());
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
 }
 
@@ -75,9 +71,7 @@ Connection::Connection(int fd,
                         type,
                         conntype,
                         flow_group,
-                        std::move(deps)),
-      retry_receipt_of_message_(getDeps()->getEvBase()),
-      sched_write_chain_(getDeps()->getEvBase()) {
+                        std::move(deps)) {
   ld_check(legacy_connection_);
 }
 
@@ -97,15 +91,12 @@ Connection::Connection(int fd,
                         type,
                         conntype,
                         flow_group,
-                        std::move(deps)),
-      proto_handler_(std::make_shared<ProtocolHandler>(this,
-                                                       std::move(sock_adapter),
-                                                       conn_description_,
-                                                       getDeps()->getEvBase())),
-      retry_receipt_of_message_(getDeps()->getEvBase()),
-      sock_write_cb_(proto_handler_.get()),
-      sched_write_chain_(getDeps()->getEvBase()) {
+                        std::move(deps),
+                        nullptr) {
   ld_check(!legacy_connection_);
+  proto_handler_ = std::make_shared<ProtocolHandler>(
+      this, std::move(sock_adapter), conn_description_, getDeps()->getEvBase());
+  sock_write_cb_ = SocketWriteCallback(proto_handler_.get());
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
   // Set the read callback.
   read_cb_.reset(new MessageReader(*proto_handler_, proto_));

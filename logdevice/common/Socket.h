@@ -13,6 +13,7 @@
 
 #include <folly/Memory.h>
 #include <folly/Optional.h>
+#include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/SSLContext.h>
 
@@ -35,6 +36,7 @@
 #include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/libevent/LibEventCompatibility.h"
+#include "logdevice/common/network/SocketWriteCallback.h"
 #include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
@@ -46,6 +48,8 @@ class SocketCallback;
 class SocketImpl;
 class SocketProxy;
 class StatsHolder;
+class ProtocolHandler;
+class SocketAdapter;
 struct Settings;
 
 /**
@@ -166,6 +170,25 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
                     FlowGroup& flow_group,
                     std::unique_ptr<SocketDependencies> deps);
 
+  // These two contructors are final two constructors that will be in use once
+  // we deprecate this class completely.
+  Socket_DEPRECATED(NodeID server_name,
+                    SocketType type,
+                    ConnectionType conntype,
+                    PeerType peerType,
+                    FlowGroup& flow_group,
+                    std::unique_ptr<SocketDependencies> deps,
+                    std::unique_ptr<SocketAdapter> sock_adapter);
+
+  Socket_DEPRECATED(int fd,
+                    ClientID client_name,
+                    const Sockaddr& client_addr,
+                    ResourceBudget::Token conn_token,
+                    SocketType type,
+                    ConnectionType conntype,
+                    FlowGroup& flow_group,
+                    std::unique_ptr<SocketDependencies> deps,
+                    std::unique_ptr<SocketAdapter> sock_adapter);
   /**
    * Disconnects, deletes the underlying bufferevent, and closes the TCP socket.
    */
@@ -1239,6 +1262,29 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
 
   // Set to true for socket based on libevent otherwise this is false.
   const bool legacy_connection_;
+
+  std::shared_ptr<ProtocolHandler> proto_handler_;
+  std::unique_ptr<folly::AsyncSocket::ReadCallback> read_cb_;
+
+  // If receive of a message hit ENOBUFS then we will retry the same message
+  // again till it succeeds. This will all stop reading more messages from the
+  // socket.
+  EvTimer retry_receipt_of_message_;
+
+  SocketWriteCallback sock_write_cb_;
+
+  // This IOBuf chain buffers writes till we can add them to asyncSocket at next
+  // eventloop iteration. This helps in getting better socket performance in
+  // case very high number of small writes. Note: sendChain can grow large do
+  // not invoke computeChainDataLength on it frequently.
+  std::unique_ptr<folly::IOBuf> sendChain_;
+
+  // Timer used to schedule event as soon as data is added to sendChain_.The
+  // callback of this timer add data into the asyncsocket.
+  EvTimer sched_write_chain_;
+
+  // Used to note down delays in writing into the asyncsocket.
+  SteadyTimestamp sched_start_time_;
 
   /**
    * For Testing only!

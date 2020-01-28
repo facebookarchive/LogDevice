@@ -28,11 +28,14 @@
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/FlowGroup.h"
+#include "logdevice/common/ProtocolHandler.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
+#include "logdevice/common/network/MessageReader.h"
+#include "logdevice/common/network/SocketAdapter.h"
 #include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
@@ -113,7 +116,9 @@ Socket_DEPRECATED::Socket_DEPRECATED(std::unique_ptr<SocketDependencies>& deps,
       deferred_event_queue_event_(deps_->getEvBase()),
       end_stream_rewind_event_(deps_->getEvBase()),
       buffered_output_flush_event_(deps_->getEvBase()),
-      legacy_connection_(deps_->attachedToLegacyEventBase()) {
+      legacy_connection_(deps_->attachedToLegacyEventBase()),
+      retry_receipt_of_message_(deps_->getEvBase()),
+      sched_write_chain_(deps_->getEvBase()) {
   conntype_ = conntype;
 
   if (!peer_sockaddr.valid()) {
@@ -242,6 +247,40 @@ Socket_DEPRECATED::Socket_DEPRECATED(int fd,
     STAT_INCR(deps_->getStats(), num_ssl_connections);
   }
 }
+
+Socket_DEPRECATED::Socket_DEPRECATED(
+    NodeID server_name,
+    SocketType type,
+    ConnectionType conntype,
+    PeerType peer_type,
+    FlowGroup& flow_group,
+    std::unique_ptr<SocketDependencies> deps,
+    std::unique_ptr<SocketAdapter> /* sock_adapter */)
+    : Socket_DEPRECATED(server_name,
+                        type,
+                        conntype,
+                        peer_type,
+                        flow_group,
+                        std::move(deps)) {}
+
+Socket_DEPRECATED::Socket_DEPRECATED(
+    int fd,
+    ClientID client_name,
+    const Sockaddr& client_addr,
+    ResourceBudget::Token conn_token,
+    SocketType type,
+    ConnectionType conntype,
+    FlowGroup& flow_group,
+    std::unique_ptr<SocketDependencies> deps,
+    std::unique_ptr<SocketAdapter> /* sock_adapter */)
+    : Socket_DEPRECATED(fd,
+                        client_name,
+                        client_addr,
+                        std::move(conn_token),
+                        type,
+                        conntype,
+                        flow_group,
+                        std::move(deps)) {}
 
 void Socket_DEPRECATED::onBufferedOutputWrite(
     struct evbuffer* buffer,

@@ -8,14 +8,10 @@
 #pragma once
 
 #include <folly/futures/Future.h>
-#include <folly/io/async/AsyncSocket.h>
-#include <folly/io/async/Request.h>
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/ClientID.h"
-#include "logdevice/common/ProtocolHandler.h"
 #include "logdevice/common/Socket.h"
-#include "logdevice/common/network/SocketWriteCallback.h"
 
 namespace facebook { namespace logdevice {
 
@@ -206,29 +202,6 @@ class Connection : public Socket_DEPRECATED {
   void onError(short direction, int socket_errno) override;
 
   void onPeerClosed() override;
-
-  std::shared_ptr<ProtocolHandler> proto_handler_;
-  std::unique_ptr<folly::AsyncSocket::ReadCallback> read_cb_;
-
-  // If receive of a message hit ENOBUFS then we will retry the same message
-  // again till it succeeds. This will all stop reading more messages from the
-  // socket.
-  EvTimer retry_receipt_of_message_;
-
-  SocketWriteCallback sock_write_cb_;
-
-  // This IOBuf chain buffers writes till we can add them to asyncSocket at next
-  // eventloop iteration. This helps in getting better socket performance in
-  // case very high number of small writes. Note: sendChain can grow large do
-  // not invoke computeChainDataLength on it frequently.
-  std::unique_ptr<folly::IOBuf> sendChain_;
-
-  // Timer used to schedule event as soon as data is added to sendChain_.The
-  // callback of this timer add data into the asyncsocket.
-  EvTimer sched_write_chain_;
-
-  // Used to note down delays in writing into the asyncsocket.
-  SteadyTimestamp sched_start_time_;
 
   void scheduleWriteChain();
 
