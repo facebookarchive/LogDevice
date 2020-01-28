@@ -92,7 +92,7 @@ class SenderImpl {
 
   // a map of all Connections wrapping connections that were accepted from
   // clients, keyed by 32-bit client ids. This map is empty on clients.
-  folly::F14FastMap<ClientID, std::unique_ptr<Connection>, ClientID::Hash>
+  folly::F14NodeMap<ClientID, std::unique_ptr<Connection>, ClientID::Hash>
       client_conns_;
 
   ClientIdxAllocator* client_id_allocator_;
