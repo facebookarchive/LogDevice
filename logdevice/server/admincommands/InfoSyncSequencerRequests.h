@@ -58,9 +58,7 @@ class InfoSyncSequencerRequests : public AdminCommand {
         if (next_lsn.hasValue()) {
           t.set<1>(next_lsn.value());
         }
-        if (last_released.hasValue()) {
-          t.set<2>(last_released.value());
-        }
+        t.set<2>(last_released.value());
         if (last_status.hasValue()) {
           t.set<3>(error_name(last_status.value()));
         }

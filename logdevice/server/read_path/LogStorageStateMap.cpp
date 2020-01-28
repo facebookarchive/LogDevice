@@ -96,9 +96,7 @@ LogStorageStateMap::getAllLastReleasedLSNs(shard_index_t shard) const {
        ++entry) {
     LogStorageState::LastReleasedLSN last_released =
         entry->second->getLastReleasedLSN();
-    if (last_released.hasValue()) {
-      states.emplace_back(logid_t(entry->first), last_released.value());
-    }
+    states.emplace_back(logid_t(entry->first), last_released.value());
   }
 
   return states;

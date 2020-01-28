@@ -444,8 +444,7 @@ void StoreStateMachine::execute() {
     // LCE and last_released_lsn
     auto last_clean_epoch = log_state->getLastCleanEpoch();
     auto last_released_lsn = log_state->getLastReleasedLSN();
-    if ((last_released_lsn.hasValue() &&
-         message_->header_.rid.lsn() <= last_released_lsn.value()) ||
+    if (message_->header_.rid.lsn() <= last_released_lsn.value() ||
         message_->header_.rid.epoch <= last_clean_epoch) {
       deleter.dismiss();
       storeAndForward();
@@ -476,10 +475,7 @@ void StoreStateMachine::execute() {
             message_->header_.rid.logid.val(),
             lsn_to_string(message_->header_.rid.lsn()).c_str(),
             last_clean_epoch.val_,
-            lsn_to_string(last_released_lsn.hasValue()
-                              ? last_released_lsn.value()
-                              : LSN_INVALID)
-                .c_str(),
+            lsn_to_string(last_released_lsn.value()).c_str(),
             seq.toString().c_str());
 
         log_state->purge_coordinator_->onReleaseMessage(

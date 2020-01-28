@@ -447,9 +447,6 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
   LogStorageState::LastReleasedLSN last_released_lsn =
       log_state.getLastReleasedLSN();
 
-  // last_released_lsn was known before start reading so it should be known
-  // now.
-  ld_check(last_released_lsn.hasValue());
   epoch_t last_epoch = lsn_to_epoch(last_released_lsn.value());
 
   folly::Optional<std::pair<epoch_t, OffsetMap>> epoch_offsets_from_log_state =
@@ -772,24 +769,6 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
     return Action::TRANSIENT_ERROR;
   }
 
-  bool needs_recover =
-      !last_released_lsn.hasValue() && !stream_->ignore_released_status_;
-
-  if (needs_recover) {
-    // If last_released_lsn (in case we care about it)
-    // is not initialized, try to recover it first.
-    int rv = deps_.recoverLogState(stream_->log_id_, stream_->shard_);
-    if (rv == 0) {
-      stream_ld_debug(
-          *stream_, "Dequeuing stream because log state needs to be recovered");
-      stream_->last_batch_status_ = "recover log state";
-      return Action::DEQUEUE_AND_CONTINUE;
-    } else {
-      stream_->last_batch_status_ = "permanent error in recoverLogState";
-      return Action::PERMANENT_ERROR;
-    }
-  }
-
   if (stream_->rebuilding_) {
     // We will wake up this stream once the shard finishes rebuilding.
     stream_ld_debug(*stream_, "Dequeuing stream because shard is rebuilding");
@@ -829,7 +808,6 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
 
   // We don't care about released records in recovery mode; sequencer is
   // interested in all records we have.
-  ld_check(stream_->ignore_released_status_ || last_released_lsn.hasValue());
   lsn_t last_released =
       stream_->ignore_released_status_ ? LSN_MAX : last_released_lsn.value();
 
@@ -853,13 +831,12 @@ CatchupOneStream::startRead(WeakRef<CatchupQueue> catchup_queue,
     lsn_t last_per_epoch_released = log_state.getLastPerEpochReleasedLSN();
     ld_check(last_per_epoch_released >= last_released);
 
-    // Refresh last_released. The underlying atomic may have increased in
-    // the meantime. Refreshing last_released avoids false positives where
-    // stream_->last_delivered_lsn_ would fall between last_released and
-    // last_per_epoch_released just because getLastPerEpochReleasedLSN() is
-    // called (much) later than getLastReleasedLSN().
+    // Refresh last_released. Refreshing last_released avoids false
+    // positives where stream_->last_delivered_lsn_ would fall between
+    // last_released and last_per_epoch_released just because
+    // getLastPerEpochReleasedLSN() is called (much) later than
+    // getLastReleasedLSN().
     last_released_lsn = log_state.getLastReleasedLSN();
-    ld_check(last_released_lsn.hasValue());
     ld_check(last_released <= last_released_lsn.value());
     last_released = last_released_lsn.value();
 
@@ -1499,12 +1476,11 @@ int CatchupOneStream::sendStarted(
     return 0;
   }
 
-  // to not include last released if the read stream is used for rebuilding
+  // Do not include last released if the read stream is used for rebuilding
   // or recovery (digest)
   lsn_t last_released_to_include =
-      ((stream_->rebuilding_ || stream_->digest_ || !last_released.hasValue())
-           ? LSN_INVALID
-           : last_released.value());
+      ((stream_->rebuilding_ || stream_->digest_) ? LSN_INVALID
+                                                  : last_released.value());
 
   STARTED_Header header = {stream_->log_id_,
                            stream_->id_,

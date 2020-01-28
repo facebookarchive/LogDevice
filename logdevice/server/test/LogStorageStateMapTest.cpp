@@ -65,7 +65,7 @@ TEST(LogStorageStateMapTest, StressTestLSNUpdating) {
     LogStorageState* log_state = map.insertOrGet(logid_t(log_id), THIS_SHARD);
     ASSERT_NE(log_state, nullptr);
     auto lsn_state = log_state->getLastReleasedLSN();
-    ASSERT_FALSE(lsn_state.hasValue());
+    ASSERT_TRUE(lsn_state.value() == LSN_INVALID);
   }
 
   std::deque<StressTestLSNUpdatingThread> instances;
@@ -98,7 +98,6 @@ TEST(LogStorageStateMapTest, StressTestLSNUpdating) {
 
   for (int log_id = 1; log_id <= STRESS_TEST_LOGS; ++log_id) {
     auto state = map.get(logid_t(log_id), THIS_SHARD).getLastReleasedLSN();
-    ASSERT_TRUE(state.hasValue());
     EXPECT_EQ(lsn_t(STRESS_TEST_LSNS), state.value());
   }
 }
@@ -143,7 +142,6 @@ TEST(LogStorageStateMapTest, LastReleasedLSNSource) {
   ASSERT_EQ(0, rv);
 
   auto released_state = log_state.getLastReleasedLSN();
-  ASSERT_TRUE(released_state.hasValue());
   EXPECT_EQ(2, released_state.value());
   EXPECT_EQ(
       LogStorageState::LastReleasedSource::RELEASE, released_state.source());

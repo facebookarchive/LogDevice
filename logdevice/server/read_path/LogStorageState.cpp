@@ -77,21 +77,15 @@ bool LogStorageState::hasPermanentError() {
 
 int LogStorageState::updateLastReleasedLSN(lsn_t new_val,
                                            LastReleasedSource source) {
-  SCOPE_EXIT {
-    last_released_lsn_state_.fetch_or((int)source);
-  };
-
   // Update the last per-epoch released LSN first, to ensure it is always at
   // least as high as the (global) last leleased LSN.
   updateLastPerEpochReleasedLSN(new_val);
-
-  // If our LSN is larger than the one already in the map, update it.
-  lsn_t prev = atomic_fetch_max(last_released_lsn_, new_val);
-  if (prev >= new_val) {
-    // last_released_lsn was already >= new_val
+  folly::SharedMutex::WriteHolder rw_lock(lsn_mutex_);
+  if (last_released_lsn_.value() >= new_val) {
     err = E::UPTODATE;
     return -1;
   }
+  last_released_lsn_.update(new_val, source);
   return 0;
 }
 
@@ -221,7 +215,7 @@ void LogStorageState::onRetryReleaseTimer(ExponentialBackoffTimerNode* node) {
 
   ReleaseRequest::broadcastReleaseRequest(
       ServerWorker::onThisThread()->processor_,
-      RecordID(last_released_lsn_, log_id_),
+      RecordID(getLastReleasedLSN().value(), log_id_),
       shard_,
       [&](worker_id_t id) {
         return failed_workers.test(id.val_) && this->isWorkerSubscribed(id);
@@ -254,10 +248,8 @@ int LogStorageState::recover(std::chrono::microseconds interval,
   LogStorageState::LastReleasedLSN last_released = getLastReleasedLSN();
 
   // Do we need to ask the sequencer for any of the missing information?
-  bool ask_sequencer = (!last_released.hasValue() ||
-                        last_released.source() !=
-                            LogStorageState::LastReleasedSource::RELEASE) ||
-      force_ask_sequencer;
+  bool ask_sequencer = force_ask_sequencer ||
+      last_released.source() != LogStorageState::LastReleasedSource::RELEASE;
 
   if (!ask_sequencer) {
     // nothing needs to be recovered
@@ -347,13 +339,11 @@ void LogStorageState::getDebugInfo(InfoLogStorageStateTable& table) const {
   table.set<1>(shard_);
 
   LastReleasedLSN last_released = getLastReleasedLSN();
-  if (last_released.hasValue()) {
-    table.set<2>(last_released.value());
-    const char* source = last_released.source() == LastReleasedSource::RELEASE
-        ? "sequencer"
-        : "local log store";
-    table.set<3>(source);
-  }
+  table.set<2>(last_released.value());
+  const char* source = last_released.source() == LastReleasedSource::RELEASE
+      ? "sequencer"
+      : "local log store";
+  table.set<3>(source);
 
   folly::Optional<lsn_t> trim_point = getTrimPoint();
   if (trim_point.hasValue()) {

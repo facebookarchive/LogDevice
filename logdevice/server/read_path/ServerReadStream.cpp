@@ -255,9 +255,7 @@ void ServerReadStream::getDebugInfo(InfoReadersTable& table) const {
       .set<23>(csid_)
       .set<24>(id_.val());
 
-  if (last_released_lsn.hasValue()) {
-    table.set<9>(last_released_lsn.value());
-  }
+  table.set<9>(last_released_lsn.value());
 
   table.set<14>(last_batch_status_);
   table.set<15>(created_.approximateSystemTimestamp().toMilliseconds());
@@ -410,8 +408,7 @@ std::string ServerReadStream::toString() const {
       lsn_to_string(last_delivered_record_) +
       ","
       "last_released=" +
-      (last_released_lsn.hasValue() ? lsn_to_string(last_released_lsn.value())
-                                    : "none") +
+      lsn_to_string(last_released_lsn.value()) +
       ","
       "window_high=" +
       lsn_to_string(window_high_) +
