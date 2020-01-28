@@ -891,6 +891,7 @@ void Socket_DEPRECATED::transitionToConnected() {
 }
 
 void Socket_DEPRECATED::onConnected() {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   ld_check(!isClosed());
   if (expecting_ssl_handshake_) {
     ld_check(connected_);
@@ -912,6 +913,7 @@ void Socket_DEPRECATED::onConnected() {
 void Socket_DEPRECATED::onSent(std::unique_ptr<Envelope> e,
                                Status reason,
                                Message::CompletionMethod cm) {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   // Do not call onSent() of pending messages if our Worker is getting
   // destroyed. This is to guarantee that onSent() code and the methods
   // it calls do not try to access a partially destroyed Worker, with some
@@ -936,6 +938,7 @@ void Socket_DEPRECATED::onSent(std::unique_ptr<Envelope> e,
 }
 
 void Socket_DEPRECATED::onError(short direction, int socket_errno) {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   // DeferredEventQueue is cleared as part of socket close which can call
   // onError recursively. Check if this is recursive call and skip the check.
   if (closing_) {
@@ -1009,6 +1012,7 @@ void Socket_DEPRECATED::onError(short direction, int socket_errno) {
 }
 
 void Socket_DEPRECATED::onPeerClosed() {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   // This method can be called recursively as part of Socket::close when
   // deferred event queue is cleared. Return rightaway if this a recursive call.
   if (closing_) {
@@ -1034,12 +1038,14 @@ void Socket_DEPRECATED::onPeerClosed() {
 }
 
 void Socket_DEPRECATED::onConnectTimeout() {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   ld_spew("Connection timeout connecting to %s", conn_description_.c_str());
 
   close(E::TIMEDOUT);
 }
 
 void Socket_DEPRECATED::onHandshakeTimeout() {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   RATELIMIT_WARNING(std::chrono::seconds(10),
                     10,
                     "Handshake timeout occurred (peer: %s).",
@@ -1049,6 +1055,7 @@ void Socket_DEPRECATED::onHandshakeTimeout() {
 }
 
 void Socket_DEPRECATED::onConnectAttemptTimeout() {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   ld_check(!connected_);
 
   RATELIMIT_DEBUG(std::chrono::seconds(5),
@@ -1275,6 +1282,7 @@ void Socket_DEPRECATED::close(Status reason) {
 }
 
 bool Socket_DEPRECATED::isClosed() const {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   if (conn_closed_ != nullptr &&
       !conn_closed_->load(std::memory_order_relaxed)) {
     return false;
@@ -1701,6 +1709,7 @@ void Socket_DEPRECATED::enqueueDeferredEvent(SocketEvent e) {
 }
 
 void Socket_DEPRECATED::onBytesAdmittedToSend(size_t nbytes) {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   message_pos_t next_drain_pos = drain_pos_ + nbytes;
   ld_check(next_pos_ >= next_drain_pos);
   size_t num_messages = 0;

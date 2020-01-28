@@ -363,7 +363,7 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * @return true iff close() has been called on the socket, or if it is
    *         a server socket that has never been connected
    */
-  virtual bool isClosed() const;
+  bool isClosed() const;
 
   /**
    * @return true iff socket is in a good state to be used for reading and
@@ -603,7 +603,7 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
   /**
    * Called by bev_ when the underlying connection is established
    */
-  virtual void onConnected();
+  void onConnected();
   void transitionToConnected();
 
   virtual int dispatchMessageBody(ProtocolHeader header,
@@ -614,18 +614,18 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * TCP connection after multiple retries or the LD handshake did not complete
    * in time.
    */
-  virtual void onConnectTimeout();
+  void onConnectTimeout();
 
   /**
    * Called when LD handshake doesn't complete in the allottted time.
    */
-  virtual void onHandshakeTimeout();
+  void onHandshakeTimeout();
 
   /**
    * Called when the TCP connection could not be established in time.
    * If n_retries_left_ is positive, will try to connect again.
    */
-  virtual void onConnectAttemptTimeout();
+  void onConnectAttemptTimeout();
 
   enum class SendStatus : uint8_t {
     SCHEDULED, // Buffer is scheduled to be written into the socket.
@@ -638,10 +638,9 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * @returns SendStatus based on the status of the write.
    */
   virtual SendStatus sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain);
-  virtual void
-      onSent(std::unique_ptr<Envelope>,
-             Status,
-             Message::CompletionMethod = Message::CompletionMethod::IMMEDIATE);
+  void onSent(std::unique_ptr<Envelope>,
+              Status,
+              Message::CompletionMethod = Message::CompletionMethod::IMMEDIATE);
 
   /**
    * Called by bev_ when connection closes because of an error. This
@@ -650,12 +649,12 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * @param direction  BEV_EVENT_READING or BEV_EVENT_WRITING to indicate
    *                   if the error occurred on a read or a write
    */
-  virtual void onError(short direction, int socket_errno);
+  void onError(short direction, int socket_errno);
 
   /**
    * Called by bev_ when the other end closes connection.
    */
-  virtual void onPeerClosed();
+  void onPeerClosed();
 
   /**
    * Called by the underlying layer implementation to indicate that the bytes
@@ -668,7 +667,7 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * @param nbytes  number of bytes transferred from buffer to
    *                        the underlying TCP connection
    */
-  virtual void onBytesAdmittedToSend(size_t nbytes);
+  void onBytesAdmittedToSend(size_t nbytes);
 
   /**
    * Update sender level stats once bytes are drained into the socket.

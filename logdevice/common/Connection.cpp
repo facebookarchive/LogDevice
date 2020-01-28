@@ -375,11 +375,6 @@ void Connection::flushOutputAndClose(Status reason) {
   }
 }
 
-bool Connection::isClosed() const {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  return Socket_DEPRECATED::isClosed();
-}
-
 bool Connection::good() const {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   auto is_good = Socket_DEPRECATED::good();
@@ -394,11 +389,6 @@ bool Connection::good() const {
   }
 
   return is_good;
-}
-
-void Connection::onConnected() {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket_DEPRECATED::onConnected();
 }
 
 int Connection::dispatchMessageBody(ProtocolHeader header,
@@ -455,44 +445,6 @@ folly::ssl::X509UniquePtr Connection::getPeerCert() const {
   }
   return nullptr;
 }
-
-void Connection::onConnectTimeout() {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket_DEPRECATED::onConnectTimeout();
-}
-
-void Connection::onHandshakeTimeout() {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket_DEPRECATED::onHandshakeTimeout();
-}
-
-void Connection::onConnectAttemptTimeout() {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket_DEPRECATED::onConnectAttemptTimeout();
-}
-
-void Connection::onSent(std::unique_ptr<Envelope> e,
-                        Status st,
-                        Message::CompletionMethod cm) {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket_DEPRECATED::onSent(std::move(e), st, cm);
-}
-
-void Connection::onError(short direction, int socket_errno) {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket_DEPRECATED::onError(direction, socket_errno);
-}
-
-void Connection::onPeerClosed() {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket_DEPRECATED::onPeerClosed();
-}
-
-void Connection::onBytesAdmittedToSend(size_t nbytes_drained) {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  Socket_DEPRECATED::onBytesAdmittedToSend(nbytes_drained);
-}
-
 void Connection::onBytesPassedToTCP(size_t nbytes) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   if (legacy_connection_) {

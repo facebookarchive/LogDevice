@@ -152,11 +152,7 @@ class Connection : public Socket_DEPRECATED {
 
   void flushOutputAndClose(Status reason) override;
 
-  bool isClosed() const override;
-
   bool good() const override;
-
-  void onBytesAdmittedToSend(size_t nbytes_drained) override;
 
   void onBytesPassedToTCP(size_t nbytes) override;
 
@@ -175,33 +171,6 @@ class Connection : public Socket_DEPRECATED {
 
  protected:
   folly::Future<Status> asyncConnect();
-  void onConnected() override;
-  /**
-   * Called when connection timeout occurs. Either we could not establish the
-   * TCP connection after multiple retries or the LD handshake did not complete
-   * in time.
-   */
-  void onConnectTimeout() override;
-
-  /**
-   * Called when LD handshake doesn't complete in the allottted time.
-   */
-  void onHandshakeTimeout() override;
-
-  /**
-   * Called when the TCP connection could not be established in time.
-   * If n_retries_left_ is positive, will try to connect again.
-   */
-  void onConnectAttemptTimeout() override;
-
-  void onSent(std::unique_ptr<Envelope>,
-              Status,
-              Message::CompletionMethod =
-                  Message::CompletionMethod::IMMEDIATE) override;
-
-  void onError(short direction, int socket_errno) override;
-
-  void onPeerClosed() override;
 
   void scheduleWriteChain();
 
