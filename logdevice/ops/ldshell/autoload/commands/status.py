@@ -143,10 +143,7 @@ async def print_results_tabular(results, *args, **kwargs):
                 if not result.uptime
                 else result.hostname,
             ),
-            (
-                "PACKAGE",
-                lambda result: f"{result.package or '?'}:{result.ld_version or '?'}",
-            ),
+            ("PACKAGE", lambda result: result.package or result.ld_version or "?"),
             ("STATE", lambda result: result.state if result.state else "?"),
             (
                 "UPTIME",
@@ -425,7 +422,7 @@ async def run_status(nodes, hostnames, extended, formatter, **kwargs):
 
         hosts_info = await asyncio.gather(*host_tasks)
         additional_info_mapping = defaultdict(dict)
-        additional_info = await get_additional_info()
+        additional_info = await get_additional_info(hosts_info)
 
         if additional_info:
             # Add the info to the defaultdict mapping.
