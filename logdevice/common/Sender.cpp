@@ -1662,7 +1662,6 @@ void Sender::closeSlowSockets() {
           "Unexpected null server socket found for nid %u. T59653729",
           entry.first);
     }
-    close_if_slow(*entry.second);
   }
   for (auto& entry : impl_->client_conns_) {
     Connection* conn = entry.second.get();
