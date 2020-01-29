@@ -399,17 +399,6 @@ async def get_nodes_state(admin_client):
     return res
 
 
-async def get_nodes_config(admin_client):
-    try:
-        res = await admin_api.get_nodes_config(admin_client)
-    except Exception as ex:
-        cprint(
-            "Failed to request getNodesConfig(): {}".format(str(ex)), file=sys.stderr
-        )
-        return None
-    return res
-
-
 async def run_status(nodes, hostnames, extended, formatter, **kwargs):
     ctx = context.get_context()
     async with ctx.get_cluster_admin_client() as client:
