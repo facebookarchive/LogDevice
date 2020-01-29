@@ -413,6 +413,8 @@ STAT_DEFINE(sock_receiver_throttled, SUM)
 STAT_DEFINE(sock_network_throttled, SUM)
 STAT_DEFINE(slow_socket_detection_time, SUM)
 STAT_DEFINE(sock_health_unknown, SUM)
+STAT_DEFINE(client_connection_close_backlog, SUM)
+STAT_DEFINE(server_connection_close_backlog, SUM)
 #endif // DESTROYING_THREAD
 #endif // RESETTING_STATS
 

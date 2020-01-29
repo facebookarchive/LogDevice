@@ -88,7 +88,7 @@ class SenderImpl {
   // in order to talk to LogDevice servers. sendMessage() to the node_index_t or
   // NodeID of that Connection will try to reconnect. The rate of reconnection
   // attempts is controlled by a ConnectionThrottle.
-  folly::F14FastMap<node_index_t, std::unique_ptr<Connection>> server_conns_;
+  folly::F14NodeMap<node_index_t, std::unique_ptr<Connection>> server_conns_;
 
   // a map of all Connections wrapping connections that were accepted from
   // clients, keyed by 32-bit client ids. This map is empty on clients.
@@ -320,6 +320,7 @@ void Sender::eraseDisconnectedClients() {
       impl_->client_conns_.erase(pos);
       impl_->client_id_allocator_->releaseClientIdx(cid);
       disconnected_clients_.erase_after(prev);
+      STAT_DECR(Worker::stats(), client_connection_close_backlog);
     } else {
       ++prev;
     }
@@ -984,11 +985,14 @@ Connection* Sender::initServerConnection(NodeID nid,
       // We have a plaintext connection, but now we need an encrypted one.
       // Scheduling this Connection to be closed and moving it out of
       // server_conns_ to initialize an SSL connection in its place.
+      STAT_INCR(Worker::stats(), server_connection_close_backlog);
       Worker::onThisThread()->add([s = std::move(it->second)] {
         if (s->good()) {
           s->close(E::SSLREQUIRED);
         }
+        STAT_DECR(Worker::stats(), server_connection_close_backlog);
       });
+      ld_check(!it->second);
       impl_->server_conns_.erase(it);
       it = impl_->server_conns_.end();
     }
@@ -1454,7 +1458,7 @@ int Sender::noteDisconnectedClient(ClientID client_name) {
     err = E::NOTFOUND;
     return -1;
   }
-
+  STAT_INCR(Worker::stats(), client_connection_close_backlog);
   disconnected_clients_.push_front(client_name);
 
   return 0;
