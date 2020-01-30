@@ -168,7 +168,11 @@ void ShardedRocksDBLocalLogStore::init(
       shard_config.createMergeOperator(shard_idx);
 
       // Create SstFileManager for this shard
-      shard_config.addSstFileManagerForShard();
+      if (is_db_local_) {
+        shard_config.addSstFileManagerForShard();
+      } else {
+        // Don't throttle file deletion when using remote storage.
+      }
 
       // If rocksdb statistics are enabled, create a Statistics object for
       // each shard.
@@ -643,7 +647,7 @@ size_t ShardedRocksDBLocalLogStore::createDiskShardMapping() {
     // Leave shard_to_devt_ and fspath_to_dsme_ empty.
     ld_info("DB is not in local file system. Disk space monitoring and "
             "space-based trimming will be disabled.");
-    return true;
+    return nshards_;
   }
 
   std::unordered_map<dev_t, size_t> dev_to_out_index;
