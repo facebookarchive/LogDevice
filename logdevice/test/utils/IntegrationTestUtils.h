@@ -1521,6 +1521,10 @@ class Node {
     return data_path_ + "/db";
   }
 
+  std::string getShardPath(shard_index_t idx) const {
+    return getDatabasePath() + "/shard" + std::to_string(idx);
+  }
+
   std::string getLogPath() const {
     return data_path_ + "/log";
   }

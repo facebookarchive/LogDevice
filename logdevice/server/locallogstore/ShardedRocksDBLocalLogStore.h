@@ -87,7 +87,7 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
             RocksDBCachesInfo* caches);
 
   /**
-   * Wipe the underlying storage layer
+   * Wipe the underlying local storage layer
    * Cannot be called when already initialized
    *
    * @param shard_indexes Shard indexes that can be wiped
@@ -169,6 +169,20 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
    * Adjust DiskInfo to indicate sequencer initiated space-based retention.
    */
   void setSequencerInitiatedSpaceBasedRetention(int shard_idx) override;
+
+  static bool
+  getLocalShardPaths(boost::filesystem::path root,
+                     shard_size_t nshards,
+                     std::vector<boost::filesystem::path>* paths_out);
+
+  // Parses path to a file in a shard. Expected format:
+  // "<path>/shard<idx>/<filename>
+  // If the given path is of that form, assigns <idx> and <filename> to
+  // *out_shard and *out_filename, and returns true.
+  // Otherwise returns false.
+  static bool parseFilePath(const std::string& path,
+                            shard_index_t* out_shard,
+                            std::string* out_filename);
 
   struct DiskInfo {
     DiskInfo() : sequencer_initiated_space_based_retention(false), shards() {}

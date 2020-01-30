@@ -16,7 +16,7 @@
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
-#include "logdevice/server/locallogstore/ShardToPathMapping.h"
+#include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 
 namespace facebook { namespace logdevice {
 
@@ -434,7 +434,8 @@ size_t RocksDBDirectory::GetUniqueId(char* id, size_t max_size) const {
 FileTracingInfo RocksDBEnv::tracingInfoForPath(const std::string& path) {
   shard_index_t shard_idx;
   FileTracingInfo info;
-  if (ShardToPathMapping::parseFilePath(path, &shard_idx, &info.filename) &&
+  if (ShardedRocksDBLocalLogStore::parseFilePath(
+          path, &shard_idx, &info.filename) &&
       shard_idx < io_tracing_by_shard_.size()) {
     info.io_tracing = io_tracing_by_shard_[shard_idx];
   } else {

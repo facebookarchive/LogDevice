@@ -34,7 +34,6 @@
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBListener.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreFactory.h"
-#include "logdevice/server/locallogstore/ShardToPathMapping.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
 namespace facebook { namespace logdevice {
@@ -169,8 +168,7 @@ void ShardedRocksDBLocalLogStore::init(
     }
   }
 
-  int rv = ShardToPathMapping(base_path_, nshards_).get(&shard_paths_);
-  if (rv != 0) {
+  if (!getLocalShardPaths(base_path_, nshards_, &shard_paths_)) {
     throw ConstructorFailed();
   }
   ld_check(static_cast<int>(shard_paths_.size()) == nshards_);
@@ -322,9 +320,7 @@ bool ShardedRocksDBLocalLogStore::wipe(
   }
 
   std::vector<fs::path> paths;
-  int rv = ShardToPathMapping(base_path_, nshards_).get(&paths);
-  if (rv != 0) {
-    ld_error("Failed to calculate shard path mapping");
+  if (!getLocalShardPaths(base_path_, nshards_, &paths)) {
     return false;
   }
 
@@ -888,6 +884,82 @@ void ShardedRocksDBLocalLogStore::onSettingsUpdated() {
     }
     rocksdb_shard->onSettingsUpdated(db_settings_.get());
   }
+}
+
+bool ShardedRocksDBLocalLogStore::getLocalShardPaths(
+    boost::filesystem::path root,
+    shard_size_t nshards,
+    std::vector<boost::filesystem::path>* paths_out) {
+  ld_check(paths_out);
+  std::vector<boost::filesystem::path> paths(nshards);
+  std::vector<shard_index_t> missing;
+
+  for (shard_index_t shard_idx = 0; shard_idx < nshards; ++shard_idx) {
+    fs::path path = root / fs::path("shard" + std::to_string(shard_idx));
+    paths[shard_idx] = path;
+    boost::system::error_code code;
+    if (!fs::exists(path, code)) {
+      missing.push_back(shard_idx);
+    }
+  }
+
+  if (!missing.empty() && missing.size() != paths.size()) {
+    ld_error("Some shard directories exist but others don't (e.g. %s). "
+             "Suspicious; refusing to start.",
+             paths[missing[0]].c_str());
+    return false;
+  }
+
+  *paths_out = paths;
+  // No need to create missing directories - rocksdb will do it.
+
+  return true;
+}
+
+bool ShardedRocksDBLocalLogStore::parseFilePath(const std::string& path,
+                                                shard_index_t* out_shard,
+                                                std::string* out_filename) {
+  auto complainer = folly::makeGuard([&] {
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    2,
+                    "Couldn't parse shard idx from path: %s",
+                    path.c_str());
+  });
+
+  // Looking for "/shard42/".
+  // Assuming that rocksdb doesn't use file names with word "shard" in them,
+  // and that it doesn't use subdirectories in the DB directory.
+
+  size_t p = path.rfind("shard");
+  if (p == std::string::npos || (p != 0 && path[p - 1] != '/')) {
+    return false;
+  }
+
+  size_t q = path.find_first_of('/', p);
+  q = q == std::string::npos ? path.size() : q;
+  p += strlen("shard");
+  ld_check(q >= p);
+
+  shard_index_t shard;
+  try {
+    shard = folly::to<shard_index_t>(path.substr(p, q - p));
+  } catch (std::range_error&) {
+    return false;
+  }
+
+  if (shard < 0 || shard >= MAX_SHARDS) {
+    return false;
+  }
+
+  if (out_shard != nullptr) {
+    *out_shard = shard;
+  }
+  if (out_filename != nullptr) {
+    *out_filename = path.substr(q + (q < path.size() ? 1 : 0));
+  }
+
+  complainer.dismiss();
+  return true;
 }
 
 }} // namespace facebook::logdevice

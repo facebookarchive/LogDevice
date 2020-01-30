@@ -21,7 +21,6 @@
 #include "logdevice/include/Client.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/lib/ops/EventLogUtils.h"
-#include "logdevice/server/locallogstore/ShardToPathMapping.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
@@ -265,19 +264,6 @@ void dirtyNodes(IntegrationTestUtils::Cluster& cluster,
     flushPartition(cluster, {nidx}, shard, 0);
     writeRecords(client, 11, out_info_per_log);
   }
-}
-
-fs::path path_for_node_shard(IntegrationTestUtils::Cluster& cluster,
-                             node_index_t node_index,
-                             shard_index_t shard_index) {
-  std::string db_path = cluster.getNode(node_index).getDatabasePath();
-  std::vector<boost::filesystem::path> out;
-  auto num_shards = cluster.getNode(node_index).num_db_shards_;
-  int rv = ShardToPathMapping(db_path, num_shards).get(&out);
-  if (rv != 0 || shard_index >= int(out.size())) {
-    std::abort();
-  }
-  return out[shard_index];
 }
 
 } // anonymous namespace
@@ -707,7 +693,7 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
   // In the real world, the disk will be unmounted. Here let's just remove
   // everything and write a marker that instructs ShardedRocksDBLocalLogStore to
   // create a FailingLocalLogStore for the shard.
-  fs::path shard_path = path_for_node_shard(*cluster, node_index_t(3), 1);
+  fs::path shard_path = cluster->getNode(3).getShardPath(1);
   for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
        ++it) {
     fs::remove_all(it->path());
@@ -794,7 +780,7 @@ TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
   // Restart all nodes with an empty disk for shard 0.
   for (node_index_t node = 1; node <= 4; ++node) {
     EXPECT_EQ(0, cluster->getNode(node).shutdown());
-    auto shard_path = path_for_node_shard(*cluster, node, SHARD);
+    auto shard_path = cluster->getNode(node).getShardPath(SHARD);
     for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
          ++it) {
       fs::remove_all(it->path());
@@ -856,7 +842,7 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
   for (node_index_t node = 1; node <= 2; ++node) {
     cluster->getNode(node).kill();
     for (shard_index_t shard = 0; shard < NUM_DB_SHARDS; ++shard) {
-      auto shard_path = path_for_node_shard(*cluster, node, shard);
+      auto shard_path = cluster->getNode(node).getShardPath(shard);
       for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
            ++it) {
         fs::remove_all(it->path());
@@ -925,7 +911,7 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
   for (node_index_t node = 1; node <= 3; ++node) {
     cluster->getNode(node).kill();
     for (shard_index_t shard = 0; shard < NUM_DB_SHARDS; ++shard) {
-      auto shard_path = path_for_node_shard(*cluster, node, shard);
+      auto shard_path = cluster->getNode(node).getShardPath(shard);
       for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
            ++it) {
         fs::remove_all(it->path());
@@ -1665,7 +1651,7 @@ TEST_P(RebuildingTest, FMajorityInRebuildingSet) {
 
   for (node_index_t node = 1; node <= 4; ++node) {
     EXPECT_EQ(0, cluster->getNode(node).shutdown());
-    auto shard_path = path_for_node_shard(*cluster, node, SHARD);
+    auto shard_path = cluster->getNode(node).getShardPath(SHARD);
     for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
          ++it) {
       fs::remove_all(it->path());
@@ -1742,7 +1728,7 @@ TEST_P(RebuildingTest, LocalWindow) {
   cluster->waitForRecovery();
 
   EXPECT_EQ(0, cluster->getNode(1).shutdown());
-  auto shard_path = path_for_node_shard(*cluster, node_index_t(1), 1);
+  auto shard_path = cluster->getNode(1).getShardPath(1);
   for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
        ++it) {
     fs::remove_all(it->path());
@@ -1994,7 +1980,7 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
   ld_info("Killing and removing data from nodes.");
   for (node_index_t node : unrecoverable_node_set) {
     cluster->getNode(node).kill();
-    auto shard_path = path_for_node_shard(*cluster, node, /*shard*/ 0);
+    auto shard_path = cluster->getNode(node).getShardPath(0);
     for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
          ++it) {
       fs::remove_all(it->path());
@@ -2145,7 +2131,7 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
   ld_info("Shutting down N1");
   EXPECT_EQ(0, cluster->getNode(1).shutdown());
   ld_info("Wiping N1");
-  auto shard_path = path_for_node_shard(*cluster, node_index_t(1), 0);
+  auto shard_path = cluster->getNode(1).getShardPath(0);
   for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
        ++it) {
     fs::remove_all(it->path());

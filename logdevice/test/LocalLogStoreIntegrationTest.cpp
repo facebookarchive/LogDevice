@@ -13,7 +13,6 @@
 
 #include "logdevice/include/Client.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
-#include "logdevice/server/locallogstore/ShardToPathMapping.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -256,13 +255,9 @@ void testWipeStorageIfEmpty(bool enabled) {
 
   // Add a random file in all shards for each node
   for (auto node_idx = 0; node_idx < num_nodes; node_idx++) {
-    std::string database_path = cluster->getNode(node_idx).getDatabasePath();
-    std::vector<fs::path> shard_paths;
-    int rv = ShardToPathMapping(database_path, num_shards).get(&shard_paths);
-    ASSERT_EQ(0, rv);
-
-    for (const auto& path : shard_paths) {
-      fs::path touched_path = path / fs::path("TOUCHED");
+    auto& node = cluster->getNode(node_idx);
+    for (int shard_idx = 0; shard_idx < node.num_db_shards_; ++shard_idx) {
+      std::string touched_path = node.getShardPath(shard_idx) + "/TOUCHED";
       folly::writeFile(std::string("testing123"), touched_path.c_str());
     }
   }
@@ -278,14 +273,9 @@ void testWipeStorageIfEmpty(bool enabled) {
 
   // Verify if only node 1 got a wiped shard
   for (auto node_idx = 0; node_idx < num_nodes; node_idx++) {
-    std::string database_path = cluster->getNode(node_idx).getDatabasePath();
-    std::vector<fs::path> shard_paths;
-
-    // Verify if only node 1 got wiped if setting was enabled
-    ASSERT_EQ(
-        0, ShardToPathMapping(database_path, num_shards).get(&shard_paths));
-    for (auto it = shard_paths.begin(); it != shard_paths.end(); it++) {
-      fs::path touched_path = *it / fs::path("TOUCHED");
+    auto& node = cluster->getNode(node_idx);
+    for (int shard_idx = 0; shard_idx < node.num_db_shards_; ++shard_idx) {
+      std::string touched_path = node.getShardPath(shard_idx) + "/TOUCHED";
       EXPECT_EQ(node_idx == 1 && enabled, !fs::exists(touched_path));
     }
   }
