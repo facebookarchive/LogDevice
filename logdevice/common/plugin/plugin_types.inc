@@ -49,11 +49,13 @@ PLUGIN_TYPE(OPEN_TRACER_FACTORY, 11, "Open Tracing tracer factory", false)
 PLUGIN_TYPE(HOT_TEXT_OPTIMIZER, 12, "HotTextOptimizer", false)
 // See AdminServerFactory.h
 PLUGIN_TYPE(ADMIN_SERVER_FACTORY, 13, "AdminServer factory", false)
-// See ZookeeperClientPlugin.h
+// See ZookeeperClientFactory.h
 PLUGIN_TYPE(ZOOKEEPER_CLIENT_FACTORY, 14, "ZookeeperClient factory", false)
 // See Logger.h
 PLUGIN_TYPE(LOGGER, 15, "Logger plugin", false)
 // See DefaultSettingsProvider.h
 PLUGIN_TYPE(DEFAULT_SETTINGS_PROVIDER, 16, "Default settings provider", false)
+// See server/locallogstore/RocksDBCustomiser.h
+PLUGIN_TYPE(ROCKSDB_CUSTOMISER_FACTORY, 17, "RocksDB customiser factory", false)
 
 #undef PLUGIN_TYPE
