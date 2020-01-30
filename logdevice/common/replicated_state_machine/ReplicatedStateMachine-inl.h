@@ -1331,7 +1331,7 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
   const size_t byte_offset_at_time_of_snapshot = delta_log_byte_offset_;
   const size_t offset_at_time_of_snapshot = delta_log_offset_;
 
-  auto append_cb = [=](Status st, lsn_t lsn) {
+  auto snapshot_cb = [=](Status st, lsn_t lsn) {
     if (st == E::OK) {
       // We don't want to wait for the snapshot to be read before
       // last_snapshot_* members are modified otherwise
@@ -1342,18 +1342,17 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
           std::max(byte_offset_at_time_of_snapshot, last_snapshot_byte_offset_);
       last_snapshot_offset_ =
           std::max(offset_at_time_of_snapshot, last_snapshot_offset_);
-      ld_info("Snapshot was assigned LSN %s", lsn_to_string(lsn).c_str());
+      rsm_info(rsm_type_,
+               "Snapshot was assigned LSN %s",
+               lsn_to_string(lsn).c_str());
     }
     snapshot_in_flight_ = false;
-
     onSnapshotCreated(st, payload.size());
-
     cb_or_noop(st);
   };
 
   postAppendRequest(
-      snapshot_log_id_, payload, snapshot_append_timeout_, append_cb);
-
+      snapshot_log_id_, payload, snapshot_append_timeout_, snapshot_cb);
   snapshot_in_flight_ = true;
 }
 

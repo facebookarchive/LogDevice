@@ -175,6 +175,13 @@ class SyncSequencerRequest : public Request {
     return false;
   }
 
+  WorkerType getWorkerTypeAffinity() override {
+    if (worker_type_.hasValue()) {
+      return worker_type_.value();
+    }
+    return WorkerType::GENERAL;
+  }
+
   int getThreadAffinity(int nthreads) override {
     if (!override_thread_idx_.hasValue()) {
       return folly::hash::twang_mix64(logid_.val_) % nthreads;
@@ -184,6 +191,9 @@ class SyncSequencerRequest : public Request {
   }
 
   // overrides the hash-based worker thread selection
+  void setWorkerType(WorkerType wtype) {
+    worker_type_.assign(wtype);
+  }
   void setThreadIdx(int idx) {
     override_thread_idx_.assign(idx);
   }
@@ -267,6 +277,7 @@ class SyncSequencerRequest : public Request {
   std::chrono::milliseconds timeout_;
   GetSeqStateRequest::MergeType merge_type_;
   folly::Optional<epoch_t> min_epoch_;
+  folly::Optional<WorkerType> worker_type_;
   folly::Optional<int> override_thread_idx_;
   // True if we need to `delete this` when done.
   bool self_owned_ = false;

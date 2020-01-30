@@ -121,7 +121,7 @@ class RSMSnapshotStore {
 
   // Tells if this store is writable, some stores are read only e.g. on most
   // clients or sequencer only nodes
-  virtual bool isWritable() {
+  virtual bool isWritable() const {
     return writable_;
   }
 
@@ -133,8 +133,8 @@ class RSMSnapshotStore {
   // For LogsConfig the key would be LogsConfig's delta log_id
   // For store implementations outside of Logdevice, the key can be
   // "cluster name":"log_id"
-  std::string key_;
-  bool writable_{false};
+  const std::string key_;
+  const bool writable_{false};
 };
 
 }} // namespace facebook::logdevice

@@ -19,14 +19,14 @@ namespace facebook { namespace logdevice {
 struct RSMSnapshotHeader : public SerializableData {
   enum Version { BASE_VERSION = 0, CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH = 1 };
 
-  uint32_t format_version;  // current snapshot header version
-  uint32_t flags;           // unused, might be handy in the future.
-  uint64_t byte_offset;     // byte offset of last considered delta.
-  uint64_t offset;          // offset of last considered delta.
-  lsn_t base_version;       // version of last applied delta.
-  size_t length;            // length of this header in bytes (for future use).
-  lsn_t delta_log_read_ptr; // reader pointer of the delta log reader at the
-                            // time of this snapshot.
+  uint32_t format_version; // current snapshot header version
+  uint32_t flags;          // unused, might be handy in the future.
+  uint64_t byte_offset;    // byte offset of last considered delta.
+  uint64_t offset;         // offset of last considered delta.
+  lsn_t base_version;      // version of last applied delta.
+  size_t length;           // length of this header in bytes (for future use).
+  lsn_t delta_log_read_ptr{LSN_INVALID}; // reader pointer of the delta log
+                                         // reader at the time of this snapshot.
 
   RSMSnapshotHeader() = default;
 
