@@ -13,6 +13,7 @@
 
 #include <folly/Memory.h>
 #include <folly/Optional.h>
+#include <folly/futures/Future.h>
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/SSLContext.h>
@@ -43,13 +44,13 @@ namespace facebook { namespace logdevice {
 
 class BWAvailableCallback;
 class FlowGroup;
+class ProtocolHandler;
 class ResourceBudget;
+class SocketAdapter;
 class SocketCallback;
 class SocketImpl;
 class SocketProxy;
 class StatsHolder;
-class ProtocolHandler;
-class SocketAdapter;
 struct Settings;
 
 /**
@@ -745,6 +746,12 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
   bool injectAsyncMessageError(std::unique_ptr<Envelope>&& msg);
 
   /**
+   * Invoked by connect() to initiate the connection to peer.
+   * Returns Future that is fulfilled once the connection completes.
+   */
+  folly::Future<Status> asyncConnect();
+
+  /**
    * Called by connect().
    *
    * Used to run basic checks before attempting a new connection.
@@ -1262,7 +1269,12 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
   // Set to true for socket based on libevent otherwise this is false.
   const bool legacy_connection_;
 
+  // Protocol Handler layer to which owns the AsyncSocket and is responsible for
+  // sending data over the socket.
   std::shared_ptr<ProtocolHandler> proto_handler_;
+
+  // Read callback installed in AsyncSocket to read data and pass it to higher
+  // layers.
   std::unique_ptr<folly::AsyncSocket::ReadCallback> read_cb_;
 
   // If receive of a message hit ENOBUFS then we will retry the same message

@@ -119,31 +119,6 @@ class Connection : public Socket_DEPRECATED {
   Connection(Connection&&) = delete;
   Connection& operator=(const Connection&) = delete;
   Connection& operator=(Connection&&) = delete;
-  /**
-   * Initiate an asynchronous connect and handshake on the socket. The socket's
-   * .peer_name_ must resolve to an ip:port to which we can connect. Currently
-   * this means that .peer_name_ must be a server address.
-   *
-   * @return  0 if connection was successfully initiated. -1 on failure, err
-   *          is set to:
-   *
-   *    ALREADY         the socket is already in CONNECTING or HANDSHAKE
-   *    ISCONN          the socket is CONNECTED
-   *    UNREACHABLE     attempt to connect to a client. Reported for
-   *                    disconnected client sockets.
-   *    UNROUTABLE      the peer endpoint of a server socket has an IP address
-   *                    to which there is no route. This may happen if a network
-   *                    interface has been taken down, e.g., during system
-   *                    shutdown.
-   *    DISABLED        connection was not initiated because the server
-   *                    is temporarily marked down (disabled) after a series
-   *                    of unsuccessful connection attempts
-   *    SYSLIMIT        out of file descriptors or ephemeral ports
-   *    NOMEM           out of kernel memory for sockets, or malloc() failed
-   *    INTERNAL        bufferevent unexpectedly failed to initiate connection,
-   *                    unexpected error from socket(2).
-   */
-  int connect() override;
 
   Socket_DEPRECATED::SendStatus
   sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) override;
@@ -170,8 +145,6 @@ class Connection : public Socket_DEPRECATED {
   }
 
  protected:
-  folly::Future<Status> asyncConnect();
-
   void scheduleWriteChain();
 
   void drainSendQueue();
