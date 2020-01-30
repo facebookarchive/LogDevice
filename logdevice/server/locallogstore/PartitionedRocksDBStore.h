@@ -400,6 +400,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                                    const std::string& path,
                                    RocksDBLogStoreConfig rocksdb_config,
                                    const Configuration* config,
+                                   RocksDBCustomiser* customiser,
                                    StatsHolder* stats,
                                    IOTracing* io_tracing)
       : PartitionedRocksDBStore(shard_idx,
@@ -407,6 +408,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                                 path,
                                 std::move(rocksdb_config),
                                 config,
+                                customiser,
                                 stats,
                                 io_tracing,
                                 DeferInit::NO) {}
@@ -1779,6 +1781,7 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
                                    const std::string& path,
                                    RocksDBLogStoreConfig rocksdb_config,
                                    const Configuration* config,
+                                   RocksDBCustomiser* customiser,
                                    StatsHolder* stats,
                                    IOTracing* io_tracing,
                                    DeferInit defer_init);

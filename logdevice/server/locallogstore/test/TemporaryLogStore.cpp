@@ -10,6 +10,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
+#include "logdevice/server/locallogstore/RocksDBCustomiser.h"
 #include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "rocksdb/db.h"
@@ -243,12 +244,14 @@ TemporaryRocksDBStore::TemporaryRocksDBStore(bool read_find_time_index)
             settings, rebuilding_settings, nullptr, nullptr, nullptr);
         rocksdb_config.createMergeOperator(shard_idx);
 
-        return std::make_unique<RocksDBLocalLogStore>(shard_idx,
-                                                      1,
-                                                      path,
-                                                      std::move(rocksdb_config),
-                                                      /* stats */ nullptr,
-                                                      /* io_tracing */ nullptr);
+        return std::make_unique<RocksDBLocalLogStore>(
+            shard_idx,
+            1,
+            path,
+            std::move(rocksdb_config),
+            RocksDBCustomiser::defaultInstance(),
+            /* stats */ nullptr,
+            /* io_tracing */ nullptr);
       }) {}
 
 class TemporaryPartitionedStoreImpl : public PartitionedRocksDBStore {
@@ -264,6 +267,7 @@ class TemporaryPartitionedStoreImpl : public PartitionedRocksDBStore {
                                 path,
                                 std::move(rocksdb_config),
                                 config,
+                                RocksDBCustomiser::defaultInstance(),
                                 stats,
                                 io_tracing,
                                 DeferInit::YES),

@@ -2147,7 +2147,7 @@ std::unique_ptr<ShardedLocalLogStore> Node::createLocalLogStore() {
       getDatabasePath(),
       num_db_shards_,
       UpdateableSettings<RocksDBSettings>(rocks_settings),
-      nullptr);
+      std::make_unique<RocksDBCustomiser>());
 
   log_store->init(create_default_settings<Settings>(),
                   UpdateableSettings<RebuildingSettings>(),
@@ -2167,7 +2167,7 @@ void Node::corruptShards(std::vector<uint32_t> shards,
     RocksDBLogStoreBase* store =
         dynamic_cast<RocksDBLogStoreBase*>(sharded_store->getByIndex(idx));
     ld_check(store != nullptr);
-    paths.push_back(store->getDBPath());
+    paths.push_back(store->getLocalDBPath().value());
   }
   sharded_store.reset(); // close DBs before corrupting them
 

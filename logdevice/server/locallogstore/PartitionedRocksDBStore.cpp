@@ -339,6 +339,7 @@ PartitionedRocksDBStore::PartitionedRocksDBStore(
     const std::string& path,
     RocksDBLogStoreConfig rocksdb_config,
     const Configuration* config,
+    RocksDBCustomiser* customiser,
     StatsHolder* stats,
     IOTracing* io_tracing,
     DeferInit defer_init)
@@ -346,6 +347,7 @@ PartitionedRocksDBStore::PartitionedRocksDBStore(
                           num_shards,
                           path,
                           std::move(rocksdb_config),
+                          customiser,
                           stats,
                           io_tracing),
       logs_(),
@@ -629,17 +631,17 @@ bool PartitionedRocksDBStore::open(
   rocksdb::Status status;
   bool read_only = getSettings()->read_only;
   if (read_only) {
-    status = rocksdb::DB::OpenForReadOnly(rocksdb_config_.options_,
-                                          db_path_,
-                                          cf_descriptors,
-                                          &cf_handles_raw,
-                                          &db);
+    status = customiser_->openReadOnlyDB(rocksdb_config_.options_,
+                                         db_path_,
+                                         cf_descriptors,
+                                         &cf_handles_raw,
+                                         &db);
   } else {
-    status = rocksdb::DB::Open(rocksdb_config_.options_,
-                               db_path_,
-                               cf_descriptors,
-                               &cf_handles_raw,
-                               &db);
+    status = customiser_->openDB(rocksdb_config_.options_,
+                                 db_path_,
+                                 cf_descriptors,
+                                 &cf_handles_raw,
+                                 &db);
   }
 
   if (!status.ok()) {

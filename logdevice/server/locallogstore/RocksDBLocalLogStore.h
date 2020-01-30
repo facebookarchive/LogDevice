@@ -297,12 +297,13 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
    * @return On success, returns the newly created instance.  On failure,
    *         returns nullptr.
    */
-  explicit RocksDBLocalLogStore(uint32_t shard_idx,
-                                uint32_t num_shards,
-                                const std::string& path,
-                                RocksDBLogStoreConfig rocksdb_config,
-                                StatsHolder*,
-                                IOTracing*);
+  RocksDBLocalLogStore(uint32_t shard_idx,
+                       uint32_t num_shards,
+                       const std::string& path,
+                       RocksDBLogStoreConfig rocksdb_config,
+                       RocksDBCustomiser* customiser,
+                       StatsHolder*,
+                       IOTracing*);
 
   int writeMulti(const std::vector<const WriteOp*>& writes,
                  const WriteOptions& options) override {

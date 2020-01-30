@@ -29,6 +29,7 @@
 #include "logdevice/include/Err.h"
 #include "logdevice/server/locallogstore/IOTracing.h"
 #include "logdevice/server/locallogstore/IteratorSearch.h"
+#include "logdevice/server/locallogstore/RocksDBCustomiser.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBWriterMergeOperator.h"
@@ -52,18 +53,35 @@ RocksDBLocalLogStore::RocksDBLocalLogStore(uint32_t shard_idx,
                                            uint32_t num_shards,
                                            const std::string& path,
                                            RocksDBLogStoreConfig rocksdb_config,
+                                           RocksDBCustomiser* customiser,
                                            StatsHolder* stats,
                                            IOTracing* io_tracing)
     : RocksDBLogStoreBase(shard_idx,
                           num_shards,
                           path,
                           std::move(rocksdb_config),
+                          customiser,
                           stats,
                           io_tracing) {
   rocksdb::DB* db;
   rocksdb::Status status;
 
-  status = rocksdb::DB::Open(rocksdb_config_.options_, path, &db);
+  // Even though RocksDBLocalLogStore doesn't use column families (only logsdb
+  // does), we use the verbose column-family-aware API for creating DB, just
+  // so RocksDBCustomiser doesn't have to redundantly wrap two flavors of
+  // openDB() (with and without column families). These few lines of boilerplate
+  // is way less than the alternative.
+  std::vector<rocksdb::ColumnFamilyDescriptor> column_families;
+  column_families.emplace_back(
+      rocksdb::kDefaultColumnFamilyName,
+      rocksdb::ColumnFamilyOptions(rocksdb_config_.options_));
+  std::vector<rocksdb::ColumnFamilyHandle*> handles;
+  status = customiser_->openDB(
+      rocksdb_config_.options_, path, column_families, &handles, &db);
+  if (status.ok()) {
+    ld_check_eq(handles.size(), 1);
+    delete handles[0];
+  }
 
   if (!status.ok()) {
     ld_error("could not open RocksDB store at \"%s\",  Open() failed with "
@@ -199,8 +217,7 @@ int RocksDBLocalLogStore::performCompaction() {
     enterFailSafeIfFailed(status, "CompactRange()");
     return -1;
   }
-  ld_debug(
-      "Performed manual compaction on RocksDB shard: %s.", getDBPath().c_str());
+  ld_debug("Performed manual compaction on RocksDB shard: %d.", getShardIdx());
   updateManualCompactTime();
   return 0;
 }

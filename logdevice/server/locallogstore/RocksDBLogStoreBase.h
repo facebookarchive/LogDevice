@@ -27,6 +27,7 @@
 
 namespace facebook { namespace logdevice {
 
+class RocksDBCustomiser;
 class RocksDBIterator;
 class RocksDBMemTableRepFactory;
 class RocksDBWriter;
@@ -195,10 +196,13 @@ class RocksDBLogStoreBase : public LocalLogStore {
   virtual void onMemTableWindowUpdated() {}
 
   /**
-   * @return  path of RocksDB directory
+   * Returns path of RocksDB directory in local file system.
+   * Returns folly::none if the DB doesn't live in local file system (but in
+   * e.g. some remote storage service or in memory) according to
+   * RocksDBCustomiser::isDBLocal().
    */
-  std::string getDBPath() const {
-    return db_path_;
+  folly::Optional<std::string> getLocalDBPath() const {
+    return is_db_local_ ? folly::make_optional(db_path_) : folly::none;
   }
 
   RocksDBLogStoreConfig& getRocksDBLogStoreConfig() {
@@ -432,6 +436,7 @@ class RocksDBLogStoreBase : public LocalLogStore {
                       uint32_t num_shards,
                       const std::string& path,
                       RocksDBLogStoreConfig rocksdb_config,
+                      RocksDBCustomiser* customiser,
                       StatsHolder* stats_holder,
                       IOTracing* io_tracing);
 
@@ -560,8 +565,14 @@ class RocksDBLogStoreBase : public LocalLogStore {
   uint32_t shard_idx_;
   uint32_t num_shards_;
 
-  // path to the rocksdb directory
+  // Path to the rocksdb directory. Keep in mind that if is_db_local_ is false,
+  // this is not a real path in local FS.
   const std::string db_path_;
+
+  RocksDBCustomiser* customiser_;
+
+  // See RocksDBCustomiser::isDBLocal().
+  const bool is_db_local_;
 
   // object used to perform writes to the db
   std::unique_ptr<RocksDBWriter> writer_;

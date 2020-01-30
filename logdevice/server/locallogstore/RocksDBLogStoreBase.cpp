@@ -10,6 +10,7 @@
 #include <rocksdb/iostats_context.h>
 
 #include "logdevice/common/stats/PerShardHistograms.h"
+#include "logdevice/server/locallogstore/RocksDBCustomiser.h"
 #include "logdevice/server/locallogstore/RocksDBMemTableRep.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
 #include "logdevice/server/locallogstore/RocksDBWriter.h"
@@ -27,11 +28,14 @@ RocksDBLogStoreBase::RocksDBLogStoreBase(uint32_t shard_idx,
                                          uint32_t num_shards,
                                          const std::string& path,
                                          RocksDBLogStoreConfig rocksdb_config,
+                                         RocksDBCustomiser* customiser,
                                          StatsHolder* stats_holder,
                                          IOTracing* io_tracing)
     : shard_idx_(shard_idx),
       num_shards_(num_shards),
       db_path_(path),
+      customiser_(customiser),
+      is_db_local_(customiser_->isDBLocal()),
       writer_(new RocksDBWriter(this, *rocksdb_config.getRocksDBSettings())),
       stats_(stats_holder),
       statistics_(rocksdb_config.options_.statistics),
@@ -530,9 +534,9 @@ RocksDBLogStoreBase::writeBatch(const rocksdb::WriteOptions& options,
     ld_check(!status.ok());
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
-                    "Returning injected error %s for shard %s.",
+                    "Returning injected error %s for shard %d.",
                     status.ToString().c_str(),
-                    getDBPath().c_str());
+                    getShardIdx());
     // Don't bump error stats for injected errors.
     enterFailSafeMode("Write()", "injected error");
   } else {
@@ -821,9 +825,9 @@ rocksdb::Status RocksDBIterator::getRocksdbStatus() {
     status = RocksDBLogStoreBase::FaultTypeToStatus(sim_error);
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     2,
-                    "Returning injected error '%s' for shard '%s'.",
+                    "Returning injected error '%s' for shard %d.",
                     status.ToString().c_str(),
-                    rb_store->getDBPath().c_str());
+                    rb_store->getShardIdx());
   } else {
     status = iterator_->status();
   }

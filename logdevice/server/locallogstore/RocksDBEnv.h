@@ -45,10 +45,11 @@ struct FileTracingInfo {
  */
 class RocksDBEnv : public rocksdb::EnvWrapper {
  public:
-  explicit RocksDBEnv(UpdateableSettings<RocksDBSettings> settings,
+  explicit RocksDBEnv(rocksdb::Env* underlying_env,
+                      UpdateableSettings<RocksDBSettings> settings,
                       StatsHolder* stats,
                       std::vector<IOTracing*> io_tracing_by_shard)
-      : rocksdb::EnvWrapper(rocksdb::Env::Default()),
+      : rocksdb::EnvWrapper(underlying_env),
         settings_(std::move(settings)),
         stats_(stats),
         io_tracing_by_shard_(io_tracing_by_shard) {}

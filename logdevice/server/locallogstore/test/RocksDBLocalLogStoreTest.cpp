@@ -22,6 +22,7 @@
 #include "logdevice/include/types.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/PartitionedRocksDBStore.h"
+#include "logdevice/server/locallogstore/RocksDBCustomiser.h"
 #include "logdevice/server/locallogstore/WriteOps.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 #include "rocksdb/db.h"
@@ -109,7 +110,13 @@ class RocksDBLocalLogStoreTest : public ::testing::Test {
   std::unique_ptr<LocalLogStore> createRocksDBLocalLogStore() {
     return std::make_unique<TemporaryLogStore>([&](std::string path) {
       return std::make_unique<RocksDBLocalLogStore>(
-          0, 1, path, rocksdb_config_, &stats_, /* io_tracing */ nullptr);
+          0,
+          1,
+          path,
+          rocksdb_config_,
+          RocksDBCustomiser::defaultInstance(),
+          &stats_,
+          /* io_tracing */ nullptr);
     });
   }
 
@@ -121,6 +128,7 @@ class RocksDBLocalLogStoreTest : public ::testing::Test {
           path,
           rocksdb_config_,
           nullptr,
+          RocksDBCustomiser::defaultInstance(),
           &stats_,
           /* io_tracing */ nullptr);
     });

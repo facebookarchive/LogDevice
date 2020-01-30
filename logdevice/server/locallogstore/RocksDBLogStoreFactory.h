@@ -18,6 +18,7 @@
 
 namespace facebook { namespace logdevice {
 
+class RocksDBCustomiser;
 class StatsHolder;
 class IOTracing;
 
@@ -26,10 +27,12 @@ class RocksDBLogStoreFactory : public LocalLogStoreFactory {
   explicit RocksDBLogStoreFactory(RocksDBLogStoreConfig rocksdb_config,
                                   const Settings& server_settings,
                                   const std::shared_ptr<Configuration> config,
+                                  RocksDBCustomiser* customiser,
                                   StatsHolder* stats)
       : rocksdb_config_(std::move(rocksdb_config)),
         server_settings_(server_settings),
         config_(std::move(config)),
+        customiser_(customiser),
         stats_(stats) {}
 
   std::unique_ptr<LocalLogStore> create(uint32_t shard_idx,
@@ -41,6 +44,7 @@ class RocksDBLogStoreFactory : public LocalLogStoreFactory {
   RocksDBLogStoreConfig rocksdb_config_;
   Settings server_settings_;
   const std::shared_ptr<Configuration> config_;
+  RocksDBCustomiser* customiser_;
   StatsHolder* stats_;
 };
 

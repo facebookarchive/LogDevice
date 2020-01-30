@@ -176,9 +176,9 @@ class RocksDBWriter {
     if (fault != FaultType::NONE) {
       status = RocksDBLogStoreBase::FaultTypeToStatus(fault);
       ld_error("RocksDBWriter::readMetadata(): Returning injected error "
-               "%s for shard %s.",
+               "%s for shard %d.",
                status.ToString().c_str(),
-               store->getDBPath().c_str());
+               store->getShardIdx());
       // Don't bump error stats for injected errors.
       if (!status.ok() && !status.IsNotFound() && !status.IsIncomplete()) {
         store->enterFailSafeMode("Write()", "injected error");

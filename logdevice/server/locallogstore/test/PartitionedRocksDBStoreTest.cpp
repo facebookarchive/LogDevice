@@ -32,6 +32,7 @@
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/PartitionMetadata.h"
 #include "logdevice/server/locallogstore/RocksDBCompactionFilter.h"
+#include "logdevice/server/locallogstore/RocksDBCustomiser.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBKeyFormat.h"
 #include "logdevice/server/locallogstore/RocksDBListener.h"
@@ -100,6 +101,7 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
                                 path,
                                 std::move(rocksdb_config),
                                 config,
+                                RocksDBCustomiser::defaultInstance(),
                                 stats,
                                 /* io_tracing */ nullptr,
                                 DeferInit::YES),
@@ -4327,7 +4329,8 @@ TEST_F(PartitionedRocksDBStoreTest, IOPrio) {
   CompactionFilter filter;
 
   auto customize_config = [&](RocksDBLogStoreConfig& cfg) {
-    env = std::make_unique<RocksDBEnv>(cfg.rocksdb_settings_,
+    env = std::make_unique<RocksDBEnv>(rocksdb::Env::Default(),
+                                       cfg.rocksdb_settings_,
                                        /* stats */ nullptr,
                                        std::vector<IOTracing*>());
     cfg.options_.env = env.get();
@@ -5792,8 +5795,10 @@ TEST_F(PartitionedRocksDBStoreTest, DeleteRatelimit) {
   // SstFileManager, which ratelimits deletes, needs RocksDBEnv for OS
   // functionality like the filesystem
   if (!env_) {
-    env_ = std::make_unique<RocksDBEnv>(
-        rocksdb_settings_, /* stats */ nullptr, std::vector<IOTracing*>());
+    env_ = std::make_unique<RocksDBEnv>(rocksdb::Env::Default(),
+                                        rocksdb_settings_,
+                                        /* stats */ nullptr,
+                                        std::vector<IOTracing*>());
   }
 
   // Measure with fast settings.

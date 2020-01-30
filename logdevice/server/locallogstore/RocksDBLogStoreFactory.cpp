@@ -26,11 +26,17 @@ RocksDBLogStoreFactory::create(uint32_t shard_idx,
                                                        path,
                                                        rocksdb_config_,
                                                        config_.get(),
+                                                       customiser_,
                                                        stats_,
                                                        io_tracing);
     } else {
-      return std::make_unique<RocksDBLocalLogStore>(
-          shard_idx, num_shards, path, rocksdb_config_, stats_, io_tracing);
+      return std::make_unique<RocksDBLocalLogStore>(shard_idx,
+                                                    num_shards,
+                                                    path,
+                                                    rocksdb_config_,
+                                                    customiser_,
+                                                    stats_,
+                                                    io_tracing);
     }
   } catch (ConstructorFailed&) {
     return nullptr;

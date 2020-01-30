@@ -22,6 +22,7 @@
 #include "logdevice/include/types.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/RocksDBCompactionFilter.h"
+#include "logdevice/server/locallogstore/RocksDBCustomiser.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 #include "logdevice/server/locallogstore/RocksDBLogStoreConfig.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
@@ -63,6 +64,7 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
   ShardedRocksDBLocalLogStore(const std::string& base_path,
                               shard_size_t num_shards,
                               UpdateableSettings<RocksDBSettings> db_settings,
+                              std::unique_ptr<RocksDBCustomiser> customiser,
                               StatsHolder* stats = nullptr);
 
   ~ShardedRocksDBLocalLogStore() override;
@@ -145,6 +147,10 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
    */
   size_t createDiskShardMapping();
 
+  /**
+   * Shards grouped by local storage device (disk). Empty if data is not stored
+   * locally (RocksDBCustomiser::isDBLocal() is false).
+   */
   const std::unordered_map<dev_t, DiskShardMappingEntry>&
   getShardToDiskMapping();
 
@@ -170,11 +176,6 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
    */
   void setSequencerInitiatedSpaceBasedRetention(int shard_idx) override;
 
-  static bool
-  getLocalShardPaths(boost::filesystem::path root,
-                     shard_size_t nshards,
-                     std::vector<boost::filesystem::path>* paths_out);
-
   // Parses path to a file in a shard. Expected format:
   // "<path>/shard<idx>/<filename>
   // If the given path is of that form, assigns <idx> and <filename> to
@@ -197,7 +198,9 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   void onSettingsUpdated();
 
-  void createAndValidateShards();
+  // Checks/creates base_path_ directory, NSHARDS file, and shard directories.
+  // Returns false on error.
+  bool createOrValidatePaths();
 
   // Shutdown event to indicate that the sharded store is closing down.
   SingleEvent shutdown_event_;
@@ -219,6 +222,7 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
   // interaction with Env if IOContext were to be owned by LocalLogStore.
   std::vector<std::unique_ptr<IOTracing>> io_tracing_by_shard_;
 
+  std::unique_ptr<RocksDBCustomiser> customiser_;
   std::unique_ptr<RocksDBEnv> env_;
 
   RocksDBLogStoreConfig rocksdb_config_;
@@ -239,12 +243,17 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   // For each shard, the directory containing the shard's database
   std::vector<boost::filesystem::path> shard_paths_;
-  std::vector<dev_t> shard_to_devt_;
 
-  // Mapping between shard idx, and the disk on which it resides
+  // Shards we shouldn't open.
+  std::vector<shard_index_t> disabled_shards_;
+
+  // Mapping between shard idx, and the disk on which it resides.
+  // Empty if is_db_local_ is false.
+  std::vector<dev_t> shard_to_devt_;
   std::unordered_map<dev_t, DiskShardMappingEntry> fspath_to_dsme_;
 
-  // Base path of where the actual RocksDB folders (shards) are located
+  // Base path of where the actual RocksDB folders (shards) are located.
+  // Keep in mind that if is_db_local_ is false, this is not a real path.
   std::string base_path_;
 
   // Number of shards to expect in the base folder
@@ -252,6 +261,12 @@ class ShardedRocksDBLocalLogStore : public ShardedLocalLogStore {
 
   // Indicating if shards are partitioned
   const bool partitioned_;
+
+  // RocksDBCustomiser::isDBLocal().
+  bool is_db_local_;
+
+  // True if createOrValidatePaths() has been called.
+  bool validated_paths_ = false;
 
   // Set to true when all RocksDB databases have been initialized
   bool initialized_ = false;
