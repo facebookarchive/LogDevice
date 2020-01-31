@@ -64,6 +64,7 @@ int migrateLogsConfig(Client& client) {
   auto logsconfig_state_machine = std::make_unique<LogsConfigStateMachine>(
       client_settings->getSettings(),
       updateable_server_config,
+      nullptr, // snapshot_store
       true,
       false /* disable snapshotting */);
 
@@ -306,6 +307,7 @@ int restoreFromDump(Client& client, std::string serialized_dump) {
   auto logsconfig_state_machine = std::make_unique<LogsConfigStateMachine>(
       client_settings->getSettings(),
       updateable_server_config,
+      nullptr, // snapshot store
       true,
       false /* disable snapshotting */);
   // This allows the state machine to make progress to the tail even if there
@@ -436,6 +438,7 @@ int takeSnapshot(Client& client) {
   auto logsconfig_state_machine = std::make_unique<LogsConfigStateMachine>(
       client_settings->getSettings(),
       updateable_server_config,
+      nullptr, // snapshot store
       true,
       false /* disable automatic snapshotting */);
 
@@ -508,6 +511,7 @@ bool isConfigLogReadable(Client& client) {
   auto logsconfig_state_machine = std::make_unique<LogsConfigStateMachine>(
       client_settings->getSettings(),
       updateable_server_config,
+      nullptr, // snapshot store
       true,
       false /* disable snapshotting */);
 

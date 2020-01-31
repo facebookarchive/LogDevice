@@ -56,7 +56,8 @@ void ClusterMaintenanceStateMachineTest::init(int nnodes) {
     }
   }
   sm_ = std::make_unique<ClusterMaintenanceStateMachine>(
-      create_default_settings<AdminServerSettings>());
+      create_default_settings<AdminServerSettings>(),
+      nullptr /* snapshot store*/);
   cluster_state_ = sm_->makeDefaultState(1);
 }
 

@@ -28,6 +28,7 @@
 #include "logdevice/common/plugin/LocationProvider.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/request_util.h"
+#include "logdevice/server/RsmSnapshotStoreFactory.h"
 
 namespace facebook { namespace logdevice { namespace admin {
 StandaloneAdminServer::StandaloneAdminServer(
@@ -244,8 +245,14 @@ void StandaloneAdminServer::initNodesConfigurationManager() {
 
 void StandaloneAdminServer::initLogsConfigManager() {
   ld_check(processor_);
+  auto snapshot_store = RsmSnapshotStoreFactory::create(
+      processor_.get(),
+      settings_->rsm_snapshot_store_type,
+      false, /* is_storage_node */
+      configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS,
+      configuration::InternalLogs::CONFIG_LOG_DELTAS);
   if (!LogsConfigManager::createAndAttach(
-          *processor_, false /* is_writable */)) {
+          *processor_, std::move(snapshot_store), false /* is_writable */)) {
     err = E::INVALID_CONFIG;
     ld_critical("Internal LogsConfig Manager could not be started in Client. "
                 "LogsConfig will not be available!");
@@ -319,7 +326,14 @@ void StandaloneAdminServer::initStatsCollection() {
 }
 
 void StandaloneAdminServer::initEventLog() {
-  event_log_ = std::make_unique<EventLogStateMachine>(settings_);
+  auto snapshot_store = RsmSnapshotStoreFactory::create(
+      processor_.get(),
+      settings_->rsm_snapshot_store_type,
+      false, /* is_storage_node */
+      configuration::InternalLogs::EVENT_LOG_SNAPSHOTS,
+      configuration::InternalLogs::EVENT_LOG_DELTAS);
+  event_log_ = std::make_unique<EventLogStateMachine>(
+      settings_, std::move(snapshot_store));
   event_log_->enableSendingUpdatesToWorkers();
 
   std::unique_ptr<Request> req =
@@ -339,7 +353,7 @@ void StandaloneAdminServer::initClusterMaintenanceStateMachine() {
       admin_settings_->enable_maintenance_manager) {
     cluster_maintenance_state_machine_ =
         std::make_unique<maintenance::ClusterMaintenanceStateMachine>(
-            admin_settings_);
+            admin_settings_, nullptr /* snapshot store */);
 
     std::unique_ptr<Request> req = std::make_unique<
         maintenance::StartClusterMaintenanceStateMachineRequest>(

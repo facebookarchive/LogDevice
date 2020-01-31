@@ -54,7 +54,9 @@ class EventLogStateMachine
  public:
   using Parent = ReplicatedStateMachine<EventLogRebuildingSet, EventLogRecord>;
 
-  explicit EventLogStateMachine(UpdateableSettings<Settings> settings);
+  explicit EventLogStateMachine(
+      UpdateableSettings<Settings> settings,
+      std::unique_ptr<RSMSnapshotStore> snapshot_store);
 
   /**
    * Start reading the event log.

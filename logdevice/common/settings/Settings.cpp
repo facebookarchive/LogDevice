@@ -17,6 +17,7 @@
 #include <boost/thread/thread.hpp>
 #include <folly/String.h>
 
+#include "logdevice/common/SnapshotStoreTypes.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
@@ -391,6 +392,22 @@ parse_authoritative_status_overrides(const std::string& value) {
     }
   }
   return res;
+}
+
+static SnapshotStoreType validate_rsm_snapshot_store(const std::string& value) {
+  if (value == "none") {
+    return SnapshotStoreType::NONE;
+  } else if (value == "log") {
+    return SnapshotStoreType::LOG;
+  } else if (value == "message") {
+    return SnapshotStoreType::MESSAGE;
+  } else if (value == "local-store") {
+    return SnapshotStoreType::LOCAL_STORE;
+  } else {
+    throw boost::program_options::error(
+        "Invalid value for snapshot store: " + value +
+        ". Expected one of 'none', 'log', 'message', 'local-store'.");
+  }
 }
 
 void Settings::defineSettings(SettingEasyInit& init) {
@@ -3225,6 +3242,19 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Allow inclusion of read pointer in RSM snapshots. Note that if this is "
        "set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE!",
        SERVER | CLIENT,
+       SettingsCategory::Core);
+
+  init("rsm-snapshot-store-type",
+       &rsm_snapshot_store_type,
+       "none",
+       validate_rsm_snapshot_store,
+       "One of the following: "
+       "none (use no snapshot store), "
+       "log (use Log Based snapshot store), "
+       "message (Message Based for bootstrapping RSM snapshot from a Remote "
+       "cluster host)"
+       "local-store (From snapshot stored in local store)",
+       SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Core);
 
   init("eventlog-snapshotting-period",

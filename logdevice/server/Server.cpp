@@ -52,6 +52,7 @@
 #include "logdevice/server/NodeRegistrationHandler.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
+#include "logdevice/server/RsmSnapshotStoreFactory.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/UnreleasedRecordDetector.h"
 #include "logdevice/server/ZookeeperEpochStore.h"
@@ -1373,6 +1374,7 @@ bool Server::initSequencerPlacement() {
 }
 
 bool Server::initRebuildingCoordinator() {
+  auto is_storage_node = params_->isStorageNode();
   std::shared_ptr<Configuration> config = processor_->config_->get();
 
   bool enable_rebuilding = false;
@@ -1384,9 +1386,17 @@ bool Server::initRebuildingCoordinator() {
              "an event log by populating the \"internal_logs\" section of the "
              "server config and restart this server");
   } else {
+    ld_info("Initializing EventLog RSM and RebuildingCoordinator");
     enable_rebuilding = true;
-    event_log_ =
-        std::make_unique<EventLogStateMachine>(params_->getProcessorSettings());
+    std::unique_ptr<RSMSnapshotStore> snapshot_store =
+        RsmSnapshotStoreFactory::create(
+            processor_.get(),
+            params_->getProcessorSettings()->rsm_snapshot_store_type,
+            is_storage_node,
+            configuration::InternalLogs::EVENT_LOG_SNAPSHOTS,
+            configuration::InternalLogs::EVENT_LOG_DELTAS);
+    event_log_ = std::make_unique<EventLogStateMachine>(
+        params_->getProcessorSettings(), std::move(snapshot_store));
     event_log_->enableSendingUpdatesToWorkers();
     event_log_->setMyNodeID(params_->getMyNodeID().value());
   }
@@ -1487,9 +1497,16 @@ bool Server::initClusterMaintenanceStateMachine() {
   if (params_->getAdminServerSettings()
           ->enable_cluster_maintenance_state_machine ||
       params_->getAdminServerSettings()->enable_maintenance_manager) {
+    std::unique_ptr<RSMSnapshotStore> snapshot_store =
+        RsmSnapshotStoreFactory::create(
+            processor_.get(),
+            SnapshotStoreType::LOG,
+            params_->isStorageNode(),
+            configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
+            configuration::InternalLogs::MAINTENANCE_LOG_DELTAS);
     cluster_maintenance_state_machine_ =
         std::make_unique<maintenance::ClusterMaintenanceStateMachine>(
-            params_->getAdminServerSettings());
+            params_->getAdminServerSettings(), std::move(snapshot_store));
 
     std::unique_ptr<Request> req = std::make_unique<
         maintenance::StartClusterMaintenanceStateMachineRequest>(
@@ -1540,8 +1557,16 @@ bool Server::startConnectionListener(std::unique_ptr<Listener>& handle) {
 }
 
 bool Server::initLogsConfigManager() {
+  auto is_storage_node = params_->isStorageNode();
+  std::unique_ptr<RSMSnapshotStore> snapshot_store =
+      RsmSnapshotStoreFactory::create(
+          processor_.get(),
+          params_->getProcessorSettings().get()->rsm_snapshot_store_type,
+          is_storage_node,
+          configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS,
+          configuration::InternalLogs::CONFIG_LOG_DELTAS);
   return LogsConfigManager::createAndAttach(
-      *processor_, true /* is_writable */);
+      *processor_, std::move(snapshot_store), true /* is_writable */);
 }
 
 bool Server::initAdminServer() {

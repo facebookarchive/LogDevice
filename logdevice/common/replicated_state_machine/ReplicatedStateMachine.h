@@ -34,6 +34,7 @@
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/replicated_state_machine/RSMSnapshotHeader.h"
+#include "logdevice/common/replicated_state_machine/RSMSnapshotStore.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-enum.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/types_internal.h"
@@ -115,11 +116,15 @@ namespace facebook { namespace logdevice {
 template <typename T, typename D>
 class ReplicatedStateMachine {
  public:
-  explicit ReplicatedStateMachine(RSMType rsm_type,
-                                  logid_t delta_log_id,
-                                  logid_t snapshot_log_id = LOGID_INVALID);
+  explicit ReplicatedStateMachine(
+      RSMType rsm_type,
+      std::unique_ptr<RSMSnapshotStore> snapshot_store,
+      logid_t delta_log_id,
+      logid_t snapshot_log_id = LOGID_INVALID);
 
-  virtual ~ReplicatedStateMachine() {}
+  virtual ~ReplicatedStateMachine() {
+    cancelSnapshotTimer();
+  }
 
   /**
    * Stop reading (equivalent to calling stop()) once the tail of the snapshot
@@ -247,6 +252,9 @@ class ReplicatedStateMachine {
   void allowSkippingBadSnapshots(bool val) {
     can_skip_bad_snapshot_ = val;
   }
+
+  virtual void getSnapshot();
+  virtual void startFetchingSnapshot();
 
   /**
    * Start reading the snapshot and delta logs.
@@ -394,7 +402,9 @@ class ReplicatedStateMachine {
   // snapshot if that snapshot is for a version greater than `version_`. Calls
   // the user-provided `deserializeState()` method to deserialize the state
   // contained in that snapshot.
-  bool processSnapshot(std::unique_ptr<DataRecord>& record);
+  bool
+  processSnapshot(const Payload& payload,
+                  const RSMSnapshotStore::SnapshotAttributes& snapshot_attrs);
 
   // Called when we receive a gap in the snapshot log.
   bool onSnapshotGap(const GapRecord& gap);
@@ -592,6 +602,12 @@ class ReplicatedStateMachine {
   virtual void cancelStallGracePeriod();
   virtual void activateConfirmTimer(boost::uuids::uuid uuid);
 
+  // These functions are for fetching snapshot periodically
+  virtual void initSnapshotTimer();
+  virtual void activateSnapshotTimer();
+  virtual void cancelSnapshotTimer();
+
+  // These functions are for writing snapshots periodically
   virtual void activateGracePeriodForSnapshotting();
   virtual void cancelGracePeriodForSnapshotting();
   virtual bool isGracePeriodForSnapshottingActive();
@@ -608,6 +624,8 @@ class ReplicatedStateMachine {
   boost::uuids::uuid last_uuid_;
 
   boost::uuids::random_generator uuid_gen_;
+
+  std::unique_ptr<RSMSnapshotStore> snapshot_store_{nullptr};
 
   // Options.
   bool stop_at_tail_{false};
@@ -634,9 +652,11 @@ class ReplicatedStateMachine {
   // Deserialize a record in the snapshot log. Expect a RSMSnapshotHeader
   // followed by the payload which the user provides deserialization for through
   // `deserializeState()`.
-  int deserializeSnapshot(const DataRecord& record,
-                          std::unique_ptr<T>& out,
-                          RSMSnapshotHeader& header) const;
+  int deserializeSnapshot(
+      const Payload& payload,
+      const RSMSnapshotStore::SnapshotAttributes& snapshot_attrs,
+      std::unique_ptr<T>& out,
+      RSMSnapshotHeader& header_out) const;
 
   // Called by `onSnapshotRecord()` or `onSnapshotGap()` when we have reached
   // the tail lsn `snapshot_sync_` of the snapshot log. When this
@@ -682,6 +702,8 @@ class ReplicatedStateMachine {
   // snapshot.
   void notifySubscribers(const D* delta = nullptr);
 
+  void advertiseVersions(lsn_t version);
+
   // Discard any entry in pending_confirmation_ that have lsn <=
   // version_ and that we could not confirm either because we fast forwarded
   // with a snapshot or we skipped the delta when we read it because we could
@@ -694,7 +716,7 @@ class ReplicatedStateMachine {
 
   // Currently running request to retrieve tail LSN, either for snapshot log (if
   // SyncState is SYNC_SNAPSHOT) or for deltas log (if SYNC_DELTAS).
-  std::unique_ptr<SyncSequencerRequest> sync_sequencer_request_;
+  std::unique_ptr<SyncSequencerRequest> sync_sequencer_request_{nullptr};
 
   // LSN of the tail of the snapshot log computed on startup. We use this to
   // define which record in the snapshot log can be considered the most recent
@@ -837,7 +859,11 @@ class ReplicatedStateMachine {
   //  - grace period passed after last snapshot
   //  - there are new deltas since last snapshot
   std::chrono::milliseconds snapshot_log_timestamp_{0};
+  // timer for writing snapshots
   Timer snapshotting_timer_;
+
+  // Timer for fetching snapshots periodically
+  std::unique_ptr<ExponentialBackoffTimer> get_snapshot_timer_{nullptr};
 
   // Timer used to schedule deletion of client read streams, so that they
   // are not destroyed inline inside of a callback.

@@ -51,10 +51,13 @@ class LogsConfigManager {
  public:
   LogsConfigManager(UpdateableSettings<Settings> updateable_settings,
                     std::shared_ptr<UpdateableConfig> updateable_config,
+                    std::unique_ptr<RSMSnapshotStore> snapshot_store,
                     WorkerType lcm_worker_type_,
                     bool is_writable);
 
-  static bool createAndAttach(Processor& processor, bool is_writable);
+  static bool createAndAttach(Processor& processor,
+                              std::unique_ptr<RSMSnapshotStore> snapshot_store,
+                              bool is_writable);
   /**
    * Starts the underlying ReplicatedStateMachine and subscribes to its updates
    */
@@ -156,7 +159,8 @@ class LogsConfigManager {
   Timer publish_timer_;
   UpdateableSettings<Settings> settings_;
   std::shared_ptr<UpdateableConfig> updateable_config_;
-  std::unique_ptr<LogsConfigStateMachine> state_machine_;
+  std::unique_ptr<LogsConfigStateMachine> state_machine_{nullptr};
+  std::unique_ptr<RSMSnapshotStore> snapshot_store_{nullptr};
   std::unique_ptr<LogsConfigStateMachine::SubscriptionHandle>
       config_updates_handle_;
   WorkerType lcm_worker_type_;
@@ -173,7 +177,7 @@ class LogsConfigManager {
  * A Request for creating the LogsConfigManager, This does not mean that it will
  * always start the underlying RSM and start publishing new LogsConfig. It will
  * be listening on UpdateableSettings changes for this. If the
- * enable-logsconfig-manager setting is already enabled, It will be start the
+ * enable-logsconfig-manager setting is already enabled, It will start the
  * RSM immediately.
  */
 class StartLogsConfigManagerRequest : public Request {

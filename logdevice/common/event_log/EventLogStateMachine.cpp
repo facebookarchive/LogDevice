@@ -15,8 +15,10 @@ namespace facebook { namespace logdevice {
 template class ReplicatedStateMachine<EventLogRebuildingSet, EventLogRecord>;
 
 EventLogStateMachine::EventLogStateMachine(
-    UpdateableSettings<Settings> settings)
+    UpdateableSettings<Settings> settings,
+    std::unique_ptr<RSMSnapshotStore> snapshot_store)
     : Parent(RSMType::EVENT_LOG_STATE_MACHINE,
+             std::move(snapshot_store),
              configuration::InternalLogs::EVENT_LOG_DELTAS,
              settings->event_log_snapshotting
                  ? configuration::InternalLogs::EVENT_LOG_SNAPSHOTS
@@ -34,6 +36,13 @@ bool EventLogStateMachine::thisNodeCanTrimAndSnapshot() const {
   if (!myNodeId_.hasValue()) {
     return false;
   }
+
+  if (settings_->rsm_snapshot_store_type != SnapshotStoreType::NONE &&
+      snapshot_store_) {
+    return snapshot_store_->isWritable();
+  }
+
+  // TODO: Remove this after deprecating SnapshotStoreType::NONE
   auto w = Worker::onThisThread();
   auto cs = w->getClusterState();
   ld_check(cs != nullptr);

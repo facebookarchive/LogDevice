@@ -46,14 +46,17 @@ int LogsConfigManager::getLogsConfigManagerWorkerIdx(int nthreads) {
   return configuration::InternalLogs::CONFIG_LOG_DELTAS.val_ % nthreads;
 }
 
-bool LogsConfigManager::createAndAttach(Processor& processor,
-                                        bool is_writable) {
+bool LogsConfigManager::createAndAttach(
+    Processor& processor,
+    std::unique_ptr<RSMSnapshotStore> snapshot_store,
+    bool is_writable) {
   std::unique_ptr<LogsConfigManager> manager;
-  ld_debug("Creating LogsConfigManager");
+  ld_info("Creating LogsConfigManager");
 
   manager = std::make_unique<LogsConfigManager>(
       processor.updateableSettings(),
       processor.config_,
+      std::move(snapshot_store),
       LogsConfigManager::workerType(&processor),
       is_writable);
   std::unique_ptr<Request> req =
@@ -77,10 +80,12 @@ bool LogsConfigManager::createAndAttach(Processor& processor,
 LogsConfigManager::LogsConfigManager(
     UpdateableSettings<Settings> updateable_settings,
     std::shared_ptr<UpdateableConfig> updateable_config,
+    std::unique_ptr<RSMSnapshotStore> snapshot_store,
     WorkerType lcm_worker_type,
     bool is_writable)
     : settings_(std::move(updateable_settings)),
       updateable_config_(std::move(updateable_config)),
+      snapshot_store_(std::move(snapshot_store)),
       lcm_worker_type_(lcm_worker_type),
       is_writable_(is_writable) {}
 
@@ -182,7 +187,12 @@ void LogsConfigManager::start() {
   };
   auto updateable_server_config = updateable_config_->updateableServerConfig();
   state_machine_ = std::make_unique<LogsConfigStateMachine>(
-      settings_, updateable_server_config, is_writable_);
+      settings_,
+      updateable_server_config,
+      std::move(snapshot_store_),
+      is_writable_,
+      is_writable_ // if the store is not writable, we'll disable snapshotting
+  );
 
   config_updates_handle_ = state_machine_->subscribe(cb);
   // Used to know whether the LogsConfig Manager is STARTED or not.
