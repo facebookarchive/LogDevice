@@ -146,7 +146,7 @@ void Connection::scheduleWriteChain() {
            to_msec(now - sched_start_time_).count());
 
   // Get bytes that are added to sendq but not yet added in the asyncSocket.
-  auto bytes_in_sendq = Socket_DEPRECATED::getBufferedBytesSize();
+  auto bytes_in_sendq = getBufferedBytesSize() - sock_write_cb_.bytes_buffered;
   sock_write_cb_.write_chains.emplace_back(
       SocketWriteCallback::WriteUnit{bytes_in_sendq, now});
   // These bytes are now buffered in socket and will be removed from sendq.
@@ -182,41 +182,6 @@ void Connection::close(Status reason) {
   }
 }
 
-void Connection::flushOutputAndClose(Status reason) {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  if (legacy_connection_) {
-    return Socket_DEPRECATED::flushOutputAndClose(reason);
-  }
-
-  if (isClosed()) {
-    return;
-  }
-
-  if (getBufferedBytesSize() > 0) {
-    close_reason_ = reason;
-    // Set the readcallback to nullptr as we know that socket is getting closed.
-    proto_handler_->sock()->setReadCB(nullptr);
-  } else {
-    close(reason);
-  }
-}
-
-bool Connection::good() const {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  auto is_good = Socket_DEPRECATED::good();
-
-  // Outgoing message send checks in Sender if the socket is closed or good
-  // before using it to send message. If the socket is already bad, Sender takes
-  // the decision to create a new connection. This is a tiny optimization
-  // helps messages from being written into a bad socket only to end up with
-  // onSent error.
-  if (!legacy_connection_) {
-    return is_good && proto_handler_->good();
-  }
-
-  return is_good;
-}
-
 int Connection::dispatchMessageBody(ProtocolHeader header,
                                     std::unique_ptr<folly::IOBuf> msg_buffer) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
@@ -240,37 +205,6 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   return rv;
 }
 
-size_t Connection::getBufferedBytesSize() const {
-  // This covers the bytes in sendChain_
-  size_t buffered_bytes = Socket_DEPRECATED::getBufferedBytesSize();
-  // This covers the bytes buffered in asyncsocket.
-  if (!legacy_connection_) {
-    buffered_bytes += sock_write_cb_.bytes_buffered;
-  }
-  return buffered_bytes;
-}
-
-size_t Connection::getBytesPending() const {
-  // Covers bytes in various queues.
-  size_t bytes_pending = Socket_DEPRECATED::getBytesPending();
-  if (!legacy_connection_) {
-    // Covers bytes in sendChain and asyncsocket.
-    bytes_pending += getBufferedBytesSize();
-  }
-  return bytes_pending;
-}
-
-folly::ssl::X509UniquePtr Connection::getPeerCert() const {
-  if (legacy_connection_) {
-    return Socket_DEPRECATED::getPeerCert();
-  }
-  ld_check(isSSL());
-  auto sock_peer_cert = proto_handler_->sock()->getPeerCertificate();
-  if (sock_peer_cert) {
-    return sock_peer_cert->getX509();
-  }
-  return nullptr;
-}
 void Connection::onBytesPassedToTCP(size_t nbytes) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   if (legacy_connection_) {

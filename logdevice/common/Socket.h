@@ -346,7 +346,7 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    *
    * @param reason for closing. See close().
    */
-  virtual void flushOutputAndClose(Status reason);
+  void flushOutputAndClose(Status reason);
 
   /**
    * Set the RFC 2474 "Differentiated Services Field Code Point" value
@@ -370,7 +370,7 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * @return true iff socket is in a good state to be used for reading and
    * writing.
    */
-  virtual bool good() const;
+  bool good() const;
   /**
    * @return true iff close() has been called on the socket and all clients have
    * dropped references.
@@ -546,7 +546,7 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * @return should only be called if the socket is SSL enabled. Returns
    *         the peers certificate if one was provided and nullptr otherwise.
    */
-  virtual folly::ssl::X509UniquePtr getPeerCert() const;
+  folly::ssl::X509UniquePtr getPeerCert() const;
 
   void setPeerShuttingDown() {
     peer_shuttingdown_ = true;
@@ -579,13 +579,13 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
   /**
    * The amount of bytes waiting to be sent on this socket.
    */
-  virtual size_t getBytesPending() const;
+  size_t getBytesPending() const;
 
   /**
    * The amount of bytes buffered in the socket layer underneath this
    * connection. For example bytes buffered in asyncsocket or evbuffer.
    */
-  virtual size_t getBufferedBytesSize() const;
+  size_t getBufferedBytesSize() const;
 
   /**
    * Run checks to make sure if the socket performing as expected.

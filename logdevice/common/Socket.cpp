@@ -800,7 +800,12 @@ void Socket_DEPRECATED::onOutputEmpty(struct bufferevent*, void* arg, short) {
 }
 
 void Socket_DEPRECATED::flushOutputAndClose(Status reason) {
-  auto pending_bytes = getTotalOutbufLength();
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
+  if (isClosed()) {
+    return;
+  }
+  auto pending_bytes =
+      legacy_connection_ ? getTotalOutbufLength() : getBufferedBytesSize();
 
   if (pending_bytes == 0) {
     close(reason);
@@ -813,17 +818,24 @@ void Socket_DEPRECATED::flushOutputAndClose(Status reason) {
 
   close_reason_ = reason;
 
-  // - Remove the read callback as we are not processing any more message
-  //   since we are about to close the connection.
-  // - Set up the write callback and the low write watermark to 0 so that the
-  //   callback will be called when the output buffer is flushed and will close
-  //   the connection using close_reason_ for the error code.
-  deps_->buffereventSetWatermark(bev_, EV_WRITE, 0, 0);
-  deps_->buffereventSetCb(bev_,
-                          nullptr,
-                          BufferEventHandler<Socket_DEPRECATED::onOutputEmpty>,
-                          BufferEventHandler<Socket_DEPRECATED::eventCallback>,
-                          (void*)this);
+  if (legacy_connection_) {
+    // - Remove the read callback as we are not processing any more message
+    //   since we are about to close the connection.
+    // - Set up the write callback and the low write watermark to 0 so that the
+    //   callback will be called when the output buffer is flushed and will
+    //   close the connection using close_reason_ for the error code.
+    deps_->buffereventSetWatermark(bev_, EV_WRITE, 0, 0);
+    deps_->buffereventSetCb(
+        bev_,
+        nullptr,
+        BufferEventHandler<Socket_DEPRECATED::onOutputEmpty>,
+        BufferEventHandler<Socket_DEPRECATED::eventCallback>,
+        (void*)this);
+  } else {
+    // For new sockets, set the readcallback to nullptr as we know that socket
+    // is getting closed.
+    proto_handler_->sock()->setReadCB(nullptr);
+  }
 }
 
 void Socket_DEPRECATED::onBytesAvailable(bool fresh) {
@@ -1459,7 +1471,13 @@ bool Socket_DEPRECATED::isClosed() const {
 }
 
 bool Socket_DEPRECATED::good() const {
-  return !Socket_DEPRECATED::isClosed();
+  auto g = folly::makeGuard(getDeps()->setupContextGuard());
+  auto is_good = !isClosed();
+  if (!legacy_connection_) {
+    return is_good && proto_handler_->good();
+  }
+
+  return is_good;
 }
 
 bool Socket_DEPRECATED::sizeLimitsExceeded() const {
@@ -2519,11 +2537,22 @@ size_t Socket_DEPRECATED::getBytesPending() const {
     buffered_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
   }
 
+  if (!legacy_connection_) {
+    buffered_bytes += getBufferedBytesSize();
+  }
+
   return queued_bytes + buffered_bytes;
 }
 
 size_t Socket_DEPRECATED::getBufferedBytesSize() const {
-  return next_pos_ - drain_pos_;
+  // This covers the bytes in sendq or in sendChain_ for asyncSocket based
+  // implementation.
+  size_t buffered_bytes = next_pos_ - drain_pos_;
+  // This covers the bytes buffered in asyncsocket.
+  if (!legacy_connection_) {
+    buffered_bytes += sock_write_cb_.bytes_buffered;
+  }
+  return buffered_bytes;
 }
 
 void Socket_DEPRECATED::handshakeTimeoutCallback(void* arg, short) {
@@ -2623,12 +2652,20 @@ bool Socket_DEPRECATED::peerIsClient() const {
 folly::ssl::X509UniquePtr Socket_DEPRECATED::getPeerCert() const {
   ld_check(isSSL());
 
-  // This function should only be called when the socket is SSL enabled.
-  // This means this should always return a valid ssl context.
-  SSL* ctx = bufferevent_openssl_get_ssl(bev_);
-  ld_check(ctx);
+  if (legacy_connection_) {
+    // This function should only be called when the socket is SSL enabled.
+    // This means this should always return a valid ssl context.
+    SSL* ctx = bufferevent_openssl_get_ssl(bev_);
+    ld_check(ctx);
 
-  return folly::ssl::X509UniquePtr(SSL_get_peer_certificate(ctx));
+    return folly::ssl::X509UniquePtr(SSL_get_peer_certificate(ctx));
+  }
+
+  auto sock_peer_cert = proto_handler_->sock()->getPeerCertificate();
+  if (sock_peer_cert) {
+    return sock_peer_cert->getX509();
+  }
+  return nullptr;
 }
 
 SocketDrainStatusType
