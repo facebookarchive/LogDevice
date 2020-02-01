@@ -51,8 +51,7 @@ class SSLFetcher {
    * @return                  a pointer to the created SSLContext or a null
    *                          pointer if the certificate could not be loaded.
    */
-  std::shared_ptr<folly::SSLContext> getSSLContext(bool loadCert,
-                                                   bool ssl_accepting);
+  std::shared_ptr<folly::SSLContext> getSSLContext(bool loadCert);
 
   /**
    * @param loadCert          Defines whether or not the certificate will be
@@ -84,14 +83,13 @@ class SSLFetcher {
   std::shared_ptr<const fizz::client::FizzClientContext> fizz_cli_context_;
   std::shared_ptr<const fizz::CertificateVerifier> fizz_cli_verifier_;
   std::shared_ptr<const fizz::server::FizzServerContext> fizz_srv_context_;
-  bool last_accepting_state_ = false;
   bool last_load_cert_ = false;
   StatsHolder* stats_{nullptr};
 
   // a context update is required when refresh_interval_ has passed or when any
   // of the input information is changed
-  bool requireContextUpdate(bool loadCert, bool ssl_accepting) const;
-  void updateState(bool loadCert, bool ssl_accepting, X509* cert);
+  bool requireContextUpdate(bool loadCert) const;
+  void updateState(bool loadCert, X509* cert);
 };
 
 }} // namespace facebook::logdevice

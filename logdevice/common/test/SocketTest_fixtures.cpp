@@ -44,7 +44,7 @@ size_t TestSocketDependencies::getBytesPending() const {
 }
 
 std::shared_ptr<folly::SSLContext>
-TestSocketDependencies::getSSLContext(bool /* accepting */) const {
+TestSocketDependencies::getSSLContext() const {
   return nullptr;
 }
 

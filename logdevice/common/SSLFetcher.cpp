@@ -11,9 +11,8 @@
 
 namespace facebook { namespace logdevice {
 
-std::shared_ptr<folly::SSLContext>
-SSLFetcher::getSSLContext(bool loadCert, bool ssl_accepting) {
-  if (!context_ || requireContextUpdate(loadCert, ssl_accepting)) {
+std::shared_ptr<folly::SSLContext> SSLFetcher::getSSLContext(bool loadCert) {
+  if (!context_ || requireContextUpdate(loadCert)) {
     try {
       context_.reset(new folly::SSLContext());
       context_->loadTrustedCertificates(ca_path_.c_str());
@@ -24,21 +23,7 @@ SSLFetcher::getSSLContext(bool loadCert, bool ssl_accepting) {
         context_->loadPrivateKey(key_path_.c_str());
       }
 
-      // The node that accepts the connection must present all valid ciphers
-      // that the connecting socket can use. Since we want to separate
-      // encryption and authentication, we include eNULL ciphers in the
-      // list of valid ciphers [DEPRECATED]. It is up to the connecting socket
-      // to limit the list of valid ciphers to enable or disable encryption.
-      std::string null_ciphers = "eNULL";
-#if FOLLY_OPENSSL_IS_110
-      null_ciphers += ":@SECLEVEL=0";
-#endif
-      if (ssl_accepting) {
-        context_->ciphers("ALL:!COMPLEMENTOFDEFAULT:" + null_ciphers +
-                          ":@STRENGTH");
-      } else {
-        context_->ciphers("ALL:!COMPLEMENTOFDEFAULT:!eNULL:@STRENGTH");
-      }
+      context_->ciphers("ALL:!COMPLEMENTOFDEFAULT:!eNULL:@STRENGTH");
 
       // Dropping the buffers we are not using and not compressing data
       context_->setOptions(SSL_OP_NO_COMPRESSION);
@@ -59,9 +44,7 @@ SSLFetcher::getSSLContext(bool loadCert, bool ssl_accepting) {
       SSL_CTX_set_session_cache_mode(context_->getSSLCtx(), SSL_SESS_CACHE_OFF);
 
       // keep track of context creation parameters
-      updateState(loadCert,
-                  ssl_accepting,
-                  SSL_CTX_get0_certificate(context_->getSSLCtx()));
+      updateState(loadCert, SSL_CTX_get0_certificate(context_->getSSLCtx()));
     } catch (const std::exception& ex) {
       ld_error("Failed to load SSL certificate, ex: %s", ex.what());
       context_.reset();
@@ -73,8 +56,7 @@ SSLFetcher::getSSLContext(bool loadCert, bool ssl_accepting) {
 
 std::shared_ptr<const fizz::server::FizzServerContext>
 SSLFetcher::getFizzServerContext() {
-  if (!fizz_srv_context_ ||
-      requireContextUpdate(true /* loadCert */, true /* ssl_accepting */)) {
+  if (!fizz_srv_context_ || requireContextUpdate(true /* loadCert */)) {
     try {
       auto context = std::make_shared<fizz::server::FizzServerContext>();
       // request client certificate, but don't force to use it
@@ -91,7 +73,7 @@ SSLFetcher::getFizzServerContext() {
 
       fizz_srv_context_ = std::move(context);
       // keep track of context creation parameters
-      updateState(true, true, x509.get());
+      updateState(true, x509.get());
 
     } catch (const std::exception& ex) {
       ld_error("Failed to create SSL context, ex: %s", ex.what());
@@ -104,8 +86,7 @@ SSLFetcher::getFizzServerContext() {
 std::pair<std::shared_ptr<const fizz::client::FizzClientContext>,
           std::shared_ptr<const fizz::CertificateVerifier>>
 SSLFetcher::getFizzClientContext(bool loadCert) {
-  if (!fizz_cli_context_ ||
-      requireContextUpdate(loadCert, false /* ssl_accepting */)) {
+  if (!fizz_cli_context_ || requireContextUpdate(loadCert)) {
     try {
       auto context = std::make_shared<fizz::client::FizzClientContext>();
       fizz_cli_verifier_ = createCertVerifier<fizz::DefaultCertificateVerifier>(
@@ -118,7 +99,7 @@ SSLFetcher::getFizzClientContext(bool loadCert) {
       }
       fizz_cli_context_ = std::move(context);
       // keep track of context creation parameters
-      updateState(loadCert, false, x509.get());
+      updateState(loadCert, x509.get());
 
     } catch (const std::exception& ex) {
       ld_error("Failed to create client SSL context, ex: %s", ex.what());
@@ -160,17 +141,16 @@ std::unique_ptr<fizz::SelfCert> SSLFetcher::createSelfCert() const {
   return fizz::CertUtils::makeSelfCert(cert_data, key_data);
 }
 
-bool SSLFetcher::requireContextUpdate(bool loadCert, bool ssl_accepting) const {
+bool SSLFetcher::requireContextUpdate(bool loadCert) const {
   auto now = std::chrono::steady_clock::now();
   bool update = (last_load_cert_ && now - last_loaded_ > refresh_interval_) ||
-      loadCert != last_load_cert_ || ssl_accepting != last_accepting_state_;
+      loadCert != last_load_cert_;
   return update;
 }
 
-void SSLFetcher::updateState(bool loadCert, bool ssl_accepting, X509* cert) {
+void SSLFetcher::updateState(bool loadCert, X509* cert) {
   ld_check(!loadCert || cert);
   last_load_cert_ = loadCert;
-  last_accepting_state_ = ssl_accepting;
   if (stats_) {
     STAT_INCR(stats_, ssl_context_created);
   }

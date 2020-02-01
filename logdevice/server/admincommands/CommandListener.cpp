@@ -288,7 +288,7 @@ void AdminCommandConnection::fizzHandshakeAttemptFallback(
   auto fd = socket->detachNetworkSocket().toFd();
   fizz_server_.reset();
 
-  auto ctx = listener_.ssl_fetcher_.getSSLContext(true, true);
+  auto ctx = listener_.ssl_fetcher_.getSSLContext(true);
   if (!ctx) {
     ld_error("no SSL context, dropping connection");
     closeConnectionAndDestroyObject();

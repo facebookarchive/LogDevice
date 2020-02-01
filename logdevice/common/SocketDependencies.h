@@ -63,7 +63,7 @@ class SocketDependencies {
                                 folly::Optional<MessageType>);
   virtual size_t getBytesPending() const;
 
-  virtual SSLCtxPtr getSSLContext(bool accepting) const;
+  virtual SSLCtxPtr getSSLContext() const;
   virtual std::shared_ptr<const fizz::server::FizzServerContext>
   getFizzServerContext() const;
   virtual FizzClientCtxPair getFizzClientContext() const;

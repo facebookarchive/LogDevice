@@ -53,7 +53,7 @@ class TestSocketDependencies : public SocketDependencies {
                                 PeerType peer_type,
                                 folly::Optional<MessageType>) override;
   virtual size_t getBytesPending() const override;
-  virtual std::shared_ptr<folly::SSLContext> getSSLContext(bool) const override;
+  virtual std::shared_ptr<folly::SSLContext> getSSLContext() const override;
   virtual bool shuttingDown() const override;
   virtual std::string dumpQueuedMessages(Address addr) const override;
   virtual const Sockaddr& getNodeSockaddr(NodeID node_id,
