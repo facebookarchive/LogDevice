@@ -103,6 +103,7 @@ void ReplicatedStateMachine<T, D>::getSnapshot() {
         case E::FAILED:
         case E::TIMEDOUT:
         case E::INPROGRESS:
+        case E::TOOBIG:
           // Let snapshot timer retry
           break;
         default:
@@ -1356,6 +1357,28 @@ void ReplicatedStateMachine<T, D>::notifySubscribers(const D* delta) {
   }
 
   advertiseVersions(version_);
+}
+
+template <typename T, typename D>
+Status ReplicatedStateMachine<T, D>::getSnapshotFromMemory(
+    lsn_t min_ver,
+    lsn_t& version_out,
+    std::string& snapshot_blob_out) {
+  rsm_debug(rsm_type_,
+            "min_ver:%s, version_:%s",
+            lsn_to_string(min_ver).c_str(),
+            lsn_to_string(version_).c_str());
+
+  if (min_ver > version_) {
+    version_out = version_;
+    return E::STALE;
+  }
+
+  bool include_read_ptr =
+      Worker::settings().rsm_include_read_pointer_in_snapshot;
+  snapshot_blob_out = createSnapshotPayload(*data_, version_, include_read_ptr);
+  version_out = version_;
+  return E::OK;
 }
 
 template <typename T, typename D>

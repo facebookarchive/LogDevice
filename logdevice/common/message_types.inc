@@ -108,6 +108,10 @@ MESSAGE_TYPE(DATA_SIZE, 'O')    // request to approximate data size by
                                 // time range, log
 MESSAGE_TYPE(DATA_SIZE_REPLY, 'P')  // response to DATA_SIZE request
 
+MESSAGE_TYPE(GET_RSM_SNAPSHOT, '&')
+MESSAGE_TYPE(GET_RSM_SNAPSHOT_REPLY, '*')
+
+
 MESSAGE_TYPE(TEST, char(1))
 
 #undef MESSAGE_TYPE

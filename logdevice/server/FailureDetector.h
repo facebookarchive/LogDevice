@@ -260,7 +260,7 @@ class FailureDetector {
    */
   Status getAllRSMVersionsInCluster(
       logid_t rsm_type,
-      std::map<lsn_t, node_index_t, std::greater<lsn_t>>& result_out);
+      std::multimap<lsn_t, node_index_t, std::greater<lsn_t>>& result_out);
 
   /* Get all NCM versions for a given node
    * The order is mentioned in FailureDetector::Node::ncm_versions_

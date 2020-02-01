@@ -433,6 +433,10 @@ class ReplicatedStateMachine {
   // multiple times.
   void onGotSnapshotLogTailLSN(Status st, lsn_t start, lsn_t lsn);
 
+  virtual Status getSnapshotFromMemory(lsn_t min_ver,
+                                       lsn_t& version_out,
+                                       std::string& snapshot_blob_out);
+
   // Create a payload for a snapshot. The payload includes `data` serialized as
   // well as the version of that snapshot.
   std::string createSnapshotPayload(const T& data,
