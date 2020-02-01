@@ -9,6 +9,7 @@
 #include <memory>
 #include <thread>
 
+#include <folly/Conv.h>
 #include <folly/Random.h>
 #include <folly/hash/Checksum.h>
 #include <gtest/gtest.h>
@@ -401,6 +402,13 @@ TEST_P(ReadingIntegrationTest, ReaderSSLTest) {
       cluster->createClient(testTimeout(), std::move(client_settings));
 
   IntegrationTest_RunReaderTest(cluster.get(), client);
+
+  // Check that the number of SSL context created, is greater than 0 but not
+  // greater than the number of workers.
+  Stats s = dynamic_cast<ClientImpl*>(client.get())->stats()->aggregate();
+  ASSERT_LE(1, s.ssl_context_created);
+  ASSERT_GE(folly::to<size_t>(client->settings().get("num-workers").value()),
+            s.ssl_context_created);
 }
 
 TEST_P(ReadingIntegrationTest, ReaderSSLNoClientCertTest) {

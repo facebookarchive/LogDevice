@@ -37,6 +37,8 @@ STAT_DEFINE(worker_executed_hi_pri_work, SUM)
 STAT_DEFINE(worker_executed_mid_pri_work, SUM)
 STAT_DEFINE(worker_executed_lo_pri_work, SUM)
 
+STAT_DEFINE(ssl_context_created, SUM)
+
 // See OverloadDetector
 STAT_DEFINE(num_workers_tracked_by_overload_detector, SUM)
 STAT_DEFINE(num_overloaded_workers, SUM)

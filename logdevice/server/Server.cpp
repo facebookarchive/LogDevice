@@ -716,7 +716,8 @@ bool Server::initListeners() {
         SSLFetcher{params_->getProcessorSettings()->ssl_cert_path,
                    params_->getProcessorSettings()->ssl_key_path,
                    params_->getProcessorSettings()->ssl_ca_path,
-                   params_->getProcessorSettings()->ssl_cert_refresh_interval});
+                   params_->getProcessorSettings()->ssl_cert_refresh_interval,
+                   params_->getStats()});
 
     auto nodes_configuration = updateable_config_->getNodesConfiguration();
     ld_check(nodes_configuration);

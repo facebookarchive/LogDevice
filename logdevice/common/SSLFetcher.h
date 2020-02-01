@@ -21,6 +21,8 @@
 
 namespace facebook { namespace logdevice {
 
+class StatsHolder;
+
 /**
  * @file Loads the SSL context from the specified files, reloads it if it gets
  *       older than the defined expiration interval, provides a shared_ptr to
@@ -32,11 +34,13 @@ class SSLFetcher {
   SSLFetcher(const std::string& cert_path,
              const std::string& key_path,
              const std::string& ca_path,
-             std::chrono::seconds refresh_interval)
+             std::chrono::seconds refresh_interval,
+             StatsHolder* stats = nullptr)
       : cert_path_(cert_path),
         key_path_(key_path),
         ca_path_(ca_path),
-        refresh_interval_(refresh_interval) {}
+        refresh_interval_(refresh_interval),
+        stats_(stats) {}
 
   /**
    * @param loadCert          Defines whether or not the certificate will be
@@ -82,10 +86,12 @@ class SSLFetcher {
   std::shared_ptr<const fizz::server::FizzServerContext> fizz_srv_context_;
   bool last_accepting_state_ = false;
   bool last_load_cert_ = false;
+  StatsHolder* stats_{nullptr};
 
   // a context update is required when refresh_interval_ has passed or when any
   // of the input information is changed
-  bool requireContextUpdate(bool loadCert, bool ssl_accepting);
+  bool requireContextUpdate(bool loadCert, bool ssl_accepting) const;
+  void updateState(bool loadCert, bool ssl_accepting, X509* cert);
 };
 
 }} // namespace facebook::logdevice

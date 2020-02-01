@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/SSLFetcher.h"
 
+#include "logdevice/common/stats/Stats.h"
+
 namespace facebook { namespace logdevice {
 
 std::shared_ptr<folly::SSLContext>
@@ -56,6 +58,10 @@ SSLFetcher::getSSLContext(bool loadCert, bool ssl_accepting) {
       // Disabling sessions caching
       SSL_CTX_set_session_cache_mode(context_->getSSLCtx(), SSL_SESS_CACHE_OFF);
 
+      // keep track of context creation parameters
+      updateState(loadCert,
+                  ssl_accepting,
+                  SSL_CTX_get0_certificate(context_->getSSLCtx()));
     } catch (const std::exception& ex) {
       ld_error("Failed to load SSL certificate, ex: %s", ex.what());
       context_.reset();
@@ -76,12 +82,16 @@ SSLFetcher::getFizzServerContext() {
           fizz::VerificationContext::Server);
       context->setClientCertVerifier(std::move(verifier));
       auto cert_mgr = std::make_unique<fizz::server::CertManager>();
-      cert_mgr->addCert(createSelfCert(), true);
+      auto cert = createSelfCert();
+      auto x509 = cert->getX509();
+      cert_mgr->addCert(std::move(cert), true);
       context->setCertManager(std::move(cert_mgr));
       context->setVersionFallbackEnabled(true);
       context->setClientAuthMode(fizz::server::ClientAuthMode::Optional);
 
       fizz_srv_context_ = std::move(context);
+      // keep track of context creation parameters
+      updateState(true, true, x509.get());
 
     } catch (const std::exception& ex) {
       ld_error("Failed to create SSL context, ex: %s", ex.what());
@@ -100,10 +110,15 @@ SSLFetcher::getFizzClientContext(bool loadCert) {
       auto context = std::make_shared<fizz::client::FizzClientContext>();
       fizz_cli_verifier_ = createCertVerifier<fizz::DefaultCertificateVerifier>(
           fizz::VerificationContext::Client);
+      folly::ssl::X509UniquePtr x509{nullptr};
       if (loadCert) {
-        context->setClientCertificate(createSelfCert());
+        auto cert = createSelfCert();
+        x509 = cert->getX509();
+        context->setClientCertificate(std::move(cert));
       }
       fizz_cli_context_ = std::move(context);
+      // keep track of context creation parameters
+      updateState(loadCert, false, x509.get());
 
     } catch (const std::exception& ex) {
       ld_error("Failed to create client SSL context, ex: %s", ex.what());
@@ -145,17 +160,24 @@ std::unique_ptr<fizz::SelfCert> SSLFetcher::createSelfCert() const {
   return fizz::CertUtils::makeSelfCert(cert_data, key_data);
 }
 
-bool SSLFetcher::requireContextUpdate(bool loadCert, bool ssl_accepting) {
+bool SSLFetcher::requireContextUpdate(bool loadCert, bool ssl_accepting) const {
   auto now = std::chrono::steady_clock::now();
-  bool update = now - last_loaded_ > refresh_interval_ ||
+  bool update = (last_load_cert_ && now - last_loaded_ > refresh_interval_) ||
       loadCert != last_load_cert_ || ssl_accepting != last_accepting_state_;
-
-  if (update) {
-    last_loaded_ = now;
-    last_accepting_state_ = ssl_accepting;
-    last_load_cert_ = loadCert;
-  }
   return update;
+}
+
+void SSLFetcher::updateState(bool loadCert, bool ssl_accepting, X509* cert) {
+  ld_check(!loadCert || cert);
+  last_load_cert_ = loadCert;
+  last_accepting_state_ = ssl_accepting;
+  if (stats_) {
+    STAT_INCR(stats_, ssl_context_created);
+  }
+  if (!cert) {
+    return;
+  }
+  last_loaded_ = std::chrono::steady_clock::now();
 }
 
 }} // namespace facebook::logdevice

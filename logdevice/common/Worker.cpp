@@ -140,7 +140,8 @@ class WorkerImpl {
         sslFetcher_(w->immutable_settings_->ssl_cert_path,
                     w->immutable_settings_->ssl_key_path,
                     w->immutable_settings_->ssl_ca_path,
-                    w->immutable_settings_->ssl_cert_refresh_interval),
+                    w->immutable_settings_->ssl_cert_refresh_interval,
+                    stats),
 
         graylistingTracker_(std::make_unique<GraylistingTracker>())
 
