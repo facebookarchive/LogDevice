@@ -7,10 +7,11 @@
  */
 #pragma once
 
-#include <folly/CachelinePadded.h>
 #include <folly/Format.h>
 #include <folly/Preprocessor.h>
 #include <folly/ThreadLocal.h>
+#include <folly/Utility.h>
+#include <folly/lang/Aligned.h>
 
 #include "logdevice/common/checks.h"
 #include "logdevice/common/toString.h"
@@ -204,7 +205,7 @@ class IOTracing {
   };
 
   shard_index_t shardIdx_;
-  folly::CachelinePadded<std::atomic<bool>> enabled_{false};
+  folly::cacheline_aligned<std::atomic<bool>> enabled_{folly::in_place, false};
   folly::ThreadLocal<State> state_;
 };
 
