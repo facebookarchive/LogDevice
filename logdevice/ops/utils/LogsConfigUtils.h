@@ -15,18 +15,6 @@ namespace facebook {
       namespace LogsConfig {
 
 /***
- * This function is meant to be used to migrate a Client running of a
- * LocalLogsConfig backed by a config file into LogsConfigManager. In order for
- * this work the following should be respected:
- *   - The client should be running without "enable-logsconfig-manager" setting
- *     while it will still work on this setting is enabled, it doesn't make
- *     much sense to copy the tree from LogsConfigManager into itself.
- *   - Servers need to be running with "enable-logsconfig-manager". Not
- *     necessarily the entire cluster though.
- */
-int migrateLogsConfig(Client& client);
-
-/***
  * This dumps the current LogsConfigTree loaded by this client, serializes it
  * using FBuffersLogsConfigCodec and returns the result.
  */
