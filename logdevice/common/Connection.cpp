@@ -157,31 +157,6 @@ void Connection::scheduleWriteChain() {
   onBytesAdmittedToSend(bytes_in_sendq);
 }
 
-void Connection::close(Status reason) {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  if (isClosed()) {
-    return;
-  }
-  // Calculate buffered bytes before clearing any member variables
-  size_t buffered_bytes = getBufferedBytesSize();
-  Socket_DEPRECATED::close(reason);
-  if (!legacy_connection_) {
-    // Clear read callback on close.
-    proto_handler_->sock()->setReadCB(nullptr);
-    if (buffered_bytes != 0 && !deps_->shuttingDown()) {
-      getDeps()->noteBytesDrained(buffered_bytes,
-                                  getPeerType(),
-                                  /* message_type */ folly::none);
-    }
-    sock_write_cb_.clear();
-    sendChain_.reset();
-    sched_write_chain_.cancelTimeout();
-    // Invoke closeNow before deleting the writing callback below.
-    proto_handler_->sock()->closeNow();
-    ld_check(getBufferedBytesSize() == 0);
-  }
-}
-
 int Connection::dispatchMessageBody(ProtocolHeader header,
                                     std::unique_ptr<folly::IOBuf> msg_buffer) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());

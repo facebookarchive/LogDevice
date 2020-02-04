@@ -339,7 +339,7 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    *                          DESTINATION_MISMATCH, PEER_CLOSED,
    *                          PEER_UNAVAILABLE, INVALID_CLUSTER.
    */
-  virtual void close(Status reason);
+  void close(Status reason);
 
   /**
    * Make sure any enqueued message is sent and close the connection.
@@ -918,6 +918,16 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
   SocketDrainStatusType getSlowSocketReason(unsigned* network_limited,
                                             unsigned* rwnd_limited,
                                             unsigned* sndbuf_limited);
+
+  /**
+   * Helper to reset state of member variables at connection close.
+   */
+  void markDisconnectedOnClose();
+  /**
+   * Helper function to clear queues and call appropriate callback functions at
+   * connection close.
+   */
+  void clearConnQueues(Status close_reason);
 
   // Reference holder that holds socket pointer and is distributed to
   // whoever wants cache the socket. It is encapsulated in SocketProxy. The

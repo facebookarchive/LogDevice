@@ -123,8 +123,6 @@ class Connection : public Socket_DEPRECATED {
   Socket_DEPRECATED::SendStatus
   sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) override;
 
-  void close(Status reason) override;
-
   void onBytesPassedToTCP(size_t nbytes) override;
 
   int dispatchMessageBody(ProtocolHeader header,

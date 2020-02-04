@@ -1292,6 +1292,7 @@ void Socket_DEPRECATED::setSoMark(uint32_t so_mark) {
 }
 
 void Socket_DEPRECATED::close(Status reason) {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   ld_debug("Closing Socket %s, reason %s ",
            conn_description_.c_str(),
            error_name(reason));
@@ -1371,8 +1372,31 @@ void Socket_DEPRECATED::close(Status reason) {
 
     deps_->buffereventFree(bev_); // this also closes the TCP socket
     bev_ = nullptr;
+  } else {
+    size_t buffered_bytes = getBufferedBytesSize();
+    // Clear read callback on close.
+    proto_handler_->sock()->setReadCB(nullptr);
+    if (buffered_bytes != 0 && !deps_->shuttingDown()) {
+      getDeps()->noteBytesDrained(buffered_bytes,
+                                  getPeerType(),
+                                  /* message_type */ folly::none);
+    }
+    sock_write_cb_.clear();
+    sendChain_.reset();
+    sched_write_chain_.cancelTimeout();
+    // Invoke closeNow to close the socket.
+    proto_handler_->sock()->closeNow();
   }
 
+  markDisconnectedOnClose();
+  clearConnQueues(reason);
+  STAT_DECR(deps_->getStats(), num_connections);
+  if (isSSL()) {
+    STAT_DECR(deps_->getStats(), num_ssl_connections);
+  }
+}
+
+void Socket_DEPRECATED::markDisconnectedOnClose() {
   // socket was just closed; make sure it's properly accounted for
   conn_incoming_token_.release();
   conn_external_token_.release();
@@ -1383,17 +1407,14 @@ void Socket_DEPRECATED::close(Status reason) {
   ssl_context_.reset();
   peer_config_version_ = config_version_t(0);
 
-  STAT_DECR(deps_->getStats(), num_connections);
-  if (isSSL()) {
-    STAT_DECR(deps_->getStats(), num_ssl_connections);
-  }
-
   read_more_.cancelTimeout();
   connect_timeout_event_.cancelTimeout();
   handshake_timeout_event_.cancelTimeout();
   deferred_event_queue_event_.cancelTimeout();
   end_stream_rewind_event_.cancelTimeout();
+}
 
+void Socket_DEPRECATED::clearConnQueues(Status close_reason) {
   // Move everything here so that this Socket object has a clean state
   // before we call any callback.
   PendingQueue moved_pendingq = std::move(pendingq_);
@@ -1416,7 +1437,7 @@ void Socket_DEPRECATED::close(Status reason) {
     while (!queue.empty()) {
       std::unique_ptr<Envelope> e(&queue.front());
       queue.pop_front();
-      onSent(std::move(e), reason);
+      onSent(std::move(e), close_reason);
     }
   }
 
@@ -1426,7 +1447,7 @@ void Socket_DEPRECATED::close(Status reason) {
     moved_pendingq.trim(
         Priority::MAX, moved_pendingq.cost(), [&](Envelope& e_ref) {
           std::unique_ptr<Envelope> e(&e_ref);
-          onSent(std::move(e), reason);
+          onSent(std::move(e), close_reason);
         });
     ld_check(moved_pendingq.empty());
     // If there are any injected errors they need to be completed before on
@@ -1437,11 +1458,11 @@ void Socket_DEPRECATED::close(Status reason) {
   // Mark next and drain pos as the same to make sure getBufferedBytesSize()
   // returns zero going forward.
   drain_pos_ = next_pos_;
-
+  ld_check(getBufferedBytesSize() == 0);
   while (!pending_bw_cbs_moved.empty()) {
     auto& cb = pending_bw_cbs_moved.front();
     cb.deactivate();
-    cb.cancelled(reason);
+    cb.cancelled(close_reason);
   }
 
   while (!on_close_moved.empty()) {
@@ -1450,7 +1471,7 @@ void Socket_DEPRECATED::close(Status reason) {
 
     // on_close_ is an intrusive list, pop_front() removes cb from list but
     // does not call any destructors. cb is now not on any callback lists.
-    cb(reason, peer_name_);
+    cb(close_reason, peer_name_);
   }
 }
 
