@@ -279,7 +279,10 @@ int RebuildingCoordinator::start() {
       return Execution::COMPLETE;
     }
     int getThreadAffinity(int /* unused */) override {
-      return 0;
+      return self_->event_log_->getWorkerId().val_;
+    }
+    WorkerType getWorkerTypeAffinity() override {
+      return self_->event_log_->getWorkerType();
     }
     RebuildingCoordinator* self_;
   };

@@ -1438,7 +1438,7 @@ bool Server::initRebuildingCoordinator() {
 
   if (event_log_) {
     std::unique_ptr<Request> req =
-        std::make_unique<StartEventLogStateMachineRequest>(event_log_.get(), 0);
+        std::make_unique<StartEventLogStateMachineRequest>(event_log_.get());
 
     const int rv = processor_->postRequest(req);
     if (rv != 0) {

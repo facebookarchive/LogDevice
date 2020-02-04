@@ -949,7 +949,6 @@ EventLogStateMachine* Worker::getEventLogStateMachine() {
 void Worker::setEventLogStateMachine(EventLogStateMachine* event_log) {
   ld_check(event_log_ == nullptr);
   event_log_ = event_log;
-  event_log_->setWorkerId(idx_);
 }
 
 void Worker::setLogsConfigManager(std::unique_ptr<LogsConfigManager> manager) {
