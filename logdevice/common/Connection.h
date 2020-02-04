@@ -125,13 +125,6 @@ class Connection : public Socket_DEPRECATED {
 
   void onBytesPassedToTCP(size_t nbytes) override;
 
-  int dispatchMessageBody(ProtocolHeader header,
-                          std::unique_ptr<folly::IOBuf> msg_buffer) override;
-
-  bool msgRetryTimerArmed() {
-    return retry_receipt_of_message_.isScheduled();
-  }
-
  protected:
   void scheduleWriteChain();
 

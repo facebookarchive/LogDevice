@@ -157,29 +157,6 @@ void Connection::scheduleWriteChain() {
   onBytesAdmittedToSend(bytes_in_sendq);
 }
 
-int Connection::dispatchMessageBody(ProtocolHeader header,
-                                    std::unique_ptr<folly::IOBuf> msg_buffer) {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  auto body_clone = msg_buffer->clone();
-  int rv =
-      Socket_DEPRECATED::dispatchMessageBody(header, std::move(msg_buffer));
-  if (rv != 0 && err == E::NOBUFS && !legacy_connection_) {
-    // No space to push more messages on the worker, disable the read callback.
-    // Retry this message and if successful it will add back the ReadCallback.
-    ld_check(!retry_receipt_of_message_.isScheduled());
-    retry_receipt_of_message_.attachCallback(
-        [this, hdr = header, payload = std::move(body_clone)]() mutable {
-          if (proto_handler_->dispatchMessageBody(hdr, std::move(payload)) ==
-              0) {
-            proto_handler_->sock()->setReadCB(read_cb_.get());
-          }
-        });
-    retry_receipt_of_message_.scheduleTimeout(0);
-    proto_handler_->sock()->setReadCB(nullptr);
-  }
-  return rv;
-}
-
 void Connection::onBytesPassedToTCP(size_t nbytes) {
   auto g = folly::makeGuard(getDeps()->setupContextGuard());
   if (legacy_connection_) {

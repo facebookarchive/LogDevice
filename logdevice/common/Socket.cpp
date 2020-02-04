@@ -2271,6 +2271,7 @@ bool Socket_DEPRECATED::processHandshakeMessage(const Message* msg) {
 int Socket_DEPRECATED::dispatchMessageBody(
     ProtocolHeader header,
     std::unique_ptr<folly::IOBuf> inbuf) {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   recv_message_ph_ = header;
   ProtocolHeader& ph = recv_message_ph_;
   // Tell the Worker that we're processing a message, so it can time it.
@@ -2297,6 +2298,21 @@ int Socket_DEPRECATED::dispatchMessageBody(
                     conn_description_.c_str(),
                     ph.len);
     err = E::NOBUFS;
+    if (!legacy_connection_) {
+      // No space to push more messages on the worker, disable the read
+      // callback. Retry this message and if successful it will add back the
+      // ReadCallback.
+      ld_check(!retry_receipt_of_message_.isScheduled());
+      retry_receipt_of_message_.attachCallback(
+          [this, hdr = header, payload = std::move(inbuf)]() mutable {
+            if (proto_handler_->dispatchMessageBody(hdr, std::move(payload)) ==
+                0) {
+              proto_handler_->sock()->setReadCB(read_cb_.get());
+            }
+          });
+      retry_receipt_of_message_.scheduleTimeout(0);
+      proto_handler_->sock()->setReadCB(nullptr);
+    }
     return -1;
   }
 

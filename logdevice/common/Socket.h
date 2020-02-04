@@ -600,15 +600,19 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
     return cached_socket_throughput_;
   }
 
+  bool msgRetryTimerArmed() const {
+    return retry_receipt_of_message_.isScheduled();
+  }
+
+  int dispatchMessageBody(ProtocolHeader header,
+                          std::unique_ptr<folly::IOBuf> msg_buffer);
+
  protected:
   /**
    * Called by bev_ when the underlying connection is established
    */
   void onConnected();
   void transitionToConnected();
-
-  virtual int dispatchMessageBody(ProtocolHeader header,
-                                  std::unique_ptr<folly::IOBuf> msg_buffer);
 
   /**
    * Called when connection timeout occurs. Either we could not establish the
