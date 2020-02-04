@@ -78,18 +78,32 @@ class SSLFetcher {
   createCertVerifier(fizz::VerificationContext verCtx) const;
   std::unique_ptr<fizz::SelfCert> createSelfCert() const;
 
+  enum ContextType {
+    OPENSSL_CONTEXT = 0,
+    FIZZ_SRV,
+    FIZZ_CLI,
+
+    // must be last in the decl
+    COUNT
+  };
+
+  struct ContextState {
+    std::chrono::time_point<std::chrono::steady_clock> last_loaded_;
+    bool last_load_cert_{false};
+    bool context_created_{false};
+  };
+
   std::shared_ptr<folly::SSLContext> context_;
-  std::chrono::time_point<std::chrono::steady_clock> last_loaded_;
   std::shared_ptr<const fizz::client::FizzClientContext> fizz_cli_context_;
   std::shared_ptr<const fizz::CertificateVerifier> fizz_cli_verifier_;
   std::shared_ptr<const fizz::server::FizzServerContext> fizz_srv_context_;
-  bool last_load_cert_ = false;
   StatsHolder* stats_{nullptr};
+  std::array<ContextState, ContextType::COUNT> state_;
 
   // a context update is required when refresh_interval_ has passed or when any
   // of the input information is changed
-  bool requireContextUpdate(bool loadCert) const;
-  void updateState(bool loadCert, X509* cert);
+  bool requireContextUpdate(ContextType type, bool loadCert) const;
+  void updateState(ContextType type, bool loadCert, X509* cert);
 };
 
 }} // namespace facebook::logdevice
