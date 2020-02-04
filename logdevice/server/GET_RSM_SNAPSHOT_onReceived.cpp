@@ -135,7 +135,7 @@ static void thisNodeServesTheRequest(GET_RSM_SNAPSHOT_Message* msg,
 
   switch (rsm_type.val_) {
     case configuration::InternalLogs::EVENT_LOG_DELTAS.val_:
-      dest_worker_type = WorkerType::GENERAL;
+      dest_worker_type = EventLogStateMachine::workerType(processor);
       dest_worker_id = EventLogStateMachine::getWorkerIdx(
           processor->getWorkerCount(dest_worker_type));
       break;

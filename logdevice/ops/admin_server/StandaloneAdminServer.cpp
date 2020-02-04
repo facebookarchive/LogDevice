@@ -332,8 +332,11 @@ void StandaloneAdminServer::initEventLog() {
       false, /* is_storage_node */
       configuration::InternalLogs::EVENT_LOG_SNAPSHOTS,
       configuration::InternalLogs::EVENT_LOG_DELTAS);
+  auto workerType = EventLogStateMachine::workerType(processor_.get());
+  auto workerId = worker_id_t(EventLogStateMachine::getWorkerIdx(
+      processor_->getWorkerCount(workerType)));
   event_log_ = std::make_unique<EventLogStateMachine>(
-      settings_, std::move(snapshot_store));
+      settings_, std::move(snapshot_store), workerId, workerType);
   event_log_->enableSendingUpdatesToWorkers();
 
   std::unique_ptr<Request> req =

@@ -1396,8 +1396,14 @@ bool Server::initRebuildingCoordinator() {
             is_storage_node,
             configuration::InternalLogs::EVENT_LOG_SNAPSHOTS,
             configuration::InternalLogs::EVENT_LOG_DELTAS);
-    event_log_ = std::make_unique<EventLogStateMachine>(
-        params_->getProcessorSettings(), std::move(snapshot_store));
+    auto workerType = EventLogStateMachine::workerType(processor_.get());
+    auto workerId = worker_id_t(EventLogStateMachine::getWorkerIdx(
+        processor_->getWorkerCount(workerType)));
+    event_log_ =
+        std::make_unique<EventLogStateMachine>(params_->getProcessorSettings(),
+                                               std::move(snapshot_store),
+                                               workerId,
+                                               workerType);
     event_log_->enableSendingUpdatesToWorkers();
     event_log_->setMyNodeID(params_->getMyNodeID().value());
   }
@@ -1744,6 +1750,10 @@ Processor* Server::getProcessor() const {
 
 RebuildingCoordinator* Server::getRebuildingCoordinator() {
   return rebuilding_coordinator_.get();
+}
+
+EventLogStateMachine* Server::getEventLogStateMachine() {
+  return event_log_.get();
 }
 
 maintenance::MaintenanceManager* Server::getMaintenanceManager() {

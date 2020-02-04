@@ -239,6 +239,8 @@ class Server {
 
   RebuildingCoordinator* getRebuildingCoordinator();
 
+  EventLogStateMachine* getEventLogStateMachine();
+
   maintenance::MaintenanceManager* getMaintenanceManager();
 
   SettingsUpdater& getSettings() {
