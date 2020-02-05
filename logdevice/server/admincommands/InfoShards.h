@@ -44,8 +44,13 @@ class InfoShards : public AdminCommand {
     if (server_->getProcessor()->runningOnStorageNode()) {
       auto sharded_store = server_->getShardedLocalLogStore();
 
+      auto workerType =
+          EventLogStateMachine::workerType(server_->getProcessor());
+      auto workerIdx = EventLogStateMachine::getWorkerIdx(
+          server_->getProcessor()->getWorkerCount(workerType));
+
       std::set<uint32_t> shards_rebuilding =
-          run_on_worker(server_->getProcessor(), 0, [&]() {
+          run_on_worker(server_->getProcessor(), workerIdx, workerType, [&]() {
             std::set<uint32_t> res;
             auto rc = server_->getRebuildingCoordinator();
             if (rc) {
