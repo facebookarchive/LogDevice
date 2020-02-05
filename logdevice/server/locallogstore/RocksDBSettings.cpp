@@ -1288,9 +1288,9 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
   init("rocksdb-max-log-file-size",
        &max_log_file_size,
        "100M",
-       parse_positive<ssize_t>(),
-       "max size of a RocksDB log file. A new file is created once the limit "
-       "is reached.",
+       parse_nonnegative<ssize_t>(),
+       "Max size of a RocksDB log file. A new file is created once the limit "
+       "is reached. 0 for unlimited.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
