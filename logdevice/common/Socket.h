@@ -642,7 +642,14 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
    * Writes a serialized buffer into the socket.
    * @returns SendStatus based on the status of the write.
    */
-  virtual SendStatus sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain);
+  SendStatus sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain);
+  /**
+   * For asyncsocket based connections, to batch data better we schedule a zero
+   * timeout event in sendBuffer. It allows to batch all the data going to same
+   * destination. The batch is written into asyncsocket in this method.
+   */
+  void scheduleWriteChain();
+
   void onSent(std::unique_ptr<Envelope>,
               Status,
               Message::CompletionMethod = Message::CompletionMethod::IMMEDIATE);
@@ -677,7 +684,13 @@ class Socket_DEPRECATED : public TrafficShappingSocket {
   /**
    * Update sender level stats once bytes are drained into the socket.
    */
-  virtual void onBytesPassedToTCP(size_t nbytes);
+  void onBytesPassedToTCP(size_t nbytes);
+
+  /**
+   * Drain send queue drain the write_chain in socket write callback as the
+   * bytes are now written into the socket.
+   */
+  void drainSendQueue();
 
   SocketDependencies* getDeps() const {
     return deps_.get();

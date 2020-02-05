@@ -119,15 +119,5 @@ class Connection : public Socket_DEPRECATED {
   Connection(Connection&&) = delete;
   Connection& operator=(const Connection&) = delete;
   Connection& operator=(Connection&&) = delete;
-
-  Socket_DEPRECATED::SendStatus
-  sendBuffer(std::unique_ptr<folly::IOBuf>&& buffer_chain) override;
-
-  void onBytesPassedToTCP(size_t nbytes) override;
-
- protected:
-  void scheduleWriteChain();
-
-  void drainSendQueue();
 };
 }} // namespace facebook::logdevice

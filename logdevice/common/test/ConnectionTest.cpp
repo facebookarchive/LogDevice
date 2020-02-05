@@ -151,32 +151,6 @@ TEST_F(ClientConnectionTest, ConnectTest) {
   ev_base_folly_.loopOnce();
 }
 
-TEST_F(ClientConnectionTest, SendBuffers) {
-  EXPECT_CALL(*sock_, connect_(_, server_addr_.getSocketAddress(), _, _, _))
-      .Times(1)
-      .WillOnce(
-          WithArg<0>(Invoke([](folly::AsyncSocket::ConnectCallback* conn_cb) {
-            conn_cb->connectSuccess();
-          })));
-  EXPECT_CALL(
-      *sock_, writeChain_(NotNull(), NotNull(), folly::WriteFlags::NONE))
-      .Times(1)
-      .WillRepeatedly(Invoke([this](folly::AsyncSocket::WriteCallback* cb,
-                                    folly::IOBuf* buf,
-                                    folly::WriteFlags) {
-        wr_callback_ = cb;
-        delete buf;
-      }));
-  ON_CALL(*sock_, good()).WillByDefault(Return(true));
-
-  EXPECT_EQ(conn_->connect(), 0);
-  ev_base_folly_.loopOnce();
-  writeSuccess();
-  auto iobuf = folly::IOBuf::create(10);
-  iobuf->append(10);
-  conn_->sendBuffer(std::move(iobuf));
-}
-
 TEST_F(ClientConnectionTest, CompleteConnectionSuccessfully) {
   std::chrono::milliseconds timeout = settings_.connect_timeout;
   size_t max_retries = settings_.connection_retries;

@@ -1554,26 +1554,63 @@ Socket_DEPRECATED::serializeMessage(const Message& msg) {
 
 Socket_DEPRECATED::SendStatus
 Socket_DEPRECATED::sendBuffer(std::unique_ptr<folly::IOBuf>&& io_buf) {
-  struct evbuffer* outbuf =
-      buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
-  ld_check(outbuf);
-  for (auto& buf : *io_buf) {
-    int rv = LD_EV(evbuffer_add)(outbuf, buf.data(), buf.size());
-    if (rv) {
-      size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
-      RATELIMIT_CRITICAL(std::chrono::seconds(1),
-                         2,
-                         "INTERNAL ERROR: Failed to move iobuffers to "
-                         "outbuf, from io_buf"
-                         "(io_buf_size:%zu, outbuf:%zu)",
-                         io_buf->computeChainDataLength(),
-                         outbuf_size);
-      err = E::INTERNAL;
-      close(err);
-      return Socket_DEPRECATED::SendStatus::ERROR;
+  if (legacy_connection_) {
+    struct evbuffer* outbuf =
+        buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
+    ld_check(outbuf);
+    for (auto& buf : *io_buf) {
+      int rv = LD_EV(evbuffer_add)(outbuf, buf.data(), buf.size());
+      if (rv) {
+        size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
+        RATELIMIT_CRITICAL(std::chrono::seconds(1),
+                           2,
+                           "INTERNAL ERROR: Failed to move iobuffers to "
+                           "outbuf, from io_buf"
+                           "(io_buf_size:%zu, outbuf:%zu)",
+                           io_buf->computeChainDataLength(),
+                           outbuf_size);
+        err = E::INTERNAL;
+        close(err);
+        return Socket_DEPRECATED::SendStatus::ERROR;
+      }
+    }
+  } else if (proto_handler_->good()) { // Sending data over new connection.
+    if (sendChain_) {
+      ld_check(sched_write_chain_.isScheduled());
+      sendChain_->prependChain(std::move(io_buf));
+    } else {
+      sendChain_ = std::move(io_buf);
+      ld_check(!sched_write_chain_.isScheduled());
+      sched_write_chain_.attachCallback([this]() { scheduleWriteChain(); });
+      sched_write_chain_.scheduleTimeout(0);
+      sched_start_time_ = SteadyTimestamp::now();
     }
   }
   return Socket_DEPRECATED::SendStatus::SCHEDULED;
+}
+
+void Socket_DEPRECATED::scheduleWriteChain() {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
+  ld_check(!legacy_connection_);
+  if (!proto_handler_->good()) {
+    return;
+  }
+  ld_check(sendChain_);
+  auto now = SteadyTimestamp::now();
+  STAT_ADD(deps_->getStats(),
+           sock_write_sched_delay,
+           to_msec(now - sched_start_time_).count());
+
+  // Get bytes that are added to sendq but not yet added in the asyncSocket.
+  auto bytes_in_sendq = getBufferedBytesSize() - sock_write_cb_.bytes_buffered;
+  sock_write_cb_.write_chains.emplace_back(
+      SocketWriteCallback::WriteUnit{bytes_in_sendq, now});
+  // These bytes are now buffered in socket and will be removed from sendq.
+  sock_write_cb_.bytes_buffered += bytes_in_sendq;
+  proto_handler_->sock()->writeChain(&sock_write_cb_, std::move(sendChain_));
+  // All the bytes will be now removed from sendq now that we have written into
+  // the asyncsocket.
+  onBytesAdmittedToSend(bytes_in_sendq);
 }
 
 int Socket_DEPRECATED::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
@@ -1961,7 +1998,9 @@ void Socket_DEPRECATED::onBytesAdmittedToSend(size_t nbytes) {
            total_time.count());
   STAT_ADD(deps_->getStats(), sock_num_messages_sent, num_messages);
   STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, nbytes);
-  onBytesPassedToTCP(nbytes);
+  if (legacy_connection_) {
+    onBytesPassedToTCP(nbytes);
+  }
 }
 
 void Socket_DEPRECATED::onBytesPassedToTCP(size_t nbytes) {
@@ -1986,6 +2025,32 @@ void Socket_DEPRECATED::onBytesPassedToTCP(size_t nbytes) {
           conn_description_.c_str(),
           nbytes,
           deps_->getBytesPending());
+}
+
+void Socket_DEPRECATED::drainSendQueue() {
+  auto g = folly::makeGuard(deps_->setupContextGuard());
+  ld_check(!legacy_connection_);
+  auto& cb = sock_write_cb_;
+  size_t total_bytes_drained = 0;
+  for (size_t& i = cb.num_success; i > 0; --i) {
+    total_bytes_drained += cb.write_chains.front().length;
+    STAT_ADD(deps_->getStats(),
+             sock_write_sched_size,
+             cb.write_chains.front().length);
+    cb.write_chains.pop_front();
+  }
+
+  ld_check(cb.bytes_buffered >= total_bytes_drained);
+  cb.bytes_buffered -= total_bytes_drained;
+  onBytesPassedToTCP(total_bytes_drained);
+
+  // flushOutputAndClose sets close_reason_ and waits for all buffers to drain.
+  // Check if all buffers were drained here if that is the case close the
+  // connection.
+  if (close_reason_ != E::UNKNOWN && cb.write_chains.size() == 0 &&
+      !sendChain_) {
+    close(close_reason_);
+  }
 }
 
 void Socket_DEPRECATED::deferredEventQueueEventCallback(void* instance, short) {
