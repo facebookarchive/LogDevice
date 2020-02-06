@@ -64,7 +64,7 @@ $(function() {
 <div class="header">
   <div class="summary">
 <a href="#pub-methods">Public Member Functions</a> &#124;
-<a href="#pub-static-methods">Static Public Member Functions</a> &#124;
+<a href="#pro-methods">Protected Member Functions</a> &#124;
 <a href="classfacebook_1_1logdevice_1_1_client-members.html">List of all members</a>  </div>
   <div class="headertitle">
 <div class="title">facebook::logdevice::Client Class Reference<span class="mlabels"><span class="mlabel">abstract</span></span></div>  </div>
@@ -73,8 +73,6 @@ $(function() {
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:adb9de7dd7dc6db1b9b9dcca495a0d7b4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#adb9de7dd7dc6db1b9b9dcca495a0d7b4">Client</a> ()=default</td></tr>
-<tr class="separator:adb9de7dd7dc6db1b9b9dcca495a0d7b4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7f65fb0d14fe6a210a6001956a31b2a6"><td class="memItemLeft" align="right" valign="top">virtual&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a7f65fb0d14fe6a210a6001956a31b2a6">~Client</a> ()=default</td></tr>
 <tr class="separator:a7f65fb0d14fe6a210a6001956a31b2a6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a038c93eefa0a8aa337b0c0b10970c7d0"><td class="memItemLeft" align="right" valign="top">virtual lsn_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a038c93eefa0a8aa337b0c0b10970c7d0">appendSync</a> (logid_t logid, std::string payload, AppendAttributes attrs=AppendAttributes(), std::chrono::milliseconds *timestamp=nullptr) noexcept=0</td></tr>
@@ -196,38 +194,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ab8e0bcb6f9dabd95d40b1b63a98448ab"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#ab8e0bcb6f9dabd95d40b1b63a98448ab">publishEvent</a> (Severity sev, std::string name_space, std::string type, std::string data=&quot;&quot;, std::string context=&quot;&quot;) noexcept=0</td></tr>
 <tr class="separator:ab8e0bcb6f9dabd95d40b1b63a98448ab"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-methods"></a>
-Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a22c6047d80ec6b513bef7d61883f0bb4"><td class="memItemLeft" align="right" valign="top">static std::shared_ptr&lt; <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#a22c6047d80ec6b513bef7d61883f0bb4">create</a> (std::string cluster_name, std::string config_url, std::string credentials, std::chrono::milliseconds timeout, std::unique_ptr&lt; <a class="el" href="classfacebook_1_1logdevice_1_1_client_settings.html">ClientSettings</a> &gt; <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aafa91f8e42039d4f7606d1c7668f37ea">settings</a>, std::string csid=&quot;&quot;) noexcept</td></tr>
-<tr class="separator:a22c6047d80ec6b513bef7d61883f0bb4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pro-methods"></a>
+Protected Member Functions</h2></td></tr>
+<tr class="memitem:adb9de7dd7dc6db1b9b9dcca495a0d7b4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_client.html#adb9de7dd7dc6db1b9b9dcca495a0d7b4">Client</a> ()=default</td></tr>
+<tr class="separator:adb9de7dd7dc6db1b9b9dcca495a0d7b4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="adb9de7dd7dc6db1b9b9dcca495a0d7b4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adb9de7dd7dc6db1b9b9dcca495a0d7b4">&#9670;&nbsp;</a></span>Client()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">facebook::logdevice::Client::Client </td>
-          <td>(</td>
-          <td class="paramname"></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">default</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-<p>No default constructor will issue a compilation error, since ClientImpl need to initialize the <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> object at first. </p>
-
-</div>
-</div>
 <a id="a7f65fb0d14fe6a210a6001956a31b2a6"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a7f65fb0d14fe6a210a6001956a31b2a6">&#9670;&nbsp;</a></span>~Client()</h2>
 
@@ -250,7 +222,33 @@ Static Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
-<p>ClientFactory::create() actually returns pointers to objects of class ClientImpl that inherits from <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a>. The destructor must be virtual in order to work correctly. </p>
+<p>Note that <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> doesn't have a public constructor. The only way to construct a <code><a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a></code> instance is using a <code>ClientFactory</code> ClientFactory::create() actually returns pointers to objects of class ClientImpl that inherits from <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a>. The destructor must be virtual in order to work correctly. </p>
+
+</div>
+</div>
+<a id="adb9de7dd7dc6db1b9b9dcca495a0d7b4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adb9de7dd7dc6db1b9b9dcca495a0d7b4">&#9670;&nbsp;</a></span>Client()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">facebook::logdevice::Client::Client </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">protected</span><span class="mlabel">default</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>No default constructor will issue a compilation error, since ClientImpl need to initialize the <a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a> object at first. </p>
 
 </div>
 </div>
@@ -515,67 +513,6 @@ Static Public Member Functions</h2></td></tr>
   </dd>
 </dl>
 <p>See appendSync(logid_t, const Payload&amp;) for a description of return values. </p>
-
-</div>
-</div>
-<a id="a22c6047d80ec6b513bef7d61883f0bb4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a22c6047d80ec6b513bef7d61883f0bb4">&#9670;&nbsp;</a></span>create()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">static std::shared_ptr&lt;<a class="el" href="classfacebook_1_1logdevice_1_1_client.html">Client</a>&gt; facebook::logdevice::Client::create </td>
-          <td>(</td>
-          <td class="paramtype">std::string&#160;</td>
-          <td class="paramname"><em>cluster_name</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">std::string&#160;</td>
-          <td class="paramname"><em>config_url</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">std::string&#160;</td>
-          <td class="paramname"><em>credentials</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">std::chrono::milliseconds&#160;</td>
-          <td class="paramname"><em>timeout</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">std::unique_ptr&lt; <a class="el" href="classfacebook_1_1logdevice_1_1_client_settings.html">ClientSettings</a> &gt;&#160;</td>
-          <td class="paramname"><em>settings</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">std::string&#160;</td>
-          <td class="paramname"><em>csid</em> = <code>&quot;&quot;</code>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">static</span><span class="mlabel">noexcept</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-<p>This interface is deprecated. Please use ClientFactory to create clients </p>
 
 </div>
 </div>
