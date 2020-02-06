@@ -97,7 +97,7 @@ int WriteMetaDataRecord::createAndActivate(bool bypass_recovery) {
     return -1;
   }
 
-  const auto& nodes_configuration =
+  const auto nodes_configuration =
       Worker::onThisThread()->getNodesConfiguration();
   ld_check(meta_seq_ == nullptr);
   // create the metadata sequencer in INITIALIZING state
@@ -160,7 +160,17 @@ int WriteMetaDataRecord::createAndActivate(bool bypass_recovery) {
 
   // populate the release_sent_ map
   for (ShardID shard : meta_storage_set) {
-    release_sent_[shard.node()] = false;
+    // filter out non-storge nodes from the metadata storage set.
+    //
+    // This does not use the same filtering mechanism as in
+    // EpochMetaDataMap::getUnionStorageSet() that is used to determine which
+    // nodes to send the releases to. Instead this is interested only in shards
+    // marked as metadata shards, that in practice could be a subset of the
+    // nodes if we demoted a metadata node during execution.
+    if (nodes_configuration->getStorageMembership()
+            ->shouldReadMetaDataFromShard(shard)) {
+      release_sent_[shard.node()] = false;
+    }
   }
 
   ld_debug("Activated metadata sequencer [%lu] for log %lu with epoch %u.",
@@ -247,9 +257,32 @@ void WriteMetaDataRecord::onReleaseSentSuccessful(node_index_t node,
 
     const int replication =
         meta_seq_->getCurrentMetaData()->replication.getReplicationFactor();
+
+    const auto nodes_configuration =
+        Worker::onThisThread()->getNodesConfiguration();
+
+    // What is the current metadata storage set?
+    auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
+        nodes_configuration->getStorageMembership()->getMetaDataNodeIndices(),
+        MetaDataLog::metaDataLogID(log_id_),
+        *nodes_configuration);
+
+    // We are only waiting for readable+existing nodes
+    meta_storage_set.erase(
+        std::remove_if(meta_storage_set.begin(),
+                       meta_storage_set.end(),
+                       [&nodes_configuration](ShardID shard) {
+                         return !nodes_configuration->getStorageMembership()
+                                     ->shouldReadMetaDataFromShard(shard);
+                       }),
+        meta_storage_set.end());
+
+    const int num_effective_metadata_nodes =
+        std::min(static_cast<int>(meta_storage_set.size()),
+                 static_cast<int>(release_sent_.size()));
+
     const int fmajority =
-        std::max(replication,
-                 static_cast<int>(release_sent_.size()) - (replication - 1));
+        std::max(replication, num_effective_metadata_nodes - (replication - 1));
 
     /**
      * Currently WriteMetaDataRecord concludes when releases are successfully
