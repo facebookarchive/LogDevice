@@ -1538,6 +1538,18 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "caution.",
        SERVER,
        SettingsCategory::LogsDB);
+
+  init("rocksdb-paranoid-checks",
+       &paranoid_checks,
+       "true",
+       nullptr,
+       "If true, RocksDB will aggressively check consistency of the data. "
+       "Also, if any of the  writes to the database fails (Put, Delete, Merge, "
+       "Write), the database will switch to read-only mode and fail all other "
+       "Write operations. "
+       "In most cases you want this to be set to true.",
+       SERVER,
+       SettingsCategory::RocksDB);
 }
 
 rocksdb::Options RocksDBSettings::passThroughRocksDBOptions() const {
@@ -1575,6 +1587,7 @@ rocksdb::Options RocksDBSettings::passThroughRocksDBOptions() const {
   options.use_direct_reads = use_direct_reads;
   options.use_direct_io_for_flush_and_compaction =
       use_direct_io_for_flush_and_compaction;
+  options.paranoid_checks = paranoid_checks;
 
   options.compaction_options_universal.min_merge_width = uc_min_merge_width;
   options.compaction_options_universal.max_merge_width = uc_max_merge_width;
