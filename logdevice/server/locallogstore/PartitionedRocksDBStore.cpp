@@ -763,7 +763,15 @@ bool PartitionedRocksDBStore::open(
     }
 
     if (!readPartitionTimestamps(partition)) {
-      if (id != latest_partition_id || err != E::NOTFOUND) {
+      if (err != E::NOTFOUND) {
+        // readPartitionTimestamps() already printed an error message.
+        return false;
+      } else if (id != latest_partition_id) {
+        ld_error("Missing starting timestamp metadata for non-latest partition "
+                 "%lu (all partitions: %lu - %lu). Refusing to open the shard.",
+                 id,
+                 oldest_partition_id,
+                 latest_partition_id);
         return false;
       } else {
         // We were probably adding a new latest partition, had created the CF,

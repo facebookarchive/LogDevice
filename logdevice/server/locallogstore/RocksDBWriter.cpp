@@ -225,6 +225,14 @@ int RocksDBWriter::writeMulti(
             &record);
 
         if (!status.ok() && !status.IsNotFound()) {
+          RATELIMIT_ERROR(std::chrono::seconds(10),
+                          2,
+                          "Got rocksdb error when reading record (key %s) in "
+                          "order to delete its findtime index entry. Error: %s",
+                          hexdump_buf(key.sliceForWriting().data(),
+                                      key.sliceForWriting().size())
+                              .c_str(),
+                          status.ToString().c_str());
           err = E::LOCAL_LOG_STORE_WRITE;
           return -1;
         }
@@ -769,6 +777,12 @@ int RocksDBWriter::enumerateStoreMetadata(
       if (status.IsNotFound()) {
         return 0;
       }
+      RATELIMIT_ERROR(
+          std::chrono::seconds(10),
+          2,
+          "Got rocksdb error when reading store metadata (key %s): %s",
+          hexdump_buf(key_slice.data(), key_slice.size()).c_str(),
+          status.ToString().c_str());
       err = E::LOCAL_LOG_STORE_READ;
       return -1;
     }
