@@ -13,7 +13,7 @@
 using ::testing::_;
 namespace facebook { namespace logdevice {
 
-static Envelope* create_message(Socket_DEPRECATED& s) {
+static Envelope* create_message(Connection& s) {
   GET_SEQ_STATE_flags_t flags = 0;
   auto msg = std::make_unique<GET_SEQ_STATE_Message>(
       logid_t(42),

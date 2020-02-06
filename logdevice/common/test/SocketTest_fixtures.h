@@ -139,7 +139,7 @@ class TestSocketDependencies : public SocketDependencies {
 // Test fixtures
 struct SocketDeleter {
   SocketDeleter(bool skip_delete = false) : skip_(skip_delete) {}
-  void operator()(Socket_DEPRECATED* s) {
+  void operator()(Connection* s) {
     if (!skip_) {
       delete s;
     }
@@ -154,9 +154,8 @@ class SocketTest : public ::testing::Test {
         server_addr_(get_localhost_address_str(), 4440),
         destination_node_id_(client_id_, 1),
         flow_group_(std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr)),
-        socket_(std::unique_ptr<Socket_DEPRECATED, SocketDeleter>(
-            nullptr,
-            SocketDeleter())) {
+        socket_(std::unique_ptr<Connection, SocketDeleter>(nullptr,
+                                                           SocketDeleter())) {
     input_ = LD_EV(evbuffer_new)();
     output_ = LD_EV(evbuffer_new)();
   }
@@ -240,7 +239,7 @@ class SocketTest : public ::testing::Test {
     settings_.checksumming_enabled = old_value;
     ld_check(serialized_buf);
     auto status = socket_->sendBuffer(std::move(serialized_buf));
-    ld_check(status == Socket_DEPRECATED::SendStatus::SCHEDULED);
+    ld_check(status == Connection::SendStatus::SCHEDULED);
     temp_output_ = nullptr;
 
     triggerOnDataAvailable();
@@ -285,10 +284,10 @@ class SocketTest : public ::testing::Test {
     socket_->endStreamRewind();
   }
 
-  const Socket_DEPRECATED::EnvelopeQueue& getSerializeq() const {
+  const Connection::EnvelopeQueue& getSerializeq() const {
     return socket_->serializeq_;
   }
-  const Socket_DEPRECATED::EnvelopeQueue& getSendq() const {
+  const Connection::EnvelopeQueue& getSendq() const {
     return socket_->sendq_;
   }
 
@@ -363,14 +362,14 @@ class SocketTest : public ::testing::Test {
 
   std::function<void(struct event*)> ev_timer_add_hook_;
 
-  std::unique_ptr<Socket_DEPRECATED, SocketDeleter> socket_;
+  std::unique_ptr<Connection, SocketDeleter> socket_;
 };
 
 class ClientSocketTest : public SocketTest {
  public:
   ClientSocketTest() : connect_throttle_(settings_.connect_throttle) {
     // Create a client socket.
-    socket_ = std::unique_ptr<Socket_DEPRECATED, SocketDeleter>(
+    socket_ = std::unique_ptr<Connection, SocketDeleter>(
         new Connection(server_name_,
                        SocketType::DATA,
                        ConnectionType::PLAIN,
@@ -408,7 +407,7 @@ class ServerSocketTest : public SocketTest {
     // Note that we can pass whatever we want here for fd and client_addr
     // because Socket will not use them directly, it will always pass them to
     // methods of TestSocketDependencies so these will remain untouched.
-    socket_ = std::unique_ptr<Socket_DEPRECATED, SocketDeleter>(
+    socket_ = std::unique_ptr<Connection, SocketDeleter>(
         new Connection(
             42 /* fd */,
             ClientID(client_id_) /* client_name */,

@@ -39,11 +39,11 @@ namespace facebook { namespace logdevice {
 // see Envelope::pos_;
 typedef uint64_t message_pos_t;
 
-class Socket_DEPRECATED;
+class Connection;
 
 class Envelope : public BWAvailableCallback {
  public:
-  explicit Envelope(Socket_DEPRECATED& conn, std::unique_ptr<Message> msg)
+  explicit Envelope(Connection& conn, std::unique_ptr<Message> msg)
       : conn_(conn),
         msg_(std::move(msg)),
         drain_pos_(~0),
@@ -60,7 +60,8 @@ class Envelope : public BWAvailableCallback {
   Priority priority() const {
     return msg_->priority();
   }
-  Socket_DEPRECATED& conn() const {
+
+  Connection& conn() const {
     return conn_;
   }
   size_t cost() const {
@@ -107,7 +108,7 @@ class Envelope : public BWAvailableCallback {
   }
 
  private:
-  Socket_DEPRECATED& conn_;
+  Connection& conn_;
   std::unique_ptr<Message> msg_;
   std::chrono::steady_clock::time_point enq_time_;
 

@@ -89,7 +89,7 @@ class BWAvailableCallback {
 
  private:
   friend class FlowGroup;
-  friend class Socket_DEPRECATED;
+  friend class Connection;
   friend class SocketImpl;
   friend class RecordRebuildingMockSocket;
 
