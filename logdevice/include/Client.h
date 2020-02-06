@@ -200,21 +200,9 @@ typedef std::function<void(Status status, std::unique_ptr<LogHeadAttributes>)>
 class Client {
  public:
   /**
-   * This interface is deprecated. Please use ClientFactory to create clients
+   * Note that Client doesn't have a public constructor. The only way to
+   * construct a `Client` instance is using a `ClientFactory`
    */
-  [[deprecated("Replaced by ClientFactory")]] static std::shared_ptr<Client>
-  create(std::string cluster_name,
-         std::string config_url,
-         std::string credentials,
-         std::chrono::milliseconds timeout,
-         std::unique_ptr<ClientSettings> settings,
-         std::string csid = "") noexcept;
-
-  /**
-  No default constructor will issue a compilation error, since ClientImpl
-  need to initialize the Client object at first.
-  */
-  Client() = default;
 
   /**
    * ClientFactory::create() actually returns pointers to objects of class
@@ -1441,6 +1429,13 @@ class Client {
                             std::string type,
                             std::string data = "",
                             std::string context = "") noexcept = 0;
+
+ protected:
+  /**
+  No default constructor will issue a compilation error, since ClientImpl
+  need to initialize the Client object at first.
+  */
+  Client() = default;
 
  private:
   Client(const Client&) = delete;            // non-copyable

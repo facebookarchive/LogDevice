@@ -67,25 +67,6 @@ using facebook::logdevice::logsconfig::FBuffersLogsConfigCodec;
 
 namespace facebook { namespace logdevice {
 
-// Implementing the member function of Client inside ClientImpl.cpp sounds
-// confusing, but this is not an error. This is for the purpose of moving
-// the indirection of calling ClientImpl::create in Client::create.
-// Instead, users who call create will always call the Client::create.
-std::shared_ptr<Client> Client::create(std::string cluster_name,
-                                       std::string config_url,
-                                       std::string credentials,
-                                       std::chrono::milliseconds timeout,
-                                       std::unique_ptr<ClientSettings> settings,
-                                       std::string csid) noexcept {
-  return ClientFactory()
-      .setClusterName(std::move(cluster_name))
-      .setCredentials(std::move(credentials))
-      .setTimeout(timeout)
-      .setClientSettings(std::move(settings))
-      .setCSID(std::move(csid))
-      .create(std::move(config_url));
-}
-
 bool ClientImpl::validateServerConfig(ServerConfig& cfg) const {
   ld_check(config_);
   ld_check(config_->get());
