@@ -18,7 +18,6 @@
 #include <folly/Varint.h>
 #include <folly/dynamic.h>
 #include <folly/json.h>
-#include <sys/prctl.h>
 
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/CopySet.h"
@@ -62,7 +61,6 @@ void print_stats_signal(int);
 void print_stats_and_die_signal(int);
 
 using namespace facebook::logdevice;
-using namespace facebook::logdevice::configuration;
 using namespace facebook::logdevice::MetaDataLog;
 
 using RecordLevelError = LogErrorTracker::RecordLevelError;
