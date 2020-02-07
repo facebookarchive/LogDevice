@@ -822,6 +822,7 @@ class Logs:
             except LogDeviceError as e:
                 if e.args[0] == ErrorStatus.NOTFOUND:
                     version = c.remove_directory(str(path), recursive)
+                raise  # will be caught and reported by outer except
             cprint("'{}' has been removed in version {}".format(path, version))
 
         except LogDeviceError as e:
