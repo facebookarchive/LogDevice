@@ -485,11 +485,13 @@ bool AppenderPrep::nodeInConfig(NodeID node) const {
   const auto& seq_membership = nodes_configuration->getSequencerMembership();
 
   if (!seq_membership->isSequencingEnabled(node.index())) {
-    RATELIMIT_WARNING(std::chrono::seconds(1),
+    RATELIMIT_WARNING(std::chrono::seconds(5),
                       1,
                       "Node %s is not in sequencer membership or does not have "
-                      "a positive sequencer weight",
-                      node.toString().c_str());
+                      "a positive sequencer weight. Log: %lu, request from: %s",
+                      node.toString().c_str(),
+                      header_.logid.val_,
+                      Sender::describeConnection(from_).c_str());
     return false;
   }
 
