@@ -34,7 +34,7 @@ from logdevice.admin.nodes.types import (
     NodesStateResponse,
     NodeState,
 )
-from logdevice.common.types import NodeID
+from logdevice.common.types import LocationScope, NodeID
 
 
 DEFAULT_THRIFT_PORT = 6440
@@ -187,7 +187,16 @@ async def group_nodes_by_scope(client: AdminAPI) -> Tuple[Tuple[NodeID, ...], ..
     ret = defaultdict(set)
 
     for node_config in nodes_config.nodes:
-        ret[node_config.location_per_scope[scope]].add(
+        # location_per_scope doesn't have NODE as a key, so we insert a
+        # dummy value for the location, which is different for each node.
+        # This is okay because we omit the name of the location from the
+        # return value.
+        if scope != LocationScope.NODE:
+            location = node_config.location_per_scope[scope]
+        else:
+            location = node_config.node_index
+
+        ret[location].add(
             NodeID(
                 node_index=node_config.node_index,
                 address=node_config.data_address,
