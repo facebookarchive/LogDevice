@@ -4567,6 +4567,7 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
         RecordTimestamp(now - config->getMaxBacklogDuration());
     auto min_dirty_partition = min_under_replicated_partition_.load();
     auto max_dirty_partition = max_under_replicated_partition_.load();
+    min_dirty_partition = std::max(min_dirty_partition, partitions->firstID());
     while (min_dirty_partition < oldest_to_keep) {
       if (min_dirty_partition > max_dirty_partition) {
         // All dirty partitions have been trimmed away due to retention.
