@@ -1548,7 +1548,18 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "Write), the database will switch to read-only mode and fail all other "
        "Write operations. "
        "In most cases you want this to be set to true.",
-       SERVER,
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
+  init("rocksdb-writable-file-max-buffer-size",
+       &writable_file_max_buffer_size,
+       "16M",
+       parse_positive<size_t>(),
+       "Buffer size rocksdb will use when writing files. Applies to sst files, "
+       "and likely to some metadata files like MANIFEST and OPTIONS. This "
+       "memory is not allocated all at once, the buffer grows exponentially "
+       "up to this size; so it's ok for this setting to be too high.",
+       SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 }
 
@@ -1588,6 +1599,7 @@ rocksdb::Options RocksDBSettings::passThroughRocksDBOptions() const {
   options.use_direct_io_for_flush_and_compaction =
       use_direct_io_for_flush_and_compaction;
   options.paranoid_checks = paranoid_checks;
+  options.writable_file_max_buffer_size = writable_file_max_buffer_size;
 
   options.compaction_options_universal.min_merge_width = uc_min_merge_width;
   options.compaction_options_universal.max_merge_width = uc_max_merge_width;

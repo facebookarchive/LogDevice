@@ -434,6 +434,7 @@ class RocksDBSettings : public SettingsBundle {
   unsigned int uc_max_size_amplification_percent;
   unsigned int uc_size_ratio;
   uint64_t sst_delete_bytes_per_sec;
+  size_t writable_file_max_buffer_size;
 
   // Applies the settings that directly correspond to rocksdb::Options fields.
   // Note that this is not the whole logic of making rocksdb::Options.

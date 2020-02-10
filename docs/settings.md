@@ -465,7 +465,7 @@ sidebar_label: Settings
 | rocksdb-num-bg-threads-hi | Number of high-priority rocksdb background threads to run. These threads are shared among all shards. If -1, num\_shards * max\_background\_flushes is used. | -1 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-num-bg-threads-lo | Number of low-priority rocksdb background threads to run. These threads are shared among all shards. If -1, num\_shards * max\_background\_compactions is used. | -1 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-num-levels | number of LSM-tree levels if level compaction is used | 1 | requires&nbsp;restart, server&nbsp;only |
-| rocksdb-paranoid-checks | If true, RocksDB will aggressively check consistency of the data. Also, if any of the  writes to the database fails (Put, Delete, Merge, Write), the database will switch to read-only mode and fail all other Write operations. In most cases you want this to be set to true. | true | server&nbsp;only |
+| rocksdb-paranoid-checks | If true, RocksDB will aggressively check consistency of the data. Also, if any of the  writes to the database fails (Put, Delete, Merge, Write), the database will switch to read-only mode and fail all other Write operations. In most cases you want this to be set to true. | true | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-partition-data-age-flush-trigger | Maximum wait after data are written before being flushed to stable storage. 0 disables the trigger. | 1200s | server&nbsp;only |
 | rocksdb-partition-idle-flush-trigger | Maximum wait after writes to a time partition cease before any uncommitted data are flushed to stable storage. 0 disables the trigger. | 600s | server&nbsp;only |
 | rocksdb-read-amp-bytes-per-bit | If greater than 0, will create a bitmap to estimate rocksdb read amplification and expose the result through READ\_AMP\_ESTIMATE\_USEFUL\_BYTES and READ\_AMP\_TOTAL\_READ\_BYTES stats. | 32 | requires&nbsp;restart, server&nbsp;only |
@@ -482,6 +482,7 @@ sidebar_label: Settings
 | rocksdb-use-direct-io-for-flush-and-compaction | If true, rocksdb will use O\_DIRECT for flushes and compactions (both input and output files). | false | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-use-direct-reads | If true, rocksdb will use O\_DIRECT for most file reads. | false | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-wal-bytes-per-sync | when writing WAL, sync once per this many bytes written. 0 turns off incremental syncing | 1M | requires&nbsp;restart, server&nbsp;only |
+| rocksdb-writable-file-max-buffer-size | Buffer size rocksdb will use when writing files. Applies to sst files, and likely to some metadata files like MANIFEST and OPTIONS. This memory is not allocated all at once, the buffer grows exponentially up to this size; so it's ok for this setting to be too high. | 16M | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-write-buffer-size | When any RocksDB memtable ('write buffer') reaches this size it is made immutable, then flushed into a newly created L0 file. This setting may soon be superseded by a more dynamic --memtable-size-per-node limit.  | 100G | server&nbsp;only |
 
 ## Security
