@@ -69,8 +69,6 @@ class NodeView:
             assert da.path is not None
             return SocketAddress(
                 address_family=da.address_family,
-                # pyre-fixme[6]: Expected `_PathLike[AnyStr]` for 1st param but got
-                #  `Optional[str]`.
                 path=os.path.join(os.path.dirname(da.path), "socket_admin"),
             )
         elif da.address_family == SocketAddressFamily.INET:

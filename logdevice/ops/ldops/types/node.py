@@ -43,7 +43,6 @@ class Node:
         """
         return NodeID(
             node_index=self.node_index,
-            # pyre-fixme[16]: `Optional` has no attribute `to_thrift`.
             address=self.data_addr.to_thrift() if self.data_addr else None,
             name=self.name if self.name else None,
         )
