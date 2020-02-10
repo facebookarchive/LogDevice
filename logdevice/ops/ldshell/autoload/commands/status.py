@@ -22,6 +22,7 @@ from ldops import admin_api
 from ldops.const import DEFAULT_THRIFT_PORT
 from logdevice.admin.nodes.types import (
     MaintenanceStatus,
+    NodesStateRequest,
     NodesStateResponse,
     SequencingState,
     ServiceHealthStatus as DaemonHealthStatus,
@@ -387,19 +388,20 @@ async def merge_information(
     return data
 
 
-async def get_nodes_state(admin_client):
+async def get_nodes_state(admin_client, force):
+    request_opts = NodesStateRequest(force=force)
     try:
-        res = await admin_api.get_nodes_state(admin_client)
+        res = await admin_api.get_nodes_state(admin_client, req=request_opts)
     except Exception as ex:
         cprint("Failed to request NodesState(): {}".format(str(ex)), file=sys.stderr)
         return None
     return res
 
 
-async def run_status(nodes, hostnames, extended, formatter, **kwargs):
+async def run_status(nodes, hostnames, extended, formatter, force, **kwargs):
     ctx = context.get_context()
     async with ctx.get_cluster_admin_client() as client:
-        nodes_state = await get_nodes_state(client)
+        nodes_state = await get_nodes_state(client, force)
         if nodes_state is None:
             return
 
@@ -473,6 +475,7 @@ FIELDS = [field.name for field in fields(NodeInfo)]
     description="Possible output formats",
     choices=list(FORMATTERS),
 )
+@argument("force", description="Sets the force flag in the Admin API call")
 @argument("extended", type=bool, description="Include internal node state as well")
 @argument("nodes", type=List[int], aliases=["n"], description="list of node ids")
 @argument("hostnames", type=List[str], aliases=["o"], description="list of hostnames")
@@ -490,6 +493,7 @@ async def status(
     hosts=None,
     hostnames=None,
     extended=False,
+    force=False,
 ):
     """
     Next gen status command using the Thrift interfaces
@@ -506,6 +510,7 @@ async def status(
         hostnames=hostnames,
         extended=extended,
         formatter=FORMATTERS[format],
+        force=force,
         sort=sort,
     )
     stop = datetime.datetime.now()
