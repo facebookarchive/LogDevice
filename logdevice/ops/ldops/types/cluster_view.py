@@ -432,17 +432,38 @@ class ClusterView:
         mvs = self.get_all_maintenance_views()
 
         if node_ids is not None:
-            sequencer_nodes = list(sequencer_nodes or []) + list(node_ids)
-            shards = list(shards or []) + [
-                ShardID(node=node_id, shard_index=ALL_SHARDS) for node_id in node_ids
-            ]
+            search_shards = self.expand_shards(
+                [ShardID(node=node_id, shard_index=ALL_SHARDS) for node_id in node_ids]
+            )
+
+            normalized_sequencer_node_indexes = tuple(
+                sorted(
+                    self.normalize_node_id(node_id).node_index for node_id in node_ids
+                )
+            )
+
+            # Note that there might be maintenances on sequencer-only or
+            # storage-only nodes, we want the filter in this case to be OR-ed.
+            # If we don't have shards or sequencers to find then we return an
+            # empty generator.
+            mvs = (
+                mv
+                for mv in mvs
+                if (search_shards and self.expand_shards(mv.shards) == search_shards)
+                or (
+                    # NOTE: This relies on the assumption that
+                    # mv.affected_sequencer_node_indexes
+                    # is also sorted.
+                    normalized_sequencer_node_indexes
+                    and normalized_sequencer_node_indexes
+                    == mv.affected_sequencer_node_indexes
+                )
+            )
 
         if shards is not None:
             search_shards = self.expand_shards(shards)
+            # NOTE: This relies on the assumption that mv.shards is also sorted.
             mvs = (mv for mv in mvs if self.expand_shards(mv.shards) == search_shards)
-
-        if shard_target_state is not None:
-            mvs = (mv for mv in mvs if shard_target_state == mv.shard_target_state)
 
         if sequencer_nodes is not None:
             normalized_sequencer_node_indexes = tuple(
@@ -454,6 +475,9 @@ class ClusterView:
                 if normalized_sequencer_node_indexes
                 == mv.affected_sequencer_node_indexes
             )
+
+        if shard_target_state is not None:
+            mvs = (mv for mv in mvs if shard_target_state == mv.shard_target_state)
 
         if sequencer_target_state is not None:
             mvs = (

@@ -321,6 +321,9 @@ class TestClusterView(TestCase):
             ),
         )
 
+        # get_node_id
+        self.assertEqual(cv.get_node_id(node_index=0).node_index, 0)
+
         # search_maintenances
         storages_node_views = [nv for nv in cv.get_all_node_views() if nv.is_storage]
         sequencers_node_views = [
@@ -328,6 +331,17 @@ class TestClusterView(TestCase):
         ]
         self.assertEqual(len(cv.search_maintenances()), len(mnts))
         self.assertEqual(len(cv.search_maintenances(node_ids=[])), 0)
+        self.assertEqual(
+            len(
+                cv.search_maintenances(
+                    sequencer_nodes=[
+                        storages_node_views[3].node_id,
+                        sequencers_node_views[4].node_id,
+                    ]
+                )
+            ),
+            1,
+        )
         self.assertEqual(
             len(
                 cv.search_maintenances(
