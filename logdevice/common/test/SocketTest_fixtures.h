@@ -431,50 +431,6 @@ class ServerSocketTest : public SocketTest {
   }
 };
 
-// FlowGroups can be applied to any Socket type. Using the client socket
-// mocks simplifies the test code (e.g.no handshake required before
-// registering messages with the socket).
-class FlowGroupTest : public ClientSocketTest {
- public:
-  FlowGroupTest();
-
-  // Create an up and handshaked client connection.
-  void setupConnection();
-
-  void SetUp() override {
-    ON_CALL(ev_base_mock_, isInTimeoutManagerThread())
-        .WillByDefault(::testing::Return(true));
-    setupConnection();
-  }
-
-  bool drain(Envelope& e, Priority p) {
-    if (e.message().tc_ == TrafficClass::HANDSHAKE) {
-      return true;
-    }
-    return flow_group->drain(e.cost(), p);
-  }
-
-  void push(Envelope& e, Priority p) {
-    flow_group->push(e, p);
-  }
-
-  bool run() {
-    SteadyTimestamp run_deadline(SteadyTimestamp::now() +
-                                 settings_.flow_groups_run_yield_interval);
-    return flow_group->run(flow_meter_mutex, run_deadline);
-  }
-
-  void resetMeter(int32_t level) {
-    for (auto& e : flow_group->meter_.entries) {
-      e.reset(level);
-    }
-  }
-
-  std::mutex flow_meter_mutex;
-  std::unique_ptr<FlowGroup> flow_group;
-  FlowGroupsUpdate::GroupEntry update;
-};
-
 ////////////////////////////////////////////////////////////////////////////////
 // Test messages.
 

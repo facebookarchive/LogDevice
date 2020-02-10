@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <array>
 
+#include <folly/ConstexprMath.h>
+
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/checks.h"
 
@@ -45,12 +47,12 @@ class FlowMeter {
  public:
   class Entry {
    public:
+    static constexpr size_t UNRESTRICTED_BUDGET{INT64_MAX};
+
     int64_t level() const {
       return level_;
     }
-    int64_t depositBudget() const {
-      return deposit_budget_;
-    }
+
     void setCapacity(int64_t capacity) {
       ld_check(capacity >= 0);
       bucket_capacity_ = capacity;
@@ -73,79 +75,66 @@ class FlowMeter {
      * @return credits that couldn't be accepted(for stats purpose)
      */
     size_t returnCredits(size_t amount) {
-      auto add =
-          [](int64_t level, int64_t credits, size_t& overflow_out) -> int64_t {
-        ld_check(credits >= 0);
-        int64_t max_level;
-        if ((credits > 0) && (level > (INT64_MAX - credits))) {
-          // overflow detected
-          max_level = INT64_MAX;
-          overflow_out += level - (INT64_MAX - credits);
-        } else {
-          max_level = level + credits;
-        }
-        return max_level;
-      };
+      int64_t clamped_amount = static_cast<int64_t>(folly::constexpr_clamp(
+          amount, size_t(0), static_cast<size_t>(INT64_MAX)));
+      size_t overflow = amount - clamped_amount;
 
-      ld_check(bucket_capacity_ >= 0);
-      int64_t allowed_amount = std::min(amount, static_cast<size_t>(INT64_MAX));
-      size_t overflow = 0;
-      // We don't need to consult deposit_budget_ since this is bandwidth
-      // that was already approved in the past
-      int64_t max_level = add(level_, allowed_amount, overflow);
+      int64_t max_level =
+          folly::constexpr_add_overflow_clamped(level_, clamped_amount);
       int64_t new_level = std::min(max_level, bucket_capacity_);
-      // additional overflow (can fit in size_t)
-      overflow += (max_level - new_level);
-      level_ = new_level;
 
-      returned_credits_ += overflow;
+      if (max_level == INT64_MAX) {
+        // Possible integer overflow detected. Retain this credit in the
+        // overflow accounting used for bucket spills.
+        ld_check(level_ >= 0);
+        overflow = folly::constexpr_add_overflow_clamped(
+            overflow,
+            static_cast<size_t>(level_) - (max_level - clamped_amount));
+      }
+
+      // Catch the bucket spill
+      overflow = folly::constexpr_add_overflow_clamped(
+          overflow, static_cast<size_t>(max_level - new_level));
+
+      level_ = new_level;
+      returned_credits_ =
+          folly::constexpr_add_overflow_clamped(returned_credits_, overflow);
+
       return overflow; // for stats purpose only
     }
 
     /**
      * Add bandwidth credit to this bucket.
      *
-     * @param amount   Bytes of credit to deposit into this meter.
-     * @param capacity The maximum accumulation of credit in bytes allowed
-     *                 for this meter.
+     * @param credit   Bytes of credit to deposit into this meter.
+     * @param budget   External budget limiting the deposit amount.
+     *                 This budget is updated based on the credit flow
+     *                 into (typical) or out of (bucket size config change)i
+     *                 the bucket.
      *
      * @return     0: Bandwidth addition fit within the capacity of this bucket.
      *         non-0: Amount of bandwidth credit left over after filling the
      *                bucket.
      */
-    size_t fill(size_t amount, size_t capacity) {
-      ld_check(capacity <= INT64_MAX);
-      capacity = std::min(capacity, static_cast<size_t>(INT64_MAX));
+    size_t fill(size_t credit, size_t& budget) {
+      ld_check(bucket_capacity_ >= 0);
 
-      ld_check(deposit_budget_ >= 0);
-      deposit_budget_ = std::max(deposit_budget_, static_cast<int64_t>(0));
-
-      // Enforce bandwidth cap.
-      size_t allowed_amount =
-          std::min(amount, static_cast<size_t>(deposit_budget_));
-
-      // Enforce burst limits.
-      ssize_t new_level = level_ + allowed_amount;
-      new_level = std::min(new_level, static_cast<ssize_t>(capacity));
-
-      // Calculate bandwidth bucket overflow.
-      // Note: If the capacity has been reduced from historic levels, this
-      //       will result in an overflow that is larger than the requested
-      //       fill amount.
-      ssize_t unlimited_level = level_ + amount;
-      ld_check((unlimited_level - new_level) >= 0);
-      size_t overflow = unlimited_level - new_level;
-
-      // Update the deposit budget
-      // Note: If "overflow" is greater than "amount" (capacity has been
-      //       reduced), this will add credit to the deposit_budget_.
-      if (deposit_budget_ != INT64_MAX) {
-        deposit_budget_ -= new_level - level_;
-      }
+      // Enforce budget and burst limits.
+      ssize_t consumed_credit = std::min(credit, budget);
+      ssize_t new_level = level_ + consumed_credit;
+      new_level = std::min(new_level, bucket_capacity_);
+      consumed_credit = new_level - level_;
 
       level_ = new_level;
 
-      return overflow;
+      // Calculate budget consumption and bandwidth bucket overflow.
+      // NOTE: If the bucket capacity has been reduced from historic levels,
+      //       this can result in both a budget credit and an overflow that is
+      //       larger than the requested fill amount.
+      if (budget != UNRESTRICTED_BUDGET) {
+        budget -= consumed_credit;
+      }
+      return credit - consumed_credit;
     }
 
     /**
@@ -179,37 +168,26 @@ class FlowMeter {
      * causing source to go into debt.
      * Return value indicates whether entire requested amount was transferred.
      */
-    bool transferCredit(Entry& bwSink, int64_t requested_amount) {
-      auto transfer_amount = requested_amount;
+    bool transferCredit(Entry& bwSink,
+                        size_t requested_amount,
+                        size_t& bwSink_budget) {
+      int64_t transfer_amount = std::min(requested_amount, bwSink_budget);
       transfer_amount = std::min(transfer_amount, level_);
-      transfer_amount = std::min(transfer_amount, bwSink.deposit_budget_);
-
-      if (transfer_amount > 0) {
-        level_ -= transfer_amount;
-        bwSink.deposit_budget_ -= transfer_amount;
-        bwSink.level_ += transfer_amount;
+      transfer_amount =
+          std::min(bwSink.bucket_capacity_ - bwSink.level_, transfer_amount);
+      if (transfer_amount < 0) {
+        return false;
       }
 
-      return transfer_amount == requested_amount;
-    }
-
-    /**
-     * Set the maximum amount of bandwidth that can be added to this
-     * meter until the next call to resetDepositBudget().
-     */
-    void resetDepositBudget(size_t amount) {
-      amount = std::min(amount, static_cast<size_t>(INT64_MAX));
-      deposit_budget_ = amount;
+      level_ -= transfer_amount;
+      bwSink.level_ += transfer_amount;
+      bwSink_budget -= transfer_amount;
+      return static_cast<size_t>(transfer_amount) == requested_amount;
     }
 
     /** @return  true  iff a call to drain() on this Entry will succeed. */
     bool canDrain() const {
       return level_ > 0;
-    }
-
-    /** @return  true iff this meter can accept any bandwidth. */
-    bool canFill() const {
-      return deposit_budget_ > 0;
     }
 
     /** @return  true  iff there is debt to cancel on this meter. */
@@ -227,10 +205,6 @@ class FlowMeter {
    private:
     // Current bucket capacity.
     int64_t level_ = 0;
-
-    // Max number of bytes that can be added to the bucket until the next
-    // bandwidth deposit by the traffic shaper.
-    int64_t deposit_budget_ = INT64_MAX;
 
     // Bucket size as calculated from config
     int64_t bucket_capacity_{0};

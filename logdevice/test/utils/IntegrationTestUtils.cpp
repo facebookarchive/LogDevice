@@ -610,8 +610,8 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
                          /*Burst Bytes*/ 10000,
                          /*Guaranteed Bps*/ 1000000,
                          /*Max Bps*/ 2000000);
-    // Provide 0 capacity for client normal so that it must always be
-    // deferred to a priority queue run.
+    // Provide 0 capacity for client normal so that it must always consume
+    // bandwidth credit from the priority queue bucket.
     root_fgp->second.set(Priority::CLIENT_NORMAL,
                          /*Burst Bytes*/ 10000,
                          /*Guaranteed Bps*/ 0,
@@ -621,7 +621,8 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
                          /*Guaranteed Bps*/ 1000000);
     root_fgp->second.set(Priority::BACKGROUND,
                          /*Burst Bytes*/ 10000,
-                         /*Guaranteed Bps*/ 1000000);
+                         /*Guaranteed Bps*/ 1000000,
+                         /*Max Bps*/ 1100000);
     root_fgp->second.set(FlowGroup::PRIORITYQ_PRIORITY,
                          /*Burst Bytes*/ 10000,
                          /*Guaranteed Bps*/ 1000000);

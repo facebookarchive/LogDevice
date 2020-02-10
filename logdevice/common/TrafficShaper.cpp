@@ -222,6 +222,9 @@ bool TrafficShaper::dispatchUpdateCommon(
       // run's first fit pass.
       overflow_entry.last_overflow = overflow_entry.cur_overflow;
       overflow_entry.cur_overflow = 0;
+      overflow_entry.last_deposit_budget_overflow =
+          overflow_entry.cur_deposit_budget_overflow;
+      overflow_entry.cur_deposit_budget_overflow = 0;
       p = priorityBelow(p);
     }
   }

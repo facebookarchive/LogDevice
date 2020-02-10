@@ -293,38 +293,4 @@ int SocketTest::getDscp() {
   return dscp;
 }
 
-FlowGroupTest::FlowGroupTest() {
-  flow_group = std::make_unique<FlowGroup>(
-      std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr));
-  flow_group->setScope(NodeLocationScope::ROOT);
-
-  // Setup a default update from the TrafficShaper
-  FlowGroupPolicy policy;
-  policy.setEnabled(true);
-  // Set burst capacity small to increase the likelyhood of experiencing
-  // a message deferral during a test run.
-  policy.set(Priority::MAX, /*burst*/ 10000, /*Bps*/ 1000000);
-  policy.set(Priority::CLIENT_HIGH, /*burst*/ 10000, /*Bps*/ 1000000);
-  policy.set(Priority::CLIENT_NORMAL, /*burst*/ 10000, /*Bps*/ 1000000);
-  policy.set(Priority::CLIENT_LOW, /*burst*/ 10000, /*Bps*/ 1000000);
-  policy.set(Priority::BACKGROUND, /*burst*/ 10000, /*Bps*/ 1000000);
-  policy.set(Priority::IDLE, /*burst*/ 10000, /*Bps*/ 1000000);
-  policy.set(FlowGroup::PRIORITYQ_PRIORITY, /*burst*/ 10000, /*Bps*/ 1000000);
-
-  update.policy =
-      policy.normalize(/*workers*/ 16, std::chrono::microseconds(1000));
-}
-
-// Create an up and handshaked client connection.
-void FlowGroupTest::setupConnection() {
-  int rv = socket_->connect();
-  ASSERT_EQ(0, rv);
-
-  triggerEventConnected();
-  flushOutputEvBuffer();
-  CHECK_ON_SENT(MessageType::HELLO, E::OK);
-  ACK_Header ackhdr{0, request_id_t(0), client_id_, max_proto_, E::OK};
-  receiveMsg(new TestACK_Message(ackhdr));
-}
-
 }} // namespace facebook::logdevice

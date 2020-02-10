@@ -35,15 +35,15 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
 
   enabled_ = update.policy.enabled();
 
-  // Run one last time once after disabling traffic shaping on a FlowGroup.
-  // This ensures that any messages blocked due to past resource constraints
-  // are now released.
   if (!enabled_) {
     // Clear any accumulated bandwidth budget or debt so that any future enable
     // of this flow group has a clean starting state.
     for (auto& e : meter_.entries) {
       e.reset(0);
     }
+    // Run one last time after disabling traffic shaping on a FlowGroup.
+    // This ensures that any messages blocked due to past resource constraints
+    // are now released.
     return true;
   }
 
@@ -55,76 +55,88 @@ bool FlowGroup::applyUpdate(FlowGroupsUpdate::GroupEntry& update,
     auto priorityq_was_blocked = !meter_it->canDrain() && !priorityq_.empty();
 
     meter_it->setCapacity(policy_it->capacity);
-    meter_it->resetDepositBudget(policy_it->max_bw);
 
-    // Every Sender gets the same priority based increment.
-    // Overflows are accumulated across all Senders to become
-    // the overflow value used during the next quantum.
-    entry.cur_overflow +=
-        meter_it->fill(policy_it->guaranteed_bw, policy_it->capacity);
+    // Allowed deposits in this quantum without exceeding maximum bandwidth cap.
+    size_t budget = policy_it->max_bw + entry.last_deposit_budget_overflow;
+    size_t starting_budget = budget;
+    ld_check(budget >= policy_it->guaranteed_bw);
 
-    // Any credit that was returned by FlowGroup's clients in the last quantum,
-    // that couldn't fit in our bucket, since it would have violated burst
-    // limit, is equivalent to the overflow that happens when we fill the bucket
-    // during a normal TrafficShaper deposit. This overflow occured in the
-    // last quantum, hence we add it to last_overflow.
+    // There are four sources of bandwidth credit for a bucket:
+    //
+    // SOURCE 1
+    // ========
+    // Every Sender gets the same guaranteed bandwidth credit in each quantum.
+    //
+    // Overflows of guaranteed credits are accumulated across all Senders to
+    // become the last_overflow value used during the next quantum. cur_overflow
+    // is not consumed directly in this quantum (i.e. by a Sender processed
+    // later in the update) to ensure all Senders have an equal probability (via
+    // randomize shuffle of the order in which updates are applied) of being
+    // able to consume excess credit.
+    entry.cur_overflow += meter_it->fill(policy_it->guaranteed_bw, budget);
+
+    // SOURCE 2
+    // ========
+    // Consumption of credit returned to the Sender by clients during the
+    // previous quantum.
+    //
+    // These "redeposits" occur when an operation doesn't consume as many
+    // credits as estimated. When redeposits occurr, they are used to first
+    // fill the traffic shaping bucket. Any overflow, which if used in the
+    // current quantum would cause us to violate burst limits, is retained
+    // for application in the next quantum. This is equivalent to the overflow
+    // that happens when we fill the bucket during a normal TrafficShaper
+    // deposit of guananteed_bw. But, since this overflow occured in the last
+    // quantum, we add it to last_overflow. It is not subject to budget limits
+    // since the credits were already allowed in a previous quantum.
     entry.last_overflow += meter_it->consumeReturnedCreditOverflow();
 
+    // SOURCE 3
+    // ========
+    // Consumption of guaranteed credit that could not be used by other
+    // Senders in the last quantum.
+    //
     // First fit. Any overflow remaining at the end of the run is
     // given to the priority queue buckets. If it can't fit in the
-    // priority queue buckets, it is discarded.
+    // priority queue buckets, it is discarded. This credit is subject
+    // to the max bandwidth budget because it was never accounted for
+    // in a previous budget.
     ld_check(entry.last_overflow >= 0);
-    entry.last_overflow =
-        meter_it->fill(entry.last_overflow, policy_it->capacity);
+    entry.last_overflow = meter_it->fill(entry.last_overflow, budget);
     ld_check(entry.last_overflow >= 0);
 
-    // Move the bandwidth credits from priority queue class into current traffic
-    // class.
-    // Deposit budget for traffic class in an interval is bound by max bytes per
-    // second. Assume that a traffic class has following bucket parameters,
-    // burst capacity(100) > max bytes per second(10) >
-    // guaranteed bytes per second(2). Let's assume an interval of 1 sec.
-    // At every interval, deposit budget for the traffic class will be reset to
-    // 10, and 2 credits will be added to the bucket. This reduces deposit
-    // budget to 8. If none of this gets used in the current interval for the
-    // traffic class, then in the next interval deposit budget will be reset and
-    // another 2 credits will be added to the bucket. This reduces the deposit
-    // budget to 8 credits again.
-    // If a burst of 20 credits comes in for the traffic class, it will consume
-    // 4 credits from the bucket and borrow 8 from pq class, if pq class has
-    // them, and incur a debt of 8. Ideally, these 20 credits should not have
-    // incurred any debt, because there was no traffic in the previous interval.
-    // Requested bandwidth is 10 bytes per second, so 20 bytes in 2 seconds
-    // is within bounds.
-    // This transfer from pq class to the requesting traffic class helps to
-    // tackle this issue. In the above example in the beginning of 1st interval,
-    // 8 credits if available in pq class will be transferred to traffic class
-    // bucket, after this number of credits in bucket is 10 and deposit budget
-    // becomes 0. In the second interval, deposit budget for traffic class
-    // bucket will be reset to 10, and it will get 2 credits as part of
-    // guaranteed bandwidth. Again if 8 credits are available in pq class
-    // bucket, they will be transferred to traffic class bucket. The total
-    // credit count in bucket will be 20. Now, if a burst that consumes 20
-    // credits comes in, it won't incur any debt. This way the traffic class
-    // bandwidth can be reached or sustained even in presence of bursty traffic.
-    // Generally speaking, this allows to accrue credits equivalent to max
-    // requested bandwidth every iteration till bucket capacity is reached. If a
-    // traffic class is not using it's credits entirely for multiple iterations,
-    // it can still reach it's requested or target bandwidth because enough
-    // credits get accumulated beforehand for this class during the lull period.
-    // Other advantage of doing this is less contention, transferring credits
-    // from pq class to traffic class when sending message acquires flow_meters
-    // mutex which can be a point of contention. By preadding the credits to
-    // traffic class will reduce the contention.
+    // SOURCE 4
+    // ========
+    // Consumption of guaranteed credit that is not assigned directly to
+    // a given priority (i.e. deposited directly into the priority queue meter)
+    // or could not be used in previous quantums at this or other priority
+    // classes.
+    //
+    // This credit is consumed in priority order so the highest priority
+    // traffic flows have first access. This credit is subject to the max
+    // bandwidth budget because it was never accounted for in a previous
+    // budget.
     if (p != Priority::INVALID) {
       auto requested_amount = policy_it->capacity - meter_it->level();
-      transferCredit(PRIORITYQ_PRIORITY, p, requested_amount);
+      transferCredit(PRIORITYQ_PRIORITY, p, requested_amount, budget);
     }
 
     ld_check_ge(policy_it->capacity, meter_it->level());
 
     if (priorityq_was_blocked && meter_it->canDrain()) {
       need_to_run = true;
+    }
+
+    // Update budget accounting.
+    auto fill_amount = starting_budget - budget;
+    if (fill_amount < policy_it->max_bw) {
+      // We couldn't use up our deposit budget. Transfer the budget credit so
+      // it is accessible by meters for this same class that are on other
+      // Senders.
+      entry.cur_deposit_budget_overflow += policy_it->max_bw - fill_amount;
+    } else {
+      // Deduct any budget used from the last quantum.
+      entry.last_deposit_budget_overflow -= fill_amount - policy_it->max_bw;
     }
 
     ++policy_it;
@@ -163,9 +175,9 @@ bool FlowGroup::run(std::mutex& flow_meters_mutex,
       issueCallback(priorityq_.front(p), flow_meters_mutex);
     }
 
-    // Getting priorityq size is linear time operation instead just depend on
-    // whether request priorityq is empty or not to see if there is still
-    // backlog
+    // Getting priorityq size is a linear time operation. Instead, just depend
+    // on whether request priorityq is empty or not to see if there is still
+    // a backlog.
     deps_->statsSet(
         &PerShapingPriorityStats::pq_backlog, scope_, p, priorityq_.empty(p));
   }

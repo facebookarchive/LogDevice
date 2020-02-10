@@ -103,13 +103,24 @@ class FlowGroupsUpdate {
       // the allotment provided by this entry's policy.
       int64_t last_overflow = 0;
       // Excess bandwidth accrued during the current FlowGroupUpdate.
-      // Note: Overflows from filling a FlowMeter entry using last_overflow
+      // NOTE: Overflows from filling a FlowMeter entry using last_overflow
       //       bandwidth is returned to last_overflow, not added here.
       //       Otherwise, excess bandwidth that cannot fit given the
       //       configured maximum capacity (maximum burst) would accrue
       //       indefinitely, effectively overriding the maximum capacity
       //       setting.
       int64_t cur_overflow = 0;
+      // Unused deposit budget from the last FlowGroupUpdate.
+      // This excess budget is consumed in a first fit fashion across
+      // all buckets of this priority.  Any unused budget in this category will
+      // be discarded upon completion of processing the current FlowGroupUpdate.
+      size_t last_deposit_budget_overflow = 0;
+      // Unused deposit budget from earlier in the current FlowGroupUpdate.
+      // This unused budget is accumulated and then transferred to
+      // last_deposit_budget_overflow upon completion of processing the current
+      // FlowGroupUpdate. It is not consumed during the current FlowGroupUpdate
+      // to ensure fair access across workers to excess budget.
+      size_t cur_deposit_budget_overflow = 0;
     };
 
     /**
@@ -186,10 +197,6 @@ class FlowGroup {
 
   size_t debt(Priority p) const {
     return meter_.entries[asInt(p)].debt();
-  }
-
-  size_t depositBudget(Priority p) const {
-    return meter_.entries[asInt(p)].depositBudget();
   }
 
   size_t level(Priority p) const {
@@ -343,11 +350,14 @@ class FlowGroup {
    * Transfer the specified amount of credit from the 'source' to 'sink'
    * FlowMeter.
    */
-  void transferCredit(Priority source, Priority sink, size_t amount) {
+  void transferCredit(Priority source,
+                      Priority sink,
+                      size_t amount,
+                      size_t& budget) {
     auto& source_entry = meter_.entries[asInt(source)];
     auto& sink_entry = meter_.entries[asInt(sink)];
     auto initialSourceLevel = source_entry.level();
-    source_entry.transferCredit(sink_entry, amount);
+    source_entry.transferCredit(sink_entry, amount, budget);
     deps_->statsAdd(&PerShapingPriorityStats::bwtransferred,
                     scope_,
                     sink,
