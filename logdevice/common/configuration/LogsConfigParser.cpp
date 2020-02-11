@@ -115,8 +115,6 @@ static const std::set<std::string> logs_config_recognized_keys = {
     SEQUENCER_BATCHING_PASSTHRU_THRESHOLD,
     SHADOW,
     TAIL_OPTIMIZED,
-    MONITORING_TIER,
-    SUPPRESS_LAG_MONITORING,
 };
 
 static const std::set<std::string> logs_config_non_defaultable_keys = {"id",
@@ -553,12 +551,9 @@ parseAttributes(const folly::dynamic& attrs,
         Attribute<ssize_t>(),     /* sequencerBatchingSizeTrigger */
         Attribute<Compression>(), /* sequencerBatchingCompression */
         Attribute<ssize_t>(),     /* sequencerBatchingPassthruThreshold */
-        Attribute<LogAttributes::Shadow>(), /* shadow */
-        false,                              /* tail optimized */
-        Attribute<folly::Optional<monitoring_tier_t>>(
-            folly::Optional<monitoring_tier_t>()), /* monitoring tier */
-        false,                                     /* suppress lag monitoring */
-        Attribute<LogAttributes::ExtrasMap>());    /* extras */
+        Attribute<LogAttributes::Shadow>(),     /* shadow */
+        false,                                  /* tail optimized */
+        Attribute<LogAttributes::ExtrasMap>()); /* extras */
   }
 
   Attribute<int> extraCopies;
@@ -876,29 +871,6 @@ parseAttributes(const folly::dynamic& attrs,
     return folly::none;
   }
 
-  Attribute<folly::Optional<monitoring_tier_t>> monitoringTier;
-  monitoring_tier_t::raw_type monitoringTier_int;
-  if (getIntFromMap<monitoring_tier_t::raw_type>(
-          attrs, MONITORING_TIER, monitoringTier_int, nullptr)) {
-    monitoringTier = monitoring_tier_t{monitoringTier_int};
-  }
-
-  // Optional, but defaults to false in logs/DefaultLogAttributes.h.
-  Attribute<bool> suppressLagMonitoring;
-  bool suppressLagMonitoring_bool = false;
-  success = getBoolFromMap(
-      attrs, SUPPRESS_LAG_MONITORING, suppressLagMonitoring_bool, nullptr);
-  if (success) {
-    suppressLagMonitoring = suppressLagMonitoring_bool;
-  } else if (!success && err != E::NOTFOUND) {
-    ld_error("Invalid value for \"%s\" attribute of log range '%s'. Expected "
-             "a bool.",
-             SUPPRESS_LAG_MONITORING,
-             interval_string.c_str());
-    err = E::INVALID_CONFIG;
-    return folly::none;
-  }
-
   // Adding fields that logdevice doesn't recognize
   Attribute<LogAttributes::ExtrasMap> extras;
   LogAttributes::ExtrasMap extras_map;
@@ -948,8 +920,6 @@ parseAttributes(const folly::dynamic& attrs,
                        sequencerBatchingPassthruThreshold,
                        shadow,
                        tailOptimized,
-                       monitoringTier,
-                       suppressLagMonitoring,
                        extras};
   return folly::Optional<LogAttributes>(std::move(output));
 }

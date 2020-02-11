@@ -138,33 +138,6 @@ FBuffersLogsConfigCodec::fbuffers_deserialize<Attribute<std::string>,
   return out;
 }
 
-template <>
-Attribute<monitoring_tier_t>
-FBuffersLogsConfigCodec::fbuffers_deserialize<Attribute<monitoring_tier_t>,
-                                              fbuffers::LogAttr>(
-    const fbuffers::LogAttr* attr,
-    const Attribute<monitoring_tier_t>& parent) {
-  Attribute<monitoring_tier_t> out;
-
-  if (attr) {
-    if (attr->value_type() == fbuffers::Any::UInt8) {
-      static_assert(
-          std::is_same_v<monitoring_tier_t::raw_type, uint8_t>,
-          "monitoring_tier_t raw type is not uint8_t anymore, you must "
-          "fix deserialization");
-      uint8_t v = static_cast<const fbuffers::UInt8*>(attr->value())->value();
-      out =
-          Attribute<monitoring_tier_t>(monitoring_tier_t{v}, attr->inherited());
-    } else {
-      ld_spew("Type mismatch while trying to decode attribute %s",
-              attr->name()->str().c_str());
-    }
-  } else if (parent.hasValue()) {
-    out = Attribute<monitoring_tier_t>(parent.value(), true);
-  }
-  return out;
-}
-
 // fbuffers::LogAttr => Attribute<folly::Optional<Type>>
 template <typename Type>
 Attribute<folly::Optional<Type>>
@@ -278,8 +251,6 @@ FBuffersLogsConfigCodec::fbuffers_deserialize<logsconfig::LogAttributes,
                    SEQUENCER_BATCHING_PASSTHRU_THRESHOLD,
                    ssize_t);
   DESERIALIZE_ATTR(tailOptimized, TAIL_OPTIMIZED, bool);
-  DESERIALIZE_ATTR_OPT(monitoringTier, MONITORING_TIER, monitoring_tier_t);
-  DESERIALIZE_ATTR(suppressLagMonitoring, SUPPRESS_LAG_MONITORING, bool);
 
 #undef DESERIALIZE_ATTR_OPT
 #undef DESERIALIZE_ATTR
@@ -430,8 +401,6 @@ FBuffersLogsConfigCodec::fbuffers_deserialize<logsconfig::LogAttributes,
                        std::move(sequencerBatchingPassthruThreshold),
                        std::move(shadow),
                        std::move(tailOptimized),
-                       std::move(monitoringTier),
-                       std::move(suppressLagMonitoring),
                        std::move(extras)};
 }
 

@@ -367,13 +367,6 @@ TEST(LogAttributesTest, ComparisonOpTest) {
   attr2 = attr2.with_syncedCopies(attr1.syncedCopies());
   ASSERT_EQ(attr1, attr2);
 
-  attr1 = attr1.with_monitoringTier(
-      folly::Optional<monitoring_tier_t>(monitoring_tier_t(17)));
-  ASSERT_NE(attr1, attr2);
-
-  attr2 = attr2.with_monitoringTier(attr1.monitoringTier());
-  ASSERT_EQ(attr1, attr2);
-
   attr1 = attr1.with_tailOptimized(false);
   attr2 = attr2.with_tailOptimized(true);
   ASSERT_NE(attr1, attr2);

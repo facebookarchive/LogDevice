@@ -59,8 +59,6 @@ constexpr char const* SHADOW = "shadow";
 constexpr char const* SHADOW_DEST = "destination";
 constexpr char const* SHADOW_RATIO = "ratio";
 constexpr char const* TAIL_OPTIMIZED = "tail_optimized";
-constexpr char const* MONITORING_TIER = "monitoring_tier";
-constexpr char const* SUPPRESS_LAG_MONITORING = "suppress_lag_monitoring";
 
 constexpr char const* EXTRAS = "extra_attributes";
 
@@ -326,9 +324,7 @@ class LogAttributes {
                       cv.sequencerBatchingCompression_,
                       cv.sequencerBatchingPassthruThreshold_,
                       cv.shadow_,
-                      cv.tailOptimized_,
-                      cv.monitoringTier_,
-                      cv.suppressLagMonitoring_);
+                      cv.tailOptimized_);
     }
 
    public:
@@ -362,9 +358,7 @@ class LogAttributes {
         const Attribute<Compression>& sequencerBatchingCompression,
         const Attribute<ssize_t>& sequencerBatchingPassthruThreshold,
         const Attribute<Shadow>& shadow,
-        const Attribute<bool>& tailOptimized,
-        const Attribute<folly::Optional<monitoring_tier_t>>& monitoringTier,
-        const Attribute<bool>& suppressLagMonitoring)
+        const Attribute<bool>& tailOptimized)
         : replicationFactor_(replicationFactor),
           extraCopies_(extraCopies),
           syncedCopies_(syncedCopies),
@@ -391,9 +385,7 @@ class LogAttributes {
           sequencerBatchingPassthruThreshold_(
               sequencerBatchingPassthruThreshold),
           shadow_(shadow),
-          tailOptimized_(tailOptimized),
-          monitoringTier_(monitoringTier),
-          suppressLagMonitoring_(suppressLagMonitoring) {}
+          tailOptimized_(tailOptimized) {}
 
     bool operator==(const CommonValues& other) const {
       return as_tuple(*this) == as_tuple(other);
@@ -568,19 +560,6 @@ class LogAttributes {
      */
     Attribute<bool> tailOptimized_;
 
-    /**
-     * Defines a monitoring tier for the log group. Each tier is kept track
-     * separately for monitoring purposes (e.g. if a tier is more
-     * important than another, there might be more strict SLAs for that tier).
-     */
-    Attribute<folly::Optional<monitoring_tier_t>> monitoringTier_;
-
-    /**
-     * If true, ClientReadersFlowTracer will not perform lag assessment for
-     * readers of that log.
-     */
-    Attribute<bool> suppressLagMonitoring_;
-
     // WARNING: update operator== and friends when adding a new attribute
 
    public:
@@ -621,8 +600,6 @@ class LogAttributes {
     ACCESSOR(sequencerBatchingPassthruThreshold)
     ACCESSOR(shadow)
     ACCESSOR(tailOptimized)
-    ACCESSOR(monitoringTier)
-    ACCESSOR(suppressLagMonitoring)
 
 #undef ACCESSOR
   };
@@ -668,8 +645,6 @@ class LogAttributes {
       const Attribute<ssize_t>& sequencerBatchingPassthruThreshold,
       const Attribute<Shadow>& shadow,
       const Attribute<bool>& tailOptimized,
-      const Attribute<folly::Optional<monitoring_tier_t>>& monitoringTier,
-      const Attribute<bool>& suppressLagMonitoring,
       const Attribute<ExtrasMap>& extras)
       : common_(std::make_shared<const CommonValues>(
             replicationFactor,
@@ -697,9 +672,7 @@ class LogAttributes {
             sequencerBatchingCompression,
             sequencerBatchingPassthruThreshold,
             shadow,
-            tailOptimized,
-            monitoringTier,
-            suppressLagMonitoring)),
+            tailOptimized)),
         extras_(extras) {}
 
   /**
@@ -754,11 +727,7 @@ class LogAttributes {
                       parent.common_->sequencerBatchingPassthruThreshold_),
             Attribute(attrs.common_->shadow_, parent.common_->shadow_),
             Attribute(attrs.common_->tailOptimized_,
-                      parent.common_->tailOptimized_),
-            Attribute(attrs.common_->monitoringTier_,
-                      parent.common_->monitoringTier_),
-            Attribute(attrs.common_->suppressLagMonitoring_,
-                      parent.common_->suppressLagMonitoring_))),
+                      parent.common_->tailOptimized_))),
         extras_(attrs.extras_, parent.extras_) {}
 
   LogAttributes(CommonValuesPtr common, Attribute<ExtrasMap> extras)
@@ -846,8 +815,6 @@ class LogAttributes {
   ACCESSOR1(sequencerBatchingPassthruThreshold)
   ACCESSOR1(shadow)
   ACCESSOR1(tailOptimized)
-  ACCESSOR1(monitoringTier)
-  ACCESSOR1(suppressLagMonitoring)
 
   ACCESSOR2(extras)
 
