@@ -322,7 +322,8 @@ int ReaderImpl::startReadingImpl(logid_t log_id,
       std::move(deps),
       processor_->config_,
       bridge_.get(),
-      attrs);
+      attrs,
+      monitoring_tier_);
 
   if (without_payload_) {
     read_stream->setNoPayload();
@@ -622,6 +623,10 @@ void ReaderImpl::read_handleData(
   // the payload will get freed when the application deletes the DataRecord.
   data_out->push_back(entry.releaseData());
   ++nread_;
+}
+
+void ReaderImpl::setMonitoringTier(MonitoringTier tier) {
+  monitoring_tier_ = tier;
 }
 
 void ReaderImpl::read_handleGap(QueueEntry& entry,

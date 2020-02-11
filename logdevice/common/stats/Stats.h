@@ -1393,20 +1393,22 @@ class PerShardStatToken {
     }                                                             \
   } while (0)
 
-#define PER_MONITORING_TIER_STAT_ADD(                                       \
-    stats_struct, monitoring_tier, name, value)                             \
-  do {                                                                      \
-    if (stats_struct) {                                                     \
-      auto& stats =                                                         \
-          stats_struct->get().per_monitoring_tier_stats[(monitoring_tier)]; \
-      stats.name += value;                                                  \
-    }                                                                       \
+#define MONITORING_TIER_STAT_ADD(stats_struct, monitoring_tier, name, value)  \
+  do {                                                                        \
+    if (stats_struct) {                                                       \
+      auto& stats =                                                           \
+          stats_struct->get().per_monitoring_tier_stats[static_cast<uint8_t>( \
+              monitoring_tier)];                                              \
+      stats.name += value;                                                    \
+    }                                                                         \
+    STAT_ADD(stats_struct, name, value);                                      \
   } while (0)
 
-#define PER_MONITORING_TIER_STAT_INCR(stats_struct, monitoring_tier, name) \
-  PER_MONITORING_TIER_STAT_ADD(stats_struct, monitoring_tier, name, +1)
-#define PER_MONITORING_TIER_STAT_DECR(stats_struct, monitoring_tier, name) \
-  PER_MONITORING_TIER_STAT_ADD(stats_struct, monitoring_tier, name, -1)
+#define MONITORING_TIER_STAT_INCR(stats_struct, monitoring_tier, name) \
+  MONITORING_TIER_STAT_ADD(stats_struct, monitoring_tier, name, +1);
+
+#define MONITORING_TIER_STAT_DECR(stats_struct, monitoring_tier, name) \
+  MONITORING_TIER_STAT_ADD(stats_struct, monitoring_tier, name, -1);
 
 // expects name to be {AppendSuccess, AppendFail}
 #define PER_NODE_STAT_ADD(stats_struct, node_id, name)                  \

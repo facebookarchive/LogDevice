@@ -46,6 +46,8 @@ class SyncCheckpointedReaderImpl : public SyncCheckpointedReader {
 
   void waitOnlyWhenNoData() override;
 
+  void setMonitoringTier(MonitoringTier tier) override;
+
   void withoutPayload() override;
 
   void forceNoSingleCopyDelivery() override;

@@ -26,15 +26,58 @@ inline uint16_t get_initial_ttl(size_t group_size, size_t num_groups) {
   return 1.25 * group_size * num_groups;
 }
 
+void updateCountersForState(ClientReadersFlowTracer::State state,
+                            bool ignoring_overload,
+                            MonitoringTier monitoring_tier,
+                            int increment) {
+  using State = ClientReadersFlowTracer::State;
+
+  if (ignoring_overload) {
+    if (state == State::STUCK || state == State::LAGGING) {
+      WORKER_STAT_ADD(
+          read_streams_stuck_or_lagging_ignoring_overload, increment);
+    }
+
+    if (state == State::STUCK) {
+      WORKER_STAT_ADD(read_streams_stuck_ignoring_overload, increment);
+    } else if (state == State::LAGGING) {
+      WORKER_STAT_ADD(read_streams_lagging_ignoring_overload, increment);
+    } else {
+      // ignore
+    }
+
+  } else {
+    if (state == State::STUCK || state == State::LAGGING) {
+      MONITORING_TIER_STAT_ADD(Worker::stats(),
+                               monitoring_tier,
+                               read_streams_stuck_or_lagging,
+                               increment);
+    }
+
+    if (state == State::STUCK) {
+      MONITORING_TIER_STAT_ADD(
+          Worker::stats(), monitoring_tier, read_streams_stuck, increment);
+    } else if (state == State::LAGGING) {
+      MONITORING_TIER_STAT_ADD(
+          Worker::stats(), monitoring_tier, read_streams_lagging, increment);
+    } else {
+      // ignore
+    }
+  }
+}
+
 ClientReadersFlowTracer::ClientReadersFlowTracer(
     std::shared_ptr<TraceLogger> logger,
     ClientReadStream* owner,
+    MonitoringTier tier,
     bool push_samples,
     bool ignore_overload)
     : SampledTracer(std::move(logger)),
       ref_holder_(this),
-      push_samples_(push_samples),
-      ignore_overload_(ignore_overload),
+      params_{/*tracer_period=*/std::chrono::milliseconds::zero(),
+              /*push_samples=*/push_samples,
+              /*ignore_overload=*/ignore_overload},
+      monitoring_tier_{tier},
       owner_(owner) {
   timer_ = std::make_unique<Timer>([this] { onTimerTriggered(); });
 
@@ -44,7 +87,7 @@ ClientReadersFlowTracer::ClientReadersFlowTracer(
   if (!ignore_overload) {
     // build a version that ignores overload
     tracer_ignoring_overload_ = std::make_unique<ClientReadersFlowTracer>(
-        logger, owner, /*push_samples=*/false, /*ignore_overload=*/true);
+        logger, owner, tier, /*push_samples=*/false, /*ignore_overload=*/true);
   }
 }
 
@@ -55,7 +98,7 @@ ClientReadersFlowTracer::~ClientReadersFlowTracer() {
 
 void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
                                               size_t num_records_read) {
-  if (!push_samples_) {
+  if (!params_.push_samples) {
     return;
   }
   auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
@@ -138,8 +181,8 @@ bool ClientReadersFlowTracer::readerIsUnhealthy() {
 
 void ClientReadersFlowTracer::onSettingsUpdated() {
   auto& settings = Worker::settings();
-  tracer_period_ = settings.client_readers_flow_tracer_period;
-  if (tracer_period_ != std::chrono::milliseconds::zero()) {
+  params_.tracer_period = settings.client_readers_flow_tracer_period;
+  if (params_.tracer_period != std::chrono::milliseconds::zero()) {
     if (!timer_->isActive()) {
       timer_->activate(std::chrono::milliseconds{0});
     }
@@ -170,7 +213,7 @@ void ClientReadersFlowTracer::onTimerTriggered() {
 
   maybeBumpStats();
   traceReaderFlow(owner_->num_bytes_delivered_, owner_->num_records_delivered_);
-  timer_->activate(tracer_period_);
+  timer_->activate(params_.tracer_period);
 }
 
 void ClientReadersFlowTracer::sendSyncSequencerRequest() {
@@ -198,7 +241,7 @@ void ClientReadersFlowTracer::sendSyncSequencerRequest() {
         }
       },
       GetSeqStateRequest::Context::READER_MONITORING,
-      /*timeout=*/tracer_period_,
+      /*timeout=*/params_.tracer_period,
       GetSeqStateRequest::MergeType::GSS_MERGE_INTO_OLD);
   ssr->setThreadIdx(Worker::onThisThread()->idx_.val());
   std::unique_ptr<Request> req(std::move(ssr));
@@ -350,7 +393,7 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
          .ttl = get_initial_ttl(group_size, num_groups)});
   }
 
-  const auto time_window = tracer_period_.count() *
+  const auto time_window = params_.tracer_period.count() *
       (group_size * (num_groups - 1) + sample_counter_ % group_size);
 
   int64_t correction = 0;
@@ -359,7 +402,7 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
     correction += x.time_lag_correction;
   }
 
-  bool is_catching_up = cur_ts_lag <= tracer_period_.count() ||
+  bool is_catching_up = cur_ts_lag <= params_.tracer_period.count() ||
       !time_lag_record_.full() ||
       cur_ts_lag - time_lag_record_.front().time_lag - correction <=
           slope_threshold * time_window;
@@ -378,9 +421,11 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
   State state_to_report;
   auto& settings = Worker::settings();
 
-  if (last_time_stuck_ != TimePoint::max()
-          ? last_time_stuck_ + settings.reader_stuck_threshold <= now
-          : false) {
+  if (force_healthy) {
+    state_to_report = State::HEALTHY;
+  } else if (last_time_stuck_ != TimePoint::max()
+                 ? last_time_stuck_ + settings.reader_stuck_threshold <= now
+                 : false) {
     state_to_report = State::STUCK;
   } else if ((last_time_lagging_ != TimePoint::max()
                   ? last_time_lagging_ + settings.reader_lagging_threshold <=
@@ -394,41 +439,15 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
     state_to_report = State::HEALTHY;
   }
 
-  if (force_healthy) {
-    state_to_report = State::HEALTHY;
-  }
-
-  auto update_counter_for_state = [ignore_overload = this->ignore_overload_](
-                                      State state, int increment) {
-    if (state == State::STUCK || state == State::LAGGING) {
-      if (ignore_overload) {
-        WORKER_STAT_ADD(
-            read_streams_stuck_or_lagging_ignoring_overload, increment);
-      } else {
-        WORKER_STAT_ADD(read_streams_stuck_or_lagging, increment);
-      }
-    }
-
-    if (state == State::STUCK) {
-      if (ignore_overload) {
-        WORKER_STAT_ADD(read_streams_stuck_ignoring_overload, increment);
-      } else {
-        WORKER_STAT_ADD(read_streams_stuck, increment);
-      }
-    } else if (state == State::LAGGING) {
-      if (ignore_overload) {
-        WORKER_STAT_ADD(read_streams_lagging_ignoring_overload, increment);
-      } else {
-        WORKER_STAT_ADD(read_streams_lagging, increment);
-      }
-    } else {
-      /* ignore */
-    }
-  };
-
   if (state_to_report != last_reported_state_) {
-    update_counter_for_state(last_reported_state_, -1);
-    update_counter_for_state(state_to_report, +1);
+    updateCountersForState(last_reported_state_,
+                           /*ignoring_overload=*/params_.ignore_overload,
+                           monitoring_tier_,
+                           -1);
+    updateCountersForState(state_to_report,
+                           /*ignoring_overload=*/params_.ignore_overload,
+                           monitoring_tier_,
+                           +1);
     last_reported_state_ = state_to_report;
   }
 }
@@ -514,7 +533,7 @@ void ClientReadersFlowTracer::updateShouldTrack() {
   bool was_being_tracked = should_track_;
 
   auto overload_detector = Worker::overloadDetector();
-  const bool overloaded = (overload_detector && !ignore_overload_)
+  const bool overloaded = (overload_detector && !params_.ignore_overload)
       ? overload_detector->overloaded()
       : false;
 

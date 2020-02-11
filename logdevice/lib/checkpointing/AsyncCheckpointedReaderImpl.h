@@ -48,6 +48,8 @@ class AsyncCheckpointedReaderImpl : public AsyncCheckpointedReader {
 
   int resumeReading(logid_t log_id) override;
 
+  void setMonitoringTier(MonitoringTier tier) override;
+
   void withoutPayload() override;
 
   void forceNoSingleCopyDelivery() override;

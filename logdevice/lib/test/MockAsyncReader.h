@@ -10,6 +10,7 @@
 #include <gmock/gmock.h>
 
 #include "logdevice/include/AsyncReader.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 
@@ -35,6 +36,8 @@ class MockAsyncReader : public AsyncReader {
                int(logid_t log_id, std::function<void()> callback));
 
   MOCK_METHOD1(resumeReading, int(logid_t log_id));
+
+  MOCK_METHOD1(setMonitoringTier, void(MonitoringTier));
 
   MOCK_METHOD0(withoutPayload, void());
 

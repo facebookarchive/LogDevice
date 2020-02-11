@@ -36,6 +36,8 @@ class MockReader : public Reader {
 
   MOCK_METHOD0(waitOnlyWhenNoData, void());
 
+  MOCK_METHOD1(setMonitoringTier, void(MonitoringTier));
+
   MOCK_METHOD0(withoutPayload, void());
 
   MOCK_METHOD0(forceNoSingleCopyDelivery, void());

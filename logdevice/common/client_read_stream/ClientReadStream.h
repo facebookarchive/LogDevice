@@ -431,7 +431,8 @@ class ClientReadStream : boost::noncopyable {
                    std::unique_ptr<ClientReadStreamDependencies>&& deps,
                    std::shared_ptr<UpdateableConfig> config,
                    ReaderBridge* reader = nullptr,
-                   const ReadStreamAttributes* attrs = nullptr);
+                   const ReadStreamAttributes* attrs = nullptr,
+                   MonitoringTier tier = MonitoringTier::MEDIUM_PRI);
 
   ~ClientReadStream();
 
@@ -1483,6 +1484,8 @@ class ClientReadStream : boost::noncopyable {
 
   // @see shipCorruptedRecords
   bool ship_corrupted_records_ = false;
+
+  MonitoringTier monitoring_tier_{MonitoringTier::MEDIUM_PRI};
 
   // Reader object to deliver to when not using callbacks.  Null if using
   // callbacks

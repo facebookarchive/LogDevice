@@ -48,6 +48,14 @@ class ClientReadersFlowTracer : public SampledTracer {
     uint16_t ttl; // for how many periods do we keep this sample
   };
 
+  enum class State { HEALTHY, STUCK, LAGGING };
+
+  struct Parameters {
+    std::chrono::milliseconds tracer_period;
+    const bool push_samples{true};
+    const bool ignore_overload{false};
+  };
+
   struct TailInfo {
     OffsetMap offsets;
     int64_t timestamp;
@@ -64,6 +72,7 @@ class ClientReadersFlowTracer : public SampledTracer {
 
   ClientReadersFlowTracer(std::shared_ptr<TraceLogger> logger,
                           ClientReadStream* owner,
+                          MonitoringTier tier = MonitoringTier::MEDIUM_PRI,
                           bool push_samples = true,
                           bool ignore_overload = false);
   virtual ~ClientReadersFlowTracer();
@@ -103,9 +112,7 @@ class ClientReadersFlowTracer : public SampledTracer {
 
   WeakRefHolder<ClientReadersFlowTracer> ref_holder_;
 
-  std::chrono::milliseconds tracer_period_;
-  const bool push_samples_{true};
-  const bool ignore_overload_{false};
+  Parameters params_;
 
   /*
    * In case we need to ignore overload detection, let's also create a version
@@ -121,8 +128,8 @@ class ClientReadersFlowTracer : public SampledTracer {
   size_t last_num_records_read_{0};
   bool should_track_{true};
 
-  enum class State { HEALTHY, STUCK, LAGGING };
   State last_reported_state_{State::HEALTHY};
+  MonitoringTier monitoring_tier_{MonitoringTier::MEDIUM_PRI};
 
   TimePoint last_time_stuck_{TimePoint::max()};
   TimePoint last_time_lagging_{TimePoint::max()};

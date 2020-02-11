@@ -165,6 +165,14 @@ class Reader {
   virtual void waitOnlyWhenNoData() = 0;
 
   /**
+   * Defines monitoring tier for this reader. Each tier is tracked separately,
+   * allowing for different alarming, SLAs, etc for each.
+   *
+   * Only affects subsequent startReading() calls.
+   */
+  virtual void setMonitoringTier(MonitoringTier tier) = 0;
+
+  /**
    * If called, data records read by this Reader will not include payloads.
    *
    * This makes reading more efficient when payloads are not needed (they won't

@@ -107,7 +107,8 @@ ClientReadStream::ClientReadStream(
     std::unique_ptr<ClientReadStreamDependencies>&& deps,
     std::shared_ptr<UpdateableConfig> config,
     ReaderBridge* reader,
-    const ReadStreamAttributes* attrs)
+    const ReadStreamAttributes* attrs,
+    MonitoringTier tier)
     : id_(id),
       log_id_(log_id),
       start_lsn_(start_lsn),
@@ -125,6 +126,7 @@ ClientReadStream::ClientReadStream(
       last_epoch_with_metadata_(EPOCH_INVALID),
       gap_end_outside_window_(LSN_INVALID),
       trim_point_(LSN_INVALID),
+      monitoring_tier_(tier),
       reader_(reader),
       coordinated_proto_(Compatibility::MAX_PROTOCOL_SUPPORTED),
       window_update_pending_(false),
@@ -458,7 +460,7 @@ void ClientReadStream::start() {
                    // SyncSequencerRequest.
   ) {
     readers_flow_tracer_ = std::make_unique<ClientReadersFlowTracer>(
-        worker_->getTraceLogger(), this);
+        worker_->getTraceLogger(), this, monitoring_tier_);
   }
 
   auto gap_grace_period = deps_->computeGapGracePeriod();
@@ -485,7 +487,8 @@ void ClientReadStream::start() {
   // The first stat counts read streams that are alive, second one counts
   // read stream creation events (i.e. it's not decremented when
   // ClientReadStream is destroyed).
-  WORKER_STAT_INCR(num_read_streams);
+  MONITORING_TIER_STAT_INCR(
+      Worker::stats(), monitoring_tier_, num_read_streams);
   WORKER_STAT_INCR(client_read_streams_created);
 
   // getLogByIDAsync might be synchronously called for LocalLogsConfig and
@@ -3846,7 +3849,8 @@ void ClientReadStream::updateLastReleased(lsn_t last_released_lsn) {
 
 ClientReadStream::~ClientReadStream() {
   if (started_) {
-    WORKER_STAT_DECR(num_read_streams);
+    MONITORING_TIER_STAT_DECR(
+        Worker::stats(), monitoring_tier_, num_read_streams);
   }
 
   // Not safe to destroy while executing a callback

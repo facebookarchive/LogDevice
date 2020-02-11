@@ -90,6 +90,10 @@ void SyncCheckpointedReaderImpl::waitOnlyWhenNoData() {
   reader_->waitOnlyWhenNoData();
 }
 
+void SyncCheckpointedReaderImpl::setMonitoringTier(MonitoringTier tier) {
+  reader_->setMonitoringTier(tier);
+}
+
 void SyncCheckpointedReaderImpl::withoutPayload() {
   reader_->withoutPayload();
 }
