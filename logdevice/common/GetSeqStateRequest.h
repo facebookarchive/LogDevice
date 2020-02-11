@@ -172,6 +172,9 @@ class GetSeqStateRequest : public Request, public SequencerRouter::Handler {
     // If set, sequencer will indicate whether the log is empty.
     bool include_is_log_empty{false};
 
+    // If set, skips remove preemption check (aka CHECK_SEAL).
+    bool skip_remote_preemption_check{false};
+
     // If the caller is ok with piggy-backing on an existing request,
     // it can set this option to GSS_MERGE_INTO_OLD.
     // However, if 'GSS_MERGE_INTO_NEW' is set, the new request will be

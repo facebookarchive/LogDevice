@@ -174,9 +174,16 @@ void ClientReadersFlowTracer::onTimerTriggered() {
 }
 
 void ClientReadersFlowTracer::sendSyncSequencerRequest() {
+  auto flags = SyncSequencerRequest::INCLUDE_TAIL_ATTRIBUTES;
+
+  if (Worker::settings()
+          .client_readers_flow_tracer_GSS_skip_remote_preemption_checks) {
+    flags |= SyncSequencerRequest::SKIP_REMOTE_PREEMPTION_CHECK;
+  }
+
   auto ssr = std::make_unique<SyncSequencerRequest>(
       owner_->log_id_,
-      SyncSequencerRequest::INCLUDE_TAIL_ATTRIBUTES,
+      flags,
       [weak_ref = ref_holder_.ref()](
           Status st,
           NodeID seq_node,

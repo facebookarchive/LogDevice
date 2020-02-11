@@ -176,6 +176,7 @@ sidebar_label: Settings
 ## Monitoring
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
+| client-readers-flow-tracer-GSS-skip-remote-preemption-checks | If set, skips remote preemption checks (aka CHECK SEALs) on GSSs issued by ClientReadersFlowTracer. | true | client&nbsp;only |
 | client-readers-flow-tracer-lagging-metric-num-sample-groups | Maximum number of samples that are kept by ClientReadersFlowTracer for computing relative reading speed in relation to writing speed. See client\_readers\_flow\_tracer\_lagging\_slope\_threshold. | 3 | client&nbsp;only |
 | client-readers-flow-tracer-lagging-metric-sample-group-size | Number of samples in ClientReadersFlowTracer that are aggregated and recorded as one entry. See client-readers-flow-tracer-lagging-metric-sample-group-size. | 20 | client&nbsp;only |
 | client-readers-flow-tracer-lagging-slope-threshold | If a reader's lag increase at at least this rate, the reader is considered lagging (rate given as variation of time lag per time unit). If the desired read ratio needs to be x% of the write ratio, set this threshold to be (1 - x / 100). | -0.3 | client&nbsp;only |

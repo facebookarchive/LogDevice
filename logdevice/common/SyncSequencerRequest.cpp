@@ -22,6 +22,8 @@ const SyncSequencerRequest::flags_t
     SyncSequencerRequest::INCLUDE_HISTORICAL_METADATA;
 const SyncSequencerRequest::flags_t SyncSequencerRequest::INCLUDE_TAIL_RECORD;
 const SyncSequencerRequest::flags_t SyncSequencerRequest::INCLUDE_IS_LOG_EMPTY;
+const SyncSequencerRequest::flags_t
+    SyncSequencerRequest::SKIP_REMOTE_PREEMPTION_CHECK;
 
 SyncSequencerRequest::SyncSequencerRequest(
     logid_t logid,
@@ -105,6 +107,10 @@ void SyncSequencerRequest::tryAgain() {
 
   if (flags_ & INCLUDE_IS_LOG_EMPTY) {
     opts.include_is_log_empty = true;
+  }
+
+  if (flags_ & SKIP_REMOTE_PREEMPTION_CHECK) {
+    opts.skip_remote_preemption_check = true;
   }
 
   opts.on_complete = [=](GetSeqStateRequest::Result res) {

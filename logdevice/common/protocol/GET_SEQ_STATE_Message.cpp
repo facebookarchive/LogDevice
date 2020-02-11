@@ -443,6 +443,17 @@ Message::Disposition GET_SEQ_STATE_Message::onReceived(Address const& from) {
   return Disposition::KEEP;
 }
 
+bool GET_SEQ_STATE_Message::shouldPerformCheckSeals() const {
+  auto w = Worker::onThisThread();
+  auto failure_detector_running = w->processor_->isFailureDetectorRunning();
+
+  bool skip_check_seal_flag_is_set =
+      (flags_ & SKIP_REMOTE_PREEMPTION_CHECK) != 0;
+
+  return failure_detector_running && !Worker::settings().disable_check_seals &&
+      !skip_check_seal_flag_is_set;
+}
+
 void GET_SEQ_STATE_Message::onSequencerNodeFound(Status status,
                                                  logid_t datalog_id,
                                                  NodeID redirect,
@@ -464,9 +475,8 @@ void GET_SEQ_STATE_Message::onSequencerNodeFound(Status status,
     return;
   }
 
-  auto w = Worker::onThisThread();
-  auto failure_detector_running = w->processor_->isFailureDetectorRunning();
-  if (failure_detector_running && !Worker::settings().disable_check_seals) {
+  if (shouldPerformCheckSeals()) {
+    auto w = Worker::onThisThread();
     auto& seqmap = w->processor_->allSequencers();
     std::shared_ptr<Sequencer> sequencer = nullptr;
     sequencer = seqmap.findSequencer(datalog_id);

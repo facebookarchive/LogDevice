@@ -85,6 +85,10 @@ class GET_SEQ_STATE_Message : public Message {
   // If set, include is_log_empty in GSS response.
   static const GET_SEQ_STATE_flags_t INCLUDE_IS_LOG_EMPTY = 1u << 8;
 
+  // If set, we don't issue remote preemption checks (aka CHECK_SEAL). Used to
+  // decrease response time at the expense of consistency.
+  static const GET_SEQ_STATE_flags_t SKIP_REMOTE_PREEMPTION_CHECK = 1u << 9;
+
   // implementation of the Message interface
   void serialize(ProtocolWriter&) const override;
   static Message::deserializer_t deserialize;
@@ -271,6 +275,9 @@ class GET_SEQ_STATE_Message : public Message {
                             logid_t datalog_id,
                             NodeID seq_node,
                             Address const& from);
+
+  bool shouldPerformCheckSeals() const;
+
   friend class CheckSealRequest;
 };
 

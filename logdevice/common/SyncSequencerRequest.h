@@ -128,6 +128,8 @@ class SyncSequencerRequest : public Request {
   static const flags_t INCLUDE_TAIL_RECORD = 1 << 4;
   // If set, include is_log_empty in GSS response.
   static const flags_t INCLUDE_IS_LOG_EMPTY = 1u << 5;
+  // If set, skips remote preemption check (aka CHECK_SEAL).
+  static const flags_t SKIP_REMOTE_PREEMPTION_CHECK = 1u << 6;
 
   folly::IntrusiveListHook list_hook;
 

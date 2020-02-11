@@ -1402,6 +1402,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "(for improved debuggability).",
        CLIENT,
        SettingsCategory::Monitoring);
+  init("client-readers-flow-tracer-GSS-skip-remote-preemption-checks",
+       &client_readers_flow_tracer_GSS_skip_remote_preemption_checks,
+       "true",
+       nullptr,
+       "If set, skips remote preemption checks (aka CHECK SEALs) on GSSs "
+       "issued by ClientReadersFlowTracer.",
+       CLIENT,
+       SettingsCategory::Monitoring);
   init("client-readers-flow-tracer-lagging-metric-num-sample-groups",
        &client_readers_flow_tracer_lagging_metric_num_sample_groups,
        "3",

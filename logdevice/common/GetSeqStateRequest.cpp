@@ -445,6 +445,9 @@ void GetSeqStateRequest::onSequencerKnown(NodeID dest,
   if (options_.include_is_log_empty) {
     flags |= GET_SEQ_STATE_Message::INCLUDE_IS_LOG_EMPTY;
   }
+  if (options_.skip_remote_preemption_check) {
+    flags |= GET_SEQ_STATE_Message::SKIP_REMOTE_PREEMPTION_CHECK;
+  }
 
   // Keep track of the current destination node. In case of a timeout, we
   // might want to skip this one and let SequencerRouter pick a different

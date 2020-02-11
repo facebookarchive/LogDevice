@@ -667,6 +667,12 @@ struct Settings : public SettingsBundle {
   // publishing samples (for improved debuggability).
   double client_readers_flow_tracer_unhealthy_publish_weight;
 
+  // (client-only setting) If set, skips remote preemption checks (aka CHECK
+  // SEALs) on GSSs issued by ClientReadersFlowTracer.
+  // TODO (T62032903): Remove this setting once we validate
+  // ClientReadersFlowTracer works well without remote preemption checks.
+  bool client_readers_flow_tracer_GSS_skip_remote_preemption_checks;
+
   // (client-only setting) Number of sample groups to maintain for the lagging
   // metric.
   size_t client_readers_flow_tracer_lagging_metric_num_sample_groups;
