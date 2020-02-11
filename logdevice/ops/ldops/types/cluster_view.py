@@ -370,7 +370,7 @@ class ClusterView:
         elif by_node_name is not None:
             return by_node_name
         else:
-            assert False, "unreachable"  # pragma: nocover
+            raise AssertionError("unreachable")  # pragma: nocover
 
     def get_node_index(self, node_name: str) -> int:
         return self.get_node_view(node_name=node_name).node_index
