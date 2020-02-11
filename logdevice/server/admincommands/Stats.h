@@ -59,6 +59,17 @@ inline void printStats(const Stats& stats,
                   trafficClasses()[tc].c_str(),
                   val);
     }
+    // Per-monitoring-tier stats.
+    void stat(const std::string& name,
+              MonitoringTier monitoring_tier,
+              int64_t val) override {
+      out_.printf("STAT %s%s.%s %" PRId64 "\r\n",
+                  keyPrefix_,
+                  name.c_str(),
+                  toString(monitoring_tier).c_str(),
+                  val);
+    }
+
     // Per-flow-group stats.
     void stat(const std::string& name,
               NodeLocationScope flow_group,

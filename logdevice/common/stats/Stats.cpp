@@ -150,6 +150,19 @@ void PerTrafficClassStats::reset() {
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
 }
 
+void PerMonitoringTierStats::aggregate(PerMonitoringTierStats const& other,
+                                       StatsAggOptional agg_override) {
+#define STAT_DEFINE(name, agg) \
+  aggregateStat(StatsAgg::agg, agg_override, name, other.name);
+#include "logdevice/common/stats/per_monitoring_tier_stats.inc" // nolint
+}
+
+void PerMonitoringTierStats::reset() {
+#define RESETTING_STATS
+#define STAT_DEFINE(name, _) name = {};
+#include "logdevice/common/stats/per_monitoring_tier_stats.inc" // nolint
+}
+
 PerShapingPriorityStats::PerShapingPriorityStats()
     : time_in_queue(std::make_unique<LatencyHistogram>()) {}
 
@@ -407,6 +420,12 @@ void Stats::aggregateCompoundStats(Stats const& other,
         other.per_traffic_class_stats[i], agg_override);
   }
 
+  // per_monitoring_tier_stats
+  for (int i = 0; i < per_monitoring_tier_stats.size(); ++i) {
+    per_monitoring_tier_stats[i].aggregate(
+        other.per_monitoring_tier_stats[i], agg_override);
+  }
+
   for (int i = 0; i < per_flow_group_stats.size(); ++i) {
     per_flow_group_stats[i].aggregate(
         other.per_flow_group_stats[i], agg_override);
@@ -517,6 +536,10 @@ void Stats::reset() {
 
       for (auto& tcs : per_traffic_class_stats) {
         tcs.reset();
+      }
+
+      for (auto& pmts : per_monitoring_tier_stats) {
+        pmts.reset();
       }
 
       for (auto& fgs : per_flow_group_stats) {
@@ -674,6 +697,13 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
     PerTrafficClassStats total = totalPerTrafficClassStats();
 #define STAT_DEFINE(c, _) cb->stat(#c, total.c);
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
+  }
+
+  // Per monitoring tier
+  for (int i = 0; i < per_monitoring_tier_stats.size(); ++i) {
+#define STAT_DEFINE(c, _) \
+  cb->stat(#c, static_cast<MonitoringTier>(i), per_monitoring_tier_stats[i].c);
+#include "logdevice/common/stats/per_monitoring_tier_stats.inc" // nolint
   }
 
   /* Network Traffic Shaping specific stats */

@@ -169,6 +169,22 @@ struct PerTrafficClassStats {
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
 };
 
+struct PerMonitoringTierStats {
+  /**
+   * Add values from @param other.
+   */
+  void aggregate(PerMonitoringTierStats const& other,
+                 StatsAggOptional agg_override);
+
+  /**
+   * Reset most counters to their initial values.
+   */
+  void reset();
+
+#define STAT_DEFINE(name, _) StatsCounter name{};
+#include "logdevice/common/stats/per_monitoring_tier_stats.inc" // nolint
+};
+
 struct PerShapingPriorityStats {
   PerShapingPriorityStats();
   ~PerShapingPriorityStats();
@@ -660,6 +676,10 @@ struct Stats final {
   std::array<PerTrafficClassStats, static_cast<int>(TrafficClass::MAX)>
       per_traffic_class_stats = {};
 
+  // per-monitoring tier stats
+  std::array<PerMonitoringTierStats, static_cast<int>(MonitoringTier::MAX)>
+      per_monitoring_tier_stats;
+
   // per-flow group stats
   // For Network Traffic Shaping
   std::array<PerFlowGroupStats, static_cast<int>(NodeLocation::NUM_ALL_SCOPES)>
@@ -811,6 +831,9 @@ class Stats::EnumerationCallbacks {
   virtual void stat(const std::string& name,
                     NodeLocationScope flow_group,
                     Priority,
+                    int64_t val) = 0;
+  virtual void stat(const std::string& name,
+                    MonitoringTier monitoring_tier,
                     int64_t val) = 0;
   // Per-msg-priority stats (totals of the previous one).
   virtual void stat(const std::string& name, Priority, int64_t val) = 0;
@@ -1369,6 +1392,21 @@ class PerShardStatToken {
           ->addLoad(load);                                        \
     }                                                             \
   } while (0)
+
+#define PER_MONITORING_TIER_STAT_ADD(                                       \
+    stats_struct, monitoring_tier, name, value)                             \
+  do {                                                                      \
+    if (stats_struct) {                                                     \
+      auto& stats =                                                         \
+          stats_struct->get().per_monitoring_tier_stats[(monitoring_tier)]; \
+      stats.name += value;                                                  \
+    }                                                                       \
+  } while (0)
+
+#define PER_MONITORING_TIER_STAT_INCR(stats_struct, monitoring_tier, name) \
+  PER_MONITORING_TIER_STAT_ADD(stats_struct, monitoring_tier, name, +1)
+#define PER_MONITORING_TIER_STAT_DECR(stats_struct, monitoring_tier, name) \
+  PER_MONITORING_TIER_STAT_ADD(stats_struct, monitoring_tier, name, -1)
 
 // expects name to be {AppendSuccess, AppendFail}
 #define PER_NODE_STAT_ADD(stats_struct, node_id, name)                  \
