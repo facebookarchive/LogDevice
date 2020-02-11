@@ -8,6 +8,7 @@ var searchData=
   ['sethealthchangecallback',['setHealthChangeCallback',['../classfacebook_1_1logdevice_1_1_async_reader.html#aac22c5e34091c1bfe6ceea1c24fde335',1,'facebook::logdevice::AsyncReader']]],
   ['setloggrouprange',['setLogGroupRange',['../classfacebook_1_1logdevice_1_1_client.html#ae46cb78be6906e72b88cafe6981c4349',1,'facebook::logdevice::Client']]],
   ['setloggrouprangesync',['setLogGroupRangeSync',['../classfacebook_1_1logdevice_1_1_client.html#ac034f89ca88ee185b69f7cae69e73f99',1,'facebook::logdevice::Client']]],
+  ['setmonitoringtier',['setMonitoringTier',['../classfacebook_1_1logdevice_1_1_async_reader.html#a3a41c126dddd280f95f660616e446357',1,'facebook::logdevice::AsyncReader::setMonitoringTier()'],['../classfacebook_1_1logdevice_1_1_reader.html#aabd00204a42a01da33c97cb1dfd514ce',1,'facebook::logdevice::Reader::setMonitoringTier()']]],
   ['setrecordcallback',['setRecordCallback',['../classfacebook_1_1logdevice_1_1_async_reader.html#a5178eed40dc11734b248565c2009a06f',1,'facebook::logdevice::AsyncReader']]],
   ['settimeout',['setTimeout',['../classfacebook_1_1logdevice_1_1_client.html#a2b30b82b19b71acd383c3f2fdbf321aa',1,'facebook::logdevice::Client::setTimeout()'],['../classfacebook_1_1logdevice_1_1_reader.html#a7fb6f4b893781cea92e959e4626c909b',1,'facebook::logdevice::Reader::setTimeout()']]],
   ['settings',['settings',['../classfacebook_1_1logdevice_1_1_client.html#aafa91f8e42039d4f7606d1c7668f37ea',1,'facebook::logdevice::Client']]],

@@ -88,6 +88,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:adc52062d63c1c704f46f691dfd7275f4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7ef97dd78f6f5c5da4200c6cdfd90d63"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#a7ef97dd78f6f5c5da4200c6cdfd90d63">waitOnlyWhenNoData</a> ()=0</td></tr>
 <tr class="separator:a7ef97dd78f6f5c5da4200c6cdfd90d63"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aabd00204a42a01da33c97cb1dfd514ce"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#aabd00204a42a01da33c97cb1dfd514ce">setMonitoringTier</a> (MonitoringTier tier)=0</td></tr>
+<tr class="separator:aabd00204a42a01da33c97cb1dfd514ce"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af1812e18565f35607e5111a053bc6edf"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#af1812e18565f35607e5111a053bc6edf">withoutPayload</a> ()=0</td></tr>
 <tr class="separator:af1812e18565f35607e5111a053bc6edf"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a71fcd2eda3b543ab4190d3c6c69c39a6"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#a71fcd2eda3b543ab4190d3c6c69c39a6">forceNoSingleCopyDelivery</a> ()=0</td></tr>
@@ -440,6 +442,34 @@ const std::chrono::milliseconds&#160;</td><td class="memItemRight" valign="botto
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>Returns the number of records delivered (between 0 and <code>nrecords</code>), or -1 if there was a gap. If &gt;= 0, that many data records were appended to the vector. If -1 then logdevice::err is set to E::GAP, and *gap_out is filled with information about the gap. </dd></dl>
+
+</div>
+</div>
+<a id="aabd00204a42a01da33c97cb1dfd514ce"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aabd00204a42a01da33c97cb1dfd514ce">&#9670;&nbsp;</a></span>setMonitoringTier()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void facebook::logdevice::Reader::setMonitoringTier </td>
+          <td>(</td>
+          <td class="paramtype">MonitoringTier&#160;</td>
+          <td class="paramname"><em>tier</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Defines monitoring tier for this reader. Each tier is tracked separately, allowing for different alarming, SLAs, etc for each.</p>
+<p>Only affects subsequent <a class="el" href="classfacebook_1_1logdevice_1_1_reader.html#a211ad73ea203bf37a65745fe37f63cd1">startReading()</a> calls. </p>
 
 </div>
 </div>
