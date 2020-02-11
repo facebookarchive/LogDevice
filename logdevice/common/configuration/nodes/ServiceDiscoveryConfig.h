@@ -114,13 +114,14 @@ struct NodeServiceDiscovery {
   bool isValidForReset(const NodeServiceDiscovery& current) const;
 
   /**
-   * Returns the corresponding socket addres for a specific channel.
+   * Returns the corresponding socket address for a specific channel.
    *
    * @param socket_type     Type of socket.
    * @param connection_type Type of connection.
    * @param peer_type       Type of peer.
    * @param use_dedicated_server_to_server_address Temporary switch to control
    *        whether nodes use a dedicated address to talk to other nodes.
+   *        Ignored if the peer type is not NODE.
    */
   const Sockaddr&
   getSockaddr(SocketType socket_type,
