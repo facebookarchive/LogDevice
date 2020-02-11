@@ -261,6 +261,7 @@
 <tr><th>Name</th><th>Description</th><th style="text-align:center">Default</th><th>Notes</th></tr>
 </thead>
 <tbody>
+<tr><td>client-readers-flow-tracer-GSS-skip-remote-preemption-checks</td><td>If set, skips remote preemption checks (aka CHECK SEALs) on GSSs issued by ClientReadersFlowTracer.</td><td style="text-align:center">true</td><td>client only</td></tr>
 <tr><td>client-readers-flow-tracer-lagging-metric-num-sample-groups</td><td>Maximum number of samples that are kept by ClientReadersFlowTracer for computing relative reading speed in relation to writing speed. See client_readers_flow_tracer_lagging_slope_threshold.</td><td style="text-align:center">3</td><td>client only</td></tr>
 <tr><td>client-readers-flow-tracer-lagging-metric-sample-group-size</td><td>Number of samples in ClientReadersFlowTracer that are aggregated and recorded as one entry. See client-readers-flow-tracer-lagging-metric-sample-group-size.</td><td style="text-align:center">20</td><td>client only</td></tr>
 <tr><td>client-readers-flow-tracer-lagging-slope-threshold</td><td>If a reader's lag increase at at least this rate, the reader is considered lagging (rate given as variation of time lag per time unit). If the desired read ratio needs to be x% of the write ratio, set this threshold to be (1 - x / 100).</td><td style="text-align:center">-0.3</td><td>client only</td></tr>
