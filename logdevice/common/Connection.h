@@ -1346,7 +1346,6 @@ class Connection : public TrafficShappingSocket {
   friend class ClientSocketTest;
   friend class ServerSocketTest;
   friend class ClientConnectionTest;
-  friend class Connection;
 };
 
 }} // namespace facebook::logdevice
