@@ -954,6 +954,10 @@ void AppenderTest::onStoredSent(Status status,
               not_available_nodes_[shard]);                                  \
   }
 
+// Check that Appender doesn't call setNotAvailableUntil() for the given shard
+#define CHECK_AVAILABLE(shard) \
+  { ASSERT_EQ(not_available_nodes_.end(), not_available_nodes_.find(shard)); }
+
 // Mark several node ids not available.
 #define SET_NOT_AVAILABLE(reason, ...)                                        \
   {                                                                           \
@@ -1397,6 +1401,28 @@ TEST_F(AppenderTest, NodeSetStateTransientErrors) {
   ASSERT_TRUE(retired_);
   Appender::Reaper()(appender_);
   CHECK_RELEASE_MSG(N2S0, N3S0, N4S0);
+}
+
+// Check that STORED with an error that failes the wave does not graylist
+// anything else
+TEST_F(AppenderTest, GraylistingCorrectOnError) {
+  updateConfig();
+  start();
+
+  CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 1, N0S0, N1S0, N2S0, N3S0, N4S0);
+
+  ON_STORED_SENT(E::NOSPC, 1, N2S0, N3S0, N4S0);
+  CHECK_NOT_AVAILABLE(N2S0, NO_SPC);
+  CHECK_NOT_AVAILABLE(N3S0, NO_SPC);
+  CHECK_NOT_AVAILABLE(N4S0, NO_SPC);
+  // check if retry timer is active since we failed a wave
+  ASSERT_TRUE(retry_timer_active_);
+  // retry timer active means timeout would have been called
+  triggerTimeout();
+  // check other nodes not graylisted
+  CHECK_AVAILABLE(N0S0);
+  CHECK_AVAILABLE(N1S0);
+  Appender::Reaper()(appender_);
 }
 
 // Test that `nodes_stored_amendable_' is updated correctly as we get STORED

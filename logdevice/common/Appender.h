@@ -842,6 +842,11 @@ class Appender : public IntrusiveUnorderedMapHook {
   // Note: in tests, this is left uninitialized.
   Timer retry_timer_;
 
+  // Used to diferentiate if we failed due to an error or a timeout. If we
+  // failed with an error we don't want onTimeout to graylist a first node that
+  // did not respond.
+  bool wave_failed_with_error_{false};
+
   // If the append was created by SequencerBatching, this contains the number
   // of constituent appends (APPEND messages that came over the wire).  Used
   // to bump stats (success/failure counters) accurately.

@@ -328,6 +328,7 @@ void Appender::onDeferredSTORECancelled(std::unique_ptr<STORE_Message> msg,
 }
 
 void Appender::forgetThePreviousWave(const copyset_size_t cfg_synced) {
+  wave_failed_with_error_ = false;
   deferred_stores_ = 0;
   replies_expected_ = 0;
   store_hdr_.wave++;
@@ -1130,7 +1131,7 @@ void Appender::onTimeout() {
   }
 
   auto worker = Worker::onThisThread(false);
-  if (worker &&
+  if (worker && !wave_failed_with_error_ &&
       worker->updateable_settings_->enable_store_histogram_calculations) {
     if (store_hdr_.flags & STORE_Header::CHAIN) {
       worker->getWorkerTimeoutStats().onReply(
@@ -1153,7 +1154,7 @@ void Appender::onTimeout() {
   //
   // On the other hand, if chain-sending is disabled, we'll still
   // graylist the slow nodes in future waves.
-  if (getSettings().disable_graylisting == false) {
+  if (getSettings().disable_graylisting == false && !wave_failed_with_error_) {
     // Technique for avoiding "death spiral of retries":
     // Don't graylist nodes if they belonged in an all_timed_out wave
     if (!recipients_.allRecipientsOutstanding()) {
@@ -1846,6 +1847,7 @@ bool Appender::onRecipientFailed(Recipient* recipient,
     return true;
   }
 
+  wave_failed_with_error_ = true;
   // If we won't be able to make progress for this wave.
   cancelStoreTimer();
   cancelRetryTimer();
