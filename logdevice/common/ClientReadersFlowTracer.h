@@ -48,7 +48,12 @@ class ClientReadersFlowTracer : public SampledTracer {
     uint16_t ttl; // for how many periods do we keep this sample
   };
 
-  enum class State { HEALTHY, STUCK, LAGGING };
+  enum class State {
+    HEALTHY,
+    STUCK,
+    STUCK_WHILE_FAILING_SYNC_SEQ_REQ,
+    LAGGING
+  };
 
   struct Parameters {
     std::chrono::milliseconds tracer_period;
@@ -122,6 +127,7 @@ class ClientReadersFlowTracer : public SampledTracer {
 
   CircularBuffer<Sample> time_lag_record_;
   folly::Optional<TailInfo> latest_tail_info_;
+  Status last_sync_seq_request_result_{E::OK};
 
   size_t sample_counter_{0};
   size_t last_num_bytes_read_{0};

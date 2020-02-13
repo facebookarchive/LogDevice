@@ -20,6 +20,7 @@
 
 STAT_DEFINE(num_read_streams, SUM)
 STAT_DEFINE(read_streams_stuck, SUM)
+STAT_DEFINE(read_streams_stuck_failing_sync_seq_req, SUM)
 STAT_DEFINE(read_streams_lagging, SUM)
 STAT_DEFINE(read_streams_stuck_or_lagging, SUM)
 

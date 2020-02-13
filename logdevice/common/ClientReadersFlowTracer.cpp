@@ -38,7 +38,8 @@ void updateCountersForState(ClientReadersFlowTracer::State state,
           read_streams_stuck_or_lagging_ignoring_overload, increment);
     }
 
-    if (state == State::STUCK) {
+    if (state == State::STUCK ||
+        state == State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ) {
       WORKER_STAT_ADD(read_streams_stuck_ignoring_overload, increment);
     } else if (state == State::LAGGING) {
       WORKER_STAT_ADD(read_streams_lagging_ignoring_overload, increment);
@@ -54,7 +55,15 @@ void updateCountersForState(ClientReadersFlowTracer::State state,
                                increment);
     }
 
-    if (state == State::STUCK) {
+    if (state == State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ) {
+      MONITORING_TIER_STAT_ADD(Worker::stats(),
+                               monitoring_tier,
+                               read_streams_stuck_failing_sync_seq_req,
+                               increment);
+    }
+
+    if (state == State::STUCK ||
+        state == State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ) {
       MONITORING_TIER_STAT_ADD(
           Worker::stats(), monitoring_tier, read_streams_stuck, increment);
     } else if (state == State::LAGGING) {
@@ -257,6 +266,7 @@ void ClientReadersFlowTracer::onSyncSequencerRequestResponse(
     NodeID seq_node,
     lsn_t next_lsn,
     std::unique_ptr<LogTailAttributes> attrs) {
+  last_sync_seq_request_result_ = st;
   if (st == E::OK && attrs) {
     auto tail_lsn_approx = attrs->last_released_real_lsn != LSN_INVALID
         ? attrs->last_released_real_lsn
@@ -426,7 +436,9 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
   } else if (last_time_stuck_ != TimePoint::max()
                  ? last_time_stuck_ + settings.reader_stuck_threshold <= now
                  : false) {
-    state_to_report = State::STUCK;
+    state_to_report = last_sync_seq_request_result_ == E::OK
+        ? State::STUCK
+        : State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ;
   } else if ((last_time_lagging_ != TimePoint::max()
                   ? last_time_lagging_ + settings.reader_lagging_threshold <=
                       now
@@ -457,6 +469,7 @@ std::string ClientReadersFlowTracer::lastReportedStatePretty() const {
     case State::HEALTHY:
       return "healthy";
     case State::STUCK:
+    case State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ:
       return "stuck";
     case State::LAGGING:
       return "lagging";

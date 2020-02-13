@@ -313,6 +313,7 @@ STAT_DEFINE(read_streams_stalled, SUM)
 // related to read_streams_stalled, read_streams_healthy and
 // read_streams_non_authoritative.
 STAT_DEFINE(read_streams_stuck, SUM)
+STAT_DEFINE(read_streams_stuck_failing_sync_seq_req, SUM)
 STAT_DEFINE(read_streams_lagging, SUM)
 STAT_DEFINE(read_streams_stuck_or_lagging, SUM)
 STAT_DEFINE(read_streams_stuck_ignoring_overload, SUM)
