@@ -488,10 +488,6 @@ void FailureDetector::gossip() {
     RATELIMIT_WARNING(std::chrono::minutes(1),
                       1,
                       "Unable to find a node to send a gossip message to");
-    // For single node cases, update self's rsm version
-    if (nodes_configuration->clusterSize() == 1) {
-      fetchVersions();
-    }
     return;
   }
 
@@ -1680,7 +1676,7 @@ Status FailureDetector::getRSMVersion(node_index_t idx,
 
 Status FailureDetector::getAllRSMVersionsInCluster(
     logid_t rsm_type,
-    std::multimap<lsn_t, node_index_t, std::greater<lsn_t>>& result_out) {
+    std::map<lsn_t, node_index_t, std::greater<lsn_t>>& result_out) {
   folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   if (std::find(registered_rsms_.begin(), registered_rsms_.end(), rsm_type) ==
       registered_rsms_.end()) {

@@ -38,8 +38,7 @@ class ClusterMaintenanceStateMachine
                                                   MaintenanceDelta>;
 
   explicit ClusterMaintenanceStateMachine(
-      UpdateableSettings<AdminServerSettings> settings,
-      std::unique_ptr<RSMSnapshotStore> snapshot_store);
+      UpdateableSettings<AdminServerSettings> settings);
 
   /**
    * Start reading the maintenance log

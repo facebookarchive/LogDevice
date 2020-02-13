@@ -31,7 +31,6 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/SnapshotStoreTypes.h"
 #include "logdevice/common/StatsCollectionThread.h"
 #include "logdevice/common/SyncSequencerRequest.h"
 #include "logdevice/common/TailRecord.h"
@@ -199,31 +198,8 @@ ClientImpl::ClientImpl(std::string cluster_name,
     }
   }
 
-  std::unique_ptr<RSMSnapshotStore> snapshot_store{nullptr};
-  auto store_type = settings_->getSettings()->rsm_snapshot_store_type;
-  ld_info("Attempting to create snapshot store, type:%d", (int)store_type);
-  switch (store_type) {
-    case SnapshotStoreType::NONE:
-      snapshot_store = nullptr;
-      break;
-    case SnapshotStoreType::MESSAGE:
-    case SnapshotStoreType::LOCAL_STORE:
-      snapshot_store = nullptr;
-      break;
-    case SnapshotStoreType::LOG:
-      ld_info("Creating LogBasedRSMSnapshotStore for logs config");
-      snapshot_store = std::make_unique<LogBasedRSMSnapshotStore>(
-          folly::to<std::string>(
-              configuration::InternalLogs::CONFIG_LOG_DELTAS.val_),
-          configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS,
-          processor_.get(),
-          false /* allow snapshotting */);
-      break;
-    default:
-      ld_error("Invaild SnapshotStoreType:%d", (int)store_type);
-  }
   if (!LogsConfigManager::createAndAttach(
-          *processor_, std::move(snapshot_store), false /* is_writable */)) {
+          *processor_, false /* is_writable */)) {
     err = E::INVALID_CONFIG;
     ld_critical("Internal LogsConfig Manager could not be started in Client. "
                 "LogsConfig will not be available for %s!",
@@ -253,8 +229,7 @@ ClientImpl::ClientImpl(std::string cluster_name,
         config_->getServerConfig()->getInternalLogsConfig());
   }
 
-  auto logs_config = config_->getLogsConfig();
-  if (!logs_config || !logs_config->isFullyLoaded()) {
+  if (!config_->getLogsConfig() || !config_->getLogsConfig()->isFullyLoaded()) {
     Semaphore sem;
 
     auto start_time = std::chrono::steady_clock::now();

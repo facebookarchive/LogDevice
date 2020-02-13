@@ -44,8 +44,8 @@ int tailEventLog(
 
   ld_check(!ThreadID::isWorker());
 
-  auto event_log = std::make_unique<EventLogStateMachine>(
-      client_settings->getSettings(), nullptr);
+  auto event_log =
+      std::make_unique<EventLogStateMachine>(client_settings->getSettings());
 
   if (stop_at_tail) {
     event_log->stopAtTail();

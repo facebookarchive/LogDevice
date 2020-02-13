@@ -27,11 +27,9 @@ namespace facebook { namespace logdevice {
 LogsConfigStateMachine::LogsConfigStateMachine(
     UpdateableSettings<Settings> settings,
     std::shared_ptr<UpdateableServerConfig> updateable_server_config,
-    std::unique_ptr<RSMSnapshotStore> snapshot_store,
     bool is_writable,
     bool allow_snapshotting)
     : Parent(RSMType::LOGS_CONFIG_STATE_MACHINE,
-             std::move(snapshot_store),
              configuration::InternalLogs::CONFIG_LOG_DELTAS,
              configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS),
       settings_(settings),
@@ -64,12 +62,8 @@ bool LogsConfigStateMachine::canTrimAndSnapshot() const {
   if (!allow_snapshotting_) {
     return true;
   }
+  // Otherwise, check the node we are running on.
 
-  if (snapshot_store_) {
-    return snapshot_store_->isWritable();
-  }
-
-  // TODO: Remove this after deprecating SnapshotStoreType::NONE
   auto w = Worker::onThisThread();
   NodeID my_node_id = w->processor_->getMyNodeID();
   ld_check(my_node_id.isNodeID());

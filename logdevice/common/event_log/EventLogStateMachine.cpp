@@ -15,19 +15,13 @@ namespace facebook { namespace logdevice {
 template class ReplicatedStateMachine<EventLogRebuildingSet, EventLogRecord>;
 
 EventLogStateMachine::EventLogStateMachine(
-    UpdateableSettings<Settings> settings,
-    std::unique_ptr<RSMSnapshotStore> snapshot_store,
-    worker_id_t worker,
-    WorkerType worker_type)
+    UpdateableSettings<Settings> settings)
     : Parent(RSMType::EVENT_LOG_STATE_MACHINE,
-             std::move(snapshot_store),
              configuration::InternalLogs::EVENT_LOG_DELTAS,
              settings->event_log_snapshotting
                  ? configuration::InternalLogs::EVENT_LOG_SNAPSHOTS
                  : LOGID_INVALID),
-      settings_(settings),
-      worker_(worker),
-      worker_type_(worker_type) {
+      settings_(settings) {
   auto cb = [&](const EventLogRebuildingSet& set,
                 const EventLogRecord* delta,
                 lsn_t version) { onUpdate(set, delta, version); };
@@ -40,13 +34,6 @@ bool EventLogStateMachine::thisNodeCanTrimAndSnapshot() const {
   if (!myNodeId_.hasValue()) {
     return false;
   }
-
-  if (settings_->rsm_snapshot_store_type != SnapshotStoreType::NONE &&
-      snapshot_store_) {
-    return snapshot_store_->isWritable();
-  }
-
-  // TODO: Remove this after deprecating SnapshotStoreType::NONE
   auto w = Worker::onThisThread();
   auto cs = w->getClusterState();
   ld_check(cs != nullptr);
@@ -210,7 +197,6 @@ void EventLogStateMachine::postWriteDeltaRequest(
     folly::Optional<lsn_t> base_version) {
   std::unique_ptr<Request> req =
       std::make_unique<EventLogWriteDeltaRequest>(getWorkerId().val(),
-                                                  getWorkerType(),
                                                   std::move(delta),
                                                   std::move(cb),
                                                   mode,

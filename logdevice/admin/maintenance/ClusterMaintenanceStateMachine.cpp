@@ -24,11 +24,10 @@ template class ReplicatedStateMachine<thrift::ClusterMaintenanceState,
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
+
 ClusterMaintenanceStateMachine::ClusterMaintenanceStateMachine(
-    UpdateableSettings<AdminServerSettings> settings,
-    std::unique_ptr<RSMSnapshotStore> snapshot_store)
+    UpdateableSettings<AdminServerSettings> settings)
     : Base(RSMType::MAINTENANCE_LOG_STATE_MACHINE,
-           std::move(snapshot_store),
            configuration::InternalLogs::MAINTENANCE_LOG_DELTAS,
            settings->maintenance_log_snapshotting
                ? configuration::InternalLogs::MAINTENANCE_LOG_SNAPSHOTS

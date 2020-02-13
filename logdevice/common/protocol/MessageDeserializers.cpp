@@ -35,8 +35,6 @@
 #include "logdevice/common/protocol/GET_EPOCH_RECOVERY_METADATA_REPLY_Message.h"
 #include "logdevice/common/protocol/GET_HEAD_ATTRIBUTES_Message.h"
 #include "logdevice/common/protocol/GET_HEAD_ATTRIBUTES_REPLY_Message.h"
-#include "logdevice/common/protocol/GET_RSM_SNAPSHOT_Message.h"
-#include "logdevice/common/protocol/GET_RSM_SNAPSHOT_REPLY_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_REPLY_Message.h"
 #include "logdevice/common/protocol/GET_TRIM_POINT_Message.h"

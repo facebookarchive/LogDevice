@@ -203,14 +203,14 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
 
   ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
 
-  lsn_t trim_point =
-      getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS);
   if (rsm_include_read_pointer_in_snapshot) {
     // then we should have trimmed up to delta log read ptr
-    ASSERT_EQ(trim_point, tail_lsn - 1);
+    ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
+              tail_lsn - 1);
   } else {
     // then we should have trimmed up to last applied delta
-    ASSERT_EQ(trim_point, last_delta);
+    ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
+              last_delta);
   }
 
   /* now check logsconfig read availability */

@@ -28,7 +28,6 @@
 #include "logdevice/server/GET_EPOCH_RECOVERY_METADATA_REPLY_onReceived.h"
 #include "logdevice/server/GET_EPOCH_RECOVERY_METADATA_onReceived.h"
 #include "logdevice/server/GET_HEAD_ATTRIBUTES_onReceived.h"
-#include "logdevice/server/GET_RSM_SNAPSHOT_onReceived.h"
 #include "logdevice/server/GET_TRIM_POINT_onReceived.h"
 #include "logdevice/server/GOSSIP_onReceived.h"
 #include "logdevice/server/GOSSIP_onSent.h"
@@ -150,10 +149,6 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
     case MessageType::GET_HEAD_ATTRIBUTES:
       return GET_HEAD_ATTRIBUTES_onReceived(
           checked_downcast<GET_HEAD_ATTRIBUTES_Message*>(msg), from);
-
-    case MessageType::GET_RSM_SNAPSHOT:
-      return GET_RSM_SNAPSHOT_onReceived(
-          checked_downcast<GET_RSM_SNAPSHOT_Message*>(msg), from);
 
     case MessageType::GET_TRIM_POINT:
       return GET_TRIM_POINT_onReceived(

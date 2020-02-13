@@ -67,7 +67,7 @@ Status migrateToMaintenanceManager(Client& client) {
   UpdateableSettings<AdminServerSettings> admin_server_settings;
   auto state_machine =
       std::make_unique<maintenance::ClusterMaintenanceStateMachine>(
-          admin_server_settings, nullptr /* snapshot store */);
+          admin_server_settings);
 
   std::unique_ptr<Request> req =
       std::make_unique<maintenance::StartClusterMaintenanceStateMachineRequest>(
@@ -255,7 +255,7 @@ int getClusterMaintenanceState(Client& client,
   UpdateableSettings<AdminServerSettings> admin_server_settings;
   auto state_machine =
       std::make_unique<maintenance::ClusterMaintenanceStateMachine>(
-          admin_server_settings, nullptr /* snapshot store */);
+          admin_server_settings);
 
   // Stop the state machine once tail is reached
   state_machine->stopAtTail();

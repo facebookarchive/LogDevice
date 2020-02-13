@@ -62,11 +62,8 @@ class InfoRebuildingShards : public AdminCommand {
                                     "Read pointer",                 // 19
                                     "Progress");                    // 20
 
-    auto workerType = EventLogStateMachine::workerType(server->getProcessor());
-    auto workerIdx = EventLogStateMachine::getWorkerIdx(
-        server->getProcessor()->getWorkerCount(workerType));
     auto tables =
-        run_on_workers(server->getProcessor(), {workerIdx}, workerType, [&]() {
+        run_on_workers(server->getProcessor(), {0}, WorkerType::GENERAL, [&]() {
           InfoRebuildingShardsTable t(table);
           if (server->getRebuildingCoordinator()) {
             server->getRebuildingCoordinator()->getDebugInfo(t);
@@ -123,12 +120,8 @@ class InfoRebuildingLogs : public AdminCommand {
                                   "Last storage task status"); // 15
 
     if (server->getParameters()->getRebuildingSettings()->enable_v2) {
-      auto workerType =
-          EventLogStateMachine::workerType(server->getProcessor());
-      auto workerIdx = EventLogStateMachine::getWorkerIdx(
-          server->getProcessor()->getWorkerCount(workerType));
       auto funcs = run_on_workers(
-          server->getProcessor(), {workerIdx}, workerType, [&]() {
+          server->getProcessor(), {0}, WorkerType::GENERAL, [&]() {
             if (server->getRebuildingCoordinator()) {
               return server->getRebuildingCoordinator()
                   ->beginGetLogsDebugInfo();

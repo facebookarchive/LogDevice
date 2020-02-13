@@ -54,11 +54,7 @@ class EventLogStateMachine
  public:
   using Parent = ReplicatedStateMachine<EventLogRebuildingSet, EventLogRecord>;
 
-  explicit EventLogStateMachine(
-      UpdateableSettings<Settings> settings,
-      std::unique_ptr<RSMSnapshotStore> snapshot_store,
-      worker_id_t worker = worker_id_t(0),
-      WorkerType worker_type = WorkerType::GENERAL);
+  explicit EventLogStateMachine(UpdateableSettings<Settings> settings);
 
   /**
    * Start reading the event log.
@@ -85,12 +81,11 @@ class EventLogStateMachine
     write_delta_header_ = true;
   }
 
+  void setWorkerId(worker_id_t worker) {
+    worker_ = worker;
+  }
   worker_id_t getWorkerId() {
     return worker_;
-  }
-
-  WorkerType getWorkerType() {
-    return worker_type_;
   }
 
   /**
@@ -131,15 +126,8 @@ class EventLogStateMachine
    */
   void snapshot(std::function<void(Status st)> cb);
 
-  static int getWorkerIdx(int nthreads) {
-    return configuration::InternalLogs::EVENT_LOG_DELTAS.val_ % nthreads;
-  }
-
-  static WorkerType workerType(Processor* processor) {
-    if (processor->getWorkerCount(WorkerType::BACKGROUND) > 0) {
-      return WorkerType::BACKGROUND;
-    }
-    return WorkerType::GENERAL;
+  static int getWorkerIdx(int /*nthreads*/) {
+    return 0;
   }
 
  protected:
@@ -253,9 +241,6 @@ class EventLogStateMachine
 
   // worker running this state machine
   worker_id_t worker_{-1};
-
-  // The type of worker running this state machine
-  WorkerType worker_type_;
 };
 
 /**
@@ -263,20 +248,19 @@ class EventLogStateMachine
  */
 class StartEventLogStateMachineRequest : public Request {
  public:
-  explicit StartEventLogStateMachineRequest(EventLogStateMachine* event_log)
-      : Request(RequestType::START_EVENT_LOG_READER), event_log_(event_log) {}
+  StartEventLogStateMachineRequest(EventLogStateMachine* event_log, int worker)
+      : Request(RequestType::START_EVENT_LOG_READER),
+        event_log_(event_log),
+        worker_(worker) {}
   ~StartEventLogStateMachineRequest() override {}
   Execution execute() override;
   int getThreadAffinity(int /*nthreads*/) override {
-    return event_log_->getWorkerId().val_;
-  }
-
-  WorkerType getWorkerTypeAffinity() override {
-    return event_log_->getWorkerType();
+    return worker_;
   }
 
  private:
   EventLogStateMachine* event_log_;
+  int worker_;
 };
 
 /** A request to write a delta on the worker running the event
@@ -286,14 +270,12 @@ class EventLogWriteDeltaRequest : public Request {
  public:
   EventLogWriteDeltaRequest(
       int worker,
-      WorkerType worker_type,
       std::string delta,
       std::function<void(Status st, lsn_t version, const std::string&)> cb,
       EventLogStateMachine::WriteMode mode,
       folly::Optional<lsn_t> base_version)
       : Request(RequestType::EVENT_LOG_WRITE_DELTA),
         worker_(worker),
-        worker_type_(worker_type),
         delta_(std::move(delta)),
         cb_(std::move(cb)),
         mode_(mode),
@@ -303,13 +285,9 @@ class EventLogWriteDeltaRequest : public Request {
   int getThreadAffinity(int /*nthreads*/) override {
     return worker_;
   }
-  WorkerType getWorkerTypeAffinity() override {
-    return worker_type_;
-  }
 
  private:
   int worker_;
-  WorkerType worker_type_;
   std::string delta_;
   std::function<void(Status st, lsn_t version, const std::string& /* unused */)>
       cb_;
