@@ -65,7 +65,6 @@
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/test/utils/ServerInfo.h"
-#include "logdevice/test/utils/nc.h"
 #include "logdevice/test/utils/port_selection.h"
 
 using facebook::logdevice::configuration::LocalLogsConfig;
@@ -292,8 +291,7 @@ Cluster::Cluster(std::string root_path,
       one_config_per_node_(one_config_per_node),
       default_log_level_(default_log_level),
       sync_server_config_to_nodes_configuration_(
-          sync_server_config_to_nodes_configuration),
-      admin_command_client_(std::make_shared<AdminCommandClient>()) {
+          sync_server_config_to_nodes_configuration) {
   config_ = std::make_shared<UpdateableConfig>();
   client_settings_.reset(ClientSettings::create());
   ClientSettingsImpl* impl_settings =
@@ -1148,7 +1146,6 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
       config_->getNodesConfiguration()->isSequencerNode(index);
   node->should_run_maintenance_manager_ = maintenance_manager_node_ == index;
   node->cmd_args_ = commandArgsForNode(*node);
-  node->admin_command_client_ = admin_command_client_;
 
   ld_info("Node N%d:%d will be started on addresses: protocol:%s, ssl:%s"
           ", gossip:%s, command:%s, admin:%s (data in %s), server-to-server:%s",
@@ -1209,7 +1206,6 @@ Cluster::createSelfRegisteringNode(const std::string& name) const {
   node->should_run_maintenance_manager_ = false;
 
   node->cmd_args_ = commandArgsForNode(*node);
-  node->admin_command_client_ = admin_command_client_;
 
   ld_info("Node %s (with self registration) will be started on addresses: "
           "protocol:%s, ssl: %s, gossip:%s, command:%s, admin:%s (data in %s), "
@@ -1614,56 +1610,6 @@ Node::sendJsonCommand(const std::string& command) const {
 
 folly::SocketAddress Node::getAdminAddress() const {
   return addrs_.admin.getSocketAddress();
-}
-
-std::string Node::sendIfaceCommand(const std::string& command,
-                                   const std::string ifname) const {
-  std::string ifaceAddr = getIfaceAddr(ifname);
-  if (ifaceAddr.empty()) {
-    ld_error("Failed to send command, couldn't get interface address!");
-    return "";
-  }
-  folly::SocketAddress iface = addrs_.command.getSocketAddress();
-  iface.setFromIpPort(ifaceAddr, iface.getPort());
-  std::string error;
-  std::string response =
-      test::nc(admin_command_client_, iface, command, &error);
-  if (!error.empty()) {
-    ld_debug("Failed to send command: %s", error.c_str());
-  }
-  return response;
-}
-
-std::string Node::getIfaceAddr(const std::string ifname) const {
-  struct ifaddrs *ifa, *ifa_tmp;
-
-  if (getifaddrs(&ifa) == -1) {
-    ld_error("getifaddrs failed");
-    return "";
-  }
-  SCOPE_EXIT {
-    freeifaddrs(ifa);
-  };
-
-  for (ifa_tmp = ifa; ifa_tmp; ifa_tmp = ifa_tmp->ifa_next) {
-    if (ifa_tmp->ifa_addr && strcmp(ifa_tmp->ifa_name, ifname.c_str()) == 0 &&
-        (ifa_tmp->ifa_addr->sa_family == AF_INET6 ||
-         ifa_tmp->ifa_addr->sa_family == AF_INET)) {
-      if (ifa_tmp->ifa_addr->sa_family == AF_INET6) { // IPv6
-        struct sockaddr_in6* in6 = (struct sockaddr_in6*)ifa_tmp->ifa_addr;
-        char addr[INET6_ADDRSTRLEN];
-        inet_ntop(AF_INET6, &in6->sin6_addr, addr, INET6_ADDRSTRLEN);
-        return std::string(addr);
-      } else { // AF_INET = IPv4
-        struct sockaddr_in* in4 = (struct sockaddr_in*)ifa_tmp->ifa_addr;
-        char addr[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &in4->sin_addr, addr, INET_ADDRSTRLEN);
-        return std::string(addr);
-      }
-    }
-  }
-  ld_error("Failed to find interface %s", ifname.c_str());
-  return "";
 }
 
 folly::Optional<test::ServerInfo>

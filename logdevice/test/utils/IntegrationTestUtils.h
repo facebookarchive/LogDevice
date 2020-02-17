@@ -32,7 +32,6 @@
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/include/types.h"
-#include "logdevice/ops/py_extensions/admin_command_client/AdminCommandClient.h"
 #include "logdevice/test/utils/MetaDataProvisioner.h"
 #include "logdevice/test/utils/port_selection.h"
 
@@ -1456,8 +1455,6 @@ class Cluster {
   // keep handles around until the cluster is destroyed.
   std::vector<UpdateableServerConfig::HookHandle> server_config_hook_handles_;
 
-  std::shared_ptr<AdminCommandClient> admin_command_client_;
-
   friend class ClusterFactory;
 };
 
@@ -1486,8 +1483,6 @@ class Node {
   RocksDBType rocksdb_type_ = RocksDBType::PARTITIONED;
   // override cluster params for this particular node
   ParamMap cmd_args_;
-
-  std::shared_ptr<AdminCommandClient> admin_command_client_;
 
   bool is_storage_node_ = true;
   bool is_sequencer_node_ = true;
@@ -1734,18 +1729,6 @@ class Node {
    * Returns the admin API address for this node
    */
   folly::SocketAddress getAdminAddress() const;
-
-  /**
-   * Sends the provided admin command via the address of the interface with the
-   * given name, and returns the result.
-   */
-  std::string sendIfaceCommand(const std::string& command,
-                               const std::string ifname) const;
-
-  /**
-   * Finds and returns the address of the given interface on the node.
-   */
-  std::string getIfaceAddr(const std::string ifname) const;
 
   /**
    * Connects to the admin ports and returns the running server information

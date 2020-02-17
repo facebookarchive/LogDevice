@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/RSMBasedVersionedConfigStore.h"
