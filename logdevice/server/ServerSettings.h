@@ -43,9 +43,7 @@ struct ServerSettings : public SettingsBundle {
 
   int port;
   std::string unix_socket;
-  int command_port;
   bool require_ssl_on_command_port;
-  std::string command_unix_socket;
   int ssl_command_port;
   bool admin_enabled;
   int command_conn_limit;
@@ -110,6 +108,9 @@ struct ServerSettings : public SettingsBundle {
   // populated.
   ServerSettings() {}
   friend class UpdateableSettingsRaw<ServerSettings>;
+
+  int command_port;
+  std::string command_unix_socket;
 };
 
 }} // namespace facebook::logdevice

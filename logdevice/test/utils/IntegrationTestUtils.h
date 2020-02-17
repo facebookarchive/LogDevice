@@ -772,12 +772,10 @@ struct ServerAddresses {
   static constexpr size_t COUNT = 7;
 
   Sockaddr protocol;
-  Sockaddr command;
   Sockaddr gossip;
   Sockaddr admin;
   Sockaddr server_to_server;
   Sockaddr protocol_ssl;
-  Sockaddr command_ssl;
 
   // If we're holding open sockets on the above ports, this list contains the
   // fd-s of these sockets. This list is cleared (and sockets closed) just
@@ -799,11 +797,9 @@ struct ServerAddresses {
     ServerAddresses r;
 
     r.protocol = Sockaddr(addr, ports[0].port);
-    r.command = Sockaddr(addr, ports[1].port);
     r.gossip = Sockaddr(addr, ports[2].port);
     r.admin = Sockaddr(addr, ports[3].port);
     r.protocol_ssl = Sockaddr(addr, ports[4].port);
-    r.command_ssl = Sockaddr(addr, ports[5].port);
     r.server_to_server = Sockaddr(addr, ports[6].port);
 
     r.owners = std::move(ports);
@@ -814,12 +810,10 @@ struct ServerAddresses {
   static ServerAddresses withUnixSockets(const std::string& path) {
     ServerAddresses r;
     r.protocol = Sockaddr(path + "/socket_main");
-    r.command = Sockaddr(path + "/socket_command");
     r.gossip = Sockaddr(path + "/socket_gossip");
     r.admin = Sockaddr(path + "/socket_admin");
     r.server_to_server = Sockaddr(path + "/socket_server_to_server");
     r.protocol_ssl = Sockaddr(path + "/ssl_socket_main");
-    r.command_ssl = Sockaddr(path + "/ssl_socket_command");
     return r;
   }
 };
@@ -1522,10 +1516,6 @@ class Node {
 
   std::string getLogPath() const {
     return data_path_ + "/log";
-  }
-
-  Sockaddr getCommandSockAddr() const {
-    return addrs_.command;
   }
 
   void signal(int sig) {

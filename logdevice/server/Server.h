@@ -26,7 +26,6 @@
 #include "logdevice/server/LocalLogFile.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/UnreleasedRecordDetector.h"
-#include "logdevice/server/admincommands/CommandListener.h"
 #include "logdevice/server/admincommands/CommandProcessor.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
@@ -282,13 +281,11 @@ class Server {
   // initListeners()
   std::unique_ptr<folly::EventBaseThread> connection_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> ssl_connection_listener_loop_;
-  std::unique_ptr<folly::EventBaseThread> command_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> gossip_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> server_to_server_listener_loop_;
   std::unique_ptr<AdminServer> admin_server_handle_;
   std::unique_ptr<Listener> connection_listener_;
   std::unique_ptr<Listener> ssl_connection_listener_;
-  std::unique_ptr<Listener> command_listener_;
   std::unique_ptr<Listener> gossip_listener_;
   std::unique_ptr<Listener> server_to_server_listener_;
 
@@ -364,7 +361,6 @@ class Server {
   // if it takes longer than server_settings_->shutdown_timeout ms.
   void shutdownWithTimeout();
 
-  bool startCommandListener(std::unique_ptr<Listener>& handle);
   bool startConnectionListener(std::unique_ptr<Listener>& handle);
 };
 }} // namespace facebook::logdevice

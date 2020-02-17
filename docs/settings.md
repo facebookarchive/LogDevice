@@ -84,7 +84,6 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | admin-enabled | Is Admin API enabled? | true | requires&nbsp;restart, **experimental**, server&nbsp;only |
 | append-timeout | Timeout for appends. If omitted the client timeout will be used. |  | client&nbsp;only |
-| command-port | TCP port on which the server listens to for admin commands, supports commands over SSL | 5440 | requires&nbsp;restart, server&nbsp;only |
 | enable-hh-wheel-backed-timers | Enables the new version of timers which run on a different thread and use HHWheelTimer backend. | true | requires&nbsp;restart |
 | enable-is-log-empty-v2 | When enabled, the V2 implementation will be used to process all isLogEmpty requests. | false | client&nbsp;only |
 | enable-store-histograms-calculations | Enables estimation of store timeouts per worker per node. | false | server&nbsp;only |
@@ -597,7 +596,6 @@ sidebar_label: Settings
 | abort-on-failed-check | When an ld\_check() fails, call abort().  If not, just continue executing.  We'll log either way. | `false` in the client, `true` elsewhere |  |
 | assert-on-data | Trigger asserts on data in RocksDB (or that received from the network). Should not be used in prod. | false | server&nbsp;only |
 | client-test-force-stats | force instantiation of StatsHolder within ClientImpl even if stats publishing is disabled | false | requires&nbsp;restart, client&nbsp;only |
-| command-unix-socket | Path to the unix domain socket the server will use to listen for admin commands, supports commands over SSL |  | requires&nbsp;restart, server&nbsp;only |
 | disable-event-log-trimming | Disable trimming of the event log (for tests only) | false | server&nbsp;only |
 | disable-logsconfig-trimming | Disable the trimming of logsconfig delta log. Used for testing only. | false | server&nbsp;only |
 | disable-rebuilding | Disable rebuilding. Do not use in production. Only used by tests. | false | requires&nbsp;restart, server&nbsp;only |

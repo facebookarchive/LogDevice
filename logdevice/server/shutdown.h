@@ -17,7 +17,6 @@
 namespace facebook { namespace logdevice {
 
 class AdminServer;
-class CommandListener;
 class ConnectionListener;
 class EventLoop;
 class EventLogStateMachine;
@@ -59,12 +58,10 @@ class ClusterMaintenanceStateMachine;
 void shutdown_server(
     std::unique_ptr<AdminServer>& admin_server,
     std::unique_ptr<Listener>& connection_listener,
-    std::unique_ptr<Listener>& command_listener,
     std::unique_ptr<Listener>& gossip_listener,
     std::unique_ptr<Listener>& ssl_connection_listener,
     std::unique_ptr<Listener>& server_to_server_listener,
     std::unique_ptr<folly::EventBaseThread>& connection_listener_loop,
-    std::unique_ptr<folly::EventBaseThread>& command_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& gossip_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& ssl_connection_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& server_to_server_listener_loop,

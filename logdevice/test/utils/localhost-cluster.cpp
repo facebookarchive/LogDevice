@@ -493,15 +493,6 @@ int shell(Cluster& cluster) {
             << std::endl;
   std::cout << "\ttail -f " << first_node.getLogPath() << std::endl
             << std::endl;
-  auto first_node_cmd_addr = first_node.getCommandSockAddr();
-  std::cout << "\033[1;31mTo send an admin command to a node:\033[1;0m"
-            << std::endl;
-  if (first_node_cmd_addr.isUnixAddress()) {
-    std::cout << "\techo info | nc -U " << first_node_cmd_addr.getPath();
-  } else {
-    std::cout << "\techo info | nc 0 " << first_node_cmd_addr.port();
-  }
-  std::cout << std::endl;
 
   // The user can stop by sending SIGTERM or SIGINT
   struct sigaction sa;

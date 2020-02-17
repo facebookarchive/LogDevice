@@ -121,12 +121,10 @@ std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
   std::unique_ptr<AdminServer> admin_handle;
   std::unique_ptr<Listener> connection_listener;
-  std::unique_ptr<Listener> command_listener;
   std::unique_ptr<Listener> gossip_listener;
   std::unique_ptr<Listener> ssl_connection_listener;
   std::unique_ptr<Listener> server_to_server_listener;
   std::unique_ptr<folly::EventBaseThread> connection_listener_loop;
-  std::unique_ptr<folly::EventBaseThread> command_listener_loop;
   std::unique_ptr<folly::EventBaseThread> gossip_listener_loop;
   std::unique_ptr<folly::EventBaseThread> ssl_connection_listener_loop;
   std::unique_ptr<folly::EventBaseThread> server_to_server_listener_loop;
@@ -143,12 +141,10 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
 
   shutdown_server(admin_handle,
                   connection_listener,
-                  command_listener,
                   gossip_listener,
                   ssl_connection_listener,
                   server_to_server_listener,
                   connection_listener_loop,
-                  command_listener_loop,
                   gossip_listener_loop,
                   ssl_connection_listener_loop,
                   server_to_server_listener_loop,

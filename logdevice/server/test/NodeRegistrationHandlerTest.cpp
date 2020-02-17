@@ -37,7 +37,6 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
     settings.unix_socket = folly::format("/{}/address", name).str();
     settings.ssl_unix_socket = folly::format("/{}/ssl", name).str();
     settings.gossip_unix_socket = folly::format("/{}/gossip", name).str();
-    settings.command_unix_socket = folly::format("/{}/command", name).str();
     settings.server_to_server_unix_socket =
         folly::format("/{}/server-to-server", name).str();
     settings.roles = 3 /* sequencer + storage */;

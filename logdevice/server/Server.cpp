@@ -694,9 +694,6 @@ bool Server::initListeners() {
         ConnectionListener::listenerTypeNames()
             [ConnectionListener::ListenerType::DATA]);
 
-    command_listener_loop_ =
-        std::make_unique<folly::EventBaseThread>(true, nullptr, "ld:admin");
-
     connection_listener_ = initListener<ConnectionListener>(
         server_settings_->port,
         server_settings_->unix_socket,
@@ -705,18 +702,6 @@ bool Server::initListeners() {
         conn_shared_state,
         ConnectionListener::ListenerType::DATA,
         conn_budget_backlog_);
-    command_listener_ = initListener<CommandListener>(
-        server_settings_->command_port,
-        server_settings_->command_unix_socket,
-        false,
-        folly::getKeepAliveToken(command_listener_loop_->getEventBase()),
-        admin_command_processor_.get(),
-        server_settings_,
-        SSLFetcher{params_->getProcessorSettings()->ssl_cert_path,
-                   params_->getProcessorSettings()->ssl_key_path,
-                   params_->getProcessorSettings()->ssl_ca_path,
-                   params_->getProcessorSettings()->ssl_cert_refresh_interval,
-                   params_->getStats()});
 
     auto nodes_configuration = updateable_config_->getNodesConfiguration();
     ld_check(nodes_configuration);
@@ -1521,11 +1506,6 @@ bool Server::initUnreleasedRecordDetector() {
   return true;
 }
 
-bool Server::startCommandListener(std::unique_ptr<Listener>& handle) {
-  CommandListener* listener = checked_downcast<CommandListener*>(handle.get());
-  return listener->startAcceptingConnections().wait().value();
-}
-
 bool Server::startConnectionListener(std::unique_ptr<Listener>& handle) {
   ConnectionListener* listener =
       checked_downcast<ConnectionListener*>(handle.get());
@@ -1640,13 +1620,6 @@ bool Server::startListening() {
     return false;
   }
 
-  // start command listener last, so that integration test framework
-  // cannot connect to the command port in the event that any other port
-  // failed to open.
-  if (!startCommandListener(command_listener_)) {
-    return false;
-  }
-
   return true;
 }
 
@@ -1660,12 +1633,10 @@ void Server::gracefulShutdown() {
   }
   shutdown_server(admin_server_handle_,
                   connection_listener_,
-                  command_listener_,
                   gossip_listener_,
                   ssl_connection_listener_,
                   server_to_server_listener_,
                   connection_listener_loop_,
-                  command_listener_loop_,
                   gossip_listener_loop_,
                   ssl_connection_listener_loop_,
                   server_to_server_listener_loop_,

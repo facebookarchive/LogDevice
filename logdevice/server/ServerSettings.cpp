@@ -107,13 +107,13 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
     ("command-unix-socket", &command_unix_socket, "", validate_unix_socket,
      "Path to the unix domain socket the server will use to listen for admin "
      "commands, supports commands over SSL",
-     SERVER | REQUIRES_RESTART,
+     SERVER | REQUIRES_RESTART | DEPRECATED,
      SettingsCategory::Testing)
 
     ("command-port", &command_port, "5440", validate_port,
      "TCP port on which the server listens to for admin commands, supports "
      "commands over SSL",
-     SERVER | REQUIRES_RESTART,
+     SERVER | REQUIRES_RESTART | DEPRECATED,
      SettingsCategory::Core)
 
     ("require-ssl-on-command-port", &require_ssl_on_command_port, "false",

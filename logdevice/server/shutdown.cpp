@@ -29,7 +29,6 @@
 #include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/UnreleasedRecordDetector.h"
-#include "logdevice/server/admincommands/CommandListener.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
@@ -133,12 +132,10 @@ using std::chrono::steady_clock;
 void shutdown_server(
     std::unique_ptr<AdminServer>& admin_server,
     std::unique_ptr<Listener>& connection_listener,
-    std::unique_ptr<Listener>& command_listener,
     std::unique_ptr<Listener>& gossip_listener,
     std::unique_ptr<Listener>& ssl_connection_listener,
     std::unique_ptr<Listener>& server_to_server_listener,
     std::unique_ptr<folly::EventBaseThread>& connection_listener_loop,
-    std::unique_ptr<folly::EventBaseThread>& command_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& gossip_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& ssl_connection_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& server_to_server_listener_loop,
@@ -193,19 +190,7 @@ void shutdown_server(
     listeners_closed.emplace_back(
         connection_listener->stopAcceptingConnections());
   }
-  // Avoid waiting for command listener as it could take a long time to shutdown
-  // reset it at the end Joining admin command is avoided at this time because
-  // , if admin command queue is large joining the thread won't be possible in
-  // shutdown timeout. Hence, at this time accepting new requests is stopped but
-  // the listener thread itself is not joined. This special casing of admin
-  // commands listener is not ideal. Ideally, we want same approach for all
-  // listeners. But, all of the stuck shutdowns till now have been because of
-  // admin command thread.
-  auto command_listener_closed = folly::SemiFuture<folly::Unit>();
-  ld_assert(command_listener_closed.hasValue());
-  if (command_listener) {
-    command_listener_closed = command_listener->stopAcceptingConnections();
-  }
+
   if (gossip_listener) {
     listeners_closed.emplace_back(gossip_listener->stopAcceptingConnections());
   }
@@ -342,10 +327,6 @@ void shutdown_server(
     processor->waitForWorkers(nworkers);
     ld_info("FAILURE_DETECTOR worker stopped");
   }
-
-  command_listener_closed.wait();
-  command_listener.reset();
-  command_listener_loop.reset();
 
   // take down all worker threads
   ld_info("Shutting down worker threads");

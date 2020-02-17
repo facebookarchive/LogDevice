@@ -1148,13 +1148,12 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   node->cmd_args_ = commandArgsForNode(*node);
 
   ld_info("Node N%d:%d will be started on addresses: protocol:%s, ssl:%s"
-          ", gossip:%s, command:%s, admin:%s (data in %s), server-to-server:%s",
+          ", gossip:%s, admin:%s (data in %s), server-to-server:%s",
           index,
           getNodeReplacementCounter(index),
           node->addrs_.protocol.toString().c_str(),
           node->addrs_.protocol_ssl.toString().c_str(),
           node->addrs_.gossip.toString().c_str(),
-          node->addrs_.command.toString().c_str(),
           node->addrs_.admin.toString().c_str(),
           node->data_path_.c_str(),
           node->addrs_.server_to_server.toString().c_str());
@@ -1208,13 +1207,12 @@ Cluster::createSelfRegisteringNode(const std::string& name) const {
   node->cmd_args_ = commandArgsForNode(*node);
 
   ld_info("Node %s (with self registration) will be started on addresses: "
-          "protocol:%s, ssl: %s, gossip:%s, command:%s, admin:%s (data in %s), "
+          "protocol:%s, ssl: %s, gossip:%s, admin:%s (data in %s), "
           "server-to-server:%s",
           name.c_str(),
           node->addrs_.protocol.toString().c_str(),
           node->addrs_.protocol_ssl.toString().c_str(),
           node->addrs_.gossip.toString().c_str(),
-          node->addrs_.command.toString().c_str(),
           node->addrs_.admin.toString().c_str(),
           node->data_path_.c_str(),
           node->addrs_.server_to_server.toString().c_str());
@@ -1229,11 +1227,6 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
   auto protocol_addr_param = p.isUnixAddress()
       ? std::make_pair("--unix-socket", ParamValue{p.getPath()})
       : std::make_pair("--port", ParamValue{std::to_string(p.port())});
-
-  const auto& c = node.addrs_.command;
-  auto command_addr_param = c.isUnixAddress()
-      ? std::make_pair("--command-unix-socket", ParamValue{c.getPath()})
-      : std::make_pair("--command-port", ParamValue{std::to_string(c.port())});
 
   const auto& g = node.addrs_.gossip;
   auto gossip_addr_param = g.isUnixAddress()
@@ -1258,7 +1251,7 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
   ParamMaps default_param_map = {
     { ParamScope::ALL,
       {
-        protocol_addr_param, command_addr_param, gossip_addr_param, admin_addr_param, s2s_addr_param,
+        protocol_addr_param, gossip_addr_param, admin_addr_param, s2s_addr_param,
         {"--name", ParamValue{node.name_}},
         {"--test-mode", ParamValue{"true"}},
         {"--config-path", ParamValue{"file:" + node.config_path_}},
