@@ -24,21 +24,16 @@ namespace facebook { namespace logdevice {
 
 class AdminCommandClient {
  public:
-  enum class ConnectionType { UNKNOWN, PLAIN, ENCRYPTED };
-
   AdminCommandClient(size_t num_threads = 4)
       : executor_(std::make_unique<folly::IOThreadPoolExecutor>(num_threads)) {}
 
   class Request {
    public:
-    Request(folly::SocketAddress addr,
-            std::string req,
-            ConnectionType conntype = ConnectionType::UNKNOWN)
-        : sockaddr(addr), request(req), conntype_(conntype) {}
+    Request(folly::SocketAddress addr, std::string req)
+        : sockaddr(addr), request(req) {}
 
     folly::SocketAddress sockaddr;
     std::string request;
-    ConnectionType conntype_;
   };
 
   struct Response {

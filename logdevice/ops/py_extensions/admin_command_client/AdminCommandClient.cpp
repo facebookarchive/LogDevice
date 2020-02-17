@@ -7,209 +7,13 @@
  */
 #include "logdevice/ops/py_extensions/admin_command_client/AdminCommandClient.h"
 
-#include <deque>
+#include <thrift/lib/cpp/async/TAsyncSocket.h>
+#include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
-#include <folly/Memory.h>
-#include <folly/io/async/AsyncSSLSocket.h>
-#include <folly/io/async/AsyncSocket.h>
-#include <folly/io/async/AsyncTimeout.h>
-#include <folly/io/async/AsyncTransport.h>
-#include <folly/io/async/EventBase.h>
-
+#include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
 #include "logdevice/common/debug.h"
 
-using folly::AsyncSocket;
-using folly::AsyncSocketException;
-using folly::AsyncSSLSocket;
-using folly::EventBase;
-
 namespace facebook { namespace logdevice {
-
-class AdminClientConnection
-    : public folly::AsyncSocket::ConnectCallback,
-      public folly::AsyncTransportWrapper::ReadCallback,
-      public folly::AsyncTransportWrapper::WriteCallback {
- public:
-  AdminClientConnection(EventBase* evb,
-                        const AdminCommandClient::Request& rr,
-                        std::chrono::milliseconds timeout,
-                        std::shared_ptr<folly::SSLContext> context)
-      : socket_(), request_(rr), timeout_(timeout) {
-    if (request_.conntype_ == AdminCommandClient::ConnectionType::ENCRYPTED) {
-      ld_check(context);
-      socket_ = AsyncSSLSocket::newSocket(context, evb);
-    } else {
-      socket_ = AsyncSocket::newSocket(evb);
-    }
-  }
-
-  virtual folly::SemiFuture<AdminCommandClient::Response> connect() {
-    bool ssl{request_.conntype_ ==
-             AdminCommandClient::ConnectionType::ENCRYPTED};
-    ld_debug("Connecting to %s with %s",
-             request_.sockaddr.describe().c_str(),
-             (ssl) ? "SSL" : "PLAIN");
-    tstart_ = std::chrono::steady_clock::now();
-    socket_->connect(this, request_.sockaddr, timeout_.count());
-    return promise_.getSemiFuture();
-  }
-
-  void connectSuccess() noexcept override {
-    auto& request = request_.request;
-    socket_->setRecvBufSize(1 * 1024 * 1024);
-    socket_->write(this, request.data(), request.size());
-    if (request.back() != '\n') {
-      socket_->write(this, "\n", 1);
-    }
-    socket_->setReadCB(this);
-  }
-
-  void connectErr(const AsyncSocketException& ex) noexcept override {
-    response_.success = false;
-    response_.failure_reason = "CONNECTION_ERROR";
-    ld_debug("Could not connect to %s: %s",
-             request_.sockaddr.describe().c_str(),
-             ex.what());
-    done();
-  }
-
-  void getReadBuffer(void** bufReturn, size_t* lenReturn) override {
-    // If the last buffer's first character is a nul byte, we never wrote
-    // anything to it, so return it.
-    if (!result_.empty() && !result_.back().empty() && result_.back()[0] == 0) {
-      *bufReturn = (void*)(result_.back().data());
-      *lenReturn = result_.back().size();
-    } else {
-      // Otherwise allocate a new buffer.
-      std::string buffer(8192, '\0');
-      *bufReturn = (void*)buffer.data();
-      *lenReturn = buffer.size();
-      result_.push_back(std::move(buffer));
-    }
-  }
-
-  void readDataAvailable(size_t length) noexcept override {
-    ld_check(length > 0);
-    result_.back().resize(length);
-
-    if (result_.size() >= 8) {
-      // fold all buffers together to reclaim some memory
-      for (int i = 1; i < result_.size(); i++) {
-        result_[0] += result_[i];
-      }
-      result_.resize(1);
-    }
-
-    // Concatenating the end of the buffer if the last chunk is less than
-    // the end marker
-    std::string eof("END\r\n");
-    while (result_.size() > 1 && result_.back().size() < eof.size()) {
-      result_[result_.size() - 2] += result_.back();
-      result_.resize(result_.size() - 1);
-    }
-
-    // Checking if we're done here
-    if (result_.back().size() >= eof.size()) {
-      if (result_.back().compare(
-              result_.back().size() - eof.size(), eof.size(), eof) == 0) {
-        result_.back().resize(result_.back().size() - eof.size());
-        success_ = true;
-        done();
-      }
-    }
-  }
-
-  void readEOF() noexcept override {
-    if (!done_) {
-      done();
-    }
-  }
-
-  void readErr(const AsyncSocketException& ex) noexcept override {
-    ld_debug("Error reading from %s: %s",
-             request_.sockaddr.describe().c_str(),
-             ex.what());
-    success_ = false;
-    response_.failure_reason = "READ_ERROR";
-    done();
-  }
-
-  void writeSuccess() noexcept override {
-    // Don't care
-  }
-
-  void writeErr(size_t /*bytesWritten*/,
-                const AsyncSocketException& ex) noexcept override {
-    ld_debug("Error writing to %s: %s",
-             request_.sockaddr.describe().c_str(),
-             ex.what());
-    response_.failure_reason = "WRITE_ERROR";
-    success_ = false;
-    done();
-  }
-
-  void done() {
-    using std::chrono::steady_clock;
-    steady_clock::time_point tdone = steady_clock::now();
-    response_.success = success_;
-
-    auto& response = response_.response;
-    response.clear();
-
-    // If the last buffer's first character is a nul byte, discard it.
-    if (!result_.empty() && !result_.back().empty() && result_.back()[0] == 0) {
-      result_.resize(result_.size() - 1);
-    }
-
-    size_t size = 0;
-    for (auto const& s : result_) {
-      size += s.size();
-    }
-    response.reserve(size);
-    for (auto const& s : result_) {
-      response += s;
-    }
-
-    socket_->setReadCB(nullptr);
-    promise_.setValue(response_);
-    steady_clock::time_point tend = steady_clock::now();
-    double d1 = std::chrono::duration_cast<std::chrono::duration<double>>(
-                    tdone - tstart_)
-                    .count();
-    double d2 =
-        std::chrono::duration_cast<std::chrono::duration<double>>(tend - tdone)
-            .count();
-    ld_log(
-        d1 + d2 > 0.5 ? dbg::Level::INFO : dbg::Level::DEBUG,
-        "Response from %s has %lu chunks, response size is %lu, "
-        "fetching data took %.3fs, preparing response took %.3fs. Command: %s",
-        request_.sockaddr.describe().c_str(),
-        result_.size(),
-        size,
-        d1,
-        d2,
-        request_.request.c_str());
-    result_.clear();
-  }
-
-  ~AdminClientConnection() override {
-    // Deregister socket callback to avoid readEOF to be invoked
-    // when we close the socket.
-    socket_->setReadCB(nullptr);
-    socket_->closeNow();
-  }
-
- private:
-  std::shared_ptr<AsyncSocket> socket_;
-  const AdminCommandClient::Request request_;
-  AdminCommandClient::Response response_;
-  std::vector<std::string> result_;
-  bool success_{false};
-  bool done_{false};
-  folly::Promise<AdminCommandClient::Response> promise_;
-  std::chrono::milliseconds timeout_;
-  std::chrono::steady_clock::time_point tstart_;
-};
 
 std::vector<folly::SemiFuture<AdminCommandClient::Response>>
 AdminCommandClient::asyncSend(
@@ -227,23 +31,43 @@ AdminCommandClient::asyncSend(
                    connect_timeout,
                    command_timeout](auto&&) mutable {
               auto evb = executor->getEventBase();
-              auto connection = std::make_unique<AdminClientConnection>(
-                  evb,
-                  r,
-                  connect_timeout,
-                  std::make_shared<folly::SSLContext>());
-              auto fut = connection->connect();
-              return std::move(fut)
+
+              auto command = r.request;
+              // Ldquery appends an extra new line at the end of the commands.
+              // Strip it for now, and remove it in the next diff.
+              if (folly::StringPiece(command).endsWith("\n")) {
+                command.resize(command.size() - 1);
+              }
+
+              auto transport = apache::thrift::async::TAsyncSocket::newSocket(
+                  evb, r.sockaddr);
+              auto channel =
+                  apache::thrift::HeaderClientChannel::newChannel(transport);
+              channel->setTimeout(connect_timeout.count());
+              auto client = std::make_unique<thrift::AdminAPIAsyncClient>(
+                  std::move(channel));
+
+              apache::thrift::RpcOptions rpc_options;
+              rpc_options.setTimeout(command_timeout);
+
+              thrift::AdminCommandRequest req;
+              req.request = command;
+
+              return client
+                  ->semifuture_executeAdminCommand(rpc_options, std::move(req))
                   .via(evb)
-                  .onTimeout(command_timeout,
-                             [] {
-                               return AdminCommandClient::Response{
-                                   "", false, "TIMEOUT"};
-                             })
-                  // After either timing-out or getting a response, let's
-                  // destroy the connection.
-                  .thenValue([c = std::move(connection)](auto response) {
-                    return response;
+                  .thenTry([](auto response) {
+                    if (response.hasException()) {
+                      return AdminCommandClient::Response{
+                          "", false, response.exception().what().toStdString()};
+                    }
+                    std::string result = response->response;
+                    // Strip the trailing END
+                    if (folly::StringPiece(result).endsWith("END\r\n")) {
+                      result.resize(result.size() - 5);
+                    }
+                    return AdminCommandClient::Response{
+                        std::move(result), true, ""};
                   });
             }));
   }

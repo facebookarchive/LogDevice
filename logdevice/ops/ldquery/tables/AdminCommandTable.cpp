@@ -178,45 +178,13 @@ void AdminCommandTable::setCacheTTL(std::chrono::seconds ttl) {
   cache_ttl_ = ttl;
 }
 
-/*
- * Currently there is no easy way to figure out in which address each node is
- * listening for admin commands in a LogDevice cluster. Right now this is not an
- * issue because our clusters are set up so that each node listens to port 5440,
- * but this will be an issue when we start using different port. We will
- * probably need to add the port in the config of the cluster as well as SMC.
- */
-std::tuple<SocketAddress, AdminCommandClient::ConnectionType>
-AdminCommandTable::getAddrForNode(
+SocketAddress AdminCommandTable::getAddrForNode(
     node_index_t nid,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_configuration) {
-  auto ld_client = ld_ctx_->getClient();
-  ld_check(ld_client);
-
   const auto* node_sd = nodes_configuration->getNodeServiceDiscovery(nid);
   ld_check(node_sd);
-
-  if (node_sd->address.isUnixAddress()) {
-    // The node is running locally and using a named socket. Expect another
-    // named socket named "socket_command" to exist in the same directory.
-    std::string path = node_sd->address.getPath();
-    path = path.substr(0, path.find_last_of("/\\")) + "/socket_command";
-    SocketAddress addr;
-    addr.setFromPath(path);
-    return std::make_tuple(addr, AdminCommandClient::ConnectionType::PLAIN);
-  } else {
-    // The node is using a TCP address. Use the same address but with port 5440
-    // to send admin commands.
-    // TODO: extract admin port from config
-    auto addr = node_sd->address.getSocketAddress();
-    addr.setPort(5440);
-    // Is encryption needed?
-    auto conntype = AdminCommandClient::ConnectionType::PLAIN;
-    if (ld_ctx_->use_ssl) {
-      conntype = AdminCommandClient::ConnectionType::ENCRYPTED;
-    }
-    return std::make_tuple(addr, conntype);
-  }
+  return node_sd->admin_address.value().getSocketAddress();
 }
 
 bool AdminCommandTable::dataIsInCacheForUsedConstraints(
@@ -286,12 +254,9 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
   for (node_index_t i : selected_nodes) {
     ld_check(nodes_configuration->isNodeInServiceDiscoveryConfig(i));
 
-    AdminCommandClient::ConnectionType conntype =
-        AdminCommandClient::ConnectionType::UNKNOWN;
-    SocketAddress addr;
-    std::tie(addr, conntype) = getAddrForNode(i, nodes_configuration);
+    auto addr = getAddrForNode(i, nodes_configuration);
     addr_to_node_id[addr] = i;
-    requests.emplace_back(addr, cmd, conntype);
+    requests.emplace_back(addr, cmd);
     ld_ctx_->activeQueryMetadata.contacted_nodes++;
   }
 

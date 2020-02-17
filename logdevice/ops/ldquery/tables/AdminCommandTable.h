@@ -105,9 +105,8 @@ class AdminCommandTable : public Table {
   const TableColumns& getColumnsImpl() const;
 
   // Get the address to use to issue admin commands to node at pos `nid` in the
-  // cluster. and return both the address and wether it expects SSL.
-  std::tuple<folly::SocketAddress, AdminCommandClient::ConnectionType>
-  getAddrForNode(
+  // cluster.
+  folly::SocketAddress getAddrForNode(
       node_index_t nid,
       const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
           nodes_configuration);
