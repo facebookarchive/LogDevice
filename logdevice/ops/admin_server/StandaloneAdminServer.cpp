@@ -323,7 +323,7 @@ void StandaloneAdminServer::initEventLog() {
   event_log_->enableSendingUpdatesToWorkers();
 
   std::unique_ptr<Request> req =
-      std::make_unique<StartEventLogStateMachineRequest>(event_log_.get(), 0);
+      std::make_unique<StartEventLogStateMachineRequest>(event_log_.get());
 
   const int rv = processor_->postRequest(req);
   if (rv != 0) {

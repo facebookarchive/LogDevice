@@ -54,10 +54,8 @@ class RSMWriteSnapShot : public AdminCommand {
     if (snapshot_type_.empty()) {
       out_.printf("snapshot type is not provided\r\n");
     } else if (snapshot_type_ == "eventlog") {
-      auto event_log_owner = EventLogStateMachine::getWorkerIdx(
-          server_->getProcessor()->getWorkerCount(WorkerType::GENERAL));
-      auto rc = run_on_worker(
-          server_->getProcessor(), event_log_owner, WorkerType::GENERAL, [&]() {
+      auto rc =
+          run_on_worker(server_->getProcessor(), 0, WorkerType::GENERAL, [&]() {
             Worker* w = Worker::onThisThread();
             if (w->event_log_) {
               auto cb = [&](Status st) { this->onSnapShotCreated(st); };
