@@ -178,15 +178,6 @@ bool ClientReadStreamScd::shardsDownFailoverTimerCallback(
     small_shardset_t down) {
   ld_check(isActive());
 
-  if (isSlowShardsDetectionEnabled()) {
-    // If slow shards detection is enabled, the shards that are stuck and
-    // haven't sent a record for a long time will be marked as slow instead of
-    // down (see onOutliersChanged()).
-    // TODO(T21282553): remove this function once the outlier detector has
-    // proven stable.
-    return false;
-  }
-
   // Rewind the stream if the shards down list changed. If the shards down list
   // contains all the shards in the read set, do nothing as the
   // all_send_all_failover_timer_ timer will take care of failing over to all
