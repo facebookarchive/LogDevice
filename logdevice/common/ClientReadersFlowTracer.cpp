@@ -22,6 +22,20 @@
 #include "logdevice/common/stats/Stats.h"
 namespace facebook { namespace logdevice {
 
+std::string toString(ClientReadersFlowTracer::State state) {
+  using State = ClientReadersFlowTracer::State;
+  switch (state) {
+    case State::STUCK:
+      return "stuck";
+    case State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ:
+      return "stuck_while_failing_sync_seq_req";
+    case State::LAGGING:
+      return "lagging";
+    case State::HEALTHY:
+      return "healthy";
+  }
+}
+
 inline uint16_t get_initial_ttl(size_t group_size, size_t num_groups) {
   return 1.25 * group_size * num_groups;
 }
@@ -110,23 +124,20 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
   if (!params_.push_samples) {
     return;
   }
-  auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
-  auto time_lagging = std::max(msec_since(last_time_lagging_), 0l);
-  auto shard_status_version = owner_->deps_->getShardStatus().getVersion();
-  auto time_lag = estimateTimeLag();
-  auto byte_lag = estimateByteLag();
-  bool overloaded = owner_->deps_->isWorkerOverloaded();
 
-  auto sample_builder =
-      [=,
-       reading_speed_bytes = num_bytes_read - last_num_bytes_read_,
-       reading_speed_records = num_records_read -
-           last_num_records_read_]() -> std::unique_ptr<TraceSample> {
+  auto sample_builder = [&, this]() -> std::unique_ptr<TraceSample> {
+    auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
+    auto time_lagging = std::max(msec_since(last_time_lagging_), 0l);
+    auto shard_status_version = owner_->deps_->getShardStatus().getVersion();
+    auto time_lag = estimateTimeLag();
+    auto byte_lag = estimateByteLag();
+    bool overloaded = owner_->deps_->isWorkerOverloaded();
+    auto reading_speed_bytes = num_bytes_read - last_num_bytes_read_;
+    auto reading_speed_records = num_records_read - last_num_records_read_;
+
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("log_id", std::to_string(owner_->log_id_.val()));
-
     sample->addNormalValue("log_group_name", owner_->log_group_name_);
-
     sample->addNormalValue(
         "read_stream_id",
         std::to_string(owner_->deps_->getReadStreamID().val()));
@@ -165,6 +176,11 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
     sample->addNormalValue("grace_counters", owner_->graceCountersPretty());
     sample->addIntValue("shard_status_version", shard_status_version);
     sample->addIntValue("in_overloaded_worker", overloaded);
+    sample->addNormalValue(
+        "waiting_for_node", readerIsStuck() ? owner_->waitingForNodeStr() : "");
+    sample->addNormalValue("reading_mode", owner_->readingModeStr());
+    sample->addNormalValue("state", toString(last_reported_state_));
+    sample->addNormalValue("monitoring_tier", toString(monitoring_tier_));
     return sample;
   };
   last_num_bytes_read_ = num_bytes_read;
@@ -184,7 +200,12 @@ double ClientReadersFlowTracer::calculateSamplingWeight() {
   }
 }
 
-bool ClientReadersFlowTracer::readerIsUnhealthy() {
+bool ClientReadersFlowTracer::readerIsStuck() const {
+  return last_reported_state_ == State::STUCK ||
+      last_reported_state_ == State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ;
+}
+
+bool ClientReadersFlowTracer::readerIsUnhealthy() const {
   return last_reported_state_ != State::HEALTHY;
 }
 

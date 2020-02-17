@@ -762,4 +762,16 @@ void ClientReadStreamScd::FailoverTimer::callback() {
   }
 }
 
+std::string toString(ClientReadStreamScd::Mode mode) {
+  using Mode = ClientReadStreamScd::Mode;
+  switch (mode) {
+    case Mode::LOCAL_SCD:
+      return "LOCAL_SCD";
+    case Mode::SCD:
+      return "SCD";
+    case Mode::ALL_SEND_ALL:
+      return "ALL_SEND_ALL";
+  }
+}
+
 }} // namespace facebook::logdevice

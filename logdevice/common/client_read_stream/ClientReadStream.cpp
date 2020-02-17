@@ -4766,4 +4766,25 @@ bool ClientReadStream::isStreamStuckFor(std::chrono::milliseconds time) {
       SystemClock::now() - last_stuck >= time;
 }
 
+std::string ClientReadStream::readingModeStr() const {
+  if (scd_) {
+    return toString(scd_->getMode());
+  }
+  return "ALL_SEND_ALL";
+}
+
+std::string ClientReadStream::waitingForNodeStr() const {
+  std::vector<std::string> responses;
+  for (auto& kv : storage_set_states_) {
+    ShardID sid = kv.first;
+    auto& state = kv.second;
+    if (state.getGapState() == GapState::NONE &&
+        state.getAuthoritativeStatus() !=
+            AuthoritativeStatus::AUTHORITATIVE_EMPTY) {
+      responses.push_back(toString(sid));
+    }
+  }
+  return folly::join(",", responses);
+}
+
 }} // namespace facebook::logdevice

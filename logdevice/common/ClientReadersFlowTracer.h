@@ -113,7 +113,8 @@ class ClientReadersFlowTracer : public SampledTracer {
   void updateShouldTrack();
   void maybeBumpStats(bool force_healthy = false);
   double calculateSamplingWeight();
-  bool readerIsUnhealthy();
+  bool readerIsUnhealthy() const;
+  bool readerIsStuck() const;
 
   WeakRefHolder<ClientReadersFlowTracer> ref_holder_;
 
@@ -146,5 +147,7 @@ class ClientReadersFlowTracer : public SampledTracer {
   ClientReadStream* const owner_;
   friend class ClientReadStream;
 };
+
+std::string toString(ClientReadersFlowTracer::State);
 
 }} // namespace facebook::logdevice

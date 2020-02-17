@@ -770,6 +770,18 @@ class ClientReadStream : boost::noncopyable {
    */
   std::string getStorageSetHealthStatusPretty() const;
 
+  /**
+   * @return A string that shows what reading mode we are in (SCD, LOCAL_SCD or
+   * ALL_SEND_ALL).
+   */
+  std::string readingModeStr() const;
+
+  /**
+   * @return String representation of nodes we are currently waiting to make
+   * progress in reads. If more than one node is expected, returns "many".
+   */
+  std::string waitingForNodeStr() const;
+
   size_t getBytesBuffered() const;
 
   bool isStreamStuckFor(std::chrono::milliseconds time);
