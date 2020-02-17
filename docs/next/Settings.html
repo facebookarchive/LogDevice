@@ -157,7 +157,6 @@
 <tbody>
 <tr><td>admin-enabled</td><td>Is Admin API enabled?</td><td style="text-align:center">true</td><td>requires restart, <strong>experimental</strong>, server only</td></tr>
 <tr><td>append-timeout</td><td>Timeout for appends. If omitted the client timeout will be used.</td><td style="text-align:center"></td><td>client only</td></tr>
-<tr><td>command-port</td><td>TCP port on which the server listens to for admin commands, supports commands over SSL</td><td style="text-align:center">5440</td><td>requires restart, server only</td></tr>
 <tr><td>enable-hh-wheel-backed-timers</td><td>Enables the new version of timers which run on a different thread and use HHWheelTimer backend.</td><td style="text-align:center">true</td><td>requires restart</td></tr>
 <tr><td>enable-is-log-empty-v2</td><td>When enabled, the V2 implementation will be used to process all isLogEmpty requests.</td><td style="text-align:center">false</td><td>client only</td></tr>
 <tr><td>enable-store-histograms-calculations</td><td>Enables estimation of store timeouts per worker per node.</td><td style="text-align:center">false</td><td>server only</td></tr>
@@ -742,7 +741,6 @@
 <tr><td>abort-on-failed-check</td><td>When an ld_check() fails, call abort().  If not, just continue executing.  We'll log either way.</td><td style="text-align:center"><code>false</code> in the client, <code>true</code> elsewhere</td><td></td></tr>
 <tr><td>assert-on-data</td><td>Trigger asserts on data in RocksDB (or that received from the network). Should not be used in prod.</td><td style="text-align:center">false</td><td>server only</td></tr>
 <tr><td>client-test-force-stats</td><td>force instantiation of StatsHolder within ClientImpl even if stats publishing is disabled</td><td style="text-align:center">false</td><td>requires restart, client only</td></tr>
-<tr><td>command-unix-socket</td><td>Path to the unix domain socket the server will use to listen for admin commands, supports commands over SSL</td><td style="text-align:center"></td><td>requires restart, server only</td></tr>
 <tr><td>disable-event-log-trimming</td><td>Disable trimming of the event log (for tests only)</td><td style="text-align:center">false</td><td>server only</td></tr>
 <tr><td>disable-logsconfig-trimming</td><td>Disable the trimming of logsconfig delta log. Used for testing only.</td><td style="text-align:center">false</td><td>server only</td></tr>
 <tr><td>disable-rebuilding</td><td>Disable rebuilding. Do not use in production. Only used by tests.</td><td style="text-align:center">false</td><td>requires restart, server only</td></tr>
