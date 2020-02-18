@@ -31,66 +31,6 @@ namespace parser {
 
 static bool parseMetaDataLogNodes(const folly::dynamic& nodes,
                                   MetaDataLogsConfig& output);
-bool parseTraceLogger(const folly::dynamic& clusterMap,
-                      TraceLoggerConfig& output) {
-  auto iter_legacy = clusterMap.find("trace-logger");
-  auto iter_well_formed = clusterMap.find("trace_logger");
-
-  if (iter_legacy == clusterMap.items().end() &&
-      iter_well_formed == clusterMap.items().end()) {
-    return true; // trace-logger is optional and have defaults
-  } else if (iter_legacy != clusterMap.items().end() &&
-             iter_well_formed != clusterMap.items().end()) {
-    ld_error("\"trace-logger\" and \"trace_logger\" cannot be used combined");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  const folly::dynamic& tracerSection = iter_legacy != clusterMap.items().end()
-      ? iter_legacy->second
-      : iter_well_formed->second;
-  if (!tracerSection.isObject()) {
-    ld_error("\"trace-logger\" entry is not a JSON object");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  auto def_iter = tracerSection.find("default-sampling-percentage");
-  if (def_iter != tracerSection.items().end()) {
-    output.default_sampling = def_iter->second.asDouble();
-  }
-
-  auto iter = tracerSection.find("tracers");
-  if (iter == clusterMap.items().end()) {
-    return true; // trace-logger.tracers is optional and have defaults
-  }
-
-  const folly::dynamic& tracers = iter->second;
-  if (!tracers.isObject()) {
-    ld_error("\"trace-logger.tracers\" entry is not a JSON object");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  output.percentages.clear();
-  for (auto& pair : tracers.items()) {
-    if (!pair.first.isString()) {
-      ld_error("a key in \"tracers\" section is not a string"
-               ". Expected a map from String -> Double(0, 100.0)");
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    if (!(pair.second.isDouble() || pair.second.isInt())) {
-      ld_error("a 'value' in \"tracers\" section is not a number"
-               ". Expected a map from String -> Double(0, 100.0)");
-      err = E::INVALID_CONFIG;
-      return false;
-    }
-    output.percentages.insert(
-        std::make_pair(pair.first.asString(), pair.second.asDouble()));
-  }
-  return true;
-}
 
 bool parseInternalLogs(const folly::dynamic& clusterMap,
                        const SecurityConfig& securityConfig,

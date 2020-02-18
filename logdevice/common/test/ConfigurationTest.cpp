@@ -97,16 +97,6 @@ TEST(ConfigurationTest, SimpleValid) {
     }
   }
 
-  // LogTracer Default Sampling Rate (percentage)
-  ASSERT_FALSE(config->serverConfig()
-                   ->getTracerSamplePercentage("UNKNOWN_TRACER")
-                   .hasValue());
-  EXPECT_DOUBLE_EQ(20.0, config->serverConfig()->getDefaultSamplePercentage());
-
-  EXPECT_DOUBLE_EQ(
-      15.4,
-      config->serverConfig()->getTracerSamplePercentage("appender").value());
-
   char buf[256];
 
   {
@@ -824,12 +814,6 @@ TEST(ConfigurationTest, Defaults) {
 
   ASSERT_NE(nullptr, config);
   LogsConfig::LogGroupNodePtr log;
-
-  // rate with no default override in cfg at all
-  ASSERT_FALSE(config->serverConfig()
-                   ->getTracerSamplePercentage("UNKNOWN_TRACER")
-                   .hasValue());
-  EXPECT_DOUBLE_EQ(0.1, config->serverConfig()->getDefaultSamplePercentage());
 
   log = config->getLogGroupByIDShared(logid_t(1));
   ASSERT_NE(nullptr, log);
@@ -1768,16 +1752,4 @@ TEST(ConfigurationTest, StorageCapacityVsWeight) {
     config = Configuration::fromJsonFile(config_path.c_str());
     ASSERT_EQ(config, nullptr);
   }
-}
-
-TEST(ConfigurationTest, AlternativeTraceConfigSection) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("valid_trace_logger.conf")));
-  ASSERT_NE(config, nullptr);
-
-  ASSERT_TRUE(
-      config->serverConfig()->getTracerSamplePercentage("appender").hasValue());
-
-  ASSERT_EQ(
-      15.4, *config->serverConfig()->getTracerSamplePercentage("appender"));
 }

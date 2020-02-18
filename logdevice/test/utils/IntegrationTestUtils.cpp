@@ -667,7 +667,6 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
                                  std::move(meta_config),
                                  ServerConfig::PrincipalsConfig(),
                                  ServerConfig::SecurityConfig(),
-                                 ServerConfig::TraceLoggerConfig(),
                                  std::move(ts_config),
                                  std::move(read_throttling_config),
                                  std::move(server_settings),

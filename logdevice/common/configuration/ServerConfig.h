@@ -29,7 +29,6 @@
 #include "logdevice/common/configuration/PrincipalsConfig.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
 #include "logdevice/common/configuration/SequencersConfig.h"
-#include "logdevice/common/configuration/TraceLoggerConfig.h"
 #include "logdevice/common/configuration/TrafficShapingConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
@@ -60,8 +59,6 @@ class ServerConfig {
   using PrincipalsConfig = facebook::logdevice::configuration::PrincipalsConfig;
   using SecurityConfig = facebook::logdevice::configuration::SecurityConfig;
   using SequencersConfig = facebook::logdevice::configuration::SequencersConfig;
-  using TraceLoggerConfig =
-      facebook::logdevice::configuration::TraceLoggerConfig;
   using ShapingConfig = facebook::logdevice::configuration::ShapingConfig;
   using TrafficShapingConfig =
       facebook::logdevice::configuration::TrafficShapingConfig;
@@ -200,20 +197,6 @@ class ServerConfig {
   }
 
   /**
-   * Looks up the sampling percentage for a certain tracer in the config
-   *
-   * @return Returns sampling percentage when an override has been found,
-   *         folly::none otherwise
-   */
-  folly::Optional<double>
-  getTracerSamplePercentage(const std::string& key) const;
-
-  /**
-   * @return the global default sampling percentage
-   */
-  double getDefaultSamplePercentage() const;
-
-  /**
    * @return if unauthenticated connections are allowed
    */
   bool allowUnauthenticated() const {
@@ -340,7 +323,6 @@ class ServerConfig {
       MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
       PrincipalsConfig = PrincipalsConfig(),
       SecurityConfig securityConfig = SecurityConfig(),
-      TraceLoggerConfig trace_config = TraceLoggerConfig(),
       TrafficShapingConfig = TrafficShapingConfig(),
       ShapingConfig =
           ShapingConfig(std::set<NodeLocationScope>{NodeLocationScope::NODE},
@@ -486,7 +468,6 @@ class ServerConfig {
                MetaDataLogsConfig metaDataLogsConfig,
                PrincipalsConfig principalConfig,
                SecurityConfig securityConfig,
-               TraceLoggerConfig traceLoggerConfig,
                TrafficShapingConfig trafficShapingConfig,
                ShapingConfig readIOShapingConfig,
                SettingsConfig serverSettingsConfig,
@@ -509,7 +490,6 @@ class ServerConfig {
       MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
       PrincipalsConfig = PrincipalsConfig(),
       SecurityConfig securityConfig = SecurityConfig(),
-      TraceLoggerConfig trace_config = TraceLoggerConfig(),
       TrafficShapingConfig = TrafficShapingConfig(),
       ShapingConfig =
           ShapingConfig(std::set<NodeLocationScope>{NodeLocationScope::NODE},
@@ -532,7 +512,6 @@ class ServerConfig {
   SequencersConfig sequencersConfig_;
   TrafficShapingConfig trafficShapingConfig_;
   ShapingConfig readIOShapingConfig_;
-  TraceLoggerConfig traceLoggerConfig_;
   SettingsConfig serverSettingsConfig_;
   SettingsConfig clientSettingsConfig_;
   configuration::InternalLogs internalLogs_;

@@ -67,8 +67,6 @@ class Configuration {
   using NodesConfig = facebook::logdevice::configuration::NodesConfig;
   using SecurityConfig = facebook::logdevice::configuration::SecurityConfig;
   using SequencersConfig = facebook::logdevice::configuration::SequencersConfig;
-  using TraceLoggerConfig =
-      facebook::logdevice::configuration::TraceLoggerConfig;
   using TrafficShapingConfig =
       facebook::logdevice::configuration::TrafficShapingConfig;
   using MetaDataLogsConfig =

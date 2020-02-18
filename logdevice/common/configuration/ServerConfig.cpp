@@ -58,8 +58,6 @@ static const std::set<std::string> config_recognized_keys = {
     "principals",
     "security_information",
     "server_settings",
-    "trace-logger",
-    "trace_logger",
     "traffic_shaping",
     "read_throttling",
     "version",
@@ -87,7 +85,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
   MetaDataLogsConfig metaDataLogsConfig;
   PrincipalsConfig principalsConfig;
   SecurityConfig securityConfig;
-  TraceLoggerConfig traceLoggerConfig;
   TrafficShapingConfig trafficShapingConfig;
   ShapingConfig readIOShapingConfig(
       std::set<NodeLocationScope>{NodeLocationScope::NODE},
@@ -133,8 +130,7 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
       parseMetaDataLog(parsed, securityConfig, metaDataLogsConfig) &&
       parseSettings(parsed, "server_settings", serverSettingsConfig) &&
       parseSettings(parsed, "client_settings", clientSettingsConfig) &&
-      parseInternalLogs(parsed, securityConfig, internalLogs) &&
-      parseTraceLogger(parsed, traceLoggerConfig);
+      parseInternalLogs(parsed, securityConfig, internalLogs);
 
   if (!success) {
     return nullptr;
@@ -164,7 +160,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
                          std::move(metaDataLogsConfig),
                          std::move(principalsConfig),
                          std::move(securityConfig),
-                         std::move(traceLoggerConfig),
                          std::move(trafficShapingConfig),
                          std::move(readIOShapingConfig),
                          std::move(serverSettingsConfig),
@@ -186,7 +181,6 @@ ServerConfig::ServerConfig(std::string cluster_name,
                            MetaDataLogsConfig metaDataLogsConfig,
                            PrincipalsConfig principalsConfig,
                            SecurityConfig securityConfig,
-                           TraceLoggerConfig traceLoggerConfig,
                            TrafficShapingConfig trafficShapingConfig,
                            ShapingConfig readIOShapingConfig,
                            SettingsConfig serverSettingsConfig,
@@ -203,7 +197,6 @@ ServerConfig::ServerConfig(std::string cluster_name,
       securityConfig_(std::move(securityConfig)),
       trafficShapingConfig_(std::move(trafficShapingConfig)),
       readIOShapingConfig_(std::move(readIOShapingConfig)),
-      traceLoggerConfig_(std::move(traceLoggerConfig)),
       serverSettingsConfig_(std::move(serverSettingsConfig)),
       clientSettingsConfig_(std::move(clientSettingsConfig)),
       internalLogs_(std::move(internalLogs)),
@@ -278,22 +271,12 @@ ServerConfig::getPrincipalByName(const std::string* name) const {
   return principalsConfig_.getPrincipalByName(name);
 }
 
-folly::Optional<double>
-ServerConfig::getTracerSamplePercentage(const std::string& key) const {
-  return traceLoggerConfig_.getSamplePercentage(key);
-}
-
-double ServerConfig::getDefaultSamplePercentage() const {
-  return traceLoggerConfig_.getDefaultSamplePercentage();
-}
-
 std::unique_ptr<ServerConfig>
 ServerConfig::fromData(std::string cluster_name,
                        NodesConfig nodes,
                        MetaDataLogsConfig metadata_logs,
                        PrincipalsConfig principalsConfig,
                        SecurityConfig securityConfig,
-                       TraceLoggerConfig traceLoggerConfig,
                        TrafficShapingConfig trafficShapingConfig,
                        ShapingConfig readIOShapingConfig,
                        SettingsConfig serverSettingsConfig,
@@ -309,7 +292,6 @@ ServerConfig::fromData(std::string cluster_name,
                        std::move(metadata_logs),
                        std::move(principalsConfig),
                        std::move(securityConfig),
-                       std::move(traceLoggerConfig),
                        std::move(trafficShapingConfig),
                        std::move(readIOShapingConfig),
                        std::move(serverSettingsConfig),
@@ -326,7 +308,6 @@ ServerConfig::fromDataTest(std::string cluster_name,
                            MetaDataLogsConfig metadata_logs,
                            PrincipalsConfig principalsConfig,
                            SecurityConfig securityConfig,
-                           TraceLoggerConfig traceLoggerConfig,
                            TrafficShapingConfig trafficShapingConfig,
                            ShapingConfig readIOShapingConfig,
                            SettingsConfig serverSettingsConfig,
@@ -346,7 +327,6 @@ ServerConfig::fromDataTest(std::string cluster_name,
                        std::move(metadata_logs),
                        std::move(principalsConfig),
                        std::move(securityConfig),
-                       std::move(traceLoggerConfig),
                        std::move(trafficShapingConfig),
                        std::move(readIOShapingConfig),
                        std::move(serverSettingsConfig),
@@ -368,7 +348,6 @@ std::unique_ptr<ServerConfig> ServerConfig::copy() const {
                                                   metaDataLogsConfig_,
                                                   principalsConfig_,
                                                   securityConfig_,
-                                                  traceLoggerConfig_,
                                                   trafficShapingConfig_,
                                                   readIOShapingConfig_,
                                                   serverSettingsConfig_,
@@ -407,7 +386,6 @@ std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
                                                   metaDataLogsConfig,
                                                   principalsConfig_,
                                                   securityConfig_,
-                                                  traceLoggerConfig_,
                                                   trafficShapingConfig_,
                                                   readIOShapingConfig_,
                                                   serverSettingsConfig_,
@@ -433,7 +411,6 @@ std::shared_ptr<ServerConfig> ServerConfig::withMetaDataLogsConfig(
                                                   std::move(metaDataLogsConfig),
                                                   principalsConfig_,
                                                   securityConfig_,
-                                                  traceLoggerConfig_,
                                                   trafficShapingConfig_,
                                                   readIOShapingConfig_,
                                                   serverSettingsConfig_,
@@ -454,7 +431,6 @@ ServerConfig::withVersion(config_version_t version) const {
                                                   metaDataLogsConfig_,
                                                   principalsConfig_,
                                                   securityConfig_,
-                                                  traceLoggerConfig_,
                                                   trafficShapingConfig_,
                                                   readIOShapingConfig_,
                                                   serverSettingsConfig_,
@@ -476,7 +452,6 @@ std::shared_ptr<ServerConfig> ServerConfig::createEmpty() {
       MetaDataLogsConfig(),
       PrincipalsConfig(),
       SecurityConfig(),
-      TraceLoggerConfig(),
       TrafficShapingConfig(),
       ShapingConfig(std::set<NodeLocationScope>{NodeLocationScope::NODE},
                     std::set<NodeLocationScope>{NodeLocationScope::NODE}),
@@ -572,8 +547,7 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
       "read_throttling", readIOShapingConfig_.toFollyDynamic())(
       "traffic_shaping", trafficShapingConfig_.toFollyDynamic())(
       "server_settings", folly::toDynamic(serverSettingsConfig_))(
-      "client_settings", folly::toDynamic(clientSettingsConfig_))(
-      "trace-logger", traceLoggerConfig_.toFollyDynamic());
+      "client_settings", folly::toDynamic(clientSettingsConfig_));
 
   // In the NCM world, the metadata_logs section won't exit. Let's only
   // serialize it if it exists.

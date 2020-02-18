@@ -27,9 +27,6 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
                       const SecurityConfig& securityConfig,
                       MetaDataLogsConfig& output);
 
-bool parseTraceLogger(const folly::dynamic& clusterMap,
-                      TraceLoggerConfig& output);
-
 bool parseInternalLogs(const folly::dynamic& clusterMap,
                        const SecurityConfig& securityConfig,
                        configuration::InternalLogs& internalLogs);

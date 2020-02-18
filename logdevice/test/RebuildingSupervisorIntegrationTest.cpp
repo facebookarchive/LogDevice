@@ -181,7 +181,6 @@ TEST_F(RebuildingSupervisorIntegrationTest,
       config->getMetaDataLogsConfig(),
       ServerConfig::PrincipalsConfig(),
       ServerConfig::SecurityConfig(),
-      ServerConfig::TraceLoggerConfig(),
       ServerConfig::TrafficShapingConfig(),
       ServerConfig::ShapingConfig(
           std::set<NodeLocationScope>{NodeLocationScope::NODE},

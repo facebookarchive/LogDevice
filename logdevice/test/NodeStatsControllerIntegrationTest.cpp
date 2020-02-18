@@ -319,7 +319,6 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
         other->getMetaDataLogsConfig(),
         ServerConfig::PrincipalsConfig(),
         ServerConfig::SecurityConfig(),
-        ServerConfig::TraceLoggerConfig(),
         ServerConfig::TrafficShapingConfig(),
         ServerConfig::ShapingConfig(
             std::set<NodeLocationScope>{NodeLocationScope::NODE},

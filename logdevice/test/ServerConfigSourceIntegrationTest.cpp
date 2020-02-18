@@ -278,7 +278,6 @@ TEST_F(ServerConfigSourceIntegrationTest, ServerConfigInternalLogUpdate) {
                                  new_server_config->getMetaDataLogsConfig(),
                                  ServerConfig::PrincipalsConfig(),
                                  new_server_config->getSecurityConfig(),
-                                 ServerConfig::TraceLoggerConfig(),
                                  new_server_config->getTrafficShapingConfig(),
                                  new_server_config->getReadIOShapingConfig(),
                                  new_server_config->getServerSettingsConfig(),
