@@ -1370,11 +1370,14 @@ bool Server::initRebuildingCoordinator() {
              "an event log by populating the \"internal_logs\" section of the "
              "server config and restart this server");
   } else {
-    enable_rebuilding = true;
-    event_log_ =
-        std::make_unique<EventLogStateMachine>(params_->getProcessorSettings());
+    auto workerType = EventLogStateMachine::workerType(processor_.get());
+    auto workerId = worker_id_t(EventLogStateMachine::getWorkerIdx(
+        processor_->getWorkerCount(workerType)));
+    event_log_ = std::make_unique<EventLogStateMachine>(
+        params_->getProcessorSettings(), workerId, workerType);
     event_log_->enableSendingUpdatesToWorkers();
     event_log_->setMyNodeID(params_->getMyNodeID().value());
+    enable_rebuilding = true;
   }
 
   if (sharded_store_) {
@@ -1690,6 +1693,10 @@ Processor* Server::getProcessor() const {
 
 RebuildingCoordinator* Server::getRebuildingCoordinator() {
   return rebuilding_coordinator_.get();
+}
+
+EventLogStateMachine* Server::getEventLogStateMachine() {
+  return event_log_.get();
 }
 
 maintenance::MaintenanceManager* Server::getMaintenanceManager() {

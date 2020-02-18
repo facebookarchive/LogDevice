@@ -129,8 +129,15 @@ class EventLogStateMachine
    */
   void snapshot(std::function<void(Status st)> cb);
 
-  static int getWorkerIdx(int /*nthreads*/) {
-    return 0;
+  static int getWorkerIdx(int nthreads) {
+    return configuration::InternalLogs::EVENT_LOG_DELTAS.val_ % nthreads;
+  }
+
+  static WorkerType workerType(Processor* processor) {
+    if (processor->getWorkerCount(WorkerType::BACKGROUND) > 0) {
+      return WorkerType::BACKGROUND;
+    }
+    return WorkerType::GENERAL;
   }
 
  protected:

@@ -319,7 +319,11 @@ void StandaloneAdminServer::initStatsCollection() {
 }
 
 void StandaloneAdminServer::initEventLog() {
-  event_log_ = std::make_unique<EventLogStateMachine>(settings_);
+  auto workerType = EventLogStateMachine::workerType(processor_.get());
+  auto workerId = worker_id_t(EventLogStateMachine::getWorkerIdx(
+      processor_->getWorkerCount(workerType)));
+  event_log_ =
+      std::make_unique<EventLogStateMachine>(settings_, workerId, workerType);
   event_log_->enableSendingUpdatesToWorkers();
 
   std::unique_ptr<Request> req =
