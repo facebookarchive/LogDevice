@@ -72,7 +72,10 @@ ShardSet ClusterMaintenanceWrapper::getShardsFromDefinition(
   // ignore_missing = true. We ignore nodes that we cannot find in the
   // configuration.
   return def && def->get_shards().size() > 0
-      ? expandShardSet(def->get_shards(), *nodes_config_, true)
+      ? expandShardSet(def->get_shards(),
+                       *nodes_config_,
+                       /* ignore_missing = */ true,
+                       /* ignore_non_storage_nodes = */ true)
       : ShardSet{};
 }
 

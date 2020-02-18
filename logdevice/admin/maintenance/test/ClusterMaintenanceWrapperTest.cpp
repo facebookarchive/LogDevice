@@ -56,6 +56,7 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
 
   auto node3 = thrift::NodeID();
   auto node3_addr = thrift::SocketAddress();
+
   // this node will be matched by address.
   node3_addr.set_address("127.0.0.9");
   node3_addr.set_address_family(thrift::SocketAddressFamily::INET);
@@ -111,6 +112,20 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
   def4.set_group_id("620");
   def4.set_allow_passive_drains(true);
   definitions.push_back(def4);
+
+  // A sequencer-only node (N7). Should not fail.
+  auto node5 = thrift::NodeID();
+  node5.set_node_index(7);
+  auto def5 = MaintenanceDefinition();
+  auto shard5 = thrift::ShardID();
+  shard5.set_node(node5);
+  shard5.set_shard_index(0);
+  def5.set_user("humans");
+  def5.set_shards({shard5});
+  def5.set_shard_target_state(ShardOperationalState::DRAINED);
+  def5.set_group_id("720");
+  def5.set_allow_passive_drains(true);
+  definitions.push_back(def5);
 
   cluster_state->set_maintenances(std::move(definitions));
 
