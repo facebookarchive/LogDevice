@@ -310,6 +310,26 @@ _attributes = [
             """
         ),
     ),
+    argument(
+        "acls",
+        type=typing.List[str],
+        description=dedent(
+            """
+                List of ACLs that will be used to perform permission checks on
+                operations directed to this log group.
+            """
+        ),
+    ),
+    argument(
+        "acls_shadow",
+        type=typing.List[str],
+        description=dedent(
+            """
+                List of ACLs that will be used to shadow permission checks on
+                operations directed to this log group.
+            """
+        ),
+    ),
 ]
 
 
