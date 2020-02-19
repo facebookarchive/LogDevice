@@ -61,7 +61,7 @@ class PassThroughCopySetManager : public CopySetManager {
     // see docblock for CopySetManager::shuffleCopySet
     shuffleCopySet(
         copyset_out, *copyset_size_out, chain_out ? *chain_out : false);
-    block_starting_lsn_out.clear();
+    block_starting_lsn_out.reset();
     return res;
   }
 

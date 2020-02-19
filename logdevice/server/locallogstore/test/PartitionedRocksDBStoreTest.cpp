@@ -152,7 +152,7 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
 
     if (state.current_promise_.hasValue()) {
       state.current_promise_.value().set_value();
-      state.current_promise_.clear();
+      state.current_promise_.reset();
     }
 
     state.cv_.wait(lock, [&] {

@@ -640,7 +640,7 @@ void PurgeCoordinator::startBuffered() {
     }
 
     to_release = std::move(buffered_release_);
-    buffered_release_.clear();
+    buffered_release_.reset();
     to_clean = std::move(buffered_clean_);
     buffered_clean_.clear();
   }
@@ -657,7 +657,7 @@ void PurgeCoordinator::onStateMachineDone() {
 
     // Steal the buffered RELEASE and CLEAN messages (if any).
     to_release = std::move(buffered_release_);
-    buffered_release_.clear();
+    buffered_release_.reset();
     to_clean = std::move(buffered_clean_);
     buffered_clean_.clear();
 

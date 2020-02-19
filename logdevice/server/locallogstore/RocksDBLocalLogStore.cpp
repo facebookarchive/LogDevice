@@ -932,7 +932,7 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
     // Move data iterator to `current` and see if it passes filter.
     if (data_iterator_ != nullptr && !data_iterator_good &&
         !current_is_filtered_out) {
-      data_iterator_->skipped_dangling_amend_.clear();
+      data_iterator_->skipped_dangling_amend_.reset();
       adaptiveSeek(*data_iterator_, current, dir, data_near, getStatsHolder());
       data_iterator_good = true;
       data_near = true;
@@ -1077,7 +1077,7 @@ RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::state() const {
 }
 
 void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::invalidate() {
-  iterator_.clear();
+  iterator_.reset();
   state_ = IteratorState::ERROR;
 }
 
@@ -1304,7 +1304,7 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::createIteratorIfNeeded() {
 }
 
 void RocksDBLocalLogStore::CSIWrapper::DataIterator::releaseIterator() {
-  iterator_.clear();
+  iterator_.reset();
   trackIteratorRelease();
 }
 

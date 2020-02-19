@@ -220,7 +220,7 @@ void LogRebuilding::onCheckpointRead(Status status,
     // Clear any seek timestamp and allow the next read to go to the end of
     // the dirty time limits.  We process this next read batch and then decide
     // if we can skip records based on the timestamps we've read.
-    seekToTimestamp_.clear();
+    seekToTimestamp_.reset();
     curDirtyTimeWindow_ = --rebuildingSet_->all_dirty_time_intervals.end();
     ld_debug("LogID %ju: Setting last_checkpoint_ to %s.",
              (uintmax_t)logid_.val(),
@@ -350,7 +350,7 @@ void LogRebuilding::readNewBatch() {
     putReadStorageTask(createReadContext());
 
     // Only seek again once we exhaust a dirty time range.
-    seekToTimestamp_.clear();
+    seekToTimestamp_.reset();
     return;
   }
 
@@ -1670,7 +1670,7 @@ bool LogRebuilding::isStallTimerActive() {
 
 void LogRebuilding::restart() {
   readPointer_.lsn = restartLsn_;
-  seekToTimestamp_.clear();
+  seekToTimestamp_.reset();
   curDirtyTimeWindow_ = --rebuildingSet_->all_dirty_time_intervals.end();
 
   recordDurabilityState_.clear();

@@ -2287,7 +2287,7 @@ void ClientReadStream::activateMetaDataRetryTimer() {
       ld_check(epoch_metadata_requested_.hasValue());
       epoch_t last_requested_epoch = epoch_metadata_requested_.value();
       // rewind epoch_metadata_requested_
-      epoch_metadata_requested_.clear();
+      epoch_metadata_requested_.reset();
       // re-read the metadata log
       requestEpochMetaData(last_requested_epoch);
     });

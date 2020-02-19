@@ -167,8 +167,8 @@ void ClientReadStreamFailureDetector::onWindowSlid(
   // Clear everything if the filter version changed (we rewound).
   if (filter_version != filter_version_) {
     filter_version_ = filter_version;
-    cur_window_.clear();
-    next_window_.clear();
+    cur_window_.reset();
+    next_window_.reset();
     for (auto& p : shards_) {
       p.second.next_lsn = LSN_OLDEST;
     }
@@ -182,7 +182,7 @@ void ClientReadStreamFailureDetector::onWindowSlid(
   if (cur_window_.hasValue()) {
     if (next_window_.hasValue()) {
       cur_window_ = std::move(next_window_.value());
-      next_window_.clear();
+      next_window_.reset();
     }
     next_window_ = std::move(wstate);
   } else {

@@ -293,7 +293,7 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
     // Revert nodeset size to its unadjusted value.
     target_nodeset_size =
         logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
-    nodeset_seed.clear();
+    nodeset_seed.reset();
   } else if (state.pending_adjustment.hasValue()) {
     if (state.pending_adjustment->epoch == current_metadata->h.epoch) {
       // An adjustment is pending. Try to apply it.
@@ -301,7 +301,7 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
       nodeset_seed = state.pending_adjustment->new_seed;
     } else {
       // A scheduled adjustment is outdated.
-      state.pending_adjustment.clear();
+      state.pending_adjustment.reset();
     }
   }
   bool use_new_storage_set_format =
@@ -814,7 +814,7 @@ void SequencerBackgroundActivator::onSettingsUpdated() {
       if (nodeset_adjustment_period_.count() <= 0) {
         // Nodeset adjusting was disabled.
         // May need to revert nodeset size back to its unadjusted value.
-        kv.second.pending_adjustment.clear();
+        kv.second.pending_adjustment.reset();
         schedule({kv.first});
         scheduled = true;
       } else {

@@ -335,7 +335,7 @@ void PartitionedRocksDBStore::Iterator::handleEmptyLog() {
   data_iterator_.reset();
   current_.clear();
   latest_.clear();
-  meta_iterator_.clear();
+  meta_iterator_.reset();
   state_ = IteratorState::AT_END;
 }
 
@@ -566,7 +566,7 @@ void PartitionedRocksDBStore::Iterator::seek(lsn_t lsn,
     // The fast path -- lsn belongs to the latest partition.
     // Don't need meta_iterator_.
     ld_check(latest_.min_lsn_ != LSN_INVALID);
-    meta_iterator_.clear();
+    meta_iterator_.reset();
     setCurrent(latest_);
   } else {
     // Slow path: seek meta_iterator_ in directory, then data_iterator_ in
@@ -663,7 +663,7 @@ void PartitionedRocksDBStore::Iterator::seekForPrev(lsn_t lsn) {
     // The fast path -- lsn belongs to the latest partition.
     // Don't need meta_iterator_.
     ld_check(latest_.min_lsn_ != LSN_INVALID);
-    meta_iterator_.clear();
+    meta_iterator_.reset();
     setCurrent(latest_);
     setDataIteratorFromCurrent();
     ld_check(data_iterator_ != nullptr);

@@ -149,7 +149,7 @@ Shadow::Attrs Shadow::checkShadowConfig(logid_t logid) {
 // ShadowClientFactory::reset will also shut down helper thread
 void Shadow::reset() {
   std::lock_guard<Mutex> range_cache_lock(shadow_mutex_);
-  last_used_range_.clear();
+  last_used_range_.reset();
   range_cache_.clear();
   pending_logs_.clear();
   shadow_map_.clear();

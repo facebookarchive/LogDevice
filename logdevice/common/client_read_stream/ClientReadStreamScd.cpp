@@ -350,7 +350,7 @@ void ClientReadStreamScd::applyScheduledChanges() {
       // list to have all shards in it. Failover to all send all mode instead.
       if (mode_ == Mode::ALL_SEND_ALL) {
         // We are already here, nothing to do.
-        scheduled_mode_transition_.clear();
+        scheduled_mode_transition_.reset();
         filtered_out_.clear();
         return;
       }
@@ -384,7 +384,7 @@ void ClientReadStreamScd::applyScheduledChanges() {
     shards_down_failover_timer_.activate();
     all_send_all_failover_timer_.activate();
   }
-  scheduled_mode_transition_.clear();
+  scheduled_mode_transition_.reset();
 }
 
 void ClientReadStreamScd::scheduleRewindToMode(Mode mode,

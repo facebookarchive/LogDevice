@@ -1592,8 +1592,8 @@ TEST_F(RecordCacheTest, EmptyCacheWithNonAuthoritativeEpoch2) {
   epoch_cache_capacity_ = 10;
   highest_lsn_ = lsn(8, 7);
   // seal and soft seal not available at the time
-  initial_seal_epoch_.clear();
-  initial_soft_seal_epoch_.clear();
+  initial_seal_epoch_.reset();
+  initial_soft_seal_epoch_.reset();
   create();
   cache_->updateLastNonAuthoritativeEpoch(LOG_ID);
 

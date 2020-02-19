@@ -65,7 +65,7 @@ void TrimRSMRetryHandler::trimImpl() {
       // transient failure.
       ld_check(in_flight_retention_.hasValue());
       if (in_flight_retention_.value() == retention_) {
-        in_flight_retention_.clear();
+        in_flight_retention_.reset();
         return;
       }
 

@@ -4474,7 +4474,7 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
                              partition_compaction_schedule.value().end(),
                              backlog.value());
         if (it == partition_compaction_schedule.value().end()) {
-          backlog_bucket.clear();
+          backlog_bucket.reset();
         } else {
           backlog_bucket = *it;
         }

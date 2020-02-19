@@ -138,7 +138,7 @@ class SequencerTest : public ::testing::Test {
   void checkHistoricalMetaDataRequestEpoch(epoch_t epoch) {
     ASSERT_TRUE(request_epoch_reading_metadata_.hasValue());
     ASSERT_EQ(epoch, request_epoch_reading_metadata_.value());
-    request_epoch_reading_metadata_.clear();
+    request_epoch_reading_metadata_.reset();
   }
 
   void noHistoricalMetaDataRequested() {

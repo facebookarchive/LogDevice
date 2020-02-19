@@ -183,7 +183,7 @@ int WriteSaturationWorker::run() {
   if (options.duration >= 0) {
     end_time_ = start_time_ + std::chrono::seconds(options.duration);
   } else {
-    end_time_.clear();
+    end_time_.reset();
   }
   while (!tryAppend(lock, logs, cb)) {
     /* keep going */
