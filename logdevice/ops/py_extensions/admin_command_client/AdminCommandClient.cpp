@@ -40,7 +40,7 @@ AdminCommandClient::asyncSend(
               }
 
               auto transport = apache::thrift::async::TAsyncSocket::newSocket(
-                  evb, r.sockaddr);
+                  evb, r.sockaddr, connect_timeout.count());
               auto channel =
                   apache::thrift::HeaderClientChannel::newChannel(transport);
               channel->setTimeout(connect_timeout.count());
