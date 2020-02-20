@@ -1451,6 +1451,11 @@ struct Settings : public SettingsBundle {
   // loglevel to publish to scribe and logview
   dbg::Level external_loglevel;
 
+  // How often we attempt to trim metadata logs on sequencers
+  std::chrono::milliseconds metadata_log_trim_interval;
+  // Time interval after which trim request is considered to be timed out
+  std::chrono::milliseconds metadata_log_trim_timeout;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

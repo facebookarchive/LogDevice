@@ -19,11 +19,13 @@
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/AtomicOptional.h"
 #include "logdevice/common/EpochMetaDataMap.h"
+#include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/RateEstimator.h"
 #include "logdevice/common/RateLimiter.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Seal.h"
 #include "logdevice/common/SequencerMetaDataLogManager.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/UpdateableSharedPtr.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
@@ -40,6 +42,7 @@ class EpochSequencer;
 struct EpochSequencerImmutableOptions;
 struct ExponentialBackoffTimerNode;
 class MetaDataLogWriter;
+class MetaDataLogTrimmer;
 class PeriodicReleases;
 class Processor;
 enum class ReleaseType : uint8_t;
@@ -246,8 +249,13 @@ class Sequencer {
    * (i.e., getHistoricalMetaData) is available. Sequencer will update its
    * metadata map when the result is up-to-date.
    *
-   * @param request_epoch    the `current' epoch of Sequencer when the request
-   *                         was made
+   * @param status              status of metadata request
+   * @param request_epoch       the `current' epoch of Sequencer when the
+   *                            request was made
+   * @param historical_metadata received metadata map
+   * @param metadata_extras     additional information for metadata log
+   *                            entries forming historical_metadata,
+   *                            such as timestamps and LSN
    *
    * @return                 true iff a retry for getting historical metadata
    *                         is needed. false if no retry is needed (e.g.,
@@ -256,7 +264,8 @@ class Sequencer {
   bool onHistoricalMetaData(
       Status status,
       epoch_t request_epoch,
-      std::shared_ptr<const EpochMetaDataMap::Map> historical_metadata);
+      std::shared_ptr<const EpochMetaDataMap::Map> historical_metadata,
+      NodeSetFinder::MetaDataExtrasMap metadata_extras);
 
   /**
    * If epoch of the current sequencer is equal to the the given epoch,
@@ -553,6 +562,13 @@ class Sequencer {
   }
 
   /**
+   * @return  the most recent LSN up to which metadata log was trimmed by this
+   *          sequencer. Will return empty value in case when the sequencer has
+   *          no successful runs of metadata trimming yet.
+   **/
+  folly::Optional<lsn_t> getLatestMetaDataTrimPoint() const;
+
+  /**
    * @return sequencer number that will be assigned to the next record
    */
   lsn_t getNextLSN() const;
@@ -655,6 +671,9 @@ class Sequencer {
    *          TODO T23464964: address this problem
    */
   std::shared_ptr<const EpochMetaDataMap> getMetaDataMap() const;
+
+  virtual std::shared_ptr<const NodeSetFinder::MetaDataExtrasMap>
+  getMetaDataExtrasMap() const;
 
   ///////////// offsets and tail attributes ///////////////////
 
@@ -832,6 +851,10 @@ class Sequencer {
   // similar to epoch_seqs_ and current_epoch_, updates are protected
   // by state_mutex_ to make sure they are in sync, while reading is lock-free
   UpdateableSharedPtr<const EpochMetaDataMap> metadata_map_;
+  // Stores additional information for metadata log entries such as LSN and
+  // timestamp. Follows the same contract as metadata_map_.
+  UpdateableSharedPtr<const NodeSetFinder::MetaDataExtrasMap>
+      metadata_extras_map_;
 
   // limits the number of sequencer reactivations
   RateLimiter reactivation_limiter_;
@@ -963,6 +986,9 @@ class Sequencer {
 
   // locate the Sequencer object given a logid
   static std::shared_ptr<Sequencer> findSequencer(logid_t log_id);
+
+  // Object responsible for periodic trimming of metadata log
+  UpdateableSharedPtr<MetaDataLogTrimmer> metadata_log_trimmer_;
 
   friend class SequencerMetaDataLogManager;
   friend class UnreleasedRecordDetectorTest;

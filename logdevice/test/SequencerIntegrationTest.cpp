@@ -3259,6 +3259,106 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
   });
 }
 
+// Test that sequencer periodically trims metadata log
+TEST_F(SequencerIntegrationTest, SequencerTrimsMetadataLogTest) {
+  auto log_attrs =
+      IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
+          .with_maxWritesInFlight(1024)
+          .with_replicationFactor(2)
+          .with_extraCopies(0)
+          .with_nodeSetSize(4);
+
+  const int NNODES = 6;
+  Configuration::Nodes nodes;
+  for (node_index_t i = 0; i < NNODES; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    if (i == 0) {
+      node.addSequencerRole();
+    }
+    node.addStorageRole(/*num_shards*/ 2);
+  }
+
+  auto s = IntegrationTestUtils::ParamScope::SEQUENCER;
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     // sequencer polling for trim point more frequently
+                     .setParam("--get-trimpoint-interval", "1s", s)
+                     // trim more frequently
+                     .setParam("--metadata-log-trim-interval", "2s", s)
+                     // update medata more often to ensure trimmer sees the
+                     // latest state of log
+                     .setParam("--update-metadata-map-interval", "1s", s)
+                     .setNodes(nodes)
+                     .setNumLogs(1)
+                     .useHashBasedSequencerAssignment()
+                     .setLogAttributes(log_attrs)
+                     .setEventLogAttributes(log_attrs)
+                     .setConfigLogAttributes(log_attrs)
+                     .create(NNODES);
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+  std::shared_ptr<Client> client = cluster->createClient();
+
+  const logid_t logid{1};
+  const logid_t metadata_logid = MetaDataLog::metaDataLogID(logid);
+
+  auto write_records = [&](int n) {
+    lsn_t lsn = LSN_INVALID;
+    for (int i = 0; i < n; ++i) {
+      lsn = client->appendSync(logid, Payload("dummy", 5));
+      EXPECT_NE(LSN_INVALID, lsn);
+    }
+    return lsn;
+  };
+
+  auto start_new_epoch = [&]() {
+    auto cmd = "up --logid " + std::to_string(logid.val_);
+    std::string reply = cluster->getNode(0).sendCommand(cmd);
+    ASSERT_NE(std::string::npos, reply.find("Started sequencer activation"));
+    // Wait for activation to complete
+    cluster->waitUntilAllSequencersQuiescent();
+  };
+
+  // Epoch 1
+  lsn_t last_written_lsn = write_records(63);
+  ld_info("Last written record %s.", lsn_to_string(last_written_lsn).c_str());
+  // trim point for metadata log should be LSN_INVALID
+  EXPECT_EQ(std::to_string(LSN_INVALID),
+            cluster->getNode(0).sequencerInfo(metadata_logid)["Trim point"]);
+
+  // Epoch 2: started with reconfiguration so the new record is added to
+  // metadata log
+  cluster->updateNodeAttributes(
+      node_index_t(1), configuration::StorageState::DISABLED, 1, false);
+  cluster->waitUntilAllSequencersQuiescent();
+  last_written_lsn = write_records(47);
+  ld_info("Last written record %s.", lsn_to_string(last_written_lsn).c_str());
+
+  // Epoch 3: started without new records in metadata log
+  start_new_epoch();
+  last_written_lsn = write_records(54);
+  ld_info("Last written record %s.", lsn_to_string(last_written_lsn).c_str());
+
+  // Epoch 4: started without new records in metadata log
+  start_new_epoch();
+  last_written_lsn = write_records(54);
+  ld_info("Last written record %s.", lsn_to_string(last_written_lsn).c_str());
+
+  // trim the log to last_written_lsn belonging to new epoch
+  int rv = client->trimSync(logid, last_written_lsn);
+  EXPECT_EQ(0, rv);
+
+  // First LSN of new epoch in metadata log should become trim point
+  wait_until("Sequencer trims old epoch records", [&]() {
+    auto trim_point_str =
+        cluster->getNode(0).sequencerInfo(logid)["Metadata trim point"];
+    if (trim_point_str.empty()) {
+      return false;
+    }
+    lsn_t trim_point_lsn = folly::to<uint64_t>(trim_point_str);
+    return lsn_to_epoch(trim_point_lsn).val() == 1;
+  });
+}
+
 // test that preemption while writing to metadata logs, doesn't cause ping-pong
 TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
   auto log_attrs =

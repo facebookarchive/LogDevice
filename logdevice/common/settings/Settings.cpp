@@ -3554,5 +3554,21 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "One of the following: critical, error, warning, info, debug, none",
        SERVER | CLIENT,
        SettingsCategory::Core);
+  init("metadata-log-trim-interval",
+       &metadata_log_trim_interval,
+       "0ms",
+       validate_nonnegative<ssize_t>(),
+       "How often periodic trimming of metadata logs should run. Zero value "
+       "prevents it from running at all. ",
+       SERVER | REQUIRES_RESTART /* Used in Sequencer c-tor */,
+       SettingsCategory::Sequencer);
+  init("metadata-log-trim-timeout",
+       &metadata_log_trim_timeout,
+       "120s",
+       validate_positive<size_t>(),
+       "Timeout when waiting for periodic metadata log trim request to be "
+       "completed",
+       SERVER,
+       SettingsCategory::Sequencer);
 }
 }} // namespace facebook::logdevice

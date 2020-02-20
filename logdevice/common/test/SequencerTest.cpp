@@ -1099,7 +1099,7 @@ TEST_F(SequencerTest, HistoricalMetadataRequest) {
       epoch_t(5), getConfig(), genMetaData(epoch_t(5), epoch_t(3)));
   checkHistoricalMetaDataRequestEpoch(epoch_t(5));
   bool rv = sequencer_->onHistoricalMetaData(
-      E::OK, epoch_t(5), genMetaDataMap({1, 2}));
+      E::OK, epoch_t(5), genMetaDataMap({1, 2}), {});
   // retry not needed
   ASSERT_FALSE(rv);
   auto expected_map = genEpochMetaDataMap({1, 2, 3}, epoch_t(5));
@@ -1126,7 +1126,7 @@ TEST_F(SequencerTest, HistoricalMetadataRequest2) {
       epoch_t(5), getConfig(), genMetaData(epoch_t(5), epoch_t(3)));
   checkHistoricalMetaDataRequestEpoch(epoch_t(5));
   bool rv = sequencer_->onHistoricalMetaData(
-      E::OK, epoch_t(5), genMetaDataMap({1, 2}));
+      E::OK, epoch_t(5), genMetaDataMap({1, 2}), {});
   // retry not needed
   ASSERT_FALSE(rv);
   // sequencer activates with the same metadata in epoch 10

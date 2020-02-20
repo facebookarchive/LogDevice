@@ -1181,6 +1181,9 @@ STAT_DEFINE(acl_cache_misses, SUM)
 // cache hits
 STAT_DEFINE(acl_cache_hits, SUM)
 
+// how many times metadata log has been trimmed
+STAT_DEFINE(metadata_log_trims, SUM)
+
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'
  * admin command.

@@ -20,9 +20,9 @@
 #include "logdevice/common/GetTrimPointRequest.h"
 #include "logdevice/common/LogRecoveryRequest.h"
 #include "logdevice/common/MetaDataLog.h"
+#include "logdevice/common/MetaDataLogTrimmer.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodeID.h"
-#include "logdevice/common/NodeSetFinder.h"
 #include "logdevice/common/PeriodicReleases.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerBackgroundActivator.h"
@@ -257,6 +257,11 @@ ActivateResult Sequencer::completeActivationWithMetaData(
 
     // 7. start timer to periodically read and refresh the metadata map.
     getHistoricalMetaData(GetHistoricalMetaDataMode::PERIODIC);
+
+    // 8. start periodic trimming of metdata log
+    metadata_log_trimmer_.update(std::make_shared<MetaDataLogTrimmer>(this));
+    metadata_log_trimmer_.get()->setRunInterval(
+        settings_->metadata_log_trim_interval);
   }
 
   return (draining_started ? ActivateResult::GRACEFUL_DRAINING
@@ -480,14 +485,16 @@ class GetHistoricalMetaDataRequest : public FireAndForgetRequest {
     bool should_retry = false;
     if (seq) {
       std::shared_ptr<const EpochMetaDataMap::Map> result_map;
+      NodeSetFinder::MetaDataExtrasMap extras_map;
       if (status == E::OK) {
         auto result = nodeset_finder_->getResult();
         ld_check(result != nullptr);
         result_map = result->getMetaDataMap();
+        extras_map = nodeset_finder_->getMetaDataExtras();
       }
 
       should_retry = seq->onHistoricalMetaData(
-          status, current_epoch_, std::move(result_map));
+          status, current_epoch_, std::move(result_map), std::move(extras_map));
     }
 
     if (should_retry) {
@@ -730,7 +737,8 @@ void Sequencer::getHistoricalMetaData(GetHistoricalMetaDataMode mode) {
 bool Sequencer::onHistoricalMetaData(
     Status status,
     epoch_t request_epoch,
-    std::shared_ptr<const EpochMetaDataMap::Map> historical_metadata) {
+    std::shared_ptr<const EpochMetaDataMap::Map> historical_metadata,
+    NodeSetFinder::MetaDataExtrasMap metadata_extras) {
   if (getCurrentEpoch() > request_epoch) {
     // the epoch has advanced since we made the request, this is a stale result,
     // nothing to do
@@ -808,6 +816,9 @@ bool Sequencer::onHistoricalMetaData(
           /*effective_until=*/current_epoch);
       ld_check(new_map != nullptr);
       metadata_map_.update(new_map);
+      metadata_extras_map_.update(
+          std::make_shared<NodeSetFinder::MetaDataExtrasMap>(
+              std::move(metadata_extras)));
     }
   }
 
@@ -1307,6 +1318,11 @@ std::shared_ptr<const EpochMetaData> Sequencer::getCurrentMetaData() const {
 
 std::shared_ptr<const EpochMetaDataMap> Sequencer::getMetaDataMap() const {
   return metadata_map_.get();
+}
+
+std::shared_ptr<const NodeSetFinder::MetaDataExtrasMap>
+Sequencer::getMetaDataExtrasMap() const {
+  return metadata_extras_map_.get();
 }
 
 bool Sequencer::hasAvailableLsns() const {
@@ -2008,6 +2024,11 @@ std::chrono::milliseconds Sequencer::getRateEstimatorWindowSize() const {
     window = std::chrono::hours(1);
   }
   return window;
+}
+
+folly::Optional<lsn_t> Sequencer::getLatestMetaDataTrimPoint() const {
+  auto timmer = metadata_log_trimmer_.get();
+  return timmer != nullptr ? timmer->getTrimPoint() : folly::none;
 }
 
 }} // namespace facebook::logdevice
