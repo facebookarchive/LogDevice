@@ -772,6 +772,8 @@ std::string toString(ClientReadStreamScd::Mode mode) {
     case Mode::ALL_SEND_ALL:
       return "ALL_SEND_ALL";
   }
+  ld_check(false);
+  __builtin_unreachable();
 }
 
 }} // namespace facebook::logdevice

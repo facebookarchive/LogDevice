@@ -34,6 +34,8 @@ std::string toString(ClientReadersFlowTracer::State state) {
     case State::HEALTHY:
       return "healthy";
   }
+  ld_check(false);
+  __builtin_unreachable();
 }
 
 inline uint16_t get_initial_ttl(size_t group_size, size_t num_groups) {
