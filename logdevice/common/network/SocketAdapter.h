@@ -7,6 +7,7 @@
  */
 
 #pragma once
+#include <folly/io/SocketOptionMap.h>
 #include <folly/io/async/AsyncSocket.h>
 
 namespace folly {
@@ -40,8 +41,8 @@ class SocketAdapter {
   virtual void connect(ConnectCallback* callback,
                        const folly::SocketAddress& address,
                        int timeout = 0,
-                       const folly::AsyncSocket::OptionMap& options =
-                           folly::AsyncSocket::emptyOptionMap,
+                       const folly::SocketOptionMap& options =
+                           folly::emptySocketOptionMap,
                        const folly::SocketAddress& bindAddr =
                            folly::AsyncSocket::anyAddress()) noexcept = 0;
   /**

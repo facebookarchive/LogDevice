@@ -11,6 +11,7 @@
 #include <utility>
 
 #include <folly/SocketAddress.h>
+#include <folly/io/SocketOptionMap.h>
 #include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/SSLContext.h>
@@ -81,7 +82,7 @@ void AsyncSocketAdapter::connect(
     ConnectCallback* callback,
     const folly::SocketAddress& address,
     int timeout,
-    const folly::AsyncSocket::OptionMap& options,
+    const folly::SocketOptionMap& options,
     const folly::SocketAddress& bindAddr) noexcept {
   ld_check(!clientHandshake_);
 

@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
+#include <folly/io/SocketOptionMap.h>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "logdevice/common/network/SocketAdapter.h"
@@ -18,12 +19,12 @@ class MockSocketAdapter : public SocketAdapter {
                void(folly::AsyncSocket::ConnectCallback*,
                     const folly::SocketAddress&,
                     int,
-                    const folly::AsyncSocket::OptionMap&,
+                    const folly::SocketOptionMap&,
                     const folly::SocketAddress&));
   void connect(folly::AsyncSocket::ConnectCallback* callback,
                const folly::SocketAddress& address,
                int timeout,
-               const folly::AsyncSocket::OptionMap& options,
+               const folly::SocketOptionMap& options,
                const folly::SocketAddress& bindAddr) noexcept override {
     connect_(callback, address, timeout, options, bindAddr);
   }

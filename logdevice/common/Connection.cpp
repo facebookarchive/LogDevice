@@ -15,6 +15,7 @@
 
 #include <folly/Random.h>
 #include <folly/ScopeGuard.h>
+#include <folly/io/SocketOptionMap.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <openssl/err.h>
@@ -504,14 +505,14 @@ int Connection::preConnectAttempt() {
   return 0;
 }
 
-static folly::AsyncSocket::OptionMap
+static folly::SocketOptionMap
 getDefaultSocketOptions(const folly::SocketAddress& sock_addr,
                         const Settings& settings) {
-  folly::AsyncSocket::OptionMap options;
+  folly::SocketOptionMap options;
   sa_family_t sa_family = sock_addr.getFamily();
   bool is_tcp = !(sa_family == AF_UNIX);
 
-  using OptionKey = folly::AsyncSocket::OptionKey;
+  using OptionKey = folly::SocketOptionKey;
 
   // Set send buffer size
   int sndbuf_size = settings.tcp_sendbuf_kb * 1024;
@@ -576,7 +577,7 @@ folly::Future<Status> Connection::asyncConnect() {
   size_t max_retries = getSettings().connection_retries;
   auto connect_timeout_retry_multiplier =
       getSettings().connect_timeout_retry_multiplier;
-  folly::AsyncSocket::OptionMap options(getDefaultSocketOptions(
+  folly::SocketOptionMap options(getDefaultSocketOptions(
       peer_sockaddr_.getSocketAddress(), getSettings()));
 
   for (size_t retry_count = 1; retry_count < max_retries; ++retry_count) {

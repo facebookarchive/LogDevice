@@ -10,6 +10,7 @@
 #include <fizz/client/AsyncFizzClient.h>
 #include <fizz/server/AsyncFizzServer.h>
 #include <fizz/server/FizzServerContext.h>
+#include <folly/io/SocketOptionMap.h>
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/DelayedDestruction.h>
 
@@ -119,8 +120,8 @@ class AsyncSocketAdapter
   void connect(ConnectCallback* callback,
                const folly::SocketAddress& address,
                int timeout = 0,
-               const folly::AsyncSocket::OptionMap& options =
-                   folly::AsyncSocket::emptyOptionMap,
+               const folly::SocketOptionMap& options =
+                   folly::emptySocketOptionMap,
                const folly::SocketAddress& bindAddr =
                    folly::AsyncSocket::anyAddress()) noexcept override;
   /**
