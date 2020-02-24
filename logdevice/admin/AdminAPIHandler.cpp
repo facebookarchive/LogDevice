@@ -15,6 +15,7 @@
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "logdevice/admin/Conv.h"
+#include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/admin/safety/SafetyChecker.h"
 #include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/Worker.h"
@@ -224,6 +225,89 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
       processor_,
       folly::Optional<worker_id_t>(logsconfig_owner_worker),
       logsconfig_worker_type,
+      cb,
+      RequestType::ADMIN_CMD_UTIL_INTERNAL);
+}
+
+folly::SemiFuture<folly::Unit>
+AdminAPIHandler::semifuture_takeMaintenanceLogSnapshot(
+    thrift::unsigned64 min_version) {
+  auto [p, f] = folly::makePromiseContract<folly::Unit>();
+  // Are we running with a cluster maintenance state machine?
+  if (!updateable_admin_server_settings_
+           ->enable_cluster_maintenance_state_machine) {
+    p.setException(thrift::NotSupported(
+        "ClusterMaintenanceStateMachine is disabled in settings on this node"));
+    return std::move(f);
+  } else if (!updateable_admin_server_settings_->maintenance_log_snapshotting) {
+    // We don't allow snapshotting on this node.
+    p.setException(thrift::NotSupported(
+        "ClusterMaintenanceStateMachine snapshotting is disabled enabled"));
+    return std::move(f);
+  }
+
+  // Figure out where does that RSM live.
+  auto maintenance_worker_type =
+      maintenance::ClusterMaintenanceStateMachine::workerType(processor_);
+  auto maintenance_owner_worker =
+      worker_id_t{maintenance::ClusterMaintenanceStateMachine::getWorkerIndex(
+          processor_->getWorkerCount(maintenance_worker_type))};
+  // Because thrift does not support u64, we encode it in a i64.
+  uint64_t minimum_version = to_unsigned(min_version);
+
+  // The callback to be executed on the target worker.
+  auto cb = [minimum_version](folly::Promise<folly::Unit> promise) mutable {
+    // This is needed because we want to move this into a lambda, an
+    // std::function<> does not allow capturing move-only objects, so here we
+    // are!
+    // http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2013/n3610.html
+    folly::MoveWrapper<folly::Promise<folly::Unit>> mpromise(
+        std::move(promise));
+    Worker* w = Worker::onThisThread(true /* enforce_worker */);
+    // ClusterMaintenanceStateMachine must exist on this worker, even if the RSM
+    // is not started.
+    ld_check(w->cluster_maintenance_state_machine_);
+
+    if (!w->cluster_maintenance_state_machine_->isFullyLoaded()) {
+      mpromise->setException(thrift::NodeNotReady(
+          "ClusterMaintenanceStateMachine has not fully replayed yet"));
+      return;
+    } else {
+      uint64_t current_version =
+          w->cluster_maintenance_state_machine_->getVersion();
+      if (minimum_version > 0 && current_version < minimum_version) {
+        thrift::StaleVersion error(
+            folly::format(
+                "Maintenance state version on this node is {} which is lower "
+                "than the minimum requested {}",
+                current_version,
+                minimum_version)
+                .str());
+        error.set_server_version(static_cast<int64_t>(current_version));
+        mpromise->setException(std::move(error));
+        return;
+      }
+      // ClusterMaintenanceStateMachine is has fully replayed. Let's take a
+      // snapshot.
+      auto snapshot_cb = [=](Status st) mutable {
+        if (st == E::OK) {
+          ld_info("A Maintenance state snapshot has been taken based on an "
+                  "Admin API request");
+          mpromise->setValue(folly::Unit());
+        } else {
+          mpromise->setException(thrift::OperationError(
+              folly::format("Cannot take a snapshot: {}", error_name(st))
+                  .str()));
+        }
+      };
+      // Actually take the snapshot, the callback will fulfill the promise.
+      w->cluster_maintenance_state_machine_->snapshot(std::move(snapshot_cb));
+    }
+  };
+  return fulfill_on_worker<folly::Unit>(
+      processor_,
+      folly::Optional<worker_id_t>(maintenance_owner_worker),
+      maintenance_worker_type,
       cb,
       RequestType::ADMIN_CMD_UTIL_INTERNAL);
 }

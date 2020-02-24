@@ -164,6 +164,44 @@ TEST_F(AdminAPILowLevelTest, TakeLogTreeSnapshot) {
                thrift::StaleVersion);
 }
 
+TEST_F(AdminAPILowLevelTest, TakeMaintenanceLogSnapshot) {
+  const int node_count = 3;
+  auto internal_log_attrs = logsconfig::LogAttributes()
+                                .with_singleWriter(false)
+                                .with_replicationFactor(2)
+                                .with_extraCopies(0)
+                                .with_syncedCopies(0);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setConfigLogAttributes(internal_log_attrs)
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--maintenance-log-snapshotting", "true")
+          .enableLogsConfigManager()
+          .useHashBasedSequencerAssignment()
+          .create(node_count);
+
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
+  ASSERT_NE(nullptr, admin_client);
+
+  cluster->waitUntilAllSequencersQuiescent();
+
+  // Takes a log-tree snapshot regardless of the version. This shouldn't throw
+  // exceptions.
+  wait_until([&]() {
+    try {
+      admin_client->sync_takeMaintenanceLogSnapshot(0);
+      return true;
+    } catch (thrift::NodeNotReady& e) {
+      return false;
+    }
+  });
+  auto unrealistic_version = 999999999999999999l;
+  ASSERT_THROW(
+      admin_client->sync_takeMaintenanceLogSnapshot(unrealistic_version),
+      thrift::StaleVersion);
+}
+
 TEST_F(AdminAPILowLevelTest, SettingsAPITest) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--store-timeout", "1s..12s")

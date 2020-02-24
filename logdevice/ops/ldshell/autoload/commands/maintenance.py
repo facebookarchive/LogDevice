@@ -14,6 +14,7 @@ from textwrap import indent, shorten
 from typing import Collection, Generator, List, Optional, Sequence, Tuple, Union
 
 from humanize import naturaltime
+from ldops.admin_api import take_maintenance_log_snapshot
 from ldops.cluster import get_cluster_view
 from ldops.exceptions import NodeNotFoundError
 from ldops.maintenance import (
@@ -1084,4 +1085,26 @@ class MaintenanceCommand:
 
         except Exception as e:
             print(colored(f"Cannot mark the data unrecoverable: {e}", "red"))
+            return
+
+    @command
+    @argument(
+        "min_version",
+        description="The minimum version that you would like "
+        "to ensure that the snapshot has, 0 means any version",
+    )
+    async def take_snapshot(self, min_version: int = 0):
+        """
+        Asks the Admin Server to take an immediate snapshot of the maintenance
+        internal log.
+        """
+        ctx = context.get_context()
+
+        try:
+            async with ctx.get_cluster_admin_client() as client:
+                await take_maintenance_log_snapshot(
+                    client=client, min_version=min_version
+                )
+        except Exception as e:
+            print(colored(f"Cannot  {e}", "red"))
             return

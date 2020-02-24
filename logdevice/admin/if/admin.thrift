@@ -268,6 +268,20 @@ service AdminAPI extends fb303.FacebookService {
        3: exceptions.NotSupported notsupported) (cpp.coroutine);
 
   /**
+   * Force the server to take new snapshot of the Maintenance state in memory.
+   * The argument to this is `min_version` which means that the snapshot should
+   * only be taken if the server is running with this Maintenance version
+   * (or newer) server will throw StaleVersion exception if that server has
+   * older version.
+   * If the argument is not supplied or (0) then the server will take a snapshot
+   * of whatever version it currently has.
+   */
+  void takeMaintenanceLogSnapshot(1: common.unsigned64 min_version) throws
+      (1: exceptions.StaleVersion stale,
+       2: exceptions.NodeNotReady notready,
+       3: exceptions.NotSupported notsupported) (cpp.coroutine);
+
+  /**
    * Get Log Group Throughput
    */
   logtree.LogGroupThroughputResponse getLogGroupThroughput(

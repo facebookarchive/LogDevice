@@ -64,6 +64,10 @@ class AdminAPIHandler : public facebook::fb303::FacebookBase2,
   folly::SemiFuture<folly::Unit>
   semifuture_takeLogTreeSnapshot(thrift::unsigned64 min_version) override;
 
+  // Take a snapshot of the Maintenance State running on this server.
+  folly::SemiFuture<folly::Unit> semifuture_takeMaintenanceLogSnapshot(
+      thrift::unsigned64 min_version) override;
+
   void getLogGroupThroughput(
       thrift::LogGroupThroughputResponse& response,
       std::unique_ptr<thrift::LogGroupThroughputRequest> request) override;
