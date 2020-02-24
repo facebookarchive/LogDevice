@@ -493,7 +493,7 @@ async def status(
     hosts=None,
     hostnames=None,
     extended=False,
-    force=False,
+    force: bool = False,
 ):
     """
     Next gen status command using the Thrift interfaces
