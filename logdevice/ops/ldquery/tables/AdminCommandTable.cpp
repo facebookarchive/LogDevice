@@ -178,13 +178,20 @@ void AdminCommandTable::setCacheTTL(std::chrono::seconds ttl) {
   cache_ttl_ = ttl;
 }
 
-SocketAddress AdminCommandTable::getAddrForNode(
+folly::Optional<SocketAddress> AdminCommandTable::getAddrForNode(
     node_index_t nid,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_configuration) {
   const auto* node_sd = nodes_configuration->getNodeServiceDiscovery(nid);
   ld_check(node_sd);
-  return node_sd->admin_address.value().getSocketAddress();
+  // This assumes that we have an admin address for the node which is not really
+  // required in the config. In the case where we don't have the address in the
+  // config we should fail.
+  if (node_sd->admin_address) {
+    return node_sd->admin_address.value().getSocketAddress();
+  } else {
+    return folly::none;
+  }
 }
 
 bool AdminCommandTable::dataIsInCacheForUsedConstraints(
@@ -254,10 +261,18 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
   for (node_index_t i : selected_nodes) {
     ld_check(nodes_configuration->isNodeInServiceDiscoveryConfig(i));
 
-    auto addr = getAddrForNode(i, nodes_configuration);
-    addr_to_node_id[addr] = i;
-    requests.emplace_back(addr, cmd);
-    ld_ctx_->activeQueryMetadata.contacted_nodes++;
+    auto opt_addr = getAddrForNode(i, nodes_configuration);
+    if (opt_addr) {
+      addr_to_node_id[opt_addr.value()] = i;
+      requests.emplace_back(opt_addr.value(), cmd);
+      ld_ctx_->activeQueryMetadata.contacted_nodes++;
+    } else {
+      ld_warning("N%d does not have admin_address configured, cannot post the "
+                 "ldquery request.",
+                 i);
+      ld_ctx_->activeQueryMetadata.failures[i] =
+          FailedNodeDetails{"", "UNKNOWN_ADMIN_ADDRESS"};
+    }
   }
 
   ld_info("Sending '%s' admin command to %lu nodes...",

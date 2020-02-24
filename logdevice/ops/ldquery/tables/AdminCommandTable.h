@@ -105,8 +105,8 @@ class AdminCommandTable : public Table {
   const TableColumns& getColumnsImpl() const;
 
   // Get the address to use to issue admin commands to node at pos `nid` in the
-  // cluster.
-  folly::SocketAddress getAddrForNode(
+  // cluster. Returns folly::none if the admin_address is unknown.
+  folly::Optional<folly::SocketAddress> getAddrForNode(
       node_index_t nid,
       const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
           nodes_configuration);
