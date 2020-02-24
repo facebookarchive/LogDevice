@@ -40,8 +40,6 @@ class ReadStreamDebugInfoSamplingConfig {
 
   bool isReadStreamDebugInfoSamplingAllowed(const std::string& csid) const;
 
-  bool isDebugEnabled() const;
-
  private:
   void updateCallback(Status, ConfigSource::Output);
 

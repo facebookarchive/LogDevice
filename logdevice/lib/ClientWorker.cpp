@@ -46,7 +46,8 @@ std::unique_ptr<MessageDispatch> ClientWorker::createMessageDispatch() {
 }
 
 void ClientWorker::sampleAllReadStreamsDebugInfo() const {
-  if (processor_->getDebugClientConfig().isDebugEnabled()) {
+  if (processor_->getDebugClientConfig().isReadStreamDebugInfoSamplingAllowed(
+          processor_->csid_)) {
     clientReadStreams().sampleAllReadStreamsDebugInfo();
   }
 

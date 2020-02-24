@@ -84,19 +84,6 @@ ReadStreamDebugInfoSamplingConfig::ReadStreamDebugInfoSamplingConfig(
   updateCallback(status, out);
 }
 
-bool ReadStreamDebugInfoSamplingConfig::isDebugEnabled() const {
-  auto locked_configs = configs_.rlock();
-  if (*locked_configs == nullptr) {
-    return false;
-  }
-  for (const auto& config : (*locked_configs)->configs) {
-    if (!isDeadlineExpired(config.deadline, currentTimeInSeconds())) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool ReadStreamDebugInfoSamplingConfig::isReadStreamDebugInfoSamplingAllowed(
     const std::string& csid,
     std::chrono::seconds current_time) const {
