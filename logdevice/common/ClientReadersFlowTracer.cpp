@@ -459,9 +459,10 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
   } else if (last_time_stuck_ != TimePoint::max()
                  ? last_time_stuck_ + settings.reader_stuck_threshold <= now
                  : false) {
-    state_to_report = last_sync_seq_request_result_ == E::OK
-        ? State::STUCK
-        : State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ;
+    state_to_report = (last_sync_seq_request_result_ != E::OK &&
+                       owner_->next_lsn_to_deliver_ >= estimateTailLSN())
+        ? State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ
+        : State::STUCK;
   } else if ((last_time_lagging_ != TimePoint::max()
                   ? last_time_lagging_ + settings.reader_lagging_threshold <=
                       now
@@ -627,6 +628,15 @@ void ClientReadersFlowTracer::onWindowUpdateSent() {
   if (tracer_ignoring_overload_) {
     tracer_ignoring_overload_->onWindowUpdateSent();
   }
+}
+
+lsn_t ClientReadersFlowTracer::estimateTailLSN() const {
+  lsn_t latest_tail_approx = owner_->last_released_;
+  if (latest_tail_info_.hasValue()) {
+    latest_tail_approx =
+        std::max(latest_tail_info_->lsn_approx, latest_tail_approx);
+  }
+  return latest_tail_approx;
 }
 
 }} // namespace facebook::logdevice

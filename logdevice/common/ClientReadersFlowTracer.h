@@ -115,6 +115,7 @@ class ClientReadersFlowTracer : public SampledTracer {
   double calculateSamplingWeight();
   bool readerIsUnhealthy() const;
   bool readerIsStuck() const;
+  lsn_t estimateTailLSN() const;
 
   WeakRefHolder<ClientReadersFlowTracer> ref_holder_;
 
