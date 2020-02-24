@@ -50,7 +50,6 @@ class MaintenanceView:
 
     @property
     def affected_sequencer_node_indexes(self) -> Tuple[int, ...]:
-        # pyre-fixme[7]: Expected `Tuple[int, ...]` but got `Tuple[Optional[int], ...]`.
         return tuple(
             n.node_index
             for n in self.affected_sequencer_node_ids
@@ -65,7 +64,6 @@ class MaintenanceView:
 
     @property
     def affected_storage_node_indexes(self) -> Tuple[int, ...]:
-        # pyre-fixme[7]: Expected `Tuple[int, ...]` but got `Tuple[Optional[int], ...]`.
         return tuple(
             n.node_index
             for n in self.affected_storage_node_ids
@@ -83,7 +81,6 @@ class MaintenanceView:
 
     @property
     def affected_node_indexes(self) -> Tuple[int, ...]:
-        # pyre-fixme[7]: Expected `Tuple[int, ...]` but got `Tuple[Optional[int], ...]`.
         return tuple(
             n.node_index for n in self.affected_node_ids if n.node_index is not None
         )
@@ -223,14 +220,12 @@ class MaintenanceView:
 
     def get_shard_state(self, shard: ShardID) -> ShardState:
         assert shard.node.node_index is not None
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         return self._node_index_to_node_view[shard.node.node_index].shard_states[
             shard.shard_index
         ]
 
     def get_sequencer_state(self, sequencer: NodeID) -> Optional[SequencerState]:
         assert sequencer.node_index is not None
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         return self._node_index_to_node_view[sequencer.node_index].sequencer_state
 
     def get_shards_by_node_index(self, node_index: int) -> Tuple[ShardID, ...]:
@@ -261,7 +256,6 @@ class MaintenanceView:
                 return MaintenanceStatus.COMPLETED
 
         if shard_state.maintenance is not None:
-            # pyre-fixme[16]: `Optional` has no attribute `status`.
             return shard_state.maintenance.status
 
         return MaintenanceStatus.NOT_STARTED
@@ -270,8 +264,6 @@ class MaintenanceView:
         shard_state = self.get_shard_state(shard)
         if shard_state.maintenance is not None:
             return ShardMaintenanceProgress.from_thrift(
-                # pyre-fixme[6]: Expected `ShardMaintenanceProgress` for 1st param
-                #  but got `Optional[ShardMaintenanceProgress]`.
                 shard_state.maintenance
             ).last_updated_at
         else:
@@ -284,7 +276,6 @@ class MaintenanceView:
         if self.sequencer_target_state == sequencer_state.state:
             return MaintenanceStatus.COMPLETED
         elif sequencer_state.maintenance is not None:
-            # pyre-fixme[16]: `Optional` has no attribute `status`.
             return sequencer_state.maintenance.status
         else:
             return MaintenanceStatus.NOT_STARTED
@@ -295,8 +286,6 @@ class MaintenanceView:
             raise NodeIsNotASequencerError(f"{sequencer}")
         elif sequencer_state.maintenance is not None:
             return SequencerMaintenanceProgress.from_thrift(
-                # pyre-fixme[6]: Expected `SequencerMaintenanceProgress` for 1st
-                #  param but got `Optional[SequencerMaintenanceProgress]`.
                 sequencer_state.maintenance
             ).last_updated_at
         else:

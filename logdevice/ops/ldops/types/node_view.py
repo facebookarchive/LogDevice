@@ -164,8 +164,6 @@ class NodeView:
         if self.node_state.shard_states is None:
             return ()
         else:
-            # pyre-fixme[6]: Expected `Iterable[_T_co]` for 1st param but got
-            #  `Optional[Sequence[ShardState]]`.
             return tuple(self.node_state.shard_states)
 
     @property
@@ -203,9 +201,7 @@ class NodeView:
     @property
     def shards_maintenance_status(self) -> Tuple[Optional[MaintenanceStatus], ...]:
         return tuple(
-            # pyre-fixme[16]: `Optional` has no attribute `status`.
-            s.maintenance.status if s.maintenance else None
-            for s in self.shard_states
+            s.maintenance.status if s.maintenance else None for s in self.shard_states
         )
 
     @property

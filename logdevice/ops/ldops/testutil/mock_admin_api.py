@@ -283,9 +283,7 @@ class MockAdminAPI:
         self, shard: ShardID, target_state: ShardOperationalState
     ) -> None:
         assert shard.node.node_index is not None
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         nc = self._nc_by_node_index[shard.node.node_index]
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         ns = self._ns_by_node_index[shard.node.node_index]
         shard_states = []
         for shard_index, shard_state in enumerate(ns.shard_states or []):
@@ -294,7 +292,6 @@ class MockAdminAPI:
             else:
                 shard_states.append(shard_state)
         new_ns = ns(shard_states=shard_states)
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         self._ns_by_node_index[shard.node.node_index] = new_ns
         self._ns_by_name[nc.name] = new_ns
 
@@ -302,9 +299,7 @@ class MockAdminAPI:
         self, shard: ShardID, maintenance_progress: ShardMaintenanceProgress
     ) -> None:
         assert shard.node.node_index is not None
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         nc = self._nc_by_node_index[shard.node.node_index]
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         ns = self._ns_by_node_index[shard.node.node_index]
         shard_states = []
         for shard_index, shard_state in enumerate(ns.shard_states or []):
@@ -313,7 +308,6 @@ class MockAdminAPI:
             else:
                 shard_states.append(shard_state)
         new_ns = ns(shard_states=shard_states)
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         self._ns_by_node_index[shard.node.node_index] = new_ns
         self._ns_by_name[nc.name] = new_ns
 
@@ -321,14 +315,10 @@ class MockAdminAPI:
         self, node_id: NodeID, target_state: SequencingState
     ) -> None:
         assert node_id.node_index is not None
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         nc = self._nc_by_node_index[node_id.node_index]
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         ns = self._ns_by_node_index[node_id.node_index]
         assert ns.sequencer_state is not None
-        # pyre-fixme[29]: `Optional[SequencerState]` is not a function.
         new_ns = ns(sequencer_state=ns.sequencer_state(state=target_state))
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         self._ns_by_node_index[node_id.node_index] = new_ns
         self._ns_by_name[nc.name] = new_ns
 
@@ -336,16 +326,12 @@ class MockAdminAPI:
         self, node_id: NodeID, maintenance_progress: SequencerMaintenanceProgress
     ) -> None:
         assert node_id.node_index is not None
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         nc = self._nc_by_node_index[node_id.node_index]
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         ns = self._ns_by_node_index[node_id.node_index]
         assert ns.sequencer_state is not None
         new_ns = ns(
-            # pyre-fixme[29]: `Optional[SequencerState]` is not a function.
             sequencer_state=ns.sequencer_state(maintenance=maintenance_progress)
         )
-        # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
         self._ns_by_node_index[node_id.node_index] = new_ns
         self._ns_by_name[nc.name] = new_ns
 
@@ -370,13 +356,10 @@ class MockAdminAPI:
             return ncs
 
         if filter.node is not None:
-            # pyre-fixme[16]: `Optional` has no attribute `node_index`.
             if filter.node.node_index is not None:
                 ncs = [nc for nc in ncs if nc.node_index == filter.node.node_index]
-            # pyre-fixme[16]: `Optional` has no attribute `address`.
             if filter.node.address is not None:
                 ncs = [nc for nc in ncs if nc.data_address == filter.node.address]
-            # pyre-fixme[16]: `Optional` has no attribute `name`.
             if filter.node.name is not None:
                 ncs = [nc for nc in ncs if nc.name == filter.node.name]
 
@@ -387,7 +370,6 @@ class MockAdminAPI:
             ncs = [
                 nc
                 for nc in ncs
-                # pyre-fixme[16]: `Optional` has no attribute `startswith`.
                 if nc.location is not None and nc.location.startswith(filter.location)
             ]
 
@@ -424,7 +406,7 @@ class MockAdminAPI:
                 r = range(sh.shard_index, sh.shard_index + 1)
 
             assert sh.node.node_index is not None
-            nc = self._nc_by_node_index[sh.node.node_index]  # pyre-ignore
+            nc = self._nc_by_node_index[sh.node.node_index]
             for shard_index in r:
                 shards.append(
                     ShardID(
@@ -442,7 +424,6 @@ class MockAdminAPI:
         seq_nodes = []
         for n in request.sequencer_nodes:
             assert n.node_index is not None
-            # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
             nc = self._nc_by_node_index[n.node_index]
             seq_nodes.append(
                 NodeID(node_index=nc.node_index, name=nc.name, address=nc.data_address)
@@ -470,7 +451,6 @@ class MockAdminAPI:
             progress=MaintenanceProgress.IN_PROGRESS,
         )
         assert mnt.group_id is not None
-        # pyre-fixme[6]: Expected `str` for 1st param but got `Optional[str]`.
         self._maintenances_by_id[mnt.group_id] = mnt
         return MaintenanceDefinitionResponse(maintenances=[mnt])
 
@@ -512,7 +492,6 @@ class MockAdminAPI:
 
         for mnt in mnts:
             assert mnt.group_id is not None
-            # pyre-fixme[6]: Expected `str` for 1st param but got `Optional[str]`.
             del self._maintenances_by_id[mnt.group_id]
 
         return RemoveMaintenancesResponse(maintenances=mnts)

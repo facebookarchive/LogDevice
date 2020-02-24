@@ -28,8 +28,6 @@ class Node:
         """
         return cls(
             node_index=node_id.node_index,
-            # pyre-fixme[6]: Expected `SocketAddress` for 1st param but got
-            #  `Optional[SocketAddress]`.
             data_addr=SocketAddress.from_thrift(node_id.address)
             if node_id.address
             else None,

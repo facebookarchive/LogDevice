@@ -236,7 +236,6 @@ def check_impact_string(
     if response.internal_logs_affected:
         lines.append(colored("CRITICAL: Internal Logs are affected negatively!", "red"))
     if response.logs_affected is not None:
-        # pyre-ignore
         for impact_on_epoch in response.logs_affected:
             lines.append(impact_on_log_string(impact_on_epoch, shards, target_state))
     return "\n".join(lines)
@@ -398,9 +397,10 @@ def impact_on_log_string(
     biggest_replication_scope = get_biggest_scope(replication)
     for i, shard in enumerate(impact.storage_set):
         assert impact.storage_set_metadata is not None
-        # pyre-ignore
         meta = impact.storage_set_metadata[i]
         loc_per_scope = meta.location_per_scope
+        # pyre-fixme[6]: Expected `Map__LocationScope_string` for 2nd param but got
+        #  `Mapping[LocationScope, str]`.
         location = location_up_to_scope(shard, loc_per_scope, biggest_replication_scope)
         is_in_target_shards = match_shards(shard, shards)
 
@@ -436,6 +436,8 @@ def impact_on_log_string(
                     # For each domain in the replication property, add the location
                     # string as a read unavailable target
                     for scope in replication.keys():
+                        # pyre-fixme[6]: Expected `Map__LocationScope_string` for
+                        #  2nd param but got `Mapping[LocationScope, str]`.
                         loc_tag = location_up_to_scope(shard, loc_per_scope, scope)
                         # If shard location is x.y.a.b and replication is rack:
                         # X, node: Y. Then the x.y.a should be added to key

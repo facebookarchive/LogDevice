@@ -303,7 +303,6 @@ def _render_expanded(
                     last_updated_at_time = min(
                         (
                             ShardMaintenanceProgress.from_thrift(
-                                # pyre-ignore
                                 ss.maintenance
                             ).last_updated_at
                             for ss in nv.shard_states

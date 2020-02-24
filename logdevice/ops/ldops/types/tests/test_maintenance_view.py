@@ -208,7 +208,6 @@ class TestMaintenanceView(TestCase):
             self.assertAlmostEqual(
                 # pyre-fixme[16]: Optional type has no attribute `timestamp`.
                 maintenance_view.created_on.timestamp() * 1000,
-                # pyre-fixme[6]: Expected `float` for 2nd param but got `Optional[int]`.
                 maintenance.created_on,
                 1,
             )
@@ -219,7 +218,6 @@ class TestMaintenanceView(TestCase):
             assert maintenance_view.expires_on is not None
             self.assertAlmostEqual(
                 maintenance_view.expires_on.timestamp() * 1000,
-                # pyre-fixme[6]: Expected `float` for 2nd param but got `Optional[int]`.
                 maintenance.expires_on,
                 1,
             )
@@ -245,7 +243,6 @@ class TestMaintenanceView(TestCase):
         for shard in maintenance.shards:
             assert shard.node.node_index is not None
             self.assertEqual(
-                # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
                 node_index_to_node_view[shard.node.node_index].shard_states[
                     shard.shard_index
                 ],
@@ -255,7 +252,6 @@ class TestMaintenanceView(TestCase):
         for sn in maintenance.sequencer_nodes:
             assert sn.node_index is not None
             self.assertEqual(
-                # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
                 node_index_to_node_view[sn.node_index].sequencer_state,
                 maintenance_view.get_sequencer_state(sn),
             )

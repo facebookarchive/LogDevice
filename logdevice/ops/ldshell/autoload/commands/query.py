@@ -171,7 +171,6 @@ class SelectCommand(Command):
             )
         return self._table_completer_cached
 
-    # pyre-fixme[15]: T48485855
     def get_completions(self, cmd, document, complete_event):
         if cmd.lower() == "describe" and self.ldquery:
             return self._table_completer.get_completions(document, complete_event)

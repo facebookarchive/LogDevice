@@ -118,10 +118,6 @@ class ClusterView:
                 )
                 for ni in nis:
                     if mnt.group_id is not None:
-                        # pyre-fixme[6]: Expected `int` for 1st param but got
-                        #  `Optional[int]`.
-                        # pyre-fixme[6]: Expected `str` for 1st param but got
-                        #  `Optional[str]`.
                         ni_to_mnt_ids[ni].append(mnt.group_id)
 
             self._node_index_to_maintenance_ids_dict = {
@@ -153,8 +149,6 @@ class ClusterView:
     @property
     def _maintenance_id_to_node_indexes(self) -> Dict[str, Tuple[int, ...]]:
         if self._maintenance_id_to_node_indexes_dict is None:
-            # pyre-fixme[8]: Attribute has type `Optional[Dict[str, Tuple[int,
-            #  ...]]]`; used as `Dict[Optional[str], Tuple[Optional[int], ...]]`.
             self._maintenance_id_to_node_indexes_dict = {
                 mnt.group_id: tuple(
                     sorted(

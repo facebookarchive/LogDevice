@@ -100,7 +100,6 @@ class SocketAddress:
         socket_address: SocketAddress
         if src.address_family == SocketAddressFamily.INET:
             assert src.address is not None
-            # pyre-fixme[6]: Expected `str` for 1st param but got `Optional[str]`.
             socket_address = cls.from_ip_port(src.address, src.port)
         elif src.address_family == SocketAddressFamily.UNIX:
             socket_address = SocketAddress(
