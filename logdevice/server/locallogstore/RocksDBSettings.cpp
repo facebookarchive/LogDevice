@@ -1294,6 +1294,17 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 
+  init("rocksdb-log-readahead-size",
+       &log_readahead_size,
+       "0",
+       parse_nonnegative<ssize_t>(),
+       "The number of bytes to prefetch when reading the log (including the "
+       "manifest). This is mostly useful for reading a remotely located log, "
+       "as it can save the number of round-trips. If 0, then the prefetching "
+       "is disabled.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
   init("rocksdb-target-file-size-base",
        &target_file_size_base,
        "67108864",
@@ -1590,6 +1601,7 @@ rocksdb::Options RocksDBSettings::passThroughRocksDBOptions() const {
   options.num_levels = num_levels;
   options.keep_log_file_num = keep_log_file_num;
   options.max_log_file_size = max_log_file_size;
+  options.log_readahead_size = log_readahead_size;
   options.target_file_size_base = target_file_size_base;
   options.write_buffer_size = write_buffer_size;
   options.max_total_wal_size = max_total_wal_size;
