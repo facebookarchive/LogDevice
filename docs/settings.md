@@ -175,6 +175,7 @@ sidebar_label: Settings
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
 | client-readers-flow-tracer-GSS-skip-remote-preemption-checks | If set, skips remote preemption checks (aka CHECK SEALs) on GSSs issued by ClientReadersFlowTracer. | true | client&nbsp;only |
+| client-readers-flow-tracer-high-pri-max-lag | Max allowed amount of lag for high priority readers. | max | client&nbsp;only |
 | client-readers-flow-tracer-lagging-metric-num-sample-groups | Maximum number of samples that are kept by ClientReadersFlowTracer for computing relative reading speed in relation to writing speed. See client\_readers\_flow\_tracer\_lagging\_slope\_threshold. | 3 | client&nbsp;only |
 | client-readers-flow-tracer-lagging-metric-sample-group-size | Number of samples in ClientReadersFlowTracer that are aggregated and recorded as one entry. See client-readers-flow-tracer-lagging-metric-sample-group-size. | 20 | client&nbsp;only |
 | client-readers-flow-tracer-lagging-slope-threshold | If a reader's lag increase at at least this rate, the reader is considered lagging (rate given as variation of time lag per time unit). If the desired read ratio needs to be x% of the write ratio, set this threshold to be (1 - x / 100). | -0.3 | client&nbsp;only |
@@ -197,7 +198,6 @@ sidebar_label: Settings
 | overload-detector-period | Sampling period for OverloadDetector | 60s | client&nbsp;only |
 | overload-detector-threshold | Minimum recv-q occupancy to declare socket overloaded (in percent). See overload-detector-percentile. | 80 | client&nbsp;only |
 | publish-single-histogram-stats | If true, single histogram values will be published alongside the rate values. | false |  |
-| reader-lagging-threshold | Amount of time we wait before we report a read stream that is considered lagging. | 2min |  |
 | reader-stalled-grace-period | Amount of time we wait before declaring a reader stalled because we can't read the metadata or data log. When this grace period expires, the client stat "read\_streams\_stalled" is bumped and record to scuba  | 30s |  |
 | reader-stuck-threshold | Amount of time we wait before we report a read stream that is considered stuck. | 121s |  |
 | request-exec-threshold | Request Execution time beyond which it is considered slow, and 'worker\_slow\_requests' stat is bumped | 10ms |  |

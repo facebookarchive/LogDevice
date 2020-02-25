@@ -393,11 +393,7 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
   }
 
   if (!should_track_) {
-    if (!time_lag_record_.full()) {
-      // if we have stale samples, let's go back to not be lagging because the
-      // client is purposefully not reading right now.
-      last_time_lagging_ = TimePoint::max();
-    }
+    last_time_lagging_ = TimePoint::max();
     maybeBumpStats();
     return;
   }
@@ -442,7 +438,16 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
       cur_ts_lag - time_lag_record_.front().time_lag - correction <=
           slope_threshold * time_window;
 
-  if (is_catching_up) {
+  bool below_max_lag_threshold = true;
+  if (monitoring_tier_ == MonitoringTier::HIGH_PRI) {
+    // High priority readers need to be below a certain lag threshold to not be
+    // lagging.
+    if (cur_ts_lag >= settings.client_readers_flow_tracer_high_pri_max_lag) {
+      below_max_lag_threshold = false;
+    }
+  }
+
+  if (is_catching_up && below_max_lag_threshold) {
     last_time_lagging_ = TimePoint::max();
   } else if (last_time_lagging_ == TimePoint::max()) {
     last_time_lagging_ = SystemClock::now();
@@ -465,10 +470,7 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
                        owner_->next_lsn_to_deliver_ >= estimateTailLSN())
         ? State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ
         : State::STUCK;
-  } else if ((last_time_lagging_ != TimePoint::max()
-                  ? last_time_lagging_ + settings.reader_lagging_threshold <=
-                      now
-                  : false) &&
+  } else if ((last_time_lagging_ != TimePoint::max()) &&
              owner_->until_lsn_ == LSN_MAX) {
     // We won't consider a reader lagging if until_lsn is a fixed target because
     // we are not attempting to reach a moving tail.

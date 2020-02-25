@@ -538,10 +538,6 @@ struct Settings : public SettingsBundle {
   // considered stuck.
   std::chrono::milliseconds reader_stuck_threshold;
 
-  // Amount of time we wait before we report a read stream that is
-  // considered lagging.
-  std::chrono::milliseconds reader_lagging_threshold;
-
   // If there were no rebuilding set changes in event log for this long,
   // consider the rebuilding set up to date.
   std::chrono::milliseconds event_log_grace_period;
@@ -682,6 +678,9 @@ struct Settings : public SettingsBundle {
   // (client-only setting) Minimum admissible slope to consider a reader as
   // lagging.
   double client_readers_flow_tracer_lagging_slope_threshold;
+
+  // (client-only setting) Max allowed amount of lag for high priority readers.
+  std::chrono::milliseconds client_readers_flow_tracer_high_pri_max_lag;
 
   // (client-only setting) Force instantiation of StatsHolder within
   // ClientImpl even if stats publishing is disabled (via

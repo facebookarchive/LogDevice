@@ -1422,6 +1422,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "threshold to be (1 - x / 100).",
       CLIENT,
       SettingsCategory::Monitoring);
+  init("client-readers-flow-tracer-high-pri-max-lag",
+       &client_readers_flow_tracer_high_pri_max_lag,
+       "max",
+       validate_nonnegative<ssize_t>(),
+       "Max allowed amount of lag for high priority readers.",
+       CLIENT,
+       SettingsCategory::Monitoring);
   init("client-test-force-stats",
        &client_test_force_stats,
        "false",
@@ -1531,14 +1538,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
        validate_nonnegative<ssize_t>(),
        "Amount of time we wait before we report a read stream that is "
        "considered stuck.",
-       SERVER | CLIENT,
-       SettingsCategory::Monitoring);
-  init("reader-lagging-threshold",
-       &reader_lagging_threshold,
-       "2min",
-       validate_nonnegative<ssize_t>(),
-       "Amount of time we wait before we report a read stream that is "
-       "considered lagging.",
        SERVER | CLIENT,
        SettingsCategory::Monitoring);
   init(
