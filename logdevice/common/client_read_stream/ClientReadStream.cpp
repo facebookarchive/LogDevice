@@ -322,7 +322,7 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
     }
     auto last_timestamp_lagged = readers_flow_tracer_->estimateTimeLag();
     if (last_timestamp_lagged.has_value()) {
-      info.timestamp_lagged = last_timestamp_lagged;
+      info.timestamp_lagged = last_timestamp_lagged->count();
     }
     info.last_lagging =
         to_msec((readers_flow_tracer_->last_time_lagging_.time_since_epoch()));

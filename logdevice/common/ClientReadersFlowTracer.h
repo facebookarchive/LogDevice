@@ -39,13 +39,13 @@ class ClientReadersFlowTracer : public SampledTracer {
   using CircularBuffer = boost::circular_buffer_space_optimized<T>;
 
   struct Sample {
-    int64_t time_lag;
-    int64_t time_lag_correction{
+    std::chrono::milliseconds time_lag{0};
+    std::chrono::milliseconds time_lag_correction{
         0}; // `time_lag_correction` is the amount of time lag accumulated due
             // to client rejecting records from the time the sample was first
             // recorded until the next sample is recorded (in
             // `time_lag_record_`).
-    uint16_t ttl; // for how many periods do we keep this sample
+    uint16_t ttl{0}; // for how many periods do we keep this sample
   };
 
   enum class State {
@@ -63,7 +63,7 @@ class ClientReadersFlowTracer : public SampledTracer {
 
   struct TailInfo {
     OffsetMap offsets;
-    int64_t timestamp;
+    std::chrono::milliseconds timestamp;
     lsn_t lsn_approx;
 
     TailInfo(OffsetMap offset_map, int64_t ts, lsn_t lsn)
@@ -93,7 +93,7 @@ class ClientReadersFlowTracer : public SampledTracer {
     return 0.005;
   }
 
-  folly::Optional<int64_t> estimateTimeLag() const;
+  folly::Optional<std::chrono::milliseconds> estimateTimeLag() const;
   folly::Optional<int64_t> estimateByteLag() const;
 
   void onSettingsUpdated();

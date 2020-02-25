@@ -22,6 +22,8 @@
 #include "logdevice/common/stats/Stats.h"
 namespace facebook { namespace logdevice {
 
+using namespace std::literals::chrono_literals;
+
 std::string toString(ClientReadersFlowTracer::State state) {
   using State = ClientReadersFlowTracer::State;
   switch (state) {
@@ -99,7 +101,7 @@ ClientReadersFlowTracer::ClientReadersFlowTracer(
     bool ignore_overload)
     : SampledTracer(std::move(logger)),
       ref_holder_(this),
-      params_{/*tracer_period=*/std::chrono::milliseconds::zero(),
+      params_{/*tracer_period=*/0ms,
               /*push_samples=*/push_samples,
               /*ignore_overload=*/ignore_overload},
       monitoring_tier_{tier},
@@ -168,7 +170,7 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
       sample->addIntValue("bytes_lagged", byte_lag.value());
     }
     if (time_lag.has_value()) {
-      sample->addIntValue("timestamp_lagged", time_lag.value());
+      sample->addIntValue("timestamp_lagged", time_lag->count());
     }
     sample->addIntValue("time_stuck", time_stuck);
     sample->addIntValue("time_lagging", time_lagging);
@@ -214,9 +216,9 @@ bool ClientReadersFlowTracer::readerIsUnhealthy() const {
 void ClientReadersFlowTracer::onSettingsUpdated() {
   auto& settings = Worker::settings();
   params_.tracer_period = settings.client_readers_flow_tracer_period;
-  if (params_.tracer_period != std::chrono::milliseconds::zero()) {
+  if (params_.tracer_period != 0ms) {
     if (!timer_->isActive()) {
-      timer_->activate(std::chrono::milliseconds{0});
+      timer_->activate(0ms);
     }
   } else {
     if (timer_->isActive()) {
@@ -361,7 +363,7 @@ void ClientReadersFlowTracer::updateTimeStuck(lsn_t tail_lsn, Status st) {
 }
 
 void ClientReadersFlowTracer::updateTimeLagging(Status st) {
-  int64_t cur_ts_lag;
+  std::chrono::milliseconds cur_ts_lag;
   auto& settings = Worker::settings();
   auto last_lag = estimateTimeLag();
   if (st == E::OK && last_lag.has_value()) {
@@ -411,7 +413,7 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
   /* Should we record this sample?
    * We do this now so time_window computation has a nicer expression. */
   if ((sample_counter_++) % group_size == 0) {
-    int64_t new_time_lag_correction = 0;
+    std::chrono::milliseconds new_time_lag_correction{0};
     if (!should_track_) {
       /* consolidate lag correction on last bucket, and start tracking lag
        * correction on the new bucket */
@@ -426,16 +428,16 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
          .ttl = get_initial_ttl(group_size, num_groups)});
   }
 
-  const auto time_window = params_.tracer_period.count() *
+  const auto time_window = params_.tracer_period *
       (group_size * (num_groups - 1) + sample_counter_ % group_size);
 
-  int64_t correction = 0;
+  std::chrono::milliseconds correction{0};
   for (auto& x : time_lag_record_) {
     // accumulate corrections
     correction += x.time_lag_correction;
   }
 
-  bool is_catching_up = cur_ts_lag <= params_.tracer_period.count() ||
+  bool is_catching_up = cur_ts_lag <= params_.tracer_period ||
       !time_lag_record_.full() ||
       cur_ts_lag - time_lag_record_.front().time_lag - correction <=
           slope_threshold * time_window;
@@ -506,7 +508,7 @@ std::string ClientReadersFlowTracer::lastTailInfoPretty() const {
   if (latest_tail_info_.has_value()) {
     return folly::sformat("OM={},TS={},LSN={}",
                           latest_tail_info_.value().offsets.toString().c_str(),
-                          latest_tail_info_.value().timestamp,
+                          latest_tail_info_.value().timestamp.count(),
                           lsn_to_string(latest_tail_info_.value().lsn_approx));
   } else {
     return "NONE";
@@ -517,27 +519,28 @@ std::string ClientReadersFlowTracer::timeLagRecordPretty() const {
   std::vector<std::string> entries_pretty;
   for (auto& s : time_lag_record_) {
     entries_pretty.push_back(folly::sformat("[ts_lag={},ts_lag_cor={},ttl={}]",
-                                            s.time_lag,
-                                            s.time_lag_correction,
+                                            s.time_lag.count(),
+                                            s.time_lag_correction.count(),
                                             s.ttl));
   }
   return folly::join(",", entries_pretty);
 }
 
-folly::Optional<int64_t> ClientReadersFlowTracer::estimateTimeLag() const {
+folly::Optional<std::chrono::milliseconds>
+ClientReadersFlowTracer::estimateTimeLag() const {
   if (latest_tail_info_.hasValue()) {
     auto tail_lsn = latest_tail_info_->lsn_approx;
     auto tail_ts = latest_tail_info_->timestamp;
-    int64_t last_in_record_ts = owner_->last_in_record_ts_.count();
+    auto last_in_record_ts = owner_->last_in_record_ts_;
 
     if (tail_lsn < owner_->next_lsn_to_deliver_) {
       /* If we are at tail, we should report that we have no lag to avoid
        * reporting a reader that is at tail as lagging. This is our last resort
        * for readers that are racing the trim point and might miss the record
        * that was last appended. */
-      return 0;
-    } else if (last_in_record_ts > 0) {
-      return std::max(tail_ts - last_in_record_ts, static_cast<int64_t>(0));
+      return 0ms;
+    } else if (last_in_record_ts > 0ms) {
+      return std::max(tail_ts - last_in_record_ts, 0ms);
     }
   }
   return folly::none;
