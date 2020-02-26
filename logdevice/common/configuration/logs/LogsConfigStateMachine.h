@@ -37,6 +37,7 @@ class LogsConfigStateMachine
   LogsConfigStateMachine(
       UpdateableSettings<Settings> settings,
       std::shared_ptr<UpdateableServerConfig> updateable_server_config,
+      std::unique_ptr<RSMSnapshotStore> snapshot_store,
       bool is_writable,
       bool allow_snapshotting = true);
 
@@ -142,7 +143,7 @@ class LogsConfigStateMachine
   ConfigSubscriptionHandle server_config_updates_handle_;
   std::unique_ptr<SubscriptionHandle> self_subscription_;
   std::unique_ptr<TrimRSMRetryHandler> trim_retry_handler_;
-  bool is_writable_;
+  bool is_writable_; // this is for delta log
   bool allow_snapshotting_;
   size_t deduplication_scheduled_{0};
 };

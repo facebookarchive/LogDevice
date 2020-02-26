@@ -22,6 +22,7 @@ KeyValueStoreStateMachine::KeyValueStoreStateMachine(logid_t delta_log_id,
                                                      logid_t snapshot_log_id)
     : ReplicatedStateMachine<KeyValueStoreState, KeyValueStoreDelta>(
           RSMType::KEY_VALUE_STORE_STATE_MACHINE,
+          nullptr, // snapshot_store
           delta_log_id,
           snapshot_log_id) {}
 

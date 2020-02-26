@@ -126,7 +126,7 @@ class MockEventLogStateMachine : public EventLogStateMachine {
  public:
   explicit MockEventLogStateMachine(EventLogTest* owner,
                                     UpdateableSettings<Settings> settings)
-      : EventLogStateMachine(settings) {
+      : EventLogStateMachine(settings, nullptr) {
     config_ = buildConfig();
     owner_ = owner;
     writeDeltaHeader();

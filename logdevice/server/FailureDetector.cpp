@@ -488,6 +488,10 @@ void FailureDetector::gossip() {
     RATELIMIT_WARNING(std::chrono::minutes(1),
                       1,
                       "Unable to find a node to send a gossip message to");
+    // For single node cases, update self's rsm version
+    if (nodes_configuration->clusterSize() == 1) {
+      fetchVersions();
+    }
     return;
   }
 

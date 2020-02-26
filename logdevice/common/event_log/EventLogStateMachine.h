@@ -54,9 +54,11 @@ class EventLogStateMachine
  public:
   using Parent = ReplicatedStateMachine<EventLogRebuildingSet, EventLogRecord>;
 
-  explicit EventLogStateMachine(UpdateableSettings<Settings> settings,
-                                worker_id_t worker = worker_id_t(0),
-                                WorkerType worker_type = WorkerType::GENERAL);
+  explicit EventLogStateMachine(
+      UpdateableSettings<Settings> settings,
+      std::unique_ptr<RSMSnapshotStore> snapshot_store,
+      worker_id_t worker = worker_id_t(0),
+      WorkerType worker_type = WorkerType::GENERAL);
 
   /**
    * Start reading the event log.

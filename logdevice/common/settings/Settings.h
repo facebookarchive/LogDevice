@@ -14,6 +14,7 @@
 
 #include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/SCDCopysetReordering.h"
+#include "logdevice/common/SnapshotStoreTypes.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/configuration/NodeLocation.h"
@@ -1366,6 +1367,7 @@ struct Settings : public SettingsBundle {
   SockaddrSet message_tracing_peers;
   dbg::Level message_tracing_log_level;
   bool rsm_include_read_pointer_in_snapshot;
+  SnapshotStoreType rsm_snapshot_store_type;
   std::chrono::milliseconds eventlog_snapshotting_period;
   std::chrono::milliseconds logsconfig_snapshotting_period;
   bool test_hold_logsconfig_in_starting;
