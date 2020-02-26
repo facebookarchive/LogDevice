@@ -1680,7 +1680,7 @@ Status FailureDetector::getRSMVersion(node_index_t idx,
 
 Status FailureDetector::getAllRSMVersionsInCluster(
     logid_t rsm_type,
-    std::map<lsn_t, node_index_t, std::greater<lsn_t>>& result_out) {
+    std::multimap<lsn_t, node_index_t, std::greater<lsn_t>>& result_out) {
   folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   if (std::find(registered_rsms_.begin(), registered_rsms_.end(), rsm_type) ==
       registered_rsms_.end()) {
