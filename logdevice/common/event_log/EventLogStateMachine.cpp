@@ -110,13 +110,15 @@ std::unique_ptr<EventLogRebuildingSet> EventLogStateMachine::deserializeState(
     Payload payload,
     lsn_t version,
     std::chrono::milliseconds timestamp) const {
-  auto verifier =
-      flatbuffers::Verifier(static_cast<const uint8_t*>(payload.data()),
-                            payload.size(),
-                            128, /* max verification depth */
-                            10000000 /* max number of tables to be verified */);
+  auto verifier = flatbuffers::Verifier(
+      static_cast<const uint8_t*>(payload.data()),
+      payload.size(),
+      512, /* max verification depth */
+      100000000 /* max number of tables to be verified */);
 
   if (!event_log_rebuilding_set::VerifySetBuffer(verifier)) {
+    ld_critical("Cannot deserialize the eventlog snapshot as fbuffers failed "
+                "to verify the payload");
     err = E::BADMSG;
     return nullptr;
   }
