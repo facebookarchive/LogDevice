@@ -157,6 +157,8 @@ class RebuildingWriteCompleteMetadataTask : public StorageTask {
         break;
       }
 
+      rrm.clear();
+      rrm.setPublished(true);
       RebuildingRangesVersion new_version(cur_version.first + 1, 0);
       if (store.writeRebuildingRanges(rrm, cur_version, new_version) == 0) {
         break;
