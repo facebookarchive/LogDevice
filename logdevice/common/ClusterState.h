@@ -243,7 +243,7 @@ class ClusterState {
       node_state_map_{};
 
   std::unordered_set<node_index_t> nodes_in_config_;
-  size_t cluster_size_{0};
+  std::atomic<size_t> cluster_size_{0};
   std::atomic<std::chrono::steady_clock::duration> last_refresh_{
       std::chrono::steady_clock::duration::zero()};
   std::atomic<bool> refresh_in_progress_{false};

@@ -118,10 +118,10 @@ node_index_t ClusterState::getFirstNodeFullyStarted() const {
 
 node_index_t ClusterState::getFirstNodeWithPred(
     folly::Function<bool(node_index_t)> pred) const {
-  folly::SharedMutex::ReadHolder read_lock(mutex_);
+  size_t cluster_size = cluster_size_.load();
   folly::Optional<node_index_t> first_node;
 
-  for (node_index_t nid = 0; nid < cluster_size_; nid++) {
+  for (node_index_t nid = 0; nid < cluster_size; nid++) {
     if (isNodeInConfig(nid)) {
       if (pred(nid)) {
         return nid;
@@ -360,8 +360,9 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
         }
       }
     }
-    ld_info(
-        "Cluster state size updated from %lu to %lu", cluster_size_, new_size);
+    ld_info("Cluster state size updated from %lu to %lu",
+            cluster_size_.load(),
+            new_size);
     node_state_map_.swap(new_state_map);
     node_status_map_.swap(new_status_map);
     cluster_size_ = new_size;
