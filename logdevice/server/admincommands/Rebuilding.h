@@ -84,7 +84,7 @@ class Rebuilding : public AdminCommand {
     }
 
     if (action_ == "mark_dirty" || action_ == "mark_clean") {
-      if (!time_from_.hasValue() || !time_to_.hasValue()) {
+      if (!time_from_.has_value() || !time_to_.has_value()) {
         out_.printf("Error: --time-from and --time-to arguments are mandatory "
                     "with the \"%s\" action.\r\n",
                     action_.c_str());

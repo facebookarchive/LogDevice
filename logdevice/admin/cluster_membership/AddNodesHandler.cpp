@@ -45,7 +45,7 @@ AddNodesHandler::buildNodesConfigurationUpdates(
 
   // Validate the uniquness of the new requests
   auto not_unique = validateUniquness(add_requests, nodes_configuration);
-  if (not_unique.hasValue()) {
+  if (not_unique.has_value()) {
     return folly::makeUnexpected(std::move(not_unique).value());
   }
 
@@ -54,7 +54,7 @@ AddNodesHandler::buildNodesConfigurationUpdates(
   for (const auto& req : add_requests) {
     auto update_error = buildUpdateFromNodeConfig(
         addition_result.update, req.new_config, nodes_configuration);
-    if (update_error.hasValue()) {
+    if (update_error.has_value()) {
       failures.failed_nodes.push_back(std::move(update_error).value());
     } else {
     }

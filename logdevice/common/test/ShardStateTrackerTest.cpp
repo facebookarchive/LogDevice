@@ -21,7 +21,7 @@ TEST(ShardStateTrackerTest, empty) {
   ShardStateTracker t{};
   {
     auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
-    EXPECT_FALSE(update_opt.hasValue());
+    EXPECT_FALSE(update_opt.has_value());
   }
 
   {
@@ -29,7 +29,7 @@ TEST(ShardStateTrackerTest, empty) {
     t.onNewConfig(nc);
 
     auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
-    EXPECT_FALSE(update_opt.hasValue());
+    EXPECT_FALSE(update_opt.has_value());
   }
 }
 
@@ -37,7 +37,7 @@ namespace {
 // verify that update takes every shard out of an intermediary state
 void verify_update(std::shared_ptr<const NodesConfiguration> base_config,
                    folly::Optional<NodesConfiguration::Update> update_opt) {
-  EXPECT_TRUE(update_opt.hasValue());
+  EXPECT_TRUE(update_opt.has_value());
 
   auto new_config = base_config->applyUpdate(std::move(update_opt).value());
   EXPECT_NE(nullptr, new_config);
@@ -80,7 +80,7 @@ TEST(ShardStateTrackerTest, basic) {
   {
     // nc2 has no shards in intermediary states
     auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
-    EXPECT_FALSE(update_opt.hasValue());
+    EXPECT_FALSE(update_opt.has_value());
   }
 
   nc2 = nc2->applyUpdate(markAllShardProvisionedUpdate(*nc2));
@@ -90,7 +90,7 @@ TEST(ShardStateTrackerTest, basic) {
   {
     // nc2 has no shards in intermediary states
     auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
-    EXPECT_FALSE(update_opt.hasValue());
+    EXPECT_FALSE(update_opt.has_value());
   }
 
   auto nc3 = nc2->applyUpdate(enablingReadUpdate(nc2->getVersion()));
@@ -103,7 +103,7 @@ TEST(ShardStateTrackerTest, basic) {
                                          base_config,
                                      folly::Optional<NodesConfiguration::Update>
                                          update_opt) {
-    EXPECT_TRUE(update_opt.hasValue());
+    EXPECT_TRUE(update_opt.has_value());
     auto& sm_update = update_opt->storage_config_update->membership_update;
     EXPECT_EQ(base_config->getStorageMembership()->getVersion(),
               sm_update->base_version);
@@ -114,7 +114,7 @@ TEST(ShardStateTrackerTest, basic) {
     EXPECT_NE(nullptr, new_config);
     EXPECT_TRUE(new_config->validate());
     auto p = new_config->getStorageMembership()->getShardState(ShardID{17, 0});
-    EXPECT_TRUE(p.hasValue());
+    EXPECT_TRUE(p.has_value());
     EXPECT_EQ(StorageState::READ_ONLY, p->storage_state);
     EXPECT_EQ(MetaDataStorageState::NONE, p->metadata_state);
     EXPECT_EQ(
@@ -123,9 +123,9 @@ TEST(ShardStateTrackerTest, basic) {
 
   {
     auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
-    EXPECT_TRUE(update_opt.hasValue());
+    EXPECT_TRUE(update_opt.has_value());
     auto update_opt2 = t.extractNCUpdate(ts3);
-    EXPECT_TRUE(update_opt2.hasValue());
+    EXPECT_TRUE(update_opt2.has_value());
 
     EXPECT_TRUE(update_opt->isValid());
     EXPECT_EQ(
@@ -138,7 +138,7 @@ TEST(ShardStateTrackerTest, basic) {
   {
     // using an old ts will return no shards in intermediary states
     auto update_opt = t.extractNCUpdate(ts1);
-    EXPECT_FALSE(update_opt.hasValue());
+    EXPECT_FALSE(update_opt.has_value());
   }
 
   /* sleep override */
@@ -166,15 +166,15 @@ TEST(ShardStateTrackerTest, basic) {
     // N17 stays in the same intermediary state, other shards enter
     // intermediary states. check that ts of N17 does not change.
     auto update_opt = t.extractNCUpdate(ts3);
-    EXPECT_TRUE(update_opt.hasValue());
+    EXPECT_TRUE(update_opt.has_value());
     verify_n17_enabling_read(nc4, std::move(update_opt));
 
     update_opt = t.extractNCUpdate(ts3_2);
-    EXPECT_TRUE(update_opt.hasValue());
+    EXPECT_TRUE(update_opt.has_value());
     verify_n17_enabling_read(nc4, std::move(update_opt));
 
     auto update_opt2 = t.extractNCUpdate(ts4);
-    EXPECT_TRUE(update_opt2.hasValue());
+    EXPECT_TRUE(update_opt2.has_value());
     verify_update(nc4, std::move(update_opt2));
   }
 
@@ -259,13 +259,13 @@ TEST(ShardStateTrackerTest, basic) {
     // N17 is no longer in intermediary state, even if we query with an earlier
     // timestamp
     auto update_opt = t.extractNCUpdate(ts5);
-    EXPECT_FALSE(update_opt.hasValue());
+    EXPECT_FALSE(update_opt.has_value());
   }
   SystemTimestamp ts7 = nc7->getLastChangeTimestamp();
   {
     auto update_opt = t.extractNCUpdate(ts7);
     auto update_opt2 = t.extractNCUpdate(SystemTimestamp::now());
-    EXPECT_TRUE(update_opt.hasValue());
+    EXPECT_TRUE(update_opt.has_value());
     EXPECT_TRUE(update_opt->isValid());
     EXPECT_EQ(
         update_opt->storage_config_update->membership_update->shard_updates,
@@ -277,7 +277,7 @@ TEST(ShardStateTrackerTest, basic) {
     EXPECT_TRUE(new_config->validate());
 
     auto& sm = new_config->getStorageMembership();
-    EXPECT_FALSE(sm->getShardState(ShardID{13, 0}).hasValue());
+    EXPECT_FALSE(sm->getShardState(ShardID{13, 0}).has_value());
     EXPECT_EQ(StorageState::READ_WRITE,
               sm->getShardState(ShardID{17, 0})->storage_state);
     EXPECT_EQ(MetaDataStorageState::METADATA,
@@ -315,10 +315,10 @@ TEST(ShardStateTrackerTest, basic) {
   }
   {
     auto update_opt = t.extractNCUpdate(ts7);
-    EXPECT_FALSE(update_opt.hasValue());
+    EXPECT_FALSE(update_opt.has_value());
 
     update_opt = t.extractNCUpdate(ts8);
-    EXPECT_TRUE(update_opt.hasValue());
+    EXPECT_TRUE(update_opt.has_value());
     EXPECT_TRUE(update_opt->isValid());
     auto& shard_updates =
         update_opt->storage_config_update->membership_update->shard_updates;
@@ -330,6 +330,6 @@ TEST(ShardStateTrackerTest, basic) {
     // The tracker should ignore old nc versions
     t.onNewConfig(nc3);
     auto update_opt = t.extractNCUpdate(ts7);
-    EXPECT_FALSE(update_opt.hasValue());
+    EXPECT_FALSE(update_opt.has_value());
   }
 }

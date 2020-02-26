@@ -35,7 +35,7 @@ Status InMemVersionedConfigStore::getConfigSync(
       return Status::NOTFOUND;
     }
 
-    if (base_version.hasValue()) {
+    if (base_version.has_value()) {
       auto opt = extract_fn_(it->second);
       if (!opt) {
         return Status::BADMSG;
@@ -91,8 +91,9 @@ void InMemVersionedConfigStore::readModifyWriteConfig(std::string key,
   status = updateConfigSync(
       std::move(key),
       std::move(write_value),
-      cur_ver.hasValue() ? cur_ver.value()
-                         : VersionedConfigStore::Condition::createIfNotExists(),
+      cur_ver.has_value()
+          ? cur_ver.value()
+          : VersionedConfigStore::Condition::createIfNotExists(),
       &version,
       &value_out);
 
@@ -122,7 +123,7 @@ Status InMemVersionedConfigStore::updateConfigSync(std::string key,
     }
 
     // TODO: Add stricter enforcement of monotonic increment of version.
-    if (curr_version_opt.hasValue() &&
+    if (curr_version_opt.has_value() &&
         value_version.val() <= curr_version_opt->val()) {
       RATELIMIT_WARNING(std::chrono::seconds(10),
                         5,
@@ -138,7 +139,8 @@ Status InMemVersionedConfigStore::updateConfigSync(std::string key,
       // conditional update version mismatch
       // TODO: set err accordingly
       set_if_not_null(version_out, curr_version_opt.value_or(version_t(0)));
-      set_if_not_null(value_out, curr_version_opt.hasValue() ? it->second : "");
+      set_if_not_null(
+          value_out, curr_version_opt.has_value() ? it->second : "");
       return status;
     }
     set_if_not_null(version_out, value_version);

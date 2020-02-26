@@ -1806,7 +1806,7 @@ int ClientImpl::isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept {
           std::shared_ptr<const EpochMetaDataMap> /*metadata_map*/,
           std::shared_ptr<TailRecord> /*tail_record*/,
           folly::Optional<bool> is_log_empty) {
-        if (!is_log_empty.hasValue()) {
+        if (!is_log_empty.has_value()) {
           ld_check_ne(st, E::OK);
           is_log_empty = false;
         }

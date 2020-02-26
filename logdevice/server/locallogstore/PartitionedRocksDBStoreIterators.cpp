@@ -288,7 +288,7 @@ void PartitionedRocksDBStore::Iterator::
 }
 
 void PartitionedRocksDBStore::Iterator::createMetaIteratorIfNull() {
-  if (meta_iterator_.hasValue()) {
+  if (meta_iterator_.has_value()) {
     return;
   }
 
@@ -419,7 +419,7 @@ void PartitionedRocksDBStore::Iterator::moveUntilValid(bool forward,
     // Initialize meta_iterator_ if needed.
 
     bool meta_iterator_is_at_prev = false;
-    if (!meta_iterator_.hasValue()) {
+    if (!meta_iterator_.has_value()) {
       // meta_iterator_ can be unset only if current_ == latest_, in which case
       // we'd hit the `if` above.
       ld_check(!forward);
@@ -578,7 +578,7 @@ void PartitionedRocksDBStore::Iterator::seek(lsn_t lsn,
     // memtables flushed) is assumed to be negligible. Also note that only
     // tailing iterators are expected to be refreshed (i.e. see new data and
     // unpin memtables and files) on every seek*().
-    if (options_.tailing && meta_iterator_.hasValue()) {
+    if (options_.tailing && meta_iterator_.has_value()) {
       meta_iterator_->Refresh(); // also clears status()
     }
 
@@ -766,7 +766,7 @@ void PartitionedRocksDBStore::Iterator::prev() {
 }
 
 IteratorState PartitionedRocksDBStore::Iterator::state() const {
-  if (meta_iterator_.hasValue() && !meta_iterator_->status().ok()) {
+  if (meta_iterator_.has_value() && !meta_iterator_->status().ok()) {
     return meta_iterator_->status().IsIncomplete() ? IteratorState::WOULDBLOCK
                                                    : IteratorState::ERROR;
   }
@@ -882,7 +882,7 @@ PartitionedRocksDBStore::PartitionedAllLogsIterator::PartitionedAllLogsIterator(
   // then the partition is dropped, the record is written again to a
   // different partition (can be either higher or lower), then we read the
   // record again from that different partition.
-  if (!data_logs_filter.hasValue()) {
+  if (!data_logs_filter.has_value()) {
     // Read all data logs.
     pstore_->getLogsDBDirectories({}, {}, directory_);
   } else if (!data_logs_filter.value().empty()) {

@@ -29,7 +29,7 @@ void ExecStorageThread::run() {
   // both slow and metadata threads are using the lower io priority
   if ((thread_type_ == StorageTask::ThreadType::SLOW ||
        thread_type_ == StorageTask::ThreadType::DEFAULT) &&
-      settings->slow_ioprio.hasValue()) {
+      settings->slow_ioprio.has_value()) {
     set_io_priority_of_this_thread(settings->slow_ioprio.value());
   }
 

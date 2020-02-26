@@ -294,7 +294,7 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
     target_nodeset_size =
         logcfg->attrs().nodeSetSize().value().value_or(NODESET_SIZE_MAX);
     nodeset_seed.reset();
-  } else if (state.pending_adjustment.hasValue()) {
+  } else if (state.pending_adjustment.has_value()) {
     if (state.pending_adjustment->epoch == current_metadata->h.epoch) {
       // An adjustment is pending. Try to apply it.
       target_nodeset_size = state.pending_adjustment->new_size;
@@ -478,7 +478,7 @@ SequencerBackgroundActivator::reprovisionOrReactivateIfNeeded(
 
   folly::Optional<EpochSequencerImmutableOptions> current_options =
       seq->getEpochSequencerOptions();
-  if (!current_options.hasValue()) {
+  if (!current_options.has_value()) {
     err = E::NOSEQUENCER;
     return ProcessLogDecision::FAILED;
   }
@@ -695,7 +695,7 @@ void SequencerBackgroundActivator::activateQueueProcessingTimer(
   if (!retry_timer_.isAssigned()) {
     retry_timer_.assign([this] { maybeProcessQueue(); });
   }
-  if (!timeout.hasValue()) {
+  if (!timeout.has_value()) {
     timeout = Worker::settings().sequencer_background_activation_retry_interval;
   }
   retry_timer_.activate(timeout.value());
@@ -864,7 +864,7 @@ void SequencerBackgroundActivator::maybeAdjustNodesetSize(logid_t log_id,
 
     folly::Optional<std::chrono::seconds> backlog =
         logcfg->attrs().backlogDuration().value();
-    if (!backlog.hasValue()) {
+    if (!backlog.has_value()) {
       // The log has infinite retention, don't resize its nodeset.
       break;
     }
@@ -920,7 +920,7 @@ void SequencerBackgroundActivator::maybeAdjustNodesetSize(logid_t log_id,
     }
   } while (false);
 
-  if (adj.new_size.hasValue()) {
+  if (adj.new_size.has_value()) {
     // Instead of applying the adjustment right here, put it in the LogState
     // and enqueue, to make sure it goes through the ResourceBudget.
     state.pending_adjustment = adj;
@@ -954,7 +954,7 @@ void SequencerBackgroundActivator::randomizeNodeset(logid_t log_id,
   epoch_t epoch = epoch_metadata->h.epoch;
   uint64_t new_seed = folly::Random::rand64();
 
-  if (state.pending_adjustment.hasValue() &&
+  if (state.pending_adjustment.has_value() &&
       state.pending_adjustment->epoch >= epoch) {
     state.pending_adjustment->new_seed = new_seed;
   } else {
@@ -1015,7 +1015,7 @@ void SequencerBackgroundActivator::recalculateNodesetRandomizationTime(
     }
     folly::Optional<std::chrono::seconds> backlog =
         logcfg->attrs().backlogDuration().value();
-    if (!backlog.hasValue()) {
+    if (!backlog.has_value()) {
       // The log has infinite retention.
       break;
     }

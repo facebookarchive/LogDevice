@@ -126,7 +126,7 @@ NodeSetSelector::Result WeightAwareNodeSetSelector::getStorageSet(
     if (replication_scope == NodeLocationScope::ROOT) {
       // All nodes are in the same replication domain.
     } else {
-      if (!sd->location.hasValue()) {
+      if (!sd->location.has_value()) {
         ld_error("Can't select nodeset because node %d (%s) does not have "
                  "location information",
                  node,

@@ -538,7 +538,7 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
     int shard_idx = mapLogToShardIndex(log_id);
 
     ld_check(shard_idx < shard_status.size());
-    if (!shard_status[shard_idx].hasValue()) {
+    if (!shard_status[shard_idx].has_value()) {
       shard_status[shard_idx].assign(append_sink_->canSendToWorker());
     }
     if (shard_status[shard_idx].value() != E::OK) {

@@ -184,7 +184,7 @@ class InfoSequencers : public AdminCommand {
                         .count());
     }
     auto metadataTrimPoint = seq.getLatestMetaDataTrimPoint();
-    if (metadataTrimPoint.hasValue()) {
+    if (metadataTrimPoint.has_value()) {
       table.set<21>(metadataTrimPoint.value());
     }
   }

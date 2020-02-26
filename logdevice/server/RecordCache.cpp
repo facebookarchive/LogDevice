@@ -318,7 +318,7 @@ void RecordCache::onRelease(lsn_t last_released) {
     if (auto epoch_cache = epoch_caches_.get(release_epoch.val_)) {
       folly::Optional<Seal> seal =
           deps_->getSeal(log_id_, shard_, /*soft=*/false);
-      if (!seal.hasValue() || seal.value().epoch < release_epoch) {
+      if (!seal.has_value() || seal.value().epoch < release_epoch) {
         epoch_cache->advanceLNG(release_esn);
       }
     }
@@ -340,7 +340,7 @@ void RecordCache::updateLastNonAuthoritativeEpoch(logid_t logid) {
   // <= 6.
   folly::Optional<Seal> soft_seal =
       deps_->getSeal(logid, shard_, /*soft=*/true);
-  if (soft_seal.hasValue()) {
+  if (soft_seal.has_value()) {
     atomic_fetch_min(last_nonauthoritative_epoch_,
                      next_epoch(epoch_t(soft_seal.value().epoch.val_)).val_);
   }
@@ -363,7 +363,8 @@ void RecordCache::updateLastNonAuthoritativeEpoch(logid_t logid) {
           "soft seal: %s, highest lsn: %s",
           last_nonauthoritative_epoch_.load(),
           logid.val_,
-          (soft_seal.hasValue() ? soft_seal.value().toString().c_str() : "n/a"),
+          (soft_seal.has_value() ? soft_seal.value().toString().c_str()
+                                 : "n/a"),
           rv == 0 ? lsn_to_string(highest_lsn).c_str() : "n/a");
     }
   }

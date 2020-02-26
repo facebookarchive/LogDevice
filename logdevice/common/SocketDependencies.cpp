@@ -688,7 +688,7 @@ SocketDependencies::createHelloMessage(NodeID destNodeID) {
   // If the client location is specified in settings, include it in the HELLOv2
   // message.
   auto& client_location_opt = getSettings().client_location;
-  if (client_location_opt.hasValue()) {
+  if (client_location_opt.has_value()) {
     client_location = client_location_opt.value().toString();
     hdr.flags |= HELLO_Header::CLIENT_LOCATION;
   }

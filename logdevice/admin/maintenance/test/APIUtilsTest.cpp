@@ -23,7 +23,7 @@ TEST(APIUtilsTest, Validate) {
   {
     MaintenanceDefinition def1;
     auto failed = APIUtils::validateDefinition(def1);
-    ASSERT_TRUE(failed.hasValue());
+    ASSERT_TRUE(failed.has_value());
     ASSERT_EQ("At least one of shards or sequencer_nodes must be set",
               failed->get_message());
   }
@@ -36,12 +36,12 @@ TEST(APIUtilsTest, Validate) {
   def1.set_shard_target_state(ShardOperationalState::DRAINED);
   // user must be set
   auto failed = APIUtils::validateDefinition(def1);
-  ASSERT_TRUE(failed.hasValue());
+  ASSERT_TRUE(failed.has_value());
   ASSERT_EQ("user must be set for the definition to non-empty string",
             failed->get_message());
   def1.set_user(INTERNAL_USER);
   failed = APIUtils::validateDefinition(def1);
-  ASSERT_TRUE(failed.hasValue());
+  ASSERT_TRUE(failed.has_value());
   ASSERT_EQ("This is a reserved user, cannot be used through the API",
             failed->get_message());
   def1.set_user("bunny");
@@ -51,12 +51,12 @@ TEST(APIUtilsTest, Validate) {
   def1.set_user("bunny");
   def1.set_sequencer_nodes({node1});
   failed = APIUtils::validateDefinition(def1);
-  ASSERT_TRUE(failed.hasValue());
+  ASSERT_TRUE(failed.has_value());
   ASSERT_EQ("sequencer_target_state must be DISABLED if sequencer_nodes is set",
             failed->get_message());
   def1.set_sequencer_target_state(SequencingState::BOYCOTTED);
   failed = APIUtils::validateDefinition(def1);
-  ASSERT_TRUE(failed.hasValue());
+  ASSERT_TRUE(failed.has_value());
   ASSERT_EQ("sequencer_target_state must be DISABLED if sequencer_nodes is set",
             failed->get_message());
   def1.set_sequencer_target_state(SequencingState::DISABLED);
@@ -65,7 +65,7 @@ TEST(APIUtilsTest, Validate) {
   shards.push_back(mkShardID(2, -10));
   def1.set_shards(shards);
   failed = APIUtils::validateDefinition(def1);
-  ASSERT_TRUE(failed.hasValue());
+  ASSERT_TRUE(failed.has_value());
   ASSERT_EQ("Cannot accept shard_index smaller than -1", failed->get_message());
   shards.pop_back();
   def1.set_shards(shards);

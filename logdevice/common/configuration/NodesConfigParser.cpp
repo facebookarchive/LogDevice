@@ -164,7 +164,7 @@ bool parseNodes(const folly::dynamic& clusterMap,
     if (!it.second.isReadableStorageNode()) {
       continue;
     }
-    if (!num_shards.hasValue()) {
+    if (!num_shards.has_value()) {
       num_shards = it.second.getNumShards();
     } else if (num_shards.value() != it.second.getNumShards()) {
       ld_error("Not all nodes are configured with the same value for "
@@ -273,7 +273,7 @@ bool parseHostString(const std::string& hostStr,
                      Sockaddr& addr_out,
                      const std::string& fieldName) {
   auto result = Sockaddr::fromString(hostStr);
-  if (!result.hasValue()) {
+  if (!result.has_value()) {
     ld_error(
         "invalid \"%s\" entry: \"%s\"", fieldName.c_str(), hostStr.c_str());
     err = E::INVALID_CONFIG;
@@ -702,10 +702,10 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
 
   // Decide on final values based on presence of either old or new attributes
   // and defaults
-  if (!storage_state.hasValue() && !legacy_storage_state.hasValue()) {
+  if (!storage_state.has_value() && !legacy_storage_state.has_value()) {
     // Use default settings as set by StorageNodeAttributes constructor.
     storage_state.assign(output.storage_attributes->state);
-  } else if (storage_state.hasValue() && legacy_storage_state.hasValue()) {
+  } else if (storage_state.has_value() && legacy_storage_state.has_value()) {
     // both settings specified, they should be identical
     if (storage_state.value() != legacy_storage_state.value()) {
       ld_error("Conflicting properties: \"storage\": \"%s\", weight: %d",
@@ -714,13 +714,13 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
       err = E::INVALID_CONFIG;
       return false;
     }
-  } else if (legacy_storage_state.hasValue()) {
+  } else if (legacy_storage_state.has_value()) {
     // Legacy value only, use it
     storage_state = legacy_storage_state;
   }
-  ld_check(storage_state.hasValue());
+  ld_check(storage_state.has_value());
 
-  if (storage_capacity.hasValue() && legacy_storage_capacity.hasValue()) {
+  if (storage_capacity.has_value() && legacy_storage_capacity.has_value()) {
     // both settings specified, they should be identical. However, weight was
     // an int and storage_capacity is a float, so a rounding discrepancy is
     // expected (and values in the range (0,1) all get rounded up to 1)
@@ -736,7 +736,7 @@ static bool parseStorageState(const folly::dynamic& nodeMap,
       err = E::INVALID_CONFIG;
       return false;
     }
-  } else if (legacy_storage_capacity.hasValue()) {
+  } else if (legacy_storage_capacity.has_value()) {
     // Legacy value only, use it
     storage_capacity = legacy_storage_capacity;
   }

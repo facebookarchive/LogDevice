@@ -15,7 +15,8 @@ type versionToWrite(const std::shared_ptr<ServerConfig>& server_cfg) {
   ld_check(server_cfg);
   auto version_in_config =
       server_cfg->getMetaDataLogsConfig().metadata_version_to_write;
-  type res = version_in_config.hasValue() ? version_in_config.value() : CURRENT;
+  type res =
+      version_in_config.has_value() ? version_in_config.value() : CURRENT;
   ld_check(validToWrite(res));
   return res;
 }

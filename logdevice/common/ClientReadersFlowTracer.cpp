@@ -530,7 +530,7 @@ std::string ClientReadersFlowTracer::timeLagRecordPretty() const {
 
 folly::Optional<std::chrono::milliseconds>
 ClientReadersFlowTracer::estimateTimeLag() const {
-  if (latest_tail_info_.hasValue()) {
+  if (latest_tail_info_.has_value()) {
     auto tail_lsn = latest_tail_info_->lsn_approx;
     auto tail_ts = latest_tail_info_->timestamp;
     auto last_in_record_ts = owner_->last_in_record_ts_;
@@ -549,7 +549,7 @@ ClientReadersFlowTracer::estimateTimeLag() const {
 }
 
 folly::Optional<int64_t> ClientReadersFlowTracer::estimateByteLag() const {
-  if (latest_tail_info_.hasValue()) {
+  if (latest_tail_info_.has_value()) {
     auto tail_lsn = latest_tail_info_->lsn_approx;
     int64_t tail_byte_offset =
         latest_tail_info_->offsets.getCounter(BYTE_OFFSET);
@@ -596,12 +596,12 @@ void ClientReadersFlowTracer::updateShouldTrack() {
   /* check if we transitioned to tracking */
   if (was_being_tracked && !should_track_) {
     auto time_lag = estimateTimeLag();
-    if (!time_lag_record_.empty() && time_lag.hasValue()) {
+    if (!time_lag_record_.empty() && time_lag.has_value()) {
       time_lag_record_.back().time_lag_correction -= time_lag.value();
     }
   } else if (!was_being_tracked && should_track_) {
     auto time_lag = estimateTimeLag();
-    if (!time_lag_record_.empty() && time_lag.hasValue()) {
+    if (!time_lag_record_.empty() && time_lag.has_value()) {
       time_lag_record_.back().time_lag_correction += time_lag.value();
     }
   }
@@ -637,7 +637,7 @@ void ClientReadersFlowTracer::onWindowUpdateSent() {
 
 lsn_t ClientReadersFlowTracer::estimateTailLSN() const {
   lsn_t latest_tail_approx = owner_->last_released_;
-  if (latest_tail_info_.hasValue()) {
+  if (latest_tail_info_.has_value()) {
     latest_tail_approx =
         std::max(latest_tail_info_->lsn_approx, latest_tail_approx);
   }

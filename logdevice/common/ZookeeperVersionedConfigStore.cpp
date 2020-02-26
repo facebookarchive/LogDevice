@@ -42,7 +42,7 @@ void ZookeeperVersionedConfigStore::getConfig(
           return;
         }
 
-        if (base_version.hasValue()) {
+        if (base_version.has_value()) {
           auto current_version_opt = extract_fn_(value);
           if (!current_version_opt) {
             RATELIMIT_WARNING(

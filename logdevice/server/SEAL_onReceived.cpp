@@ -106,7 +106,7 @@ Message::Disposition SEAL_onReceived(SEAL_Message* msg, const Address& from) {
   folly::Optional<Seal> current_seal =
       log_state->getSeal(LogStorageState::SealType::NORMAL);
 
-  if (current_seal.hasValue() && current_seal.value() > seal) {
+  if (current_seal.has_value() && current_seal.value() > seal) {
     // if there is already a Seal in log storage state that can preempt the
     // SEAL message received, send a reply back with the current seal to the
     // sequencer without creating a storage task.

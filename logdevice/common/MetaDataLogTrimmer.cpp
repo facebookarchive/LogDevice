@@ -97,10 +97,10 @@ folly::Optional<lsn_t> MetaDataLogTrimmer::findMetadataTrimLSN() {
     // candidate to new epoch and second best to previous max. Otherwise new
     // epoch might be worse then max found so far but still worse than the
     // second best. If this is the case we advance second best to new epoch.
-    if (!candidate_lsn.hasValue() || *candidate_lsn < extras.lsn) {
+    if (!candidate_lsn.has_value() || *candidate_lsn < extras.lsn) {
       confirmed_lsn = candidate_lsn;
       candidate_lsn = extras.lsn;
-    } else if (!confirmed_lsn.hasValue() || *confirmed_lsn < extras.lsn) {
+    } else if (!confirmed_lsn.has_value() || *confirmed_lsn < extras.lsn) {
       confirmed_lsn = extras.lsn;
     }
   }
@@ -109,7 +109,7 @@ folly::Optional<lsn_t> MetaDataLogTrimmer::findMetadataTrimLSN() {
 
 void MetaDataLogTrimmer::trim() {
   auto metadata_trim_lsn = findMetadataTrimLSN();
-  if (!metadata_trim_lsn.hasValue()) {
+  if (!metadata_trim_lsn.has_value()) {
     // We either could not find a trim point or there is nothing to trim
     RATELIMIT_DEBUG(std::chrono::seconds(10),
                     1,
@@ -117,7 +117,7 @@ void MetaDataLogTrimmer::trim() {
     return;
   }
   auto last_trim_point = getTrimPoint();
-  if (last_trim_point.hasValue() &&
+  if (last_trim_point.has_value() &&
       last_trim_point.value() >= metadata_trim_lsn.value()) {
     RATELIMIT_DEBUG(
         std::chrono::seconds(10),

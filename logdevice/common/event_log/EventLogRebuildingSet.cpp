@@ -266,7 +266,7 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
         // been rebuilt. This may happen if there is a bug in
         // RebuildingSupervisor causing it to trigger rebuilding of a shard
         // already being rebuilt.
-        if (currentMode.hasValue() && currentMode.value() == requestedMode &&
+        if (currentMode.has_value() && currentMode.value() == requestedMode &&
             (flags & SHARD_NEEDS_REBUILD_Header::TIME_RANGED) == 0 &&
             it->second.auth_status !=
                 AuthoritativeStatus::FULLY_AUTHORITATIVE) {
@@ -305,8 +305,8 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
     }
     // When drain flag is set, preserve the existing mode
     // if one exists. Otherwise, set mode to RELOCATE.
-    node_info.mode =
-        currentMode.hasValue() ? currentMode.value() : RebuildingMode::RELOCATE;
+    node_info.mode = currentMode.has_value() ? currentMode.value()
+                                             : RebuildingMode::RELOCATE;
     node_info.drain = true;
   }
 
@@ -725,7 +725,7 @@ void EventLogRebuildingSet::recomputeShardRebuildTimeIntervals(
   shard.all_dirty_time_intervals.clear();
   for (auto node_kv : shard.nodes_) {
     auto& node = node_kv.second;
-    if (my_node_id_.hasValue() && node_kv.first == my_node_id_->index() &&
+    if (my_node_id_.has_value() && node_kv.first == my_node_id_->index() &&
         node.mode == RebuildingMode::RESTORE) {
       // In RESTORE mode, we cannot be a donor for our own records.
       continue;

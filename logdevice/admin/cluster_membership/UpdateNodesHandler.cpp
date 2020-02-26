@@ -53,7 +53,7 @@ UpdateNodesHandler::buildUpdateFromNodeConfig(
   auto maybe_node_index =
       findNodeIndex(req.node_to_be_updated, nodes_configuration);
 
-  if (!maybe_node_index.hasValue()) {
+  if (!maybe_node_index.has_value()) {
     return folly::makeUnexpected(buildNodeFailure(
         req.node_to_be_updated,
         logdevice::thrift::ClusterMembershipFailureReason::NO_MATCH_IN_CONFIG,

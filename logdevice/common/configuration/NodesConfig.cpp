@@ -135,7 +135,7 @@ folly::dynamic NodesConfig::toJson() const {
     }
 
     // Optional Universal Attributes.
-    if (node.location.hasValue()) {
+    if (node.location.has_value()) {
       node_dict["location"] = node.locationStr();
     }
     if (node.ssl_address) {

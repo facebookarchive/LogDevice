@@ -124,7 +124,7 @@ NodesConfigurationPoller::aggregateConfiguration(const std::string* config,
 
   if (config == nullptr) {
     const auto version = version_fn_(response.config_str);
-    if (!version.hasValue()) {
+    if (!version.has_value()) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       10,
                       "Got a success reply for NodesConfiguration polling but "
@@ -139,8 +139,8 @@ NodesConfigurationPoller::aggregateConfiguration(const std::string* config,
   const auto response_version = version_fn_(response.config_str);
   // version_fn_ should be deterministic and existing config was picked by the
   // same function eariler
-  ld_check(existing_version.hasValue());
-  if (!response_version.hasValue() ||
+  ld_check(existing_version.has_value());
+  if (!response_version.has_value() ||
       response_version.value() < existing_version.value()) {
     // existing version is newer, no-op
     return folly::none;
@@ -190,7 +190,7 @@ NodesConfigurationPoller::getConditionalPollVersion() const {
     return folly::none;
   }
 
-  if (conditional_base_version_.hasValue()) {
+  if (conditional_base_version_.has_value()) {
     // if conditional_base_version_ is set, use the given
     // conditional_base_version_
     return conditional_base_version_.value();
@@ -255,7 +255,7 @@ NodesConfigurationPoller::sendRequestToNode(Poller::RoundID round,
 
   folly::Optional<uint64_t> conditional_poll_version_msg;
   auto conditional_poll_version = getConditionalPollVersion();
-  if (conditional_poll_version.hasValue()) {
+  if (conditional_poll_version.has_value()) {
     conditional_poll_version_msg.assign(conditional_poll_version.value().val());
   }
 
@@ -299,7 +299,7 @@ NodesConfigurationPoller::candidatesFromNodesConfiguration(
   for (const auto kv : *serv_disc) {
     result.insert(kv.first);
   }
-  if (my_node_id.hasValue()) {
+  if (my_node_id.has_value()) {
     result.erase(my_node_id.value());
   }
   return result;

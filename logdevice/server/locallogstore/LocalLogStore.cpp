@@ -189,7 +189,7 @@ bool LocalLogStoreReadFilter::operator()(logid_t,
     auto is_local = [&](int i) {
       if (auto node = nc->getNodeServiceDiscovery(copyset[i].node())) {
         const folly::Optional<NodeLocation>& location = node->location;
-        if (location.hasValue()) {
+        if (location.has_value()) {
           if (client_location_->sharesScopeWith(
                   location.value(), NodeLocationScope::REGION)) {
             return true;

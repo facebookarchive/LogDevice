@@ -115,7 +115,7 @@ void WriteMetaDataLogRequest::writeRecord() {
       10000, /* timeout, 10sec*/
       1,     /* append_message_count */
       epoch_store_metadata_->h.epoch /* acceptable_epoch */);
-  if (reply.hasValue()) {
+  if (reply.has_value()) {
     // got a synchronous error
     onAppendResult(reply.value().status, LSN_INVALID);
   }
@@ -232,7 +232,7 @@ void WriteMetaDataLogRequest::onEpochStoreUpdated(
                         bool unexpected = false) {
     static const char* unexpected_str = "Unexpected ";
     std::string retry_str;
-    if (delay.hasValue()) {
+    if (delay.has_value()) {
       retry_str =
           " Retrying in " + std::to_string(delay.value().count()) + "ms.";
     }

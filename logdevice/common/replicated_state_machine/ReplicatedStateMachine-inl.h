@@ -1014,7 +1014,7 @@ void ReplicatedStateMachine<T, D>::writeDelta(
     }
   }
 
-  if (base_version.hasValue()) {
+  if (base_version.has_value()) {
     // The caller asked to write that delta only if the state is at a specific
     // version. Do the check here and fail if they don't match.
 

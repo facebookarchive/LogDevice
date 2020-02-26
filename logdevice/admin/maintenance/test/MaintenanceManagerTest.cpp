@@ -597,7 +597,7 @@ void MaintenanceManagerTest::changeManualOverride(
 
   for (const auto& shard : shards) {
     auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-    ld_check(result.hasValue());
+    ld_check(result.has_value());
 
     auto shardState = result.value();
     membership::ShardState::Update::StateOverride s;
@@ -615,7 +615,7 @@ void MaintenanceManagerTest::changeManualOverride(
 
   for (auto nid : seq) {
     auto result = nodes_config_->getSequencerMembership()->getNodeState(nid);
-    ld_check(result.hasValue());
+    ld_check(result.has_value());
 
     auto nodeState = result.value();
     membership::SequencerNodeState::Update seq_update;
@@ -654,7 +654,7 @@ void MaintenanceManagerTest::overrideStorageState(
   for (const auto& it : map) {
     auto shard = it.first;
     auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-    ld_check(result.hasValue());
+    ld_check(result.has_value());
 
     auto shardState = result.value();
     membership::ShardState::Update::StateOverride s;

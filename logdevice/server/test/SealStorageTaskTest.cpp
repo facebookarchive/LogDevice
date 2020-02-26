@@ -95,7 +95,7 @@ TEST(SealStorageTaskTest, UpdateSealSmaller) {
 
   folly::Optional<Seal> seal =
       map.get(logid_t(1), SHARD_IDX).getSeal(LogStorageState::SealType::NORMAL);
-  ASSERT_TRUE(seal.hasValue());
+  ASSERT_TRUE(seal.has_value());
   EXPECT_EQ(epoch_t(2), seal.value().epoch);
 }
 
@@ -197,7 +197,7 @@ TEST(SealStorageTaskTest, SoftSeal) {
 
     folly::Optional<Seal> soft_seal =
         map.get(logid_t(1), SHARD_IDX).getSeal(LogStorageState::SealType::SOFT);
-    ASSERT_TRUE(soft_seal.hasValue());
+    ASSERT_TRUE(soft_seal.has_value());
     EXPECT_EQ(Seal(epoch_t(3), NodeID(5, 1)), soft_seal.value());
   }
 
@@ -220,14 +220,14 @@ TEST(SealStorageTaskTest, SoftSeal) {
     folly::Optional<Seal> soft_seal =
         map.get(logid_t(2), SHARD_IDX).getSeal(LogStorageState::SealType::SOFT);
     // soft seal should have value but stay the same
-    ASSERT_TRUE(soft_seal.hasValue());
+    ASSERT_TRUE(soft_seal.has_value());
     EXPECT_EQ(Seal(epoch_t(2), NodeID(5, 1)), soft_seal.value());
 
     folly::Optional<Seal> normal_seal =
         map.get(logid_t(2), SHARD_IDX)
             .getSeal(LogStorageState::SealType::NORMAL);
     // soft seal should have value but stay the same
-    ASSERT_TRUE(normal_seal.hasValue());
+    ASSERT_TRUE(normal_seal.has_value());
     EXPECT_EQ(Seal(epoch_t(3), NodeID(0, 1)), normal_seal.value());
   }
 }

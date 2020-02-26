@@ -99,7 +99,7 @@ class TestMetaDataLogReader : public MetaDataLogReader {
 
   void onMetaDataCallback(Status st, MetaDataLogReader::Result r) {
     ASSERT_TRUE(started_);
-    ASSERT_FALSE(result_.hasValue());
+    ASSERT_FALSE(result_.has_value());
     result_.assign(std::make_tuple(st, std::move(r)));
   }
 

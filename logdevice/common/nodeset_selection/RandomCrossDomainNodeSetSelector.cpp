@@ -48,7 +48,7 @@ int RandomCrossDomainNodeSetSelector::buildDomainMap(
       continue;
     }
 
-    if (!sd->location.hasValue()) {
+    if (!sd->location.has_value()) {
       ld_error("Node %d (%s) does not have location information, cross-domain "
                "selection cannot continue.",
                node,

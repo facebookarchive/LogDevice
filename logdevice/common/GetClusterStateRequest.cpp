@@ -86,7 +86,7 @@ void GetClusterStateRequest::initNodes() {
   nodes_.clear();
   next_node_pos_ = 0;
 
-  if (dest_.hasValue()) {
+  if (dest_.has_value()) {
     // An explicit recipient was passed in constructor. Put it by itself in the
     // nodes list and let the request execute immediately.
     nodes_.push_back(dest_.value().index());
@@ -146,7 +146,7 @@ bool GetClusterStateRequest::done(
     std::vector<node_index_t> boycotted_nodes,
     std::vector<std::pair<node_index_t, uint16_t>> nodes_status) {
   ld_debug("Done getting cluster state from %s with status %s",
-           dest_.hasValue() ? dest_.value().toString().c_str() : "<unknown>",
+           dest_.has_value() ? dest_.value().toString().c_str() : "<unknown>",
            error_description(status));
   if (timer_) {
     timer_->cancel();
@@ -187,8 +187,8 @@ void GetClusterStateRequest::sendTo(NodeID to) {
   auto msg = std::make_unique<GET_CLUSTER_STATE_Message>(header);
   int rv = Worker::onThisThread()->sender().sendMessage(std::move(msg), to);
   if (rv != 0) {
-    RATELIMIT_LEVEL(dest_.hasValue() ? facebook::logdevice::dbg::Level::SPEW
-                                     : facebook::logdevice::dbg::Level::ERROR,
+    RATELIMIT_LEVEL(dest_.has_value() ? facebook::logdevice::dbg::Level::SPEW
+                                      : facebook::logdevice::dbg::Level::ERROR,
                     std::chrono::seconds(1),
                     5,
                     "Failed to queue a GET_CLUSTER_STATE message "
@@ -234,7 +234,7 @@ bool GetClusterStateRequest::onError(Status status) {
       if (errors_ == next_node_pos_) {
         // if we exhausted all nodes of the cluster, we give up
         if (next_node_pos_ == nodes_.size()) {
-          RATELIMIT_LEVEL(dest_.hasValue()
+          RATELIMIT_LEVEL(dest_.has_value()
                               ? facebook::logdevice::dbg::Level::SPEW
                               : facebook::logdevice::dbg::Level::ERROR,
                           std::chrono::seconds(1),
@@ -333,8 +333,8 @@ bool GetClusterStateRequest::onWaveTimeout() {
 }
 
 bool GetClusterStateRequest::onTimeout() {
-  RATELIMIT_LEVEL(dest_.hasValue() ? facebook::logdevice::dbg::Level::SPEW
-                                   : facebook::logdevice::dbg::Level::ERROR,
+  RATELIMIT_LEVEL(dest_.has_value() ? facebook::logdevice::dbg::Level::SPEW
+                                    : facebook::logdevice::dbg::Level::ERROR,
                   std::chrono::seconds(1),
                   10,
                   "Retrieving the state of the cluster timed out.");

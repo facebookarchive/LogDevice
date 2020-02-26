@@ -443,7 +443,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
 
   std::string loc_prefix = "rg1.dc1.cl1.rw1.rk";
 
-  if (node_configs_.hasValue()) {
+  if (node_configs_.has_value()) {
     nodes = node_configs_.value();
     nnodes = (int)nodes.size();
   } else if (hash_based_sequencer_assignment_) {
@@ -501,7 +501,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
       });
 
   logsconfig::LogAttributes log0;
-  if (log_attributes_.hasValue()) {
+  if (log_attributes_.has_value()) {
     // Caller supplied log config, use that.
     log0 = log_attributes_.value();
   } else {
@@ -519,7 +519,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   Configuration::NodesConfig nodes_config(std::move(nodes));
 
   Configuration::MetaDataLogsConfig meta_config;
-  if (meta_config_.hasValue()) {
+  if (meta_config_.has_value()) {
     meta_config = meta_config_.value();
   } else {
     // metadata stored on all storage nodes with max replication factor 3
@@ -540,7 +540,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
       createLogAttributesStub(nstorage_nodes).with_extraCopies(0);
 
   // Internal logs shouldn't have a lower replication factor than data logs
-  if (log_attributes_.hasValue() &&
+  if (log_attributes_.has_value() &&
       log_attributes_.value().replicationFactor().hasValue() &&
       log_attributes_.value().replicationFactor().value() >
           internal_log_attrs.replicationFactor().value()) {
@@ -708,7 +708,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
 
   std::string root_path;
   std::unique_ptr<TemporaryDirectory> root_pin;
-  if (root_path_.hasValue()) {
+  if (root_path_.has_value()) {
     root_path = root_path_.value();
     boost::filesystem::create_directories(root_path);
   } else {
@@ -746,7 +746,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
     addrs[i].toNodeConfig(nodes[node_ids[i]], !no_ssl_address_);
   }
 
-  if (!nodes_configuration_sot_.hasValue()) {
+  if (!nodes_configuration_sot_.has_value()) {
     // sot setting not provided. randomize the source of truth of NC.
     nodes_configuration_sot_.assign(
         folly::Random::rand64(2) == 0
@@ -754,7 +754,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
             : NodesConfigurationSourceOfTruth::SERVER_CONFIG);
   }
 
-  ld_check(nodes_configuration_sot_.hasValue());
+  ld_check(nodes_configuration_sot_.has_value());
   ld_info(
       "Using %s as source of truth for NodesConfiguration.",
       nodes_configuration_sot_.value() == NodesConfigurationSourceOfTruth::NCM
@@ -854,7 +854,7 @@ ClusterFactory::createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster) {
       num_storage_nodes++;
     }
   }
-  logsconfig::LogAttributes attrs = log_attributes_.hasValue()
+  logsconfig::LogAttributes attrs = log_attributes_.has_value()
       ? log_attributes_.value()
       : createDefaultLogAttributes(num_storage_nodes);
 
@@ -1498,7 +1498,7 @@ std::vector<std::string> Node::commandLine() const {
   std::vector<std::string> argv = {server_binary_};
   for (const auto& pair : cmd_args_) {
     argv.emplace_back(pair.first);
-    if (pair.second.hasValue()) {
+    if (pair.second.has_value()) {
       argv.emplace_back(pair.second.value());
     }
   }
@@ -2170,10 +2170,10 @@ bool Node::injectShardFault(std::string shard,
   if (single_shot) {
     cmd += " --single_shot";
   }
-  if (chance.hasValue()) {
+  if (chance.has_value()) {
     cmd += folly::format(" --chance={}", chance.value()).str();
   }
-  if (latency_ms.hasValue()) {
+  if (latency_ms.has_value()) {
     cmd += folly::format(" --latency={}", latency_ms.value()).str();
   }
   cmd += " --force"; // Within tests, it's fine to inject errors on opt builds.
@@ -2749,7 +2749,7 @@ int Cluster::updateNodeAttributes(node_index_t index,
           (int)index,
           storageStateToString(storage_state).c_str(),
           sequencer_weight,
-          enable_sequencing.hasValue()
+          enable_sequencing.has_value()
               ? enable_sequencing.value() ? "true" : "false"
               : "unchanged");
 
@@ -2772,7 +2772,7 @@ int Cluster::updateNodeAttributes(node_index_t index,
 
   if (node.sequencer_attributes != nullptr) {
     node.sequencer_attributes->setWeight(sequencer_weight);
-    if (enable_sequencing.hasValue()) {
+    if (enable_sequencing.has_value()) {
       node.sequencer_attributes->setEnabled(enable_sequencing.value());
     }
   }
@@ -2856,7 +2856,7 @@ int Cluster::waitUntilAllSequencersQuiescent(
 int Cluster::waitUntilAllStartedAndPropagatedInGossip(
     folly::Optional<std::set<node_index_t>> nodes,
     std::chrono::steady_clock::time_point deadline) {
-  if (!nodes.hasValue()) {
+  if (!nodes.has_value()) {
     nodes.emplace();
     for (auto& it : nodes_) {
       if (!it.second->stopped_) {
@@ -3029,7 +3029,7 @@ int Cluster::waitUntilGossipStatus(
 int Cluster::waitUntilNoOneIsInStartupState(
     folly::Optional<std::set<uint64_t>> nodes,
     std::chrono::steady_clock::time_point deadline) {
-  if (!nodes.hasValue()) {
+  if (!nodes.has_value()) {
     nodes = std::set<uint64_t>();
     for (const auto& [nid, _] : getNodes()) {
       nodes.value().insert(nid);

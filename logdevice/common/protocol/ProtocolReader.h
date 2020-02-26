@@ -355,14 +355,14 @@ class ProtocolReader {
   }
 
   bool isProtoSet() const {
-    return proto_.hasValue();
+    return proto_.has_value();
   }
   uint16_t proto() const {
-    ld_assert(proto_.hasValue());
+    ld_assert(proto_.has_value());
     return proto_.value();
   }
   bool isProtoVersionAllowed() {
-    if (!proto_.hasValue()) {
+    if (!proto_.has_value()) {
       setError(E::PROTO); // protocol version must be set
       return false;
     } else if (proto_.value() < proto_gate_) {

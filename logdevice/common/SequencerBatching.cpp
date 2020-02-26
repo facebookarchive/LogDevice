@@ -317,7 +317,7 @@ std::pair<Status, NodeID> SequencerBatching::appendBuffered(
                                  client_timeout_ms,
                                  unique_contexts.size());
 
-  if (reply.hasValue()) {
+  if (reply.has_value()) {
     // Uh oh, runInternalAppend() failed synchronously and invoked the
     // callback with an error code.  Propagate it to BufferedWriter.
     std::pair<Status, NodeID> res;

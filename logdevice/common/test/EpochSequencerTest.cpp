@@ -579,7 +579,7 @@ void EpochSequencerTest::checkTailRecord(lsn_t lsn,
   const auto& r = *es_->getTailRecord();
   EXPECT_EQ(lsn, r.header.lsn);
   EXPECT_GT(r.header.timestamp, 0);
-  if (offsets.hasValue()) {
+  if (offsets.has_value()) {
     EXPECT_EQ(offsets.value(), r.offsets_map_);
   }
   EXPECT_NE(0, r.header.flags & TailRecordHeader::OFFSET_WITHIN_EPOCH);

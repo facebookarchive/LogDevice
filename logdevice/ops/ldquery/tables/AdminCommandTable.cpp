@@ -47,7 +47,7 @@ bool AdminCommandTable::allowServerSideFiltering() const {
 AdminCommandTable::MatchResult
 AdminCommandTable::nodeMatchesConstraint(node_index_t nid,
                                          const Constraint& c) {
-  if (!c.expr.hasValue()) {
+  if (!c.expr.has_value()) {
     return MatchResult::UNUSED;
   }
   std::string expr = c.expr.value();
@@ -379,7 +379,7 @@ void AdminCommandTable::buildIndexForConstraint(Data& data,
     for (size_t i = 0; i < col_vec.size(); ++i) {
       const ColumnValue& v = col_vec[i];
       // We don't fill the index with null values.
-      if (v.hasValue()) {
+      if (v.has_value()) {
         data.indices[col][v.value()].push_back(i);
       }
     }
@@ -402,14 +402,14 @@ std::shared_ptr<TableData> AdminCommandTable::getData(QueryContext& ctx) {
 
   // Then, check if we can serve the data from an index.
   auto c = findIndexableConstraint(ctx);
-  if (!c.hasValue()) {
+  if (!c.has_value()) {
     // If we are here, we could not fetch data from an index. Return everything
     // we have, SQLite will filter it.
     return cached.data;
   }
 
   auto& expr = c.value().second->expr;
-  if (!expr.hasValue()) {
+  if (!expr.has_value()) {
     // TODO(#7646110): if the constraint compares a column with "null", we do
     // not check the index because the index currently does not support indexing
     // null values.

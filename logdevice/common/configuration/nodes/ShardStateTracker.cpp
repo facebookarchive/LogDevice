@@ -94,7 +94,7 @@ void ShardStateTracker::onNewConfig(
 
       auto new_entry = Entry{shard_state, since_timestamp};
       auto entry_opt = getEntry(node_idx, shard_idx);
-      if (entry_opt.hasValue() &&
+      if (entry_opt.has_value() &&
           entry_opt.value().shard_state_ == shard_state) {
         new_entry.since_timestamp_ = entry_opt.value().since_timestamp_;
       }

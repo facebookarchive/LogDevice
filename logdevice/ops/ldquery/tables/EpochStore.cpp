@@ -176,7 +176,7 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
     result->set("lce", s(lce.val_));
     result->set("meta_lce", s(meta_lce.val_));
     result->set("tail_record", tail_record.toString());
-    if (meta_props && meta_props->last_writer_node_id.hasValue()) {
+    if (meta_props && meta_props->last_writer_node_id.has_value()) {
       result->set("written_by", meta_props->last_writer_node_id->toString());
     }
   };

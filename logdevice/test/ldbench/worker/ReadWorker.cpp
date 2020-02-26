@@ -166,13 +166,13 @@ void ReadWorker::tryStartTailer(LogTailerState* tailer) {
   ld_check(!tailer->retry_timer.isActive());
 
   // Get tail LSN if needed.
-  if (!tailer->start_lsn.hasValue()) {
+  if (!tailer->start_lsn.has_value()) {
     if (options.read_all) {
       // Start at the beginning of the log.
       tailer->start_lsn = LSN_OLDEST;
     } else {
       // Do either getTailLSN() or findTime() to determine where to start.
-      bool backlog = tailer->backlog_depth.hasValue();
+      bool backlog = tailer->backlog_depth.has_value();
       tailer->is_backlog_reading = backlog;
 
       // It's safe to capture `tailer` by raw pointer because `LogTailerState`s
@@ -224,7 +224,7 @@ void ReadWorker::tryStartTailer(LogTailerState* tailer) {
     }
   }
 
-  ld_check(tailer->start_lsn.hasValue());
+  ld_check(tailer->start_lsn.has_value());
 
   // Pick a random reader that isn't reading this log.
   int ri = -1;
@@ -757,7 +757,7 @@ void ReadWorker::dumpDebugInfo() {
       LogTailerState& tailer = *log_state.tailers[tailer_idx];
 
       char tailer_state;
-      if (!tailer.start_lsn.hasValue()) {
+      if (!tailer.start_lsn.has_value()) {
         // Waiting for getTailLSN()/findTime().
         tailer_state = 'F';
       } else if (tailer.reader_idx == -1) {

@@ -1490,11 +1490,11 @@ class MockRecordCacheDependencies : public RecordCacheDependencies {
                                 bool soft) const override {
     const NodeID nid(0, 1);
     if (soft) {
-      return test_->initial_soft_seal_epoch_.hasValue()
+      return test_->initial_soft_seal_epoch_.has_value()
           ? Seal(test_->initial_soft_seal_epoch_.value(), nid)
           : folly::Optional<Seal>();
     }
-    return test_->initial_seal_epoch_.hasValue()
+    return test_->initial_seal_epoch_.has_value()
         ? Seal(test_->initial_seal_epoch_.value(), nid)
         : folly::Optional<Seal>();
   }
@@ -1503,7 +1503,7 @@ class MockRecordCacheDependencies : public RecordCacheDependencies {
                             shard_index_t /*shard*/,
                             lsn_t* highest_lsn) const override {
     EXPECT_EQ(LOG_ID, log_id);
-    if (test_->highest_lsn_.hasValue()) {
+    if (test_->highest_lsn_.has_value()) {
       *highest_lsn = test_->highest_lsn_.value();
       return 0;
     }

@@ -172,7 +172,7 @@ static bool parseSubLogs(LocalLogsConfig::DirectoryNode* parent_ns,
   folly::Optional<LogAttributes> attrs;
   if (!parseDefaults(namespaceMap, scope, securityConfig, attrs)) {
     return false;
-  } else if (attrs.hasValue()) {
+  } else if (attrs.has_value()) {
     ns_attrs = attrs.value();
   }
 

@@ -36,7 +36,7 @@ bool validateSSLSettings(
     std::shared_ptr<const Settings> settings) {
   size_t ssl_nodes = 0;
   for (const auto& kv : *nodes_configuration->getServiceDiscovery()) {
-    if (kv.second.ssl_address.hasValue()) {
+    if (kv.second.ssl_address.has_value()) {
       ++ssl_nodes;
     }
   }

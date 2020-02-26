@@ -93,7 +93,7 @@ Request::Execution CompactionRequest::execute() {
         std::move(task));
   };
 
-  if (shard_idx_.hasValue()) {
+  if (shard_idx_.has_value()) {
     int index = shard_idx_.value();
     ld_check(index >= 0 && index < sharded_pool->numShards());
     post_compaction_task(index);

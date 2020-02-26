@@ -200,7 +200,8 @@ void WriteMetaDataRecord::onAppenderRetired(Status st, lsn_t lsn) {
     ld_check(st == E::PREEMPTED || st == E::SHUTDOWN);
     abortRecovery();
     finalize(st);
-  } else if (recovery_status_.hasValue() && recovery_status_.value() != E::OK) {
+  } else if (recovery_status_.has_value() &&
+             recovery_status_.value() != E::OK) {
     // appender has fully stored but recovery encountered unrecoverable error
     // abort
     finalize(recovery_status_.value());

@@ -54,7 +54,7 @@ bool ClientSettings::isOverridden(const std::string& name) {
   return impl()
       ->getSettingsUpdater()
       ->getValueFromSource(name, SettingsUpdater::Source::CLIENT)
-      .hasValue();
+      .has_value();
 }
 
 std::vector<std::pair<std::string, std::string>> ClientSettings::getAll() {

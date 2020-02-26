@@ -1180,14 +1180,14 @@ TEST_F(ConfigIntegrationTest, SslClientCertUnsetByDefault) {
   ClientSettings& settings = client_impl->settings();
 
   auto certval = settings.get("ssl-cert-path");
-  ASSERT_TRUE(certval.hasValue());
+  ASSERT_TRUE(certval.has_value());
   ASSERT_EQ(certval.value(), "");
 
   auto keyval = settings.get("ssl-key-path");
-  ASSERT_TRUE(keyval.hasValue());
+  ASSERT_TRUE(keyval.has_value());
   ASSERT_EQ(keyval.value(), "");
 
   auto loadval = settings.get("ssl-load-client-cert");
-  ASSERT_TRUE(loadval.hasValue());
+  ASSERT_TRUE(loadval.has_value());
   ASSERT_EQ(loadval.value(), "false");
 }

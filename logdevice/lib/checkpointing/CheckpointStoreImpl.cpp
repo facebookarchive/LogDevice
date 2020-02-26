@@ -196,7 +196,7 @@ void CheckpointStoreImpl::updateCheckpoints(
   auto mcb = [modify_checkpoint = std::move(modify_checkpoint)](
                  folly::Optional<std::string> value) {
     auto value_thrift = std::make_unique<Checkpoint>();
-    if (value.hasValue()) {
+    if (value.has_value()) {
       value_thrift = ThriftCodec::deserialize<BinarySerializer, Checkpoint>(
           Slice::fromString(value.value()));
       if (value_thrift == nullptr) {

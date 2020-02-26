@@ -91,7 +91,7 @@ struct NodeServiceDiscovery {
   }
 
   std::string locationStr() const {
-    if (!location.hasValue()) {
+    if (!location.has_value()) {
       return "";
     }
     return location.value().toString();

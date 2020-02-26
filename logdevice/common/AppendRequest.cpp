@@ -158,7 +158,7 @@ AppendRequest::~AppendRequest() {
     // Call back only when the request is active. If not, it has been cancelled
     // and no one is expecting the callback.
 
-    if (!client_payload_.hasValue()) {
+    if (!client_payload_.has_value()) {
       callback_(client_status, record_);
     } else {
       // Make sure to call the callback using the same Payload object as the one
@@ -224,7 +224,7 @@ void AppendRequest::onLogConfigAvailable(LogsConfig::LogGroupNodePtr cfg) {
   auto attrs = cfg->attrs();
 
   if ((attrs.writeToken().hasValue() &&
-       attrs.writeToken().value().hasValue()) &&
+       attrs.writeToken().value().has_value()) &&
       !client_->hasWriteToken(attrs.writeToken().value().value()) &&
       (!per_request_token_ ||
        *per_request_token_ != attrs.writeToken().value().value())) {
@@ -733,7 +733,7 @@ APPEND_flags_t AppendRequest::getAppendFlags() {
   if (!attrs_.optional_keys.empty()) {
     append_flags |= APPEND_Header::CUSTOM_KEY;
   }
-  if (attrs_.counters.hasValue()) {
+  if (attrs_.counters.has_value()) {
     append_flags |= APPEND_Header::CUSTOM_COUNTERS;
   }
   if (previous_lsn_ != LSN_INVALID) {

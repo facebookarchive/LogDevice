@@ -56,7 +56,7 @@ Shadow::~Shadow() = default;
 int Shadow::appendShadow(const AppendRequest& req) {
   logid_t logid = req.getRecordLogID();
   Attrs shadow_attrs = checkShadowConfig(logid); // sets err
-  if (!shadow_attrs.hasValue()) {
+  if (!shadow_attrs.has_value()) {
     return -1;
   }
 
@@ -107,7 +107,7 @@ Shadow::Attrs Shadow::checkShadowConfig(logid_t logid) {
 
   folly::Optional<logid_range_t> range;
   // First check the last used range, then check the range cache
-  if (last_used_range_.hasValue() &&
+  if (last_used_range_.has_value() &&
       logIDInRange(logid, last_used_range_.value())) {
     range = last_used_range_.value();
   } else {
@@ -122,7 +122,7 @@ Shadow::Attrs Shadow::checkShadowConfig(logid_t logid) {
   // If all else failed, then we need to look up the log range that this logid
   // belongs to. This operation might take time, so it will be done async. The
   // current payload will be dropped from shadowing until the range is resolved.
-  if (!range.hasValue()) {
+  if (!range.has_value()) {
     loadLogRangeForID(logid); // sets err
     return folly::none;
   } else {
@@ -133,7 +133,7 @@ Shadow::Attrs Shadow::checkShadowConfig(logid_t logid) {
   // If we have range information, shadow information should have already been
   // loaded as well
   ShadowInfo& shadow_info = shadow_map_[range.value()];
-  if (shadow_info.attrs.hasValue()) {
+  if (shadow_info.attrs.has_value()) {
     if (checkAndUpdateRatio(shadow_info)) {
       return shadow_info.attrs;
     } else {

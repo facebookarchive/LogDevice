@@ -130,7 +130,7 @@ int VirtualTable::xColumn(sqlite3_vtab_cursor* cur,
 
   const ColumnValue& value = col_it->second[pCur->row];
 
-  if (!value.hasValue()) {
+  if (!value.has_value()) {
     sqlite3_result_null(ctx);
     return SQLITE_OK;
   }

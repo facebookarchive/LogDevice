@@ -161,9 +161,9 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
         batch.attrs.optional_keys[KeyType::FINDKEY] = key;
       }
     }
-    if (append.attrs.counters.hasValue()) {
+    if (append.attrs.counters.has_value()) {
       const auto& new_counters = append.attrs.counters.value();
-      if (!batch.attrs.counters.hasValue()) {
+      if (!batch.attrs.counters.has_value()) {
         batch.attrs.counters.emplace();
       }
       auto& curr_counters = batch.attrs.counters.value();

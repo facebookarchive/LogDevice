@@ -139,7 +139,7 @@ NodesConfigurationInit::buildBootstrappingServerConfig(
   configuration::Nodes nodes;
   for (size_t index = 0; index < host_list.size(); index++) {
     auto maybe_address = Sockaddr::fromString(host_list[index]);
-    if (!maybe_address.hasValue()) {
+    if (!maybe_address.has_value()) {
       ld_error("Invalid bootstrapping address: %s", host_list[index].c_str());
       return nullptr;
     }

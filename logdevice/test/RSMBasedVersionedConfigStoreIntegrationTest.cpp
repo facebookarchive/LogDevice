@@ -115,7 +115,7 @@ TEST_F(RSMBasedVersionedConfigStoreIntegrationTest,
       "key3", "value4", VersionedConfigStore::Condition::overwrite());
   EXPECT_EQ(Status::OK, status);
   auto mcb = [](folly::Optional<std::string> value) {
-    EXPECT_TRUE(value.hasValue());
+    EXPECT_TRUE(value.has_value());
     return std::make_pair(Status::OK, value.value() + "4");
   };
   folly::Baton<> call_baton;

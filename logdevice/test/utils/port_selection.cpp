@@ -66,7 +66,7 @@ int find_free_port_set(size_t count, std::vector<PortOwner>& ports_out) {
   for (int i = 0; out.size() < count && i < port_range_size; ++i) {
     int port = port_from + (offset + i) % port_range_size;
     auto owner = claim_port(port);
-    if (owner.hasValue()) {
+    if (owner.has_value()) {
       out.push_back(std::move(owner.value()));
     }
   }

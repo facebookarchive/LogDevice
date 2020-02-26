@@ -83,7 +83,7 @@ bool check(ShardedLocalLogStore& sharded_store,
     LocalLogStore* store = sharded_store.getByIndex(shard);
     folly::Optional<ClusterMarkerMetadata> to_write;
     all_good &= checkShard(store, shard, prefix, &to_write);
-    if (to_write.hasValue())
+    if (to_write.has_value())
       to_write_shards.emplace_back(shard, to_write.value());
   }
 

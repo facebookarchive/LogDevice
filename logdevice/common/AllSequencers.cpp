@@ -680,7 +680,7 @@ void AllSequencers::notePreemption(logid_t logid,
                                    Sequencer* seq,
                                    const char* context) {
   ld_check(seq != nullptr);
-  if (!meta_props || !meta_props->last_writer_node_id.hasValue()) {
+  if (!meta_props || !meta_props->last_writer_node_id.has_value()) {
     RATELIMIT_WARNING(
         std::chrono::seconds(10),
         2,

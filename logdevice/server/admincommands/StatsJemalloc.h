@@ -301,14 +301,14 @@ class JemallocGetSet : public AdminCommand {
       return;
     }
 
-    if (type_.hasValue() && !dataTypes().count(type_.value())) {
+    if (type_.has_value() && !dataTypes().count(type_.value())) {
       out_.printf("ERROR: unknown type: %s; expected: %s\r\n",
                   type_.value().c_str(),
                   dataTypeNames().c_str());
       return;
     }
 
-    if (!type_.hasValue()) {
+    if (!type_.has_value()) {
       if (knownNameToType().count(name_)) {
         type_ = knownNameToType().at(name_);
       } else {
@@ -322,12 +322,12 @@ class JemallocGetSet : public AdminCommand {
         out_.printf("ERROR: get with void type is invalid, use set\r\n");
         return;
       }
-      if (value_.hasValue()) {
+      if (value_.has_value()) {
         out_.printf("ERROR: no value required for void type\r\n");
         return;
       }
     } else {
-      if (set_ && !value_.hasValue()) {
+      if (set_ && !value_.has_value()) {
         out_.printf("ERROR: value required\r\n");
         return;
       }
@@ -342,7 +342,7 @@ class JemallocGetSet : public AdminCommand {
       if (type_ == "str") {
         // For string, point directly into value_.
         ptr = value_->empty() ? nullptr : &value_.value()[0];
-      } else if (!value_.hasValue()) {
+      } else if (!value_.has_value()) {
         // Need to pass nullptr for void type.
         ptr = nullptr;
       } else if (!dataTypes().at(type_.value()).parse(value_.value(), ptr)) {
@@ -359,7 +359,7 @@ class JemallocGetSet : public AdminCommand {
         out_.printf("FAILED: %s\r\n", strerror(rv));
       }
     } else {
-      ld_check(!value_.hasValue());
+      ld_check(!value_.has_value());
       size_t size = dataTypes().at(type_.value()).size;
       ld_check_le(size, buf.size());
       int rv = mallctl(name_.c_str(), &buf[0], &size, nullptr, 0);

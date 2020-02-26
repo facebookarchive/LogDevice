@@ -73,7 +73,7 @@ class EraseRecord : public AdminCommand {
   }
 
   void run() override {
-    if (shard_.hasValue()) {
+    if (shard_.has_value()) {
       runOnShard(shard_.value());
     } else {
       auto sharded_store = getShardedStore();

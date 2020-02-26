@@ -92,7 +92,7 @@ bool EpochRecovery::onSealed(ShardID from,
            lng.val_,
            max_seen_esn.val_,
            epoch_size.toString().c_str(),
-           tail.hasValue() ? tail.value().toString().c_str() : "n/a");
+           tail.has_value() ? tail.value().toString().c_str() : "n/a");
   recovery_set_.transition(from, RecoveryNode::State::SEALED);
 
   // It's ok to update lng_ even if we already sent some START messages and
@@ -108,7 +108,7 @@ bool EpochRecovery::onSealed(ShardID from,
 
   uint64_t last_timestamp = 0;
 
-  if (tail.hasValue() &&
+  if (tail.has_value() &&
       (!tail_record_from_sealed_.isValid() ||
        tail_record_from_sealed_.header.lsn < tail.value().header.lsn)) {
     ld_check(tail.value().containOffsetWithinEpoch());

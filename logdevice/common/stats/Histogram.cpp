@@ -832,7 +832,7 @@ void CompactHistogram::print(std::ostream& out) const {
 }
 
 bool CompactHistogram::shouldPublishFrequencyCounters() const {
-  return publish_range_.hasValue() &&
+  return publish_range_.has_value() &&
       publish_range_->to >= publish_range_->from &&
       publish_range_->to < buckets_.size();
 }

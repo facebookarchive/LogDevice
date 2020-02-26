@@ -92,7 +92,7 @@ void RSMBasedVersionedConfigStore::getConfig(
     value = it->second;
   }
 
-  if (base_version.hasValue()) {
+  if (base_version.has_value()) {
     auto current_version_opt = (extract_fn_)(value);
     if (!current_version_opt) {
       RATELIMIT_WARNING(std::chrono::seconds(10),
@@ -160,7 +160,7 @@ void RSMBasedVersionedConfigStore::readModifyWriteConfig(
     version_t new_version = optional_version.value();
 
     // TODO: Add stricter enforcement of monotonic increment of version.
-    if (cur_ver.hasValue() && new_version.val() <= cur_ver.value().val()) {
+    if (cur_ver.has_value() && new_version.val() <= cur_ver.value().val()) {
       RATELIMIT_WARNING(std::chrono::seconds(10),
                         5,
                         "Config value's version is not monitonically increasing"

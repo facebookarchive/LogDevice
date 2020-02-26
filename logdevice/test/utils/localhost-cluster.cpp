@@ -592,7 +592,7 @@ int main(int argc, const char* argv[]) {
     factory.setRootPath(options::root);
   }
 
-  if (options::cluster_name.hasValue()) {
+  if (options::cluster_name.has_value()) {
     factory.setClusterName(options::cluster_name.value());
   }
 

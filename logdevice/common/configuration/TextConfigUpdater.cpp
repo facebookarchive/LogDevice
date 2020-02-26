@@ -125,7 +125,7 @@ void TextConfigUpdaterImpl::onContents(State* state,
 }
 
 void TextConfigUpdaterImpl::update(bool force_reload_logsconfig) {
-  ld_check(main_config_state_.output.hasValue());
+  ld_check(main_config_state_.output.has_value());
 
   // In most cases (success or error) we'll wake the main thread at the end of
   // the function if it's waiting for the first config.

@@ -106,7 +106,7 @@ class MockIsLogEmptyRequest : public IsLogEmptyRequest {
         holder_(holder) {
     map_ = test->starting_map_;
 
-    Configuration::NodesConfig nodes_config = nodes_config_override.hasValue()
+    Configuration::NodesConfig nodes_config = nodes_config_override.has_value()
         ? std::move(nodes_config_override.value())
         : createSimpleNodesConfig(storage_set_size);
 

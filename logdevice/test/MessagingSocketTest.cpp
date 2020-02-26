@@ -312,7 +312,7 @@ class ServerSocket {
     // try to claim any port from range [4445-5445), give up if that fails.
     for (int port = 4445; port < 5445; port++) {
       auto p = IntegrationTestUtils::detail::claim_port(port);
-      if (p.hasValue()) {
+      if (p.has_value()) {
         sock_ = std::move(p.value());
         break;
       }

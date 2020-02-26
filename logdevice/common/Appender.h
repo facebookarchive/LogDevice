@@ -479,7 +479,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   }
 
   void setAcceptableEpoch(folly::Optional<epoch_t> epoch) {
-    if (epoch.hasValue() && !MetaDataLog::isMetaDataLog(log_id_)) {
+    if (epoch.has_value() && !MetaDataLog::isMetaDataLog(log_id_)) {
       // conditional appends are only supported for metadata log records
       ld_critical(
           "attempting to set acceptable epoch for data log %lu", log_id_.val());

@@ -215,12 +215,12 @@ void SyncSequencerRequest::onGotSeqState(GetSeqStateRequest::Result res) {
   }
 
   if (res.status == E::OK) {
-    if (!nextLsn_.hasValue() && next_lsn.hasValue()) {
+    if (!nextLsn_.has_value() && next_lsn.has_value()) {
       nextLsn_ = next_lsn.value();
     }
     lastReleased_ = res.last_released_lsn;
     last_seq_ = res.last_seq;
-    if (res.attributes.hasValue()) {
+    if (res.attributes.has_value()) {
       log_tail_attributes_ =
           std::make_unique<LogTailAttributes>(res.attributes.value());
     } else {
@@ -246,10 +246,10 @@ bool SyncSequencerRequest::gotReleasedUntilLSN() const {
   if (flags_ & WAIT_RELEASED) {
     // Need to keep pinging sequencer until it releases all records that we're
     // going to rebuild.
-    return nextLsn_.hasValue() && lastReleased_.hasValue() &&
+    return nextLsn_.has_value() && lastReleased_.has_value() &&
         lastReleased_.value() + 1 >= nextLsn_.value();
   } else {
-    return nextLsn_.hasValue();
+    return nextLsn_.has_value();
   }
 }
 
@@ -273,7 +273,7 @@ bool SyncSequencerRequest::shouldComplete() const {
 }
 
 void SyncSequencerRequest::onTimeout() {
-  if (!lastGetSeqStateStatus_.hasValue()) {
+  if (!lastGetSeqStateStatus_.has_value()) {
     complete(E::TIMEDOUT);
     return;
   }
@@ -340,7 +340,7 @@ void SyncSequencerRequest::complete(Status status) {
 
   cb_(status,
       getLastSequencer(),
-      nextLsn_.hasValue() ? nextLsn_.value() : LSN_INVALID,
+      nextLsn_.has_value() ? nextLsn_.value() : LSN_INVALID,
       std::move(log_tail_attributes_),
       std::move(metadata_map_),
       std::move(tail_record_),

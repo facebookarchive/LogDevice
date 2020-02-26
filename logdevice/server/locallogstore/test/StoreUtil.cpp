@@ -38,7 +38,7 @@ void store_fill(LocalLogStore& store,
         tr.optional_keys_,
         buf);
 
-    Slice payload_slice = tr.payload_.hasValue()
+    Slice payload_slice = tr.payload_.has_value()
         ? Slice(tr.payload_.value())
         : Slice(TestRecord::kDefaultPayload.data(),
                 TestRecord::kDefaultPayload.size());

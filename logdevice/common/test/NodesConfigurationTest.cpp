@@ -46,7 +46,7 @@ class NodesConfigurationTest : public ::testing::Test {
         ld_info("Serialized config blob has %lu bytes", str_buf.size());
 
         auto version = NodesConfigurationCodec::extractConfigVersion(str_buf);
-        ASSERT_TRUE(version.hasValue());
+        ASSERT_TRUE(version.has_value());
         ASSERT_EQ(c.getVersion(), version.value());
 
         auto c_deserialized2 = NodesConfigurationCodec::deserialize(str_buf);
@@ -87,7 +87,7 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
   for (node_index_t n : NodeSetIndices({1, 7})) {
     ASSERT_TRUE(seq_membership->hasNode(n));
     auto result = seq_membership->getNodeState(n);
-    EXPECT_TRUE(result.hasValue());
+    EXPECT_TRUE(result.has_value());
     EXPECT_EQ(n == 1 ? 1.0 : 7.0, result->getConfiguredWeight());
   }
 
@@ -108,7 +108,7 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
   for (node_index_t n : NodeSetIndices({1, 2, 9})) {
     ASSERT_TRUE(storage_membership->hasNode(n));
     auto result = storage_membership->getShardState(ShardID(n, 0));
-    EXPECT_TRUE(result.hasValue());
+    EXPECT_TRUE(result.has_value());
     // newly provisioned shards should be in rw state
     EXPECT_EQ(StorageState::READ_WRITE, result->storage_state);
 
@@ -829,13 +829,13 @@ TEST_F(NodesConfigurationTest, LegacyMetadataLogsConfigConversion) {
 
 TEST_F(NodesConfigurationTest, ExtractVersionErrorEmptyString) {
   auto version = NodesConfigurationCodec::extractConfigVersion(std::string());
-  ASSERT_FALSE(version.hasValue());
+  ASSERT_FALSE(version.has_value());
 }
 
 TEST_F(NodesConfigurationTest, ExtractVersionError) {
   auto version =
       NodesConfigurationCodec::extractConfigVersion(std::string("123"));
-  ASSERT_FALSE(version.hasValue());
+  ASSERT_FALSE(version.has_value());
 }
 
 } // namespace

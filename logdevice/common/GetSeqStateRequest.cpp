@@ -436,7 +436,7 @@ void GetSeqStateRequest::onSequencerKnown(NodeID dest,
   if (options_.include_historical_metadata) {
     flags |= GET_SEQ_STATE_Message::INCLUDE_HISTORICAL_METADATA;
   }
-  if (options_.min_epoch.hasValue()) {
+  if (options_.min_epoch.has_value()) {
     flags |= GET_SEQ_STATE_Message::MIN_EPOCH;
   }
   if (options_.include_tail_record) {

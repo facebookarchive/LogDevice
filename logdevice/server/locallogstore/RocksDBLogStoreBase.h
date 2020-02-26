@@ -637,7 +637,7 @@ struct IterateUpperBoundHelper {
   explicit IterateUpperBoundHelper(folly::Optional<logid_t> log_id)
       : data_key(log_id.value_or(LOGID_INVALID),
                  std::numeric_limits<lsn_t>::max()) {
-    if (log_id.hasValue()) {
+    if (log_id.has_value()) {
       // Set (log_id, LSN_MAX) as the upper bound.
       // Note that this may prevent iterator from seeing record LSN_MAX because
       // iterate_upper_bound is the exclusive upper bound.
@@ -725,7 +725,7 @@ class RocksDBIterator {
   rocksdb::Status status() const {
     ld_check(iterator_ != nullptr);
     // Makes no sense to call status() before doing the first seek.
-    ld_check(status_.hasValue());
+    ld_check(status_.has_value());
 
     status_checked_ = true;
 

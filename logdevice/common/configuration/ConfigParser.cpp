@@ -51,7 +51,7 @@ bool parseInternalLogs(const folly::dynamic& clusterMap,
   folly::Optional<LogAttributes> default_attrs;
   if (!parseDefaults(clusterMap, "cluster", securityConfig, default_attrs)) {
     return false;
-  } else if (default_attrs.hasValue()) {
+  } else if (default_attrs.has_value()) {
     std::string failure_reason;
     if (!internalLogs.setDefaultAttributes(
             default_attrs.value(), failure_reason)) {
@@ -77,7 +77,7 @@ bool parseInternalLogs(const folly::dynamic& clusterMap,
         parseAttributes(pair.second,
                         pair.first.asString(),
                         securityConfig.allowPermissionsInConfig());
-    if (!attrs.hasValue()) {
+    if (!attrs.has_value()) {
       return false;
     }
 
@@ -143,7 +143,7 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
                       "metadata_logs",
                       /* permissions */ false,
                       /* metadata_logs */ true);
-  if (!log_attrs.hasValue()) {
+  if (!log_attrs.has_value()) {
     err = E::INVALID_CONFIG;
     return false;
   }
@@ -184,7 +184,7 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
   ld_check(output.nodeset_selector_type != NodeSetSelectorType::INVALID);
 
   // metadata version override is optional, default should be unspecified
-  ld_check(!output.metadata_version_to_write.hasValue());
+  ld_check(!output.metadata_version_to_write.has_value());
   epoch_metadata_version::type metadata_version;
   success = getIntFromMap<epoch_metadata_version::type>(
       metaDataLogSection, "metadata_version", metadata_version);

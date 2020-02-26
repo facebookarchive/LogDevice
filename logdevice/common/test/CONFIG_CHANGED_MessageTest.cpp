@@ -48,7 +48,7 @@ void serializeAndDeserialize(
   msg.serialize(writer);
   ASSERT_GT(writer.result(), 0);
 
-  if (expected_hex.hasValue()) {
+  if (expected_hex.has_value()) {
     EXPECT_EQ(expected_hex.value(), hexdump_buf(Slice::fromString(dest)));
   }
 

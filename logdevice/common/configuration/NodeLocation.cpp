@@ -50,7 +50,7 @@ size_t NodeLocation::effectiveScopes(NodeLocationScope scope) {
 std::string
 NodeLocation::getDomain(NodeLocationScope scope,
                         folly::Optional<node_index_t> node_idx) const {
-  if (isEmpty() && !node_idx.hasValue()) {
+  if (isEmpty() && !node_idx.has_value()) {
     return "";
   }
 
@@ -68,7 +68,7 @@ NodeLocation::getDomain(NodeLocationScope scope,
 
   ld_assert(validDomain(result));
 
-  if (scope == NodeLocationScope::NODE && node_idx.hasValue()) {
+  if (scope == NodeLocationScope::NODE && node_idx.has_value()) {
     result += ":N";
     result += std::to_string(node_idx.value());
   }

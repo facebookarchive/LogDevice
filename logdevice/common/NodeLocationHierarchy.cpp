@@ -29,7 +29,7 @@ NodeLocationHierarchy::NodeLocationHierarchy(
   for (const ShardID i : indices) {
     const auto* node_sd =
         nodes_configuration->getNodeServiceDiscovery(i.node());
-    if (node_sd && node_sd->location.hasValue()) {
+    if (node_sd && node_sd->location.has_value()) {
       const auto& location = node_sd->location.value();
       insertShardWithLocation(i, location);
     }

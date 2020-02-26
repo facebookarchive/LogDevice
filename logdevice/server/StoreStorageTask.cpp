@@ -150,8 +150,8 @@ bool StoreStorageTask::isPreempted(Seal* preempted_by) {
   folly::Optional<Seal> soft_seal =
       log_state.getSeal(LogStorageState::SealType::SOFT);
   // both normal and soft seals must have been recovered by StoreStateMachine
-  ld_check(normal_seal.hasValue());
-  ld_check(soft_seal.hasValue());
+  ld_check(normal_seal.has_value());
+  ld_check(soft_seal.has_value());
 
   auto result = STORE_Message::checkIfPreempted(rid_,
                                                 extra_.recovery_epoch,
@@ -192,7 +192,7 @@ size_t StoreStorageTask::getPayloadSize() const {
 }
 
 size_t StoreStorageTask::getNumWriteOps() const {
-  return 1 + metadata_write_op_.hasValue();
+  return 1 + metadata_write_op_.has_value();
 }
 
 size_t StoreStorageTask::getWriteOps(const WriteOp** write_ops,
@@ -233,7 +233,7 @@ void StoreStorageTask::onDone() {
   }
 
   // Bump metadata write stats if metadata has been written successfully
-  if (status_ == E::OK && metadata_write_op_.hasValue()) {
+  if (status_ == E::OK && metadata_write_op_.has_value()) {
     STAT_INCR(worker->stats(), mutable_per_epoch_log_metadata_writes);
   }
 

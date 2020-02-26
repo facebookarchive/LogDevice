@@ -221,7 +221,7 @@ static SockaddrSet parse_sockaddrs(const std::string& val) {
 
 dbg::Level parse_log_level(const std::string& val) {
   const auto level = dbg::tryParseLoglevel(val.c_str());
-  if (!level.hasValue()) {
+  if (!level.has_value()) {
     std::array<char, 1024> buf;
     snprintf(buf.data(),
              buf.size(),

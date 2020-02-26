@@ -300,7 +300,7 @@ class MockAppenderPrep : public AppenderPrep {
       running_appenders_.push_back(&appender);
     }
 
-    if (next_status_.hasValue()) {
+    if (next_status_.has_value()) {
       err = next_status_.value();
       next_status_.reset();
       return err != E::OK ? RunAppenderStatus::ERROR_DELETE

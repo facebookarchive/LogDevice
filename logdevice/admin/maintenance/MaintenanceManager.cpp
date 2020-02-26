@@ -721,7 +721,7 @@ MaintenanceManager::getStorageState(ShardID shard) {
 folly::Expected<membership::StorageState, Status>
 MaintenanceManager::getStorageStateInternal(ShardID shard) const {
   auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-  if (result.hasValue()) {
+  if (result.has_value()) {
     return result->storage_state;
   }
   return folly::makeUnexpected(E::NOTFOUND);
@@ -741,7 +741,7 @@ MaintenanceManager::getMetaDataStorageState(ShardID shard) {
 folly::Expected<membership::MetaDataStorageState, Status>
 MaintenanceManager::getMetaDataStorageStateInternal(ShardID shard) const {
   auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-  if (result.hasValue()) {
+  if (result.has_value()) {
     return result->metadata_state;
   }
   return folly::makeUnexpected(E::NOTFOUND);
@@ -854,7 +854,7 @@ MaintenanceManager::markAllShardsUnrecoverableInternal(std::string /*unused*/,
                        auto shard_state =
                            nodes_config_->getStorageMembership()->getShardState(
                                shard);
-                       if (shard_state.hasValue()) {
+                       if (shard_state.has_value()) {
                          return shard_state->flags &
                              membership::StorageStateFlags::UNRECOVERABLE;
                        }
@@ -877,7 +877,7 @@ MaintenanceManager::markAllShardsUnrecoverableInternal(std::string /*unused*/,
   for (auto shard : shards_to_mark_unrecoverable) {
     auto shard_state =
         nodes_config_->getStorageMembership()->getShardState(shard);
-    ld_check(shard_state.hasValue());
+    ld_check(shard_state.has_value());
     membership::ShardState::Update shard_state_update;
     shard_state_update.transition =
         membership::StorageStateTransition::MARK_SHARD_UNRECOVERABLE;
@@ -1673,7 +1673,7 @@ membership::StateTransitionCondition MaintenanceManager::getCondition(
   membership::StateTransitionCondition c;
   c = membership::required_conditions(transition);
   auto result = nodes_config_->getStorageMembership()->getShardState(shard);
-  ld_check(result.hasValue());
+  ld_check(result.has_value());
   if (result->metadata_state == membership::MetaDataStorageState::METADATA) {
     c |= membership::Condition::METADATA_CAPACITY_CHECK;
   }
@@ -1786,7 +1786,7 @@ MaintenanceManager::runShardWorkflows() {
     }
     // The shard should be in NodesConfig since workflow is created
     // only for shards in the config
-    ld_check(current_storage_state.hasValue());
+    ld_check(current_storage_state.has_value());
     shards.push_back(shard_id);
     futures.push_back(wf->run(current_storage_state.value(),
                               getShardDataHealthInternal(shard_id).value(),
@@ -1892,7 +1892,7 @@ bool MaintenanceManager::isShardEnabled(const ShardID& shard) {
       result.value() == membership::StorageState::READ_WRITE &&
       !event_log_rebuilding_set_
            ->isRebuildingFullShard(shard.node(), shard.shard())
-           .hasValue();
+           .has_value();
 }
 
 bool MaintenanceManager::isSequencingEnabled(node_index_t node) const {
@@ -1924,7 +1924,7 @@ MaintenanceManager::runSequencerWorkflows() {
     nodes.push_back(node);
     auto node_state =
         nodes_config_->getSequencerMembership()->getNodeState(node);
-    ld_check(node_state.hasValue());
+    ld_check(node_state.has_value());
     ClusterStateNodeState gossip_state = ClusterStateNodeState::FULLY_STARTED;
     if (cluster_state != nullptr) {
       gossip_state = cluster_state->getNodeState(node);

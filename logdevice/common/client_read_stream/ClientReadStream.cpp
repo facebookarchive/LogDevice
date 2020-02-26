@@ -2204,7 +2204,7 @@ void ClientReadStream::applyShardStatus(const char* context,
     }
   };
 
-  if (state.hasValue()) {
+  if (state.has_value()) {
     process_shard(*state.value());
   } else {
     for (auto& it : storage_set_states_) {
@@ -2232,7 +2232,7 @@ void ClientReadStream::requestEpochMetaData(
   ld_check(last_epoch_with_metadata_ == EPOCH_INVALID ||
            epoch.val_ == last_epoch_with_metadata_.val_ + 1);
 
-  if (epoch_metadata_requested_.hasValue() &&
+  if (epoch_metadata_requested_.has_value() &&
       epoch <= epoch_metadata_requested_.value()) {
     // read stream should not request an epoch less than the highest one
     // it already requested
@@ -2279,12 +2279,12 @@ void ClientReadStream::activateMetaDataRetryTimer() {
         INITIAL_RETRY_READ_METADATA_DELAY, MAX_RETRY_READ_METADATA_DELAY);
     retry_read_metadata_->setCallback([this]() {
       ld_info("epoch_metadata_requested: %u, current epoch: %u",
-              epoch_metadata_requested_.hasValue()
+              epoch_metadata_requested_.has_value()
                   ? epoch_metadata_requested_.value().val()
                   : 0,
               currentEpoch().val());
       // we must have requested epoch metadata for an epoch before
-      ld_check(epoch_metadata_requested_.hasValue());
+      ld_check(epoch_metadata_requested_.has_value());
       epoch_t last_requested_epoch = epoch_metadata_requested_.value();
       // rewind epoch_metadata_requested_
       epoch_metadata_requested_.reset();
@@ -2595,7 +2595,7 @@ void ClientReadStream::onEpochMetaData(Status st,
   epoch_t until = result.epoch_until;
   const MetaDataLogReader::RecordSource source = result.source;
 
-  ld_check(epoch_metadata_requested_.hasValue());
+  ld_check(epoch_metadata_requested_.has_value());
   ld_check(epoch == epoch_metadata_requested_.value());
   ld_check(last_epoch_with_metadata_ < EPOCH_MAX);
 
@@ -2847,7 +2847,7 @@ void ClientReadStream::updateCurrentReadSet() {
     for (const SenderState& state : added_shards) {
       folly::Optional<uint16_t> proto =
           deps_->getSocketProtocolVersion(state.getShardID().node());
-      if (proto.hasValue()) {
+      if (proto.has_value()) {
         coordinated_proto_ = std::min(coordinated_proto_, proto.value());
       }
     }
@@ -3989,7 +3989,7 @@ void ClientReadStream::handleStartPROTONOSUPPORT(ShardID shard_id) {
       deps_->getSocketProtocolVersion(shard_id.node());
   // Assuming a socket to the server exists, which seems reasonable if we just
   // got a PROTONOSUPPORT error.
-  ld_check(proto.hasValue());
+  ld_check(proto.has_value());
   if (proto.value() < coordinated_proto_) {
     RATELIMIT_INFO(
         std::chrono::seconds(10),

@@ -127,7 +127,7 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(4446);
     EXPECT_EQ(expected_port, aptr->sin_port);
 
-    ASSERT_TRUE(node.admin_address.hasValue());
+    ASSERT_TRUE(node.admin_address.has_value());
     EXPECT_EQ("127.0.0.1:6440", node.admin_address->toString());
 
     EXPECT_EQ(configuration::StorageState::READ_WRITE, node.getStorageState());
@@ -137,7 +137,7 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(3, node.generation);
     EXPECT_TRUE(node.isSequencingEnabled());
 
-    EXPECT_TRUE(node.location.hasValue());
+    EXPECT_TRUE(node.location.has_value());
     const NodeLocation& location = node.location.value();
     EXPECT_EQ("ash", location.getLabel(NodeLocationScope::REGION));
     EXPECT_EQ("ash2", location.getLabel(NodeLocationScope::DATA_CENTER));
@@ -175,7 +175,7 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(6670);
     EXPECT_EQ(expected_port, aptr->sin6_port);
 
-    ASSERT_TRUE(node.admin_address.hasValue());
+    ASSERT_TRUE(node.admin_address.has_value());
     EXPECT_EQ("[::1]:6440", node.admin_address->toString());
 
     EXPECT_EQ(configuration::StorageState::READ_WRITE,
@@ -185,7 +185,7 @@ TEST(ConfigurationTest, SimpleValid) {
 
     EXPECT_EQ(6, node.generation);
     EXPECT_FALSE(node.isSequencingEnabled());
-    EXPECT_FALSE(node.location.hasValue());
+    EXPECT_FALSE(node.location.has_value());
 
     EXPECT_FALSE(node.hasRole(NodeRole::SEQUENCER));
     EXPECT_TRUE(node.hasRole(NodeRole::STORAGE));
@@ -219,7 +219,7 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(6673);
     EXPECT_EQ(expected_port, aptr->sin6_port);
 
-    EXPECT_FALSE(node.admin_address.hasValue());
+    EXPECT_FALSE(node.admin_address.has_value());
 
     EXPECT_EQ(configuration::StorageState::READ_WRITE,
               node.storage_attributes->state);
@@ -229,7 +229,7 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(2, node.generation);
     EXPECT_TRUE(node.isSequencingEnabled());
 
-    ASSERT_TRUE(node.location.hasValue());
+    ASSERT_TRUE(node.location.has_value());
     EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
 
     EXPECT_TRUE(node.hasRole(NodeRole::SEQUENCER));
@@ -264,7 +264,7 @@ TEST(ConfigurationTest, SimpleValid) {
     expected_port = htons(6672);
     EXPECT_EQ(expected_port, aptr->sin6_port);
 
-    EXPECT_FALSE(node.admin_address.hasValue());
+    EXPECT_FALSE(node.admin_address.has_value());
 
     EXPECT_EQ(configuration::StorageState::READ_WRITE,
               node.storage_attributes->state);
@@ -273,7 +273,7 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(5, node.generation);
     EXPECT_TRUE(node.isSequencingEnabled());
 
-    ASSERT_TRUE(node.location.hasValue());
+    ASSERT_TRUE(node.location.has_value());
     EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
   }
 
@@ -322,7 +322,7 @@ TEST(ConfigurationTest, SimpleValid) {
   auto check_log = [&](logid_t::raw_type log,
                        const logsconfig::LogGroupInDirectory& gid_log) {
     const Configuration::LogAttributes& log_attrs = gid_log.log_group->attrs();
-    EXPECT_FALSE(log_attrs.backlogDuration().value().hasValue());
+    EXPECT_FALSE(log_attrs.backlogDuration().value().has_value());
     EXPECT_EQ(log >= 11, log_attrs.replicateAcross().hasValue());
     if (log >= 8 && log <= 10) {
       EXPECT_EQ(3, log_attrs.replicationFactor());
@@ -414,7 +414,7 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(
         NodeLocationScope::CLUSTER, meta_attrs.syncReplicationScope().value());
     auto& ml_conf = config->serverConfig()->getMetaDataLogsConfig();
-    EXPECT_TRUE(ml_conf.metadata_version_to_write.hasValue());
+    EXPECT_TRUE(ml_conf.metadata_version_to_write.has_value());
     EXPECT_EQ(1, ml_conf.metadata_version_to_write.value());
     EXPECT_EQ(NodeSetSelectorType::SELECT_ALL, ml_conf.nodeset_selector_type);
   }
@@ -435,7 +435,7 @@ TEST(ConfigurationTest, SimpleValid) {
       folly::dynamic::object("custom_field_for_testing", "custom_value");
   EXPECT_EQ(config->serverConfig()->getCustomFields(), fields);
   auto timestamp = config->serverConfig()->getClusterCreationTime();
-  EXPECT_TRUE(timestamp.hasValue());
+  EXPECT_TRUE(timestamp.has_value());
   EXPECT_EQ(timestamp.value().count(), 1467928224);
 }
 
@@ -693,7 +693,7 @@ TEST(ConfigurationTest, SockaddrFromString) {
   const auto& nodes = config->serverConfig()->getNodes();
   auto check_address = [](const facebook::logdevice::Sockaddr& a) {
     auto r = facebook::logdevice::Sockaddr::fromString(a.toString());
-    EXPECT_TRUE(r.hasValue());
+    EXPECT_TRUE(r.has_value());
     EXPECT_EQ(a, r);
   };
 
@@ -825,7 +825,7 @@ TEST(ConfigurationTest, Defaults) {
   EXPECT_EQ(1000, *attrs.maxWritesInFlight());
   EXPECT_EQ(0, *attrs.singleWriter());
   EXPECT_EQ(NodeLocationScope::RACK, *attrs.syncReplicationScope());
-  EXPECT_FALSE(attrs.backlogDuration().value().hasValue());
+  EXPECT_FALSE(attrs.backlogDuration().value().has_value());
   EXPECT_EQ(3, *attrs.nodeSetSize());
   EXPECT_EQ(std::chrono::milliseconds(10), *attrs.deliveryLatency());
   EXPECT_TRUE(*attrs.scdEnabled());
@@ -836,7 +836,7 @@ TEST(ConfigurationTest, Defaults) {
 
   log = config->getLogGroupByIDShared(logid_t(2));
   const auto& attrs2 = log->attrs();
-  EXPECT_TRUE(attrs2.backlogDuration().value().hasValue());
+  EXPECT_TRUE(attrs2.backlogDuration().value().has_value());
   EXPECT_EQ(std::chrono::seconds(3600 * 24 * 4),
             attrs2.backlogDuration().value().value());
 
@@ -855,7 +855,7 @@ TEST(ConfigurationTest, Defaults) {
   EXPECT_NE(config->serverConfig()->getCustomFields(), nullptr);
   EXPECT_EQ(config->serverConfig()->getCustomFields().size(), 0);
   auto timestamp = config->serverConfig()->getClusterCreationTime();
-  EXPECT_FALSE(timestamp.hasValue());
+  EXPECT_FALSE(timestamp.has_value());
 }
 
 TEST(ConfigurationTest, BadID) {
@@ -1024,7 +1024,7 @@ TEST(ConfigurationTest, LogsWithNamespaces) {
   EXPECT_NE(config->serverConfig()->getCustomFields(), nullptr);
   EXPECT_EQ(config->serverConfig()->getCustomFields().size(), 0);
   auto timestamp = config->serverConfig()->getClusterCreationTime();
-  EXPECT_FALSE(timestamp.hasValue());
+  EXPECT_FALSE(timestamp.has_value());
 }
 
 /**
@@ -1056,7 +1056,7 @@ TEST(ConfigurationTest, CustomFields) {
       "custom_field_test4", folly::dynamic::array("value_at_0", "value_at_1"));
   EXPECT_EQ(config->serverConfig()->getCustomFields(), customFields);
   auto timestamp = config->serverConfig()->getClusterCreationTime();
-  EXPECT_FALSE(timestamp.hasValue());
+  EXPECT_FALSE(timestamp.has_value());
 }
 
 template <typename T>
@@ -1242,7 +1242,7 @@ TEST(ConfigurationTest, SecurityAndPermissionInfo) {
   EXPECT_NE(config->serverConfig()->getCustomFields(), nullptr);
   EXPECT_EQ(config->serverConfig()->getCustomFields().size(), 0);
   auto timestamp = config->serverConfig()->getClusterCreationTime();
-  EXPECT_FALSE(timestamp.hasValue());
+  EXPECT_FALSE(timestamp.has_value());
 }
 
 /**
@@ -1524,7 +1524,7 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
     auto cfg = get_config("");
     ASSERT_NE(cfg, nullptr);
     auto& ml_config = cfg->serverConfig()->getMetaDataLogsConfig();
-    ASSERT_FALSE(ml_config.metadata_version_to_write.hasValue());
+    ASSERT_FALSE(ml_config.metadata_version_to_write.has_value());
     EXPECT_EQ(NodeSetSelectorType::CONSISTENT_HASHING,
               ml_config.nodeset_selector_type);
     ASSERT_EQ(epoch_metadata_version::CURRENT,
@@ -1534,7 +1534,7 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
     auto cfg = get_config("\"metadata_version\": 1");
     ASSERT_NE(cfg, nullptr);
     auto& ml_config = cfg->serverConfig()->getMetaDataLogsConfig();
-    ASSERT_TRUE(ml_config.metadata_version_to_write.hasValue());
+    ASSERT_TRUE(ml_config.metadata_version_to_write.has_value());
     ASSERT_EQ(1, ml_config.metadata_version_to_write.value());
     ASSERT_EQ(1, epoch_metadata_version::versionToWrite(cfg->serverConfig()));
     EXPECT_EQ(NodeSetSelectorType::CONSISTENT_HASHING,
@@ -1544,7 +1544,7 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
     auto cfg = get_config("\"nodeset_selector\": \"random-crossdomain\"");
     ASSERT_NE(cfg, nullptr);
     auto& ml_config = cfg->serverConfig()->getMetaDataLogsConfig();
-    ASSERT_FALSE(ml_config.metadata_version_to_write.hasValue());
+    ASSERT_FALSE(ml_config.metadata_version_to_write.has_value());
     ASSERT_EQ(epoch_metadata_version::CURRENT,
               epoch_metadata_version::versionToWrite(cfg->serverConfig()));
     EXPECT_EQ(NodeSetSelectorType::RANDOM_CROSSDOMAIN,
@@ -1554,7 +1554,7 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
     auto cfg = get_config("\"nodeset_selector\": \"random\"");
     ASSERT_NE(cfg, nullptr);
     auto& ml_config = cfg->serverConfig()->getMetaDataLogsConfig();
-    ASSERT_FALSE(ml_config.metadata_version_to_write.hasValue());
+    ASSERT_FALSE(ml_config.metadata_version_to_write.has_value());
     ASSERT_EQ(epoch_metadata_version::CURRENT,
               epoch_metadata_version::versionToWrite(cfg->serverConfig()));
     EXPECT_EQ(NodeSetSelectorType::RANDOM, ml_config.nodeset_selector_type);
@@ -1563,7 +1563,7 @@ TEST(ConfigurationTest, MetaDataLogsConfig) {
     auto cfg = get_config("\"nodeset_selector\": \"select-all\"");
     ASSERT_NE(cfg, nullptr);
     auto& ml_config = cfg->serverConfig()->getMetaDataLogsConfig();
-    ASSERT_FALSE(ml_config.metadata_version_to_write.hasValue());
+    ASSERT_FALSE(ml_config.metadata_version_to_write.has_value());
     ASSERT_EQ(epoch_metadata_version::CURRENT,
               epoch_metadata_version::versionToWrite(cfg->serverConfig()));
     EXPECT_EQ(NodeSetSelectorType::SELECT_ALL, ml_config.nodeset_selector_type);

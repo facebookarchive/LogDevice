@@ -208,7 +208,7 @@ class AppenderTest : public ::testing::Test {
     ASSERT_TRUE(retired_);
   }
   void checkReplyHasNoValue() {
-    ASSERT_FALSE(reply_.hasValue());
+    ASSERT_FALSE(reply_.has_value());
   }
 
  private:
@@ -648,7 +648,7 @@ class AppenderTest::MockAppender : public Appender {
   }
 
   void replyToAppendRequest(APPENDED_Header& replyhdr) override {
-    ASSERT_FALSE(test_->reply_.hasValue());
+    ASSERT_FALSE(test_->reply_.has_value());
     test_->reply_ = replyhdr;
   }
 
@@ -903,7 +903,7 @@ void AppenderTest::checkReleaseMsg(std::set<ShardID> shards) {
   }
 
 void AppenderTest::checkAppended(Status expected_status) {
-  ASSERT_TRUE(reply_.hasValue());
+  ASSERT_TRUE(reply_.has_value());
   ASSERT_EQ(request_id_t{1}, reply_->rqid);
   ASSERT_EQ(expected_status, reply_->status);
   ASSERT_EQ(LSN, reply_->lsn);
@@ -999,7 +999,7 @@ TEST_F(AppenderTest, SimpleStream) {
   ON_STORED_SENT(E::OK, 1, N0S0, N1S0, N3S0);
   ASSERT_TRUE(retired_);
   CHECK_DELETE_MSG(N2S0, N4S0);
-  ASSERT_FALSE(reply_.hasValue());
+  ASSERT_FALSE(reply_.has_value());
   Appender::Reaper()(appender_);
   CHECK_APPENDED(E::OK);
   CHECK_RELEASE_MSG(N0S0, N1S0, N3S0);
@@ -1050,7 +1050,7 @@ TEST_F(AppenderTest, NotEnoughRepliesExpectedTryNewWave) {
   // 1 recipient replies for the previous wave. This should not cause APPENDED
   // to be sent.
   ON_STORED_SENT(E::OK, 1, N1S0);
-  ASSERT_FALSE(reply_.hasValue());
+  ASSERT_FALSE(reply_.has_value());
   // A third recipient replies.
   ON_STORED_SENT(E::OK, 2, N7S0);
 
@@ -1083,7 +1083,7 @@ TEST_F(AppenderTest, StoreTimeoutTryNewWave) {
   CHECK_NO_STORE_MSG();
   // STORED is received from previous wave and discarded.
   ON_STORED_SENT(E::OK, 1, N4S0, N3S0, N2S0);
-  ASSERT_FALSE(reply_.hasValue());
+  ASSERT_FALSE(reply_.has_value());
   // 3 nodes reply in time this time.
   ON_STORED_SENT(E::OK, 2, N7S0, N5S0, N6S0);
   CHECK_APPENDED(E::OK);
@@ -1108,7 +1108,7 @@ TEST_F(AppenderTest, StoreTimeoutRelaxedGraylisting) {
   CHECK_NO_STORE_MSG();
   // STORED is received from previous wave and discarded.
   ON_STORED_SENT(E::OK, 1, N4S0, N3S0, N2S0, N1S0, N0S0);
-  ASSERT_FALSE(reply_.hasValue());
+  ASSERT_FALSE(reply_.has_value());
   // 3 nodes reply on time.
   ON_STORED_SENT(E::OK, 2, N0S0, N1S0, N2S0);
   CHECK_APPENDED(E::OK);
@@ -1394,7 +1394,7 @@ TEST_F(AppenderTest, NodeSetStateTransientErrors) {
   CHECK_NOT_AVAILABLE(N0S0, STORE_DISABLED);
   ON_STORED_SENT(E::NOSPC, 1, N1S0);
   CHECK_NOT_AVAILABLE(N1S0, NO_SPC);
-  ASSERT_FALSE(reply_.hasValue());
+  ASSERT_FALSE(reply_.has_value());
   ASSERT_FALSE(retired_);
   ON_STORED_SENT(E::OK, 1, N4S0);
   CHECK_APPENDED(E::OK);
@@ -1610,7 +1610,7 @@ TEST_F(AppenderTest, SoftPreemptedWhenDraining) {
   // sequencer should NOT be preempted, no reply should been sent
   EXPECT_EQ(EPOCH_INVALID, preempted_epoch_);
   EXPECT_FALSE(preempted_by_.isNodeID());
-  ASSERT_FALSE(reply_.hasValue());
+  ASSERT_FALSE(reply_.has_value());
 
   // since the appender may still complete the wave, no new wave should
   // be started
@@ -1621,7 +1621,7 @@ TEST_F(AppenderTest, SoftPreemptedWhenDraining) {
   // sequencer should NOT be preempted either
   EXPECT_EQ(EPOCH_INVALID, preempted_epoch_);
   EXPECT_FALSE(preempted_by_.isNodeID());
-  ASSERT_FALSE(reply_.hasValue());
+  ASSERT_FALSE(reply_.has_value());
 
   // there is no hope to finish the wave, the Appender should retry
   // for a new wave
@@ -1667,7 +1667,7 @@ TEST_F(AppenderTest, PremptedByNormalSealWhenDraining) {
   appender_->onReply(storedHeader(1, E::PREEMPTED, N8, SOFT), N3S0);
   EXPECT_EQ(EPOCH_INVALID, preempted_epoch_);
   EXPECT_FALSE(preempted_by_.isNodeID());
-  ASSERT_FALSE(reply_.hasValue());
+  ASSERT_FALSE(reply_.has_value());
   ASSERT_TRUE(retry_timer_active_);
   ASSERT_FALSE(store_timer_active_);
   first_candidate_idx_ = 3;

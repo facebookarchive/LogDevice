@@ -277,7 +277,7 @@ GraylistingTracker::Latencies GraylistingTracker::getLatencyEstimationForNodes(
   for (const auto& kv : *nodes_configuration.getServiceDiscovery()) {
     auto latency =
         stats.getEstimations(WorkerTimeoutStats::Levels::TEN_SECONDS, kv.first);
-    if (!latency.hasValue()) {
+    if (!latency.has_value()) {
       continue;
     }
     latencies.emplace_back(
@@ -369,7 +369,7 @@ GraylistingTracker::groupLatenciesPerRegion(
       continue;
     }
 
-    auto region = sd->location.hasValue() && !sd->location.value().isEmpty()
+    auto region = sd->location.has_value() && !sd->location.value().isEmpty()
         ? sd->location.value().getLabel(NodeLocationScope::REGION)
         : kUnknownRegion.toString();
     auto it = per_region_latencies.find(region);

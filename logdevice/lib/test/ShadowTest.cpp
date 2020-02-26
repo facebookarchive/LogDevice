@@ -75,7 +75,7 @@ class MockShadow : public Shadow {
                                                          client_settings)) {}
 
   bool isReset() {
-    return !last_used_range_.hasValue() && range_cache_.empty() &&
+    return !last_used_range_.has_value() && range_cache_.empty() &&
         shadow_map_.empty();
   }
 
@@ -188,12 +188,12 @@ TEST_F(ShadowTest, LogRangeResolutionNoShadow) {
   ASSERT_FALSE(shadow->checkShadowConfig(logid_t{1}));
   ASSERT_EQ(err, E::SHADOW_LOADING);
   ASSERT_TRUE(shadow->isLogGroupLoaded(kTestData[0].range));
-  ASSERT_FALSE(shadow->getLoadedLogGroup(kTestData[0].range).attrs.hasValue());
+  ASSERT_FALSE(shadow->getLoadedLogGroup(kTestData[0].range).attrs.has_value());
 
   ASSERT_FALSE(shadow->checkShadowConfig(logid_t{201}));
   ASSERT_EQ(err, E::SHADOW_LOADING);
   ASSERT_TRUE(shadow->isLogGroupLoaded(kTestData[1].range));
-  ASSERT_FALSE(shadow->getLoadedLogGroup(kTestData[1].range).attrs.hasValue());
+  ASSERT_FALSE(shadow->getLoadedLogGroup(kTestData[1].range).attrs.has_value());
 }
 
 // Test logid -> log range resolution with shadow configured
@@ -208,14 +208,14 @@ TEST_F(ShadowTest, LogRangeResolutionWithShadow) {
   ASSERT_FALSE(shadow->checkShadowConfig(logid_t{1}));
   ASSERT_EQ(err, E::SHADOW_LOADING);
   ASSERT_TRUE(shadow->isLogGroupLoaded(kTestData[0].range));
-  ASSERT_TRUE(shadow->getLoadedLogGroup(kTestData[0].range).attrs.hasValue());
+  ASSERT_TRUE(shadow->getLoadedLogGroup(kTestData[0].range).attrs.has_value());
   ASSERT_EQ(shadow->getLoadedLogGroup(kTestData[0].range).attrs.value(),
             kTestData[0].attrs);
 
   ASSERT_FALSE(shadow->checkShadowConfig(logid_t{201}));
   ASSERT_EQ(err, E::SHADOW_LOADING);
   ASSERT_TRUE(shadow->isLogGroupLoaded(kTestData[1].range));
-  ASSERT_TRUE(shadow->getLoadedLogGroup(kTestData[1].range).attrs.hasValue());
+  ASSERT_TRUE(shadow->getLoadedLogGroup(kTestData[1].range).attrs.has_value());
   ASSERT_EQ(shadow->getLoadedLogGroup(kTestData[1].range).attrs.value(),
             kTestData[1].attrs);
 

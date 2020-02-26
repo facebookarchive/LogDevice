@@ -18,7 +18,7 @@ TEST(AppendErrorInjectorTest, ZeroFailRatio) {
   logid_t log{1};
   AppendErrorInjector injector{Status::SEQNOBUFS, log, 0.0};
 
-  EXPECT_FALSE(injector.getCallback()(log, 0).hasValue());
+  EXPECT_FALSE(injector.getCallback()(log, 0).has_value());
 }
 
 TEST(AppendErrorInjectorTest, OneFailRatio) {
@@ -34,5 +34,5 @@ TEST(AppendErrorInjectorTest, DifferentLogs) {
 
   EXPECT_EQ(Status::SEQNOBUFS, injector.getCallback()(log1, 0));
   EXPECT_EQ(Status::SEQNOBUFS, injector.getCallback()(log2, 0));
-  EXPECT_FALSE(injector.getCallback()(log3, 0).hasValue());
+  EXPECT_FALSE(injector.getCallback()(log3, 0).has_value());
 }

@@ -49,7 +49,7 @@ class InfoRecoveries : public AdminCommand {
     auto tables = run_on_all_workers(server_->getProcessor(), [&]() {
       InfoRecoveriesTable t(table);
       Worker* w = Worker::onThisThread();
-      if (logid_.hasValue()) {
+      if (logid_.has_value()) {
         auto it = w->runningLogRecoveries().map.find(logid_.value());
         if (it != w->runningLogRecoveries().map.end()) {
           it->second->getDebugInfo(t);

@@ -138,7 +138,7 @@ bool InternalLogs::isValid() const {
 
     // backlog duration must be not be set.
     if (p.log_group->attrs().backlogDuration() &&
-        p.log_group->attrs().backlogDuration().value().hasValue()) {
+        p.log_group->attrs().backlogDuration().value().has_value()) {
       ld_error("\"backlog\" attribute must not be set for internal log "
                "\"%s\" (%lu)",
                l.first.c_str(),

@@ -40,7 +40,7 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
       res.decision = Decision::FAILED;
       return res;
     }
-    if (logcfg->attrs().nodeSetSize().value().hasValue()) {
+    if (logcfg->attrs().nodeSetSize().value().has_value()) {
       ld_error("nodeSetSize property set for log %lu, unable to select all "
                "shards",
                log_id.val_);

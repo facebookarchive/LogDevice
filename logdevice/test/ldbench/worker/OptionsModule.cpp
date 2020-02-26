@@ -30,7 +30,7 @@ static object validateWorkerOptions(std::string bench_name, list& args) {
   std::stringstream ss;
   folly::Optional<int> rv = parse_commandline_options(
       client_settings, options, (int)arg_vec.size(), arg_vec.data(), ss);
-  if (rv.hasValue()) {
+  if (rv.has_value()) {
     if (rv.value() == 0) {
       ss.str("");
       ss << "Unexpected --help.";
@@ -47,7 +47,7 @@ static std::string getHelp(bool verbose = false) {
   std::stringstream ss;
   folly::Optional<int> rv = parse_commandline_options(
       client_settings, options, verbose ? 3 : 2, argv, ss);
-  ld_check(rv.hasValue());
+  ld_check(rv.has_value());
   ld_check(rv.value() == 0);
   return ss.str();
 }

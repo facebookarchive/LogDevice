@@ -675,7 +675,7 @@ ClientIdxAllocator& Processor::clientIdxAllocator() const {
 }
 
 bool Processor::hasMyNodeID() const {
-  return my_node_id_.hasValue();
+  return my_node_id_.has_value();
 }
 
 NodeID Processor::getMyNodeID() const {

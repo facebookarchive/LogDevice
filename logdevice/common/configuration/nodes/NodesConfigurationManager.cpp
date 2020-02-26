@@ -391,7 +391,7 @@ void NodesConfigurationManager::onUpdateRequest(ncm::UpdateContext ctx,
           if (folly::kIsDebug) {
             auto extracted_version_opt =
                 NodesConfigurationCodec::extractConfigVersion(stored_data);
-            ld_assert(extracted_version_opt.hasValue());
+            ld_assert(extracted_version_opt.has_value());
             ld_assert_eq(stored_version, extracted_version_opt.value());
             // VERSION_MISMATCH <=> stored_version != current_version (i.e.,
             // base_version).
@@ -550,7 +550,7 @@ void NodesConfigurationManager::advanceIntermediaryShardStates() {
           ->processor_->settings()
           ->nodes_configuration_manager_intermediary_shard_state_timeout;
   auto update_opt = tracker_.extractNCUpdate(till_timestamp);
-  if (update_opt.hasValue()) {
+  if (update_opt.has_value()) {
     ld_info("Proposing update to transition shards out of intermediary "
             "states that entered the state before %s...",
             till_timestamp.toString().c_str());

@@ -101,7 +101,7 @@ class StoreTimeoutHistogram : public AdminCommand {
 
       auto estimations = timeout_stats.getEstimations(
           WorkerTimeoutStats::Levels::TEN_SECONDS, node_);
-      if (!estimations.hasValue()) {
+      if (!estimations.has_value()) {
         return {};
       }
       return std::make_tuple(estimations.value(), worker->idx_, node_);
@@ -148,7 +148,7 @@ class StoreTimeoutHistogram : public AdminCommand {
       for (auto& node_estimator : timeout_stats.histograms_) {
         auto estimate = timeout_stats.getEstimations(
             WorkerTimeoutStats::TEN_SECONDS, node_estimator.first);
-        if (estimate.hasValue()) {
+        if (estimate.has_value()) {
           result.emplace_back(std::make_tuple(
               estimate.value(), worker->idx_, node_estimator.first));
         } else {
@@ -185,7 +185,7 @@ class StoreTimeoutHistogram : public AdminCommand {
 
   static void addPercentilesRowToTable(const EstimatesFromWorker& estimates,
                                        SummaryTable& table) {
-    if (!estimates.hasValue()) {
+    if (!estimates.has_value()) {
       return;
     }
 
@@ -205,7 +205,7 @@ class StoreTimeoutHistogram : public AdminCommand {
   }
 
   void printPercentiles(const EstimatesFromWorker& estimates) {
-    if (!estimates.hasValue()) {
+    if (!estimates.has_value()) {
       return;
     }
     std::ostringstream oss;

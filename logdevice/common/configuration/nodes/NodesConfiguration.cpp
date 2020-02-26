@@ -403,13 +403,13 @@ NodesConfiguration::withIncrementedVersionAndTimestamp(
         new_sequencer_membership_version,
     folly::Optional<membership::MembershipVersion::Type>
         new_storage_membership_version) const {
-  if (new_nc_version.hasValue() && new_nc_version.value() <= version_) {
+  if (new_nc_version.has_value() && new_nc_version.value() <= version_) {
     return nullptr;
   }
 
   auto new_config = std::make_shared<NodesConfiguration>(*this);
   new_config->touch();
-  if (new_nc_version.hasValue()) {
+  if (new_nc_version.has_value()) {
     new_config->setVersion(new_nc_version.value());
   }
 

@@ -1736,7 +1736,7 @@ PartitionedRocksDBStore::getWritePartition(
     LocalLogStoreRecordFormat::flags_t flags) {
   ld_check(!getSettings()->read_only);
   partition_id_t latest_partition_id = latest_.get()->id_;
-  partition_id_t target_partition = timestamp.hasValue()
+  partition_id_t target_partition = timestamp.has_value()
       ? getPreferredPartition(timestamp.value())
       : PARTITION_MAX;
   target_partition = std::min(target_partition, latest_partition_id);
@@ -1847,7 +1847,7 @@ PartitionedRocksDBStore::getWritePartition(
     }
 
     if (lsn > current_partition->max_lsn) {
-      if (!timestamp.hasValue()) {
+      if (!timestamp.has_value()) {
         // This is a delete/amend operation, and record with this LSN is known
         // to not exist. Drop this operation.
         return GetWritePartitionResult::SKIP;
@@ -1869,7 +1869,7 @@ PartitionedRocksDBStore::getWritePartition(
     }
   } else if (next_partition && target_partition == next_partition->id) {
     // Need to decrease first_lsn of next_partition.
-    if (!timestamp.hasValue()) {
+    if (!timestamp.has_value()) {
       return GetWritePartitionResult::SKIP;
     }
 
@@ -1896,7 +1896,7 @@ PartitionedRocksDBStore::getWritePartition(
   } else {
     // Need to add a new directory entry. Includes the frequent case of adding
     // an entry for the latest partition soon after it's created.
-    if (!timestamp.hasValue()) {
+    if (!timestamp.has_value()) {
       return GetWritePartitionResult::SKIP;
     }
 
@@ -3040,7 +3040,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
             // instances of bridge records).  Promote to SYNC_WRITE.
             put_op->increaseDurabilityTo(Durability::SYNC_WRITE);
             STAT_INCR(stats_, sync_write_promotion_no_timestamp);
-          } else if (!put_op->coordinator.hasValue()) {
+          } else if (!put_op->coordinator.has_value()) {
             // Recovery from MEMORY stores requires coordinator information.
             // Promote to a synchronous write if this isn't available.
             put_op->increaseDurabilityTo(Durability::SYNC_WRITE);
@@ -3050,7 +3050,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
                     partition->id_,
                     put_op->isRebuilding() ? "rebuild" : "append",
                     put_op->coordinator.value());
-            ld_check(timestamp.hasValue());
+            ld_check(timestamp.has_value());
             dirty_ops.emplace_back(partition,
                                    timestamp.value(),
                                    put_op,
@@ -3080,7 +3080,7 @@ int PartitionedRocksDBStore::writeMultiImpl(
           }
         }
         // Complain about another kind of suspicious writes.
-        if (timestamp.hasValue()) {
+        if (timestamp.has_value()) {
           auto dt = timestamp.value() - partition->starting_timestamp;
           auto dur = getSettings()->partition_duration_;
           // It's expected that 0 <= dt < dur, but the check below has some
@@ -4383,7 +4383,7 @@ PartitionedRocksDBStore::getEffectiveBacklogDuration(
     }
     backlog = log_config->attrs().backlogDuration().value();
 
-    if (test_override.count() != 0 && backlog.hasValue()) {
+    if (test_override.count() != 0 && backlog.has_value()) {
       backlog = std::min(backlog.value(), test_override);
     }
   }
@@ -4459,7 +4459,7 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
     //    (we'll want to run compaction on them).
 
     DataForBacklogDuration* duration_data = nullptr;
-    if (backlog.hasValue() && out_to_compact != nullptr) {
+    if (backlog.has_value() && out_to_compact != nullptr) {
       auto backlog_bucket = backlog;
 
       // settings->partition_compaction_schedule has the effect of rounding
@@ -4467,7 +4467,7 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
       // This only affects compaction decisions, not trim points.
       auto partition_compaction_schedule =
           settings->partition_compaction_schedule;
-      if (partition_compaction_schedule.hasValue() &&
+      if (partition_compaction_schedule.has_value() &&
           !partition_compaction_schedule.value().empty()) {
         auto it =
             std::lower_bound(partition_compaction_schedule.value().begin(),
@@ -4480,7 +4480,7 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
         }
       }
 
-      if (backlog_bucket.hasValue()) {
+      if (backlog_bucket.has_value()) {
         bool new_duration = !backlog_durations.count(backlog_bucket.value());
         duration_data = &backlog_durations[backlog_bucket.value()];
         if (new_duration) {
@@ -4497,7 +4497,7 @@ int PartitionedRocksDBStore::trimLogsBasedOnTime(
     }
 
     RecordTimestamp cutoff_timestamp = RecordTimestamp::min();
-    if (backlog.hasValue() && backlog.value() < now) {
+    if (backlog.has_value() && backlog.value() < now) {
       cutoff_timestamp = RecordTimestamp::from(now - backlog.value());
     }
 
@@ -6053,7 +6053,7 @@ void PartitionedRocksDBStore::hiPriBackgroundThreadRun() {
 void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
   ld_check(!getSettings()->read_only);
   setBGThreadName("lo", shard_idx_);
-  if (getSettings()->low_ioprio.hasValue()) {
+  if (getSettings()->low_ioprio.has_value()) {
     // Partial compactions can do significant amount of disk IO directly from
     // this thread. Set the same IO priority as RocksDBEnv sets for rocksdb
     // compaction threads.
@@ -6111,7 +6111,7 @@ void PartitionedRocksDBStore::loPriBackgroundThreadRun() {
                          (RecordTimestamp::now().toSeconds() - start).count());
     }
 
-    if (!getSettings()->partition_compaction_schedule.hasValue()) {
+    if (!getSettings()->partition_compaction_schedule.has_value()) {
       // no retention-based compactions
       to_compact.clear();
     }

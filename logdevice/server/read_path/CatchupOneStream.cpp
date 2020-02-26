@@ -458,10 +458,10 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
   // First check if right epoch offsets are already available from
   // LogStorageState or cached value from PerEpochLogMetadata in
   // ServerReadStream.
-  if (epoch_offsets_from_log_state.hasValue() &&
+  if (epoch_offsets_from_log_state.has_value() &&
       epoch_offsets_from_log_state.value().first == record_epoch) {
     return epoch_offsets_from_log_state.value().second;
-  } else if (epoch_offsets_from_metadata.hasValue() &&
+  } else if (epoch_offsets_from_metadata.has_value() &&
              epoch_offsets_from_metadata.value().first == record_epoch) {
     return epoch_offsets_from_metadata.value().second;
   }

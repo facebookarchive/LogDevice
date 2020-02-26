@@ -30,7 +30,7 @@ struct Deps {
   }
 
   static void sleepFor(std::chrono::steady_clock::duration duration) {
-    ASSERT_FALSE(slept_for.hasValue());
+    ASSERT_FALSE(slept_for.has_value());
     slept_for = duration;
   }
 };

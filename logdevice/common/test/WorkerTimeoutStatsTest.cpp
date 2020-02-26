@@ -27,7 +27,7 @@ TEST(WorkerTimeoutStatsTest, DummyTest) {
   MockWorkerTimeoutStats stats;
   auto overall_result =
       stats.getEstimations(WorkerTimeoutStats::Levels::TEN_SECONDS);
-  ASSERT_EQ(overall_result.hasValue(), false);
+  ASSERT_EQ(overall_result.has_value(), false);
 
   ShardID shard_id{1, 1};
   STORE_Header store_hdr{};
@@ -38,10 +38,10 @@ TEST(WorkerTimeoutStatsTest, DummyTest) {
   stats.onReply(shard_id, store_hdr);
   auto result = stats.getEstimations(
       WorkerTimeoutStats::Levels::TEN_SECONDS, shard_id.node());
-  ASSERT_EQ(result.hasValue(), false); // no histogram
+  ASSERT_EQ(result.has_value(), false); // no histogram
   overall_result =
       stats.getEstimations(WorkerTimeoutStats::Levels::TEN_SECONDS);
-  ASSERT_EQ(overall_result.hasValue(), false);
+  ASSERT_EQ(overall_result.has_value(), false);
 
   auto st = steady_clock::now();
   stats.onCopySent(Status::OK, shard_id, store_hdr);
@@ -50,7 +50,7 @@ TEST(WorkerTimeoutStatsTest, DummyTest) {
   auto took_time = duration_cast<milliseconds>(steady_clock::now() - st);
   overall_result = stats.getEstimations(
       WorkerTimeoutStats::Levels::TEN_SECONDS, shard_id.node());
-  ASSERT_EQ(overall_result.hasValue(), 1);
+  ASSERT_EQ(overall_result.has_value(), 1);
   for (int i = 0; i < 6; ++i) {
     std::cerr << took_time.count() << ' ' << (*overall_result)[i] << '\n';
     ASSERT_LE((*overall_result)[i] - took_time.count(), 5);
@@ -77,7 +77,7 @@ TEST(WorkerTimeoutStatsTest, StressTest) {
   auto took_time = duration_cast<milliseconds>(steady_clock::now() - st);
   auto overall_result = stats.getEstimations(
       WorkerTimeoutStats::Levels::TEN_SECONDS, shard_id.node());
-  ASSERT_EQ(overall_result.hasValue(), 1);
+  ASSERT_EQ(overall_result.has_value(), 1);
   for (int i = 0; i < 6; ++i) {
     std::cerr << took_time.count() << ' ' << (*overall_result)[i] << '\n';
     ASSERT_LE((*overall_result)[i] - took_time.count(), 5);

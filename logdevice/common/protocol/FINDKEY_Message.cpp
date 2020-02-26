@@ -19,7 +19,7 @@ namespace facebook { namespace logdevice {
 void FINDKEY_Message::serialize(ProtocolWriter& writer) const {
   writer.write(header_);
   if (header_.flags & FINDKEY_Header::USER_KEY) {
-    ld_check(key_.hasValue());
+    ld_check(key_.has_value());
     ld_check(key_.value().size() <= std::numeric_limits<uint16_t>::max());
 
     uint16_t key_length = key_.value().size();

@@ -27,7 +27,7 @@ void ClientHelloInfoTracer::traceClientHelloInfo(
     const PrincipalIdentity& principal,
     ConnectionType conn_type,
     const Status status) {
-  if (json.hasValue() && !(*json).isObject()) {
+  if (json.has_value() && !(*json).isObject()) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,
                     "Invalid client build info. "
@@ -55,7 +55,7 @@ void ClientHelloInfoTracer::traceClientHelloInfo(
     sample->addNormVectorValue("identities", identities);
     sample->addNormalValue("csid", principal.csid);
 
-    if (json.hasValue()) {
+    if (json.has_value()) {
       // dynamically build the trace based on the field name prefixes
       for (const auto& pair : (*json).items()) {
         auto key_piece = pair.first.stringPiece();

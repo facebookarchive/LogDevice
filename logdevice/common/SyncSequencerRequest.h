@@ -178,14 +178,14 @@ class SyncSequencerRequest : public Request {
   }
 
   WorkerType getWorkerTypeAffinity() override {
-    if (worker_type_.hasValue()) {
+    if (worker_type_.has_value()) {
       return worker_type_.value();
     }
     return WorkerType::GENERAL;
   }
 
   int getThreadAffinity(int nthreads) override {
-    if (!override_thread_idx_.hasValue()) {
+    if (!override_thread_idx_.has_value()) {
       return folly::hash::twang_mix64(logid_.val_) % nthreads;
     }
     ld_check(override_thread_idx_.value() < nthreads);

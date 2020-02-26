@@ -943,7 +943,7 @@ RunAppenderStatus AppenderPrep::append(std::shared_ptr<Sequencer>& sequencer,
       ld_debug("Ignoring APPEND message: not accepting more work");
       break;
     case E::ABORTED:
-      ld_check(acceptable_epoch_.hasValue());
+      ld_check(acceptable_epoch_.has_value());
       RATELIMIT_INFO(std::chrono::seconds(1),
                      10,
                      "Aborted append from %s for log %lu due to unacceptable "

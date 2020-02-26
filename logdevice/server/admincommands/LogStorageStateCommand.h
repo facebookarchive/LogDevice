@@ -96,7 +96,7 @@ class LogStorageStateCommand : public AdminCommand {
       }
     };
 
-    if (logid_.hasValue()) {
+    if (logid_.has_value()) {
       if (shard_ == -1) {
         for (shard_index_t s = 0; s < num_shards; ++s) {
           find_and_process_one(logid_.value(), s);

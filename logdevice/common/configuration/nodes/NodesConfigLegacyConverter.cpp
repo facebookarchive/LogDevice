@@ -80,7 +80,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
   for (auto qn : seq_mem->getMembershipNodes()) {
     all_nodes.insert(qn);
     auto res = seq_mem->getNodeState(qn);
-    ld_check(res.hasValue());
+    ld_check(res.has_value());
     res_nodes[qn].addSequencerRole(
         res->sequencer_enabled, res->getConfiguredWeight());
 
@@ -107,7 +107,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     folly::Optional<configuration::StorageState> ss;
     for (shard_index_t sid = 0; sid < attr.num_shards; ++sid) {
       auto res = storage_mem->getShardState(ShardID(sn, sid));
-      if (!res.hasValue()) {
+      if (!res.has_value()) {
         RATELIMIT_ERROR(std::chrono::seconds(10),
                         5,
                         "Shard %s does not exist!",
@@ -117,7 +117,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
       }
 
       auto shard_ss = toLegacyStorageState(res->storage_state);
-      if (ss.hasValue() && ss.value() != shard_ss) {
+      if (ss.has_value() && ss.value() != shard_ss) {
         RATELIMIT_ERROR(
             std::chrono::seconds(10),
             5,
@@ -133,7 +133,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
       ss = shard_ss;
     }
 
-    if (!ss.hasValue()) {
+    if (!ss.has_value()) {
       err = E::INVALID_CONFIG;
       return -1;
     }
@@ -306,7 +306,7 @@ int NodesConfigLegacyConverter::toLegacyMetadataLogsConfig(
     // Uses old format to minimize the diff if possible, if not, fallback to the
     // new format.
     auto old_format = replication_property.toOldRepresentation();
-    if (old_format.hasValue()) {
+    if (old_format.has_value()) {
       new_attrs =
           log_group->attrs()
               .with_syncReplicationScope(old_format->sync_replication_scope)

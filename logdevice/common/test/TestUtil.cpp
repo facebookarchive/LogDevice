@@ -120,7 +120,7 @@ TemporaryDirectory::TemporaryDirectory(const std::string& name_prefix) {
 }
 
 TemporaryDirectory::~TemporaryDirectory() {
-  if (!path_.hasValue()) {
+  if (!path_.has_value()) {
     // Moved out.
     return;
   }
@@ -176,7 +176,7 @@ createMetaDataLogsConfig(std::vector<node_index_t> positive_weight_nodes,
                       /* permissions */ false,
                       /* metadata_logs */ true);
 
-  ld_check(log_attrs.hasValue());
+  ld_check(log_attrs.has_value());
   cfg.setMetadataLogGroup(
       logsconfig::LogGroupNode("metadata logs",
                                log_attrs.value(),

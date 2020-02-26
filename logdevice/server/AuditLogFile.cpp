@@ -93,7 +93,7 @@ void log_trim_movement(ServerProcessor& processor,
       entry.log_group = log_group->name();
       auto retention = *log_group->attrs().backlogDuration();
       entry.retention =
-          retention.hasValue() ? chrono_string(retention.value()) : "infinity";
+          retention.has_value() ? chrono_string(retention.value()) : "infinity";
     }
   }
 

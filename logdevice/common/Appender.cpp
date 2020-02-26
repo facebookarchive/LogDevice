@@ -171,7 +171,7 @@ int Appender::sendSTORE(const StoreChainLink copyset[],
                                       payload_, // cloning the PayloadHolder
                                       true      // appender_context
       );
-  if (block_starting_lsn.hasValue()) {
+  if (block_starting_lsn.has_value()) {
     store_msg->setBlockStartingLSN(block_starting_lsn.value());
   }
 
@@ -312,7 +312,7 @@ void Appender::sendDeferredSTORE(std::unique_ptr<STORE_Message> msg,
     // This check should never fire, because we can get here only from
     // bwAvailCB which cannot be called without shard_ so the copyset has been
     // selected and the store timeout has been set.
-    ld_check(timeout_.hasValue());
+    ld_check(timeout_.has_value());
 
     activateStoreTimer(timeout_.value());
   }
@@ -580,7 +580,7 @@ int Appender::sendWave() {
     // wave if we do not get enough replies before it expires
     store_timeout_set_ = true;
 
-    if (!timeout_.hasValue()) {
+    if (!timeout_.has_value()) {
       timeout_.assign(exponentialStoreTimeout());
       ld_info("Copyset hasn't been selected, "
               "backoff %ldms before trying again.",
@@ -1049,7 +1049,7 @@ void Appender::sendError(Status reason) {
 
     case E::ABORTED:
       // This can only happen if the current epoch is unsuitable to the appender
-      ld_check(acceptable_epoch_.hasValue());
+      ld_check(acceptable_epoch_.has_value());
       client_code = E::ABORTED;
       break;
 
@@ -1109,8 +1109,9 @@ void Appender::onTimeout() {
           10,
           "Appender %s hit a STORE timeout(%sms), wave %u, recipient set: %s",
           store_hdr_.rid.toString().c_str(),
-          timeout_.hasValue() ? std::to_string(timeout_.value().count()).c_str()
-                              : "<NO VALUE>",
+          timeout_.has_value()
+              ? std::to_string(timeout_.value().count()).c_str()
+              : "<NO VALUE>",
           store_hdr_.wave,
           recipients_.dumpRecipientSet().c_str());
     } else {
@@ -1119,8 +1120,9 @@ void Appender::onTimeout() {
           2,
           "Appender %s hit a STORE timeout(%sms), wave %u, recipient set: %s",
           store_hdr_.rid.toString().c_str(),
-          timeout_.hasValue() ? std::to_string(timeout_.value().count()).c_str()
-                              : "<NO VALUE>",
+          timeout_.has_value()
+              ? std::to_string(timeout_.value().count()).c_str()
+              : "<NO VALUE>",
           store_hdr_.wave,
           recipients_.dumpRecipientSet().c_str());
     }
@@ -1860,7 +1862,7 @@ bool Appender::onRecipientFailed(Recipient* recipient,
     activateRetryTimer();
   } else {
     // Retry after a store timeout.
-    ld_check(timeout_.hasValue());
+    ld_check(timeout_.has_value());
     activateStoreTimer(timeout_.value());
   }
 
@@ -2370,7 +2372,7 @@ Appender::selectStoreTimeout(const StoreChainLink copyset[], int size) const {
     auto estimations =
         stats.getEstimations(WorkerTimeoutStats::Levels::TEN_SECONDS, node);
 
-    if (estimations.hasValue()) {
+    if (estimations.has_value()) {
       const auto percentile = WorkerTimeoutStats::QuantileIndexes::P99_99;
       constexpr int factor = 2;
       const auto estimation = factor * (*estimations)[percentile];

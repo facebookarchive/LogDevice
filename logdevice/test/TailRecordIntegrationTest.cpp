@@ -139,12 +139,12 @@ TailRecordIntegrationTest::checkTail(std::shared_ptr<ClientImpl>& client,
 
   EXPECT_EQ(lsn, tail_record->header.lsn);
   EXPECT_EQ(timestamp, tail_record->header.timestamp);
-  if (byte_offset.hasValue()) {
+  if (byte_offset.has_value()) {
     EXPECT_EQ(
         byte_offset.value(), tail_record->offsets_map_.getCounter(BYTE_OFFSET));
   }
 
-  if (tail_optimized_ && payload.hasValue()) {
+  if (tail_optimized_ && payload.has_value()) {
     uint64_t expected_checksum = 0;
     const auto& pl = payload.value();
     if (checksum_bits_ == 32) {

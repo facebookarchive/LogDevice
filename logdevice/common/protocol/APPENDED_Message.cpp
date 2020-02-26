@@ -26,8 +26,8 @@ __thread uint32_t APPENDED_Message::last_seq_batching_offset;
 void APPENDED_Message::serialize(ProtocolWriter& writer) const {
   writer.write(header_);
   ld_check((header_.flags & APPENDED_Header::INCLUDES_SEQ_BATCHING_OFFSET) ==
-           seq_batching_offset.hasValue());
-  if (seq_batching_offset.hasValue()) {
+           seq_batching_offset.has_value());
+  if (seq_batching_offset.has_value()) {
     uint32_t offset = seq_batching_offset.value();
     writer.write(offset);
   }
@@ -137,7 +137,7 @@ APPENDED_Message::getDebugInfo() const {
   add("status", error_name(header_.status));
   add("flags", flagsToString(header_.flags));
 
-  if (seq_batching_offset.hasValue()) {
+  if (seq_batching_offset.has_value()) {
     add("seq_batching_offset", seq_batching_offset.value());
   }
 

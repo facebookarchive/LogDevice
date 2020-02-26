@@ -92,7 +92,7 @@ class InfoRecordCache : public AdminCommand {
       }
     };
 
-    if (log_id_.hasValue()) {
+    if (log_id_.has_value()) {
       if (shard_ == -1) {
         for (shard_index_t s = 0; s < num_shards; ++s) {
           find_and_process_one(log_id_.value(), s);

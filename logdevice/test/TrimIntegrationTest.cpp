@@ -253,7 +253,7 @@ TEST_F(TrimIntegrationTest, AutoLegacy) {
     std::string data("data" + std::to_string(i));
     lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
     ASSERT_NE(LSN_INVALID, lsn);
-    if (!first.hasValue()) {
+    if (!first.has_value()) {
       first = lsn;
     }
   }
@@ -333,7 +333,7 @@ TEST_F(TrimIntegrationTest, Auto) {
     std::string data("data" + std::to_string(i));
     lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
     ASSERT_NE(LSN_INVALID, lsn);
-    if (!first.hasValue()) {
+    if (!first.has_value()) {
       first = lsn;
     }
   }

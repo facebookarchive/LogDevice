@@ -138,7 +138,7 @@ int RocksDBWriter::writeMulti(
           record_bytes += s.size();
         }
 
-        if (op->copyset_index_lsn.hasValue()) {
+        if (op->copyset_index_lsn.has_value()) {
           // Writing copyset index entry
           ++csi_entry_writes;
           ld_check(op->copyset_index_entry.data);

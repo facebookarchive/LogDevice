@@ -68,7 +68,7 @@ CrossDomainCopySetSelector::CrossDomainCopySetSelector(
     return;
   }
 
-  if (!my_sd->location.hasValue()) {
+  if (!my_sd->location.has_value()) {
     ld_error("This sequencer node %s for log %lu does not have location "
              "specified in config! Cannot exploit location locality to save "
              "cross-domain bandwith.",

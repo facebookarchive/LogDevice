@@ -64,7 +64,7 @@ void FindKeyStorageTask::executeImpl(const LocalLogStore& store,
   }
 
   int rv;
-  if (target_key_.hasValue()) {
+  if (target_key_.has_value()) {
     rv = store.findKey(log_id_,
                        target_key_.value(),
                        &result_lo_,

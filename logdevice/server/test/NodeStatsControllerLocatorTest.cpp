@@ -43,7 +43,7 @@ class NodeStatsControllerLocatorTest : public Test {
     std::vector<NodeTemplate> templates;
     for (const auto& location_str : locations) {
       auto idx = node_index++;
-      if (!location_str.hasValue()) {
+      if (!location_str.has_value()) {
         continue;
       }
       templates.emplace_back(NodeTemplate{

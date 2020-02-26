@@ -36,7 +36,7 @@ Node::Node(const Node& other) {
 }
 
 std::string Node::locationStr() const {
-  if (!location.hasValue()) {
+  if (!location.has_value()) {
     return "";
   }
   return location.value().toString();

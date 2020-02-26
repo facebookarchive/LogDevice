@@ -113,7 +113,7 @@ TEST_F(NodeRegistrationHandlerTest, testAddNode) {
   EXPECT_EQ(StorageState::PROVISIONING, shards.at(2).storage_state);
 
   const auto& seq = nc->getSequencerMembership()->getNodeState(index);
-  ASSERT_TRUE(seq.hasValue());
+  ASSERT_TRUE(seq.has_value());
   EXPECT_FALSE(seq->sequencer_enabled);
   EXPECT_EQ(12, seq->getConfiguredWeight());
 }
@@ -149,7 +149,7 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   EXPECT_EQ("/new/ssl", svd->ssl_address->toString());
   EXPECT_EQ("/new/gossip", svd->gossip_address->toString());
   EXPECT_EQ("/new/s2s", svd->server_to_server_address->toString());
-  EXPECT_FALSE(svd->admin_address.hasValue());
+  EXPECT_FALSE(svd->admin_address.has_value());
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
 
@@ -166,7 +166,7 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   EXPECT_EQ(StorageState::PROVISIONING, shards.at(2).storage_state);
 
   const auto& seq = nc->getSequencerMembership()->getNodeState(index);
-  ASSERT_TRUE(seq.hasValue());
+  ASSERT_TRUE(seq.has_value());
   EXPECT_FALSE(seq->sequencer_enabled);
   EXPECT_EQ(22, seq->getConfiguredWeight());
 }

@@ -150,7 +150,7 @@ class TestPartitionedRocksDBStore : public PartitionedRocksDBStore {
     auto& state = states_[(int)type];
     std::unique_lock<std::mutex> lock(test_mutex_);
 
-    if (state.current_promise_.hasValue()) {
+    if (state.current_promise_.has_value()) {
       state.current_promise_.value().set_value();
       state.current_promise_.reset();
     }
@@ -694,7 +694,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
                Type type,
                folly::Optional<std::string> key)
         : type(type), logid(logid), lsn(lsn) {
-      if (key.hasValue()) {
+      if (key.has_value()) {
         optional_keys.insert(std::make_pair(KeyType::FINDKEY, key.value()));
       }
     }
@@ -704,7 +704,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
                uint64_t timestamp,
                folly::Optional<std::string> key)
         : logid(logid), lsn(lsn), timestamp(timestamp), index(index) {
-      if (key.hasValue()) {
+      if (key.has_value()) {
         optional_keys.insert(std::make_pair(KeyType::FINDKEY, key.value()));
       }
     }
@@ -719,7 +719,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
           lsn(lsn),
           timestamp(timestamp),
           durability(d) {
-      if (key.hasValue()) {
+      if (key.has_value()) {
         optional_keys.insert(std::make_pair(KeyType::FINDKEY, key.value()));
       }
     }
@@ -1037,7 +1037,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
       return EPOCH_INVALID;
     }
     auto mtp = state->getPerEpochLogMetadataTrimPoint();
-    return mtp.hasValue() ? mtp.value() : EPOCH_INVALID;
+    return mtp.has_value() ? mtp.value() : EPOCH_INVALID;
   }
 
   int updateTrimPoint(logid_t log_id, lsn_t trim_point) {

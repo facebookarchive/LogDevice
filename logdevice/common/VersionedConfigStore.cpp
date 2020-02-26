@@ -90,7 +90,7 @@ void VersionedConfigStore::updateConfig(std::string key,
           folly::Optional<std::string> current_value) mutable
       -> std::pair<Status, std::string> {
     folly::Optional<version_t> current_version_opt;
-    if (current_value.hasValue()) {
+    if (current_value.has_value()) {
       current_version_opt = extract_fn_(*current_value);
       if (!current_version_opt) {
         RATELIMIT_WARNING(std::chrono::seconds(10),
@@ -156,9 +156,9 @@ Status VersionedConfigStore::isAllowedUpdate(
   if (condition.isOverwrite()) {
     return E::OK;
   } else if (condition.isCreateIfNotExists()) {
-    return current_version.hasValue() ? E::VERSION_MISMATCH : E::OK;
+    return current_version.has_value() ? E::VERSION_MISMATCH : E::OK;
   } else if (condition.hasVersion()) {
-    if (!current_version.hasValue()) {
+    if (!current_version.has_value()) {
       return E::NOTFOUND;
     }
     return current_version.value() == condition.getVersion()

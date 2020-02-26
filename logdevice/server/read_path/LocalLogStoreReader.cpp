@@ -244,7 +244,8 @@ Status readImpl(LocalLogStore::ReadIterator& read_iterator,
 
       // Check and move timestamp window.
       if (read_ctx->it_stats_.maxTimestampReached()) {
-        ld_check(read_ctx->it_stats_.max_read_timestamp_lower_bound.hasValue());
+        ld_check(
+            read_ctx->it_stats_.max_read_timestamp_lower_bound.has_value());
         read_ctx->ts_window_high_ =
             read_ctx->it_stats_.max_read_timestamp_lower_bound.value();
         return E::WINDOW_END_REACHED;

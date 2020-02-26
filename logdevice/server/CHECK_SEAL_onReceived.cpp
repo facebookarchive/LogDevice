@@ -25,8 +25,8 @@ static void prepareReplyWithHighestSeal(CHECK_SEAL_REPLY_Header& reply_out,
                                         folly::Optional<Seal> soft) {
   ld_check(reply_out.status == E::OK);
 
-  if (!normal.hasValue() ||
-      (soft.hasValue() && soft.value().epoch > normal.value().epoch)) {
+  if (!normal.has_value() ||
+      (soft.has_value() && soft.value().epoch > normal.value().epoch)) {
     reply_out.sealed_epoch = soft.value().epoch;
     reply_out.sequencer = soft->seq_node;
     reply_out.seal_type = CheckSealType::SOFT;
@@ -36,7 +36,7 @@ static void prepareReplyWithHighestSeal(CHECK_SEAL_REPLY_Header& reply_out,
     reply_out.seal_type = CheckSealType::NORMAL;
   }
 
-  if (!normal.hasValue() && soft.hasValue()) {
+  if (!normal.has_value() && soft.has_value()) {
     RATELIMIT_INFO(
         std::chrono::seconds(1),
         5,
@@ -135,7 +135,7 @@ Message::Disposition CHECK_SEAL_onReceived(CHECK_SEAL_Message* msg,
   folly::Optional<Seal> soft_seal =
       log_state->getSeal(LogStorageState::SealType::SOFT);
 
-  if (!normal_seal.hasValue() && !soft_seal.hasValue()) {
+  if (!normal_seal.has_value() && !soft_seal.has_value()) {
     const logid_t log_id = header.log_id;
     int rv = log_state->recoverSeal(
         [reply_hdr, log_id, from](Status status, LogStorageState::Seals seals) {
@@ -152,10 +152,10 @@ Message::Disposition CHECK_SEAL_onReceived(CHECK_SEAL_Message* msg,
               " normal_seal:%s, soft_seal:%s], rqid:%lu",
               log_id.val_,
               error_name(status),
-              recovered_normal.hasValue()
+              recovered_normal.has_value()
                   ? folly::to<std::string>(recovered_normal->epoch.val_).c_str()
                   : "not present",
-              recovered_soft.hasValue()
+              recovered_soft.has_value()
                   ? folly::to<std::string>(recovered_soft->epoch.val_).c_str()
                   : "not present",
               reply.rqid.val());

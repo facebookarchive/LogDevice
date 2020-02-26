@@ -316,7 +316,7 @@ void ServerReadStream::noteSent(StatsHolder* stats,
       break;
   }
 
-  if (last_sent_source_.hasValue() && source == last_sent_source_.value()) {
+  if (last_sent_source_.has_value() && source == last_sent_source_.value()) {
     return;
   }
 

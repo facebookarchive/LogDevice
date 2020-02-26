@@ -81,7 +81,7 @@ class MockDataSizeRequest : public DataSizeRequest {
                         std::chrono::seconds(1)),
         replication_(replication),
         map_(starting_map) {
-    Configuration::NodesConfig nodes_config = nodes_config_override.hasValue()
+    Configuration::NodesConfig nodes_config = nodes_config_override.has_value()
         ? std::move(nodes_config_override.value())
         : createSimpleNodesConfig(storage_set_size);
 

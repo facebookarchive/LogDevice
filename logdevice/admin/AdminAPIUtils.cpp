@@ -183,7 +183,7 @@ void fillNodeConfig(
     roles.insert(thrift::Role::SEQUENCER);
     const auto& seq_membership = nodes_configuration.getSequencerMembership();
     const auto result = seq_membership->getNodeState(node_index);
-    if (result.hasValue()) {
+    if (result.has_value()) {
       // Sequencer Config
       thrift::SequencerConfig sequencer_config;
       sequencer_config.set_weight(result->getConfiguredWeight());
@@ -302,7 +302,7 @@ void fillNodeState(
       // For every shard in storage membership
       ShardID shard(node_index, shard_index);
       auto result = storage_membership->getShardState(shard);
-      if (!result.hasValue()) {
+      if (!result.has_value()) {
         // shard does not exist in membership
         continue;
       }
@@ -425,7 +425,7 @@ folly::F14FastSet<node_index_t> extractSequencerNodeIndicies(
   folly::F14FastSet<node_index_t> output;
   for (const auto& it : thrift_shards) {
     auto maybe_idx = findNodeIndex(it.get_node(), nodes_configuration);
-    if (maybe_idx.hasValue() &&
+    if (maybe_idx.has_value() &&
         nodes_configuration.isSequencerNode(*maybe_idx)) {
       output.insert(*maybe_idx);
     }

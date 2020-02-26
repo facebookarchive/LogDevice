@@ -436,7 +436,7 @@ class ClientReadStreamTest
         start_lsn_,
         until_lsn_,
         flow_control_threshold_,
-        buffer_type_.hasValue() ? buffer_type_.value() : GetParam(),
+        buffer_type_.has_value() ? buffer_type_.value() : GetParam(),
         buffer_size_,
         std::move(deps),
         state_.config,
@@ -4330,7 +4330,7 @@ TEST_P(ClientReadStreamTest, StartReadingWithUnconfirmedEpochs) {
   ASSERT_NO_START_MESSAGES();
 
   // allows soft entries for metadata cache when first starts reading
-  ASSERT_TRUE(state_.require_consistent_from_cache.hasValue());
+  ASSERT_TRUE(state_.require_consistent_from_cache.has_value());
   ASSERT_FALSE(state_.require_consistent_from_cache.value());
   // request metadata for epoch 8 for the first time
   ASSERT_METADATA_REQ(epoch_t(8));

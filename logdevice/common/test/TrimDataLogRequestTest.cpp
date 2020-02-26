@@ -124,7 +124,7 @@ class MockTrimDataLogRequest : public TrimDataLogRequest {
 
   void runTrim() override {
     issued_trim_for_ = new_trim_point_;
-    ld_check(trim_status_.hasValue());
+    ld_check(trim_status_.has_value());
     onTrimComplete(trim_status_.value());
   }
 

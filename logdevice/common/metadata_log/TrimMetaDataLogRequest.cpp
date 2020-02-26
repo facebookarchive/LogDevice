@@ -93,7 +93,7 @@ void TrimMetaDataLogRequest::start() {
 
   backlog_ = log->attrs().backlogDuration().value();
   // directly read metadata log in trim_all_UNSAFE mode
-  if (!backlog_.hasValue() && !trim_all_UNSAFE_) {
+  if (!backlog_.has_value() && !trim_all_UNSAFE_) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    10,
                    "There is no backlog duration found in log config for "
@@ -197,7 +197,7 @@ void TrimMetaDataLogRequest::readMetaDataLog() {
     reader_timer_ = std::make_unique<Timer>([this] { onReadTimeout(); });
   } else {
     // we used the read_timer_ for data log reading
-    ld_check(!backlog_.hasValue());
+    ld_check(!backlog_.has_value());
     ld_check(!reader_timer_->isActive());
   }
   reader_timer_->activate(read_timeout_);
@@ -268,7 +268,7 @@ void TrimMetaDataLogRequest::onEpochMetaData(Status st,
 
   if (trim_all_UNSAFE_) {
     trimAllUnsafe(std::move(result));
-  } else if (backlog_.hasValue()) {
+  } else if (backlog_.has_value()) {
     trimWithMetaDataTimestamp(std::move(result));
   } else {
     trimWithDataLog(std::move(result));
@@ -278,7 +278,7 @@ void TrimMetaDataLogRequest::onEpochMetaData(Status st,
 void TrimMetaDataLogRequest::trimWithMetaDataTimestamp(
     MetaDataLogReader::Result result) {
   ld_check(result.metadata);
-  ld_check(backlog_.hasValue());
+  ld_check(backlog_.has_value());
   ld_check(state_ == State::READ_METADATA_LOG);
 
   const epoch_t epoch = result.epoch_req;
@@ -334,8 +334,8 @@ void TrimMetaDataLogRequest::trimWithDataLog(MetaDataLogReader::Result result) {
   ld_check(result.metadata);
   ld_check(state_ == State::READ_METADATA_LOG);
 
-  ld_check(!backlog_.hasValue());
-  ld_check(trim_point_datalog_.hasValue());
+  ld_check(!backlog_.has_value());
+  ld_check(trim_point_datalog_.has_value());
 
   const epoch_t epoch = result.epoch_req;
   epoch_t until = result.epoch_until;

@@ -80,7 +80,7 @@ void GET_SEQ_STATE_Message::serialize(ProtocolWriter& writer) const {
   writer.write(calling_ctx_);
 
   if (flags_ & GET_SEQ_STATE_Message::MIN_EPOCH) {
-    ld_check(min_epoch_.hasValue());
+    ld_check(min_epoch_.has_value());
     writer.write(min_epoch_.value());
   }
 }
@@ -214,7 +214,7 @@ GET_SEQ_STATE_Message::getSequencer(logid_t datalog_id,
     // 1) sequencer does not have a valid epoch; OR
     // 2) current epoch is less than min_epoch_
     return seq.getState() == Sequencer::State::UNAVAILABLE ||
-        (min_epoch_.hasValue() && seq.getCurrentEpoch() < min_epoch_.value());
+        (min_epoch_.has_value() && seq.getCurrentEpoch() < min_epoch_.value());
   };
 
   epoch_t cur_epoch =
@@ -235,8 +235,9 @@ GET_SEQ_STATE_Message::getSequencer(logid_t datalog_id,
         cur_epoch.val_,
         request_id_.val(),
         getContextString(calling_ctx_).c_str(),
-        min_epoch_.hasValue() ? std::to_string(min_epoch_.value().val()).c_str()
-                              : "none",
+        min_epoch_.has_value()
+            ? std::to_string(min_epoch_.value().val()).c_str()
+            : "none",
         Sender::describeConnection(from).c_str());
 
     if (!sequencer_out) {
@@ -916,10 +917,10 @@ void GET_SEQ_STATE_Message::sendReply(
   msg->request_id_ = request_id_;
   msg->status_ = status;
   msg->redirect_ = redirect;
-  if (tail_attributes.hasValue()) {
+  if (tail_attributes.has_value()) {
     msg->tail_attributes_ = tail_attributes.value();
   }
-  if (epoch_offsets.hasValue()) {
+  if (epoch_offsets.has_value()) {
     msg->epoch_offsets_ = std::move(epoch_offsets.value());
   }
   if (metadata_map) {
@@ -928,7 +929,7 @@ void GET_SEQ_STATE_Message::sendReply(
   if (tail_record) {
     msg->tail_record_ = std::move(tail_record);
   }
-  if (is_log_empty.hasValue()) {
+  if (is_log_empty.has_value()) {
     msg->is_log_empty_ = is_log_empty.value();
   }
 
@@ -997,7 +998,7 @@ GET_SEQ_STATE_Message::getDebugInfo() const {
   add("rqid", request_id_.val());
   add("flags", flagsToString(flags_));
   add("calling_ctx", getContextString(calling_ctx_));
-  if (min_epoch_.hasValue()) {
+  if (min_epoch_.has_value()) {
     add("min_epoch", min_epoch_.value().val());
   }
   return res;

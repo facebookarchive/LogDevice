@@ -83,13 +83,13 @@ std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
   if (!config_) {
     setUpdateableConfig(UpdateableConfig::createEmpty());
   }
-  if (!server_settings_.hasValue()) {
+  if (!server_settings_.has_value()) {
     setServerSettings(create_default_settings<ServerSettings>());
   }
-  if (!admin_settings_.hasValue()) {
+  if (!admin_settings_.has_value()) {
     setAdminServerSettings(create_default_settings<AdminServerSettings>());
   }
-  if (!gossip_settings_.hasValue()) {
+  if (!gossip_settings_.has_value()) {
     GossipSettings gossip_settings(create_default_settings<GossipSettings>());
     gossip_settings.enabled = false;
     setGossipSettings(std::move(gossip_settings));

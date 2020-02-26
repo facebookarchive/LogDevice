@@ -35,21 +35,21 @@ PThread::PThread(std::function<void()> f) {
 PThread::PThread(PThread&& rhs) noexcept : t_(std::move(rhs.t_)) {}
 
 PThread& PThread::operator=(PThread&& rhs) {
-  ld_check(!t_.hasValue());
+  ld_check(!t_.has_value());
   t_ = std::move(rhs.t_);
   return *this;
 }
 
 PThread::~PThread() {
-  ld_check(!t_.hasValue());
+  ld_check(!t_.has_value());
 }
 
 bool PThread::joinable() const {
-  return t_.hasValue();
+  return t_.has_value();
 }
 
 void PThread::join() {
-  ld_check(t_.hasValue());
+  ld_check(t_.has_value());
 
   int rv = pthread_join(t_.value(), /* retval */ nullptr);
   ld_check_eq(rv, 0);
@@ -58,7 +58,7 @@ void PThread::join() {
 }
 
 bool PThread::isCurrentThread() const {
-  ld_check(t_.hasValue());
+  ld_check(t_.has_value());
   return pthread_equal(pthread_self(), t_.value());
 }
 

@@ -40,7 +40,7 @@ NodeRegistrationHandler::registerSelf(NodeIndicesAllocator allocator) {
             trial_num);
 
         auto update = buildSelfUpdate(my_idx, /* is_update= */ false);
-        if (!update.hasValue()) {
+        if (!update.has_value()) {
           return Status::INVALID_ATTRIBUTES;
         }
         return applyUpdate(std::move(update).value());
@@ -62,7 +62,7 @@ Status NodeRegistrationHandler::updateSelf(node_index_t my_idx) {
                 my_idx,
                 trial_num);
         auto update = buildSelfUpdate(my_idx, /* is_update= */ true);
-        if (!update.hasValue()) {
+        if (!update.has_value()) {
           return Status::INVALID_ATTRIBUTES;
         }
         return applyUpdate(std::move(update).value());
@@ -82,7 +82,7 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
 
   update_builder.setNodeIndex(my_idx).setName(server_settings_.name);
 
-  if (server_settings_.version.hasValue()) {
+  if (server_settings_.version.has_value()) {
     update_builder.setVersion(server_settings_.version.value());
   }
 

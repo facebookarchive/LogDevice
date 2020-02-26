@@ -361,7 +361,7 @@ int Digest::recomputeOffsetsWithinEpoch(
 
   // if offsets_within_epoch is not given, figure out offsets_within_epoch
   // from digest entries
-  if (!offsets_within_epoch.hasValue()) {
+  if (!offsets_within_epoch.has_value()) {
     ld_check(last_known_good >= digest_start_esn_);
     auto iter = entries_.find(last_known_good);
     if (iter == entries_.end()) {

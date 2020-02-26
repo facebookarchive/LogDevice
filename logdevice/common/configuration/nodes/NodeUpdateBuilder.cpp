@@ -83,17 +83,17 @@ NodeUpdateBuilder& NodeUpdateBuilder::setSequencerWeight(double weight) {
 }
 
 NodeUpdateBuilder::Result NodeUpdateBuilder::validate() const {
-  if (!node_index_.hasValue()) {
+  if (!node_index_.has_value()) {
     return Result{
         Status::INVALID_PARAM, "Mandatory field 'node_index' is missing"};
   }
 
-  if (!data_address_.hasValue()) {
+  if (!data_address_.has_value()) {
     return Result{
         Status::INVALID_PARAM, "Mandatory field 'data_address' is missing"};
   }
 
-  if (!name_.hasValue()) {
+  if (!name_.has_value()) {
     return Result{Status::INVALID_PARAM, "Mandatory field 'name' is missing"};
   }
 
@@ -102,18 +102,18 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::validate() const {
   }
 
   if (hasRole(roles_, NodeRole::SEQUENCER)) {
-    if (!sequencer_weight_.hasValue()) {
+    if (!sequencer_weight_.has_value()) {
       return Result{Status::INVALID_PARAM,
                     "Sequencer node without field 'sequencer_weight'"};
     }
   }
 
   if (hasRole(roles_, NodeRole::STORAGE)) {
-    if (!storage_capacity_.hasValue()) {
+    if (!storage_capacity_.has_value()) {
       return Result{Status::INVALID_PARAM,
                     "Storage node without field 'storage_capacity'"};
     }
-    if (!num_shards_.hasValue()) {
+    if (!num_shards_.has_value()) {
       return Result{
           Status::INVALID_PARAM, "Storage node without field 'num_shards'"};
     }
@@ -233,7 +233,7 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::buildUpdateNodeUpdate(
     return validation_result;
   }
 
-  ld_assert(node_index_.hasValue());
+  ld_assert(node_index_.has_value());
   auto node_idx = node_index_.value();
 
   auto current_svc = nodes_configuration.getNodeServiceDiscovery(node_idx);

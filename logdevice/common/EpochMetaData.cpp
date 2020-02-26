@@ -264,7 +264,7 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
   if (h.flags & MetaDataLogRecordHeader::HAS_TARGET_NODESET_SIZE_AND_SEED) {
     CHECK_READER();
     if (reader.bytesRemaining() == 0 ||
-        (expected_size.hasValue() &&
+        (expected_size.has_value() &&
          reader.bytesRead() - bytes_read_before_deserialize ==
              expected_size.value())) {
       // This is a hack to work around what D13463100 fixes.
@@ -300,7 +300,7 @@ void EpochMetaData::deserialize(ProtocolReader& reader,
   CHECK_READER();
   // Check trailing bytes if expected_size is set.
   // Note that if reader.error(), reader.bytesRemaining() will be zero.
-  if (expected_size.hasValue()) {
+  if (expected_size.has_value()) {
     const size_t bytes_consumed =
         reader.bytesRead() - bytes_read_before_deserialize;
 
@@ -399,7 +399,7 @@ void EpochMetaData::serialize(ProtocolWriter& writer) const {
   new_h.replication_factor_DO_NOT_USE = replication.getReplicationFactor();
 
   auto legacy_replication = replication.toOldRepresentation();
-  if (legacy_replication.hasValue()) {
+  if (legacy_replication.has_value()) {
     new_h.flags &= ~MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY;
     new_h.sync_replication_scope_DO_NOT_USE =
         legacy_replication->sync_replication_scope;

@@ -17,7 +17,7 @@ constexpr const char* kLogDevicePluginSymbolName = "logdevice_plugin";
 
 PluginVector DynamicPluginLoader::getPlugins() {
   auto maybe_env = readEnv();
-  if (!maybe_env.hasValue()) {
+  if (!maybe_env.has_value()) {
     return {};
   }
   // Parse the env variable to extract paths out of it

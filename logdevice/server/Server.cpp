@@ -114,11 +114,11 @@ bool ServerParameters::shutdownIfMyNodeInfoChanged(
 }
 
 bool ServerParameters::hasMyNodeInfoChanged(const NodesConfiguration& config) {
-  ld_check(my_node_id_.hasValue());
+  ld_check(my_node_id_.has_value());
   ld_check(my_node_id_finder_);
 
   auto node_id = my_node_id_finder_->calculate(config);
-  if (!node_id.hasValue()) {
+  if (!node_id.has_value()) {
     ld_error("Couldn't find my node ID in config.");
     return true;
   }
@@ -479,7 +479,7 @@ void ServerParameters::init() {
   if (!registerAndUpdateNodeInfo(nodes_configuration_store)) {
     throw ConstructorFailed();
   }
-  ld_check(my_node_id_.hasValue());
+  ld_check(my_node_id_.has_value());
 
   if (updateable_logs_config->get() == nullptr) {
     // Initialize logdevice with an empty LogsConfig that only contains the
@@ -729,7 +729,7 @@ bool Server::initListeners() {
       return true;
     };
 
-    if (node_svc->ssl_address.hasValue()) {
+    if (node_svc->ssl_address.has_value()) {
       std::string ssl_unix_socket;
       int ssl_port = -1;
       if (!getSocketOrPort(node_svc->ssl_address.value().getSocketAddress(),
@@ -808,7 +808,7 @@ bool Server::initListeners() {
 
     folly::Optional<Sockaddr> server_to_server_addr_opt =
         node_svc->server_to_server_address;
-    if (server_to_server_addr_opt.hasValue()) {
+    if (server_to_server_addr_opt.has_value()) {
       std::string server_to_server_socket;
       int server_to_server_port = -1;
       if (!getSocketOrPort(server_to_server_addr_opt.value().getSocketAddress(),
@@ -1563,7 +1563,7 @@ bool Server::initAdminServer() {
     ld_check(svd);
 
     auto admin_listen_addr = svd->admin_address;
-    if (!admin_listen_addr.hasValue()) {
+    if (!admin_listen_addr.has_value()) {
       const auto& admin_settings = params_->getAdminServerSettings();
       if (!admin_settings->admin_unix_socket.empty()) {
         admin_listen_addr = Sockaddr(admin_settings->admin_unix_socket);

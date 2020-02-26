@@ -39,12 +39,12 @@ bool isOptionalFieldValid(const F& field, folly::StringPiece name) {
 } // namespace
 
 const Sockaddr& NodeServiceDiscovery::getGossipAddress() const {
-  return gossip_address.hasValue() ? gossip_address.value() : address;
+  return gossip_address.has_value() ? gossip_address.value() : address;
 }
 
 const Sockaddr& NodeServiceDiscovery::getServerToServerAddress() const {
-  return server_to_server_address.hasValue() ? server_to_server_address.value()
-                                             : address;
+  return server_to_server_address.has_value() ? server_to_server_address.value()
+                                              : address;
 }
 
 bool NodeServiceDiscovery::isValid() const {
@@ -107,8 +107,9 @@ bool NodeServiceDiscovery::isValidForReset(
         "Storage nodes' location is assumed to be immutable to maintain the "
         "correctness of the replication property of the historical nodesets. "
         "Current value: '%s', requested update: '%s'",
-        current.location.hasValue() ? current.location->toString().c_str() : "",
-        location.hasValue() ? location->toString().c_str() : "");
+        current.location.has_value() ? current.location->toString().c_str()
+                                     : "",
+        location.has_value() ? location->toString().c_str() : "");
     return false;
   }
 
@@ -121,12 +122,13 @@ std::string NodeServiceDiscovery::toString() const {
       "[{} => A:{},G:{},S:{},AA:{},S2SA:{},L:{},R:{},V:{}]",
       name,
       address.toString(),
-      gossip_address.hasValue() ? gossip_address->toString() : "",
-      ssl_address.hasValue() ? ssl_address->toString() : "",
-      admin_address.hasValue() ? admin_address->toString() : "",
-      server_to_server_address.hasValue() ? server_to_server_address->toString()
-                                          : "",
-      location.hasValue() ? location->toString() : "",
+      gossip_address.has_value() ? gossip_address->toString() : "",
+      ssl_address.has_value() ? ssl_address->toString() : "",
+      admin_address.has_value() ? admin_address->toString() : "",
+      server_to_server_address.has_value()
+          ? server_to_server_address->toString()
+          : "",
+      location.has_value() ? location->toString() : "",
       logdevice::toString(roles),
       version);
 }
@@ -143,14 +145,14 @@ const Sockaddr& NodeServiceDiscovery::getSockaddr(
     case SocketType::DATA:
       if (peer_type == PeerType::NODE &&
           use_dedicated_server_to_server_address) {
-        if (!server_to_server_address.hasValue()) {
+        if (!server_to_server_address.has_value()) {
           return Sockaddr::INVALID;
         }
         return server_to_server_address.value();
       }
 
       if (connection_type == ConnectionType::SSL) {
-        if (!ssl_address.hasValue()) {
+        if (!ssl_address.has_value()) {
           return Sockaddr::INVALID;
         }
         return ssl_address.value();

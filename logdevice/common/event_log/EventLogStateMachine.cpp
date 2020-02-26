@@ -37,7 +37,7 @@ EventLogStateMachine::EventLogStateMachine(
 }
 
 bool EventLogStateMachine::thisNodeCanTrimAndSnapshot() const {
-  if (!myNodeId_.hasValue()) {
+  if (!myNodeId_.has_value()) {
     return false;
   }
 

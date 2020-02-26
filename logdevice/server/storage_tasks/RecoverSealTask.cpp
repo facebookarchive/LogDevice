@@ -98,7 +98,7 @@ void RecoverSealTask::invokeCallback() {
       // it may happen nevertheless if a log is sealed after we (attempted to)
       // read the seal record from the local log store.
       folly::Optional<Seal> current_seal = state.getSeal(type);
-      ld_check(current_seal.hasValue());
+      ld_check(current_seal.has_value());
       seals_.setSeal(type, current_seal.value());
     }
   };

@@ -112,7 +112,7 @@ StorageSetAccessor::SendResult FindKeyRequest::sendTo(ShardID shard) {
   if (accuracy_ == FindKeyAccuracy::APPROXIMATE) {
     flags |= FINDKEY_Header::APPROXIMATE;
   }
-  if (key_.hasValue()) {
+  if (key_.has_value()) {
     flags |= FINDKEY_Header::USER_KEY;
   }
   FINDKEY_Header header = {id_,
@@ -155,7 +155,7 @@ void FindKeyRequest::finalize(Status status, bool delete_this) {
   callback_called_ = true;
   bool lsn_invalid = (status == E::FAILED || status == E::INVALID_PARAM);
 
-  if (!key_.hasValue()) {
+  if (!key_.has_value()) {
     // If we got at least one successful reply, we can return at least a
     // somewhat accurate result to the application.  Otherwise, return
     // LSN_INVALID.

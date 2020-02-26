@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
   // updating global variable that is accessed from within LogDeviceClient, if
   // the benchmark is for LogDevice.
   client_settings = std::move(client_settings_impl);
-  if (exit_code.hasValue()) {
+  if (exit_code.has_value()) {
     (exit_code.value() == 0 ? std::cout : std::cerr) << ss.str();
     return exit_code.value();
   }

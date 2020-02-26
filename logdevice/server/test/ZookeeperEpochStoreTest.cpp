@@ -755,7 +755,7 @@ class CheckNodeIDRequest : public Request {
           ASSERT_NE(nullptr, info);
           EXPECT_TRUE(info->isValid());
           ASSERT_NE(nullptr, meta_props);
-          ASSERT_TRUE(meta_props->last_writer_node_id.hasValue());
+          ASSERT_TRUE(meta_props->last_writer_node_id.has_value());
           ASSERT_EQ(Worker::onThisThread()->processor_->getMyNodeID(),
                     meta_props->last_writer_node_id.value());
           ++completedRequestCnt;

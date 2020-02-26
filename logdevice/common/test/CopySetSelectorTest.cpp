@@ -336,7 +336,7 @@ void CopySetSelectorTest::setUp() {
   const Configuration::Node* my_node =
       config_->serverConfig()->getNode(seq_node_id.index());
   ASSERT_NE(nullptr, my_node);
-  if (my_node->location.hasValue()) {
+  if (my_node->location.has_value()) {
     seq_domain_name_ = my_node->location.value().getDomain();
   }
 
@@ -448,7 +448,7 @@ CopySetSelectorTest::buildNodeGroups(const StorageSet& shards) const {
     const Configuration::Node* node =
         config_->serverConfig()->getNode(i.node());
     ld_check(node);
-    ld_check(node->location.hasValue());
+    ld_check(node->location.has_value());
     const auto& location = node->location.value();
     scope_map[location.getDomain(sync_replication_scope_)].push_back(i);
   }
@@ -460,7 +460,7 @@ std::string
 CopySetSelectorTest::getNodeDomainName(node_index_t index,
                                        NodeLocationScope scope) const {
   const Configuration::Node* node = config_->serverConfig()->getNode(index);
-  if (node && node->location.hasValue()) {
+  if (node && node->location.has_value()) {
     return node->location.value().getDomain(scope);
   }
   return "";
@@ -476,7 +476,7 @@ size_t CopySetSelectorTest::countShardsWithDomainName(
             config_->serverConfig()->getNode(i.node());
         int rv = loc.fromDomainString(domain_name);
         ld_check(rv == 0);
-        return node && node->location.hasValue() &&
+        return node && node->location.has_value() &&
             node->location.value().sharesScopeWith(loc, loc.lastScope());
       });
 }
@@ -1193,7 +1193,7 @@ TEST_F(CopySetSelectorTest, CrossDomainCopysetSelectorDistribution) {
     const Configuration::Node* node =
         config_->serverConfig()->getNode(s.first.node());
     ld_check(node);
-    ld_check(node->location.hasValue());
+    ld_check(node->location.has_value());
     const auto& location = node->location.value();
     scope_stores[location.getDomain(sync_replication_scope_)] += s.second;
   }

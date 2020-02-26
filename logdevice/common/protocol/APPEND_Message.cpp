@@ -68,7 +68,7 @@ void APPEND_Message::serialize(ProtocolWriter& writer) const {
   }
 
   ld_check(bool(header_.flags & APPEND_Header::CUSTOM_COUNTERS) ==
-           attrs_.counters.hasValue());
+           attrs_.counters.has_value());
   if (header_.flags & APPEND_Header::CUSTOM_COUNTERS) {
     ld_check(attrs_.counters->size() <= std::numeric_limits<uint8_t>::max());
     uint8_t counters_length = attrs_.counters->size();
@@ -208,7 +208,7 @@ Message::Disposition APPEND_Message::onReceived(const Address& from) {
   if (auto log_path = Worker::getConfig()->getLogGroupPath(header_.logid)) {
     LOG_GROUP_TIME_SERIES_ADD(
         stats, append_in_bytes, log_path.value(), payload_size);
-    if (attrs_.counters.hasValue()) {
+    if (attrs_.counters.has_value()) {
       LOG_GROUP_CUSTOM_COUNTERS_ADD(
           stats, log_path.value(), attrs_.counters.value());
     }
@@ -298,7 +298,7 @@ APPEND_Message::getDebugInfo() const {
     }
     add("optional_keys", std::move(map));
   }
-  if (attrs_.counters.hasValue() && !attrs_.counters->empty()) {
+  if (attrs_.counters.has_value() && !attrs_.counters->empty()) {
     folly::dynamic map{folly::dynamic::object()};
     for (auto& kv : attrs_.counters.value()) {
       map[toString(kv.first)] = kv.second;

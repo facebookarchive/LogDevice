@@ -176,8 +176,8 @@ class MessageSerializationTest : public ::testing::Test {
       ASSERT_EQ(flag1, flag2);
     }
     ASSERT_EQ(m.attrs_.optional_keys, m2.attrs_.optional_keys);
-    ASSERT_EQ(m.attrs_.counters.hasValue(), m2.attrs_.counters.hasValue());
-    if (m.attrs_.counters.hasValue()) {
+    ASSERT_EQ(m.attrs_.counters.has_value(), m2.attrs_.counters.has_value());
+    if (m.attrs_.counters.has_value()) {
       ASSERT_EQ(m.attrs_.counters->size(), m2.attrs_.counters->size());
       for (auto counter : m.attrs_.counters.value()) {
         auto map =
@@ -1497,7 +1497,7 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
     EXPECT_EQ(7, m2.request_id_.val());
     EXPECT_EQ(flags8, m2.flags_);
     EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
-    EXPECT_FALSE(m2.min_epoch_.hasValue());
+    EXPECT_FALSE(m2.min_epoch_.has_value());
   };
   auto check8_with_min_epoch = [&](const GET_SEQ_STATE_Message& m2,
                                    uint16_t /*proto*/) {
@@ -1505,8 +1505,8 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
     EXPECT_EQ(7, m2.request_id_.val());
     EXPECT_EQ(flags8 | GET_SEQ_STATE_Message::MIN_EPOCH, m2.flags_);
     EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
-    EXPECT_TRUE(m2.min_epoch_.hasValue());
-    if (m2.min_epoch_.hasValue()) {
+    EXPECT_TRUE(m2.min_epoch_.has_value());
+    if (m2.min_epoch_.has_value()) {
       EXPECT_EQ(min_ep, m2.min_epoch_.value());
     }
   };
@@ -1518,7 +1518,7 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
         m2.flags_,
         proto < Compatibility::IS_LOG_EMPTY_IN_GSS_REPLY ? flags8 : flags32);
     EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
-    EXPECT_FALSE(m2.min_epoch_.hasValue());
+    EXPECT_FALSE(m2.min_epoch_.has_value());
   };
   auto check32_with_min_epoch = [&](const GET_SEQ_STATE_Message& m2,
                                     uint16_t proto) {
@@ -1529,8 +1529,8 @@ TEST_F(MessageSerializationTest, GET_SEQ_STATE) {
                   ? flags8 | GET_SEQ_STATE_Message::MIN_EPOCH
                   : flags32 | GET_SEQ_STATE_Message::MIN_EPOCH);
     EXPECT_EQ(GetSeqStateRequest::Context::GET_TAIL_RECORD, m2.calling_ctx_);
-    EXPECT_TRUE(m2.min_epoch_.hasValue());
-    if (m2.min_epoch_.hasValue()) {
+    EXPECT_TRUE(m2.min_epoch_.has_value());
+    if (m2.min_epoch_.has_value()) {
       EXPECT_EQ(min_ep, m2.min_epoch_.value());
     }
   };

@@ -262,7 +262,7 @@ class TemporaryDirectory {
   TemporaryDirectory& operator=(TemporaryDirectory&& rhs) = default;
 
   const boost::filesystem::path& path() const {
-    ld_check(path_.hasValue());
+    ld_check(path_.has_value());
     return path_.value();
   }
 

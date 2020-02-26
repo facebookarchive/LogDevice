@@ -111,7 +111,7 @@ int HashBasedSequencerLocator::locateSequencer(
   std::shared_ptr<NodeLocation> sequencerAffinity;
   if (log_attrs) {
     const auto& aff = log_attrs->sequencerAffinity();
-    if (aff.hasValue() && aff.value().hasValue()) {
+    if (aff.hasValue() && aff.value().has_value()) {
       // populating sequencerAffinity
       sequencerAffinity = std::make_shared<NodeLocation>();
       if (sequencerAffinity->fromDomainString(aff.value().value()) != 0) {
@@ -165,7 +165,7 @@ int HashBasedSequencerLocator::locateSequencer(
             nodes_configuration->getNodeServiceDiscovery(node);
         if (serv_disc != nullptr) {
           const auto location = serv_disc->location;
-          if (location.hasValue()) {
+          if (location.has_value()) {
             if (sequencerAffinity->sharesScopeWith(
                     location.value(), sequencerAffinity->lastScope())) {
               return w;

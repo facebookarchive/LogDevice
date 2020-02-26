@@ -18,18 +18,18 @@ fromConfig(folly::Optional<int> replication_factor,
            folly::Optional<logsconfig::LogAttributes::ScopeReplicationFactors>
                replicate_across) {
   ReplicationProperty prop;
-  if (replicate_across.hasValue() && !replicate_across.value().empty()) {
+  if (replicate_across.has_value() && !replicate_across.value().empty()) {
     int rv = prop.assign(replicate_across.value());
     ld_check(rv == 0);
-    ld_check(!sync_replication_scope.hasValue());
+    ld_check(!sync_replication_scope.has_value());
   }
-  if (replication_factor.hasValue()) {
+  if (replication_factor.has_value()) {
     ld_check(prop.getReplication(NodeLocationScope::NODE) == 0 ||
              prop.getReplication(NodeLocationScope::NODE) ==
                  replication_factor.value());
     prop.setReplication(NodeLocationScope::NODE, replication_factor.value());
   }
-  if (sync_replication_scope.hasValue() &&
+  if (sync_replication_scope.has_value() &&
       sync_replication_scope.value() != NodeLocationScope::NODE &&
       replication_factor.value() > 1) {
     prop.setReplication(sync_replication_scope.value(), 2);

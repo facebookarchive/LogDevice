@@ -64,7 +64,7 @@ void RebuildingLogEnumerator::start() {
     // not sure if it's possible to determine that without performing copy-set
     // iteration. Simpler to just track the biggest backlog.
     if (rebuilding_settings_->disable_data_log_rebuilding &&
-        !MetaDataLog::isMetaDataLog(logid) && backlog.hasValue()) {
+        !MetaDataLog::isMetaDataLog(logid) && backlog.has_value()) {
       // We want to skip over data logs with a finite backlog but we don't
       // want to notify that the shard is rebuilt until after the contents
       // of the longest-lived log, since rebuild was requested, has expired.
@@ -81,7 +81,7 @@ void RebuildingLogEnumerator::start() {
     }
 
     RecordTimestamp next_ts = RecordTimestamp::min();
-    if (backlog.hasValue()) {
+    if (backlog.has_value()) {
       next_ts = cur_timestamp - backlog.value();
     }
 

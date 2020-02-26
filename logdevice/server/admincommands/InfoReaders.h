@@ -60,27 +60,27 @@ class InfoReaders : public AdminCommand {
 
   void run() override {
     if (type_ == "log") {
-      if (!id_.hasValue() || id_.value() <= 0) {
+      if (!id_.has_value() || id_.value() <= 0) {
         out_.printf(
             "Invalid parameter for 'info readers logid' "
             "command. Expected a positive log id, "
             "got %s.\r\n",
-            id_.hasValue() ? std::to_string(id_.value()).c_str() : "nothing");
+            id_.has_value() ? std::to_string(id_.value()).c_str() : "nothing");
         return;
       }
     } else if (type_ == "client") {
-      if (!id_.hasValue() ||
+      if (!id_.has_value() ||
           id_.value() > std::numeric_limits<uint32_t>::max() ||
           !ClientID::valid(static_cast<int32_t>(id_.value()))) {
         out_.printf(
             "Invalid parameter for 'info readers client' "
             "command. Expected a valid client id, "
             "got %s.\r\n",
-            id_.hasValue() ? std::to_string(id_.value()).c_str() : "nothing");
+            id_.has_value() ? std::to_string(id_.value()).c_str() : "nothing");
         return;
       }
     } else if (type_ == "all") {
-      if (id_.hasValue()) {
+      if (id_.has_value()) {
         out_.printf("Unexpected parameter for 'info readers all'.\r\n");
         return;
       }

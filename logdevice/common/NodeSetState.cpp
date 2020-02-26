@@ -478,7 +478,7 @@ bool NodeSetState::setNotAvailableUntil(
 
   do {
     old_reason = old_state.getReason();
-    if (allow_transition_from.hasValue() &&
+    if (allow_transition_from.has_value() &&
         old_reason != *allow_transition_from) {
       return false;
     }

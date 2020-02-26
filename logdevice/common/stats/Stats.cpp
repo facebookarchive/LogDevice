@@ -57,7 +57,7 @@ static void aggregateStat(StatsAgg agg,
                           StatsAggOptional override,
                           StatsCounter& out,
                           int64_t in) {
-  aggregateStat(override.hasValue() ? override.value() : agg, out, in);
+  aggregateStat(override.has_value() ? override.value() : agg, out, in);
 }
 
 template <typename H>

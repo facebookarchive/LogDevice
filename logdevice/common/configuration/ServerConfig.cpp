@@ -563,14 +563,14 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
     metadata_logs["sequencers_provision_epoch_store"] =
         metaDataLogsConfig_.sequencers_provision_epoch_store;
     auto& metadata_version = metaDataLogsConfig_.metadata_version_to_write;
-    if (metadata_version.hasValue()) {
+    if (metadata_version.has_value()) {
       metadata_logs["metadata_version"] = metadata_version.value();
     }
 
     json_all["metadata_logs"] = std::move(metadata_logs);
   }
 
-  if (clusterCreationTime_.hasValue()) {
+  if (clusterCreationTime_.has_value()) {
     json_all["cluster_creation_time"] = clusterCreationTime_.value().count();
   }
   if (with_logs != nullptr) {

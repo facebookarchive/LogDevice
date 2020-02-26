@@ -254,8 +254,8 @@ bool runNonBlockingFindKey(const FINDKEY_Message& msg,
   bool approximate = msg.header_.flags & FINDKEY_Header::APPROXIMATE;
 
   if (!Worker::settings().allow_reads_on_workers ||
-      (!msg.key_.hasValue() && !store->supportsNonBlockingFindTime()) ||
-      (msg.key_.hasValue() && !store->supportsNonBlockingFindKey())) {
+      (!msg.key_.has_value() && !store->supportsNonBlockingFindTime()) ||
+      (msg.key_.has_value() && !store->supportsNonBlockingFindKey())) {
     return false;
   }
 
@@ -268,7 +268,7 @@ bool runNonBlockingFindKey(const FINDKEY_Message& msg,
   int rv;
   lsn_t lo;
   lsn_t hi;
-  if (!msg.key_.hasValue()) {
+  if (!msg.key_.has_value()) {
     std::chrono::milliseconds timestamp(msg.header_.timestamp);
     lo = std::max(trim_point, msg.header_.hint_lo);
     hi = std::min(last_per_epoch_released_lsn, msg.header_.hint_hi);

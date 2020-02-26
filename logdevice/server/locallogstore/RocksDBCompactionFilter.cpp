@@ -84,7 +84,7 @@ RocksDBCompactionFilter::filterImpl(const rocksdb::Slice& key,
   if (first_record_) {
     first_record_ = false;
     // Check that this thread has low IO priority (set in RocksDBEnv).
-    if (settings_->low_ioprio.hasValue()) {
+    if (settings_->low_ioprio.has_value()) {
       std::pair<int, int> io_prio;
       int rv = get_io_priority_of_this_thread(&io_prio);
       if (rv == 0 && io_prio != settings_->low_ioprio.value()) {
@@ -196,7 +196,7 @@ RocksDBCompactionFilter::filterImpl(const rocksdb::Slice& key,
   getTrimInfo(log_id);
   Decision decision = Decision::kKeep;
 
-  if (cache.trim_point.hasValue() && cache.trim_point.value() >= lsn) {
+  if (cache.trim_point.has_value() && cache.trim_point.value() >= lsn) {
     // This record/index-entry is behind trim point. Drop it.
     decision = filterOutAndMaybeSkip(log_id, key, skip_until);
 
@@ -234,7 +234,7 @@ RocksDBCompactionFilter::filterOutAndMaybeSkip(logid_t log_id,
     char header = key.data()[0];
 
     // If we have a whitelist of logs, skip to the next whitelisted log.
-    if (context_ && context_->logs_to_keep.hasValue()) {
+    if (context_ && context_->logs_to_keep.has_value()) {
       auto it = std::lower_bound(context_->logs_to_keep->begin(),
                                  context_->logs_to_keep->end(),
                                  log_id);
@@ -328,7 +328,7 @@ RocksDBCompactionFilter::makeDecisionPerEpochLogMetadata(logid_t log_id,
   auto metadata_trim_point = cache.per_epoch_log_metadata_trim_point;
 
   RocksDBCompactionFilter::Decision decision;
-  if (metadata_trim_point.hasValue() && epoch <= metadata_trim_point.value()) {
+  if (metadata_trim_point.has_value() && epoch <= metadata_trim_point.value()) {
     ++per_epoch_log_metadata_removed_;
     decision = Decision::kRemove;
   } else {
@@ -338,7 +338,7 @@ RocksDBCompactionFilter::makeDecisionPerEpochLogMetadata(logid_t log_id,
     // them.
     decision = Decision::kKeep;
 
-    if (cache.trim_point.hasValue()) {
+    if (cache.trim_point.has_value()) {
       const epoch_t data_trim_epoch = lsn_to_epoch(cache.trim_point.value());
       if (epoch < data_trim_epoch && epoch != EPOCH_INVALID) {
         // metadata trim point can be safely moved to epoch - 1,
@@ -357,7 +357,7 @@ void RocksDBCompactionFilter::advanceTrimPointIfNeeded(
     logid_t log_id,
     lsn_t lsn,
     const rocksdb::Slice& record) {
-  if (!cache.cutoff_timestamp.hasValue()) {
+  if (!cache.cutoff_timestamp.has_value()) {
     return;
   }
 
@@ -381,7 +381,7 @@ void RocksDBCompactionFilter::advanceTrimPointIfNeeded(
   // and cutoff timestamp which we computed earlier
   if (timestamp < cache.cutoff_timestamp.value()) {
     // update next_trim_points map if needed
-    if (!cache.trim_point.hasValue() || cache.trim_point.value() < lsn) {
+    if (!cache.trim_point.has_value() || cache.trim_point.value() < lsn) {
       auto result = next_trim_points_.insert(std::make_pair(log_id, lsn));
       if (!result.second) {
         // key already in the map, check if value needs updating
@@ -484,7 +484,7 @@ void RocksDBCompactionFilter::getTrimInfo(logid_t log_id) {
   folly::Optional<std::chrono::seconds> backlog =
       log ? log->attrs().backlogDuration().value() : folly::none;
   // Don't trim metadata logs based on time.
-  if (backlog.hasValue() && !MetaDataLog::isMetaDataLog(log_id)) {
+  if (backlog.has_value() && !MetaDataLog::isMetaDataLog(log_id)) {
     // compute the cutoff timestamp based on the current local time
     std::chrono::milliseconds now = currentTime();
 

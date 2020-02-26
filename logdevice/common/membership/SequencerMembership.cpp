@@ -164,7 +164,7 @@ int SequencerMembership::applyUpdate(
     const SequencerNodeState::Update& node_update = kv.second;
 
     auto current_node_state = getNodeState(node);
-    bool node_exist = current_node_state.hasValue();
+    bool node_exist = current_node_state.has_value();
 
     if (!node_exist &&
         node_update.transition != SequencerMembershipTransition::ADD_NODE) {

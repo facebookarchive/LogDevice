@@ -182,7 +182,7 @@ NodesConfigurationManagerFactory::create(
   const auto& settings = *processor->settings();
   const bool is_server = settings.server;
 
-  if (is_server && !roles.hasValue()) {
+  if (is_server && !roles.has_value()) {
     ld_critical("Unable to create NodesConfigurationStore for creating "
                 "NodesConfiguratonManager!");
     err = E::INTERNAL;

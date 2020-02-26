@@ -77,7 +77,7 @@ runInternalAppend(logid_t logid,
       .setAcceptableEpoch(acceptable_epoch)
       .execute();
 
-  if (req->getReply().hasValue()) {
+  if (req->getReply().has_value()) {
     // Uh oh, AppenderPrep::execute() failed synchronously and invoked the
     // callback with an error code. Return it to the caller.
     return req->getReply();

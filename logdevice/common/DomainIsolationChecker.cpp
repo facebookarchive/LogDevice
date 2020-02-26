@@ -48,7 +48,7 @@ void DomainIsolationChecker::rebuildState() {
 
   const auto& my_location_optional =
       sd_config->nodeAttributesAt(this_node.index()).location;
-  if (!my_location_optional.hasValue()) {
+  if (!my_location_optional.has_value()) {
     ld_warning("This node (%s) does not have location information in config "
                "unable to detect domain isolation!",
                this_node.toString().c_str());
@@ -62,7 +62,7 @@ void DomainIsolationChecker::rebuildState() {
     const configuration::nodes::NodeServiceDiscovery& sd = kv.second;
     // we use a conservative approach so that nodes which do NOT have
     // location info are treated as nodes _outside_ of the domain
-    if (!sd.location.hasValue()) {
+    if (!sd.location.has_value()) {
       ld_warning("Node %hd does not have location information in config. "
                  "Domain isolation detection may not be accurate!",
                  index);

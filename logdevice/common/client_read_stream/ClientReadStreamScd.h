@@ -493,7 +493,7 @@ class ClientReadStreamScd : public boost::noncopyable {
 
   // Returns true if a transition to the given mode is scheduled.
   bool scheduledTransitionTo(Mode mode) {
-    return scheduled_mode_transition_.hasValue() &&
+    return scheduled_mode_transition_.has_value() &&
         scheduled_mode_transition_.value() == mode;
   }
 

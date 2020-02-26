@@ -152,7 +152,7 @@ RecoveredLSNs::RecoveryStatus RecoveredLSNs::recoveryStatus(lsn_t lsn) const {
 int LogRecoveryRequest::getThreadAffinity(int nthreads) {
   // If setTargetWorker() is called, pin the recovery request to the specified
   // worker thread
-  if (target_worker_.hasValue()) {
+  if (target_worker_.has_value()) {
     worker_id_t target = target_worker_.value();
     ld_check(target.val_ >= 0 && target.val_ < nthreads);
     return target.val_;
@@ -515,7 +515,7 @@ void LogRecoveryRequest::getLastCleanEpochCF(Status status,
 
 void LogRecoveryRequest::getEpochMetaData() {
   // must have fetched lce
-  ld_check(last_clean_epoch_.hasValue());
+  ld_check(last_clean_epoch_.has_value());
   const epoch_t last_clean_epoch = last_clean_epoch_.value();
 
   // There should be unclean epochs to recover otherwise the state machine would
@@ -609,7 +609,7 @@ int LogRecoveryRequest::createEpochRecoveryMachines(
 void LogRecoveryRequest::onEpochMetaData(Status st,
                                          MetaDataLogReader::Result result) {
   ld_check(result.log_id == log_id_);
-  ld_check(last_clean_epoch_.hasValue());
+  ld_check(last_clean_epoch_.has_value());
   const epoch_t last_clean_epoch = last_clean_epoch_.value();
   const epoch_t seq_metadata_effective_since = seq_metadata_->h.effective_since;
 
@@ -709,7 +709,7 @@ void LogRecoveryRequest::onEpochMetaData(Status st,
 void LogRecoveryRequest::finalizeEpochMetaData() {
   ld_check(!epoch_metadata_finalized_);
   ld_check(seq_metadata_);
-  ld_check(last_clean_epoch_.hasValue());
+  ld_check(last_clean_epoch_.has_value());
   const epoch_t last_clean_epoch = last_clean_epoch_.value();
   const epoch_t effective_since = seq_metadata_->h.effective_since;
 
@@ -911,7 +911,7 @@ void LogRecoveryRequest::informSequencerOfMetaDataRead(epoch_t effective_since,
 void LogRecoveryRequest::sealLog() {
   // must finished last step of getting epoch metadata
   ld_check(epoch_metadata_finalized_);
-  ld_check(last_clean_epoch_.hasValue());
+  ld_check(last_clean_epoch_.has_value());
   const epoch_t last_clean_epoch = last_clean_epoch_.value();
   ld_check(last_clean_epoch.val_ < next_epoch_.val_ - 1);
 
@@ -1006,7 +1006,7 @@ void LogRecoveryRequest::sealLog() {
 
   ld_check(epoch_recovery_machines_.size() > 0);
 
-  ld_check(tail_record_.hasValue());
+  ld_check(tail_record_.has_value());
   epoch_recovery_machines_.begin()->activate(tail_record_.value());
 }
 
@@ -1460,7 +1460,7 @@ void LogRecoveryRequest::complete(Status status) {
   }
 
   if (sequencer) {
-    if (!tail_record_.hasValue()) {
+    if (!tail_record_.has_value()) {
       ld_check(status != E::OK);
       tail_record_.assign(TailRecord());
     }
@@ -1581,7 +1581,7 @@ void LogRecoveryRequest::onEpochRecovered(epoch_t epoch,
   epoch_recovery_machines_.pop_front();
 
   if (epoch_recovery_machines_.begin() != epoch_recovery_machines_.end()) {
-    ld_check(tail_record_.hasValue());
+    ld_check(tail_record_.has_value());
     epoch_recovery_machines_.begin()->activate(tail_record_.value());
   } else {
     // finished recoverying all epochs in [lce+1, next_epoch-1]
@@ -1690,7 +1690,7 @@ void LogRecoveryRequest::getDebugInfo(InfoRecoveriesTable& table) const {
   auto started =
       creation_timestamp_.approximateSystemTimestamp().toMilliseconds();
 
-  if (!last_clean_epoch_.hasValue()) {
+  if (!last_clean_epoch_.has_value()) {
     // We still haven't fetched lce from the epoch store.
     table.next()
         .set<0>(log_id_)

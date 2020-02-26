@@ -176,7 +176,7 @@ void RebuildingSupervisor::addForRebuilding(
 
     if (node_id == myNodeId_.index()) {
       // this trigger is for our own shard. make sure the shard id was provided.
-      ld_check(shard_idx.hasValue());
+      ld_check(shard_idx.has_value());
       // When starting rebuilding of our shard, we don't need a grace period.
       // Only wait for event_log_grace_period to make it likely that rebuilding
       // set is propagated to workers by the time we check
@@ -200,13 +200,13 @@ void RebuildingSupervisor::addForRebuilding(
                    10,
                    "Scheduling rebuilding of N%d%s to execute in %s",
                    node_id,
-                   shard_idx.hasValue()
+                   shard_idx.has_value()
                        ? (":S" + std::to_string(shard_idx.value())).c_str()
                        : "",
                    chrono_string(timeout).c_str());
     WORKER_STAT_ADD(shard_rebuilding_scheduled, trigger.shards_.size());
   } else {
-    if (shard_idx.hasValue()) {
+    if (shard_idx.has_value()) {
       ld_check(node_id == myNodeId_.index());
       if (triggers_.addShard(node_id, shard_idx.value())) {
         WORKER_STAT_INCR(shard_rebuilding_scheduled);
@@ -300,7 +300,7 @@ void RebuildingSupervisor::scheduleNextRun(
     return;
   }
 
-  if (!timeout.hasValue()) {
+  if (!timeout.has_value()) {
     // no timeout specified. let's compute the timeout based on expiration of
     // the next trigger.
     auto trigger = triggers_.top();

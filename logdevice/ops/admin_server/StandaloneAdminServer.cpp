@@ -87,7 +87,7 @@ void StandaloneAdminServer::start() {
   std::string plugin_location =
       location_plugin ? location_plugin->getMyLocation() : "";
   auto location = settings_->client_location;
-  if (!location.hasValue() && !plugin_location.empty()) {
+  if (!location.has_value() && !plugin_location.empty()) {
     // if my-location was not specified, set the value to what the plugin
     // provides.
     folly::Optional<NodeLocation> res;

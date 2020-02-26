@@ -58,7 +58,7 @@ void RocksDBEnv::bgJobRun(void* arg) {
         ThreadID::Type::ROCKSDB, folly::sformat("rocks-{}-{}", pri_name, idx));
 
     // Set IO priority if needed.
-    if (job->ioprio_to_set.hasValue()) {
+    if (job->ioprio_to_set.has_value()) {
       set_io_priority_of_this_thread(job->ioprio_to_set.value());
     }
 

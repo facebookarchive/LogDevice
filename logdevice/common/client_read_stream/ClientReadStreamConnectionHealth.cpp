@@ -121,7 +121,7 @@ void ClientReadStreamConnectionHealth::recalculate(bool grace_period_expired) {
   // the next storage set to read from. In that case, we will consider the read
   // stream stalled only after a grace period expires (see 3.c/ below).
   bool waiting_for_metadata = !owner_->healthy_node_set_ ||
-      (owner_->epoch_metadata_requested_.hasValue() &&
+      (owner_->epoch_metadata_requested_.has_value() &&
        owner_->last_epoch_with_metadata_ <
            owner_->epoch_metadata_requested_.value());
 

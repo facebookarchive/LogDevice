@@ -429,7 +429,7 @@ class LocalLogStore : boost::noncopyable {
     // (which usually comes from logsdb partition boundaries), not the exact
     // record timestamps.
     bool maxTimestampReached() const {
-      return max_read_timestamp_lower_bound.hasValue() &&
+      return max_read_timestamp_lower_bound.has_value() &&
           *max_read_timestamp_lower_bound > stop_reading_after_timestamp;
     }
 

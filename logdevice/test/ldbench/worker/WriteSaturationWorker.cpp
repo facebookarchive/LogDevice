@@ -91,14 +91,14 @@ bool WriteSaturationWorker::tryAppend(std::unique_lock<std::mutex>& lock,
   for (;;) {
     auto now_plus_one_sec =
         std::chrono::steady_clock::now() + std::chrono::seconds(1);
-    auto wakeup_time = end_time_.hasValue()
+    auto wakeup_time = end_time_.has_value()
         ? std::min(now_plus_one_sec, end_time_.value())
         : now_plus_one_sec;
     cond_var_.wait_until(lock, wakeup_time, [this] {
       return errorOrStopped() || (npending_ < window_);
     });
     if (errorOrStopped() ||
-        (end_time_.hasValue() &&
+        (end_time_.has_value() &&
          std::chrono::steady_clock::now() >= end_time_.value())) {
       // Fatal error, stop requested, or end of benchmark.
       return true;

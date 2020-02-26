@@ -60,7 +60,7 @@ void SequencerContactor::contactSequencer(logid_t logid) {
           {st,
            seq,
            next_lsn,
-           (tail_in.hasValue()
+           (tail_in.has_value()
                 ? std::make_unique<LogTailAttributes>(tail_in.value())
                 : nullptr),
            md_map});

@@ -58,7 +58,7 @@ class TimeControlledNCS : public NodesConfigurationStore {
       return;
     }
 
-    if (get_delay_.hasValue()) {
+    if (get_delay_.has_value()) {
       folly::makeFuture()
           .delayed(get_delay_.value())
           .thenValue([mcb = std::move(cb), cfg = config_](auto&&) mutable {

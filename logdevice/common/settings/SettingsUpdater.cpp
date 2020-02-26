@@ -18,7 +18,7 @@ namespace facebook { namespace logdevice {
 
 bool fails_check(const SettingsUpdater::setting_checker_t& checker,
                  const SettingsUpdater::SettingState& setting) {
-  return checker && checker(setting, "").hasValue();
+  return checker && checker(setting, "").has_value();
 }
 
 #define ENSURES_FALSE(condition, description)                                \
@@ -57,7 +57,7 @@ std::string SettingsUpdater::help(SettingFlag::flag_t flag,
   std::map<std::string, std::unique_ptr<options_description>> bundles;
   for (auto& opt : settings_) {
     std::string name = opt.second.bundle_name;
-    if (bundle.hasValue() && name != bundle.value()) {
+    if (bundle.has_value() && name != bundle.value()) {
       continue;
     }
     if (opt.second.descriptor.flags & SettingFlag::INTERNAL_ONLY) {
@@ -186,8 +186,8 @@ formatEffectiveValue(const SettingsUpdater::SettingState& state) {
   folly::Optional<SettingsUpdater::Source> source;
   auto v = computeValue(state, &source);
   return formatValue(v) + " (from " +
-      (source.hasValue() ? SettingsUpdater::sourceNames()[source.value()]
-                         : std::string("defaults")) +
+      (source.has_value() ? SettingsUpdater::sourceNames()[source.value()]
+                          : std::string("defaults")) +
       ")";
 }
 
@@ -236,7 +236,7 @@ void SettingsUpdater::parse(int argc,
       try {
         if (checker && settings_.count(opt.first)) {
           auto e = checker(settings_.at(opt.first), opt.first);
-          if (e.hasValue()) {
+          if (e.has_value()) {
             throw boost::program_options::error(e.value());
           }
         }
@@ -251,7 +251,7 @@ void SettingsUpdater::parse(int argc,
       if (settings_.count(opt.first)) {
         if (checker) {
           auto e = checker(settings_.at(opt.first), opt.first);
-          if (e.hasValue()) {
+          if (e.has_value()) {
             throw boost::program_options::error(e.value());
           }
         }
@@ -663,7 +663,7 @@ void SettingsUpdater::unsetFromAdminCmd(std::string name) {
     throw boost::program_options::error("Unknown option \"" + name + "\"");
   } else {
     auto e = checker(settings_[name], name);
-    if (e.hasValue()) {
+    if (e.has_value()) {
       throw boost::program_options::error(folly::to<std::string>(
           "Option '", name, "' cannot be used: ", e.value()));
     }

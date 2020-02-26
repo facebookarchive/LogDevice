@@ -138,7 +138,7 @@ void LogStorageState::updateLastCleanEpoch(epoch_t epoch) {
 void LogStorageState::updateEpochOffsetMap(
     std::pair<epoch_t, OffsetMap> epoch_offsets) {
   RWLock::WriteHolder write_guard(rw_lock_);
-  if (latest_epoch_offsets_.hasValue() &&
+  if (latest_epoch_offsets_.has_value() &&
       latest_epoch_offsets_.value().first < epoch_offsets.first) {
     // No updates needed for older epoch.
     return;
@@ -310,7 +310,7 @@ int LogStorageState::recover(std::chrono::microseconds interval,
 int LogStorageState::recoverSeal(seal_callback_t callback) {
   folly::Optional<Seal> normal_seal = getSeal(SealType::NORMAL);
   folly::Optional<Seal> soft_seal = getSeal(SealType::SOFT);
-  if (normal_seal.hasValue() && soft_seal.hasValue()) {
+  if (normal_seal.has_value() && soft_seal.has_value()) {
     // both normal and soft seals have values, no need to recover
     Seals seals;
     seals.setSeal(SealType::NORMAL, normal_seal.value());
@@ -346,22 +346,22 @@ void LogStorageState::getDebugInfo(InfoLogStorageStateTable& table) const {
   table.set<3>(source);
 
   folly::Optional<lsn_t> trim_point = getTrimPoint();
-  if (trim_point.hasValue()) {
+  if (trim_point.has_value()) {
     table.set<4>(trim_point.value());
   }
 
   folly::Optional<epoch_t> epoch_trim_point = getPerEpochLogMetadataTrimPoint();
-  if (epoch_trim_point.hasValue()) {
+  if (epoch_trim_point.has_value()) {
     table.set<5>(epoch_trim_point.value());
   }
 
   folly::Optional<Seal> seal = getSeal(SealType::NORMAL);
-  if (seal.hasValue()) {
+  if (seal.has_value()) {
     table.set<6>(seal.value().epoch);
     table.set<7>(seal.value().seq_node.toString());
   }
   folly::Optional<Seal> soft_seal = getSeal(SealType::SOFT);
-  if (seal.hasValue()) {
+  if (seal.has_value()) {
     table.set<8>(soft_seal.value().epoch);
     table.set<9>(soft_seal.value().seq_node.toString());
   }
@@ -376,7 +376,7 @@ void LogStorageState::getDebugInfo(InfoLogStorageStateTable& table) const {
   table.set<12>(getLastCleanEpoch());
 
   auto latest_epoch = getEpochOffsetMap();
-  if (latest_epoch.hasValue()) {
+  if (latest_epoch.has_value()) {
     table.set<13>(latest_epoch->first);
     table.set<14>(latest_epoch->second.toString());
   }

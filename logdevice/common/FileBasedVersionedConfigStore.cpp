@@ -120,7 +120,7 @@ void FileBasedVersionedConfigStore::getConfigImpl(
     return;
   }
 
-  if (base_version.hasValue()) {
+  if (base_version.has_value()) {
     auto current_version_opt = (extract_fn_)(value);
     if (!current_version_opt) {
       RATELIMIT_WARNING(std::chrono::seconds(10),
@@ -318,7 +318,7 @@ void FileBasedVersionedConfigStore::readModifyWriteConfig(
   version_t new_version = opt.value();
 
   // TODO: Add stricter enforcement of monotonic increment of version.
-  if (cur_ver.hasValue() && new_version.val() <= cur_ver.value().val()) {
+  if (cur_ver.has_value() && new_version.val() <= cur_ver.value().val()) {
     RATELIMIT_WARNING(std::chrono::seconds(10),
                       5,
                       "Config value's version is not monitonically increasing"
@@ -339,7 +339,7 @@ void FileBasedVersionedConfigStore::readModifyWriteConfig(
     updateConfigImpl(std::move(key),
                      std::move(value),
                      std::move(new_version),
-                     base_version.hasValue()
+                     base_version.has_value()
                          ? base_version.value()
                          : VersionedConfigStore::Condition::createIfNotExists(),
                      cb_shared);

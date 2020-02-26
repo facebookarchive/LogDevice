@@ -49,7 +49,7 @@ std::string Table::getColumnDefinition() const {
 
 void preprocessColumn(DataType type, ColumnValue* inout_val) {
   ld_check(inout_val != nullptr);
-  if (type != DataType::LOGID || !inout_val->hasValue()) {
+  if (type != DataType::LOGID || !inout_val->has_value()) {
     return;
   }
 
@@ -98,7 +98,7 @@ std::string constraint_to_string(const Constraint& c) {
       op = "???";
       break;
   }
-  if (c.expr.hasValue()) {
+  if (c.expr.has_value()) {
     return op + c.expr.value();
   } else {
     return op;
@@ -158,7 +158,7 @@ bool Table::columnhasconstraint(int col,
 
   const ConstraintList& constraints = it_constraints->second;
   for (const Constraint& c : constraints.constraints_) {
-    if (!c.expr.hasValue()) {
+    if (!c.expr.has_value()) {
       continue;
     }
 

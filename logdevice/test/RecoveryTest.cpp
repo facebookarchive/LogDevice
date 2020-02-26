@@ -381,16 +381,16 @@ void RecoveryTest::init(bool can_tail_optimize) {
   factory.setParam(
       "--enable-record-cache", use_record_cache_ ? "true" : "false");
 
-  if (seq_reactivation_limit_.hasValue()) {
+  if (seq_reactivation_limit_.has_value()) {
     factory.setParam("--reactivation-limit", seq_reactivation_limit_.value());
   }
 
-  if (recovery_timeout_.hasValue()) {
+  if (recovery_timeout_.has_value()) {
     factory.setParam("--recovery-timeout",
                      toString(recovery_timeout_.value().count()) + "ms");
   }
 
-  if (recovery_grace_period_.hasValue()) {
+  if (recovery_grace_period_.has_value()) {
     factory.setParam("--recovery-grace-period",
                      toString(recovery_grace_period_.value().count()) + "ms");
   }
@@ -404,16 +404,16 @@ void RecoveryTest::init(bool can_tail_optimize) {
     factory.doPreProvisionEpochMetaData();
   }
 
-  if (num_logs_.hasValue()) {
+  if (num_logs_.has_value()) {
     factory.setNumLogs(num_logs_.value());
   }
 
-  if (node_configs_.hasValue()) {
+  if (node_configs_.has_value()) {
     ASSERT_EQ(nodes_, node_configs_.value().size());
     factory.setNodes(node_configs_.value());
   }
 
-  if (metadata_config_.hasValue()) {
+  if (metadata_config_.has_value()) {
     factory.setMetaDataLogsConfig(metadata_config_.value());
   } else {
     // Place metadata logs on the first 3 nodes in the cluster.
@@ -499,9 +499,9 @@ void RecoveryTest::prepopulateRecordCacheForLog(
   record_cache->neverStored();
   for (const TestRecord& tr : records) {
     auto ph = PayloadHolder::copyPayload(
-        tr.payload_.hasValue() ? tr.payload_.value()
-                               : Payload(TestRecord::kDefaultPayload.data(),
-                                         TestRecord::kDefaultPayload.size()));
+        tr.payload_.has_value() ? tr.payload_.value()
+                                : Payload(TestRecord::kDefaultPayload.data(),
+                                          TestRecord::kDefaultPayload.size()));
 
     STORE_flags_t store_flags =
         STORE_flags_t(tr.flags_ & LocalLogStoreRecordFormat::FLAG_MASK);

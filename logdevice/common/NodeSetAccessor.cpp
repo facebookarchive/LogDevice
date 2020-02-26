@@ -176,7 +176,7 @@ void StorageSetAccessor::setGracePeriod(std::chrono::milliseconds grace_period,
 }
 
 void StorageSetAccessor::onGracePeriodTimedout() {
-  ld_check(grace_period_.hasValue());
+  ld_check(grace_period_.has_value());
   complete(E::OK, "grace_period");
 }
 
@@ -542,14 +542,14 @@ bool StorageSetAccessor::checkIfDone() {
       }
 
       if (fmajority_result != FmajorityResult::NONE) {
-        if (completion_cond_.hasValue() && !completion_cond_.value()()) {
+        if (completion_cond_.has_value() && !completion_cond_.value()()) {
           RATELIMIT_INFO(std::chrono::seconds(5),
                          1,
                          "StorageSetAccessor has f-majority but completion "
                          "condition is not yet satisfied for log %lu",
                          log_id_.val());
           // Start the grace period timer here
-          if (grace_period_.hasValue()) {
+          if (grace_period_.has_value()) {
             activateGracePeriodTimer();
           }
           // Keep going
@@ -820,7 +820,7 @@ void StorageSetAccessor::activateJobTimer() {
 void StorageSetAccessor::activateGracePeriodTimer() {
   ld_check(grace_period_timer_);
   if (!grace_period_timer_->isActive()) {
-    ld_check(grace_period_.hasValue());
+    ld_check(grace_period_.has_value());
     ld_check(grace_period_timer_ != nullptr);
     grace_period_timer_->activate(grace_period_.value());
   }
@@ -955,7 +955,7 @@ std::string StorageSetAccessor::describeState(bool all_shards) const {
                s.state == ShardState::SUCCESS) {
       normal_status = E::OK;
     }
-    if (!normal_status.hasValue() || s.status != normal_status.value()) {
+    if (!normal_status.has_value() || s.status != normal_status.value()) {
       ss << ' ' << error_name(s.status);
     }
   }

@@ -224,7 +224,7 @@ class EpochMetaDataUpdateToNextEpoch final : public EpochMetaData::Updater {
     // If metadata was provided, make the write conditional on that metadata
     // being up-to-date.
     if (updated_metadata_ != nullptr) {
-      if (acceptable_activation_epoch_.hasValue()) {
+      if (acceptable_activation_epoch_.has_value()) {
         ld_check_eq(acceptable_activation_epoch_.value().val(),
                     updated_metadata_->h.epoch.val());
       } else {

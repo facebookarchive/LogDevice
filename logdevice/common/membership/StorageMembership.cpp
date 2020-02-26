@@ -38,7 +38,7 @@ bool ShardState::Update::isValid() const {
   }
 
   if (transition == StorageStateTransition::OVERRIDE_STATE &&
-      !state_override.hasValue()) {
+      !state_override.has_value()) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
         5,
@@ -281,7 +281,7 @@ int ShardState::transition(const ShardState& current_state,
     case StorageStateTransition::OVERRIDE_STATE: {
       // must have the force flag in conditions
       ld_check(update.conditions & Condition::FORCE);
-      ld_check(update.state_override.hasValue());
+      ld_check(update.state_override.has_value());
       const auto& state_override = update.state_override.value();
 
       // blindly overwrite the shard state to the target overrid state
@@ -458,7 +458,7 @@ int StorageMembership::applyUpdate(const Membership::Update& membership_update,
 
     // Step 1: get the current ShardState of the shard of the requested shard
     auto current_shard_state = getShardState(shard);
-    bool shard_exist = current_shard_state.hasValue();
+    bool shard_exist = current_shard_state.has_value();
 
     if (!shard_exist) {
       if (!isAddingNewShard(shard_update.transition)) {
@@ -629,12 +629,12 @@ std::vector<node_index_t> StorageMembership::getMembershipNodes() const {
 
 bool StorageMembership::canWriteToShard(ShardID shard) const {
   auto result = getShardState(shard);
-  return result.hasValue() ? canWriteTo(result->storage_state) : false;
+  return result.has_value() ? canWriteTo(result->storage_state) : false;
 }
 
 bool StorageMembership::shouldReadFromShard(ShardID shard) const {
   auto result = getShardState(shard);
-  return result.hasValue() ? shouldReadFrom(result->storage_state) : false;
+  return result.has_value() ? shouldReadFrom(result->storage_state) : false;
 }
 
 bool StorageMembership::hasWritableShard(node_index_t node) const {
@@ -663,16 +663,16 @@ bool StorageMembership::hasShardShouldReadFrom(node_index_t node) const {
 
 bool StorageMembership::canWriteMetaDataToShard(ShardID shard) const {
   auto result = getShardState(shard);
-  return (result.hasValue() ? canWriteMetaDataTo(
-                                  result->storage_state, result->metadata_state)
-                            : false);
+  return (result.has_value() ? canWriteMetaDataTo(result->storage_state,
+                                                  result->metadata_state)
+                             : false);
 }
 
 bool StorageMembership::shouldReadMetaDataFromShard(ShardID shard) const {
   auto result = getShardState(shard);
-  return (result.hasValue() ? shouldReadMetaDataFrom(
-                                  result->storage_state, result->metadata_state)
-                            : false);
+  return (result.has_value() ? shouldReadMetaDataFrom(result->storage_state,
+                                                      result->metadata_state)
+                             : false);
 }
 
 StorageMembership::StorageMembership() : Membership(EMPTY_VERSION) {

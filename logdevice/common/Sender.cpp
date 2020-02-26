@@ -274,7 +274,7 @@ void Sender::noteBytesQueued(size_t nbytes,
   StatsHolder* stats = Worker::stats();
   STAT_ADD(stats, sockets_bytes_pending_total, nbytes);
   STAT_ADD(stats, sockets_bytes_pending_max_worker, nbytes);
-  if (message_type.hasValue()) {
+  if (message_type.has_value()) {
     MESSAGE_TYPE_STAT_ADD(
         stats, message_type.value(), message_bytes_pending, nbytes);
   }
@@ -287,7 +287,7 @@ void Sender::noteBytesDrained(size_t nbytes,
   StatsHolder* stats = Worker::stats();
   STAT_SUB(stats, sockets_bytes_pending_total, nbytes);
   STAT_SUB(stats, sockets_bytes_pending_max_worker, nbytes);
-  if (message_type.hasValue()) {
+  if (message_type.has_value()) {
     MESSAGE_TYPE_STAT_SUB(
         stats, message_type.value(), message_bytes_pending, nbytes);
   }
@@ -1020,7 +1020,7 @@ Connection* Sender::initServerConnection(NodeID nid,
     // Determine whether we should use SSL and what the flow group scope is
     auto flow_group_scope = NodeLocationScope::NODE;
     if (nid.index() != my_node_index_) {
-      if (my_location_.hasValue() && node_cfg->location) {
+      if (my_location_.has_value() && node_cfg->location) {
         flow_group_scope =
             my_location_->closestSharedScope(*node_cfg->location);
       } else {

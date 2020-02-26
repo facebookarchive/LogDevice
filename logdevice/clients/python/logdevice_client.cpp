@@ -203,7 +203,7 @@ boost::shared_ptr<Client> logdevice_make_client(object name,
         .setCredentials(std::move(credentials_str))
         .setClientSettings(std::move(client_settings))
         .setCSID(std::move(csid_str));
-    if (timeout.hasValue()) {
+    if (timeout.has_value()) {
       factory.setTimeout(timeout.value());
     }
     client = factory.create(std::move(config_path));

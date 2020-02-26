@@ -194,7 +194,7 @@ int LogBasedRSMSnapshotStore::getLastReleasedLsn(
         tail_attributes
             ? lsn_to_string(tail_attributes->last_released_real_lsn).c_str()
             : "no tail attributes",
-        is_log_empty.hasValue()
+        is_log_empty.has_value()
             ? folly::to<std::string>(is_log_empty.value()).c_str()
             : "no value",
         lsn_to_string(read_upto).c_str());

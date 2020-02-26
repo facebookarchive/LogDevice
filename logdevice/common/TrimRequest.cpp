@@ -204,7 +204,7 @@ void TrimRequest::onLogConfigAvailable(LogsConfig::LogGroupNodePtr cfg) {
   }
   auto attrs = cfg->attrs();
   // Check the write token ...
-  if (attrs.writeToken().hasValue() && attrs.writeToken().value().hasValue() &&
+  if (attrs.writeToken().hasValue() && attrs.writeToken().value().has_value() &&
       !client_->hasWriteToken(attrs.writeToken().value().value()) &&
       (!per_request_token_ ||
        *per_request_token_ != attrs.writeToken().value().value())) {

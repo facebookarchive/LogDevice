@@ -286,12 +286,13 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
     }
 
     void assertCallbackNotCalled() {
-      ASSERT_FALSE(result.hasValue()) << error_name(result.value().first) << " "
-                                      << lsn_to_string(result.value().second);
+      ASSERT_FALSE(result.has_value())
+          << error_name(result.value().first) << " "
+          << lsn_to_string(result.value().second);
     }
 
     void assertCallbackCalled(Status st, lsn_t lsn) {
-      ASSERT_TRUE(result.hasValue());
+      ASSERT_TRUE(result.has_value());
       ASSERT_EQ(st, result.value().first) << error_name(result.value().first);
       ASSERT_EQ(lsn, result.value().second)
           << lsn_to_string(result.value().second);

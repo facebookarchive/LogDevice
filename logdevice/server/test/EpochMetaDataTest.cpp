@@ -60,7 +60,7 @@ class EpochMetaDataTest : public ::testing::Test {
       epoch_t::raw_type effective_since = 6,
       StorageSet storage_set = {N3, N4, N5},
       int replication_factor = 2) {
-    if (!sync_replication_scope.hasValue()) {
+    if (!sync_replication_scope.has_value()) {
       sync_replication_scope = NodeLocationScope::NODE;
     }
     ld_check(sync_replication_scope.value() != NodeLocationScope::ROOT);

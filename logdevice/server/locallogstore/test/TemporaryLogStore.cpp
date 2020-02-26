@@ -355,7 +355,7 @@ int TemporaryPartitionedStore::putRecord(
       &csi_entry_buf);
 
   std::string payload_buf;
-  if (!payload.hasValue()) {
+  if (!payload.has_value()) {
     payload_buf = toString(log.val()) + lsn_to_string(lsn);
     payload = Slice::fromString(payload_buf);
   }

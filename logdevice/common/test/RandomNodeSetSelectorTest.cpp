@@ -55,7 +55,7 @@ verify_result(NodeSetSelector* selector,
               folly::Optional<nodeset_size_t> target_size = folly::none) {
   SCOPED_TRACE("log " + toString(logid.val_));
 
-  if (!target_size.hasValue()) {
+  if (!target_size.has_value()) {
     const auto logcfg = config->getLogGroupByIDShared(logid);
     ASSERT_NE(nullptr, logcfg);
     target_size =
@@ -215,7 +215,7 @@ TEST(RandomCrossDomainNodeSetSelectorTest, RackAssignment) {
       for (const ShardID i : *storage_set) {
         const Configuration::Node* node = cfg.serverConfig()->getNode(i.node());
         ASSERT_NE(nullptr, node);
-        ASSERT_TRUE(node->location.hasValue());
+        ASSERT_TRUE(node->location.has_value());
         node_map[node->locationStr()].push_back(i);
       }
 

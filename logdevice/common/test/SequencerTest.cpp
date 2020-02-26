@@ -136,13 +136,13 @@ class SequencerTest : public ::testing::Test {
   }
 
   void checkHistoricalMetaDataRequestEpoch(epoch_t epoch) {
-    ASSERT_TRUE(request_epoch_reading_metadata_.hasValue());
+    ASSERT_TRUE(request_epoch_reading_metadata_.has_value());
     ASSERT_EQ(epoch, request_epoch_reading_metadata_.value());
     request_epoch_reading_metadata_.reset();
   }
 
   void noHistoricalMetaDataRequested() {
-    ASSERT_FALSE(request_epoch_reading_metadata_.hasValue());
+    ASSERT_FALSE(request_epoch_reading_metadata_.has_value());
   }
 
   void removeLogFromConfig();

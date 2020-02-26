@@ -101,11 +101,11 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
     const auto& node_sd = kv.second;
     result->set("node_id", s(nid));
     result->set("address", node_sd.address.toString());
-    if (node_sd.ssl_address.hasValue()) {
+    if (node_sd.ssl_address.has_value()) {
       result->set("ssl_address", node_sd.ssl_address.value().toString());
     }
     result->set("generation", s(nodes_configuration->getNodeGeneration(nid)));
-    if (node_sd.location.hasValue()) {
+    if (node_sd.location.has_value()) {
       result->set("location", node_sd.location.value().toString());
     }
     result->set("sequencer",
@@ -128,7 +128,7 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
       // TODO: in compatibility mode, use the storage state of ShardID(nid, 0)
       ShardID compatibility_shard(nid, 0);
       auto state_res = storage_membership->getShardState(compatibility_shard);
-      if (state_res.hasValue()) {
+      if (state_res.has_value()) {
         // TODO: use the new storage state string
         // result->set(
         //     "storage_state",

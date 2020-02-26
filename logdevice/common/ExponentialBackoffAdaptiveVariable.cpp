@@ -47,7 +47,7 @@ void ExponentialBackoffAdaptiveVariable::negativeFeedback() {
 
 void ExponentialBackoffAdaptiveVariable::positiveFeedback(
     ExponentialBackoffAdaptiveVariable::TS::TimePoint now) {
-  if (last_positive_feedback_.hasValue()) {
+  if (last_positive_feedback_.has_value()) {
     const auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - last_positive_feedback_.value());
     const double decrease_value = fuzz(delta.count() * decrease_rate_ / 1000);

@@ -257,7 +257,7 @@ RunAppenderStatus MetaDataLogWriter::runAppender(Appender* appender) {
 
   if (appender != nullptr) {
     auto acceptable_epoch = appender->getAcceptableEpoch();
-    if (acceptable_epoch.hasValue()) {
+    if (acceptable_epoch.has_value()) {
       if (acceptable_epoch.value() != epoch_from_parent) {
         // Current epoch is unacceptable to this appender
         err = E::ABORTED;

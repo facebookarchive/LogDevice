@@ -41,7 +41,7 @@ std::unique_ptr<CopySetSelector> CopySetSelectorFactory::create(
 
   // If we have weights or a relatively complicated replication property,
   // use the new experimental copyset selector that supports that.
-  if (!legacy_replication.hasValue() || !epoch_metadata.weights.empty() ||
+  if (!legacy_replication.has_value() || !epoch_metadata.weights.empty() ||
       settings.weighted_copyset_selector) {
     bool locality_enabled =
         epoch_metadata.replication.getBiggestReplicationScope() >=

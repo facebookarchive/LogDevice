@@ -474,7 +474,7 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
 
   // Buffer the RELEASE.  Once the PurgeUncleanEpochs state machine finishes,
   // we will re-examine the RELEASE, probably going through the fast path.
-  if (!buffered_release_.hasValue() || lsn > buffered_release_.value().lsn) {
+  if (!buffered_release_.has_value() || lsn > buffered_release_.value().lsn) {
     buffered_release_ = BufferedRelease{lsn, from};
   }
 
@@ -509,7 +509,7 @@ PurgeCoordinator::checkPreemption(epoch_t sequencer_epoch) {
   folly::Optional<Seal> soft_seal =
       parent_->getSeal(LogStorageState::SealType::SOFT);
 
-  if (!normal_seal.hasValue() || !soft_seal.hasValue() ||
+  if (!normal_seal.has_value() || !soft_seal.has_value() ||
       !normal_seal->valid()) {
     // We expect both normal seal and soft seal are likely to have values,
     // since by the time the node received CLEAN message, it must have been
@@ -618,7 +618,7 @@ void PurgeCoordinator::startBufferedMessages(
         std::move(clean.message), clean.from, clean.reply_to, clean.worker);
   }
 
-  if (buffered_release.hasValue()) {
+  if (buffered_release.has_value()) {
     onReleaseMessage(buffered_release->lsn,
                      buffered_release->from,
                      ReleaseType::GLOBAL, // we never buffer per-epoch releases

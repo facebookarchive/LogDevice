@@ -56,10 +56,10 @@ class InfoBoycotts : public AdminCommand {
 
     table.next()
         .set<0>(node_idx_)
-        .set<1>(boycott.hasValue())
-        .set<2>(boycott.hasValue() ? boycott.value().boycott_duration
-                                   : std::chrono::milliseconds(0))
-        .set<3>(boycott.hasValue()
+        .set<1>(boycott.has_value())
+        .set<2>(boycott.has_value() ? boycott.value().boycott_duration
+                                    : std::chrono::milliseconds(0))
+        .set<3>(boycott.has_value()
                     ? std::chrono::duration_cast<std::chrono::milliseconds>(
                           boycott.value().boycott_in_effect_time)
                     : std::chrono::milliseconds(0));

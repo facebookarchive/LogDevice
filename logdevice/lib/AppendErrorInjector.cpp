@@ -39,7 +39,7 @@ class AppendRequestWrapper : public AppendRequest {
    */
   void sendAppendMessage() override {
     folly::Optional<Status> st = cb_(getRecordLogID(), sequencer_node_.index());
-    if (st.hasValue()) {
+    if (st.has_value()) {
       if (st.value() == E::OK) {
         // If we're injecting a success rather than an error, assign a fake
         // non-INVALID LSN to avoid tripping an assert in ClientImpl.

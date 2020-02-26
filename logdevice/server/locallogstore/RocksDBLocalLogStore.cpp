@@ -568,13 +568,13 @@ void RocksDBLocalLogStore::CSIWrapper::seek(logid_t log,
 void RocksDBLocalLogStore::CSIWrapper::seek(lsn_t lsn,
                                             ReadFilter* filter,
                                             ReadStats* stats) {
-  ld_check(log_id_.hasValue());
+  ld_check(log_id_.has_value());
   seek(log_id_.value(), lsn, filter, stats);
 }
 
 void RocksDBLocalLogStore::CSIWrapper::seekForPrev(lsn_t lsn) {
   SCOPED_IO_TRACING_CONTEXT_FROM_ITERATOR(this, "seekForPrev");
-  ld_check(log_id_.hasValue());
+  ld_check(log_id_.has_value());
   moveTo(Location(log_id_.value(), lsn),
          Direction::BACKWARD,
          /* near */ false,
@@ -942,7 +942,7 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
         state_ = data_iterator_->state();
         if (csi_iterator_good && state_ == IteratorState::AT_END) {
           STAT_INCR(getStatsHolder(), read_streams_num_csi_skips_no_record);
-          if (!data_iterator_->skipped_dangling_amend_.hasValue() ||
+          if (!data_iterator_->skipped_dangling_amend_.has_value() ||
               data_iterator_->skipped_dangling_amend_.value() != current) {
             RATELIMIT_INFO(std::chrono::seconds(10),
                            2,
@@ -960,7 +960,7 @@ void RocksDBLocalLogStore::CSIWrapper::moveTo(const Location& target,
         ld_check(current.before(data_loc, dir));
         if (csi_iterator_good) {
           STAT_INCR(getStatsHolder(), read_streams_num_csi_skips_no_record);
-          if (!data_iterator_->skipped_dangling_amend_.hasValue() ||
+          if (!data_iterator_->skipped_dangling_amend_.has_value() ||
               data_iterator_->skipped_dangling_amend_.value() != current) {
             RATELIMIT_INFO(std::chrono::seconds(10),
                            2,
@@ -1037,13 +1037,13 @@ RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::CopySetIndexIterator(
       last_key_(parent_->log_id_.value_or(LOGID_INVALID),
                 std::numeric_limits<lsn_t>::max(),
                 CopySetIndexKey::LAST_ENTRY_TYPE) {
-  if (parent_->log_id_.hasValue() &&
+  if (parent_->log_id_.has_value() &&
       !parent_->getRocksDBStore()->getSettings()->disable_iterate_upper_bound) {
     upper_bound_ = rocksdb::Slice(
         reinterpret_cast<const char*>(&last_key_), sizeof(last_key_));
   }
   rocks_options_ = translateReadOptions(
-      parent_->read_opts_, parent_->log_id_.hasValue(), &upper_bound_);
+      parent_->read_opts_, parent_->log_id_.has_value(), &upper_bound_);
   registerTracking(parent_->cf_->GetName(),
                    parent_->log_id_.value_or(LOGID_INVALID),
                    rocks_options_.tailing,
@@ -1054,7 +1054,7 @@ RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::CopySetIndexIterator(
 
 RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::
     ~CopySetIndexIterator() {
-  if (iterator_.hasValue()) {
+  if (iterator_.has_value()) {
     STAT_INCR(
         parent_->getStatsHolder(), read_streams_num_csi_iterators_destroyed);
   }
@@ -1062,7 +1062,7 @@ RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::
 
 void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::
     createIteratorIfNeeded() {
-  if (!iterator_.hasValue()) {
+  if (!iterator_.has_value()) {
     iterator_ =
         parent_->getRocksDBStore()->newIterator(rocks_options_, parent_->cf_);
     STAT_INCR(
@@ -1072,7 +1072,7 @@ void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::
 
 IteratorState
 RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::state() const {
-  ld_check(iterator_.hasValue());
+  ld_check(iterator_.has_value());
   return state_;
 }
 
@@ -1083,7 +1083,7 @@ void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::invalidate() {
 
 void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::
     checkIteratorAndParseCurrentEntry() {
-  ld_check(iterator_.hasValue());
+  ld_check(iterator_.has_value());
 
   state_ = IteratorState::MAX;
   SCOPE_EXIT {
@@ -1101,7 +1101,7 @@ void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::
         std::chrono::seconds(10),
         2,
         "RocksDB copyset index iterator for log %s failed with status %s",
-        parent_->log_id_.hasValue()
+        parent_->log_id_.has_value()
             ? folly::to<std::string>(parent_->log_id_.value().val_).c_str()
             : "all",
         status.ToString().c_str());
@@ -1137,7 +1137,7 @@ void RocksDBLocalLogStore::CSIWrapper::CopySetIndexIterator::
   current_single_log_id_ = CopySetIndexKey::getLogID(iterator_->key().data());
   current_single_lsn_ = CopySetIndexKey::getLSN(iterator_->key().data());
 
-  if (parent_->log_id_.hasValue() &&
+  if (parent_->log_id_.has_value() &&
       current_single_log_id_ != parent_->log_id_.value()) {
     state_ = IteratorState::AT_END;
     return;
@@ -1286,7 +1286,7 @@ RocksDBLocalLogStore::CSIWrapper::DataIterator::DataIterator(
               ? folly::none
               : parent_->log_id_),
       rocks_options_(translateReadOptions(parent_->read_opts_,
-                                          parent_->log_id_.hasValue(),
+                                          parent_->log_id_.has_value(),
                                           &upper_bound_.upper_bound)) {
   registerTracking(parent_->cf_->GetName(),
                    parent_->log_id_.value_or(LOGID_INVALID),
@@ -1297,7 +1297,7 @@ RocksDBLocalLogStore::CSIWrapper::DataIterator::DataIterator(
 }
 
 void RocksDBLocalLogStore::CSIWrapper::DataIterator::createIteratorIfNeeded() {
-  if (!iterator_.hasValue()) {
+  if (!iterator_.has_value()) {
     iterator_ =
         parent_->getRocksDBStore()->newIterator(rocks_options_, parent_->cf_);
   }
@@ -1309,7 +1309,7 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::releaseIterator() {
 }
 
 IteratorState RocksDBLocalLogStore::CSIWrapper::DataIterator::state() const {
-  if (!iterator_.hasValue()) {
+  if (!iterator_.has_value()) {
     ld_check(false);
     return IteratorState::ERROR;
   }
@@ -1323,7 +1323,7 @@ IteratorState RocksDBLocalLogStore::CSIWrapper::DataIterator::state() const {
         std::chrono::seconds(10),
         2,
         "RocksDB data iterator for log %s failed with status %s",
-        parent_->log_id_.hasValue()
+        parent_->log_id_.has_value()
             ? folly::to<std::string>(parent_->log_id_.value().val_).c_str()
             : "all",
         status.ToString().c_str());
@@ -1351,7 +1351,7 @@ IteratorState RocksDBLocalLogStore::CSIWrapper::DataIterator::state() const {
                  hexdump_buf(slice.data(), slice.size(), 50).c_str())) {
     return IteratorState::ERROR;
   }
-  if (parent_->log_id_.hasValue() &&
+  if (parent_->log_id_.has_value() &&
       DataKey::getLogID(slice.data()) != parent_->log_id_.value()) {
     return IteratorState::AT_END;
   }
@@ -1413,7 +1413,7 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::step(Direction dir) {
 
 void RocksDBLocalLogStore::CSIWrapper::DataIterator::
     handleKeyFormatMigration() {
-  ld_check(iterator_.hasValue());
+  ld_check(iterator_.has_value());
   while (true) {
     // If we're standing on a dangling amend in new format, step forward and
     // see if the next key has the same lsn. If it does, merge the two together.
@@ -1435,7 +1435,7 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::
     logid_t log = DataKey::getLogID(key.data());
     lsn_t lsn = DataKey::getLSN(key.data());
 
-    if (parent_->log_id_.hasValue() && log != parent_->log_id_.value()) {
+    if (parent_->log_id_.has_value() && log != parent_->log_id_.value()) {
       break;
     }
 
@@ -1451,7 +1451,7 @@ void RocksDBLocalLogStore::CSIWrapper::DataIterator::
     // Alright, we've got a dangling amend in new format.
     STAT_INCR(getStatsHolder(), data_key_format_migration_steps);
 
-    if (!skipped_dangling_amend_.hasValue()) {
+    if (!skipped_dangling_amend_.has_value()) {
       skipped_dangling_amend_ = Location(log, lsn);
     }
 

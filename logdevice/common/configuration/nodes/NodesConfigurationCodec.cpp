@@ -25,20 +25,20 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
   disc.set_name(discovery.name);
   disc.set_version(discovery.version);
   disc.set_address(discovery.address.toString());
-  if (discovery.gossip_address.hasValue()) {
+  if (discovery.gossip_address.has_value()) {
     disc.set_gossip_address(discovery.gossip_address->toString());
   }
-  if (discovery.ssl_address.hasValue()) {
+  if (discovery.ssl_address.has_value()) {
     disc.set_ssl_address(discovery.ssl_address.value().toString());
   }
-  if (discovery.admin_address.hasValue()) {
+  if (discovery.admin_address.has_value()) {
     disc.set_admin_address(discovery.admin_address.value().toString());
   }
-  if (discovery.server_to_server_address.hasValue()) {
+  if (discovery.server_to_server_address.has_value()) {
     disc.set_server_to_server_address(
         discovery.server_to_server_address.value().toString());
   }
-  if (discovery.location.hasValue()) {
+  if (discovery.location.has_value()) {
     disc.set_location(discovery.location.value().toString());
   }
   disc.set_roles(discovery.roles.to_ullong());
@@ -59,7 +59,7 @@ int NodesConfigurationThriftConverter::fromThrift(
     return -1;
   } else {
     auto sock = Sockaddr::fromString(obj.address);
-    if (!sock.hasValue()) {
+    if (!sock.has_value()) {
       ld_error("malformed socket addr field address.");
       return -1;
     }
@@ -68,7 +68,7 @@ int NodesConfigurationThriftConverter::fromThrift(
 
   if (obj.gossip_address_ref().has_value()) {
     auto sock = Sockaddr::fromString(obj.gossip_address_ref().value());
-    if (!sock.hasValue()) {
+    if (!sock.has_value()) {
       ld_error("malformed socket addr field gossip_address.");
       return -1;
     }
@@ -77,7 +77,7 @@ int NodesConfigurationThriftConverter::fromThrift(
 
   if (obj.ssl_address_ref().has_value()) {
     auto sock = Sockaddr::fromString(obj.ssl_address_ref().value());
-    if (!sock.hasValue()) {
+    if (!sock.has_value()) {
       ld_error("malformed socket addr field ssl_address.");
       return -1;
     }
@@ -86,7 +86,7 @@ int NodesConfigurationThriftConverter::fromThrift(
 
   if (obj.admin_address_ref().has_value()) {
     auto sock = Sockaddr::fromString(obj.admin_address_ref().value());
-    if (!sock.hasValue()) {
+    if (!sock.has_value()) {
       ld_error("malformed socket addr field admin_address.");
       return -1;
     }
@@ -96,7 +96,7 @@ int NodesConfigurationThriftConverter::fromThrift(
   if (obj.server_to_server_address_ref().has_value()) {
     auto sock =
         Sockaddr::fromString(obj.server_to_server_address_ref().value());
-    if (!sock.hasValue()) {
+    if (!sock.has_value()) {
       ld_error("malformed socket addr field server_to_server_address.");
       return -1;
     }

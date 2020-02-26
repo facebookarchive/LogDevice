@@ -48,7 +48,7 @@ void ConfigurationFetchRequest::initTimeoutTimer() {
     it->second->onError(E::TIMEDOUT);
   });
 
-  if (timeout_.hasValue()) {
+  if (timeout_.has_value()) {
     timeout_timer_.activate(timeout_.value());
   }
 }
@@ -61,8 +61,8 @@ void ConfigurationFetchRequest::sendConfigFetch() {
   CONFIG_FETCH_Header hdr{
       isWaitingForResponse() ? id_ : REQUEST_ID_INVALID,
       config_type_,
-      (conditional_poll_version_.hasValue() ? conditional_poll_version_.value()
-                                            : 0)};
+      (conditional_poll_version_.has_value() ? conditional_poll_version_.value()
+                                             : 0)};
 
   std::unique_ptr<Message> msg = std::make_unique<CONFIG_FETCH_Message>(hdr);
   int rv = sendMessageTo(std::move(msg), node_id_);

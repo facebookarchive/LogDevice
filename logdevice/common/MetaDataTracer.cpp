@@ -25,7 +25,7 @@ void MetaDataTracer::trace(Status st, lsn_t appended_lsn) {
   auto sample = std::make_unique<TraceSample>();
   sample->addIntValue("log_id", log_id_.val());
   sample->addNormalValue("action", actionToStr(action_));
-  if (old_metadata_.hasValue()) {
+  if (old_metadata_.has_value()) {
     sample->addNormalValue("metadata_old", old_metadata_.value().toString());
   }
   if (new_metadata_.isValid()) {

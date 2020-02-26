@@ -683,7 +683,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
       }
     }
 
-    if (until_lsn.hasValue()) {
+    if (until_lsn.has_value()) {
       size_t log1 = shard_idx ? shard_idx : num_shards;
       for (size_t i = log1; i <= num_logs; i += num_shards) {
         onRetrievedPlanForLog(i, shard_idx, until_lsn.value(), version);
@@ -799,7 +799,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
            folly::Optional<lsn_t> restart_version = folly::none) {
     ld_check(coordinator_->shardRebuildings.count(shard_idx));
     auto reb = coordinator_->shardRebuildings.at(shard_idx);
-    if (restart_version.hasValue()) {
+    if (restart_version.has_value()) {
       ld_check_eq(restart_version.value(), reb->getRestartVersion());
     }
     return reb;

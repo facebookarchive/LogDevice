@@ -120,7 +120,7 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
         return_fetched_value_(return_fetched_value) {
     // If we should write our NodeID, it must have a value.
     ld_assert(write_node_id_ != EpochStore::WriteNodeID::MY ||
-              my_node_id_.hasValue());
+              my_node_id_.has_value());
   }
 
   int update(const char* buf, size_t len, char* out, size_t out_len) override {
@@ -195,7 +195,7 @@ class FileEpochStore::MetaDataUpdater : public FileEpochStore::FileUpdater {
             break;
           case EpochStore::WriteNodeID::KEEP_LAST:
             if (meta_props_out_ &&
-                meta_props_out_->last_writer_node_id.hasValue()) {
+                meta_props_out_->last_writer_node_id.has_value()) {
               node_id_to_write = meta_props_out_->last_writer_node_id.value();
             }
             break;

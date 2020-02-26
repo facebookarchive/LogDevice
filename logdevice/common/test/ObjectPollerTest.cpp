@@ -210,7 +210,7 @@ TEST_F(ObjectPollerTest, Basic) {
   poller->onSourceReply(/*round*/ 1, 2, RequestResult::OK, 223);
   poller->onSourceReply(/*round*/ 1, 3, RequestResult::FAILURE_BLACKLIST, {});
   // poller shouldn't finish round 1 yet
-  ASSERT_FALSE(result_.hasValue());
+  ASSERT_FALSE(result_.has_value());
   ASSERT_EQ(nullptr, poller->getRoundResultTimer());
 
   next_wave_nodes_ = {4, 5, 6};
@@ -224,7 +224,7 @@ TEST_F(ObjectPollerTest, Basic) {
   CHECK_REQUESTS_SENT(/*round*/ 1, 4, 5, 6);
   poller->onSourceReply(/*round*/ 1, 4, RequestResult::FAILURE_GRAYLIST, {});
   poller->onSourceReply(/*round*/ 1, 5, RequestResult::OK, 237);
-  ASSERT_FALSE(result_.hasValue());
+  ASSERT_FALSE(result_.has_value());
   // round should complete after 5 replies
   ASSERT_TRUE(poller->getRoundResultTimer()->isActive());
   ((MockTimer*)poller->getRoundResultTimer())->trigger();
@@ -335,7 +335,7 @@ TEST_F(ObjectPollerTest, StopAndResume) {
   poller->onSourceReply(/*round*/ 1, 2, RequestResult::OK, 223);
   poller->onSourceReply(/*round*/ 1, 3, RequestResult::FAILURE_BLACKLIST, {});
   // poller shouldn't finish round 1 yet
-  ASSERT_FALSE(result_.hasValue());
+  ASSERT_FALSE(result_.has_value());
   ASSERT_EQ(nullptr, poller->getRoundResultTimer());
 
   // stop the poller in the middle of round 1
@@ -343,14 +343,14 @@ TEST_F(ObjectPollerTest, StopAndResume) {
 
   // callbacks should be suppressed
   ASSERT_EQ(nullptr, poller->getRoundResultTimer());
-  ASSERT_FALSE(result_.hasValue());
+  ASSERT_FALSE(result_.has_value());
   ASSERT_EQ(nullptr, poller->getWaveTimer());
   ASSERT_EQ(nullptr, poller->getRoundTimer());
 
   // node 1's reply won't have any affect
   poller->onSourceReply(/*round*/ 1, 1, RequestResult::OK, 225);
   ASSERT_EQ(nullptr, poller->getRoundResultTimer());
-  ASSERT_FALSE(result_.hasValue());
+  ASSERT_FALSE(result_.has_value());
 
   // restart poller and it should start a new round
   next_wave_nodes_ = {4, 5, 6};

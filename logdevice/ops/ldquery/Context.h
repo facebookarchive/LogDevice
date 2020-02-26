@@ -77,7 +77,7 @@ struct Context {
   std::shared_ptr<logdevice::Client> createClient(bool withLogsConfig) {
     ClientFactory factory;
 
-    if (commandTimeout.hasValue()) {
+    if (commandTimeout.has_value()) {
       factory.setTimeout(commandTimeout.value());
     }
     std::shared_ptr<logdevice::Client> client =

@@ -29,7 +29,7 @@ RemoveNodesHandler::buildNodesConfigurationUpdates(
   auto not_met =
       checkPreconditions(node_idxs, nodes_configuration, cluster_state);
 
-  if (not_met.hasValue()) {
+  if (not_met.has_value()) {
     return folly::makeUnexpected(std::move(not_met).value());
   }
 
@@ -103,13 +103,13 @@ RemoveNodesHandler::checkPreconditions(
     const ClusterState& cluster_state) const {
   thrift::ClusterMembershipOperationFailed failure;
   for (const auto& idx : node_idxs) {
-    if (auto fail = check_is_dead(cluster_state, idx); fail.hasValue()) {
+    if (auto fail = check_is_dead(cluster_state, idx); fail.has_value()) {
       failure.failed_nodes.push_back(std::move(fail).value());
       continue;
     }
 
     if (auto fail = check_is_disabled(nodes_configuration, idx);
-        fail.hasValue()) {
+        fail.has_value()) {
       failure.failed_nodes.push_back(std::move(fail).value());
       continue;
     }

@@ -191,7 +191,7 @@ folly::dynamic LogGroupInDirectory::toFollyDynamic(bool metadata_logs) const {
   }
 
   if (attrs.sequencerAffinity().hasValue() &&
-      attrs.sequencerAffinity().value().hasValue()) {
+      attrs.sequencerAffinity().value().has_value()) {
     json_log[SEQUENCER_AFFINITY] = attrs.sequencerAffinity().value().value();
   }
 
@@ -272,7 +272,7 @@ bool LogGroupNode::isValid(const DirectoryNode* parent,
 
   // backlog duration must be larger than 0 if set.
   if (lg->attrs().backlogDuration() &&
-      lg->attrs().backlogDuration().value().hasValue() &&
+      lg->attrs().backlogDuration().value().has_value() &&
       lg->attrs().backlogDuration().value().value().count() <= 0) {
     failure_reason = folly::format("Invalid value of \"backlog\" attribute "
                                    "for log(s) {}",
@@ -1232,7 +1232,7 @@ void LogsConfigTree::updateLookupIndex(const DirectoryNode* parent,
   }
   auto backlogDuration = log_group->attrs().backlogDuration();
   // update the max_backlog_duration
-  if (backlogDuration.hasValue() && backlogDuration.value().hasValue()) {
+  if (backlogDuration.hasValue() && backlogDuration.value().has_value()) {
     max_backlog_duration_ =
         std::max(max_backlog_duration_, backlogDuration.value().value());
   }

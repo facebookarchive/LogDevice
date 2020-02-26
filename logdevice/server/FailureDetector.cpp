@@ -61,13 +61,13 @@ class FailureDetector::RoundRobinSelector
     const auto& serv_disc = nodes_configuration->getServiceDiscovery();
     NodeID this_node = detector->getMyNodeID();
 
-    if (next_node_idx_.hasValue() &&
+    if (next_node_idx_.has_value() &&
         !serv_disc->hasNode(next_node_idx_.value())) {
       // The node was removed from config.
       next_node_idx_ = folly::none;
     }
 
-    if (!next_node_idx_.hasValue() || iters_ >= serv_disc->numNodes()) {
+    if (!next_node_idx_.has_value() || iters_ >= serv_disc->numNodes()) {
       // Every `nodes.size()' iterations reset next_node_idx_ to this
       // node's neighbour. This is meant to avoid all nodes gossiping to the
       // same node in each round, even in the presence of sporadic down nodes.
@@ -83,7 +83,7 @@ class FailureDetector::RoundRobinSelector
 
     NodeID target;
     for (int attempts = serv_disc->numNodes(); attempts > 0; --attempts) {
-      ld_assert(next_node_idx_.hasValue());
+      ld_assert(next_node_idx_.has_value());
       ld_assert(serv_disc->hasNode(next_node_idx_.value()));
       target = nodes_configuration->getNodeID(next_node_idx_.value());
 

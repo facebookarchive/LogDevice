@@ -55,11 +55,11 @@ class InfoSyncSequencerRequests : public AdminCommand {
         const auto next_lsn = it.getNextLSN();
         const auto last_released = it.getLastReleasedLSN();
         const auto last_status = it.getLastStatus();
-        if (next_lsn.hasValue()) {
+        if (next_lsn.has_value()) {
           t.set<1>(next_lsn.value());
         }
         t.set<2>(last_released.value());
-        if (last_status.hasValue()) {
+        if (last_status.has_value()) {
           t.set<3>(error_name(last_status.value()));
         }
       }

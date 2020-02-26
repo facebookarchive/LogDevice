@@ -94,10 +94,10 @@ WeightedCopySetSelector::WeightedCopySetSelector(
 
   // Find my node's failure domain name.
   folly::Optional<std::string> my_domain;
-  if (my_node_id.hasValue()) {
+  if (my_node_id.has_value()) {
     node_index_t my_node = my_node_id.value().index();
     const auto* node_sd = nodes_configuration->getNodeServiceDiscovery(my_node);
-    if (node_sd && node_sd->location.hasValue()) {
+    if (node_sd && node_sd->location.has_value()) {
       my_domain =
           node_sd->location->getDomain(secondary_replication_scope_, my_node);
     }
@@ -206,7 +206,7 @@ WeightedCopySetSelector::WeightedCopySetSelector(
   }
 
   // Find my node's domain.
-  if (my_domain.hasValue() && secondary_domain_idx.count(my_domain.value())) {
+  if (my_domain.has_value() && secondary_domain_idx.count(my_domain.value())) {
     my_domain_idx_ = secondary_domain_idx[my_domain.value()];
   }
 
@@ -607,7 +607,7 @@ std::string WeightedCopySetSelector::getName() const {
 WeightedCopySetSelector::NodeAvailabilityCache&
 WeightedCopySetSelector::prepareCachedNodeAvailability() const {
   NodeAvailabilityCache& cache = *node_availability_cache_.get();
-  if (!cache.adjusted_hierarchy.hasValue()) {
+  if (!cache.adjusted_hierarchy.has_value()) {
     ld_check(cache.unavailable_nodes.empty());
     cache.adjusted_hierarchy.emplace(&hierarchy_);
   }
@@ -769,7 +769,7 @@ WeightedCopySetSelector::select(copyset_size_t extras,
   };
 
   bool pick_local_separately = false;
-  if (locality_enabled_ && my_domain_idx_.hasValue() &&
+  if (locality_enabled_ && my_domain_idx_.has_value() &&
       !cache.avoid_detaching_my_domain) {
     // If locality is enabled, we should maximize the probability that copyset
     // will have at least one copy from local domain, but we should still
@@ -1010,7 +1010,7 @@ void WeightedCopySetSelector::splitExistingCopySet(
                  need_new_domains);
       }
       size_t domain_idx = path[0];
-      if (my_domain_idx_.hasValue() && domain_idx == my_domain_idx_.value()) {
+      if (my_domain_idx_.has_value() && domain_idx == my_domain_idx_.value()) {
         ld_check(!have_local_copies);
         have_local_copies = true;
       } else {
@@ -1198,7 +1198,7 @@ WeightedCopySetSelector::augment(StoreChainLink inout_copyset[],
 
     // 1. Pick as many as allowed from my (local) domain.
     if (have_local_copies && replication_ - out_size > need_new_domains) {
-      ld_check(my_domain_idx_.hasValue());
+      ld_check(my_domain_idx_.has_value());
       out_size +=
           selectFlat(replication_ - out_size - need_new_domains,
                      hierarchy.getRoot().getSubdomain(my_domain_idx_.value()),

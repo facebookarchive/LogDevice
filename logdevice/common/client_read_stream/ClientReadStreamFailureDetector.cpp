@@ -179,14 +179,14 @@ void ClientReadStreamFailureDetector::onWindowSlid(
   wstate.n_candidates_complete = recomputeCounterForWindow(wstate);
 
   // Rotate the buffer if needed.
-  if (cur_window_.hasValue()) {
-    if (next_window_.hasValue()) {
+  if (cur_window_.has_value()) {
+    if (next_window_.has_value()) {
       cur_window_ = std::move(next_window_.value());
       next_window_.reset();
     }
     next_window_ = std::move(wstate);
   } else {
-    ld_check(!next_window_.hasValue());
+    ld_check(!next_window_.has_value());
     cur_window_ = std::move(wstate);
   }
 
@@ -335,7 +335,7 @@ bool ClientReadStreamFailureDetector::findShardsBlockingWindow(
     ClientReadStreamFailureDetector::Samples& samples_out,
     std::chrono::milliseconds& threshold,
     OutlierChangedReason& reason) {
-  if (!cur_window_.hasValue()) {
+  if (!cur_window_.has_value()) {
     return false;
   }
 
@@ -499,8 +499,8 @@ ClientReadStreamFailureDetector::getLastWindow() {
 
 const ClientReadStreamFailureDetector::WindowState&
 ClientReadStreamFailureDetector::getLastWindow() const {
-  ld_check(cur_window_.hasValue());
-  return next_window_.hasValue() ? next_window_.value() : cur_window_.value();
+  ld_check(cur_window_.has_value());
+  return next_window_.has_value() ? next_window_.value() : cur_window_.value();
 }
 
 size_t ClientReadStreamFailureDetector::recomputeCounterForWindow(
