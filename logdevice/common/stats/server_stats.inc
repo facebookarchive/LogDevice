@@ -1121,16 +1121,6 @@ STAT_DEFINE(shard_rebuilding_not_triggered_started, SUM)
 // exceeding the trigger queue threshold
 STAT_DEFINE(rebuilding_supervisor_throttled, SUM)
 
-// LogsConfig RSM trimming requests
-STAT_DEFINE(logsconfig_manager_trimming_requests, SUM)
-// LogsConfig RSM snapshotting errors
-STAT_DEFINE(logsconfig_manager_snapshotting_errors, SUM)
-// LogsConfig number of deltas written in LogsConfig state machine
-STAT_DEFINE(logsconfig_manager_delta_written, SUM)
-// How many snapshots has been created
-STAT_DEFINE(logsconfig_manager_snapshot_created, SUM)
-// How many snapshots we have requested
-STAT_DEFINE(logsconfig_manager_snapshot_requested, SUM)
 // LogsConfigManager Request Stats
 STAT_DEFINE(logsconfig_api_requests_received, SUM)
 // Requests that was served successfully, This include legit error responses

@@ -111,6 +111,17 @@ STAT_DEFINE(logsconfig_manager_serialization_errors, SUM)
 // LogsConfig number of deltas applied
 STAT_DEFINE(logsconfig_manager_delta_applied, SUM)
 
+// LogsConfig RSM trimming requests
+STAT_DEFINE(logsconfig_manager_trimming_requests, SUM)
+// LogsConfig RSM snapshotting errors
+STAT_DEFINE(logsconfig_manager_snapshotting_errors, SUM)
+// LogsConfig number of deltas written in LogsConfig state machine
+STAT_DEFINE(logsconfig_manager_delta_written, SUM)
+// How many snapshots has been created
+STAT_DEFINE(logsconfig_manager_snapshot_created, SUM)
+// How many snapshots we have requested
+STAT_DEFINE(logsconfig_manager_snapshot_requested, SUM)
+
 // NodesConfigurationManager
 // Number of new nodes configuration published
 STAT_DEFINE(nodes_configuration_manager_config_published, SUM)

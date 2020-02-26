@@ -114,7 +114,6 @@ INSTANTIATE_TEST_CASE_P(InternalLogsIntegrationTest,
                         InternalLogsIntegrationTest,
                         ::testing::Bool());
 
-// test that Client cannot directly write to internal logs
 TEST_F(InternalLogsIntegrationTest, ClientCannotWriteInternalLog) {
   buildClusterAndClient(clusterFactory());
 
@@ -620,4 +619,41 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   seq.start();
   seq.waitUntilStarted();
   seq.waitUntilLogsConfigSynced(new_tail_lsn);
+}
+
+TEST_F(InternalLogsIntegrationTest, LCM_VerifyClientCannotTakeSnapshot) {
+  // Using a config file to force client to pickup 1s snapshotting period.
+  // client_settings->set() doesn't work on SERVER only settings,
+  // so with the default setting of 1h, client will never even attempt
+  // to write snapshot
+  auto config = Configuration::fromJsonFile(
+      TEST_CONFIG_FILE("lcm_client_cannot_take_snapshot.conf"));
+  ASSERT_NE(nullptr, config);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .enableLogsConfigManager()
+                     .setParam("--file-config-update-interval", "10ms")
+                     .create(*config);
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  auto client = cluster->createClient(
+      getDefaultTestTimeout(), std::move(client_settings));
+
+  ld_info("Checking N0 stats");
+  auto stats = cluster->getNode(0).stats();
+  wait_until([&]() {
+    return cluster->getNode(0)
+               .stats()["logsconfig_manager_snapshot_requested"] > 10;
+  });
+
+  // Everyone other than N0 should not be taking snapshots
+  // TODO: This needs to change when the snapshot store is Local-Store
+  for (int i = 1; i < 4; i++) {
+    ld_info("Checking N%d stats", i);
+    auto num_snapshots_requested =
+        cluster->getNode(i).stats()["logsconfig_manager_snapshot_requested"];
+    EXPECT_EQ(num_snapshots_requested, 0);
+  }
+
+  ld_info("Checking client stats");
+  Stats s = dynamic_cast<ClientImpl*>(client.get())->stats()->aggregate();
+  EXPECT_EQ(0, s.logsconfig_manager_snapshot_requested);
 }
