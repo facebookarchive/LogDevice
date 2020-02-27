@@ -501,7 +501,7 @@ async def status(
 
     hostnames = set(chain.from_iterable((hostnames or [], hosts or [])))
 
-    await additional_validation()
+    await additional_validation()  # pyre-ignore
 
     start = datetime.datetime.now()
 
