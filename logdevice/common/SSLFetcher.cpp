@@ -12,6 +12,7 @@
 namespace facebook { namespace logdevice {
 
 std::shared_ptr<folly::SSLContext> SSLFetcher::getSSLContext(bool loadCert) {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (requireContextUpdate(ContextType::OPENSSL_CONTEXT, loadCert)) {
     try {
       context_.reset(new folly::SSLContext());
@@ -58,6 +59,7 @@ std::shared_ptr<folly::SSLContext> SSLFetcher::getSSLContext(bool loadCert) {
 
 std::shared_ptr<const fizz::server::FizzServerContext>
 SSLFetcher::getFizzServerContext() {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (requireContextUpdate(ContextType::FIZZ_SRV, true /* loadCert */)) {
     try {
       auto context = std::make_shared<fizz::server::FizzServerContext>();
@@ -88,6 +90,7 @@ SSLFetcher::getFizzServerContext() {
 std::pair<std::shared_ptr<const fizz::client::FizzClientContext>,
           std::shared_ptr<const fizz::CertificateVerifier>>
 SSLFetcher::getFizzClientContext(bool loadCert) {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (requireContextUpdate(ContextType::FIZZ_CLI, loadCert)) {
     try {
       auto context = std::make_shared<fizz::client::FizzClientContext>();

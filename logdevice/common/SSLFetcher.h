@@ -99,10 +99,13 @@ class SSLFetcher {
   std::shared_ptr<const fizz::server::FizzServerContext> fizz_srv_context_;
   StatsHolder* stats_{nullptr};
   std::array<ContextState, ContextType::COUNT> state_;
+  std::mutex mutex_;
 
   // a context update is required when refresh_interval_ has passed or when any
   // of the input information is changed
+  // lock needs to be acquired in at least read mode
   bool requireContextUpdate(ContextType type, bool loadCert) const;
+  // lock needs to be acquired in write mode
   void updateState(ContextType type, bool loadCert, X509* cert);
 };
 

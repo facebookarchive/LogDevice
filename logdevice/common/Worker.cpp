@@ -137,12 +137,6 @@ class WorkerImpl {
                         w->immutable_settings_->num_workers),
         // TODO: Make this configurable
         previously_redirected_appends_(1024),
-        sslFetcher_(w->immutable_settings_->ssl_cert_path,
-                    w->immutable_settings_->ssl_key_path,
-                    w->immutable_settings_->ssl_ca_path,
-                    w->immutable_settings_->ssl_cert_refresh_interval,
-                    stats),
-
         graylistingTracker_(std::make_unique<GraylistingTracker>())
 
   {
@@ -188,7 +182,6 @@ class WorkerImpl {
   WriteMetaDataRecordMap runningWriteMetaDataRecords_;
   AppendRequestEpochMap appendRequestEpochMap_;
   CheckNodeHealthRequestSet pendingHealthChecks_;
-  SSLFetcher sslFetcher_;
   AllClientReadStreams clientReadStreams_;
   std::unique_ptr<SequencerBackgroundActivator> sequencerBackgroundActivator_;
   std::unique_ptr<GraylistingTracker> graylistingTracker_;
@@ -1244,7 +1237,7 @@ Worker::runningGetEpochRecoveryMetadata() const {
 }
 
 SSLFetcher& Worker::sslFetcher() const {
-  return impl_->sslFetcher_;
+  return processor_->sslFetcher();
 }
 
 std::unique_ptr<SequencerBackgroundActivator>&

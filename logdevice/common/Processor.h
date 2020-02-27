@@ -58,6 +58,7 @@ class Request;
 class SequencerBatching;
 class ReadStreamDebugInfoSamplingConfig;
 class SequencerLocator;
+class SSLFetcher;
 class StatsHolder;
 class TraceLogger;
 class UpdateableConfig;
@@ -690,6 +691,9 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // inflight. Should ONLY be used in testing.
   void
   setSequencerBatching(std::unique_ptr<SequencerBatching> sequencer_batching);
+
+  // SSL context fetcher, used to refresh certificate data
+  SSLFetcher& sslFetcher() const;
 
  private:
   const std::shared_ptr<TraceLogger> trace_logger_;

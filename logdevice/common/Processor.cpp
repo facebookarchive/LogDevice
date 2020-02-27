@@ -32,6 +32,7 @@
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/SequencerLocator.h"
@@ -106,7 +107,12 @@ class ProcessorImpl {
         nc_publisher_(processor->config_, settings, std::move(trace_logger)),
         read_stream_debug_info_sampling_config_(
             processor->getPluginRegistry(),
-            settings->all_read_streams_debug_config_path) {
+            settings->all_read_streams_debug_config_path),
+        sslFetcher_(settings->ssl_cert_path,
+                    settings->ssl_key_path,
+                    settings->ssl_ca_path,
+                    settings->ssl_cert_refresh_interval,
+                    processor->stats_) {
     dbg::externalLoggerLogLevel = settings->external_loglevel;
   }
 
@@ -137,6 +143,7 @@ class ProcessorImpl {
   ReadStreamDebugInfoSamplingConfig read_stream_debug_info_sampling_config_;
   // If anything depends on worker make sure that it is deleted in the
   // destructor above.
+  SSLFetcher sslFetcher_;
 };
 
 namespace {
@@ -785,6 +792,10 @@ void Processor::setSequencerBatching(
 
 ResourceBudget::Token Processor::getIncomingMessageToken(size_t payload_size) {
   return impl_->incoming_message_budget_.acquireToken(payload_size);
+}
+
+SSLFetcher& Processor::sslFetcher() const {
+  return impl_->sslFetcher_;
 }
 
 }} // namespace facebook::logdevice
