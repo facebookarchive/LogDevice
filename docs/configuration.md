@@ -203,7 +203,7 @@ can be placed on machines with 3 different rack identifiers (but could share sam
 
 Each section can be expressed as a string.
 
-### Roles and state (`roles`, `sequencer`, `sequencer_weight`, `storage` and `storage_weight`)
+### Roles and state (`roles`, `sequencer`, `sequencer_weight`, `storage` and `storage_capacity`)
 A distinction should be made between roles and state:
 - Role: this remains the same during the lifetime of the node.
 - State: could change (for e.g. maintenance operations)

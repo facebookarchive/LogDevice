@@ -120,10 +120,10 @@ Many clients can write to the same log. Records are written in sequence number o
 
 If you have a heterogeneous set of hardware, you can configure weights for storage and sequencer nodes in the node configuration. The weight values are used to balance APPENDs across sequencer nodes and STOREs across storage nodes.
 
-* `storage_weight` defines the amount of data to be stored compared to other machines. You should assign weights to systems according to their relative disk size.
+* `storage_capacity` defines the amount of data to be stored compared to other machines. You should assign weights to systems according to their relative disk size.
 * `sequencer_weight` is used when determining number of sequencers to be placed on a node. Assign a larger weight to the nodes with the fastest hardware / most memory.
 
-[See how to configure `sequencer_weight` and `storage_weight`.](configuration.md#roles-and-state-roles-sequencer-sequencer_weight-storage-and-storage_weight)
+[See how to configure `sequencer_weight` and `storage_capacity`.](configuration.md#roles-and-state-roles-sequencer-sequencer_weight-storage-and-storage_capacity)
 
 ### Load balancing across logs
 
