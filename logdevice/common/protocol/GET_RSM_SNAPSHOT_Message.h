@@ -45,6 +45,10 @@ class GET_RSM_SNAPSHOT_Message : public Message {
     return header_;
   }
 
+  const std::string& getKey() const {
+    return key_;
+  }
+
   // see Message.h
   void serialize(ProtocolWriter&) const override;
   void onSent(Status st, const Address& to) const override;
@@ -52,6 +56,7 @@ class GET_RSM_SNAPSHOT_Message : public Message {
   uint16_t getMinProtocolVersion() const override;
   static Message::deserializer_t deserialize;
 
+ private:
   GET_RSM_SNAPSHOT_Header header_;
   // RSM type: this is the delta log id of the state machine e.g.
   // Logsconfig, EventLog etc.

@@ -39,6 +39,7 @@
 #include "logdevice/common/GetEpochRecoveryMetadataRequest.h"
 #include "logdevice/common/GetHeadAttributesRequest.h"
 #include "logdevice/common/GetLogInfoRequest.h"
+#include "logdevice/common/GetRsmSnapshotRequest.h"
 #include "logdevice/common/GetTrimPointRequest.h"
 #include "logdevice/common/GraylistingTracker.h"
 #include "logdevice/common/IsLogEmptyRequest.h"
@@ -157,6 +158,7 @@ class WorkerImpl {
   FindKeyRequestMap runningFindKey_;
   FireAndForgetRequestMap runningFireAndForgets_;
   TrimRequestMap runningTrimRequests_;
+  GetRsmSnapshotRequestMap runningGetRsmSnapshotRequests_;
   GetTrimPointRequestMap runningGetTrimPoint_;
   IsLogEmptyRequestMap runningIsLogEmpty_;
   DataSizeRequestMap runningDataSize_;
@@ -637,6 +639,13 @@ void Worker::finishWorkAndCloseSockets() {
     c = runningGetTrimPoint().map.size();
     runningGetTrimPoint().map.clear();
     ld_info("Aborted %lu get-trim-point requests", c);
+  }
+
+  // abort get-rsm-snapshot requests
+  if (!runningGetRsmSnapshotRequests().map.empty()) {
+    c = runningGetRsmSnapshotRequests().map.size();
+    runningGetRsmSnapshotRequests().map.clear();
+    ld_info("Aborted %lu get-rsm-snapshot requests", c);
   }
 
   // abort configuration-fetch requests
@@ -1125,6 +1134,10 @@ TrimRequestMap& Worker::runningTrimRequests() const {
 
 GetTrimPointRequestMap& Worker::runningGetTrimPoint() const {
   return impl_->runningGetTrimPoint_;
+}
+
+GetRsmSnapshotRequestMap& Worker::runningGetRsmSnapshotRequests() const {
+  return impl_->runningGetRsmSnapshotRequests_;
 }
 
 IsLogEmptyRequestMap& Worker::runningIsLogEmpty() const {

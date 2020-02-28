@@ -7,6 +7,7 @@
  */
 #include "logdevice/common/protocol/GET_RSM_SNAPSHOT_Message.h"
 
+#include "logdevice/common/GetRsmSnapshotRequest.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
@@ -42,9 +43,14 @@ GET_RSM_SNAPSHOT_Message::onReceived(const Address& /* unused */) {
   std::abort();
 }
 
-void GET_RSM_SNAPSHOT_Message::onSent(Status /* unused */,
-                                      const Address& /* unused */) const {
-  // TODO: Introduce GetRsmSnapshotRequest map lookup
+void GET_RSM_SNAPSHOT_Message::onSent(Status st, const Address& to) const {
+  if (st != E::OK) {
+    auto& rqmap = Worker::onThisThread()->runningGetRsmSnapshotRequests().map;
+    auto it = rqmap.find(header_.rqid);
+    if (it != rqmap.end()) {
+      it->second->onError(st, to.id_.node_);
+    }
+  }
 }
 
 uint16_t GET_RSM_SNAPSHOT_Message::getMinProtocolVersion() const {

@@ -162,6 +162,7 @@ struct GetClusterStateRequestMap;
 struct GetEpochRecoveryMetadataRequestMap;
 struct GetHeadAttributesRequestMap;
 struct GetLogInfoRequestMaps;
+struct GetRsmSnapshotRequestMap;
 struct GetTrimPointRequestMap;
 struct IsLogEmptyRequestMap;
 struct LogIDUniqueQueue;
@@ -423,6 +424,8 @@ class Worker : public WorkContext {
 
   // a map of all currently running GetTrimPointRequest
   GetTrimPointRequestMap& runningGetTrimPoint() const;
+
+  GetRsmSnapshotRequestMap& runningGetRsmSnapshotRequests() const;
 
   // a map of all currently running IsLogEmptyRequests
   IsLogEmptyRequestMap& runningIsLogEmpty() const;

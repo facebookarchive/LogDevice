@@ -1043,6 +1043,10 @@ struct Settings : public SettingsBundle {
   std::chrono::milliseconds get_cluster_state_timeout{10000};
   std::chrono::milliseconds get_cluster_state_wave_timeout{1000};
 
+  std::chrono::milliseconds rsm_snapshot_request_timeout;
+  chrono_expbackoff_t<std::chrono::milliseconds>
+      rsm_snapshot_request_wave_timeout;
+
   // Maximum duration of Sender::runFlowGroups() before yielding to the
   // event loop.
   std::chrono::microseconds flow_groups_run_yield_interval;

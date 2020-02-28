@@ -131,7 +131,8 @@ static void thisNodeServesTheRequest(GET_RSM_SNAPSHOT_Message* msg,
   WorkerType dest_worker_type;
   int dest_worker_id;
   reply_hdr.delta_log_id = rsm_type;
-  reply_hdr.rqid = msg->header_.rqid;
+  auto& msg_hdr = msg->getHeader();
+  reply_hdr.rqid = msg_hdr.rqid;
 
   switch (rsm_type.val_) {
     case configuration::InternalLogs::EVENT_LOG_DELTAS.val_:
@@ -165,7 +166,7 @@ static void thisNodeServesTheRequest(GET_RSM_SNAPSHOT_Message* msg,
           rsm_type,
           min_ver,
           from,
-          msg->header_.rqid);
+          msg_hdr.rqid);
   processor->postRequest(req);
 }
 
@@ -202,20 +203,21 @@ Message::Disposition GET_RSM_SNAPSHOT_onReceived(GET_RSM_SNAPSHOT_Message* msg,
   // it will serve the request.
   // Otherwise, it will pick a random node from cluster nodes(with max version),
   // and send a REDIRECT
+  auto& msg_hdr = msg->getHeader();
   RATELIMIT_INFO(std::chrono::seconds(1),
                  2,
                  "Received GET_RSM_SNAPSHOT_Message from %s, key:%s, "
                  "hdr(min_ver:%s, rqid:%lu, flags:%hhu)",
                  Sender::describeConnection(from).c_str(),
-                 msg->key_.c_str(),
-                 lsn_to_string(msg->header_.min_ver).c_str(),
-                 msg->header_.rqid.val_,
-                 msg->header_.flags);
-  auto delta_log_id = logid_t(folly::to<logid_t::raw_type>(msg->key_));
+                 msg->getKey().c_str(),
+                 lsn_to_string(msg_hdr.min_ver).c_str(),
+                 msg_hdr.rqid.val_,
+                 msg_hdr.flags);
+  auto delta_log_id = logid_t(folly::to<logid_t::raw_type>(msg->getKey()));
   GET_RSM_SNAPSHOT_REPLY_Header reply_hdr;
   reply_hdr.delta_log_id = delta_log_id;
-  reply_hdr.rqid = msg->header_.rqid;
-  auto flags = msg->header_.flags;
+  reply_hdr.rqid = msg_hdr.rqid;
+  auto flags = msg_hdr.flags;
 
   ServerWorker* worker = ServerWorker::onThisThread();
   ServerProcessor* processor = worker->processor_;
@@ -228,7 +230,7 @@ Message::Disposition GET_RSM_SNAPSHOT_onReceived(GET_RSM_SNAPSHOT_Message* msg,
   auto fd = processor->failure_detector_.get();
   if (!fd || flags & GET_RSM_SNAPSHOT_Message::FORCE) {
     thisNodeServesTheRequest(
-        msg, from, delta_log_id, msg->header_.min_ver, reply_hdr);
+        msg, from, delta_log_id, msg_hdr.min_ver, reply_hdr);
     return Message::Disposition::NORMAL;
   }
 
@@ -241,11 +243,11 @@ Message::Disposition GET_RSM_SNAPSHOT_onReceived(GET_RSM_SNAPSHOT_Message* msg,
     if (begin_it == versions_in_cluster.end()) {
       // Return E::EMPTY if we don't have version information for this RSM
       reply_hdr.st = E::EMPTY;
-    } else if (begin_it->first < msg->header_.min_ver) {
+    } else if (begin_it->first < msg_hdr.min_ver) {
       ld_debug("Returning E::STALE since the cluster has a lower version(%s) "
                "than requested(%s) for log:%lu",
                lsn_to_string(begin_it->first).c_str(),
-               lsn_to_string(msg->header_.min_ver).c_str(),
+               lsn_to_string(msg_hdr.min_ver).c_str(),
                delta_log_id.val_);
       reply_hdr.st = E::STALE;
       reply_hdr.snapshot_ver = begin_it->first;
@@ -268,7 +270,7 @@ Message::Disposition GET_RSM_SNAPSHOT_onReceived(GET_RSM_SNAPSHOT_Message* msg,
       fd->getRSMVersion(my_node_id, delta_log_id, rsm_ver_on_this_node)) {
     if (rsm_ver_on_this_node == begin_it->first) {
       thisNodeServesTheRequest(
-          msg, from, delta_log_id, msg->header_.min_ver, reply_hdr);
+          msg, from, delta_log_id, msg_hdr.min_ver, reply_hdr);
       return Message::Disposition::NORMAL;
     }
   }

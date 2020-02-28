@@ -3251,6 +3251,22 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER | CLIENT,
        SettingsCategory::Core);
 
+  init("rsm-snapshot-request-timeout",
+       &rsm_snapshot_request_timeout,
+       "30s",
+       validate_nonnegative<ssize_t>(),
+       "Overall timeout for GetRsmSnapshotRequest",
+       CLIENT | SERVER,
+       SettingsCategory::Configuration);
+
+  init("rsm-snapshot-request-wave-timeout",
+       &rsm_snapshot_request_wave_timeout,
+       "2s..5s",
+       validate_positive<ssize_t>(),
+       "timeout settings for Fetching RSM snapshot via MessageBased Store",
+       CLIENT | SERVER,
+       SettingsCategory::Configuration);
+
   init(
       "rsm-snapshot-store-type",
       &rsm_snapshot_store_type,

@@ -8,6 +8,7 @@
 
 #include "logdevice/common/protocol/GET_RSM_SNAPSHOT_REPLY_Message.h"
 
+#include "logdevice/common/GetRsmSnapshotRequest.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 
@@ -37,8 +38,13 @@ GET_RSM_SNAPSHOT_REPLY_Message::deserialize(ProtocolReader& reader) {
 }
 
 Message::Disposition
-GET_RSM_SNAPSHOT_REPLY_Message::onReceived(const Address& /*unused */) {
-  // TODO: Introduce GetRsmSnapshotRequest map lookup
+GET_RSM_SNAPSHOT_REPLY_Message::onReceived(const Address& from) {
+  Worker* worker = Worker::onThisThread();
+  auto& rqmap = worker->runningGetRsmSnapshotRequests().map;
+  auto it = rqmap.find(header_.rqid);
+  if (it != rqmap.end()) {
+    it->second->onReply(from, *this);
+  }
   return Disposition::NORMAL;
 }
 

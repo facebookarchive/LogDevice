@@ -48,12 +48,17 @@ class GET_RSM_SNAPSHOT_REPLY_Message : public Message {
     return header_;
   }
 
+  const std::string& getSnapshotBlob() const {
+    return snapshot_blob_;
+  }
+
   // see Message.h
   void serialize(ProtocolWriter&) const override;
   Disposition onReceived(const Address&) override;
   uint16_t getMinProtocolVersion() const override;
   static Message::deserializer_t deserialize;
 
+ private:
   GET_RSM_SNAPSHOT_REPLY_Header header_;
   // Snapshot returned by the Node. This is valid only if header.st is E::OK
   std::string snapshot_blob_;

@@ -64,6 +64,8 @@ sidebar_label: Settings
 | on-demand-logs-config | Set this to true if you want the client to get log configuration on demand from the server when log configuration is not included in the main config file. | false | requires&nbsp;restart, client&nbsp;only |
 | on-demand-logs-config-retry-delay | When a client's attempt to get log configuration information from server on demand fails, the client waits this much before retrying. | 5ms..1s | client&nbsp;only |
 | remote-logs-config-cache-ttl | The TTL for cache entries for the remote logs config. If the logs config is not available locally and is fetched from the server, this will determine how fresh the log configuration used by the client will be. | 60s | requires&nbsp;restart, client&nbsp;only |
+| rsm-snapshot-request-timeout | Overall timeout for GetRsmSnapshotRequest | 30s |  |
+| rsm-snapshot-request-wave-timeout | timeout settings for Fetching RSM snapshot via MessageBased Store | 2s..5s |  |
 | sequencer-background-activation-retry-interval | Retry interval on failures while processing background sequencer activations for reprovisioning. | 500ms | server&nbsp;only |
 | sequencer-epoch-store-write-retry-delay | The retry delay for sequencer writing log metadata into the epoch store during log reconfiguration. | 5s..1min-2x | server&nbsp;only |
 | sequencer-historical-metadata-retry-delay | The retry delay for sequencer reading metadata log for historical epoch metadata during log reconfiguration. | 5s..1min-2x | server&nbsp;only |
