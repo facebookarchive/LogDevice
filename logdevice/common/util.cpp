@@ -179,7 +179,7 @@ int parse_ioprio(const std::string& val,
                  folly::Optional<std::pair<int, int>>* out_prio) {
   ld_check(out_prio);
   if (val == "" || val == "any") {
-    out_prio->clear();
+    out_prio->reset();
     return 0;
   }
 

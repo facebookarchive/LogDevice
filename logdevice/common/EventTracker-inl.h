@@ -42,7 +42,7 @@ void EventTracker<EventType, Clock, mergeAction>::commit(TimePoint now,
                                                          EventType event_type) {
   if (ongoingEventType_.hasValue()) {
     simpleCommit(now, ongoingEventType_.value());
-    ongoingEventType_.clear();
+    ongoingEventType_.reset();
   } else {
     simpleCommit(now, event_type);
   }
@@ -116,7 +116,7 @@ void EventTracker<EventType, Clock, mergeAction>::mergeTimeBreakdown(
   // Step 0. Ongoing events must be committed and forgotten if they exist.
   if (ongoingEventType_.hasValue()) {
     simpleCommit(now, ongoingEventType_.value());
-    ongoingEventType_.clear();
+    ongoingEventType_.reset();
     return;
   }
 
