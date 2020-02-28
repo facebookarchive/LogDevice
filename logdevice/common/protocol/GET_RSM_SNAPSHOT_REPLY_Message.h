@@ -62,6 +62,8 @@ class GET_RSM_SNAPSHOT_REPLY_Message : public Message {
   GET_RSM_SNAPSHOT_REPLY_Header header_;
   // Snapshot returned by the Node. This is valid only if header.st is E::OK
   std::string snapshot_blob_;
+
+  friend class MockGetRsmSnapshotRequest;
 };
 
 }} // namespace facebook::logdevice
