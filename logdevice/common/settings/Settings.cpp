@@ -1014,7 +1014,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        parse_positive<ssize_t>(),
        "Number of preallocated nodes in the cluster. Used for sizing "
        "data structures of the failure detector.",
-       SERVER | REQUIRES_RESTART,
+       SERVER | REQUIRES_RESTART | DEPRECATED,
        SettingsCategory::Core);
   init("sbr-node-threshold",
        &space_based_retention_node_threshold,

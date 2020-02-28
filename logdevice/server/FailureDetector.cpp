@@ -119,14 +119,8 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
                                  ServerProcessor* processor,
                                  StatsHolder* stats)
     : settings_(std::move(settings)), stats_(stats), processor_(processor) {
-  size_t max_nodes = processor->settings()->max_nodes;
-
   initial_time_ms_ = getCurrentTimeInMillis();
-  for (size_t i = 0; i < max_nodes; ++i) {
-    Node& node = nodes_[i];
-    node.last_suspected_at_ = initial_time_ms_;
-  }
-
+  updateNodesMap();
   switch (settings_->mode) {
     case GossipSettings::SelectionMode::RANDOM:
       selector_.reset(new RandomSelector());
@@ -415,6 +409,7 @@ void FailureDetector::noteConfigurationChanged() {
 }
 
 void FailureDetector::gossip() {
+  updateNodesMap();
   const auto& nodes_configuration = getNodesConfiguration();
   const auto& serv_disc = nodes_configuration->getServiceDiscovery();
 
@@ -890,15 +885,15 @@ void FailureDetector::startGossiping() {
 
 std::string FailureDetector::dumpGossipList(std::vector<uint32_t> list) {
   const auto& nodes_configuration = getNodesConfiguration();
-  size_t n = nodes_configuration->getMaxNodeIndex() + 1;
-  n = std::min(n, list.size());
   std::string res;
-
-  for (size_t i = 0; i < n; ++i) {
+  for (auto& node : nodes_) {
+    if (res.size() != 0) {
+      res += ", ";
+    }
     // if i doesn't exist, generation 1 will be used
-    NodeID node_id = nodes_configuration->getNodeID(i);
-    res += node_id.toString() + " = " + folly::to<std::string>(list[i]) +
-        (i < n - 1 ? ", " : "");
+    NodeID node_id = nodes_configuration->getNodeID(node.first);
+    res +=
+        node_id.toString() + " = " + folly::to<std::string>(list[node.first]);
   }
 
   return res;
@@ -907,15 +902,16 @@ std::string FailureDetector::dumpGossipList(std::vector<uint32_t> list) {
 std::string
 FailureDetector::dumpInstanceList(std::vector<std::chrono::milliseconds> list) {
   const auto& nodes_configuration = getNodesConfiguration();
-  size_t n = nodes_configuration->getMaxNodeIndex() + 1;
-  n = std::min(n, list.size());
   std::string res;
+  for (auto& node : nodes_) {
+    if (res.size() != 0) {
+      res += ", ";
+    }
 
-  for (size_t i = 0; i < n; ++i) {
     // if i doesn't exist, generation 1 will be used
-    NodeID node_id = nodes_configuration->getNodeID(i);
+    NodeID node_id = nodes_configuration->getNodeID(node.first);
     res += node_id.toString() + " = " +
-        folly::to<std::string>(list[i].count()) + (i < n - 1 ? ", " : "");
+        folly::to<std::string>(list[node.first].count());
   }
 
   return res;
@@ -1357,6 +1353,16 @@ std::string FailureDetector::getDomainIsolationString() const {
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 FailureDetector::getNodesConfiguration() const {
   return Worker::onThisThread()->getNodesConfiguration();
+}
+
+void FailureDetector::updateNodesMap() {
+  for (const auto& node_attributes :
+       *(processor_->getNodesConfiguration()->getServiceDiscovery())) {
+    if (nodes_.count(node_attributes.first) == 0) {
+      Node& node = nodes_[node_attributes.first];
+      node.last_suspected_at_ = initial_time_ms_;
+    }
+  }
 }
 
 NodeID FailureDetector::getMyNodeID() const {

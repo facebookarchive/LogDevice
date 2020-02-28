@@ -223,6 +223,11 @@ class FailureDetector {
     node_health_status_.store(status, std::memory_order_relaxed);
   }
 
+  /** This fetches the new set of nodes and updates nodes_
+   *  to reflect the actual nodes configuration.
+   */
+  void updateNodesMap();
+
   /**
    * Updates the RSM and NCM versions maintained in FD upon receiving
    * GOSSIP Message from another node.

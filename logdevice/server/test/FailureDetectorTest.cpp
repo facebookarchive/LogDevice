@@ -175,7 +175,6 @@ make_processor_with_detector(node_index_t nid,
   ServerSettings server_settings = create_default_settings<ServerSettings>();
   Settings main_settings = create_default_settings<Settings>();
   main_settings.num_workers = 1;
-  main_settings.max_nodes = 1000;
   main_settings.worker_request_pipe_capacity = 1000000;
 
   if (!create_monitor)
