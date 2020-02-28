@@ -9,7 +9,6 @@
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/SnapshotStoreTypes.h"
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/replicated_state_machine/LogBasedRSMSnapshotStore.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-enum.h"
 #include "logdevice/common/replicated_state_machine/logging.h"
 

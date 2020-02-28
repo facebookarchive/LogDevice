@@ -52,7 +52,7 @@
 #include "logdevice/server/NodeRegistrationHandler.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/RebuildingSupervisor.h"
-#include "logdevice/server/RsmSnapshotStoreFactory.h"
+#include "logdevice/server/RsmServerSnapshotStoreFactory.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/UnreleasedRecordDetector.h"
 #include "logdevice/server/ZookeeperEpochStore.h"
@@ -1374,7 +1374,7 @@ bool Server::initRebuildingCoordinator() {
     ld_info("Initializing EventLog RSM and RebuildingCoordinator");
     enable_rebuilding = true;
     std::unique_ptr<RSMSnapshotStore> snapshot_store =
-        RsmSnapshotStoreFactory::create(
+        RsmServerSnapshotStoreFactory::create(
             processor_.get(),
             params_->getProcessorSettings()->rsm_snapshot_store_type,
             params_->isStorageNode(),
@@ -1537,7 +1537,7 @@ bool Server::startConnectionListener(std::unique_ptr<Listener>& handle) {
 
 bool Server::initLogsConfigManager() {
   std::unique_ptr<RSMSnapshotStore> snapshot_store =
-      RsmSnapshotStoreFactory::create(
+      RsmServerSnapshotStoreFactory::create(
           processor_.get(),
           params_->getProcessorSettings().get()->rsm_snapshot_store_type,
           params_->isStorageNode(),

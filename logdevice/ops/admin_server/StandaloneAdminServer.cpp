@@ -28,7 +28,7 @@
 #include "logdevice/common/plugin/LocationProvider.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/request_util.h"
-#include "logdevice/server/RsmSnapshotStoreFactory.h"
+#include "logdevice/server/RsmServerSnapshotStoreFactory.h"
 
 namespace facebook { namespace logdevice { namespace admin {
 StandaloneAdminServer::StandaloneAdminServer(
@@ -245,7 +245,7 @@ void StandaloneAdminServer::initNodesConfigurationManager() {
 
 void StandaloneAdminServer::initLogsConfigManager() {
   ld_check(processor_);
-  auto snapshot_store = RsmSnapshotStoreFactory::create(
+  auto snapshot_store = RsmServerSnapshotStoreFactory::create(
       processor_.get(),
       settings_->rsm_snapshot_store_type,
       false, /* is_storage_node */
@@ -325,7 +325,7 @@ void StandaloneAdminServer::initStatsCollection() {
 }
 
 void StandaloneAdminServer::initEventLog() {
-  auto snapshot_store = RsmSnapshotStoreFactory::create(
+  auto snapshot_store = RsmServerSnapshotStoreFactory::create(
       processor_.get(),
       settings_->rsm_snapshot_store_type,
       false, /* is_storage_node */

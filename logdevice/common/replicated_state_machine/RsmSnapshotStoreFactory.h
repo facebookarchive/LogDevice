@@ -11,6 +11,7 @@
 
 #include "logdevice/common/debug.h"
 #include "logdevice/common/replicated_state_machine/LogBasedRSMSnapshotStore.h"
+#include "logdevice/common/replicated_state_machine/MessageBasedRSMSnapshotStore.h"
 #include "logdevice/common/replicated_state_machine/RSMSnapshotStore.h"
 
 namespace facebook { namespace logdevice {
@@ -20,11 +21,13 @@ class RsmSnapshotStoreFactory {
   static std::unique_ptr<RSMSnapshotStore>
   create(Processor* processor,
          SnapshotStoreType snapshot_store_type,
-         bool storage_rw,
-         std::string key) {
-    ld_info("Attempting to create snapshot store (type:%d, key:%s)",
-            static_cast<int>(snapshot_store_type),
-            key.c_str());
+         std::string key,
+         bool is_server) {
+    ld_info(
+        "Attempting to create snapshot store (type:%d, key:%s, is_server:%d)",
+        static_cast<int>(snapshot_store_type),
+        key.c_str(),
+        is_server);
 
     switch (snapshot_store_type) {
       case SnapshotStoreType::LEGACY:
@@ -50,16 +53,22 @@ class RsmSnapshotStoreFactory {
             ld_error("Invalid key:%s", key.c_str());
             return nullptr;
         };
-        ld_info("Creating LogBasedRSMSnapshotStore on server.");
+        ld_info("Creating LogBasedRSMSnapshotStore");
         return std::make_unique<LogBasedRSMSnapshotStore>(
-            key, snapshot_log, processor, true /* allow snapshotting */);
+            key, snapshot_log, processor, is_server /* allow snapshotting */);
       } break;
 
-      case SnapshotStoreType::MESSAGE:
-        break;
-
       case SnapshotStoreType::LOCAL_STORE:
+        ld_check(!is_server);
+        // Intentional fall through for cases when client settings
+        // doesn't have store type as Message.
+      case SnapshotStoreType::MESSAGE:
+        ld_info("Creating MessageBasedRSMSnapshotStore");
+        return std::make_unique<MessageBasedRSMSnapshotStore>(key);
         break;
+      default:
+        ld_error("Invaild SnapshotStoreType:%d",
+                 static_cast<int>(snapshot_store_type));
     }
     return nullptr;
   }

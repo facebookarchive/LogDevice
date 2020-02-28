@@ -49,6 +49,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/plugin/ZookeeperClientFactory.h"
+#include "logdevice/common/replicated_state_machine/RsmSnapshotStoreFactory.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/stats/Stats.h"
@@ -199,29 +200,11 @@ ClientImpl::ClientImpl(std::string cluster_name,
     }
   }
 
-  std::unique_ptr<RSMSnapshotStore> snapshot_store{nullptr};
-  auto store_type = settings_->getSettings()->rsm_snapshot_store_type;
-  ld_info("Attempting to create snapshot store, type:%d", (int)store_type);
-  switch (store_type) {
-    case SnapshotStoreType::LEGACY:
-      snapshot_store = nullptr;
-      break;
-    case SnapshotStoreType::MESSAGE:
-    case SnapshotStoreType::LOCAL_STORE:
-      snapshot_store = nullptr;
-      break;
-    case SnapshotStoreType::LOG:
-      ld_info("Creating LogBasedRSMSnapshotStore for logs config");
-      snapshot_store = std::make_unique<LogBasedRSMSnapshotStore>(
-          folly::to<std::string>(
-              configuration::InternalLogs::CONFIG_LOG_DELTAS.val_),
-          configuration::InternalLogs::CONFIG_LOG_SNAPSHOTS,
-          processor_.get(),
-          false /* allow snapshotting */);
-      break;
-    default:
-      ld_error("Invaild SnapshotStoreType:%d", (int)store_type);
-  }
+  auto snapshot_store = RsmSnapshotStoreFactory::create(
+      processor_.get(),
+      settings_->getSettings()->rsm_snapshot_store_type,
+      std::to_string(configuration::InternalLogs::CONFIG_LOG_DELTAS.val_),
+      false /* is_server */);
   if (!LogsConfigManager::createAndAttach(
           *processor_, std::move(snapshot_store), false /* is_writable */)) {
     err = E::INVALID_CONFIG;
