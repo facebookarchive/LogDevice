@@ -38,9 +38,15 @@ class HealthMonitorTest : public testing::Test {
   }
 
   void checkNodeHealthStatsPair(const NodeHealthStats& left,
-                                const NodeHealthStats& right) {
+                                const NodeHealthStats& right,
+                                bool check_hm_delay = false) {
     EXPECT_EQ(left.observed_time_period_ms, right.observed_time_period_ms);
-    EXPECT_EQ(left.health_monitor_delayed, right.health_monitor_delayed);
+    // The health monitor can be spuriously delayed due to the scheduling
+    // of tests executed in parallel. Only check it if explicitly requested
+    // (i.e. when a test is guaranteeing that the monitor will be delayed).
+    if (check_hm_delay) {
+      EXPECT_EQ(left.health_monitor_delayed, right.health_monitor_delayed);
+    }
     EXPECT_EQ(left.watchdog_delayed, right.watchdog_delayed);
     EXPECT_EQ(
         left.curr_total_stalled_workers, right.curr_total_stalled_workers);
@@ -110,7 +116,9 @@ class HealthMonitorTest : public testing::Test {
     stats.observed_time_period_ms = MockHealthMonitor::kPeriodRange *
         MockHealthMonitor::kLongLoopDuration.count();
     EXPECT_EQ(true, hm->internal_info_.health_monitor_delay_);
-    checkNodeHealthStatsPair(stats, hm->getNodeHealthStats());
+    checkNodeHealthStatsPair(stats,
+                             hm->getNodeHealthStats(),
+                             /*check_hm_monitor=*/true);
     EXPECT_EQ(NodeHealthStatus::UNHEALTHY, hm->node_status_);
   }
 
