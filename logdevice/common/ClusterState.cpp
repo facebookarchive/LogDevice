@@ -125,13 +125,13 @@ node_index_t ClusterState::getFirstNodeWithPred(
     if (isNodeInConfig(nid)) {
       if (pred(nid)) {
         return nid;
-      } else if (!first_node.hasValue()) {
+      } else if (!first_node.has_value()) {
         first_node = nid;
       }
     }
   }
 
-  if (!first_node.hasValue()) {
+  if (!first_node.has_value()) {
     RATELIMIT_WARNING(
         std::chrono::seconds{5}, 1, "No node in service discovery config.");
     first_node = 0;
