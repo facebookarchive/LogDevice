@@ -9,7 +9,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 from collections import defaultdict
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, TypeVar
 
 import prettytable as pt
 from ldops.cluster import get_cluster_view
@@ -39,6 +39,11 @@ from thrift.py3 import exceptions as texceptions
 
 
 MAX_COLS_PER_TABLE = 4
+T = TypeVar("T")
+
+# Type alias for a _very_ long type
+# location scope -> (name of location -> set of shard ids)
+ReadUnavailableMapping = Mapping[LocationScope, Mapping[str, Set[ShardID]]]
 
 
 @command
@@ -271,8 +276,8 @@ def make_table():
 
 
 def reverse_sort_replication(
-    replication: Mapping[LocationScope, Any]
-) -> List[Tuple[LocationScope, Any]]:
+    replication: Mapping[LocationScope, T]
+) -> List[Tuple[LocationScope, T]]:
     """
     Sort scopes from smaller to bigger (NODE, RACK, ROW, etc.)
     """
@@ -318,12 +323,11 @@ def location_up_to_scope(
 
 
 def analyze_read_availability(
-    read_unavailable: Dict[LocationScope, Dict[str, ShardID]],
-    replication: ReplicationProperty,
+    read_unavailable: ReadUnavailableMapping, replication: ReplicationProperty
 ) -> str:
     formatted_read_unavailable = []
     sorted_read_unavailable = reverse_sort_replication(read_unavailable)
-    # biggest_failing_domain is a tuple (LocationScope, set(locations))
+    # biggest_failing_domain is a tuple (LocationScope, Mapping[str, Set[ShardID]])
     biggest_failing_domain = (
         sorted_read_unavailable[-1] if sorted_read_unavailable else None
     )
@@ -390,8 +394,10 @@ def impact_on_log_string(
     location_map: Mapping[str, List[str]] = defaultdict(lambda: [])
 
     # Maps LocationScope to the unique locations of read available domains.
-    # {Domain -> {loc -> set(shard_id)}}
+    read_unavailable: ReadUnavailableMapping
+    # pyre-ignore (T47856310)
     read_unavailable = defaultdict(lambda: defaultdict(lambda: set()))
+
     n_writeable = 0
     n_writeable_loss = 0
 
@@ -402,8 +408,6 @@ def impact_on_log_string(
         assert impact.storage_set_metadata is not None
         meta = impact.storage_set_metadata[i]
         loc_per_scope = meta.location_per_scope
-        # pyre-fixme[6]: Expected `Map__LocationScope_string` for 2nd param but got
-        #  `Mapping[LocationScope, str]`.
         location = location_up_to_scope(shard, loc_per_scope, biggest_replication_scope)
         is_in_target_shards = match_shards(shard, shards)
 
@@ -439,8 +443,6 @@ def impact_on_log_string(
                     # For each domain in the replication property, add the location
                     # string as a read unavailable target
                     for scope in replication.keys():
-                        # pyre-fixme[6]: Expected `Map__LocationScope_string` for
-                        #  2nd param but got `Mapping[LocationScope, str]`.
                         loc_tag = location_up_to_scope(shard, loc_per_scope, scope)
                         # If shard location is x.y.a.b and replication is rack:
                         # X, node: Y. Then the x.y.a should be added to key
