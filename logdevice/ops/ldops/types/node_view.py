@@ -77,7 +77,7 @@ class NodeView:
                 address_family=da.address_family, address=da.address, port=6440
             )
         else:
-            assert False, "unreachable"  # pragma: nocover
+            raise AssertionError("unreachable")  # pragma: nocover
 
     @property
     def node_id(self) -> NodeID:

@@ -215,18 +215,21 @@ class TestMaintenanceView(TestCase):
         if maintenance.expires_on is None:
             self.assertIsNone(maintenance_view.expires_on)
         else:
-            assert maintenance_view.expires_on is not None
+            # pull these into local vars to appease pyre
+            view_expires_on = maintenance_view.expires_on
+            view_expires_in = maintenance_view.expires_in
+
+            assert view_expires_on is not None
             self.assertAlmostEqual(
-                maintenance_view.expires_on.timestamp() * 1000,
+                view_expires_on.timestamp() * 1000,
                 maintenance.expires_on,
                 1,
             )
 
-            assert maintenance_view.expires_in is not None
+            assert view_expires_in is not None
             self.assertAlmostEqual(
-                maintenance_view.expires_in.total_seconds(),
-                # pyre-fixme[16]: Optional type has no attribute `__sub__`.
-                (maintenance_view.expires_on - datetime.now()).total_seconds(),
+                view_expires_in.total_seconds(),
+                (view_expires_on - datetime.now()).total_seconds(),
                 1,
             )
 

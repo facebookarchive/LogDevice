@@ -41,7 +41,7 @@ class SocketAddress:
             if not self.path:
                 raise ValueError(f"Invalid path: {self.path}")
         else:
-            assert False, "unreachable"  # pragma: nocover
+            raise AssertionError("unreachable")  # pragma: nocover
 
     def to_thrift(self) -> ThriftSocketAddress:
         """
@@ -58,7 +58,7 @@ class SocketAddress:
             assert self.path is not None
             addr = self.path
         else:
-            assert False, "unreachable"  # pragma: nocover
+            raise AssertionError("unreachable")  # pragma: nocover
 
         return ThriftSocketAddress(
             address_family=self.address_family,
@@ -106,7 +106,7 @@ class SocketAddress:
                 address_family=src.address_family, path=src.address
             )
         else:
-            assert False, "unreachable"  # pragma: nocover
+            raise AssertionError("unreachable")  # pragma: nocover
 
         return socket_address
 
@@ -117,6 +117,6 @@ class SocketAddress:
             elif isinstance(self.address, IPv6Address):
                 return f"[{self.address.compressed}]:{self.port}"
             else:
-                assert False, "unreachable"  # pragma: nocover
+                raise AssertionError("unreachable")  # pragma: nocover
         else:
             return f"unix:{self.path}"

@@ -106,16 +106,16 @@ class TestNodeView(TestCase):
         self.assertEqual(nv.data_address, SocketAddress.from_thrift(nc.data_address))
 
         if nv.thrift_address.address_family == SocketAddressFamily.INET:
-            assert nv.thrift_address.address is not None
+            # local variable to appease pyre
+            nv_address = nv.thrift_address.address
+            assert nv_address is not None
 
             from_nc = SocketAddress.from_thrift(nc.data_address)
             assert from_nc.address is not None
 
             self.assertEqual(nv.thrift_address.port, 6440)
             self.assertEqual(
-                # pyre-fixme[16]: Optional type has no attribute `compressed`.
-                nv.thrift_address.address.compressed,
-                from_nc.address.compressed,
+                nv_address.compressed, from_nc.address.compressed
             )
 
         self.assertEqual(

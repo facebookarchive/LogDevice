@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
 #
@@ -291,8 +293,9 @@ def get_biggest_scope(replication: ReplicationProperty) -> LocationScope:
     return biggest_scope
 
 
+# TODO (T62931988) change this back to Location
 def location_up_to_scope(
-    shard: ShardID, location_per_scope: Location, scope: LocationScope
+    shard: ShardID, location_per_scope: Mapping[LocationScope, str], scope: LocationScope
 ) -> str:
     """
     Generates a string of the location string up to a given scope. The input
@@ -496,7 +499,6 @@ def impact_on_log_string(
     # Write/Rebuilding Availability
     lines.append(analyze_write_availability(n_writeable, n_writeable_loss, replication))
     # Read/F-Majority Availability
-    # pyre-ignore
     lines.append(analyze_read_availability(read_unavailable, replication))
     lines.append(colored(f"Impact: {impact_str}", "red"))
     for table in tables:
