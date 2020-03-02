@@ -113,7 +113,7 @@ Nodes is an array of node objects. An example node object would be:
     ],
     "sequencer": true,
     "storage": "read-write",
-    "storage_weight": 2,
+    "storage_capacity": 2,
     "location": "abc.def.gh.ij.kl",
     "node_id": 0,
     "num_shards": 15,
@@ -145,7 +145,7 @@ can be placed on machines with 3 different rack identifiers (but could share sam
 
 Each section can be expressed as a string.
 
-### Roles and state (`roles`, `sequencer`, `sequencer_weight`, `storage` and `storage_weight`)
+### Roles and state (`roles`, `sequencer`, `sequencer_weight`, `storage` and `storage_capacity`)
 A distinction should be made between roles and state:
 - Role: this remains the same during the lifetime of the node.
 - State: could change (for e.g. maintenance operations)
@@ -155,7 +155,7 @@ A distinction should be made between roles and state:
 - `sequencer`
 - `storage`
 
-`storage_weight` defines a proportional value for the amount of data to be stored compared to other machines. When e.g. total disk size is used as weight for machines with variable disk sizes, the storage will be used proportionally.
+`storage_capacity` defines a proportional value for the amount of data to be stored compared to other machines. When e.g. total disk size is used as weight for machines with variable disk sizes, the storage will be used proportionally.
 `sequencer_weight` can similarly define a proportional value for the number of sequencers to be placed on the machine.
 
 #### State
