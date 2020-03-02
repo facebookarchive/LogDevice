@@ -176,7 +176,7 @@ Status RebuildingMarkerChecker::markShardsAsProvisioned(
       /* backoff_max */ std::chrono::seconds(60),
       /* jitter_param */ 0.25);
 
-  return result.hasValue() ? result.value() : result.error();
+  return result.first;
 }
 
 }} // namespace facebook::logdevice

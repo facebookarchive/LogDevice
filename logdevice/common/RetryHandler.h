@@ -26,7 +26,7 @@ namespace facebook { namespace logdevice {
 template <class T>
 class RetryHandler {
  public:
-  using Result = folly::Expected<T, T>;
+  using Result = std::pair<T, /* exhausted_retries */ bool>;
 
   /**
    * Retries the function until either we exhaust all the retries or
@@ -37,10 +37,9 @@ class RetryHandler {
    * @param should_retry: Given the output of func, returns true to retry, or
    *                      false to stop retrying.
    *
-   * @returns A folly::Expected indicating either:
-   *   1- Success and contains the returned value.
-   *   2- Error which means that we exhausted all the retries. It will also
-   *      hold the last returned value from the function.
+   * @returns A pair of:
+   *   1- The last returned value from the function.
+   *   2- True if we exhausted all the retries, false otherwise.
    */
   static folly::SemiFuture<Result>
   run(folly::Function<T(size_t trial_num) const> func,
@@ -62,14 +61,14 @@ class RetryHandler {
                    return folly::make_exception_wrapper<Failure>(
                        std::move(ret));
                  } else {
-                   return folly::makeExpected<T>(std::move(ret));
+                   return std::make_pair(std::move(ret), false);
                  }
                })
-        // When we exhaust all the retries, return it as a folly unexpected
-        // of a future carrying an exception.
+        // Called when we exhaust all the retry. Return the last value and mark
+        // it as exhausted all retries.
         .deferError(folly::tag_t<Failure>(),
                     [](Failure f) -> folly::SemiFuture<Result> {
-                      return folly::makeUnexpected(std::move(f.type));
+                      return std::make_pair(std::move(f.type), true);
                     });
   }
 

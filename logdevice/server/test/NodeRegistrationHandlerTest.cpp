@@ -12,11 +12,13 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/settings/util.h"
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
+#include "logdevice/common/test/MockNodesConfigurationStore.h"
 
 namespace facebook { namespace logdevice {
 
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership;
+using testing::_;
 
 class NodeRegistrationHandlerTest : public ::testing::Test {
  public:
@@ -184,6 +186,23 @@ TEST_F(NodeRegistrationHandlerTest, testSameUpdateNoop) {
       settings, admin_settings, updateable_nc, store_};
   auto status = handler.updateSelf(add_res.value());
   ASSERT_EQ(Status::UPTODATE, status);
+}
+
+// Makes sure that the handler bubbles up unexpected failures.
+TEST_F(NodeRegistrationHandlerTest, testRegistrationBubbleUpdateFailures) {
+  auto settings = buildServerSettings("node1");
+  auto admin_settings = buildAdminServerSettings("node1");
+
+  auto store = std::make_shared<MockNodesConfigurationStore>();
+  EXPECT_CALL(*store, updateConfigSync(_, _, _, _))
+      .WillOnce(testing::Return(Status::BADMSG));
+  auto updateable_nc = std::make_shared<UpdateableNodesConfiguration>();
+  updateable_nc->update(std::make_shared<NodesConfiguration>());
+  NodeRegistrationHandler handler{
+      settings, admin_settings, std::move(updateable_nc), store};
+  auto res = handler.registerSelf(NodeIndicesAllocator{});
+  ASSERT_TRUE(res.hasError());
+  EXPECT_EQ(Status::BADMSG, res.error());
 }
 
 }} // namespace facebook::logdevice

@@ -16,7 +16,7 @@ namespace facebook { namespace logdevice {
 TEST(RetryHandlerTest, testFirstTimeSuccess) {
   int num_calls = 0;
 
-  EXPECT_EQ(Status::OK,
+  EXPECT_EQ(std::make_pair(Status::OK, false),
             RetryHandler<Status>::syncRun(
                 [&](size_t) {
                   num_calls++;
@@ -26,15 +26,14 @@ TEST(RetryHandlerTest, testFirstTimeSuccess) {
                 /* max_retries= */ 10,
                 /* backoff_min= */ std::chrono::milliseconds(1),
                 /* backoff_max= */ std::chrono::milliseconds(10),
-                /* jitter_param= */ 0)
-                .value());
+                /* jitter_param= */ 0));
   EXPECT_EQ(1, num_calls);
 }
 
 TEST(RetryHandlerTest, testEventualSuccess) {
   int num_calls = 0;
 
-  EXPECT_EQ(Status::OK,
+  EXPECT_EQ(std::make_pair(Status::OK, false),
             RetryHandler<Status>::syncRun(
                 [&](size_t trial) {
                   num_calls++;
@@ -48,15 +47,14 @@ TEST(RetryHandlerTest, testEventualSuccess) {
                 /* max_retries= */ 10,
                 /* backoff_min= */ std::chrono::milliseconds(1),
                 /* backoff_max= */ std::chrono::milliseconds(10),
-                /* jitter_param= */ 0)
-                .value());
+                /* jitter_param= */ 0));
   EXPECT_EQ(4, num_calls);
 }
 
 TEST(RetryHandlerTest, testFailure) {
   int num_calls = 0;
 
-  EXPECT_EQ(Status::UNKNOWN,
+  EXPECT_EQ(std::make_pair(Status::UNKNOWN, true),
             RetryHandler<Status>::syncRun(
                 [&](size_t) {
                   num_calls++;
@@ -67,8 +65,7 @@ TEST(RetryHandlerTest, testFailure) {
                 /* max_retries= */ 10,
                 /* backoff_min= */ std::chrono::milliseconds(1),
                 /* backoff_max= */ std::chrono::milliseconds(10),
-                /* jitter_param= */ 0)
-                .error());
+                /* jitter_param= */ 0));
   EXPECT_EQ(10, num_calls);
 }
 

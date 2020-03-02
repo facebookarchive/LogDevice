@@ -50,8 +50,10 @@ NodeRegistrationHandler::registerSelf(NodeIndicesAllocator allocator) {
       /* backoff_min */ std::chrono::seconds(1),
       /* backoff_max */ kMaxSleepDuration,
       /* jitter_param */ 0.25);
-  return result.hasValue() ? folly::makeExpected<E>(my_idx)
-                           : folly::makeUnexpected(result.error());
+
+  auto status = result.first;
+  return status == Status::OK ? folly::makeExpected<E>(my_idx)
+                              : folly::makeUnexpected(status);
 }
 
 Status NodeRegistrationHandler::updateSelf(node_index_t my_idx) {
@@ -73,7 +75,7 @@ Status NodeRegistrationHandler::updateSelf(node_index_t my_idx) {
       /* backoff_max */ kMaxSleepDuration,
       /* jitter_param */ 0.25);
 
-  return result.hasValue() ? result.value() : result.error();
+  return result.first;
 }
 
 configuration::nodes::NodeUpdateBuilder
