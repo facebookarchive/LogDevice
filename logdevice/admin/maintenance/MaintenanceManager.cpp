@@ -554,36 +554,10 @@ MaintenanceManager::getShardOperationalStateInternal(ShardID shard) const {
 
   ld_check(storageState.hasValue());
 
-  auto targetOpStates = getShardTargetStatesInternal(shard);
-
-  if (targetOpStates.hasError()) {
-    return folly::makeUnexpected(std::move(targetOpStates.error()));
-  }
-
-  ld_check(targetOpStates.hasValue());
-
-  if (targetOpStates->count(ShardOperationalState::ENABLED)) {
-    ld_check(targetOpStates->size() == 1);
-    if (storageState.value() == membership::StorageState::READ_WRITE) {
-      return ShardOperationalState::ENABLED;
-    } else {
-      if (storageState.value() == membership::StorageState::PROVISIONING) {
-        return ShardOperationalState::PROVISIONING;
-      } else {
-        // This does not necessarily mean we have an active workflow
-        // right now but one will be created if this state holds
-        return ShardOperationalState::ENABLING;
-      }
-    }
-  }
-
-  ShardOperationalState result;
-  ld_check(targetOpStates->count(ShardOperationalState::DRAINED) ||
-           targetOpStates->count(ShardOperationalState::MAY_DISAPPEAR));
-
   auto sa = nodes_config_->getNodeStorageAttribute(shard.node());
   bool exclude_from_nodeset = sa->exclude_from_nodesets;
 
+  ShardOperationalState result;
   switch (storageState.value()) {
     case membership::StorageState::NONE:
       result = ShardOperationalState::DRAINED;
