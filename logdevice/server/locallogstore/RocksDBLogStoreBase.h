@@ -479,7 +479,14 @@ class RocksDBLogStoreBase : public LocalLogStore {
 
     // Schema version key not found.  Check if the database is empty ...
     int rv = isCFEmpty(cf);
-    if (rv != 1) {
+    if (rv == -1) {
+      // isCFEmpty() already logged an error.
+      return -1;
+    }
+    if (rv == 0) {
+      ld_error(
+          "Schema version key is missing, but the DB is not empty. This should "
+          "be impossible. The DB may be corrupted. Refusing to open.");
       return -1;
     }
 

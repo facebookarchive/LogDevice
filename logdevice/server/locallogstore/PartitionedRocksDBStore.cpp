@@ -1607,6 +1607,14 @@ bool PartitionedRocksDBStore::readPartitionTimestamps(PartitionPtr partition) {
         &meta,
         metadata_cf_->get());
     if (rv != 0) {
+      if (err == E::NOTFOUND) {
+        ld_error("Partition %lu doesn't have starting timestamp metadata. This "
+                 "should be impossible - we sync this metadata to WAL. DB may "
+                 "be corrupted. Refusing to open.",
+                 partition->id_);
+      } else {
+        // readMetadata() already logged an error.
+      }
       return false;
     }
     partition->starting_timestamp = meta.getTimestamp();
