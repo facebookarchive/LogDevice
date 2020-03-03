@@ -243,7 +243,7 @@ class MockMaintenanceManager : public MaintenanceManager {
                          std::vector<folly::SemiFuture<MaintenanceStatus>>>());
 
   MOCK_METHOD1(getExpectedStorageStateTransition,
-               membership::StorageStateTransition(ShardID));
+               folly::Optional<membership::StorageStateTransition>(ShardID));
 
   void activateReevaluationTimer() override {
     test_->periodic_reeval_timer_active_ = true;

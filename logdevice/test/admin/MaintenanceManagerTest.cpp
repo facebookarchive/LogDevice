@@ -241,6 +241,63 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
   });
 }
 
+TEST_P(MaintenanceManagerTest, BasicPassiveDrain) {
+  init();
+  cluster_->start({0, 1, 2, 3});
+  cluster_->waitUntilAllStartedAndPropagatedInGossip();
+  std::shared_ptr<Client> client = cluster_->createClient();
+  write_test_records(client, LOG_ID, 10);
+
+  auto& processor = static_cast<ClientImpl*>(client.get())->getProcessor();
+  auto maintenanceLogWriter =
+      std::make_unique<MaintenanceLogWriter>(&processor);
+
+  // Add a maintenance to passive drain everything
+  thrift::MaintenanceDefinition def;
+  def.set_shards({mkShardID(0, -1), mkShardID(2, -1)});
+  def.set_shard_target_state(thrift::ShardOperationalState::DRAINED);
+  def.set_user("Test");
+  def.set_reason("Integration Test");
+  def.set_skip_safety_checks(false);
+  def.set_force_restore_rebuilding(false);
+  def.set_group(true);
+  def.set_ttl_seconds(0);
+  def.set_allow_passive_drains(true);
+  def.set_group_id("PSV-1");
+  def.set_created_on(SystemTimestamp::now().toMilliseconds().count());
+
+  auto maintenanceDelta = std::make_unique<MaintenanceDelta>();
+  maintenanceDelta->set_apply_maintenances({def});
+  writeToMaintenanceLog(*client, *maintenanceDelta);
+
+  wait_until("ShardOperationalState is PASSIVE_DRAINING", [&]() {
+    auto state = cluster_->getNode(2).sendCommand("info shardopstate 0 0");
+    const std::string expected_text = "PASSIVE_DRAINING\r\n";
+    return state == expected_text;
+  });
+
+  // Now remove the DRAINED maintenance, node should go back to being
+  // MAY_DISAPEAR
+  maintenanceDelta = std::make_unique<MaintenanceDelta>();
+  thrift::MaintenancesFilter filter;
+  filter.set_group_ids({"PSV-1"});
+  filter.set_user("Test");
+
+  thrift::RemoveMaintenancesRequest req;
+  req.set_filter(std::move(filter));
+  req.set_user("Test");
+  req.set_reason("Integration Test");
+
+  maintenanceDelta->set_remove_maintenances(std::move(req));
+  writeToMaintenanceLog(*client, *maintenanceDelta);
+
+  wait_until("ShardOperationalState is ENABLED", [&]() {
+    auto state = cluster_->getNode(2).sendCommand("info shardopstate 0 0");
+    const std::string expected_text = "ENABLED\r\n";
+    return state == expected_text;
+  });
+}
+
 TEST_P(MaintenanceManagerTest, Snapshotting) {
   const size_t num_nodes = 5;
   const size_t num_shards = 2;

@@ -1269,7 +1269,7 @@ void MaintenanceManager::processShardWorkflowResult(
   }
 }
 
-membership::StorageStateTransition
+folly::Optional<membership::StorageStateTransition>
 MaintenanceManager::getExpectedStorageStateTransition(ShardID shard) {
   ld_check(active_shard_workflows_.count(shard));
   return active_shard_workflows_.at(shard)
@@ -1532,10 +1532,12 @@ MaintenanceManager::scheduleNodesConfigUpdates() {
     ShardWorkflow* wf = it.second.first.get();
     MaintenanceStatus status = it.second.second;
 
-    if (status == MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES) {
+    auto expected_storage_transition = getExpectedStorageStateTransition(shard);
+    if (status == MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES &&
+        expected_storage_transition.hasValue()) {
       // Membership update
       membership::ShardState::Update shard_state_update;
-      shard_state_update.transition = getExpectedStorageStateTransition(shard);
+      shard_state_update.transition = expected_storage_transition.value();
       // TODO: Verify conditions are valid and met for each
       // requested transition
       shard_state_update.conditions =
@@ -1745,6 +1747,8 @@ MaintenanceManager::runShardWorkflows() {
     ShardWorkflow* wf = it.second.first.get();
     auto current_storage_state =
         nodes_config_->getStorageMembership()->getShardState(shard_id);
+    auto sa = nodes_config_->getNodeStorageAttribute(shard_id.node());
+    bool exclude_from_nodeset = sa->exclude_from_nodesets;
     // Getting the ClusterStateNodeState for this node, if we don't have gossip
     // information (no ClusterState) we assume FULLY_STARTED as this is the
     // safest option to avoid blocking ENABLE(s).
@@ -1763,6 +1767,7 @@ MaintenanceManager::runShardWorkflows() {
     ld_check(current_storage_state.has_value());
     shards.push_back(shard_id);
     futures.push_back(wf->run(current_storage_state.value(),
+                              exclude_from_nodeset,
                               getShardDataHealthInternal(shard_id).value(),
                               getCurrentRebuildingMode(shard_id),
                               isShardDraining(shard_id),
@@ -1862,8 +1867,13 @@ bool MaintenanceManager::isShardEnabled(const ShardID& shard) {
   // Shard is considered as enabled if its storage state is READ_WRITE
   // and there is no full rebuilding (mini rebuilding is fine)
   auto result = getStorageStateInternal(shard);
+  auto sa = nodes_config_->getNodeStorageAttribute(shard.node());
+  bool exclude_from_nodeset = sa->exclude_from_nodesets;
   return result.hasValue() &&
       result.value() == membership::StorageState::READ_WRITE &&
+      // A shard is considered fully enabled if its node is not excluded from
+      // nodesets. For these shards we need to create a workflow to enable.
+      exclude_from_nodeset == false &&
       !event_log_rebuilding_set_
            ->isRebuildingFullShard(shard.node(), shard.shard())
            .has_value();

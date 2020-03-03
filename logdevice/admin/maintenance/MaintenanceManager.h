@@ -597,7 +597,7 @@ class MaintenanceManager : public SerialWorkContext {
   bool has_shards_to_enable_;
 
   // Returns the transition expected by shard workflow
-  virtual membership::StorageStateTransition
+  virtual folly::Optional<membership::StorageStateTransition>
   getExpectedStorageStateTransition(ShardID shard);
 
   // Returns the required conditions for given shard and transition

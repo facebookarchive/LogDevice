@@ -52,6 +52,8 @@ class ShardWorkflow {
    * passed
    *
    * @param shard_state           The membership ShardState in NC
+   * @param excluded_from_nodeset Whether currently this shard is
+   *                              excluded from nodesets or not.
    * @param data_health           ShardDataHealth for the shard
    * @param rebuilding_mode       RebuildingMode for the shard
    * @param is_draining           Is drain flag set in event log
@@ -66,6 +68,7 @@ class ShardWorkflow {
    */
   folly::SemiFuture<thrift::MaintenanceStatus>
   run(const membership::ShardState& shard_state,
+      bool excluded_from_nodeset,
       ShardDataHealth data_health,
       RebuildingMode rebuilding_mode,
       bool is_draining,
@@ -102,8 +105,9 @@ class ShardWorkflow {
 
   // Returns the StorageStateTransition that this workflow expects for this
   // shard in NodesConfiguration. This will be used
-  // by the MaintenanceManager in NodesConfig update request
-  membership::StorageStateTransition getExpectedStorageStateTransition() const;
+  // by the MaintenanceManager in NodesConfig update request.
+  folly::Optional<membership::StorageStateTransition>
+  getExpectedStorageStateTransition() const;
 
   // Returns value of allow_passive_drain_
   bool allowPassiveDrain() const;
@@ -136,7 +140,8 @@ class ShardWorkflow {
   // in the NodesConfiguration. Workflow will set this value
   // and MaintenanceManager will make use of it to request
   // the update in NodesConfiguration.
-  membership::StorageStateTransition expected_storage_state_transition_;
+  folly::Optional<membership::StorageStateTransition>
+      expected_storage_state_transition_{folly::none};
   // If safety checker determines that a drain is needed,
   // allow passive drain if reruired
   bool allow_passive_drain_{false};
@@ -156,6 +161,8 @@ class ShardWorkflow {
   // The last StorageState as informed by MM for this shard
   // Gets updated every time `run` is called
   membership::StorageState current_storage_state_;
+  // Whether we are currently being excluded from nodesets or not.
+  bool is_excluded_from_nodeset_{false};
   // The last ShardDataHealth as informed by the MM for this
   // shard.
   // Gets updated every time `run` is called

@@ -17,32 +17,40 @@ namespace facebook { namespace logdevice { namespace maintenance {
 
 folly::SemiFuture<MaintenanceStatus>
 ShardWorkflow::run(const membership::ShardState& shard_state,
+                   bool excluded_from_nodeset,
                    ShardDataHealth data_health,
                    RebuildingMode rebuilding_mode,
                    bool is_draining,
                    bool is_non_authoritative,
                    ClusterStateNodeState node_gossip_state) {
-  ld_spew("%s",
-          folly::format(
-              "State before update:"
-              "current_storage_state_:{},"
-              "expected_storage_state_transition_:{},"
-              "current_rebuilding_mode_:{},"
-              "gossip_state:{},"
-              "current_data_health_:{},"
-              "status_:{},"
-              "event_type:{}",
-              membership::toString(current_storage_state_).str(),
-              membership::toString(expected_storage_state_transition_).str(),
-              toString(current_rebuilding_mode_),
-              ClusterState::getNodeStateString(node_gossip_state),
-              apache::thrift::util::enumNameSafe(current_data_health_),
-              apache::thrift::util::enumNameSafe(status_),
-              (event_) ? toString(event_->getType()) : "nullptr")
-              .str()
-              .c_str());
+  ld_spew(
+      "%s",
+      folly::format(
+          "State before update:"
+          "current_storage_state_:{},"
+          "is_excluded_from_nodeset_:{},"
+          "expected_storage_state_transition_:{},"
+          "current_rebuilding_mode_:{},"
+          "gossip_state:{},"
+          "current_data_health_:{},"
+          "status_:{},"
+          "event_type:{}",
+          membership::toString(current_storage_state_).str(),
+          is_excluded_from_nodeset_ ? "true" : "false",
+          expected_storage_state_transition_.hasValue()
+              ? membership::toString(expected_storage_state_transition_.value())
+                    .str()
+              : "NONE",
+          toString(current_rebuilding_mode_),
+          ClusterState::getNodeStateString(node_gossip_state),
+          apache::thrift::util::enumNameSafe(current_data_health_),
+          apache::thrift::util::enumNameSafe(status_),
+          (event_) ? toString(event_->getType()) : "nullptr")
+          .str()
+          .c_str());
 
   current_storage_state_ = shard_state.storage_state;
+  is_excluded_from_nodeset_ = excluded_from_nodeset;
   current_data_health_ = data_health;
   gossip_state_ = node_gossip_state;
   current_rebuilding_mode_ = rebuilding_mode;
@@ -55,23 +63,29 @@ ShardWorkflow::run(const membership::ShardState& shard_state,
     computeMaintenanceStatus();
   }
 
-  ld_spew("%s",
-          folly::format(
-              "State after update:"
-              "current_storage_state_:{},"
-              "expected_storage_state_transition_:{},"
-              "current_rebuilding_mode_:{},"
-              "current_data_health_:{},"
-              "status_:{},"
-              "event_type:{}",
-              membership::toString(current_storage_state_).str(),
-              membership::toString(expected_storage_state_transition_).str(),
-              toString(current_rebuilding_mode_),
-              apache::thrift::util::enumNameSafe(current_data_health_),
-              apache::thrift::util::enumNameSafe(status_),
-              (event_) ? toString(event_->getType()) : "nullptr")
-              .str()
-              .c_str());
+  ld_spew(
+      "%s",
+      folly::format(
+          "State after update:"
+          "current_storage_state_:{},"
+          "is_excluded_from_nodeset_:{},"
+          "expected_storage_state_transition_:{},"
+          "current_rebuilding_mode_:{},"
+          "current_data_health_:{},"
+          "status_:{},"
+          "event_type:{}",
+          membership::toString(current_storage_state_).str(),
+          is_excluded_from_nodeset_ ? "true" : "false",
+          expected_storage_state_transition_.hasValue()
+              ? membership::toString(expected_storage_state_transition_.value())
+                    .str()
+              : "NONE",
+          toString(current_rebuilding_mode_),
+          apache::thrift::util::enumNameSafe(current_data_health_),
+          apache::thrift::util::enumNameSafe(status_),
+          (event_) ? toString(event_->getType()) : "nullptr")
+          .str()
+          .c_str());
 
   if (event_ != nullptr) {
     // We have a event that needs to be written to the event log.
@@ -277,8 +291,14 @@ void ShardWorkflow::computeMaintenanceStatusForEnable() {
       updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
       break;
     case membership::StorageState::READ_WRITE:
+      // reset the expected transition.
+      expected_storage_state_transition_ = folly::none;
       createAbortEventIfRequired();
-      updateStatus(MaintenanceStatus::COMPLETED);
+      if (!is_excluded_from_nodeset_) {
+        updateStatus(MaintenanceStatus::COMPLETED);
+      } else {
+        updateStatus(MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+      }
       break;
     case membership::StorageState::RW_TO_RO:
       // We can just abort the disable that is happening instead of waiting for
@@ -387,7 +407,7 @@ SystemTimestamp ShardWorkflow::getCreationTimestamp() const {
   return created_at_;
 }
 
-membership::StorageStateTransition
+folly::Optional<membership::StorageStateTransition>
 ShardWorkflow::getExpectedStorageStateTransition() const {
   return expected_storage_state_transition_;
 }
