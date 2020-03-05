@@ -750,9 +750,18 @@ bool ReplicatedStateMachine<T, D>::onDeltaRecord(
       // lsns match.
       ld_check(it->second->lsn == LSN_INVALID ||
                it->second->lsn == record->attrs.lsn);
-      it->second->cb(st, record->attrs.lsn, failure_reason);
-      pending_confirmation_.erase(it->second);
-      pending_confirmation_by_uuid_.erase(it);
+      if (state_delivery_blocked_) {
+        rsm_info(rsm_type_,
+                 "RSM just got unblocked from executing a callback on a delta "
+                 "because the EXPERIMENTATION setting (block-%s-rsm = true) "
+                 "the delta LSN is %s.",
+                 toString(rsm_type_).c_str(),
+                 lsn_to_string(record->attrs.lsn).c_str());
+      } else {
+        it->second->cb(st, record->attrs.lsn, failure_reason);
+        pending_confirmation_.erase(it->second);
+        pending_confirmation_by_uuid_.erase(it);
+      }
     }
   }
 
@@ -1334,8 +1343,54 @@ void ReplicatedStateMachine<T, D>::advertiseVersions(lsn_t version) {
 }
 
 template <typename T, typename D>
+void ReplicatedStateMachine<T, D>::notifySubscribersWithLatestState() {
+  notifySubscribers(nullptr);
+}
+
+template <typename T, typename D>
+bool ReplicatedStateMachine<T, D>::blockStateDelivery(bool blocked) {
+  bool prev = state_delivery_blocked_;
+  state_delivery_blocked_ = blocked;
+  if (prev == true && state_delivery_blocked_ == false) {
+    // We have just been unblocked. notify all subscribers;
+    if (sync_state_ == SyncState::TAILING || deliver_while_replaying_) {
+      rsm_info(
+          rsm_type_,
+          "RSM just got unblocked by unsetting the EXPERIMENTATION setting "
+          " (block-%s-rsm = false) but we cannot publish a state because the "
+          "RSM is not currently tailing or has deliver_while_replaying "
+          "enabled",
+          toString(rsm_type_).c_str());
+      notifySubscribers();
+    } else {
+      rsm_info(
+          rsm_type_,
+          "RSM just got unblocked by unsetting the EXPERIMENTATION setting "
+          " (block-%s-rsm = false) but we cannot publish a state because the "
+          "RSM is not currently tailing or has deliver_while_replaying "
+          "enabled",
+          toString(rsm_type_).c_str());
+    }
+  }
+  return prev;
+}
+
+template <typename T, typename D>
 void ReplicatedStateMachine<T, D>::notifySubscribers(const D* delta) {
   if (subscribers_.empty()) {
+    return;
+  }
+
+  if (state_delivery_blocked_) {
+    rsm_warning(rsm_type_,
+                "Will NOT notify subscribers of new state since delivery is "
+                "blocked via an EXPERIMENTATION setting (block-%s-rsm = true). "
+                "Current version: %s, Latest published was: %s",
+                toString(rsm_type_).c_str(),
+                lsn_to_string(version_).c_str(),
+                latest_published_version_.hasValue()
+                    ? lsn_to_string(latest_published_version_.value()).c_str()
+                    : "NONE");
     return;
   }
 
@@ -1346,6 +1401,7 @@ void ReplicatedStateMachine<T, D>::notifySubscribers(const D* delta) {
     cb(*data_, delta, version_);
   }
 
+  latest_published_version_ = version_;
   advertiseVersions(version_);
 }
 

@@ -347,6 +347,10 @@ struct Settings : public SettingsBundle {
   // TODO: T28014582
   bool purging_use_metadata_log_only;
 
+  /// ** Used ONLY for experimentation and testing
+  bool block_logsconfig_rsm;
+  bool block_eventlog_rsm;
+
   // maximum concurrent purging state machines for RELEASE messages
   // per storage shard for each worker
   size_t max_concurrent_purging_for_release_per_shard;
@@ -1374,7 +1378,6 @@ struct Settings : public SettingsBundle {
   SnapshotStoreType rsm_snapshot_store_type;
   std::chrono::milliseconds eventlog_snapshotting_period;
   std::chrono::milliseconds logsconfig_snapshotting_period;
-  bool test_hold_logsconfig_in_starting;
 
   // polling interval for fetching trim point from historical node set
   std::chrono::seconds get_trimpoint_interval;

@@ -93,14 +93,6 @@ class LogsConfigManager {
   }
 
   /**
-   * Returns true if the test-only settings test_hold_logsconfig_in_starting is
-   * true.
-   */
-  bool testRequestsHoldInStartingState() const {
-    return Worker::settings().test_hold_logsconfig_in_starting;
-  }
-
-  /**
    * Returns the WorkerType that LogsConfigManager should be working on
    */
   static WorkerType workerType(Processor* processor) {

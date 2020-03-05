@@ -64,7 +64,7 @@ void MaintenanceManagerDependencies::startSubscription() {
 }
 
 void MaintenanceManagerDependencies::stopSubscription() {
-  ld_info("Canceling subscription to ClustermaintenanceStateMachine");
+  ld_info("Canceling subscription to ClusterMaintenanceStateMachine");
   cms_update_handle_.reset();
   ld_info("Canceling subscription to EventLogStateMachine");
   el_update_handle_.reset();

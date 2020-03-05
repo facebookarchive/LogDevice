@@ -72,6 +72,11 @@ class LogsConfigStateMachine
   virtual void snapshot(std::function<void(Status st)> cb) override;
 
   /**
+   * Starts executing the state machine
+   */
+  void start();
+
+  /**
    * Mark that something about the tree received a delta and should
    * be deduplicated at some point.
    */

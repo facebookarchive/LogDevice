@@ -46,6 +46,11 @@ class ClusterMaintenanceStateMachine
    */
   void start();
 
+  /**
+   * Called when settings have changed.
+   */
+  void onSettingsUpdated();
+
   const thrift::ClusterMaintenanceState& getCurrentState() const {
     return getState();
   }
@@ -96,6 +101,10 @@ class ClusterMaintenanceStateMachine
  private:
   // Will be set to true when we finish replaying the state machine.
   bool is_fully_loaded_{false};
+
+  // subscription for changes in UpdateableSettings<AdminServerSettings>
+  UpdateableSettings<AdminServerSettings>::SubscriptionHandle
+      updateable_settings_subscription_;
 
   std::unique_ptr<SubscriptionHandle> update_handle_;
 

@@ -272,7 +272,7 @@ TEST_F(InternalLogsIntegrationTest,
   }
   for (auto nid : STUCK_NODES) {
     auto& node = cluster->getNode(nid);
-    node.setParam("--test-hold-logsconfig-in-starting-state", "true");
+    node.setParam("--block-logsconfig-rsm", "true");
     node.start();
   }
   cluster->waitUntilAllAvailable();
@@ -298,8 +298,7 @@ TEST_F(InternalLogsIntegrationTest,
   /* Now we set Logsconfig unstuck and we expect nodes to eventually move out of
    * starting state. */
   for (auto nid : STUCK_NODES) {
-    cluster->getNode(nid).updateSetting(
-        "test-hold-logsconfig-in-starting-state", "false");
+    cluster->getNode(nid).updateSetting("block-logsconfig-rsm", "false");
   }
 
   /* now we should move out of the STARTING state and finish recoveries */

@@ -55,6 +55,11 @@ LogsConfigStateMachine::LogsConfigStateMachine(
   setSnapshottingGracePeriod(settings_->logsconfig_snapshotting_period);
 }
 
+void LogsConfigStateMachine::start() {
+  blockStateDelivery(settings_->block_logsconfig_rsm);
+  Parent::start();
+}
+
 bool LogsConfigStateMachine::canTrimAndSnapshot() const {
   // We can do neither trimming nor snapshotting if the RSM is non-writable.
   if (!is_writable_) {

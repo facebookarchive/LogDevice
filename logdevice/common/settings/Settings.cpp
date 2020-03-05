@@ -977,6 +977,28 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SERVER | REQUIRES_RESTART,
        SettingsCategory::Testing);
 
+  init("block-logsconfig-rsm",
+       &block_logsconfig_rsm,
+       "false",
+       nullptr,
+       "If true, the LogsConfig replicated state machine will not publish any "
+       "state updates. This simulates the case where we cannot finish loading "
+       "the state on startup. Changing the value will cause the RSM to publish "
+       "the state immediately if it can.",
+       SERVER | CLIENT,
+       SettingsCategory::Testing);
+
+  init("block-eventlog-rsm",
+       &block_eventlog_rsm,
+       "false",
+       nullptr,
+       "If true, the EventLog replicated state machine will not publish any "
+       "state updates. This simulates the case where we cannot finish loading "
+       "the state on startup. Changing the value will cause the RSM to publish "
+       "the state immediately if it can.",
+       SERVER,
+       SettingsCategory::Testing);
+
   init("purging-use-metadata-log-only",
        &purging_use_metadata_log_only,
        "false",
@@ -2495,14 +2517,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "snapshot it.",
       SERVER,
       SettingsCategory::Configuration);
-  init("test-hold-logsconfig-in-starting-state",
-       &test_hold_logsconfig_in_starting,
-       "false",
-       nullptr,
-       "Prevents LogsConfigStateMachine from being started. Used for testing "
-       "only.",
-       SERVER,
-       SettingsCategory::Testing);
   init("client-config-fetch-allowed",
        &client_config_fetch_allowed,
        "true",

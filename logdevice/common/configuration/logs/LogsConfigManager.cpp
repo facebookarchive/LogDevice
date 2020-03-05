@@ -95,6 +95,15 @@ void LogsConfigManager::onSettingsUpdated() {
       Worker::onThisThread(true)->settings().logsconfig_manager_grace_period;
 
   if (isEnabledInSettings()) {
+    if (is_running_) {
+      ld_assert(state_machine_);
+      // Only update the blocking status, we are not calling
+      // state_machine_->start() so we need to manually control the blocking
+      // state from here.
+      bool is_delivery_blocked =
+          Worker::onThisThread(true)->settings().block_logsconfig_rsm;
+      state_machine_->blockStateDelivery(is_delivery_blocked);
+    }
     if (publish_timer_.isActive()) {
       // LCM is already running and we have an active publish timer.
       ld_check(is_running_);
@@ -109,7 +118,7 @@ void LogsConfigManager::onSettingsUpdated() {
         cancelPublishTimer();
         activatePublishTimer();
       }
-    } else if (!testRequestsHoldInStartingState()) {
+    } else {
       start();
     }
   } else {

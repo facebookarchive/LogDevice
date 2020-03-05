@@ -234,6 +234,18 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      "cache",
      SERVER,
      SettingsCategory::AdminAPI)
+
+    ("block-maintenance-rsm",
+     &block_maintenance_rsm,
+     "false",
+     nullptr,
+     "If true, the Maintenance replicated state machine will not publish any "
+     "state updates. This simulates the case where we cannot finish loading "
+     "the state on startup. Changing the value will cause the RSM to publish "
+     "the state immediately if it can.",
+     SERVER,
+     SettingsCategory::Testing)
+
     ;
   // clang-format on
 };

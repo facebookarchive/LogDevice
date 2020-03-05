@@ -106,7 +106,7 @@
  * TODO(T13475700): the replay mechanism depends on recovery completing.
  * We may consider relaxing this and allowing streaming updates to subscribers
  * when the state machine is past the current last released lsn instead of the
- * curren tail.
+ * current tail.
  * It is still unclear if we'd rather give a stale version or nothing at all
  * (and stall) when recovery has not completed.
  */
@@ -147,6 +147,17 @@ class ReplicatedStateMachine {
   void deliverWhileReplaying() {
     deliver_while_replaying_ = true;
   }
+
+  /**
+   * Prevents the state machine from publishing updates. This can be used for
+   * testing situations where the RSM is blocked/stuck.
+   *
+   * Requests the state machine to publish its last known state to subscribers
+   * immediately. The state machine will only publish the state if it has one.
+   *
+   * ** Must be called on the same worker as the RSM. **
+   */
+  bool blockStateDelivery(bool blocked);
 
   /**
    * By default, if there is evidence that some deltas were lost (because we
@@ -632,6 +643,7 @@ class ReplicatedStateMachine {
   bool stop_at_tail_{false};
   bool deliver_while_replaying_{false};
   bool stall_if_data_loss_{true};
+  bool state_delivery_blocked_{false};
   size_t max_pending_confirmation_{1000};
   std::chrono::milliseconds delta_append_timeout_{std::chrono::seconds{5}};
   std::chrono::milliseconds snapshot_append_timeout_{std::chrono::seconds{5}};
@@ -665,6 +677,16 @@ class ReplicatedStateMachine {
   // time to read the delta log.
   // Calls getDeltaLogTailLSN().
   void onBaseSnapshotRetrieved();
+
+  /**
+   * Requests the state machine to publish its last known state to subscribers
+   * immediately. The state machine will only publish the state if it has one,
+   * other wise this will print a warning indicating the reason why it didn't
+   * notify the subscriptions.
+   *
+   * ** Must be called on the same worker as the RSM. **
+   */
+  void notifySubscribersWithLatestState();
 
   // When we are tailing, we may receive a new snapshot record. Applying that
   // snapshot "fast-forwards" the state machine to the version of that snapshot,
@@ -768,6 +790,9 @@ class ReplicatedStateMachine {
 
   // Version of the local copy.
   lsn_t version_{LSN_OLDEST};
+
+  // Version of the latest published state to subscribers.
+  folly::Optional<lsn_t> latest_published_version_{folly::none};
 
   // Ids of the read streams for reading the snapshot and delta logs.
   read_stream_id_t snapshot_log_rsid_{0};

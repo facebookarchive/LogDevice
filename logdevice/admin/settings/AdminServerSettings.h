@@ -62,7 +62,9 @@ struct AdminServerSettings : public SettingsBundle {
 
   // How often to check if Metadata Nodeset needs to be updated
   std::chrono::milliseconds maintenance_manager_metadata_nodeset_update_period;
-  ;
+
+  /// ** Used ONLY for experimentation and testing
+  bool block_maintenance_rsm;
 
  private:
   // Only UpdateableSettings can create this bundle.

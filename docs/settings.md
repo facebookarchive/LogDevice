@@ -600,6 +600,9 @@ sidebar_label: Settings
 | abort-on-failed-catch | When an ld\_catch() fails, call abort().  If not, just continue executing.  We'll log either way. | `true` in debug builds, `false` in release builds |  |
 | abort-on-failed-check | When an ld\_check() fails, call abort().  If not, just continue executing.  We'll log either way. | `false` in the client, `true` elsewhere |  |
 | assert-on-data | Trigger asserts on data in RocksDB (or that received from the network). Should not be used in prod. | false | server&nbsp;only |
+| block-eventlog-rsm | If true, the EventLog replicated state machine will not publish any state updates. This simulates the case where we cannot finish loading the state on startup. Changing the value will cause the RSM to publish the state immediately if it can. | false | server&nbsp;only |
+| block-logsconfig-rsm | If true, the LogsConfig replicated state machine will not publish any state updates. This simulates the case where we cannot finish loading the state on startup. Changing the value will cause the RSM to publish the state immediately if it can. | false |  |
+| block-maintenance-rsm | If true, the Maintenance replicated state machine will not publish any state updates. This simulates the case where we cannot finish loading the state on startup. Changing the value will cause the RSM to publish the state immediately if it can. | false | server&nbsp;only |
 | client-test-force-stats | force instantiation of StatsHolder within ClientImpl even if stats publishing is disabled | false | requires&nbsp;restart, client&nbsp;only |
 | disable-event-log-trimming | Disable trimming of the event log (for tests only) | false | server&nbsp;only |
 | disable-logsconfig-trimming | Disable the trimming of logsconfig delta log. Used for testing only. | false | server&nbsp;only |
@@ -629,7 +632,6 @@ sidebar_label: Settings
 | test-bypass-recovery | If set, sequencers will not automatically run recovery upon activation. Recovery can be started using the 'startrecovery' admin command.  Note that last released lsn won't get advanced without recovery. | false | requires&nbsp;restart, server&nbsp;only |
 | test-do-not-pick-in-copysets | Copyset selectors won't pick these nodes. Comma-separated list of node indexes, e.g. '1,2,3'. Used in tests. |  | server&nbsp;only |
 | test-get-cluster-state-recipients | Force get-cluster-state recipients as a comma-separated list of node ids |  | client&nbsp;only |
-| test-hold-logsconfig-in-starting-state | Prevents LogsConfigStateMachine from being started. Used for testing only. | false | server&nbsp;only |
 | test-reject-hello | if set to the name of an error code, reject all HELLOs with the specified error code. Currently supported values are ACCESS and PROTONOSUPPORT. Used for testing. | OK | requires&nbsp;restart, server&nbsp;only |
 | test-sequencer-corrupt-stores | Simulates bad hardware flipping a bit in the payload of a STORE message. | false | server&nbsp;only |
 | test-stall-rebuilding | Makes rebuilding pretend to start but not make any actual progress. Used in tests. | false | server&nbsp;only |

@@ -65,6 +65,7 @@ void EventLogStateMachine::start() {
     gracePeriodTimer_.assign([this] { updateWorkerShardStatusMap(); });
   }
 
+  blockStateDelivery(settings_->block_eventlog_rsm);
   Parent::start();
 }
 
@@ -385,6 +386,7 @@ void EventLogStateMachine::noteConfigurationChanged() {
 }
 
 void EventLogStateMachine::onSettingsUpdated() {
+  blockStateDelivery(settings_->block_eventlog_rsm);
   // In case shard status overrides have changed.
   updateWorkerShardStatusMap();
 }
