@@ -47,6 +47,8 @@ class VersionedConfigStore {
     static Condition createIfNotExists();
     static Condition overwrite();
 
+    bool operator==(Condition const& other) const;
+
    private:
     struct OverwriteTag {};
     struct CreateIfNotExistsTag {};

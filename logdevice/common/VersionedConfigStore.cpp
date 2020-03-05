@@ -27,6 +27,19 @@ VersionedConfigStore::Condition::Condition(
 VersionedConfigStore::Condition::Condition(version_t version)
     : condition_(version) {}
 
+bool VersionedConfigStore::Condition::operator==(Condition const& other) const {
+  if (hasVersion() == other.hasVersion()) {
+    return getVersion() == other.getVersion();
+  } else if (isOverwrite()) {
+    return other.isOverwrite();
+  } else if (isCreateIfNotExists()) {
+    return other.isCreateIfNotExists();
+  } else {
+    ld_check(false);
+    return false;
+  }
+}
+
 VersionedConfigStore::version_t
 VersionedConfigStore::Condition::getVersion() const {
   ld_check(hasVersion());

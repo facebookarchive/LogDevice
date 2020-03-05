@@ -203,6 +203,17 @@ Status NodeRegistrationHandler::applyUpdate(
                                          &config_out);
   if (status == Status::VERSION_MISMATCH) {
     // There's a new NC, let's refresh our updatable.
+    if (config_out.empty()) {
+      // NCS failed to provide us with the new version, so we need to fetch it
+      // ourselves.
+      auto read_status = store_->getConfigSync(&config_out);
+      if (read_status != Status::OK) {
+        ld_error("Got a NodesConfiguration version mismatch during update, but "
+                 "failed to fetch the new version: %s",
+                 error_name(read_status));
+        return read_status;
+      }
+    }
     auto new_nc = NodesConfigurationCodec::deserialize(config_out);
     if (new_nc == nullptr) {
       ld_error("Got a NodesConfiguration version mismatch during update, but "

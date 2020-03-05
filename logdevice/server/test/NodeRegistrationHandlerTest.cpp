@@ -205,4 +205,65 @@ TEST_F(NodeRegistrationHandlerTest, testRegistrationBubbleUpdateFailures) {
   EXPECT_EQ(Status::BADMSG, res.error());
 }
 
+// Make sure that NCM VERSION_MISMATCH-es are retried
+TEST_F(NodeRegistrationHandlerTest, testRetryOnVersionMismatch) {
+  auto settings = buildServerSettings("node1");
+  auto admin_settings = buildAdminServerSettings("node1");
+
+  auto store = std::make_shared<MockNodesConfigurationStore>();
+
+  // The expected interactions with the NCS:
+  // 1- Initial update fails with VERSION_MISMATCH without providing the new
+  // value.
+  // 2- The handler, will try to fetch the new version (v2).
+  // 3- The new update will also fail with VERSION_MISMATCH but will provide the
+  // new value (v3).
+  // 4- The update will then succeed.
+  testing::InSequence seq;
+  EXPECT_CALL(
+      *store,
+      updateConfigSync(
+          _, VersionedConfigStore::Condition(MembershipVersion::Type(0)), _, _))
+      .WillOnce(testing::Return(Status::VERSION_MISMATCH));
+  EXPECT_CALL(*store, getConfigSync(_, _))
+      .WillOnce(testing::Invoke([](auto* value_out, auto) {
+        auto nc = NodesConfiguration{}.withVersion(MembershipVersion::Type(1));
+        if (value_out) {
+          *value_out = NodesConfigurationCodec::serialize(std::move(*nc));
+        }
+        return Status::OK;
+      }));
+  EXPECT_CALL(
+      *store,
+      updateConfigSync(
+          _, VersionedConfigStore::Condition(MembershipVersion::Type(1)), _, _))
+      .WillOnce(
+          testing::Invoke([](auto, auto, auto* version_out, auto* value_out) {
+            auto version = MembershipVersion::Type(2);
+            auto nc = NodesConfiguration{}.withVersion(version);
+            if (version_out) {
+              *version_out = version;
+            }
+            if (value_out) {
+              *value_out = NodesConfigurationCodec::serialize(std::move(*nc));
+            }
+            return Status::VERSION_MISMATCH;
+          }));
+  EXPECT_CALL(
+      *store,
+      updateConfigSync(
+          _, VersionedConfigStore::Condition(MembershipVersion::Type(2)), _, _))
+      .WillOnce(testing::Return(Status::OK));
+
+  auto updateable_nc = std::make_shared<UpdateableNodesConfiguration>();
+  updateable_nc->update(std::make_shared<NodesConfiguration>());
+  NodeRegistrationHandler handler{
+      settings, admin_settings, updateable_nc, store};
+  auto res = handler.registerSelf(NodeIndicesAllocator{});
+  ASSERT_TRUE(res.hasValue());
+
+  // The updatable should have the the latest value
+  ASSERT_EQ(MembershipVersion::Type(2), updateable_nc->get()->getVersion());
+}
+
 }} // namespace facebook::logdevice
