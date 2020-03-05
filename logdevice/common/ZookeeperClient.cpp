@@ -175,36 +175,6 @@ int ZookeeperClient::state() {
   return zoo_state(zh_.get().get());
 }
 
-int ZookeeperClient::setData(const char* znode_path,
-                             const char* znode_value,
-                             int znode_value_size,
-                             int version,
-                             stat_completion_t completion,
-                             const void* data) {
-  return zoo_aset(zh_.get().get(),
-                  znode_path,
-                  znode_value,
-                  znode_value_size,
-                  version,
-                  completion,
-                  data);
-}
-
-int ZookeeperClient::getData(const char* znode_path,
-                             data_completion_t completion,
-                             const void* data) {
-  return zoo_aget(
-      zh_.get().get(), znode_path, /* watch = */ 0, completion, data);
-}
-
-int ZookeeperClient::multiOp(int count,
-                             const zoo_op_t* ops,
-                             zoo_op_result_t* results,
-                             void_completion_t completion,
-                             const void* data) {
-  return zoo_amulti(zh_.get().get(), count, ops, results, completion, data);
-}
-
 /* static */ zk::Stat ZookeeperClient::toStat(const struct Stat* stat) {
   using namespace std::chrono;
   auto dur = std::chrono::duration_cast<system_clock::duration>(

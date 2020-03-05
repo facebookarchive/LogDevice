@@ -57,32 +57,6 @@ class ZookeeperClient : public ZookeeperClientBase {
   int state() override;
 
   /**
-   * Sets the data associated with a node.
-   */
-  int setData(const char* znode_path,
-              const char* znode_value,
-              int znode_value_size,
-              int version,
-              stat_completion_t completion,
-              const void* data) override;
-
-  /**
-   *  Gets the data associated with a node.
-   */
-  int getData(const char* znode_path,
-              data_completion_t completion,
-              const void* data) override;
-
-  /**
-   * Performs multiple ZK operations as a single atomic operation
-   */
-  int multiOp(int count,
-              const zoo_op_t* ops,
-              zoo_op_result_t* results,
-              void_completion_t completion,
-              const void* data) override;
-
-  /**
    * Converts a ZK *_STATE constant into a human-readable string.
    */
   static std::string stateString(int state);
@@ -113,7 +87,7 @@ class ZookeeperClient : public ZookeeperClientBase {
    *         SYSLIMIT if process is out of fds, INTERNAL if zookeeper_init()
    *         reports an unexpected status (debug build asserts)
    */
-  int reconnect(zhandle_t* prev) override;
+  int reconnect(zhandle_t* prev);
 
   // ZK session state watcher function, used to track session state
   // transitions

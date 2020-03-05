@@ -143,30 +143,10 @@ class ZookeeperClientBase : boost::noncopyable {
 
   virtual int state() = 0;
 
-  virtual int setData(const char* znode_path,
-                      const char* znode_value,
-                      int znode_value_size,
-                      int version,
-                      stat_completion_t completion,
-                      const void* data) = 0;
-
-  virtual int getData(const char* znode_path,
-                      data_completion_t completion,
-                      const void* data) = 0;
-
-  virtual int multiOp(int count,
-                      const zoo_op_t* ops,
-                      zoo_op_result_t* results,
-                      void_completion_t,
-                      const void* data) = 0;
-
   virtual ~ZookeeperClientBase() {}
 
  protected:
   const std::string quorum_; // see @param quorum in the constructor
-
- private:
-  virtual int reconnect(zhandle_t* prev) = 0;
 
   //////// New API ////////
  public:

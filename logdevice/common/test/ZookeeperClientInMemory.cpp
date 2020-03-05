@@ -74,10 +74,6 @@ ZookeeperClientInMemory::~ZookeeperClientInMemory() {
   }
 }
 
-int ZookeeperClientInMemory::reconnect(zhandle_t*) {
-  return ZOK;
-}
-
 int ZookeeperClientInMemory::state() {
   return ZOK;
 }
