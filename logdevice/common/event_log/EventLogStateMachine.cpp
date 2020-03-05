@@ -86,6 +86,9 @@ void EventLogStateMachine::trim() {
 }
 
 void EventLogStateMachine::publishRebuildingSet() {
+  rsm_info(rsm_type_,
+           "Published new EventLogRebuildingSet version (%lu)",
+           getVersion());
   Worker::onThisThread()->processor_->rebuilding_set_.update(
       std::make_shared<EventLogRebuildingSet>(getState()));
 }

@@ -107,6 +107,9 @@ void ClusterMaintenanceStateMachine::onUpdate(
     const ClusterMaintenanceState& state,
     const MaintenanceDelta* /* unused */,
     lsn_t version) {
+  rsm_info(rsm_type_,
+           "Published new ClusterMaintenanceState version (%lu)",
+           getVersion());
   is_fully_loaded_ = true;
   // When using snapshotting, We create a snapshot when the delta log
   // grows too big.
