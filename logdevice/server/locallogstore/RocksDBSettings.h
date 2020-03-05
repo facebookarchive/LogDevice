@@ -52,6 +52,10 @@ static_assert(ROCKSDB_MAJOR > 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR >= 7),
 #define LOGDEVICE_ROCKSDB_HAS_FIRST_KEY_IN_INDEX
 #endif
 
+#if ROCKSDB_MAJOR > 6 || (ROCKSDB_MAJOR == 6 && ROCKSDB_MINOR >= 8)
+#define LOGDEVICE_ROCKSDB_HAS_SKIP_CHECKING_SST_FILE_SIZES_ON_DB_OPEN
+#endif
+
 namespace boost { namespace program_options {
 class options_description;
 }} // namespace boost::program_options
@@ -407,6 +411,9 @@ class RocksDBSettings : public SettingsBundle {
   bool use_direct_reads;
   bool use_direct_io_for_flush_and_compaction;
   bool paranoid_checks;
+#ifdef LOGDEVICE_ROCKSDB_HAS_SKIP_CHECKING_SST_FILE_SIZES_ON_DB_OPEN
+  bool skip_checking_sst_file_sizes_on_db_open;
+#endif
   int max_open_files;
   uint64_t compaction_max_bytes_at_once;
   uint64_t bytes_per_sync;

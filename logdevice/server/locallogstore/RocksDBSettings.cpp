@@ -1572,6 +1572,20 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "up to this size; so it's ok for this setting to be too high.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
+
+#ifdef LOGDEVICE_ROCKSDB_HAS_SKIP_CHECKING_SST_FILE_SIZES_ON_DB_OPEN
+  init("rocksdb-skip-checking-sst-file-sizes-on-db-open",
+       &skip_checking_sst_file_sizes_on_db_open,
+       "true",
+       nullptr,
+       "If true, then rocksdb will not fetch and check sizes of all sst "
+       "files wjen opening a DB. This may significantly speed up startup, "
+       "especially when using remote storage. It'll still check that all "
+       "required sst files exist. If rocksdb-paranoid-checks is false, "
+       "this option is ignored, and sst files are not checked at all.",
+       SERVER,
+       SettingsCategory::RocksDB);
+#endif
 }
 
 rocksdb::Options RocksDBSettings::passThroughRocksDBOptions() const {
@@ -1612,6 +1626,10 @@ rocksdb::Options RocksDBSettings::passThroughRocksDBOptions() const {
       use_direct_io_for_flush_and_compaction;
   options.paranoid_checks = paranoid_checks;
   options.writable_file_max_buffer_size = writable_file_max_buffer_size;
+#ifdef LOGDEVICE_ROCKSDB_HAS_SKIP_CHECKING_SST_FILE_SIZES_ON_DB_OPEN
+  options.skip_checking_sst_file_sizes_on_db_open =
+      skip_checking_sst_file_sizes_on_db_open;
+#endif
 
   options.compaction_options_universal.min_merge_width = uc_min_merge_width;
   options.compaction_options_universal.max_merge_width = uc_max_merge_width;
