@@ -497,5 +497,5 @@ struct NodesStateRequest {
    * If force=true we return the state information that we have even if the node
    * is not fully ready. We don't throw NodeNotReady exception in this case.
    */
-  2: optional bool force,
+  2: optional bool force (deprecated),
 }

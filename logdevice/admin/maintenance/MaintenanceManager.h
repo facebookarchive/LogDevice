@@ -273,8 +273,7 @@ class MaintenanceManager : public SerialWorkContext {
   folly::SemiFuture<folly::Expected<ShardOperationalState, Status>>
   getShardOperationalState(ShardID shard);
   // Getter that returns a SemiFuture with ShardDataHealth for the given shard
-  folly::SemiFuture<folly::Expected<ShardDataHealth, Status>>
-  getShardDataHealth(ShardID shard);
+  folly::SemiFuture<ShardDataHealth> getShardDataHealth(ShardID shard);
   // Getter that returns a SemiFuture with SequencingState for the gievn node
   folly::SemiFuture<folly::Expected<SequencingState, Status>>
   getSequencingState(node_index_t node);
@@ -469,12 +468,10 @@ class MaintenanceManager : public SerialWorkContext {
    * Getter that returns ShardDataHealth for the given shard
    *
    * @param   shard ShardID for which to get ShardDataHealth
-   * @return  folly::Expected<ShardDataHealth, Status>
-   *          ShardDataHealth or E::NOTREADY if EventLogRebuildingSet
+   * @return  ShardDataHealth::UNKNOWN if EventLogRebuildingSet
    *          is not initalized
    */
-  folly::Expected<ShardDataHealth, Status>
-  getShardDataHealthInternal(ShardID shard) const;
+  ShardDataHealth getShardDataHealthInternal(ShardID shard) const;
   // Getter that returns SequencingState for the gievn node
   SequencingState getSequencingStateInternal(node_index_t node) const;
   /**

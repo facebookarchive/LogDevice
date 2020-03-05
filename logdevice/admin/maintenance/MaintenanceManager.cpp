@@ -479,13 +479,7 @@ MaintenanceManager::getShardState(ShardID shard) {
 folly::Expected<thrift::ShardState, Status>
 MaintenanceManager::getShardStateInternal(ShardID shard) const {
   thrift::ShardState state;
-
-  auto dataHealth = getShardDataHealthInternal(shard);
-  if (dataHealth.hasError()) {
-    return folly::makeUnexpected(std::move(dataHealth.error()));
-  }
-  ld_check(dataHealth.hasValue());
-  state.set_data_health(std::move(dataHealth.value()));
+  state.set_data_health(getShardDataHealthInternal(shard));
 
   auto opState = getShardOperationalStateInternal(shard);
   if (opState.hasError()) {
@@ -640,10 +634,9 @@ thrift::MaintenanceProgress MaintenanceManager::getMaintenanceProgressInternal(
   return thrift::MaintenanceProgress::COMPLETED;
 }
 
-folly::SemiFuture<folly::Expected<ShardDataHealth, Status>>
+folly::SemiFuture<ShardDataHealth>
 MaintenanceManager::getShardDataHealth(ShardID shard) {
-  auto pf =
-      folly::makePromiseContract<folly::Expected<ShardDataHealth, Status>>();
+  auto pf = folly::makePromiseContract<ShardDataHealth>();
   add([this, shard, mpromise = std::move(pf.first)]() mutable {
     mpromise.setValue(getShardDataHealthInternal(shard));
   });
@@ -651,10 +644,10 @@ MaintenanceManager::getShardDataHealth(ShardID shard) {
   return std::move(pf.second);
 }
 
-folly::Expected<ShardDataHealth, Status>
+ShardDataHealth
 MaintenanceManager::getShardDataHealthInternal(ShardID shard) const {
   if (!event_log_rebuilding_set_) {
-    return folly::makeUnexpected(E::NOTREADY);
+    return thrift::ShardDataHealth::UNKNOWN;
   }
   std::vector<node_index_t> donors_remaining;
   auto auth_status = event_log_rebuilding_set_->getShardAuthoritativeStatus(
@@ -1768,7 +1761,7 @@ MaintenanceManager::runShardWorkflows() {
     shards.push_back(shard_id);
     futures.push_back(wf->run(current_storage_state.value(),
                               exclude_from_nodeset,
-                              getShardDataHealthInternal(shard_id).value(),
+                              getShardDataHealthInternal(shard_id),
                               getCurrentRebuildingMode(shard_id),
                               isShardDraining(shard_id),
                               isRebuildingNonAuthoritative(shard_id),
