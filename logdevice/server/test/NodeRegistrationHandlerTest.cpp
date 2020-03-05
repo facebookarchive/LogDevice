@@ -104,7 +104,7 @@ TEST_F(NodeRegistrationHandlerTest, testAddNode) {
 
   const auto& storage_attr = nc->getNodeStorageAttribute(index);
   ASSERT_NE(nullptr, storage_attr);
-  EXPECT_EQ(1, storage_attr->generation);
+  EXPECT_EQ(2, storage_attr->generation);
   EXPECT_EQ(13, storage_attr->capacity);
   EXPECT_EQ(3, storage_attr->num_shards);
 
@@ -157,7 +157,7 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
 
   const auto& storage_attr = nc->getNodeStorageAttribute(index);
   ASSERT_NE(nullptr, storage_attr);
-  EXPECT_EQ(1, storage_attr->generation);
+  EXPECT_EQ(2, storage_attr->generation);
   EXPECT_EQ(23, storage_attr->capacity);
   EXPECT_EQ(3, storage_attr->num_shards);
 

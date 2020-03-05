@@ -141,11 +141,16 @@ NodeUpdateBuilder::buildNodeServiceDiscovery() {
 
 std::unique_ptr<StorageNodeAttribute>
 NodeUpdateBuilder::buildStorageAttributes() {
-  // TODO(mbassem): Check initial exclude_from_nodesets.
   auto attr = std::make_unique<StorageNodeAttribute>();
   attr->capacity = storage_capacity_.value();
   attr->num_shards = num_shards_.value();
-  attr->generation = 1;
+  // Generation 1 is special as it bypasses rebuilding if it's a new node.
+  // In the NCM world, the new node check relies on the storage state instead,
+  // and using generation 1 here will bypass this check and may lead to silent
+  // under replication. So generations in the NCM world *must* have a value > 1,
+  // in preparation to completely deprecate it.
+  // Check the logic in RebuildingMarkerChecker for more info.
+  attr->generation = 2;
   attr->exclude_from_nodesets = false;
   return attr;
 }
