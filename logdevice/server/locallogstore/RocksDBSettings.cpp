@@ -1523,30 +1523,48 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-io-tracing-shards",
        &io_tracing_shards,
-       "",
-       [](const std::string& val) -> std::vector<shard_index_t> {
+       "all",
+       [](const std::string& val) -> IOTracingShards {
+         IOTracingShards ret;
+         if (val == "none" || val == "") {
+           return ret;
+         }
+         if (val == "all") {
+           ret.all_shards = true;
+           return ret;
+         }
          std::vector<std::string> tokens;
          folly::split(',', val, tokens, true /* ignoreEmpty */);
 
-         std::vector<shard_index_t> v;
          for (const auto& token : tokens) {
            try {
-             v.push_back(folly::to<shard_index_t>(token));
+             ret.shards.push_back(folly::to<shard_index_t>(token));
            } catch (std::range_error&) {
              throw boost::program_options::error(
                  "Invalid shard idx in --rocksdb-io-tracing-shards: " + val);
            }
          }
 
-         std::sort(v.begin(), v.end());
-         v.erase(std::unique(v.begin(), v.end()), v.end());
+         std::sort(ret.shards.begin(), ret.shards.end());
+         ret.shards.erase(std::unique(ret.shards.begin(), ret.shards.end()),
+                          ret.shards.end());
 
-         return v;
+         return ret;
        },
-       "List of shards for which to enable IO tracing. IO tracing prints "
-       "information about every single IO operation (like file read() and "
-       "write() calls) to the log at info level. It's very spammy, use with "
-       "caution.",
+       "List of shards for which to enable IO tracing. 'all' to enable for all "
+       "shards, 'none' or empty string to disable for all shards. IO tracing "
+       "prints information about every sufficiently slow (see "
+       "rocksdb-io-tracing-threshold) IO operation (like file read() and "
+       "write() calls) to the log at info level.",
+       SERVER,
+       SettingsCategory::LogsDB);
+
+  init("rocksdb-io-tracing-threshold",
+       &io_tracing_threshold,
+       "5s",
+       nullptr,
+       "IO tracing (see rocksdb-io-tracing-shards) will report only operations "
+       "that took at least this long. Set to '0' to report all operations.",
        SERVER,
        SettingsCategory::LogsDB);
 

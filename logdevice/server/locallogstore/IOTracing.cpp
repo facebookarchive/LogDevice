@@ -16,10 +16,13 @@ IOTracing::IOTracing(shard_index_t shard_idx) : shardIdx_(shard_idx) {}
 
 void IOTracing::reportCompletedOp(
     std::chrono::steady_clock::duration duration) {
-  ld_info("[io:S%d] %s  %.3fms",
-          static_cast<int>(shardIdx_),
-          state_->context.c_str(),
-          to_sec_double(duration) * 1e3);
+  auto threshold = options_->threshold.load(std::memory_order_relaxed);
+  if (threshold.count() <= 0 || duration >= threshold) {
+    ld_info("[io:S%d] %s  %.3fms",
+            static_cast<int>(shardIdx_),
+            state_->context.c_str(),
+            to_sec_double(duration) * 1e3);
+  }
 }
 
 }} // namespace facebook::logdevice

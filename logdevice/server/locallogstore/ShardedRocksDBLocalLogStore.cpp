@@ -722,19 +722,30 @@ void ShardedRocksDBLocalLogStore::printDiskShardMapping() {
 }
 
 void ShardedRocksDBLocalLogStore::refreshIOTracingSettings() {
+  auto settings = db_settings_.get();
+  auto shards = settings->io_tracing_shards;
+  std::chrono::milliseconds threshold = settings->io_tracing_threshold;
+
   std::vector<bool> enabled_by_shard(io_tracing_by_shard_.size());
-  for (shard_index_t idx : db_settings_.get()->io_tracing_shards) {
-    if (idx < 0 || idx >= enabled_by_shard.size()) {
-      ld_error("Shard idx out of range in --rocksdb-io-tracing-shards: %d not "
-               "in [0, %lu). Ignoring.",
-               static_cast<int>(idx),
-               io_tracing_by_shard_.size());
-      continue;
+  if (shards.all_shards) {
+    std::fill(enabled_by_shard.begin(), enabled_by_shard.end(), true);
+  } else {
+    for (shard_index_t idx : shards.shards) {
+      if (idx < 0 || idx >= enabled_by_shard.size()) {
+        ld_error(
+            "Shard idx out of range in --rocksdb-io-tracing-shards: %d not "
+            "in [0, %lu). Ignoring.",
+            static_cast<int>(idx),
+            io_tracing_by_shard_.size());
+        continue;
+      }
+      enabled_by_shard[idx] = true;
     }
-    enabled_by_shard[idx] = true;
   }
+
   for (shard_index_t i = 0; i < enabled_by_shard.size(); ++i) {
     io_tracing_by_shard_[i]->setEnabled(enabled_by_shard[i]);
+    io_tracing_by_shard_[i]->setThreshold(threshold);
   }
 }
 

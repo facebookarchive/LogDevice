@@ -350,7 +350,13 @@ class RocksDBSettings : public SettingsBundle {
 
   bool print_details;
 
-  std::vector<shard_index_t> io_tracing_shards;
+  struct IOTracingShards {
+    std::vector<shard_index_t> shards;
+    bool all_shards = false;
+  };
+  IOTracingShards io_tracing_shards;
+
+  std::chrono::milliseconds io_tracing_threshold;
 
   // When ld manages flushes, memory limit for the node and memtable
   // within rocksdb set to a very high value. rocksdb should never be

@@ -175,6 +175,7 @@ class IOTracing {
         return;
       }
       auto duration = std::chrono::steady_clock::now() - startTime_;
+
       tracing_->reportCompletedOp(duration);
     }
 
@@ -188,14 +189,18 @@ class IOTracing {
   explicit IOTracing(shard_index_t shard_idx);
 
   bool isEnabled() const {
-    return enabled_->load(std::memory_order_relaxed);
+    return options_->enabled.load(std::memory_order_relaxed);
   }
   void setEnabled(bool enabled) {
-    enabled_->store(enabled);
+    options_->enabled.store(enabled);
+  }
+  void setThreshold(std::chrono::milliseconds t) {
+    options_->threshold.store(t);
   }
 
   // Logs the current context along with operation duration.
-  // Does _not_ check isEnabled(); it needs to be checked before calling this.
+  // Does _not_ check isEnabled() or threshold; they need to be checked before
+  // calling this.
   // Usually used through OpTimer/SCOPED_IO_TRACED_OP() rather than directly.
   void reportCompletedOp(std::chrono::steady_clock::duration duration);
 
@@ -203,9 +208,14 @@ class IOTracing {
   struct State {
     std::string context;
   };
+  struct Options {
+    std::atomic<bool> enabled{false};
+    std::atomic<std::chrono::milliseconds> threshold{
+        std::chrono::milliseconds(0)};
+  };
 
   shard_index_t shardIdx_;
-  folly::cacheline_aligned<std::atomic<bool>> enabled_{folly::in_place, false};
+  folly::cacheline_aligned<Options> options_;
   folly::ThreadLocal<State> state_;
 };
 
