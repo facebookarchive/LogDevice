@@ -341,7 +341,15 @@ void Dependencies::readFromStore(bool should_do_consistent_config_fetch) {
   if (should_do_consistent_config_fetch) {
     store_->getLatestConfig(std::move(data_cb));
   } else {
-    store_->getConfig(std::move(data_cb));
+    // Do a conditional getConfig. If our version is greater than or equal the
+    // version in the NCS, we will get an UPTODATE response.
+    folly::Optional<NodesConfigurationStore::version_t> current_version;
+    if (auto ncm = ncm_.lock(); ncm) {
+      if (auto nc = ncm->getConfig(); nc) {
+        current_version = nc->getVersion();
+      }
+    }
+    store_->getConfig(std::move(data_cb), std::move(current_version));
   }
 }
 
