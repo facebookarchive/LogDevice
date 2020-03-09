@@ -46,68 +46,68 @@ TEST(Timer, Test) {
   folly::Synchronized<std::vector<Timer>> vec;
   vec.wlock()->reserve(10);
 
-  std::unique_ptr<Request> request = std::make_unique<CallbackRequest>([promise,
-                                                                        &vec] {
-    auto nfired = std::make_shared<std::atomic<int>>(0);
-    auto tstart = steady_clock::now();
-    auto assert_passed = [tstart](milliseconds ms) {
-      ASSERT_GE(steady_clock::now() - tstart, 0.95 * ms);
-    };
+  std::unique_ptr<Request> request =
+      std::make_unique<CallbackRequest>([promise, &vec] {
+        auto nfired = std::make_shared<std::atomic<int>>(0);
+        auto tstart = steady_clock::now();
+        auto assert_passed = [tstart](milliseconds ms) {
+          ASSERT_GE(steady_clock::now() - tstart, 0.95 * ms);
+        };
 
-    vec.wlock()->emplace_back([nfired, assert_passed] {
-      ++*nfired;
-      assert_passed(0ms);
-    });
-    vec.wlock()->back().activate(0ms);
+        vec.wlock()->emplace_back([nfired, assert_passed] {
+          ++*nfired;
+          assert_passed(0ms);
+        });
+        vec.wlock()->back().activate(0ms);
 
-    vec.wlock()->emplace_back([] { FAIL() << "timer not cancelled"; });
-    vec.wlock()->back().activate(50ms);
-    vec.wlock()->back().cancel();
+        vec.wlock()->emplace_back([] { FAIL() << "timer not cancelled"; });
+        vec.wlock()->back().activate(50ms);
+        vec.wlock()->back().cancel();
 
-    vec.wlock()->emplace_back([nfired, assert_passed] {
-      ++*nfired;
-      assert_passed(20ms);
-    });
-    vec.wlock()->back().activate(20ms);
+        vec.wlock()->emplace_back([nfired, assert_passed] {
+          ++*nfired;
+          assert_passed(20ms);
+        });
+        vec.wlock()->back().activate(20ms);
 
-    vec.wlock()->emplace_back([] { FAIL() << "timer not cancelled"; });
-    vec.wlock()->back().activate(50ms);
-    vec.wlock()->back().cancel();
+        vec.wlock()->emplace_back([] { FAIL() << "timer not cancelled"; });
+        vec.wlock()->back().activate(50ms);
+        vec.wlock()->back().cancel();
 
-    vec.wlock()->emplace_back([nfired, assert_passed] {
-      ++*nfired;
-      assert_passed(104ms);
-    });
-    vec.wlock()->back().activate(100ms);
+        vec.wlock()->emplace_back([nfired, assert_passed] {
+          ++*nfired;
+          assert_passed(104ms);
+        });
+        vec.wlock()->back().activate(100ms);
 
-    vec.wlock()->emplace_back([nfired, assert_passed] {
-      ++*nfired;
-      assert_passed(101ms);
-    });
-    vec.wlock()->back().activate(10ms);
-    vec.wlock()->back().activate(100ms);
+        vec.wlock()->emplace_back([nfired, assert_passed] {
+          ++*nfired;
+          assert_passed(101ms);
+        });
+        vec.wlock()->back().activate(10ms);
+        vec.wlock()->back().activate(100ms);
 
-    vec.wlock()->emplace_back([nfired, assert_passed] {
-      ++*nfired;
-      assert_passed(102ms);
-    });
-    vec.wlock()->back().activate(microseconds(100000));
+        vec.wlock()->emplace_back([nfired, assert_passed] {
+          ++*nfired;
+          assert_passed(102ms);
+        });
+        vec.wlock()->back().activate(microseconds(100000));
 
-    vec.wlock()->emplace_back([nfired, assert_passed] {
-      ++*nfired;
-      assert_passed(103ms);
-    });
-    vec.wlock()->back().activate(
-        duration_cast<microseconds>(duration<double>(0.1)));
+        vec.wlock()->emplace_back([nfired, assert_passed] {
+          ++*nfired;
+          assert_passed(103ms);
+        });
+        vec.wlock()->back().activate(
+            duration_cast<microseconds>(duration<double>(0.1)));
 
-    vec.wlock()->emplace_back([] { FAIL() << "timer not cancelled"; });
-    vec.wlock()->back().activate(50ms);
-    vec.wlock()->back().cancel();
+        vec.wlock()->emplace_back([] { FAIL() << "timer not cancelled"; });
+        vec.wlock()->back().activate(50ms);
+        vec.wlock()->back().cancel();
 
-    vec.wlock()->emplace_back(
-        [nfired, promise] { promise->setValue(*nfired); });
-    vec.wlock()->back().activate(1s);
-  });
+        vec.wlock()->emplace_back(
+            [nfired, promise] { promise->setValue(*nfired); });
+        vec.wlock()->back().activate(1s);
+      });
 
   ASSERT_EQ(processor->postRequest(request), 0);
   ASSERT_EQ(ready.valid(), true);

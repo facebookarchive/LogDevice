@@ -93,7 +93,7 @@ struct SecurityConfig {
   /**
    * Defines the TTL for entries in the ACL Cache in seconds.
    */
-  std::chrono::seconds aclCacheTtl{ 180 };
+  std::chrono::seconds aclCacheTtl{180};
 
   /**
    * Defines the max size for the ACL Cache.

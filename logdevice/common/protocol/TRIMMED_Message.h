@@ -32,7 +32,7 @@ struct TRIMMED_Header {
   //  * FAILED - local log store is either unwritable or overloaded
   Status status;
 
-  shard_index_t shard;      // shard on which the log was trimmed
+  shard_index_t shard; // shard on which the log was trimmed
 
   // Return the expected size of the header given a protocol version.
   static size_t getExpectedSize(uint16_t proto);

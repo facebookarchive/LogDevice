@@ -336,7 +336,7 @@ class FailureDomainNodeSet {
   folly::F14FastMap<ShardID, AttrType, ShardID::Hash> shard_attribute_;
 
   // A mapping between a shard and its authoritative status.
- AuthoritativeStatusMap shard_authoritative_;
+  AuthoritativeStatusMap shard_authoritative_;
 
   // keeping track of how many shards are in each AuthoritativeStatus.
   std::array<size_t, static_cast<size_t>(AuthoritativeStatus::Count)>

@@ -117,13 +117,13 @@ class AsyncSocketAdapter
 
   ~AsyncSocketAdapter() override;
 
-  void connect(ConnectCallback* callback,
-               const folly::SocketAddress& address,
-               int timeout = 0,
-               const folly::SocketOptionMap& options =
-                   folly::emptySocketOptionMap,
-               const folly::SocketAddress& bindAddr =
-                   folly::AsyncSocket::anyAddress()) noexcept override;
+  void
+  connect(ConnectCallback* callback,
+          const folly::SocketAddress& address,
+          int timeout = 0,
+          const folly::SocketOptionMap& options = folly::emptySocketOptionMap,
+          const folly::SocketAddress& bindAddr =
+              folly::AsyncSocket::anyAddress()) noexcept override;
   /**
    * Close the transport immediately.
    *

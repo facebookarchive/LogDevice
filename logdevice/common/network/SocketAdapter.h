@@ -38,13 +38,13 @@ class SocketAdapter {
    *                  does not succeed within this period,
    *                  callback->connectError() will be invoked.
    */
-  virtual void connect(ConnectCallback* callback,
-                       const folly::SocketAddress& address,
-                       int timeout = 0,
-                       const folly::SocketOptionMap& options =
-                           folly::emptySocketOptionMap,
-                       const folly::SocketAddress& bindAddr =
-                           folly::AsyncSocket::anyAddress()) noexcept = 0;
+  virtual void
+  connect(ConnectCallback* callback,
+          const folly::SocketAddress& address,
+          int timeout = 0,
+          const folly::SocketOptionMap& options = folly::emptySocketOptionMap,
+          const folly::SocketAddress& bindAddr =
+              folly::AsyncSocket::anyAddress()) noexcept = 0;
   /**
    * Close the transport immediately.
    *
