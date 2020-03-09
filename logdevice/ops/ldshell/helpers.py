@@ -68,3 +68,7 @@ def parse_socket_address(raw: str, is_unix: bool = False) -> SocketAddress:
     else:
         # TODO: Support parsing unix socket if input is not ipaddress/hostname.
         raise NotImplementedError("Parsing unix sockets is not implemented yet.")
+
+
+def humanize_lsn(lsn):
+    return "e{}n{}".format(lsn >> 32, lsn & 0xFFFFFFFF)

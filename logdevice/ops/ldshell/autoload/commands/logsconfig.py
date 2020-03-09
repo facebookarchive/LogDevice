@@ -7,8 +7,10 @@
 # LICENSE file in the root directory of this source tree.
 
 import typing
+from datetime import datetime
 from textwrap import dedent
 
+from ldshell import helpers
 from logdevice.client import (
     Directory,
     LogDeviceError,
@@ -849,3 +851,65 @@ class Logs:
             cprint("Cannot remove '{}'. Reason: {}".format(path, e.args[2]), "red")
 
             return 1
+
+    def _tail_attributes_single(self, client, logid):
+        try:
+            tail_lsn = client.get_tail_lsn(logid)
+            cprint("  Tail lsn: {}".format(helpers.humanize_lsn(tail_lsn)))
+            attr = client.get_tail_attributes(logid)
+            cprint(
+                "  Last released real (record) lsn: {}".format(
+                    helpers.humanize_lsn(attr[0])
+                )
+            )
+            ts = "INVALID!"
+            try:
+                ts = datetime.fromtimestamp(attr[1] / 1000)
+            except Exception:
+                pass
+            cprint(
+                "  Approximate timestamp of last released real lsn: "
+                "{} -> {}".format(attr[1], ts)
+            )
+            cprint(
+                "  Approximate byte offset of the tail of the log: {}".format(attr[2])
+            )
+
+        except Exception as e:
+            cprint("Can't get tail attributes: {}".format(e), "red")
+            return 1
+
+    def _head_attributes_single(self, client, logid):
+        try:
+            attr = client.get_head_attributes(logid)
+            cprint("  Trim point: {}".format(helpers.humanize_lsn(attr[0])))
+            ts = "INVALID!"
+            try:
+                ts = datetime.fromtimestamp(attr[1] / 1000)
+            except Exception:
+                pass
+            cprint(
+                "  Approximate timestamp of trim point (ms):"
+                " {} -> {}".format(attr[1], ts)
+            )
+        except Exception as e:
+            cprint("Can't get head attributes: {}".format(e), "red")
+            return 1
+        return 0
+
+    @command
+    @argument("log_id", name="id", description="The log ID to query")
+    def info(self, log_id: int):
+        """
+        Command to get current attributes of the tail/head of the log such as last
+        appended and released for delivery record, its approximate timestamp and
+        byte offset.
+        """
+        log_id = int(log_id)
+        ctx = context.get_context()
+        client = ctx.get_client()
+        cprint("Tail Info:")
+        self._tail_attributes_single(client, log_id)
+        cprint("Head Info:")
+        self._head_attributes_single(client, log_id)
+        cprint("Has Data?: {}".format(client.is_log_empty(log_id)))
