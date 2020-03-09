@@ -675,6 +675,7 @@ Show information about all shards in a cluster.
 | accepting\_writes | string | Status indicating if this shard is accepting writes.  Can be one of: "OK" (the shard is accepting writes), "LOW\_ON\_SPC" (the shard is accepting writes but is low on free space), "NOSPC" (the shard is not accepting writes because it is low on space), "DISABLED" (The shard will never accept writes. This can happen if the shard entered fail-safe mode). |
 | rebuilding\_state | string | "NONE": the shard is not rebuilding.  "WAITING\_FOR\_REBUILDING": the shard is missing data and is waiting for rebuilding to start.  "REBUILDING": the shard is missing data and rebuilding was started. |
 | default\_cf\_version | long | Returns current version of the data.  if LogsDB is  enabled, this will return the version of the default column familiy. |
+| dirty\_state | string | Status indicating if this shard has dirty ranges or not. |
 
 ## sockets
 Tracks all Connections on all nodes in the cluster.

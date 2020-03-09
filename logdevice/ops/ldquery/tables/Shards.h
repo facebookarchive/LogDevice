@@ -53,6 +53,9 @@ class Shards : public AdminCommandTable {
          DataType::BIGINT,
          "Returns current version of the data.  if LogsDB is  enabled, this "
          "will return the version of the default column familiy."},
+        {"dirty_state",
+         DataType::TEXT,
+         "Status indicating if this shard has dirty ranges or not."},
     };
   }
   std::string getCommandToSend(QueryContext& /*ctx*/) const override {
