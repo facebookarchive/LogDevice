@@ -859,6 +859,12 @@ STAT_DEFINE(write_metadata_record_started, SUM)
 // Total number of successfully finished WriteMetaDataRecord state machines
 STAT_DEFINE(write_metadata_record_finished, SUM)
 
+// Total number of failed attempts to write metadata log
+STAT_DEFINE(write_metadata_request_failed, SUM)
+// Total number of failed attempts to update EpochStore after writing metadata 
+// entry to log
+STAT_DEFINE(write_metadata_epoch_store_failed, SUM)
+
 // Number of times a partition was created, dropped and compacted
 STAT_DEFINE(partitions_created, SUM)
 STAT_DEFINE(partitions_prepended, SUM)

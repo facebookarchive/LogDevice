@@ -140,6 +140,13 @@ void WriteMetaDataLogRequest::onAppendResult(Status st, lsn_t lsn) {
     case E::NOTINSERVERCONFIG:
     case E::NOSEQUENCER:
     case E::NOTREADY:
+      WORKER_STAT_INCR(write_metadata_request_failed);
+      RATELIMIT_ERROR(
+          std::chrono::seconds(1),
+          1,
+          "Append to metadata log %lu failed with non-retryable error %s",
+          MetaDataLog::metaDataLogID(log_id_).val(),
+          error_description(st));
       // another sequencer should take care of this
       destroyRequest(st);
       return;
@@ -158,6 +165,7 @@ void WriteMetaDataLogRequest::onAppendResult(Status st, lsn_t lsn) {
             Worker::settings().sequencer_metadata_log_write_retry_delay);
         append_retry_timer_->randomize();
       }
+      WORKER_STAT_INCR(write_metadata_request_failed);
       RATELIMIT_ERROR(std::chrono::seconds(1),
                       1,
                       "Append to metadata log %lu failed with error %s, "
@@ -170,6 +178,7 @@ void WriteMetaDataLogRequest::onAppendResult(Status st, lsn_t lsn) {
       append_retry_timer_->activate();
       return;
     default:
+      WORKER_STAT_INCR(write_metadata_request_failed);
       RATELIMIT_ERROR(std::chrono::seconds(1),
                       1,
                       "unexpected error when appending to metadata log %lu: %s",
@@ -236,6 +245,7 @@ void WriteMetaDataLogRequest::onEpochStoreUpdated(
       retry_str =
           " Retrying in " + std::to_string(delay.value().count()) + "ms.";
     }
+    WORKER_STAT_INCR(write_metadata_epoch_store_failed);
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
                     "%serror when updating metadata in epoch store for log "
