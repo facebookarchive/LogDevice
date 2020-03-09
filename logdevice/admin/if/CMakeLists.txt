@@ -57,7 +57,7 @@ foreach(THRIFT_SOURCE
   )
 
   add_dependencies(${THRIFT_SOURCE}-cpp2-target fbthrift)
-  target_link_libraries(${THRIFT_SOURCE}-cpp2 common-cpp2)
+  target_link_libraries(${THRIFT_SOURCE}-cpp2 common-cpp2 Membership-cpp2)
 
   if(thriftpy3)
     target_link_libraries(

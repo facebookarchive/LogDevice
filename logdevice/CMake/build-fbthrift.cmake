@@ -52,6 +52,7 @@ set(FBTHRIFT_LIBRARIES
     ${BINARY_DIR}/lib/libcompiler_base.so
     ${BINARY_DIR}/lib/libthriftprotocol.so
     ${BINARY_DIR}/lib/libconcurrency.so
+    ${BINARY_DIR}/lib/libthriftmetadata.so
 )
 
 set(FBTHRIFT_INCLUDE_DIR
