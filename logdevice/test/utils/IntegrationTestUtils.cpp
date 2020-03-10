@@ -2025,7 +2025,7 @@ int Node::waitUntilExited() {
 }
 
 void Node::suspend() {
-  ld_info("Suspencing node %d", node_index_);
+  ld_info("Suspending node %d", node_index_);
 
   // Make sure the node doesn't hold any file locks while stopped.
   std::string response = sendCommand("pause_file_epoch_store");
