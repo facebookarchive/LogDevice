@@ -3621,7 +3621,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        validate_nonnegative<ssize_t>(),
        "How often periodic trimming of metadata logs should run. Zero value "
        "prevents it from running at all. ",
-       SERVER | REQUIRES_RESTART /* Used in Sequencer c-tor */,
+       SERVER,
        SettingsCategory::Sequencer);
   init("metadata-log-trim-timeout",
        &metadata_log_trim_timeout,

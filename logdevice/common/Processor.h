@@ -751,6 +751,9 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // and FastUpdateableSharedPtr and shared_ptr machinery every time we need it
   // is relatively expensive
   size_t num_general_workers_{0};
+
+  // Callback called when settings are update
+  void onSettingsUpdated();
 };
 
 }} // namespace facebook::logdevice

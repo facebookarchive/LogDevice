@@ -202,6 +202,7 @@ class Sequencer {
    * for activation, finish the activation process, advancing the Sequencer to
    * a new epoch with nodeset and replication properties provided by the given
    * EpochMetaData.
+   * This method must be called from some Worker thread.
    *
    * @param epoch      the epoch number gotten from the epoch store
    * @param cfg        snapshot of the config. The logs config must contain this
@@ -753,6 +754,11 @@ class Sequencer {
                                      ExponentialBackoffTimerNode* node);
 
   void onNodeIsolated();
+
+  /**
+   * Called each time after settings updated from configuration thread
+   */
+  void onSettingsUpdated();
 
  public:
   // the following items should be private but made public for testing only

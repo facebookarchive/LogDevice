@@ -1046,4 +1046,12 @@ void AllSequencers::disableAllSequencersDueToIsolation() {
     x.second->onNodeIsolated();
   }
 }
+
+void AllSequencers::onSettingsUpdated() {
+  folly::SharedMutex::ReadHolder map_lock(map_mutex_);
+  for (const auto& x : map_) {
+    x.second->onSettingsUpdated();
+  }
+}
+
 }} // namespace facebook::logdevice

@@ -20,6 +20,7 @@
 #include "logdevice/common/RateLimiter.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/SequencerLocator.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/TestUtil.h"
 
@@ -86,7 +87,8 @@ class APPEND_MessageTest : public ::testing::Test {
   static logid_t TEST_LOG;
 
   explicit APPEND_MessageTest()
-      : settings_(create_default_settings<Settings>()) {
+      : settings_(create_default_settings<Settings>()),
+        processor_(make_test_processor(settings_)) {
     // build a Configuration object and use it to initialize a Sequencer
     Configuration::Node node;
     node.address = Sockaddr("127.0.0.1", "20034");
@@ -128,8 +130,10 @@ class APPEND_MessageTest : public ::testing::Test {
     metadata->h.epoch = metadata->h.effective_since = epoch;
 
     sequencer_->startActivation([](logid_t) { return 0; });
-    sequencer_->completeActivationWithMetaData(
-        epoch, config_, std::move(metadata));
+    run_on_worker(processor_.get(), 1, [&]() {
+      return sequencer_->completeActivationWithMetaData(
+          epoch, config_, std::move(metadata));
+    });
 
     current_epoch_ = epoch;
   }
@@ -149,6 +153,7 @@ class APPEND_MessageTest : public ::testing::Test {
   epoch_t current_epoch_{1};
   Settings settings_;
   PrincipalIdentity principal_;
+  std::shared_ptr<Processor> processor_;
 };
 logid_t APPEND_MessageTest::TEST_LOG(1);
 

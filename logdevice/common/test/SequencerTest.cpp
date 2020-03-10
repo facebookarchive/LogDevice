@@ -55,7 +55,7 @@ class SequencerTest : public ::testing::Test {
   std::shared_ptr<Processor> processor_;
   std::shared_ptr<Sequencer> sequencer_;
 
-  bool with_processor_{false};
+  bool with_processor_{true};
   std::atomic<epoch_t::raw_type> draining_timer_epoch_{EPOCH_INVALID.val_};
 
   std::mutex mutex_;
@@ -125,9 +125,14 @@ class SequencerTest : public ::testing::Test {
     return updateable_config_->getNodesConfiguration();
   }
 
-  ActivateResult completeActivation(int epoch) {
-    return sequencer_->completeActivationWithMetaData(
-        epoch_t(epoch), getConfig(), genMetaData(epoch_t(epoch)));
+  ActivateResult
+  completeActivation(int epoch, folly::Optional<epoch_t> since = folly::none) {
+    auto func = [&]() {
+      return sequencer_->completeActivationWithMetaData(
+          epoch_t(epoch), getConfig(), genMetaData(epoch_t(epoch), since));
+    };
+    bool on_worker = Worker::onThisThread(/*enforce*/ false) != nullptr;
+    return on_worker ? func() : run_on_worker(processor_.get(), 0, func);
   }
 
   void drainingTimerExpired(epoch_t draining_epoch) {
@@ -265,7 +270,9 @@ class MockSequencer : public Sequencer {
       : Sequencer(test->LOG_ID, test->updateable_settings_, &test->stats_),
         test_(test) {}
 
-  ~MockSequencer() override {}
+  ~MockSequencer() override {
+    shutdown();
+  }
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
@@ -1095,8 +1102,7 @@ TEST_F(SequencerTest, HistoricalMetadataRequest) {
   setUp();
   ASSERT_EQ(Sequencer::State::UNAVAILABLE, sequencer_->getState());
   sequencer_->startActivation([this](logid_t) { return getMetaData(); });
-  sequencer_->completeActivationWithMetaData(
-      epoch_t(5), getConfig(), genMetaData(epoch_t(5), epoch_t(3)));
+  completeActivation(5, epoch_t(3));
   checkHistoricalMetaDataRequestEpoch(epoch_t(5));
   bool rv = sequencer_->onHistoricalMetaData(
       E::OK, epoch_t(5), genMetaDataMap({1, 2}), {});
@@ -1112,8 +1118,7 @@ TEST_F(SequencerTest, HistoricalMetadataSinceOne) {
   ASSERT_EQ(Sequencer::State::UNAVAILABLE, sequencer_->getState());
   sequencer_->startActivation([this](logid_t) { return getMetaData(); });
   // got epoch 5 metadata effective since 1
-  sequencer_->completeActivationWithMetaData(
-      epoch_t(5), getConfig(), genMetaData(epoch_t(5), EPOCH_MIN));
+  completeActivation(5, EPOCH_MIN);
   noHistoricalMetaDataRequested();
 }
 
@@ -1122,8 +1127,7 @@ TEST_F(SequencerTest, HistoricalMetadataRequest2) {
   settings_.reactivation_limit = RATE_UNLIMITED;
   setUp();
   sequencer_->startActivation([this](logid_t) { return getMetaData(); });
-  sequencer_->completeActivationWithMetaData(
-      epoch_t(5), getConfig(), genMetaData(epoch_t(5), epoch_t(3)));
+  completeActivation(5, epoch_t(3));
   checkHistoricalMetaDataRequestEpoch(epoch_t(5));
   bool rv = sequencer_->onHistoricalMetaData(
       E::OK, epoch_t(5), genMetaDataMap({1, 2}), {});
@@ -1131,15 +1135,13 @@ TEST_F(SequencerTest, HistoricalMetadataRequest2) {
   ASSERT_FALSE(rv);
   // sequencer activates with the same metadata in epoch 10
   sequencer_->startActivation([this](logid_t) { return getMetaData(); });
-  sequencer_->completeActivationWithMetaData(
-      epoch_t(10), getConfig(), genMetaData(epoch_t(10), epoch_t(3)));
+  completeActivation(10, epoch_t(3));
   noHistoricalMetaDataRequested();
   auto expected_map = genEpochMetaDataMap({1, 2, 3}, epoch_t(10));
   ASSERT_EQ(*expected_map, *sequencer_->getMetaDataMap());
   // sequencer activates to epoch 15 with a new metadata with effective since 11
   sequencer_->startActivation([this](logid_t) { return getMetaData(); });
-  sequencer_->completeActivationWithMetaData(
-      epoch_t(15), getConfig(), genMetaData(epoch_t(15), epoch_t(11)));
+  completeActivation(15, epoch_t(11));
   noHistoricalMetaDataRequested();
   expected_map = genEpochMetaDataMap({1, 2, 3, 11}, epoch_t(15));
   ASSERT_EQ(*expected_map, *sequencer_->getMetaDataMap());

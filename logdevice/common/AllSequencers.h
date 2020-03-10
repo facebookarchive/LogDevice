@@ -367,6 +367,12 @@ class AllSequencers {
   }
 
   /**
+   * Called each time after settings values are updated. The call comes from
+   * configuration thread.
+   */
+  void onSettingsUpdated();
+
+  /**
    * Performs clean up work during worker and processor shutdown.
    */
   void shutdown();

@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Sequencer.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;
@@ -63,16 +64,20 @@ class MockSequencer : public Sequencer {
 class MetaDataLogTrimmerTest : public ::testing::Test {
  public:
   void SetUp() override {
+    processor_ = make_test_processor(settings_);
     sequencer_ = std::make_unique<MockSequencer>(log_id_, updateable_settings_);
-    trimmer_ = std::make_unique<MockMetaDataLogTrimmer>(sequencer_.get());
+    trimmer_ = run_on_worker(processor_.get(), 1, [this]() {
+      return std::make_shared<MockMetaDataLogTrimmer>(sequencer_.get());
+    });
   }
 
   const logid_t log_id_{1};
   Settings settings_ = create_default_settings<Settings>();
   UpdateableSettings<Settings> updateable_settings_ =
       UpdateableSettings<Settings>(settings_);
+  std::shared_ptr<Processor> processor_;
   std::unique_ptr<MockSequencer> sequencer_;
-  std::unique_ptr<MockMetaDataLogTrimmer> trimmer_;
+  std::shared_ptr<MockMetaDataLogTrimmer> trimmer_;
 };
 
 TEST_F(MetaDataLogTrimmerTest, TrimSent) {
@@ -83,8 +88,8 @@ TEST_F(MetaDataLogTrimmerTest, TrimSent) {
   sequencer_->addMetaDataExtras(7, 11); // effective range [7, 8]
   sequencer_->addMetaDataExtras(8, 24); // effective range [8, 10]
   sequencer_->addMetaDataExtras(10, 7); // effective range [10, max)
-  EXPECT_CALL(*trimmer_, sendTrimRequest(metadata_trim_point)).Times(1);
-  trimmer_->trim();
+  EXPECT_CALL(*trimmer_.get(), sendTrimRequest(metadata_trim_point)).Times(1);
+  trimmer_.get()->trim();
 }
 
 TEST_F(MetaDataLogTrimmerTest, NothingToTrim) {
@@ -92,8 +97,8 @@ TEST_F(MetaDataLogTrimmerTest, NothingToTrim) {
   sequencer_->setTrimPoint(data_trim_point);
   sequencer_->addMetaDataExtras(8, 24); // effective range [8, 10]
   sequencer_->addMetaDataExtras(10, 7); // effective range [10, max)
-  trimmer_->trim();
-  EXPECT_CALL(*trimmer_, sendTrimRequest(_)).Times(0);
+  trimmer_.get()->trim();
+  EXPECT_CALL(*trimmer_.get(), sendTrimRequest(_)).Times(0);
 }
 
 // Checks the case when current epoch number was introduced without adding
@@ -108,21 +113,21 @@ TEST_F(MetaDataLogTrimmerTest, EpochFromPast) {
   sequencer_->addMetaDataExtras(3, 11); // effective range [7, 8]
   sequencer_->addMetaDataExtras(8, 24); // effective range [8, 10]
   sequencer_->addMetaDataExtras(10, 7); // effective range [10, max)
-  EXPECT_CALL(*trimmer_, sendTrimRequest(metadata_trim_point)).Times(1);
-  trimmer_->trim();
+  EXPECT_CALL(*trimmer_.get(), sendTrimRequest(metadata_trim_point)).Times(1);
+  trimmer_.get()->trim();
 }
 
 TEST_F(MetaDataLogTrimmerTest, NoTrimPoint) {
   sequencer_->addMetaDataExtras(1, 17); // effective range [1, 10]
   sequencer_->addMetaDataExtras(10, 7); // effective range [10, max)
-  trimmer_->trim();
-  EXPECT_CALL(*trimmer_, sendTrimRequest(_)).Times(0);
+  trimmer_.get()->trim();
+  EXPECT_CALL(*trimmer_.get(), sendTrimRequest(_)).Times(0);
 }
 
 TEST_F(MetaDataLogTrimmerTest, NoExtrasLoaded) {
   lsn_t data_trim_point = compose_lsn(epoch_t(4), esn_t(17));
   sequencer_->setTrimPoint(data_trim_point);
-  trimmer_->trim();
-  EXPECT_CALL(*trimmer_, sendTrimRequest(_)).Times(0);
+  trimmer_.get()->trim();
+  EXPECT_CALL(*trimmer_.get(), sendTrimRequest(_)).Times(0);
 }
 } // namespace

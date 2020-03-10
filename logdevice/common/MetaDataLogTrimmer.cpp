@@ -10,54 +10,99 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/TrimRequest.h"
+#include "logdevice/common/request_util.h"
 
 namespace facebook { namespace logdevice {
 
 MetaDataLogTrimmer::MetaDataLogTrimmer(Sequencer* sequencer)
     : sequencer_(sequencer),
+      processor_(sequencer->getProcessor()),
       log_id_(sequencer->getLogID()),
-      current_run_interval_(0) {
+      worker_id_(Worker::onThisThread()->idx_),
+      worker_type_(Worker::onThisThread()->worker_type_) {
   ld_check(sequencer);
   ld_check(!MetaDataLog::isMetaDataLog(log_id_));
+  state_ = std::make_shared<MetaDataLogTrimmer::State>();
+  state_->timer = std::make_unique<Timer>();
 }
 
+// Called from any thread
 void MetaDataLogTrimmer::setRunInterval(
     std::chrono::milliseconds run_interval) {
-  if (current_run_interval_ == run_interval) {
-    // No changes, skipping update
+  std::function<void()> func = [this, s = state_, run_interval]() {
+    updateRunInterval(s, run_interval);
+  };
+  auto request = FuncRequest::make(
+      worker_id_, worker_type_, RequestType::MISC, std::move(func));
+  auto rv = processor_->postRequest(request);
+  if (rv != 0) {
+    RATELIMIT_ERROR(std::chrono::seconds(5),
+                    1,
+                    "Posting update function failed with error(%s)",
+                    error_name(err));
+  }
+}
+
+// Called from Worker thread, but scheduled from any thread
+void MetaDataLogTrimmer::updateRunInterval(
+    std::shared_ptr<MetaDataLogTrimmer::State> state,
+    std::chrono::milliseconds run_interval) {
+  if (state->stopped.load()) {
     return;
   }
-  current_run_interval_ = run_interval;
-  if (current_run_interval_.count() == 0) {
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   1,
-                   "Stopping periodic trimming log for %lu",
-                   log_id_.val_);
-    trim_timer_.cancel();
-  } else {
-    schedulePeriodicTrimming();
+  if (state->run_interval != run_interval) {
+    state->run_interval = run_interval;
+    if (run_interval.count() == 0) {
+      RATELIMIT_INFO(std::chrono::seconds(10),
+                     1,
+                     "Stopping periodic trimming log for %lu",
+                     log_id_.val_);
+      state->timer->cancel();
+    } else {
+      schedulePeriodicTrimming();
+    }
   }
+}
+
+// Called from any thread
+void MetaDataLogTrimmer::shutdown() {
+  // blocks until the passed lambda executes
+  // Check if it is stopped already
+  if (state_->stopped.exchange(true)) {
+    return;
+  }
+  run_on_worker(processor_, worker_id_.val_, worker_type_, [s = state_]() {
+    s->timer.release();
+    return 0;
+  });
 }
 
 folly::Optional<lsn_t> MetaDataLogTrimmer::getTrimPoint() {
-  return metadata_trim_point_.loadOptional();
+  return state_->metadata_trim_point.loadOptional();
 }
 
+// Called from Worker thread
 void MetaDataLogTrimmer::schedulePeriodicTrimming() {
-  ld_check(current_run_interval_.count() > 0);
+  ld_check(!state_->stopped.load());
   RATELIMIT_INFO(std::chrono::seconds(10),
                  1,
                  "Will run periodic trimming every %lu s for %lu",
-                 current_run_interval_.count(),
+                 state_->run_interval.count(),
                  log_id_.val_);
-  trim_timer_.setCallback([this]() {
+  state_->timer->setCallback([this, s = state_]() {
+    // Called from worker but may run after destruction
+    if (s->stopped.load()) {
+      // Callback called after shutdown, skipping it
+      return;
+    }
     // Re-activate timer for next round
-    trim_timer_.activate(current_run_interval_);
+    s->timer->activate(s->run_interval);
     trim();
   });
-  trim_timer_.activate(current_run_interval_);
+  state_->timer->activate(state_->run_interval);
 }
 
+// Called from Worker thread
 folly::Optional<lsn_t> MetaDataLogTrimmer::findMetadataTrimLSN() {
   auto metadata_extras = sequencer_->getMetaDataExtrasMap();
   if (metadata_extras == nullptr) {
@@ -107,6 +152,7 @@ folly::Optional<lsn_t> MetaDataLogTrimmer::findMetadataTrimLSN() {
   return confirmed_lsn;
 }
 
+// Called from Worker thread
 void MetaDataLogTrimmer::trim() {
   auto metadata_trim_lsn = findMetadataTrimLSN();
   if (!metadata_trim_lsn.has_value()) {
@@ -131,17 +177,20 @@ void MetaDataLogTrimmer::trim() {
   sendTrimRequest(metadata_trim_lsn.value());
 }
 
+// Called from Worker thread
 void MetaDataLogTrimmer::sendTrimRequest(lsn_t metadata_lsn) {
   ld_check(metadata_lsn != LSN_INVALID);
 
-  STAT_INCR(sequencer_->getProcessor()->stats_, metadata_log_trims);
+  STAT_INCR(processor_->stats_, metadata_log_trims);
 
   auto request = std::make_unique<TrimRequest>(
       nullptr,
       MetaDataLog::metaDataLogID(log_id_),
       metadata_lsn,
       sequencer_->settings().metadata_log_trim_timeout,
-      [this, metadata_lsn](Status st) { onTrimComplete(st, metadata_lsn); });
+      [log_id = log_id_, s = state_, metadata_lsn](Status status) {
+        onTrimComplete(s, log_id, status, metadata_lsn);
+      });
 
   request->bypassWriteTokenCheck();
   // This is a hack to work around SyncSequencerRequest returning underestimated
@@ -149,7 +198,7 @@ void MetaDataLogTrimmer::sendTrimRequest(lsn_t metadata_lsn) {
   request->bypassTailLSNCheck();
 
   std::unique_ptr<Request> req(std::move(request));
-  int rv = sequencer_->getProcessor()->postRequest(req);
+  int rv = processor_->postRequest(req);
   if (rv != 0 && err != E::SHUTDOWN) {
     ld_error("Got unexpected err %s for posting trim request for metadata log "
              "for %lu",
@@ -158,17 +207,22 @@ void MetaDataLogTrimmer::sendTrimRequest(lsn_t metadata_lsn) {
   }
 }
 
-void MetaDataLogTrimmer::onTrimComplete(Status status, lsn_t trim_point) {
+/* static */
+void MetaDataLogTrimmer::onTrimComplete(
+    std::shared_ptr<MetaDataLogTrimmer::State> state,
+    logid_t log_id,
+    Status status,
+    lsn_t trim_point) {
   if (status == E::OK) {
-    metadata_trim_point_.store(trim_point);
+    state->metadata_trim_point.store(trim_point);
     ld_info("Successfully trimmed MetaDataLog for data log %lu up to %s",
-            log_id_.val_,
+            log_id.val_,
             lsn_to_string(trim_point).c_str());
   } else {
     RATELIMIT_ERROR(std::chrono::seconds(5),
                     1,
                     "Error on trimming metadata log for data log %lu: %s ",
-                    log_id_.val_,
+                    log_id.val_,
                     error_description(status));
   }
 }

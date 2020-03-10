@@ -259,9 +259,11 @@ ActivateResult Sequencer::completeActivationWithMetaData(
     getHistoricalMetaData(GetHistoricalMetaDataMode::PERIODIC);
 
     // 8. start periodic trimming of metdata log
-    metadata_log_trimmer_.update(std::make_shared<MetaDataLogTrimmer>(this));
-    metadata_log_trimmer_.get()->setRunInterval(
-        settings_->metadata_log_trim_interval);
+    if (metadata_log_trimmer_.get() == nullptr) {
+      metadata_log_trimmer_.update(std::make_shared<MetaDataLogTrimmer>(this));
+      metadata_log_trimmer_.get()->setRunInterval(
+          settings_->metadata_log_trim_interval);
+    }
   }
 
   return (draining_started ? ActivateResult::GRACEFUL_DRAINING
@@ -1927,6 +1929,10 @@ void Sequencer::notifySequencerBackgroundActivator(Status st) {
 
 void Sequencer::shutdown() {
   setUnavailable(UnavailabilityReason::SHUTDOWN);
+  auto trimmer = metadata_log_trimmer_.get();
+  if (trimmer) {
+    trimmer->shutdown();
+  }
 }
 
 void Sequencer::noteReleaseSuccessful(ShardID shard,
@@ -2029,6 +2035,13 @@ std::chrono::milliseconds Sequencer::getRateEstimatorWindowSize() const {
 folly::Optional<lsn_t> Sequencer::getLatestMetaDataTrimPoint() const {
   auto timmer = metadata_log_trimmer_.get();
   return timmer != nullptr ? timmer->getTrimPoint() : folly::none;
+}
+
+void Sequencer::onSettingsUpdated() {
+  auto trimmer = metadata_log_trimmer_.get();
+  if (trimmer != nullptr) {
+    trimmer->setRunInterval(settings_->metadata_log_trim_interval);
+  }
 }
 
 }} // namespace facebook::logdevice

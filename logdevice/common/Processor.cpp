@@ -147,7 +147,7 @@ class ProcessorImpl {
 };
 
 namespace {
-void settingsUpdated(const UpdateableSettings<Settings>& settings) {
+void applySettings(const UpdateableSettings<Settings>& settings) {
   bool ch = settings->abort_on_failed_check;
   bool ca = settings->abort_on_failed_catch;
   if (dbg::abortOnFailedCheck.exchange(ch) != ch) {
@@ -197,10 +197,7 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       csid_(std::move(csid)),
       trace_logger_(trace_logger),
       name_(name),
-      my_node_id_(std::move(my_node_id)) {
-  settingsUpdateHandle_ = settings_.callAndSubscribeToUpdates(
-      std::bind(settingsUpdated, settings_));
-}
+      my_node_id_(std::move(my_node_id)) {}
 
 void Processor::init() {
   auto local_settings = settings_.get();
@@ -248,6 +245,9 @@ void Processor::init() {
   if (!settings_->server && settings_->enable_initial_get_cluster_state) {
     cluster_state_->refreshClusterStateAsync();
   }
+  applySettings(settings_);
+  settingsUpdateHandle_ = settings_.subscribeToUpdates(
+      std::bind(&Processor::onSettingsUpdated, this));
   if (settings_->server) {
     // Remaining necessary steps are implemented in ServerProcessor::init().
     return;
@@ -796,6 +796,10 @@ ResourceBudget::Token Processor::getIncomingMessageToken(size_t payload_size) {
 
 SSLFetcher& Processor::sslFetcher() const {
   return impl_->sslFetcher_;
+}
+
+void Processor::onSettingsUpdated() {
+  impl_->allSequencers_->onSettingsUpdated();
 }
 
 }} // namespace facebook::logdevice

@@ -167,6 +167,11 @@ struct MockProcessor : public Processor {
     return isNodeIsolated_;
   }
 
+  void start() {
+    init();
+    startRunning();
+  }
+
   bool isNodeIsolated_{false};
 };
 
@@ -241,8 +246,14 @@ class MockAllSequencers : public AllSequencers {
     if (st == E::EMPTY) {
       startMetadataLogEmptyCheck(logid, activation_reason);
     } else {
-      AllSequencers::onEpochMetaDataFromEpochStore(
-          st, logid, activation_reason, std::move(info), std::move(meta_props));
+      run_on_worker(getProcessor(), 1, [&]() {
+        AllSequencers::onEpochMetaDataFromEpochStore(st,
+                                                     logid,
+                                                     activation_reason,
+                                                     std::move(info),
+                                                     std::move(meta_props));
+        return 0;
+      });
     }
   }
 
@@ -288,6 +299,7 @@ void AllSequencersTest::setUp() {
   }
 
   processor_ = std::make_unique<MockProcessor>(this);
+  processor_->start();
   all_seqs_ = std::make_unique<MockAllSequencers>(this, processor_.get());
 }
 
