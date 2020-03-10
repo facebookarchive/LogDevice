@@ -469,7 +469,7 @@ std::string get_localhost_address_str() {
   if (getifaddrs(&ifaddr) != 0) {
     throw std::runtime_error(
         "getifaddrs() failed. errno=" + folly::to<std::string>(errno) + " (" +
-        folly::errnoStr(errno).toStdString() + ")");
+        folly::errnoStr(errno) + ")");
   }
 
   SCOPE_EXIT {
