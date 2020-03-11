@@ -71,7 +71,7 @@ At Facebook, we don't usually write to the [write ahead log (WAL)](https://githu
 
 ## Failed node starts up
 
-When a node comes up it reads the event log. If it has no data, it waits as each of its shards are rebuild and marked empty. While rebuilding is happening, it rejects reader requests with a special status of REBUILDING. For readers, it has an underreplicated authoritative status. When each shard is done, the node sends a `SHARD_ACK_REBUILD` message to the event log to indicate that it is ready for writes again. It also writes `RebuildingCompleteMetaData` to the shard that was rebuilt.
+When a node comes up it reads the event log. If it has no data, it waits as each of its shards are rebuilt and marked empty. While rebuilding is happening, it rejects reader requests with a special status of REBUILDING. For readers, it has an underreplicated authoritative status. When each shard is done, the node sends a `SHARD_ACK_REBUILT` message to the event log to indicate that it is ready for writes again. It also writes `RebuildingCompleteMetaData` to the shard that was rebuilt.
 
 If a node comes back with its data intact, and it sees that rebuilding is ongoing by checking the event log, then it aborts rebuilding. The shard continues as a storage node. This means some records might be over-replicated, but that hasn't proven to be a problem in practice.
 

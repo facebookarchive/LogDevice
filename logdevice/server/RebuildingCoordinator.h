@@ -537,7 +537,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
     // true iff our node is a donor for this rebuilding and hasn't finished
     // rebuilding yet. When all LogRebuildings finish, this is set to false
-    // but ShardState stays alive until we read SHARD_ACK_REBUILD from
+    // but ShardState stays alive until we read SHARD_ACK_REBUILT from
     // event log - this is needed to have the correct
     // rebuildingSet if we see other SHARD_NEEDS_REBUILD events.
     bool participating{false};

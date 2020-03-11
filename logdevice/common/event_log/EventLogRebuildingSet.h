@@ -369,7 +369,7 @@ class EventLogRebuildingSet {
   lsn_t last_seen_lsn_ = LSN_INVALID;
 
   // LSN of the last event that affected rebuilding set, either
-  // SHARD_NEEDS_REBUILD or SHARD_ACK_REBUILD.
+  // SHARD_NEEDS_REBUILD or SHARD_ACK_REBUILT.
   lsn_t last_update_ = LSN_INVALID;
 
   folly::Optional<NodeID> my_node_id_{folly::none};
