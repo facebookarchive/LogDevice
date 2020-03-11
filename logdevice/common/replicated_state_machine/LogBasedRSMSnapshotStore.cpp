@@ -129,8 +129,10 @@ bool LogBasedRSMSnapshotStore::isWritable() const {
     return false;
   }
 
-  NodeID my_node_id = processor_->getMyNodeID();
-  ld_check(my_node_id.isNodeID());
+  auto my_node_id = processor_->getOptionalMyNodeID();
+  if (!my_node_id.has_value() || !my_node_id.value().isNodeID()) {
+    return false;
+  }
 
   auto w = Worker::onThisThread();
   auto cs = w->getClusterState();
@@ -138,7 +140,7 @@ bool LogBasedRSMSnapshotStore::isWritable() const {
 
   // The node responsible for snapshotting is the first node
   // that's alive according to the failure detector.
-  return cs->getFirstNodeAlive() == my_node_id.index();
+  return cs->getFirstNodeAlive() == my_node_id.value().index();
 }
 
 void LogBasedRSMSnapshotStore::writeSnapshot(lsn_t snapshot_ver,
