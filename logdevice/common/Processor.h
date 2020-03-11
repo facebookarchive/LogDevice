@@ -84,9 +84,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * @param rebuilding_mode             whether this Processor is part of
    *                                    rebuilding process
    * @param permission_checker          pointer to a PermissionChecker.
-   *                                    Ownership is transfered to the processor
+   *                                    Ownership is transferred to the
+   *                                    processor
    * @param principal_parser            pointer to a PrinciplaParser. Ownership
-   *                                    is transfered to the processor
+   *                                    is transferred to the processor
    * @param stats                       object used to update various stat
    *                                    counters
    * @param sequencer_locator           used on clients and storage nodes to

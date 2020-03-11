@@ -88,10 +88,10 @@ std::shared_ptr<Sequencer> AllSequencers::findSequencer(logid_t logid) {
     return getMetaDataLogSequencer(logid);
   }
 
-  folly::SharedMutex::ReadHolder map_lock(map_mutex_);
+  folly::SharedMutex::ReadHolder map_lock(sequencer_map_mutex_);
   // data log id
-  auto it = map_.find(logid.val_);
-  if (it == map_.end()) {
+  auto it = sequencer_map_.find(logid.val_);
+  if (it == sequencer_map_.end()) {
     err = E::NOSEQUENCER;
     return nullptr;
   }
@@ -127,9 +127,9 @@ int AllSequencers::activateSequencer(
     return -1;
   }
 
-  folly::SharedMutex::UpgradeHolder map_lock(map_mutex_);
-  auto it = map_.find(logid.val_);
-  if (it != map_.end()) {
+  folly::SharedMutex::UpgradeHolder map_lock(sequencer_map_mutex_);
+  auto it = sequencer_map_.find(logid.val_);
+  if (it != sequencer_map_.end()) {
     // Already have a Sequencer for this log, check state. In order to
     // avoid shutdown crashes all threads that may run activateSequencer()
     // must stop before this AllSequencers object (a subobject of Processor)
@@ -143,7 +143,8 @@ int AllSequencers::activateSequencer(
     // of the shared lock
     seq = createSequencer(logid, settings_);
     folly::SharedMutex::WriteHolder map_write_lock(std::move(map_lock));
-    auto insertion_result = map_.insert(std::make_pair(logid.val(), seq));
+    auto insertion_result =
+        sequencer_map_.insert(std::make_pair(logid.val(), seq));
 
     ld_check(insertion_result.second);
   }
@@ -964,16 +965,16 @@ void AllSequencers::notifyMetaDataLogWriterOnActivation(Sequencer* seq,
 void AllSequencers::noteConfigurationChanged() {
   if (!processor_->hasMyNodeID()) {
     // not a server node
-    ld_check(map_.empty());
+    ld_check(sequencer_map_.empty());
     return;
   }
   std::vector<logid_t> log_ids;
   {
     folly::stop_watch<std::chrono::milliseconds> watch;
-    folly::SharedMutex::ReadHolder map_lock(map_mutex_);
+    folly::SharedMutex::ReadHolder map_lock(sequencer_map_mutex_);
     uint64_t lock_ms = watch.lap().count();
-    for (auto const& x : map_) {
-      log_ids.push_back(logid_t(x.first));
+    for (auto const& [log_id, _] : sequencer_map_) {
+      log_ids.push_back(logid_t(log_id));
     }
     ld_info("Acquiring lock for sequencer map took %lums", lock_ms);
   }
@@ -984,29 +985,29 @@ void AllSequencers::noteConfigurationChanged() {
 }
 
 void AllSequencers::shutdown() {
-  folly::SharedMutex::ReadHolder map_lock(map_mutex_);
-  for (auto const& x : map_) {
-    x.second->shutdown();
+  folly::SharedMutex::ReadHolder map_lock(sequencer_map_mutex_);
+  for (auto const& [_, sequencer] : sequencer_map_) {
+    sequencer->shutdown();
   }
 }
 
 AllSequencers::Accessor::Accessor(AllSequencers* owner)
-    : owner_(owner), map_lock_(owner_->map_mutex_) {}
+    : owner_(owner), map_lock_(owner_->sequencer_map_mutex_) {}
 
 AllSequencers::Accessor AllSequencers::accessAll() {
   return Accessor(this);
 }
 AllSequencers::Accessor::Iterator AllSequencers::Accessor::begin() {
-  return Iterator(owner_->map_.begin());
+  return Iterator(owner_->sequencer_map_.begin());
 }
 AllSequencers::Accessor::Iterator AllSequencers::Accessor::end() {
-  return Iterator(owner_->map_.end());
+  return Iterator(owner_->sequencer_map_.end());
 }
 
 std::vector<std::shared_ptr<Sequencer>> AllSequencers::getAll() {
   std::vector<std::shared_ptr<Sequencer>> out;
-  folly::SharedMutex::ReadHolder map_lock(map_mutex_);
-  for (auto& p : map_) {
+  folly::SharedMutex::ReadHolder map_lock(sequencer_map_mutex_);
+  for (auto& p : sequencer_map_) {
     out.push_back(p.second);
   }
   return out;
@@ -1041,16 +1042,16 @@ AllSequencers::getMetaDataLogSequencer(logid_t datalog_id) {
 }
 
 void AllSequencers::disableAllSequencersDueToIsolation() {
-  folly::SharedMutex::ReadHolder map_lock(map_mutex_);
-  for (const auto& x : map_) {
-    x.second->onNodeIsolated();
+  folly::SharedMutex::ReadHolder map_lock(sequencer_map_mutex_);
+  for (const auto& [_, sequencer] : sequencer_map_) {
+    sequencer->onNodeIsolated();
   }
 }
 
 void AllSequencers::onSettingsUpdated() {
-  folly::SharedMutex::ReadHolder map_lock(map_mutex_);
-  for (const auto& x : map_) {
-    x.second->onSettingsUpdated();
+  folly::SharedMutex::ReadHolder map_lock(sequencer_map_mutex_);
+  for (const auto& [_, sequencer] : sequencer_map_) {
+    sequencer->onSettingsUpdated();
   }
 }
 

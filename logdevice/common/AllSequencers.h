@@ -411,19 +411,20 @@ class AllSequencers {
   virtual StatsHolder* getStats() const;
 
  private:
-  // Protects map_ and the std::shared_ptr objects within map_.
+  // Protects sequencer_map_ and the std::shared_ptr objects within
+  // sequencer_map_.
   //
   // A single instance of std::shared_ptr isn't read/write safe
   // from multiple threads. Since we already use a mutex to serialize
-  // concurrent read/write access to map_, it is natural to just continue
-  // to hold that mutex after lookup while updating, or instantiating a
+  // concurrent read/write access to sequencer_map_, it is natural to just
+  // continue to hold that mutex after lookup while updating, or instantiating a
   // thread local copy of, the contained std::shared_ptrs.
   //
   // NOTE: If we see contention on this mutex, sharding the map should
   //       be an easy remedy (assuming the contention is not on specific
   //       logs).
-  folly::SharedMutex map_mutex_;
-  SequencerMap map_;
+  folly::SharedMutex sequencer_map_mutex_;
+  SequencerMap sequencer_map_;
 
   // cluster config used by the Processor that owns this object
   std::shared_ptr<UpdateableConfig> updateable_config_;
