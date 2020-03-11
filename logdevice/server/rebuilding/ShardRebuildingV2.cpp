@@ -77,6 +77,7 @@ void ShardRebuildingV2::start(
   readContext_->rebuildingSet = rebuildingSet_;
   readContext_->rebuildingSettings = rebuildingSettings_;
   readContext_->myShardID = ShardID(getMyNodeIndex(), shard_);
+  readContext_->progressTimestamp = direction_.firstTimestamp();
 
   for (const auto& log_plan : plan) {
     auto ins = readContext_->logs.emplace(

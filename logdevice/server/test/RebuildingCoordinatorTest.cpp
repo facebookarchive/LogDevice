@@ -572,6 +572,12 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     settings.use_legacy_log_to_shard_mapping_in_rebuilding = false;
     settings.shard_is_rebuilt_msg_delay = {
         std::chrono::seconds(0), std::chrono::seconds(0)};
+    // A lot of the tests in this file are more about ShardRebuildingV1
+    // rather than RebuildingCoordinator.
+    // TODO: Remove ShardRebuildingV1 along with such tests. Then these two
+    //       setting overrides won't be needed.
+    settings.enable_v2 = false;
+    settings.new_to_old = false;
 
     // Clean up possible leftovers from previous test run.
     received.clear();

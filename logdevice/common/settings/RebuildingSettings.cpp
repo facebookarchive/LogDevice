@@ -561,7 +561,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Rebuilding);
   init("rebuilding-new-to-old",
        &new_to_old,
-       "false",
+       "true",
        nullptr,
        "Rebuild records in order of approximately increasing age. More "
        "specifically, rebuilding iterates over partitions in reverse order, "

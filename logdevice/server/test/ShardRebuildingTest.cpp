@@ -130,7 +130,9 @@ class MockedShardRebuilding : public ShardRebuildingV2,
                                 double progress_estimate) override {
     EXPECT_EQ(shard, SHARD_IDX);
     EXPECT_EQ(version, REBUILDING_VERSION);
-    if (next_ts != RecordTimestamp::min()) {
+    if (next_ts !=
+        (rebuildingSettings_->new_to_old ? RecordTimestamp::max()
+                                         : RecordTimestamp::min())) {
       donorProgress.push_back(next_ts);
     }
   }
@@ -177,10 +179,12 @@ class MockedShardRebuilding : public ShardRebuildingV2,
   }
 };
 
-class ShardRebuildingTest : public ::testing::Test {
+class ShardRebuildingTest : public ::testing::TestWithParam<bool> {
  public:
   ShardRebuildingTest() {
     rebuildingSettingsUpdater_.registerSettings(rebuildingSettings_);
+    rebuildingSettingsUpdater_.setFromConfig(
+        {{"rebuilding-new-to-old", GetParam() ? "true" : "false"}});
   }
 
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
@@ -228,7 +232,7 @@ ChunkData* makeChunk(logid_t log,
 
 #define PER_SHARD_STAT(s) reb.stats.get().per_shard_stats->get(SHARD_IDX)->s
 
-TEST_F(ShardRebuildingTest, Basic) {
+TEST_P(ShardRebuildingTest, Basic) {
   MockedShardRebuilding reb(rebuildingSettings_);
   // ShardRebuilding doesn't directly use rebuilding plan, it just passes it to
   // readContext_. So we can pass an empty plan.
@@ -236,6 +240,8 @@ TEST_F(ShardRebuildingTest, Basic) {
   EXPECT_TRUE(reb.taskInFlight);
   EXPECT_EQ(0, reb.chunkRebuildings.size());
   EXPECT_EQ(0, reb.donorProgress.size());
+
+  int direction = GetParam() ? -1 : +1; // new to old: -1, old to new: +1
 
   // Read one chunk. Chunk rebuilding and another storage task will be started.
   reb.simulateReadTaskDone({makeChunk(logid_t(1), 100, 101, 10, BASE_TIME)});
@@ -252,21 +258,21 @@ TEST_F(ShardRebuildingTest, Basic) {
 
   // Read 2 chunks, reached end.
   reb.simulateReadTaskDone(
-      {makeChunk(logid_t(2), 50, 52, 30, BASE_TIME + MINUTE * 2),
-       makeChunk(logid_t(1), 102, 110, 40, BASE_TIME + MINUTE)},
+      {makeChunk(logid_t(2), 50, 52, 30, BASE_TIME + direction * MINUTE * 2),
+       makeChunk(logid_t(1), 102, 110, 40, BASE_TIME + direction * MINUTE)},
       true);
   EXPECT_FALSE(reb.taskInFlight);
   ASSERT_EQ(2, reb.chunkRebuildings.size());
   EXPECT_EQ(50, reb.chunkRebuildings[0].data->address.min_lsn);
   EXPECT_EQ(1, reb.chunkRebuildings[1].data->address.log.val());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE);
 
   // The two chunk rebuildings come back out of order.
 
   reb.simulateChunkRebuildingDone(1);
   EXPECT_FALSE(reb.taskInFlight);
   ASSERT_EQ(1, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE * 2);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE * 2);
 
   EXPECT_FALSE(reb.completed);
 
@@ -278,7 +284,7 @@ TEST_F(ShardRebuildingTest, Basic) {
   EXPECT_TRUE(reb.completed);
 }
 
-TEST_F(ShardRebuildingTest, NothingToRebuild) {
+TEST_P(ShardRebuildingTest, NothingToRebuild) {
   MockedShardRebuilding reb(rebuildingSettings_);
   reb.start({});
   reb.simulateReadTaskDone({}, true);
@@ -288,7 +294,7 @@ TEST_F(ShardRebuildingTest, NothingToRebuild) {
   EXPECT_TRUE(reb.completed);
 }
 
-TEST_F(ShardRebuildingTest, WindowsAndLimits) {
+TEST_P(ShardRebuildingTest, WindowsAndLimits) {
   rebuildingSettingsUpdater_.setFromCLI(
       // Keep the difference between the newest and oldest ChunkRebuilding below
       // 30 minutes.
@@ -301,8 +307,10 @@ TEST_F(ShardRebuildingTest, WindowsAndLimits) {
        // (750*(3-1), the 3 being hardcoded in ShardRebuilding).
        {"rebuilding-max-batch-bytes", "750"}});
 
+  int direction = GetParam() ? -1 : +1; // new to old: -1, old to new: +1
+
   MockedShardRebuilding reb(rebuildingSettings_);
-  reb.simulateAdvanceGlobalWindow(BASE_TIME - MINUTE);
+  reb.simulateAdvanceGlobalWindow(BASE_TIME - direction * MINUTE);
   reb.start({});
 
   /* sleep override */
@@ -310,28 +318,31 @@ TEST_F(ShardRebuildingTest, WindowsAndLimits) {
 
   // Read 3 records, all above global window.
   reb.simulateReadTaskDone(
-      {makeChunk(logid_t(2), 50, 51, 600, BASE_TIME + MINUTE),
+      {makeChunk(logid_t(2), 50, 51, 600, BASE_TIME + direction * MINUTE),
        makeChunk(logid_t(1), 102, 103, 100, BASE_TIME),
-       makeChunk(logid_t(1), 120, 121, 200, BASE_TIME + MINUTE * 10)});
+       makeChunk(
+           logid_t(1), 120, 121, 200, BASE_TIME + direction * MINUTE * 10)});
   EXPECT_TRUE(reb.taskInFlight);
   EXPECT_FALSE(reb.waitingForGlobalWindow);
   ASSERT_EQ(0, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE);
 
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
   // Move global window to allow 2 out of 3 records to proceed.
-  reb.simulateAdvanceGlobalWindow(BASE_TIME + MINUTE * 5);
+  reb.simulateAdvanceGlobalWindow(BASE_TIME + direction * MINUTE * 5);
   EXPECT_FALSE(reb.waitingForGlobalWindow);
   ASSERT_EQ(2, reb.chunkRebuildings.size());
   EXPECT_DONOR_PROGRESS(BASE_TIME);
 
   // Read some more records. Now the read buffer is too big to read more.
   reb.simulateReadTaskDone(
-      {makeChunk(logid_t(3), 1, 2, 500, BASE_TIME + MINUTE * 2),
-       makeChunk(logid_t(1), 130, 131, 300, BASE_TIME + MINUTE * 20),
-       makeChunk(logid_t(2), 53, 54, 800, BASE_TIME + MINUTE * 35)});
+      {makeChunk(logid_t(3), 1, 2, 500, BASE_TIME + direction * MINUTE * 2),
+       makeChunk(
+           logid_t(1), 130, 131, 300, BASE_TIME + direction * MINUTE * 20),
+       makeChunk(
+           logid_t(2), 53, 54, 800, BASE_TIME + direction * MINUTE * 35)});
   EXPECT_FALSE(reb.taskInFlight);
   ASSERT_EQ(2, reb.chunkRebuildings.size());
   EXPECT_DONOR_PROGRESS(BASE_TIME);
@@ -341,7 +352,7 @@ TEST_F(ShardRebuildingTest, WindowsAndLimits) {
 
   // Move global window to above all the buffered records.
   // One chunk rebuilding starts, and the max-records-in-flight is hit.
-  reb.simulateAdvanceGlobalWindow(BASE_TIME + MINUTE * 40);
+  reb.simulateAdvanceGlobalWindow(BASE_TIME + direction * MINUTE * 40);
   EXPECT_FALSE(reb.taskInFlight);
   ASSERT_EQ(3, reb.chunkRebuildings.size());
   EXPECT_DONOR_PROGRESS(BASE_TIME);
@@ -352,38 +363,40 @@ TEST_F(ShardRebuildingTest, WindowsAndLimits) {
   reb.simulateChunkRebuildingDone(1);
   EXPECT_TRUE(reb.taskInFlight);
   ASSERT_EQ(3, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE);
 
   // A chunk rebuilding completes, and nothing happens because we're still
   // over max-record-bytes-in-flight.
   reb.simulateChunkRebuildingDone(1);
   ASSERT_EQ(2, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE);
 
   // A chunk rebuilding completes, one new one starts before
   // rebuilding-local-window is hit.
   reb.simulateChunkRebuildingDone(0);
   ASSERT_EQ(2, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE * 2);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE * 2);
 
   // Read one last record, above global window.
   reb.simulateReadTaskDone(
-      {makeChunk(logid_t(1), 300, 301, 10, BASE_TIME + MINUTE * 45)}, true);
+      {makeChunk(
+          logid_t(1), 300, 301, 10, BASE_TIME + direction * MINUTE * 45)},
+      true);
   EXPECT_FALSE(reb.taskInFlight);
   ASSERT_EQ(2, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE * 2);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE * 2);
 
   // A chunk rebuilding completes, one new one starts before global window is
   // hit.
   reb.simulateChunkRebuildingDone(0);
   EXPECT_FALSE(reb.waitingForGlobalWindow);
   ASSERT_EQ(2, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE * 20);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE * 20);
 
   // Still waiting for global window.
   reb.simulateChunkRebuildingDone(0);
   ASSERT_EQ(1, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE * 35);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE * 35);
 
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -393,16 +406,16 @@ TEST_F(ShardRebuildingTest, WindowsAndLimits) {
   reb.simulateChunkRebuildingDone(0);
   EXPECT_TRUE(reb.waitingForGlobalWindow);
   ASSERT_EQ(0, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE * 45);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE * 45);
 
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
   // Move global window. The last chunk rebuilding starts.
-  reb.simulateAdvanceGlobalWindow(BASE_TIME + MINUTE * 50);
+  reb.simulateAdvanceGlobalWindow(BASE_TIME + direction * MINUTE * 50);
   EXPECT_FALSE(reb.waitingForGlobalWindow);
   ASSERT_EQ(1, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE * 45);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE * 45);
 
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -415,7 +428,7 @@ TEST_F(ShardRebuildingTest, WindowsAndLimits) {
   EXPECT_TRUE(reb.completed);
 }
 
-TEST_F(ShardRebuildingTest, PersistentError) {
+TEST_P(ShardRebuildingTest, PersistentError) {
   MockedShardRebuilding reb(rebuildingSettings_);
   reb.start({});
 
@@ -436,7 +449,7 @@ TEST_F(ShardRebuildingTest, PersistentError) {
   EXPECT_FALSE(reb.completed);
 }
 
-TEST_F(ShardRebuildingTest, TestStallRebuilding) {
+TEST_P(ShardRebuildingTest, TestStallRebuilding) {
   rebuildingSettingsUpdater_.setFromCLI({{"test-stall-rebuilding", "true"}});
 
   MockedShardRebuilding reb(rebuildingSettings_);
@@ -449,11 +462,13 @@ TEST_F(ShardRebuildingTest, TestStallRebuilding) {
 
 // Check that internal logs and metadata logs don't affect global window and are
 // not affected by it.
-TEST_F(ShardRebuildingTest, WindowsAndInternalLogs) {
+TEST_P(ShardRebuildingTest, WindowsAndInternalLogs) {
   rebuildingSettingsUpdater_.setFromCLI({{"rebuilding-local-window", "30min"}});
 
+  int direction = GetParam() ? -1 : +1; // new to old: -1, old to new: +1
+
   MockedShardRebuilding reb(rebuildingSettings_);
-  reb.simulateAdvanceGlobalWindow(BASE_TIME - HOUR);
+  reb.simulateAdvanceGlobalWindow(BASE_TIME - direction * HOUR);
   reb.start({});
   EXPECT_TRUE(reb.taskInFlight);
   EXPECT_EQ(0, reb.chunkRebuildings.size());
@@ -480,16 +495,16 @@ TEST_F(ShardRebuildingTest, WindowsAndInternalLogs) {
                  300,
                  300,
                  10,
-                 BASE_TIME + HOUR * 100),
-       makeChunk(logid_t(1), 100, 100, 10, BASE_TIME + MINUTE),
-       makeChunk(logid_t(1), 200, 200, 10, BASE_TIME + HOUR)});
+                 BASE_TIME + direction * HOUR * 100),
+       makeChunk(logid_t(1), 100, 100, 10, BASE_TIME + direction * MINUTE),
+       makeChunk(logid_t(1), 200, 200, 10, BASE_TIME + direction * HOUR)});
   EXPECT_TRUE(reb.taskInFlight);
   EXPECT_EQ(2, reb.chunkRebuildings.size());
   EXPECT_EQ(0, reb.donorProgress.size());
 
   // Move global window. One data log chunk should start, the second one
   // shouldn't, because of big timestamp difference.
-  reb.simulateAdvanceGlobalWindow(BASE_TIME + MINUTE * 45);
+  reb.simulateAdvanceGlobalWindow(BASE_TIME + direction * MINUTE * 45);
   EXPECT_EQ(3, reb.chunkRebuildings.size());
   EXPECT_EQ(0, reb.donorProgress.size());
 
@@ -497,7 +512,7 @@ TEST_F(ShardRebuildingTest, WindowsAndInternalLogs) {
   // among the in-flight chunks, so it's reported as progress.
   reb.simulateChunkRebuildingDone(0);
   EXPECT_EQ(2, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + MINUTE);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * MINUTE);
 
   // Data log chunk done. Now we're waiting for global window.
   reb.simulateChunkRebuildingDone(1);
@@ -505,14 +520,16 @@ TEST_F(ShardRebuildingTest, WindowsAndInternalLogs) {
   EXPECT_EQ(0, reb.donorProgress.size());
 
   // Started the second data chunk, reported donor progress.
-  reb.simulateAdvanceGlobalWindow(BASE_TIME + HOUR * 2);
+  reb.simulateAdvanceGlobalWindow(BASE_TIME + direction * HOUR * 2);
   EXPECT_EQ(2, reb.chunkRebuildings.size());
-  EXPECT_DONOR_PROGRESS(BASE_TIME + HOUR);
+  EXPECT_DONOR_PROGRESS(BASE_TIME + direction * HOUR);
 }
 
 // TODO: getDebugInfo()
 // TODO: getDebugInfo() while waiting for global window
 // TODO: getDebugInfo() while have and don't have storage task in flight
 // TODO: noteConfigurationChanged()
+
+INSTANTIATE_TEST_CASE_P(P, ShardRebuildingTest, ::testing::Values(false, true));
 
 }} // namespace facebook::logdevice
