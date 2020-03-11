@@ -7244,6 +7244,15 @@ TEST_F(PartitionedRocksDBStoreTest, PrependingSmokeTest) {
         }
         partition_id_t new_p1 = p2 - target_cnt + 1;
 
+        // Thread sanitizer's deadlock detector currently has a hard limit of
+        // 64 simultaneous locks. Don't drop more than 20 partitions at a time
+        // because dropPartitionsUpTo() locks each partition's mutex.
+#if defined(FOLLY_SANITIZE_THREAD)
+        if (new_p1 + 20 < p2) {
+          new_p1 = p2 - 20;
+        }
+#endif
+
         // We'll update first_partition and drop/prepend partitions.
         // Do these 2 operations in random order, defined by this boolean.
         bool order = rnd() % 2 == 0;
