@@ -299,19 +299,23 @@ int main(int argc, const char** argv) {
 
   ThreadID::set(ThreadID::Type::UTILITY, "logdeviced-main");
 
-  auto global_cpu_executor = std::make_shared<folly::CPUThreadPoolExecutor>(15);
-  folly::setCPUExecutor(global_cpu_executor);
-
   std::shared_ptr<PluginRegistry> plugin_registry =
       std::make_shared<PluginRegistry>(
           createPluginVector<DynamicPluginLoader,
                              StaticPluginLoader,
                              BuiltinPluginProvider>());
+
   auto ht_plugin = plugin_registry->getSinglePlugin<HotTextOptimizerPlugin>(
       PluginType::HOT_TEXT_OPTIMIZER);
   if (ht_plugin) {
+    // The program will crash if we have more than 1 thread at the time of
+    // HotTextOptimizer execution.
     (*ht_plugin)();
   }
+
+  // Don't move it before HotTextOptimizer.
+  auto global_cpu_executor = std::make_shared<folly::CPUThreadPoolExecutor>(15);
+  folly::setCPUExecutor(global_cpu_executor);
 
   {
     std::shared_ptr<Logger> logger_plugin =
