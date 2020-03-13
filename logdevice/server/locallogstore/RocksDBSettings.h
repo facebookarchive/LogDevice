@@ -64,6 +64,26 @@ namespace facebook { namespace logdevice {
 
 class StatsHolder;
 
+// Some customized behaviour of rocksdb write-ahead log files, moving
+// potentially slow IO operations away from write path and increasing batching.
+// See RocksDBBufferedWALFile for full info.
+enum class WALBufferingMode {
+  // Don't do anything fancy, just stock rocksdb.
+  NONE,
+  // Offload WritableFile::RangeSync() (Linux sync_file_range()) to background
+  // thread.
+  BACKGROUND_RANGE_SYNC,
+  // Offload file writes to background thread. When rocksdb asks us to flush
+  // the writes to the file (usually at the end of a write batch) - trigger the
+  // flush but don't wait for it. Sync/fsync are still synchronous.
+  // Also does BACKGROUND_RANGE_SYNC.
+  BACKGROUND_APPEND,
+  // Like BACKGROUND_APPEND, but the buffer is only flushed if it gets full, or
+  // a sync happens, or file is closed. Sync/fsync are still synchronous.
+  // The buffer may remain unflushed indefinitely if the file is not used.
+  DELAYED_APPEND,
+};
+
 class RocksDBSettings : public SettingsBundle {
  public:
   const char* getName() const override {
@@ -97,8 +117,9 @@ class RocksDBSettings : public SettingsBundle {
   // position.
   int skip_list_lookahead;
 
-  // Do RangeSync() for WAL files in a background thread.
-  bool background_wal_sync;
+  WALBufferingMode wal_buffering;
+
+  uint64_t wal_buffer_size;
 
   // IO priority to request for lo-pri rocksdb threads.
   folly::Optional<std::pair<int, int>> low_ioprio;
