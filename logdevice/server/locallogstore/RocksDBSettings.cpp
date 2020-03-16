@@ -789,60 +789,11 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Storage);
 
   init("rocksdb-background-wal-sync",
-       (bool*)nullptr,
+       &background_wal_sync,
        "true",
        nullptr,
-       "Deprecated and ignored.",
-       SERVER,
-       SettingsCategory::LogsDB);
-
-  init("rocksdb-wal-buffering",
-       &wal_buffering,
-       "background-range-sync",
-       [](const std::string& val) -> WALBufferingMode {
-         if (val == "none") {
-           return WALBufferingMode::NONE;
-         } else if (val == "background-range-sync") {
-           return WALBufferingMode::BACKGROUND_RANGE_SYNC;
-         } else if (val == "background-append") {
-           return WALBufferingMode::BACKGROUND_APPEND;
-         } else if (val == "delayed-append") {
-           return WALBufferingMode::DELAYED_APPEND;
-         }
-         throw boost::program_options::error(
-             "value of --rocksdb-wal-buffering must be one of: "
-             "background-range-sync, background-append, delayed-append. Got: " +
-             val);
-       },
-       "What write-ahead log operations to offload from write path to "
-       "background thread. 'none' - no offloading, 'background-range-sync' - "
-       "offload optional sync_file_range() calls, 'background-append' - "
-       "offload writes, 'delayed-append' - offload and batch writes.",
-       SERVER,
-       SettingsCategory::LogsDB);
-
-  init("rocksdb-wal-buffer-size",
-       &wal_buffer_size,
-       "8M",
-       parse_positive<uint64_t>(),
-       "WAL buffer size when rocksdb-wal-buffering is set to background-append "
-       "or delayed-append. Some things to consider: "
-       "(1) We allocate 2 buffers of this size for each WAL file. "
-       "(2) There may occasionally be a few such files open at a time, but "
-       "most of the time just one. "
-       "(3) Normally, a new WAL file is created on every flush, which "
-       "typically happens every few hundred MB, but in extreme cases may be "
-       "happeninig every couple MB during rebuilding. "
-       "(4) If append-store-durability is set to 'memory', WAL gets very few "
-       "writes - only occasional small pieces of metadata. "
-       "(5) If this buffer size is set too small, writes may stall if a "
-       "particularly slow background write or sync stalls long enough "
-       "for foreground thread to run out of buffer space. "
-       "(6) If this buffer size is set too big, the allocation/deallocation of "
-       "the oversized buffers may be a significant overhead when creating WAL "
-       "files that never grow big enough to use all of the buffer. (The latter "
-       "limitation is unnecessary: we could make the buffer grow lazily; that "
-       "is not implemented at the moment.)",
+       "Perform all RocksDB WAL syncs on a background thread rather than "
+       "synchronously on a 'fast' storage thread executing the write.",
        SERVER,
        SettingsCategory::LogsDB);
 

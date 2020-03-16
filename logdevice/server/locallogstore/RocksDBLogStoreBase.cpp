@@ -372,6 +372,12 @@ rocksdb::ReadOptions RocksDBLogStoreBase::translateReadOptions(
 }
 
 int RocksDBLogStoreBase::syncWAL() {
+  if (!is_db_local_) {
+    // WS-TODO (#26865326): This is a temporary hack! Fix before shipping warm
+    //                   storage integration to prod!
+    return 0;
+  }
+
   rocksdb::Status status = writer_->syncWAL();
   if (!status.ok()) {
     err = E::LOCAL_LOG_STORE_WRITE;

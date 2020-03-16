@@ -13,7 +13,6 @@
 #include <set>
 #include <thread>
 
-#include <folly/Memory.h>
 #include <rocksdb/db.h>
 #include <rocksdb/env.h>
 
@@ -238,11 +237,7 @@ class RocksDBWritableFile : public rocksdb::WritableFileWrapper {
   // will call Allocate() occasionally, which will get traced.
 
  protected:
-  // Subclasses should avoid calling file_'s methods directly because that
-  // bypasses RocksDBWritableFile's instrumentation.
-  // Call RocksDBWritableFile's methods instead.
   std::unique_ptr<rocksdb::WritableFile> file_;
-
   StatsHolder* stats_;
   FileTracingInfo tracing_;
   bool closed_ = false;
@@ -307,274 +302,36 @@ class RocksDBDirectory : public rocksdb::DirectoryWrapper {
 #endif // LOGDEVICED_ROCKSDB_HAS_WRAPPERS
 
 // A wrapper around rocksdb::WritableFile intended for WAL files.
-// Offloads some operations to a background thread to:
-//  - avoid IO on write path,
-//  - batch writes better,
-//  - support thread-safe Sync()/Fsync() even if underlying WritableFile
-//    implementation doesn't; this is required for rocksdb::DB::SyncWAL() API to
-//    work, which logdevice really needs for correctness.
-// This sacrifices some durability: since Flush() doesn't wait for the bytes
-// to be passed to the operating system, a process crash may result in losing
-// acknowledged writes. Sync()/Fsync() still wait for the flush+sync, so synced
-// writes are still durable, and that's all that really matters for logdevice.
-class RocksDBBufferedWALFile : public RocksDBWritableFile {
+// Overrides RangeSync() to not do the sync but instead schedule it on a
+// background thread.
+class RocksDBBackgroundSyncFile : public RocksDBWritableFile {
  public:
-  RocksDBBufferedWALFile(std::unique_ptr<rocksdb::WritableFile> file,
-                         StatsHolder* stats,
-                         FileTracingInfo tracing,
-                         bool defer_writes,
-                         bool flush_eagerly,
-                         size_t buffer_size);
-  ~RocksDBBufferedWALFile() override;
+  explicit RocksDBBackgroundSyncFile(
+      std::unique_ptr<rocksdb::WritableFile> file,
+      StatsHolder* stats,
+      FileTracingInfo tracing)
+      : RocksDBWritableFile(std::move(file), stats, tracing) {
+    thread_ =
+        std::thread(std::bind(&RocksDBBackgroundSyncFile::ThreadRun, this));
+  }
 
-  rocksdb::Status Append(const rocksdb::Slice& data) override;
-  rocksdb::Status Truncate(uint64_t /*size*/) override;
+  rocksdb::Status RangeSync(uint64_t offset, uint64_t nbytes) override;
+
   rocksdb::Status Close() override;
-  rocksdb::Status Flush() override;
-  rocksdb::Status Sync() override;
-  rocksdb::Status Fsync() override;
-  bool IsSyncThreadSafe() const override;
-  bool use_direct_io() const override;
-  size_t GetRequiredBufferAlignment() const override;
-  uint64_t GetFileSize() override;
-  rocksdb::Status RangeSync(uint64_t /*offset*/, uint64_t /*nbytes*/) override;
+  ~RocksDBBackgroundSyncFile() override;
 
  private:
-  // How this class is used by rocksdb:
-  //  - On each write there's a few Append() calls followed by a Flush() call,
-  //    and sometimes also a RangeSync() call.
-  //    These calls happen single-threadedly (rocksdb holds a mutex).
-  //  - When a WAL sync is requested, rocksdb will call either Sync() or Fsync()
-  //    on this file. This call may overlap with Append()/Flush()/RangeSync()
-  //    calls, but not with any other calls on this file and not with other
-  //    Sync()/Fsync() calls.
-  //  - When rocksdb is done with this WAL file, it'll wait for all outstanding
-  //    Append()/Flush()/RangeSync()/Sync()/Fsync() calls to return, then will
-  //    maybe do Truncate(), then Close().
-  //  - The RangeSync() calls' byte ranges are back to back: the next call's
-  //    start offset is previous call's end offset, and first call's start
-  //    offset is zero.
-  //
-  // Note that concurrency is very limited, which makes RocksDBBufferedWALFile's
-  // task much easier.
-  //
-  // If IsSyncThreadSafe() is false, Sync()/Fsync() calls don't overlap with
-  // Append()/Flush()/RangeSync() calls, so *all* usage of WritableFile is
-  // single-threaded. We'd like RocksDBBufferedWALFile to have
-  // IsSyncThreadSafe() = true even if the underlying WritableFile has
-  // IsSyncThreadSafe() = false.
-  //
-  // In a normal WritableFile implementation, Append() appends to a buffer,
-  // Flush() writes that buffer to the file, RangeSync() calls Linux's
-  // sync_file_range() (on other platforms RangeSync() may be a no-op),
-  // and Sync()/Fsync() call POSIX's sync()/fsync().
-  //
-  // In RocksDBBufferedWALFile:
-  //  - Append() appends to a buffer; if buffer got big enough, asks background
-  //    thread to flush it; if there's already another flush in progress, waits
-  //    for that flush - it's better to block Append() than to let buffer
-  //    grow huge,
-  //  - Flush() does nothing,
-  //  - RangeSync() asks background thread to do the range sync,
-  //  - Sync()/Fsync() asks background thread to do the sync/fsync and waits
-  //    for background thread to do it,
-  //  - Background thread does the requested flushes/syncs in a loop. If
-  //    multiple writes or range syncs were requested while the previous flush
-  //    was happening, all these new operations will be merged together into one
-  //    write and range sync. Additionally, it may intentionally wait for some
-  //    time before doing the operation, to let more writes accumulate and be
-  //    batched together; this is particularly useful on remote storage.
-  //
-  // Note that buffer may remain unflushed indefinitely if writes and syncs
-  // stop. This is currently ok for logdevice because we do SyncWAL() after all
-  // writes that use WAL and need any durability guarantees.
-
-  class Buffer {
-   public:
-    Buffer() = default; // invalid Buffer, can only be assigned to
-    Buffer(size_t capacity, size_t alignment) {
-      ld_check_gt(alignment, 0);
-      ld_check((alignment & (alignment - 1)) == 0);
-      alignment = std::max(alignment, sizeof(void*));
-
-      void* ptr = folly::aligned_malloc(capacity, alignment);
-      if (ptr == nullptr) {
-        ld_critical("folly::aligned_malloc (aka posix_memalign()) failed: %s",
-                    strerror(errno));
-        std::abort();
-      }
-
-      data_ = reinterpret_cast<char*>(ptr);
-      capacity_ = capacity;
-    }
-    ~Buffer() {
-      folly::aligned_free(data_);
-    }
-
-    // Movable, so that we can move two buffers back and forth between
-    // background and foreground threads.
-    Buffer(Buffer&& rhs) noexcept {
-      *this = std::move(rhs);
-    }
-    Buffer& operator=(Buffer&& rhs) {
-      // This move operator should only be used in std::swap(), and std::swap()
-      // should only move into a moved-out Buffer. Otherwise we'll have
-      // unnecessary memory reallocations, so let's assert that doesn't happen.
-      ld_check(data_ == nullptr && capacity_ == 0 && size_ == 0);
-
-      std::swap(data_, rhs.data_);
-      std::swap(capacity_, rhs.capacity_);
-      std::swap(size_, rhs.size_);
-
-      return *this;
-    }
-
-    size_t capacity() const {
-      return capacity_;
-    }
-    size_t size() const {
-      return size_;
-    }
-    bool empty() const {
-      return size_ == 0;
-    }
-    bool full() const {
-      ld_check(data_);
-      return size_ == capacity_;
-    }
-    const char* data() const {
-      ld_check(data_);
-      return data_;
-    }
-
-    size_t append(const char* p, size_t s) {
-      ld_check(data_);
-      ld_check(p != nullptr);
-      size_t n = std::min(s, capacity_ - size_);
-      memcpy(data_ + size_, p, n);
-      size_ += n;
-      return n;
-    }
-
-    void clear() {
-      size_ = 0;
-    }
-
-   private:
-    char* data_ = nullptr;
-    size_t capacity_ = 0;
-
-    size_t size_ = 0;
-  };
-
-  // If true, Append()/Flush() on the underlying file will happen from
-  // background thread, and our Append()/Flush() won't wait for the writes
-  // to complete. This removes rocksdb's guarantee that WAL-enabled write
-  // returns only after it's appended to WAL file - now the file append can be
-  // still in RocksDBBufferedWALFile's buffer when rocksdb acks the write.
-  const bool deferWrites_;
-
-  // If true, our Flush() will initiate a background flush of the buffer (but
-  // won't wait for it). If false, our Flush() does nothing.
-  const bool flushEagerly_;
-
-  // Size of each buffer. We currently use two such buffers, and they are
-  // currently all allocated to full size during construction.
-  const size_t bufferSize_;
-
-  // Protects all fields. Unlocked during background IO operations.
   std::mutex mutex_;
-
-  // Foreground thread notifies this cv when a flush or a sync is needed.
-  // Specifically, after hasWorkPending() or shutdown_ changes from
-  // false to true.
-  std::condition_variable workRequestedCv_;
-
-  // Background thread notifies this cv when a flush or a sync is completed.
-  // Specifically, after workInProgress_ changes from true to false.
-  std::condition_variable workCompletedCv_;
-
-  // Background thread.
+  std::condition_variable cv_;
+  bool shutting_down_ = false;
   std::thread thread_;
 
-  enum class SyncType {
-    NONE = 0,
-    SYNC = 1,
-    FSYNC = 2,
-  };
+  // Byte range that needs background sync.
+  off_t to_sync_begin_{0};
+  std::atomic<off_t> to_sync_end_{0};
 
-  // Bytes appended but not yet picked up for flushing by background thread.
-  // Used only if deferWrites_ is true; otherwise, appends happen directly
-  // from our Append().
-  Buffer writeBuffer_;
-
-  // Things that background thread should do on next iteration.
-  // Doesn't contain things that background thread is doing right now.
-  struct {
-    // If true, call Append()+Flush() on the underlying file for the
-    // contents of writeBuffer_.
-    // Note that it may be false even if writeBuffer_ is nonempty, if we chose
-    // to not delay the flush until more bytes accumulate in the buffer.
-    // Note also that writeBuffer_ may receive more appends between the moment
-    // this flag is set to true and the moment background thread actually picks
-    // up the buffer for the flush; this is important: it allows foreground
-    // thread to do multiple appends to the buffer without stalling if a
-    // background append/sync is taking a long time.
-    bool flushWriteBuffer = false;
-
-    // If not NONE, call Sync()/Fsync() on the underlying file. Used only if
-    // underlying file's IsSyncThreadSafe() is false; otherwise syncs happen
-    // directly from our Sync()/Fsync(), see comment there for explanation.
-    SyncType syncType = SyncType::NONE;
-
-    // If these two are not equal, call RangeSync() on the underlying file.
-    // If flushEagerly_ is false, we don't take range syncs very seriously,
-    // and this range may contain bytes not yet scheduled for flush; in this
-    // case, background thread will truncate the range.
-    size_t rangeSyncFrom = 0;
-    size_t rangeSyncTo = 0;
-  } pending_;
-
-  // True if the background thread is doing a flush or a sync now.
-  bool workInProgress_ = false;
-
-  // If true, background thread should finish up pending work and quit.
-  bool shutdown_ = false;
-
-  // Total bytes we got in Append() calls, including bytes we haven't yet
-  // flushed.
-  std::atomic<size_t> size_ = 0;
-
-  // If a background operation returns an error, we'll store it here and
-  // return it from some foreground operation later. We'll also avoid doing
-  // any more operations (especially appends) on the underlying file if any
-  // previous operations returned an error.
-  rocksdb::Status status_ = rocksdb::Status::OK();
-
-  // mutex_ must be held.
-  bool hasWorkPending() const {
-    return pending_.flushWriteBuffer || pending_.syncType != SyncType::NONE ||
-        pending_.rangeSyncTo > pending_.rangeSyncFrom;
-  }
-
-  // Schedules writeBuffer_'s contents to be flushed.
-  // If writeBuffer_ is empty, does nothing.
-  // The `lock` parameter is just to make it harder to accidentally call this
-  // method without locking mutex_; it's not actually used.
-  void requestWriteBufferFlush(std::unique_lock<std::mutex>& lock);
-
-  // Waits until workInProgress_ = hasWorkPending() = false.
-  void waitForWorkToComplete(std::unique_lock<std::mutex>& lock);
-
-  void flushAndWait(std::unique_lock<std::mutex>& lock) {
-    requestWriteBufferFlush(lock);
-    waitForWorkToComplete(lock);
-  }
-
-  // Implementation of Sync() and Fsync().
-  rocksdb::Status syncImpl(SyncType type);
-
-  void threadRun();
+  void ThreadRun();
+  void JoinThread();
 };
 
 }} // namespace facebook::logdevice
