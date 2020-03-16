@@ -1484,7 +1484,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "After receiving responses to an isLogEmpty() request from an f-majority "
       "of nodes, wait up to this long for more nodes to chime in if there is "
       "not yet consensus.",
-      CLIENT | EXPERIMENTAL,
+      CLIENT | DEPRECATED,
       SettingsCategory::ReadPath);
   init("release-retry-interval",
        &release_retry_interval,
@@ -1650,11 +1650,11 @@ void Settings::defineSettings(SettingEasyInit& init) {
       SettingsCategory::FailureDetector);
   init("enable-is-log-empty-v2",
        &enable_is_log_empty_v2,
-       "false",
+       "true",
        nullptr,
        "When enabled, the V2 implementation will be used to process all "
        "isLogEmpty requests.",
-       CLIENT,
+       CLIENT | DEPRECATED,
        SettingsCategory::Core);
   init(
       "enable-initial-get-cluster-state",

@@ -24,7 +24,6 @@
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/FindKeyRequest.h"
 #include "logdevice/common/GetHeadAttributesRequest.h"
-#include "logdevice/common/IsLogEmptyRequest.h"
 #include "logdevice/common/LogsConfigApiRequest.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PrincipalParser.h"
@@ -1708,10 +1707,6 @@ struct IsLogEmptyGate {
 }; // namespace
 
 int ClientImpl::isLogEmptySync(logid_t logid, bool* empty) noexcept {
-  if (settings_->getSettings()->enable_is_log_empty_v2) {
-    return isLogEmptyV2Sync(logid, empty);
-  }
-
   IsLogEmptyGate gate; // request-reply synchronization
   int rv;
 
@@ -1733,53 +1728,6 @@ int ClientImpl::isLogEmptySync(logid_t logid, bool* empty) noexcept {
 }
 
 int ClientImpl::isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept {
-  if (settings_->getSettings()->enable_is_log_empty_v2) {
-    return isLogEmptyV2(logid, cb);
-  }
-
-  auto cb_wrapper = [cb, logid, start = SteadyClock::now()](
-                        const IsLogEmptyRequest& req, Status st, bool empty) {
-    // log response
-    Worker* w = Worker::onThisThread();
-    if (w) {
-      auto& tracer = w->processor_->api_hits_tracer_;
-      if (tracer) {
-        tracer->traceIsLogEmpty(
-            msec_since(start), logid, req.getFailedShards(st), st, empty);
-      }
-    }
-    cb(st, empty);
-  };
-  std::unique_ptr<Request> req = std::make_unique<IsLogEmptyRequest>(
-      logid,
-      settings_->getSettings()->meta_api_timeout.value_or(timeout_),
-      cb_wrapper,
-      settings_->getSettings()->client_is_log_empty_grace_period);
-  return processor_->postRequest(req);
-}
-
-int ClientImpl::isLogEmptyV2Sync(logid_t logid, bool* empty) noexcept {
-  IsLogEmptyGate gate; // request-reply synchronization
-  int rv;
-
-  ld_check(empty);
-
-  rv = isLogEmptyV2(logid, std::ref(gate));
-
-  if (rv == 0) {
-    gate.wait();
-    if (gate.status == E::OK) {
-      *empty = gate.empty;
-    } else {
-      logdevice::err = gate.status;
-      rv = -1;
-    }
-  }
-
-  return rv;
-}
-
-int ClientImpl::isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept {
   auto cb_wrapper =
       [logid, cb, start = SteadyClock::now()](
           Status st,

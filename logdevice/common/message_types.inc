@@ -61,8 +61,8 @@ MESSAGE_TYPE(CONFIG_CHANGED, 'g')     // we send this on config change
 MESSAGE_TYPE(CONFIG_ADVISORY, 'X')    // used to send the config version
 MESSAGE_TYPE(CONFIG_FETCH, 'z')       // used to fetch a config
 
-MESSAGE_TYPE(IS_LOG_EMPTY, 'e')        // request to know whether a log is empty
-MESSAGE_TYPE(IS_LOG_EMPTY_REPLY, 'E')  // response to IS_LOG_EMPTY request
+// MESSAGE_TYPE(IS_LOG_EMPTY, 'e')        // request to know whether a log is empty
+// MESSAGE_TYPE(IS_LOG_EMPTY_REPLY, 'E')  // response to IS_LOG_EMPTY request
 
 MESSAGE_TYPE(GET_HEAD_ATTRIBUTES, 'h') // request to get log head attributes
                                        // such as trim point and its timestamp

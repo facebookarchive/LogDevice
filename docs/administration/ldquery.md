@@ -209,15 +209,6 @@ A table that dumps information about all the configurations loaded by each node 
 | last\_modified | time | Date and Time when the config was last modified. |
 | last\_loaded | time | Date and Time when the config was last loaded. |
 
-## is\_log\_empty
-This table provides a way to check which logs are empty or not. It is implemented on top of the islogEmpty API (see "logdevice/include/Client.h").
-
-|   Column   |   Type   |   Description   |
-|------------|:--------:|-----------------|
-| log\_id | log_id | ID of the log. |
-| status | string | Response status of running isLogEmpty() on this log. Check the documentation of isLogEmpty() for the list of error codes. |
-| empty | bool | Wether the log is empty, null if "status" != OK. |
-
 ## iterators
 This table allows fetching the list of RocksDB iterators on all storage nodes.
 

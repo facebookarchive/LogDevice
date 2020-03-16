@@ -38,7 +38,6 @@ ClientMessageDispatch::onReceivedImpl(Message* msg,
     case MessageType::NODE_STATS:
     case MessageType::NODE_STATS_AGGREGATE:
     case MessageType::NODE_STATS_AGGREGATE_REPLY:
-    case MessageType::IS_LOG_EMPTY:
     case MessageType::RELEASE:
     case MessageType::SEAL:
     case MessageType::START:

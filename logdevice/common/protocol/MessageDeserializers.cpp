@@ -43,8 +43,6 @@
 #include "logdevice/common/protocol/GET_TRIM_POINT_REPLY_Message.h"
 #include "logdevice/common/protocol/GOSSIP_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
-#include "logdevice/common/protocol/IS_LOG_EMPTY_Message.h"
-#include "logdevice/common/protocol/IS_LOG_EMPTY_REPLY_Message.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_Message.h"
 #include "logdevice/common/protocol/LOGS_CONFIG_API_REPLY_Message.h"
 #include "logdevice/common/protocol/MEMTABLE_FLUSHED_Message.h"

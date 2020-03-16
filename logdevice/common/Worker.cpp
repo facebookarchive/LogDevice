@@ -42,7 +42,6 @@
 #include "logdevice/common/GetRsmSnapshotRequest.h"
 #include "logdevice/common/GetTrimPointRequest.h"
 #include "logdevice/common/GraylistingTracker.h"
-#include "logdevice/common/IsLogEmptyRequest.h"
 #include "logdevice/common/LogIDUniqueQueue.h"
 #include "logdevice/common/LogRecoveryRequest.h"
 #include "logdevice/common/LogsConfigApiRequest.h"
@@ -160,7 +159,6 @@ class WorkerImpl {
   TrimRequestMap runningTrimRequests_;
   GetRsmSnapshotRequestMap runningGetRsmSnapshotRequests_;
   GetTrimPointRequestMap runningGetTrimPoint_;
-  IsLogEmptyRequestMap runningIsLogEmpty_;
   DataSizeRequestMap runningDataSize_;
   GetHeadAttributesRequestMap runningGetHeadAttributes_;
   GetClusterStateRequestMap runningGetClusterState_;
@@ -1138,10 +1136,6 @@ GetTrimPointRequestMap& Worker::runningGetTrimPoint() const {
 
 GetRsmSnapshotRequestMap& Worker::runningGetRsmSnapshotRequests() const {
   return impl_->runningGetRsmSnapshotRequests_;
-}
-
-IsLogEmptyRequestMap& Worker::runningIsLogEmpty() const {
-  return impl_->runningIsLogEmpty_;
 }
 
 DataSizeRequestMap& Worker::runningDataSize() const {

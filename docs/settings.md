@@ -87,7 +87,6 @@ sidebar_label: Settings
 | admin-enabled | Is Admin API enabled? | true | requires&nbsp;restart, **experimental**, server&nbsp;only |
 | append-timeout | Timeout for appends. If omitted the client timeout will be used. |  | client&nbsp;only |
 | enable-hh-wheel-backed-timers | Enables the new version of timers which run on a different thread and use HHWheelTimer backend. | true | requires&nbsp;restart |
-| enable-is-log-empty-v2 | When enabled, the V2 implementation will be used to process all isLogEmpty requests. | false | client&nbsp;only |
 | enable-store-histograms-calculations | Enables estimation of store timeouts per worker per node. | false | server&nbsp;only |
 | external-loglevel | One of the following: critical, error, warning, info, debug, none | critical |  |
 | findkey-timeout | Findkey API call timeout. If omitted the client timeout will be used. |  | client&nbsp;only |
@@ -289,7 +288,6 @@ sidebar_label: Settings
 | authoritative-status-overrides | Force the given authoritative statuses for the given shards. Comma-separated list of overrides, each override of form 'N<node>S<shard>:<status>' or 'N<node>S<shard1>-<shard2>:<status>'. E.g. 'N7:S0-15:UNDERREPLICATION,N8:S2:UNDERREPLICATION' will set status of shards 0-15 of node 7 and shard 2 of node 8 to UNDERREPLICATION. This is useful for recovering from situations where internal logs or metadata logs are unreadable because too many nodes are unavailable or lost their data. In such situation, use this setting to temporarily override the state of shards that are unavailable (not running logdeviced) to UNDERREPLICATION, then, optionally, write SHARD\_UNRECOVERABLE events for the same shards to event log. |  | server&nbsp;only |
 | client-epoch-metadata-cache-size | maximum number of entries in the client-side epoch metadata cache. Set it to 0 to disable the epoch metadata cache. | 50000 | requires&nbsp;restart, client&nbsp;only |
 | client-initial-redelivery-delay | Initial delay to use when reader application rejects a record or gap | 1s |  |
-| client-is-log-empty-grace-period | After receiving responses to an isLogEmpty() request from an f-majority of nodes, wait up to this long for more nodes to chime in if there is not yet consensus. | 5s | **experimental**, client&nbsp;only |
 | client-max-redelivery-delay | Maximum delay to use when reader application rejects a record or gap | 30s |  |
 | client-read-buffer-size | number of records to buffer per read stream in the client object while reading. If this setting is changed on-the-fly, the change will only apply to new reader instances | 512 |  |
 | client-read-flow-control-threshold | threshold (relative to buffer size) at which the client broadcasts window update messages (less means more often) | 0.7 |  |

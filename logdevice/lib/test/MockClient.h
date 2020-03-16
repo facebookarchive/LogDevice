@@ -44,8 +44,6 @@ class MockClient : public Client {
                int(logid_t, std::string, find_key_callback_t, FindKeyAccuracy));
   MOCK_METHOD2(isLogEmptySync, int(logid_t logid, bool* empty));
   MOCK_METHOD2(isLogEmpty, int(logid_t logid, is_empty_callback_t cb));
-  MOCK_METHOD2(isLogEmptyV2Sync, int(logid_t logid, bool* empty));
-  MOCK_METHOD2(isLogEmptyV2, int(logid_t logid, is_empty_callback_t cb));
   MOCK_METHOD5(dataSizeSync,
                int(logid_t logid,
                    std::chrono::milliseconds start,

@@ -32,7 +32,6 @@
 #include "logdevice/server/GET_TRIM_POINT_onReceived.h"
 #include "logdevice/server/GOSSIP_onReceived.h"
 #include "logdevice/server/GOSSIP_onSent.h"
-#include "logdevice/server/IS_LOG_EMPTY_onReceived.h"
 #include "logdevice/server/LOGS_CONFIG_API_onReceived.h"
 #include "logdevice/server/MEMTABLE_FLUSHED_onReceived.h"
 #include "logdevice/server/RECORD_onSent.h"
@@ -161,12 +160,6 @@ Message::Disposition ServerMessageDispatch::onReceivedHandler(
 
     case MessageType::GOSSIP:
       return GOSSIP_onReceived(checked_downcast<GOSSIP_Message*>(msg), from);
-
-    case MessageType::IS_LOG_EMPTY:
-      return IS_LOG_EMPTY_onReceived(
-          checked_downcast<IS_LOG_EMPTY_Message*>(msg),
-          from,
-          permission_status);
 
     case MessageType::MEMTABLE_FLUSHED:
       return MEMTABLE_FLUSHED_onReceived(

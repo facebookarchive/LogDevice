@@ -477,16 +477,6 @@ typedef AdminCommandTable<logid_t,    /* Log ID */
                           std::string /* Details */
                           >
     IsLogEmptyTable;
-typedef AdminCommandTable<logid_t,    /* Log ID */
-                          Status,     /* Result status V1 */
-                          bool,       /* Empty V1 */
-                          uint32_t,   /* isLogEmpty latency */
-                          Status,     /* Result status V2 */
-                          bool,       /* Empty V2 */
-                          uint32_t,   /* isLogEmptyV2 latency */
-                          std::string /* Details */
-                          >
-    IsLogEmptyVersionComparisonTable;
 
 typedef AdminCommandTable<logid_t,                  /* Log id */
                           epoch_t,                  /* Epoch */

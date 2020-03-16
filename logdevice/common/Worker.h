@@ -164,7 +164,6 @@ struct GetHeadAttributesRequestMap;
 struct GetLogInfoRequestMaps;
 struct GetRsmSnapshotRequestMap;
 struct GetTrimPointRequestMap;
-struct IsLogEmptyRequestMap;
 struct LogIDUniqueQueue;
 struct LogRebuildingMap;
 struct LogRecoveryRequestMap;
@@ -426,9 +425,6 @@ class Worker : public WorkContext {
   GetTrimPointRequestMap& runningGetTrimPoint() const;
 
   GetRsmSnapshotRequestMap& runningGetRsmSnapshotRequests() const;
-
-  // a map of all currently running IsLogEmptyRequests
-  IsLogEmptyRequestMap& runningIsLogEmpty() const;
 
   // a map of all currently running dataSizeRequests
   DataSizeRequestMap& runningDataSize() const;

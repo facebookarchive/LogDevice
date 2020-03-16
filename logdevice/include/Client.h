@@ -645,54 +645,8 @@ class Client {
           FindKeyAccuracy accuracy = FindKeyAccuracy::STRICT) noexcept = 0;
 
   /**
-   * NOTE: This API call translates to isLogEmptyV2Sync call, if client setting
-   * --enable-is-log-empty-v2 is set to true. If you intend to use this, please
-   * refer to the comment section of isLogEmptyV2Sync for possbile error codes
-   * as they are slightly different from V1.
-   *
    * Checks wether a particular log is empty. This method is blocking until the
    * state can be determined or an error occurred.
-   *
-   * @param logid is the ID of the log to check
-   * @param empty will be set by this method to either true or false depending
-   *        on the responses received by storage nodes.
-   * @return 0 if the request was successful, -1 otherwise and sets
-   *         logdevice::err to:
-   *     INVALID_PARAM  if the log ID is invalid,
-   *     PARTIAL        if we can't answer with certainty. The log is probably
-   *                    either empty or almost empty, and any records are
-   *                    probably not very recent.
-   *     ACCESS         if permission to access the log was denied
-   *     FAILED         if the state of the log could not be determined.
-   *     NOBUFS         if too many requests are pending to be delivered to
-   *                    Workers
-   *     SHUTDOWN       Processor is shutting down
-   *     INTERNAL       if attempt to write into the request pipe of a
-   *                    Worker failed
-   *     TIMEDOUT       None of the above happened before the client timeout
-   *                    ran out.
-   */
-  virtual int isLogEmptySync(logid_t logid, bool* empty) noexcept = 0;
-
-  /**
-   * NOTE: This API call translates to isLogEmptyV2 call, if client setting
-   * --enable-is-log-empty-v2 is set to true. If you intend to use this, please
-   * refer to the comment section of isLogEmptyV2Sync for possbile error codes
-   * as they are slightly different from V1.
-   *
-   * A non-blocking version of isLogEmptySync().
-   *
-   * @param logid is the ID of the log to check
-   * @param cb will be called once the state of the log is determined or an
-   *        error occurred. The possible status values are the same as for
-   *        isLogEmptySync().
-   * @return 0 if the request was successfuly scheduled, -1 otherwise.
-   */
-  virtual int isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept = 0;
-
-  /**
-   * Like isLogEmptySync, but instead of asking all the nodes, we ask the
-   * sequencer to compare the trim point to the tail record of the log.
    *
    * @param logid is the ID of the log to check
    * @param empty will be set by this method to either true or false depending
@@ -716,18 +670,18 @@ class Client {
    *     TIMEDOUT       None of the above happened before the client timeout
    *                    ran out.
    */
-  virtual int isLogEmptyV2Sync(logid_t logid, bool* empty) noexcept = 0;
+  virtual int isLogEmptySync(logid_t logid, bool* empty) noexcept = 0;
 
   /**
-   * A non-blocking version of isLogEmptyV2Sync().
+   * A non-blocking version of isLogEmptySync().
    *
    * @param logid is the ID of the log to check
    * @param cb will be called once the state of the log is determined or an
    *        error occurred. The possible status values are the same as for
-   *        isLogEmptyV2Sync().
+   *        isLogEmptySync().
    * @return 0 if the request was successfuly scheduled, -1 otherwise.
    */
-  virtual int isLogEmptyV2(logid_t logid, is_empty_callback_t cb) noexcept = 0;
+  virtual int isLogEmpty(logid_t logid, is_empty_callback_t cb) noexcept = 0;
 
   /**
    * Finds the size of stored data for the given log in the given time range,
