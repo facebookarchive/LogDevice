@@ -7,6 +7,7 @@
  */
 #include "logdevice/ops/py_extensions/admin_command_client/AdminCommandClient.h"
 
+#include <thrift/lib/cpp/async/TAsyncSSLSocket.h>
 #include <thrift/lib/cpp/async/TAsyncSocket.h>
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
@@ -39,10 +40,18 @@ AdminCommandClient::asyncSend(
                 command.resize(command.size() - 1);
               }
 
-              auto transport = apache::thrift::async::TAsyncSocket::newSocket(
-                  evb, r.sockaddr, connect_timeout.count());
-              auto channel =
-                  apache::thrift::HeaderClientChannel::newChannel(transport);
+              std::shared_ptr<folly::SSLContext> ssl_context{nullptr};
+              std::shared_ptr<apache::thrift::async::TAsyncSocket> transport;
+              if (r.type == Request::ConnectionType::PLAIN) {
+                transport = apache::thrift::async::TAsyncSocket::newSocket(evb);
+              } else {
+                ssl_context = std::make_shared<folly::SSLContext>();
+                transport = apache::thrift::async::TAsyncSSLSocket::newSocket(
+                    ssl_context, evb);
+              }
+              transport->connect(nullptr, r.sockaddr);
+              auto channel = apache::thrift::HeaderClientChannel::newChannel(
+                  std::move(transport));
               channel->setTimeout(connect_timeout.count());
               auto client = std::make_unique<thrift::AdminAPIAsyncClient>(
                   std::move(channel));
@@ -56,7 +65,7 @@ AdminCommandClient::asyncSend(
               return client
                   ->semifuture_executeAdminCommand(rpc_options, std::move(req))
                   .via(evb)
-                  .thenTry([](auto response) {
+                  .thenTry([ssl_context](auto response) {
                     if (response.hasException()) {
                       return AdminCommandClient::Response{
                           "", false, response.exception().what().toStdString()};

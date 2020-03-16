@@ -21,11 +21,12 @@ std::string send_to_node(AdminCommandClient& self,
                          std::string cmd,
                          std::string host,
                          int port,
-                         float timeout) {
+                         float timeout,
+                         AdminCommandClient::Request::ConnectionType conntype) {
   folly::SocketAddress addr(host, port, true);
   std::vector<AdminCommandClient::Request> reqs;
   std::vector<AdminCommandClient::Response> responses;
-  reqs.emplace_back(addr, cmd);
+  reqs.emplace_back(addr, cmd, conntype);
   {
     gil_release_and_guard guard;
     responses = self.send(reqs, std::chrono::milliseconds(int(timeout * 1000)));
@@ -47,10 +48,14 @@ BOOST_PYTHON_MODULE(admin_command_client) {
                            "An AdminCommandClientException is an error raised "
                            "by the AdminCommandClient");
 
+  enum_<AdminCommandClient::Request::ConnectionType>("ConnectionType")
+      .value("PLAIN", AdminCommandClient::Request::ConnectionType::PLAIN)
+      .value("SSL", AdminCommandClient::Request::ConnectionType::SSL);
+
   class_<AdminCommandClient,
          boost::shared_ptr<AdminCommandClient>,
          boost::noncopyable>("AdminCommandClient")
       .def("send",
            &send_to_node,
-           args("self", "cmd", "host", "port", "timeout"));
+           args("self", "cmd", "host", "port", "timeout", "conntype"));
 }

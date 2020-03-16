@@ -29,11 +29,15 @@ class AdminCommandClient {
 
   class Request {
    public:
-    Request(folly::SocketAddress addr, std::string req)
+    enum class ConnectionType { PLAIN, SSL };
+    Request(folly::SocketAddress addr,
+            std::string req,
+            ConnectionType type = ConnectionType::PLAIN)
         : sockaddr(addr), request(req) {}
 
     folly::SocketAddress sockaddr;
     std::string request;
+    ConnectionType type;
   };
 
   struct Response {

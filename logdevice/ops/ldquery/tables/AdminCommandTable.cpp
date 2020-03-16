@@ -264,7 +264,10 @@ void AdminCommandTable::refillCache(QueryContext& ctx) {
     auto opt_addr = getAddrForNode(i, nodes_configuration);
     if (opt_addr) {
       addr_to_node_id[opt_addr.value()] = i;
-      requests.emplace_back(opt_addr.value(), cmd);
+      auto conn_type = ld_ctx_->use_ssl
+          ? AdminCommandClient::Request::ConnectionType::SSL
+          : AdminCommandClient::Request::ConnectionType::PLAIN;
+      requests.emplace_back(opt_addr.value(), cmd, conn_type);
       ld_ctx_->activeQueryMetadata.contacted_nodes++;
     } else {
       ld_warning("N%d does not have admin_address configured, cannot post the "
