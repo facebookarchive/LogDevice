@@ -1376,6 +1376,7 @@ struct Settings : public SettingsBundle {
   dbg::Level message_tracing_log_level;
   bool rsm_include_read_pointer_in_snapshot;
   SnapshotStoreType rsm_snapshot_store_type;
+  bool rsm_snapshot_enable_dual_writes;
   std::chrono::milliseconds eventlog_snapshotting_period;
   std::chrono::milliseconds logsconfig_snapshotting_period;
 

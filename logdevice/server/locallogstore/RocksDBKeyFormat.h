@@ -43,6 +43,7 @@ enum class KeyPrefix : char {
   PartitionMeta_Dirty = 'D',
   DataKey = 'd',
   LogMeta_LogRemovalTime = 'e',
+  LogMeta_RsmSnapshot = 'E',
   Index = 'I',
   LogMeta_SoftSeal = 'i',
   StoreMeta_ClusterMarker = 'i',
@@ -228,6 +229,8 @@ class LogMetaKey {
         return prefix(KeyPrefix::LogMeta_SoftSeal);
       case LogMetadataType::LOG_REMOVAL_TIME:
         return prefix(KeyPrefix::LogMeta_LogRemovalTime);
+      case LogMetadataType::RSM_SNAPSHOT:
+        return prefix(KeyPrefix::LogMeta_RsmSnapshot);
       // Before adding a new character type, search in the
       // file(this is not the only place where these characters are
       // defined)

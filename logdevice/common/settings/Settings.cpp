@@ -3296,6 +3296,15 @@ void Settings::defineSettings(SettingEasyInit& init) {
       SERVER | CLIENT | REQUIRES_RESTART,
       SettingsCategory::Core);
 
+  init("rsm-snapshot-enable-dual-writes",
+       &rsm_snapshot_enable_dual_writes,
+       "true",
+       nullptr, // no validation
+       "Decides whether snapshots should be written to log based store as "
+       "well(to roll back from local store to log based in case of emergency",
+       SERVER,
+       SettingsCategory::Core);
+
   init("eventlog-snapshotting-period",
        &eventlog_snapshotting_period,
        "1h",

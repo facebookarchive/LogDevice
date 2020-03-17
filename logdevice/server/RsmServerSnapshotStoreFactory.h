@@ -9,6 +9,7 @@
 #pragma once
 
 #include "logdevice/common/replicated_state_machine/RsmSnapshotStoreFactory.h"
+#include "logdevice/server/LocalSnapshotStoreWithFallbacks.h"
 
 namespace facebook { namespace logdevice {
 
@@ -17,14 +18,15 @@ class RsmServerSnapshotStoreFactory {
   static std::unique_ptr<RSMSnapshotStore>
   create(Processor* processor,
          SnapshotStoreType snapshot_store_type,
-         bool /* unused */,
+         bool storage_rw,
          std::string key) {
     ld_info("Attempting to create snapshot store (type:%d, key:%s)",
             static_cast<int>(snapshot_store_type),
             key.c_str());
     if (snapshot_store_type == SnapshotStoreType::LOCAL_STORE) {
-      /* TODO will be supported with Local store Implementation */
-      return nullptr;
+      ld_info("Creating LocalSnapshotStoreWithFallbacks on server");
+      return std::make_unique<LocalSnapshotStoreWithFallbacks>(
+          processor, key, storage_rw /* writable */);
     } else {
       return RsmSnapshotStoreFactory::create(
           processor, snapshot_store_type, key, true /* server */);

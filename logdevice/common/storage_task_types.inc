@@ -68,6 +68,8 @@ STORAGE_TASK_TYPE(UPDATE_PER_EPOCH_METADATA, "UpdatePerEpochLogMetadataStorageTa
 STORAGE_TASK_TYPE(UPDATE_TRIM_POINTS, "UpdateTrimPointsStorageTask", true)
 STORAGE_TASK_TYPE(WRITE_BATCH, "WriteBatchStorageTask", true)
 STORAGE_TASK_TYPE(WRITE_LOG_REBUILDING_CHECKPOINT, "WriteLogRebuildingCheckpointTask", false)
+STORAGE_TASK_TYPE(READ_RSM_SNAPSHOT, "ReadRsmSnapshotStorageTask", false)
+STORAGE_TASK_TYPE(WRITE_RSM_SNAPSHOT, "WriteRsmSnapshotStorageTask", false)
 STORAGE_TASK_TYPE(WRITE_TRIM_METADATA, "WriteTrimMetadataTask", false)
 STORAGE_TASK_TYPE(UPDATE_PARTITION_TIMESTAMP, "Partition::TimestampUpdateTask", false)
 

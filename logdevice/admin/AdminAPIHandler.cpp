@@ -205,15 +205,21 @@ folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
     } else {
       // LogsConfig is has fully replayed. Let's take a snapshot.
       auto snapshot_cb = [=](Status st) mutable {
-        if (st == E::OK) {
-          ld_info("A LogTree snapshot has been taken based on an Admin API "
-                  "request");
-          mpromise->setValue(folly::Unit());
-        } else {
-          mpromise->setException(thrift::OperationError(
-              folly::format("Cannot take a snapshot: {}", error_name(st))
-                  .str()));
-        }
+        switch (st) {
+          case E::OK:
+            ld_info("A LogTree snapshot has been taken based on an Admin API "
+                    "request");
+            mpromise->setValue(folly::Unit());
+            break;
+          case E::UPTODATE:
+            ld_info("A LogTree snapshot already exists at the same version.");
+            mpromise->setValue(folly::Unit());
+            break;
+          default:
+            mpromise->setException(thrift::OperationError(
+                folly::format("Cannot take a snapshot: {}", error_name(st))
+                    .str()));
+        };
       };
       ld_check(w->logsconfig_manager_->getStateMachine());
       // Actually take the snapshot, the callback will fulfill the promise.

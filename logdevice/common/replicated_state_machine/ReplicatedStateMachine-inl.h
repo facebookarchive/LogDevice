@@ -96,6 +96,7 @@ void ReplicatedStateMachine<T, D>::getSnapshot() {
             s->activateSnapshotFetchTimer();
           }
           break;
+        case E::UPTODATE:
         case E::EMPTY:
           s->onBaseSnapshotRetrieved();
           break;
@@ -430,6 +431,7 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
              (int)sync_state_,
              deliver_while_replaying_);
 
+    advertiseVersions(version_);
     if (sync_state_ == SyncState::TAILING || deliver_while_replaying_) {
       notifySubscribers();
     }
@@ -1217,7 +1219,7 @@ void ReplicatedStateMachine<T, D>::activateGracePeriodForSnapshotting() {
             // or not.
             rsm_info(rsm_type_, "Taking a new time-based snapshot");
             auto cb = [&](Status st) {
-              if (st != E::OK) {
+              if (st != E::OK && st != E::UPTODATE) {
                 rsm_error(rsm_type_,
                           "Could not take a time-based snapshot: %s",
                           error_name(st));
@@ -1559,35 +1561,61 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
   const size_t byte_offset_at_time_of_snapshot = delta_log_byte_offset_;
   const size_t offset_at_time_of_snapshot = delta_log_offset_;
 
+  auto ticket = callbackHelper_.ticket();
   auto snapshot_cb = [=](Status st, lsn_t lsn) {
-    if (st == E::OK) {
-      // We don't want to wait for the snapshot to be read before
-      // last_snapshot_* members are modified otherwise
-      // numDeltaRecordsSinceLastSnapshot() and numBytesSinceLastSnapshot() may
-      // report stale values and the user may want to create a snapshot again.
-      // We may have read other snapshots in between so make sure we use max().
-      last_snapshot_byte_offset_ =
-          std::max(byte_offset_at_time_of_snapshot, last_snapshot_byte_offset_);
-      last_snapshot_offset_ =
-          std::max(offset_at_time_of_snapshot, last_snapshot_offset_);
-      rsm_info(rsm_type_,
-               "Snapshot was assigned LSN %s",
-               lsn_to_string(lsn).c_str());
-      onSnapshotCreated(st, payload.size());
-    } else {
-      rsm_info(rsm_type_, "Writing Snapshot failed with st:%s", error_name(st));
-    }
-    snapshot_in_flight_ = false;
-    cb_or_noop(st);
+    ticket.postCallbackRequest([=](ReplicatedStateMachine<T, D>* s) {
+      if (!s) {
+        return;
+      }
+
+      if (st == E::OK) {
+        // We don't want to wait for the snapshot to be read before
+        // last_snapshot_* members are modified otherwise
+        // numDeltaRecordsSinceLastSnapshot() and numBytesSinceLastSnapshot()
+        // may report stale values and the user may want to create a snapshot
+        // again. We may have read other snapshots in between so make sure we
+        // use max().
+        last_snapshot_byte_offset_ = std::max(
+            byte_offset_at_time_of_snapshot, last_snapshot_byte_offset_);
+        last_snapshot_offset_ =
+            std::max(offset_at_time_of_snapshot, last_snapshot_offset_);
+        rsm_info(rsm_type_,
+                 "Snapshot was assigned LSN %s",
+                 lsn_to_string(lsn).c_str());
+        last_written_version_ = lsn;
+        onSnapshotCreated(st, payload.size());
+      } else if (st == E::UPTODATE) {
+        rsm_debug(rsm_type_,
+                  "Didn't write snapshot as it's already UPTODATE(lsn:%s)",
+                  lsn_to_string(lsn).c_str());
+      } else {
+        rsm_info(
+            rsm_type_, "Writing Snapshot failed with st:%s", error_name(st));
+      }
+      snapshot_in_flight_ = false;
+      cb_or_noop(st);
+    });
   };
 
+  rsm_info(rsm_type_,
+           "%swriting snapshot, version_:%s, last_written_version_:%s, "
+           "payload size:%lu",
+           version_ > last_written_version_ ? "" : "Not ",
+           lsn_to_string(version_).c_str(),
+           lsn_to_string(last_written_version_).c_str(),
+           payload.size());
   if (snapshot_store_) {
-    snapshot_store_->writeSnapshot(version_, std::move(payload), snapshot_cb);
+    if (version_ > last_written_version_) {
+      snapshot_in_flight_ = true;
+      snapshot_store_->writeSnapshot(version_, std::move(payload), snapshot_cb);
+    } else {
+      snapshot_cb(E::UPTODATE, last_written_version_);
+    }
   } else {
     postAppendRequest(
         snapshot_log_id_, payload, snapshot_append_timeout_, snapshot_cb);
+    snapshot_in_flight_ = true;
   }
-  snapshot_in_flight_ = true;
 }
 
 template <typename T, typename D>

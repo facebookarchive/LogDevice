@@ -116,6 +116,66 @@ std::string EpochRecoveryMetadata::toStringShort() const {
   return out;
 }
 
+bool RsmSnapshotMetadata::
+operator==(const RsmSnapshotMetadata& rsm_meta) const {
+  return this->version_ == rsm_meta.version_ &&
+      this->update_time_ == rsm_meta.update_time_ &&
+      this->snapshot_blob_ == rsm_meta.snapshot_blob_;
+}
+
+Slice RsmSnapshotMetadata::serialize() const {
+  serialize_buffer_.clear();
+  serialize_buffer_.resize(sizeof(version_) + sizeof(update_time_) +
+                           snapshot_blob_.size());
+  size_t buf_len{0};
+
+  // Write snapshot version
+  memcpy(serialize_buffer_.data() + buf_len, &version_, sizeof(version_));
+  buf_len += sizeof(version_);
+
+  // Write snapshot update time
+  memcpy(
+      serialize_buffer_.data() + buf_len, &update_time_, sizeof(update_time_));
+  buf_len += sizeof(update_time_);
+
+  // Write snapshot blob
+  memcpy(serialize_buffer_.data() + buf_len,
+         snapshot_blob_.data(),
+         snapshot_blob_.size());
+
+  return Slice(serialize_buffer_.data(), serialize_buffer_.size());
+}
+
+int RsmSnapshotMetadata::deserialize(Slice blob) {
+  const char* ptr = blob.ptr();
+  ld_check(ptr != nullptr);
+
+  size_t buf_size{0};
+  std::memcpy(&version_, ptr + buf_size, sizeof(version_));
+  buf_size += sizeof(version_);
+
+  std::memcpy(&update_time_, ptr + buf_size, sizeof(update_time_));
+  buf_size += sizeof(update_time_);
+
+  snapshot_blob_ = std::string(ptr + buf_size, blob.size - buf_size);
+  return 0;
+}
+
+std::string RsmSnapshotMetadata::toString() const {
+  std::string out("[");
+  out.append("base version: ");
+  out.append(lsn_to_string(version_));
+  out.append(", update time: ");
+  out.append(RecordTimestamp(update_time_).toString());
+  out.append(", snapshot size: ");
+  out.append(std::to_string(snapshot_blob_.size()));
+  out.append(", snapshot blob: (");
+  out.append(hexdump_buf(
+      snapshot_blob_.data(), std::min(30ul, snapshot_blob_.size())));
+  out.append(")]");
+  return out;
+}
+
 Slice MutablePerEpochLogMetadata::serialize() const {
   serialize_buffer_.clear();
   serialize_buffer_.resize(sizeInLinearBuffer(data_, epoch_size_map_));
@@ -494,6 +554,8 @@ std::unique_ptr<LogMetadata> LogMetadataFactory::create(LogMetadataType type) {
       return std::make_unique<SoftSealMetadata>();
     case LogMetadataType::LOG_REMOVAL_TIME:
       return std::make_unique<LogRemovalTimeMetadata>();
+    case LogMetadataType::RSM_SNAPSHOT:
+      return std::make_unique<RsmSnapshotMetadata>();
     case LogMetadataType::MAX:
       break;
   }
@@ -542,8 +604,9 @@ void EnumMap<LogMetadataType, std::string, LogMetadataType::MAX>::setValues() {
   set(LogMetadataType::REBUILDING_CHECKPOINT, "REBUILDING_CHECKPOINT");
   set(LogMetadataType::SOFT_SEAL, "SOFT_SEAL");
   set(LogMetadataType::LOG_REMOVAL_TIME, "LOG_REMOVAL_TIME");
+  set(LogMetadataType::RSM_SNAPSHOT, "RSM_SNAPSHOT");
 
-  static_assert((int)LogMetadataType::MAX == 10,
+  static_assert((int)LogMetadataType::MAX == 11,
                 "Added a LogMetadataType? Add it here too.");
 }
 

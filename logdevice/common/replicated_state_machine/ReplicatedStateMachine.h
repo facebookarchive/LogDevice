@@ -631,6 +631,7 @@ class ReplicatedStateMachine {
   const RSMType rsm_type_;
   const logid_t delta_log_id_;
   const logid_t snapshot_log_id_;
+  lsn_t last_written_version_{LSN_INVALID};
 
   // Used by tests.
   boost::uuids::uuid last_uuid_;

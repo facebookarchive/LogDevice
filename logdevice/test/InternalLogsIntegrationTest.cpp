@@ -285,7 +285,13 @@ TEST_F(InternalLogsIntegrationTest,
    * starting state. */
   auto result =
       cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
-  ASSERT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+  if (result.find("Logsconfig snapshot is already uptodate.") ==
+          std::string::npos &&
+      result.find("Successfully created logsconfig snapshot") ==
+          std::string::npos) {
+    ld_info("Received unexpected result:(%s)", result.c_str());
+    ASSERT_EQ(0, 1);
+  }
 
   /* Let's ensure that should be stuck is stuck */
   auto is_starting = cluster->getNode(0).gossipStarting();

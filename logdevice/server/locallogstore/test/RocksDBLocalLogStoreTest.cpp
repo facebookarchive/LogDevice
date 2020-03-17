@@ -875,7 +875,7 @@ TEST_F(RocksDBLocalLogStoreTest, PerEpochLogMetadata) {
   EpochRecoveryMetadata erm_empty;
   ASSERT_FALSE(erm_empty.valid());
   // can be serialized despite invalid
-  EpochRecoveryMetadata erm1, erm2;
+  EpochRecoveryMetadata erm1;
   ASSERT_EQ(0, erm1.deserialize(erm_empty.serialize()));
   ASSERT_EQ(erm_empty, erm1);
   EpochRecoveryMetadata erm_valid(epoch_t(1),
@@ -987,6 +987,45 @@ STORE_TEST(RocksDBLocalLogStoreTest, PerEpochLogMetadata, store) {
                                       LocalLogStore::WriteOptions()));
   ASSERT_EQ(erm_new, erm1);
   ASSERT_EQ(0, store.readPerEpochLogMetadata(logid_t(1), epoch_t(1), &erm2));
+}
+
+TEST_F(RocksDBLocalLogStoreTest, RsmSnapshotMetadataBasic) {
+  RsmSnapshotMetadata meta_empty;
+  ASSERT_FALSE(meta_empty.valid());
+  // can be serialized despite invalid
+  RsmSnapshotMetadata meta1;
+  ASSERT_EQ(0, meta1.deserialize(meta_empty.serialize()));
+  ASSERT_EQ(meta_empty, meta1);
+
+  // serialize and deserialize valid blob
+  RsmSnapshotMetadata valid_meta(
+      LSN_OLDEST, "oldest-blob", std::chrono::milliseconds(1));
+  ASSERT_TRUE(valid_meta.valid());
+  Slice s = valid_meta.serialize();
+  ASSERT_NE(nullptr, s.data);
+  ASSERT_EQ(0, meta1.deserialize(s));
+  ASSERT_EQ(valid_meta, meta1);
+}
+
+STORE_TEST(RocksDBLocalLogStoreTest, RsmSnapshotReadAfterWrite, store) {
+  RsmSnapshotMetadata rsm_meta(
+      lsn_t(1), "snapshot_blob", std::chrono::milliseconds(1));
+  ASSERT_EQ(0, store.writeLogMetadata(logid_t(1), rsm_meta));
+  RsmSnapshotMetadata metadata;
+  ASSERT_EQ(0, store.readLogMetadata(logid_t(1), &metadata));
+  EXPECT_EQ(lsn_t(1), metadata.version_);
+  EXPECT_EQ("snapshot_blob", metadata.snapshot_blob_);
+  EXPECT_EQ(std::chrono::milliseconds(1), metadata.update_time_);
+
+  rsm_meta.version_ = lsn_t(2);
+  rsm_meta.snapshot_blob_ += "+delta";
+  rsm_meta.update_time_ = std::chrono::milliseconds(2);
+  ASSERT_EQ(0, store.writeLogMetadata(logid_t(1), rsm_meta));
+  RsmSnapshotMetadata metadata2;
+  ASSERT_EQ(0, store.readLogMetadata(logid_t(1), &metadata2));
+  EXPECT_EQ(lsn_t(2), metadata2.version_);
+  EXPECT_EQ("snapshot_blob+delta", metadata2.snapshot_blob_);
+  EXPECT_EQ(std::chrono::milliseconds(2), metadata2.update_time_);
 }
 
 STORE_TEST(RocksDBLocalLogStoreTest, EmptyPerEpochLogMetadata, store) {

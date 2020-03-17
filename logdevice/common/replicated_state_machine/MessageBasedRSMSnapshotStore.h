@@ -7,13 +7,10 @@
  */
 #pragma once
 
-#include <chrono>
 #include <string>
 
-#include "logdevice/common/client_read_stream/ClientReadStream.h"
 #include "logdevice/common/replicated_state_machine/RSMSnapshotHeader.h"
 #include "logdevice/common/replicated_state_machine/RSMSnapshotStore.h"
-#include "logdevice/include/LogTailAttributes.h"
 
 /**
  * @file Message based implementation of RSMSnapshotStore.

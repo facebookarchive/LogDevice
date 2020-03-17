@@ -81,6 +81,8 @@ class RSMWriteSnapShot : public AdminCommand {
         semaphore_.wait();
         if (st_ == E::OK) {
           out_.printf("Successfully created eventlog snapshot\r\n");
+        } else if (st_ == E::UPTODATE) {
+          out_.printf("Eventlog snapshot is already uptodate.\r\n");
         } else {
           out_.printf(
               "Could not create eventlog snapshot:%s\r\n", error_name(st_));
@@ -114,6 +116,8 @@ class RSMWriteSnapShot : public AdminCommand {
         semaphore_.wait();
         if (st_ == E::OK) {
           out_.printf("Successfully created logsconfig snapshot\r\n");
+        } else if (st_ == E::UPTODATE) {
+          out_.printf("Logsconfig snapshot is already uptodate.\r\n");
         } else {
           out_.printf(
               "Could not create logsconfig snapshot:%s\r\n", error_name(st_));

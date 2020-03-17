@@ -582,6 +582,35 @@ class RebuildingCheckpointMetadata final : public LogMetadata {
   } data_ __attribute__((__packed__));
 };
 
+class RsmSnapshotMetadata : public LogMetadata {
+ public:
+  RsmSnapshotMetadata() = default;
+  explicit RsmSnapshotMetadata(lsn_t ver,
+                               std::string blob,
+                               std::chrono::milliseconds update_time)
+      : version_(ver),
+        snapshot_blob_(std::move(blob)),
+        update_time_(update_time) {}
+
+  LogMetadataType getType() const override {
+    return LogMetadataType::RSM_SNAPSHOT;
+  }
+
+  bool operator==(const RsmSnapshotMetadata& rsm_meta) const;
+  bool valid() const override {
+    return version_ > LSN_INVALID;
+  }
+
+  Slice serialize() const override;
+  int deserialize(Slice blob) override;
+  std::string toString() const override;
+
+  lsn_t version_{LSN_INVALID};
+  std::string snapshot_blob_;
+  std::chrono::milliseconds update_time_{std::chrono::milliseconds::min()};
+  mutable std::vector<uint8_t> serialize_buffer_;
+};
+
 /**
  * Per-epoch log metadata stored by epoch recovery in the CLEAN phase.
  * Stores information about the EpochRecovery instance, including:
