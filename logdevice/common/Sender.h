@@ -762,6 +762,12 @@ class Sender : public SenderBase {
   ssize_t getTcpSendBufSizeForClient(ClientID client_id) const;
 
   /**
+   * Proxy for Connection::getTcpSendBufOccupancy() for a client Connection.
+   * Returns -1 if Connection not found.
+   */
+  ssize_t getTcpSendBufOccupancyForClient(ClientID client_id) const;
+
+  /**
    * @return if this Sender manages a Connection for the node at configuration
    *         position idx, return that Connection. Otherwise return nullptr.
    *         Deprecated : Do not use this API to get Connection. Use of

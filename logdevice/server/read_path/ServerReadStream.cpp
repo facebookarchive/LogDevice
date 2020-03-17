@@ -281,6 +281,10 @@ void ServerReadStream::getDebugInfo(InfoReadersTable& table) const {
 
   size_t current_meter_level = getCurrentMeterLevel();
   table.set<22>(current_meter_level);
+
+  ssize_t send_buf_occupancy =
+      worker->sender().getTcpSendBufOccupancyForClient(client_id_);
+  table.set<25>(send_buf_occupancy);
 }
 
 void ServerReadStream::addReleasedRecords(

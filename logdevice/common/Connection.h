@@ -452,6 +452,11 @@ class Connection : public TrafficShappingSocket {
   ssize_t getTcpRecvBufOccupancy() const;
 
   /**
+   * Returns the tcp sendbuf occupancy or -1 in case of error.
+   */
+  ssize_t getTcpSendBufOccupancy() const;
+
+  /**
    * Returns total bytes received by socket since it was created.
    */
   uint64_t getNumBytesReceived() const;

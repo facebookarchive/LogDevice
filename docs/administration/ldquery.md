@@ -433,6 +433,7 @@ Tracks all ServerReadStreams. A ServerReadStream is a stream of records sent by 
 | storage\_task\_in\_flight | int | True if there is currently a storage task running on a slow storage thread for reading a batch of records. |
 | csid | string | Client Session ID |
 | rsid | string | Read stream ID |
+| sndbuf\_occupancy | int | Number of bytes in TCP sndbuf waiting to be sent |
 
 ## record
 This table allows fetching information about individual record copies in the cluster.  The user must provide query constraints on the "log\_id" and "lsn" columns.  This table can be useful to introspect where copies of a record are stored and see their metadata.  Do not use it to serve production use cases as this query runs very inneficiently (it bypasses the normal read protocol and instead performs a point query on all storage nodes in the cluster).

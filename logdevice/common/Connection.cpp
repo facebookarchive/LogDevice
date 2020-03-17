@@ -2614,6 +2614,22 @@ ssize_t Connection::getTcpRecvBufOccupancy() const {
   }
 }
 
+ssize_t Connection::getTcpSendBufOccupancy() const {
+  if (isClosed()) {
+    return -1;
+  }
+  int ret;
+  int error = ioctl(fd_, TIOCOUTQ, &ret);
+  if (error != 0) {
+    ld_error("Failed to get sndbuf occupancy for TCP socket %d: %s",
+             fd_,
+             strerror(error));
+    return -1;
+  } else {
+    return ret;
+  }
+}
+
 uint64_t Connection::getNumBytesReceived() const {
   return num_bytes_received_;
 }

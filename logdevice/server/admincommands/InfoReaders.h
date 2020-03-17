@@ -113,7 +113,8 @@ class InfoReaders : public AdminCommand {
                            "Throttled since(msec)",
                            "ReadShaping(Meter Level)",
                            "CSID",
-                           "RSID");
+                           "RSID",
+                           "TCP sndbuf");
 
     auto tables = run_on_all_workers(server_->getProcessor(), [&]() {
       InfoReadersTable t(table);

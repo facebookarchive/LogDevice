@@ -117,6 +117,9 @@ class Readers : public AdminCommandTable {
          "thread for reading a batch of records."},
         {"csid", DataType::TEXT, "Client Session ID"},
         {"rsid", DataType::TEXT, "Read stream ID"},
+        {"sndbuf_occupancy",
+         DataType::INTEGER,
+         "Number of bytes in TCP sndbuf waiting to be sent"},
     };
   }
   std::string getCommandToSend(QueryContext& ctx) const override {

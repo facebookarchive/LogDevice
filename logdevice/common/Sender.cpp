@@ -300,8 +300,15 @@ ssize_t Sender::getTcpSendBufSizeForClient(ClientID client_id) const {
     ld_check(false);
     return -1;
   }
-
   return it->second->getTcpSendBufSize();
+}
+
+ssize_t Sender::getTcpSendBufOccupancyForClient(ClientID client_id) const {
+  auto it = impl_->client_conns_.find(client_id);
+  if (it == impl_->client_conns_.end()) {
+    return -1;
+  }
+  return it->second->getTcpSendBufOccupancy();
 }
 
 void Sender::eraseDisconnectedClients() {
