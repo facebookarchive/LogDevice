@@ -91,7 +91,7 @@ TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
         }
         p.setValue();
       });
-  folly::collectAll(futures).get();
+  folly::collectAllUnsafe(futures).get();
 
   // there should only be 2 config fetched requests
   EXPECT_EQ(2, counter.load());

@@ -203,7 +203,8 @@ void shutdown_server(
         server_to_server_listener->stopAcceptingConnections());
   }
 
-  folly::collectAll(listeners_closed.begin(), listeners_closed.end()).wait();
+  folly::collectAllUnsafe(listeners_closed.begin(), listeners_closed.end())
+      .wait();
 
   connection_listener.reset();
   connection_listener_loop.reset();

@@ -74,7 +74,7 @@ void runBasicTests(std::unique_ptr<ZookeeperClientInMemory> z) {
   z->getData(kBar, getDataCallback);
   z->getData(kBar, C::getDataCallback);
 
-  collectAll(std::move(fs)).wait();
+  collectAllUnsafe(std::move(fs)).wait();
 
   // create
   {
