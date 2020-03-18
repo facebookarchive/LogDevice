@@ -3094,6 +3094,7 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
                     IntegrationTestUtils::ParamScope::ALL)
           // If some reactivations are delayed they still complete quickly
           .setParam("--sequencer-reactivation-delay-secs", "1s..2s")
+          .setParam("--connect-throttle", "0s..0s")
           .setNodes(nodes)
           .setNumLogs(1)
           .useHashBasedSequencerAssignment(100, "10s")
@@ -3102,14 +3103,21 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
           .setConfigLogAttributes(log_attrs)
           .setMetaDataLogsConfig(meta_config)
           .create(NNODES);
+
   std::shared_ptr<Client> client = cluster->createClient();
 
-  ld_info("disabling N1");
+  ld_info("setting N1 as read-only");
   cluster->updateNodeAttributes(1, configuration::StorageState::READ_ONLY, 0);
   cluster->waitForServersToPartiallyProcessConfigUpdate();
 
   // suspend N3
+  ld_info("suspending N3");
   cluster->getNode(3).suspend();
+
+  // wait for nodes to properly startup
+  int rv = cluster->waitUntilAllStartedAndPropagatedInGossip(
+      std::set<node_index_t>{0, 1, 2, 4});
+  ASSERT_NE(-1, rv);
 
   // make sure there is no sequencer running on N0
   auto seq = cluster->getNode(0).sequencerInfo(logid_t{1});
@@ -3117,25 +3125,26 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
 
   // send a write to trigger auto log provisioning
   lsn_t lsn = client->appendSync(logid_t(1), Payload("dummy", 5));
-  EXPECT_NE(LSN_INVALID, lsn);
+  ASSERT_NE(LSN_INVALID, lsn);
 
   // metadata writes should never succeed
-  int rv = cluster->waitForMetaDataLogWrites(std::chrono::steady_clock::now() +
-                                             std::chrono::seconds(1));
-  // the wait should timed out
-  EXPECT_EQ(-1, rv);
+  rv = cluster->waitForMetaDataLogWrites(std::chrono::steady_clock::now() +
+                                         std::chrono::seconds(1));
+  // the wait should time out
+  ASSERT_EQ(-1, rv);
 
   // try to read the metadata log it should also timed out since
   // the record shouldn't be fully written
   std::unique_ptr<Reader> reader(client->createReader(1));
-  reader->setTimeout(std::chrono::milliseconds(500));
   reader->startReading(MetaDataLog::metaDataLogID(logid_t{1}),
                        compose_lsn(EPOCH_MIN, ESN_MIN),
                        LSN_MAX);
   std::vector<std::unique_ptr<DataRecord>> data_out;
   GapRecord gap_out;
+
+  reader->setTimeout(std::chrono::seconds(1)); // don't wait too much
   auto res = reader->read(1, &data_out, &gap_out);
-  EXPECT_EQ(0, res);
+  ASSERT_EQ(0, res);
   rv = reader->stopReading(MetaDataLog::metaDataLogID(logid_t{1}));
   ASSERT_EQ(0, rv);
 
@@ -3156,8 +3165,10 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
   reader->startReading(MetaDataLog::metaDataLogID(logid_t{1}),
                        compose_lsn(EPOCH_MIN, ESN_MIN),
                        LSN_MAX);
+  ld_info("Trying to read a single record from metadata log for logid 1");
+  reader->setTimeout(DEFAULT_TEST_TIMEOUT); // wait as much as possible
   res = reader->read(1, &data_out, &gap_out);
-  EXPECT_EQ(1, res);
+  ASSERT_EQ(1, res);
   rv = reader->stopReading(MetaDataLog::metaDataLogID(logid_t{1}));
   ASSERT_EQ(0, rv);
 
@@ -3165,7 +3176,7 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
   ld_info("reading lsn %s for log 1.", lsn_to_string(lsn).c_str());
   reader->startReading(logid_t{1}, lsn, lsn);
   res = reader->read(1, &data_out, &gap_out);
-  EXPECT_EQ(1, res);
+  ASSERT_EQ(1, res);
 }
 
 // Test that sequencer can get the trim point from storage nodes
