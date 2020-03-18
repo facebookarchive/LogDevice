@@ -467,13 +467,6 @@ struct StatsParams {
     return !is_server && stats_set == StatsSet::DEFAULT;
   }
 
-  // TODO(T40896662) stop supporting this, see task
-  folly::Optional<std::string> additional_entity_suffix{folly::none};
-  StatsParams& addAdditionalEntitySuffix(std::string suffix) {
-    additional_entity_suffix = suffix;
-    return *this;
-  }
-
   /**
    * Below are parameters which can be defined in settings
    * The reason for not passing the settings object is to not have Stats depend
@@ -644,14 +637,6 @@ struct Stats final {
    */
   std::string getName() const {
     return params->get()->getStatsSetName();
-  }
-
-  /**
-   * Returns an additional entity suffix, that stats should also be pushed to.
-   * TODO(T40896662): get rid of this.
-   */
-  folly::Optional<std::string> getAdditionalEntitySuffix() const {
-    return params->get()->additional_entity_suffix;
   }
 
   /**

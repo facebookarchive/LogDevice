@@ -123,11 +123,8 @@ ClientImpl::ClientImpl(std::string cluster_name,
   if (settings->stats_collection_interval.count() > 0 ||
       settings->client_test_force_stats) {
     auto params =
-        StatsParams()
-            .setIsServer(false)
-            .addAdditionalEntitySuffix(".client")
-            .setNodeStatsRetentionTimeOnClients(
-                settings->sequencer_boycotting.node_stats_send_period);
+        StatsParams().setIsServer(false).setNodeStatsRetentionTimeOnClients(
+            settings->sequencer_boycotting.node_stats_send_period);
     // Only create StatsHolder when we're going to collect stats, primarily to
     // avoid instantianting thread-local Stats unnecessarily
     stats_ = std::make_unique<StatsHolder>(std::move(params));
