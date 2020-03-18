@@ -11,13 +11,16 @@ find_package(PythonLibs ${LD_PYTHON_VERSION} REQUIRED)
 if(thriftpy3)
   find_package(Cython 0.28 REQUIRED)
 endif()
+
 set(_boost_py_component1
 	    python${PYTHON_VERSION_MAJOR})
 set(_boost_py_component2
 	    python-py${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
+set(_boost_py_component3
+	    python)
 
-find_package(Boost 1.55.0 MODULE
-  COMPONENTS
+foreach(_boost_py_component ${_boost_py_component1} ${_boost_py_component2} ${_boost_py_component3})
+  find_package(Boost 1.55.0 COMPONENTS
     context
     chrono
     date_time
@@ -26,30 +29,19 @@ find_package(Boost 1.55.0 MODULE
     regex
     system
     thread
-    ${_boost_py_component1}
-)
+    ${_boost_py_component})
+
+
+  if(Boost_FOUND)
+    message(STATUS "Boost Python Component ${_boost_py_component} found")
+    break()
+  else()
+    message(STATUS "Boost Python Component ${_boost_py_component} not found")
+  endif()
+endforeach()
 
 if(NOT Boost_FOUND)
-  message(STATUS "Boost Python Component ${_boost_py_component1} not found")
-  find_package(Boost 1.55.0 MODULE
-    COMPONENTS
-      context
-      chrono
-      date_time
-      filesystem
-      program_options
-      regex
-      system
-      thread
-      ${_boost_py_component2}
-  )
-  if(NOT Boost_FOUND)
-    message(FATAL_ERROR "Boost Python Component ${_boost_py_component2} is also not found, terminating. At least one is required. ${Boost_ERROR_REASON}")
-  else()
-    message(STATUS "Boost Python Component ${_boost_py_component2} found")
-  endif()
-else()
-  message(STATUS "Boost Python Component ${_boost_py_component1} found")
+  message(FATAL_ERROR "Couldn't find any Boost python component. At least one is required, terminating. ${Boost_ERROR_REASON}")
 endif()
 
 set(CMAKE_THREAD_PREFER_PTHREAD ON)
