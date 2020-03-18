@@ -2264,6 +2264,34 @@ std::map<std::string, std::string> Node::gossipState() const {
   return parseGossipState(sendCommand("info gossip"));
 }
 
+std::map<node_index_t, std::string> Node::getRsmVersions(logid_t log_id) const {
+  std::map<node_index_t, std::string> res;
+  std::string column_name;
+  if (log_id == configuration::InternalLogs::CONFIG_LOG_DELTAS) {
+    column_name = "logsconfig";
+  } else if (log_id == configuration::InternalLogs::EVENT_LOG_DELTAS) {
+    column_name = "eventlog";
+  } else {
+    ld_error("Not supported");
+    return res;
+  }
+  column_name += " in-memory version";
+
+  std::string command = "info rsm --json";
+  auto data = sendJsonCommand(command);
+  for (const auto& row : data) {
+    const auto node_id = row.find("Node ID");
+    const auto ver = row.find(column_name);
+    if (node_id == row.end() || ver == row.end()) {
+      continue;
+    }
+    auto node_idx = folly::to<node_index_t>(node_id->second);
+    lsn_t ver_lsn = folly::to<lsn_t>(ver->second);
+    res.emplace(node_idx, lsn_to_string(ver_lsn));
+  }
+  return res;
+}
+
 std::map<std::string, std::pair<std::string, uint64_t>>
 Node::gossipCount() const {
   return parseGossipCount(sendCommand("info gossip"));

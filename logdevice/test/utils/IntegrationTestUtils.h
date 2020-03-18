@@ -1864,6 +1864,8 @@ class Node {
    */
   std::map<std::string, std::string> gossipState() const;
 
+  std::map<node_index_t, std::string> getRsmVersions(logid_t rsm_log) const;
+
   /*
    * Sends "info gossip" to command port via nc.
    *

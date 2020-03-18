@@ -1702,21 +1702,33 @@ Status FailureDetector::getAllRSMVersionsInCluster(
   return E::OK;
 }
 
-Status
-FailureDetector::getRSMVersionsForNode(node_index_t idx,
-                                       std::map<logid_t, lsn_t>& result_out) {
-  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
-  if (nodes_[idx].state_.load() == NodeState::DEAD) {
-    return E::STALE;
-  }
+void FailureDetector::getRSMVersionsForNode(node_index_t idx,
+                                            InfoRsmTable& table) {
+  logid_t logsconfig = configuration::InternalLogs::CONFIG_LOG_DELTAS;
+  lsn_t logsconfig_mem_ver = LSN_INVALID, logsconfig_durable_ver = LSN_INVALID;
+  logid_t eventlog = configuration::InternalLogs::EVENT_LOG_DELTAS;
+  lsn_t eventlog_mem_ver = LSN_INVALID, eventlog_durable_ver = LSN_INVALID;
 
-  result_out = nodes_[idx].rsm_versions_;
-  for (auto rsm : registered_rsms_) {
-    if (result_out.find(rsm) == result_out.end()) {
-      result_out[rsm] = LSN_INVALID;
+  folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
+  auto state = nodes_[idx].state_.load();
+  auto state_str = getNodeStateString(state);
+  if (state != NodeState::DEAD) {
+    auto rsm_versions_for_node = nodes_[idx].rsm_versions_;
+    if (rsm_versions_for_node.find(logsconfig) != rsm_versions_for_node.end()) {
+      logsconfig_mem_ver = rsm_versions_for_node[logsconfig];
+    }
+    if (rsm_versions_for_node.find(eventlog) != rsm_versions_for_node.end()) {
+      eventlog_mem_ver = rsm_versions_for_node[eventlog];
     }
   }
-  return E::OK;
+
+  table.next()
+      .set<0>(idx)
+      .set<1>(state_str)
+      .set<2>(logsconfig_mem_ver)
+      .set<3>(logsconfig_durable_ver)
+      .set<4>(eventlog_mem_ver)
+      .set<5>(eventlog_durable_ver);
 }
 
 Status FailureDetector::getNCMVersionsForNode(

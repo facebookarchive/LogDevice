@@ -649,16 +649,40 @@ TEST_F(InternalLogsIntegrationTest, LCM_VerifyClientCannotTakeSnapshot) {
                .stats()["logsconfig_manager_snapshot_requested"] > 10;
   });
 
-  // Everyone other than N0 should not be taking snapshots
-  // TODO: This needs to change when the snapshot store is Local-Store
-  for (int i = 1; i < 4; i++) {
-    ld_info("Checking N%d stats", i);
-    auto num_snapshots_requested =
-        cluster->getNode(i).stats()["logsconfig_manager_snapshot_requested"];
-    EXPECT_EQ(num_snapshots_requested, 0);
-  }
-
   ld_info("Checking client stats");
   Stats s = dynamic_cast<ClientImpl*>(client.get())->stats()->aggregate();
   EXPECT_EQ(0, s.logsconfig_manager_snapshot_requested);
+}
+
+class VerifyServerSnapshotting : public ::testing::TestWithParam<std::string> {
+};
+INSTANTIATE_TEST_CASE_P(VerifyServerSnapshotting,
+                        VerifyServerSnapshotting,
+                        ::testing::Values("legacy", "log", "local-store"));
+TEST_P(VerifyServerSnapshotting, Basic) {
+  auto snapshot_type = GetParam();
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .enableLogsConfigManager()
+                     .setParam("--rsm-snapshot-store-type", snapshot_type)
+                     .setParam("--logsconfig-snapshotting-period", "1s")
+                     .useHashBasedSequencerAssignment()
+                     .create(4);
+
+  ld_info("Checking N0 stats");
+  auto stats = cluster->getNode(0).stats();
+  wait_until([&]() {
+    return cluster->getNode(0)
+               .stats()["logsconfig_manager_snapshot_requested"] > 10;
+  });
+
+  for (int i = 1; i < 4; i++) {
+    ld_info("Checking N%d stats, store_type:%s", i, snapshot_type.c_str());
+    auto num_snapshots_requested =
+        cluster->getNode(i).stats()["logsconfig_manager_snapshot_requested"];
+    if (snapshot_type == "local-store") {
+      EXPECT_GT(num_snapshots_requested, 0);
+    } else {
+      EXPECT_EQ(num_snapshots_requested, 0);
+    }
+  }
 }

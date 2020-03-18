@@ -16,6 +16,7 @@
 
 #include <folly/Optional.h>
 
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/DomainIsolationChecker.h"
 #include "logdevice/common/NodeHealthStatus.h"
 #include "logdevice/common/NodeID.h"
@@ -252,12 +253,11 @@ class FailureDetector {
    */
   Status getRSMVersion(node_index_t idx, logid_t rsm_type, lsn_t& result_out);
 
-  /** Get all RSM versions for a given node
-   * @return if the Node idx is DEAD, returns E::STALE
-   *         else returns E::OK and populates 'result_out'
+  /** Populate admin command table's fields
+   *  If the Node 'idx' is DEAD, populates LSN_INVALID,
+   *  Else populates from the rsm data structures in FD.
    */
-  Status getRSMVersionsForNode(node_index_t idx,
-                               std::map<logid_t, lsn_t>& result_out);
+  void getRSMVersionsForNode(node_index_t idx, InfoRsmTable& table);
 
   /* Get a RSM's version on all cluster nodes, sorted by lsn
    * @return if the RSM is registered, returns E::OK and populates 'result_out'

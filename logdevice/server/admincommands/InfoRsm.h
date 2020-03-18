@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/server/admincommands/AdminCommand.h"
 
 namespace facebook { namespace logdevice { namespace commands {
@@ -15,12 +16,14 @@ class InfoRsm : public AdminCommand {
   using AdminCommand::AdminCommand;
 
  private:
+  bool json_ = false;
   node_index_t node_idx_{-1};
 
  public:
   void getOptions(boost::program_options::options_description& opts) override {
     opts.add_options()(
-        "node-idx", boost::program_options::value<node_index_t>(&node_idx_));
+        "node-idx", boost::program_options::value<node_index_t>(&node_idx_))(
+        "json", boost::program_options::bool_switch(&json_));
   }
 
   void getPositionalOptions(
@@ -29,14 +32,14 @@ class InfoRsm : public AdminCommand {
   }
 
   std::string getUsage() override {
-    return "info rsm [node idx]";
+    return "info rsm [node idx] [--json]";
   }
 
   void run() override {
-    printPretty();
+    printRsmVersions();
   }
 
-  void printPretty() {
+  void printRsmVersions() {
     auto fd = server_->getServerProcessor()->failure_detector_.get();
     if (fd == nullptr) {
       out_.printf("Failure detector not present.\r\n");
@@ -56,40 +59,22 @@ class InfoRsm : public AdminCommand {
       lo = hi = node_idx_;
     }
 
+    InfoRsmTable table(!json_,
+                       "Node ID",
+                       "State",
+                       "logsconfig in-memory version",
+                       "logsconfig durable version",
+                       "eventlog in-memory version",
+                       "eventlog durable version");
+
     for (node_index_t idx = lo; idx <= hi; ++idx) {
       if (!nodes_configuration->isNodeInServiceDiscoveryConfig(idx)) {
         continue;
       }
-
       std::map<logid_t, lsn_t> node_rsm_info;
-      auto st = fd->getRSMVersionsForNode(idx, node_rsm_info);
-      if (st == E::OK) {
-        std::string node_rsm_str;
-        size_t num_rsms = node_rsm_info.size();
-        size_t i = 0;
-        for (auto& r : node_rsm_info) {
-          node_rsm_str += folly::to<std::string>(r.first.val_) + ":" +
-              lsn_to_string(r.second);
-          if (++i != num_rsms) {
-            node_rsm_str += ", ";
-          }
-        }
-        out_.printf("N%u RSM [%s]; ", idx, node_rsm_str.c_str());
-      } else {
-        out_.printf("N%u RSM []; ", idx);
-      }
-
-      std::array<membership::MembershipVersion::Type, 3> ncm_result;
-      st = fd->getNCMVersionsForNode(idx, ncm_result);
-      if (st == E::OK) {
-        out_.printf("NCM[nc:%lu, seq:%lu, storage:%lu]\r\n",
-                    ncm_result[0].val_,
-                    ncm_result[1].val_,
-                    ncm_result[2].val_);
-      } else {
-        out_.printf("NCM[]\r\n");
-      }
+      fd->getRSMVersionsForNode(idx, table);
     }
+    json_ ? table.printJson(out_) : table.print(out_);
   }
 };
 

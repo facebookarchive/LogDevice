@@ -97,6 +97,16 @@ typedef AdminCommandTable<std::string, /* State */
                           >
     InfoSocketsTable;
 
+typedef AdminCommandTable<
+    node_index_t,             /* Node ID */
+    std::string,              /* State */
+    admin_command_table::LSN, /* logsconfig in memory version */
+    admin_command_table::LSN, /* logsconfig durable version */
+    admin_command_table::LSN, /* eventlog in memory version */
+    admin_command_table::LSN  /* eventlog durable version */
+    >
+    InfoRsmTable;
+
 typedef AdminCommandTable<logid_t,                   /* Log id */
                           int64_t,                   /* Shard */
                           admin_command_table::LSN,  /* Min LSN */
