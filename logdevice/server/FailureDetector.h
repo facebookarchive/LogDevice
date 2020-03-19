@@ -26,6 +26,7 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/protocol/GOSSIP_Message.h"
+#include "logdevice/common/replicated_state_machine/ReplicatedStateMachine.h"
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
@@ -265,6 +266,7 @@ class FailureDetector {
    */
   Status getAllRSMVersionsInCluster(
       logid_t rsm_type,
+      RsmVersionType type,
       std::multimap<lsn_t, node_index_t, std::greater<lsn_t>>& result_out);
 
   /* Get all NCM versions for a given node
@@ -319,6 +321,11 @@ class FailureDetector {
 
     // RSM versions for a Node
     std::map<logid_t, lsn_t> rsm_versions_;
+    std::map<logid_t, lsn_t> rsm_durable_versions_;
+    // Keep rejecting durable versions for a node Nx from misc nodes Ny until
+    // Nx itself indicates so e.g. if a shard is broken, other nodes can send a
+    // higher(but stale) version for Nx, while Nx is sending LSN_INVALID
+    std::map<logid_t, bool> accept_durable_versions_;
 
     // An array containing NCM information in the following order:
     // - nc_version
@@ -578,13 +585,14 @@ class FailureDetector {
   }
 
   // Reads this node's RSM and NCM versions from Processor
-  virtual void fetchVersions();
+  virtual void fetchVersions(RsmVersionType type);
 
   // RSMs for which we need to distribute the versions in the cluster
   std::vector<logid_t> registered_rsms_;
   // keeps track of when RSM version information should be sent along with
   // the GOSSIP_Message
   uint32_t skip_sending_versions_{0};
+  RsmVersionType rsm_version_type_to_send_{RsmVersionType::IN_MEMORY};
 
   // these helper functions are overridden in unit tests
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>

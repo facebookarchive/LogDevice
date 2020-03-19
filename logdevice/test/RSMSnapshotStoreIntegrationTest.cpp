@@ -269,7 +269,8 @@ TEST_P(VerifySequencerOnlyNodes, CanCatchupToLatestRsmState) {
   bool catching_up = true;
   while (catching_up) {
     auto in_mem_versions = cluster->getNode(4).getRsmVersions(
-        configuration::InternalLogs::CONFIG_LOG_DELTAS);
+        configuration::InternalLogs::CONFIG_LOG_DELTAS,
+        RsmVersionType::IN_MEMORY);
     catching_up = !in_mem_versions.size();
     for (auto x : in_mem_versions) {
       if (tail_lsn_str != x.second) {
@@ -281,6 +282,213 @@ TEST_P(VerifySequencerOnlyNodes, CanCatchupToLatestRsmState) {
       }
     }
     std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+}
+
+// Verify that Durable versions with Local Store Impl will eventually
+// be propagated. Also introduce a sequencer only node to verify that
+// its Durable version is LSN_INVALID
+TEST_F(RSMSnapshotStoreIntegrationTest, LocalStoreDurableVersionCatchesUp) {
+  int num_nodes = 4;
+  // Configure nodes
+  Configuration::Nodes nodes;
+  for (int i = 0; i < num_nodes; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole(2);
+  }
+  // Add a sequencer only node (N4)
+  auto& node = nodes[num_nodes];
+  node.generation = 1;
+  node.addSequencerRole();
+  auto factory = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--rsm-snapshot-store-type", "local-store")
+                     .setParam("--logsconfig-snapshotting-period", "5s")
+                     .setParam("--logsconfig-max-delta-records",
+                               "1") // to trigger writeSnapshot() as soon as we
+                                    // write a delta record
+                     .enableLogsConfigManager()
+                     .useHashBasedSequencerAssignment()
+                     .setNodes(nodes);
+
+  std::unique_ptr<Cluster> cluster;
+  std::shared_ptr<Client> client;
+  cluster = factory.create(num_nodes + 1);
+  cluster->waitUntilAllSequencersQuiescent();
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
+  client = cluster->createIndependentClient(
+      DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+  ASSERT_NE(nullptr, client);
+
+  /* write something to the delta log */
+  auto dir = client->makeDirectorySync("/file1", true);
+  ASSERT_NE(nullptr, dir);
+  lsn_t last_delta = dir->version();
+
+  /* Verify that RSMs are at the same lsn everywhere */
+  auto tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  auto tail_lsn_str = lsn_to_string(tail_lsn);
+  bool catching_up;
+  do {
+    catching_up = false;
+    auto in_mem_versions = cluster->getNode(4).getRsmVersions(
+        configuration::InternalLogs::CONFIG_LOG_DELTAS,
+        RsmVersionType::IN_MEMORY);
+    for (auto x : in_mem_versions) {
+      if (tail_lsn_str != x.second) {
+        catching_up = true;
+        ld_info("In Memory versions: N%hu at %s, waiting to catch up till %s",
+                x.first,
+                x.second.c_str(),
+                tail_lsn_str.c_str());
+      }
+    }
+    auto durable_versions = cluster->getNode(3).getRsmVersions(
+        configuration::InternalLogs::CONFIG_LOG_DELTAS,
+        RsmVersionType::DURABLE);
+    for (auto d : durable_versions) {
+      ld_info("Durable versions: N%hu at %s, waiting to catch up till %s",
+              d.first,
+              d.second.c_str(),
+              tail_lsn_str.c_str());
+      if (d.first == 4) {
+        ASSERT_EQ(d.second, "LSN_INVALID");
+      } else if (tail_lsn_str != d.second) {
+        catching_up = true;
+      }
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  } while (catching_up);
+
+  // Now restart all nodes, and not write anything new.
+  // At this stage, verify that
+  // a) RSMs bootstrap from local store and
+  // b) distribute durable versions
+  for (int i = 0; i <= num_nodes; i++) {
+    cluster->getNode(i).kill();
+  }
+  for (int i = 0; i <= num_nodes; i++) {
+    cluster->getNode(i).start();
+    cluster->getNode(i).waitUntilStarted();
+  }
+
+  do {
+    catching_up = false;
+    auto durable_versions = cluster->getNode(2).getRsmVersions(
+        configuration::InternalLogs::CONFIG_LOG_DELTAS,
+        RsmVersionType::DURABLE);
+    for (auto d : durable_versions) {
+      ld_info("Durable versions: N%hu at %s, waiting to catch up till %s",
+              d.first,
+              d.second.c_str(),
+              tail_lsn_str.c_str());
+      if (d.first == 4) {
+        ASSERT_EQ(d.second, "LSN_INVALID");
+      } else if (tail_lsn_str != d.second) {
+        catching_up = true;
+      }
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  } while (catching_up);
+}
+
+TEST_F(RSMSnapshotStoreIntegrationTest,
+       InavlidateDurableVersionOnShardFailure) {
+  int num_nodes = 4;
+  // Configure nodes
+  Configuration::Nodes nodes;
+  for (int i = 0; i < num_nodes; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole(2);
+  }
+  // Add a sequencer only node (N4)
+  auto& node = nodes[num_nodes];
+  node.generation = 1;
+  node.addSequencerRole();
+  auto factory = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--rsm-snapshot-store-type", "local-store")
+                     .setParam("--logsconfig-snapshotting-period", "5s")
+                     .setParam("--logsconfig-max-delta-records",
+                               "1") // to trigger writeSnapshot() as soon as we
+                                    // write a delta record
+                     .enableLogsConfigManager()
+                     .useHashBasedSequencerAssignment()
+                     .setNodes(nodes);
+
+  std::unique_ptr<Cluster> cluster;
+  std::shared_ptr<Client> client;
+  cluster = factory.create(num_nodes + 1);
+  cluster->waitUntilAllSequencersQuiescent();
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
+  client = cluster->createIndependentClient(
+      DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+  ASSERT_NE(nullptr, client);
+
+  /* write something to the delta log */
+  auto dir = client->makeDirectorySync("/file1", true);
+  ASSERT_NE(nullptr, dir);
+
+  /* Verify that RSMs are at the same lsn everywhere */
+  auto tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  auto tail_lsn_str = lsn_to_string(tail_lsn);
+  bool catching_up;
+  do {
+    catching_up = false;
+    auto durable_versions = cluster->getNode(2).getRsmVersions(
+        configuration::InternalLogs::CONFIG_LOG_DELTAS,
+        RsmVersionType::DURABLE);
+    for (auto d : durable_versions) {
+      ld_info("Durable versions: N%hu at %s, waiting to catch up till %s",
+              d.first,
+              d.second.c_str(),
+              tail_lsn_str.c_str());
+      if (d.first == 4) {
+        ASSERT_EQ(d.second, "LSN_INVALID");
+      } else if (tail_lsn_str != d.second) {
+        catching_up = true;
+      }
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  } while (catching_up);
+
+  ld_info("Injecting io_error in N3:S0 to verify that other nodes know that "
+          "N3's durable version is now LSN_INVALID");
+  ASSERT_EQ(
+      true,
+      cluster->getNode(3).injectShardFault("0", "all", "all", "io_error"));
+  // Writing to the delta log so that we can have a new snapshot in memory,
+  // which will trigger a new snapshot write
+  ASSERT_NE(nullptr, client->makeDirectorySync("/file2", true));
+  auto new_tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  auto new_tail_lsn_str = lsn_to_string(new_tail_lsn);
+  std::vector<int> nodes_to_check_n3_on{0, 1, 2, 4};
+  for (auto n : nodes_to_check_n3_on) {
+    bool durable_ver_still_not_invalid = false;
+    do {
+      auto durable_versions = cluster->getNode(n).getRsmVersions(
+          configuration::InternalLogs::CONFIG_LOG_DELTAS,
+          RsmVersionType::DURABLE);
+      for (auto d : durable_versions) {
+        if (d.first != 3) {
+          continue;
+        }
+        ld_info("FD view of N%d -> N%hu(%s), waiting for it to become "
+                "LSN_INVALID",
+                n,
+                d.first,
+                d.second.c_str());
+        durable_ver_still_not_invalid = d.second != "LSN_INVALID";
+      }
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    } while (durable_ver_still_not_invalid);
   }
 }
 

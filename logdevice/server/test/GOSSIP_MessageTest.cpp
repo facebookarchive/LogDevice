@@ -100,7 +100,7 @@ void checkVersions(uint16_t proto,
       proto >= Compatibility::ProtocolVersion::INCLUDE_VERSIONS_IN_GOSSIP) {
     EXPECT_EQ(left_rsm_types.size(), right_rsm_types.size());
     uint8_t num_rsms = left_rsm_types.size();
-    if (!(flags & GOSSIP_Message::HAS_VERSIONS)) {
+    if (!(flags & GOSSIP_Message::HAS_IN_MEM_VERSIONS)) {
       EXPECT_EQ(num_rsms, 0);
     }
     auto left_rsm_type_it = left_rsm_types.begin();
@@ -169,7 +169,7 @@ void serializeAndDeserializeTest(Params params) {
   GOSSIP_Message::versions_node_list_t versions_list;
   if (params.with_versions) {
     node_list[1].is_node_starting_ = true;
-    flags |= GOSSIP_Message::HAS_VERSIONS;
+    flags |= GOSSIP_Message::HAS_IN_MEM_VERSIONS;
     rsm_types.push_back(configuration::InternalLogs::MAINTENANCE_LOG_DELTAS);
     rsm_types.push_back(configuration::InternalLogs::CONFIG_LOG_DELTAS);
     rsm_types.push_back(configuration::InternalLogs::EVENT_LOG_DELTAS);

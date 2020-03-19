@@ -24,7 +24,8 @@ lsn_t LocalSnapshotStoreWithFallbacks::getMaxRsmVersionInCluster() {
   if (fd) {
     std::multimap<lsn_t, node_index_t, std::greater<lsn_t>> all_rsm_versions;
     auto delta_log_id = logid_t(folly::to<logid_t::raw_type>(key_));
-    auto st = fd->getAllRSMVersionsInCluster(delta_log_id, all_rsm_versions);
+    auto st = fd->getAllRSMVersionsInCluster(
+        delta_log_id, RsmVersionType::IN_MEMORY, all_rsm_versions);
     if (st != E::OK || !all_rsm_versions.size()) {
       return LSN_INVALID;
     }

@@ -236,7 +236,8 @@ Message::Disposition GET_RSM_SNAPSHOT_onReceived(GET_RSM_SNAPSHOT_Message* msg,
 
   // 1. Fetch in memory versions present in the cluster for the requested RSM
   std::multimap<lsn_t, node_index_t, std::greater<lsn_t>> versions_in_cluster;
-  auto st = fd->getAllRSMVersionsInCluster(delta_log_id, versions_in_cluster);
+  auto st = fd->getAllRSMVersionsInCluster(
+      delta_log_id, RsmVersionType::IN_MEMORY, versions_in_cluster);
   auto begin_it = versions_in_cluster.begin();
   reply_hdr.st = st;
   if (st == E::OK) {

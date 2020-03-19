@@ -44,7 +44,7 @@ void ReplicatedStateMachine<T, D>::start() {
   // Initialize `data_` with a default value that we'll use if the snapshot
   // log is empty.
   data_ = makeDefaultState(version_);
-  advertiseVersions(version_);
+  advertiseVersions(RsmVersionType::IN_MEMORY, version_);
 
   if (snapshot_log_id_ == LOGID_INVALID) {
     onBaseSnapshotRetrieved();
@@ -431,7 +431,7 @@ bool ReplicatedStateMachine<T, D>::processSnapshot(
              (int)sync_state_,
              deliver_while_replaying_);
 
-    advertiseVersions(version_);
+    advertiseVersions(RsmVersionType::IN_MEMORY, version_);
     if (sync_state_ == SyncState::TAILING || deliver_while_replaying_) {
       notifySubscribers();
     }
@@ -558,7 +558,7 @@ void ReplicatedStateMachine<T, D>::onBaseSnapshotRetrieved() {
            "Base snapshot has version:%s, delta_log_read_ptr:%s",
            lsn_to_string(version_).c_str(),
            lsn_to_string(last_snapshot_last_read_ptr_).c_str());
-  advertiseVersions(version_);
+  advertiseVersions(RsmVersionType::IN_MEMORY, version_);
   activateGracePeriodForSnapshotting();
   gotInitialState(*data_);
   sync_state_ = SyncState::SYNC_DELTAS;
@@ -1334,14 +1334,19 @@ ReplicatedStateMachine<T, D>::SubscriptionHandle::~SubscriptionHandle() {
 }
 
 template <typename T, typename D>
-void ReplicatedStateMachine<T, D>::advertiseVersions(lsn_t version) {
+void ReplicatedStateMachine<T, D>::advertiseVersions(RsmVersionType type,
+                                                     lsn_t version) {
   Worker* w = Worker::onThisThread(false);
   if (!w || !w->settings().server) {
     return;
   }
 
   Processor* p = w->processor_;
-  p->setRSMVersion(delta_log_id_, version);
+  if (type == RsmVersionType::IN_MEMORY) {
+    p->setRSMVersion(delta_log_id_, version);
+  } else if (type == RsmVersionType::DURABLE) {
+    p->setDurableRSMVersion(delta_log_id_, version);
+  }
 }
 
 template <typename T, typename D>
@@ -1404,7 +1409,7 @@ void ReplicatedStateMachine<T, D>::notifySubscribers(const D* delta) {
   }
 
   latest_published_version_ = version_;
-  advertiseVersions(version_);
+  advertiseVersions(RsmVersionType::IN_MEMORY, version_);
 }
 
 template <typename T, typename D>
@@ -1580,17 +1585,18 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
         last_snapshot_offset_ =
             std::max(offset_at_time_of_snapshot, last_snapshot_offset_);
         rsm_info(rsm_type_,
-                 "Snapshot was assigned LSN %s",
+                 "Snapshot with base ver:%s was written successfully",
                  lsn_to_string(lsn).c_str());
         last_written_version_ = lsn;
+        advertiseVersions(RsmVersionType::DURABLE, last_written_version_);
         onSnapshotCreated(st, payload.size());
       } else if (st == E::UPTODATE) {
-        rsm_debug(rsm_type_,
-                  "Didn't write snapshot as it's already UPTODATE(lsn:%s)",
-                  lsn_to_string(lsn).c_str());
+        advertiseVersions(RsmVersionType::DURABLE, lsn);
       } else {
         rsm_info(
             rsm_type_, "Writing Snapshot failed with st:%s", error_name(st));
+        last_written_version_ = LSN_INVALID;
+        advertiseVersions(RsmVersionType::DURABLE, LSN_INVALID);
       }
       snapshot_in_flight_ = false;
       cb_or_noop(st);

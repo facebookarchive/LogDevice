@@ -618,9 +618,19 @@ std::map<logid_t, lsn_t> Processor::getAllRSMVersions() {
   return rsm_versions_; // returns a copy
 }
 
+std::map<logid_t, lsn_t> Processor::getAllDurableRSMVersions() {
+  folly::SharedMutex::ReadHolder rlock(rsm_versions_mutex_);
+  return rsm_durable_versions_; // returns a copy
+}
+
 void Processor::setRSMVersion(logid_t rsm_type, lsn_t ver) {
   folly::SharedMutex::WriteHolder wrlock(rsm_versions_mutex_);
   rsm_versions_[rsm_type] = ver;
+}
+
+void Processor::setDurableRSMVersion(logid_t rsm_type, lsn_t ver) {
+  folly::SharedMutex::WriteHolder wrlock(rsm_versions_mutex_);
+  rsm_durable_versions_[rsm_type] = ver;
 }
 
 worker_id_t Processor::selectWorkerLoadAware() {

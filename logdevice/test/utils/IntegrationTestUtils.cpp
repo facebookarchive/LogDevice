@@ -2264,7 +2264,8 @@ std::map<std::string, std::string> Node::gossipState() const {
   return parseGossipState(sendCommand("info gossip"));
 }
 
-std::map<node_index_t, std::string> Node::getRsmVersions(logid_t log_id) const {
+std::map<node_index_t, std::string>
+Node::getRsmVersions(logid_t log_id, RsmVersionType rsm_type) const {
   std::map<node_index_t, std::string> res;
   std::string column_name;
   if (log_id == configuration::InternalLogs::CONFIG_LOG_DELTAS) {
@@ -2275,7 +2276,14 @@ std::map<node_index_t, std::string> Node::getRsmVersions(logid_t log_id) const {
     ld_error("Not supported");
     return res;
   }
-  column_name += " in-memory version";
+  if (rsm_type == RsmVersionType::IN_MEMORY) {
+    column_name += " in-memory version";
+  } else if (rsm_type == RsmVersionType::DURABLE) {
+    column_name += " durable version";
+  } else {
+    ld_error("Invalid type");
+    return res;
+  }
 
   std::string command = "info rsm --json";
   auto data = sendJsonCommand(command);

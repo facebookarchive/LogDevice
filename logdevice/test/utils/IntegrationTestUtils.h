@@ -28,6 +28,7 @@
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
+#include "logdevice/common/replicated_state_machine/RsmVersionTypes.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/LogsConfigTypes.h"
@@ -1864,7 +1865,8 @@ class Node {
    */
   std::map<std::string, std::string> gossipState() const;
 
-  std::map<node_index_t, std::string> getRsmVersions(logid_t rsm_log) const;
+  std::map<node_index_t, std::string>
+  getRsmVersions(logid_t rsm_log, RsmVersionType rsm_type) const;
 
   /*
    * Sends "info gossip" to command port via nc.

@@ -155,7 +155,7 @@ class GOSSIP_Message : public Message {
 
   // Only one of the two flags can be set at any time
   // The message contains in-memory RSM versions on cluster nodes
-  static const GOSSIP_flags_t HAS_VERSIONS = 1 << 5;
+  static const GOSSIP_flags_t HAS_IN_MEM_VERSIONS = 1 << 5;
   // The message contains durable RSM versions(in local store) on cluster nodes
   static const GOSSIP_flags_t HAS_DURABLE_SNAPSHOT_VERSIONS = 1 << 6;
 

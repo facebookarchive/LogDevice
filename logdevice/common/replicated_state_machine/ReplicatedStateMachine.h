@@ -36,6 +36,7 @@
 #include "logdevice/common/replicated_state_machine/RSMSnapshotHeader.h"
 #include "logdevice/common/replicated_state_machine/RSMSnapshotStore.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-enum.h"
+#include "logdevice/common/replicated_state_machine/RsmVersionTypes.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
@@ -726,7 +727,7 @@ class ReplicatedStateMachine {
   // snapshot.
   void notifySubscribers(const D* delta = nullptr);
 
-  void advertiseVersions(lsn_t version);
+  void advertiseVersions(RsmVersionType type, lsn_t version);
 
   // Discard any entry in pending_confirmation_ that have lsn <=
   // version_ and that we could not confirm either because we fast forwarded

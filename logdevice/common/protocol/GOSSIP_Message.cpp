@@ -72,7 +72,7 @@ void GOSSIP_Message::serialize(ProtocolWriter& writer) const {
     writer.writeVector(legacy_node_list);
   } else {
     writer.writeVector(node_list_);
-    if (flags & HAS_VERSIONS) {
+    if (flags & HAS_IN_MEM_VERSIONS || flags & HAS_DURABLE_SNAPSHOT_VERSIONS) {
       writeVersions(writer);
     }
   }
@@ -106,7 +106,7 @@ MessageReadResult GOSSIP_Message::deserialize(ProtocolReader& reader) {
                    });
   } else {
     reader.readVector(&msg->node_list_, num_nodes);
-    if (msg->flags_ & HAS_VERSIONS ||
+    if (msg->flags_ & HAS_IN_MEM_VERSIONS ||
         msg->flags_ & HAS_DURABLE_SNAPSHOT_VERSIONS) {
       // For future compatibility deserialize messages with durable flag.
       // It will be discarded in this commit of the code, but will be supported

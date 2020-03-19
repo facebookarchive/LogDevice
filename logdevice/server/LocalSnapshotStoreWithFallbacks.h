@@ -31,7 +31,7 @@ class LocalSnapshotStoreWithFallbacks : public RSMSnapshotStore {
   }
 
   lsn_t getMaxRsmVersionInCluster();
-  void getSnapshotImpl(lsn_t min_ver, snapshot_cb_t cb);
+  void getSnapshotImpl(lsn_t, snapshot_cb_t);
   void getSnapshot(lsn_t min_ver, snapshot_cb_t) override;
 
   void writeSnapshot(lsn_t snapshot_ver,

@@ -545,6 +545,8 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   // RSMs will write and FailureDetector will read from this map, so that
   // the versions can be distributed to other cluster nodes
   std::map<logid_t, lsn_t> rsm_versions_;
+  // RSM durable versions(only meant for local store) for this node.
+  std::map<logid_t, lsn_t> rsm_durable_versions_;
   folly::SharedMutex rsm_versions_mutex_;
 
   /**
@@ -590,7 +592,9 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   }
 
   std::map<logid_t, lsn_t> getAllRSMVersions();
+  std::map<logid_t, lsn_t> getAllDurableRSMVersions();
   void setRSMVersion(logid_t rsm_type, lsn_t ver);
+  void setDurableRSMVersion(logid_t rsm_type, lsn_t ver);
 
   /**
    * Selects a worker based on hash of the given `seed` value.

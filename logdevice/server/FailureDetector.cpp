@@ -149,7 +149,7 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
   /* skipping maintenance log as it doesn't run on cluster */
 }
 
-void FailureDetector::fetchVersions() {
+void FailureDetector::fetchVersions(RsmVersionType type) {
   Worker* w = Worker::onThisThread(false);
   if (!w) {
     return;
@@ -159,9 +159,14 @@ void FailureDetector::fetchVersions() {
   Processor* p = w->processor_;
   node_index_t my_idx = getMyNodeID().index();
   auto& this_node = nodes_[my_idx];
-  auto rsm_versions = p->getAllRSMVersions();
+  auto rsm_versions = type == RsmVersionType::IN_MEMORY
+      ? p->getAllRSMVersions()
+      : p->getAllDurableRSMVersions();
+  auto& node_rsm_versions = type == RsmVersionType::IN_MEMORY
+      ? this_node.rsm_versions_
+      : this_node.rsm_durable_versions_;
   for (auto& v : rsm_versions) {
-    this_node.rsm_versions_[v.first] = v.second;
+    node_rsm_versions[v.first] = v.second;
   }
 
   /* Update NCM versions of this node */
@@ -485,7 +490,7 @@ void FailureDetector::gossip() {
                       "Unable to find a node to send a gossip message to");
     // For single node cases, update self's rsm version
     if (nodes_configuration->clusterSize() == 1) {
-      fetchVersions();
+      fetchVersions(RsmVersionType::IN_MEMORY);
     }
     return;
   }
@@ -528,9 +533,20 @@ void FailureDetector::gossip() {
   GOSSIP_Message::node_list_t gossip_node_list;
   GOSSIP_Message::versions_node_list_t versions_list;
   if (!skip_sending_versions_) {
-    fetchVersions();
-    flags |= GOSSIP_Message::HAS_VERSIONS;
+    fetchVersions(rsm_version_type_to_send_);
+    if (rsm_version_type_to_send_ == RsmVersionType::IN_MEMORY) {
+      flags |= GOSSIP_Message::HAS_IN_MEM_VERSIONS;
+    } else if (rsm_version_type_to_send_ == RsmVersionType::DURABLE) {
+      flags |= GOSSIP_Message::HAS_DURABLE_SNAPSHOT_VERSIONS;
+    }
+    // Toggle for next iteration
+    if (processor_->settings()->rsm_snapshot_store_type ==
+        SnapshotStoreType::LOCAL_STORE) {
+      rsm_version_type_to_send_ =
+          RsmVersionType(((int)rsm_version_type_to_send_ + 1) % 2);
+    }
   }
+
   for (auto serv_it = serv_disc->begin(); serv_it != serv_disc->end();
        ++serv_it) {
     if (nodes_.find(serv_it->first) == nodes_.end()) {
@@ -554,13 +570,17 @@ void FailureDetector::gossip() {
     gnode.node_status_ = fdnode.status_;
     gossip_node_list.push_back(gnode);
 
-    if (flags & GOSSIP_Message::HAS_VERSIONS) {
+    if (flags & GOSSIP_Message::HAS_IN_MEM_VERSIONS ||
+        flags & GOSSIP_Message::HAS_DURABLE_SNAPSHOT_VERSIONS) {
       Versions_Node rnode;
       rnode.node_id_ = serv_it->first;
       for (auto& rsm_type : registered_rsms_) {
         lsn_t rsm_version = LSN_INVALID;
-        if (fdnode.rsm_versions_.find(rsm_type) != fdnode.rsm_versions_.end()) {
-          rsm_version = fdnode.rsm_versions_[rsm_type];
+        auto& rsm_ver_map = flags & GOSSIP_Message::HAS_IN_MEM_VERSIONS
+            ? fdnode.rsm_versions_
+            : fdnode.rsm_durable_versions_;
+        if (rsm_ver_map.find(rsm_type) != rsm_ver_map.end()) {
+          rsm_version = rsm_ver_map[rsm_type];
         }
         rnode.rsm_versions_.push_back(rsm_version);
       }
@@ -666,7 +686,6 @@ bool FailureDetector::processFlags(
     // When new instance id comes up, reset all version information
     resetVersions(sender_idx);
   } else {
-    ld_check(true);
     return true;
   }
 
@@ -1608,6 +1627,7 @@ void FailureDetector::updateVersions(
     const GOSSIP_Message& msg,
     std::unordered_set<size_t> node_ids_to_skip,
     std::unordered_set<size_t> nodes_with_new_instances) {
+  node_index_t sender_idx = msg.gossip_node_.index();
   for (const auto& node : msg.versions_) {
     size_t id = node.node_id_;
     if (node_ids_to_skip.find(id) != node_ids_to_skip.end()) {
@@ -1620,6 +1640,9 @@ void FailureDetector::updateVersions(
     bool new_instance_id =
         nodes_with_new_instances.find(id) != nodes_with_new_instances.end();
     auto& fdnode = nodes_[id];
+    auto& fdnode_rsm_versions = msg.flags_ & GOSSIP_Message::HAS_IN_MEM_VERSIONS
+        ? fdnode.rsm_versions_
+        : fdnode.rsm_durable_versions_;
     for (size_t i = 0; i < msg.rsm_types_.size(); ++i) {
       if (std::find(registered_rsms_.begin(),
                     registered_rsms_.end(),
@@ -1632,20 +1655,41 @@ void FailureDetector::updateVersions(
         // the same time, e.g. during rolling-restart where old server and
         // new server may have different rsms registered.
         registered_rsms_.push_back(msg.rsm_types_[i]);
-        fdnode.rsm_versions_[msg.rsm_types_[i]] = LSN_INVALID;
+        fdnode_rsm_versions[msg.rsm_types_[i]] = LSN_INVALID;
       }
-      lsn_t existing = fdnode.rsm_versions_[msg.rsm_types_[i]];
+      lsn_t existing = fdnode_rsm_versions[msg.rsm_types_[i]];
       lsn_t recvd = node.rsm_versions_[i];
-      if ((recvd > existing) || new_instance_id) {
-        ld_debug("Updating RSM versions for N%zu, GOSSIP received from:%s, "
-                 "new_instance_id:%s, rsm_type:%lu, recvd:%s, existing:%s",
-                 id,
-                 msg.gossip_node_.toString().c_str(),
-                 new_instance_id ? "yes" : "no",
-                 msg.rsm_types_[i].val_,
-                 lsn_to_string(recvd).c_str(),
-                 lsn_to_string(existing).c_str());
-        fdnode.rsm_versions_[msg.rsm_types_[i]] = node.rsm_versions_[i];
+      if (id == sender_idx) {
+        // If sender doesn't have a valid version, stop accepting versions
+        // from others
+        fdnode.accept_durable_versions_[msg.rsm_types_[i]] =
+            recvd > LSN_INVALID;
+        fdnode_rsm_versions[msg.rsm_types_[i]] = node.rsm_versions_[i];
+        continue;
+      }
+
+      bool accepting_durable_ver_indirectly = true;
+      if (msg.flags_ & GOSSIP_Message::HAS_DURABLE_SNAPSHOT_VERSIONS) {
+        auto it = fdnode.accept_durable_versions_.find(msg.rsm_types_[i]);
+        if (it != fdnode.accept_durable_versions_.end() && !it->second) {
+          accepting_durable_ver_indirectly = false;
+        }
+      }
+      if (new_instance_id ||
+          (accepting_durable_ver_indirectly && (recvd > existing))) {
+        ld_info("Updating RSM %s versions for N%zu, GOSSIP received from:%s, "
+                "new_instance_id:%s, rsm_type:%lu, "
+                "recvd:%s, existing:%s, accepting indirectly:%d",
+                msg.flags_ & GOSSIP_Message::HAS_IN_MEM_VERSIONS ? "in-memory"
+                                                                 : "durable",
+                id,
+                msg.gossip_node_.toString().c_str(),
+                new_instance_id ? "yes" : "no",
+                msg.rsm_types_[i].val_,
+                lsn_to_string(recvd).c_str(),
+                lsn_to_string(existing).c_str(),
+                accepting_durable_ver_indirectly);
+        fdnode_rsm_versions[msg.rsm_types_[i]] = node.rsm_versions_[i];
       }
     }
 
@@ -1686,6 +1730,7 @@ Status FailureDetector::getRSMVersion(node_index_t idx,
 
 Status FailureDetector::getAllRSMVersionsInCluster(
     logid_t rsm_type,
+    RsmVersionType type,
     std::multimap<lsn_t, node_index_t, std::greater<lsn_t>>& result_out) {
   folly::SharedMutex::ReadHolder read_lock(nodes_mutex_);
   if (std::find(registered_rsms_.begin(), registered_rsms_.end(), rsm_type) ==
@@ -1695,8 +1740,11 @@ Status FailureDetector::getAllRSMVersionsInCluster(
 
   for (auto& node : nodes_) {
     if (node.second.state_.load() != NodeState::DEAD) {
+      auto& node_rsm_versions = type == RsmVersionType::IN_MEMORY
+          ? node.second.rsm_versions_
+          : node.second.rsm_durable_versions_;
       result_out.insert(
-          std::make_pair(node.second.rsm_versions_[rsm_type], node.first));
+          std::make_pair(node_rsm_versions[rsm_type], node.first));
     }
   }
   return E::OK;
@@ -1714,11 +1762,14 @@ void FailureDetector::getRSMVersionsForNode(node_index_t idx,
   auto state_str = getNodeStateString(state);
   if (state != NodeState::DEAD) {
     auto rsm_versions_for_node = nodes_[idx].rsm_versions_;
+    auto rsm_durable_versions_for_node = nodes_[idx].rsm_durable_versions_;
     if (rsm_versions_for_node.find(logsconfig) != rsm_versions_for_node.end()) {
       logsconfig_mem_ver = rsm_versions_for_node[logsconfig];
+      logsconfig_durable_ver = rsm_durable_versions_for_node[logsconfig];
     }
     if (rsm_versions_for_node.find(eventlog) != rsm_versions_for_node.end()) {
       eventlog_mem_ver = rsm_versions_for_node[eventlog];
+      eventlog_durable_ver = rsm_durable_versions_for_node[eventlog];
     }
   }
 
@@ -1746,9 +1797,9 @@ Status FailureDetector::getNCMVersionsForNode(
 void FailureDetector::resetVersions(node_index_t idx) {
   ld_info("Resetting RSM and NCM Versions for N%hu", idx);
   auto& fdnode = nodes_[idx];
-  for (auto& rsm : fdnode.rsm_versions_) {
-    rsm.second = LSN_INVALID;
-  }
+
+  fdnode.rsm_versions_.clear();
+  fdnode.rsm_durable_versions_.clear();
 
   fdnode.ncm_versions_[0] = membership::MembershipVersion::Type(0);
   fdnode.ncm_versions_[1] = membership::MembershipVersion::Type(0);
