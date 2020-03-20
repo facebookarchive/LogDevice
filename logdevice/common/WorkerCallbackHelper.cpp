@@ -12,7 +12,7 @@
 
 namespace facebook { namespace logdevice {
 
-TicketBase::TicketBase() {
+TicketBase::TicketBase(RequestType request_type, int8_t request_priority) {
   auto w = Worker::onThisThread(false);
   if (!w) {
     // Two asserts to differentiate between running on a non-EventLoop
@@ -24,6 +24,8 @@ TicketBase::TicketBase() {
   processor_ = w->processor_->weak_from_this();
   workerIdx_ = w->idx_.val();
   worker_type_ = w->worker_type_;
+  request_type_ = request_type;
+  request_priority_ = request_priority;
 }
 
 int TicketBase::postRequest(std::unique_ptr<Request>& rq) const {

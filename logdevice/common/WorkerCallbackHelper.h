@@ -36,9 +36,14 @@ class Processor;
 
 class TicketBase {
  public:
-  TicketBase();
-  explicit TicketBase(std::nullptr_t)
-      : workerIdx_(-1), worker_type_(WorkerType::GENERAL) {}
+  TicketBase(RequestType request_type, int8_t request_priority);
+  explicit TicketBase(std::nullptr_t,
+                      RequestType request_type,
+                      int8_t request_priority)
+      : workerIdx_(-1),
+        worker_type_(WorkerType::GENERAL),
+        request_type_(request_type),
+        request_priority_(request_priority) {}
   int postRequest(std::unique_ptr<Request>& rq) const;
   int getWorkerId() const {
     return workerIdx_;
@@ -48,10 +53,20 @@ class TicketBase {
     return worker_type_;
   }
 
+  int8_t getRequestPriority() const {
+    return request_priority_;
+  }
+
+  RequestType getRequestType() const {
+    return request_type_;
+  }
+
  private:
   std::weak_ptr<Processor> processor_;
   int workerIdx_;
   WorkerType worker_type_;
+  RequestType request_type_;
+  int8_t request_priority_;
 };
 
 template <class T>
@@ -62,11 +77,19 @@ class WorkerCallbackHelper {
   class Ticket : public TicketBase {
    public:
     // Creates a ticket that behaves as if it referenced a destroyed object.
-    explicit Ticket(std::nullptr_t) : TicketBase(nullptr) {}
+    explicit Ticket(
+        std::nullptr_t,
+        RequestType request_type = RequestType::WORKER_CALLBACK_HELPER,
+        int8_t request_priority = folly::Executor::LO_PRI)
+        : TicketBase(nullptr, request_type, request_priority) {}
 
     void postCallbackRequest(Callback cb) const {
-      std::unique_ptr<Request> rq =
-          std::make_unique<Rq>(getWorkerId(), getWorkerType(), ptr_, cb);
+      std::unique_ptr<Request> rq = std::make_unique<Rq>(getWorkerId(),
+                                                         getWorkerType(),
+                                                         getRequestType(),
+                                                         getRequestPriority(),
+                                                         ptr_,
+                                                         cb);
       const int rv = postRequest(rq);
       if (rv == -1 && err != E::SHUTDOWN) {
         ld_error("Failed to post request: %s.", error_description(err));
@@ -93,16 +116,20 @@ class WorkerCallbackHelper {
 
     typename WeakRefHolder<T>::Ref ptr_;
 
-    explicit Ticket(typename WeakRefHolder<T>::Ref ptr)
-        : TicketBase(), ptr_(std::move(ptr)) {}
+    explicit Ticket(
+        typename WeakRefHolder<T>::Ref ptr,
+        RequestType request_type = RequestType::WORKER_CALLBACK_HELPER,
+        int8_t request_priority = folly::Executor::LO_PRI)
+        : TicketBase(request_type, request_priority), ptr_(std::move(ptr)) {}
   };
 
   explicit WorkerCallbackHelper(T* parent) : parent_(parent) {}
   WorkerCallbackHelper(const WorkerCallbackHelper&) = delete;
   WorkerCallbackHelper& operator=(const WorkerCallbackHelper&) = delete;
 
-  Ticket ticket() const {
-    return Ticket(parent_.ref());
+  Ticket ticket(RequestType request_type = RequestType::WORKER_CALLBACK_HELPER,
+                int8_t request_priority = folly::Executor::LO_PRI) const {
+    return Ticket(parent_.ref(), request_type, request_priority);
   }
 
   WeakRefHolder<T>& getHolder() {
@@ -114,11 +141,14 @@ class WorkerCallbackHelper {
    public:
     Rq(int worker_idx,
        WorkerType worker_type,
+       RequestType request_type,
+       int8_t request_priority,
        typename WeakRefHolder<T>::Ref ptr,
        Callback cb)
-        : Request(RequestType::WORKER_CALLBACK_HELPER),
+        : Request(request_type),
           workerIdx_(worker_idx),
           worker_type_(worker_type),
+          priorty_(request_priority),
           ptr_(ptr),
           cb_(cb) {}
 
@@ -135,9 +165,14 @@ class WorkerCallbackHelper {
       return worker_type_;
     }
 
+    int8_t getExecutorPriority() const override {
+      return priorty_;
+    }
+
    private:
     int workerIdx_;
     WorkerType worker_type_;
+    int8_t priorty_;
     typename WeakRefHolder<T>::Ref ptr_;
     Callback cb_;
   };
