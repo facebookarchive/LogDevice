@@ -149,17 +149,84 @@ RocksDBEnv::WritableFileOpImpl(WritableFileOp op,
     }
   }
 
-  if (!settings_->background_wal_sync ||
-      f.substr(f.size() - std::min(f.size(), 4ul)) != ".log") {
+  if (f.substr(f.size() - std::min(f.size(), 4ul)) != ".log") {
     ld_debug("Opened writable file %s", f.c_str());
     *r =
         std::make_unique<RocksDBWritableFile>(std::move(file), stats_, tracing);
-  } else {
-    ld_debug("Opened writable file %s with background RangeSync() wrapper",
-             f.c_str());
-    *r = std::make_unique<RocksDBBackgroundSyncFile>(
-        std::move(file), stats_, tracing);
+    return rocksdb::Status::OK();
   }
+
+  // It's a write-ahead log file. Wrap it in RocksDBBufferedWALFile if needed.
+  // Adjust buffering mode depending on what the underlying file supports.
+
+  WALBufferingMode mode = settings_->wal_buffering;
+
+  if (file->use_direct_io()) {
+    // Files with use_direct_io() have some additional alignment requirements
+    // that RocksDBBufferedWALFile's background thread doesn't meet.
+    // That's ok because rocksdb disables direct IO for WAL files, so this
+    // branch is not even supposed to be reachable.
+
+    if (!file->IsSyncThreadSafe()) {
+      // Oops, this combination is not supported.
+      // This currently can't happen for two reasons: rocksdb doesn't enable
+      // direct IO for WAL files, and rocksdb's WritableFile has
+      // IsSyncThreadSafe() = true.
+      // If somehow both of these change in future, you'll have to make rocksdb
+      // not use direct IO for wal files (maybe through
+      // Env::OptimizeForLogWrite()), or make underlying WritableFile support
+      // IsSyncThreadSafe(), or make RocksDBBufferedWALFile support direct IO.
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          1,
+          "rocksdb::WritableFile implementation uses direct IO "
+          "and doesn't support thread-safe sync. Such combination "
+          "is not supported by logdevice, and rocksdb is not "
+          "supposed to do that. Please investigate. For now we'll "
+          "be dropping WAL syncs on the floor, which will cause "
+          "all sorts of metadata corruption on crashes.");
+      std::abort();
+    } else if (mode != WALBufferingMode::NONE) {
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(10),
+          1,
+          "rocksdb::WritableFile implementation uses direct IO for WAL file. "
+          "This is unexpected. WAL buffering (rocksdb-wal-buffering setting) "
+          "is not supported in this case.");
+      ld_check(false);
+      mode = WALBufferingMode::NONE;
+    }
+  } else if (!file->IsSyncThreadSafe() &&
+             mode != WALBufferingMode::BACKGROUND_APPEND &&
+             mode != WALBufferingMode::DELAYED_APPEND) {
+    RATELIMIT_INFO(
+        std::chrono::seconds(10),
+        1,
+        "rocksdb::WritableFile implementation doesn't support SyncWAL(), and "
+        "WAL buffering is disabled by rocksdb-wal-buffering. Overriding "
+        "buffering mode to 'background-append' to make SyncWAL() work. "
+        "Consider changing the rocksdb-wal-buffering setting to make this "
+        "explicit.");
+    mode = WALBufferingMode::BACKGROUND_APPEND;
+  }
+
+  if (mode == WALBufferingMode::NONE) {
+    ld_debug("Opened plain WAL file %s", f.c_str());
+    *r =
+        std::make_unique<RocksDBWritableFile>(std::move(file), stats_, tracing);
+    return rocksdb::Status::OK();
+  }
+
+  *r = std::make_unique<RocksDBBufferedWALFile>(
+      std::move(file),
+      stats_,
+      tracing,
+      /* defer_writes */ mode == WALBufferingMode::BACKGROUND_APPEND ||
+          mode == WALBufferingMode::DELAYED_APPEND,
+      /* flush_eagerly */ mode != WALBufferingMode::DELAYED_APPEND,
+      settings_->wal_buffer_size);
+  ld_debug("Created RocksDBBufferedWALFile for %s", f.c_str());
+
   return rocksdb::Status::OK();
 }
 
@@ -545,75 +612,370 @@ rocksdb::Status RocksDBWritableFile::Allocate(uint64_t offset, uint64_t len) {
   return rocksdb::WritableFileWrapper::Allocate(offset, len);
 }
 
-rocksdb::Status RocksDBBackgroundSyncFile::Close() {
-  // Some enqueued RangeSync-s may be dropped on the floor, but that's ok,
-  // they're best-effort anyway.
-  JoinThread();
-  return RocksDBWritableFile::Close();
-}
-RocksDBBackgroundSyncFile::~RocksDBBackgroundSyncFile() {
-  Close();
+RocksDBBufferedWALFile::RocksDBBufferedWALFile(
+    std::unique_ptr<rocksdb::WritableFile> file,
+    StatsHolder* stats,
+    FileTracingInfo tracing,
+    bool defer_writes,
+    bool flush_eagerly,
+    size_t buffer_size)
+    : RocksDBWritableFile(std::move(file), stats, tracing),
+      // If underlying file's sync is not thread safe, we must buffer on our
+      // side to make our sync thread safe.
+      deferWrites_(defer_writes),
+      flushEagerly_(flush_eagerly),
+      bufferSize_(buffer_size) {
+  if (deferWrites_) {
+    // RocksDBEnv ensures this.
+    ld_check(!RocksDBWritableFile::use_direct_io());
+
+    writeBuffer_ =
+        Buffer(bufferSize_, RocksDBWritableFile::GetRequiredBufferAlignment());
+  } else {
+    // RocksDBEnv ensures this.
+    ld_check(RocksDBWritableFile::IsSyncThreadSafe());
+  }
+
+  thread_ = std::thread(std::bind(&RocksDBBufferedWALFile::threadRun, this));
 }
 
-rocksdb::Status RocksDBBackgroundSyncFile::RangeSync(uint64_t offset,
-                                                     uint64_t nbytes) {
-  if (static_cast<off_t>(offset) != to_sync_end_.load()) {
-    // We expect RangeSync() to be called for sequential ranges.
+RocksDBBufferedWALFile::~RocksDBBufferedWALFile() {
+  std::unique_lock lock(mutex_);
+
+  if (!writeBuffer_.empty()) {
+    // RocksDB is supposed to Flush() and Close() before calling destructor.
+    ld_error(
+        "Destroying a WritableFile with nonempty write buffer. Suspicious!");
+    requestWriteBufferFlush(lock);
+  }
+
+  // Sync()/Fsync() are supposed to wait for completion.
+  ld_check(pending_.syncType == SyncType::NONE);
+
+  shutdown_ = true;
+  workRequestedCv_.notify_all();
+  lock.unlock();
+  thread_.join();
+}
+
+rocksdb::Status RocksDBBufferedWALFile::Append(const rocksdb::Slice& data) {
+  std::unique_lock lock(mutex_);
+  size_ += data.size();
+
+  if (!deferWrites_) {
+    if (status_.ok()) {
+      status_ = RocksDBWritableFile::Append(data);
+    }
+    return status_;
+  }
+
+  const char* ptr = data.data();
+  size_t remaining = data.size();
+  while (remaining != 0) {
+    // If buffer is full, wait for background thread to pick it up for flush
+    // and put an empty buffer in its place.
+    if (writeBuffer_.full()) {
+      requestWriteBufferFlush(lock);
+      workCompletedCv_.wait(lock, [&] { return !writeBuffer_.full(); });
+    }
+
+    size_t n = writeBuffer_.append(ptr, remaining);
+    ld_check(n != 0);
+    ptr += n;
+    remaining -= n;
+  }
+
+  return status_;
+}
+
+rocksdb::Status RocksDBBufferedWALFile::Flush() {
+  if (!deferWrites_) {
+    return RocksDBWritableFile::Flush();
+  }
+
+  if (!flushEagerly_) {
+    return rocksdb::Status::OK();
+  }
+
+  std::unique_lock lock(mutex_);
+  requestWriteBufferFlush(lock);
+
+  return status_;
+}
+
+rocksdb::Status RocksDBBufferedWALFile::Truncate(uint64_t size) {
+  std::unique_lock lock(mutex_);
+  flushAndWait(lock);
+  if (status_.ok()) {
+    status_ = RocksDBWritableFile::Truncate(size);
+  }
+  return status_;
+}
+
+rocksdb::Status RocksDBBufferedWALFile::Close() {
+  std::unique_lock lock(mutex_);
+  flushAndWait(lock);
+  // Call Close() even if previous operations had errors.
+  auto s = RocksDBWritableFile::Close();
+  // If background thread encountered any errors, this is our last chance to
+  // report them.
+  return status_.ok() ? s : status_;
+}
+
+rocksdb::Status RocksDBBufferedWALFile::Sync() {
+  return syncImpl(SyncType::SYNC);
+}
+
+rocksdb::Status RocksDBBufferedWALFile::Fsync() {
+  return syncImpl(SyncType::FSYNC);
+}
+
+rocksdb::Status RocksDBBufferedWALFile::syncImpl(SyncType type) {
+  // Deferring Sync() to the background thread has a downside: if underlying
+  // file's Sync() is slow enough and our buffer is small enough, Append()s may
+  // run out of buffer and block while background thread is busy doing a long
+  // Sync(). So we only defer Sync() to background thread if we have to, i.e.
+  // if underlying file's Sync() is not thread safe.
+  std::unique_lock lock(mutex_);
+  if (RocksDBWritableFile::IsSyncThreadSafe()) {
+    // Flush buffered appends (if any), then do the sync right here.
+    flushAndWait(lock); // flush buffered appends
+    if (!status_.ok()) {
+      return status_;
+    }
+    lock.unlock();
+    auto s = type == SyncType::SYNC ? RocksDBWritableFile::Sync()
+                                    : RocksDBWritableFile::Fsync();
+    if (!s.ok()) {
+      lock.lock();
+      status_ = s;
+    }
+    return s;
+  } else {
+    // Request a flush and a sync, then wait for them.
+
+    requestWriteBufferFlush(lock);
+
+    bool had_work = hasWorkPending();
+
+    pending_.syncType = std::max(pending_.syncType, type);
+
+    ld_check(hasWorkPending());
+    if (!had_work) {
+      workRequestedCv_.notify_all();
+    }
+
+    waitForWorkToComplete(lock);
+
+    return status_;
+  }
+}
+
+bool RocksDBBufferedWALFile::IsSyncThreadSafe() const {
+  return true;
+}
+
+bool RocksDBBufferedWALFile::use_direct_io() const {
+  return deferWrites_ ? false : RocksDBWritableFile::use_direct_io();
+}
+
+size_t RocksDBBufferedWALFile::GetRequiredBufferAlignment() const {
+  return deferWrites_ ? 1 : RocksDBWritableFile::GetRequiredBufferAlignment();
+}
+
+uint64_t RocksDBBufferedWALFile::GetFileSize() {
+  return deferWrites_ ? size_.load(std::memory_order_relaxed)
+                      : RocksDBWritableFile::GetFileSize();
+}
+
+rocksdb::Status RocksDBBufferedWALFile::RangeSync(uint64_t from,
+                                                  uint64_t nbytes) {
+  std::unique_lock lock(mutex_);
+
+  if (nbytes == 0) {
+    return status_;
+  }
+
+  uint64_t to = from + nbytes;
+  ld_check(to >= from);
+  ld_check(to <= size_.load()); // shouldn't sync past end of file
+
+  if (from != pending_.rangeSyncTo) {
+    // We expect the ranges passed to RangeSync() to be back to back: each
+    // range starting exactly where the previous one ended, and first range
+    // starting at zero. This allows us to easily merge multiple calls into one
+    // if background thread is falling behind.
     RATELIMIT_WARNING(
         std::chrono::seconds(10),
         1,
-        "Something changed in rocksdb implementation around RangeSync() usage. "
-        "Please check if RocksDBBackgroundSyncFile behavior still makes "
-        "sense.");
-  }
-  std::lock_guard<std::mutex> lock(mutex_);
-  to_sync_begin_ = std::min(to_sync_begin_, static_cast<off_t>(offset));
-  to_sync_end_.store(
-      std::max(to_sync_end_.load(), static_cast<off_t>(offset + nbytes)));
-  cv_.notify_one();
+        "rocksdb::WritableFile::RangeSync() called for nonconsecutive ranges "
+        "([%lu, %lu] -> [%lu, %lu]). Something changed in rocksdb "
+        "implementation around RangeSync() usage. "
+        "Please check if RocksDBBufferedWALFile::RangeSync() behavior still "
+        "makes "
+        "sense.",
+        pending_.rangeSyncFrom,
+        pending_.rangeSyncTo,
+        from,
+        to);
 
-  return rocksdb::Status::OK();
+    if (to <= pending_.rangeSyncTo) {
+      return status_;
+    }
+  }
+
+  if (flushEagerly_) {
+    // Make sure the bytes to be range synced are flushed.
+    requestWriteBufferFlush(lock);
+  } else {
+    // We might request a range sync for a range that hasn't yet been flushed
+    // or even requested for flushing. The background thread will truncate the
+    // range. The precise ranges of range syncs are not important in general,
+    // and even less important in situations when we would want to use
+    // flushEagerly_ = false.
+  }
+
+  bool had_work = hasWorkPending();
+
+  pending_.rangeSyncTo = to;
+
+  if (hasWorkPending() && !had_work) {
+    workRequestedCv_.notify_all();
+  }
+
+  return status_;
 }
 
-void RocksDBBackgroundSyncFile::ThreadRun() {
-  ThreadID::set(ThreadID::Type::UTILITY, "ld:wal-sync");
+void RocksDBBufferedWALFile::requestWriteBufferFlush(
+    std::unique_lock<std::mutex>& /* caller_has_locked_the_mutex */) {
+  if (writeBuffer_.empty()) {
+    return;
+  }
 
-  std::unique_lock<std::mutex> lock(mutex_);
-  while (!shutting_down_) {
-    off_t end;
-    while ((end = to_sync_end_.load()) > to_sync_begin_ && !shutting_down_) {
-      off_t offset = to_sync_begin_;
-      off_t nbytes = end - to_sync_begin_;
-      to_sync_begin_ = end;
+  bool had_work = hasWorkPending();
 
-      lock.unlock();
-      auto status = RocksDBWritableFile::RangeSync(offset, nbytes);
-      if (!status.ok()) {
-        RATELIMIT_ERROR(std::chrono::seconds(2),
-                        2,
-                        "RangeSync() failed with status %s",
-                        status.ToString().c_str());
+  pending_.flushWriteBuffer = true;
+
+  ld_check(hasWorkPending());
+  if (!had_work) {
+    workRequestedCv_.notify_all();
+  }
+}
+
+void RocksDBBufferedWALFile::waitForWorkToComplete(
+    std::unique_lock<std::mutex>& lock) {
+  workCompletedCv_.wait(
+      lock, [&] { return !hasWorkPending() && !workInProgress_; });
+}
+
+void RocksDBBufferedWALFile::threadRun() {
+  ThreadID::set(ThreadID::Type::UTILITY, "ld:wal");
+
+  std::unique_lock lock(mutex_);
+
+  // Buffer holding data we're currently appending to the underlying file.
+  // Swapped back and forth with writeBuffer_.
+  Buffer second_buffer;
+  if (deferWrites_) {
+    second_buffer =
+        Buffer(bufferSize_, RocksDBWritableFile::GetRequiredBufferAlignment());
+  }
+
+  // How much we Append()ed to the underlying file.
+  uint64_t bytes_flushed = 0;
+
+  // How far we actually range-synced, as opposed to pending_.rangeSyncFrom,
+  // which is how far we promised to sync.
+  uint64_t range_actually_synced_to = 0;
+
+  while (true) {
+    workRequestedCv_.wait(lock, [&] { return hasWorkPending() || shutdown_; });
+
+    // Finish all work even if shutdown_ is true.
+    if (!hasWorkPending()) {
+      ld_check(shutdown_);
+      break;
+    }
+
+    // Move all information about pending operations into local variables,
+    // then unlock mutex and do the operations.
+    second_buffer.clear();
+    if (pending_.flushWriteBuffer) {
+      std::swap(writeBuffer_, second_buffer);
+      pending_.flushWriteBuffer = false;
+    }
+    SyncType sync = pending_.syncType;
+    pending_.syncType = SyncType::NONE;
+    size_t range_sync_to = pending_.rangeSyncTo;
+    pending_.rangeSyncFrom = pending_.rangeSyncTo;
+
+    ld_check(!hasWorkPending());
+
+    rocksdb::Status s = status_;
+    workInProgress_ = true;
+
+    lock.unlock();
+
+    // Append.
+    if (!second_buffer.empty()) {
+      if (s.ok()) {
+        s = RocksDBWritableFile::Append(
+            rocksdb::Slice(second_buffer.data(), second_buffer.size()));
+        if (!s.ok()) {
+          ld_error("Append() failed: %s", s.ToString().c_str());
+        }
       }
-      lock.lock();
+
+      if (s.ok()) {
+        s = RocksDBWritableFile::Flush();
+        if (!s.ok()) {
+          ld_error("Flush() failed: %s", s.ToString().c_str());
+        }
+      }
+
+      if (s.ok()) {
+        bytes_flushed += second_buffer.size();
+      }
     }
 
-    if (!shutting_down_) {
-      cv_.wait(lock);
+    // Sync/fsync.
+    if (s.ok() && sync != SyncType::NONE) {
+      s = sync == SyncType::SYNC ? RocksDBWritableFile::Sync()
+                                 : RocksDBWritableFile::Fsync();
+      if (!s.ok()) {
+        ld_error("%s failed: %s",
+                 sync == SyncType::SYNC ? "Sync" : "Fsync",
+                 s.ToString().c_str());
+      }
     }
-  }
-}
 
-void RocksDBBackgroundSyncFile::JoinThread() {
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (shutting_down_) {
-      return;
+    // Range sync.
+    if (deferWrites_) {
+      // If we're asked to sync something we haven't flushed yet, sync only what
+      // we flushed for now, but sync the missing part later. This messes up
+      // alignment: sync_file_range() rounds the range to page boundaries, so
+      // we may end up requesting sync for the same page twice, but that should
+      // be negligible because usually the ranges are big compared to pages.
+      range_sync_to = std::min(range_sync_to, bytes_flushed);
     }
-    shutting_down_ = true;
+    if (s.ok() && range_sync_to > range_actually_synced_to) {
+      s = RocksDBWritableFile::RangeSync(
+          range_actually_synced_to, range_sync_to - range_actually_synced_to);
+      if (!s.ok()) {
+        ld_error("RangeSync() failed: %s", s.ToString().c_str());
+      } else {
+        range_actually_synced_to = range_sync_to;
+      }
+    }
+
+    lock.lock();
+
+    if (status_.ok()) {
+      status_ = s;
+    }
+    workInProgress_ = false;
+    workCompletedCv_.notify_all();
   }
-  cv_.notify_one();
-  ld_check(thread_.joinable());
-  thread_.join();
 }
 
 }} // namespace facebook::logdevice
