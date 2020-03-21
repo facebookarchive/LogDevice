@@ -28,6 +28,7 @@
 #include "tables/HistoricalMetadata.h"
 #include "tables/Info.h"
 #include "tables/InfoConfig.h"
+#include "tables/InfoRsm.h"
 #include "tables/Iterators.h"
 #include "tables/LogGroups.h"
 #include "tables/LogRebuildings.h"
@@ -154,6 +155,7 @@ LDQuery::LDQuery(std::string config_path,
   table_registry_.registerTable<tables::HistoricalMetadataLegacy>(ctx_);
   table_registry_.registerTable<tables::Info>(ctx_);
   table_registry_.registerTable<tables::InfoConfig>(ctx_);
+  table_registry_.registerTable<tables::InfoRsm>(ctx_);
   table_registry_.registerTable<tables::Iterators>(ctx_);
   table_registry_.registerTable<tables::LogGroups>(ctx_);
   table_registry_.registerTable<tables::LogRebuildings>(ctx_);

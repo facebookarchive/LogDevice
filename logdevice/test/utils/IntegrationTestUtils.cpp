@@ -2288,12 +2288,12 @@ Node::getRsmVersions(logid_t log_id, RsmVersionType rsm_type) const {
   std::string command = "info rsm --json";
   auto data = sendJsonCommand(command);
   for (const auto& row : data) {
-    const auto node_id = row.find("Node ID");
+    const auto peer_id = row.find("Peer ID");
     const auto ver = row.find(column_name);
-    if (node_id == row.end() || ver == row.end()) {
+    if (peer_id == row.end() || ver == row.end()) {
       continue;
     }
-    auto node_idx = folly::to<node_index_t>(node_id->second);
+    auto node_idx = folly::to<node_index_t>(peer_id->second);
     lsn_t ver_lsn = folly::to<lsn_t>(ver->second);
     res.emplace(node_idx, lsn_to_string(ver_lsn));
   }

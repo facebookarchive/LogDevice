@@ -209,6 +209,19 @@ A table that dumps information about all the configurations loaded by each node 
 | last\_modified | time | Date and Time when the config was last modified. |
 | last\_loaded | time | Date and Time when the config was last loaded. |
 
+## info\_rsm
+Show RSM in-memory and durable version information in the cluster
+
+|   Column   |   Type   |   Description   |
+|------------|:--------:|-----------------|
+| node\_id | int | Node ID this row is for. |
+| peer\_id | int | Peer ID |
+| state | string | State of Peer Node In FailureDetector |
+| logsconfig\_in\_memory\_version | lsn | logsconfig in-memory version |
+| logsconfig\_durable\_version | lsn | logsconfig durable version |
+| eventlog\_in\_memory\_version | lsn | eventlog in-memory version |
+| eventlog\_durable\_version | lsn | eventlog durable version |
+
 ## iterators
 This table allows fetching the list of RocksDB iterators on all storage nodes.
 

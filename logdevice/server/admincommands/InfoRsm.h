@@ -60,7 +60,7 @@ class InfoRsm : public AdminCommand {
     }
 
     InfoRsmTable table(!json_,
-                       "Node ID",
+                       "Peer ID",
                        "State",
                        "logsconfig in-memory version",
                        "logsconfig durable version",
