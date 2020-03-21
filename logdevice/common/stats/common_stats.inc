@@ -122,6 +122,12 @@ STAT_DEFINE(logsconfig_manager_snapshot_created, SUM)
 // How many snapshots we have requested
 STAT_DEFINE(logsconfig_manager_snapshot_requested, SUM)
 
+// RSM Snapshot Store stats
+STAT_DEFINE(rsm_legacy_snapshot_store_init, SUM)
+STAT_DEFINE(rsm_log_snapshot_store_init, SUM)
+STAT_DEFINE(rsm_msg_snapshot_store_init, SUM)
+STAT_DEFINE(rsm_local_snapshot_store_init, SUM)
+
 // NodesConfigurationManager
 // Number of new nodes configuration published
 STAT_DEFINE(nodes_configuration_manager_config_published, SUM)

@@ -9,6 +9,7 @@
 #pragma once
 #include <string>
 
+#include "logdevice/common/Processor.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/replicated_state_machine/LogBasedRSMSnapshotStore.h"
 #include "logdevice/common/replicated_state_machine/MessageBasedRSMSnapshotStore.h"
@@ -31,6 +32,7 @@ class RsmSnapshotStoreFactory {
 
     switch (snapshot_store_type) {
       case SnapshotStoreType::LEGACY:
+        STAT_INCR(processor->stats_, rsm_legacy_snapshot_store_init);
         return nullptr;
         break;
 
@@ -54,6 +56,7 @@ class RsmSnapshotStoreFactory {
             return nullptr;
         };
         ld_info("Creating LogBasedRSMSnapshotStore");
+        STAT_INCR(processor->stats_, rsm_log_snapshot_store_init);
         return std::make_unique<LogBasedRSMSnapshotStore>(
             key, snapshot_log, processor, is_server /* allow snapshotting */);
       } break;
@@ -63,6 +66,7 @@ class RsmSnapshotStoreFactory {
         // Intentional fall through for cases when client settings
         // doesn't have store type as Message.
       case SnapshotStoreType::MESSAGE:
+        STAT_INCR(processor->stats_, rsm_msg_snapshot_store_init);
         ld_info("Creating MessageBasedRSMSnapshotStore");
         return std::make_unique<MessageBasedRSMSnapshotStore>(key);
         break;

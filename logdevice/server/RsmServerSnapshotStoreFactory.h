@@ -25,6 +25,7 @@ class RsmServerSnapshotStoreFactory {
             key.c_str());
     if (snapshot_store_type == SnapshotStoreType::LOCAL_STORE) {
       ld_info("Creating LocalSnapshotStoreWithFallbacks on server");
+      STAT_INCR(processor->stats_, rsm_local_snapshot_store_init);
       return std::make_unique<LocalSnapshotStoreWithFallbacks>(
           processor, key, storage_rw /* writable */);
     } else {
