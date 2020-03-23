@@ -62,7 +62,6 @@ class RebuildingLogEnumerator {
   void onMetaDataLogsStorageTaskDone(Status,
                                      uint32_t shard_idx,
                                      std::vector<logid_t> log_ids);
-  void onMetaDataLogsStorageTaskDropped(uint32_t shard_idx);
 
   void abortShardIdx(shard_index_t shard_idx);
 

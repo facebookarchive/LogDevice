@@ -130,14 +130,14 @@ void RebuildingLogEnumerator::onMetaDataLogsStorageTaskDone(
     return; // ignore
   } else if (st != E::OK) {
     const auto& params = parameters_.at(shard_idx);
-    RATELIMIT_ERROR(std::chrono::seconds(10),
-                    1,
-                    "Unable to enumerate metadata logs for rebuilding on shard "
-                    "%u, version %s: %s. Retrying...",
-                    shard_idx,
-                    lsn_to_string(params.version).c_str(),
-                    error_description(st));
-    putStorageTask(shard_idx);
+    ld_error("Unable to enumerate metadata logs for rebuilding on shard "
+             "%u, version %s: %s. The shard should have been "
+             "transitioned to fail-safe mode and should be added to "
+             "rebuilding set soon. Until then, rebuilding will stall",
+             shard_idx,
+             lsn_to_string(params.version).c_str(),
+             error_description(st));
+    ld_check_eq(st, E::LOCAL_LOG_STORE_READ);
   } else {
     for (logid_t l : log_ids) {
       results_.emplace(l, RecordTimestamp::min());
@@ -146,19 +146,6 @@ void RebuildingLogEnumerator::onMetaDataLogsStorageTaskDone(
     maybeFinalize();
     // `this` may be destroyed here.
   }
-}
-
-void RebuildingLogEnumerator::onMetaDataLogsStorageTaskDropped(
-    uint32_t shard_idx) {
-  // Retrying
-  const auto& params = parameters_.at(shard_idx);
-  RATELIMIT_WARNING(std::chrono::seconds(10),
-                    1,
-                    "Storage task for enumerating metadata logs dropped for "
-                    "rebuilding on shard %u, version %s. Retrying...",
-                    shard_idx,
-                    lsn_to_string(params.version).c_str());
-  putStorageTask(shard_idx);
 }
 
 void RebuildingLogEnumerator::abortShardIdx(shard_index_t shard_idx) {

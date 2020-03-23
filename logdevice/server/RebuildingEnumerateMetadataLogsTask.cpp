@@ -65,6 +65,11 @@ void RebuildingEnumerateMetadataLogsTask::execute() {
       ld_check(false);
       status_ = E::FAILED;
   }
+
+  if (status_ == E::LOCAL_LOG_STORE_READ) {
+    storageThreadPool_->getLocalLogStore().enterFailSafeMode(
+        "RebuildingEnumerateMetadataLogsTask", "iterator error");
+  }
 }
 
 void RebuildingEnumerateMetadataLogsTask::onDone() {
@@ -76,11 +81,7 @@ void RebuildingEnumerateMetadataLogsTask::onDone() {
 }
 
 void RebuildingEnumerateMetadataLogsTask::onDropped() {
-  if (!ref_) {
-    return;
-  }
-  shard_index_t shard_idx = storageThreadPool_->getShardIdx();
-  ref_->onMetaDataLogsStorageTaskDropped(shard_idx);
+  ld_check(false);
 }
 
 }} // namespace facebook::logdevice

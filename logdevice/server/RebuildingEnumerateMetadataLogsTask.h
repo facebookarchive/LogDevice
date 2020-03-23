@@ -36,6 +36,10 @@ class RebuildingEnumerateMetadataLogsTask : public StorageTask {
 
   void onDropped() override;
 
+  bool isDroppable() const override {
+    return false;
+  }
+
   ThreadType getThreadType() const override {
     // Read tasks may take a while to execute, so they shouldn't block fast
     // write operations.
