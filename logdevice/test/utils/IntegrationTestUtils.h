@@ -888,28 +888,14 @@ class Cluster {
   }
 
   /**
-   * Like ClientFactory::create(), but:
-   *  - tweaks some client settings to be more appropriate for tests,
-   *  - the created client taps into the UpdateableConfig instance owned by
-   *    this Cluster object. This speeds up client creation.
-   * Creating a client can take a few seconds, so reuse them when possible.
+   * This creates a client by calling ClientFactory::create() that does not
+   * share the loaded config_.
    */
   std::shared_ptr<Client>
   createClient(std::chrono::milliseconds timeout = getDefaultTestTimeout(),
                std::unique_ptr<ClientSettings> settings =
                    std::unique_ptr<ClientSettings>(),
                std::string credentials = "");
-
-  /**
-   * This creates a client by calling ClientFactory::create() that does not
-   * share the loaded config_. This function should be removed and instead we
-   * should update createClient to do the same. t18313631 tracks this and
-   * explains the reasons behind this.
-   */
-  std::shared_ptr<Client> createIndependentClient(
-      std::chrono::milliseconds timeout = getDefaultTestTimeout(),
-      std::unique_ptr<ClientSettings> settings =
-          std::unique_ptr<ClientSettings>()) const;
 
   const Nodes& getNodes() const {
     return nodes_;
@@ -1176,6 +1162,8 @@ class Cluster {
       std::chrono::steady_clock::time_point deadline =
           std::chrono::steady_clock::time_point::max());
 
+  int waitUntilAllClientsPickedConfig(const std::string& serialized_config);
+
   /**
    * Same as ClusterFactory::setParam(). Only affects future logdeviced
    * instances, like the ones created by replace().
@@ -1386,7 +1374,7 @@ class Cluster {
   // specified node
   ParamMap commandArgsForNode(const Node& node) const;
 
-  // Helper for createClient() and createIndependentClient() to populate client
+  // Helper for createClient() to populate client
   // settings.
   void populateClientSettings(std::unique_ptr<ClientSettings>& settings) const;
 
@@ -1449,6 +1437,9 @@ class Cluster {
 
   // keep handles around until the cluster is destroyed.
   std::vector<UpdateableServerConfig::HookHandle> server_config_hook_handles_;
+
+  // A vector of all the clients that are created for this cluster.
+  std::vector<std::weak_ptr<Client>> created_clients_;
 
   friend class ClusterFactory;
 };

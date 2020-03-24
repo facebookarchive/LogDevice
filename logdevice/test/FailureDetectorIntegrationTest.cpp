@@ -556,10 +556,10 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
 
   /* we should not be able to create clients if we can't read internal logs */
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_THROW(
+  ASSERT_EQ(
+      nullptr,
       cluster->createClient(
-          /*timeout=*/std::chrono::seconds{2}, std::move(client_settings)),
-      ConstructorFailed);
+          /*timeout=*/std::chrono::seconds{2}, std::move(client_settings)));
 
   ld_info("Starting node N%d", S.node());
   cluster->getNode(S.node()).start();
@@ -574,8 +574,8 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
 
   /* create client */
   std::unique_ptr<ClientSettings> client_settings2(ClientSettings::create());
-  auto client = cluster->createIndependentClient(
-      this->testTimeout(), std::move(client_settings2));
+  auto client =
+      cluster->createClient(this->testTimeout(), std::move(client_settings2));
 
   /* we should be able to create log groups now */
   auto log_group = client->makeLogGroupSync(

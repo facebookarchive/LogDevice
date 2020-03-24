@@ -835,7 +835,7 @@ TEST_F(NodeStatsControllerIntegrationTest, NoSequencerNode) {
 
   std::unique_ptr<ClientSettings> settings(ClientSettings::create());
   ASSERT_EQ(0, settings->set("on-demand-logs-config", "true"));
-  std::shared_ptr<Client> client = cluster->createIndependentClient(
+  std::shared_ptr<Client> client = cluster->createClient(
       std::chrono::milliseconds(100), std::move(settings));
   ASSERT_TRUE((bool)client);
 

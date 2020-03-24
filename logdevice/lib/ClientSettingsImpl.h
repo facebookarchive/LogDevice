@@ -43,6 +43,10 @@ class ClientSettingsImpl : public ClientSettings {
     return plugin_registry_;
   }
 
+  void setPluginRegistry(std::shared_ptr<PluginRegistry> registry) {
+    plugin_registry_ = std::move(registry);
+  }
+
  private:
   std::shared_ptr<PluginRegistry> plugin_registry_;
   UpdateableSettings<Settings> settings_;

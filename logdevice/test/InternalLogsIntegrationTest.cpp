@@ -58,8 +58,8 @@ class InternalLogsIntegrationTest
     for (auto& p : additional_client_settings) {
       client_settings->set(p.first, p.second);
     }
-    client = cluster->createIndependentClient(
-        DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+    client =
+        cluster->createClient(DEFAULT_TEST_TIMEOUT, std::move(client_settings));
 
     // cast the Client object back to ClientImpl and enable internal log writes
     client_impl = std::dynamic_pointer_cast<ClientImpl>(client);
@@ -257,7 +257,7 @@ TEST_F(InternalLogsIntegrationTest,
   }
   cluster->waitUntilAllStartedAndPropagatedInGossip();
 
-  client = cluster->createIndependentClient(DEFAULT_TEST_TIMEOUT);
+  client = cluster->createClient(DEFAULT_TEST_TIMEOUT);
 
   /* Write something to logs config */
   auto dir = client->makeDirectorySync("/ipsum_dolor_sit_amet", true);

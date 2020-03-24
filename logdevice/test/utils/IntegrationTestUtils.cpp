@@ -2469,10 +2469,43 @@ void Node::unsetSetting(std::string name) {
   ld_check(false);
 }
 
+namespace {
+
+class StaticSequencerLocatorFactory : public SequencerLocatorFactory {
+  std::string identifier() const override {
+    return "static";
+  }
+
+  std::string displayName() const override {
+    return "Static sequencer placement";
+  }
+  std::unique_ptr<SequencerLocator>
+  operator()(std::shared_ptr<UpdateableConfig> config) override {
+    return std::make_unique<StaticSequencerLocator>(std::move(config));
+  }
+};
+
+} // namespace
+
 void Cluster::populateClientSettings(
     std::unique_ptr<ClientSettings>& settings) const {
   if (!settings) {
     settings.reset(ClientSettings::create());
+  }
+
+  // If we're not using the default hash based sequencer placement, we will need
+  // to hijack the client plugins and provide a different sequencer locator.
+  if (!hash_based_sequencer_assignment_) {
+    ClientSettingsImpl* impl_settings =
+        static_cast<ClientSettingsImpl*>(settings.get());
+
+    PluginVector seed_plugins = getClientPluginProviders();
+    // assume N0 runs sequencers for all logs
+    seed_plugins.emplace_back(
+        std::make_unique<StaticSequencerLocatorFactory>());
+
+    impl_settings->setPluginRegistry(
+        std::make_shared<PluginRegistry>(std::move(seed_plugins)));
   }
 
   int rv;
@@ -2504,95 +2537,19 @@ void Cluster::populateClientSettings(
   }
 }
 
-namespace {
-
-class StaticSequencerLocatorFactory : public SequencerLocatorFactory {
-  std::string identifier() const override {
-    return "static";
-  }
-
-  std::string displayName() const override {
-    return "Static sequencer placement";
-  }
-  std::unique_ptr<SequencerLocator>
-  operator()(std::shared_ptr<UpdateableConfig> config) override {
-    return std::make_unique<StaticSequencerLocator>(std::move(config));
-  }
-};
-
-} // namespace
-
 std::shared_ptr<Client>
 Cluster::createClient(std::chrono::milliseconds timeout,
                       std::unique_ptr<ClientSettings> settings,
                       std::string credentials) {
-  // Using the ClientImpl constructor directly so that we can have it share
-  // our UpdateableConfig instance (instead of reading the file).  This way
-  // in-process Client instances will see config updates instantly, making
-  // tests behave more intuitively.
-
   populateClientSettings(settings);
-
-  // Client should update its settings from the config file
-  ClientSettingsImpl* impl_settings =
-      static_cast<ClientSettingsImpl*>(settings.get());
-  if (impl_settings != nullptr) {
-    auto settings_updater = impl_settings->getSettingsUpdater();
-    auto update_settings = [settings_updater](ServerConfig& config) -> bool {
-      auto settings = config.getClientSettingsConfig();
-
-      try {
-        settings_updater->setFromConfig(settings);
-      } catch (const boost::program_options::error&) {
-        return false;
-      }
-      return true;
-    };
-
-    // do an initial read for the settings since the config is already loaded
-    update_settings(*config_->getServerConfig());
-    // subscribe for config updates, always update the settings
-    server_config_hook_handles_.push_back(
-        config_->updateableServerConfig()->addHook(std::move(update_settings)));
-  }
-
-  // original client settings loaded at the time of loading the config
-  ClientSettingsImpl* original_settings =
-      static_cast<ClientSettingsImpl*>(client_settings_.get());
-
-  if (original_settings->getSettings()->enable_logsconfig_manager) {
-    settings->set("enable-logsconfig-manager", "true");
-  }
-
-  PluginVector seed_plugins = getClientPluginProviders();
-  if (!hash_based_sequencer_assignment_) {
-    // assume N0 runs sequencers for all logs
-    seed_plugins.emplace_back(
-        std::make_unique<StaticSequencerLocatorFactory>());
-  }
-  std::shared_ptr<PluginRegistry> plugin_registry =
-      std::make_shared<PluginRegistry>(std::move(seed_plugins));
-  ld_info(
-      "Plugins loaded: %s", plugin_registry->getStateDescriptionStr().c_str());
-
-  return std::make_shared<ClientImpl>(cluster_name_,
-                                      config_,
-                                      credentials,
-                                      "",
-                                      timeout,
-                                      std::move(settings),
-                                      plugin_registry);
-}
-
-std::shared_ptr<Client> Cluster::createIndependentClient(
-    std::chrono::milliseconds timeout,
-    std::unique_ptr<ClientSettings> settings) const {
-  populateClientSettings(settings);
-  return ClientFactory()
-      .setClusterName(cluster_name_)
-      .setTimeout(timeout)
-      .setClientSettings(std::move(settings))
-      .create(config_path_);
+  auto client = ClientFactory()
+                    .setClusterName(cluster_name_)
+                    .setTimeout(timeout)
+                    .setClientSettings(std::move(settings))
+                    .setCredentials(credentials)
+                    .create(config_path_);
+  created_clients_.push_back(client);
+  return client;
 }
 
 namespace {
@@ -3093,6 +3050,23 @@ int Cluster::waitUntilNoOneIsInStartupState(
   });
 }
 
+int Cluster::waitUntilAllClientsPickedConfig(
+    const std::string& serialized_config) {
+  return wait_until("Config update picked up", [&] {
+    for (const auto& client_ptr : created_clients_) {
+      auto client = client_ptr.lock();
+      if (client == nullptr) {
+        continue;
+      }
+      auto client_impl = dynamic_cast<ClientImpl*>(client.get());
+      if (client_impl->getConfig()->get()->toString() != serialized_config) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
 bool Cluster::isGossipEnabled() const {
   static const std::string gossip_flag = "--gossip-enabled";
   if (cmd_param_.find(ParamScope::ALL) == cmd_param_.end()) {
@@ -3460,6 +3434,7 @@ int Cluster::writeConfig(const ServerConfig* server_cfg,
           ->toString(logs_cfg);
   wait_until("Config update picked up",
              [&] { return config_->get()->toString() == expected_text; });
+  waitUntilAllClientsPickedConfig(expected_text);
   return 0;
 }
 

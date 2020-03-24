@@ -56,8 +56,8 @@ TEST_F(AdminAPILowLevelTest, LogTreeReplicationInfo) {
   // Let's create some log groups
   std::unique_ptr<ClientSettings> settings(ClientSettings::create());
   settings->set("on-demand-logs-config", "true");
-  std::shared_ptr<Client> client = cluster->createIndependentClient(
-      std::chrono::seconds(60), std::move(settings));
+  std::shared_ptr<Client> client =
+      cluster->createClient(std::chrono::seconds(60), std::move(settings));
 
   cluster->waitUntilAllSequencersQuiescent();
 
@@ -135,8 +135,8 @@ TEST_F(AdminAPILowLevelTest, TakeLogTreeSnapshot) {
   // Let's create some log groups
   std::unique_ptr<ClientSettings> settings(ClientSettings::create());
   settings->set("on-demand-logs-config", "true");
-  std::shared_ptr<Client> client = cluster->createIndependentClient(
-      std::chrono::seconds(60), std::move(settings));
+  std::shared_ptr<Client> client =
+      cluster->createClient(std::chrono::seconds(60), std::move(settings));
 
   cluster->waitUntilAllSequencersQuiescent();
 

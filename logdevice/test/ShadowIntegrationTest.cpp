@@ -67,7 +67,7 @@ class ShadowIntegrationTest : public IntegrationTestBase {
     // Create origin cluster client
     auto client_settings =
         std::unique_ptr<ClientSettings>(ClientSettings::create());
-    client_ = cluster_->createIndependentClient(
+    client_ = cluster_->createClient(
         DEFAULT_TEST_TIMEOUT, std::move(client_settings));
     client_settings_ = &client_->settings();
 
@@ -86,7 +86,7 @@ class ShadowIntegrationTest : public IntegrationTestBase {
     std::string shadow_config = "file:" + shadow_cluster_->getConfigPath();
 
     // Set up equivalent log range on shadow cluster
-    shadow_client_ = shadow_cluster_->createIndependentClient();
+    shadow_client_ = shadow_cluster_->createClient();
     LogAttributes shadow_log_attrs = LogAttributes().with_replicationFactor(1);
     auto group = shadow_client_->makeLogGroupSync(
         kTestLog, kTestRange, shadow_log_attrs);

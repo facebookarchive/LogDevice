@@ -288,7 +288,7 @@ TEST_F(ConfigIntegrationTest, RemoteLogsConfigWithLogsConfigManagerTest) {
                      .useHashBasedSequencerAssignment()
                      .enableLogsConfigManager()
                      .create(3);
-  std::shared_ptr<Client> client = cluster->createIndependentClient();
+  std::shared_ptr<Client> client = cluster->createClient();
 
   ld_info("Creating directories and log groups");
   ASSERT_NE(

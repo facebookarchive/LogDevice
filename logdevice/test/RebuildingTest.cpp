@@ -2167,7 +2167,7 @@ TEST_P(RebuildingTest, RebuildMetaDataLogsOfDeletedLogs) {
   auto cf = rollingRebuildingClusterFactory(nnodes, 3, 0, true).setNumLogs(4);
   auto cluster = cf.create(nnodes);
   auto get_metadata_record_count = [&](logid_t log_id) {
-    std::shared_ptr<Client> client = cluster->createIndependentClient();
+    std::shared_ptr<Client> client = cluster->createClient();
     lsn_t until_lsn =
         client->getTailLSNSync(MetaDataLog::metaDataLogID(log_id));
     ld_info("Reading metadata log for %lu until lsn %s",

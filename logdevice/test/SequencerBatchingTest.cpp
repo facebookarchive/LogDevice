@@ -309,8 +309,7 @@ TEST_F(SequencerBatchingTest, DifferentLogGroupSettings) {
                      .setParam("--sequencer-batching")
                      .create(1);
 
-  auto independent_client =
-      cluster->createIndependentClient(this->testTimeout());
+  auto independent_client = cluster->createClient(this->testTimeout());
 
   // This log will have enabled sequencer batching since --sequencer-batching
   // option is provided. Compression setting for this log group is set via
@@ -376,8 +375,7 @@ TEST_F(SequencerBatchingTest, DifferentLogGroupSettingsReloading) {
                      .useHashBasedSequencerAssignment()
                      .create(1);
 
-  auto independent_client =
-      cluster->createIndependentClient(this->testTimeout());
+  auto independent_client = cluster->createClient(this->testTimeout());
 
   auto lg1 = independent_client->makeLogGroupSync(
       "/log1",

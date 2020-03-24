@@ -19,6 +19,7 @@
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/lib/ClientImpl.h"
+#include "logdevice/lib/ClientProcessor.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -113,16 +114,14 @@ class RSMSnapshotStoreIntegrationTest
   void initClientSnapshotStore(SnapshotStoreType store_type,
                                logid_t delta_log,
                                logid_t snapshot_log) {
-    // Create test processor
-    Settings settings = create_default_settings<Settings>();
-    test_processor_ = make_test_processor(settings, cluster->getConfig());
+    ClientImpl* client_impl = dynamic_cast<ClientImpl*>(client.get());
     switch (store_type) {
       case SnapshotStoreType::LOG:
         ld_info("Creating LogBasedRSMSnapshotStoreTest");
         client_snapshot_store_ = std::make_unique<LogBasedRSMSnapshotStoreTest>(
             folly::to<std::string>(delta_log.val_),
             snapshot_log,
-            test_processor_.get(),
+            client_impl->getProcessorPtr().get(),
             true /* writable */,
             client);
         break;
@@ -205,7 +204,6 @@ class RSMSnapshotStoreIntegrationTest
   std::shared_ptr<Client> client;
   std::unique_ptr<RSMSnapshotStore> snapshot_store_{nullptr};
   std::unique_ptr<RSMSnapshotStore> client_snapshot_store_{nullptr};
-  std::shared_ptr<Processor> test_processor_;
 };
 
 std::vector<TestMode> cluster_client_types{
@@ -254,8 +252,8 @@ TEST_P(VerifySequencerOnlyNodes, CanCatchupToLatestRsmState) {
   cluster->waitUntilAllSequencersQuiescent();
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
-  client = cluster->createIndependentClient(
-      DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+  client =
+      cluster->createClient(DEFAULT_TEST_TIMEOUT, std::move(client_settings));
   ASSERT_NE(nullptr, client);
 
   /* write something to the delta log */
@@ -318,8 +316,8 @@ TEST_F(RSMSnapshotStoreIntegrationTest, LocalStoreDurableVersionCatchesUp) {
   cluster->waitUntilAllSequencersQuiescent();
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
-  client = cluster->createIndependentClient(
-      DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+  client =
+      cluster->createClient(DEFAULT_TEST_TIMEOUT, std::move(client_settings));
   ASSERT_NE(nullptr, client);
 
   /* write something to the delta log */
@@ -426,8 +424,8 @@ TEST_F(RSMSnapshotStoreIntegrationTest,
   cluster->waitUntilAllSequencersQuiescent();
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
-  client = cluster->createIndependentClient(
-      DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+  client =
+      cluster->createClient(DEFAULT_TEST_TIMEOUT, std::move(client_settings));
   ASSERT_NE(nullptr, client);
 
   /* write something to the delta log */

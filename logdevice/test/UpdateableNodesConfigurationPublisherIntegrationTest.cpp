@@ -56,8 +56,8 @@ class NodesConfigurationPublisherIntegrationTest : public IntegrationTestBase {
           "nodes-configuration-manager-store-polling-interval", "10ms");
       settings->set(
           "nodes-configuration-file-store-dir", cluster_->getNCSPath());
-      client_ = cluster_->createIndependentClient(
-          getDefaultTestTimeout(), std::move(settings));
+      client_ =
+          cluster_->createClient(getDefaultTestTimeout(), std::move(settings));
     }
   }
 

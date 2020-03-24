@@ -30,7 +30,7 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
   {
     // Without client bootstrapping
     // TODO Remove this when client bootstrapping becomes the default.
-    auto client = cluster->createIndependentClient();
+    auto client = cluster->createClient();
     auto client_impl = dynamic_cast<ClientImpl*>(client.get());
     auto config = client_impl->getConfig();
     EXPECT_EQ(nullptr, config->getNodesConfigurationFromNCMSource());
@@ -43,8 +43,8 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
     settings->set("enable-nodes-configuration-manager", "true");
     settings->set("nodes-configuration-seed-servers", seed_addr);
 
-    auto client = cluster->createIndependentClient(
-        getDefaultTestTimeout(), std::move(settings));
+    auto client =
+        cluster->createClient(getDefaultTestTimeout(), std::move(settings));
     auto client_impl = dynamic_cast<ClientImpl*>(client.get());
     auto config = client_impl->getConfig();
     auto nodes_cfg = config->getNodesConfigurationFromNCMSource();
@@ -65,7 +65,7 @@ TEST_F(NodesConfigurationInitIntegrationTest, SeedDown) {
   settings->set("enable-nodes-configuration-manager", "true");
   settings->set("nodes-configuration-seed-servers", seed_addr);
 
-  auto client = cluster->createIndependentClient(
-      getDefaultTestTimeout(), std::move(settings));
+  auto client =
+      cluster->createClient(getDefaultTestTimeout(), std::move(settings));
   EXPECT_EQ(nullptr, client);
 }
