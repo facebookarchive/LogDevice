@@ -458,6 +458,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
   RebuildingSupervisor* rebuilding_supervisor_; // May be null in tests.
 
+  WorkerType my_worker_type_ = WorkerType::GENERAL;
   worker_id_t my_worker_id_ = WORKER_ID_INVALID;
 
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;

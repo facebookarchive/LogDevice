@@ -312,6 +312,7 @@ void RebuildingCoordinator::subscribeToEventLogIfNeeded() {
 void RebuildingCoordinator::startOnWorkerThread() {
   Worker* w = Worker::onThisThread();
   w->setRebuildingCoordinator(this);
+  my_worker_type_ = w->worker_type_;
   my_worker_id_ = w->idx_;
 
   // initialize the counter to 0. it will be updated based on the
@@ -333,7 +334,7 @@ void RebuildingCoordinator::startOnWorkerThread() {
         // Forward the call back to RebuildingCoordinator's worker thread.
         std::unique_ptr<Request> rq = std::make_unique<FuncRequest>(
             my_worker_id_,
-            WorkerType::GENERAL,
+            my_worker_type_,
             RequestType::REBUILDING_COORDINATOR_SETTINGS_UPDATED,
             [this] {
               // Note that RebuildingCoordinator can't have been destroyed
