@@ -44,32 +44,16 @@ void STORE_onSent(const STORE_Message& msg,
 
     ServerWorker* w = ServerWorker::onThisThread();
 
-    auto log_rebuilding =
-        w->runningLogRebuildings().find(msg.header_.rid.logid, shard_idx);
-    if (log_rebuilding) {
-      RecordRebuildingInterface* r =
-          log_rebuilding->findRecordRebuilding(msg.header_.rid.lsn());
-      if (r) {
-        r->onStoreSent(st,
-                       msg.header_,
-                       shard,
-                       msg.extra_.rebuilding_version,
-                       msg.extra_.rebuilding_wave);
-        return;
-      }
-    } else {
-      ld_check(msg.extra_.rebuilding_id != LOG_REBUILDING_ID_INVALID);
-      auto& chunk_rebuildings = w->runningChunkRebuildings();
-      auto it = chunk_rebuildings.map.find(msg.extra_.rebuilding_id);
-      if (it != chunk_rebuildings.map.end()) {
-        if (it->second->onStoreSent(st,
-                                    msg.header_,
-                                    shard,
-                                    msg.extra_.rebuilding_version,
-                                    msg.extra_.rebuilding_wave)) {
-          return;
-        }
-      }
+    ld_check(msg.extra_.rebuilding_id != LOG_REBUILDING_ID_INVALID);
+    auto& chunk_rebuildings = w->runningChunkRebuildings();
+    auto it = chunk_rebuildings.map.find(msg.extra_.rebuilding_id);
+    if (it != chunk_rebuildings.map.end() &&
+        it->second->onStoreSent(st,
+                                msg.header_,
+                                shard,
+                                msg.extra_.rebuilding_version,
+                                msg.extra_.rebuilding_wave)) {
+      return;
     }
 
     RATELIMIT_INFO(std::chrono::seconds(1),

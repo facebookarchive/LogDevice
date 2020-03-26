@@ -45,9 +45,6 @@ Message::Disposition MEMTABLE_FLUSHED_onReceived(MEMTABLE_FLUSHED_Message* msg,
   ServerProcessor* processor = w->processor_;
   int nworkers = processor->getWorkerCount();
   for (worker_id_t idx(0); idx.val_ < nworkers; ++idx.val_) {
-    if (idx == w->idx_) {
-      continue;
-    }
     std::unique_ptr<Request> req =
         std::make_unique<MemtableFlushedRequest>(idx,
                                                  header.node_index_,
@@ -62,15 +59,6 @@ Message::Disposition MEMTABLE_FLUSHED_onReceived(MEMTABLE_FLUSHED_Message* msg,
                       header.shard_idx_,
                       header.memtable_id_,
                       idx.val_);
-    }
-  }
-
-  // on the current worker, send an update to all LogRebuilding state machines
-  // whose log maps to the shard on which memtable was flushed.
-  for (const auto& lr : w->runningLogRebuildings().map) {
-    if (lr.first.second == header.shard_idx_) {
-      lr.second->onMemtableFlushed(
-          header.node_index_, header.server_instance_id_, header.memtable_id_);
     }
   }
 

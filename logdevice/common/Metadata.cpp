@@ -537,6 +537,7 @@ std::unique_ptr<LogMetadata> LogMetadataFactory::create(LogMetadataType type) {
     case LogMetadataType::DEPRECATED_1:
     case LogMetadataType::DEPRECATED_2:
     case LogMetadataType::DEPRECATED_3:
+    case LogMetadataType::DEPRECATED_4:
       assert(false);
       std::abort();
       return nullptr;
@@ -548,8 +549,6 @@ std::unique_ptr<LogMetadata> LogMetadataFactory::create(LogMetadataType type) {
       return std::make_unique<SealMetadata>();
     case LogMetadataType::LAST_CLEAN:
       return std::make_unique<LastCleanMetadata>();
-    case LogMetadataType::REBUILDING_CHECKPOINT:
-      return std::make_unique<RebuildingCheckpointMetadata>();
     case LogMetadataType::SOFT_SEAL:
       return std::make_unique<SoftSealMetadata>();
     case LogMetadataType::LOG_REMOVAL_TIME:
@@ -600,8 +599,6 @@ void EnumMap<LogMetadataType, std::string, LogMetadataType::MAX>::setValues() {
   set(LogMetadataType::TRIM_POINT, "TRIM_POINT");
   set(LogMetadataType::SEAL, "SEAL");
   set(LogMetadataType::LAST_CLEAN, "LAST_CLEAN");
-  set(LogMetadataType::REBUILDING_CHECKPOINT, "REBUILDING_CHECKPOINT");
-  set(LogMetadataType::REBUILDING_CHECKPOINT, "REBUILDING_CHECKPOINT");
   set(LogMetadataType::SOFT_SEAL, "SOFT_SEAL");
   set(LogMetadataType::LOG_REMOVAL_TIME, "LOG_REMOVAL_TIME");
   set(LogMetadataType::RSM_SNAPSHOT, "RSM_SNAPSHOT");

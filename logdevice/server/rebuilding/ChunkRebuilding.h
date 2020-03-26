@@ -14,6 +14,28 @@
 
 namespace facebook { namespace logdevice {
 
+/**
+ * @file ChunkRebuilding is responsible for re-replicating a "chunk" of records.
+ *       It runs on rebuilding storage node. Chunk is a sequence of records
+ *       with the same log ID, consecutive LSNs, and the same copyset.
+ *       Most of rebuilding operates on chunks rather than individual records
+ *       for efficiency.
+ *
+ *       Currently ChunkRebuilding is implemented as a collection of
+ *       RecordRebuildingStore and RecordRebuildingAmend state machines for
+ *       individual records, which defeats some of the purpose of having chunks
+ *       in the first place. (The separation between Store and Amend part of
+ *       RecordRebuilding is a leftover from rebuilding without WAL feature,
+ *       which was removed and needs to be reimplemented; without it the
+ *       separation serves no purpose.) Would be good to refactor it to do the
+ *       actual re-replication work (picking copyset, sending out stores and
+ *       amends, dealing with timeouts, etc) in ChunkRebuilding directly -
+ *       perhaps by moving most of the code from RecordRebuilding* into
+ *       ChunkRebuilding, and perhaps adding a multi-STORE message to send the
+ *       whole chunk at once (which may also simplify handling of timeouts and
+ *       other errors).
+ */
+
 struct ChunkAddress {
   logid_t log;
   lsn_t min_lsn;

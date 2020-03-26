@@ -135,7 +135,7 @@ struct RecordRebuildingAmendState {
 
 // Target of callbacks from RecordRebuilding.
 // Also provides RecordRebuilding with some information about the rebuilding.
-// LogRebuilding and ChunkRebuilding implement this interface.
+// Only ChunkRebuilding implements this interface.
 class RecordRebuildingOwner {
  public:
   virtual ~RecordRebuildingOwner() = default;

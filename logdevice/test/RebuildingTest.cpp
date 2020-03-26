@@ -34,13 +34,6 @@ namespace fs = boost::filesystem;
 
 namespace {
 
-enum class DurabilityMode {
-  V1_WITH_WAL,
-  V1_WITHOUT_WAL,
-  V2_WITH_WAL,
-  // V2 doesn't support disabling wal.
-};
-
 enum class FlushMode { ROCKSDB, LD };
 
 // Enable/Disable --filter-relocate-shards
@@ -49,7 +42,6 @@ enum class FilterMode { DEFAULT, FILTER_RELOCATE };
 enum class RebuildingDirection { OLD_TO_NEW, NEW_TO_OLD };
 
 struct TestMode {
-  DurabilityMode m;
   FlushMode f;
   FilterMode filter_mode;
   RebuildingDirection d;
@@ -297,13 +289,6 @@ class RebuildingTest : public IntegrationTestBase,
           .setParam("--rocksdb-min-manual-flush-interval", "200ms")
           .setParam("--rocksdb-partition-hi-pri-check-period", "50ms")
           .setParam("--rebuilding-store-timeout", "6s..10s")
-          .setParam("--rebuild-store-durability",
-                    test_param.m == DurabilityMode::V1_WITHOUT_WAL
-                        ? "memory"
-                        : "async_write")
-          .setParam(
-              "--rebuilding-v2",
-              test_param.m == DurabilityMode::V2_WITH_WAL ? "true" : "false")
           // When rebuilding Without WAL, destruction of memtable is used as
           // proxy for memtable being flushed to stable storage. Iterators can
           // pin a memtable preventing its destruction. Low ttl in tests ensures
@@ -1663,8 +1648,7 @@ TEST_P(RebuildingTest, FMajorityInRebuildingSet) {
 
   // 4 nodes in the rebuilding set is too much, it's impossible to rebuild the
   // records that have a replication factor of 3 since there are 6-4=2 nodes not
-  // in the set. LogRebuilding should skip the epochs and rebuilding should not
-  // stall.
+  // in the set. Rebuilding should skip the epochs and not stall.
   for (node_index_t node = 1; node <= 4; ++node) {
     ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node, SHARD));
   }
@@ -1677,132 +1661,6 @@ TEST_P(RebuildingTest, FMajorityInRebuildingSet) {
        ShardID(4, SHARD)},
       AuthoritativeStatus::FULLY_AUTHORITATIVE,
       true);
-}
-
-// TODO: Remove this test when removing rebuilding v1. It doesn't seem useful
-//       with v2, and looks broken even for v1.
-//
-// Rebuild using a local window of 50ms
-//
-// Note that in this test, some logs have a backlog and some logs don't have one
-// (event log). Logs that have a backlog are put in the wakeupQueue with an
-// estimate of their `nextTimestamp` equal to `now() - backlog` while logs that
-// don't have a backlog are put on the wakeupQueue with a `nextTimestamp` equal
-// to -inf. This mechanism increases the chances that the first time we read a
-// batch of records for a log that has a backlog duration configured, we
-// actually read some data instead of reading nothing and just updating
-// `nextTimestamp`.
-// In order to exercise conditions where both logs with a backlog duration and
-// logs without one are scheduled for rebuilding, we rebuild shard 1 which
-// includes the event log.
-TEST_P(RebuildingTest, LocalWindow) {
-  auto log_attrs = logsconfig::LogAttributes()
-                       .with_replicationFactor(3)
-                       .with_extraCopies(0)
-                       .with_syncedCopies(0)
-                       .with_maxWritesInFlight(30)
-                       .with_backlogDuration(std::chrono::seconds{6 * 3600});
-
-  auto event_log_attrs = logsconfig::LogAttributes()
-                             .with_replicationFactor(3)
-                             .with_extraCopies(0)
-                             .with_syncedCopies(0)
-                             .with_maxWritesInFlight(30);
-
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup())
-          .setLogGroupName("test-log-group")
-          .setLogAttributes(log_attrs)
-          .setEventLogAttributes(event_log_attrs)
-          .setNumLogs(42)
-          .setParam("--rebuilding-local-window", "50ms")
-          .setParam("--rocksdb-partition-timestamp-granularity", "10ms")
-          .create(5);
-
-  // Write some records, with 10ms sleep between writes.
-  auto client = cluster->createClient();
-  writeRecordsToMultiplePartitions(
-      *cluster, *client, 100, nullptr, LOG_IDS, std::chrono::milliseconds(10));
-
-  cluster->waitForRecovery();
-
-  EXPECT_EQ(0, cluster->getNode(1).shutdown());
-  auto shard_path = cluster->getNode(1).getShardPath(1);
-  for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
-       ++it) {
-    fs::remove_all(it->path());
-  }
-  ASSERT_EQ(0, cluster->bumpGeneration(1));
-  cluster->getNode(1).start();
-  cluster->getNode(1).waitUntilStarted();
-
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 1, 1));
-
-  cluster->getNode(1).waitUntilAllShardsFullyAuthoritative(client);
-  cluster->waitForMetaDataLogWrites();
-  // there is a known issue where purging deletes records that gets surfaced in
-  // tests with sequencer-written metadata, which is why we skip checking
-  // replication for bridge records that this may impact. See t13850978
-  IntegrationTestUtils::Cluster::argv_t check_args = {
-      "--dont-count-bridge-records",
-  };
-  // Verify that everything is correctly replicated.
-  ASSERT_EQ(0, cluster->checkConsistency(check_args));
-}
-
-// Same as `LocalWindow` but there is also a 30ms global window.
-TEST_P(RebuildingTest, LocalAndGlobalWindow) {
-  auto log_attrs = logsconfig::LogAttributes()
-                       .with_replicationFactor(3)
-                       .with_extraCopies(0)
-                       .with_syncedCopies(0)
-                       .with_maxWritesInFlight(30)
-                       .with_backlogDuration(std::chrono::seconds{6 * 3600});
-
-  auto event_log_attrs = logsconfig::LogAttributes()
-                             .with_replicationFactor(3)
-                             .with_extraCopies(0)
-                             .with_syncedCopies(0)
-                             .with_maxWritesInFlight(30);
-
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .apply(commonSetup())
-          .setLogGroupName("test-log")
-          .setLogAttributes(log_attrs)
-          .setEventLogAttributes(event_log_attrs)
-          .setParam("--rebuilding-local-window", "5ms")
-          .setParam("--rebuilding-global-window", "30ms")
-          .setParam("--rocksdb-partition-timestamp-granularity", "10ms")
-          .setNumLogs(42)
-          .create(5);
-
-  // Write some records, with 10ms sleep between writes.
-  auto client = cluster->createClient();
-  writeRecordsToMultiplePartitions(
-      *cluster, *client, 100, nullptr, LOG_IDS, std::chrono::milliseconds(10));
-
-  cluster->waitForRecovery();
-
-  EXPECT_EQ(0, cluster->getNode(1).shutdown());
-  cluster->getNode(1).wipeShard(1);
-  ASSERT_EQ(0, cluster->bumpGeneration(1));
-  cluster->getNode(1).start();
-  cluster->getNode(1).waitUntilStarted();
-
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 1, 1));
-
-  cluster->getNode(1).waitUntilAllShardsFullyAuthoritative(client);
-  cluster->waitForMetaDataLogWrites();
-  // there is a known issue where purging deletes records that gets surfaced in
-  // tests with sequencer-written metadata, which is why we skip checking
-  // replication for bridge records that this may impact. See t13850978
-  IntegrationTestUtils::Cluster::argv_t check_args = {
-      "--dont-count-bridge-records",
-  };
-  // Verify that everything is correctly replicated.
-  ASSERT_EQ(0, cluster->checkConsistency(check_args));
 }
 
 // Kill/Restart each storage node one by one. No extras.
@@ -3320,30 +3178,14 @@ TEST_P(RebuildingTest, UndrainDeadNode) {
   }
 }
 
-std::vector<TestMode> test_params{{DurabilityMode::V1_WITH_WAL,
-                                   FlushMode::LD,
-                                   FilterMode::DEFAULT,
-                                   RebuildingDirection::OLD_TO_NEW},
-                                  {DurabilityMode::V1_WITHOUT_WAL,
-                                   FlushMode::ROCKSDB,
-                                   FilterMode::DEFAULT,
-                                   RebuildingDirection::OLD_TO_NEW},
-                                  {DurabilityMode::V1_WITHOUT_WAL,
-                                   FlushMode::LD,
-                                   FilterMode::DEFAULT,
-                                   RebuildingDirection::OLD_TO_NEW},
-                                  {DurabilityMode::V2_WITH_WAL,
-                                   FlushMode::LD,
-                                   FilterMode::DEFAULT,
-                                   RebuildingDirection::OLD_TO_NEW},
-                                  {DurabilityMode::V2_WITH_WAL,
-                                   FlushMode::LD,
-                                   FilterMode::FILTER_RELOCATE,
-                                   RebuildingDirection::OLD_TO_NEW},
-                                  {DurabilityMode::V2_WITH_WAL,
-                                   FlushMode::LD,
-                                   FilterMode::FILTER_RELOCATE,
-                                   RebuildingDirection::NEW_TO_OLD}};
+std::vector<TestMode> test_params{
+    {FlushMode::LD, FilterMode::DEFAULT, RebuildingDirection::OLD_TO_NEW},
+    {FlushMode::LD,
+     FilterMode::FILTER_RELOCATE,
+     RebuildingDirection::OLD_TO_NEW},
+    {FlushMode::LD,
+     FilterMode::FILTER_RELOCATE,
+     RebuildingDirection::NEW_TO_OLD}};
 INSTANTIATE_TEST_CASE_P(RebuildingTest,
                         RebuildingTest,
                         ::testing::ValuesIn(test_params));

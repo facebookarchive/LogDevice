@@ -463,7 +463,7 @@ void RecordRebuildingBase::onStored(const STORED_Header& header,
     return;
   }
 
-  // rebuilding_id check is necessary only when LogRebuilding is restarted
+  // rebuilding_id check is necessary only when ChunkRebuilding is restarted
   // without a change in the version.
   if (rebuilding_id != LOG_REBUILDING_ID_INVALID &&
       rebuilding_id != owner_->getLogRebuildingId()) {

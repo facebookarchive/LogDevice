@@ -191,7 +191,7 @@ struct STORE_Extra {
   uint32_t rebuilding_wave = 0;
 
   // If this STORE message is for rebuilding, the rebuilding_id which uniquely
-  // identifies a run of the LogRebuilding state machine where this store
+  // identifies a run of the ChunkRebuilding state machine where this store
   // originated from, is sent along. This version will be passed back in the
   // STORED reply.
   log_rebuilding_id_t rebuilding_id = LOG_REBUILDING_ID_INVALID;

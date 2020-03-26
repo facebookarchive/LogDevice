@@ -24,7 +24,6 @@
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
-#include "logdevice/server/rebuilding/ShardRebuildingV1.h"
 #include "logdevice/server/rebuilding/ShardRebuildingV2.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 #include "logdevice/server/storage_tasks/ReadStorageTask.h"
@@ -1111,24 +1110,13 @@ RebuildingCoordinator::createShardRebuilding(
     lsn_t restart_version,
     std::shared_ptr<const RebuildingSet> rebuilding_set,
     UpdateableSettings<RebuildingSettings> rebuilding_settings) {
-  if (rebuilding_settings->enable_v2) {
-    return std::make_unique<ShardRebuildingV2>(shard,
-                                               version,
-                                               restart_version,
-                                               rebuilding_set,
-                                               rebuilding_settings,
-                                               processor_->getMyNodeID(),
-                                               this);
-  } else {
-    return std::make_unique<ShardRebuildingV1>(shard,
-                                               version,
-                                               restart_version,
-                                               rebuilding_set,
-                                               shardedStore_->getByIndex(shard),
-                                               rebuilding_settings,
-                                               config_,
-                                               this);
-  }
+  return std::make_unique<ShardRebuildingV2>(shard,
+                                             version,
+                                             restart_version,
+                                             rebuilding_set,
+                                             rebuilding_settings,
+                                             processor_->getMyNodeID(),
+                                             this);
 }
 
 void RebuildingCoordinator::abortShardRebuilding(uint32_t shard_idx) {
@@ -2001,7 +1989,6 @@ void RebuildingCoordinator::getDebugInfo(
 
 std::function<void(InfoRebuildingLogsTable&)>
 RebuildingCoordinator::beginGetLogsDebugInfo() const {
-  ld_check(rebuildingSettings_->enable_v2);
   std::vector<std::function<void(InfoRebuildingLogsTable&)>> funcs;
   for (auto& s : shardsRebuilding_) {
     auto& shard_state = s.second;

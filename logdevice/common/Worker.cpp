@@ -153,7 +153,6 @@ class WorkerImpl {
 
   ShardAuthoritativeStatusManager shardStatusManager_;
   Sender sender_;
-  LogRebuildingMap runningLogRebuildings_;
   FindKeyRequestMap runningFindKey_;
   FireAndForgetRequestMap runningFireAndForgets_;
   TrimRequestMap runningTrimRequests_;
@@ -600,17 +599,6 @@ void Worker::finishWorkAndCloseSockets() {
     ld_info("Aborted %lu sync sequencer requests", c);
   }
 
-  // Abort all LogRebuilding state machines.
-  std::vector<LogRebuildingInterface*> to_abort;
-  for (auto& it : runningLogRebuildings().map) {
-    to_abort.push_back(it.second.get());
-  }
-  if (!to_abort.empty()) {
-    for (auto l : to_abort) {
-      l->abort(false /* notify_complete */);
-    }
-    ld_info("Aborted %lu log rebuildings", to_abort.size());
-  }
   if (rebuilding_coordinator_) {
     rebuilding_coordinator_->shutdown();
   }
@@ -809,7 +797,6 @@ bool Worker::requestsPending() const {
   PROCESS(runningGetLogInfo().per_node_map, "per-node get log infos");
   PROCESS(runningGetTrimPoint().map, "get log trim points");
   PROCESS(runningTrimRequests().map, "trim requests");
-  PROCESS(runningLogRebuildings().map, "log rebuildings");
   PROCESS(runningSyncSequencerRequests().getList(), "sync sequencer requests");
   PROCESS(runningConfigurationFetches().map, "configuration fetch requests");
 #undef PROCESS
@@ -1112,10 +1099,6 @@ void Worker::unpackRunContext(
 
 Sender& Worker::sender() const {
   return impl_->sender_;
-}
-
-LogRebuildingMap& Worker::runningLogRebuildings() const {
-  return impl_->runningLogRebuildings_;
 }
 
 FindKeyRequestMap& Worker::runningFindKey() const {

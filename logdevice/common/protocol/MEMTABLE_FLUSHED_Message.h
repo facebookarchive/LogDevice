@@ -12,6 +12,11 @@
 
 namespace facebook { namespace logdevice {
 
+// This message is currently unused. It's left here because it may be useful for
+// a reimplementation of rebuilding without WAL.
+// Sent by storage node to rebuilding donor node to notify it that a memtable
+// was flushed.
+
 struct MEMTABLE_FLUSHED_Header {
   explicit MEMTABLE_FLUSHED_Header(FlushToken memtable_id,
                                    ServerInstanceId server_instance_id,

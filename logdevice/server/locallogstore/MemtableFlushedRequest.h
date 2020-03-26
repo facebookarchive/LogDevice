@@ -20,6 +20,9 @@ namespace facebook { namespace logdevice {
 /**
  * @file Created by PartitionedRocksDBStore when it receives a callback on
  *       memtable being flushed to stable storage.
+ *
+ *       This mechanism is currently unused, see comment in
+ *       MEMTABLE_FLUSHED_Message.h
  */
 
 class MemtableFlushedRequest : public Request {

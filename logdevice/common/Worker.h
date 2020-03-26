@@ -118,7 +118,6 @@ class Configuration;
 class EpochRecovery;
 class EventLogStateMachine;
 class GetSeqStateRequestMap;
-class LogRebuildingInterface;
 class LogStorageState;
 class LogsConfig;
 class LogsConfigManager;
@@ -165,7 +164,6 @@ struct GetLogInfoRequestMaps;
 struct GetRsmSnapshotRequestMap;
 struct GetTrimPointRequestMap;
 struct LogIDUniqueQueue;
-struct LogRebuildingMap;
 struct LogRecoveryRequestMap;
 struct LogsConfigApiRequestMap;
 struct LogsConfigManagerReplyMap;
@@ -408,9 +406,6 @@ class Worker : public WorkContext {
   // An interface for sending Messages on this Worker. This object owns all
   // Connections on this Worker.
   Sender& sender() const;
-
-  // a map of all currently running LogRebuildings.
-  LogRebuildingMap& runningLogRebuildings() const;
 
   // a map of all currently running FindKeyRequests
   FindKeyRequestMap& runningFindKey() const;

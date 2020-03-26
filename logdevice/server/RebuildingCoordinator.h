@@ -31,7 +31,8 @@
 #include "logdevice/server/rebuilding/RebuildingPlanner.h"
 
 /**
- * @file RebuildingCoordinator coordinates all LogRebuilding state machines.
+ * @file RebuildingCoordinator coordinates all RebuildingPlanner and
+ * ShardRebuilding state machines, among other things.
  */
 
 namespace facebook { namespace logdevice {
@@ -89,15 +90,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
   /**
    * Called when the cluster's configuration has changed.
-   * The purpose of this method is to handle a cluster being shrunk while
-   * rebuilding is in progress. The necessary steps are:
-   *
-   * 1/ find all nodes that are in the donor set for a shard but were removed
-   * from the config and act as if they had sent a SHARD_IS_REBUILT message for
-   * it.
-   *
-   * 2/ find all logs that have been removed from the config but are found in
-   * activeLogs and stop LogRebuilding State machines
+   * Applies settings updates.
    */
   void noteConfigurationChanged() override;
 
@@ -215,7 +208,6 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   /**
    * Returns a function that fills out the per-log debug info table.
    * The function needs to be called on a non-worker thread.
-   * Requires rebuilding-v2 to be enabled in settings.
    * See ShardRebuildingV2::beginGetLogsDebugInfo() for more details.
    */
   std::function<void(InfoRebuildingLogsTable&)> beginGetLogsDebugInfo() const;
@@ -496,13 +488,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
     lsn_t version{LSN_INVALID};
 
     // Changed each time we call restartForShard(). Used for checking staleness
-    // of requests sent by LogRebuilding state machines over to us. When
-    // restartForShard() is called, we bump this version which makes these stale
-    // request created prior to the restart be discarded. Using this instead of
-    // `version` is more reliable because it covers the case where the state
-    // machine is restarted while the version was not bumped, which may happen
-    // rarely if we fast-forward reading the event log because we receive a
-    // snapshot.
+    // of STORE replies. When restartForShard() is called, we bump this version.
+    // This is probably obsolete, but I'm not completely sure yet.
     lsn_t restartVersion{LSN_INVALID};
 
     // Utility used to build a plan for each log on each shard. A plan describes
@@ -543,9 +530,9 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
     PerShardStatToken progressStat;
 
     // true iff our node is a donor for this rebuilding and hasn't finished
-    // rebuilding yet. When all LogRebuildings finish, this is set to false
-    // but ShardState stays alive until we read SHARD_ACK_REBUILT from
-    // event log - this is needed to have the correct
+    // rebuilding yet. When ShardRebuilding finishes and SHARD_IS_REBUILT is
+    // written, this is set to false but ShardState stays alive until we read
+    // SHARD_ACK_REBUILT from event log - this is needed to have the correct
     // rebuildingSet if we see other SHARD_NEEDS_REBUILD events.
     bool participating{false};
 

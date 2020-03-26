@@ -22,15 +22,15 @@ namespace facebook { namespace logdevice {
  * The algorithm is as follows:
  *
  * If this node's generation is 1 or the shard is in PROVISIONING state, write
- * RebuildingCheckpointMetadata for each shard and mark it as not missing data.
+ * RebuildingCompleteMetadata for each shard and mark it as not missing data.
  * Also, transition the node out of the PROVISIONING state to NONE if NCM is
  * enabled.
  *
  * If this node's generation is >1, try and retrieve the
- * RebuildingCheckpointMetadata for each shard. For each shard:
+ * RebuildingCompleteMetadata for each shard. For each shard:
  * - If the marker does exist, mark the shard as not missing data.
  * - If the marker does not exist, we mark it as missing data.
- *   Once it is rebuilt, we will write the RebuildingCheckpointMetadata before
+ *   Once it is rebuilt, we will write the RebuildingCompleteMetadata before
  *   we send SHARD_ACK_REBUILT in the event log.
  *
  * @return 0 on success, or -1 on failure.

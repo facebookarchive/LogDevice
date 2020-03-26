@@ -78,7 +78,7 @@ struct RebuildingSet {
   // Rebuilding state machines should not try to use these shards as recipient
   // and not consider them to decide whether or not the current rebuilding is
   // authoritative.
-  // TODO: currently LogRebuilding will look for records that contain these
+  // TODO: currently rebuilding will look for records that contain these
   // shards in their copyset, which is useless since these shards have already
   // been authoritatively rebuilt.
   std::unordered_set<ShardID, ShardID::Hash> empty;
@@ -104,9 +104,6 @@ class RebuildingPlan;
 class RebuildingReadStorageTask;
 struct STORED_Header;
 struct STORE_Header;
-
-class ShardRebuildingV1;
-using ShardRebuildingV1Ref = WorkerCallbackHelper<ShardRebuildingV1>::Ticket;
 
 class ShardRebuildingV2;
 using ShardRebuildingV2Ref = WorkerCallbackHelper<ShardRebuildingV2>::Ticket;
@@ -137,20 +134,6 @@ class RecordRebuildingInterface {
                                    size_t salt);
 };
 
-class LogRebuildingInterface {
- public:
-  virtual void abort(bool notify_complete = true) = 0;
-  virtual void onReadTaskDone(RebuildingReadStorageTask& task) = 0;
-  virtual void onReadTaskDropped(RebuildingReadStorageTask& task) = 0;
-  virtual RecordRebuildingInterface* findRecordRebuilding(lsn_t lsn) = 0;
-  virtual void onMemtableFlushed(node_index_t node_index,
-                                 ServerInstanceId server_instance_id,
-                                 FlushToken flushToken) = 0;
-  virtual void onGracefulShutdown(node_index_t node_index,
-                                  ServerInstanceId server_instance_id) = 0;
-  virtual ~LogRebuildingInterface() {}
-};
-
 class RebuildingCoordinatorInterface {
  public:
   virtual void noteConfigurationChanged() = 0;
@@ -161,41 +144,19 @@ class RebuildingCoordinatorInterface {
 };
 
 /**
- * A map from (logid, shard) to LogRebuildingInterface.
- */
-struct LogRebuildingMap {
- public:
-  using Key = std::pair<logid_t, shard_index_t>;
-  struct KeyHasher {
-    size_t operator()(const Key& k) const;
-  };
-  using Map = std::
-      unordered_map<Key, std::unique_ptr<LogRebuildingInterface>, KeyHasher>;
-  LogRebuildingInterface* find(logid_t logid, shard_index_t shard);
-  void erase(logid_t logid, shard_index_t shard);
-  void insert(logid_t logid,
-              shard_index_t shard,
-              std::unique_ptr<LogRebuildingInterface> log);
-  Map map;
-};
-
-/**
  * Object in charge of the data movement during rebuilding.
  * It reads and re-replicates the records.
- * There are currently two implementations: the old rebuilding that uses a
- * LogRebuilding for each log, and the new rebuilding partition by partition
- * that reads all logs together.
  *
- * TODO (#T24665001): After rebuilding partition by partition is good and
- *                    stable, remove this interface and have
- *                    RebuildingCoordinator just use ShardRebuilding directly.
+ * TODO (#24665001): This interface is obsolete: there's only one class
+ *                   implementing it. Remove it and have RebuildingCoordinator
+ *                   just use ShardRebuilding directly.
  */
 class ShardRebuildingInterface {
  public:
   // Interface for the owner of a ShardRebuilding instance.
   // Gets notified when ShardRebuilding completes and when it makes enough
   // progress to notify other donors through event log.
-  // RebuildingCoordinator if the only implementation of this interface outside
+  // RebuildingCoordinator is the only implementation of this interface outside
   // tests; see comments there for documentation of the methods' arguments.
   struct Listener {
     virtual void onShardRebuildingComplete(uint32_t shard_idx) = 0;

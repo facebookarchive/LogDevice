@@ -328,11 +328,7 @@ class LogMetadataFactory final {
 };
 
 /**
- * Present if no rebuilding is needed. Checking for this metadata is almost
- * equivalent to checking that all logs have RebuildingCheckpointMetadata with
- * LSN_MAX. The only difference is when new logs are added to config -
- * RebuildingCompleteMetadata remains valid, while checking for all
- * RebuildingCheckpointMetadata would erroneously say that rebuilding is needed.
+ * Present if no rebuilding is needed.
  */
 class RebuildingCompleteMetadata final : public StoreMetadata {
  public:
@@ -553,33 +549,6 @@ class RebuildingRangesMetadata final : public StoreMetadata {
 class StoreMetadataFactory final {
  public:
   static std::unique_ptr<StoreMetadata> create(StoreMetadataType type);
-};
-
-/**
- * Per-log checkpoint on a donor node for rebuilding.
- * The checkpoint contains the last LSN rebuilt by this donor node.
- * It also contains the rebuilding version, @see LogRebuilding::version_.
- */
-class RebuildingCheckpointMetadata final : public LogMetadata {
- public:
-  RebuildingCheckpointMetadata() = default;
-  RebuildingCheckpointMetadata(lsn_t rebuilding_version, lsn_t rebuilt_upto)
-      : data_{rebuilding_version, rebuilt_upto} {}
-
-  LogMetadataType getType() const override {
-    return LogMetadataType::REBUILDING_CHECKPOINT;
-  }
-
-  GEN_METADATA_SERIALIZATION_METHODS(
-      RebuildingCheckpointMetadata,
-      data_,
-      "v " + lsn_to_string(data_.rebuilding_version) + " upto " +
-          lsn_to_string(data_.rebuilt_upto))
-
-  struct {
-    lsn_t rebuilding_version;
-    lsn_t rebuilt_upto;
-  } data_ __attribute__((__packed__));
 };
 
 class RsmSnapshotMetadata : public LogMetadata {

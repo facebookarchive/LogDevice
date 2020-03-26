@@ -388,6 +388,7 @@ class LocalLogStore : boost::noncopyable {
         LSN_MAX};
 
     // Max timestamp to read. Not supported by AllLogsIterator.
+    // Currently unused, although the iterators fully support it.
     std::chrono::milliseconds stop_reading_after_timestamp{
         std::chrono::milliseconds::max()};
 

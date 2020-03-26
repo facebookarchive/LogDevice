@@ -15,7 +15,7 @@
 namespace facebook { namespace logdevice {
 
 /**
- * @file Task created by LogRebuilding state machines when they need data read
+ * @file Task created by ShardRebuilding state machines when they need data read
  *       from the local log store.  Upon completion, the task (including the
  *       result) gets sent back to the worker thread.
  */

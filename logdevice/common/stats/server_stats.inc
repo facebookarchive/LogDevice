@@ -751,7 +751,7 @@ STAT_DEFINE(read_streams_num_records_filtered_rebuilding, SUM)
 // Number of bytes filtered by LocalLogStoreReader for read streams used for
 // rebuilding.
 STAT_DEFINE(read_streams_num_bytes_filtered_rebuilding, SUM)
-// Number of records filtered by LogRebuilding which required information
+// Number of records filtered out by rebuilding which required information
 // only available after the full record was read.
 STAT_DEFINE(read_streams_num_records_late_filtered_rebuilding, SUM)
 
@@ -861,7 +861,7 @@ STAT_DEFINE(write_metadata_record_finished, SUM)
 
 // Total number of failed attempts to write metadata log
 STAT_DEFINE(write_metadata_request_failed, SUM)
-// Total number of failed attempts to update EpochStore after writing metadata 
+// Total number of failed attempts to update EpochStore after writing metadata
 // entry to log
 STAT_DEFINE(write_metadata_epoch_store_failed, SUM)
 
@@ -988,11 +988,7 @@ STAT_DEFINE(fdatasync_microsec, SUM)
 STAT_DEFINE(rebuilding_store_sent, SUM)
 STAT_DEFINE(rebuilding_amend_sent, SUM)
 STAT_DEFINE(rebuilding_donor_stored_ok, SUM)
-STAT_DEFINE(rebuilding_donor_stored_ms, SUM)
-STAT_DEFINE(rebuilding_donor_store_persisted_ms, SUM)
 STAT_DEFINE(rebuilding_donor_amended_ok, SUM)
-STAT_DEFINE(rebuilding_donor_amended_ms, SUM)
-STAT_DEFINE(rebuilding_donor_amend_persisted_ms, SUM)
 STAT_DEFINE(rebuilding_recipient_stored_ok, SUM)
 STAT_DEFINE(rebuilding_recipient_amended_ok, SUM)
 STAT_DEFINE(rebuilding_malformed_records, SUM)
@@ -1003,9 +999,6 @@ STAT_DEFINE(record_rebuilding_amend_in_progress, SUM)
 STAT_DEFINE(record_rebuilding_amend_timeouts, SUM)
 STAT_DEFINE(record_rebuilding_amend_retries, SUM)
 STAT_DEFINE(record_rebuilding_amend_failed, SUM)
-STAT_DEFINE(log_rebuilding_record_durability_timeout, SUM)
-STAT_DEFINE(log_rebuilding_restarted_by_rebuilding_coordinator, SUM)
-STAT_DEFINE(record_rebuilding_timeouts, SUM)
 
 // How many times we've seen an amend pseudorecord without an corresponding
 // full record.
@@ -1204,10 +1197,7 @@ STAT_DEFINE(read_storage_tasks_delayed, SUM)
 STAT_DEFINE(recovery_enqueued, SUM)
 
 // Stats for rebuilding
-STAT_DEFINE(num_in_flight_rebuilding_read_storage_tasks, SUM)
 STAT_DEFINE(num_logs_rebuilding, SUM)
-STAT_DEFINE(log_rebuilding_stall_timer_expired, SUM)
-STAT_DEFINE(rebuilding_records_read_from_cache, SUM)
 
 // Number of pending GetSeqStateRequests with UNRELEASED_RECORD context
 STAT_DEFINE(get_seq_state_pending_context_unreleased_record, SUM)

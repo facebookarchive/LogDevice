@@ -51,15 +51,9 @@ void MemtableFlushedRequest::broadcast() {
 }
 
 void MemtableFlushedRequest::applyFlush() {
-  // send an update to all LogRebuilding state machines
-  // whose log maps to the shard on which memtable was flushed.
-  ServerWorker* w = ServerWorker::onThisThread();
-  for (const auto& lr : w->runningLogRebuildings().map) {
-    if (shard_idx_ == lr.first.second) {
-      lr.second->onMemtableFlushed(
-          node_index_, server_instance_id_, flushToken_);
-    }
-  }
+  // If you're reimplementing rebuilding without WAL:
+  // This is called on each worker (of type GENERAL) of a rebuilding donor node
+  // when it receives a flush notification from a storage node.
 }
 
 NodeID MemtableFlushedRequest::getMyNodeID() const {

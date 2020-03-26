@@ -642,7 +642,7 @@ Like shard\_authoritative\_status but has more columns and prints all the shards
 | ack\_version | string | Version of the rebuilding that was acked. |
 
 ## shard\_rebuildings
-Show debugging information about the ShardRebuilding state machines (see "logdevice/server/rebuilding/ShardRebuildingV1.h").  This state machine is responsible for running all LogRebuilding state machines (see "logs\_rebuilding" table) for all logs in a donor shard.
+Show debugging information about the ShardRebuilding state machines (see "logdevice/server/rebuilding/ShardRebuildingV2.h"). This state machine is responsible for coordinating reads and re-replication on a donor shard.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
@@ -661,12 +661,12 @@ Show debugging information about the ShardRebuilding state machines (see "logdev
 | num\_restart\_timers\_active | long | Number of logs that have completed but for which we are still waiting for acknowlegments that writes were durable. |
 | num\_active\_logs | long | Set of logs being rebuilt for this shard.  The shard completes rebuilding when this number reaches zero. |
 | participating | int | true if this shard is a donor for this rebuilding and hasn't finished rebuilding yet. |
-| time\_by\_state | string | Time spent in each state. 'stalled' means either waiting for global window or aborted because of a persistent error. V2 only |
-| task\_in\_flight | int | True if a storage task for reading records is in queue or in flight right now. V2 only. |
-| persistent\_error | int | True if we encountered an unrecoverable error when reading. Shard shouldn't stay in this state for more than a few seconds: it's expected that RebuildingCoordinator will request a rebuilding for this shard, and rebuilding will rewind without this node's participation. V2 only. |
-| read\_buffer\_bytes | long | Bytes of records that we've read but haven't started re-replicating yet. V2 only. |
-| records\_in\_flight | long | Number of records that are being re-replicated right now. V2 only. |
-| read\_pointer | string | How far we have read: partition, log ID, LSN. V2 only. |
+| time\_by\_state | string | Time spent in each state. 'stalled' means either waiting for global window or aborted because of a persistent error. |
+| task\_in\_flight | int | True if a storage task for reading records is in queue or in flight right now. |
+| persistent\_error | int | True if we encountered an unrecoverable error when reading. Shard shouldn't stay in this state for more than a few seconds: it's expected that RebuildingCoordinator will request a rebuilding for this shard, and rebuilding will rewind without this node's participation. |
+| read\_buffer\_bytes | long | Bytes of records that we've read but haven't started re-replicating yet. |
+| records\_in\_flight | long | Number of records that are being re-replicated right now. |
+| read\_pointer | string | How far we have read: partition, log ID, LSN. |
 | progress | real | Approximately what fraction of the work is done, between 0 and 1. -1 if the implementation doesn't support progress estimation. |
 
 ## shards

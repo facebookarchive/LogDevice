@@ -120,28 +120,4 @@ void RecordRebuildingInterface::getRNGSeedFromRecord(uint32_t (&out)[4],
   }
 }
 
-size_t LogRebuildingMap::KeyHasher::
-operator()(const LogRebuildingMap::Key& k) const {
-  return folly::hash::hash_combine(k.first.val_, k.second);
-}
-
-LogRebuildingInterface* LogRebuildingMap::find(logid_t logid,
-                                               shard_index_t shard) {
-  Key k(logid, shard);
-  auto it = map.find(k);
-  return it == map.end() ? nullptr : it->second.get();
-}
-
-void LogRebuildingMap::erase(logid_t logid, shard_index_t shard) {
-  Key k(logid, shard);
-  map.erase(k);
-}
-
-void LogRebuildingMap::insert(logid_t logid,
-                              shard_index_t shard,
-                              std::unique_ptr<LogRebuildingInterface> log) {
-  Key k(logid, shard);
-  map[k] = std::move(log);
-}
-
 }} // namespace facebook::logdevice

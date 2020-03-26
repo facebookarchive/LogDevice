@@ -28,10 +28,9 @@ class ShardRebuildings : public AdminCommandTable {
   std::string getDescription() override {
     return "Show debugging information about the ShardRebuilding state "
            "machines (see "
-           "\"logdevice/server/rebuilding/ShardRebuildingV1.h\").  This state "
-           "machine is responsible for running all LogRebuilding state "
-           "machines (see \"logs_rebuilding\" table) for all logs in a donor "
-           "shard.";
+           "\"logdevice/server/rebuilding/ShardRebuildingV2.h\"). This state "
+           "machine is responsible for coordinating reads and re-replication "
+           "on a donor shard.";
   }
   TableColumns getFetchableColumns() const override {
     return {
@@ -93,28 +92,28 @@ class ShardRebuildings : public AdminCommandTable {
         {"time_by_state",
          DataType::TEXT,
          "Time spent in each state. 'stalled' means either waiting for global "
-         "window or aborted because of a persistent error. V2 only"},
+         "window or aborted because of a persistent error."},
         {"task_in_flight",
          DataType::INTEGER,
          "True if a storage task for reading records is in queue or in flight "
-         "right now. V2 only."},
+         "right now."},
         {"persistent_error",
          DataType::INTEGER,
          "True if we encountered an unrecoverable error when reading. Shard "
          "shouldn't stay in this state for more than a few seconds: it's "
          "expected that RebuildingCoordinator will request a rebuilding for "
          "this shard, and rebuilding will rewind without this node's "
-         "participation. V2 only."},
+         "participation."},
         {"read_buffer_bytes",
          DataType::BIGINT,
          "Bytes of records that we've read but haven't started re-replicating "
-         "yet. V2 only."},
+         "yet."},
         {"records_in_flight",
          DataType::BIGINT,
-         "Number of records that are being re-replicated right now. V2 only."},
+         "Number of records that are being re-replicated right now."},
         {"read_pointer",
          DataType::TEXT,
-         "How far we have read: partition, log ID, LSN. V2 only."},
+         "How far we have read: partition, log ID, LSN."},
         {"progress",
          DataType::REAL,
          "Approximately what fraction of the work is done, between 0 and 1. "

@@ -163,12 +163,14 @@ class STORED_Message : public Message {
   // If the STORE message was for rebuilding (REBUILDING flag was set), the
   // rebuilding id is sent back along so that the RecordRebuilding state
   // machine can detect that it is a stale response in case the rebuilding
-  // id changed. (Rebuilding id changes everytime LogRebuilding state machine
-  // is restarted.)
+  // id changed. (Rebuilding id changes everytime donor restarts the rebuilding
+  // procedure.)
   log_rebuilding_id_t rebuilding_id_;
   // If the STORE message was for rebuilding (REBUILDING flag was set), the
-  // flushToken the write was attributed to is sent so that LogRebuilding
+  // flushToken the write was attributed to is sent so that rebuilding
   // state machine can act on a write being stored durably.
+  // Currently unused as the implementation of rebuilding without WAL has been
+  // removed (it didn't work well enough, need to reimplement).
   FlushToken flushToken_;
   ServerInstanceId serverInstanceId_;
 

@@ -9,7 +9,6 @@
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/request_util.h"
-#include "logdevice/server/LogRebuilding.h"
 #include "logdevice/server/RebuildingCoordinator.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/admincommands/AdminCommand.h"
@@ -122,35 +121,19 @@ class InfoRebuildingLogs : public AdminCommand {
                                   "NonDurable Amends",         // 14
                                   "Last storage task status"); // 15
 
-    if (server->getParameters()->getRebuildingSettings()->enable_v2) {
-      auto workerType =
-          EventLogStateMachine::workerType(server->getProcessor());
-      auto workerIdx = EventLogStateMachine::getWorkerIdx(
-          server->getProcessor()->getWorkerCount(workerType));
-      auto funcs = run_on_workers(
-          server->getProcessor(), {workerIdx}, workerType, [&]() {
-            if (server->getRebuildingCoordinator()) {
-              return server->getRebuildingCoordinator()
-                  ->beginGetLogsDebugInfo();
-            }
-            return std::function<void(InfoRebuildingLogsTable&)>();
-          });
-      ld_check_le(funcs.size(), 1);
-      if (funcs.size() == 1 && funcs[0]) {
-        funcs[0](table);
-      }
-    } else {
-      auto tables = run_on_all_workers(server->getProcessor(), [&]() {
-        InfoRebuildingLogsTable t(table);
-        for (auto& r : Worker::onThisThread()->runningLogRebuildings().map) {
-          checked_downcast<LogRebuilding*>(r.second.get())->getDebugInfo(t);
-        }
-        return t;
-      });
-
-      for (int i = 0; i < tables.size(); ++i) {
-        table.mergeWith(std::move(tables[i]));
-      }
+    auto workerType = EventLogStateMachine::workerType(server->getProcessor());
+    auto workerIdx = EventLogStateMachine::getWorkerIdx(
+        server->getProcessor()->getWorkerCount(workerType));
+    auto funcs =
+        run_on_workers(server->getProcessor(), {workerIdx}, workerType, [&]() {
+          if (server->getRebuildingCoordinator()) {
+            return server->getRebuildingCoordinator()->beginGetLogsDebugInfo();
+          }
+          return std::function<void(InfoRebuildingLogsTable&)>();
+        });
+    ld_check_le(funcs.size(), 1);
+    if (funcs.size() == 1 && funcs[0]) {
+      funcs[0](table);
     }
 
     json ? table.printJson(out) : table.print(out);

@@ -46,12 +46,6 @@ Message::Disposition SHUTDOWN_Message::onReceived(const Address& from) {
   Worker* w = Worker::onThisThread();
   w->sender().setPeerShuttingDown(from.asNodeID());
 
-  // Inform the LogRebuilding state machines about graceful
-  // shutdown
-  for (const auto& lr : w->runningLogRebuildings().map) {
-    lr.second->onGracefulShutdown(
-        from.asNodeID().index(), header_.serverInstanceId);
-  }
   return Disposition::NORMAL;
 }
 

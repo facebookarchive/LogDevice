@@ -127,8 +127,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "1000ms",
        nullptr,
        "Max amount of time rebuilding read storage task is allowed to "
-       "take before yielding to other storage tasks. Only supported by "
-       "rebuilding V2 (partition by partition). \"max\" for unlimited.",
+       "take before yielding to other storage tasks. \"max\" for unlimited.",
        SERVER);
   init("rebuilding-max-records-in-flight",
        &max_records_in_flight,
@@ -141,8 +140,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
          }
        },
        "Maximum number of rebuilding STORE requests that a rebuilding donor "
-       "node can have in flight at the same time. Rebuilding v1: per log, "
-       "rebuilding v2: per shard.",
+       "node can have in flight per shard at the same time.",
        SERVER,
        SettingsCategory::Rebuilding);
   init(
@@ -151,25 +149,9 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
       "100M",
       parse_positive<size_t>(),
       "Maximum total size of rebuilding STORE requests that a rebuilding donor "
-      "node can have in flight at the same time, per shard. Only used by "
-      "rebuilding v2.",
+      "node can have in flight at the same time, per shard.",
       SERVER,
       SettingsCategory::Rebuilding);
-  init("rebuilding-max-amends-in-flight",
-       &max_amends_in_flight,
-       "100",
-       [](size_t val) {
-         if ((ssize_t)val <= 0) {
-           throw boost::program_options::error(
-               "rebuilding-max-amends-in-flight must "
-               "be positive");
-         }
-       },
-       "maximum number of requests to update (amend) a rebuilt record's "
-       "copyset that a rebuilding donor node can have in flight at the same "
-       "time, per log. Rebuilding v1 only.",
-       SERVER,
-       SettingsCategory::Rebuilding);
   init(
       "rebuilding-max-get-seq-state-in-flight",
       &max_get_seq_state_in_flight,
@@ -195,69 +177,13 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "rebuilding via SyncSequencerRequest API, with exponential backoff",
        SERVER,
        SettingsCategory::Rebuilding);
-  init("rebuilding-max-logs-in-flight",
-       &max_logs_in_flight,
-       "1",
-       [](size_t val) {
-         if ((ssize_t)val <= 0) {
-           throw boost::program_options::error("rebuilding-max-logs-"
-                                               "in-flight must be "
-                                               "positive");
-         }
-       },
-       "Maximum number of logs that a donor node can be rebuilding at the same "
-       "time. V1 only.",
-       SERVER,
-       SettingsCategory::Rebuilding);
   init("rebuilding-use-rocksdb-cache",
        &use_rocksdb_cache,
        "false",
        nullptr,
-       "Allow rebuilding reads to use RocksDB block cache. Recommended: enable "
-       "for rebuilding v1, disable for rebuilding v2.",
-       SERVER,
-       SettingsCategory::Rebuilding);
-  init("rebuilding-checkpoint-interval-mb",
-       &checkpoint_interval_mb,
-       "100",
-       [](size_t val) {
-         if ((ssize_t)val <= 0) {
-           throw boost::program_options::error(
-               "rebuilding-checkpoint-interval-mb must be positive");
-         }
-       },
-       "Write a per-log rebuilding checkpoint once per this many megabytes of "
-       "rebuilt data in the log. A rebuilding checkpoints contains an LSN "
-       "through which the log has been rebuilt by this donor and the "
-       "rebuilding version number identifying this rebuilding run. If a node "
-       "restarts in the middle of a rebuilding run, it resumes rebuilding of a "
-       "log from that log's last checkpoint. V1 only.",
-       SERVER,
-       SettingsCategory::Rebuilding);
-  init("total-log-rebuilding-size-per-shard-mb",
-       &total_log_rebuilding_size_per_shard_mb,
-       "100",
-       [](double val) {
-         if ((double)val <= 0) {
-           throw boost::program_options::error(
-               "total-log-rebuilding-size-per-shard-mb must be positive");
-         }
-       },
-       "Maximum amount of memory that can be consumed by all LogRebuilding "
-       "state machines, per shard. V1 only.",
-       SERVER,
-       SettingsCategory::Rebuilding);
-  init("max-log-rebuilding-size-mb",
-       &max_log_rebuilding_size_mb,
-       "5",
-       [](double val) {
-         if ((double)val <= 0) {
-           throw boost::program_options::error(
-               "max-log-rebuilding-size-mb must be positive");
-         }
-       },
-       "Maximum amount of memory that can be consumed by a single "
-       "LogRebuilding state machine. V1 only.",
+       "Allow rebuilding reads to use RocksDB block cache. Rebuilding reads "
+       "are not expected to benefit from using the cache, so it's disabled by "
+       "default to avoid thrashing the cache.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuilding-read-only",
@@ -305,23 +231,6 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "(--rebuilding-retry-timeout) is used if something is known to be wrong "
        "with the store, e.g. we failed to send the message, or we've got an "
        "unsuccessful reply, or connection closed after we sent the store.",
-       SERVER,
-       SettingsCategory::Rebuilding);
-  init("rebuilding-local-window-uses-partition-boundary",
-       &local_window_uses_partition_boundary,
-       "true",
-       nullptr,
-       "If true, the local window will be moved on partition boundaries. If "
-       "false, it will instead be moved on fixed time intervals, as set by "
-       "--rebuilding-local-window. V1 only, V2 always reads partition by "
-       "partition.",
-       SERVER,
-       SettingsCategory::Rebuilding);
-  init("rebuilding-use-iterator-cache",
-       &use_iterator_cache,
-       "false",
-       nullptr,
-       "Place rebuilding iterators in the LogsDB iterator cache. V1 only.",
        SERVER,
        SettingsCategory::Rebuilding);
   init("rebuild-dirty-shards",
@@ -416,20 +325,6 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
       "automatically, based on the cluster configuration.",
       SERVER | DEPRECATED,
       SettingsCategory::Rebuilding);
-  init("record-durability-timeout",
-       &record_durability_timeout,
-       "960s",
-       [](std::chrono::seconds val) -> void {
-         if (val.count() < 0) {
-           out_of_range(
-               "record-durability-timeout", "non-negative", val.count());
-         }
-       },
-       "Time for which LogRebuilding/RebuildingCoordinator will wait for "
-       "pending records to be durable before restarting the rebuilding for "
-       "the log.",
-       SERVER | EXPERIMENTAL,
-       SettingsCategory::Rebuilding);
   init(
       "auto-mark-unrecoverable-timeout",
       &auto_mark_unrecoverable_timeout,
@@ -510,13 +405,6 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        "Used in tests.",
        SERVER,
        SettingsCategory::Testing);
-  init("rebuilding-v2",
-       &enable_v2,
-       "true",
-       nullptr,
-       "Enables a new implementation of rebuilding. The old one is deprecated.",
-       SERVER,
-       SettingsCategory::Rebuilding);
   init("rebuilding-rate-limit",
        &rate_limit,
        "unlimited",
@@ -532,7 +420,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
          }
          return res;
        },
-       "Rebuilding V2 only. Limit on how fast rebuilding reads, in bytes per "
+       "Limit on how fast rebuilding reads, in bytes per "
        "unit of time, per shard. Example: 5M/1s will make rebuilding read at "
        "most one megabyte per second in each shard. Note that it counts "
        "pre-filtering bytes; if rebuilding has high read amplification "

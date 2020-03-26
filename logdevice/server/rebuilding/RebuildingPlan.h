@@ -17,7 +17,7 @@
 namespace facebook { namespace logdevice {
 
 /**
- * RebuildingPlan describes the plan that a LogRebuilding must follow to
+ * RebuildingPlan describes the plan that a ShardRebuilding must follow to
  * rebuild (with local data) a certain log in a certain shard. In particular,
  * it contains ranges of epochs for which this node has relevant data and an
  * estimation of the smallest record timestamp that will be rebuilt.
