@@ -2487,8 +2487,8 @@ class StaticSequencerLocatorFactory : public SequencerLocatorFactory {
 
 } // namespace
 
-void Cluster::populateClientSettings(
-    std::unique_ptr<ClientSettings>& settings) const {
+void Cluster::populateClientSettings(std::unique_ptr<ClientSettings>& settings,
+                                     bool use_file_based_ncs) const {
   if (!settings) {
     settings.reset(ClientSettings::create());
   }
@@ -2535,13 +2535,56 @@ void Cluster::populateClientSettings(
         "ssl-ca-path", TEST_SSL_FILE("logdevice_test_valid_ca.cert"));
     ld_check(rv == 0);
   }
+
+  {
+    // Enable NCM on clients
+    if (!settings->isOverridden("enable-nodes-configuration-manager")) {
+      rv = settings->set("enable-nodes-configuration-manager", "true");
+      ld_check(rv == 0);
+    }
+
+    if (settings->isOverridden("nodes-configuration-seed-servers") &&
+        use_file_based_ncs) {
+      ld_error("Can't have nodes-configuration-seed-servers set and require a "
+               "file based NCS");
+      ld_check(false);
+    }
+
+    if (use_file_based_ncs) {
+      rv = settings->set("admin-client-capabilities", "true");
+      ld_check(rv == 0);
+      rv = settings->set("nodes-configuration-file-store-dir", getNCSPath());
+      ld_check(rv == 0);
+    } else if (!settings->isOverridden("nodes-configuration-seed-servers")) {
+      auto nc = readNodesConfigurationFromStore();
+      std::vector<std::string> addrs;
+      for (const auto& [_, node] : *nc->getServiceDiscovery()) {
+        addrs.push_back(node.address.toString());
+      }
+      std::string seed_addr =
+          folly::sformat("data:{}", folly::join(",", addrs));
+      rv = settings->set("nodes-configuration-seed-servers", seed_addr);
+      ld_check(rv == 0);
+    }
+
+    if (!settings->isOverridden(
+            "use-nodes-configuration-manager-nodes-configuration")) {
+      rv = settings->set(
+          "use-nodes-configuration-manager-nodes-configuration",
+          nodes_configuration_sot_ == NodesConfigurationSourceOfTruth::NCM
+              ? "true"
+              : "false");
+      ld_check(rv == 0);
+    }
+  }
 }
 
 std::shared_ptr<Client>
 Cluster::createClient(std::chrono::milliseconds timeout,
                       std::unique_ptr<ClientSettings> settings,
-                      std::string credentials) {
-  populateClientSettings(settings);
+                      std::string credentials,
+                      bool use_file_based_ncs) {
+  populateClientSettings(settings, use_file_based_ncs);
   auto client = ClientFactory()
                     .setClusterName(cluster_name_)
                     .setTimeout(timeout)
@@ -3467,7 +3510,7 @@ void Cluster::unsetSetting(const std::string& name) {
 }
 
 std::unique_ptr<configuration::nodes::NodesConfigurationStore>
-Cluster::buildNodesConfigurationStore() {
+Cluster::buildNodesConfigurationStore() const {
   using namespace logdevice::configuration::nodes;
   NodesConfigurationStoreFactory::Params params;
   params.type = NodesConfigurationStoreFactory::NCSType::File;
@@ -3479,7 +3522,7 @@ Cluster::buildNodesConfigurationStore() {
 }
 
 std::shared_ptr<const NodesConfiguration>
-Cluster::readNodesConfigurationFromStore() {
+Cluster::readNodesConfigurationFromStore() const {
   using namespace logdevice::configuration::nodes;
   auto store = buildNodesConfigurationStore();
   if (store == nullptr) {

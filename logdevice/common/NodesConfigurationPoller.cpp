@@ -55,13 +55,22 @@ NodesConfigurationPoller::createPoller() {
                              const NodeSourceSet& graylist,
                              size_t num_required,
                              size_t num_extras) {
+    // We can't use cluster state in bootstrapping processor because our address
+    // to NodeID mapping can be different from the actual one. So for
+    // example, Cluster state's N5, can be different from bootstrapping
+    // processor's N5.
+    ClusterState* cluster_state{nullptr};
+    if (!isBootstrapping()) {
+      cluster_state = getClusterState();
+    }
+
     return RandomNodeSelector::select(candidates,
                                       existing,
                                       blacklist,
                                       graylist,
                                       num_required,
                                       num_extras,
-                                      getClusterState());
+                                      cluster_state);
   };
 
   auto req_fn = [this](Poller::RoundID round, node_index_t node) {

@@ -61,7 +61,11 @@ TEST_F(NodeConfigChangeTest, ChangeDataIP) {
   // Spawn a cluster
   auto cluster = IntegrationTestUtils::ClusterFactory().create(2);
   // Create a client
-  std::shared_ptr<Client> client = cluster->createClient();
+  std::shared_ptr<Client> client =
+      cluster->createClient(getDefaultTestTimeout(),
+                            std::unique_ptr<ClientSettings>(),
+                            "",
+                            /* use_file_based_ncs */ true);
 
   // Wait for all sockets on node 0 to become active
   waitForSocketActivation(cluster, 0);

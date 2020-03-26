@@ -95,14 +95,22 @@ TEST_F(ConfigPermissionTest, Append) {
   };
 
   // create a client with different credentials
-  auto guest_client =
-      cluster->createClient(this->testTimeout(), client_settings());
-  auto auth_client =
-      cluster->createClient(this->testTimeout(), client_settings(), "allPass");
-  auto noAppend_client = cluster->createClient(
-      this->testTimeout(), client_settings(), "appendFail");
-  auto admin_client = cluster->createClient(
-      this->testTimeout(), client_settings(), "admin_user_id");
+  auto guest_client = cluster->createClient(this->testTimeout(),
+                                            client_settings(),
+                                            "",
+                                            /* use_file_based_ncs */ true);
+  auto auth_client = cluster->createClient(this->testTimeout(),
+                                           client_settings(),
+                                           "allPass",
+                                           /* use_file_based_ncs */ true);
+  auto noAppend_client = cluster->createClient(this->testTimeout(),
+                                               client_settings(),
+                                               "appendFail",
+                                               /* use_file_based_ncs */ true);
+  auto admin_client = cluster->createClient(this->testTimeout(),
+                                            client_settings(),
+                                            "admin_user_id",
+                                            /* use_file_based_ncs */ true);
 
   char data[128]; // send the contents of this array as payload
   std::atomic<int> cb_called(0);
@@ -156,12 +164,11 @@ TEST_F(ConfigPermissionTest, Trim) {
   auto config = Configuration::fromJsonFile(
       TEST_CONFIG_FILE("conf_permission_test.conf"));
   ASSERT_NE(nullptr, config);
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .doPreProvisionEpochMetaData() // to avoid gaps
-          .setParam("--require-permission-message-types", "all")
-          .useTcp() // required for ip server authentication
-          .create(*config);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .doPreProvisionEpochMetaData() // to avoid gaps
+                     .setParam("--require-permission-message-types", "all")
+                     .useTcp() // required for ip server authentication
+                     .create(*config);
 
   // create a client with different credentials
   auto guest_client = cluster->createClient(this->testTimeout());
@@ -282,12 +289,11 @@ TEST_F(ConfigPermissionTest, AsyncRead) {
   auto config = Configuration::fromJsonFile(
       TEST_CONFIG_FILE("conf_permission_test.conf"));
   ASSERT_NE(nullptr, config);
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .doPreProvisionEpochMetaData() // to avoid gaps
-          .setParam("--require-permission-message-types", "all")
-          .useTcp() // required for ip server authentication
-          .create(*config);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .doPreProvisionEpochMetaData() // to avoid gaps
+                     .setParam("--require-permission-message-types", "all")
+                     .useTcp() // required for ip server authentication
+                     .create(*config);
   auto client = cluster->createClient(this->testTimeout());
   auto auth_client = cluster->createClient(
       this->testTimeout(), std::unique_ptr<ClientSettings>(), "allPass");
@@ -429,12 +435,11 @@ TEST_F(ConfigPermissionTest, RequireAuthentication) {
       TEST_CONFIG_FILE("conf_permission_test_req_auth.conf"));
   ASSERT_NE(nullptr, config);
 
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .doPreProvisionEpochMetaData()
-          .setParam("--require-permission-message-types", "all")
-          .useTcp() // required for ip server authentication
-          .create(*config);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .doPreProvisionEpochMetaData()
+                     .setParam("--require-permission-message-types", "all")
+                     .useTcp() // required for ip server authentication
+                     .create(*config);
 
   std::unique_ptr<ClientSettings> settings(ClientSettings::create());
 
@@ -446,7 +451,10 @@ TEST_F(ConfigPermissionTest, RequireAuthentication) {
 
   // client was created with out any credential, it should not be allowed to
   // connect
-  auto client = cluster->createClient(this->testTimeout(), std::move(settings));
+  auto client = cluster->createClient(this->testTimeout(),
+                                      std::move(settings),
+                                      "",
+                                      /* use_file_based_ncs */ true);
 
   std::atomic<int> cb_called(0);
   auto check_append_status_cb = [&](Status st, const DataRecord& /*r*/) {
@@ -504,11 +512,10 @@ TEST_F(ConfigPermissionTest, PermissionCheckingDisabled) {
       "conf_permission_test_permission_checking_disabled.conf"));
   ASSERT_NE(nullptr, config);
 
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .doPreProvisionEpochMetaData() // to avoid gaps
-          .useTcp() // required for ip server authentication
-          .create(*config);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .doPreProvisionEpochMetaData() // to avoid gaps
+                     .useTcp() // required for ip server authentication
+                     .create(*config);
 
   // client was created with out any credential, it should be allowed to
   // connect and perform all operations
@@ -594,12 +601,11 @@ TEST_F(ConfigPermissionTest, ACL) {
   auto config = Configuration::fromJsonFile(
       TEST_CONFIG_FILE("conf_permission_acl_test.conf"));
   ASSERT_NE(nullptr, config);
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .doPreProvisionEpochMetaData() // to avoid gaps
-          .setParam("--require-permission-message-types", "all")
-          .useTcp() // required for ip server authentication
-          .create(*config);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .doPreProvisionEpochMetaData() // to avoid gaps
+                     .setParam("--require-permission-message-types", "all")
+                     .useTcp() // required for ip server authentication
+                     .create(*config);
 }
 
 // Verifies that configPermissionChecker works with internal logs.
@@ -609,7 +615,7 @@ TEST_F(ConfigPermissionTest, InternalLogs) {
   ASSERT_NE(nullptr, config);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .doPreProvisionEpochMetaData()        // to avoid gaps
+          .doPreProvisionEpochMetaData() // to avoid gaps
           .useTcp() // required for ip server authentication
           .setParam("--handshake-timeout", chrono_string(this->testTimeout()))
           .setParam("--require-permission-message-types", "all")

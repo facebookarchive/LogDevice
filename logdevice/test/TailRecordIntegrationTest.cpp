@@ -165,16 +165,16 @@ TailRecordIntegrationTest::checkTail(std::shared_ptr<ClientImpl>& client,
 // check the tail of the log that has never been written before
 TEST_F(TailRecordIntegrationTest, EmptyLog) {
   init();
-  auto client = createClient();
   cluster_->start();
+  auto client = createClient();
   cluster_->waitForRecovery();
   checkTail(client, LSN_INVALID, 0, 0);
 }
 
 TEST_F(TailRecordIntegrationTest, Basic) {
   init();
-  auto client = createClient();
   cluster_->start();
+  auto client = createClient();
   lsn_t lsn;
   std::chrono::milliseconds timestamp;
   size_t byte_offset = 0;
@@ -192,8 +192,8 @@ TEST_F(TailRecordIntegrationTest, Basic) {
 
 TEST_F(TailRecordIntegrationTest, SequencerFailOver) {
   init();
-  auto client = createClient();
   cluster_->start();
+  auto client = createClient();
   lsn_t lsn;
   std::chrono::milliseconds timestamp;
   size_t byte_offset = 0;
@@ -227,8 +227,8 @@ TEST_F(TailRecordIntegrationTest, SequencerFailOver) {
 // check that non-existent log ID returns NOTFOUND
 TEST_F(TailRecordIntegrationTest, LogNotFound) {
   init(true);
-  auto client = createClient();
   cluster_->start();
+  auto client = createClient();
   cluster_->waitForRecovery();
   // Try to fetch log attributes of unknown log
   auto tail_attribute = client->getTailAttributesSync(logid_t(41));

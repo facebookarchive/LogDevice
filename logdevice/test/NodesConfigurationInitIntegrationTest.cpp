@@ -8,6 +8,7 @@
 
 #include "logdevice/common/NodesConfigurationInit.h"
 #include "logdevice/lib/ClientImpl.h"
+#include "logdevice/lib/ClientProcessor.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -27,33 +28,20 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
     return cluster->getNode(idx).addrs_.protocol.toString();
   };
 
-  {
-    // Without client bootstrapping
-    // TODO Remove this when client bootstrapping becomes the default.
-    auto client = cluster->createClient();
-    auto client_impl = dynamic_cast<ClientImpl*>(client.get());
-    auto config = client_impl->getConfig();
-    EXPECT_EQ(nullptr, config->getNodesConfigurationFromNCMSource());
-  }
+  auto client = cluster->createClient();
+  ASSERT_NE(nullptr, client);
+  auto client_impl = dynamic_cast<ClientImpl*>(client.get());
+  ASSERT_FALSE(client_impl->getProcessor()
+                   .settings()
+                   ->nodes_configuration_seed_servers.empty());
 
-  {
-    // With NCM client bootstrapping
-    auto seed_addr = "data:" + get_protocol_addr(0);
-    auto settings = std::unique_ptr<ClientSettings>(ClientSettings::create());
-    settings->set("enable-nodes-configuration-manager", "true");
-    settings->set("nodes-configuration-seed-servers", seed_addr);
-
-    auto client =
-        cluster->createClient(getDefaultTestTimeout(), std::move(settings));
-    auto client_impl = dynamic_cast<ClientImpl*>(client.get());
-    auto config = client_impl->getConfig();
-    auto nodes_cfg = config->getNodesConfigurationFromNCMSource();
-    ASSERT_NE(nullptr, nodes_cfg);
-    EXPECT_EQ(get_protocol_addr(0),
-              nodes_cfg->getNodeServiceDiscovery(0)->address.toString());
-    EXPECT_EQ(get_protocol_addr(4),
-              nodes_cfg->getNodeServiceDiscovery(4)->address.toString());
-  }
+  auto config = client_impl->getConfig();
+  auto nodes_cfg = config->getNodesConfigurationFromNCMSource();
+  ASSERT_NE(nullptr, nodes_cfg);
+  EXPECT_EQ(get_protocol_addr(0),
+            nodes_cfg->getNodeServiceDiscovery(0)->address.toString());
+  EXPECT_EQ(get_protocol_addr(4),
+            nodes_cfg->getNodeServiceDiscovery(4)->address.toString());
 }
 
 TEST_F(NodesConfigurationInitIntegrationTest, SeedDown) {

@@ -584,7 +584,9 @@ TEST_F(AppendIntegrationTest, LogIdNotInServerConfig) {
  * either success or (more likely) E::TIMEDOUT.
  */
 TEST_F(AppendIntegrationTest, AppendTimeout) {
-  auto cluster = IntegrationTestUtils::ClusterFactory().create(1);
+  // One node would have been enough in here for this test, but we added another
+  // one for the client to able the nodes config.
+  auto cluster = IntegrationTestUtils::ClusterFactory().create(2);
 
   cluster->getSequencerNode().suspend();
 

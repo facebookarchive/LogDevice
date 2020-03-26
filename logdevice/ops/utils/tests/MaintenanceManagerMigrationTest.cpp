@@ -82,15 +82,11 @@ TEST_F(MaintenanceManagerMigrationTest, Migration) {
   init();
   cluster_->start();
 
-  auto seed_addr = "data:" + cluster_->getNode(0).addrs_.protocol.toString();
-  auto settings = std::unique_ptr<ClientSettings>(ClientSettings::create());
-  settings->set("enable-nodes-configuration-manager", "true");
-  settings->set("nodes-configuration-seed-servers", seed_addr);
-  settings->set("admin-client-capabilities", "true");
-  settings->set("nodes-configuration-file-store-dir", cluster_->getNCSPath());
-
-  std::shared_ptr<Client> client =
-      cluster_->createClient(getDefaultTestTimeout(), std::move(settings));
+  std::shared_ptr<Client> client = cluster_->createClient(
+      getDefaultTestTimeout(),
+      std::unique_ptr<ClientSettings>(ClientSettings::create()),
+      "",
+      /* use_file_based_ncs */ true);
   auto clientImpl = dynamic_cast<ClientImpl*>(client.get());
   clientImpl->allowWriteInternalLog();
 

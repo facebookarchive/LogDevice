@@ -890,12 +890,19 @@ class Cluster {
   /**
    * This creates a client by calling ClientFactory::create() that does not
    * share the loaded config_.
+   *
+   * If use_file_based_ncs is set to true, the client will use
+   * FileBasedNodesConfigurationStore to fetch and update the
+   * NodesConfiguration instead of the server based one. Use this *only* if you
+   * want to create a client without estabilishing any connection to the nodes
+   * to fetch the Nodes Config (e.g. when all the nodes are dead).
    */
   std::shared_ptr<Client>
   createClient(std::chrono::milliseconds timeout = getDefaultTestTimeout(),
                std::unique_ptr<ClientSettings> settings =
                    std::unique_ptr<ClientSettings>(),
-               std::string credentials = "");
+               std::string credentials = "",
+               bool use_file_based_ncs = false);
 
   const Nodes& getNodes() const {
     return nodes_;
@@ -1310,10 +1317,11 @@ class Cluster {
 
   // Build a NodesConfigurationStore to modify the NodesConfiguration directly.
   std::unique_ptr<configuration::nodes::NodesConfigurationStore>
-  buildNodesConfigurationStore();
+  buildNodesConfigurationStore() const;
 
   // Reads the nodes configuration from the cluster's NodesConfigurationStore.
-  std::shared_ptr<const NodesConfiguration> readNodesConfigurationFromStore();
+  std::shared_ptr<const NodesConfiguration>
+  readNodesConfigurationFromStore() const;
 
   // Create a self registering node with a given name. Does not start the
   // process.
@@ -1376,7 +1384,8 @@ class Cluster {
 
   // Helper for createClient() to populate client
   // settings.
-  void populateClientSettings(std::unique_ptr<ClientSettings>& settings) const;
+  void populateClientSettings(std::unique_ptr<ClientSettings>& settings,
+                              bool use_file_based_ncs) const;
 
   // We keep track whether the cluster was created using tcp ports or unix
   // domain sockets so that we can use the same method for new nodes created by

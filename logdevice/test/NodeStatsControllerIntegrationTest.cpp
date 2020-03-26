@@ -835,8 +835,14 @@ TEST_F(NodeStatsControllerIntegrationTest, NoSequencerNode) {
 
   std::unique_ptr<ClientSettings> settings(ClientSettings::create());
   ASSERT_EQ(0, settings->set("on-demand-logs-config", "true"));
-  std::shared_ptr<Client> client = cluster->createClient(
-      std::chrono::milliseconds(100), std::move(settings));
+  // Given that the cluster has a only a single node and it hasn't started yet,
+  // we can't use the normal ServerBasedNodesConfigurationStore. The client
+  // needs to read from the NC file directly.
+  std::shared_ptr<Client> client =
+      cluster->createClient(std::chrono::milliseconds(100),
+                            std::move(settings),
+                            "",
+                            /* use_file_based_ncs */ true);
   ASSERT_TRUE((bool)client);
 
   // Sends an append and expects it to timeout before routing it (because it's

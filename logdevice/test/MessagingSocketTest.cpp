@@ -1490,6 +1490,8 @@ TEST_P(MessagingSocketTest, ReentrantOnSent) {
  * fail with CONNFAILED.
  */
 TEST_P(MessagingSocketTest, PROTONOSUPPORT) {
+  // One node would have been enough in here for this test, but we added another
+  // one for the client to able the nodes config.
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setParam("--test-reject-hello",
@@ -1499,7 +1501,7 @@ TEST_P(MessagingSocketTest, PROTONOSUPPORT) {
                     GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
                         ? "true"
                         : "false")
-          .create(1);
+          .create(2);
 
   cluster->getSequencerNode().suspend();
 
@@ -1547,6 +1549,8 @@ TEST_P(MessagingSocketTest, PROTONOSUPPORT) {
  * fail with CONNFAILED.
  */
 TEST_P(MessagingSocketTest, DestinationMismatchTestReject) {
+  // One node would have been enough in here for this test, but we added another
+  // one for the client to able the nodes config.
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setParam("--test-reject-hello",
@@ -1556,7 +1560,7 @@ TEST_P(MessagingSocketTest, DestinationMismatchTestReject) {
                     GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
                         ? "true"
                         : "false")
-          .create(1);
+          .create(2);
 
   cluster->getSequencerNode().suspend();
 
@@ -1604,6 +1608,8 @@ TEST_P(MessagingSocketTest, DestinationMismatchTestReject) {
  * fail with CONNFAILED.
  */
 TEST_P(MessagingSocketTest, InvalidClusterNameTestReject) {
+  // One node would have been enough in here for this test, but we added another
+  // one for the client to able the nodes config.
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .setParam("--test-reject-hello",
@@ -1613,8 +1619,7 @@ TEST_P(MessagingSocketTest, InvalidClusterNameTestReject) {
                     GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
                         ? "true"
                         : "false")
-          .create(1);
-
+          .create(2);
   cluster->getSequencerNode().suspend();
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
