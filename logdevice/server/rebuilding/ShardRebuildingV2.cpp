@@ -316,7 +316,7 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
     // window is enabled), and keeps progress stat up to date.
     progress_timestamp = readingProgressTimestamp_;
   }
-  listener_->notifyShardDonorProgress(
+  listener_->onShardRebuildingProgress(
       shard_, progress_timestamp, rebuildingVersion_, readingProgress_);
 }
 

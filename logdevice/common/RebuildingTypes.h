@@ -199,10 +199,10 @@ class ShardRebuildingInterface {
   // tests; see comments there for documentation of the methods' arguments.
   struct Listener {
     virtual void onShardRebuildingComplete(uint32_t shard_idx) = 0;
-    virtual void notifyShardDonorProgress(uint32_t shard,
-                                          RecordTimestamp next_ts,
-                                          lsn_t version,
-                                          double progress_estimate) = 0;
+    virtual void onShardRebuildingProgress(uint32_t shard,
+                                           RecordTimestamp next_ts,
+                                           lsn_t version,
+                                           double progress_estimate) = 0;
     virtual ~Listener() = default;
   };
 

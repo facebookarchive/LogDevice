@@ -136,7 +136,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    * @param next_ts  Approximate timestamp of the next data record to be
    *                 rebuilt. If global window's end advances above this
    *                 timestamp, ShardRebuilding must be able to make progress
-   *                 (i.e. eventually call either notifyShardDonorProgress()
+   *                 (i.e. eventually call either onMyShardDonorProgress()
    *                 with a higher next_ts, or onShardRebuildingComplete());
    *                 this ensures that rebuilding will never get stuck waiting
    *                 on global window forever, even if global window size is
@@ -147,10 +147,17 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    *                 fraction of work done so far. Exported as a stat.
    *                 -1 if not available; in this case stat is left unchanged.
    */
-  void notifyShardDonorProgress(uint32_t shard,
-                                RecordTimestamp next_ts,
-                                lsn_t version,
-                                double progress_estimate) override;
+  void onShardRebuildingProgress(uint32_t shard,
+                                 RecordTimestamp next_ts,
+                                 lsn_t version,
+                                 double progress_estimate) override;
+
+  /**
+   * Writes a SHARD_DONOR_PROGRESS to the event log. Can be mocked in tests.
+   */
+  virtual void notifyShardDonorProgress(uint32_t shard,
+                                        RecordTimestamp next_ts,
+                                        lsn_t version);
 
   /*
    * Called when RebuildingPlanner completes for a log.
@@ -438,7 +445,6 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
   virtual void activatePlanningTimer();
 
- private:
   // Called when the rebuilding set changed. If `delta` != nullptr, only make
   // the necessary changes described by `delta`, otherwise, restart all
   // rebuildings using `set`.
@@ -748,7 +754,6 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
       nonAuthoratitiveRebuildingChecker_;
 
   friend class RebuildingCoordinatorTest;
-  friend class MockedRebuildingCoordinator;
 };
 
 }} // namespace facebook::logdevice

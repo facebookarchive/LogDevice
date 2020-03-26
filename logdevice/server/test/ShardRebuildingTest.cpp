@@ -13,6 +13,8 @@
 
 namespace facebook { namespace logdevice {
 
+namespace {
+
 static const node_index_t MY_NODE_IDX = 13;
 static const shard_index_t SHARD_IDX = 4;
 static const lsn_t REBUILDING_VERSION = 42;
@@ -124,10 +126,10 @@ class MockedShardRebuilding : public ShardRebuildingV2,
     completed = true;
   }
 
-  void notifyShardDonorProgress(uint32_t shard,
-                                RecordTimestamp next_ts,
-                                lsn_t version,
-                                double progress_estimate) override {
+  void onShardRebuildingProgress(uint32_t shard,
+                                 RecordTimestamp next_ts,
+                                 lsn_t version,
+                                 double progress_estimate) override {
     EXPECT_EQ(shard, SHARD_IDX);
     EXPECT_EQ(version, REBUILDING_VERSION);
     if (next_ts !=
@@ -223,6 +225,8 @@ ChunkData* makeChunk(logid_t log,
 
   return c;
 }
+
+} // namespace
 
 #define EXPECT_DONOR_PROGRESS(ts)                                    \
   do {                                                               \

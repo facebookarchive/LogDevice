@@ -391,7 +391,7 @@ void RebuildingCoordinator::noteRebuildingSettingsChanged() {
 
     // If global window size was decreased (e.g. global window got enabled) we
     // may want to write a SHARD_DONOR_PROGRESS event for some shards.
-    notifyShardDonorProgress(
+    onShardRebuildingProgress(
         s.first, s.second.myProgress, s.second.version, -1);
     // If global window size was increased (e.g. global window got disabled) we
     // may want to advance global window end.
@@ -1295,7 +1295,7 @@ void RebuildingCoordinator::onRetrievedPlanForLog(
     std::unique_ptr<RebuildingPlan> log_plan,
     bool is_authoritative,
     lsn_t version) {
-  ld_assert(shardsRebuilding_.find(shard_idx) != shardsRebuilding_.end());
+  ld_check(shardsRebuilding_.find(shard_idx) != shardsRebuilding_.end());
   auto& shard_state = getShardState(shard_idx);
   ld_check(version == shard_state.version);
   ld_check(shard_state.waitingForMorePlans);
@@ -1868,10 +1868,11 @@ void RebuildingCoordinator::notifyAckMyShardRebuilt(uint32_t shard,
   processor_->markShardClean(shard);
 }
 
-void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
-                                                     RecordTimestamp next_ts,
-                                                     lsn_t version,
-                                                     double progress_estimate) {
+void RebuildingCoordinator::onShardRebuildingProgress(
+    uint32_t shard,
+    RecordTimestamp next_ts,
+    lsn_t version,
+    double progress_estimate) {
   auto it_shard = shardsRebuilding_.find(shard);
   ld_check(it_shard != shardsRebuilding_.end());
   auto& shard_state = it_shard->second;
@@ -1905,10 +1906,16 @@ void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
 
   shard_state.lastReportedProgress = shard_state.myProgress;
 
+  notifyShardDonorProgress(shard, shard_state.myProgress, version);
+}
+
+void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
+                                                     RecordTimestamp next_ts,
+                                                     lsn_t version) {
   auto event = std::make_unique<SHARD_DONOR_PROGRESS_Event>(
       myNodeId_,
       shard,
-      shard_state.myProgress.toMilliseconds().count(),
+      next_ts.toMilliseconds().count(),
       version,
       rebuildingSettings_->new_to_old
           ? SHARD_DONOR_PROGRESS_Header::FLAG_NEW_TO_OLD
