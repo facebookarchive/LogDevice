@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <fizz/server/FizzServerContext.h>
 #include <folly/io/async/SSLContext.h>
 
 #include "event2/buffer.h"
@@ -39,9 +38,6 @@ class Worker;
 class SocketDependencies {
  public:
   using SSLCtxPtr = std::shared_ptr<folly::SSLContext>;
-  using FizzClientCtxPair =
-      std::pair<std::shared_ptr<const fizz::client::FizzClientContext>,
-                std::shared_ptr<const fizz::CertificateVerifier>>;
 
   SocketDependencies(Processor* processor, Sender* sender);
   /*
@@ -64,9 +60,6 @@ class SocketDependencies {
   virtual size_t getBytesPending() const;
 
   virtual SSLCtxPtr getSSLContext() const;
-  virtual std::shared_ptr<const fizz::server::FizzServerContext>
-  getFizzServerContext() const;
-  virtual FizzClientCtxPair getFizzClientContext() const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID node_id,

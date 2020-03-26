@@ -10,9 +10,6 @@
 #include <chrono>
 #include <string>
 
-#include <fizz/client/FizzClientContext.h>
-#include <fizz/protocol/DefaultCertificateVerifier.h>
-#include <fizz/server/FizzServerContext.h>
 #include <folly/FileUtil.h>
 #include <folly/io/async/SSLContext.h>
 #include <folly/portability/OpenSSL.h>
@@ -53,39 +50,11 @@ class SSLFetcher {
    */
   std::shared_ptr<folly::SSLContext> getSSLContext(bool loadCert);
 
-  /**
-   * @param loadCert          Defines whether or not the certificate will be
-   *                          loaded into the fizz context.
-   *
-   * @return                  a pointer to the created context or a null
-   *                          pointer if the certificate could not be loaded.
-   */
-
-  std::shared_ptr<const fizz::server::FizzServerContext> getFizzServerContext();
-
-  std::pair<std::shared_ptr<const fizz::client::FizzClientContext>,
-            std::shared_ptr<const fizz::CertificateVerifier>>
-  getFizzClientContext(bool loadCert);
-
  private:
   const std::string cert_path_;
   const std::string key_path_;
   const std::string ca_path_;
   const std::chrono::seconds refresh_interval_;
-
-  template <class CertVerifierT>
-  std::shared_ptr<const CertVerifierT>
-  createCertVerifier(fizz::VerificationContext verCtx) const;
-  std::unique_ptr<fizz::SelfCert> createSelfCert() const;
-
-  enum ContextType {
-    OPENSSL_CONTEXT = 0,
-    FIZZ_SRV,
-    FIZZ_CLI,
-
-    // must be last in the decl
-    COUNT
-  };
 
   struct ContextState {
     std::chrono::time_point<std::chrono::steady_clock> last_loaded_;
@@ -94,19 +63,17 @@ class SSLFetcher {
   };
 
   std::shared_ptr<folly::SSLContext> context_;
-  std::shared_ptr<const fizz::client::FizzClientContext> fizz_cli_context_;
-  std::shared_ptr<const fizz::CertificateVerifier> fizz_cli_verifier_;
-  std::shared_ptr<const fizz::server::FizzServerContext> fizz_srv_context_;
   StatsHolder* stats_{nullptr};
-  std::array<ContextState, ContextType::COUNT> state_;
+  ContextState state_;
   std::mutex mutex_;
 
   // a context update is required when refresh_interval_ has passed or when any
   // of the input information is changed
   // lock needs to be acquired in at least read mode
-  bool requireContextUpdate(ContextType type, bool loadCert) const;
+  bool requireContextUpdate(bool loadCert) const;
+
   // lock needs to be acquired in write mode
-  void updateState(ContextType type, bool loadCert, X509* cert);
+  void updateState(bool loadCert, X509* cert);
 };
 
 }} // namespace facebook::logdevice

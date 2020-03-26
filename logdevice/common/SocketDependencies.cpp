@@ -92,23 +92,6 @@ std::shared_ptr<SSLContext> SocketDependencies::getSSLContext() const {
   return Worker::onThisThread()->sslFetcher().getSSLContext(loadCert);
 }
 
-std::shared_ptr<const fizz::server::FizzServerContext>
-SocketDependencies::getFizzServerContext() const {
-  // Servers are required to have a certificate so that the client can verify
-  // them. If clients specify that they want to include their certificate, then
-  // the server will also authenticate the client certificates.
-
-  return Worker::onThisThread()->sslFetcher().getFizzServerContext();
-}
-
-std::pair<std::shared_ptr<const fizz::client::FizzClientContext>,
-          std::shared_ptr<const fizz::CertificateVerifier>>
-SocketDependencies::getFizzClientContext() const {
-  bool loadCert = getSettings().server || getSettings().ssl_load_client_cert;
-
-  return Worker::onThisThread()->sslFetcher().getFizzClientContext(loadCert);
-}
-
 bool SocketDependencies::shuttingDown() const {
   return Worker::onThisThread()->shuttingDown();
 }

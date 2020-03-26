@@ -2279,7 +2279,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "false",
        nullptr,
        "Use Fizz (TLS 1.3) when establishing secure connections to servers.",
-       CLIENT | REQUIRES_RESTART,
+       CLIENT | REQUIRES_RESTART | DEPRECATED,
        SettingsCategory::Network);
   init("server-connect-with-fizz",
        &server_connect_with_fizz,
@@ -2287,7 +2287,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        nullptr,
        "Use Fizz (TLS 1.3) when establishing secure connections to other"
        " servers.",
-       SERVER | REQUIRES_RESTART,
+       SERVER | REQUIRES_RESTART | DEPRECATED,
        SettingsCategory::Network);
   init("sequencer-batching",
        &sequencer_batching,
