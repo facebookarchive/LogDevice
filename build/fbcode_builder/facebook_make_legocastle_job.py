@@ -31,7 +31,6 @@ from facebook_legocastle_builder import LegocastleFBCodeBuilder
 from shell_quoting import ShellQuoted
 from utils import make_temp_dir, run_command
 from utils import read_fbcode_builder_config, build_fbcode_builder_config
-from getdeps.facebook.sandcastle import DEFAULT_TENANT
 
 # Used in the command-line --help.
 BASIC_HELP = '''
@@ -123,7 +122,7 @@ def make_lego_spec(builder, type):
         'type': type,
         'vcs': 'fbcode-fbsource',
         'os': builder.option('legocastle_os', 'stable'),
-        'tenant': builder.option('tenant', DEFAULT_TENANT)
+        'tenant': builder.option('tenant', 'oss_fbcode_builder')
     }
     xcode = builder.option('xcode_version', '')
     if xcode != '':
