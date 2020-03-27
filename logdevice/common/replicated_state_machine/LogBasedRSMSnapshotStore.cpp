@@ -94,14 +94,20 @@ read_stream_id_t LogBasedRSMSnapshotStore::createBasicReadStream(
       ClientReadStreamBufferType::CIRCULAR,
       100,
       std::move(deps),
-      processor_->config_);
+      processor_->config_,
+      nullptr,
+      nullptr,
+      MonitoringTier::MEDIUM_PRI,
+      SCDCopysetReordering(processor_->settings()->rsm_scd_copyset_reordering));
 
+  Worker* w = Worker::onThisThread();
+  ld_check(w->processor_ == processor_);
   // SCD adds complexity and may incur latency on storage node failures. Since
   // replicated state machines should be low volume logs, we can afford to not
   // use that optimization.
-  read_stream->forceNoSingleCopyDelivery();
-  Worker* w = Worker::onThisThread();
-  ld_check(w->processor_ == processor_);
+  if (w->settings().rsm_force_all_send_all) {
+    read_stream->forceNoSingleCopyDelivery();
+  }
   w->clientReadStreams().insertAndStart(std::move(read_stream));
   return rsid;
 }

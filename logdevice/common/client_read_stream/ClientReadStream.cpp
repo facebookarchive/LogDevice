@@ -108,7 +108,8 @@ ClientReadStream::ClientReadStream(
     std::shared_ptr<UpdateableConfig> config,
     ReaderBridge* reader,
     const ReadStreamAttributes* attrs,
-    MonitoringTier tier)
+    MonitoringTier tier,
+    folly::Optional<SCDCopysetReordering> scd_copyset_reordering)
     : id_(id),
       log_id_(log_id),
       start_lsn_(start_lsn),
@@ -132,7 +133,8 @@ ClientReadStream::ClientReadStream(
       window_update_pending_(false),
       gap_tracer_(std::make_unique<ClientGapTracer>(nullptr)),
       read_tracer_(std::make_unique<ClientReadTracer>(nullptr)),
-      events_tracer_(std::make_unique<ClientReadStreamTracer>(nullptr)) {
+      events_tracer_(std::make_unique<ClientReadStreamTracer>(nullptr)),
+      scd_copyset_reordering_(scd_copyset_reordering) {
   if (attrs != nullptr) {
     attrs_ = *attrs;
   }
@@ -618,9 +620,9 @@ void ClientReadStream::sendStart(ShardID shard_id, SenderState& state) {
 
   ld_check(current_metadata_);
   header.replication = current_metadata_->replication.getReplicationFactor();
-  header.scd_copyset_reordering = std::min(
+  header.scd_copyset_reordering = scd_copyset_reordering_.value_or(std::min(
       SCDCopysetReordering::HASH_SHUFFLE_CLIENT_SEED,
-      SCDCopysetReordering(deps_->getSettings().scd_copyset_reordering_max));
+      SCDCopysetReordering(deps_->getSettings().scd_copyset_reordering_max)));
 
   if (scd_->isActive()) {
     header.flags |= START_Header::SINGLE_COPY_DELIVERY;

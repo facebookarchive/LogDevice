@@ -432,7 +432,9 @@ class ClientReadStream : boost::noncopyable {
                    std::shared_ptr<UpdateableConfig> config,
                    ReaderBridge* reader = nullptr,
                    const ReadStreamAttributes* attrs = nullptr,
-                   MonitoringTier tier = MonitoringTier::MEDIUM_PRI);
+                   MonitoringTier tier = MonitoringTier::MEDIUM_PRI,
+                   folly::Optional<SCDCopysetReordering>
+                       scd_copyset_reordering = folly::none);
 
   ~ClientReadStream();
 
@@ -1641,6 +1643,8 @@ class ClientReadStream : boost::noncopyable {
   std::unique_ptr<RewindScheduler> rewind_scheduler_;
 
   ReadStreamAttributes attrs_ = ReadStreamAttributes();
+
+  folly::Optional<SCDCopysetReordering> scd_copyset_reordering_;
 
   Worker* worker_;
 

@@ -1233,6 +1233,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        " get graylisted",
        SERVER,
        SettingsCategory::WritePath);
+  init("rsm-force-all-send-all",
+       &rsm_force_all_send_all,
+       "true",
+       nullptr, // no validation
+       "Forces ALL_SEND_ALL mode for read streams associated with RSM.",
+       SERVER | CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Core);
   init("graylisting-monitored-period",
        &graylisting_monitored_period,
        "120s",
@@ -2764,6 +2771,25 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "in reading the log, which can be benefit non-disk-bound "
        "workloads.",
        SERVER | CLIENT,
+       SettingsCategory::ReadPath);
+
+  init("rsm-scd-copyset-reordering",
+       &rsm_scd_copyset_reordering,
+       "hash-shuffle",
+       parse_scd_copyset_reordering,
+       "SCDCopysetReordering values that clients ask servers to "
+       "use.  "
+       "Currently available options: "
+       "none, hash-shuffle (default), hash-shuffle-client-seed. "
+       "hash-shuffle results in only one storage node reading a record "
+       "block "
+       "from disk, and then serving it to multiple readers from the "
+       "cache. "
+       "hash-shuffle-client-seed enables multiple storage nodes to "
+       "participate "
+       "in reading the log, which can be benefit non-disk-bound "
+       "workloads.",
+       SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::ReadPath);
 
   init("sequencer-metadata-log-write-retry-delay",

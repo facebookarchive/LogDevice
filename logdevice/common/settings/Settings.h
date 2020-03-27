@@ -182,6 +182,11 @@ struct Settings : public SettingsBundle {
   // setsockopt(TCP_NODELAY).
   bool nagle;
 
+  // Forces no scd mode for read streams associated with RSM.
+  bool rsm_force_all_send_all;
+
+  int rsm_scd_copyset_reordering;
+
   // Set outbuf_overflow_ limit of new Connection objects to this number of
   // KILOBYTES. See Connection.h.
   size_t outbuf_overflow_kb;

@@ -186,12 +186,18 @@ read_stream_id_t ReplicatedStateMachine<T, D>::createBasicReadStream(
       ClientReadStreamBufferType::CIRCULAR,
       100,
       std::move(deps),
-      processor->config_);
+      processor->config_,
+      nullptr,
+      nullptr,
+      MonitoringTier::MEDIUM_PRI,
+      SCDCopysetReordering(processor->settings()->rsm_scd_copyset_reordering));
 
   // SCD adds complexity and may incur latency on storage node failures. Since
   // replicated state machines should be low volume logs, we can afford to not
   // use that optimization.
-  read_stream->forceNoSingleCopyDelivery();
+  if (w->settings().rsm_force_all_send_all) {
+    read_stream->forceNoSingleCopyDelivery();
+  }
 
   w->clientReadStreams().insertAndStart(std::move(read_stream));
 
