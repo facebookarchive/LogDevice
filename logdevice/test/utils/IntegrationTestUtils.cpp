@@ -19,12 +19,12 @@
 #include <folly/String.h>
 #include <folly/Subprocess.h>
 #include <folly/dynamic.h>
+#include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/EventBaseManager.h>
 #include <folly/json.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <thrift/lib/cpp/async/TAsyncSocket.h>
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
@@ -1851,7 +1851,7 @@ int Node::waitUntilAllSequencersQuiescent(
 
 std::unique_ptr<thrift::AdminAPIAsyncClient> Node::createAdminClient() const {
   folly::SocketAddress address = getAdminAddress();
-  auto transport = apache::thrift::async::TAsyncSocket::newSocket(
+  auto transport = folly::AsyncSocket::newSocket(
       folly::EventBaseManager::get()->getEventBase(), address);
   auto channel = apache::thrift::HeaderClientChannel::newChannel(transport);
   channel->setTimeout(5000);

@@ -7,8 +7,8 @@
  */
 #include "logdevice/ops/py_extensions/admin_command_client/AdminCommandClient.h"
 
+#include <folly/io/async/AsyncSocket.h>
 #include <thrift/lib/cpp/async/TAsyncSSLSocket.h>
-#include <thrift/lib/cpp/async/TAsyncSocket.h>
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
@@ -41,9 +41,9 @@ AdminCommandClient::asyncSend(
               }
 
               std::shared_ptr<folly::SSLContext> ssl_context{nullptr};
-              std::shared_ptr<apache::thrift::async::TAsyncSocket> transport;
+              std::shared_ptr<folly::AsyncSocket> transport;
               if (r.type == Request::ConnectionType::PLAIN) {
-                transport = apache::thrift::async::TAsyncSocket::newSocket(evb);
+                transport = folly::AsyncSocket::newSocket(evb);
               } else {
                 ssl_context = std::make_shared<folly::SSLContext>();
                 transport = apache::thrift::async::TAsyncSSLSocket::newSocket(
