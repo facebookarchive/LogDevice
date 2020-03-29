@@ -129,15 +129,19 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
     return;
   }
 
-  auto sample_builder = [&, this]() -> std::unique_ptr<TraceSample> {
+  auto reading_speed_bytes = num_bytes_read - last_num_bytes_read_;
+  auto reading_speed_records = num_records_read - last_num_records_read_;
+
+  auto sample_builder = [&,
+                         reading_speed_bytes,
+                         reading_speed_records,
+                         this]() -> std::unique_ptr<TraceSample> {
     auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
     auto time_lagging = std::max(msec_since(last_time_lagging_), 0l);
     auto shard_status_version = owner_->deps_->getShardStatus().getVersion();
     auto time_lag = estimateTimeLag();
     auto byte_lag = estimateByteLag();
     bool overloaded = owner_->deps_->isWorkerOverloaded();
-    auto reading_speed_bytes = num_bytes_read - last_num_bytes_read_;
-    auto reading_speed_records = num_records_read - last_num_records_read_;
 
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("log_id", std::to_string(owner_->log_id_.val()));
