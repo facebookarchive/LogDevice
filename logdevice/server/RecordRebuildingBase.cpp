@@ -342,7 +342,7 @@ RecordRebuildingBase::buildStoreMessage(ShardID target_shard, bool amend) {
   STORE_Extra extra;
   extra.rebuilding_version = owner_->getRestartVersion();
   extra.rebuilding_wave = rebuildingWave_;
-  extra.rebuilding_id = owner_->getLogRebuildingId();
+  extra.rebuilding_id = owner_->getChunkRebuildingId();
   extra.offsets_within_epoch = offsets_within_epoch_;
 
   copyset_off_t offset = findCopysetOffset(newCopyset_, target_shard);
@@ -439,7 +439,7 @@ void RecordRebuildingBase::onStored(const STORED_Header& header,
                                     ShardID from,
                                     lsn_t rebuilding_version,
                                     uint32_t rebuilding_wave,
-                                    log_rebuilding_id_t rebuilding_id,
+                                    chunk_rebuilding_id_t rebuilding_id,
                                     ServerInstanceId server_instance_id,
                                     FlushToken flush_token) {
   if (getSettings().rebuilding_dont_wait_for_flush_callbacks) {
@@ -465,8 +465,8 @@ void RecordRebuildingBase::onStored(const STORED_Header& header,
 
   // rebuilding_id check is necessary only when ChunkRebuilding is restarted
   // without a change in the version.
-  if (rebuilding_id != LOG_REBUILDING_ID_INVALID &&
-      rebuilding_id != owner_->getLogRebuildingId()) {
+  if (rebuilding_id != CHUNK_REBUILDING_ID_INVALID &&
+      rebuilding_id != owner_->getChunkRebuildingId()) {
     RATELIMIT_INFO(std::chrono::seconds(10),
                    2,
                    "got STORED for %lu%s from %s for an old rebuilding id "
@@ -475,7 +475,7 @@ void RecordRebuildingBase::onStored(const STORED_Header& header,
                    lsn_to_string(lsn_).c_str(),
                    from.toString().c_str(),
                    rebuilding_id.val_,
-                   owner_->getLogRebuildingId().val_);
+                   owner_->getChunkRebuildingId().val_);
     return;
   }
 

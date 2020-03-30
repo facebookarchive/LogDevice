@@ -15,7 +15,6 @@
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/RecordRebuildingStore.h"
 
-
 // Shortcuts for writing ShardIDs
 #define N10 ShardID(10, 0)
 #define N20 ShardID(20, 0)
@@ -79,7 +78,7 @@ const logid_t LOG_ID(8008);
 const lsn_t LSN(123);
 const uint64_t TIMESTAMP(1234567890ul);
 const esn_t LNG(332233);
-const log_rebuilding_id_t REBUILDING_ID(11);
+const chunk_rebuilding_id_t REBUILDING_ID(11);
 const ServerInstanceId
     SERVER_INSTANCE_ID(std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::system_clock::now().time_since_epoch())
@@ -242,7 +241,7 @@ class TestRecordRebuildingStore : public RecordRebuildingStore,
   lsn_t getRebuildingVersion() const override {
     return 11;
   }
-  log_rebuilding_id_t getLogRebuildingId() const override {
+  chunk_rebuilding_id_t getChunkRebuildingId() const override {
     return REBUILDING_ID;
   }
   node_index_t getMyNodeIndex() const override {

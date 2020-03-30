@@ -28,7 +28,7 @@ namespace facebook { namespace logdevice {
 STORED_Message::STORED_Message(const STORED_Header& header,
                                lsn_t rebuilding_version,
                                uint32_t rebuilding_wave,
-                               log_rebuilding_id_t rebuilding_id,
+                               chunk_rebuilding_id_t rebuilding_id,
                                FlushToken flushToken,
                                ServerInstanceId serverInstanceId,
                                ShardID rebuildingRecipient)
@@ -50,7 +50,7 @@ MessageReadResult STORED_Message::deserialize(ProtocolReader& reader) {
   uint32_t rebuilding_wave = 0;
   FlushToken flushToken = FlushToken_INVALID;
   ServerInstanceId serverInstanceId = ServerInstanceId_INVALID;
-  log_rebuilding_id_t rebuilding_id = LOG_REBUILDING_ID_INVALID;
+  chunk_rebuilding_id_t rebuilding_id = CHUNK_REBUILDING_ID_INVALID;
   if (hdr.flags & STORED_Header::REBUILDING) {
     reader.read(&rebuilding_version);
     reader.read(&rebuilding_wave);
@@ -271,7 +271,7 @@ void STORED_Message::createAndSend(const STORED_Header& header,
                                    ClientID send_to,
                                    lsn_t rebuilding_version,
                                    uint32_t rebuilding_wave,
-                                   log_rebuilding_id_t rebuilding_id,
+                                   chunk_rebuilding_id_t rebuilding_id,
                                    FlushToken flushToken,
                                    ShardID rebuildingRecipient) {
   ld_check(send_to.valid()); // must have been set by onReceived()

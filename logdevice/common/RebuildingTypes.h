@@ -105,8 +105,8 @@ class RebuildingReadStorageTask;
 struct STORED_Header;
 struct STORE_Header;
 
-class ShardRebuildingV2;
-using ShardRebuildingV2Ref = WorkerCallbackHelper<ShardRebuildingV2>::Ticket;
+class ShardRebuilding;
+using ShardRebuildingRef = WorkerCallbackHelper<ShardRebuilding>::Ticket;
 
 class RecordRebuildingInterface {
  public:
@@ -114,7 +114,7 @@ class RecordRebuildingInterface {
                         ShardID from,
                         lsn_t rebuilding_version,
                         uint32_t rebuilding_wave,
-                        log_rebuilding_id_t rebuilding_id,
+                        chunk_rebuilding_id_t rebuilding_id,
                         ServerInstanceId server_instance_id,
                         FlushToken flush_token) = 0;
 

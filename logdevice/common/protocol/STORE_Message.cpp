@@ -507,7 +507,7 @@ STORE_Message::getDebugInfo() const {
     add("rebuilding_version", extra_.rebuilding_version);
     add("rebuilding_wave", extra_.rebuilding_wave);
   }
-  if (extra_.rebuilding_id != LOG_REBUILDING_ID_INVALID) {
+  if (extra_.rebuilding_id != CHUNK_REBUILDING_ID_INVALID) {
     add("rebuilding_id", extra_.rebuilding_id.val());
   }
   add("offsets_within_epoch", extra_.offsets_within_epoch.toString().c_str());

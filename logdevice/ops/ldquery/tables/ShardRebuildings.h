@@ -28,7 +28,7 @@ class ShardRebuildings : public AdminCommandTable {
   std::string getDescription() override {
     return "Show debugging information about the ShardRebuilding state "
            "machines (see "
-           "\"logdevice/server/rebuilding/ShardRebuildingV2.h\"). This state "
+           "\"logdevice/server/rebuilding/ShardRebuilding.h\"). This state "
            "machine is responsible for coordinating reads and re-replication "
            "on a donor shard.";
   }

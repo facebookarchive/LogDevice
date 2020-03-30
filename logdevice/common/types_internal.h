@@ -215,13 +215,12 @@ write_stream_seq_num_t next_seq_num(write_stream_seq_num_t seq_num);
 void increment_seq_num(write_stream_seq_num_t& seq_num);
 
 /**
- * Type used to identify a run of LogRebuilding state machine.
- * TODO (#24665001): In rebuilding v2 it's used to identiy chunks rather than
- * logs. Rename to chunk_rebuilding_id_t.
+ * Type used to identify a ChunkRebuilding state machine within a process.
+ * Sent in STORE and STORED messages.
  */
-LOGDEVICE_STRONG_TYPEDEF(uint64_t, log_rebuilding_id_t);
+LOGDEVICE_STRONG_TYPEDEF(uint64_t, chunk_rebuilding_id_t);
 
-constexpr log_rebuilding_id_t LOG_REBUILDING_ID_INVALID(0);
+constexpr chunk_rebuilding_id_t CHUNK_REBUILDING_ID_INVALID(0);
 
 /**
  * Filter version used in START messages. This is bumped each time a new START
@@ -382,9 +381,9 @@ constexpr size_t IOBUF_ALLOCATION_UNIT = 1024;
 
 }} // namespace facebook::logdevice
 
-// Specialization of std::hash for log_rebuilding_id_t
+// Specialization of std::hash for chunk_rebuilding_id_t
 namespace std {
 template <>
-struct hash<facebook::logdevice::log_rebuilding_id_t>
-    : public facebook::logdevice::log_rebuilding_id_t::Hash {};
+struct hash<facebook::logdevice::chunk_rebuilding_id_t>
+    : public facebook::logdevice::chunk_rebuilding_id_t::Hash {};
 } // namespace std

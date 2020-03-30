@@ -463,7 +463,7 @@ struct SenderBasicSendRequest : public Request {
         std::make_unique<STORED_Message>(SenderBasicSendRequest::hdr1out,
                                          0,
                                          0,
-                                         log_rebuilding_id_t(0),
+                                         chunk_rebuilding_id_t(0),
                                          0,
                                          ServerInstanceId_INVALID);
     EXPECT_EQ(0, w->sender().sendMessage(std::move(msg1out), firstNodeID));
@@ -473,7 +473,7 @@ struct SenderBasicSendRequest : public Request {
         std::make_unique<STORED_Message>(SenderBasicSendRequest::hdr2out,
                                          0,
                                          0,
-                                         log_rebuilding_id_t(0),
+                                         chunk_rebuilding_id_t(0),
                                          0,
                                          ServerInstanceId_INVALID);
     EXPECT_EQ(0, w->sender().sendMessage(std::move(msg2out), firstNodeID));
@@ -483,7 +483,7 @@ struct SenderBasicSendRequest : public Request {
         std::make_unique<STORED_Message>(SenderBasicSendRequest::hdr1out,
                                          0,
                                          0,
-                                         log_rebuilding_id_t(0),
+                                         chunk_rebuilding_id_t(0),
                                          0,
                                          ServerInstanceId_INVALID);
     EXPECT_EQ(-1, w->sender().sendMessage(std::move(msg3nogo), badNodeID));
@@ -929,7 +929,7 @@ struct SendStoredWithTimeoutRequest : public Request {
     auto msg = std::make_unique<STORED_Message>(SenderBasicSendRequest::hdr1out,
                                                 0,
                                                 0,
-                                                log_rebuilding_id_t(0),
+                                                chunk_rebuilding_id_t(0),
                                                 0,
                                                 ServerInstanceId_INVALID);
     int rv = w->sender().sendMessage(std::move(msg), firstNodeID, new OnClose);

@@ -20,7 +20,7 @@ namespace facebook { namespace logdevice {
  *       result) gets sent back to the worker thread.
  */
 
-class RebuildingReadStorageTaskV2 : public StorageTask {
+class RebuildingReadStorageTask : public StorageTask {
  private:
   class Filter;
 
@@ -120,15 +120,15 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
     void getLogsDebugInfo(InfoRebuildingLogsTable& table) const;
 
    private:
-    friend class RebuildingReadStorageTaskV2;
+    friend class RebuildingReadStorageTask;
 
     // Used for filtering records in iterator. Lives in Context because the
     // filter's state needs to be preserved across multiple
-    // RebuildingReadStorageTaskV2 runs.
+    // RebuildingReadStorageTask runs.
     std::unique_ptr<Filter> filter;
   };
 
-  explicit RebuildingReadStorageTaskV2(std::weak_ptr<Context> context);
+  explicit RebuildingReadStorageTask(std::weak_ptr<Context> context);
 
   void execute() override;
 
@@ -236,7 +236,7 @@ class RebuildingReadStorageTaskV2 : public StorageTask {
 
     void clearStats();
 
-    RebuildingReadStorageTaskV2* task;
+    RebuildingReadStorageTask* task;
     Context* context;
 
     // Just a cache to avoid lookup in context->logs.

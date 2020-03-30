@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/server/rebuilding/RebuildingReadStorageTaskV2.h"
+#include "logdevice/server/rebuilding/RebuildingReadStorageTask.h"
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/server/ServerProcessor.h"
@@ -13,11 +13,11 @@
 
 namespace facebook { namespace logdevice {
 
-RebuildingReadStorageTaskV2::RebuildingReadStorageTaskV2(
+RebuildingReadStorageTask::RebuildingReadStorageTask(
     std::weak_ptr<Context> context)
-    : StorageTask(StorageTask::Type::REBUILDING_READ_V2), context_(context) {}
+    : StorageTask(StorageTask::Type::REBUILDING_READ), context_(context) {}
 
-void RebuildingReadStorageTaskV2::execute() {
+void RebuildingReadStorageTask::execute() {
   std::shared_ptr<Context> context = context_.lock();
   if (context == nullptr) {
     // The ShardRebuilding was aborted. Nothing to do.
@@ -47,7 +47,7 @@ void RebuildingReadStorageTaskV2::execute() {
     }
 
     LocalLogStore::ReadOptions opts(
-        "RebuildingReadStorageTaskV2", /* rebuilding */ true);
+        "RebuildingReadStorageTask", /* rebuilding */ true);
     opts.fill_cache = context->rebuildingSettings->use_rocksdb_cache;
     opts.allow_copyset_index = true;
     opts.new_to_old = context->rebuildingSettings->new_to_old;
@@ -325,7 +325,7 @@ void RebuildingReadStorageTaskV2::execute() {
   }
 }
 
-int RebuildingReadStorageTaskV2::checkRecordForBlockChange(
+int RebuildingReadStorageTask::checkRecordForBlockChange(
     logid_t log,
     lsn_t lsn,
     Slice record,
@@ -393,7 +393,7 @@ int RebuildingReadStorageTaskV2::checkRecordForBlockChange(
   return 0;
 }
 
-bool RebuildingReadStorageTaskV2::lookUpEpochMetadata(
+bool RebuildingReadStorageTask::lookUpEpochMetadata(
     logid_t log,
     lsn_t lsn,
     Context* context,
@@ -438,7 +438,7 @@ bool RebuildingReadStorageTaskV2::lookUpEpochMetadata(
   return true;
 }
 
-void RebuildingReadStorageTaskV2::markNodesInRebuildingSetNotAvailable(
+void RebuildingReadStorageTask::markNodesInRebuildingSetNotAvailable(
     NodeSetState* nodeset_state,
     Context* context) {
   for (auto it : context->rebuildingSet->shards) {
@@ -458,7 +458,7 @@ void RebuildingReadStorageTaskV2::markNodesInRebuildingSetNotAvailable(
   }
 }
 
-void RebuildingReadStorageTaskV2::onDone() {
+void RebuildingReadStorageTask::onDone() {
   std::shared_ptr<Context> context = context_.lock();
   if (context == nullptr) {
     // The ShardRebuilding was aborted. Nothing to do.
@@ -466,11 +466,11 @@ void RebuildingReadStorageTaskV2::onDone() {
   }
   context->onDone(std::move(result_));
 }
-void RebuildingReadStorageTaskV2::onDropped() {
+void RebuildingReadStorageTask::onDropped() {
   ld_check(false);
 }
 
-void RebuildingReadStorageTaskV2::getDebugInfoDetailed(
+void RebuildingReadStorageTask::getDebugInfoDetailed(
     StorageTaskDebugInfo& info) const {
   std::shared_ptr<Context> context = context_.lock();
   if (context == nullptr) {
@@ -484,31 +484,30 @@ void RebuildingReadStorageTaskV2::getDebugInfoDetailed(
                                            : std::string("none"));
 }
 
-UpdateableSettings<Settings> RebuildingReadStorageTaskV2::getSettings() {
+UpdateableSettings<Settings> RebuildingReadStorageTask::getSettings() {
   return storageThreadPool_->getSettings();
 }
-std::shared_ptr<UpdateableConfig> RebuildingReadStorageTaskV2::getConfig() {
+std::shared_ptr<UpdateableConfig> RebuildingReadStorageTask::getConfig() {
   return storageThreadPool_->getProcessor().config_;
 }
 
-folly::Optional<NodeID> RebuildingReadStorageTaskV2::getMyNodeID() {
+folly::Optional<NodeID> RebuildingReadStorageTask::getMyNodeID() {
   return storageThreadPool_->getProcessor().getOptionalMyNodeID();
 }
-StatsHolder* RebuildingReadStorageTaskV2::getStats() {
+StatsHolder* RebuildingReadStorageTask::getStats() {
   return storageThreadPool_->stats();
 }
 
 std::unique_ptr<LocalLogStore::AllLogsIterator>
-RebuildingReadStorageTaskV2::createIterator(
+RebuildingReadStorageTask::createIterator(
     const LocalLogStore::ReadOptions& opts,
     const std::unordered_map<logid_t, std::pair<lsn_t, lsn_t>>& logs) {
   return storageThreadPool_->getLocalLogStore().readAllLogs(opts, logs);
 }
 
-void RebuildingReadStorageTaskV2::updateTrimPoint(
-    logid_t log,
-    Context* context,
-    Context::LogState* log_state) {
+void RebuildingReadStorageTask::updateTrimPoint(logid_t log,
+                                                Context* context,
+                                                Context::LogState* log_state) {
   LogStorageStateMap& log_state_map =
       storageThreadPool_->getProcessor().getLogStorageStateMap();
   LogStorageState* s =
@@ -518,12 +517,11 @@ void RebuildingReadStorageTaskV2::updateTrimPoint(
   log_state->trimPoint = t;
 }
 
-RebuildingReadStorageTaskV2::Filter::Filter(Context* context)
-    : context(context) {
+RebuildingReadStorageTask::Filter::Filter(Context* context) : context(context) {
   scd_my_shard_id_ = context->myShardID;
 }
 
-void RebuildingReadStorageTaskV2::Filter::clearStats() {
+void RebuildingReadStorageTask::Filter::clearStats() {
   nRecordsLateFiltered = 0;
   nRecordsSCDFiltered = 0;
   nRecordsNotDirtyFiltered = 0;
@@ -532,7 +530,7 @@ void RebuildingReadStorageTaskV2::Filter::clearStats() {
   nRecordsEpochRangeFiltered = 0;
 }
 
-bool RebuildingReadStorageTaskV2::Filter::shouldProcessTimeRange(
+bool RebuildingReadStorageTask::Filter::shouldProcessTimeRange(
     RecordTimestamp min,
     RecordTimestamp max) {
   auto& cache = timeRangeCache;
@@ -590,7 +588,7 @@ bool RebuildingReadStorageTaskV2::Filter::shouldProcessTimeRange(
   return have_shards_intersecting_range;
 }
 
-bool RebuildingReadStorageTaskV2::Filter::shouldProcessRecordRange(
+bool RebuildingReadStorageTask::Filter::shouldProcessRecordRange(
     logid_t log,
     lsn_t min_lsn,
     lsn_t max_lsn,
@@ -634,7 +632,7 @@ bool RebuildingReadStorageTaskV2::Filter::shouldProcessRecordRange(
   return true;
 }
 
-bool RebuildingReadStorageTaskV2::Filter::
+bool RebuildingReadStorageTask::Filter::
 operator()(logid_t log,
            lsn_t lsn,
            const ShardID* copyset,
@@ -730,8 +728,8 @@ operator()(logid_t log,
   return result;
 }
 
-RebuildingReadStorageTaskV2::Filter::FilteredReason
-RebuildingReadStorageTaskV2::Filter::populateFilterParams(
+RebuildingReadStorageTask::Filter::FilteredReason
+RebuildingReadStorageTask::Filter::populateFilterParams(
     logid_t log,
     lsn_t lsn,
     const ShardID* copyset,
@@ -861,7 +859,7 @@ RebuildingReadStorageTaskV2::Filter::populateFilterParams(
   return filtered_reason;
 }
 
-bool RebuildingReadStorageTaskV2::Filter::lookUpLogState(logid_t log) {
+bool RebuildingReadStorageTask::Filter::lookUpLogState(logid_t log) {
   if (log == currentLog) {
     return currentLogState != nullptr;
   }
@@ -878,7 +876,7 @@ bool RebuildingReadStorageTaskV2::Filter::lookUpLogState(logid_t log) {
 /**
  * Update stats regarding skipped records.
  */
-void RebuildingReadStorageTaskV2::Filter::noteRecordFiltered(
+void RebuildingReadStorageTask::Filter::noteRecordFiltered(
     FilteredReason reason,
     bool late) {
   switch (reason) {
@@ -903,7 +901,7 @@ void RebuildingReadStorageTaskV2::Filter::noteRecordFiltered(
   }
 }
 
-void RebuildingReadStorageTaskV2::Context::getLogsDebugInfo(
+void RebuildingReadStorageTask::Context::getLogsDebugInfo(
     InfoRebuildingLogsTable& table) const {
   std::lock_guard<std::mutex> lock(logsMutex);
   for (const auto& p : logs) {

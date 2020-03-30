@@ -35,7 +35,7 @@ Message::Disposition STORED_onReceived(STORED_Message* msg,
   if (msg->header_.flags & STORED_Header::REBUILDING) {
     auto& chunk_rebuildings = w->runningChunkRebuildings();
     if (!chunk_rebuildings.map.empty() &&
-        msg->rebuilding_id_ == LOG_REBUILDING_ID_INVALID) {
+        msg->rebuilding_id_ == CHUNK_REBUILDING_ID_INVALID) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       2,
                       "Rebuilding got a STORED for %s without chunk ID from "

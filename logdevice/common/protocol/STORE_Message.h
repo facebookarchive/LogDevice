@@ -194,7 +194,7 @@ struct STORE_Extra {
   // identifies a run of the ChunkRebuilding state machine where this store
   // originated from, is sent along. This version will be passed back in the
   // STORED reply.
-  log_rebuilding_id_t rebuilding_id = LOG_REBUILDING_ID_INVALID;
+  chunk_rebuilding_id_t rebuilding_id = CHUNK_REBUILDING_ID_INVALID;
 
   // If this STORE message include BYTE_OFFSET (BYTE_OFFSET flag is
   // set), the amount of bytes were written in epoch (to which this message

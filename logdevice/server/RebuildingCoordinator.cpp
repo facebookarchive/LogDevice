@@ -24,7 +24,7 @@
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
-#include "logdevice/server/rebuilding/ShardRebuildingV2.h"
+#include "logdevice/server/rebuilding/ShardRebuilding.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 #include "logdevice/server/storage_tasks/ReadStorageTask.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
@@ -1110,13 +1110,13 @@ RebuildingCoordinator::createShardRebuilding(
     lsn_t restart_version,
     std::shared_ptr<const RebuildingSet> rebuilding_set,
     UpdateableSettings<RebuildingSettings> rebuilding_settings) {
-  return std::make_unique<ShardRebuildingV2>(shard,
-                                             version,
-                                             restart_version,
-                                             rebuilding_set,
-                                             rebuilding_settings,
-                                             processor_->getMyNodeID(),
-                                             this);
+  return std::make_unique<ShardRebuilding>(shard,
+                                           version,
+                                           restart_version,
+                                           rebuilding_set,
+                                           rebuilding_settings,
+                                           processor_->getMyNodeID(),
+                                           this);
 }
 
 void RebuildingCoordinator::abortShardRebuilding(uint32_t shard_idx) {
@@ -1994,7 +1994,7 @@ RebuildingCoordinator::beginGetLogsDebugInfo() const {
     auto& shard_state = s.second;
     if (shard_state.shardRebuilding != nullptr) {
       auto sr =
-          dynamic_cast<ShardRebuildingV2*>(shard_state.shardRebuilding.get());
+          dynamic_cast<ShardRebuilding*>(shard_state.shardRebuilding.get());
       ld_check(sr != nullptr);
       funcs.push_back(sr->beginGetLogsDebugInfo());
     }

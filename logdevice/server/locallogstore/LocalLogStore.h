@@ -350,7 +350,7 @@ class LocalLogStore : boost::noncopyable {
     //   (b) rocksdb's Iterator::Prev() is slow,
     //   (c) it would require a bunch more code in CSIWrapper
     //       and PartitionedAllLogsIterator,
-    //   (d) it would require a little more code RebuildingReadStorageTaskV2.)
+    //   (d) it would require a little more code RebuildingReadStorageTask.)
     bool new_to_old = false;
   };
 

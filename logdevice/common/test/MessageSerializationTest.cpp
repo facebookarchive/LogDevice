@@ -528,7 +528,7 @@ TEST_F(MessageSerializationTest, STORE_WithRebuildingInfo2) {
   STORE_Extra extra;
   extra.rebuilding_version = 42;
   extra.rebuilding_wave = 3;
-  extra.rebuilding_id = log_rebuilding_id_t(10);
+  extra.rebuilding_id = chunk_rebuilding_id_t(10);
 
   TestStoreMessageFactory factory;
   factory.setFlags(STORE_Header::REBUILDING);

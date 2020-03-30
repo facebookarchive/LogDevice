@@ -5,11 +5,12 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/rebuilding/ShardRebuilding.h"
+
 #include <gtest/gtest.h>
 
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/test/MockTimer.h"
-#include "logdevice/server/rebuilding/ShardRebuildingV2.h"
 
 namespace facebook { namespace logdevice {
 
@@ -20,11 +21,11 @@ static const shard_index_t SHARD_IDX = 4;
 static const lsn_t REBUILDING_VERSION = 42;
 static const lsn_t RESTART_VERSION = 420;
 
-class MockedShardRebuilding : public ShardRebuildingV2,
+class MockedShardRebuilding : public ShardRebuilding,
                               public ShardRebuildingInterface::Listener {
  public:
   struct ChunkInfo {
-    log_rebuilding_id_t id;
+    chunk_rebuilding_id_t id;
     std::unique_ptr<ChunkData> data;
     worker_id_t worker;
   };
@@ -74,18 +75,18 @@ class MockedShardRebuilding : public ShardRebuildingV2,
     waitingForGlobalWindow = waiting;
   }
 
-  // ShardRebuildingV2 doesn't directly use rebuilding set and config, it just
+  // ShardRebuilding doesn't directly use rebuilding set and config, it just
   // passes them through to storage task and chunk rebuildings, which are mocked
   // out in this test. So we just use nullptrs here.
   explicit MockedShardRebuilding(
       UpdateableSettings<RebuildingSettings> rebuilding_settings)
-      : ShardRebuildingV2(SHARD_IDX,
-                          REBUILDING_VERSION,
-                          RESTART_VERSION,
-                          /* rebuilding_set */ nullptr,
-                          rebuilding_settings,
-                          /* my_node_id */ NodeID(),
-                          /* listener */ this),
+      : ShardRebuilding(SHARD_IDX,
+                        REBUILDING_VERSION,
+                        RESTART_VERSION,
+                        /* rebuilding_set */ nullptr,
+                        rebuilding_settings,
+                        /* my_node_id */ NodeID(),
+                        /* listener */ this),
         stats(StatsParams().setIsServer(true)) {}
 
   ~MockedShardRebuilding() override {
@@ -109,7 +110,7 @@ class MockedShardRebuilding : public ShardRebuildingV2,
     return MY_NODE_IDX;
   }
   worker_id_t startChunkRebuilding(std::unique_ptr<ChunkData> chunk,
-                                   log_rebuilding_id_t chunk_id) override {
+                                   chunk_rebuilding_id_t chunk_id) override {
     worker_id_t worker{(int)(chunk_id.val() % 10)};
     chunkRebuildings.emplace_back(
         ChunkInfo{.id = chunk_id, .data = std::move(chunk), .worker = worker});

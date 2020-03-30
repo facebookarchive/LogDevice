@@ -137,13 +137,13 @@ class ChunkRebuilding : public RecordRebuildingOwner {
   // Constructor can be called from any thread but start() needs to be called
   // from the worker thread on which this ChunkRebuilding will live.
   ChunkRebuilding(std::unique_ptr<ChunkData> data,
-                  log_rebuilding_id_t chunk_id,
+                  chunk_rebuilding_id_t chunk_id,
                   std::shared_ptr<const RebuildingSet> rebuilding_set,
                   UpdateableSettings<RebuildingSettings> rebuilding_settings,
                   lsn_t rebuilding_version,
                   lsn_t restart_version,
                   uint32_t shard,
-                  ShardRebuildingV2Ref owner);
+                  ShardRebuildingRef owner);
 
   // If the chunk rebuilding is still running, aborts it.
   ~ChunkRebuilding();
@@ -155,7 +155,7 @@ class ChunkRebuilding : public RecordRebuildingOwner {
   logid_t getLogID() const override;
   lsn_t getRebuildingVersion() const override;
   lsn_t getRestartVersion() const override;
-  log_rebuilding_id_t getLogRebuildingId() const override;
+  chunk_rebuilding_id_t getChunkRebuildingId() const override;
   ServerInstanceId getServerInstanceId() const override;
   UpdateableSettings<RebuildingSettings> getRebuildingSettings() const override;
 
@@ -171,7 +171,7 @@ class ChunkRebuilding : public RecordRebuildingOwner {
                 ShardID from,
                 lsn_t rebuilding_version,
                 uint32_t rebuilding_wave,
-                log_rebuilding_id_t rebuilding_id,
+                chunk_rebuilding_id_t rebuilding_id,
                 ServerInstanceId server_instance_id,
                 FlushToken flush_token);
 
@@ -190,11 +190,11 @@ class ChunkRebuilding : public RecordRebuildingOwner {
   void getDebugInfo(InfoRebuildingChunksTable& table) const;
 
  private:
-  ShardRebuildingV2Ref owner_;
+  ShardRebuildingRef owner_;
   // This needs to be a shared_ptr to allow STORE_Message to keep the payload
   // alive until it's passed to TCP.
   std::shared_ptr<ChunkData> data_;
-  log_rebuilding_id_t chunkID_;
+  chunk_rebuilding_id_t chunkID_;
   std::shared_ptr<const RebuildingSet> rebuildingSet_;
   UpdateableSettings<RebuildingSettings> rebuildingSettings_;
   lsn_t rebuildingVersion_;
@@ -231,7 +231,7 @@ class StartChunkRebuildingRequest : public Request {
 
 class AbortChunkRebuildingRequest : public Request {
  public:
-  AbortChunkRebuildingRequest(worker_id_t worker_id, log_rebuilding_id_t id);
+  AbortChunkRebuildingRequest(worker_id_t worker_id, chunk_rebuilding_id_t id);
 
   int getThreadAffinity(int) override;
   WorkerType getWorkerTypeAffinity() override;
@@ -240,11 +240,12 @@ class AbortChunkRebuildingRequest : public Request {
 
  private:
   worker_id_t workerID_;
-  log_rebuilding_id_t id_;
+  chunk_rebuilding_id_t id_;
 };
 
 struct ChunkRebuildingMap {
-  std::unordered_map<log_rebuilding_id_t, std::unique_ptr<ChunkRebuilding>> map;
+  std::unordered_map<chunk_rebuilding_id_t, std::unique_ptr<ChunkRebuilding>>
+      map;
 };
 
 }} // namespace facebook::logdevice

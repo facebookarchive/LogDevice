@@ -109,7 +109,7 @@ class STORED_Message : public Message {
   explicit STORED_Message(const STORED_Header& header,
                           lsn_t rebuilding_version,
                           uint32_t rebuilding_wave,
-                          log_rebuilding_id_t rebuilding_id,
+                          chunk_rebuilding_id_t rebuilding_id,
                           FlushToken flushToken,
                           ServerInstanceId serverInstanceId,
                           ShardID rebuildingRecipient = ShardID());
@@ -148,7 +148,7 @@ class STORED_Message : public Message {
                             ClientID send_to,
                             lsn_t rebuilding_version,
                             uint32_t rebuilding_wave,
-                            log_rebuilding_id_t rebuilding_id,
+                            chunk_rebuilding_id_t rebuilding_id,
                             FlushToken flushToken = FlushToken_INVALID,
                             ShardID rebuildingRecipient = ShardID());
 
@@ -165,7 +165,7 @@ class STORED_Message : public Message {
   // machine can detect that it is a stale response in case the rebuilding
   // id changed. (Rebuilding id changes everytime donor restarts the rebuilding
   // procedure.)
-  log_rebuilding_id_t rebuilding_id_;
+  chunk_rebuilding_id_t rebuilding_id_;
   // If the STORE message was for rebuilding (REBUILDING flag was set), the
   // flushToken the write was attributed to is sent so that rebuilding
   // state machine can act on a write being stored durably.

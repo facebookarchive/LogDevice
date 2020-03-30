@@ -642,7 +642,7 @@ Like shard\_authoritative\_status but has more columns and prints all the shards
 | ack\_version | string | Version of the rebuilding that was acked. |
 
 ## shard\_rebuildings
-Show debugging information about the ShardRebuilding state machines (see "logdevice/server/rebuilding/ShardRebuildingV2.h"). This state machine is responsible for coordinating reads and re-replication on a donor shard.
+Show debugging information about the ShardRebuilding state machines (see "logdevice/server/rebuilding/ShardRebuilding.h"). This state machine is responsible for coordinating reads and re-replication on a donor shard.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|

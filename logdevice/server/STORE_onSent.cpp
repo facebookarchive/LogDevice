@@ -44,7 +44,7 @@ void STORE_onSent(const STORE_Message& msg,
 
     ServerWorker* w = ServerWorker::onThisThread();
 
-    ld_check(msg.extra_.rebuilding_id != LOG_REBUILDING_ID_INVALID);
+    ld_check(msg.extra_.rebuilding_id != CHUNK_REBUILDING_ID_INVALID);
     auto& chunk_rebuildings = w->runningChunkRebuildings();
     auto it = chunk_rebuildings.map.find(msg.extra_.rebuilding_id);
     if (it != chunk_rebuildings.map.end() &&

@@ -144,7 +144,7 @@ class RecordRebuildingOwner {
   virtual logid_t getLogID() const = 0;
   virtual lsn_t getRebuildingVersion() const = 0;
   virtual lsn_t getRestartVersion() const = 0;
-  virtual log_rebuilding_id_t getLogRebuildingId() const = 0;
+  virtual chunk_rebuilding_id_t getChunkRebuildingId() const = 0;
   virtual ServerInstanceId getServerInstanceId() const = 0;
   virtual UpdateableSettings<RebuildingSettings>
   getRebuildingSettings() const = 0;
@@ -240,7 +240,7 @@ class RecordRebuildingBase : public RecordRebuildingInterface {
                 ShardID from,
                 lsn_t rebuilding_version,
                 uint32_t rebuilding_wave,
-                log_rebuilding_id_t rebuilding_id,
+                chunk_rebuilding_id_t rebuilding_id,
                 ServerInstanceId serverInstanceId = ServerInstanceId_INVALID,
                 FlushToken flush_token = FlushToken_INVALID) override;
 

@@ -262,7 +262,7 @@ Message::Disposition StoreStateMachine::onReceived(STORE_Message* msg,
       : Worker::settings().append_store_durability;
 
   if (rebuilding && default_durability <= Durability::MEMORY) {
-    if (msg->extra_.rebuilding_id == LOG_REBUILDING_ID_INVALID) {
+    if (msg->extra_.rebuilding_id == CHUNK_REBUILDING_ID_INVALID) {
       // rebuilding_id is used as proxy to determine if the node
       // where this STORE originated from can tolerate a record with
       // low durability.

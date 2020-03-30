@@ -14,20 +14,20 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
-#include "logdevice/server/rebuilding/RebuildingReadStorageTaskV2.h"
+#include "logdevice/server/rebuilding/RebuildingReadStorageTask.h"
 
 namespace facebook { namespace logdevice {
 
-class ShardRebuildingV2 : public ShardRebuildingInterface {
+class ShardRebuilding : public ShardRebuildingInterface {
  public:
-  ShardRebuildingV2(shard_index_t shard,
-                    lsn_t rebuilding_version,
-                    lsn_t restart_version,
-                    std::shared_ptr<const RebuildingSet> rebuilding_set,
-                    UpdateableSettings<RebuildingSettings> rebuilding_settings,
-                    NodeID my_node_id,
-                    ShardRebuildingInterface::Listener* listener);
-  ~ShardRebuildingV2() override;
+  ShardRebuilding(shard_index_t shard,
+                  lsn_t rebuilding_version,
+                  lsn_t restart_version,
+                  std::shared_ptr<const RebuildingSet> rebuilding_set,
+                  UpdateableSettings<RebuildingSettings> rebuilding_settings,
+                  NodeID my_node_id,
+                  ShardRebuildingInterface::Listener* listener);
+  ~ShardRebuilding() override;
 
   void start(std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan)
       override;
@@ -36,7 +36,7 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   void noteRebuildingSettingsChanged() override;
 
   void onReadTaskDone(std::vector<std::unique_ptr<ChunkData>> chunks);
-  void onChunkRebuildingDone(log_rebuilding_id_t chunk_id,
+  void onChunkRebuildingDone(chunk_rebuilding_id_t chunk_id,
                              RecordTimestamp oldest_timestamp);
 
   void getDebugInfo(InfoRebuildingShardsTable& table) const override;
@@ -54,7 +54,7 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   virtual StatsHolder* getStats();
   virtual node_index_t getMyNodeIndex();
   virtual worker_id_t startChunkRebuilding(std::unique_ptr<ChunkData> chunk,
-                                           log_rebuilding_id_t chunk_id);
+                                           chunk_rebuilding_id_t chunk_id);
   virtual std::chrono::milliseconds getIteratorTTL();
   virtual void putStorageTask();
   virtual std::unique_ptr<TimerInterface> createTimer(std::function<void()> cb);
@@ -63,11 +63,11 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // Key in the ordered map of in-flight chunk rebuildings.
   struct ChunkRebuildingKey {
     RecordTimestamp oldestTimestamp;
-    log_rebuilding_id_t chunkID;
+    chunk_rebuilding_id_t chunkID;
 
     ChunkRebuildingKey() = default;
     ChunkRebuildingKey(RecordTimestamp oldest_timestamp,
-                       log_rebuilding_id_t chunk_id)
+                       chunk_rebuilding_id_t chunk_id)
         : oldestTimestamp(oldest_timestamp), chunkID(chunk_id) {}
 
     // Compares oldestTimestamp first.
@@ -94,11 +94,11 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
 
   RecordTimestamp globalWindowEnd_;
 
-  // There's at most one RebuildingReadStorageTaskV2 in flight at any time.
+  // There's at most one RebuildingReadStorageTask in flight at any time.
   bool storageTaskInFlight_ = false;
   // The reading context is shared between us and the storage task.
   // When a storage task is in flight, we're not allowed to access the context.
-  std::shared_ptr<RebuildingReadStorageTaskV2::Context> readContext_;
+  std::shared_ptr<RebuildingReadStorageTask::Context> readContext_;
 
   RateLimiter readRateLimiter_;
   // The timer is used when readRateLimiter_ tells us to wait before reading.
@@ -125,9 +125,9 @@ class ShardRebuildingV2 : public ShardRebuildingInterface {
   // data indefinitely.
   std::unique_ptr<TimerInterface> iteratorInvalidationTimer_;
 
-  WorkerCallbackHelper<ShardRebuildingV2> callbackHelper_;
+  WorkerCallbackHelper<ShardRebuilding> callbackHelper_;
 
-  static std::atomic<log_rebuilding_id_t::raw_type> nextChunkID_;
+  static std::atomic<chunk_rebuilding_id_t::raw_type> nextChunkID_;
 
   // Posts requests to abort state machines listed in chunkRebuildings_.
   void abortChunkRebuildings();

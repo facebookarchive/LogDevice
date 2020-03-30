@@ -5,12 +5,13 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+#include "logdevice/server/rebuilding/RebuildingReadStorageTask.h"
+
 #include <gtest/gtest.h>
 
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
-#include "logdevice/server/rebuilding/RebuildingReadStorageTaskV2.h"
 
 using namespace facebook::logdevice;
 
@@ -38,11 +39,11 @@ lsn_t mklsn(epoch_t::raw_type epoch, esn_t::raw_type esn) {
 
 class RebuildingReadStorageTaskTest : public ::testing::TestWithParam<bool> {
  public:
-  class MockRebuildingReadStorageTaskV2 : public RebuildingReadStorageTaskV2 {
+  class MockRebuildingReadStorageTask : public RebuildingReadStorageTask {
    public:
-    MockRebuildingReadStorageTaskV2(RebuildingReadStorageTaskTest* test,
-                                    std::weak_ptr<Context> context)
-        : RebuildingReadStorageTaskV2(context), test(test) {}
+    MockRebuildingReadStorageTask(RebuildingReadStorageTaskTest* test,
+                                  std::weak_ptr<Context> context)
+        : RebuildingReadStorageTask(context), test(test) {}
 
     RebuildingReadStorageTaskTest* test;
 
@@ -135,10 +136,10 @@ class RebuildingReadStorageTaskTest : public ::testing::TestWithParam<bool> {
   }
 
   // The caller needs to assign `onDone` and `logs` afterwards.
-  std::shared_ptr<RebuildingReadStorageTaskV2::Context>
+  std::shared_ptr<RebuildingReadStorageTask::Context>
   createContext(std::shared_ptr<const RebuildingSet> rebuilding_set,
                 ShardID my_shard_id = ShardID(1, 0)) {
-    auto c = std::make_shared<RebuildingReadStorageTaskV2::Context>();
+    auto c = std::make_shared<RebuildingReadStorageTask::Context>();
     c->rebuildingSet = rebuilding_set;
     c->rebuildingSettings = rebuildingSettings;
     c->myShardID = my_shard_id;
@@ -327,7 +328,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
     // Metadata and partition 3.
     // Read up to the long range of filtered out records.
     {
-      MockRebuildingReadStorageTaskV2 task(this, c);
+      MockRebuildingReadStorageTask task(this, c);
       task.execute();
       task.onDone();
       EXPECT_FALSE(c->reachedEnd);
@@ -347,7 +348,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
     // The next nonempty batch will stop at the big record in partition 0.
     int empty_batches = 0;
     while (true) {
-      MockRebuildingReadStorageTaskV2 task(this, c);
+      MockRebuildingReadStorageTask task(this, c);
       task.execute();
       task.onDone();
       EXPECT_FALSE(c->persistentError);
@@ -371,7 +372,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
     // count towards the limit for this batch because it was counted by the
     // previous batch.
     {
-      MockRebuildingReadStorageTaskV2 task(this, c);
+      MockRebuildingReadStorageTask task(this, c);
       task.execute();
       task.onDone();
       EXPECT_FALSE(c->reachedEnd);
@@ -383,7 +384,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
 
     // Partition 0. Read the second big record, and we're done.
     {
-      MockRebuildingReadStorageTaskV2 task(this, c);
+      MockRebuildingReadStorageTask task(this, c);
       task.execute();
       task.onDone();
       EXPECT_TRUE(c->reachedEnd);
@@ -395,7 +396,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
   } else {
     {
       // Read up to the big record that exceeds the byte limit.
-      MockRebuildingReadStorageTaskV2 task(this, c);
+      MockRebuildingReadStorageTask task(this, c);
       task.execute();
       task.onDone();
       EXPECT_FALSE(c->reachedEnd);
@@ -411,7 +412,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
       // Read up to the next big record. Note that the first big record doesn't
       // count towards the limit for this batch because it was counted by the
       // previous batch.
-      MockRebuildingReadStorageTaskV2 task(this, c);
+      MockRebuildingReadStorageTask task(this, c);
       task.execute();
       task.onDone();
       EXPECT_FALSE(c->reachedEnd);
@@ -422,7 +423,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
       block_id = chunks.at(0)->blockID;
     }
     {
-      MockRebuildingReadStorageTaskV2 task(this, c);
+      MockRebuildingReadStorageTask task(this, c);
       task.execute();
       task.onDone();
       EXPECT_FALSE(c->reachedEnd);
@@ -443,7 +444,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
     // Read through a long sequence of CSI that doesn't pass filter.
     int empty_batches = 0;
     while (true) {
-      MockRebuildingReadStorageTaskV2 task(this, c);
+      MockRebuildingReadStorageTask task(this, c);
       task.execute();
       task.onDone();
       EXPECT_FALSE(c->persistentError);
@@ -468,7 +469,7 @@ TEST_P(RebuildingReadStorageTaskTest, Basic) {
     chunks.push_back(std::make_unique<ChunkData>());
     chunks.back()->address.min_lsn = 42;
 
-    MockRebuildingReadStorageTaskV2 task(this, c);
+    MockRebuildingReadStorageTask task(this, c);
     c.reset();
     task.execute();
     task.onDone();
@@ -579,7 +580,7 @@ TEST_P(RebuildingReadStorageTaskTest, TimeRanges) {
       std::vector<size_t>({2, 1, 1, 2, 1, 2}), store->getNumLogsPerPartition());
 
   {
-    MockRebuildingReadStorageTaskV2 task(this, c);
+    MockRebuildingReadStorageTask task(this, c);
     task.execute();
     task.onDone();
     EXPECT_TRUE(c->reachedEnd);

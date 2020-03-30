@@ -208,7 +208,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   /**
    * Returns a function that fills out the per-log debug info table.
    * The function needs to be called on a non-worker thread.
-   * See ShardRebuildingV2::beginGetLogsDebugInfo() for more details.
+   * See ShardRebuilding::beginGetLogsDebugInfo() for more details.
    */
   std::function<void(InfoRebuildingLogsTable&)> beginGetLogsDebugInfo() const;
 

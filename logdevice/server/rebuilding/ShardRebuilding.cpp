@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/server/rebuilding/ShardRebuildingV2.h"
+#include "logdevice/server/rebuilding/ShardRebuilding.h"
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/MetaDataLog.h"
@@ -19,9 +19,9 @@ namespace facebook { namespace logdevice {
 static constexpr std::chrono::milliseconds PROFILING_TIMER_PERIOD =
     std::chrono::minutes(1);
 
-std::atomic<log_rebuilding_id_t::raw_type> ShardRebuildingV2::nextChunkID_{0};
+std::atomic<chunk_rebuilding_id_t::raw_type> ShardRebuilding::nextChunkID_{0};
 
-ShardRebuildingV2::ShardRebuildingV2(
+ShardRebuilding::ShardRebuilding(
     shard_index_t shard,
     lsn_t rebuilding_version,
     lsn_t restart_version,
@@ -42,13 +42,13 @@ ShardRebuildingV2::ShardRebuildingV2(
       globalWindowEnd_(direction_.lastTimestamp()),
       callbackHelper_(this) {}
 
-ShardRebuildingV2::~ShardRebuildingV2() {
+ShardRebuilding::~ShardRebuilding() {
   PER_SHARD_STAT_SET(
       getStats(), rebuilding_global_window_waiting_flag, shard_, 0);
   abortChunkRebuildings();
 }
 
-void ShardRebuildingV2::abortChunkRebuildings() {
+void ShardRebuilding::abortChunkRebuildings() {
   for (const auto& p : chunkRebuildings_) {
     std::unique_ptr<Request> rq = std::make_unique<AbortChunkRebuildingRequest>(
         p.second.workerID, p.first.chunkID);
@@ -61,13 +61,13 @@ void ShardRebuildingV2::abortChunkRebuildings() {
   }
 }
 
-void ShardRebuildingV2::start(
+void ShardRebuilding::start(
     std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan) {
   numLogs_ = plan.size();
   startTime_ = SteadyTimestamp::now();
   readingProgressTimestamp_ = direction_.firstTimestamp();
   readRateLimiter_ = RateLimiter(rebuildingSettings_->rate_limit);
-  readContext_ = std::make_shared<RebuildingReadStorageTaskV2::Context>();
+  readContext_ = std::make_shared<RebuildingReadStorageTask::Context>();
   readContext_->onDone = [this, this_ref = callbackHelper_.getHolder().ref()](
                              std::vector<std::unique_ptr<ChunkData>> chunks) {
     if (this_ref.get() != nullptr) {
@@ -99,7 +99,7 @@ void ShardRebuildingV2::start(
   tryMakeProgress();
 }
 
-void ShardRebuildingV2::advanceGlobalWindow(RecordTimestamp new_window_end) {
+void ShardRebuilding::advanceGlobalWindow(RecordTimestamp new_window_end) {
   globalWindowEnd_ = new_window_end;
   if (readContext_ != nullptr) {
     tryMakeProgress();
@@ -108,7 +108,7 @@ void ShardRebuildingV2::advanceGlobalWindow(RecordTimestamp new_window_end) {
   }
 }
 
-void ShardRebuildingV2::sendStorageTaskIfNeeded() {
+void ShardRebuilding::sendStorageTaskIfNeeded() {
   const size_t read_batch_size = rebuildingSettings_->max_batch_bytes;
   // Hard code max size of readBuffer_ as 3x max read batch size.
   // This could be a separate setting, but that doesn't seem very useful.
@@ -144,30 +144,30 @@ void ShardRebuildingV2::sendStorageTaskIfNeeded() {
   putStorageTask();
 }
 
-void ShardRebuildingV2::putStorageTask() {
-  auto task = std::make_unique<RebuildingReadStorageTaskV2>(readContext_);
+void ShardRebuilding::putStorageTask() {
+  auto task = std::make_unique<RebuildingReadStorageTask>(readContext_);
   auto task_queue =
       ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard_);
   task_queue->putTask(std::move(task));
 }
 
-std::chrono::milliseconds ShardRebuildingV2::getIteratorTTL() {
+std::chrono::milliseconds ShardRebuilding::getIteratorTTL() {
   return Worker::settings().iterator_cache_ttl;
 }
 
 std::unique_ptr<TimerInterface>
-ShardRebuildingV2::createTimer(std::function<void()> cb) {
+ShardRebuilding::createTimer(std::function<void()> cb) {
   return std::make_unique<Timer>(cb);
 }
 
-void ShardRebuildingV2::invalidateIterator() {
+void ShardRebuilding::invalidateIterator() {
   ld_info("Invalidating rebuilding iterator in shard %u", shard_);
   ld_check(!storageTaskInFlight_);
   ld_check(readContext_->iterator != nullptr);
   readContext_->iterator->invalidate();
 }
 
-void ShardRebuildingV2::onReadTaskDone(
+void ShardRebuilding::onReadTaskDone(
     std::vector<std::unique_ptr<ChunkData>> chunks) {
   // Report the cost of this read task to rate limiter.
   std::chrono::steady_clock::duration unused;
@@ -190,7 +190,7 @@ void ShardRebuildingV2::onReadTaskDone(
   tryMakeProgress();
 }
 
-void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
+void ShardRebuilding::startSomeChunkRebuildingsIfNeeded() {
   const size_t max_records_in_flight =
       rebuildingSettings_->max_records_in_flight;
   const size_t max_bytes_in_flight =
@@ -253,7 +253,7 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
       break;
     }
 
-    log_rebuilding_id_t chunk_id{++nextChunkID_};
+    chunk_rebuilding_id_t chunk_id{++nextChunkID_};
     std::unique_ptr<ChunkData> chunk = std::move(readBuffer_.front());
     readBuffer_.pop_front();
     ld_check_ge(bytesInReadBuffer_, chunk->totalBytes());
@@ -321,8 +321,8 @@ void ShardRebuildingV2::startSomeChunkRebuildingsIfNeeded() {
 }
 
 worker_id_t
-ShardRebuildingV2::startChunkRebuilding(std::unique_ptr<ChunkData> chunk,
-                                        log_rebuilding_id_t chunk_id) {
+ShardRebuilding::startChunkRebuilding(std::unique_ptr<ChunkData> chunk,
+                                      chunk_rebuilding_id_t chunk_id) {
   Processor* processor = Worker::onThisThread()->processor_;
   worker_id_t worker_id = processor->selectWorkerRandomly(
       chunk_id.val(), StartChunkRebuildingRequest::workerType);
@@ -346,9 +346,8 @@ ShardRebuildingV2::startChunkRebuilding(std::unique_ptr<ChunkData> chunk,
   return worker_id;
 }
 
-void ShardRebuildingV2::onChunkRebuildingDone(
-    log_rebuilding_id_t chunk_id,
-    RecordTimestamp oldest_timestamp) {
+void ShardRebuilding::onChunkRebuildingDone(chunk_rebuilding_id_t chunk_id,
+                                            RecordTimestamp oldest_timestamp) {
   ChunkRebuildingKey key(oldest_timestamp, chunk_id);
   auto it = chunkRebuildings_.find(key);
   ld_check(it != chunkRebuildings_.end());
@@ -370,7 +369,7 @@ void ShardRebuildingV2::onChunkRebuildingDone(
   tryMakeProgress();
 }
 
-void ShardRebuildingV2::finalizeIfNeeded() {
+void ShardRebuilding::finalizeIfNeeded() {
   // We're done if reading has reached the end, read buffer was drained,
   // and all chunk rebuildings have completed.
   // Additionally, if we got a persistent read error, we just stall the
@@ -397,25 +396,25 @@ void ShardRebuildingV2::finalizeIfNeeded() {
   listener_->onShardRebuildingComplete(shard_);
 }
 
-void ShardRebuildingV2::tryMakeProgress() {
+void ShardRebuilding::tryMakeProgress() {
   startSomeChunkRebuildingsIfNeeded();
   sendStorageTaskIfNeeded();
   updateProfilingState();
   finalizeIfNeeded();
 }
 
-void ShardRebuildingV2::noteConfigurationChanged() {
+void ShardRebuilding::noteConfigurationChanged() {
   // No need to do anything even when logs are removed from config.
-  // Neither RebuildingReadStorageTaskV2 nor ChunkRebuilding require the log to
+  // Neither RebuildingReadStorageTask nor ChunkRebuilding require the log to
   // be in config.
 }
 
-void ShardRebuildingV2::noteRebuildingSettingsChanged() {
+void ShardRebuilding::noteRebuildingSettingsChanged() {
   readRateLimiter_.update(rebuildingSettings_->rate_limit);
   tryMakeProgress();
 }
 
-void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
+void ShardRebuilding::getDebugInfo(InfoRebuildingShardsTable& table) const {
   // Some measure of how far we have progressed, in terms of record timestamps.
   // TODO (#24665001):
   //   This doesn't match the current column name "local_window_end".
@@ -450,23 +449,23 @@ void ShardRebuildingV2::getDebugInfo(InfoRebuildingShardsTable& table) const {
 }
 
 std::function<void(InfoRebuildingLogsTable&)>
-ShardRebuildingV2::beginGetLogsDebugInfo() const {
+ShardRebuilding::beginGetLogsDebugInfo() const {
   ld_check(readContext_ != nullptr);
   return [context = readContext_](InfoRebuildingLogsTable& table) {
     context->getLogsDebugInfo(table);
   };
 }
 
-StatsHolder* ShardRebuildingV2::getStats() {
+StatsHolder* ShardRebuilding::getStats() {
   return Worker::stats();
 }
 
-node_index_t ShardRebuildingV2::getMyNodeIndex() {
+node_index_t ShardRebuilding::getMyNodeIndex() {
   return my_node_id_.index();
 }
 
-const SimpleEnumMap<ShardRebuildingV2::ProfilingState, std::string>&
-ShardRebuildingV2::profilingStateNames() {
+const SimpleEnumMap<ShardRebuilding::ProfilingState, std::string>&
+ShardRebuilding::profilingStateNames() {
   static SimpleEnumMap<ProfilingState, std::string> s_names(
       {{ProfilingState::FULLY_OCCUPIED, "fully_occupied"},
        {ProfilingState::WAITING_FOR_READ, "waiting_for_read"},
@@ -476,7 +475,7 @@ ShardRebuildingV2::profilingStateNames() {
   return s_names;
 }
 
-void ShardRebuildingV2::flushCurrentStateTime() {
+void ShardRebuilding::flushCurrentStateTime() {
   auto now = SteadyTimestamp::now();
   if (profilingState_ == ProfilingState::MAX) {
     currentStateStartTime_ = now;
@@ -505,7 +504,7 @@ void ShardRebuildingV2::flushCurrentStateTime() {
       ld_check(false);
   }
 }
-void ShardRebuildingV2::updateProfilingState() {
+void ShardRebuilding::updateProfilingState() {
   ProfilingState new_state;
   if (chunkRebuildings_.empty()) {
     if (storageTaskInFlight_) {
@@ -552,7 +551,7 @@ void ShardRebuildingV2::updateProfilingState() {
   }
 }
 
-std::string ShardRebuildingV2::describeTimeByState() const {
+std::string ShardRebuilding::describeTimeByState() const {
   std::stringstream ss;
   ss.precision(3);
   ss.setf(std::ios::fixed, std::ios::floatfield);
@@ -566,7 +565,7 @@ std::string ShardRebuildingV2::describeTimeByState() const {
   return ss.str();
 }
 
-bool ShardRebuildingV2::ChunkRebuildingKey::
+bool ShardRebuilding::ChunkRebuildingKey::
 operator<(const ChunkRebuildingKey& rhs) const {
   return std::tie(oldestTimestamp, chunkID) <
       std::tie(rhs.oldestTimestamp, rhs.chunkID);
