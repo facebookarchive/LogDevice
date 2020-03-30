@@ -49,8 +49,6 @@ STAT_DEFINE(get_trim_point_received, SUM)
 STAT_DEFINE(get_trim_point_reply_ok, SUM)
 // Number of GET_TRIM_POINT response sent with ERROR status_
 STAT_DEFINE(get_trim_point_reply_error, SUM)
-// Number of BYTEOFFSET messages received for the log
-STAT_DEFINE(byte_offset_received, SUM)
 // Number of GET_SEQ_STATE messages sent with UNRELEASED_RECORD context
 STAT_DEFINE(get_seq_state_sent_context_unreleased_record, SUM)
 // Number of GET_SEQ_STATE messages received with UNRELEASED_RECORD context

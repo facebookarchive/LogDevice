@@ -20,15 +20,6 @@ STAT_DEFINE(rebuilding_global_window_slide_num, SUM)
 STAT_DEFINE(rebuilding_global_window_slide_total, SUM)
 // 1 if we are waiting on the global window, 0 otherwise
 STAT_DEFINE(rebuilding_global_window_waiting_flag, SUM)
-// total amount of milliseconds we waited for the global window to slide
-// (updated when it finally slides). V1 only, on V2 use rebuilding_ms_stalled.
-STAT_DEFINE(rebuilding_global_window_waiting_total, SUM)
-// The end of the rebuilding local window
-STAT_DEFINE(rebuilding_local_window_end, MAX)
-// Number of times the local window was slid
-STAT_DEFINE(rebuilding_local_window_slide_num, SUM)
-// The total number of milliseconds the local window slid by
-STAT_DEFINE(rebuilding_local_window_slide_total, SUM)
 
 // Number of records read by RebuildingReadStorageTask
 STAT_DEFINE(rebuilding_num_records_read, SUM)
@@ -78,8 +69,6 @@ STAT_DEFINE(num_memtables, SUM)
 // Cumulative sum of age for all memtables created.
 STAT_DEFINE(cumulative_memtable_age_ms, SUM)
 // Number of times metadata memtable was selected to be flushed because there
-// are active writers writing into a partition.
-STAT_DEFINE(pessimistic_metadata_memtable_flush, SUM)
 
 STAT_DEFINE(memtable_size_active, SUM)
 STAT_DEFINE(memtable_size_flushing, SUM)

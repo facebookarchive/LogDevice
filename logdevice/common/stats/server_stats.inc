@@ -147,8 +147,6 @@ STAT_DEFINE(catchup_queue_push_immediate, SUM)
 // Number of streams inserted to CatchupQueue to be processed when it's
 // ready to read newly released records
 STAT_DEFINE(catchup_queue_push_delayed, SUM)
-// Number of times a CatchupQueue activated its ping timer
-STAT_DEFINE(catchup_queue_ping_timer_activations, SUM)
 
 // Read stream ordering rules violations
 STAT_DEFINE(read_stream_start_violations, SUM)
@@ -341,8 +339,6 @@ STAT_DEFINE(sequencer_unavailable_admin_deactivated, SUM)
 // a sequencer node
 STAT_DEFINE(sequencer_unavailable_not_sequencer_node, SUM)
 
-// how many times sequencer activation gets a result of GRACEFUL_SUCCESS
-STAT_DEFINE(graceful_reactivation_result_success, SUM)
 // how many times sequencer activation gets a result of GRACEFUL_DEFERRED
 STAT_DEFINE(graceful_reactivation_result_deferred, SUM)
 // how many graceful reactivation completion procedure is started
@@ -400,13 +396,6 @@ STAT_DEFINE(strict_find_key_try_non_blocking, SUM)
 // but end up doing seeks on disk
 STAT_DEFINE(strict_find_key_would_block, SUM)
 
-// How many times linear search in PartitionedRocksDBStore findTime iterated
-STAT_DEFINE(strict_findtime_linear_search_iterations, SUM)
-// How many times linear search in PartitionedRocksDBStore triggered
-STAT_DEFINE(strict_findtime_linear_search_count, SUM)
-// How many times linear search in PartitionedRocksDBStore findTime timed out
-STAT_DEFINE(strict_findtime_linear_search_timedout, SUM)
-
 // How many times findKey storage task timed out during execution
 STAT_DEFINE(findkey_timedout_during_run, SUM)
 // How many times findKey storage task timed out before execution
@@ -441,10 +430,6 @@ STAT_DEFINE(zookeeper_epoch_store_internal_inconsistency_error, SUM)
 
 // PurgeUncleanEpochs instances created and started
 STAT_DEFINE(purging_started, SUM)
-// PurgeUncleanEpochs instances that started reading
-STAT_DEFINE(purging_reading_started, SUM)
-// PurgeUncleanEpochs instances that finished reading
-STAT_DEFINE(purging_reading_done, SUM)
 // PurgeUncleanEpochs instances that started deleting
 STAT_DEFINE(purging_delete_started, SUM)
 // PurgeUncleanEpochs instances that finished deleting
@@ -468,9 +453,6 @@ STAT_DEFINE(purging_v2_purge_epoch_started, SUM)
 // number of PurgeSingleEpoch state machine completed
 STAT_DEFINE(purging_v2_purge_epoch_completed, SUM)
 
-// number of times PurgeSingleEpoch state machine is completed with purging
-// skipped because all fully authoritative nodes have responded
-STAT_DEFINE(purging_v2_purge_epoch_skipped_all_responded, SUM)
 // number of times PurgeSingleEpoch state machine is completed with the epoch
 // considered empty and purged because all fully authoritative nodes have
 // responded including at least one of them with E::EMPTY
@@ -486,8 +468,6 @@ STAT_DEFINE(purging_v2_delete_by_keys, SUM)
 // number of times purge delete records by first reading the records
 STAT_DEFINE(purging_v2_delete_by_reading_data, SUM)
 
-// Records deleted while purging
-STAT_DEFINE(purging_deleted_records, SUM)
 STAT_DEFINE(purging_task_dropped, SUM)
 // Number of storage tasks queued
 STAT_DEFINE(storage_tasks_queued, SUM)
@@ -635,9 +615,6 @@ STAT_DEFINE(epoch_recovery_metadata_stored, SUM)
 // number of times a storage node failed to send SEALED reply to a sequencer
 // node running log recovery
 STAT_DEFINE(sealed_reply_failed_to_send, SUM)
-
-// number of zero copied records drained on disposal on their original worker
-STAT_DEFINE(zero_copied_records_drained, SUM)
 
 //// stats for record cache
 STAT_DEFINE(record_cache_store_cached, SUM)
@@ -844,8 +821,6 @@ STAT_DEFINE(data_key_format_migration_merges, SUM)
 
 // Number of calls to LocalLogStoreReader::read()
 STAT_DEFINE(read_streams_num_ops, SUM)
-// Number of reads that required doing a seek() on an iterator
-STAT_DEFINE(read_streams_num_ops_requiring_seeks, SUM)
 // Number of times we encounter a transient errors while serving reads
 STAT_DEFINE(read_streams_transient_errors, SUM)
 
@@ -1071,9 +1046,6 @@ STAT_DEFINE(effective_unhealthy_nodes, SUM)
 STAT_DEFINE(health_monitor_overloaded, SUM)
 // Increases for every HM loop in which the node is found to be unhealthy
 STAT_DEFINE(health_monitor_unhealthy, SUM)
-
-// EventLoop delays.
-STAT_DEFINE(event_loop_sched_delay, SUM)
 
 // Number of records from the event log that EventLogReader has seen so far.
 STAT_DEFINE(num_event_log_records_read, SUM)
@@ -1316,21 +1288,8 @@ STAT_DEFINE(graylist_reset_on_disable, SUM)
 //    cleared for any reason.
 STAT_DEFINE(graylist_reseted, SUM)
 
-// How many times does PrioritizedQueue scan all priorities but not find an
-// element, even though there should be one?
-STAT_DEFINE(prioritized_queue_cant_find_once, SUM)
-STAT_DEFINE(prioritized_queue_cant_find_twice, SUM)
-STAT_DEFINE(prioritized_queue_cant_find_thrice_or_more, SUM)
-STAT_DEFINE(prioritized_queue_cant_find_max, MAX)
-
 // how many time fail to recompute byteoffset during Epoch recovery
 STAT_DEFINE(recompute_byteoffset_failed, SUM)
-
-// stats related to admin command connections
-STAT_DEFINE(command_port_connection_encrypted, SUM)
-STAT_DEFINE(command_port_connection_plain, SUM)
-STAT_DEFINE(command_port_connection_failed_ssl_upgrade, SUM)
-STAT_DEFINE(command_port_connection_failed_ssl_required, SUM)
 
 #endif // DESTROYING_THREAD
 #endif // RESETTING_STATS

@@ -96,9 +96,7 @@ struct RocksDBColumnFamily {
     // This count and special value for dependent_memtable protects from a race
     // where an incorrect memtable dependency would be recorded in the tracker
     // when there are active writers writing into the column family. The exact
-    // scenario is described above. The pessimistic_metadata_memtable_flush stat
-    // counts number of time dependent memtable was flushed because of special
-    // value.
+    // scenario is described above.
     uint32_t active_writers_count{0};
 
     // Ideally I would like to have the column_family handle of the dependent
