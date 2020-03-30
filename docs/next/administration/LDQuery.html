@@ -365,7 +365,7 @@
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="log_rebuildings"></a><a href="#log_rebuildings" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>log_rebuildings</h2>
-<p>This table dumps debugging information about the state of LogRebuilding state machines (see &quot;logdevice/server/LogRebuilding.h&quot;) which are state machines running on donor storage nodes and responsible for rebuilding records of that log.</p>
+<p>This table dumps some per-log state of rebuilding on this donor node, mostly related to reading. See also shard_rebuildings.</p>
 <table>
 <thead>
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
@@ -373,21 +373,11 @@
 <tbody>
 <tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
 <tr><td>log_id</td><td style="text-align:center">log_id</td><td>ID of the log.</td></tr>
-<tr><td>shard</td><td style="text-align:center">int</td><td>Index of the shard from which the LogRebuilding state machine is reading.</td></tr>
-<tr><td>started</td><td style="text-align:center">time</td><td>Date and Time of when that state machine was started.</td></tr>
-<tr><td>rebuilding_set</td><td style="text-align:center">string</td><td>Information provided to the LogRebuilding state machine which defines the list of shards that lost record copies which need to be re-replicated elsewhere. Expressed in the form &quot;&lt;shard-id&gt;<em>?[&lt;dirty-ranges&gt;],...&quot;. &quot;</em>&quot; indicates that the shard may be up but we want to drain its data by replicating it elsewhere.  If &lt;dirty-ranges&gt; is not empty, this means that the storage shard only lost data within the specified ranges.</td></tr>
-<tr><td>version</td><td style="text-align:center">lsn</td><td>Rebuilding version.  This version comes from the event log RSM that coordinates rebuilding.  See the &quot;event_log&quot; table.</td></tr>
+<tr><td>shard</td><td style="text-align:center">int</td><td>Index of the shard from which the ShardRebuilding state machine is reading.</td></tr>
 <tr><td>until_lsn</td><td style="text-align:center">lsn</td><td>LSN up to which the log must be rebuilt.  See &quot;logdevice/server/rebuilding/RebuildingPlanner.h&quot; for how this LSN is computed.</td></tr>
-<tr><td>max_timestamp</td><td style="text-align:center">time</td><td>Maximum timestamp that this LogRebuilding state machine is instructed to read through.</td></tr>
 <tr><td>rebuilt_up_to</td><td style="text-align:center">lsn</td><td>Next LSN to be considered by this state machine for rebuilding.</td></tr>
 <tr><td>num_replicated</td><td style="text-align:center">long</td><td>Number of records replicated by this state machine so far.</td></tr>
 <tr><td>bytes_replicated</td><td style="text-align:center">long</td><td>Number of bytes replicated by this state machine so far.</td></tr>
-<tr><td>rr_in_flight</td><td style="text-align:center">long</td><td>Number of stores currently in flight, ie pending acknowledgment from the recipient storage shard.</td></tr>
-<tr><td>nondurable_stores</td><td style="text-align:center">long</td><td>Number of stores for which we are pending acknowledgment that they are durable on disk.</td></tr>
-<tr><td>durable_stores</td><td style="text-align:center">long</td><td>Number of records that were durably replicated and now are pending an amend.</td></tr>
-<tr><td>rra_in_flight</td><td style="text-align:center">long</td><td>Number of amends that are in flight, ie pending acknowledgment from the recipient storage shard.</td></tr>
-<tr><td>nondurable_amends</td><td style="text-align:center">long</td><td>Number of amends for which we are pending acknowledgment that they are durable on disk.</td></tr>
-<tr><td>last_storage_task_status</td><td style="text-align:center">string</td><td>Status of the last batch of records we read from disk.</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="log_storage_state"></a><a href="#log_storage_state" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>log_storage_state</h2>
@@ -802,7 +792,7 @@
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="shard_rebuildings"></a><a href="#shard_rebuildings" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>shard_rebuildings</h2>
-<p>Show debugging information about the ShardRebuilding state machines (see &quot;logdevice/server/rebuilding/ShardRebuildingV2.h&quot;). This state machine is responsible for coordinating reads and re-replication on a donor shard.</p>
+<p>Show debugging information about the ShardRebuilding state machines (see &quot;logdevice/server/rebuilding/ShardRebuilding.h&quot;). This state machine is responsible for coordinating reads and re-replication on a donor shard.</p>
 <table>
 <thead>
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
@@ -810,17 +800,12 @@
 <tbody>
 <tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
 <tr><td>shard_id</td><td style="text-align:center">long</td><td>Donor shard.</td></tr>
-<tr><td>rebuilding_set</td><td style="text-align:center">string</td><td>Rebuilding set considered.  See &quot;rebuilding_set&quot; column of the &quot;log_rebuilding&quot; table.</td></tr>
+<tr><td>rebuilding_set</td><td style="text-align:center">string</td><td>The list of shards that lost record copies which need to be re-replicated elsewhere. Expressed in the form &quot;&lt;shard-id&gt;<em>?[&lt;dirty-ranges&gt;],...&quot;. &quot;</em>&quot; indicates that the shard may be up but we want to drain its data by replicating it elsewhere.  If &lt;dirty-ranges&gt; is not empty, this means that the storage shard only lost data within the specified ranges.</td></tr>
 <tr><td>version</td><td style="text-align:center">lsn</td><td>Rebuilding version.  This version comes from the event log RSM that coordinates rebuilding.  See the &quot;event_log&quot; table.</td></tr>
 <tr><td>global_window_end</td><td style="text-align:center">time</td><td>End of the global window (if enabled with --rebuilding-global-window).  This is a time window used to synchronize all ShardRebuilding state machines across all donor shards.</td></tr>
-<tr><td>local_window_end</td><td style="text-align:center">time</td><td>ShardRebuilding schedules reads for all logs within a time window called the local window.  This shows the end of the current window.</td></tr>
+<tr><td>progress_timestamp</td><td style="text-align:center">time</td><td>Approximately how far rebuilding has progressed on this donor, timestamp-wise. This may be the min timestamp of records of in-flight RecordRebuilding-s, or partition timestamp that ReadStorageTask has reached, or something else.</td></tr>
 <tr><td>num_logs_waiting_for_plan</td><td style="text-align:center">long</td><td>Number of logs that are waiting for a plan.  See &quot;logdevice/include/RebuildingPlanner.h&quot;.</td></tr>
-<tr><td>num_logs_catching_up</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines currently active.</td></tr>
-<tr><td>num_logs_queued_for_catch_up</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines that are inside the local window and queued for catch up.</td></tr>
-<tr><td>num_logs_in_restart_queue</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines that are ready to be restarted as soon as a slot is available.  Logs are scheduled for a restart if we waited too long for writes done by the state machine to be acknowledged as durable.</td></tr>
-<tr><td>total_memory_used</td><td style="text-align:center">long</td><td>Total amount of memory used by all LogRebuilding state machines.</td></tr>
-<tr><td>stall_timer_active</td><td style="text-align:center">int</td><td>If true, all LogRebuilding state machines are stalled until memory usage decreased.</td></tr>
-<tr><td>num_restart_timers_active</td><td style="text-align:center">long</td><td>Number of logs that have completed but for which we are still waiting for acknowlegments that writes were durable.</td></tr>
+<tr><td>total_memory_used</td><td style="text-align:center">long</td><td>Approximate total amount of memory used by ShardRebuilding state machine.</td></tr>
 <tr><td>num_active_logs</td><td style="text-align:center">long</td><td>Set of logs being rebuilt for this shard.  The shard completes rebuilding when this number reaches zero.</td></tr>
 <tr><td>participating</td><td style="text-align:center">int</td><td>true if this shard is a donor for this rebuilding and hasn't finished rebuilding yet.</td></tr>
 <tr><td>time_by_state</td><td style="text-align:center">string</td><td>Time spent in each state. 'stalled' means either waiting for global window or aborted because of a persistent error.</td></tr>
