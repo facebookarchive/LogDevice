@@ -390,8 +390,7 @@ void RebuildingCoordinator::noteRebuildingSettingsChanged() {
 
     // If global window size was decreased (e.g. global window got enabled) we
     // may want to write a SHARD_DONOR_PROGRESS event for some shards.
-    onShardRebuildingProgress(
-        s.first, s.second.myProgress, s.second.version, -1);
+    onShardRebuildingProgress(s.first, s.second.myProgress, -1);
     // If global window size was increased (e.g. global window got disabled) we
     // may want to advance global window end.
     if (!restartIsScheduledForShard(s.first)) {
@@ -1859,7 +1858,6 @@ void RebuildingCoordinator::notifyAckMyShardRebuilt(uint32_t shard,
 void RebuildingCoordinator::onShardRebuildingProgress(
     uint32_t shard,
     RecordTimestamp next_ts,
-    lsn_t version,
     double progress_estimate) {
   auto it_shard = shardsRebuilding_.find(shard);
   ld_check(it_shard != shardsRebuilding_.end());
@@ -1894,7 +1892,7 @@ void RebuildingCoordinator::onShardRebuildingProgress(
 
   shard_state.lastReportedProgress = shard_state.myProgress;
 
-  notifyShardDonorProgress(shard, shard_state.myProgress, version);
+  notifyShardDonorProgress(shard, shard_state.myProgress, shard_state.version);
 }
 
 void RebuildingCoordinator::notifyShardDonorProgress(uint32_t shard,
@@ -1979,7 +1977,7 @@ void RebuildingCoordinator::getDebugInfo(
         .set<2>(shard_state.version)
         .set<3>(shard_state.globalWindowEnd.toMilliseconds())
         .set<5>(logs_waiting_for_plan)
-        .set<13>(shard_state.participating);
+        .set<8>(shard_state.participating);
 
     if (shard_state.shardRebuilding != nullptr) {
       shard_state.shardRebuilding->getDebugInfo(table);

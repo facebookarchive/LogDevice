@@ -37,8 +37,12 @@ class ShardRebuildings : public AdminCommandTable {
         {"shard_id", DataType::BIGINT, "Donor shard."},
         {"rebuilding_set",
          DataType::TEXT,
-         "Rebuilding set considered.  See \"rebuilding_set\" column of "
-         "the \"log_rebuilding\" table."},
+         "The list of shards that lost record copies which need to be "
+         "re-replicated elsewhere. Expressed in the form "
+         "\"<shard-id>*?[<dirty-ranges>],...\". \"*\" indicates that the shard "
+         "may be up but we want to drain its data by replicating it elsewhere. "
+         " If <dirty-ranges> is not empty, this means that the storage shard "
+         "only lost data within the specified ranges."},
         {"version",
          DataType::LSN,
          "Rebuilding version.  This version comes from the event log RSM that "
@@ -49,38 +53,20 @@ class ShardRebuildings : public AdminCommandTable {
          "--rebuilding-global-window).  This is a time window used to "
          "synchronize all ShardRebuilding state machines across all donor "
          "shards."},
-        {"local_window_end",
+        {"progress_timestamp",
          DataType::TIME,
-         "ShardRebuilding schedules reads for all logs within a time window "
-         "called the local window.  This shows the end of the current window."},
+         "Approximately how far rebuilding has progressed on this donor, "
+         "timestamp-wise. This may be the min timestamp of records of "
+         "in-flight RecordRebuilding-s, or partition timestamp that "
+         "ReadStorageTask has reached, or something else."},
         {"num_logs_waiting_for_plan",
          DataType::BIGINT,
          "Number of logs that are waiting for a plan.  See "
          "\"logdevice/include/RebuildingPlanner.h\"."},
-        {"num_logs_catching_up",
-         DataType::BIGINT,
-         "Number of LogRebuilding state machines currently active."},
-        {"num_logs_queued_for_catch_up",
-         DataType::BIGINT,
-         "Number of LogRebuilding state machines that are inside the local "
-         "window and queued for catch up."},
-        {"num_logs_in_restart_queue",
-         DataType::BIGINT,
-         "Number of LogRebuilding state machines that are ready to be "
-         "restarted as soon as a slot is available.  Logs are scheduled for a "
-         "restart if we waited too long for writes done by the state machine "
-         "to be acknowledged as durable."},
         {"total_memory_used",
          DataType::BIGINT,
-         "Total amount of memory used by all LogRebuilding state machines."},
-        {"stall_timer_active",
-         DataType::INTEGER,
-         "If true, all LogRebuilding state machines are stalled until memory "
-         "usage decreased."},
-        {"num_restart_timers_active",
-         DataType::BIGINT,
-         "Number of logs that have completed but for which we are still "
-         "waiting for acknowlegments that writes were durable."},
+         "Approximate total amount of memory used by ShardRebuilding state "
+         "machine."},
         {"num_active_logs",
          DataType::BIGINT,
          "Set of logs being rebuilt for this shard.  The shard completes "
@@ -121,8 +107,7 @@ class ShardRebuildings : public AdminCommandTable {
     };
   }
   std::string getCommandToSend(QueryContext& /*ctx*/) const override {
-    // TODO (#35636262): Use "info rebuilding shards --json" instead.
-    return std::string("info rebuildings --shards --json\n");
+    return std::string("info rebuilding shards --json\n");
   }
 };
 

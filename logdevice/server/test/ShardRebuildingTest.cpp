@@ -129,10 +129,8 @@ class MockedShardRebuilding : public ShardRebuilding,
 
   void onShardRebuildingProgress(uint32_t shard,
                                  RecordTimestamp next_ts,
-                                 lsn_t version,
                                  double progress_estimate) override {
     EXPECT_EQ(shard, SHARD_IDX);
-    EXPECT_EQ(version, REBUILDING_VERSION);
     if (next_ts !=
         (rebuildingSettings_->new_to_old ? RecordTimestamp::max()
                                          : RecordTimestamp::min())) {

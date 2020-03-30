@@ -122,37 +122,21 @@ typedef AdminCommandTable<logid_t,                   /* Log id */
                           >
     InfoRebuildingChunksTable;
 
-typedef AdminCommandTable<logid_t,                   /* Log id */
-                          int64_t,                   /* Shard */
-                          std::chrono::milliseconds, /* Started */
-                          std::string,               /* Rebuilding set */
-                          admin_command_table::LSN,  /* Version */
-                          admin_command_table::LSN,  /* Until LSN */
-                          std::chrono::milliseconds, /* Max timestamp */
-                          admin_command_table::LSN,  /* Rebuilt up to */
-                          uint64_t,                  /* Num replicated */
-                          uint64_t,                  /* Bytes replicated */
-                          uint64_t, /* RecordRebuilding In flight */
-                          uint64_t, /* Num Stores waiting for flush */
-                          uint64_t, /* Num records waiting for amends to start*/
-                          uint64_t, /* RecordRebuildingAmend In flight */
-                          uint64_t, /* Num Amends waiting for flush*/
-                          std::string /* Last storage task status */
-                          >
+typedef AdminCommandTable<logid_t,                  /* Log id */
+                          int64_t,                  /* Shard */
+                          admin_command_table::LSN, /* Until LSN */
+                          admin_command_table::LSN, /* Rebuilt up to */
+                          uint64_t,                 /* Num replicated */
+                          uint64_t>                 /* Bytes replicated */
     InfoRebuildingLogsTable;
 
 typedef AdminCommandTable<uint32_t,                  /* Shard id */
                           std::string,               /* Rebuilding set */
                           admin_command_table::LSN,  /* Version */
                           std::chrono::milliseconds, /* Global window end */
-                          std::chrono::milliseconds, /* Local window end */
+                          std::chrono::milliseconds, /* Progress timestamp */
                           int64_t,     /* Num logs waiting for plan */
-                          uint64_t,    /* Num logs catching up */
-                          uint64_t,    /* Num logs queued for catchup */
-                          uint64_t,    /* Num logs in restart queue */
                           uint64_t,    /* Total memory used */
-                          bool,        /* Stall timer active */
-                          uint64_t,    /* Num restart timers active */
                           uint64_t,    /* Num active logs */
                           bool,        /* Participating */
                           std::string, /* Time by state */

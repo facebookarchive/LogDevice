@@ -134,15 +134,12 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    *                 this ensures that rebuilding will never get stuck waiting
    *                 on global window forever, even if global window size is
    *                 unreasonably small.
-   * @param version  LSN of the last SHARD_NEEDS_REBUILD event log record that
-   *                 was taken into account for rebuilding this shard.
    * @param progress_estimate  A number between 0 and 1 estimating the
    *                 fraction of work done so far. Exported as a stat.
    *                 -1 if not available; in this case stat is left unchanged.
    */
   void onShardRebuildingProgress(uint32_t shard,
                                  RecordTimestamp next_ts,
-                                 lsn_t version,
                                  double progress_estimate) override;
 
   /**

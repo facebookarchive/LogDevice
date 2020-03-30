@@ -317,7 +317,7 @@ void ShardRebuilding::startSomeChunkRebuildingsIfNeeded() {
     progress_timestamp = readingProgressTimestamp_;
   }
   listener_->onShardRebuildingProgress(
-      shard_, progress_timestamp, rebuildingVersion_, readingProgress_);
+      shard_, progress_timestamp, readingProgress_);
 }
 
 worker_id_t
@@ -416,9 +416,6 @@ void ShardRebuilding::noteRebuildingSettingsChanged() {
 
 void ShardRebuilding::getDebugInfo(InfoRebuildingShardsTable& table) const {
   // Some measure of how far we have progressed, in terms of record timestamps.
-  // TODO (#24665001):
-  //   This doesn't match the current column name "local_window_end".
-  //   When rebuilding v2 becomes the default, rename the column.
   if (!chunkRebuildings_.empty()) {
     table.set<4>((rebuildingSettings_->new_to_old
                       ? chunkRebuildings_.rbegin()->first
@@ -430,22 +427,22 @@ void ShardRebuilding::getDebugInfo(InfoRebuildingShardsTable& table) const {
     table.set<4>(readingProgressTimestamp_.toMilliseconds());
   }
   // Total memory used.
-  table.set<9>(bytesInReadBuffer_ + chunkRebuildingBytesInFlight_);
-  table.set<12>(numLogs_);
-  table.set<14>(describeTimeByState());
-  table.set<15>(storageTaskInFlight_);
+  table.set<6>(bytesInReadBuffer_ + chunkRebuildingBytesInFlight_);
+  table.set<7>(numLogs_);
+  table.set<9>(describeTimeByState());
+  table.set<10>(storageTaskInFlight_);
   if (!storageTaskInFlight_) {
-    table.set<16>(readContext_->persistentError);
+    table.set<11>(readContext_->persistentError);
   }
-  table.set<17>(bytesInReadBuffer_);
+  table.set<12>(bytesInReadBuffer_);
   // TODO (#24665001):
   //   When ChunkRebuilding gets reimplemented to process all records at once,
   //   change this into number of chunks in flight.
-  table.set<18>(chunkRebuildingRecordsInFlight_);
+  table.set<13>(chunkRebuildingRecordsInFlight_);
   if (nextLocation_ != nullptr) {
-    table.set<19>(nextLocation_->toString());
+    table.set<14>(nextLocation_->toString());
   }
-  table.set<20>(readingProgress_);
+  table.set<15>(readingProgress_);
 }
 
 std::function<void(InfoRebuildingLogsTable&)>

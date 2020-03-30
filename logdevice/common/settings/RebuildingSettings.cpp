@@ -389,10 +389,8 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
       "store (e.g. caused by bugs, forward incompatibility, or other processes "
       "writing unexpected things to rocksdb directly)."
       "If rebuilding encounters invalid records, it skips them and logs "
-      // TODO (T24665001): With rebuilding partition by partition,
-      //                   remove the "in the same log" part.
-      "warnings. But if it encounters at least this many of them in the same "
-      "log, it freaks out, logs a critical error and stalls indefinitely. The "
+      "warnings. But if it encounters at least this many of them, it freaks "
+      "out, logs a critical error and stalls indefinitely. The "
       "rest of the server keeps trying to run normally, to the extent to which "
       "you can run normally when you can't parse most of the records in the "
       "DB.",

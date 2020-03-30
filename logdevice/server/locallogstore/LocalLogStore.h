@@ -225,13 +225,10 @@ class LocalLogStore : boost::noncopyable {
   // The order of logs and records within each of the 3 groups is undefined.
   // For LogsDB, the iteration happens in order of increasing
   // tuple <partition, log, LSN>, i.e. we read partitions one by one, reading
-  // sequentially inside each partition.
-  //
-  // Records of different logs can interleave, but records of each log are
-  // almost always visited in order of increasing LSN. It's safe to ignore the
-  // the records that have LSN below the max previously seen LSN for the log.
-  // TODO (#T24665001):
-  //   There's one corner case when it's not safe: T22197755. Fix it.
+  // sequentially inside each partition. If new_to_old = true, then the order of
+  // partitions is reversed, but inside each partition we still go in order of
+  // increasing <log, LSN> pair, so the records of each log arrive in a sawtooth
+  // pattern.
   //
   // The iterator may or may not see records that were written after the
   // iterator was created. (It may also see some but not others, or see

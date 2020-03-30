@@ -259,27 +259,17 @@ A table that lists the log groups configured in the cluster.  A log group is an 
 | custom\_fields | string | Custom text field provided by the user. |
 
 ## log\_rebuildings
-This table dumps debugging information about the state of LogRebuilding state machines (see "logdevice/server/LogRebuilding.h") which are state machines running on donor storage nodes and responsible for rebuilding records of that log.
+This table dumps some per-log state of rebuilding on this donor node, mostly related to reading. See also shard\_rebuildings.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
 | node\_id | int | Node ID this row is for. |
 | log\_id | log_id | ID of the log. |
-| shard | int | Index of the shard from which the LogRebuilding state machine is reading. |
-| started | time | Date and Time of when that state machine was started. |
-| rebuilding\_set | string | Information provided to the LogRebuilding state machine which defines the list of shards that lost record copies which need to be re-replicated elsewhere. Expressed in the form "<shard-id>*?[<dirty-ranges>],...". "*" indicates that the shard may be up but we want to drain its data by replicating it elsewhere.  If <dirty-ranges> is not empty, this means that the storage shard only lost data within the specified ranges. |
-| version | lsn | Rebuilding version.  This version comes from the event log RSM that coordinates rebuilding.  See the "event\_log" table. |
+| shard | int | Index of the shard from which the ShardRebuilding state machine is reading. |
 | until\_lsn | lsn | LSN up to which the log must be rebuilt.  See "logdevice/server/rebuilding/RebuildingPlanner.h" for how this LSN is computed. |
-| max\_timestamp | time | Maximum timestamp that this LogRebuilding state machine is instructed to read through. |
 | rebuilt\_up\_to | lsn | Next LSN to be considered by this state machine for rebuilding. |
 | num\_replicated | long | Number of records replicated by this state machine so far. |
 | bytes\_replicated | long | Number of bytes replicated by this state machine so far. |
-| rr\_in\_flight | long | Number of stores currently in flight, ie pending acknowledgment from the recipient storage shard. |
-| nondurable\_stores | long | Number of stores for which we are pending acknowledgment that they are durable on disk. |
-| durable\_stores | long | Number of records that were durably replicated and now are pending an amend. |
-| rra\_in\_flight | long | Number of amends that are in flight, ie pending acknowledgment from the recipient storage shard. |
-| nondurable\_amends | long | Number of amends for which we are pending acknowledgment that they are durable on disk. |
-| last\_storage\_task\_status | string | Status of the last batch of records we read from disk. |
 
 ## log\_storage\_state
 Tracks all in-memory metadata for logs on storage nodes (see "info log\_storage\_state" admin command).
@@ -648,17 +638,12 @@ Show debugging information about the ShardRebuilding state machines (see "logdev
 |------------|:--------:|-----------------|
 | node\_id | int | Node ID this row is for. |
 | shard\_id | long | Donor shard. |
-| rebuilding\_set | string | Rebuilding set considered.  See "rebuilding\_set" column of the "log\_rebuilding" table. |
+| rebuilding\_set | string | The list of shards that lost record copies which need to be re-replicated elsewhere. Expressed in the form "<shard-id>*?[<dirty-ranges>],...". "*" indicates that the shard may be up but we want to drain its data by replicating it elsewhere.  If <dirty-ranges> is not empty, this means that the storage shard only lost data within the specified ranges. |
 | version | lsn | Rebuilding version.  This version comes from the event log RSM that coordinates rebuilding.  See the "event\_log" table. |
 | global\_window\_end | time | End of the global window (if enabled with --rebuilding-global-window).  This is a time window used to synchronize all ShardRebuilding state machines across all donor shards. |
-| local\_window\_end | time | ShardRebuilding schedules reads for all logs within a time window called the local window.  This shows the end of the current window. |
+| progress\_timestamp | time | Approximately how far rebuilding has progressed on this donor, timestamp-wise. This may be the min timestamp of records of in-flight RecordRebuilding-s, or partition timestamp that ReadStorageTask has reached, or something else. |
 | num\_logs\_waiting\_for\_plan | long | Number of logs that are waiting for a plan.  See "logdevice/include/RebuildingPlanner.h". |
-| num\_logs\_catching\_up | long | Number of LogRebuilding state machines currently active. |
-| num\_logs\_queued\_for\_catch\_up | long | Number of LogRebuilding state machines that are inside the local window and queued for catch up. |
-| num\_logs\_in\_restart\_queue | long | Number of LogRebuilding state machines that are ready to be restarted as soon as a slot is available.  Logs are scheduled for a restart if we waited too long for writes done by the state machine to be acknowledged as durable. |
-| total\_memory\_used | long | Total amount of memory used by all LogRebuilding state machines. |
-| stall\_timer\_active | int | If true, all LogRebuilding state machines are stalled until memory usage decreased. |
-| num\_restart\_timers\_active | long | Number of logs that have completed but for which we are still waiting for acknowlegments that writes were durable. |
+| total\_memory\_used | long | Approximate total amount of memory used by ShardRebuilding state machine. |
 | num\_active\_logs | long | Set of logs being rebuilt for this shard.  The shard completes rebuilding when this number reaches zero. |
 | participating | int | true if this shard is a donor for this rebuilding and hasn't finished rebuilding yet. |
 | time\_by\_state | string | Time spent in each state. 'stalled' means either waiting for global window or aborted because of a persistent error. |

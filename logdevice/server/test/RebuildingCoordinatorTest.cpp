@@ -706,12 +706,9 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     coordinator_->setShardUnrecoverable(shard);
   }
 
-  void onShardRebuildingProgress(uint32_t shard,
-                                 int64_t next_ts,
-                                 lsn_t version) {
+  void onShardRebuildingProgress(uint32_t shard, int64_t next_ts) {
     coordinator_->onShardRebuildingProgress(shard,
                                             RecordTimestamp::from(ms(next_ts)),
-                                            version,
                                             /*progress_estimate*/ 0.5);
   }
 
@@ -861,7 +858,7 @@ TEST_F(RebuildingCoordinatorTest, GlobalWindow1) {
 
   // Simulate ShardRebuilding informing coordinator of the timestamp of the
   // first record.
-  onShardRebuildingProgress(1, 42, version);
+  onShardRebuildingProgress(1, 42);
   ASSERT_DONOR_PROGRESS(1, 42, version);
 
   // Now we wait for all other nodes to inform that they reached the end of the
@@ -881,19 +878,19 @@ TEST_F(RebuildingCoordinatorTest, GlobalWindow1) {
 
   // Report progress timestamp smaller than the previous one (ShardRebuilding is
   // allowed to do that). RebuildingCoordinator should ignore it.
-  onShardRebuildingProgress(1, 40, version);
+  onShardRebuildingProgress(1, 40);
   ASSERT_NO_DONOR_PROGRESS();
   EXPECT_EQ(global_window_end, getShard(1)->global_window);
 
   // Report progress timestamp only slightly higher than the last time.
   // RebuildingCoordinator shouldn't write to the event log when the
   // difference is to small.
-  onShardRebuildingProgress(1, 45, version);
+  onShardRebuildingProgress(1, 45);
   ASSERT_NO_DONOR_PROGRESS();
   EXPECT_EQ(global_window_end, getShard(1)->global_window);
 
   // Report some progress timestamp ~2/3 of the way through the global window.
-  onShardRebuildingProgress(1, 20300, version);
+  onShardRebuildingProgress(1, 20300);
   ASSERT_DONOR_PROGRESS(1, 20300, version);
 
   // All other nodes move forward.
@@ -907,7 +904,7 @@ TEST_F(RebuildingCoordinatorTest, GlobalWindow1) {
   EXPECT_EQ(global_window_end, getShard(1)->global_window);
 
   // Our ShardRebuilding makes more progress.
-  onShardRebuildingProgress(1, 1000300, version);
+  onShardRebuildingProgress(1, 1000300);
   ASSERT_DONOR_PROGRESS(1, 1000300, version);
   // Read what we wrote.
   onShardDonorProgress(0, 1, 1000300, version);
@@ -947,7 +944,7 @@ TEST_F(RebuildingCoordinatorTest, GlobalWindow2) {
 
   // Simulate ShardRebuilding informing coordinator of the timestamp of the
   // first record.
-  onShardRebuildingProgress(1, 42, v2);
+  onShardRebuildingProgress(1, 42);
   ASSERT_DONOR_PROGRESS(1, 42, v2);
 
   // Now we wait for all other nodes to inform that they reached the end of the
@@ -967,7 +964,7 @@ TEST_F(RebuildingCoordinatorTest, GlobalWindow2) {
   EXPECT_EQ(global_window_end, getShard(1)->global_window);
 
   // Simulate some more ShardRebuilding progress.
-  onShardRebuildingProgress(1, 20300, v2);
+  onShardRebuildingProgress(1, 20300);
   ASSERT_DONOR_PROGRESS(1, 20300, v2);
 
   // All nodes move forward.
@@ -979,7 +976,7 @@ TEST_F(RebuildingCoordinatorTest, GlobalWindow2) {
   EXPECT_EQ(global_window_end, getShard(1)->global_window);
 
   // Simulate some more ShardRebuilding progress.
-  onShardRebuildingProgress(1, 1000300, v2);
+  onShardRebuildingProgress(1, 1000300);
   ASSERT_DONOR_PROGRESS(1, 1000300, v2);
   // Which we then read.
   onShardDonorProgress(0, 1, 1000300, v2);

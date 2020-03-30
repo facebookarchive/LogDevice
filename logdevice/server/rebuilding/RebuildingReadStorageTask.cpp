@@ -902,10 +902,10 @@ void RebuildingReadStorageTask::Context::getLogsDebugInfo(
     table.next()
         .set<0>(p.first)
         .set<1>(myShardID.shard())
-        .set<5>(s.plan.untilLSN)
-        .set<7>(s.lastSeenLSN)
-        .set<8>(s.recordsDelivered)
-        .set<9>(s.bytesDelivered);
+        .set<2>(s.plan.untilLSN)
+        .set<3>(s.lastSeenLSN)
+        .set<4>(s.recordsDelivered)
+        .set<5>(s.bytesDelivered);
   }
 }
 

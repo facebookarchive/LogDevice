@@ -147,9 +147,11 @@ class RebuildingCoordinatorInterface {
  * Object in charge of the data movement during rebuilding.
  * It reads and re-replicates the records.
  *
- * TODO (#24665001): This interface is obsolete: there's only one class
- *                   implementing it. Remove it and have RebuildingCoordinator
- *                   just use ShardRebuilding directly.
+ * There's only one non-test class implementing it - ShardRebuilding, - and only
+ * one non-test class implementing ShardRebuildingInterface::Listener -
+ * RebuildingCoordinator, - so it's not clear if this interfacce needs to exist.
+ * It comes in handy for mocking in RebuildingCoordnatorTest, so I'm keeping it
+ * for now.
  */
 class ShardRebuildingInterface {
  public:
@@ -162,7 +164,6 @@ class ShardRebuildingInterface {
     virtual void onShardRebuildingComplete(uint32_t shard_idx) = 0;
     virtual void onShardRebuildingProgress(uint32_t shard,
                                            RecordTimestamp next_ts,
-                                           lsn_t version,
                                            double progress_estimate) = 0;
     virtual ~Listener() = default;
   };
@@ -200,7 +201,7 @@ class ShardRebuildingInterface {
 // partitions/timestamps.
 //
 // Note that rebuilding doesn't go exactly in order of timestamps, so this
-// order is applied loosely. This struct is mostly used for global/local window.
+// order is applied loosely. This struct is mostly used for global window.
 struct RebuildingDirectionHelper {
   const bool new_to_old;
 
