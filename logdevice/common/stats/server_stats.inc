@@ -745,15 +745,15 @@ STAT_DEFINE(read_streams_block_bytes_read, SUM)
 STAT_DEFINE(read_streams_num_records_filtered, SUM)
 // Total number of bytes filtered by LocalLogStoreReader for all read streams.
 STAT_DEFINE(read_streams_num_bytes_filtered, SUM)
-// Number of records filtered by LocalLogStoreReader for read streams used for
-// rebuilding.
-STAT_DEFINE(read_streams_num_records_filtered_rebuilding, SUM)
-// Number of bytes filtered by LocalLogStoreReader for read streams used for
-// rebuilding.
-STAT_DEFINE(read_streams_num_bytes_filtered_rebuilding, SUM)
-// Number of records filtered out by rebuilding which required information
-// only available after the full record was read.
-STAT_DEFINE(read_streams_num_records_late_filtered_rebuilding, SUM)
+
+// Number of records filtered out by RebuildingReadStorageTask.
+STAT_DEFINE(rebuilding_num_records_filtered, SUM)
+// Number of bytes filtered out by RebuildingReadStorageTask.
+STAT_DEFINE(rebuilding_num_bytes_filtered, SUM)
+// Number of records filtered out by RebuildingReadStorageTask which required
+// information only available after the full record was read (as opposed to
+// information from the copyset index).
+STAT_DEFINE(rebuilding_num_records_late_filtered, SUM)
 
 // The number of copyset index entries that LocalLogStoreReader read.
 STAT_DEFINE(read_streams_num_csi_entries_read, SUM)
@@ -844,7 +844,6 @@ STAT_DEFINE(data_key_format_migration_merges, SUM)
 
 // Number of calls to LocalLogStoreReader::read()
 STAT_DEFINE(read_streams_num_ops, SUM)
-STAT_DEFINE(read_streams_num_ops_rebuilding, SUM)
 // Number of reads that required doing a seek() on an iterator
 STAT_DEFINE(read_streams_num_ops_requiring_seeks, SUM)
 // Number of times we encounter a transient errors while serving reads

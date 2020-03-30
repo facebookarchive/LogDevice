@@ -241,7 +241,6 @@ TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
                                               LSN_MAX,
                                               bytes,
                                               true,  // first_record_any_size
-                                              false, // is_rebuilding
                                               std::make_shared<LLSFilter>(),
                                               CatchupEventTrigger::OTHER);
     LocalLogStore::ReadOptions options("ReadStorageTasksMemoryLimit");

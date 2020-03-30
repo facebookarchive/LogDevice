@@ -62,7 +62,6 @@ LocalLogStoreTestReader::process(const TemporaryRocksDBStore* store,
                                        last_released_,
                                        max_bytes_all_records_,
                                        first_record_any_size_,
-                                       false, // is_rebuilding
                                        filter_,
                                        CatchupEventTrigger::OTHER);
 

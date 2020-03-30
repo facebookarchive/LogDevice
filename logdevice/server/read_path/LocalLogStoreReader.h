@@ -100,7 +100,6 @@ struct ReadContext {
               lsn_t last_released_lsn,
               size_t max_bytes_to_deliver,
               bool first_record_any_size,
-              bool is_rebuilding,
               std::shared_ptr<LocalLogStore::ReadFilter> lls_filter,
               CatchupEventTrigger catchup_reason)
       : logid_(logid),
@@ -111,7 +110,6 @@ struct ReadContext {
         last_released_lsn_(last_released_lsn),
         max_bytes_to_deliver_(max_bytes_to_deliver),
         first_record_any_size_(first_record_any_size),
-        rebuilding_(is_rebuilding),
         lls_filter_(std::move(lls_filter)),
         catchup_reason_(catchup_reason) {}
 
@@ -137,8 +135,6 @@ struct ReadContext {
   // Should the first record be delivered even if it is bigger than
   // `max_bytes_to_deliver_`?
   bool first_record_any_size_;
-  // True if the read is being done as part of rebuilding
-  bool rebuilding_{false};
   // Filter to be used for filtering records that should not be sent.
   std::shared_ptr<LocalLogStore::ReadFilter> lls_filter_;
   // A reason of the current catchup

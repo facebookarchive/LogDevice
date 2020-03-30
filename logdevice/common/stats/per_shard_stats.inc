@@ -30,18 +30,18 @@ STAT_DEFINE(rebuilding_local_window_slide_num, SUM)
 // The total number of milliseconds the local window slid by
 STAT_DEFINE(rebuilding_local_window_slide_total, SUM)
 
-// Number of records read by LocalLogStoreReader in rebuilding read streams
-STAT_DEFINE(read_streams_num_records_read_rebuilding, SUM)
-// Number of bytes read by LocalLogStoreReader in rebuilding read streams
-STAT_DEFINE(read_streams_num_bytes_read_rebuilding, SUM)
-// Number of record bytes read by LocalLogStoreReader in rebuilding read streams
-STAT_DEFINE(read_streams_num_record_bytes_read_rebuilding, SUM)
-// Number of CSI bytes read by LocalLogStoreReader in rebuilding read streams
-STAT_DEFINE(read_streams_num_csi_bytes_read_rebuilding, SUM)
-// Number of CSI entries read by LocalLogStoreReader in rebuilding read streams
-STAT_DEFINE(read_streams_num_csi_entries_read_rebuilding, SUM)
+// Number of records read by RebuildingReadStorageTask
+STAT_DEFINE(rebuilding_num_records_read, SUM)
+// Number of bytes read by RebuildingReadStorageTask
+STAT_DEFINE(rebuilding_num_bytes_read, SUM)
+// Number of record bytes read by RebuildingReadStorageTask
+STAT_DEFINE(rebuilding_num_record_bytes_read, SUM)
+// Number of CSI bytes read by RebuildingReadStorageTask
+STAT_DEFINE(rebuilding_num_csi_bytes_read, SUM)
+// Number of CSI entries read by RebuildingReadStorageTask
+STAT_DEFINE(rebuilding_num_csi_entries_read, SUM)
 // Total size of rocksdb blocks read from disk by LocalLogStoreReader for rebuilding
-STAT_DEFINE(read_streams_block_bytes_read_rebuilding, SUM)
+STAT_DEFINE(rebuilding_block_bytes_read, SUM)
 
 // number of times that a storage node failed to write to the local log store
 // (err is E::LOCAL_LOG_STORE_WRITE)

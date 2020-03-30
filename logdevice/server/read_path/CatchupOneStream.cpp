@@ -1868,7 +1868,6 @@ CatchupOneStream::createReadContext(lsn_t last_released_lsn,
                                             last_released_lsn,
                                             max_record_bytes_queued,
                                             first_record_any_size,
-                                            false, // is_rebuilding
                                             std::move(filter),
                                             catchup_reason);
 

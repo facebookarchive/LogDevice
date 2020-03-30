@@ -39,8 +39,6 @@ void RebuildingReadStorageTask::execute() {
 
   StatsHolder* stats = getStats();
 
-  STAT_INCR(stats, read_streams_num_ops_rebuilding);
-
   if (context->iterator == nullptr) {
     for (auto& p : context->logs) {
       updateTrimPoint(p.first, context.get(), &p.second);
@@ -97,39 +95,34 @@ void RebuildingReadStorageTask::execute() {
       result_.clear();
     } else {
       auto shard = context->myShardID.shard();
-      PER_SHARD_STAT_ADD(stats,
-                         read_streams_num_records_read_rebuilding,
-                         shard,
-                         read_stats.read_records);
+      PER_SHARD_STAT_ADD(
+          stats, rebuilding_num_records_read, shard, read_stats.read_records);
       PER_SHARD_STAT_ADD(
           stats,
-          read_streams_num_bytes_read_rebuilding,
+          rebuilding_num_bytes_read,
           shard,
           read_stats.read_record_bytes + read_stats.read_csi_bytes);
       PER_SHARD_STAT_ADD(stats,
-                         read_streams_num_record_bytes_read_rebuilding,
+                         rebuilding_num_record_bytes_read,
                          shard,
                          read_stats.read_record_bytes);
       PER_SHARD_STAT_ADD(stats,
-                         read_streams_num_csi_entries_read_rebuilding,
+                         rebuilding_num_csi_entries_read,
                          shard,
                          read_stats.read_csi_entries);
       PER_SHARD_STAT_ADD(stats,
-                         read_streams_num_csi_bytes_read_rebuilding,
+                         rebuilding_num_csi_bytes_read,
                          shard,
                          read_stats.read_csi_bytes);
-      PER_SHARD_STAT_ADD(stats,
-                         read_streams_block_bytes_read_rebuilding,
-                         shard,
-                         block_bytes_read);
+      PER_SHARD_STAT_ADD(
+          stats, rebuilding_block_bytes_read, shard, block_bytes_read);
+      STAT_ADD(
+          stats, rebuilding_num_records_filtered, read_stats.filtered_records);
       STAT_ADD(stats,
-               read_streams_num_records_filtered_rebuilding,
-               read_stats.filtered_records);
-      STAT_ADD(stats,
-               read_streams_num_bytes_filtered_rebuilding,
+               rebuilding_num_bytes_filtered,
                read_stats.filtered_record_bytes);
       STAT_ADD(stats,
-               read_streams_num_records_late_filtered_rebuilding,
+               rebuilding_num_records_late_filtered,
                context->filter->nRecordsLateFiltered);
 
       size_t tot_skipped = context->filter->nRecordsSCDFiltered +
