@@ -476,8 +476,10 @@
 </thead>
 <tbody>
 <tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node</td></tr>
+<tr><td>name</td><td style="text-align:center">string</td><td>Human readable name of the node</td></tr>
 <tr><td>address</td><td style="text-align:center">string</td><td>Ip and port that should be used for communication with the node</td></tr>
 <tr><td>ssl_address</td><td style="text-align:center">string</td><td>Same as &quot;address&quot; but with SSL</td></tr>
+<tr><td>admin_address</td><td style="text-align:center">string</td><td>The IP address, including port number, for admin server</td></tr>
 <tr><td>generation</td><td style="text-align:center">long</td><td>Generation of the node.  This value is bumped each time the node is swapped, sent to repair, or has one of its drives sent to repair.</td></tr>
 <tr><td>location</td><td style="text-align:center">string</td><td>Location of the node: <region>.<cluster>.<row>.<rack></td></tr>
 <tr><td>sequencer</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'sequencer_enabled'.</td></tr>
