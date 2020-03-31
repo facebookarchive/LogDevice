@@ -1243,9 +1243,6 @@ void ReplicatedStateMachine<T, D>::activateGracePeriodForSnapshotting() {
 
           // Scheduling the next run.
           if (!snapshotting_timer_.isActive()) {
-            rsm_info(rsm_type_,
-                     "Activaiting snapshot timer for snapshotting duration:%lu",
-                     snapshotting_duration.count());
             snapshotting_timer_.activate(snapshotting_duration);
           }
         });
@@ -1573,6 +1570,7 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
   const size_t offset_at_time_of_snapshot = delta_log_offset_;
 
   auto ticket = callbackHelper_.ticket();
+  auto delta_read_ptr_copy = delta_read_ptr_;
   auto snapshot_cb = [=](Status st, lsn_t lsn) {
     ticket.postCallbackRequest([=](ReplicatedStateMachine<T, D>* s) {
       if (!s) {
@@ -1590,10 +1588,13 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
             byte_offset_at_time_of_snapshot, last_snapshot_byte_offset_);
         last_snapshot_offset_ =
             std::max(offset_at_time_of_snapshot, last_snapshot_offset_);
-        rsm_info(rsm_type_,
-                 "Snapshot with base ver:%s was written successfully",
-                 lsn_to_string(lsn).c_str());
         last_written_version_ = lsn;
+        last_snapshot_last_read_ptr_ = delta_read_ptr_copy;
+        rsm_info(rsm_type_,
+                 "Snapshot with base ver:%s and read_ptr:%s was written "
+                 "successfully",
+                 lsn_to_string(lsn).c_str(),
+                 lsn_to_string(delta_read_ptr_copy).c_str());
         advertiseVersions(RsmVersionType::DURABLE, last_written_version_);
         onSnapshotCreated(st, payload.size());
       } else if (st == E::UPTODATE) {
@@ -1609,20 +1610,27 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
     });
   };
 
+  bool writing_snapshot = !snapshot_store_ ||
+      (version_ > last_written_version_) ||
+      (include_read_ptr && last_snapshot_last_read_ptr_ < delta_read_ptr_copy);
   rsm_info(rsm_type_,
-           "%swriting snapshot, version_:%s, last_written_version_:%s, "
-           "payload size:%lu",
-           version_ > last_written_version_ ? "" : "Not ",
+           "%swriting snapshot(version_:%s, delta_read_ptr:%s, payload "
+           "size:%lu), last_written_version_:%s, "
+           "last_snapshot_last_read_ptr_:%s, include_read_ptr:%d",
+           writing_snapshot ? "" : "Not ",
            lsn_to_string(version_).c_str(),
+           lsn_to_string(delta_read_ptr_copy).c_str(),
+           payload.size(),
            lsn_to_string(last_written_version_).c_str(),
-           payload.size());
+           lsn_to_string(last_snapshot_last_read_ptr_).c_str(),
+           include_read_ptr);
+  if (!writing_snapshot) {
+    snapshot_cb(E::UPTODATE, last_written_version_);
+    return;
+  }
   if (snapshot_store_) {
-    if (version_ > last_written_version_) {
-      snapshot_in_flight_ = true;
-      snapshot_store_->writeSnapshot(version_, std::move(payload), snapshot_cb);
-    } else {
-      snapshot_cb(E::UPTODATE, last_written_version_);
-    }
+    snapshot_in_flight_ = true;
+    snapshot_store_->writeSnapshot(version_, std::move(payload), snapshot_cb);
   } else {
     postAppendRequest(
         snapshot_log_id_, payload, snapshot_append_timeout_, snapshot_cb);
