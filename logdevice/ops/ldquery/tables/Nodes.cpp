@@ -20,7 +20,6 @@
 #include "logdevice/common/membership/utils.h"
 #include "logdevice/lib/ClientImpl.h"
 
-
 namespace facebook {
   namespace logdevice {
     namespace ldquery {
@@ -28,10 +27,14 @@ namespace facebook {
 
 TableColumns Nodes::getColumns() const {
   return {{"node_id", DataType::BIGINT, "Id of the node"},
+          {"name", DataType::TEXT, "Human readable name of the node"},
           {"address",
            DataType::TEXT,
            "Ip and port that should be used for communication with the node"},
           {"ssl_address", DataType::TEXT, "Same as \"address\" but with SSL"},
+          {"admin_address",
+           DataType::TEXT,
+           "The IP address, including port number, for admin server"},
           {"generation",
            DataType::BIGINT,
            "Generation of the node.  This value is bumped each time the "
@@ -100,9 +103,15 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
     node_index_t nid = kv.first;
     const auto& node_sd = kv.second;
     result->set("node_id", s(nid));
+    if (!node_sd.name.empty()) {
+      result->set("name", node_sd.name);
+    }
     result->set("address", node_sd.address.toString());
     if (node_sd.ssl_address.has_value()) {
       result->set("ssl_address", node_sd.ssl_address.value().toString());
+    }
+    if (node_sd.admin_address.has_value()) {
+      result->set("admin_address", node_sd.admin_address.value().toString());
     }
     result->set("generation", s(nodes_configuration->getNodeGeneration(nid)));
     if (node_sd.location.has_value()) {

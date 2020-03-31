@@ -353,8 +353,10 @@ Lists the nodes in the cluster from the configuration.
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
 | node\_id | long | Id of the node |
+| name | string | Human readable name of the node |
 | address | string | Ip and port that should be used for communication with the node |
 | ssl\_address | string | Same as "address" but with SSL |
+| admin\_address | string | The IP address, including port number, for admin server |
 | generation | long | Generation of the node.  This value is bumped each time the node is swapped, sent to repair, or has one of its drives sent to repair. |
 | location | string | Location of the node: <region>.<cluster>.<row>.<rack> |
 | sequencer | int | 1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'sequencer\_enabled'. |
