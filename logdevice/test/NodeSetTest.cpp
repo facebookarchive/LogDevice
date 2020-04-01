@@ -469,16 +469,22 @@ TEST_F(NodeSetTest, ReadWithNodeSet) {
   nread = reader->read(total_records, &records, &gap);
   ASSERT_EQ(-1, nread);
   ASSERT_EQ(E::GAP, err);
+  ld_info("written lsns: %s %s %s; first gap: [%s, %s]",
+          lsn_to_string(first_lsn).c_str(),
+          lsn_to_string(second_lsn).c_str(),
+          lsn_to_string(third_lsn).c_str(),
+          lsn_to_string(gap.lo).c_str(),
+          lsn_to_string(gap.hi).c_str());
   ASSERT_EQ(GapType::BRIDGE, gap.type);
   ASSERT_EQ(1, gap.lo);
 
   auto prev_hi = gap.hi;
 
   nread = reader->read(total_records, &records, &gap);
-  // expect another gap
+  // expect another bridge gap to skip epoch 1
   ASSERT_EQ(-1, nread);
   ASSERT_EQ(E::GAP, err);
-  ASSERT_GT(gap.lo, prev_hi);
+  ASSERT_EQ(gap.lo, prev_hi + 1);
   ASSERT_EQ(first_lsn - 1, gap.hi);
   // reading the first epoch
   nread = reader->read(total_records, &records, &gap);
@@ -489,15 +495,6 @@ TEST_F(NodeSetTest, ReadWithNodeSet) {
   ASSERT_EQ(E::GAP, err);
   ASSERT_EQ(GapType::BRIDGE, gap.type);
   ASSERT_EQ(lsn_to_epoch(first_lsn), lsn_to_epoch(gap.lo));
-  ASSERT_EQ(lsn_to_epoch(first_lsn), lsn_to_epoch(gap.hi));
-  ASSERT_EQ(ESN_MAX, lsn_to_esn(gap.hi));
-  nread = reader->read(total_records, &records, &gap);
-  ASSERT_EQ(-1, nread);
-  ASSERT_EQ(E::GAP, err);
-  ASSERT_EQ(GapType::BRIDGE, gap.type);
-
-  ASSERT_EQ(lsn_to_epoch(second_lsn), lsn_to_epoch(gap.lo));
-  ASSERT_EQ(ESN_INVALID, lsn_to_esn(gap.lo));
   ASSERT_EQ(second_lsn - 1, gap.hi);
 
   // reading the second epoch
@@ -510,13 +507,6 @@ TEST_F(NodeSetTest, ReadWithNodeSet) {
   ASSERT_EQ(E::GAP, err);
   ASSERT_EQ(GapType::BRIDGE, gap.type);
   ASSERT_EQ(lsn_to_epoch(second_lsn), lsn_to_epoch(gap.lo));
-  ASSERT_EQ(compose_lsn(lsn_to_epoch(second_lsn), ESN_MAX), gap.hi);
-  // keep reading there is another bridge gap at the beginning of epoch
-  nread = reader->read(total_records, &records, &gap);
-  ASSERT_EQ(-1, nread);
-  ASSERT_EQ(E::GAP, err);
-  ASSERT_EQ(GapType::BRIDGE, gap.type);
-  ASSERT_EQ(compose_lsn(lsn_to_epoch(third_lsn), ESN_INVALID), gap.lo);
   ASSERT_EQ(third_lsn - 1, gap.hi);
   // reading the third epoch
   nread = reader->read(records_third, &records, &gap);
@@ -553,14 +543,9 @@ TEST_F(NodeSetTest, AsyncReadWithNodeSet) {
     EXPECT_EQ(GapType::BRIDGE, gap.type);
     EXPECT_NE(lsn_map.cend(), it);
 
-    // expect two bridge gaps for each epoch with record:
-    if (lsn_to_esn(gap.lo) == ESN_INVALID) {
-      EXPECT_EQ(lsn_to_epoch(it->first), lsn_to_epoch(gap.lo));
-      EXPECT_EQ(it->first - 1, gap.hi);
-    } else {
-      EXPECT_EQ(std::prev(it, 1)->first + 1, gap.lo);
-      EXPECT_EQ(compose_lsn(lsn_to_epoch(gap.lo), ESN_MAX), gap.hi);
-    }
+    // expect one bridge gap for each epoch with record
+    EXPECT_EQ(std::prev(it, 1)->first + 1, gap.lo);
+    EXPECT_EQ(it->first - 1, gap.hi);
 
     return true;
   };
@@ -841,16 +826,9 @@ TEST_F(NodeSetTest, RebuildMultipleEpochs) {
     EXPECT_EQ(GapType::BRIDGE, gap.type);
     EXPECT_NE(lsn_map.cend(), it);
 
-    // expect two bridge gaps for each epoch with record:
-    if (lsn_to_esn(gap.lo) == ESN_INVALID) {
-      EXPECT_EQ(lsn_to_epoch(it->first), lsn_to_epoch(gap.lo));
-      EXPECT_EQ(it->first - 1, gap.hi);
-    } else {
-      EXPECT_EQ(std::prev(it, 1)->first + 1, gap.lo);
-
-      ld_check(std::prev(it, 1)->first + 1 == gap.lo);
-      EXPECT_EQ(compose_lsn(lsn_to_epoch(gap.lo), ESN_MAX), gap.hi);
-    }
+    // expect one bridge gap for each epoch with record:
+    EXPECT_EQ(std::prev(it, 1)->first + 1, gap.lo);
+    EXPECT_EQ(it->first - 1, gap.hi);
 
     // Unblock the main thread if any of the checks failed
     if (HasFailure()) {

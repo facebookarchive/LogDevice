@@ -117,15 +117,9 @@ TEST_F(MetaDataLogsIntegrationTest, WriteMetaDataLog) {
     }
     EXPECT_NE(lsn_written.cbegin(), it);
 
-    // expect two bridge gaps for each epoch with record:
-    if (lsn_to_esn(gap.lo) == ESN_INVALID) {
-      EXPECT_EQ(*it - 1, gap.lo);
-      EXPECT_EQ(*it - 1, gap.hi);
-    } else {
-      EXPECT_EQ(*std::prev(it, 1) + 1, gap.lo);
-      // *it has esn == 1, -2 goes to ESN_MAX of the previous epoch
-      EXPECT_EQ(*it - 2, gap.hi);
-    }
+    // expect one bridge gap for each epoch with record:
+    EXPECT_EQ(*std::prev(it, 1) + 1, gap.lo);
+    EXPECT_EQ(*it - 1, gap.hi);
 
     return true;
   };

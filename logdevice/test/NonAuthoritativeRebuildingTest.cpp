@@ -78,7 +78,6 @@ class NonAuthoritativeRebuildingTest : public IntegrationTestBase {
    * tests know what to not do.
    */
   void SetUp() override {
-    dbg::currentLevel = dbg::Level::INFO;
     dbg::assertOnData = true;
 
     auto log_attrs = logsconfig::LogAttributes()
@@ -248,6 +247,7 @@ TEST_F(NonAuthoritativeRebuildingTest,
   reader_thread->start();
   append_thread->start();
 
+  ld_info("Creating client");
   auto client = cluster_->createClient();
 
   std::vector<ShardID> shards_in_rack;
@@ -261,11 +261,13 @@ TEST_F(NonAuthoritativeRebuildingTest,
   all_shards.push_back(another_shard);
 
   // A rack and N11 go down.
+  ld_info("Killing nodes");
   for (ShardID sid : all_shards) {
     cluster_->getNode(sid.node()).kill();
   }
 
   // Start rebuilding the rack and N11.
+  ld_info("Requesting rebuilding");
   for (ShardID sid : all_shards) {
     lsn_t lsn = requestShardRebuilding(*client, sid.node(), sid.shard());
     EXPECT_NE(LSN_INVALID, lsn);
@@ -276,12 +278,14 @@ TEST_F(NonAuthoritativeRebuildingTest,
   // This should make readers stall instead of make progress and issue DATALOSS
   // gaps. At the end of this test we'll check that no DATALOSS gaps were
   // issued.
+  ld_info("Waiting for rebuilding");
   waitUntilShardsHaveEventLogState(
       client, all_shards, AuthoritativeStatus::UNAVAILABLE, true);
   expectClusterIsWaitingForRecoverableShards(all_shards.size());
 
   // Wipe the shard on node 11 and restart it.
   // The node should write SHARD_UNRECOVERABLE message.
+  ld_info("Wiping a shard, bumping generation and starting");
   cluster_->getNode(another_shard.node()).wipeShard(another_shard.shard());
   ASSERT_EQ(0, cluster_->bumpGeneration(another_shard.node()));
   cluster_->getNode(another_shard.node()).start();
@@ -290,15 +294,18 @@ TEST_F(NonAuthoritativeRebuildingTest,
   // Now that the shard has been marked as unrecoverable, its authoritative
   // status should be changed to UNDERREPLICATION and remain there even though
   // rebuilding completes.
+  ld_info("Waiting for the shard to be marked unrecoverable");
   waitUntilShardHasEventLogState(
       client, another_shard, AuthoritativeStatus::UNDERREPLICATION, true);
   expectClusterIsWaitingForRecoverableShards(all_shards.size());
 
   // At this point the reader should have realized that its connection is not
   // healthy and stall.
+  ld_info("Waiting for reader to stall");
   reader_thread->waitUntilStalled();
 
   // Restart the rack. The nodes should cancel rebuildings.
+  ld_info("Starting nodes");
   for (ShardID sid : shards_in_rack) {
     cluster_->getNode(sid.node()).start();
   }
@@ -307,16 +314,19 @@ TEST_F(NonAuthoritativeRebuildingTest,
   }
 
   // The rack coming back should be enough for the readers to unstall.
+  ld_info("Waiting for readers");
   reader_thread->syncToTail();
   expectClusterIsWaitingForRecoverableShards(0);
 
   // After the rack was restarted, rebuilding is restarted authoritatively. Wait
   // until it completes and expect all shards to be FULLY_AUTHORITATIVE.
+  ld_info("Waiting for rebuilding");
   waitUntilShardsHaveEventLogState(
       client, all_shards, AuthoritativeStatus::FULLY_AUTHORITATIVE, true);
 
   // Stop appends, wait for readers to finish reading up to the last record
   // that was appended.
+  ld_info("Stopping things");
   append_thread->stop();
   reader_thread->syncToTail();
   reader_thread->stop();
@@ -326,6 +336,7 @@ TEST_F(NonAuthoritativeRebuildingTest,
 
   // Finally, start a reader to read everything from the beginning, it should
   // not see dataloss.
+  ld_info("Reading backlog");
   auto backlog_reader_thread =
       std::make_unique<ReaderThread>(cluster_->createClient(), LOG_ID);
   backlog_reader_thread->start();
