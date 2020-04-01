@@ -27,7 +27,7 @@ namespace facebook {
 
 TableColumns ShardAuthoritativeStatus::getColumns() const {
   TableColumns res({
-      {"node_id", DataType::BIGINT, "Id of the node."},
+      {"node_id", DataType::INTEGER, "Id of the node."},
       {"shard", DataType::BIGINT, "Id of the shard."},
       {"rebuilding_version",
        DataType::TEXT,

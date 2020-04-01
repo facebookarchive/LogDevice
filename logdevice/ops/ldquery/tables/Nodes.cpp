@@ -26,7 +26,7 @@ namespace facebook {
       namespace tables {
 
 TableColumns Nodes::getColumns() const {
-  return {{"node_id", DataType::BIGINT, "Id of the node"},
+  return {{"node_id", DataType::INTEGER, "Id of the node"},
           {"name", DataType::TEXT, "Human readable name of the node"},
           {"address",
            DataType::TEXT,
