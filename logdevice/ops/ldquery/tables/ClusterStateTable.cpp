@@ -26,7 +26,7 @@ namespace facebook {
       namespace tables {
 
 TableColumns ClusterStateTable::getColumns() const {
-  return {{"node_id", DataType::BIGINT, "Id of the node."},
+  return {{"node_id", DataType::INTEGER, "Id of the node."},
           {"status", DataType::TEXT, "Status of the node."},
           {"dead_nodes",
            DataType::TEXT,

@@ -85,7 +85,7 @@ Fetches the state of the gossip-based failure detector from the nodes of the clu
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
-| node\_id | long | Id of the node. |
+| node\_id | int | Id of the node. |
 | status | string | Status of the node. |
 | dead\_nodes | string | List of node IDs that this node believes to be dead. |
 | boycotted\_nodes | string | List of boycotted nodes. |
@@ -352,7 +352,7 @@ Lists the nodes in the cluster from the configuration.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
-| node\_id | long | Id of the node |
+| node\_id | int | Id of the node |
 | name | string | Human readable name of the node |
 | address | string | Ip and port that should be used for communication with the node |
 | ssl\_address | string | Same as "address" but with SSL |
@@ -571,7 +571,7 @@ Show the current state in the event log. This contains each shard's authoritativ
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
-| node\_id | long | Id of the node. |
+| node\_id | int | Id of the node. |
 | shard | long | Id of the shard. |
 | rebuilding\_version | string | Rebuilding version: the LSN of the last SHARD\_NEEDS\_REBUILD delta from the event log. |
 | authoritative\_status | string | Authoritative status of the shard. |
@@ -590,7 +590,7 @@ Like shard\_authoritative\_status\_verbose but has even more columns.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
-| node\_id | long | Id of the node. |
+| node\_id | int | Id of the node. |
 | shard | long | Id of the shard. |
 | rebuilding\_version | string | Rebuilding version: the LSN of the last SHARD\_NEEDS\_REBUILD delta from the event log. |
 | authoritative\_status | string | Authoritative status of the shard. |
@@ -615,7 +615,7 @@ Like shard\_authoritative\_status but has more columns and prints all the shards
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|
-| node\_id | long | Id of the node. |
+| node\_id | int | Id of the node. |
 | shard | long | Id of the shard. |
 | rebuilding\_version | string | Rebuilding version: the LSN of the last SHARD\_NEEDS\_REBUILD delta from the event log. |
 | authoritative\_status | string | Authoritative status of the shard. |
