@@ -120,9 +120,7 @@ TEST(NodesConfigurationInitTest, ConfigCreation) {
       server_config);
   EXPECT_NE(nullptr, config);
 
-  auto nodes = config->getServerConfig()
-                   ->getNodesConfigurationFromServerConfigSource()
-                   ->getServiceDiscovery();
+  auto nodes = config->getNodesConfiguration()->getServiceDiscovery();
   EXPECT_EQ(3, nodes->numNodes());
   EXPECT_EQ("10.0.0.2:4440",
             nodes->getNodeAttributesPtr(node_index_t(0))->address.toString());

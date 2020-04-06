@@ -46,8 +46,7 @@ void NodesConfigurationPublisher::publish() {
 
   auto settings = settings_.get();
   bool from_ncm = settings->enable_nodes_configuration_manager &&
-      settings->use_nodes_configuration_manager_nodes_configuration &&
-      !settings->bootstrapping;
+      settings->use_nodes_configuration_manager_nodes_configuration;
 
   auto ncm_nc = config_->getNodesConfigurationFromNCMSource();
   auto server_config_nc =

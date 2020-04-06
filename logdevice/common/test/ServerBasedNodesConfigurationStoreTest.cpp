@@ -27,6 +27,12 @@ using namespace facebook::logdevice::configuration::nodes;
 TEST(ServerBasedNodesConfigurationStoreTest, SuccessScenario) {
   auto updatable_config =
       std::make_shared<UpdateableConfig>(createSimpleConfig(3, 0));
+  updatable_config->updateableNodesConfiguration()->update(
+      updatable_config->getServerConfig()
+          ->getNodesConfigurationFromServerConfigSource());
+  updatable_config->updateableNCMNodesConfiguration()->update(
+      updatable_config->getServerConfig()
+          ->getNodesConfigurationFromServerConfigSource());
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 5;
   settings.bootstrapping = true;

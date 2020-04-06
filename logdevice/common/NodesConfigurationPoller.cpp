@@ -218,16 +218,7 @@ ClusterState* NodesConfigurationPoller::getClusterState() {
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 NodesConfigurationPoller::getNodesConfiguration() const {
-  if (isBootstrapping()) {
-    // for bootstrapping environment, currently only server config
-    // based NC is available
-    // TODO T44484704: use NC for seed hosts in NodesConfigurationInit
-    // bootstrapping
-    return Worker::onThisThread()
-        ->getNodesConfigurationFromServerConfigSource();
-  }
-
-  // Otherwise, NodesConfigurationPoller is used by NCM so it must use
+  // NodesConfigurationPoller is used by NCM so it must use
   // NCM based NC for conditional polling
   return Worker::onThisThread()->getNodesConfigurationFromNCMSource();
 }

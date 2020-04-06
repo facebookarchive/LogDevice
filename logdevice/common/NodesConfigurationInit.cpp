@@ -134,9 +134,13 @@ std::shared_ptr<UpdateableConfig>
 NodesConfigurationInit::buildBootstrappingServerConfig(
     const std::vector<std::string>& host_list,
     std::shared_ptr<ServerConfig> current_server_config) const {
-  // TODO T44484704: use NC for seed hosts in NodesConfigurationInit
-  // bootstrapping
-  configuration::Nodes nodes;
+  using namespace configuration::nodes;
+  ld_check(!host_list.empty());
+
+  NodesConfiguration::Update update;
+  update.service_discovery_update =
+      std::make_unique<ServiceDiscoveryConfig::Update>();
+
   for (size_t index = 0; index < host_list.size(); index++) {
     auto maybe_address = Sockaddr::fromString(host_list[index]);
     if (!maybe_address.has_value()) {
@@ -144,23 +148,24 @@ NodesConfigurationInit::buildBootstrappingServerConfig(
       return nullptr;
     }
 
-    configuration::Node node;
-    node.name = folly::sformat("server-{}", index);
-    node.address = maybe_address.value();
-    node.ssl_address = maybe_address.value();
-    node.setRole(configuration::NodeRole::SEQUENCER);
-    node.sequencer_attributes =
-        std::make_unique<configuration::SequencerNodeAttributes>();
-    node.generation = 1;
+    auto sd = std::make_unique<NodeServiceDiscovery>();
 
-    nodes[index] = std::move(node);
+    sd->name = folly::sformat("server-{}", index);
+    sd->address = maybe_address.value();
+    sd->ssl_address = maybe_address.value();
+    sd->roles.set(static_cast<uint8_t>(NodeRole::SEQUENCER));
+
+    update.service_discovery_update->addNode(
+        index, {ServiceDiscoveryConfig::UpdateType::PROVISION, std::move(sd)});
   }
 
-  auto server_config = current_server_config->withNodes(
-      configuration::NodesConfig(std::move(nodes)));
-  ld_check(server_config);
+  auto nodes_config = NodesConfiguration().applyUpdate(update);
+  ld_check(nodes_config);
+
   auto config = std::make_shared<UpdateableConfig>();
-  config->updateableServerConfig()->update(std::move(server_config));
+  config->updateableServerConfig()->update(std::move(current_server_config));
+  config->updateableNodesConfiguration()->update(nodes_config);
+  config->updateableNCMNodesConfiguration()->update(nodes_config);
   return config;
 }
 

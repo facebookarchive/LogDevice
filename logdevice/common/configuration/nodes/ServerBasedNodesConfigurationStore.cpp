@@ -106,17 +106,12 @@ void ServerBasedNodesConfigurationStore::getConfig(
   }
 
   auto worker = Worker::onThisThread();
-  // TODO T44484704: genPollerOptions is currently using the NodesConfiguration
-  // from the ServerConfig, later this will be switched to use the
-  // NodesConfiguration maintained by NCM, and we need to make sure such NC is
-  // always available, even in the special bootstrapping processor
   std::unique_ptr<Request> rq =
       std::make_unique<NodesConfigurationOneTimePollRequest>(
-          genPollerOptions(
-              NodesConfigurationPoller::Poller::Mode::ONE_TIME,
-              *worker->processor_->settings(),
-              *worker->processor_->config_->getServerConfig()
-                   ->getNodesConfigurationFromServerConfigSource()),
+          genPollerOptions(NodesConfigurationPoller::Poller::Mode::ONE_TIME,
+                           *worker->processor_->settings(),
+                           *worker->processor_->config_
+                                ->getNodesConfigurationFromNCMSource()),
           std::move(callback),
           base_version);
   worker->processor_->postRequest(rq);
