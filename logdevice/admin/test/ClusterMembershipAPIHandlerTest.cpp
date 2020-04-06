@@ -151,6 +151,23 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
            }) == 0;
   }
 
+  bool waitUntilMaintenanceManagerHasNCVersion(
+      std::unique_ptr<thrift::AdminAPIAsyncClient>& admin_client,
+      uint64_t version) {
+    return wait_until(
+               folly::sformat(
+                   "Maintenance Managers's NC has version >= {}", version)
+                   .c_str(),
+               [&]() {
+                 thrift::NodesStateRequest state_req;
+                 state_req.set_filter(thrift::NodesFilter{});
+
+                 thrift::NodesStateResponse nc;
+                 admin_client->sync_getNodesState(nc, state_req);
+                 return nc.version >= version;
+               }) == 0;
+  }
+
  public:
   std::unique_ptr<IntegrationTestUtils::Cluster> cluster_;
 };
@@ -186,12 +203,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveProvisioningNodes) {
     thrift::AddNodesResponse resp;
     admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
     ASSERT_EQ(2, resp.added_nodes.size());
-
-    wait_until("AdminServer's NC picks the additions", [&]() {
-      thrift::NodesConfigResponse nc;
-      admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
-      return nc.version >= resp.new_nodes_configuration_version;
-    });
+    waitUntilMaintenanceManagerHasNCVersion(
+        admin_client, resp.new_nodes_configuration_version);
   }
 
   thrift::RemoveNodesResponse resp;
@@ -210,11 +223,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestApplyDrainOnProvisioning) {
     admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
     ASSERT_EQ(2, resp.added_nodes.size());
 
-    wait_until("AdminServer's NC picks the additions", [&]() {
-      thrift::NodesConfigResponse nc;
-      admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
-      return nc.version >= resp.new_nodes_configuration_version;
-    });
+    waitUntilMaintenanceManagerHasNCVersion(
+        admin_client, resp.new_nodes_configuration_version);
   }
 
   // We didn't provision the shared, let's apply a DRAINED maintenance
@@ -262,11 +272,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNodeSuccess) {
   EXPECT_EQ(1, resp.removed_nodes.size());
   EXPECT_EQ(1, resp.removed_nodes[0].node_index_ref().value_unchecked());
 
-  wait_until("AdminServer's NC picks the removal", [&]() {
-    thrift::NodesConfigResponse nodes_config;
-    admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
-    return nodes_config.version >= resp.new_nodes_configuration_version;
-  });
+  waitUntilMaintenanceManagerHasNCVersion(
+      admin_client, resp.new_nodes_configuration_version);
 
   thrift::NodesConfigResponse nodes_config;
   admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
@@ -306,11 +313,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
                   NodeConfigEq(10, req.new_node_requests[0].new_config),
                   NodeConfigEq(4, req.new_node_requests[1].new_config)));
 
-  wait_until("AdminServer's NC picks the additions", [&]() {
-    thrift::NodesConfigResponse nodes_config;
-    admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
-    return nodes_config.version >= resp.new_nodes_configuration_version;
-  });
+  waitUntilMaintenanceManagerHasNCVersion(
+      admin_client, resp.new_nodes_configuration_version);
 
   thrift::NodesConfigResponse nodes_config;
   admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
@@ -412,11 +416,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
   EXPECT_EQ(1, uresp.updated_nodes.size());
   EXPECT_THAT(uresp.updated_nodes, UnorderedElementsAre(NodeConfigEq(3, cfg)));
 
-  wait_until("AdminServer's NC picks the updates", [&]() {
-    thrift::NodesConfigResponse nc;
-    admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
-    return nc.version >= uresp.new_nodes_configuration_version;
-  });
+  waitUntilMaintenanceManagerHasNCVersion(
+      admin_client, uresp.new_nodes_configuration_version);
 
   admin_client->sync_getNodesConfig(nodes_config, filter);
   ASSERT_EQ(1, nodes_config.nodes.size());
@@ -508,11 +509,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
     admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
     ASSERT_EQ(2, resp.added_nodes.size());
 
-    wait_until("AdminServer's NC picks the additions", [&]() {
-      thrift::NodesConfigResponse nc;
-      admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
-      return nc.version >= resp.new_nodes_configuration_version;
-    });
+    waitUntilMaintenanceManagerHasNCVersion(
+        admin_client, resp.new_nodes_configuration_version);
   }
 
   // Mark all N100 shards, and only N101:S0 as provisioned
@@ -525,11 +523,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
               UnorderedElementsAre(
                   mkShardID(100, 0), mkShardID(100, 1), mkShardID(101, 0)));
 
-  wait_until("AdminServer's NC picks the updates", [&]() {
-    thrift::NodesConfigResponse nc;
-    admin_client->sync_getNodesConfig(nc, thrift::NodesFilter{});
-    return nc.version >= resp.new_nodes_configuration_version;
-  });
+  waitUntilMaintenanceManagerHasNCVersion(
+      admin_client, resp.new_nodes_configuration_version);
 
   auto get_shard_state = [&](const thrift::NodesState& state,
                              thrift::ShardID shard) {
