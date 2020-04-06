@@ -299,7 +299,7 @@ service AdminAPI extends fb303.FacebookService {
    * Executes the text based admin command passed in the request. This API is
    * meant as a replacement for the command port.
    *
-   * NOTE: To perserve backward comptability with the toolings that used the
+   * NOTE: To perserve backward compatibility with the toolings that used the
    *       legacy commmand port, the response always ends with "END\r\n".
    */
   admin_commands.AdminCommandResponse executeAdminCommand(
