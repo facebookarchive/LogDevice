@@ -161,7 +161,7 @@ TEST_F(NodesConfigurationManagerTest, basic) {
   };
   auto futures =
       fulfill_on_all_workers<folly::Unit>(processor_.get(), verify_version);
-  folly::collectAllSemiFuture(futures).get();
+  folly::collectAll(futures).get();
 }
 
 TEST_F(NodesConfigurationManagerTest, update) {

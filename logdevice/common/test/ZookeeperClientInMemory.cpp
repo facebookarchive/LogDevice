@@ -424,7 +424,7 @@ void ZookeeperClientInMemory::createWithAncestors(std::string path,
         return fut;
       });
 
-  folly::collectAllSemiFuture(std::move(futures))
+  folly::collectAll(std::move(futures))
       .toUnsafeFuture()
       .thenTry([this,
                 path = std::move(path),

@@ -468,7 +468,7 @@ void NodesConfigurationManager::maybeProcessStagedConfig() {
   // worker anyway, so there's little we could do in that case.
   // TODO: handle / monitor worker config processing getting stuck, e.g., by
   // timeout.
-  folly::collectAllSemiFuture(std::move(futures))
+  folly::collectAll(std::move(futures))
       .toUnsafeFuture()
       .thenTry([pending_nodes_config = pending_nodes_config_,
                 ncm_weak_ptr = weak_from_this()](auto&& t) mutable {

@@ -876,7 +876,7 @@ MaintenanceManager::markAllShardsUnrecoverableInternal(std::string /*unused*/,
         for (auto shard : shards_to_mark_unrecoverable) {
           ev_result.push_back(writeShardUnrecoverable(shard));
         }
-        return collectAllSemiFuture(ev_result.begin(), ev_result.end())
+        return collectAll(ev_result.begin(), ev_result.end())
             .via(this)
             .thenValue([shards = std::move(shards_to_mark_unrecoverable)](
                            std::vector<folly::Try<Status>>&& result) mutable
@@ -1023,8 +1023,7 @@ void MaintenanceManager::evaluate() {
   status_ = MMStatus::RUNNING_WORKFLOWS;
   ld_info("Updated MaintenanceManager status to RUNNING_WORKFLOWS");
   auto shards_futures = runShardWorkflows();
-  collectAllSemiFuture(
-      shards_futures.second.begin(), shards_futures.second.end())
+  collectAll(shards_futures.second.begin(), shards_futures.second.end())
       .via(this)
       // Cont. When all shard workflows finish processing. At this point we have
       // a list of MaintenanceStatus states for the shards that tell us how we
@@ -1035,7 +1034,7 @@ void MaintenanceManager::evaluate() {
         processShardWorkflowResult(shards, result);
         auto nodes_futures = runSequencerWorkflows();
         // Process all sequencer workflow results now.
-        return collectAllSemiFuture(
+        return collectAll(
                    nodes_futures.second.begin(), nodes_futures.second.end())
             .via(this)
             .thenValue([this, n = std::move(nodes_futures.first)](

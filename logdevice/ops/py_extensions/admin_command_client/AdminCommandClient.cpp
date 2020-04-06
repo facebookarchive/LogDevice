@@ -88,7 +88,7 @@ std::vector<AdminCommandClient::Response>
 AdminCommandClient::send(const std::vector<AdminCommandClient::Request>& rr,
                          std::chrono::milliseconds command_timeout,
                          std::chrono::milliseconds connect_timeout) const {
-  return collectAllSemiFuture(asyncSend(rr, command_timeout, connect_timeout))
+  return collectAll(asyncSend(rr, command_timeout, connect_timeout))
       .via(executor_.get())
       .thenValue(
           [](std::vector<folly::Try<AdminCommandClient::Response>> results) {

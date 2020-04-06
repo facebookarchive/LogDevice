@@ -438,7 +438,7 @@ void StandaloneAdminServer::shutdown() {
             /* with_retrying = */ true);
     ld_info("Waiting for workers to acknowledge.");
 
-    folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
+    folly::collectAll(futures.begin(), futures.end()).get();
     ld_info("Workers acknowledged stopping accepting new work");
 
     ld_info("Finishing work and closing sockets on all workers.");
@@ -453,7 +453,7 @@ void StandaloneAdminServer::shutdown() {
         /* with_retrying = */ true);
     ld_info("Waiting for workers to acknowledge.");
 
-    folly::collectAllSemiFuture(futures.begin(), futures.end()).get();
+    folly::collectAll(futures.begin(), futures.end()).get();
     ld_info("Workers finished all works.");
 
     if (stats_thread_) {
