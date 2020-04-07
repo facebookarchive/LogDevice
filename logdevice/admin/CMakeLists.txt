@@ -15,7 +15,7 @@ auto_sources(admin_settings_files
   "*.cpp" RECURSE "${LOGDEVICE_ADMIN_DIR}/settings")
 
 auto_sources(admin_hfiles "*.h" "${LOGDEVICE_ADMIN_DIR}/")
-auto_sources(admin_files "*.cpp""${LOGDEVICE_ADMIN_DIR}/")
+auto_sources(admin_files "*.cpp" "${LOGDEVICE_ADMIN_DIR}/")
 
 auto_sources(admin_membership_hfiles "*.h"
   "${LOGDEVICE_ADMIN_DIR}/cluster_membership/")
