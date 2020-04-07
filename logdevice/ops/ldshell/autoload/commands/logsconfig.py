@@ -912,4 +912,4 @@ class Logs:
         self._tail_attributes_single(client, log_id)
         cprint("Head Info:")
         self._head_attributes_single(client, log_id)
-        cprint("Has Data?: {}".format(client.is_log_empty(log_id)))
+        cprint("Log Empty?: {}".format(client.is_log_empty(log_id)))
