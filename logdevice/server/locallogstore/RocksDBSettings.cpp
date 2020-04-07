@@ -57,7 +57,7 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
 
   init("rocksdb-compression-type",
        &compression,
-       "none",
+       "lz4",
        [](const std::string& val) {
          if (val == "snappy") {
            return rocksdb::kSnappyCompression;
@@ -81,8 +81,8 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
                "' for option --rocksdb-compression-type");
          }
        },
-       "compression algorithm: 'snappy' (default), 'none', 'zlib', 'bzip2', "
-       "'lz4', 'lz4hc', 'zstd'",
+       "compression algorithm: 'lz4' (default), 'lz4hc', 'snappy', "
+       "'zlib', 'bzip2', 'zstd', 'none'",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 

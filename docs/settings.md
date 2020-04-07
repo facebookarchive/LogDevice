@@ -426,7 +426,7 @@ sidebar_label: Settings
 | rocksdb-compaction-style | compaction style: 'universal' (default) or 'level'; if using 'level', also set --num-levels to at least 2 | universal | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-compressed-cache-numshardbits | This setting is not important. Same as --rocksdb-cache-numshardbits but for the compressed cache (if enabled) | 4 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-compressed-cache-size | size of compressed RocksDB block cache (0 to turn off) | 0 | requires&nbsp;restart, server&nbsp;only |
-| rocksdb-compression-type | compression algorithm: 'snappy' (default), 'none', 'zlib', 'bzip2', 'lz4', 'lz4hc', 'zstd' | none | requires&nbsp;restart, server&nbsp;only |
+| rocksdb-compression-type | compression algorithm: 'lz4' (default), 'lz4hc', 'snappy', 'zlib', 'bzip2', 'zstd', 'none' | lz4 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-db-write-buffer-size | Soft limit on the total size of memtables per shard; when exceeded, oldest memtables will automatically be flushed. This may soon be superseded by a more global --rocksdb-memtable-size-per-node limit that should be set to <num\_shards> * what you'd set this to. If you set this logdevice will no longer manage any flushes and all responsibility of flushing memtable is taken by rocksdb. | 0 | requires&nbsp;restart, server&nbsp;only |
 | rocksdb-disable-iterate-upper-bound | disable iterate\_upper\_bound optimization in RocksDB | false | server&nbsp;only |
 | rocksdb-enable-insert-hint | Enable rocksdb insert hint optimization. May reduce CPU usage for inserting keys into rocksdb, with small memory overhead. | true | requires&nbsp;restart, server&nbsp;only |
