@@ -238,17 +238,17 @@ TEST_F(InternalLogsIntegrationTest,
   meta_config.sequencers_write_metadata_logs = false;
   meta_config.sequencers_provision_epoch_store = false;
   meta_config.nodeset_selector_type = NodeSetSelectorType::PICK_CURRENT_NODESET;
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .useHashBasedSequencerAssignment()
-                     .setMetaDataLogsConfig(meta_config)
-                     .allowExistingMetaData()
-                     .setInternalLogsReplicationFactor(1)
-                     .enableLogsConfigManager()
-                     .setParam("--loglevel-overrides",
-                               "ReplicatedStateMachine-inl.h:debug")
-                     .setNumDBShards(1)
-                     .deferStart()
-                     .create(NNODES);
+  cluster = IntegrationTestUtils::ClusterFactory()
+                .useHashBasedSequencerAssignment()
+                .setMetaDataLogsConfig(meta_config)
+                .allowExistingMetaData()
+                .setInternalLogsReplicationFactor(1)
+                .enableLogsConfigManager()
+                .setParam("--loglevel-overrides",
+                          "ReplicatedStateMachine-inl.h:debug")
+                .setNumDBShards(1)
+                .deferStart()
+                .create(NNODES);
 
   ASSERT_EQ(0, cluster->provisionEpochMetadataWithShardIDs({0, 1, 2}));
 
@@ -634,10 +634,10 @@ TEST_F(InternalLogsIntegrationTest, LCM_VerifyClientCannotTakeSnapshot) {
   auto config = Configuration::fromJsonFile(
       TEST_CONFIG_FILE("lcm_client_cannot_take_snapshot.conf"));
   ASSERT_NE(nullptr, config);
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableLogsConfigManager()
-                     .setParam("--file-config-update-interval", "10ms")
-                     .create(*config);
+  cluster = IntegrationTestUtils::ClusterFactory()
+                .enableLogsConfigManager()
+                .setParam("--file-config-update-interval", "10ms")
+                .create(*config);
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   auto client = cluster->createClient(
       getDefaultTestTimeout(), std::move(client_settings));

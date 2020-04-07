@@ -10,6 +10,7 @@
 #include <string>
 
 #include "logdevice/common/Metadata.h"
+#include "logdevice/common/configuration/ReplicationProperty.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/replicated_state_machine/MessageBasedRSMSnapshotStore.h"
 #include "logdevice/common/replicated_state_machine/RSMSnapshotStore.h"
@@ -100,11 +101,12 @@ class LocalRSMSnapshotStoreImpl : public RSMSnapshotStore {
 
   void getVersion(snapshot_ver_cb_t cb) override;
 
-  void getDurableVersion(snapshot_ver_cb_t cb) override {
-    // TODO: This will be filled in a future diff which adds support
-    // for distributing Durable versions via Gossip
-    cb(E::NOTSUPPORTED, LSN_INVALID);
-  }
+  // Returns durable version in the whole cluster, meant to issue trimming
+  // on delta log safely.
+  void getDurableVersion(snapshot_ver_cb_t) override;
+
+  ReplicationProperty getDurableReplicationProperty(ReplicationProperty rp_in,
+                                                    size_t cluster_size);
 
  private:
   shard_index_t shard_id_{-1};

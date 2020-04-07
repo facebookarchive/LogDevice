@@ -8,6 +8,7 @@
 
 #include "logdevice/server/LocalRSMSnapshotStoreImpl.h"
 
+#include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
@@ -103,6 +104,108 @@ void LocalRSMSnapshotStoreImpl::getVersion(snapshot_ver_cb_t cb) {
   auto task_queue =
       ServerWorker::onThisThread()->getStorageTaskQueueForShard(shard_id_);
   task_queue->putTask(std::move(task));
+}
+
+ReplicationProperty LocalRSMSnapshotStoreImpl::getDurableReplicationProperty(
+    ReplicationProperty rp_in,
+    size_t cluster_size) {
+  ReplicationProperty rp_out = rp_in;
+  auto replicationFactors = rp_in.getDistinctReplicationFactors();
+  auto rf_size = replicationFactors.size();
+  if (rf_size == 0) {
+    return rp_out;
+  }
+
+  auto r = replicationFactors[rf_size - 1].second;
+  // Double the replication factor of delta log, but cap it to atmost half
+  // of the cluster
+  int desired_replication = r * 2;
+  int max_replication = std::max(r, static_cast<int>(cluster_size / 2));
+  rp_out.setReplication(
+      NodeLocationScope::NODE, std::min(desired_replication, max_replication));
+  return rp_out;
+}
+
+// Twice the ReplicationProperty of delta log is used to determine the number
+// of nodes that should have some durable version of the delta log.
+// All durable rsm versions in cluster are sorted in descending order, and
+// we keep going down the version list until a vaild FailureDomainNodeset can
+// be formed. The last version processed while doing the above iteration
+// is returned as a trimmable version.
+void LocalRSMSnapshotStoreImpl::getDurableVersion(snapshot_ver_cb_t cb) {
+  if (!isWritable()) {
+    cb(E::NOTSUPPORTED, LSN_INVALID);
+    return;
+  }
+
+  ServerWorker* worker = ServerWorker::onThisThread();
+  ServerProcessor* processor = worker->processor_;
+  if (!worker->isAcceptingWork()) {
+    cb(E::SHUTDOWN, LSN_INVALID);
+    return;
+  }
+
+  auto delta_log_id = logid_t(folly::to<logid_t::raw_type>(key_));
+  auto fd = processor->failure_detector_.get();
+  if (!fd) {
+    ld_error("FailureDetector not running, returning E::FAILED for log:%lu",
+             delta_log_id.val_);
+    cb(E::FAILED, LSN_INVALID);
+    return;
+  }
+
+  ReplicationProperty rp;
+  auto logsconfig = processor->config_->getLocalLogsConfig();
+  auto status = logsconfig->getLogReplicationProperty(delta_log_id, rp);
+  if (status != E::OK) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    1,
+                    "Failed to fetch ReplicationProperty for internal log:%lu",
+                    delta_log_id.val_);
+    cb(E::FAILED, LSN_INVALID);
+    return;
+  }
+
+  // Double the replication property upto half the cluster nodes to determine
+  // durability of locally stored snapshots
+  const auto& nodes_cfg = worker->getNodesConfiguration();
+  ReplicationProperty rp_double =
+      getDurableReplicationProperty(rp, nodes_cfg->clusterSize());
+
+  Status fstatus{E::DATALOSS};
+  lsn_t durable_lsn{LSN_INVALID};
+  StorageSet ss;
+  int nodes_added{0};
+  int min_nodes_needed = rp_double.getReplicationFactor();
+  // Fetch all RSM versions in descending order
+  std::multimap<lsn_t, node_index_t, std::greater<lsn_t>> sorted_rsm_versions;
+  fd->getAllRSMVersionsInCluster(
+      delta_log_id, RsmVersionType::DURABLE, sorted_rsm_versions);
+  for (auto m : sorted_rsm_versions) {
+    if (m.first == LSN_INVALID) {
+      break;
+    }
+    ss.push_back(ShardID(m.second, 0));
+    nodes_added++;
+    if (nodes_added >= min_nodes_needed &&
+        configuration::nodes::validStorageSet(*nodes_cfg, ss, rp_double)) {
+      fstatus = E::OK;
+      durable_lsn = m.first;
+      break;
+    }
+  }
+
+  RATELIMIT_INFO(std::chrono::seconds(1),
+                 1,
+                 "%s a durable version(%s) for log:%lu, nodes checked:%d, "
+                 " min_nodes_needed:%d, cluster_size:%zu",
+                 fstatus == E::OK ? "Found" : "Didn't find",
+                 lsn_to_string(durable_lsn).c_str(),
+                 delta_log_id.val_,
+                 nodes_added,
+                 min_nodes_needed,
+                 nodes_cfg->clusterSize());
+  cb(fstatus, durable_lsn);
 }
 
 void LocalRSMSnapshotStoreImpl::getSnapshot(lsn_t min_ver, snapshot_cb_t cb) {

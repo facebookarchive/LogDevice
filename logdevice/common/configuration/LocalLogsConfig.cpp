@@ -287,6 +287,16 @@ size_t LocalLogsConfig::size() const {
   return config_tree_->size() + internal_logs_.size();
 }
 
+Status LocalLogsConfig::getLogReplicationProperty(logid_t log,
+                                                  ReplicationProperty& rp_out) {
+  auto log_group = getLogGroupByIDShared(log);
+  if (log_group) {
+    rp_out = log_group->getReplicationProperty();
+    return E::OK;
+  }
+  return E::NOTFOUND;
+}
+
 ReplicationProperty LocalLogsConfig::getNarrowestReplication() {
   if (narrowest_replication_cache_.isEmpty()) {
     narrowest_replication_cache_ = config_tree_->getNarrowestReplication();

@@ -1868,6 +1868,9 @@ class Node {
   std::map<node_index_t, std::string>
   getRsmVersions(logid_t rsm_log, RsmVersionType rsm_type) const;
 
+  std::pair<std::string, std::string>
+  getTrimmableVersion(logid_t rsm_log) const;
+
   /*
    * Sends "info gossip" to command port via nc.
    *

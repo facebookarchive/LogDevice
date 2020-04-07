@@ -323,7 +323,6 @@ TEST_F(RSMSnapshotStoreIntegrationTest, LocalStoreDurableVersionCatchesUp) {
   /* write something to the delta log */
   auto dir = client->makeDirectorySync("/file1", true);
   ASSERT_NE(nullptr, dir);
-  lsn_t last_delta = dir->version();
 
   /* Verify that RSMs are at the same lsn everywhere */
   auto tail_lsn =
@@ -488,6 +487,168 @@ TEST_F(RSMSnapshotStoreIntegrationTest,
       std::this_thread::sleep_for(std::chrono::seconds(1));
     } while (durable_ver_still_not_invalid);
   }
+}
+
+// Verifies that a cluster's logsconfig is intact during whole cluster restart
+TEST_F(RSMSnapshotStoreIntegrationTest,
+       VerifyLogsConfigIsIntactOnClusterRestart) {
+  int num_nodes = 5;
+  // Configure nodes
+  Configuration::Nodes nodes;
+  for (int i = 0; i < num_nodes; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole(2);
+  }
+  auto factory = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--rsm-snapshot-store-type", "local-store")
+                     .setParam("--logsconfig-snapshotting-period", "5s")
+                     .setParam("--logsconfig-max-delta-records",
+                               "1") // to trigger writeSnapshot() as soon as we
+                                    // write a delta record
+                     .enableLogsConfigManager()
+                     .useHashBasedSequencerAssignment()
+                     .setNodes(nodes);
+
+  std::unique_ptr<Cluster> cluster;
+  std::shared_ptr<Client> client;
+  cluster = factory.create(num_nodes);
+  cluster->waitUntilAllSequencersQuiescent();
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
+  client =
+      cluster->createClient(DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+  ASSERT_NE(nullptr, client);
+
+  auto catchup_func = [&](std::string catchup_lsn) {
+    bool catching_up;
+    do {
+      catching_up = false;
+      auto durable_versions = cluster->getNode(0).getRsmVersions(
+          configuration::InternalLogs::CONFIG_LOG_DELTAS,
+          RsmVersionType::DURABLE);
+      for (auto d : durable_versions) {
+        ld_info("Durable versions: N%hu at %s, waiting to catch up till %s",
+                d.first,
+                d.second.c_str(),
+                catchup_lsn.c_str());
+        if (catchup_lsn != d.second) {
+          catching_up = true;
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    } while (catching_up);
+  };
+
+  // write first delta
+  ld_info("Writing /file1");
+  auto dir = client->makeDirectorySync("/file1", true);
+  ASSERT_NE(nullptr, dir);
+
+  // Verify that RSMs are at the same lsn everywhere
+  auto tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  auto tail_lsn_str = lsn_to_string(tail_lsn);
+  ld_info("Verifying that rsm is in sync on all nodes, tail_lsn:%s",
+          tail_lsn_str.c_str());
+  catchup_func(tail_lsn_str);
+
+  // Writing another delta to ensure a new snapshot is created
+  // and first delta record is trimmed
+  ld_info("Writing /file2");
+  dir = client->makeDirectorySync("/file2", true);
+  ASSERT_NE(nullptr, dir);
+  tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  tail_lsn_str = lsn_to_string(tail_lsn);
+  ld_info("Verifying that rsm is in sync on all nodes, tail_lsn:%s",
+          tail_lsn_str.c_str());
+  catchup_func(tail_lsn_str);
+
+  ld_info("Shutting down the cluster...");
+  std::vector<node_index_t> nodelist{0, 1, 2, 3, 4};
+  EXPECT_EQ(0, cluster->shutdownNodes(nodelist));
+
+  ld_info("Starting cluster again...");
+  EXPECT_EQ(0, cluster->start(nodelist));
+  cluster->waitUntilAllStartedAndPropagatedInGossip();
+  // Use a different client to avoid cached results
+  std::unique_ptr<ClientSettings> client_settings2(ClientSettings::create());
+  ASSERT_EQ(0, client_settings2->set("enable-logsconfig-manager", true));
+  ASSERT_EQ(0, client_settings2->set("rsm-snapshot-store-type", "message"));
+  auto client2 =
+      cluster->createClient(DEFAULT_TEST_TIMEOUT, std::move(client_settings2));
+  ASSERT_NE(nullptr, client2);
+  ld_info("Verifying that both /file1 and file2 are present...");
+  auto dir1 = client2->getDirectorySync("/file1");
+  ASSERT_NE(nullptr, dir1);
+  auto dir2 = client2->getDirectorySync("/file2");
+  ASSERT_NE(nullptr, dir2);
+}
+
+TEST_F(RSMSnapshotStoreIntegrationTest, getTrimmableVersion) {
+  int num_nodes = 10;
+  // Configure nodes
+  Configuration::Nodes nodes;
+  for (int i = 0; i < num_nodes; ++i) {
+    auto& node = nodes[i];
+    node.generation = 1;
+    node.addSequencerRole();
+    node.addStorageRole(2);
+  }
+  // Add a sequencer only node (N10)
+  auto& node = nodes[num_nodes];
+  node.generation = 1;
+  node.addSequencerRole();
+
+  auto factory = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--rsm-snapshot-store-type", "local-store")
+                     .setParam("--logsconfig-snapshotting-period", "5s")
+                     .setParam("--logsconfig-max-delta-records",
+                               "1") // to trigger writeSnapshot() as soon as we
+                                    // write a delta record
+                     .enableLogsConfigManager()
+                     .useHashBasedSequencerAssignment()
+                     .setNodes(nodes);
+
+  std::unique_ptr<Cluster> cluster;
+  std::shared_ptr<Client> client;
+  cluster = factory.create(num_nodes + 1);
+  cluster->waitUntilAllSequencersQuiescent();
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  ASSERT_EQ(0, client_settings->set("enable-logsconfig-manager", true));
+  client =
+      cluster->createClient(DEFAULT_TEST_TIMEOUT, std::move(client_settings));
+  ASSERT_NE(nullptr, client);
+
+  /* write something to the delta log */
+  auto dir = client->makeDirectorySync("/file1", true);
+  ASSERT_NE(nullptr, dir);
+
+  auto tail_lsn =
+      client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  auto tail_lsn_str = lsn_to_string(tail_lsn);
+
+  // Verify that N10 returns E::NOTSUPPORTED
+  auto res = cluster->getNode(num_nodes).getTrimmableVersion(
+      configuration::InternalLogs::CONFIG_LOG_DELTAS);
+  ASSERT_EQ(res.first, "NOTSUPPORTED");
+
+  bool catching_up;
+  do {
+    catching_up = false;
+    auto n0_res = cluster->getNode(0).getTrimmableVersion(
+        configuration::InternalLogs::CONFIG_LOG_DELTAS);
+    if (tail_lsn_str != n0_res.second) {
+      catching_up = true;
+      ld_info("tail_lsn:%s, st:%s, trimmable_version:%s",
+              tail_lsn_str.c_str(),
+              n0_res.first.c_str(),
+              n0_res.second.c_str());
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  } while (catching_up);
 }
 
 TEST_F(RSMSnapshotStoreIntegrationTest,

@@ -501,6 +501,10 @@ class ReplicatedStateMachine {
   // How far we have processed the delta log.
   lsn_t getDeltaReadPtr() const;
 
+  RSMSnapshotStore* getSnapshotStore() {
+    return snapshot_store_.get();
+  }
+
  protected:
   // These functions may be overridden by tests.
 

@@ -159,6 +159,31 @@ std::map<std::string, std::string> parseGossipState(std::string output) {
   return out;
 }
 
+/*
+ * Returns [status, lsn] pair
+ */
+std::pair<std::string, std::string> parseTrimmableVersion(std::string output) {
+  std::string status_out{"E::FAILED"};
+  std::string lsn_str_out{"LSN_INVALID"};
+  std::vector<std::string> lines;
+  folly::split("\r\n", output, lines, /* ignoreEmpty */ true);
+
+  std::array<char, 31> st = {{0}};
+  std::array<char, 21> ver = {{0}};
+  if (!lines.size()) {
+    return std::make_pair(status_out, lsn_str_out);
+  }
+  auto line = lines[0];
+
+  int ret =
+      sscanf(line.c_str(), "st:%30s trimmable_ver:%20s", st.data(), ver.data());
+  if (ret == 2) {
+    status_out = st.data();
+    lsn_str_out = ver.data();
+  }
+  return std::make_pair(status_out, lsn_str_out);
+}
+
 /**
  * Parses a string like:
  *
@@ -2285,7 +2310,7 @@ Node::getRsmVersions(logid_t log_id, RsmVersionType rsm_type) const {
     return res;
   }
 
-  std::string command = "info rsm --json";
+  std::string command = "info rsm versions --json";
   auto data = sendJsonCommand(command);
   for (const auto& row : data) {
     const auto peer_id = row.find("Peer ID");
@@ -2298,6 +2323,12 @@ Node::getRsmVersions(logid_t log_id, RsmVersionType rsm_type) const {
     res.emplace(node_idx, lsn_to_string(ver_lsn));
   }
   return res;
+}
+
+std::pair<std::string, std::string>
+Node::getTrimmableVersion(logid_t rsm_log) const {
+  return parseTrimmableVersion(sendCommand("info rsm get_trimmable_version " +
+                                           std::to_string(rsm_log.val_)));
 }
 
 std::map<std::string, std::pair<std::string, uint64_t>>

@@ -44,8 +44,7 @@ class InfoRsm : public AdminCommandTable {
     };
   }
   std::string getCommandToSend(QueryContext& /*ctx*/) const override {
-    // TODO: replace with info rsm versions
-    return std::string("info rsm --json\n");
+    return std::string("info rsm versions --json\n");
   }
 };
 
