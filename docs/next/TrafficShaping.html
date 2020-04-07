@@ -241,11 +241,11 @@ END
 <li>/logdevice/common/stats/per_message_type_stats.inc</li>
 </ul>
 <p>These are visible through the admin interface:</p>
-<pre><code class="hljs">% nc -U  <span class="hljs-regexp">/dev/</span>shm<span class="hljs-regexp">/tmp/</span>cluster<span class="hljs-regexp">/N0\:1/</span>socket_command
+<pre><code class="hljs">% ladmin --unix-path <span class="hljs-regexp">/dev/</span>shm<span class="hljs-regexp">/tmp/</span>cluster<span class="hljs-regexp">/N0\:1/</span>socket_command
 info stats2
 </code></pre>
 <p>or</p>
-<pre><code class="hljs">% echo stats2 |nc ::<span class="hljs-number">1</span> <span class="hljs-number">5440</span> |grep flow_group
+<pre><code class="hljs">% ldadmin stats2 | grep flow_group
 
 STAT flow_groups_run_deadline_exceeded <span class="hljs-number">0</span>
 STAT flow_group.direct_dispatched.<span class="hljs-keyword">NODE</span> <span class="hljs-title">66</span>
