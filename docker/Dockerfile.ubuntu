@@ -76,6 +76,6 @@ RUN apt-get update && \
     apt-get remove -y --auto-remove gcc python3-setuptools python3-dev && \
     rm -rf /var/lib/apt/lists/* /tmp/*.whl /tmp/*.deps
 
-EXPOSE 4440 4441 4443 5440 6440
+EXPOSE 4440 4441 4443 6440
 
 CMD /usr/local/bin/ld-dev-cluster

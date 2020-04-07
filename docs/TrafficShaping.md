@@ -218,12 +218,12 @@ Several statistics track the behavior of traffic shaping. You can see their defi
 These are visible through the admin interface:
 
 ```
-% nc -U  /dev/shm/tmp/cluster/N0\:1/socket_command
+% ladmin --unix-path /dev/shm/tmp/cluster/N0\:1/socket_command
 info stats2
 ```
 or
 ```
-% echo stats2 |nc ::1 5440 |grep flow_group
+% ldadmin stats2 | grep flow_group
 
 STAT flow_groups_run_deadline_exceeded 0
 STAT flow_group.direct_dispatched.NODE 66

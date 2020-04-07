@@ -42,8 +42,6 @@ spec:
         - containerPort: 4440
         # Gossip port
         - containerPort: 4441
-        # Command Port
-        - containerPort: 5440
         # Admin Port
         - containerPort: 6440
         env:

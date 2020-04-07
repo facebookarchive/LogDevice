@@ -11,7 +11,7 @@ Each LogDevice server should have at least 4GB of RAM. For best results the netw
 
 The only platform currently supported is Ubuntu 18 LTS "Bionic Beaver".
 
-Make sure that network ports that you choose are open. We recommend that you use the default ports (`4440`, `4441`, `4443`, `5440`, `6440`) Also, the nodes have to be able to communicate with ZooKeeper.
+Make sure that network ports that you choose are open. We recommend that you use the default ports (`4440`, `4441`, `4443`, `6440`) Also, the nodes have to be able to communicate with ZooKeeper.
 
 **Note:** This simple tutorial sets up a cluster without any security controls. You should restrict network access to these ports using other means (like a firewall or NAT) to prevent your cluster being open to the world.
 
