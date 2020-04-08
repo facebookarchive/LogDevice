@@ -14,11 +14,10 @@ from typing import Any, Collection, Dict, Optional, Tuple
 
 from ldops.const import INTERNAL_USER
 from ldops.exceptions import NodeIsNotASequencerError
-from ldops.types.maintenance_overall_status import MaintenanceOverallStatus
 from ldops.types.node_view import NodeView
 from ldops.types.sequencer_maintenance_progress import SequencerMaintenanceProgress
 from ldops.types.shard_maintenance_progress import ShardMaintenanceProgress
-from logdevice.admin.maintenance.types import MaintenanceDefinition
+from logdevice.admin.maintenance.types import MaintenanceDefinition, MaintenanceProgress
 from logdevice.admin.nodes.types import (
     MaintenanceStatus,
     SequencerState,
@@ -178,51 +177,33 @@ class MaintenanceView:
 
     @property
     def is_everything_done(self) -> bool:
-        return self.are_all_sequencers_done and self.are_all_shards_done
+        return self._maintenance.progress == MaintenanceProgress.COMPLETED
 
     @property
     def is_blocked(self) -> bool:
-        for s in self.shards:
-            if self.get_shard_maintenance_status(s) in {
-                MaintenanceStatus.BLOCKED_UNTIL_SAFE,
-                MaintenanceStatus.REBUILDING_IS_BLOCKED,
-            }:
-                return True
-
-        for n in self.sequencer_nodes:
-            if self.get_sequencer_maintenance_status(n) in {
-                MaintenanceStatus.BLOCKED_UNTIL_SAFE,
-                MaintenanceStatus.REBUILDING_IS_BLOCKED,
-            }:
-                return True
-
-        return False
+        return self._maintenance.progress in [
+            MaintenanceProgress.BLOCKED_UNTIL_SAFE,
+            MaintenanceProgress.UNKNOWN,
+        ]
 
     @property
     def is_completed(self) -> bool:
-        for s in self.shards:
-            if self.get_shard_maintenance_status(s) != MaintenanceStatus.COMPLETED:
-                return False
-
-        for n in self.sequencer_nodes:
-            if self.get_sequencer_maintenance_status(n) != MaintenanceStatus.COMPLETED:
-                return False
-
-        return True
+        return self._maintenance.progress == MaintenanceProgress.COMPLETED
 
     @property
     def is_in_progress(self) -> bool:
-        return not self.is_blocked and not self.is_completed
+        return self._maintenance.progress == MaintenanceProgress.IN_PROGRESS
 
     @property
     def is_internal(self) -> bool:
         return self.user == INTERNAL_USER
 
-    def get_shard_state(self, shard: ShardID) -> ShardState:
+    def get_shard_state(self, shard: ShardID) -> Optional[ShardState]:
         assert shard.node.node_index is not None
-        return self._node_index_to_node_view[shard.node.node_index].shard_states[
-            shard.shard_index
-        ]
+        node = self._node_index_to_node_view[shard.node.node_index]
+        if node.is_storage:
+            return node.shard_states[shard.shard_index]
+        return None
 
     def get_sequencer_state(self, sequencer: NodeID) -> Optional[SequencerState]:
         assert sequencer.node_index is not None
@@ -242,6 +223,10 @@ class MaintenanceView:
 
     def get_shard_maintenance_status(self, shard: ShardID) -> MaintenanceStatus:
         shard_state = self.get_shard_state(shard)
+        if shard_state is None:
+            # This is not a storage node, we assume that these shards are
+            # COMPLETED already since there is nothing to be done.
+            return MaintenanceStatus.COMPLETED
         if self.shard_target_state == ShardOperationalState.MAY_DISAPPEAR:
             if shard_state.current_operational_state in {
                 ShardOperationalState.DRAINED,
@@ -262,6 +247,8 @@ class MaintenanceView:
 
     def get_shard_last_updated_at(self, shard: ShardID) -> Optional[datetime]:
         shard_state = self.get_shard_state(shard)
+        if shard_state is None:
+            return None
         if shard_state.maintenance is not None:
             return ShardMaintenanceProgress.from_thrift(
                 shard_state.maintenance
@@ -292,10 +279,5 @@ class MaintenanceView:
             return None
 
     @property
-    def overall_status(self) -> MaintenanceOverallStatus:
-        if self.is_completed:
-            return MaintenanceOverallStatus.COMPLETED
-        elif self.is_blocked:
-            return MaintenanceOverallStatus.BLOCKED
-        else:
-            return MaintenanceOverallStatus.IN_PROGRESS
+    def overall_status(self) -> MaintenanceProgress:
+        return self._maintenance.progress

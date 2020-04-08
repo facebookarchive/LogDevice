@@ -127,10 +127,14 @@ class MockAdminAPI:
         self.num_distribute_across = num_distribute_across
 
         self.available_locations: Dict[LocationScope, List[str]] = {}
+        # Node Name -> NodeConfig Mapping
         self._nc_by_name: Dict[str, NodeConfig] = {}
+        # Node Name -> NodeState Mapping
         self._ns_by_name: Dict[str, NodeState] = {}
 
+        # Node ID -> NodeConfig Mapping
         self._nc_by_node_index: Dict[int, NodeConfig] = {}
+        # Node ID -> NodeState Mapping
         self._ns_by_node_index: Dict[int, NodeState] = {}
 
         self._nc_version = 0
@@ -321,6 +325,14 @@ class MockAdminAPI:
         new_ns = ns(sequencer_state=ns.sequencer_state(state=target_state))
         self._ns_by_node_index[node_id.node_index] = new_ns
         self._ns_by_name[nc.name] = new_ns
+
+    def _set_maintenance_progress(
+        self, group_id: str, maintenance_progress: MaintenanceProgress
+    ) -> None:
+        mnt = self._maintenances_by_id[group_id]
+        # Since thrift structures are immutable in py3, this is the recommended
+        # way to mutate the __call__ operator is overloaded to perform a clone.
+        self._maintenances_by_id[group_id] = mnt(progress=maintenance_progress)
 
     def _set_sequencer_maintenance_progress(
         self, node_id: NodeID, maintenance_progress: SequencerMaintenanceProgress

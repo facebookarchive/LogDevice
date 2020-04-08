@@ -23,13 +23,14 @@ from ldops.maintenance import (
     remove_maintenances,
 )
 from ldops.types.cluster_view import ClusterView
-from ldops.types.maintenance_view import MaintenanceOverallStatus, MaintenanceView
+from ldops.types.maintenance_view import MaintenanceView
 from ldops.types.shard_maintenance_progress import ShardMaintenanceProgress
 from ldops.util.helpers import parse_shards
 from ldshell.autoload.commands import safety
 from ldshell.helpers import confirm_prompt
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
+    MaintenanceProgress,
     MarkAllShardsUnrecoverableResponse,
 )
 from logdevice.admin.nodes.types import MaintenanceStatus, ShardOperationalState
@@ -152,6 +153,15 @@ def _render_compact(
     )
 
 
+def _get_shard_operational_state(
+    mv: MaintenanceView, shard: ShardID
+) -> ShardOperationalState:
+    shard_state = mv.get_shard_state(shard)
+    if shard_state is not None:
+        return shard_state.current_operational_state
+    return ShardOperationalState.UNKNOWN
+
+
 def _render_expanded(
     maintenance_views: Sequence[MaintenanceView],
     cluster_view: ClusterView,
@@ -173,14 +183,12 @@ def _render_expanded(
             )
 
             tbl.append(
-                [
-                    "Overall Status",
-                    colored(mv.overall_status.name, _color(mv.overall_status)),
-                ]
+                ["Status", colored(mv.overall_status.name, _color(mv.overall_status))]
             )
 
             if (
-                mv.overall_status == MaintenanceOverallStatus.BLOCKED
+                mv.overall_status
+                in [MaintenanceProgress.BLOCKED_UNTIL_SAFE, MaintenanceProgress.UNKNOWN]
                 and mv.last_check_impact_result
             ):
                 tbl.append(
@@ -266,7 +274,7 @@ def _render_expanded(
                     for cur_op_state, num in sorted(
                         Counter(
                             (
-                                mv.get_shard_state(shard).current_operational_state
+                                _get_shard_operational_state(mv, shard)
                                 for shard in mv.get_shards_by_node_index(ni)
                             )
                         ).items(),
@@ -300,18 +308,18 @@ def _render_expanded(
 
                     maintenance_status = ",".join(chunks)
 
-                    last_updated_at_time = min(
-                        (
-                            ShardMaintenanceProgress.from_thrift(
-                                ss.maintenance
-                            ).last_updated_at
-                            for ss in nv.shard_states
-                            if ss.maintenance
+                    last_updated_at = "NEVER"
+                    if nv.shard_states:
+                        last_updated_at_time = min(
+                            (
+                                ShardMaintenanceProgress.from_thrift(
+                                    ss.maintenance
+                                ).last_updated_at
+                                for ss in nv.shard_states
+                                if ss.maintenance
+                            )
                         )
-                    )
-                    last_updated_at = (
-                        f"{last_updated_at_time} ({naturaltime(last_updated_at_time)})"
-                    )
+                        last_updated_at = f"{last_updated_at_time} ({naturaltime(last_updated_at_time)})"
 
                     tbl.append(
                         [
@@ -341,8 +349,7 @@ def _render_expanded(
                         tbl = []
                         for shard in mv.get_shards_by_node_index(ni):
                             target_state = mv.shard_target_state
-                            shard_state = mv.get_shard_state(shard)
-                            cur_op_state = shard_state.current_operational_state
+                            cur_op_state = _get_shard_operational_state(mv, shard)
                             current_state = colored(
                                 cur_op_state.name,
                                 _color_shard_op_state(
@@ -450,7 +457,7 @@ def _render_expanded(
 
         def impact(mv: MaintenanceView, show_safety_check_results: bool) -> str:
             if (
-                mv.overall_status == MaintenanceOverallStatus.BLOCKED
+                mv.overall_status == MaintenanceProgress.BLOCKED_UNTIL_SAFE
                 and show_safety_check_results
             ):
                 response = mv.last_check_impact_result
@@ -517,20 +524,22 @@ def _color_maintenance_status(arg: MaintenanceStatus) -> str:
     return color
 
 
-def _color_maintenance_overall_status(arg: MaintenanceOverallStatus) -> str:
+def _color_maintenance_overall_status(arg: MaintenanceProgress) -> str:
     color = "white"
-    if arg == MaintenanceOverallStatus.COMPLETED:
+    if arg == MaintenanceProgress.COMPLETED:
         color = "green"
-    elif arg == MaintenanceOverallStatus.BLOCKED:
+    elif arg == MaintenanceProgress.BLOCKED_UNTIL_SAFE:
         color = "red"
-    elif arg == MaintenanceOverallStatus.IN_PROGRESS:
+    elif arg == MaintenanceProgress.UNKNOWN:
+        color = "red"
+    elif arg == MaintenanceProgress.IN_PROGRESS:
         color = "yellow"
     return color
 
 
-def _color(arg: Union[MaintenanceOverallStatus, MaintenanceStatus]) -> str:
+def _color(arg: Union[MaintenanceProgress, MaintenanceStatus]) -> str:
     return {
-        MaintenanceOverallStatus: _color_maintenance_overall_status,
+        MaintenanceProgress: _color_maintenance_overall_status,
         MaintenanceStatus: _color_maintenance_status,
         # pyre-ignore
     }[type(arg)](arg)
