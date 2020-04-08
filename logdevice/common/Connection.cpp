@@ -1837,6 +1837,7 @@ Envelope* Connection::registerMessage(std::unique_ptr<Message>&& msg) {
   // buffer space for messages. HELLO and ACK are a part of connection
   // establishment.
   if (!isHandshakeMessage(msg->type_) && sizeLimitsExceeded()) {
+    STAT_INCR(deps_->getStats(), sock_write_event_nobufs);
     RATELIMIT_WARNING(
         std::chrono::seconds(1),
         10,
