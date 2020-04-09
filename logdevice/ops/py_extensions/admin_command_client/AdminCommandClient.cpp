@@ -49,7 +49,7 @@ AdminCommandClient::asyncSend(
                 transport = apache::thrift::async::TAsyncSSLSocket::newSocket(
                     ssl_context, evb);
               }
-              transport->connect(nullptr, r.sockaddr);
+              transport->connect(nullptr, r.sockaddr, connect_timeout.count());
               auto channel = apache::thrift::HeaderClientChannel::newChannel(
                   std::move(transport));
               channel->setTimeout(connect_timeout.count());
