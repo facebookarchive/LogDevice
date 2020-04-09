@@ -59,9 +59,4 @@ Message::Disposition CONFIG_ADVISORY_Message::onReceived(const Address& from) {
   return Disposition::NORMAL;
 }
 
-template <>
-bool CONFIG_ADVISORY_Message::allowUnencrypted() const {
-  return true;
-}
-
 }} // namespace facebook::logdevice

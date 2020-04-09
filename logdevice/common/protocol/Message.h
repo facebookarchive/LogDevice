@@ -71,15 +71,6 @@ struct Message {
   }
 
   /**
-   * If this method returns true, this message can be sent in plain text, even
-   * if global settings say SSL should be used for communication between the
-   * sender and the recipient.
-   */
-  virtual bool allowUnencrypted() const {
-    return false;
-  }
-
-  /**
    * Calculates how much space the message will take when transmitted,
    * including the protocol header.
    */

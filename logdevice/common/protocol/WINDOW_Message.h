@@ -47,7 +47,6 @@ class WINDOW_Message : public Message {
   // see Message.h
   void serialize(ProtocolWriter&) const override;
   Disposition onReceived(const Address&) override;
-  bool allowUnencrypted() const override;
   static Message::deserializer_t deserialize;
 
   WINDOW_Header header_;

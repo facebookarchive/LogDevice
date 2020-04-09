@@ -509,9 +509,6 @@ class Sender : public SenderBase {
    * either ALREADY or NOTCONN, depending on whether this is the first attempt
    * to connect to the given node or not.
    *
-   * If allow_unencrypted == true, will accept a plaintext connection as a
-   * "working" connection even if settings generally mandate the use of SSL.
-   *
    * @return  0 if a connection to nid is already established and handshake
    *          completed, -1 otherwise with err set to
    *
@@ -522,9 +519,7 @@ class Sender : public SenderBase {
    * connection is currently marked down after an unsuccessful connection
    * attempt INVALID_PARAM  nid is invalid (debug build asserts)
    */
-  int checkConnection(NodeID nid,
-                      ClientID* our_name_at_peer,
-                      bool allow_unencrypted);
+  int checkConnection(NodeID nid, ClientID* our_name_at_peer);
 
   /**
    * Check if a working connection to a give client exists. If peer_is_client is
@@ -549,7 +544,7 @@ class Sender : public SenderBase {
    *                       configured for nid
    *         see Connection::connect() for the rest of possible error codes
    */
-  int connect(NodeID nid, bool allow_unencrypted);
+  int connect(NodeID nid);
 
   /**
    * @param addr  peer name of a client or server Connection expected to be
@@ -932,9 +927,8 @@ class Sender : public SenderBase {
    * Returns a Connection to a given node in the cluster config. If a Connection
    * doesn't exist yet, it will be created.
    *
-   * If no Connection is available and allow_unencrypted is false, this will
-   * always initialize a secure Connection. Otherwise, will rely on ssl_boundary
-   * setting and target/own location to determine whether to use SSL.
+   * This will rely on ssl_boundary setting and target/own location to determine
+   * whether to use SSL.
    *
    * @return a pointer to the valid Connection object; on failure returns
    * nullptr and sets err to NOTINCONFIG  nid is not present in the current
@@ -942,9 +936,7 @@ class Sender : public SenderBase {
    *                      configured for nid
    *         INTERNAL     internal error (debug builds assert)
    */
-  Connection* initServerConnection(NodeID nid,
-                                   SocketType sock_type,
-                                   bool allow_unencrypted);
+  Connection* initServerConnection(NodeID nid, SocketType sock_type);
 
   /**
    * This method gets the Connection associated with a given ClientID. The
@@ -1015,8 +1007,7 @@ class Sender : public SenderBase {
    * Returns true if SSL should be used with the specified node.
    * If cross_boundary_out or authentication_out are given, outputs in them
    * whether SSL should be used for data encryption or for authentication
-   * accordingly. Data encryption enforced only if allowUnencrypted == false
-   * ( for message ) AND useSSLWith == true
+   * accordingly.
    */
   bool useSSLWith(NodeID nid,
                   bool* cross_boundary = nullptr,

@@ -37,9 +37,4 @@ Message::Disposition WINDOW_Message::onReceived(const Address&) {
   std::abort();
 }
 
-bool WINDOW_Message::allowUnencrypted() const {
-  return MetaDataLog::isMetaDataLog(header_.log_id) &&
-      Worker::settings().read_streams_use_metadata_log_only;
-}
-
 }} // namespace facebook::logdevice

@@ -22,8 +22,7 @@ NodeAvailabilityChecker::NodeStatus
 NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
                                    ShardID shard,
                                    StoreChainLink* destination_out,
-                                   bool ignore_nodeset_state,
-                                   bool allow_unencrypted_connections) const {
+                                   bool ignore_nodeset_state) const {
   ld_check(destination_out != nullptr);
   const auto& storage_membership =
       getNodesConfiguration()->getStorageMembership();
@@ -61,8 +60,7 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
 
   NodeStatus result;
 
-  int rv = checkConnection(
-      dest_nid, &our_name_at_peer, allow_unencrypted_connections);
+  int rv = checkConnection(dest_nid, &our_name_at_peer);
   if (rv != 0) {
     switch (err) {
       case E::NOTFOUND:
@@ -70,7 +68,7 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
         // We never tried/managed to connect to this node and connecting attempt
         // is not in progress. Let's try to connect and report as unavailable if
         // it fails immediately.
-        rv = connect(dest_nid, allow_unencrypted_connections);
+        rv = connect(dest_nid);
         if (rv != 0) {
           result = NodeStatus::NOT_AVAILABLE;
         } else {
@@ -87,7 +85,7 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
         // We don't have a working connection to the node yet. Skip this
         // destination for now, but make sure a reconnection attempt is in
         // progress.
-        connect(dest_nid, allow_unencrypted_connections);
+        connect(dest_nid);
         // fall-through
         FOLLY_FALLTHROUGH;
       case E::DISABLED:
@@ -128,10 +126,9 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
 }
 
 int NodeAvailabilityChecker::checkConnection(NodeID nid,
-                                             ClientID* our_name_at_peer,
-                                             bool allow_unencrypted) const {
+                                             ClientID* our_name_at_peer) const {
   return Worker::onThisThread()->sender().checkConnection(
-      nid, our_name_at_peer, allow_unencrypted);
+      nid, our_name_at_peer);
 }
 
 // `nodeset_state` is nullptr in tests.
@@ -174,8 +171,8 @@ NodeAvailabilityChecker::getNodesConfiguration() const {
   return Worker::onThisThread()->getNodesConfiguration();
 }
 
-int NodeAvailabilityChecker::connect(NodeID nid, bool allow_unencrypted) const {
-  return Worker::onThisThread()->sender().connect(nid, allow_unencrypted);
+int NodeAvailabilityChecker::connect(NodeID nid) const {
+  return Worker::onThisThread()->sender().connect(nid);
 }
 
 const NodeAvailabilityChecker* NodeAvailabilityChecker::instance() {

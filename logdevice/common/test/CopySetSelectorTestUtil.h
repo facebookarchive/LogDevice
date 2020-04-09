@@ -19,8 +19,7 @@ class TestCopySetSelectorDeps : public CopySetSelectorDependencies,
   NodeStatus checkNode(NodeSetState*,
                        ShardID shard,
                        StoreChainLink* destination_out,
-                       bool /*ignore_nodeset_state*/,
-                       bool /*allow_unencrypted_conections*/) const override {
+                       bool /*ignore_nodeset_state*/) const override {
     auto entry = getNodeEntry(shard.asNodeID());
     if (entry.status_ != NodeAvailabilityChecker::NodeStatus::NOT_AVAILABLE) {
       *destination_out = {shard, entry.client_id_};

@@ -861,9 +861,7 @@ bool Sender::isClosed(const Address& addr) const {
   return false;
 }
 
-int Sender::checkConnection(NodeID nid,
-                            ClientID* our_name_at_peer,
-                            bool allow_unencrypted) {
+int Sender::checkConnection(NodeID nid, ClientID* our_name_at_peer) {
   if (!nid.isNodeID()) {
     ld_check(false);
     err = E::INVALID_PARAM;
@@ -876,7 +874,7 @@ int Sender::checkConnection(NodeID nid,
     return -1;
   }
 
-  if (!c->isSSL() && !allow_unencrypted && useSSLWith(nid)) {
+  if (!c->isSSL() && useSSLWith(nid)) {
     // We have a plaintext connection, but we need an encrypted one.
     err = E::SSLREQUIRED;
     return -1;
@@ -912,14 +910,13 @@ int Sender::checkConnection(ClientID cid, bool check_peer_is_node) {
   return 0;
 }
 
-int Sender::connect(NodeID nid, bool allow_unencrypted) {
+int Sender::connect(NodeID nid) {
   if (shutting_down_) {
     err = E::SHUTDOWN;
     return -1;
   }
 
-  Connection* c =
-      initServerConnection(nid, SocketType::DATA, allow_unencrypted);
+  Connection* c = initServerConnection(nid, SocketType::DATA);
   if (!c) {
     return -1;
   }
@@ -958,9 +955,7 @@ bool Sender::useSSLWith(NodeID nid,
   return cross_boundary || authentication;
 }
 
-Connection* Sender::initServerConnection(NodeID nid,
-                                         SocketType sock_type,
-                                         bool allow_unencrypted) {
+Connection* Sender::initServerConnection(NodeID nid, SocketType sock_type) {
   ld_check(!shutting_down_);
   const auto node_cfg = nodes_->getNodeServiceDiscovery(nid.index());
 
@@ -985,7 +980,7 @@ Connection* Sender::initServerConnection(NodeID nid,
     //     ssl_on_gossip_port is false.
     const bool should_create_new = it->second->isClosed() ||
         (sock_type != SocketType::GOSSIP && !it->second->isSSL() &&
-         !allow_unencrypted && useSSLWith(nid)) ||
+         useSSLWith(nid)) ||
         (it->second->isSSL() != Worker::settings().ssl_on_gossip_port &&
          sock_type == SocketType::GOSSIP);
 
@@ -1040,8 +1035,7 @@ Connection* Sender::initServerConnection(NodeID nid,
 
     bool cross_boundary = false;
     bool ssl_authentication = false;
-    bool use_ssl = !allow_unencrypted &&
-        useSSLWith(nid, &cross_boundary, &ssl_authentication);
+    bool use_ssl = useSSLWith(nid, &cross_boundary, &ssl_authentication);
     if (sock_type == SocketType::GOSSIP) {
       ld_check(is_gossip_sender_);
       if (Worker::settings().send_to_gossip_port) {
@@ -1149,8 +1143,7 @@ Connection* FOLLY_NULLABLE Sender::getConnection(const NodeID& nid,
     sock_type = SocketType::DATA;
   }
 
-  Connection* conn =
-      initServerConnection(nid, sock_type, msg.allowUnencrypted());
+  Connection* conn = initServerConnection(nid, sock_type);
   if (!conn) {
     // err set by initServerConnection()
     return nullptr;

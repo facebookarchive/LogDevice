@@ -150,8 +150,7 @@ class MyCopySetSelectorDeps : public CopySetSelectorDependencies,
   NodeStatus checkNode(NodeSetState*,
                        ShardID shard,
                        StoreChainLink* destination_out,
-                       bool /*ignore_nodeset_state*/,
-                       bool /*allow_unencrypted_conections*/) const override {
+                       bool /*ignore_nodeset_state*/) const override {
     *destination_out = {shard, ClientID()};
     return NodeAvailabilityChecker::NodeStatus::AVAILABLE;
   }

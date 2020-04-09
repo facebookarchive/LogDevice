@@ -40,7 +40,6 @@ class STOP_Message : public Message {
   // see Message.h
   void serialize(ProtocolWriter&) const override;
   Disposition onReceived(const Address&) override;
-  bool allowUnencrypted() const override;
   static Message::deserializer_t deserialize;
 
   const STOP_Header& getHeader() const {

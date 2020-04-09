@@ -44,16 +44,11 @@ class NodeAvailabilityChecker {
    * @param ignore_nodeset_state  if true, don't ask nodeset.nodeset_state_
    *                              whether the node is marked as unavailable;
    *                              assume it's available
-   * @param allow_unencrypted_connections if true, will accept a plaintext
-   *                                      connection as suitable even if
-   *                                      settings generally mandate an SSL one.
    */
-  virtual NodeStatus
-  checkNode(NodeSetState* nodeset_state,
-            ShardID shard,
-            StoreChainLink* destination_out,
-            bool ignore_nodeset_state = false,
-            bool allow_unencrypted_connections = false) const;
+  virtual NodeStatus checkNode(NodeSetState* nodeset_state,
+                               ShardID shard,
+                               StoreChainLink* destination_out,
+                               bool ignore_nodeset_state = false) const;
 
   virtual ~NodeAvailabilityChecker() {}
 
@@ -62,9 +57,7 @@ class NodeAvailabilityChecker {
 
  protected:
   // Proxy for Sender::checkConnection(). override in tests
-  virtual int checkConnection(NodeID nid,
-                              ClientID* our_name_at_peer,
-                              bool allow_unencrypted) const;
+  virtual int checkConnection(NodeID nid, ClientID* our_name_at_peer) const;
 
   // Proxy for NodeSetState::checkNotAvailableUntil(). override in tests.
   // @param now is provided for test override.
@@ -93,7 +86,7 @@ class NodeAvailabilityChecker {
   getNodesConfiguration() const;
 
   // Proxy for Sender::connect(). override in tests
-  virtual int connect(NodeID nid, bool allow_unencrypted) const;
+  virtual int connect(NodeID nid) const;
 };
 
 }} // namespace facebook::logdevice

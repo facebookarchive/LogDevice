@@ -66,11 +66,7 @@ class SimpleMessage : public Message {
   void onSent(Status st, const Address& to) const override {
     Message::onSent(st, to);
   }
-  // See Message.h. MAY be specialized if the instantiation needs a different
-  // implementation.
-  bool allowUnencrypted() const override {
-    return Message::allowUnencrypted();
-  }
+
   // See Message.h. MAY be specialized. It's recommended to specialize it for
   // all messages to make message tracing more useful.
   std::vector<std::pair<std::string, folly::dynamic>>

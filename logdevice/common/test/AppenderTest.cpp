@@ -234,13 +234,9 @@ class AppenderTest::TestCopySetSelectorDeps
   NodeStatus checkNode(NodeSetState* nodeset_state,
                        ShardID shard,
                        StoreChainLink* destination_out,
-                       bool ignore_nodeset_state,
-                       bool allow_unencrypted_connections) const override {
-    return NodeAvailabilityChecker::checkNode(nodeset_state,
-                                              shard,
-                                              destination_out,
-                                              ignore_nodeset_state,
-                                              allow_unencrypted_connections);
+                       bool ignore_nodeset_state) const override {
+    return NodeAvailabilityChecker::checkNode(
+        nodeset_state, shard, destination_out, ignore_nodeset_state);
   }
 
   void setConnectionError(NodeID node, Status error) {
@@ -248,9 +244,7 @@ class AppenderTest::TestCopySetSelectorDeps
   }
 
  private:
-  int checkConnection(NodeID nid,
-                      ClientID* our_name_at_peer,
-                      bool) const override {
+  int checkConnection(NodeID nid, ClientID* our_name_at_peer) const override {
     auto it = node_status_.find(nid);
     if (it != node_status_.end() &&
         it->second.connection_state_ != Status::OK) {
@@ -288,7 +282,7 @@ class AppenderTest::TestCopySetSelectorDeps
     return true;
   }
 
-  int connect(NodeID /*nid*/, bool /*allow_unencrypted*/) const override {
+  int connect(NodeID /*nid*/) const override {
     // Called by when checkNode() sees a node that's not
     // connected. Ignored.
     return 0;

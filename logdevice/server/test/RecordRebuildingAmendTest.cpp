@@ -91,8 +91,7 @@ class MockNodeAvailabilityChecker : public NodeAvailabilityChecker {
   NodeStatus checkNode(NodeSetState* nodeset_state,
                        ShardID shard,
                        StoreChainLink* destination_out,
-                       bool ignore_nodeset_state,
-                       bool /*unused*/) const override {
+                       bool ignore_nodeset_state) const override {
     ++const_cast<std::map<ShardID, int>&>(requests_seen)[shard];
     if (!ignore_nodeset_state) {
       const auto now = std::chrono::steady_clock::now();

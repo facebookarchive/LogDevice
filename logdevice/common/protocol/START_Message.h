@@ -147,7 +147,6 @@ class START_Message : public Message {
     // We have highly sophisticated handling for protocol versions
     return false;
   }
-  bool allowUnencrypted() const override;
   static Message::deserializer_t deserialize;
 
   // `proto_' only populated when receiving

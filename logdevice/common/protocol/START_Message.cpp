@@ -138,11 +138,6 @@ MessageReadResult START_Message::deserialize(ProtocolReader& reader) {
   return reader.resultMsg(std::move(m));
 }
 
-bool START_Message::allowUnencrypted() const {
-  return MetaDataLog::isMetaDataLog(header_.log_id) &&
-      Worker::settings().read_streams_use_metadata_log_only;
-}
-
 std::vector<std::pair<std::string, folly::dynamic>>
 START_Message::getDebugInfo() const {
   std::vector<std::pair<std::string, folly::dynamic>> res;
