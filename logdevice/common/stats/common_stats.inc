@@ -424,6 +424,10 @@ STAT_DEFINE(config_update_same_version, SUM)
 STAT_DEFINE(durability_failures, SUM)
 STAT_DEFINE(durability_total, SUM)
 
+// Network stats
+// Failed to send a message because we are out of send buffer
+STAT_DEFINE(send_failed_nobufs, SUM)
+
 // Connection health check stats. Not accumulated for destroyed threads.
 STAT_DEFINE(num_sockets, SUM)
 STAT_DEFINE(sock_active, SUM)

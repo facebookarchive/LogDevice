@@ -520,6 +520,7 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
                       getBytesPending(),
                       getBytesPending(conn.getPeerType()));
     err = E::NOBUFS;
+    STAT_INCR(Worker::stats(), send_failed_nobufs);
     return -1;
   }
 
