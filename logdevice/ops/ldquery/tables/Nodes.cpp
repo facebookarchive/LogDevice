@@ -62,11 +62,6 @@ TableColumns Nodes::getColumns() const {
            "should be a sequencer for relative to other nodes in the "
            "cluster.  A value of 0 means this node cannot run "
            "sequencers."},
-          {"is_storage",
-           DataType::INTEGER,
-           "1 if this node is provisioned for the storage role. "
-           "Otherwise 0. Provisioned roles must be enabled in order "
-           "to be considered active. See 'storage_state'."},
           {"storage_state",
            DataType::TEXT,
            "Determines the current state of the storage node. One "
