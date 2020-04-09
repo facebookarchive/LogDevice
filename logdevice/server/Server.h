@@ -246,6 +246,10 @@ class Server {
     return *settings_updater_;
   }
 
+  std::shared_ptr<SettingsUpdater> getSettingsUpdater() {
+    return settings_updater_;
+  }
+
   const UpdateableSettings<ServerSettings>& getServerSettings() const {
     return server_settings_;
   }

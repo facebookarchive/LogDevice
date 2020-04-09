@@ -6,17 +6,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/admincommands/SettingOverrideTTLRequest.h"
+#include "logdevice/admin/SettingOverrideTTLRequest.h"
 
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
-#include "logdevice/server/Server.h"
-#include "logdevice/server/ServerWorker.h"
 
 namespace facebook { namespace logdevice {
 
 void SettingOverrideTTLRequest::onTimeout() {
-  server_->getSettings().unsetFromAdminCmd(name_);
+  settings_updater_->unsetFromAdminCmd(name_);
   ld_info("Setting \"%s\" has been unset because of a ttl. "
           "The value was set %s ago.",
           name_.c_str(),
@@ -41,7 +40,7 @@ int SettingOverrideTTLRequest::getThreadAffinity(int /*nthreads*/) {
 }
 
 void SettingOverrideTTLRequest::registerRequest() {
-  auto& map = ServerWorker::onThisThread()->activeSettingOverrides().map;
+  auto& map = Worker::onThisThread()->activeSettingOverrides().map;
   auto it = map.find(name_);
   if (it != map.end()) {
     // There is already an override for this setting. Override it.
@@ -53,7 +52,7 @@ void SettingOverrideTTLRequest::registerRequest() {
 }
 
 void SettingOverrideTTLRequest::destroy() {
-  auto& map = ServerWorker::onThisThread()->activeSettingOverrides().map;
+  auto& map = Worker::onThisThread()->activeSettingOverrides().map;
   auto it = map.find(name_);
 
   ld_check(it != map.end());

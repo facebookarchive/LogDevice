@@ -7,9 +7,9 @@
  */
 #pragma once
 
+#include "logdevice/admin/SettingOverrideTTLRequest.h"
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/server/admincommands/AdminCommand.h"
-#include "logdevice/server/admincommands/SettingOverrideTTLRequest.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 

@@ -13,11 +13,11 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 
-class Server;
 class SettingOverrideTTLRequest;
 
 /**
@@ -28,10 +28,11 @@ class SettingOverrideTTLRequest;
  */
 class SettingOverrideTTLRequest : public Request {
  public:
-  explicit SettingOverrideTTLRequest(std::chrono::microseconds ttl,
-                                     std::string name,
-                                     Server* server)
-      : ttl_(ttl), name_(name), server_(server) {}
+  explicit SettingOverrideTTLRequest(
+      std::chrono::microseconds ttl,
+      std::string name,
+      std::shared_ptr<SettingsUpdater> settings_updater)
+      : ttl_(ttl), name_(name), settings_updater_(settings_updater) {}
 
   void onTimeout();
 
@@ -50,7 +51,7 @@ class SettingOverrideTTLRequest : public Request {
   Timer timer_;
   std::chrono::microseconds ttl_;
   std::string name_;
-  Server* server_;
+  std::shared_ptr<SettingsUpdater> settings_updater_;
 };
 
 }} // namespace facebook::logdevice

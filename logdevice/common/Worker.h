@@ -171,6 +171,9 @@ struct LogsConfigManagerRequestMap;
 struct MUTATED_Header;
 struct TrimRequestMap;
 struct WriteMetaDataRecordMap;
+struct SettingOverrideTTLRequestMap {
+  std::unordered_map<std::string, std::unique_ptr<Request>> map;
+};
 
 namespace configuration {
 class ZookeeperConfig;
@@ -438,6 +441,9 @@ class Worker : public WorkContext {
 
   // Internal LogsConfigManager reply map
   LogsConfigManagerReplyMap& runningLogsConfigManagerReplies() const;
+
+  // a map of all currently running SettingOverrideTTLRequest
+  SettingOverrideTTLRequestMap& activeSettingOverrides() const;
 
   // a map of GetEpochRecoveryMetadataRequest that are running on this
   // worker

@@ -35,8 +35,8 @@ void commands::SettingSet::run() {
 
     // Post a request to unset the setting after ttl expires.
     // If the request fails, do nothing
-    std::unique_ptr<Request> req =
-        std::make_unique<SettingOverrideTTLRequest>(ttl_, name_, server_);
+    std::unique_ptr<Request> req = std::make_unique<SettingOverrideTTLRequest>(
+        ttl_, name_, server_->getSettingsUpdater());
     if (server_->getServerProcessor()->postImportant(req) != 0) {
       out_.printf("Failed to post SettingOverrideTTLRequest, error: %s.\r\n",
                   error_name(err));

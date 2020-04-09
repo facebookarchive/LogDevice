@@ -43,7 +43,6 @@ class ServerWorkerImpl {
 
   AllCachedDigests cachedDigests_;
   PurgeUncleanEpochsMap activePurges_;
-  SettingOverrideTTLRequestMap activeSettingOverrides_;
   ChunkRebuildingMap runningChunkRebuildings_;
 
   /**
@@ -159,10 +158,6 @@ AllCachedDigests& ServerWorker::cachedDigests() const {
 
 PurgeUncleanEpochsMap& ServerWorker::activePurges() const {
   return impl_->activePurges_;
-}
-
-SettingOverrideTTLRequestMap& ServerWorker::activeSettingOverrides() const {
-  return impl_->activeSettingOverrides_;
 }
 
 ChunkRebuildingMap& ServerWorker::runningChunkRebuildings() const {

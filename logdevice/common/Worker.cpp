@@ -165,6 +165,7 @@ class WorkerImpl {
   LogsConfigApiRequestMap runningLogManagementReqs_;
   LogsConfigManagerRequestMap runningLogsConfigManagerReqs_;
   LogsConfigManagerReplyMap runningLogsConfigManagerReplies_;
+  SettingOverrideTTLRequestMap activeSettingOverrides_;
   AppendRequestMap runningAppends_;
   CheckSealRequestMap runningCheckSeals_;
   ConfigurationFetchRequestMap runningConfigurationFetches_;
@@ -1143,6 +1144,10 @@ LogsConfigManagerRequestMap& Worker::runningLogsConfigManagerRequests() const {
 
 LogsConfigManagerReplyMap& Worker::runningLogsConfigManagerReplies() const {
   return impl_->runningLogsConfigManagerReplies_;
+}
+
+SettingOverrideTTLRequestMap& Worker::activeSettingOverrides() const {
+  return impl_->activeSettingOverrides_;
 }
 
 AppenderMap& Worker::activeAppenders() const {
