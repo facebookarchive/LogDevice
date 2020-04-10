@@ -156,7 +156,7 @@ class MockEventLogStateMachine : public EventLogStateMachine {
   void scheduleStop() override {}
   void updateWorkerShardStatusMap() override {}
   void publishRebuildingSet() override {}
-  void trim() override {}
+  void trim(trim_cb_t /* unused */) override {}
   void trimNotSnapshotted(lsn_t /*lsn*/) override {}
   void postRequestWithRetrying(std::unique_ptr<Request>& /*rq*/) override {}
   void postAppendRequest(logid_t logid,

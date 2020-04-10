@@ -111,6 +111,7 @@ Status trim(Client& client, std::chrono::milliseconds timestamp) {
                                        WorkerType::GENERAL,
                                        RSMType::LOGS_CONFIG_STATE_MACHINE,
                                        false, /* do not trim_everything */
+                                       false, /* trim snapshot only */
                                        client_impl->getTimeout(),
                                        client_impl->getTimeout());
 
@@ -145,7 +146,8 @@ Status trimEverything(Client& client) {
                                        worker_id_t{0},
                                        WorkerType::GENERAL,
                                        RSMType::LOGS_CONFIG_STATE_MACHINE,
-                                       true, /* trim everything */
+                                       true,  /* trim everything */
+                                       false, /* trim snapshot only */
                                        client_impl->getTimeout(),
                                        client_impl->getTimeout());
 

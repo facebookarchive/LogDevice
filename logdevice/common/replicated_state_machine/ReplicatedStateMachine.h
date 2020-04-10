@@ -278,6 +278,22 @@ class ReplicatedStateMachine {
    */
   void stop();
 
+  typedef std::function<void(Status st)> trim_cb_t;
+  void trim(std::function<void(Status st)>,
+            std::chrono::milliseconds retention);
+
+  /**
+   * Trims snapshot log.
+   * Optionally trims delta log if there's no snapshot store
+   * This is not needed if none of the RSMs use snapshot
+   */
+  void legacyTrim(std::function<void(Status st)> trim_cb,
+                  std::chrono::milliseconds retention,
+                  bool trim_snapshot_only);
+
+  void trimDelta(trim_cb_t trim_cb);
+  void trimDeltaUpto(lsn_t trim_upto, trim_cb_t trim_cb);
+
   /**
    * Block until this state machine completes either because someone called
    * stop() or the stopAtTail() option was provided and the state machine
@@ -632,6 +648,9 @@ class ReplicatedStateMachine {
   virtual bool shouldCreateSnapshot() const = 0;
   virtual bool canSnapshot() const = 0;
   virtual void onSnapshotCreated(Status st, size_t snapshotSize) = 0;
+
+  // Whether this node can perform trimming of delta log
+  bool canTrim() const;
 
   const RSMType rsm_type_;
   const logid_t delta_log_id_;

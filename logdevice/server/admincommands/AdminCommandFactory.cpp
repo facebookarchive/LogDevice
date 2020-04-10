@@ -62,6 +62,7 @@
 #include "logdevice/server/admincommands/Partitions.h"
 #include "logdevice/server/admincommands/PauseOrUnpauseFileEpochStore.h"
 #include "logdevice/server/admincommands/PrintLogsDBDirectories.h"
+#include "logdevice/server/admincommands/RSMTrim.h"
 #include "logdevice/server/admincommands/RSMWriteSnapshot.h"
 #include "logdevice/server/admincommands/Rebuilding.h"
 #include "logdevice/server/admincommands/Record.h"
@@ -241,6 +242,7 @@ AdminCommandFactory::AdminCommandFactory() {
   // Can be used for emergency situations when there is data loss
   // in the delta log.
   selector_.add<commands::RSMWriteSnapShot>("rsm write-snapshot");
+  selector_.add<commands::RSMTrim>("rsm trim");
 
   selector_.add<commands::PauseOrUnpauseFileEpochStore>(
       "pause_file_epoch_store", true);

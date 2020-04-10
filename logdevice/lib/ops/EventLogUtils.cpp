@@ -196,6 +196,7 @@ Status trim(Client& client, std::chrono::milliseconds timestamp) {
                                        WorkerType::GENERAL,
                                        RSMType::EVENT_LOG_STATE_MACHINE,
                                        false, /* trim_everthing = false */
+                                       false, /* trim snapshot only */
                                        client_impl->getTimeout(),
                                        client_impl->getTimeout());
 

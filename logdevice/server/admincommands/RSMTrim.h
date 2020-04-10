@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc. and its affiliates.
+ * Copyright (c) 2019-present, Facebook, Inc. and its affiliates.
  * All rights reserved.
  *
  * This source code is licensed under the BSD-style license found in the
@@ -21,15 +21,15 @@
 
 namespace facebook { namespace logdevice { namespace commands {
 
-class RSMWriteSnapShot : public AdminCommand {
+class RSMTrim : public AdminCommand {
   using AdminCommand::AdminCommand;
 
  private:
-  std::string snapshot_type_;
+  std::string rsm_type_;
   Semaphore semaphore_;
   Status st_;
 
-  void onSnapShotCreated(Status st) {
+  void onTrimmed(Status st) {
     st_ = st;
     semaphore_.post();
   }
@@ -38,36 +38,29 @@ class RSMWriteSnapShot : public AdminCommand {
   void getOptions(
       boost::program_options::options_description& out_options) override {
     out_options.add_options()(
-        "snapshot_type",
-        boost::program_options::value<std::string>(&snapshot_type_));
+        "rsm_type", boost::program_options::value<std::string>(&rsm_type_));
   }
   void getPositionalOptions(
       boost::program_options::positional_options_description& out_options)
       override {
-    out_options.add("snapshot_type", 1);
+    out_options.add("rsm_type", 1);
   }
   std::string getUsage() override {
-    return "rsm write-snapshot eventlog|logsconfig";
+    return "rsm trim eventlog|logsconfig";
   }
 
   void run() override {
-    if (snapshot_type_.empty()) {
+    if (rsm_type_.empty()) {
       out_.printf("snapshot type is not provided\r\n");
-    } else if (snapshot_type_ == "eventlog") {
-      if (!server_->getEventLogStateMachine()) {
-        out_.printf(
-            "This node is not running with an event log state machine\r\n");
-        return;
-      }
+    } else if (rsm_type_ == "eventlog") {
+      auto event_log_owner = EventLogStateMachine::getWorkerIdx(
+          server_->getProcessor()->getWorkerCount(WorkerType::GENERAL));
       auto rc = run_on_worker(
-          server_->getProcessor(),
-          server_->getEventLogStateMachine()->getWorkerId().val_,
-          server_->getEventLogStateMachine()->getWorkerType(),
-          [&]() {
+          server_->getProcessor(), event_log_owner, WorkerType::GENERAL, [&]() {
             Worker* w = Worker::onThisThread();
             if (w->event_log_) {
-              auto cb = [&](Status st) { this->onSnapShotCreated(st); };
-              w->event_log_->snapshot(cb);
+              auto cb = [&](Status st) { this->onTrimmed(st); };
+              w->event_log_->trim(cb);
               return true;
             } else {
               return false;
@@ -88,44 +81,41 @@ class RSMWriteSnapShot : public AdminCommand {
               "Could not create eventlog snapshot:%s\r\n", error_name(st_));
         }
       }
-    } else if (snapshot_type_ == "logsconfig") {
+    } else if (rsm_type_ == "logsconfig") {
       auto logsconfig_worker_type =
           LogsConfigManager::workerType(server_->getProcessor());
       auto logsconfig_owner_worker =
           LogsConfigManager::getLogsConfigManagerWorkerIdx(
               server_->getProcessor()->getWorkerCount(logsconfig_worker_type));
-      auto rc = run_on_worker(
-          server_->getProcessor(),
-          logsconfig_owner_worker,
-          logsconfig_worker_type,
-          [&]() {
-            Worker* w = Worker::onThisThread();
-            if (w->logsconfig_manager_ &&
-                w->logsconfig_manager_->getStateMachine()) {
-              auto cb = [&](Status st) { this->onSnapShotCreated(st); };
-              w->logsconfig_manager_->getStateMachine()->snapshot(cb);
-              return true;
-            } else {
-              return false;
-            }
-          });
+      auto rc =
+          run_on_worker(server_->getProcessor(),
+                        logsconfig_owner_worker,
+                        logsconfig_worker_type,
+                        [&]() {
+                          Worker* w = Worker::onThisThread();
+                          if (w->logsconfig_manager_ &&
+                              w->logsconfig_manager_->getStateMachine()) {
+                            auto cb = [&](Status st) { this->onTrimmed(st); };
+                            w->logsconfig_manager_->getStateMachine()->trim(cb);
+                            return true;
+                          } else {
+                            return false;
+                          }
+                        });
       if (!rc) {
         out_.printf(
-            "This node is not running with an logs config state machine\r\n");
+            "This node is not running with a logs config state machine\r\n");
       } else {
         semaphore_.wait();
         if (st_ == E::OK) {
-          out_.printf("Successfully created logsconfig snapshot\r\n");
-        } else if (st_ == E::UPTODATE) {
-          out_.printf("Logsconfig snapshot is already uptodate.\r\n");
+          out_.printf("Successfully trimmed logsconfig\r\n");
         } else {
           out_.printf(
               "Could not create logsconfig snapshot:%s\r\n", error_name(st_));
         }
       }
     } else {
-      out_.printf(
-          "Snapshot type '%s' not supported\r\n", snapshot_type_.c_str());
+      out_.printf("Snapshot type '%s' not supported\r\n", rsm_type_.c_str());
     }
   }
 };

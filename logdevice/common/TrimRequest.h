@@ -81,6 +81,10 @@ class TrimRequest : public DistributedRequest {
     return -1;
   }
 
+  WorkerType getWorkerTypeAffinity() override {
+    return worker_type_;
+  }
+
   /**
    * Called when Configuration::getLogByIDAsync() returns with the log config.
    */
@@ -94,6 +98,10 @@ class TrimRequest : public DistributedRequest {
    */
   void setTargetWorker(worker_id_t id) {
     target_worker_ = id;
+  }
+
+  void setWorkerType(WorkerType type) {
+    worker_type_ = type;
   }
 
   // Specify write token for specific request. Append will go through if
@@ -172,6 +180,7 @@ class TrimRequest : public DistributedRequest {
 
   // If not -1, run this request on specified Worker
   worker_id_t target_worker_{-1};
+  WorkerType worker_type_{WorkerType::GENERAL};
 
   bool bypass_write_token_check_ = false;
   bool bypass_tail_lsn_check_ = false;

@@ -42,7 +42,9 @@ bool EventLogStateMachine::thisNodeCanTrimAndSnapshot() const {
   }
 
   if (snapshot_store_) {
-    return snapshot_store_->isWritable();
+    auto trimmable = Parent::canTrim();
+    auto snapshottable = snapshot_store_->isWritable();
+    return trimmable && snapshottable;
   }
 
   // TODO: Remove this after deprecating SnapshotStoreType::LEGACY
@@ -73,16 +75,11 @@ void EventLogStateMachine::stop() {
   ld_info("Stopping EventLogStateMachine");
   gracePeriodTimer_.cancel();
   handle_.reset();
-  trim_retry_handler_.reset();
   Parent::stop();
 }
 
-void EventLogStateMachine::trim() {
-  if (!trim_retry_handler_) {
-    trim_retry_handler_ = std::make_unique<TrimRSMRetryHandler>(
-        delta_log_id_, snapshot_log_id_, rsm_type_);
-  }
-  trim_retry_handler_->trim(settings_->event_log_retention);
+void EventLogStateMachine::trim(trim_cb_t cb) {
+  Parent::trim(std::move(cb), settings_->event_log_retention);
 }
 
 void EventLogStateMachine::publishRebuildingSet() {
@@ -251,7 +248,10 @@ void EventLogStateMachine::onSnapshotCreated(Status st, size_t snapshotSize) {
     ld_info("Successfully created a snapshot");
     WORKER_STAT_SET(eventlog_snapshot_size, snapshotSize);
     if (shouldTrim()) {
-      trim();
+      auto trim_cb = [this](Status st) {
+        rsm_info(rsm_type_, "Trimming finished with status:%s", error_name(st));
+      };
+      trim(std::move(trim_cb));
     }
   } else {
     ld_error("Could not create a snapshot: %s", error_name(st));
@@ -266,13 +266,17 @@ bool EventLogStateMachine::shouldTrim() const {
   // 2. This node is the first node alive according to the FD.
   // 3. We use a snapshot log (otherwise trimming of delta log is done by
   //    noteConfigurationChanged());
-  return !settings_->disable_event_log_trimming &&
-      thisNodeCanTrimAndSnapshot() && snapshot_log_id_ != LOGID_INVALID;
+  bool cantrim =
+      snapshot_store_ ? Parent::canTrim() : thisNodeCanTrimAndSnapshot();
+  return !settings_->disable_event_log_trimming && cantrim &&
+      snapshot_log_id_ != LOGID_INVALID;
 }
 
 bool EventLogStateMachine::canSnapshot() const {
+  bool cansnapshot = snapshot_store_ ? snapshot_store_->isWritable()
+                                     : thisNodeCanTrimAndSnapshot();
   return !snapshot_in_flight_ && settings_->event_log_snapshotting &&
-      thisNodeCanTrimAndSnapshot() && snapshot_log_id_ != LOGID_INVALID;
+      cansnapshot && snapshot_log_id_ != LOGID_INVALID;
 }
 
 bool EventLogStateMachine::shouldCreateSnapshot() const {

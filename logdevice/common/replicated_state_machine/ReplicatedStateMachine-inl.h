@@ -9,7 +9,9 @@
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/SnapshotStoreTypes.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/TrimRequest.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine-enum.h"
+#include "logdevice/common/replicated_state_machine/TrimRSMRequest.h"
 #include "logdevice/common/replicated_state_machine/logging.h"
 
 namespace facebook { namespace logdevice {
@@ -148,6 +150,103 @@ void ReplicatedStateMachine<T, D>::stop() {
   read_stream_deletion_timer_.cancel();
   // This will unblock anyone that called wait().
   sem_.post();
+}
+
+template <typename T, typename D>
+void ReplicatedStateMachine<T, D>::trim(std::function<void(Status st)> trim_cb,
+                                        std::chrono::milliseconds retention) {
+  auto settings = Worker::settings();
+  if (!snapshot_store_) {
+    // For no store(legacy code), we need to trim snapshot followed by delta
+    // log (via TrimRSMRequest)
+    legacyTrim(std::move(trim_cb), retention, false /* trim snapshot only */);
+  } else {
+    // 1. Trim snapshot log if applicable
+    if (settings.rsm_snapshot_store_type == SnapshotStoreType::LOG) {
+      // For LOG based snapshot store, getDurableVersion() can be used to trim
+      // delta log, therefore we only trim snapshot log below
+      legacyTrim(trim_cb, retention, true /* trim snapshot only */);
+    }
+    // 2. Trim delta
+    trimDelta(std::move(trim_cb));
+  }
+}
+
+// Adapted from TrimRSMRetryHandler::trimImpl()
+template <typename T, typename D>
+void ReplicatedStateMachine<T, D>::legacyTrim(
+    std::function<void(Status st)> trim_cb,
+    std::chrono::milliseconds retention,
+    bool snapshot_only) {
+  auto cb = [this, trim_cb](Status st) {
+    if (st != E::OK) {
+      rsm_error(rsm_type_, "Could not trim snapshot log: %s.", error_name(st));
+    }
+    trim_cb(st);
+  };
+
+  rsm_info(rsm_type_,
+           "Attempting TrimRSMRequest for snapshot log%s",
+           snapshot_only ? "" : " and delta log.");
+  auto cur_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch());
+  const auto trim_and_findtime_timeout = std::chrono::seconds{20};
+  std::unique_ptr<Request> rq =
+      std::make_unique<TrimRSMRequest>(delta_log_id_,
+                                       snapshot_log_id_,
+                                       cur_timestamp - retention,
+                                       cb,
+                                       Worker::onThisThread()->idx_,
+                                       Worker::onThisThread()->worker_type_,
+                                       rsm_type_,
+                                       false, /* don't trim everything */
+                                       snapshot_only,
+                                       trim_and_findtime_timeout,
+                                       trim_and_findtime_timeout);
+  Worker::onThisThread()->processor_->postWithRetrying(rq);
+}
+
+template <typename T, typename D>
+void ReplicatedStateMachine<T, D>::trimDelta(
+    std::function<void(Status st)> trim_cb) {
+  auto ver_cb = [this, trim_cb](Status st, lsn_t durable_ver_out) {
+    if (st != E::OK) {
+      trim_cb(st);
+      return;
+    }
+    if (durable_ver_out == LSN_INVALID) {
+      // no valid trim point found
+      trim_cb(E::NOTFOUND);
+      return;
+    }
+    trimDeltaUpto(durable_ver_out, std::move(trim_cb));
+  };
+  snapshot_store_->getDurableVersion(std::move(ver_cb));
+}
+
+template <typename T, typename D>
+void ReplicatedStateMachine<T, D>::trimDeltaUpto(lsn_t trim_upto,
+                                                 trim_cb_t trim_cb) {
+  const auto trim_timeout = std::chrono::seconds{20};
+  auto delta_log_id = delta_log_id_;
+  ld_info("Trimming delta log:%lu upto lsn:%s",
+          delta_log_id_.val_,
+          lsn_to_string(trim_upto).c_str());
+
+  auto on_trimmed_cb = [delta_log_id, trim_cb](Status st) {
+    ld_info("Trimming for log:%lu finished with status:%s",
+            delta_log_id.val_,
+            error_name(st));
+    trim_cb(st);
+  };
+
+  auto trimreq = std::make_unique<TrimRequest>(
+      nullptr, delta_log_id_, trim_upto, trim_timeout, on_trimmed_cb);
+  trimreq->setTargetWorker(Worker::onThisThread()->idx_);
+  trimreq->setWorkerType(Worker::onThisThread()->worker_type_);
+  trimreq->bypassWriteTokenCheck();
+  std::unique_ptr<Request> req(std::move(trimreq));
+  Worker::onThisThread()->processor_->postWithRetrying(req);
 }
 
 template <typename T, typename D>
@@ -1197,6 +1296,20 @@ void ReplicatedStateMachine<T, D>::initSnapshotFetchTimer() {
         std::chrono::seconds{600});
   }
   activateSnapshotFetchTimer();
+}
+
+template <typename T, typename D>
+bool ReplicatedStateMachine<T, D>::canTrim() const {
+  auto w = Worker::onThisThread();
+  auto my_node_id = w->processor_->getOptionalMyNodeID();
+  if (!my_node_id.has_value() || !my_node_id.value().isNodeID()) {
+    return false;
+  }
+
+  auto cs = w->getClusterState();
+  ld_check(cs != nullptr);
+  auto first_idx = cs->getFirstNodeAlive();
+  return first_idx == my_node_id.value().index();
 }
 
 template <typename T, typename D>

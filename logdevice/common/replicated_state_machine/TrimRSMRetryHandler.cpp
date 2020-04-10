@@ -95,6 +95,7 @@ void TrimRSMRetryHandler::trimImpl() {
                                        Worker::onThisThread()->worker_type_,
                                        rsm_type_,
                                        false, /* don't trim everything */
+                                       false /* trim snapshot only */,
                                        trim_and_findtime_timeout,
                                        trim_and_findtime_timeout);
   Worker::onThisThread()->processor_->postWithRetrying(rq);

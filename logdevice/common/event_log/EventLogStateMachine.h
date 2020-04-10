@@ -12,7 +12,6 @@
 #include "logdevice/common/event_log/EventLogRebuildingSet_generated.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine.h"
-#include "logdevice/common/replicated_state_machine/TrimRSMRetryHandler.h"
 
 /**
  * The Event Log is a replicated state machine that maintains the authoritative
@@ -130,6 +129,10 @@ class EventLogStateMachine
    * Currently called by AdminCommand class
    */
   void snapshot(std::function<void(Status st)> cb);
+  /**
+   * Trim the RSM. Called after we successfully wrote a snapshot.
+   */
+  virtual void trim(trim_cb_t cb);
 
   static int getWorkerIdx(int nthreads) {
     return configuration::InternalLogs::EVENT_LOG_DELTAS.val_ % nthreads;
@@ -169,11 +172,6 @@ class EventLogStateMachine
    * Update rebuilding set in Processor.
    */
   virtual void publishRebuildingSet();
-
-  /**
-   * Trim the RSM. Called after we successfully wrote a snapshot.
-   */
-  virtual void trim();
 
   /*
    * Trim the delta log when it is not paired with a snapshot log.
@@ -248,8 +246,6 @@ class EventLogStateMachine
 
   // folly::none if this object is not running on a server node.
   folly::Optional<NodeID> myNodeId_{folly::none};
-
-  std::unique_ptr<TrimRSMRetryHandler> trim_retry_handler_;
 
   // worker running this state machine
   worker_id_t worker_{-1};

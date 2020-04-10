@@ -25,23 +25,38 @@ using namespace testing;
 
 class InternalLogsIntegrationTest
     : public IntegrationTestBase,
-      public ::testing::WithParamInterface<bool /*rsm_trim_up_to_read_ptr*/> {
+      public ::testing::WithParamInterface<
+          std::tuple<bool /*rsm_trim_up_to_read_ptr*/, SnapshotStoreType>> {
  public:
   static const size_t NNODES = 3;
 
-  ClusterFactory
-  clusterFactory(bool rsm_include_read_pointer_in_snapshot = false) {
+  ClusterFactory clusterFactory(
+      bool rsm_include_read_pointer_in_snapshot = false,
+      std::string logsconfig_snapshotting_period =
+          "2s", // default in settings is "1h"
+      SnapshotStoreType snapshot_store_type = SnapshotStoreType::LEGACY) {
     auto factory = IntegrationTestUtils::ClusterFactory()
+                       .useHashBasedSequencerAssignment()
                        .enableLogsConfigManager()
                        .allowExistingMetaData()
                        .setParam("--loglevel-overrides",
                                  "ReplicatedStateMachine-inl.h:debug")
                        .doPreProvisionEpochMetaData();
 
-    if (rsm_include_read_pointer_in_snapshot) {
-      factory.setParam("--rsm-include-read-pointer-in-snapshot", "true");
-    } else {
-      factory.setParam("--rsm-include-read-pointer-in-snapshot", "false");
+    factory.setParam("--rsm-include-read-pointer-in-snapshot",
+                     rsm_include_read_pointer_in_snapshot ? "true" : "false");
+    // take local snapshots more often for tests
+    if (logsconfig_snapshotting_period != "default") {
+      factory.setParam(
+          "--logsconfig-snapshotting-period", logsconfig_snapshotting_period);
+    }
+
+    if (snapshot_store_type == SnapshotStoreType::LEGACY) {
+      factory.setParam("--rsm-snapshot-store-type", "legacy");
+    } else if (snapshot_store_type == SnapshotStoreType::LOG) {
+      factory.setParam("--rsm-snapshot-store-type", "log");
+    } else if (snapshot_store_type == SnapshotStoreType::LOCAL_STORE) {
+      factory.setParam("--rsm-snapshot-store-type", "local-store");
     }
 
     return factory;
@@ -64,6 +79,24 @@ class InternalLogsIntegrationTest
     // cast the Client object back to ClientImpl and enable internal log writes
     client_impl = std::dynamic_pointer_cast<ClientImpl>(client);
     ASSERT_NE(nullptr, client);
+  }
+
+  void take_snapshot() {
+    std::string result;
+    bool inprogress = true;
+    do {
+      result = cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
+      inprogress =
+          result.find("Could not create logsconfig snapshot:INPROGRESS") !=
+          std::string::npos;
+    } while (inprogress);
+    if (result.find("Logsconfig snapshot is already uptodate.") ==
+            std::string::npos &&
+        result.find("Successfully created logsconfig snapshot") ==
+            std::string::npos) {
+      ld_info("Received unexpected result:(%s)", result.c_str());
+      ASSERT_EQ(0, 1);
+    }
   }
 
   lsn_t getTrimPointFor(logid_t log) {
@@ -96,6 +129,7 @@ class InternalLogsIntegrationTest
                                          WorkerType::GENERAL,
                                          RSMType::LOGS_CONFIG_STATE_MACHINE,
                                          trim_everything,
+                                         false, /* trim snapshot only */
                                          client_impl->getTimeout(),
                                          client_impl->getTimeout());
 
@@ -110,9 +144,14 @@ class InternalLogsIntegrationTest
   std::shared_ptr<ClientImpl> client_impl;
 };
 
-INSTANTIATE_TEST_CASE_P(InternalLogsIntegrationTest,
-                        InternalLogsIntegrationTest,
-                        ::testing::Bool());
+INSTANTIATE_TEST_CASE_P(
+    Parametric,
+    InternalLogsIntegrationTest,
+    ::testing::Combine(
+        ::testing::Bool() /* rsm_include_read_pointer_in_snapshot */,
+        ::testing::Values(SnapshotStoreType::LEGACY,
+                          SnapshotStoreType::LOG,
+                          SnapshotStoreType::LOCAL_STORE)));
 
 TEST_F(InternalLogsIntegrationTest, ClientCannotWriteInternalLog) {
   buildClusterAndClient(clusterFactory());
@@ -163,10 +202,16 @@ TEST_F(InternalLogsIntegrationTest, ClientWriteInternalLog) {
 /**
  * If the `rsm-include-read-pointer-in-snapshot` setting is enabled, our
  * snapshots should allow us to trim up to the delta log read pointer.
+ *
+ * This is true for Legacy implementation, but for snapshot store
+ * implementation, we only trim upto a durable version, which won't necessarily
+ * be same as delta log read pointer.
  */
 TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
-  const bool rsm_include_read_pointer_in_snapshot = GetParam();
-  buildClusterAndClient(clusterFactory(rsm_include_read_pointer_in_snapshot));
+  const bool rsm_include_read_pointer_in_snapshot = std::get<0>(GetParam());
+  const SnapshotStoreType store_type = std::get<1>(GetParam());
+  buildClusterAndClient(
+      clusterFactory(rsm_include_read_pointer_in_snapshot, "2s", store_type));
 
   /* write something to the delta log */
   auto dir = client->makeDirectorySync("/facebok_sneks", true);
@@ -178,7 +223,9 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
 
   /* bump epoch a number of times */
   const size_t NUM_EPOCHS_TO_BUMP = 5;
-  auto& seq = cluster->getSequencerNode();
+  auto sequencer_node_id = cluster->getHashAssignedSequencerNodeId(
+      configuration::InternalLogs::CONFIG_LOG_DELTAS, client.get());
+  auto& seq = cluster->getNode(sequencer_node_id);
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
     seq.upDown(configuration::InternalLogs::CONFIG_LOG_DELTAS);
     cluster->waitUntilAllSequencersQuiescent();
@@ -187,7 +234,7 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
   /* double check that we bumped those epochs */
   auto tail_lsn =
       client->getTailLSNSync(configuration::InternalLogs::CONFIG_LOG_DELTAS);
-  ASSERT_EQ(epoch_t(lsn_to_epoch(last_delta).val_ + NUM_EPOCHS_TO_BUMP),
+  ASSERT_GE(epoch_t(lsn_to_epoch(last_delta).val_ + NUM_EPOCHS_TO_BUMP),
             lsn_to_epoch(tail_lsn));
 
   /* sync logsconfig everywhere */
@@ -196,17 +243,45 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
   cluster->waitUntilLogsConfigSynced(tail_lsn);
 
   /* take snapshot */
-  auto result =
-      cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
-  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+  take_snapshot();
 
-  ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
+  switch (store_type) {
+    case SnapshotStoreType::LEGACY:
+      ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
+      break;
+    case SnapshotStoreType::LOG:
+    case SnapshotStoreType::LOCAL_STORE: {
+      bool trimming_can_cause_dataloss = true;
+      std::string trim_result;
+      while (trimming_can_cause_dataloss) {
+        trim_result = cluster->getNode(0).sendCommand("rsm trim logsconfig");
+        trimming_can_cause_dataloss =
+            trim_result.find("Could not create logsconfig snapshot:DATALOSS") !=
+            std::string::npos;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+      EXPECT_THAT(trim_result, HasSubstr("Successfully trimmed logsconfig"));
+    } break;
+    default:
+      ld_error("Unsupported store type:%d, call appropriate trimming code when "
+               "a new store is added",
+               static_cast<int>(store_type));
+      ASSERT_EQ(0, 1);
+  };
 
   lsn_t trim_point =
       getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS);
   if (rsm_include_read_pointer_in_snapshot) {
-    // then we should have trimmed up to delta log read ptr
-    ASSERT_EQ(trim_point, tail_lsn - 1);
+    ASSERT_NE(trim_point, LSN_INVALID);
+    if (store_type == SnapshotStoreType::LEGACY) {
+      // for legacy rsm code we should have trimmed up to delta log read ptr
+      ASSERT_EQ(trim_point, tail_lsn - 1);
+    } else {
+      // Delta trimming is going to be conservative with snapshot store
+      // interface, as it only looks at durable version and not the delta log
+      // read ptr unlike legacy trim
+      ASSERT_LE(trim_point, tail_lsn - 1);
+    }
   } else {
     // then we should have trimmed up to last applied delta
     ASSERT_EQ(trim_point, last_delta);
@@ -283,15 +358,7 @@ TEST_F(InternalLogsIntegrationTest,
 
   /* Take a Logsconfig snapshot that should go to one of the nodes stuck in
    * starting state. */
-  auto result =
-      cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
-  if (result.find("Logsconfig snapshot is already uptodate.") ==
-          std::string::npos &&
-      result.find("Successfully created logsconfig snapshot") ==
-          std::string::npos) {
-    ld_info("Received unexpected result:(%s)", result.c_str());
-    ASSERT_EQ(0, 1);
-  }
+  take_snapshot();
 
   /* Let's ensure that should be stuck is stuck */
   auto is_starting = cluster->getNode(0).gossipStarting();
@@ -380,10 +447,7 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   cluster->waitUntilLogsConfigSynced(tail_lsn);
   client->syncLogsConfigVersion(last_delta);
 
-  // Take snapshot
-  auto result =
-      cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
-  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+  take_snapshot();
 
   // Trim the delta log up to our client's read pointer
   ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
@@ -440,8 +504,7 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   cluster->getNode(0).waitUntilLogsConfigSynced(new_tail_lsn);
 
   // Take another snapshot and trim the delta log
-  result = cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
-  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+  take_snapshot();
   ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
   ASSERT_EQ(getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS),
             new_tail_lsn - 1);
@@ -482,7 +545,11 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   // Most of the test is copy-pasted from
   // RecoverAfterStallingDueToTrimmingDeltaLog above. See comments there.
 
-  auto factory = clusterFactory(true);
+  // More frequent snapshotting shouldn't be used in this test because
+  // that means we call processSnapshot(which internally calls
+  // cancelStallGracePeriod()) before stallGracePeriodTimer_(default 10s)
+  // gets a chance to bump 'num_replicated_state_machines_stalled'.
+  auto factory = clusterFactory(true, "default" /* snapshotting period */);
 
   Configuration::Nodes nodes;
   for (int i = 0; i < NNODES; ++i) {
@@ -531,10 +598,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   cluster->waitUntilLogsConfigSynced(tail_lsn);
   client->syncLogsConfigVersion(last_delta);
 
-  // Take snapshot
-  auto result =
-      cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
-  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+  take_snapshot();
 
   // Trim the delta log up to our client's read pointer
   ASSERT_EQ(trimLogsconfig(/*trim_everything=*/false), E::OK);
@@ -570,8 +634,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   cluster->getNode(0).waitUntilLogsConfigSynced(new_tail_lsn);
 
   // Write an intermediate snapshot
-  result = cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
-  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+  take_snapshot();
 
   // Bump epoch a few more times to move the tail and cause bridge gaps
   for (size_t t = 0; t < NUM_EPOCHS_TO_BUMP; ++t) {
@@ -609,15 +672,16 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   });
 
   // Write a snapshot
-  result = cluster->getNode(0).sendCommand("rsm write-snapshot logsconfig");
-  EXPECT_THAT(result, HasSubstr("Successfully created logsconfig snapshot"));
+  take_snapshot();
 
   // Check that N<last> is able to sycnhronize the logs config up to the tail.
   cluster->getNode(NNODES).waitUntilLogsConfigSynced(new_tail_lsn);
 
   // Check that N<last> is no longer waiting for newer snapshot
-  auto stats = cluster->getNode(NNODES).stats();
-  EXPECT_EQ(stats["num_replicated_state_machines_stalled"], 0);
+  wait_until("N<last> logsconfig replicated state machine unstalls", [&]() {
+    auto stats = cluster->getNode(NNODES).stats();
+    return stats["num_replicated_state_machines_stalled"] == 0;
+  });
 
   // Check logsconfig read availability on sequencer by restarting it
   seq.kill();

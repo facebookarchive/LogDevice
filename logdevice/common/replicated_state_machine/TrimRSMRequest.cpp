@@ -281,6 +281,11 @@ void TrimRSMRequest::onSnapshotTrimmed(Status st) {
              snapshot_log_id_.val_);
   }
 
+  if (trim_snapshot_only_) {
+    rsm_info(rsm_type_, "Not trimming delta log");
+    return;
+  }
+
   // Step 4: f=findTime(delta_log_id, NOW-retention)
   // unless we are trimming everything, we will then get use the tail lsn
   // instead of using findTime
@@ -365,7 +370,10 @@ void TrimRSMRequest::deltaFindTimeCallback(Status st, lsn_t lsn) {
       std::max(std::min(lsn, snapshot_delta_read_ptr_), LSN_OLDEST + 1) - 1;
 
   // Step 5: trim delta log up to min(f - 1, snapshot_delta_read_ptr_ - 1)
+  trimDeltaLog(trim_up_to);
+}
 
+void TrimRSMRequest::trimDeltaLog(lsn_t trim_up_to) {
   rsm_info(rsm_type_,
            "Trimming delta log %lu up to lsn %s.",
            delta_log_id_.val_,

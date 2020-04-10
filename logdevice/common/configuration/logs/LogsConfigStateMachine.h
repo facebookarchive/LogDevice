@@ -13,7 +13,6 @@
 #include "logdevice/common/configuration/logs/LogsConfigDeltaTypes.h"
 #include "logdevice/common/configuration/logs/LogsConfigTree.h"
 #include "logdevice/common/replicated_state_machine/ReplicatedStateMachine.h"
-#include "logdevice/common/replicated_state_machine/TrimRSMRetryHandler.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 
 namespace facebook { namespace logdevice {
@@ -70,6 +69,7 @@ class LogsConfigStateMachine
    * Currently called by AdminCommand class
    */
   virtual void snapshot(std::function<void(Status st)> cb) override;
+  void trim(trim_cb_t cb);
 
   /**
    * Starts executing the state machine
@@ -118,8 +118,6 @@ class LogsConfigStateMachine
   // trim the RSM if possible.
   void onSnapshotCreated(Status st, size_t snapshotSize) override;
 
-  void trim();
-
   std::unique_ptr<logsconfig::LogsConfigTree>
   makeDefaultState(lsn_t version) const override;
 
@@ -147,7 +145,6 @@ class LogsConfigStateMachine
   folly::Synchronized<std::string> delimiter_;
   ConfigSubscriptionHandle server_config_updates_handle_;
   std::unique_ptr<SubscriptionHandle> self_subscription_;
-  std::unique_ptr<TrimRSMRetryHandler> trim_retry_handler_;
   bool is_writable_; // this is for delta log
   bool allow_snapshotting_;
   size_t deduplication_scheduled_{0};
