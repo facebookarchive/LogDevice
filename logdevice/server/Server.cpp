@@ -106,6 +106,14 @@ bool ServerParameters::shutdownIfMyNodeInfoChanged(
 
   ld_critical("Configuration mismatch detected, rejecting the config.");
   if (server_settings_->shutdown_on_node_configuration_mismatch) {
+    // Tempporary hack to get a quick exit until we have fencing
+    // support available from WS.
+    if (server_settings_->hard_exit_on_node_configuration_mismatch) {
+      ld_critical(
+          "--shutdown-on-node-configuration-mismatch and "
+          "hard-exit-on-node-configuration-mismatch are set, hard exiting.");
+      _exit(EXIT_FAILURE);
+    }
     ld_critical("--shutdown-on-node-configuration-mismatch is set, gracefully "
                 "shutting down.");
     requestStop();
@@ -364,7 +372,11 @@ bool ServerParameters::registerAndUpdateNodeInfo(
   //
   // TODO(T53579322): Harden the startup of the node to avoid crashing when
   // it's still unknown to the rest of the cluster
-  /* sleep override */ std::this_thread::sleep_for(std::chrono::seconds(5));
+
+  /* sleep override */
+  std::this_thread::sleep_for(
+      server_settings_->sleep_secs_after_self_registeration);
+
   return true;
 }
 

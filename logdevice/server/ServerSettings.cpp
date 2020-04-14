@@ -407,6 +407,17 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::Configuration)
 
+    ("hard-exit-on-node-configuration-mismatch",
+     &hard_exit_on_node_configuration_mismatch,
+     "false",
+     nullptr,
+     "Just quickly exits whenever the server's NodeID and/or service discovery configuration changes. "
+     "Necessary so that we don't get stuck for shutdown timeout if flusing IOs on shared storage is "
+     "slow or failing. This allowes another storage head to take over the shared storage as quickly as "
+     "possible. Ultimately IO fencing will solve this more gracefully.",
+     SERVER,
+     SettingsCategory::Configuration)
+
     ("enable-node-self-registration", &enable_node_self_registration, "false",
      nullptr,
      "If set, the node will register itself in the config if it doesn't find "
@@ -424,6 +435,18 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "the old one.",
      SERVER | REQUIRES_RESTART | CLI_ONLY,
      SettingsCategory::NodeRegistration)
+
+    ("sleep-secs-after-self-registeration", &sleep_secs_after_self_registeration, "5s",
+     [](std::chrono::seconds val) -> void {
+       if (val.count() < 0) {
+         throw boost::program_options::error(
+           "sleep secs  must be >= 0"
+         );
+       }
+     },
+     "If set, the node will sleep for these many secs after self registeration",
+     SERVER,
+     SettingsCategory::Configuration)
 
     ("node-version", &version, "",
      [](const std::string& val) -> decltype(version) {

@@ -50,6 +50,7 @@ sidebar_label: Settings
 | enable-node-self-registration | If set, the node will register itself in the config if it doesn't find itself there. Otherwise it will crash. This requires --enable-nodes-configuration-manager=true | false | requires&nbsp;restart, **experimental**, server&nbsp;only |
 | enable-nodes-configuration-manager | If set, NodesConfigurationManager and its workflow will be enabled. | false | requires&nbsp;restart |
 | file-config-update-interval | interval at which to poll config file for changes (if reading config from file on disk | 10000ms |  |
+| hard-exit-on-node-configuration-mismatch | Just quickly exits whenever the server's NodeID and/or service discovery configuration changes. Necessary so that we don't get stuck for shutdown timeout if flusing IOs on shared storage is slow or failing. This allowes another storage head to take over the shared storage as quickly as possible. Ultimately IO fencing will solve this more gracefully. | false | server&nbsp;only |
 | initial-config-load-timeout | maximum time to wait for initial server configuration until giving up | 15s | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | logsconfig-manager-grace-period | Grace period before making a change to the logs config available to the server. | 0ms |  |
 | logsconfig-max-delta-bytes | How many bytes of deltas to keep in the logsconfig deltas log before we snapshot it. | 10485760 | server&nbsp;only |
@@ -77,6 +78,7 @@ sidebar_label: Settings
 | server-default-dscp | Use default DSCP to setup to server sockets at Sender.Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4 | 0 | requires&nbsp;restart, server&nbsp;only |
 | server\_based\_nodes\_configuration\_store\_polling\_extra\_requests | how many extra requests to send for server based Nodes Configuration Store polling in addition to the required response for each wave | 1 |  |
 | shutdown-on-node-configuration-mismatch | Gracefully shutdown whenever the server's NodeID and/or service discovery configuration changes. | true | server&nbsp;only |
+| sleep-secs-after-self-registeration | If set, the node will sleep for these many secs after self registeration | 5s | server&nbsp;only |
 | use-nodes-configuration-manager-nodes-configuration | If true and enable\_nodes\_configuration\_manager is set, logdevice will use the nodes configuration from the NodesConfigurationManager. | false |  |
 | wipe-storage-when-storage-state-none | Allow wiping the local RocksDB store when its storage state is none | false | requires&nbsp;restart, server&nbsp;only |
 | zk-config-polling-interval | polling and retry interval for Zookeeper config source | 1000ms | CLI&nbsp;only |
