@@ -359,8 +359,8 @@ void RecordCache::updateLastNonAuthoritativeEpoch(logid_t logid) {
   if (folly::kIsDebug) {
     if (last_nonauthoritative_epoch_.load() != EPOCH_MAX.val_) {
       ld_debug(
-          "Last non-authoritative epoch has been updated to %u for log %lu. "
-          "Soft seal: %s, highest lsn: %s",
+          "Last non-authoritative epoch has been updated to %u for log %lu."
+          "soft seal: %s, highest lsn: %s",
           last_nonauthoritative_epoch_.load(),
           logid.val_,
           (soft_seal.has_value() ? soft_seal.value().toString().c_str()

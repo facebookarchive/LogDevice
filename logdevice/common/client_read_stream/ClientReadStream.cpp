@@ -3186,11 +3186,11 @@ int ClientReadStream::handleBridgeRecord(lsn_t bridge_record_lsn,
 
   // Now we are sure that there are no more data records beyond the
   // next_lsn_to_deliver_ for the current epoch. Try to advance
-  // next_lsn_to_deliver_ to the first esn for the next epoch,
-  // i.e, e(currentEpoch()+1)n(ESN_INVALID+1).
-  const lsn_t gap_lsn = std::min(
-      until_lsn_, compose_lsn(epoch_t(currentEpoch().val() + 1), ESN_INVALID));
-  const lsn_t next_lsn_target = gap_lsn + 1;
+  // next_lsn_to_deliver_ to the last esn for the current epoch,
+  // i.e, e(currentEpoch())n(ESN_MAX).
+  const lsn_t gap_lsn =
+      std::min(until_lsn_, compose_lsn(currentEpoch(), ESN_MAX));
+  const lsn_t next_lsn_target = (gap_lsn == LSN_MAX ? LSN_MAX : gap_lsn + 1);
 
   ld_check(gap_lsn >= next_lsn_to_deliver_);
   int rv = deliverGap(GapType::BRIDGE, next_lsn_to_deliver_, gap_lsn);
@@ -3206,7 +3206,7 @@ int ClientReadStream::handleBridgeRecord(lsn_t bridge_record_lsn,
   // fast-forward the read stream to the next_lsn_target.
   namespace arg = std::placeholders;
   buffer_->forEachUpto(
-      next_lsn_target - 1,
+      next_lsn_target,
       std::bind(&ClientReadStream::clearRecordState, this, arg::_1, arg::_2));
 
   if (next_lsn_target > window_high_) {

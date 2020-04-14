@@ -1092,7 +1092,8 @@ TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
 
   EXPECT_EQ(std::vector<gap_record_t>({
                 gap_record_t(GapType::HOLE, lsn(1, 2), lsn(1, 2)),
-                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(2, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(2, 0)),
                 gap_record_t(GapType::HOLE, lsn(2, 1), lsn(2, 1)),
                 gap_record_t(GapType::HOLE, lsn(2, 5), lsn(2, 5)),
                 gap_record_t(GapType::HOLE, lsn(2, 6), lsn(2, 6)),
@@ -1305,8 +1306,8 @@ TEST_P(RecoveryTest, Purging) {
   EXPECT_EQ(std::vector<lsn_t>({lsn(1, 1)}), records_);
 
   EXPECT_EQ(std::vector<gap_record_t>({
-                gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(2, 0)),
-                gap_record_t(GapType::BRIDGE, lsn(2, 1), lsn(3, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(3, 0)),
             }),
             gaps_);
   cluster_->stop();
@@ -1401,10 +1402,11 @@ TEST_P(RecoveryTest, MultipleSequencers) {
   EXPECT_EQ(std::vector<lsn_t>({lsn(1, 1), last_lsn}), records_);
 
   // bridge record is inserted at lsn(1,2), so we will get a bridge gap
-  // of [e1n2, e2n0], and bridge gaps covering the range of
-  // [e2n1, last_lsn-1]
+  // of [e1n2, e1nESN_MAX], and bridge gaps covering the range of
+  // [e2n0, last_lsn-1]
   ASSERT_LE(2, gaps_.size());
-  EXPECT_EQ(gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(2, 0)), gaps_[0]);
+  EXPECT_EQ(
+      gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(1, ESN_MAX.val_)), gaps_[0]);
 
   // bridge gap from lsn(1, 4) to last_lsn-1 may be split into multiple gaps
   EXPECT_EQ(GapType::BRIDGE, std::get<0>(gaps_[1]));
@@ -1414,7 +1416,7 @@ TEST_P(RecoveryTest, MultipleSequencers) {
     EXPECT_EQ(gap_hi + 1, std::get<1>(gaps_[i]));
     gap_hi = std::get<2>(gaps_[i]);
   }
-  EXPECT_EQ(lsn(2, 1), gap_lo);
+  EXPECT_EQ(lsn(2, 0), gap_lo);
   EXPECT_EQ(last_lsn - 1, gap_hi);
 
   // latest seal_epoch should be one less than the epoch of last_lsn
@@ -1696,8 +1698,10 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithNodeSet) {
 
   EXPECT_EQ(std::vector<gap_record_t>(
                 {// e1n1 is the first and last data record in its epoch
-                 gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(2, 0)),
-                 gap_record_t(GapType::BRIDGE, lsn(2, 3), lsn(3, 0)),
+                 gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(1, ESN_MAX.val_)),
+                 gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(2, 0)),
+                 gap_record_t(GapType::BRIDGE, lsn(2, 3), lsn(2, ESN_MAX.val_)),
+                 gap_record_t(GapType::BRIDGE, lsn(3, 0), lsn(3, 0)),
                  gap_record_t(GapType::HOLE, lsn(3, 1), lsn(3, 1)),
                  // e3n3 is the bridge record of epoch 3, deliver a bridge gap
                  // to until_lsn
@@ -1873,7 +1877,8 @@ TEST_P(RecoveryTest, FailureDomainAuthoritative) {
             records_);
   EXPECT_EQ(std::vector<gap_record_t>({
                 gap_record_t(GapType::HOLE, lsn(1, 2), lsn(1, 2)),
-                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(2, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(2, 0)),
                 gap_record_t(GapType::BRIDGE, lsn(2, 1), lsn(2, 2)),
             }),
             gaps_);
@@ -1968,8 +1973,8 @@ TEST_P(RecoveryTest, NonAuthoritativePurging) {
   EXPECT_EQ(std::vector<lsn_t>({lsn(1, 1)}), records_);
 
   EXPECT_EQ(std::vector<gap_record_t>({
-                gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(2, 0)),
-                gap_record_t(GapType::BRIDGE, lsn(2, 1), lsn(3, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(3, 0)),
             }),
             gaps_);
 
@@ -2102,8 +2107,8 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
 
   EXPECT_EQ(std::vector<gap_record_t>({
                 gap_record_t(GapType::HOLE, lsn(1, 2), lsn(1, 2)),
-                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(2, 0)),
-                gap_record_t(GapType::BRIDGE, lsn(2, 1), lsn(3, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(3, 0)),
             }),
             gaps_);
   cluster_->stop();
@@ -2699,8 +2704,8 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
             records_);
 
   EXPECT_EQ(std::vector<gap_record_t>({
-                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(2, 0)),
-                gap_record_t(GapType::BRIDGE, lsn(2, 1), lsn(3, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(3, 0)),
             }),
             gaps_);
 
@@ -3003,7 +3008,8 @@ TEST_P(RecoveryTest, D4187744) {
   EXPECT_EQ(std::vector<lsn_t>({lsn(1, 1), lsn(1, 3), last_lsn}), records_);
   EXPECT_EQ(std::vector<gap_record_t>({
                 gap_record_t(GapType::HOLE, lsn(1, 2), lsn(1, 2)),
-                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(2, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 4), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(2, 0)),
             }),
             gaps_);
   cluster_->stop();
@@ -3134,9 +3140,10 @@ TEST_P(RecoveryTest, BridgeRecords) {
   EXPECT_EQ(std::vector<lsn_t>({lsn(1, 1), lsn(4, 1), lsn(4, 3)}), records_);
 
   EXPECT_EQ(std::vector<gap_record_t>({
-                gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(2, 0)),
-                gap_record_t(GapType::BRIDGE, lsn(2, 1), lsn(3, 0)),
-                gap_record_t(GapType::BRIDGE, lsn(3, 1), lsn(4, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 2), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(2, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 1), lsn(2, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(3, 0), lsn(4, 0)),
                 gap_record_t(GapType::HOLE, lsn(4, 2), lsn(4, 2)),
                 gap_record_t(GapType::BRIDGE, lsn(4, 4), lsn(4, 4)),
             }),
@@ -3765,11 +3772,15 @@ TEST_P(RecoveryTest, BridgeRecordForEmptyEpochs) {
   EXPECT_EQ(std::vector<lsn_t>({}), records_);
 
   std::vector<gap_record_t> expected_gaps;
-  expected_gaps.push_back(gap_record_t(GapType::BRIDGE, lsn(1, 1), lsn(2, 0)));
+  expected_gaps.push_back(
+      gap_record_t(GapType::BRIDGE, lsn(1, 1), lsn(1, ESN_MAX.val_)));
   for (int e = 2; e < 8; ++e) {
     expected_gaps.push_back(
-        gap_record_t(GapType::BRIDGE, lsn(e, 1), lsn(e + 1, 0)));
+        gap_record_t(GapType::BRIDGE, lsn(e, 0), lsn(e, 0)));
+    expected_gaps.push_back(
+        gap_record_t(GapType::BRIDGE, lsn(e, 1), lsn(e, ESN_MAX.val_)));
   }
+  expected_gaps.push_back(gap_record_t(GapType::BRIDGE, lsn(8, 0), lsn(8, 0)));
 
   EXPECT_EQ(expected_gaps, gaps_);
   expectAuthoritativeOnly();
@@ -4004,7 +4015,8 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithDrainingNodes) {
   EXPECT_EQ(std::vector<gap_record_t>({
                 gap_record_t(GapType::HOLE, lsn(1, 2), lsn(1, 2)),
                 gap_record_t(GapType::HOLE, lsn(1, 3), lsn(1, 3)),
-                gap_record_t(GapType::BRIDGE, lsn(1, 5), lsn(2, 0)),
+                gap_record_t(GapType::BRIDGE, lsn(1, 5), lsn(1, ESN_MAX.val_)),
+                gap_record_t(GapType::BRIDGE, lsn(2, 0), lsn(2, 0)),
             }),
             gaps_);
 

@@ -3941,11 +3941,12 @@ TEST_P(ClientReadStreamTest, ScdNoMoreDataFailoverToAllSendAll) {
   // N0 sends a bridge record, we move to the next epoch and slide the window.
   onDataRecord(
       N0, mockRecord(lsn(1, 6), RECORD_Header::HOLE | RECORD_Header::BRIDGE));
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(1, 6), lsn(2, 0)});
+  ASSERT_GAP_MESSAGES(
+      GapMessage{GapType::BRIDGE, lsn(1, 6), lsn(1, ESN_MAX.val_)});
 
   // Because we slid the window we move to SCD.
   triggerScheduledRewind();
-  lsn_t next_lsn = lsn(2, 1);
+  lsn_t next_lsn = lsn(2, 0);
   buffer_max = calc_buffer_max(next_lsn, buffer_size_);
   ASSERT_START_MESSAGES(next_lsn,
                         LSN_MAX,
@@ -6068,10 +6069,11 @@ TEST_P(ClientReadStreamTest, EpochBumpWithBridgeRecord) {
       N0, mockRecord(lsn(3, 4), RECORD_Header::HOLE | RECORD_Header::BRIDGE));
 
   // expect a bridge gap of [e3n4, e3nESN_MAX]
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(3, 4), lsn(4, 0)});
+  ASSERT_GAP_MESSAGES(
+      GapMessage{GapType::BRIDGE, lsn(3, 4), lsn(3, ESN_MAX.val_)});
 
   // window should be moved and re-broadcast to nodes in the read set
-  ASSERT_WINDOW_MESSAGES(lsn(4, 1), lsn(4, 1) + buffer_size_ - 1, N0, N1, N2);
+  ASSERT_WINDOW_MESSAGES(lsn(4, 0), lsn(4, 0) + buffer_size_ - 1, N0, N1, N2);
 }
 
 // bridge gap should stop at until_lsn_ if it is before the end of epoch
@@ -6104,7 +6106,7 @@ TEST_P(ClientReadStreamTest, BridgeAtEsnMAX) {
                           RECORD_Header::HOLE | RECORD_Header::BRIDGE));
 
   ASSERT_GAP_MESSAGES(
-      GapMessage{GapType::BRIDGE, lsn(3, ESN_MAX.val_), lsn(4, 0)});
+      GapMessage{GapType::BRIDGE, lsn(3, ESN_MAX.val_), lsn(3, ESN_MAX.val_)});
   ASSERT_NO_WINDOW_MESSAGES();
 }
 
@@ -6125,6 +6127,39 @@ TEST_P(ClientReadStreamTest, StartReadingWithEpochBegin) {
   // the read stream should immediately deliver a bridge gap
   ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, start_lsn_, lsn(3, 6)});
   ASSERT_RECV(lsn(3, 7));
+}
+
+// test the normal case where epoch transitions can happen with both bridge
+// record and epoch begin
+TEST_P(ClientReadStreamTest, EpochBumpWithBridgeRecordAndEpochBegin) {
+  // 3 nodes, replication factor 1
+  state_.shards.resize(3);
+  buffer_size_ = 1024;
+  start_lsn_ = lsn(3, 4);
+  start();
+
+  onDataRecord(N0, mockRecord(start_lsn_));
+  ASSERT_RECV(start_lsn_);
+
+  onDataRecord(N1, mockRecord(lsn(3, 7), RECORD_Header::HOLE));
+  ASSERT_RECV();
+
+  onDataRecord(
+      N2, mockRecord(lsn(3, 5), RECORD_Header::HOLE | RECORD_Header::BRIDGE));
+
+  // expect a bridge gap of [e3n5, e3nESN_MAX]
+  ASSERT_GAP_MESSAGES(
+      GapMessage{GapType::BRIDGE, lsn(3, 5), lsn(3, ESN_MAX.val_)});
+
+  // lsn(3, 7) will never be delivered
+  ASSERT_RECV();
+  ASSERT_WINDOW_MESSAGES(lsn(4, 0), lsn(4, 0) + buffer_size_ - 1, N0, N1, N2);
+
+  onDataRecord(N0, mockRecord(lsn(4, 6)));
+  onDataRecord(N1, mockRecord(lsn(4, 5), RECORD_Header::EPOCH_BEGIN));
+
+  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(4, 0), lsn(4, 4)});
+  ASSERT_RECV(lsn(4, 5), lsn(4, 6));
 }
 
 // log recovery may store a hole plug in eXn1 despite that EPOCH_BEGIN may be
@@ -6170,8 +6205,9 @@ TEST_P(ClientReadStreamTest, BridgeAtEsnMIN) {
   onDataRecord(
       N1, mockRecord(lsn(3, 1), RECORD_Header::HOLE | RECORD_Header::BRIDGE));
 
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(3, 0), lsn(3, 0)},
-                      GapMessage{GapType::BRIDGE, lsn(3, 1), lsn(4, 0)});
+  ASSERT_GAP_MESSAGES(
+      GapMessage{GapType::BRIDGE, lsn(3, 0), lsn(3, 0)},
+      GapMessage{GapType::BRIDGE, lsn(3, 1), lsn(3, ESN_MAX.val_)});
 
   ASSERT_RECV();
 
@@ -6200,7 +6236,8 @@ TEST_P(ClientReadStreamTest, BridgeGapWithMetaData) {
   onDataRecord(
       N1, mockRecord(lsn(3, 4), RECORD_Header::HOLE | RECORD_Header::BRIDGE));
 
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(3, 4), lsn(4, 0)});
+  ASSERT_GAP_MESSAGES(
+      GapMessage{GapType::BRIDGE, lsn(3, 4), lsn(3, ESN_MAX.val_)});
 
   // next_lsn_to_deliver_ is at lsn(4, 0), the read stream should request
   // metadata for epoch 4 so that it can update its window to other nodes
@@ -6210,7 +6247,7 @@ TEST_P(ClientReadStreamTest, BridgeGapWithMetaData) {
 
   // window has already been slit at this time
   ASSERT_WINDOW_MESSAGES(
-      lsn(4, 1), calc_buffer_max(lsn(4, 1), buffer_size_), N1, N2);
+      lsn(4, 0), calc_buffer_max(lsn(4, 0), buffer_size_), N1, N2);
 
   onEpochMetaData(epoch_t(4),
                   epoch_t(4),
@@ -6220,9 +6257,9 @@ TEST_P(ClientReadStreamTest, BridgeGapWithMetaData) {
                   StorageSet{N0, N1});
 
   ASSERT_STOP_MESSAGES(N2);
-  ASSERT_START_MESSAGES(lsn(4, 1),
+  ASSERT_START_MESSAGES(lsn(4, 0),
                         LSN_MAX,
-                        calc_buffer_max(lsn(4, 1), buffer_size_),
+                        calc_buffer_max(lsn(4, 0), buffer_size_),
                         filter_version_t{1},
                         false,
                         small_shardset_t{},
@@ -6231,11 +6268,12 @@ TEST_P(ClientReadStreamTest, BridgeGapWithMetaData) {
   ASSERT_NO_WINDOW_MESSAGES();
   overrideConnectionStates(ConnectionState::READING);
 
-  // N0 sends a record at ESN_MIN
-  onDataRecord(N0, mockRecord(lsn(4, 1)));
+  // N0 sends a record with EPOCH_BEGIN
+  onDataRecord(N0, mockRecord(lsn(4, 17), RECORD_Header::EPOCH_BEGIN));
 
   ASSERT_METADATA_REQ();
-  ASSERT_RECV(lsn(4, 1));
+  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(4, 0), lsn(4, 16)});
+  ASSERT_RECV(lsn(4, 17));
 }
 
 TEST_P(ClientReadStreamTest, Epoch0IsSkippedWithBridgeGap) {
@@ -6335,7 +6373,8 @@ TEST_P(ClientReadStreamTest, S150164_NonauthoritativeGapAndBridgeRecord) {
   // the bridge should advance the read stream to epoch 3, and the read stream
   // should request epoch metadata for epoch 3 despite that it hasn't gotten
   // metadata for epoch 2 yet
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(2, 10), lsn(3, 0)});
+  ASSERT_GAP_MESSAGES(
+      GapMessage{GapType::BRIDGE, lsn(2, 10), lsn(2, ESN_MAX.val_)});
   ASSERT_METADATA_REQ(epoch_t(3));
 
   // the code should make sure that the new request will override the previous
@@ -6352,7 +6391,7 @@ TEST_P(ClientReadStreamTest, S150164_NonauthoritativeGapAndBridgeRecord) {
   // dataloss detection
   onDataRecord(N1, mockRecord(lsn(3, 5)));
   onDataRecord(N2, mockRecord(lsn(3, 7)));
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::DATALOSS, lsn(3, 1), lsn(3, 4)});
+  ASSERT_GAP_MESSAGES(GapMessage{GapType::DATALOSS, lsn(3, 0), lsn(3, 4)});
   ASSERT_RECV(lsn(3, 5));
 }
 
@@ -6391,18 +6430,20 @@ TEST_P(ClientReadStreamTest, ScdEpochBumpWithBridgeRecords) {
       N2, mockRecord(lsn(1, 4), RECORD_Header::HOLE | RECORD_Header::BRIDGE));
 
   ASSERT_RECV();
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(1, 4), lsn(2, 0)});
+  ASSERT_GAP_MESSAGES(
+      GapMessage{GapType::BRIDGE, lsn(1, 4), lsn(1, ESN_MAX.val_)});
 
   // we are still in SCD
   ASSERT_TRUE(isCurrentlyInSingleCopyDeliveryMode());
   // no stream rewinds
   ASSERT_NO_START_MESSAGES();
   // window update should be received.
-  ASSERT_WINDOW_MESSAGES(lsn(2, 1), lsn(2, 10), N0, N1, N2, N3);
+  ASSERT_WINDOW_MESSAGES(lsn(2, 0), lsn(2, 9), N0, N1, N2, N3);
 
-  onDataRecord(N0, mockRecord(lsn(2, 1)));
+  onDataRecord(N0, mockRecord(lsn(2, 7), RECORD_Header::EPOCH_BEGIN));
 
-  ASSERT_RECV(lsn(2, 1));
+  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(2, 0), lsn(2, 6)});
+  ASSERT_RECV(lsn(2, 7));
 
   // we are still in SCD
   ASSERT_TRUE(isCurrentlyInSingleCopyDeliveryMode());
@@ -7317,10 +7358,11 @@ TEST_P(ClientReadStreamTest, ReproT17673244) {
   triggerScheduledRewind();
 
   ASSERT_RECV();
-  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(1, 4), lsn(2, 0)});
+  ASSERT_GAP_MESSAGES(
+      GapMessage{GapType::BRIDGE, lsn(1, 4), lsn(1, ESN_MAX.val_)});
 
-  buffer_max = calc_buffer_max(lsn(2, 1), buffer_size_);
-  ASSERT_START_MESSAGES(lsn(2, 1),
+  buffer_max = calc_buffer_max(lsn(2, 0), buffer_size_);
+  ASSERT_START_MESSAGES(lsn(2, 0),
                         LSN_MAX,
                         buffer_max,
                         filter_version_t{2},
@@ -7333,7 +7375,7 @@ TEST_P(ClientReadStreamTest, ReproT17673244) {
   ON_STARTED(filter_version_t{2}, N0, N2, N3);
 
   // a window update should be received.
-  ASSERT_WINDOW_MESSAGES(lsn(2, 1), lsn(2, 10), N0, N1, N2, N3);
+  ASSERT_WINDOW_MESSAGES(lsn(2, 0), lsn(2, 9), N0, N1, N2, N3);
 
   read_stream_->onDataRecord(
       N0, mockRecord(lsn(2, 7), RECORD_Header::EPOCH_BEGIN));
