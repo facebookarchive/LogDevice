@@ -757,7 +757,8 @@ class VerifyRSMsSync : public ::testing::TestWithParam<SnapshotStoreType> {};
 INSTANTIATE_TEST_CASE_P(VerifyRSMsSync,
                         VerifyRSMsSync,
                         ::testing::Values(SnapshotStoreType::LOG,
-                                          SnapshotStoreType::LOCAL_STORE));
+                                          SnapshotStoreType::LOCAL_STORE,
+                                          SnapshotStoreType::LEGACY));
 TEST_P(VerifyRSMsSync, Basic) {
   static const size_t NUM_LOGS = 20;
   logsconfig::LogAttributes log_attrs;
@@ -774,7 +775,6 @@ TEST_P(VerifyRSMsSync, Basic) {
   std::vector<node_index_t> nodes{0, 1, 2, 3, 4};
   cluster->start(nodes);
   cluster->waitUntilAllAvailable();
-  cluster->waitForRecovery();
   auto client = cluster->createClient();
   for (int i = 1; i < NUM_LOGS; ++i) {
     auto logrange_str = "/logrange" + folly::to<std::string>(i);
