@@ -641,13 +641,7 @@ void PurgeUncleanEpochs::startReadingMetaData() {
       log_id_,
       Worker::settings().read_historical_metadata_timeout * 2,
       [this](Status st) { onHistoricalMetadata(st); },
-      // TODO:T28014582 Deprecate the setting once
-      // all servers are migrated to a version that
-      // supports INCLUDE_HISTORICAL_METADATA in
-      // SyncSequencerRequest.
-      Worker::settings().purging_use_metadata_log_only
-          ? NodeSetFinder::Source::METADATA_LOG
-          : NodeSetFinder::Source::BOTH);
+      NodeSetFinder::Source::BOTH);
 
   nodeset_finder_->start();
 }

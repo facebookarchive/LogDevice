@@ -1006,7 +1006,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "If true, the NodeSetFinder within PurgeUncleanEpochs will use "
        "only the metadata log as source for fetching historical metadata."
        "used only for migration",
-       SERVER,
+       SERVER | DEPRECATED,
        SettingsCategory::Recovery);
   init(
       "send-to-gossip-port",
