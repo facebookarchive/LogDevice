@@ -2802,6 +2802,9 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
           .setParam("--append-store-durability", "memory")
           // Set min flush trigger intervals and partition duration high
           // so that only the test is creating/retiring partitions.
+          .setParam("--rocksdb-partition-idle-flush-trigger", "900s")
+          .setParam("--rocksdb-partition-data-age-flush-trigger", "900s")
+          .setParam("--rocksdb-partition-flush-check-period", "900s")
           .setParam("--rocksdb-min-manual-flush-interval", "900s")
           .setParam("--rocksdb-partition-duration", "900s")
           // Decrease the timestamp granularity so that we can minimize the
@@ -2818,6 +2821,7 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
           // Use only a single shard so that partition creation/flushing
           // commands can be unambiguously targeted.
           .setNumDBShards(1)
+          .useHashBasedSequencerAssignment()
           .create(5);
 
   cluster->waitForRecovery();
