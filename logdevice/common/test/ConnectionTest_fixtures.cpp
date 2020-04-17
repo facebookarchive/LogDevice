@@ -6,16 +6,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/common/test/SocketTest_fixtures.h"
+#include "logdevice/common/test/ConnectionTest_fixtures.h"
 
 #include <folly/executors/InlineExecutor.h>
+#include <gtest/gtest.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
 namespace facebook { namespace logdevice {
+using ::testing::_;
+using ::testing::Invoke;
+using ::testing::Return;
+using ::testing::SaveArg;
 
 bool TestSocketDependencies::attachedToLegacyEventBase() const {
-  return owner_->attachedToLegacyEventBase_;
+  return false;
 }
 
 const Settings& TestSocketDependencies::getSettings() const {
@@ -68,8 +73,7 @@ TestSocketDependencies::getNodeSockaddr(NodeID node_id,
 }
 
 EvBase* TestSocketDependencies::getEvBase() {
-  return owner_->use_mock_evbase_ ? &owner_->ev_base_mock_
-                                  : &owner_->ev_base_folly_;
+  return &owner_->ev_base_folly_;
 }
 
 const struct timeval*
@@ -95,16 +99,16 @@ struct bufferevent* TestSocketDependencies::buffereventSocketNew(
     bool /*secure*/,
     bufferevent_ssl_state /*ssl_state*/,
     folly::SSLContext* /*ssl_ctx*/) {
-  return &owner_->bev_;
+  return nullptr;
 }
 
 struct evbuffer*
 TestSocketDependencies::getOutput(struct bufferevent* /*bev*/) {
-  return owner_->temp_output_ ? owner_->temp_output_ : owner_->output_;
+  return nullptr;
 }
 
 struct evbuffer* TestSocketDependencies::getInput(struct bufferevent* /*bev*/) {
-  return owner_->input_;
+  return nullptr;
 }
 
 SteadyTimestamp TestSocketDependencies::getCurrentTimestamp() {
@@ -115,16 +119,6 @@ int TestSocketDependencies::buffereventSocketConnect(
     struct bufferevent* /*bev*/,
     struct sockaddr* /*ss*/,
     int /*len*/) {
-  // Keep track of how many times this function was called. Useful for tests
-  // that verify connection retries.
-  ++owner_->connection_attempts_;
-
-  // Simulate this function failing if a test required so.
-  if (owner_->next_connect_attempts_errno_ != 0) {
-    errno = owner_->next_connect_attempts_errno_;
-    return -1;
-  }
-
   return 0;
 }
 
@@ -137,14 +131,10 @@ void TestSocketDependencies::buffereventSetWatermark(
 }
 
 void TestSocketDependencies::buffereventSetCb(struct bufferevent* /*bev*/,
-                                              bufferevent_data_cb readcb,
-                                              bufferevent_data_cb writecb,
-                                              bufferevent_event_cb eventcb,
-                                              void* /*cbarg*/) {
-  owner_->read_cb_ = readcb;
-  owner_->write_cb_ = writecb;
-  owner_->event_cb_ = eventcb;
-}
+                                              bufferevent_data_cb /*readcb*/,
+                                              bufferevent_data_cb /*writecb*/,
+                                              bufferevent_event_cb /*eventcb*/,
+                                              void* /*cbarg*/) {}
 
 void TestSocketDependencies::buffereventShutDownSSL(
     struct bufferevent* /*bev*/) {
@@ -184,7 +174,7 @@ void TestSocketDependencies::onSent(std::unique_ptr<Message> msg,
                                     Status st,
                                     const SteadyTimestamp /*enqueue_time*/,
                                     Message::CompletionMethod) {
-  owner_->sent_.push(ClientSocketTest::SentMsg{msg->type_, st});
+  owner_->sent_.push(ConnectionTest::SentMsg{msg->type_, st});
 }
 
 Message::Disposition
@@ -272,17 +262,17 @@ int TestSocketDependencies::getTCPInfo(TCPInfo* info, int /*fd*/) {
 
 //
 
-int SocketTest::getDscp() {
+int ConnectionTest::getDscp() {
   int dscp = 0;
   unsigned int dscplen = sizeof(dscp);
   int rc = 0;
-  switch (socket_->peer_sockaddr_.family()) {
+  switch (conn_->peer_sockaddr_.family()) {
     case AF_INET: {
-      rc = getsockopt(socket_->fd_, IPPROTO_IP, IP_TOS, &dscp, &dscplen);
+      rc = getsockopt(conn_->fd_, IPPROTO_IP, IP_TOS, &dscp, &dscplen);
       break;
     }
     case AF_INET6: {
-      rc = getsockopt(socket_->fd_, IPPROTO_IPV6, IPV6_TCLASS, &dscp, &dscplen);
+      rc = getsockopt(conn_->fd_, IPPROTO_IPV6, IPV6_TCLASS, &dscp, &dscplen);
       break;
     }
     default:

@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 #include "logdevice/common/test/FlowGroupTest.h"
+
+#include <gtest/gtest.h>
 using namespace facebook::logdevice;
 
 namespace {

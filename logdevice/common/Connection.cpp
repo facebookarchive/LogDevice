@@ -1341,6 +1341,9 @@ void Connection::close(Status reason) {
   endStreamRewind();
 
   if (connect_throttle_ && (peer_shuttingdown_ || reason != E::SHUTDOWN)) {
+    if (peer_shuttingdown_ && !peer_name_.isClientAddress()) {
+      reason = E::SHUTDOWN;
+    }
     connect_throttle_->connectFailed();
   }
 
@@ -1827,7 +1830,8 @@ void Connection::send(std::unique_ptr<Envelope> envelope) {
   }
 }
 
-Envelope* Connection::registerMessage(std::unique_ptr<Message>&& msg) {
+Envelope* FOLLY_NULLABLE
+Connection::registerMessage(std::unique_ptr<Message>&& msg) {
   if (preSendCheck(*msg) != 0) {
     return nullptr;
   }

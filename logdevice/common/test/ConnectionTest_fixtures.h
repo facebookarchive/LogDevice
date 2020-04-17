@@ -11,10 +11,6 @@
 
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
-#include "event2/bufferevent.h"
-#include "event2/bufferevent_struct.h"
-#include "event2/event.h"
 #include "logdevice/common/Connection.h"
 #include "logdevice/common/Envelope.h"
 #include "logdevice/common/FlowGroup.h"
@@ -31,17 +27,18 @@
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/test/MockSocketAdapter.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {
-class SocketTest;
+class ConnectionTest;
 
 ////////////////////////////////////////////////////////////////////////////////
 // TestSocketDependencies
 
 class TestSocketDependencies : public SocketDependencies {
  public:
-  explicit TestSocketDependencies(SocketTest* owner)
+  explicit TestSocketDependencies(ConnectionTest* owner)
       : SocketDependencies(nullptr, nullptr), owner_(owner) {}
   bool attachedToLegacyEventBase() const override;
   virtual const Settings& getSettings() const override;
@@ -132,170 +129,43 @@ class TestSocketDependencies : public SocketDependencies {
 
   virtual ~TestSocketDependencies() {}
 
-  SocketTest* owner_;
+  ConnectionTest* owner_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // Test fixtures
-struct SocketDeleter {
-  SocketDeleter(bool skip_delete = false) : skip_(skip_delete) {}
-  void operator()(Connection* s) {
-    if (!skip_) {
-      delete s;
-    }
-  }
-  bool skip_;
-};
-class SocketTest : public ::testing::Test {
+class ConnectionTest : public ::testing::Test {
  public:
-  SocketTest()
+  ConnectionTest()
       : settings_(create_default_settings<Settings>()),
         server_name_(0, 1),
         server_addr_(get_localhost_address_str(), 4440),
         destination_node_id_(client_id_, 1),
-        flow_group_(std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr)),
-        socket_(std::unique_ptr<Connection, SocketDeleter>(nullptr,
-                                                           SocketDeleter())) {
-    input_ = LD_EV(evbuffer_new)();
-    output_ = LD_EV(evbuffer_new)();
-  }
+        flow_group_(
+            std::make_unique<NwShapingFlowGroupDeps>(nullptr, nullptr)) {}
 
-  ~SocketTest() {
-    socket_.reset(); // before freeing the evbuffers
+  ~ConnectionTest() {
     EXPECT_EQ(bytes_pending_, 0);
-    LD_EV(evbuffer_free)(input_);
-    LD_EV(evbuffer_free)(output_);
   }
 
   using SentMsg = std::tuple<MessageType, Status>;
 
-  void SetUp() override {
-    ON_CALL(ev_base_mock_, isInTimeoutManagerThread())
-        .WillByDefault(::testing::Return(true));
-  }
-
-  void triggerEventConnected() {
-    ASSERT_NE(nullptr, event_cb_);
-    event_cb_(&bev_, BEV_EVENT_CONNECTED, (void*)socket_.get());
-  }
-
-  void triggerEventEOF() {
-    ASSERT_NE(nullptr, event_cb_);
-    event_cb_(&bev_, BEV_EVENT_EOF, (void*)socket_.get());
-  }
-
-  void triggerEventError(short dir) {
-    ASSERT_NE(nullptr, event_cb_);
-    event_cb_(&bev_, BEV_EVENT_ERROR | dir, (void*)socket_.get());
-  }
-
-  void triggerOnDataAvailable() {
-    ASSERT_NE(nullptr, read_cb_);
-    read_cb_(&bev_, (void*)socket_.get());
-  }
-
-  void triggerConnectAttemptTimeout() {
-    socket_->onConnectAttemptTimeout();
-  }
-
   void triggerHandshakeTimeout() {
-    socket_->onHandshakeTimeout();
-  }
-
-  /**
-   * Use this to make future calls to buffereventSocketConnect fail with the
-   * given status code. Pass 0 if the future calls should succeed.
-   */
-  void setNextConnectAttempsStatus(int err) {
-    next_connect_attempts_errno_ = err;
-  }
-
-  /**
-   * Simulate the Socket receiving a message through its input evbuffer.
-   */
-  template <typename MSG>
-  void receiveMsg(MSG* raw_msg) {
-    // Hack:
-    // Update the deserializer of the messages that we mock because we want to
-    // ensure that Socket calls MSG::deserialize.
-    messageDeserializers.set(raw_msg->type_, &MSG::deserialize);
-
-    std::unique_ptr<Message> msg(raw_msg);
-    // Calling msg->serialize() with a null output evbuffer to get the size of
-    // the message without the protocol header
-    ProtocolWriter wtmp(msg->type_, (folly::IOBuf*)nullptr, socket_->proto_);
-    msg->serialize(wtmp);
-    auto bodylen = wtmp.result();
-    EXPECT_TRUE(bodylen > 0);
-
-    // using checksum version because some tests like
-    // ClientSocketTest.CloseConnectionOnProtocolChecksumMismatch
-    // need to always run irrespective of the
-    // "Settings::checksumming_enabled" value
-    temp_output_ = input_;
-    const auto old_value = settings_.checksumming_enabled;
-    settings_.checksumming_enabled = true;
-    auto serialized_buf = socket_->serializeMessage(*msg);
-    settings_.checksumming_enabled = old_value;
-    ld_check(serialized_buf);
-    auto status = socket_->sendBuffer(std::move(serialized_buf));
-    ld_check(status == Connection::SendStatus::SCHEDULED);
-    temp_output_ = nullptr;
-
-    triggerOnDataAvailable();
-  }
-
-  /**
-   * Dequeue some bytes from the Socket's output evbuffer.
-   *
-   * @param nbytes number of bytes to remove. This function verifies that this
-   *               is smaller or equal than the number of bytes in the socket's
-   *               output evbuffer.
-   */
-  void dequeueBytesFromOutputEvbuffer(size_t nbytes) {
-    ASSERT_TRUE(nbytes <= 1024);
-    static char buf[1024];
-    // The test expects at least this amount of bytes to be in the output
-    // evbuffer of the socket. Verify that.
-    ASSERT_TRUE(LD_EV(evbuffer_get_length)(output_) >= nbytes);
-    // Remove the bytes. Socket should be notified automatically through
-    // `bytesSentCallback`.
-    LD_EV(evbuffer_remove)(output_, buf, nbytes);
-  }
-
-  /**
-   * Dequeue all the bytes from the Socket's output evbuffer, simulating that
-   * all the messages that were serialized get sent, thus all these messages
-   * should have their onSent() callback called.
-   */
-  void flushOutputEvBuffer() {
-    static char buf[1024];
-    const size_t nbytes = LD_EV(evbuffer_get_length)(output_);
-    ASSERT_TRUE(nbytes <= 1024);
-    LD_EV(evbuffer_remove)(output_, buf, nbytes);
-  }
-
-  size_t getTotalOutbufLength() {
-    return socket_->getTotalOutbufLength();
-  }
-
-  virtual void eventActive(struct event* ev, int /*what*/, short /*ncalls*/) {
-    ld_check(ev == socket_->end_stream_rewind_event_.getEvent());
-    socket_->endStreamRewind();
+    conn_->onHandshakeTimeout();
   }
 
   const Connection::EnvelopeQueue& getSerializeq() const {
-    return socket_->serializeq_;
+    return conn_->serializeq_;
   }
   const Connection::EnvelopeQueue& getSendq() const {
-    return socket_->sendq_;
+    return conn_->sendq_;
   }
 
   bool connected() const {
-    return socket_->connected_;
+    return conn_->connected_;
   }
   bool handshaken() const {
-    return socket_->handshaken_;
+    return conn_->handshaken_;
   }
 
   int getDscp();
@@ -308,45 +178,21 @@ class SocketTest : public ::testing::Test {
   Sockaddr server_addr_;  // stays invalid on a client.
   NodeID source_node_id_; // stays invalid on a client.
   NodeID destination_node_id_;
-  std::string cluster_name_{"Socket_test_cluster"};
-  std::string credentials_{"Socket_test_credentials"};
+  std::string cluster_name_{"ConnectionTest_cluster"};
+  std::string credentials_{"ConnectionTest_credentials"};
   std::string csid_;
   std::string client_build_info_{"{}"};
   FlowGroup flow_group_;
-  bool use_mock_evbase_{true};
-  EvBaseMock ev_base_mock_;
   EvBase ev_base_folly_;
   SteadyTimestamp cur_time_{SteadyTimestamp::now()};
 
-  bool attachedToLegacyEventBase_{true};
-  // IMPORTANT: this remains uninitialized and a pointer to this is returned by
-  // buffereventSocketConnect(). This remains untouched because Socket only
-  // accesses this through TestSocketDependencies.
-  struct bufferevent bev_;
-  // evbuffers that will be used by socket_ to write and read data.
-  struct evbuffer* input_;
-  struct evbuffer* output_;
-  // Check receiveMsg and getOutput for usage. Allows test to change buffer
-  // returned by getOutput API.
-  struct evbuffer* temp_output_{nullptr};
-
-  // Updated when Socket calls noteBytesQueued/noteBytesDrained.
+  // Updated when Connection calls noteBytesQueued/noteBytesDrained.
   size_t bytes_pending_{0};
-  // Incremented when Socket calls buffereventSocketConnect.
-  size_t connection_attempts_{0};
-  // Future calls to buffereventSocketConnect will fail with this value if !=
-  // E::OK:
-  int next_connect_attempts_errno_{0};
   // Keep track of all calls to onSent.
   std::queue<SentMsg> sent_;
 
   // Keep track of socket flow stats.
   TCPInfo socket_flow_stats_;
-
-  // These are set when Socket calls buffereventSetCb.
-  bufferevent_data_cb read_cb_{nullptr};
-  bufferevent_data_cb write_cb_{nullptr};
-  bufferevent_event_cb event_cb_{nullptr};
 
   ResourceBudget conn_budget_external_{std::numeric_limits<uint64_t>::max()};
   ResourceBudget incoming_message_bytes_limit_{
@@ -360,75 +206,58 @@ class SocketTest : public ::testing::Test {
                                      ResourceBudget::Token)>
       on_received_hook_;
 
-  std::function<void(struct event*)> ev_timer_add_hook_;
+  std::unique_ptr<Connection> conn_;
+  SocketDependencies* deps_;
 
-  std::unique_ptr<Connection, SocketDeleter> socket_;
+  testing::NiceMock<MockSocketAdapter>* sock_;
+  folly::AsyncSocket::WriteCallback* wr_callback_;
+  folly::AsyncSocket::ReadCallback* rd_callback_;
+  bool tamper_checksum_;
+  bool socket_closed_{false};
 };
 
-class ClientSocketTest : public SocketTest {
+class ClientConnectionTest : public ConnectionTest {
  public:
-  ClientSocketTest() : connect_throttle_(settings_.connect_throttle) {
-    // Create a client socket.
-    socket_ = std::unique_ptr<Connection, SocketDeleter>(
-        new Connection(server_name_,
-                       SocketType::DATA,
-                       ConnectionType::PLAIN,
-                       PeerType::CLIENT,
-                       flow_group_,
-                       std::make_unique<TestSocketDependencies>(this)),
-        SocketDeleter());
-    socket_->setConnectThrottle(&connect_throttle_);
-    cluster_name_ = "Socket_test_cluster";
-    credentials_ = "Socket_test_credentials";
+  ClientConnectionTest() : connect_throttle_({1, 1000}) {
+    deps_ = new TestSocketDependencies(this);
+    auto sock = std::make_unique<testing::NiceMock<MockSocketAdapter>>();
+    sock_ = sock.get();
+    ev_base_folly_.selectEvBase(EvBase::FOLLY_EVENTBASE);
+    conn_ =
+        std::make_unique<Connection>(server_name_,
+                                     SocketType::DATA,
+                                     ConnectionType::PLAIN,
+                                     PeerType::CLIENT,
+                                     flow_group_,
+                                     std::unique_ptr<SocketDependencies>(deps_),
+                                     std::move(sock));
     csid_ = "client_uuid";
-    client_build_info_ = "{}";
     EXPECT_FALSE(connected());
     EXPECT_FALSE(handshaken());
+    conn_->setConnectThrottle(&connect_throttle_);
   }
 
-  ~ClientSocketTest() override {
-    socket_->setConnectThrottle(nullptr);
+  void SetUp() override {
+    ON_CALL(*sock_, good()).WillByDefault(::testing::Return(!socket_closed_));
   }
 
+  void writeSuccess() {
+    wr_callback_->writeSuccess();
+    ev_base_folly_.loopOnce();
+  }
+
+  void
+  receiveAckMessage(Status st = E::OK,
+                    facebook::logdevice::Message::Disposition disp =
+                        facebook::logdevice::Message::Disposition::NORMAL,
+                    uint16_t proto = Compatibility::MAX_PROTOCOL_SUPPORTED);
+  ~ClientConnectionTest() override {
+    conn_.reset();
+    EXPECT_EQ(bytes_pending_, 0);
+  }
+
+  folly::AsyncSocket::ConnectCallback* conn_callback_;
   ConnectThrottle connect_throttle_;
-};
-
-class ServerSocketTest : public SocketTest {
- public:
-  ServerSocketTest() {
-    settings_.server = true;
-    source_node_id_ = server_name_;
-    cluster_name_ = "Socket_test_cluster";
-    credentials_ = "Socket_test_credentials";
-    csid_ = "";
-    ON_CALL(ev_base_mock_, isInTimeoutManagerThread())
-        .WillByDefault(::testing::Return(true));
-    // Create a server socket.
-    // Note that we can pass whatever we want here for fd and client_addr
-    // because Socket will not use them directly, it will always pass them to
-    // methods of TestSocketDependencies so these will remain untouched.
-    socket_ = std::unique_ptr<Connection, SocketDeleter>(
-        new Connection(
-            42 /* fd */,
-            ClientID(client_id_) /* client_name */,
-            Sockaddr(get_localhost_address_str(), 4440) /* client_addr */,
-            ResourceBudget::Token() /* accounting token, not used */,
-            SocketType::DATA /* socket type */,
-            ConnectionType::PLAIN,
-            flow_group_,
-            std::make_unique<TestSocketDependencies>(this)),
-        SocketDeleter());
-    // A server socket is connected from the beginning.
-    EXPECT_TRUE(connected());
-    EXPECT_FALSE(handshaken());
-  }
-
-  std::unique_ptr<folly::IOBuf>& getMessagePendingProcessing() {
-    return socket_->msg_pending_processing_;
-  }
-  void triggerReadMoreTimeout() {
-    socket_->read_more_.timeoutExpired();
-  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -508,7 +337,7 @@ class VarLengthTestMessage : public Message {
    * msg->setSize(3, 30);
    * msg->setSize(4, 40);
    *
-   * - For protocols in range [0, 2], socket will reject the message;
+   * - For protocols in range [0, 2], connection will reject the message;
    * - In range [2, 3], the message will have size 30;
    * - In range [4, 4], the message will have size 40;
    * - In range [5, MAX_PROTOCOL_SUPPORTED], it will have size 42.
@@ -570,9 +399,9 @@ class VarLengthTestMessage : public Message {
 // Macros
 
 /**
- * Check that the content of an Envelope queue on a Socket.
+ * Check that the content of an Envelope queue on a Connection.
  */
-#define CHECK_SOCKETQ(queue, ...)                                        \
+#define CHECK_CONNQ(queue, ...)                                          \
   {                                                                      \
     std::vector<MessageType> expected_q = {__VA_ARGS__};                 \
     std::vector<MessageType> actual_q((queue).size());                   \
@@ -583,9 +412,9 @@ class VarLengthTestMessage : public Message {
     ASSERT_EQ(expected_q, actual_q);                                     \
   }
 
-#define CHECK_PENDINGQ(...) CHECK_SOCKETQ(getPendingq(), __VA_ARGS__)
-#define CHECK_SERIALIZEQ(...) CHECK_SOCKETQ(getSerializeq(), __VA_ARGS__)
-#define CHECK_SENDQ(...) CHECK_SOCKETQ(getSendq(), __VA_ARGS__)
+#define CHECK_PENDINGQ(...) CHECK_CONNQ(getPendingq(), __VA_ARGS__)
+#define CHECK_SERIALIZEQ(...) CHECK_CONNQ(getSerializeq(), __VA_ARGS__)
+#define CHECK_SENDQ(...) CHECK_CONNQ(getSendq(), __VA_ARGS__)
 
 #define CHECK_ON_SENT(type, status)              \
   {                                              \

@@ -34,7 +34,7 @@
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/common/test/SocketTest_fixtures.h"
+#include "logdevice/common/test/ConnectionTest_fixtures.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/lib/ClientImpl.h"

@@ -15,8 +15,7 @@
 #include "logdevice/common/network/MessageReader.h"
 #include "logdevice/common/protocol/CHECK_NODE_HEALTH_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
-#include "logdevice/common/test/MockSocketAdapter.h"
-#include "logdevice/common/test/SocketTest_fixtures.h"
+#include "logdevice/common/test/ConnectionTest_fixtures.h"
 
 using ::testing::_;
 using ::testing::Args;
@@ -29,80 +28,18 @@ using ::testing::WithArg;
 
 using namespace facebook::logdevice;
 
-class ClientConnectionTest : public SocketTest {
- public:
-  ClientConnectionTest() : connect_throttle_({1, 1000}) {
-    attachedToLegacyEventBase_ = false;
-    deps_ = new TestSocketDependencies(this);
-    auto sock = std::make_unique<testing::NiceMock<MockSocketAdapter>>();
-    sock_ = sock.get();
-    use_mock_evbase_ = false;
-    ev_base_folly_.selectEvBase(EvBase::FOLLY_EVENTBASE);
-    conn_ =
-        std::make_unique<Connection>(server_name_,
-                                     SocketType::DATA,
-                                     ConnectionType::PLAIN,
-                                     PeerType::CLIENT,
-                                     flow_group_,
-                                     std::unique_ptr<SocketDependencies>(deps_),
-                                     std::move(sock));
-    socket_ = std::unique_ptr<Connection, SocketDeleter>(
-        conn_.get(), SocketDeleter(true /* skip */));
-    csid_ = "client_uuid";
-    EXPECT_FALSE(connected());
-    EXPECT_FALSE(handshaken());
-    conn_->setConnectThrottle(&connect_throttle_);
-  }
-
-  void SetUp() override {
-    ON_CALL(*sock_, good()).WillByDefault(Return(!socket_closed_));
-  }
-
-  void writeSuccess() {
-    wr_callback_->writeSuccess();
-    ev_base_folly_.loopOnce();
-  }
-
-  void
-  receiveAckMessage(Status st = E::OK,
-                    facebook::logdevice::Message::Disposition disp =
-                        facebook::logdevice::Message::Disposition::NORMAL,
-                    uint16_t proto = Compatibility::MAX_PROTOCOL_SUPPORTED);
-  ~ClientConnectionTest() override {
-    conn_.reset();
-    EXPECT_EQ(bytes_pending_, 0);
-  }
-  SocketDependencies* deps_;
-  std::unique_ptr<Connection> conn_;
-  testing::NiceMock<MockSocketAdapter>* sock_;
-  folly::AsyncSocket::ConnectCallback* conn_callback_;
-  folly::AsyncSocket::WriteCallback* wr_callback_;
-  folly::AsyncSocket::ReadCallback* rd_callback_;
-  bool tamper_checksum_;
-  bool socket_closed_{false};
-  ConnectThrottle connect_throttle_;
-  template <typename T>
-  friend void receiveMessage(T& socket,
-                             const facebook::logdevice::Message* msg,
-                             uint16_t proto);
-};
-
-class ServerConnectionTest : public SocketTest {
+class ServerConnectionTest : public ConnectionTest {
  public:
   ServerConnectionTest() {
     settings_.server = true;
     source_node_id_ = server_name_;
-    use_mock_evbase_ = false;
     ev_base_folly_.selectEvBase(EvBase::FOLLY_EVENTBASE);
-    attachedToLegacyEventBase_ = false;
     deps_ = new TestSocketDependencies(this);
   }
 
   void SetUp() override {
     auto sock = std::make_unique<testing::NiceMock<MockSocketAdapter>>();
     sock_ = sock.get();
-    ON_CALL(ev_base_mock_, isInTimeoutManagerThread())
-        .WillByDefault(::testing::Return(true));
     ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
     ON_CALL(*sock_, good()).WillByDefault(Return(!socket_closed_));
     conn_ = std::make_unique<Connection>(
@@ -115,8 +52,6 @@ class ServerConnectionTest : public SocketTest {
         flow_group_,
         std::unique_ptr<SocketDependencies>(deps_),
         std::move(sock));
-    socket_ = std::unique_ptr<Connection, SocketDeleter>(
-        conn_.get(), SocketDeleter(true /* skip */));
     // A server socket is connected from the beginning.
     EXPECT_TRUE(connected());
     EXPECT_FALSE(handshaken());
@@ -127,13 +62,6 @@ class ServerConnectionTest : public SocketTest {
     EXPECT_EQ(bytes_pending_, 0);
   }
 
-  SocketDependencies* deps_;
-  std::unique_ptr<Connection> conn_;
-  testing::NiceMock<MockSocketAdapter>* sock_;
-  folly::AsyncSocket::WriteCallback* wr_callback_;
-  folly::AsyncSocket::ReadCallback* rd_callback_;
-  bool tamper_checksum_;
-  bool socket_closed_{false};
   template <typename T>
   friend void receiveMessage(T& socket,
                              const facebook::logdevice::Message* msg,
@@ -295,9 +223,9 @@ TEST_F(ClientConnectionTest, SerializationStages) {
           }));
   ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
   EXPECT_EQ(conn_->connect(), 0);
-  auto envelope = create_message(*socket_);
+  auto envelope = create_message(*conn_);
   ASSERT_NE(envelope, nullptr);
-  socket_->releaseMessage(*envelope);
+  conn_->releaseMessage(*envelope);
 
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
   conn_callback_->connectSuccess();
@@ -340,8 +268,8 @@ TEST_F(ServerConnectionTest, Handshake) {
   ACK_Header ackhdr{
       0, request_id_t(0), client_id_, uint16_t(max_proto_), E::OK};
   std::unique_ptr<Message> msg = std::make_unique<ACK_Message>(ackhdr);
-  auto envelope = socket_->registerMessage(std::move(msg));
-  socket_->releaseMessage(*envelope);
+  auto envelope = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*envelope);
   // We should be handshaken now.
   EXPECT_TRUE(handshaken());
 }
@@ -369,8 +297,8 @@ TEST_F(ServerConnectionTest, IncomingMessageBytesLimitHandshake) {
   ACK_Header ackhdr{
       0, request_id_t(0), client_id_, uint16_t(max_proto_), E::OK};
   std::unique_ptr<Message> msg = std::make_unique<ACK_Message>(ackhdr);
-  auto envelope = socket_->registerMessage(std::move(msg));
-  socket_->releaseMessage(*envelope);
+  auto envelope = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*envelope);
   // We should be handshaken now.
   EXPECT_TRUE(handshaken());
 }
@@ -393,9 +321,8 @@ TEST_F(ServerConnectionTest, IncomingMessageBytesLimit) {
   // Simulate the server replying ACK.
   ACK_Header ackhdr{
       0, request_id_t(0), client_id_, uint16_t(max_proto_), E::OK};
-  auto envelope =
-      socket_->registerMessage(std::make_unique<ACK_Message>(ackhdr));
-  socket_->releaseMessage(*envelope);
+  auto envelope = conn_->registerMessage(std::make_unique<ACK_Message>(ackhdr));
+  conn_->releaseMessage(*envelope);
   // We should be handshaken now.
   EXPECT_TRUE(handshaken());
 
@@ -486,9 +413,9 @@ TEST_F(ClientConnectionTest, InvalidAckMessage) {
           }));
   ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
   EXPECT_EQ(conn_->connect(), 0);
-  auto envelope = create_message(*socket_);
+  auto envelope = create_message(*conn_);
   ASSERT_NE(envelope, nullptr);
-  socket_->releaseMessage(*envelope);
+  conn_->releaseMessage(*envelope);
 
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
   conn_callback_->connectSuccess();
@@ -501,6 +428,57 @@ TEST_F(ClientConnectionTest, InvalidAckMessage) {
   receiveAckMessage(
       E::PROTONOSUPPORT, facebook::logdevice::Message::Disposition::ERROR);
   CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::PROTONOSUPPORT);
+}
+
+TEST_F(ClientConnectionTest, GetDscp) {
+  auto net_socket = folly::netops::socket(AF_INET, SOCK_STREAM, 0);
+  ON_CALL(*sock_, getNetworkSocket()).WillByDefault(Return(net_socket));
+  ON_CALL(*sock_, connect_(_, _, _, _, _))
+      .WillByDefault(SaveArg<0>(&conn_callback_));
+  int rv = conn_->connect();
+  ASSERT_EQ(0, rv);
+
+  conn_->setDSCP(4);
+  EXPECT_EQ(4 << 2, getDscp());
+}
+
+TEST_F(ClientConnectionTest, PeerShutdown) {
+  std::unique_ptr<folly::IOBuf> hello_buf;
+  ON_CALL(*sock_, connect_(_, _, _, _, _))
+      .WillByDefault(SaveArg<0>(&conn_callback_));
+  ON_CALL(*sock_, writeChain_(_, _, _))
+      .WillByDefault(
+          Invoke([this, &hello_buf](folly::AsyncSocket::WriteCallback* cb,
+                                    folly::IOBuf* buf,
+                                    folly::WriteFlags) {
+            wr_callback_ = cb;
+            hello_buf.reset(buf);
+          }));
+  ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
+  int rv = conn_->connect();
+  ASSERT_EQ(0, rv);
+
+  // Send a message.
+  auto envelope = create_message(*conn_);
+  ASSERT_NE(envelope, nullptr);
+  conn_->releaseMessage(*envelope);
+
+  // HELLO will be serialized once we are connected.
+  CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
+  CHECK_SENDQ();
+  conn_callback_->connectSuccess();
+  CHECK_SERIALIZEQ(MessageType::GET_SEQ_STATE);
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  CHECK_ON_SENT(MessageType::HELLO, E::OK);
+
+  // Simulate the socket closing.
+  // onSent(st=E::SHUTDOWN) should be called for GET_SEQ_STATE.
+  conn_->setPeerShuttingDown();
+  rd_callback_->readErr(folly::AsyncSocketException(
+      folly::AsyncSocketException::END_OF_FILE, ""));
+  ev_base_folly_.loopOnce();
+  CHECK_ON_SENT(MessageType::GET_SEQ_STATE, E::SHUTDOWN);
 }
 
 // A message is enqueued in the Socket but finally it is rejected once handshake
@@ -524,8 +502,8 @@ TEST_F(ClientConnectionTest, MessageRejectedAfterHandshakeInvalidProtocol) {
       std::make_unique<VarLengthTestMessage>(
           Compatibility::MIN_PROTOCOL_SUPPORTED + 1 /* min_proto+1 */,
           1 /* size */);
-  auto envelope = socket_->registerMessage(std::move(msg));
-  socket_->releaseMessage(*envelope);
+  auto envelope = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*envelope);
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::TEST);
 
   conn_callback_->connectSuccess();
@@ -573,8 +551,8 @@ TEST_F(ClientConnectionTest, MessageChangesSizeAfterHandshake) {
   auto raw_msg = new VarLengthTestMessage(3 /* min_proto */, 42 /* size */);
   raw_msg->setSize(5, 21);
   std::unique_ptr<facebook::logdevice::Message> msg(raw_msg);
-  auto envelope = socket_->registerMessage(std::move(msg));
-  socket_->releaseMessage(*envelope);
+  auto envelope = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*envelope);
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::TEST);
 
   conn_callback_->connectSuccess();
@@ -614,9 +592,9 @@ TEST_F(ClientConnectionTest, ConnectionTimeout) {
   ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
   EXPECT_EQ(conn_->connect(), 0);
   // Send a message.
-  auto envelope = create_message(*socket_);
+  auto envelope = create_message(*conn_);
   ASSERT_NE(envelope, nullptr);
-  socket_->releaseMessage(*envelope);
+  conn_->releaseMessage(*envelope);
 
   // HELLO will be serialized once we are connected.
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
@@ -651,9 +629,9 @@ TEST_F(ClientConnectionTest, HandshakeTimeout) {
   ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
   EXPECT_EQ(conn_->connect(), 0);
   // Send a message.
-  auto envelope = create_message(*socket_);
+  auto envelope = create_message(*conn_);
   ASSERT_NE(envelope, nullptr);
-  socket_->releaseMessage(*envelope);
+  conn_->releaseMessage(*envelope);
 
   // HELLO will be serialized once we are connected.
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
@@ -688,9 +666,9 @@ TEST_F(ClientConnectionTest, ConnectionResetByPeer) {
   EXPECT_EQ(conn_->connect(), 0);
 
   // Send a message.
-  auto envelope = create_message(*socket_);
+  auto envelope = create_message(*conn_);
   ASSERT_NE(envelope, nullptr);
-  socket_->releaseMessage(*envelope);
+  conn_->releaseMessage(*envelope);
 
   // HELLO will be serialized once we are connected.
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
@@ -728,9 +706,9 @@ TEST_F(ClientConnectionTest, ConnFailed) {
   EXPECT_EQ(conn_->connect(), 0);
 
   // Send a message.
-  auto envelope = create_message(*socket_);
+  auto envelope = create_message(*conn_);
   ASSERT_NE(envelope, nullptr);
-  socket_->releaseMessage(*envelope);
+  conn_->releaseMessage(*envelope);
 
   // HELLO will be serialized once we are connected.
   CHECK_SERIALIZEQ(MessageType::HELLO, MessageType::GET_SEQ_STATE);
@@ -781,7 +759,7 @@ TEST_F(ClientConnectionTest, DownRevEvbufferAccounting) {
 
   size_t protohdr_size_for_test_proto =
       ProtocolHeader::bytesNeeded(msg->type_, test_proto_ver);
-  auto* envelope = socket_->registerMessage(std::move(msg));
+  auto* envelope = conn_->registerMessage(std::move(msg));
 
   // Queued messages are accounted assuming MAX_PROTOCOL_SUPPORTED.
   // Therefore, we expect full ProtocolHeader
@@ -789,7 +767,7 @@ TEST_F(ClientConnectionTest, DownRevEvbufferAccounting) {
 
   // Serialize to the asyncsocket. This will add the serialization cost
   // to the queued cost.
-  socket_->releaseMessage(*envelope);
+  conn_->releaseMessage(*envelope);
 
   ASSERT_EQ(bytes_pending_,
             msg_max_proto_size + sizeof(ProtocolHeader) +
@@ -943,6 +921,220 @@ TEST_F(ClientConnectionTest, CloseConnectionOnProtocolChecksumMismatch) {
   ev_base_folly_.loopOnce();
 }
 
+TEST_F(ClientConnectionTest, RunSocketHealthCheck) {
+  std::unique_ptr<folly::IOBuf> hello_buf;
+  ON_CALL(*sock_, connect_(_, _, _, _, _))
+      .WillByDefault(SaveArg<0>(&conn_callback_));
+  ON_CALL(*sock_, good()).WillByDefault(Return(true));
+  ON_CALL(*sock_, writeChain_(_, _, _))
+      .WillByDefault(
+          Invoke([this, &hello_buf](folly::AsyncSocket::WriteCallback* cb,
+                                    folly::IOBuf* buf,
+                                    folly::WriteFlags) {
+            wr_callback_ = cb;
+            hello_buf.reset(buf);
+          }));
+  ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
+  EXPECT_EQ(conn_->connect(), 0);
+  conn_callback_->connectSuccess();
+  EXPECT_TRUE(connected());
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  receiveAckMessage();
+  EXPECT_TRUE(handshaken());
+
+  // Test cases that consider just socket-idle-threshold to qualify a active
+  // socket. min_socket_idle_threshold_percent is zero for these cases.
+  settings_.socket_health_check_period = std::chrono::milliseconds(1000);
+  settings_.min_socket_idle_threshold_percent = 0;
+  settings_.socket_idle_threshold = 100;
+  settings_.min_bytes_to_drain_per_second = 1000;
+  // Message well below socket-idle-threshold should not be considered in
+  // slowness detection.
+  auto msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 10);
+  auto e = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  EXPECT_EQ(SocketDrainStatusType::IDLE, conn_->checkSocketHealth());
+
+  // Message is above socket-idle-threshold and also the throughput is way low
+  // compared min_bytes_to_drain_per_second
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 200);
+  e = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  EXPECT_EQ(SocketDrainStatusType::NET_SLOW, conn_->checkSocketHealth());
+
+  // Message is above socket-idle-threshold and also the throughput is
+  // above min_bytes_to_drain_per_second.
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 1000);
+  e = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  EXPECT_EQ(SocketDrainStatusType::ACTIVE, conn_->checkSocketHealth());
+
+  // Message above socket-idle-threshold and also the throughput is way low
+  // compared min_bytes_to_drain_per_second. But the socket is receiver
+  // limited.
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 200);
+  e = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  socket_flow_stats_.rwnd_limited_time += std::chrono::milliseconds(
+      51 * settings_.socket_health_check_period.count() / 100);
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  EXPECT_EQ(SocketDrainStatusType::RECV_SLOW, conn_->checkSocketHealth());
+
+  // Tests cases with non-zero min_socket_idle_threshold_percent where is a
+  // socket is not active for enough time it is not considered active and is
+  // not included in slow detection.
+  settings_.min_socket_idle_threshold_percent = 40;
+
+  // Pass time to 61% of socket_health_check_period this means socket can be
+  // active only for 39% of time in this period, below the threshold limit.
+  cur_time_ += std::chrono::milliseconds(
+      settings_.socket_health_check_period.count() * 61 / 100);
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 200);
+  e = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*e);
+  cur_time_ += std::chrono::milliseconds(
+      settings_.socket_health_check_period.count() * 39 / 100);
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  EXPECT_EQ(SocketDrainStatusType::IDLE, conn_->checkSocketHealth());
+  // Pass time to 55% of ocket_health_check_period this means socket can be
+  // active for more than 40% time.
+  cur_time_ += std::chrono::milliseconds(
+      settings_.socket_health_check_period.count() * 55 / 100);
+  msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, 200);
+  e = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*e);
+  cur_time_ += std::chrono::milliseconds(
+      settings_.socket_health_check_period.count() * 45 / 100);
+  socket_flow_stats_.busy_time += settings_.socket_health_check_period;
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  EXPECT_EQ(SocketDrainStatusType::NET_SLOW, conn_->checkSocketHealth());
+}
+TEST_F(ClientConnectionTest, SocketThroughput) {
+  std::unique_ptr<folly::IOBuf> hello_buf;
+  ON_CALL(*sock_, connect_(_, _, _, _, _))
+      .WillByDefault(SaveArg<0>(&conn_callback_));
+  ON_CALL(*sock_, good()).WillByDefault(Return(true));
+  ON_CALL(*sock_, writeChain_(_, _, _))
+      .WillByDefault(
+          Invoke([this, &hello_buf](folly::AsyncSocket::WriteCallback* cb,
+                                    folly::IOBuf* buf,
+                                    folly::WriteFlags) {
+            wr_callback_ = cb;
+            hello_buf.reset(buf);
+          }));
+  ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
+  EXPECT_EQ(conn_->connect(), 0);
+  conn_callback_->connectSuccess();
+  EXPECT_TRUE(connected());
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  receiveAckMessage();
+  EXPECT_TRUE(handshaken());
+
+  // Test cases that don't care about idle percent and just make sure correct
+  // throughput is calculated.
+  settings_.socket_health_check_period = std::chrono::milliseconds(1000);
+  settings_.min_socket_idle_threshold_percent = 0;
+  settings_.socket_idle_threshold = 0;
+  // To reset health stats invoke checkSocketHealth
+  conn_->checkSocketHealth();
+
+  auto payload_size = 301;
+  auto msg = std::make_unique<VarLengthTestMessage>(
+      Compatibility::MIN_PROTOCOL_SUPPORTED, payload_size);
+  auto total_msg_size = msg->size();
+  auto e = conn_->registerMessage(std::move(msg));
+  conn_->releaseMessage(*e);
+  cur_time_ += settings_.socket_health_check_period;
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  conn_->checkSocketHealth();
+  EXPECT_EQ(
+      int(total_msg_size * 1e3 / settings_.socket_health_check_period.count()),
+      int(conn_->getSocketThroughput() * 1e3));
+
+  // Send 6 messages 3 messages above idle-threshold 3 messages below
+  // idle-threshold and make sure write throughput is used.
+  payload_size = 305 / 3;
+  settings_.socket_idle_threshold = payload_size - 1;
+  auto time_slice = settings_.socket_health_check_period.count() / 6;
+  total_msg_size = 0;
+  for (int i = 1; i <= 3; ++i) {
+    msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MIN_PROTOCOL_SUPPORTED, payload_size);
+    total_msg_size += msg->size();
+    e = conn_->registerMessage(std::move(msg));
+    conn_->releaseMessage(*e);
+    cur_time_ += std::chrono::milliseconds(time_slice);
+    ev_base_folly_.loopOnce();
+    writeSuccess();
+  }
+  for (int i = 1; i <= 3; ++i) {
+    msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MIN_PROTOCOL_SUPPORTED, 1);
+    total_msg_size += msg->size();
+    e = conn_->registerMessage(std::move(msg));
+    conn_->releaseMessage(*e);
+    cur_time_ += std::chrono::milliseconds(time_slice);
+    ev_base_folly_.loopOnce();
+    writeSuccess();
+  }
+  conn_->checkSocketHealth();
+  EXPECT_GT(int(conn_->getSocketThroughput() * 1e3), 0);
+  EXPECT_EQ(
+      int(total_msg_size * 1e3 / settings_.socket_health_check_period.count()),
+      int(conn_->getSocketThroughput() * 1e3));
+  // Send 6 messages with alternating busy and idle times and make sure
+  // calculated throughput is correct.
+  // Using same values for payload_size, time_slice and total_msg_size.
+  for (int i = 1; i <= 3; ++i) {
+    msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MIN_PROTOCOL_SUPPORTED, payload_size);
+    e = conn_->registerMessage(std::move(msg));
+    conn_->releaseMessage(*e);
+    cur_time_ += std::chrono::milliseconds(time_slice);
+    ev_base_folly_.loopOnce();
+    writeSuccess();
+    msg = std::make_unique<VarLengthTestMessage>(
+        Compatibility::MIN_PROTOCOL_SUPPORTED, 1);
+    e = conn_->registerMessage(std::move(msg));
+    conn_->releaseMessage(*e);
+    cur_time_ += std::chrono::milliseconds(time_slice);
+    ev_base_folly_.loopOnce();
+    writeSuccess();
+  }
+  conn_->checkSocketHealth();
+  EXPECT_GT(int(conn_->getSocketThroughput() * 1e3), 0);
+  EXPECT_EQ(
+      int(total_msg_size * 1e3 / settings_.socket_health_check_period.count()),
+      int(conn_->getSocketThroughput() * 1e3));
+}
+
 TEST_F(ClientConnectionTest, SenderBytesPendingTest) {
   std::unique_ptr<folly::IOBuf> hello_buf;
   ON_CALL(*sock_, connect_(_, _, _, _, _))
@@ -974,13 +1166,13 @@ TEST_F(ClientConnectionTest, SenderBytesPendingTest) {
   auto raw_msg = new VarLengthTestMessage(3 /* min_proto */, 42 /* size */);
   std::unique_ptr<facebook::logdevice::Message> msg(raw_msg);
   auto msg_size_max_proto = msg->size();
-  auto msg_size_at_proto = msg->size(socket_->getProto());
-  auto envelope = socket_->registerMessage(std::move(msg));
+  auto msg_size_at_proto = msg->size(conn_->getProto());
+  auto envelope = conn_->registerMessage(std::move(msg));
   // Message cost at max compatibility is added at registerMessage.
   EXPECT_EQ(bytes_pending_, msg_size_max_proto);
-  socket_->releaseMessage(*envelope);
-  // Now message is added into the sendq and Connection::sendChain_ which will
-  // lead to double counting.
+  conn_->releaseMessage(*envelope);
+  // Now message is added into the sendq and Connection::sendChain_ which
+  // will lead to double counting.
   EXPECT_EQ(bytes_pending_, msg_size_max_proto + msg_size_at_proto);
   ev_base_folly_.loopOnce();
   // Message is now added into the asyncsocket and removed from sendq.

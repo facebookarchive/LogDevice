@@ -1347,10 +1347,7 @@ class Connection : public TrafficShappingSocket {
 
   bool tamper_{false};
 
-  friend class SocketTest;
-  friend class ClientSocketTest;
-  friend class ServerSocketTest;
-  friend class ClientConnectionTest;
+  friend class ConnectionTest;
 };
 
 }} // namespace facebook::logdevice
