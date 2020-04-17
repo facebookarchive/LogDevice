@@ -19,10 +19,6 @@ using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SaveArg;
 
-bool TestSocketDependencies::attachedToLegacyEventBase() const {
-  return false;
-}
-
 const Settings& TestSocketDependencies::getSettings() const {
   return owner_->settings_;
 }
@@ -76,97 +72,8 @@ EvBase* TestSocketDependencies::getEvBase() {
   return &owner_->ev_base_folly_;
 }
 
-const struct timeval*
-TestSocketDependencies::getCommonTimeout(std::chrono::milliseconds /*t*/) {
-  // This is passed to evtimerAdd and ignored.
-  return nullptr;
-}
-
-const timeval*
-TestSocketDependencies::getTimevalFromMilliseconds(std::chrono::milliseconds) {
-  // This is passed to evtimerAdd and ignored.
-  return nullptr;
-}
-
-const struct timeval* TestSocketDependencies::getZeroTimeout() {
-  // This is passed to evtimerAdd and ignored.
-  return nullptr;
-}
-
-struct bufferevent* TestSocketDependencies::buffereventSocketNew(
-    int /*sfd*/,
-    int /*opts*/,
-    bool /*secure*/,
-    bufferevent_ssl_state /*ssl_state*/,
-    folly::SSLContext* /*ssl_ctx*/) {
-  return nullptr;
-}
-
-struct evbuffer*
-TestSocketDependencies::getOutput(struct bufferevent* /*bev*/) {
-  return nullptr;
-}
-
-struct evbuffer* TestSocketDependencies::getInput(struct bufferevent* /*bev*/) {
-  return nullptr;
-}
-
 SteadyTimestamp TestSocketDependencies::getCurrentTimestamp() {
   return owner_->cur_time_;
-}
-
-int TestSocketDependencies::buffereventSocketConnect(
-    struct bufferevent* /*bev*/,
-    struct sockaddr* /*ss*/,
-    int /*len*/) {
-  return 0;
-}
-
-void TestSocketDependencies::buffereventSetWatermark(
-    struct bufferevent* /*bev*/,
-    short /*events*/,
-    size_t /*lowmark*/,
-    size_t /*highmark*/) {
-  // Ignored.
-}
-
-void TestSocketDependencies::buffereventSetCb(struct bufferevent* /*bev*/,
-                                              bufferevent_data_cb /*readcb*/,
-                                              bufferevent_data_cb /*writecb*/,
-                                              bufferevent_event_cb /*eventcb*/,
-                                              void* /*cbarg*/) {}
-
-void TestSocketDependencies::buffereventShutDownSSL(
-    struct bufferevent* /*bev*/) {
-  // Ignored.
-}
-
-void TestSocketDependencies::buffereventFree(struct bufferevent* /*bev*/) {
-  // Ignored.
-}
-
-int TestSocketDependencies::evUtilMakeSocketNonBlocking(int /*sfd*/) {
-  return 0;
-}
-
-int TestSocketDependencies::buffereventSetMaxSingleWrite(
-    struct bufferevent* /*bev*/,
-    size_t /*size*/) {
-  // There are no tests that simulate this function returning != 0 yet.
-  return 0;
-}
-
-int TestSocketDependencies::buffereventSetMaxSingleRead(
-    struct bufferevent* /*bev*/,
-    size_t /*size*/) {
-  // There are no tests that simulate this function returning != 0 yet.
-  return 0;
-}
-
-int TestSocketDependencies::buffereventEnable(struct bufferevent* /*bev*/,
-                                              short /*event*/) {
-  // There are no tests that simulate this function returning != 0 yet.
-  return 0;
 }
 
 void TestSocketDependencies::onSent(std::unique_ptr<Message> msg,
@@ -202,13 +109,6 @@ NodeID TestSocketDependencies::getMyNodeID() {
 NodeID TestSocketDependencies::getDestinationNodeID() {
   return owner_->destination_node_id_;
 }
-
-void TestSocketDependencies::configureSocket(bool /*is_tcp*/,
-                                             int /*fd*/,
-                                             int* /*snd_out*/,
-                                             int* /*rcv_out*/,
-                                             sa_family_t /*sa_family*/,
-                                             const uint8_t /*default_dscp*/) {}
 
 ResourceBudget& TestSocketDependencies::getConnBudgetExternal() {
   return owner_->conn_budget_external_;

@@ -14,6 +14,7 @@
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/network/AsyncSocketAdapter.h"
+#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(

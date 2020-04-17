@@ -40,7 +40,7 @@ class TestSocketDependencies : public SocketDependencies {
  public:
   explicit TestSocketDependencies(ConnectionTest* owner)
       : SocketDependencies(nullptr, nullptr), owner_(owner) {}
-  bool attachedToLegacyEventBase() const override;
+
   virtual const Settings& getSettings() const override;
   virtual StatsHolder* getStats() const override;
   virtual void noteBytesQueued(size_t nbytes,
@@ -58,40 +58,7 @@ class TestSocketDependencies : public SocketDependencies {
                                           ConnectionType connection_type,
                                           PeerType peer_type) override;
   EvBase* getEvBase() override;
-  virtual const struct timeval*
-  getCommonTimeout(std::chrono::milliseconds t) override;
-  virtual const timeval*
-  getTimevalFromMilliseconds(std::chrono::milliseconds t) override;
-  virtual const struct timeval* getZeroTimeout() override;
-  virtual struct bufferevent*
-  buffereventSocketNew(int sfd,
-                       int opts,
-                       bool secure,
-                       bufferevent_ssl_state ssl_state,
-                       folly::SSLContext*) override;
-  struct evbuffer* getOutput(struct bufferevent* bev) override;
-  virtual struct evbuffer* getInput(struct bufferevent* bev) override;
   virtual SteadyTimestamp getCurrentTimestamp() override;
-  virtual int buffereventSocketConnect(struct bufferevent* bev,
-                                       struct sockaddr* ss,
-                                       int len) override;
-  virtual void buffereventSetWatermark(struct bufferevent* bev,
-                                       short events,
-                                       size_t lowmark,
-                                       size_t highmark) override;
-  virtual void buffereventSetCb(struct bufferevent* bev,
-                                bufferevent_data_cb readcb,
-                                bufferevent_data_cb writecb,
-                                bufferevent_event_cb eventcb,
-                                void* cbarg) override;
-  virtual void buffereventShutDownSSL(struct bufferevent* bev) override;
-  virtual void buffereventFree(struct bufferevent* bev) override;
-  virtual int evUtilMakeSocketNonBlocking(int sfd) override;
-  virtual int buffereventSetMaxSingleWrite(struct bufferevent* bev,
-                                           size_t size) override;
-  virtual int buffereventSetMaxSingleRead(struct bufferevent* bev,
-                                          size_t size) override;
-  virtual int buffereventEnable(struct bufferevent* bev, short event) override;
   virtual void onSent(std::unique_ptr<Message> msg,
                       const Address& to,
                       Status st,
@@ -104,12 +71,6 @@ class TestSocketDependencies : public SocketDependencies {
              ResourceBudget::Token resource_token) override;
   virtual void processDeferredMessageCompletions() override;
   virtual NodeID getMyNodeID() override;
-  virtual void configureSocket(bool is_tcp,
-                               int fd,
-                               int* snd_out,
-                               int* rcv_out,
-                               sa_family_t sa_family,
-                               const uint8_t default_dscp) override;
   virtual ResourceBudget& getConnBudgetExternal() override;
   virtual std::string getClusterName() override;
   virtual const std::string& getHELLOCredentials() override;

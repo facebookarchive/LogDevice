@@ -18,14 +18,10 @@
 #include <folly/io/SocketOptionMap.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <openssl/err.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "event2/bufferevent.h"
-#include "event2/bufferevent_ssl.h"
-#include "event2/event.h"
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/BWAvailableCallback.h"
 #include "logdevice/common/ConstructorFailed.h"
@@ -36,7 +32,6 @@
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/network/MessageReader.h"
 #include "logdevice/common/network/SocketAdapter.h"
 #include "logdevice/common/network/SocketConnectCallback.h"
@@ -99,16 +94,12 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       deps_(std::move(deps)),
       next_pos_(0),
       drain_pos_(0),
-      bev_(nullptr),
       connected_(false),
       handshaken_(false),
       proto_(getSettings().max_protocol),
       our_name_at_peer_(ClientID::INVALID),
       outbuf_overflow_(getSettings().outbuf_overflow_kb * 1024),
       outbufs_min_budget_(getSettings().outbuf_socket_min_kb * 1024),
-      read_more_(deps_->getEvBase()),
-      connect_timeout_event_(deps_->getEvBase()),
-      retries_so_far_(0),
       handshake_timeout_event_(deps_->getEvBase()),
       first_attempt_(true),
       tcp_sndbuf_cache_({128 * 1024, std::chrono::steady_clock::now()}),
@@ -117,10 +108,7 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       num_messages_sent_(0),
       num_messages_received_(0),
       num_bytes_received_(0),
-      deferred_event_queue_event_(deps_->getEvBase()),
       end_stream_rewind_event_(deps_->getEvBase()),
-      buffered_output_flush_event_(deps_->getEvBase()),
-      legacy_connection_(deps_->attachedToLegacyEventBase()),
       retry_receipt_of_message_(deps_->getEvBase()),
       sched_write_chain_(deps_->getEvBase()) {
   conntype_ = conntype;
@@ -143,24 +131,9 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
     throw ConstructorFailed();
   }
 
-  read_more_.attachCallback([this] {
-    bumpEventHandersCalled();
-    onBytesAvailable(false /*fresh*/);
-    bumpEventHandlersCompleted();
-  });
-  connect_timeout_event_.attachCallback([this] {
-    bumpEventHandersCalled();
-    onConnectAttemptTimeout();
-    bumpEventHandlersCompleted();
-  });
   handshake_timeout_event_.attachCallback([this] {
     bumpEventHandersCalled();
     onHandshakeTimeout();
-    bumpEventHandlersCompleted();
-  });
-  deferred_event_queue_event_.attachCallback([this] {
-    bumpEventHandersCalled();
-    processDeferredEventQueue();
     bumpEventHandlersCompleted();
   });
   end_stream_rewind_event_.attachCallback([this] {
@@ -174,12 +147,6 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
     err = E::INTERNAL;
     throw ConstructorFailed();
   }
-
-  buffered_output_flush_event_.attachCallback([this] {
-    bumpEventHandersCalled();
-    flushBufferedOutput();
-    bumpEventHandlersCompleted();
-  });
 }
 
 Connection::Connection(NodeID server_name,
@@ -211,7 +178,6 @@ Connection::Connection(NodeID server_name,
                  peer_type,
                  flow_group,
                  std::move(deps)) {
-  ld_check(!legacy_connection_);
   proto_handler_ = std::make_shared<ProtocolHandler>(
       this, std::move(sock_adapter), conn_description_, deps_->getEvBase());
   sock_write_cb_ = SocketWriteCallback(proto_handler_.get());
@@ -239,28 +205,11 @@ Connection::Connection(int fd,
   // note that caller (Sender.addClient()) does not close(fd) on error.
   // If you add code here that throws ConstructorFailed you must close(fd)!
 
-  if (legacy_connection_) {
-    bev_ = newBufferevent(fd,
-                          client_addr.family(),
-                          &tcp_sndbuf_cache_.size,
-                          &tcp_rcvbuf_size_,
-                          // This is only used if conntype_ == SSL, tells
-                          // libevent we are in a server context
-                          BUFFEREVENT_SSL_ACCEPTING,
-                          getSettings().client_dscp_default);
-    if (!bev_) {
-      throw ConstructorFailed(); // err is already set
-    }
-  }
   conn_closed_ = std::make_shared<std::atomic<bool>>(false);
   conn_incoming_token_ = std::move(conn_token);
 
   addHandshakeTimeoutEvent();
-  expectProtocolHeader();
 
-  if (isSSL()) {
-    expecting_ssl_handshake_ = true;
-  }
   connected_ = true;
   peer_shuttingdown_ = false;
   fd_ = fd;
@@ -289,9 +238,8 @@ Connection::Connection(int fd,
                  conntype,
                  flow_group,
                  std::move(deps)) {
-  ld_check(!legacy_connection_);
   proto_handler_ = std::make_shared<ProtocolHandler>(
-      this, std::move(sock_adapter), conn_description_, getDeps()->getEvBase());
+      this, std::move(sock_adapter), conn_description_, deps_->getEvBase());
   sock_write_cb_ = SocketWriteCallback(proto_handler_.get());
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
   // Set the read callback.
@@ -299,176 +247,10 @@ Connection::Connection(int fd,
   proto_handler_->sock()->setReadCB(read_cb_.get());
 }
 
-void Connection::onBufferedOutputWrite(struct evbuffer* buffer,
-                                       const struct evbuffer_cb_info* info,
-                                       void* arg) {
-  Connection* self = reinterpret_cast<Connection*>(arg);
-
-  ld_check(self);
-  ld_check(!self->isClosed());
-  ld_check(self->buffered_output_);
-  ld_check(buffer == self->buffered_output_);
-
-  if (info->n_added) {
-    self->buffered_output_flush_event_.scheduleTimeout(0);
-  }
-}
-
-void Connection::flushBufferedOutput() {
-  ld_check(buffered_output_);
-  ld_check(!isClosed());
-  // Moving buffer chains into bev's output
-  int rv = LD_EV(evbuffer_add_buffer)(deps_->getOutput(bev_), buffered_output_);
-  if (rv != 0) {
-    ld_error("evbuffer_add_buffer() failed. error %d", rv);
-    err = E::NOMEM;
-    close(E::NOMEM);
-  }
-
-  // the buffered_output_ size might not be 0 because of minor size limit
-  // differences with the actual outbuf. We also have to check if we are still
-  // connected here, because the socket might have been closed above, or if we
-  // flushed the last bytes (see flushOutputandClose())
-  if (connected_ && LD_EV(evbuffer_get_length)(buffered_output_) != 0) {
-    buffered_output_flush_event_.scheduleTimeout(0);
-  }
-}
-
-void Connection::onBufferedOutputTimerEvent(void* instance, short) {
-  auto self = reinterpret_cast<Connection*>(instance);
-  ld_check(self);
-  self->flushBufferedOutput();
-}
-
 Connection::~Connection() {
   auto g = folly::makeGuard(deps_->setupContextGuard());
   ld_debug("Destroying Socket %s", conn_description_.c_str());
   close(E::SHUTDOWN);
-}
-
-struct bufferevent* Connection::newBufferevent(int sfd,
-                                               sa_family_t sa_family,
-                                               size_t* sndbuf_size_out,
-                                               size_t* rcvbuf_size_out,
-                                               bufferevent_ssl_state ssl_state,
-                                               const uint8_t default_dcsp) {
-  int rv;
-
-  ld_check(sa_family == AF_INET || sa_family == AF_INET6 ||
-           sa_family == AF_UNIX);
-
-  if (sfd < 0) {
-    sfd = socket(sa_family, SOCK_STREAM, 0);
-    if (sfd < 0) {
-      ld_error("socket() failed. errno=%d (%s)", errno, strerror(errno));
-      switch (errno) {
-        case EMFILE:
-        case ENFILE:
-          err = E::SYSLIMIT;
-          break;
-        case ENOBUFS:
-        case ENOMEM:
-          err = E::NOMEM;
-          break;
-        default:
-          err = E::INTERNAL;
-      }
-      return nullptr;
-    }
-  }
-
-  rv = deps_->evUtilMakeSocketNonBlocking(sfd);
-  if (rv != 0) { // unlikely
-    ld_error("Failed to make fd %d non-blocking. errno=%d (%s)",
-             sfd,
-             errno,
-             strerror(errno));
-    ::close(sfd);
-    err = E::INTERNAL;
-    return nullptr;
-  }
-
-  int tcp_sndbuf_size = 0, tcp_rcvbuf_size = 0;
-
-  deps_->configureSocket(!peer_sockaddr_.isUnixAddress(),
-                         sfd,
-                         &tcp_sndbuf_size,
-                         &tcp_rcvbuf_size,
-                         sa_family,
-                         default_dcsp);
-
-  if (isSSL()) {
-    ld_check(!ssl_context_);
-    ssl_context_ = deps_->getSSLContext();
-  }
-
-  struct bufferevent* bev = deps_->buffereventSocketNew(
-      sfd, BEV_OPT_CLOSE_ON_FREE, isSSL(), ssl_state, ssl_context_.get());
-  if (!bev) { // unlikely
-    ld_error("bufferevent_socket_new() failed. errno=%d (%s)",
-             errno,
-             strerror(errno));
-    err = E::NOMEM;
-    ::close(sfd);
-    return nullptr;
-  }
-
-  struct evbuffer* outbuf = deps_->getOutput(bev);
-  ld_check(outbuf);
-
-  struct evbuffer_cb_entry* outbuf_cbe = LD_EV(evbuffer_add_cb)(
-      outbuf,
-      &EvBufferEventHandler<Connection::bytesSentCallback>,
-      (void*)this);
-
-  if (!outbuf_cbe) { // unlikely
-    ld_error("evbuffer_add_cb() failed. errno=%d (%s)", errno, strerror(errno));
-    err = E::NOMEM;
-    ::close(sfd);
-    return nullptr;
-  }
-
-  // At this point, we are convinced the socket we are using is legit.
-  fd_ = sfd;
-
-  if (tcp_sndbuf_size > 0) {
-    deps_->buffereventSetMaxSingleWrite(bev, tcp_sndbuf_size);
-    if (sndbuf_size_out) {
-      *sndbuf_size_out = tcp_sndbuf_size;
-    }
-  }
-
-  if (tcp_rcvbuf_size > 0) {
-    deps_->buffereventSetMaxSingleRead(bev, tcp_rcvbuf_size);
-    if (rcvbuf_size_out) {
-      *rcvbuf_size_out = tcp_rcvbuf_size;
-    }
-  }
-
-  deps_->buffereventSetCb(bev,
-                          BufferEventHandler<Connection::dataReadCallback>,
-                          nullptr,
-                          BufferEventHandler<Connection::eventCallback>,
-                          (void*)this);
-
-  if (isSSL()) {
-    // The buffer may already exist if we're making another attempt at a
-    // connection
-    if (!buffered_output_) {
-      // creating an evbuffer that would batch up SSL writes
-      buffered_output_ = LD_EV(evbuffer_new)();
-      LD_EV(evbuffer_add_cb)
-      (buffered_output_,
-       &EvBufferEventHandler<Connection::onBufferedOutputWrite>,
-       (void*)this);
-    }
-  } else {
-    buffered_output_ = nullptr;
-  }
-
-  deps_->buffereventEnable(bev, EV_READ | EV_WRITE);
-
-  return bev;
 }
 
 int Connection::preConnectAttempt() {
@@ -628,75 +410,45 @@ int Connection::connect() {
     return rv;
   }
 
-  if (legacy_connection_) {
-    retries_so_far_ = 0;
+  auto fut = asyncConnect();
 
-    rv = doConnectAttempt();
-    if (rv != 0) {
-      if (!isClosed()) {
-        STAT_INCR(deps_->getStats(), num_connections);
-        close(err);
-      }
-      return -1; // err set by doConnectAttempt
-    }
-    if (isSSL()) {
-      ld_check(bev_);
-      ld_assert(bufferevent_get_openssl_error(bev_) == 0);
-    }
+  fd_ = proto_handler_->sock()->getNetworkSocket().toFd();
+  conn_closed_ = std::make_shared<std::atomic<bool>>(false);
+  next_pos_ = 0;
+  drain_pos_ = 0;
 
-    next_pos_ = 0;
-    drain_pos_ = 0;
-    health_stats_.clear();
-    sendHello(); // queue up HELLO, to be sent when we connect
-
-    RATELIMIT_DEBUG(std::chrono::seconds(1),
-                    10,
-                    "Connected %s socket via %s channel to %s",
-                    getSockType() == SocketType::DATA ? "DATA" : "GOSSIP",
-                    getConnType() == ConnectionType::SSL ? "SSL" : "PLAIN",
-                    peerSockaddr().toString().c_str());
-  } else {
-    auto fut = asyncConnect();
-
-    fd_ = proto_handler_->sock()->getNetworkSocket().toFd();
-    conn_closed_ = std::make_shared<std::atomic<bool>>(false);
-    next_pos_ = 0;
-    drain_pos_ = 0;
-
-    if (good()) {
-      // enqueue hello message into the socket.
-      sendHello();
-    }
-
-    auto complete_connection = [this](Status st) {
-      auto g = folly::makeGuard(getDeps()->setupContextGuard());
-      if (st == E::ISCONN) {
-        transitionToConnected();
-        read_cb_.reset(new MessageReader(*proto_handler_, proto_));
-        proto_handler_->sock()->setReadCB(read_cb_.get());
-      }
-    };
-
-    if (!fut.isReady()) {
-      std::move(fut).thenValue(
-          [connect_completion = std::move(complete_connection)](Status st) {
-            connect_completion(st);
-          });
-    } else {
-      complete_connection(std::move(fut.value()));
-    }
-
-    RATELIMIT_DEBUG(
-        std::chrono::seconds(1),
-        10,
-        "Connected %s socket via %s channel to %s, immediate_connect "
-        "%d, immediate_fail %d",
-        getSockType() == SocketType::DATA ? "DATA" : "GOSSIP",
-        getConnType() == ConnectionType::SSL ? "SSL" : "PLAIN",
-        peerSockaddr().toString().c_str(),
-        connected_,
-        !proto_handler_->good());
+  if (good()) {
+    // enqueue hello message into the socket.
+    sendHello();
   }
+
+  auto complete_connection = [this](Status st) {
+    auto g = folly::makeGuard(deps_->setupContextGuard());
+    if (st == E::ISCONN) {
+      transitionToConnected();
+      read_cb_.reset(new MessageReader(*proto_handler_, proto_));
+      proto_handler_->sock()->setReadCB(read_cb_.get());
+    }
+  };
+
+  if (!fut.isReady()) {
+    std::move(fut).thenValue(
+        [connect_completion = std::move(complete_connection)](Status st) {
+          connect_completion(st);
+        });
+  } else {
+    complete_connection(std::move(fut.value()));
+  }
+
+  RATELIMIT_DEBUG(std::chrono::seconds(1),
+                  10,
+                  "Connected %s socket via %s channel to %s, immediate_connect "
+                  "%d, immediate_fail %d",
+                  getSockType() == SocketType::DATA ? "DATA" : "GOSSIP",
+                  getConnType() == ConnectionType::SSL ? "SSL" : "PLAIN",
+                  peerSockaddr().toString().c_str(),
+                  connected_,
+                  !proto_handler_->good());
 
   STAT_INCR(deps_->getStats(), num_connections);
   if (isSSL()) {
@@ -706,120 +458,12 @@ int Connection::connect() {
   return 0;
 }
 
-int Connection::doConnectAttempt() {
-  const uint8_t default_dscp = getSettings().server
-      ? getSettings().server_dscp_default
-      : getSettings().client_dscp_default;
-
-  ld_check(!connected_);
-  ld_check(!bev_);
-  bev_ = newBufferevent(-1,
-                        peer_sockaddr_.family(),
-                        &tcp_sndbuf_cache_.size,
-                        &tcp_rcvbuf_size_,
-                        // This is only used if conntype_ == SSL, tells libevent
-                        // we are in a client context
-                        BUFFEREVENT_SSL_CONNECTING,
-                        default_dscp);
-
-  if (!bev_) {
-    return -1; // err is already set
-  }
-  conn_closed_ = std::make_shared<std::atomic<bool>>(false);
-  expectProtocolHeader();
-
-  struct sockaddr_storage ss;
-  int len = peer_sockaddr_.toStructSockaddr(&ss);
-  if (len == -1) {
-    // This can only fail if node->address is an invalid Sockaddr.  Since the
-    // address comes from Configuration, it must have been validated already.
-    err = E::INTERNAL;
-    ld_check(false);
-    return -1;
-  }
-  const int rv = deps_->buffereventSocketConnect(
-      bev_, reinterpret_cast<struct sockaddr*>(&ss), len);
-
-  if (rv != 0) {
-    if (isSSL() && bev_) {
-      unsigned long ssl_err = 0;
-      char ssl_err_string[120];
-      while ((ssl_err = bufferevent_get_openssl_error(bev_))) {
-        ERR_error_string_n(ssl_err, ssl_err_string, sizeof(ssl_err_string));
-        RATELIMIT_ERROR(
-            std::chrono::seconds(10), 10, "SSL error: %s", ssl_err_string);
-      }
-    }
-
-    ld_error("Failed to initiate connection to %s errno=%d (%s)",
-             conn_description_.c_str(),
-             errno,
-             strerror(errno));
-    switch (errno) {
-      case ENOMEM:
-        err = E::NOMEM;
-        break;
-      case ENETUNREACH:
-      case ENOENT: // for unix domain sockets.
-        err = E::UNROUTABLE;
-        break;
-      case EAGAIN:
-        err = E::SYSLIMIT; // out of ephemeral ports
-        break;
-      case ECONNREFUSED: // TODO: verify
-      case EADDRINUSE:   // TODO: verify
-      default:
-        // Linux does not report ECONNREFUSED for non-blocking TCP
-        // sockets even if connecting over loopback. Other errno values
-        // can only be explained by an internal error such as memory
-        // corruption or a bug in libevent.
-        err = E::INTERNAL;
-        break;
-    }
-
-    return -1;
-  }
-  if (isSSL()) {
-    ld_assert(bufferevent_get_openssl_error(bev_) == 0);
-  }
-
-  // Start a timer for this connection attempt. When the timer triggers, this
-  // function will be called again until we reach the maximum amount of
-  // connection retries.
-  addConnectAttemptTimeoutEvent();
-  return 0;
-}
-
-size_t Connection::getTotalOutbufLength() {
-  auto pending_bytes = LD_EV(evbuffer_get_length)(deps_->getOutput(bev_));
-  if (buffered_output_) {
-    pending_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
-  }
-  return pending_bytes;
-}
-
-void Connection::onOutputEmpty(struct bufferevent*, void* arg, short) {
-  Connection* self = reinterpret_cast<Connection*>(arg);
-  ld_check(self);
-  // Write watermark has been set to zero so the output buffer should be
-  // empty when this callback gets called, but we could still have bytes
-  // pending in buffered_output_
-  auto pending_bytes = self->getTotalOutbufLength();
-  if (pending_bytes == 0) {
-    self->close(self->close_reason_);
-  } else {
-    ld_info("Not closing socket because %lu bytes are still pending",
-            pending_bytes);
-  }
-}
-
 void Connection::flushOutputAndClose(Status reason) {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
+  auto g = folly::makeGuard(deps_->setupContextGuard());
   if (isClosed()) {
     return;
   }
-  auto pending_bytes =
-      legacy_connection_ ? getTotalOutbufLength() : getBufferedBytesSize();
+  auto pending_bytes = getBufferedBytesSize();
 
   if (pending_bytes == 0) {
     close(reason);
@@ -832,218 +476,9 @@ void Connection::flushOutputAndClose(Status reason) {
 
   close_reason_ = reason;
 
-  if (legacy_connection_) {
-    // - Remove the read callback as we are not processing any more message
-    //   since we are about to close the connection.
-    // - Set up the write callback and the low write watermark to 0 so that the
-    //   callback will be called when the output buffer is flushed and will
-    //   close the connection using close_reason_ for the error code.
-    deps_->buffereventSetWatermark(bev_, EV_WRITE, 0, 0);
-    deps_->buffereventSetCb(bev_,
-                            nullptr,
-                            BufferEventHandler<Connection::onOutputEmpty>,
-                            BufferEventHandler<Connection::eventCallback>,
-                            (void*)this);
-  } else {
-    // For new sockets, set the readcallback to nullptr as we know that socket
-    // is getting closed.
-    proto_handler_->sock()->setReadCB(nullptr);
-  }
-}
-
-void Connection::onBytesAvailable(bool fresh) {
-  // process up to this many messages
-  unsigned process_max = getSettings().incoming_messages_max_per_socket;
-
-  size_t bytes_cached = msg_pending_processing_
-      ? msg_pending_processing_->computeChainDataLength()
-      : 0;
-  size_t available =
-      LD_EV(evbuffer_get_length)(deps_->getInput(bev_)) + bytes_cached;
-
-  // if this function was called by bev_ in response to "input buffer
-  // length is above low watermark" event, we must have at least as
-  // many bytes available as Socket is expecting. Otherwise the
-  // function was called by read_more_ event, which may run after
-  // "bev_ is readable" if TCP socket becomes readable after
-  // read_more_ was activated. If that happens this callback may find
-  // fewer bytes in bev_'s input buffer than dataReadCallback() expects.
-  ld_assert(!fresh || available >= bytesExpected());
-  auto start_time = std::chrono::steady_clock::now();
-  unsigned i = 0;
-  STAT_INCR(deps_->getStats(), sock_read_events);
-  for (;; i++) {
-    if (available >= bytesExpected()) {
-      // it's i/2 because we need 2 calls : one for the protocol header, the
-      // other for message
-      if (i / 2 < process_max) {
-        struct evbuffer* inbuf = deps_->getInput(bev_);
-        int rv = 0;
-        if (expectingProtocolHeader()) {
-          // We always have space for header.
-          ld_check(!msg_pending_processing_);
-          rv = readMessageHeader(inbuf);
-          if (rv == 0) {
-            expectMessageBody();
-          }
-        } else {
-          auto expected_bytes = bytesExpected();
-          size_t read_bytes = 0;
-          if (!msg_pending_processing_) {
-            msg_pending_processing_ = folly::IOBuf::create(expected_bytes);
-            rv = LD_EV(evbuffer_remove)(
-                inbuf,
-                static_cast<void*>(msg_pending_processing_->writableData()),
-                expected_bytes);
-            if (rv > 0) {
-              read_bytes = rv;
-              msg_pending_processing_->append(expected_bytes);
-            } else {
-              err = E::INTERNAL;
-            }
-          } else {
-            ld_check(msg_pending_processing_ && bytes_cached > 0);
-            read_bytes = bytes_cached;
-          }
-          if (read_bytes > 0) {
-            ld_check_eq(read_bytes, expected_bytes);
-            rv = dispatchMessageBody(
-                recv_message_ph_, msg_pending_processing_->clone());
-            if (rv == 0) {
-              msg_pending_processing_.reset();
-              expectProtocolHeader();
-            }
-          }
-        }
-        if (rv != 0) {
-          if (!peer_name_.isClientAddress()) {
-            RATELIMIT_ERROR(std::chrono::seconds(10),
-                            10,
-                            "reading message failed with %s from %s.",
-                            error_name(err),
-                            conn_description_.c_str());
-          }
-          if (err == E::NOBUFS) {
-            STAT_INCR(deps_->getStats(), sock_read_event_nobufs);
-            ld_check(msg_pending_processing_);
-            // Ran out of space to enqueue message into worker. Try again.
-            read_more_.scheduleTimeout(0);
-            break;
-          }
-          if ((err == E::PROTONOSUPPORT || err == E::INVALID_CLUSTER ||
-               err == E::ACCESS || err == E::DESTINATION_MISMATCH) &&
-              isHELLOMessage(recv_message_ph_.type)) {
-            // Make sure the ACK message with E::PROTONOSUPPORT, E::ACCESS,
-            // E::DESTINATION_MISMATCH or E::INVALID_CLUSTER error is sent to
-            // the client before the socket is closed.
-            flushOutputAndClose(err);
-          } else {
-            close(err);
-          }
-          break;
-        }
-      } else {
-        // We reached the limit of how many messages we are allowed to
-        // process before returning control to libevent. schedule
-        // read_more_ to fire in the next iteration of event loop and
-        // return control to libevent so that we can run other events
-        read_more_.scheduleTimeout(0);
-        break;
-      }
-    } else {
-      read_more_.cancelTimeout();
-      break;
-    }
-
-    ld_check(!isClosed());
-    ld_check(!msg_pending_processing_);
-    available = LD_EV(evbuffer_get_length)(deps_->getInput(bev_));
-  }
-
-  STAT_ADD(deps_->getStats(), sock_num_messages_read, i);
-  auto total_time = getTimeDiff(start_time);
-  STAT_ADD(
-      deps_->getStats(), sock_time_spent_reading_message, total_time.count());
-}
-
-void Connection::dataReadCallback(struct bufferevent* bev, void* arg, short) {
-  Connection* self = reinterpret_cast<Connection*>(arg);
-
-  ld_check(self);
-  ld_check(bev == self->bev_);
-
-  self->onBytesAvailable(/*fresh=*/true);
-}
-
-void Connection::readMoreCallback(void* arg, short what) {
-  Connection* self = reinterpret_cast<Connection*>(arg);
-  ld_check(what & EV_TIMEOUT);
-  ld_check(!self->isClosed());
-  ld_spew(
-      "Socket %s remains above low watermark", self->conn_description_.c_str());
-  self->onBytesAvailable(/*fresh=*/false);
-}
-
-size_t Connection::bytesExpected() {
-  size_t protohdr_bytes =
-      ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-
-  if (expectingProtocolHeader()) {
-    return protohdr_bytes;
-  } else {
-    return recv_message_ph_.len - protohdr_bytes;
-  }
-}
-
-void Connection::eventCallback(struct bufferevent* bev, void* arg, short what) {
-  Connection* self = reinterpret_cast<Connection*>(arg);
-
-  ld_check(self);
-  ld_check(bev == self->bev_);
-
-  SocketEvent e{what, errno};
-
-  if (self->isSSL() && !(e.what & BEV_EVENT_CONNECTED)) {
-    // libevent's SSL handlers will call this before calling the
-    // bytesSentCallback(), which breaks assumptions in our code. To avoid
-    // that, we place the callback on a queue instead of calling it
-    // immediately.
-
-    // Not deferring onConnected(), as otherwise onConnectAttemptTimeout()
-    // might be triggered after the connection has been established (and the
-    // BEV_EVENT_CONNECTED processed), but before onConnected() callback is
-    // hit.
-    self->enqueueDeferredEvent(e);
-  } else {
-    self->eventCallbackImpl(e);
-  }
-}
-
-void Connection::eventCallbackImpl(SocketEvent e) {
-  STAT_INCR(deps_->getStats(), sock_misc_socket_events);
-  auto start_time = std::chrono::steady_clock::now();
-  if (e.what & BEV_EVENT_CONNECTED) {
-    onConnected();
-    auto total_time = getTimeDiff(start_time);
-    STAT_ADD(
-        deps_->getStats(), sock_connect_event_proc_time, total_time.count());
-  } else if (e.what & BEV_EVENT_ERROR) {
-    onError(e.what & (BEV_EVENT_READING | BEV_EVENT_WRITING), e.socket_errno);
-    auto total_time = getTimeDiff(start_time);
-    STAT_ADD(deps_->getStats(), sock_error_event_proc_time, total_time.count());
-  } else if (e.what & BEV_EVENT_EOF) {
-    onPeerClosed();
-    auto total_time = getTimeDiff(start_time);
-    STAT_ADD(deps_->getStats(),
-             sock_peer_closed_event_proc_time,
-             total_time.count());
-  } else {
-    // BEV_EVENT_TIMEOUT must not be reported yet
-    ld_critical("INTERNAL ERROR: unexpected event bitset in a bufferevent "
-                "callback: 0x%hx",
-                e.what);
-    ld_check(0);
-  }
+  // For new sockets, set the readcallback to nullptr as we know that socket
+  // is getting closed.
+  proto_handler_->sock()->setReadCB(nullptr);
 }
 
 void Connection::flushNextInSerializeQueue() {
@@ -1070,26 +505,6 @@ void Connection::transitionToConnected() {
 
   ld_check(!serializeq_.empty());
   flushNextInSerializeQueue();
-}
-
-void Connection::onConnected() {
-  auto g = folly::makeGuard(deps_->setupContextGuard());
-  ld_check(!isClosed());
-  if (expecting_ssl_handshake_) {
-    ld_check(connected_);
-    // we receive a BEV_EVENT_CONNECTED for an _incoming_ connection after the
-    // handshake is done.
-    ld_check(isSSL());
-    ld_debug("SSL handshake with %s completed", conn_description_.c_str());
-    expecting_ssl_handshake_ = false;
-    expectProtocolHeader();
-    return;
-  }
-  ld_check(!connected_);
-  ld_check(!peer_name_.isClientAddress());
-
-  connect_timeout_event_.cancelTimeout();
-  transitionToConnected();
 }
 
 void Connection::onSent(std::unique_ptr<Envelope> e,
@@ -1119,158 +534,14 @@ void Connection::onSent(std::unique_ptr<Envelope> e,
   }
 }
 
-void Connection::onError(short direction, int socket_errno) {
-  auto g = folly::makeGuard(deps_->setupContextGuard());
-  // DeferredEventQueue is cleared as part of socket close which can call
-  // onError recursively. Check if this is recursive call and skip the check.
-  if (closing_) {
-    return;
-  }
-
-  if (isClosed()) {
-    ld_critical("INTERNAL ERROR: got a libevent error on disconnected socket "
-                "with peer %s. errno=%d (%s)",
-                conn_description_.c_str(),
-                socket_errno,
-                strerror(socket_errno));
-    ld_check(0);
-    return;
-  }
-
-  bool ssl_error_reported = false;
-  if (isSSL()) {
-    unsigned long ssl_err = 0;
-    char ssl_err_string[120];
-    while ((ssl_err = bufferevent_get_openssl_error(bev_))) {
-      ERR_error_string_n(ssl_err, ssl_err_string, sizeof(ssl_err_string));
-      RATELIMIT_ERROR(
-          std::chrono::seconds(10), 10, "SSL error: %s", ssl_err_string);
-      ssl_error_reported = true;
-    }
-  }
-
-  if (connected_) {
-    // OpenSSL/libevent error reporting is weird and maybe broken.
-    // (Note: make sure to not confuse "SSL_get_error" and "ERR_get_error".)
-    // The way openssl reports errors is that you check SSL_get_error(),
-    // and if it reports an error, the details supposedly can be found either
-    // through ERR_get_error() (for ssl-specific errors) or through
-    // errno (for socket errors).
-    // But sometimes neither ERR_get_error() nor errno have anything;
-    // in particular, I've seen SSL_do_handshake() return -1, then
-    // SSL_get_error() return SSL_ERROR_SYSCALL, then ERR_get_error() return 0,
-    // and errno = 0.
-    // This may deserve an investigation, but for now let's just say
-    // "OpenSSL didn't report any details about the error".
-    // (Note that bufferevent_get_openssl_error() just propagates errors
-    // reported by ERR_get_error().)
-    const bool severe = socket_errno != ECONNRESET &&
-        socket_errno != ETIMEDOUT && !ssl_error_reported;
-    ld_log(severe ? facebook::logdevice::dbg::Level::ERROR
-                  : facebook::logdevice::dbg::Level::WARNING,
-           "Got an error on socket connected to %s while %s%s. %s",
-           conn_description_.c_str(),
-           (direction & BEV_EVENT_WRITING) ? "writing" : "reading",
-           expecting_ssl_handshake_ ? " (during SSL handshake)" : "",
-           socket_errno != 0 ? ("errno=" + std::to_string(socket_errno) + " (" +
-                                strerror(socket_errno) + ")")
-                                   .c_str()
-                             : ssl_error_reported
-                   ? "See SSL errors above."
-                   : "OpenSSL didn't report any details about the error.");
-  } else {
-    ld_check(!peer_name_.isClientAddress());
-    RATELIMIT_LEVEL(
-        socket_errno == ECONNREFUSED ? dbg::Level::DEBUG : dbg::Level::WARNING,
-        std::chrono::seconds(10),
-        10,
-        "Failed to connect to node %s. errno=%d (%s)",
-        conn_description_.c_str(),
-        socket_errno,
-        strerror(socket_errno));
-  }
-
-  close(E::CONNFAILED);
-}
-
-void Connection::onPeerClosed() {
-  auto g = folly::makeGuard(deps_->setupContextGuard());
-  // This method can be called recursively as part of Socket::close when
-  // deferred event queue is cleared. Return rightaway if this a recursive call.
-  if (closing_) {
-    return;
-  }
-  ld_spew("Peer %s closed.", conn_description_.c_str());
-  ld_check(!isClosed());
-  if (!isSSL()) {
-    // an SSL socket can be in a state where the TCP connection is established,
-    // but the SSL handshake hasn't finished, this isn't considered connected.
-    ld_check(connected_);
-  }
-
-  Status reason = E::PEER_CLOSED;
-
-  if (!peer_name_.isClientAddress()) {
-    if (peer_shuttingdown_) {
-      reason = E::SHUTDOWN;
-    }
-  }
-
-  close(reason);
-}
-
-void Connection::onConnectTimeout() {
-  auto g = folly::makeGuard(deps_->setupContextGuard());
-  ld_spew("Connection timeout connecting to %s", conn_description_.c_str());
-
-  close(E::TIMEDOUT);
-}
-
 void Connection::onHandshakeTimeout() {
   auto g = folly::makeGuard(deps_->setupContextGuard());
   RATELIMIT_WARNING(std::chrono::seconds(10),
                     10,
                     "Handshake timeout occurred (peer: %s).",
                     conn_description_.c_str());
-  onConnectTimeout();
+  close(E::TIMEDOUT);
   STAT_INCR(deps_->getStats(), handshake_timeouts);
-}
-
-void Connection::onConnectAttemptTimeout() {
-  auto g = folly::makeGuard(deps_->setupContextGuard());
-  ld_check(!connected_);
-
-  RATELIMIT_DEBUG(std::chrono::seconds(5),
-                  5,
-                  "Connection timeout occurred (peer: %s). Attempt %lu.",
-                  conn_description_.c_str(),
-                  retries_so_far_);
-  ld_check(!connected_);
-  if (retries_so_far_ >= getSettings().connection_retries) {
-    onConnectTimeout();
-    STAT_INCR(deps_->getStats(), connection_timeouts);
-  } else {
-    // Nothing should be written in the output buffer of an unconnected socket.
-    ld_check(getTotalOutbufLength() == 0);
-    deps_->buffereventFree(bev_); // this also closes the TCP socket
-    bev_ = nullptr;
-    ssl_context_.reset();
-    conn_closed_->store(true);
-
-    // Try connecting again.
-    if (doConnectAttempt() != 0) {
-      RATELIMIT_WARNING(std::chrono::seconds(10),
-                        10,
-                        "Connect attempt #%lu failed (peer:%s), err=%s",
-                        retries_so_far_ + 1,
-                        conn_description_.c_str(),
-                        error_name(err));
-      onConnectTimeout();
-    } else {
-      STAT_INCR(deps_->getStats(), connection_retries);
-      ++retries_so_far_;
-    }
-  }
 }
 
 void Connection::setDSCP(uint8_t dscp) {
@@ -1347,58 +618,19 @@ void Connection::close(Status reason) {
     connect_throttle_->connectFailed();
   }
 
-  if (!deferred_event_queue_.empty()) {
-    // Process outstanding deferred events since they may inform us that
-    // connection throttling is appropriate against future connections. But
-    // if we are shutting down and won't be accepting new connections, don't
-    // bother.
-    if (!deps_->shuttingDown()) {
-      processDeferredEventQueue();
-    } else {
-      deferred_event_queue_.clear();
-    }
+  size_t buffered_bytes = getBufferedBytesSize();
+  // Clear read callback on close.
+  proto_handler_->sock()->setReadCB(nullptr);
+  if (buffered_bytes != 0 && !deps_->shuttingDown()) {
+    deps_->noteBytesDrained(buffered_bytes,
+                            getPeerType(),
+                            /* message_type */ folly::none);
   }
-
-  if (legacy_connection_) {
-    ld_check(deps_->attachedToLegacyEventBase());
-    // This means that bufferevent was created and should be valid here.
-    ld_check(bev_);
-    size_t buffered_bytes = LD_EV(evbuffer_get_length)(deps_->getOutput(bev_));
-
-    if (buffered_output_) {
-      buffered_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
-      buffered_output_flush_event_.cancelTimeout();
-      LD_EV(evbuffer_free)(buffered_output_);
-      buffered_output_ = nullptr;
-    }
-
-    if (isSSL()) {
-      deps_->buffereventShutDownSSL(bev_);
-    }
-
-    if (buffered_bytes != 0 && !deps_->shuttingDown()) {
-      deps_->noteBytesDrained(buffered_bytes,
-                              getPeerType(),
-                              /* message_type */ folly::none);
-    }
-
-    deps_->buffereventFree(bev_); // this also closes the TCP socket
-    bev_ = nullptr;
-  } else {
-    size_t buffered_bytes = getBufferedBytesSize();
-    // Clear read callback on close.
-    proto_handler_->sock()->setReadCB(nullptr);
-    if (buffered_bytes != 0 && !deps_->shuttingDown()) {
-      getDeps()->noteBytesDrained(buffered_bytes,
-                                  getPeerType(),
-                                  /* message_type */ folly::none);
-    }
-    sock_write_cb_.clear();
-    sendChain_.reset();
-    sched_write_chain_.cancelTimeout();
-    // Invoke closeNow to close the socket.
-    proto_handler_->sock()->closeNow();
-  }
+  sock_write_cb_.clear();
+  sendChain_.reset();
+  sched_write_chain_.cancelTimeout();
+  // Invoke closeNow to close the socket.
+  proto_handler_->sock()->closeNow();
 
   markDisconnectedOnClose();
   clearConnQueues(reason);
@@ -1415,13 +647,9 @@ void Connection::markDisconnectedOnClose() {
   our_name_at_peer_ = ClientID::INVALID;
   connected_ = false;
   handshaken_ = false;
-  ssl_context_.reset();
   peer_config_version_ = config_version_t(0);
 
-  read_more_.cancelTimeout();
-  connect_timeout_event_.cancelTimeout();
   handshake_timeout_event_.cancelTimeout();
-  deferred_event_queue_event_.cancelTimeout();
   end_stream_rewind_event_.cancelTimeout();
 }
 
@@ -1442,7 +670,6 @@ void Connection::clearConnQueues(Status close_reason) {
   ld_check(sendq_.empty());
   ld_check(impl_->on_close_.empty());
   ld_check(impl_->pending_bw_cbs_.empty());
-  ld_check(deferred_event_queue_.empty());
 
   for (auto& queue : moved_queues) {
     while (!queue.empty()) {
@@ -1503,13 +730,8 @@ bool Connection::isClosed() const {
 }
 
 bool Connection::good() const {
-  auto g = folly::makeGuard(getDeps()->setupContextGuard());
-  auto is_good = !isClosed();
-  if (!legacy_connection_) {
-    return is_good && proto_handler_->good();
-  }
-
-  return is_good;
+  auto g = folly::makeGuard(deps_->setupContextGuard());
+  return !isClosed() && proto_handler_->good();
 }
 
 bool Connection::sizeLimitsExceeded() const {
@@ -1564,27 +786,7 @@ std::unique_ptr<folly::IOBuf> Connection::serializeMessage(const Message& msg) {
 
 Connection::SendStatus
 Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& io_buf) {
-  if (legacy_connection_) {
-    struct evbuffer* outbuf =
-        buffered_output_ ? buffered_output_ : deps_->getOutput(bev_);
-    ld_check(outbuf);
-    for (auto& buf : *io_buf) {
-      int rv = LD_EV(evbuffer_add)(outbuf, buf.data(), buf.size());
-      if (rv) {
-        size_t outbuf_size = LD_EV(evbuffer_get_length)(outbuf);
-        RATELIMIT_CRITICAL(std::chrono::seconds(1),
-                           2,
-                           "INTERNAL ERROR: Failed to move iobuffers to "
-                           "outbuf, from io_buf"
-                           "(io_buf_size:%zu, outbuf:%zu)",
-                           io_buf->computeChainDataLength(),
-                           outbuf_size);
-        err = E::INTERNAL;
-        close(err);
-        return Connection::SendStatus::ERROR;
-      }
-    }
-  } else if (proto_handler_->good()) { // Sending data over new connection.
+  if (proto_handler_->good()) {
     if (sendChain_) {
       ld_check(sched_write_chain_.isScheduled());
       sendChain_->prependChain(std::move(io_buf));
@@ -1601,7 +803,6 @@ Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& io_buf) {
 
 void Connection::scheduleWriteChain() {
   auto g = folly::makeGuard(deps_->setupContextGuard());
-  ld_check(!legacy_connection_);
   if (!proto_handler_->good()) {
     return;
   }
@@ -1667,31 +868,6 @@ int Connection::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
     if (getBufferedBytesSize() > getSettings().socket_idle_threshold &&
         s.active_start_time_ == SteadyTimestamp::min()) {
       s.active_start_time_ = deps_->getCurrentTimestamp();
-    }
-  }
-  if (status == Connection::SendStatus::SENT) {
-    STAT_INCR(deps_->getStats(), sock_num_messages_sent);
-    STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, msglen);
-    ld_check(status == Connection::SendStatus::SENT);
-    // Some state machines expect onSent for success scenarios to be called
-    // after completion of sendMessage invocation. Hence, we need to post a
-    // function to invoke onSent later.
-    auto exec = deps_->getExecutor();
-    ld_check(exec);
-    auto sent_success = [this,
-                         is_closed =
-                             std::weak_ptr<std::atomic<bool>>(conn_closed_),
-                         e = std::move(envelope)]() mutable {
-      auto ref = is_closed.lock();
-      if (ref && !*ref) {
-        auto g = folly::makeGuard(deps_->setupContextGuard());
-        onSent(std::move(e), E::OK);
-      }
-    };
-    if (exec->getNumPriorities() > 1) {
-      exec->addWithPriority(std::move(sent_success), folly::Executor::HI_PRI);
-    } else {
-      exec->add(std::move(sent_success));
     }
   }
   return 0;
@@ -1934,28 +1110,6 @@ const Settings& Connection::getSettings() {
   return deps_->getSettings();
 }
 
-void Connection::bytesSentCallback(struct evbuffer* buffer,
-                                   const struct evbuffer_cb_info* info,
-                                   void* arg) {
-  Connection* self = reinterpret_cast<Connection*>(arg);
-
-  ld_check(self);
-  ld_check(!self->isClosed());
-  ld_check(buffer == self->deps_->getOutput(self->bev_));
-  STAT_INCR(self->deps_->getStats(), sock_write_events);
-  if (info->n_deleted > 0) {
-    self->onBytesAdmittedToSend(info->n_deleted);
-  }
-}
-
-void Connection::enqueueDeferredEvent(SocketEvent e) {
-  deferred_event_queue_.push_back(e);
-
-  if (!deferred_event_queue_event_.isScheduled()) {
-    ld_check(deferred_event_queue_event_.scheduleTimeout(0));
-  }
-}
-
 void Connection::onBytesAdmittedToSend(size_t nbytes) {
   auto g = folly::makeGuard(deps_->setupContextGuard());
   message_pos_t next_drain_pos = drain_pos_ + nbytes;
@@ -2009,9 +1163,6 @@ void Connection::onBytesAdmittedToSend(size_t nbytes) {
            total_time.count());
   STAT_ADD(deps_->getStats(), sock_num_messages_sent, num_messages);
   STAT_ADD(deps_->getStats(), sock_total_bytes_in_messages_written, nbytes);
-  if (legacy_connection_) {
-    onBytesPassedToTCP(nbytes);
-  }
 }
 
 void Connection::onBytesPassedToTCP(size_t nbytes) {
@@ -2040,7 +1191,6 @@ void Connection::onBytesPassedToTCP(size_t nbytes) {
 
 void Connection::drainSendQueue() {
   auto g = folly::makeGuard(deps_->setupContextGuard());
-  ld_check(!legacy_connection_);
   auto& cb = sock_write_cb_;
   size_t total_bytes_drained = 0;
   for (size_t& i = cb.num_success; i > 0; --i) {
@@ -2064,34 +1214,6 @@ void Connection::drainSendQueue() {
   }
 }
 
-void Connection::deferredEventQueueEventCallback(void* instance, short) {
-  auto self = reinterpret_cast<Connection*>(instance);
-  self->processDeferredEventQueue();
-}
-
-void Connection::processDeferredEventQueue() {
-  auto& queue = deferred_event_queue_;
-  ld_check(!queue.empty());
-
-  while (!queue.empty()) {
-    // we have to remove the event from the queue before hitting callbacks, as
-    // they might trigger calls into deferredEventQueueEventCallback() as
-    // well.
-    SocketEvent event = queue.front();
-    queue.pop_front();
-
-    // Hitting the callbacks
-    eventCallbackImpl(event);
-  }
-
-  if (deferred_event_queue_event_.isScheduled()) {
-    deferred_event_queue_event_.cancelTimeout();
-  }
-
-  ld_check(queue.empty());
-  ld_assert(!deferred_event_queue_event_.isScheduled());
-}
-
 void Connection::endStreamRewindCallback(void* instance, short) {
   auto self = reinterpret_cast<Connection*>(instance);
   self->endStreamRewind();
@@ -2105,117 +1227,6 @@ void Connection::endStreamRewind() {
     message_error_injection_rewound_count_ = 0;
     message_error_injection_rewinding_stream_ = false;
   }
-}
-
-void Connection::expectProtocolHeader() {
-  ld_check(!isClosed());
-  if (bev_) {
-    size_t protohdr_bytes =
-        ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-
-    // Set read watermarks. This tells bev_ to call dataReadCallback()
-    // only after sizeof(ProtocolHeader) bytes are available in the input
-    // evbuffer (low watermark). bev_ will stop reading from TCP socket after
-    // the evbuffer hits tcp_rcvbuf_size_ (high watermark).
-    deps_->buffereventSetWatermark(bev_,
-                                   EV_READ,
-                                   protohdr_bytes,
-                                   std::max(protohdr_bytes, tcp_rcvbuf_size_));
-  }
-  expecting_header_ = true;
-}
-
-void Connection::expectMessageBody() {
-  ld_check(!isClosed());
-  ld_check(expecting_header_);
-
-  if (bev_) {
-    size_t protohdr_bytes =
-        ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-    ld_check(recv_message_ph_.len > protohdr_bytes);
-    ld_check(recv_message_ph_.len <= Message::MAX_LEN + protohdr_bytes);
-
-    deps_->buffereventSetWatermark(
-        bev_,
-        EV_READ,
-        recv_message_ph_.len - protohdr_bytes,
-        std::max((size_t)recv_message_ph_.len, tcp_rcvbuf_size_));
-  }
-  expecting_header_ = false;
-}
-
-int Connection::readMessageHeader(struct evbuffer* inbuf) {
-  ld_check(expectingProtocolHeader());
-  static_assert(sizeof(recv_message_ph_) == sizeof(ProtocolHeader),
-                "recv_message_ph_ type is not ProtocolHeader");
-  // 1. Read first 2 fields of ProtocolHeader to extract message type
-  size_t min_protohdr_bytes =
-      sizeof(ProtocolHeader) - sizeof(ProtocolHeader::cksum);
-  int nbytes =
-      LD_EV(evbuffer_remove)(inbuf, &recv_message_ph_, min_protohdr_bytes);
-  if (nbytes != min_protohdr_bytes) { // unlikely
-    ld_critical("INTERNAL ERROR: got %d from evbuffer_remove() while "
-                "reading a protocol header from peer %s. "
-                "Expected %lu bytes.",
-                nbytes,
-                conn_description_.c_str(),
-                min_protohdr_bytes);
-    err = E::INTERNAL; // TODO: make sure close() works as an error handler
-    return -1;
-  }
-  if (recv_message_ph_.len <= min_protohdr_bytes) {
-    ld_error("PROTOCOL ERROR: got message length %u from peer %s, expected "
-             "at least %zu given sizeof(ProtocolHeader)=%zu",
-             recv_message_ph_.len,
-             conn_description_.c_str(),
-             min_protohdr_bytes + 1,
-             sizeof(ProtocolHeader));
-    err = E::BADMSG;
-    return -1;
-  }
-
-  size_t protohdr_bytes =
-      ProtocolHeader::bytesNeeded(recv_message_ph_.type, proto_);
-
-  if (recv_message_ph_.len > Message::MAX_LEN + protohdr_bytes) {
-    err = E::BADMSG;
-    ld_error("PROTOCOL ERROR: got invalid message length %u from peer %s "
-             "for msg:%s. Expected at most %u. min_protohdr_bytes:%zu",
-             recv_message_ph_.len,
-             conn_description_.c_str(),
-             messageTypeNames()[recv_message_ph_.type].c_str(),
-             Message::MAX_LEN,
-             min_protohdr_bytes);
-    return -1;
-  }
-
-  if (!handshaken_ && !isHandshakeMessage(recv_message_ph_.type)) {
-    ld_error("PROTOCOL ERROR: got a message of type %s on a brand new "
-             "connection to/from %s). Expected %s.",
-             messageTypeNames()[recv_message_ph_.type].c_str(),
-             conn_description_.c_str(),
-             peer_name_.isClientAddress() ? "HELLO" : "ACK");
-    err = E::PROTO;
-    return -1;
-  }
-
-  // 2. Now read checksum field if needed
-  if (ProtocolHeader::needChecksumInHeader(recv_message_ph_.type, proto_)) {
-    int cksum_nbytes = LD_EV(evbuffer_remove)(
-        inbuf, &recv_message_ph_.cksum, sizeof(recv_message_ph_.cksum));
-
-    if (cksum_nbytes != sizeof(recv_message_ph_.cksum)) { // unlikely
-      ld_critical("INTERNAL ERROR: got %d from evbuffer_remove() while "
-                  "reading checksum in protocol header from peer %s. "
-                  "Expected %lu bytes.",
-                  cksum_nbytes,
-                  conn_description_.c_str(),
-                  sizeof(recv_message_ph_.cksum));
-      err = E::INTERNAL;
-      return -1;
-    }
-  }
-  return 0;
 }
 
 bool Connection::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
@@ -2346,8 +1357,7 @@ bool Connection::processHandshakeMessage(const Message* msg) {
 int Connection::dispatchMessageBody(ProtocolHeader header,
                                     std::unique_ptr<folly::IOBuf> inbuf) {
   auto g = folly::makeGuard(deps_->setupContextGuard());
-  recv_message_ph_ = header;
-  ProtocolHeader& ph = recv_message_ph_;
+  ProtocolHeader& ph = header;
   // Tell the Worker that we're processing a message, so it can time it.
   // The time will include message's deserialization, checksumming,
   // onReceived, destructor and Socket's processing overhead.
@@ -2372,21 +1382,20 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
                     conn_description_.c_str(),
                     ph.len);
     err = E::NOBUFS;
-    if (!legacy_connection_) {
-      // No space to push more messages on the worker, disable the read
-      // callback. Retry this message and if successful it will add back the
-      // ReadCallback.
-      ld_check(!retry_receipt_of_message_.isScheduled());
-      retry_receipt_of_message_.attachCallback(
-          [this, hdr = header, payload = std::move(inbuf)]() mutable {
-            if (proto_handler_->dispatchMessageBody(hdr, std::move(payload)) ==
-                0) {
-              proto_handler_->sock()->setReadCB(read_cb_.get());
-            }
-          });
-      retry_receipt_of_message_.scheduleTimeout(0);
-      proto_handler_->sock()->setReadCB(nullptr);
-    }
+    // No space to push more messages on the worker, disable the read
+    // callback. Retry this message and if successful it will add back the
+    // ReadCallback.
+    ld_check(!retry_receipt_of_message_.isScheduled());
+    retry_receipt_of_message_.attachCallback(
+        [this, hdr = header, payload = std::move(inbuf)]() mutable {
+          if (proto_handler_->dispatchMessageBody(hdr, std::move(payload)) ==
+              0) {
+            proto_handler_->sock()->setReadCB(read_cb_.get());
+          }
+        });
+    retry_receipt_of_message_.scheduleTimeout(0);
+    proto_handler_->sock()->setReadCB(nullptr);
+
     return -1;
   }
 
@@ -2394,7 +1403,6 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
 
   ++num_messages_received_;
   num_bytes_received_ += ph.len;
-  expectProtocolHeader();
 
   // 1. compute and verify checksum in header.
 
@@ -2479,7 +1487,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
 
   ld_spew("Received message %s of size %u bytes from %s",
           messageTypeNames()[ph.type].c_str(),
-          recv_message_ph_.len,
+          ph.len,
           conn_description_.c_str());
 
   // 4. Dispatch message to state machines for processing.
@@ -2646,29 +1654,10 @@ void Connection::addHandshakeTimeoutEvent() {
   }
 }
 
-void Connection::addConnectAttemptTimeoutEvent() {
-  std::chrono::milliseconds timeout = getSettings().connect_timeout;
-  if (timeout.count() > 0) {
-    timeout *=
-        pow(getSettings().connect_timeout_retry_multiplier, retries_so_far_);
-    connect_timeout_event_.scheduleTimeout(timeout);
-  }
-}
-
 size_t Connection::getBytesPending() const {
   size_t queued_bytes = pendingq_.cost() + serializeq_.cost() + sendq_.cost();
 
-  size_t buffered_bytes = 0;
-  if (bev_) {
-    buffered_bytes += LD_EV(evbuffer_get_length)(deps_->getOutput(bev_));
-  }
-  if (buffered_output_) {
-    buffered_bytes += LD_EV(evbuffer_get_length)(buffered_output_);
-  }
-
-  if (!legacy_connection_) {
-    buffered_bytes += getBufferedBytesSize();
-  }
+  size_t buffered_bytes = getBufferedBytesSize();
 
   return queued_bytes + buffered_bytes;
 }
@@ -2678,18 +1667,14 @@ size_t Connection::getBufferedBytesSize() const {
   // implementation.
   size_t buffered_bytes = next_pos_ - drain_pos_;
   // This covers the bytes buffered in asyncsocket.
-  if (!legacy_connection_) {
-    buffered_bytes += sock_write_cb_.bytes_buffered;
-  }
+
+  buffered_bytes += sock_write_cb_.bytes_buffered;
+
   return buffered_bytes;
 }
 
 void Connection::handshakeTimeoutCallback(void* arg, short) {
   reinterpret_cast<Connection*>(arg)->onHandshakeTimeout();
-}
-
-void Connection::connectAttemptTimeoutCallback(void* arg, short) {
-  reinterpret_cast<Connection*>(arg)->onConnectAttemptTimeout();
 }
 
 int Connection::checkConnection(ClientID* our_name_at_peer) {
@@ -2744,8 +1729,7 @@ void Connection::getDebugInfo(InfoSocketsTable& table) const {
     state = "A";
   }
 
-  const size_t available =
-      bev_ ? LD_EV(evbuffer_get_length)(deps_->getInput(bev_)) : 0;
+  const size_t available = 0;
 
   auto total_busy_time = health_stats_.busy_time_.count();
   auto total_rwnd_limited_time = health_stats_.rwnd_limited_time_.count();
@@ -2779,14 +1763,6 @@ bool Connection::peerIsClient() const {
 
 folly::ssl::X509UniquePtr Connection::getPeerCert() const {
   ld_check(isSSL());
-
-  if (legacy_connection_) {
-    // This function should only be called when the socket is SSL enabled.
-    // This means this should always return a valid ssl context.
-    SSL* ctx = bufferevent_openssl_get_ssl(bev_);
-    ld_check(ctx);
-    return folly::ssl::X509UniquePtr(SSL_get_peer_certificate(ctx));
-  }
   auto sock_peer_cert = proto_handler_->sock()->getPeerCertificate();
   if (sock_peer_cert) {
     return sock_peer_cert->getX509();

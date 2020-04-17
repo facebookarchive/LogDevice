@@ -16,6 +16,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/network/AsyncSocketConnectionFactory.h"
 #include "logdevice/common/network/ConnectionFactory.h"
+#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 

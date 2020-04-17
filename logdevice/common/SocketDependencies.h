@@ -40,11 +40,6 @@ class SocketDependencies {
   using SSLCtxPtr = std::shared_ptr<folly::SSLContext>;
 
   SocketDependencies(Processor* processor, Sender* sender);
-  /*
-   * Indicates whether the event base on this socket is attached to legacy
-   * type or not.
-   */
-  virtual bool attachedToLegacyEventBase() const;
   virtual const Settings& getSettings() const;
   virtual StatsHolder* getStats() const;
   virtual std::shared_ptr<Configuration> getConfig() const;
@@ -67,37 +62,7 @@ class SocketDependencies {
                                           ConnectionType connection_type,
                                           PeerType peer_type);
   virtual EvBase* getEvBase();
-  virtual const struct timeval* getCommonTimeout(std::chrono::milliseconds t);
-  virtual const timeval*
-  getTimevalFromMilliseconds(std::chrono::milliseconds t);
-  virtual const struct timeval* getZeroTimeout();
-  virtual struct bufferevent* buffereventSocketNew(int sfd,
-                                                   int opts,
-                                                   bool secure,
-                                                   bufferevent_ssl_state,
-                                                   folly::SSLContext*);
 
-  virtual struct evbuffer* getOutput(struct bufferevent* bev);
-  virtual struct evbuffer* getInput(struct bufferevent* bev);
-  virtual int buffereventSocketConnect(struct bufferevent* bev,
-                                       struct sockaddr* ss,
-                                       int len);
-  virtual void buffereventSetWatermark(struct bufferevent* bev,
-                                       short events,
-                                       size_t lowmark,
-                                       size_t highmark);
-  virtual void buffereventSetCb(struct bufferevent* bev,
-                                bufferevent_data_cb readcb,
-                                bufferevent_data_cb writecb,
-                                bufferevent_event_cb eventcb,
-                                void* cbarg);
-  virtual void buffereventShutDownSSL(struct bufferevent* bev);
-  virtual void buffereventFree(struct bufferevent* bev);
-  virtual int evUtilMakeSocketNonBlocking(int sfd);
-  virtual int buffereventSetMaxSingleWrite(struct bufferevent* bev,
-                                           size_t size);
-  virtual int buffereventSetMaxSingleRead(struct bufferevent* bev, size_t size);
-  virtual int buffereventEnable(struct bufferevent* bev, short event);
   virtual void onSent(std::unique_ptr<Message> msg,
                       const Address& to,
                       Status st,
@@ -110,12 +75,6 @@ class SocketDependencies {
              ResourceBudget::Token resource_token);
   virtual void processDeferredMessageCompletions();
   virtual NodeID getMyNodeID();
-  virtual void configureSocket(bool is_tcp,
-                               int fd,
-                               int* snd_out,
-                               int* rcv_out,
-                               sa_family_t sa_family,
-                               const uint8_t default_dscp);
   virtual int setDSCP(int fd,
                       sa_family_t sa_family,
                       const uint8_t default_dscp);

@@ -1803,7 +1803,6 @@ TEST_P(MessagingSocketTest, DifferentProtocolsT6281298) {
 
 INSTANTIATE_TEST_CASE_P(MessagingSocketTestAllBase,
                         MessagingSocketTest,
-                        ::testing::Values(EvBase::EvBaseType::LEGACY_EVENTBASE,
-                                          EvBase::EvBaseType::FOLLY_EVENTBASE));
+                        ::testing::Values(EvBase::EvBaseType::FOLLY_EVENTBASE));
 
 } // namespace

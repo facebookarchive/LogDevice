@@ -18,11 +18,6 @@
 #include <folly/io/async/AsyncTimeout.h>
 #include <folly/io/async/SSLContext.h>
 
-#include "event2/buffer.h"
-#include "event2/bufferevent.h"
-#include "event2/bufferevent_ssl.h"
-#include "event2/event.h"
-#include "event2/event_struct.h"
 #include "logdevice/common/Address.h"
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/ClientID.h"
@@ -32,21 +27,17 @@
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/PriorityQueue.h"
 #include "logdevice/common/ResourceBudget.h"
-#include "logdevice/common/RunContext.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/SocketTypes.h"
-#include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/libevent/LibEventCompatibility.h"
 #include "logdevice/common/network/SocketWriteCallback.h"
-#include "logdevice/common/settings/Settings.h"
 
 namespace facebook { namespace logdevice {
 
 class BWAvailableCallback;
 class FlowGroup;
 class ProtocolHandler;
-class ResourceBudget;
 class SocketAdapter;
 class SocketCallback;
 class SocketImpl;
@@ -144,6 +135,27 @@ class Connection : public TrafficShappingSocket {
              FlowGroup& flow_group,
              std::unique_ptr<SocketDependencies> deps);
 
+  /**
+   * Constructs a new Socket, to be connected to a LogDevice
+   * server. The calling thread must be a Worker thread.
+   *
+   * @param server_name     id of server to connect to
+   * @param type            type of socket
+   * @param flow_group      traffic shaping state shared between sockets
+   *                        with the same bandwidth constraints.
+   * @param sock_adapter    Socket implementation that will be used by this
+   * connection.
+   *
+   * @return  on success, a new fully constructed Socket is returned. It is
+   *          expected that the Socket will be registered with the Worker's
+   *          Sender under server_name. On failure throws ConstructorFailed and
+   *          sets err to:
+   *
+   *     INVALID_THREAD  current thread is not running a Worker (debug build
+   *                     asserts)
+   *     NOTINCONFIG     server_name does not appear in cluster config
+   *     INTERNAL        failed to initialize a libevent timer (unlikely)
+   */
   Connection(NodeID server_name,
              SocketType socket_type,
              ConnectionType connection_type,
@@ -189,6 +201,32 @@ class Connection : public TrafficShappingSocket {
              FlowGroup& flow_group,
              std::unique_ptr<SocketDependencies> deps);
 
+  /**
+   * Constructs a new Connection from a TCP socket fd that was returned by
+   * accept(). The thread must run a Worker. On success the socket is emplaced
+   * on this Sender's .client_sockets_ map with client_name as key.
+   *
+   * @param fd        fd of the accepted socket. The caller passes
+   *                  responsibility for closing fd to the constructor.
+   * @param client_name local identifier assigned to this passively accepted
+   *                    connection (aka "client address")
+   * @param client_addr sockaddr we got from accept() for this client connection
+   * @param conn_token  used to keep track of all accepted connections
+   * @param type        type of socket
+   * @param flow_group  traffic shaping state shared between sockets
+   *                    with the same bandwidth constraints.
+   * @param sock_adapter socket implementation that will be used by the
+   * connection.
+   *
+   * @return  on success, a new fully constructed Socket is returned. On
+   *          failure throws ConstructorFailed and sets err to:
+   *
+   *     INVALID_THREAD  current thread is not running a Worker (debug build
+   *                     asserts)
+   *     NOMEM           a libevent function could not allocate memory
+   *     INTERNAL        failed to set fd non-blocking (unlikely) or failed to
+   *                     initialize a libevent timer (unlikely).
+   */
   Connection(int fd,
              ClientID client_name,
              const Sockaddr& client_addr,
@@ -622,29 +660,11 @@ class Connection : public TrafficShappingSocket {
                           std::unique_ptr<folly::IOBuf> msg_buffer);
 
  protected:
-  /**
-   * Called by bev_ when the underlying connection is established
-   */
-  void onConnected();
   void transitionToConnected();
-
   /**
-   * Called when connection timeout occurs. Either we could not establish the
-   * TCP connection after multiple retries or the LD handshake did not complete
-   * in time.
-   */
-  void onConnectTimeout();
-
-  /**
-   * Called when LD handshake doesn't complete in the allottted time.
+   * Called when LD handshake doesn't complete in the allotted time.
    */
   void onHandshakeTimeout();
-
-  /**
-   * Called when the TCP connection could not be established in time.
-   * If n_retries_left_ is positive, will try to connect again.
-   */
-  void onConnectAttemptTimeout();
 
   enum class SendStatus : uint8_t {
     SCHEDULED, // Buffer is scheduled to be written into the socket.
@@ -669,20 +689,6 @@ class Connection : public TrafficShappingSocket {
               Message::CompletionMethod = Message::CompletionMethod::IMMEDIATE);
 
   /**
-   * Called by bev_ when connection closes because of an error. This
-   * generally causes the Socket to enter DISCONNECTED state.
-   *
-   * @param direction  BEV_EVENT_READING or BEV_EVENT_WRITING to indicate
-   *                   if the error occurred on a read or a write
-   */
-  void onError(short direction, int socket_errno);
-
-  /**
-   * Called by bev_ when the other end closes connection.
-   */
-  void onPeerClosed();
-
-  /**
    * Called by the underlying layer implementation to indicate that the bytes
    * have been admitted to be sent to the remote endpoint. If the underlying
    * layer is evbuffer based, this is invoked once we have written into the tcp
@@ -705,10 +711,6 @@ class Connection : public TrafficShappingSocket {
    * bytes are now written into the socket.
    */
   void drainSendQueue();
-
-  SocketDependencies* getDeps() const {
-    return deps_.get();
-  }
 
   /**
    * This is strictly a delegating constructor. It sets all members
@@ -790,51 +792,6 @@ class Connection : public TrafficShappingSocket {
   int preConnectAttempt();
 
   /**
-   * Called by connect() and by onConnectAttemptTimeout().
-   *
-   * Initiate an asynchronous connect and handshake on the socket. The socket's
-   * .peer_name_ must resolve to an ip:port to which we can connect. Currently
-   * this means that .peer_name_ must be a server address.
-   *
-   * This expects the socket to be not connected.
-   *
-   * @return  0 if connection was successfully initiated. -1 on failure, err
-   *          is set to:
-   *
-   *    UNROUTABLE      the peer endpoint of a server socket has an IP address
-   *                    to which there is no route, see connect() above
-   *    SYSLIMIT        out of file descriptors or ephemeral ports
-   *    NOMEM           out of kernel memory for sockets, or malloc() failed
-   *    INTERNAL        bufferevent unexpectedly failed to initiate connection,
-   *                    unexpected error from socket(2).
-   */
-  int doConnectAttempt();
-
-  /**
-   * Called by onBytesAvailable() to process either a protocol header
-   * or the rest of a message.
-   *
-   * @return 0 on success, -1 if an error occurred and the socket must
-   *         be closed. err is set to the value to pass to Socket::close():
-   *   INTERNAL, BADMSG, TOOBIG, PROTO, PROTONOSUPPORT, ACCESS
-   */
-
-  int readMessageHeader(struct evbuffer* inbuf);
-
-  /**
-   * Called by dataReadCallback() or readMoreCallback() to read one or
-   * more messages in bev_.input evbuffer.
-   *
-   * @param fresh   if true, the call is made by dataReadCallback() as
-   *                fresh data is added to the input evbuffer. If false,
-   *                the function is called by readMoreCallback() to
-   *                continue reading the input evbuffer contents.
-   *
-   * NOTE: this function may close the Socket
-   */
-  void onBytesAvailable(bool fresh);
-
-  /**
    * Write the next message in serializeq_ to the output buffer.
    * Called by flushSerializeQueue() and onConnected().
    */
@@ -874,71 +831,10 @@ class Connection : public TrafficShappingSocket {
   bool processHandshakeMessage(const Message* msg);
 
   /**
-   * @return the number of bytes that receiveMessage() expects to find in
-   *         the input evbuffer of bev_ next time it is caleld.
-   */
-  size_t bytesExpected();
-
-  /**
-   * A helper method for creating bufferevents. Mostly registers callbacks
-   * and converts errnos to E:: codes. May set output_buffer_ and ssl_context_.
-   *
-   * @param   sfd   if non-negative, the fd of TCP socket to use. If -1,
-   *                the function will call socket(2)
-   * @param   sa_family  address family for socket (AF_INET or AF_INET6)
-   *
-   * @param   rcvbuf_size_out   if non-NULL and TCP receive buffer size for
-   *                            sfd was successfully obtained, the size is
-   *                            returned through this parameter
-   * @param   ssl_state BUFFEREVENT_SSL_ACCEPTING or BUFFEREVENT_SSL_CONNECTING
-   *                    Used only if (conntype_ == SSL)
-   * @return  a new bufferevent on success, nullptr on failure. err is set to
-   *             SYSLIMIT        out of file descriptors
-   *             NOMEM           out of kernel memory for sockets,
-   *                             or malloc() failed
-   *             INTERNAL        unexpected error from socket(2) or fcntl(2).
-   *
-   */
-  struct bufferevent* newBufferevent(int sfd,
-                                     sa_family_t sa_family,
-                                     size_t* sndbuf_size_out,
-                                     size_t* rcvbuf_size_out,
-                                     bufferevent_ssl_state ssl_state,
-                                     const uint8_t default_dcsp);
-
-  /**
-   * Set bev_ read watermarks so that a read callback is triggered as
-   * soon as we have enough bytes for a protocol header. Clears
-   * recv_message_ph_.len, keeping recv_message_ph_.type unchanged.
-   */
-  void expectProtocolHeader();
-
-  /**
-   * @return true if we are expecting to read a protocol header, false
-   *         if we are expecting a message body
-   */
-  bool expectingProtocolHeader() const {
-    return expecting_header_;
-  }
-
-  /**
-   * Set bev_ read watermarks so that a read callback is triggered only
-   * after we got recv_message_ph_.len bytes constituting the body of a
-   * message.
-   */
-  void expectMessageBody();
-
-  /**
    * A helper method for setting up a timer event used to detect handshake
    * timeouts (@see handshake_timeout_event_).
    */
   void addHandshakeTimeoutEvent();
-
-  /**
-   * A helper method for setting up a timer event used to detect TCP connection
-   * timeouts. (@see connect_timeout_event_).
-   */
-  void addConnectAttemptTimeoutEvent();
 
   /**
    * A helper function to determine the reason for lower socket throughput.
@@ -996,10 +892,6 @@ class Connection : public TrafficShappingSocket {
   // this Socket. See Envelope::pos_ in Envelope.h.
   message_pos_t drain_pos_;
 
-  // libevent 2.x bufferevent underlying this Socket. This is nullptr if we
-  // are not either connecting or connected.
-  struct bufferevent* bev_;
-
   // set to true if this Socket has an established TCP connection to
   // its peer.  Otherwise false. If this is false and bev_ is set,
   // then a connection is in progress.
@@ -1042,13 +934,6 @@ class Connection : public TrafficShappingSocket {
   // LD-level handshake has not yet completed this is an invalid ClientID.
   ClientID our_name_at_peer_;
 
-  // Body length and type from the last received header.
-  ProtocolHeader recv_message_ph_;
-
-  // true if we are waiting to read a full protocol header.
-  // false if we have just read the header and are now reading the message body.
-  bool expecting_header_{true};
-
   // if the peer is a server, this object throttles the rate of connection
   // attempts
   ConnectThrottle* connect_throttle_{nullptr};
@@ -1062,26 +947,6 @@ class Connection : public TrafficShappingSocket {
   // If the sender's outbufs limit is reached , allow a minimum budget of
   //  outbufs_min_budget_
   size_t outbufs_min_budget_;
-
-  // This is a timer event with timeout of 0 that we use to regain
-  // control after we processed incoming_messages_max_per_socket
-  // messages from bev_ and yielded.
-  EvTimer read_more_;
-
-  // The message payload is copied into this from evbuffer. If the system
-  // cannot accept anymore data from socket, this helps in avoiding copying the
-  // message payload from the evbuffer again hence saving cpu incase of large
-  // payload and too many sockets per worker.
-  std::unique_ptr<folly::IOBuf> msg_pending_processing_;
-
-  // Timer event used to give up the TCP connection if it is not established
-  // within some reasonable period of time.
-  EvTimer connect_timeout_event_;
-
-  // Number of times we have tried connecting so far. This value is incremented
-  // each time the connection times out until it reaches the maximum specified
-  // in settings.
-  size_t retries_so_far_;
 
   // Timer event used to close the connection if the LD protocol handshake
   // (HELLO/ACK message received) is not fully established within some
@@ -1173,24 +1038,12 @@ class Connection : public TrafficShappingSocket {
   // Indicates whether this is an SSL socket
   ConnectionType conntype_{ConnectionType::PLAIN};
 
-  // The SSL context. We have to hold it alive as long as the SSL* object which
-  // we submit to bufferevent_openssl_new() is in use
-  std::shared_ptr<folly::SSLContext> ssl_context_;
-
-  // true if we accepted a TCP connection, but the SSL handshake didn't
-  // complete yet
-  bool expecting_ssl_handshake_ = false;
-
   // true if the message error injection code has decided to rewind
   // a message stream. All traffic for this socket will be diverted until
   // the end of the event loop, at which time the messages will be delivered
   // with the error code specified by Sender::getMessageErrorInjectionErrorCode
   // via the onSent() callback.
   bool message_error_injection_rewinding_stream_ = false;
-
-  // event for signalling there are pending callbacks for various deferred
-  // events in the queue for this socket. See Socket::eventCallback()
-  EvTimer deferred_event_queue_event_;
 
   // event signalling the need to terminate the current simulated stream
   // rewind event as soon as control is returned to the event loop.
@@ -1204,101 +1057,19 @@ class Connection : public TrafficShappingSocket {
   // simulated stream rewind event.
   uint64_t message_error_injection_pass_count_ = 0;
 
-  struct SocketEvent {
-    short what;
-    int socket_errno;
-  };
-
-  // callback queue for deferred events. See Socket::eventCallback()
-  std::deque<SocketEvent> deferred_event_queue_;
-
   // These two members are used to correctly maintain the number of available
   // fds for all accepted and client-only connections.
   ResourceBudget::Token conn_incoming_token_;
   ResourceBudget::Token conn_external_token_;
 
-  // Output buffer in front of bev's output buffer. Used mostly for SSL to
-  // batch up small writes.
-  struct evbuffer* buffered_output_{nullptr};
-
-  // The zero-timeout timer used to flush the output buffer
-  EvTimer buffered_output_flush_event_;
-
-  // called by bev_ when all bytes we have been waiting for arrive
-  static void dataReadCallback(struct bufferevent*, void*, short);
-
-  static void onOutputEmpty(struct bufferevent* bev, void* arg, short);
-
-  // called for items in the deferred_event_queue_ whenever the event
-  // is handled
-  static void deferredEventQueueEventCallback(void* instance, short);
-
   // called when the end_stream_rewind_event_ is signed.
   static void endStreamRewindCallback(void* instance, short);
-
-  // called by deferredEventQueueEventCallback to actually process the deferred
-  // event queue
-  void processDeferredEventQueue();
 
   // called by endStreamRewindCallback to terminate the rewind on a parituclar
   // socket instance.
   void endStreamRewind();
 
-  /**
-   * Called by bev_ when an important event occurs
-   *
-   * @param what  a conjunction of flags: BEV_EVENT_READING or
-   *              BEV_EVENT_WRITING to indicate if the error was encountered
-   *              on the read or write path, and one of the following flags:
-   *              BEV_EVENT_EOF, BEV_EVENT_ERROR, BEV_EVENT_TIMEOUT,
-   *              BEV_EVENT_CONNECTED
-   */
-  static void eventCallback(struct bufferevent*, void*, short what);
-
-  /**
-   * Implementation of eventCallback()
-   */
-  void eventCallbackImpl(SocketEvent e);
-
-  /**
-   * Called by libevent when read_more_ timer event fires.
-   */
-  static void readMoreCallback(void* arg, short what);
-
-  /**
-   * Called by the output evbuffer of bev_ after some bytes have been
-   * drained from the buffer into the underlying TCP socket.
-   */
-  static void bytesSentCallback(struct evbuffer*,
-                                const struct evbuffer_cb_info*,
-                                void*);
-
   static void handshakeTimeoutCallback(void*, short);
-
-  static void connectAttemptTimeoutCallback(void*, short);
-
-  void enqueueDeferredEvent(SocketEvent e);
-
-  /**
-   * A callback on write to buffered_output_
-   */
-  static void onBufferedOutputWrite(struct evbuffer* buffer,
-                                    const struct evbuffer_cb_info* info,
-                                    void* arg);
-  /**
-   * Flushes the local output buffer to bev's output buffer
-   */
-  void flushBufferedOutput();
-
-  /**
-   * A callback for buffered_output_flush_event_
-   */
-  static void onBufferedOutputTimerEvent(void* instance, short);
-
-  /**
-   * Gets the sum of sizes of output buffers
-   */
-  size_t getTotalOutbufLength();
 
   // The file descriptor of the underlying OS socket. Set to -1 in situations
   // where the file descriptor is not known (e.g., before connecting).
@@ -1306,9 +1077,6 @@ class Connection : public TrafficShappingSocket {
 
   // Avoid invoking Socket::close on socket that is already closed.
   std::shared_ptr<std::atomic<bool>> conn_closed_;
-
-  // Set to true for socket based on libevent otherwise this is false.
-  const bool legacy_connection_;
 
   // Protocol Handler layer to which owns the AsyncSocket and is responsible for
   // sending data over the socket.
