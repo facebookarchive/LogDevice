@@ -27,6 +27,11 @@ ExternalProject_Add(rocksdb
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DWITH_TESTS=OFF
         -DWITH_TOOLS=OFF
+        -DWITH_BZ2=ON
+        -DWITH_LZ4=ON
+        -DWITH_SNAPPY=ON
+        -DWITH_ZLIB=ON
+        -DWITH_ZSTD=ON
         -DCMAKE_POSITION_INDEPENDENT_CODE=True
     INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
