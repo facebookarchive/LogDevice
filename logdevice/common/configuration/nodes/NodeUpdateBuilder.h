@@ -67,7 +67,9 @@ class NodeUpdateBuilder {
       const configuration::nodes::NodesConfiguration& nodes_configuration) &&;
 
  private:
-  std::unique_ptr<StorageNodeAttribute> buildStorageAttributes();
+  std::unique_ptr<StorageNodeAttribute>
+  // If current_gen is present, the result preserves it.
+  buildStorageAttributes(folly::Optional<node_gen_t> current_gen);
   std::unique_ptr<SequencerNodeAttribute> buildSequencerAttributes();
   std::unique_ptr<NodeServiceDiscovery> buildNodeServiceDiscovery();
 

@@ -139,8 +139,8 @@ NodeUpdateBuilder::buildNodeServiceDiscovery() {
   return sd;
 }
 
-std::unique_ptr<StorageNodeAttribute>
-NodeUpdateBuilder::buildStorageAttributes() {
+std::unique_ptr<StorageNodeAttribute> NodeUpdateBuilder::buildStorageAttributes(
+    folly::Optional<node_gen_t> current_gen) {
   auto attr = std::make_unique<StorageNodeAttribute>();
   attr->capacity = storage_capacity_.value();
   attr->num_shards = num_shards_.value();
@@ -150,7 +150,7 @@ NodeUpdateBuilder::buildStorageAttributes() {
   // under replication. So generations in the NCM world *must* have a value > 1,
   // in preparation to completely deprecate it.
   // Check the logic in RebuildingMarkerChecker for more info.
-  attr->generation = 2;
+  attr->generation = current_gen.value_or(2);
   attr->exclude_from_nodesets = false;
   return attr;
 }
@@ -224,7 +224,7 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::buildAddNodeUpdate(
     createIfNull(update.storage_config_update->attributes_update)
         ->addNode(node_idx,
                   {StorageAttributeConfig::UpdateType::PROVISION,
-                   buildStorageAttributes()});
+                   buildStorageAttributes(folly::none)});
   }
 
   return {Status::OK, ""};
@@ -307,7 +307,7 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::buildUpdateNodeUpdate(
   if (hasRole(roles_, NodeRole::STORAGE)) {
     const auto& storage_attrs = nodes_configuration.getStorageAttributes();
     auto curr_attrs = storage_attrs->getNodeAttributesPtr(node_idx);
-    auto new_attrs = buildStorageAttributes();
+    auto new_attrs = buildStorageAttributes(curr_attrs->generation);
     if (*curr_attrs != *new_attrs) {
       createIfNull(update.storage_config_update);
       createIfNull(update.storage_config_update->attributes_update)
