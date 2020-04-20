@@ -20,7 +20,6 @@
 #include <folly/IntrusiveList.h>
 #include <folly/Optional.h>
 #include <folly/ssl/OpenSSLPtrTypes.h>
-#include <openssl/ossl_typ.h>
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/PrincipalIdentity.h"
@@ -63,10 +62,6 @@ class SocketProxy;
 class StatsHolder;
 struct Settings;
 class IConnectionFactory;
-
-namespace configuration {
-struct TrafficShapingConfig;
-}
 
 /**
  * @file a Sender sends Messages to Addresses by mapping an Address to a
@@ -351,15 +346,6 @@ class Sender : public SenderBase {
    * @param node_count   the number of nodes in cluster configuration at the
    *                     time this Sender was created
    */
-  Sender(std::shared_ptr<const Settings> settings,
-         struct event_base* base,
-         const configuration::ShapingConfig& tsc,
-         ClientIdxAllocator* client_id_allocator,
-         bool is_gossip_sender,
-         std::shared_ptr<const configuration::nodes::NodesConfiguration> nodes,
-         node_index_t my_node_index,
-         folly::Optional<NodeLocation> my_location,
-         StatsHolder* stats);
 
   Sender(std::shared_ptr<const Settings> settings,
          struct event_base* base,

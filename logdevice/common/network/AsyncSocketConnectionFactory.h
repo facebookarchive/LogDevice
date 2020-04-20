@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 #pragma once
+#include <folly/container/F14Map.h>
 
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/NodeID.h"
@@ -22,10 +23,11 @@ class Connection;
 class FlowGroup;
 class SockAddr;
 class SocketDependencies;
+class ConnectThrottle;
 
 class AsyncSocketConnectionFactory : public IConnectionFactory {
  public:
-  explicit AsyncSocketConnectionFactory(folly::EventBase* base) : base_(base) {}
+  explicit AsyncSocketConnectionFactory(folly::EventBase* base);
 
   std::unique_ptr<Connection>
   createConnection(NodeID node_id,
@@ -47,6 +49,11 @@ class AsyncSocketConnectionFactory : public IConnectionFactory {
 
  private:
   folly::EventBase* base_{nullptr};
+  // A new server socket instance is created everytime, connect throttle map
+  // maintains history of connection attempts and cannot be destroyed alongwith
+  // server socket.
+  folly::F14FastMap<NodeID, std::unique_ptr<ConnectThrottle>, NodeID::Hash>
+      connect_throttle_map_;
 };
 
 }} // namespace facebook::logdevice

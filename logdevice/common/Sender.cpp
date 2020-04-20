@@ -10,16 +10,13 @@
 #include <chrono>
 #include <stdexcept>
 #include <unordered_map>
-#include <vector>
 
 #include <folly/DynamicConverter.h>
+#include <folly/Optional.h>
 #include <folly/Random.h>
-#include <folly/ScopeGuard.h>
 #include <folly/container/F14Map.h>
 #include <folly/json.h>
-#include <folly/small_vector.h>
 
-#include "event2/event.h"
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/ClientIdxAllocator.h"
 #include "logdevice/common/Connection.h"
@@ -36,12 +33,11 @@
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
-#include "logdevice/common/network/ConnectionFactory.h"
+#include "logdevice/common/network/IConnectionFactory.h"
 #include "logdevice/common/protocol/CONFIG_ADVISORY_Message.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
-#include "logdevice/common/protocol/MessageTracer.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
@@ -126,26 +122,6 @@ void SenderBase::MessageCompletion::send() {
   w->onStoppedRunning(run_context);
   Worker::unpackRunContext(prev_context);
 }
-
-Sender::Sender(std::shared_ptr<const Settings> settings,
-               struct event_base* base,
-               const configuration::ShapingConfig& tsc,
-               ClientIdxAllocator* client_id_allocator,
-               bool is_gossip_sender,
-               std::shared_ptr<const NodesConfiguration> nodes,
-               node_index_t my_index,
-               folly::Optional<NodeLocation> my_location,
-               StatsHolder* stats)
-    : Sender(settings,
-             base,
-             tsc,
-             client_id_allocator,
-             is_gossip_sender,
-             std::move(nodes),
-             my_index,
-             my_location,
-             std::make_unique<ConnectionFactory>(),
-             stats){};
 
 Sender::Sender(std::shared_ptr<const Settings> settings,
                struct event_base* base,

@@ -66,7 +66,7 @@
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
-#include "logdevice/common/network/LibeventCompatibilityConnectionFactory.h"
+#include "logdevice/common/network/AsyncSocketConnectionFactory.h"
 #include "logdevice/common/network/OverloadDetector.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
@@ -127,7 +127,8 @@ class WorkerImpl {
                 getMyNodeIndex(w),
                 getMyLocation(config, w),
                 std::unique_ptr<IConnectionFactory>(
-                    new LibeventCompatibilityConnectionFactory(w->getEvBase())),
+                    new AsyncSocketConnectionFactory(
+                        w->getEvBase().getEventBase())),
                 stats),
         activeAppenders_(w->immutable_settings_->server ? N_APPENDER_MAP_BUCKETS
                                                         : 1),

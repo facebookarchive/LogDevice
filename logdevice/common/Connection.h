@@ -8,15 +8,11 @@
 #pragma once
 
 #include <chrono>
-#include <deque>
 #include <memory>
 
-#include <folly/Memory.h>
-#include <folly/Optional.h>
 #include <folly/futures/Future.h>
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncTimeout.h>
-#include <folly/io/async/SSLContext.h>
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/AdminCommandTable-fwd.h"
