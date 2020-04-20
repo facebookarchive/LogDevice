@@ -15,6 +15,7 @@ RUN apt-get update \
       -y $(cat /tmp/ubuntu.deps) \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /build/staging/usr/local \
+    && python3 -m pip install setuptools \
     && python3 -m pip install virtualenv
 
 # Activating the virtualenv
