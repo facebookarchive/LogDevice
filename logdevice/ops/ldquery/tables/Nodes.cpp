@@ -47,15 +47,12 @@ TableColumns Nodes::getColumns() const {
            DataType::INTEGER,
            "1 if this node is provisioned for the sequencing role. "
            "Otherwise 0. Provisioned roles must be enabled in order "
-           "to be considered active. See 'sequencer_enabled'."},
+           "to be considered active."},
           {"storage",
            DataType::INTEGER,
            "1 if this node is provisioned for the storage role. "
            "Otherwise 0. Provisioned roles must be enabled in order "
            "to be considered active. See 'storage_state'."},
-          {"sequencer_enabled",
-           DataType::INTEGER,
-           "1 if sequencing on this node is enabled. Othewise 0."},
           {"sequencer_weight",
            DataType::REAL,
            "A non-negative value indicating how many logs this node "
