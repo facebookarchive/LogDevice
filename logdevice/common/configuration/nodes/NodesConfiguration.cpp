@@ -12,6 +12,7 @@
 #include <folly/hash/SpookyHashV2.h>
 
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 
@@ -394,6 +395,22 @@ void NodesConfiguration::recomputeConfigMetadata() {
   num_shards_ = computeNumShards();
   max_node_index_ = computeMaxNodeIndex();
   sequencer_locator_config_ = computeSequencersConfig();
+  serialized_config_ = serializeConfig();
+}
+
+folly::Optional<std::string> NodesConfiguration::serialize() const {
+  return serialized_config_;
+}
+
+folly::Optional<std::string> NodesConfiguration::serializeConfig() const {
+  auto serialized =
+      NodesConfigurationCodec::serialize(*this, {/* compression */ true});
+  if (serialized.empty() && err != Status::OK) {
+    ld_error("Failed to serialize the NodesConfiguration with error %s",
+             error_description(err));
+    return folly::none;
+  }
+  return serialized;
 }
 
 std::shared_ptr<const NodesConfiguration>

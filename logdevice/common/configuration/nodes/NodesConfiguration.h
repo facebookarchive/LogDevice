@@ -18,7 +18,7 @@ namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
 /**
- * @file NodesConfiguration  NodesConfiguration consists of the following three
+ * @file NodesConfiguration  NodesConfiguration consists of the following four
  * different components:
  *
  * 1) ServiceDiscoveryConfig: node properties that stay immutable all the time
@@ -27,20 +27,19 @@ namespace nodes {
  *
  * 2) (per-role) Membership: These mutable node attributes need agreement among
  * node members and usually require a synchronization protocol and have to be
- * versioned. Example include: storage membership (contains storage state),
- * sequencer membership(contains sequencer weight that affects sequencer
+ * versioned. Example includes: storage membership (contains storage state),
+ * sequencer membership (contains sequencer weight that affects sequencer
  * placement).
  *
- * 3) (per-role) NodeAttributesConfig: mutable node attributes that does not
- * require versioning or synchronization between nodes. These are the attributes
+ * 3) (per-role) NodeAttributesConfig: mutable node attributes that do not
+ * require versioning or synchronization between nodes. These attributes
  * can be changed freely without worrying about correctness and does not need a
  * config synchronization protocol to achieve agreement. Example includes:
  * storage_weight, compaction schedule, etc.
  *
- * 4) MetaDatqLogsReplication: defines replication properties of
- * metadata logs.  Although this doesn't directly describe node
- * properties, it strongly corelates with metadata storage membership and
- * changing the replication property usually requries.
+ * 4) MetaDataLogsReplication: defines replication properties of
+ * metadata logs. Although this doesn't directly describe node
+ * properties, it strongly correlates with metadata storage membership.
  */
 
 class NodesConfiguration {
@@ -236,6 +235,11 @@ class NodesConfiguration {
   // same as == operator but with config timestamp and version ignored
   bool equalWithTimestampAndVersionIgnored(const NodesConfiguration& rhs) const;
 
+  // Returns serilized version of this config object or empty optional iff
+  // serialization fails. The function does not provide information about error
+  // but takes care of logging failure details.
+  folly::Optional<std::string> serialize() const;
+
   virtual ~NodesConfiguration() = default;
 
  private:
@@ -275,6 +279,7 @@ class NodesConfiguration {
   shard_size_t computeNumShards() const;
   node_index_t computeMaxNodeIndex() const;
   SequencersConfig computeSequencersConfig() const;
+  folly::Optional<std::string> serializeConfig() const;
 
   // recompute configuration metadata (e.g., storage_hash_ and num_shards_)
   // from each sub-configuration, note that version, timestamp,
@@ -283,6 +288,11 @@ class NodesConfiguration {
 
   // Increments config version, sets last_change_timestamp_
   void touch();
+
+  // Cached serialized config. We store it to avoid paying cost of serializing
+  // the same data for multple clients which can cause an issue when the number
+  // of clients is very high.
+  folly::Optional<std::string> serialized_config_;
 
   friend class NodesConfigLegacyConverter;
   friend class NodesConfigurationThriftConverter;
