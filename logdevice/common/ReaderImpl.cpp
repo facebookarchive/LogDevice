@@ -311,6 +311,8 @@ int ReaderImpl::startReadingImpl(logid_t log_id,
       },
       nullptr);
 
+  deps->setReaderName(reader_name_);
+
   auto read_stream = std::make_unique<ClientReadStream>(
       rsid,
       log_id,

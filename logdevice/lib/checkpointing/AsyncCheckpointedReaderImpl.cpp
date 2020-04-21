@@ -128,4 +128,10 @@ void AsyncCheckpointedReaderImpl::getBytesBuffered(
     std::function<void(size_t)> callback) {
   reader_->getBytesBuffered(callback);
 }
+
+void AsyncCheckpointedReaderImpl::setReaderName(
+    const std::string& reader_name) {
+  reader_->setReaderName(reader_name);
+}
+
 }} // namespace facebook::logdevice

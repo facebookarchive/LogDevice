@@ -321,12 +321,20 @@ class ClientReadStreamDependencies {
                                         const EpochMetaData& metadata,
                                         MetaDataLogReader::RecordSource source);
 
+  virtual void setReaderName(const std::string& reader_name) {
+    reader_name_ = reader_name;
+  }
+
   read_stream_id_t getReadStreamID() const {
     return read_stream_id_;
   }
 
   const std::string& getClientSessionID() const {
     return client_session_id_;
+  }
+
+  const std::string& getReaderName() const {
+    return reader_name_;
   }
 
   // Gets the protocol version of an outgoing socket (if the socket exists).
@@ -345,6 +353,7 @@ class ClientReadStreamDependencies {
   read_stream_id_t read_stream_id_;
   logid_t log_id_;
   std::string client_session_id_;
+  std::string reader_name_;
   record_cb_t record_callback_;
   gap_cb_t gap_callback_;
   done_cb_t done_callback_;

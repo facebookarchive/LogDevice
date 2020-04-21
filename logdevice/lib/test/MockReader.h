@@ -49,5 +49,7 @@ class MockReader : public Reader {
   MOCK_CONST_METHOD1(isConnectionHealthy, int(logid_t));
 
   MOCK_METHOD0(doNotDecodeBufferedWrites, void());
+
+  MOCK_METHOD1(setReaderName, void(const std::string&));
 };
 }} // namespace facebook::logdevice

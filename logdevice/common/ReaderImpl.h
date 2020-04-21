@@ -60,6 +60,10 @@ class ReaderImpl : public Reader {
     return timeout_;
   }
 
+  void setReaderName(const std::string& reader_name) override {
+    reader_name_ = reader_name;
+  }
+
  public: // LogDevice-internally-public interface
   ReaderImpl(size_t max_logs,
              ssize_t buffer_size,
@@ -418,6 +422,8 @@ class ReaderImpl : public Reader {
   std::chrono::steady_clock::time_point until_;
   size_t nrecords_;
   size_t nread_;
+
+  std::string reader_name_;
 
   // Initializes may_wait_ and until_.
   void read_initWaitParams();

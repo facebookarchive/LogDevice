@@ -245,6 +245,8 @@ class Reader {
    */
   virtual void doNotDecodeBufferedWrites() = 0;
 
+  virtual void setReaderName(const std::string&) = 0;
+
   /**
    * Get next lowest recommended LSN to read from when servers appear stuck.
    *

@@ -50,6 +50,10 @@ class AsyncReaderImpl : public AsyncReader {
   void doNotSkipPartiallyTrimmedSections() override;
   void getBytesBuffered(std::function<void(size_t)> callback) override;
 
+  void setReaderName(const std::string& reader_name) override {
+    reader_name_ = reader_name;
+  }
+
   // specify the buffer type for reading the log
   void setBufferType(ClientReadStreamBufferType buffer_type) {
     buffer_type_ = buffer_type;
@@ -173,6 +177,8 @@ class AsyncReaderImpl : public AsyncReader {
 
   // Used to differentiate subsequent requests for stats.
   int statRequestId_{0};
+
+  std::string reader_name_;
 };
 
 }} // namespace facebook::logdevice

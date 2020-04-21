@@ -321,6 +321,8 @@ int AsyncReaderImpl::startReading(logid_t log_id,
                                           : HealthChangeType::LOG_UNHEALTHY);
         }
       });
+  deps->setReaderName(reader_name_);
+
   auto read_stream = std::make_unique<ClientReadStream>(
       rsid,
       log_id,

@@ -64,6 +64,8 @@ class AsyncCheckpointedReaderImpl : public AsyncCheckpointedReader {
 
   void getBytesBuffered(std::function<void(size_t)> callback) override;
 
+  void setReaderName(const std::string& reader_name) override;
+
  private:
   std::unique_ptr<AsyncReader> reader_;
 };

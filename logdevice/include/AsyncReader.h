@@ -301,6 +301,8 @@ class AsyncReader {
    */
   virtual void getBytesBuffered(std::function<void(size_t)> callback) = 0;
 
+  virtual void setReaderName(const std::string& reader_name) = 0;
+
   virtual ~AsyncReader() {}
 };
 

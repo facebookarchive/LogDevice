@@ -60,6 +60,8 @@ class SyncCheckpointedReaderImpl : public SyncCheckpointedReader {
 
   void doNotDecodeBufferedWrites() override;
 
+  void setReaderName(const std::string& reader_name) override;
+
  private:
   std::unique_ptr<Reader> reader_;
 };

@@ -52,5 +52,7 @@ class MockAsyncReader : public AsyncReader {
   MOCK_METHOD0(doNotDecodeBufferedWrites, void());
 
   MOCK_METHOD1(getBytesBuffered, void(std::function<void(size_t)> callback));
+
+  MOCK_METHOD1(setReaderName, void(const std::string&));
 };
 }} // namespace facebook::logdevice

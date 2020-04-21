@@ -118,4 +118,8 @@ void SyncCheckpointedReaderImpl::doNotDecodeBufferedWrites() {
   reader_->doNotDecodeBufferedWrites();
 }
 
+void SyncCheckpointedReaderImpl::setReaderName(const std::string& reader_name) {
+  reader_->setReaderName(reader_name);
+}
+
 }} // namespace facebook::logdevice
