@@ -119,6 +119,21 @@ class SafetyCheckScheduler {
     // that is affected by this maintenance.
     folly::F14FastSet<std::string> locations;
   };
+
+  /**
+   * a data structure that encapsulates a single stage request in running the
+   * safety checker. This includes the necessary arguments needed to perform the
+   * safety check run.
+   */
+  struct SafetyCheckJob {
+    // the maintenance group ID.
+    GroupID group_id;
+    // The shards and sequencers in this maintenance.
+    ShardsAndSequencers shards_and_seqs;
+    // The safety margin requested for this safety check run
+    SafetyMargin safety_margin;
+  };
+
   /**
    * A data structure that records the progress of the progressive safety check
    * operations. The `result` field has the final recorded result if the plan
@@ -137,7 +152,7 @@ class SafetyCheckScheduler {
     };
     // The execution plan. This gets updated as we progress, each time we check
     // one item we remove it and update the Result.
-    std::deque<std::pair<GroupID, ShardsAndSequencers>> plan;
+    std::deque<SafetyCheckJob> plan;
     // The last check_impact operation if any.
     folly::Optional<LastCheck> last_check{folly::none};
 
@@ -156,35 +171,49 @@ class SafetyCheckScheduler {
               std::shared_ptr<const configuration::nodes::NodesConfiguration>
                   nodes_config) const;
 
-  // Performs a single safety check round for the given shards + sequencers.
-  // This method takes arguments by-value to ensure that we don't hold
-  // references across the async boundary.
+  /**
+   * Performs a single safety check round for the given shards + sequencers.
+   * This method takes arguments by-value to ensure that we don't hold
+   * references across the async boundary.
+   */
   virtual folly::SemiFuture<folly::Expected<Impact, Status>> performSafetyCheck(
       ShardSet disabled_shards,
       NodeIndexSet disabled_sequencers,
       ShardAuthoritativeStatusMap status_map,
       std::shared_ptr<const configuration::nodes::NodesConfiguration>,
       ShardSet shards,
-      NodeIndexSet sequencers) const;
+      NodeIndexSet sequencers,
+      SafetyMargin safety_margin) const;
 
-  // Build execution plans for shard+sequencer safety checks.
-  // This returns an ordered list of safety check operations that need to be
-  // tested in order.
-  //
-  // Each item is a set of shards that need to be tested along with a list of
-  // sequencer DISABLED checks that go with it.
-  //
-  // The safety checker will perform both checks combined, there is no point of
-  // performing a disable on a sequencer if we know we can't transition to the
-  // target state for shards within the same maintenanc group.
-  virtual std::deque<std::pair<GroupID, ShardsAndSequencers>>
-  buildExecutionPlan(
+  /**
+   * Build execution plans for shard+sequencer safety checks.
+   * This returns an ordered list of safety check operations that need to be
+   * tested in order.
+   *
+   * Each item is a set of shards that need to be tested along with a list of
+   * sequencer DISABLED checks that go with it.
+   *
+   * The safety checker will perform both checks combined, there is no point of
+   * performing a disable on a sequencer if we know we can't transition to the
+   * target state for shards within the same maintenanc group.
+   */
+  virtual std::deque<SafetyCheckJob> buildExecutionPlan(
       const ClusterMaintenanceWrapper& maintenance_state,
       const std::vector<const ShardWorkflow*>& shard_wf,
       const std::vector<const SequencerWorkflow*>& seq_wf,
       const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
           nodes_config,
       NodeLocationScope biggest_replication_scope) const;
+
+  virtual std::deque<SafetyCheckJob> buildExecutionPlanPerPriority(
+      const ClusterMaintenanceWrapper& maintenance_state,
+      const std::vector<const ShardWorkflow*>& shard_wf,
+      const std::vector<const SequencerWorkflow*>& seq_wf,
+      const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+          nodes_config,
+      NodeLocationScope biggest_replication_scope,
+      MaintenancePriority priority,
+      SafetyMargin safety_margin) const;
 
   /**
    * Performs the sorting an grouping of maintenances in a way that would

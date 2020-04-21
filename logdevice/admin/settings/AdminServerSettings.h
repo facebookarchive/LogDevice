@@ -66,6 +66,11 @@ struct AdminServerSettings : public SettingsBundle {
   /// ** Used ONLY for experimentation and testing
   bool block_maintenance_rsm;
 
+  // Safety margin for medium-priority maintenances
+  size_t safety_margin_medium_pri_scopes;
+  // Safety margin for low-priority maintenances
+  size_t safety_margin_low_pri_scopes;
+
  private:
   // Only UpdateableSettings can create this bundle.
   AdminServerSettings() {}

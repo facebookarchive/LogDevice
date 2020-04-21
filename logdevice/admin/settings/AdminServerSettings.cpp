@@ -246,6 +246,28 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::Testing)
 
+    ("safety-margin-medium-pri-scopes" ,
+     &safety_margin_medium_pri_scopes,
+     "0",
+     parse_nonnegative<ssize_t>(),
+     "This is the extra safety margin that will be accounted for when evaluating"
+     "maintenances with MEDIUM priority. The value represents how many extra "
+     "failure domains that the system can still lose in addition to the impact "
+     "of the requested maintenance before losing availability",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
+    ("safety-margin-low-pri-scopes" ,
+     &safety_margin_low_pri_scopes,
+     "1",
+     parse_nonnegative<ssize_t>(),
+     "This is the extra safety margin that will be accounted for when evaluating"
+     "maintenances with LOW priority. The value represents how many extra "
+     "failure domains that the system can still lose in addition to the impact "
+     "of the requested maintenance before losing availability",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
     ;
   // clang-format on
 };

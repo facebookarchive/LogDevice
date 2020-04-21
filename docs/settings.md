@@ -26,6 +26,8 @@ sidebar_label: Settings
 | safety-check-max-batch-size | The maximum number of logs to be checked in a single batch. Larger batches mean faster performance but means blocking the CPU thread pool for longer (not yielding often enough) | 15000 | server&nbsp;only |
 | safety-check-max-logs-in-flight | The number of concurrent logs that we runs checks against during execution of the CheckImpact operation either internally during a maintenance or through the Admin API's checkImpact() call | 1000 | server&nbsp;only |
 | safety-check-metadata-update-period | The period between automatic metadata updates for safety checker internal cache | 10min | server&nbsp;only |
+| safety-margin-low-pri-scopes | This is the extra safety margin that will be accounted for when evaluatingmaintenances with LOW priority. The value represents how many extra failure domains that the system can still lose in addition to the impact of the requested maintenance before losing availability | 1 | server&nbsp;only |
+| safety-margin-medium-pri-scopes | This is the extra safety margin that will be accounted for when evaluatingmaintenances with MEDIUM priority. The value represents how many extra failure domains that the system can still lose in addition to the impact of the requested maintenance before losing availability | 0 | server&nbsp;only |
 
 ## Batching and compression
 |   Name    |   Description   |  Default  |   Notes   |

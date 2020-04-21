@@ -190,7 +190,8 @@ TEST(ClusterMaintenanceWrapperTest, ShardDefinitions) {
       wrapper.getShardTargetStates(ShardID(17, 0)));
 
   auto grouped = wrapper.groupShardsByGroupID(
-      {ShardID(9, 0), ShardID(1, 0), ShardID(2, 0)});
+      {ShardID(9, 0), ShardID(1, 0), ShardID(2, 0)},
+      MaintenancePriority::MEDIUM);
   // 3 groups.
   ASSERT_EQ(3, grouped.size());
   ASSERT_EQ(ShardSet({ShardID(9, 0)}), grouped["520"]);
@@ -271,7 +272,8 @@ TEST(ClusterMaintenanceWrapperTest, SequencerDefinitions) {
   ASSERT_EQ(SequencingState::DISABLED, wrapper.getSequencerTargetState(2));
   ASSERT_EQ(SequencingState::DISABLED, wrapper.getSequencerTargetState(9));
 
-  auto grouped = wrapper.groupSequencersByGroupID({1, 2, 9});
+  auto grouped =
+      wrapper.groupSequencersByGroupID({1, 2, 9}, MaintenancePriority::MEDIUM);
   // 3 groups.
   ASSERT_EQ(2, grouped.size());
   ASSERT_EQ(folly::F14FastSet<node_index_t>({1, 2}), grouped["911"]);

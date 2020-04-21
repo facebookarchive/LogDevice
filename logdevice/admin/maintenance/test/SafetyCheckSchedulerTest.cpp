@@ -44,10 +44,10 @@ class SafetyCheckSchedulerMock : public SafetyCheckScheduler {
                      ShardAuthoritativeStatusMap status_map,
                      std::shared_ptr<const NodesConfiguration>,
                      ShardSet shards,
-                     NodeIndexSet sequencers) const override;
+                     NodeIndexSet sequencers,
+                     SafetyMargin safety_margin) const override;
 
-  virtual std::deque<std::pair<GroupID, ShardsAndSequencers>>
-  buildExecutionPlan(
+  virtual std::deque<SafetyCheckScheduler::SafetyCheckJob> buildExecutionPlan(
       const ClusterMaintenanceWrapper& maintenance_state,
       const std::vector<const ShardWorkflow*>& shard_wf,
       const std::vector<const SequencerWorkflow*>& seq_wf,
@@ -62,7 +62,8 @@ SafetyCheckSchedulerMock::performSafetyCheck(
     ShardAuthoritativeStatusMap /* unused */,
     std::shared_ptr<const NodesConfiguration> /* unused */,
     ShardSet shards,
-    SafetyCheckScheduler::NodeIndexSet sequencers) const {
+    SafetyCheckScheduler::NodeIndexSet sequencers,
+    SafetyMargin /* unused */) const {
   auto promise_future_pair =
       folly::makePromiseContract<folly::Expected<Impact, Status>>();
   for (const auto& it : shard_impacts) {
@@ -82,7 +83,7 @@ SafetyCheckSchedulerMock::performSafetyCheck(
   return std::move(promise_future_pair.second);
 }
 
-std::deque<std::pair<GroupID, SafetyCheckScheduler::ShardsAndSequencers>>
+std::deque<SafetyCheckScheduler::SafetyCheckJob>
 SafetyCheckSchedulerMock::buildExecutionPlan(
     const ClusterMaintenanceWrapper& maintenance_state,
     const std::vector<const ShardWorkflow*>& shard_wf,
@@ -118,7 +119,8 @@ TEST(SafetyCheckerSchedulerTest, TestMock) {
                                    ShardAuthoritativeStatusMap(),
                                    nullptr,
                                    canned.shards,
-                                   canned.sequencers);
+                                   canned.sequencers,
+                                   SafetyMargin());
   folly::Expected<Impact, Status> result = std::move(f).get();
   ASSERT_TRUE(result.hasValue());
   ASSERT_EQ(impact.result, result->result);
@@ -135,7 +137,8 @@ TEST(SafetyCheckerSchedulerTest, TestMock) {
                                     ShardAuthoritativeStatusMap(),
                                     nullptr,
                                     canned.shards,
-                                    canned.sequencers);
+                                    canned.sequencers,
+                                    SafetyMargin());
 
   ASSERT_TRUE(f2.isReady());
   result = std::move(f2).get();
@@ -162,38 +165,37 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning1) {
   auto plan = mock.buildExecutionPlan(
       wrapper, shard_wf, seq_wf, nodes_config, NodeLocationScope::RACK);
   // We expect the following results:
+  // G3 (N2:S0 -> DRAINED) (HIGH PRIORITY)
   // G1 (N1S0 -> MAY_DISAPPEAR) + (N1 -> DISABLED)
-  // G3 (N2:S0 -> DRAINED)
-  // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED)
   // G4 (N7 -> DISABLED)
+  // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED) (LOW PRIORITY)
   ASSERT_EQ(4, plan.size());
-  auto group1 = plan[0];
-  auto shards1_sequencers1 = group1.second;
-  ASSERT_EQ("G1", group1.first);
-  ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards1_sequencers1.first);
-  ASSERT_EQ(folly::F14FastSet<node_index_t>{1}, shards1_sequencers1.second);
-
   // G3 (N2:S0 -> DRAINED)
-  auto group2 = plan[1];
-  auto shards2_sequencers2 = group2.second;
-  ASSERT_EQ("G3", group2.first);
-  ASSERT_EQ(ShardSet{{ShardID(2, 0)}}, shards2_sequencers2.first);
-  ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards2_sequencers2.second);
+  auto group = plan[0];
+  auto shards_sequencers = group.shards_and_seqs;
+  ASSERT_EQ("G3", group.group_id);
+  ASSERT_EQ(ShardSet{{ShardID(2, 0)}}, shards_sequencers.first);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
 
-  // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED)
-  auto group3 = plan[2];
-  auto shards3_sequencers3 = group3.second;
-  ASSERT_EQ("G2", group3.first);
-  ASSERT_EQ(
-      ShardSet({ShardID(2, 0), ShardID(11, 0)}), shards3_sequencers3.first);
-  ASSERT_EQ(folly::F14FastSet<node_index_t>{11}, shards3_sequencers3.second);
+  group = plan[1];
+  shards_sequencers = group.shards_and_seqs;
+  ASSERT_EQ("G1", group.group_id);
+  ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards_sequencers.first);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{1}, shards_sequencers.second);
 
   // G4 (N7 -> DISABLED)
-  auto group4 = plan[3];
-  auto shards4_sequencers4 = group4.second;
-  ASSERT_EQ("G4", group4.first);
-  ASSERT_EQ(ShardSet(), shards4_sequencers4.first);
-  ASSERT_EQ(folly::F14FastSet<node_index_t>{7}, shards4_sequencers4.second);
+  group = plan[2];
+  shards_sequencers = group.shards_and_seqs;
+  ASSERT_EQ("G4", group.group_id);
+  ASSERT_EQ(ShardSet(), shards_sequencers.first);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{7}, shards_sequencers.second);
+
+  // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED)
+  group = plan[3];
+  shards_sequencers = group.shards_and_seqs;
+  ASSERT_EQ("G2", group.group_id);
+  ASSERT_EQ(ShardSet({ShardID(2, 0), ShardID(11, 0)}), shards_sequencers.first);
+  ASSERT_EQ(folly::F14FastSet<node_index_t>{11}, shards_sequencers.second);
 }
 
 TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
@@ -246,15 +248,15 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanning2) {
   // G2 () + (N11 -> DISABLED)
   ASSERT_EQ(2, plan.size());
   auto group1 = plan[0];
-  auto shards1_sequencers1 = group1.second;
-  ASSERT_EQ("G1", group1.first);
+  auto shards1_sequencers1 = group1.shards_and_seqs;
+  ASSERT_EQ("G1", group1.group_id);
   ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards1_sequencers1.first);
   ASSERT_EQ(folly::F14FastSet<node_index_t>{1}, shards1_sequencers1.second);
 
   // G2 () + (N11 -> DISABLED)
   auto group2 = plan[1];
-  auto shards2_sequencers2 = group2.second;
-  ASSERT_EQ("G2", group2.first);
+  auto shards2_sequencers2 = group2.shards_and_seqs;
+  ASSERT_EQ("G2", group2.group_id);
   ASSERT_EQ(ShardSet(), shards2_sequencers2.first);
   ASSERT_EQ(folly::F14FastSet<node_index_t>{11}, shards2_sequencers2.second);
 }
@@ -419,50 +421,50 @@ TEST(SafetyCheckerSchedulerTest, ShardPlanningLocationAware) {
   ASSERT_EQ(7, plan.size());
   {
     auto group = plan[0];
-    auto shards_sequencers = group.second;
-    ASSERT_EQ("N1S0", group.first);
+    auto shards_sequencers = group.shards_and_seqs;
+    ASSERT_EQ("N1S0", group.group_id);
     ASSERT_EQ(ShardSet{{ShardID(1, 0)}}, shards_sequencers.first);
     ASSERT_EQ(folly::F14FastSet<node_index_t>{1}, shards_sequencers.second);
   }
   {
     auto group = plan[1];
-    auto shards_sequencers = group.second;
-    ASSERT_EQ("N0S0", group.first);
+    auto shards_sequencers = group.shards_and_seqs;
+    ASSERT_EQ("N0S0", group.group_id);
     ASSERT_EQ(ShardSet{{ShardID(0, 0)}}, shards_sequencers.first);
     ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
   }
   {
     auto group = plan[2];
-    auto shards_sequencers = group.second;
-    ASSERT_EQ("N0S1", group.first);
+    auto shards_sequencers = group.shards_and_seqs;
+    ASSERT_EQ("N0S1", group.group_id);
     ASSERT_EQ(ShardSet{{ShardID(0, 1)}}, shards_sequencers.first);
     ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
   }
   {
     auto group = plan[3];
-    auto shards_sequencers = group.second;
-    ASSERT_EQ("N2S0", group.first);
+    auto shards_sequencers = group.shards_and_seqs;
+    ASSERT_EQ("N2S0", group.group_id);
     ASSERT_EQ(ShardSet{{ShardID(2, 0)}}, shards_sequencers.first);
     ASSERT_EQ(folly::F14FastSet<node_index_t>{2}, shards_sequencers.second);
   }
   {
     auto group = plan[4];
-    auto shards_sequencers = group.second;
-    ASSERT_EQ("N4S0", group.first);
+    auto shards_sequencers = group.shards_and_seqs;
+    ASSERT_EQ("N4S0", group.group_id);
     ASSERT_EQ(ShardSet{{ShardID(4, 0)}}, shards_sequencers.first);
     ASSERT_EQ(folly::F14FastSet<node_index_t>{4}, shards_sequencers.second);
   }
   {
     auto group = plan[5];
-    auto shards_sequencers = group.second;
-    ASSERT_EQ("N3S1", group.first);
+    auto shards_sequencers = group.shards_and_seqs;
+    ASSERT_EQ("N3S1", group.group_id);
     ASSERT_EQ(ShardSet{{ShardID(3, 1)}}, shards_sequencers.first);
     ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
   }
   {
     auto group = plan[6];
-    auto shards_sequencers = group.second;
-    ASSERT_EQ("N3S0", group.first);
+    auto shards_sequencers = group.shards_and_seqs;
+    ASSERT_EQ("N3S0", group.group_id);
     ASSERT_EQ(ShardSet{{ShardID(3, 0)}}, shards_sequencers.first);
     ASSERT_EQ(folly::F14FastSet<node_index_t>{}, shards_sequencers.second);
   }
@@ -501,16 +503,16 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
 
   SafetyCheckSchedulerMock mock;
   // We expect the following results:
+  // G3 (N2:S0 -> DRAINED) (HIGH PRIORITY)
   // G1 (N1S0 -> MAY_DISAPPEAR) + (N1 -> DISABLED)
-  // G3 (N2:S0 -> DRAINED)
-  // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED)
   // G4 (N7 -> DISABLED)
+  // G2 (N2:S0, N11:S0 -> DRAINED) + (N11 -> DISABLED) (LOW PRIORITY)
   //
   // Our Safety Check Results:
-  // G1 => SAFE (N1S0, N1) -> disabled.
   // G3 => SAFE (N2S0) -> disabled.
-  // G2 => UNSAFE (N11:S0, N11) [blocked].
+  // G1 => SAFE (N1S0, N1) -> disabled.
   // G4 => SAFE (, N7) -> disabled
+  // G2 => UNSAFE (N11:S0, N11) [blocked].
 
   // Say N13 already passed safety check. We expect it to
   // be included in the safety check result since it is
@@ -524,6 +526,15 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
   Impact safe_impact;
   safe_impact.result = Impact::ImpactResult::NONE;
 
+  // G3 test. => SAFE
+  mock.shard_impacts.push_back(SafetyCheckSchedulerMock::CannedCheckImpact{
+      .disabled_shards = safe_shards_to_disable,
+      .disabled_sequencers = safe_sequencers_to_disable,
+      .shards = {{ShardID(2, 0)}},
+      .impact = safe_impact,
+  });
+  safe_shards_to_disable.insert(ShardID(2, 0));
+
   // G1 test. => SAFE
   mock.shard_impacts.push_back(SafetyCheckSchedulerMock::CannedCheckImpact{
       .disabled_shards = safe_shards_to_disable,
@@ -535,14 +546,14 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
   safe_shards_to_disable.insert(ShardID(1, 0));
   safe_sequencers_to_disable.insert(1);
 
-  // G3 test. => SAFE
+  // G4 test. => SAFE
   mock.shard_impacts.push_back(SafetyCheckSchedulerMock::CannedCheckImpact{
       .disabled_shards = safe_shards_to_disable,
       .disabled_sequencers = safe_sequencers_to_disable,
-      .shards = {{ShardID(2, 0)}},
+      .sequencers = {7},
       .impact = safe_impact,
   });
-  safe_shards_to_disable.insert(ShardID(2, 0));
+  safe_sequencers_to_disable.insert(7);
 
   // G2 test. => UNSAFE
   mock.shard_impacts.push_back(SafetyCheckSchedulerMock::CannedCheckImpact{
@@ -551,14 +562,6 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
       .shards = {{ShardID(2, 0), ShardID(11, 0)}},
       .sequencers = {11},
       .impact = bad_impact,
-  });
-
-  // G4 test. => SAFE
-  mock.shard_impacts.push_back(SafetyCheckSchedulerMock::CannedCheckImpact{
-      .disabled_shards = safe_shards_to_disable,
-      .disabled_sequencers = safe_sequencers_to_disable,
-      .sequencers = {7},
-      .impact = safe_impact,
   });
 
   auto f = mock.schedule(wrapper,

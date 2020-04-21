@@ -187,6 +187,7 @@ MaintenanceLogWriter::buildMaintenanceDefinitionForRebuilding(
   def.set_shards({shardid});
   def.set_shard_target_state(thrift::ShardOperationalState::DRAINED);
   def.set_user(INTERNAL_USER.str());
+  def.set_priority(MaintenancePriority::IMMINENT);
   def.set_reason(std::move(reason));
   def.set_skip_safety_checks(true);
   def.set_force_restore_rebuilding(true);

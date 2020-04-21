@@ -9,7 +9,6 @@
 
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
-
 namespace facebook { namespace logdevice { namespace maintenance {
 
 std::shared_ptr<const NodesConfiguration> genNodesConfiguration() {
@@ -62,9 +61,10 @@ std::unique_ptr<thrift::ClusterMaintenanceState> genMaintenanceState() {
   def1.set_sequencer_nodes({N1});
   def1.set_sequencer_target_state(SequencingState::DISABLED);
   def1.set_group_id("G1");
+  def1.set_priority(MaintenancePriority::MEDIUM);
   definitions.push_back(std::move(def1));
 
-  //    G2 => (N2:S0, N11:S0) -> DRAINED (N11 SEQ DISABLED)
+  //    G2 => (N2:S0, N11:S0) -> DRAINED (N11 SEQ DISABLED) (LOW PRIORITY)
   auto def2 = MaintenanceDefinition();
   def2.set_user("Autobot");
   def2.set_shards({N2S0, N11S0});
@@ -73,15 +73,17 @@ std::unique_ptr<thrift::ClusterMaintenanceState> genMaintenanceState() {
   def2.set_sequencer_target_state(SequencingState::DISABLED);
   def2.set_created_on(100);
   def2.set_group_id("G2");
+  def2.set_priority(MaintenancePriority::LOW);
   definitions.push_back(std::move(def2));
 
-  //    G3 => (N2:S0) -> DRAINED
+  //    G3 => (N2:S0) -> DRAINED (HIGH PRIORITY)
   auto def3 = MaintenanceDefinition();
   def3.set_user("Autobot");
   def3.set_shards({N2S0});
   def3.set_shard_target_state(ShardOperationalState::DRAINED);
   def3.set_created_on(50);
   def3.set_group_id("G3");
+  def3.set_priority(MaintenancePriority::HIGH);
   definitions.push_back(std::move(def3));
 
   //    G4 => (N7) -(sequencer)-> DISABLED
@@ -91,6 +93,7 @@ std::unique_ptr<thrift::ClusterMaintenanceState> genMaintenanceState() {
   def4.set_sequencer_target_state(SequencingState::DISABLED);
   def4.set_created_on(50);
   def4.set_group_id("G4");
+  def4.set_priority(MaintenancePriority::MEDIUM);
   definitions.push_back(std::move(def4));
 
   output->set_maintenances(std::move(definitions));

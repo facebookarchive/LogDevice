@@ -59,8 +59,8 @@ SafetyCheckScheduler::executePlan(
     return std::move(state.result);
   }
 
-  auto group = state.plan.front();
-  auto shards_sequencers_to_check = group.second;
+  auto safety_check_job = state.plan.front();
+  auto shards_sequencers_to_check = safety_check_job.shards_and_seqs;
   // remove it from the plan.
   state.plan.pop_front();
   // We have a plan to execute.
@@ -71,7 +71,8 @@ SafetyCheckScheduler::executePlan(
                          status_map,
                          nodes_config,
                          shards_sequencers_to_check.first,
-                         shards_sequencers_to_check.second);
+                         shards_sequencers_to_check.second,
+                         safety_check_job.safety_margin);
 
   folly::SemiFuture<folly::Expected<Result, Status>> result_fut =
       std::move(safety_future)
@@ -85,7 +86,7 @@ SafetyCheckScheduler::executePlan(
                status_map{std::move(status_map)},
                nodes_config{std::move(nodes_config)},
                state{std::move(state)},
-               group_id{std::move(group.first)},
+               group_id{std::move(safety_check_job.group_id)},
                sequencers_to_check{
                    std::move(shards_sequencers_to_check.second)},
                shards_to_check{std::move(shards_sequencers_to_check.first)}](
@@ -150,7 +151,8 @@ SafetyCheckScheduler::performSafetyCheck(
     std::shared_ptr<const configuration::nodes::NodesConfiguration>
         nodes_config,
     ShardSet shards,
-    NodeIndexSet sequencers) const {
+    NodeIndexSet sequencers,
+    SafetyMargin safety_margin) const {
   // We must have nodes configuration to operate.
   ld_assert(nodes_config != nullptr);
   ld_assert(processor_);
@@ -158,7 +160,7 @@ SafetyCheckScheduler::performSafetyCheck(
 
   ld_info("Performing safety check for disabling shards %s while assuming that "
           "%s are already disabled. And disabling sequencers %s while assuming "
-          "that sequencers %s are already disabled",
+          "that sequencers %s are already disabled.",
           toString(shards).c_str(),
           toString(disabled_shards).c_str(),
           toString(sequencers).c_str(),
@@ -175,7 +177,7 @@ SafetyCheckScheduler::performSafetyCheck(
       sequencers,
       configuration::StorageState::DISABLED, // We always assume that nodes may
                                              // die.
-      SafetyMargin(),
+      safety_margin,
       /* check_metadata_logs= */ true,
       /* check_internal_logs= */ true,
       /* check_capacity= */ true,
@@ -184,7 +186,7 @@ SafetyCheckScheduler::performSafetyCheck(
       /* logids_to_check= */ folly::none);
 }
 
-std::deque<std::pair<GroupID, SafetyCheckScheduler::ShardsAndSequencers>>
+std::deque<SafetyCheckScheduler::SafetyCheckJob>
 SafetyCheckScheduler::buildExecutionPlan(
     const ClusterMaintenanceWrapper& maintenance_state,
     const std::vector<const ShardWorkflow*>& shard_wf,
@@ -192,6 +194,68 @@ SafetyCheckScheduler::buildExecutionPlan(
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_config,
     NodeLocationScope biggest_replication_scope) const {
+  // We will iteratively create the plan by building a plan per periority from
+  // high to low. We only care about HIGH, MEDIUM, LOW here since IMMINENT will
+  // not trigger safety check at all.
+  //
+  std::deque<SafetyCheckJob> plan;
+
+  SafetyMargin medium_safety_margin;
+  // We don't want to set the safety margin if the value is zero for better
+  // performance. Safety checking with margin is significatly more expensive
+  // (see SafetyCheckerUtils.cpp for the safety_margin.empty() check)
+  if (settings_->safety_margin_medium_pri_scopes > 0) {
+    medium_safety_margin[biggest_replication_scope] =
+        settings_->safety_margin_medium_pri_scopes;
+  }
+  SafetyMargin low_safety_margin;
+  if (settings_->safety_margin_low_pri_scopes > 0) {
+    low_safety_margin[biggest_replication_scope] =
+        settings_->safety_margin_low_pri_scopes;
+  }
+  auto high_pri = buildExecutionPlanPerPriority(maintenance_state,
+                                                shard_wf,
+                                                seq_wf,
+                                                nodes_config,
+                                                biggest_replication_scope,
+                                                MaintenancePriority::HIGH,
+                                                // No safety margin for HIGH
+                                                // priority maintenances
+                                                SafetyMargin());
+
+  auto medium_pri = buildExecutionPlanPerPriority(maintenance_state,
+                                                  shard_wf,
+                                                  seq_wf,
+                                                  nodes_config,
+                                                  biggest_replication_scope,
+                                                  MaintenancePriority::MEDIUM,
+                                                  medium_safety_margin);
+
+  auto low_pri = buildExecutionPlanPerPriority(maintenance_state,
+                                               shard_wf,
+                                               seq_wf,
+                                               nodes_config,
+                                               biggest_replication_scope,
+                                               MaintenancePriority::LOW,
+                                               low_safety_margin);
+
+  // Combining results
+  plan.insert(plan.end(), high_pri.begin(), high_pri.end());
+  plan.insert(plan.end(), medium_pri.begin(), medium_pri.end());
+  plan.insert(plan.end(), low_pri.begin(), low_pri.end());
+  return plan;
+}
+
+std::deque<SafetyCheckScheduler::SafetyCheckJob>
+SafetyCheckScheduler::buildExecutionPlanPerPriority(
+    const ClusterMaintenanceWrapper& maintenance_state,
+    const std::vector<const ShardWorkflow*>& shard_wf,
+    const std::vector<const SequencerWorkflow*>& seq_wf,
+    const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+        nodes_config,
+    NodeLocationScope biggest_replication_scope,
+    MaintenancePriority priority,
+    SafetyMargin safety_margin) const {
   //
   // We want to sort the shard and sequencer maintenances so that we process
   // maintenances for shards that are in the same (biggest) replication
@@ -201,7 +265,7 @@ SafetyCheckScheduler::buildExecutionPlan(
   // We assume that all the workflows passed to us require safety checks.
   // We also assume that all these shards already exist in the
   // ClusterMaintenanceWrapper as well.
-  std::deque<std::pair<GroupID, ShardsAndSequencers>> plan;
+  std::deque<SafetyCheckJob> plan;
   // Stage 1: Group the shards into their corresponding groups.
   std::vector<ShardID> all_shards;
   for (const auto* workflow : shard_wf) {
@@ -217,12 +281,11 @@ SafetyCheckScheduler::buildExecutionPlan(
 
   // A mapping from a group ID to the set of shards.
   folly::F14FastMap<GroupID, ShardSet> group_to_shards =
-      maintenance_state.groupShardsByGroupID(all_shards);
+      maintenance_state.groupShardsByGroupID(all_shards, priority);
 
   // A mapping from a group ID to the set of sequencer node ids.
   folly::F14FastMap<GroupID, NodeIndexSet> group_to_sequencers =
-      maintenance_state.groupSequencersByGroupID(all_sequencers);
-
+      maintenance_state.groupSequencersByGroupID(all_sequencers, priority);
   // Stage 2: Order the shard sets as following:
   //   1. Group all MAY_DISAPPEAR groups first as we know that these are
   //   short-term maintenances.
@@ -293,20 +356,31 @@ SafetyCheckScheduler::buildExecutionPlan(
   std::for_each(may_disappear.begin(),
                 may_disappear.end(),
                 [&](const MaintenanceManifest& v) {
-                  plan.push_back(std::make_pair(v.group_id, v.shards_and_seqs));
+                  plan.push_back(SafetyCheckJob{
+                      .group_id = v.group_id,
+                      .shards_and_seqs = v.shards_and_seqs,
+                      .safety_margin = safety_margin,
+                  });
                 });
 
   std::for_each(
       drained.begin(), drained.end(), [&](const MaintenanceManifest& v) {
-        plan.push_back(std::make_pair(v.group_id, v.shards_and_seqs));
+        plan.push_back(SafetyCheckJob{
+            .group_id = v.group_id,
+            .shards_and_seqs = v.shards_and_seqs,
+            .safety_margin = safety_margin,
+        });
       });
 
   // Do we have sequencer-only maintenances still left?
   if (group_to_sequencers.size() > 0) {
     for (const auto& it : group_to_sequencers) {
       ShardSet empty;
-      plan.push_back(
-          std::make_pair(it.first, std::make_pair(empty, it.second)));
+      plan.push_back(SafetyCheckJob{
+          .group_id = it.first,
+          .shards_and_seqs = std::make_pair(empty, it.second),
+          .safety_margin = safety_margin,
+      });
     }
   }
 

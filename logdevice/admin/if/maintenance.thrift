@@ -38,6 +38,36 @@ enum MaintenanceProgress {
   COMPLETED = 3,
 }
 
+/**
+ * Defines the scheduling priority of a given maintenance. Note that lower
+ * maintenance priorities might be associated with higher safety margin for
+ * availability loss.
+ */
+enum MaintenancePriority {
+  /**
+   * The maintenance MUST be executed before anything else, in this priority
+   * both capacity and safety checking will be ignored.
+   */
+  IMMINENT = 1,
+  /**
+   * The maintenance is of a high-priority and will be attempted to be scheduled
+   * before lower priority maintenances.
+   */
+  HIGH = 2,
+  /**
+   * The maintenance is of a medium-priority (default) and will be attempted
+   * to be scheduled before lower priority maintenances.
+   */
+  MEDIUM = 3,
+  /**
+   * Maintenances that are not critical to the system health. These can be used
+   * for a long-running rolling operation that sweeps the cluster (e.g., kernel
+   * upgrades). By default, these maintenances will have one extra scope of
+   * safety margin.
+   */
+  LOW = 4,
+}
+
 struct MaintenanceDefinition {
   /**
    * if ShardID's shard_index == common.ALL_SHARDS this maintenance targets the
@@ -74,7 +104,7 @@ struct MaintenanceDefinition {
   /**
    * Dangerous and should only be used for emergency situations.
    */
-  8: bool skip_safety_checks = false,
+  8: bool skip_safety_checks = false (deprecated), // use priority == IMMINENT
   /**
    * Should not be set by the user unless there is a very good reason to.
    * This is normally set by internal maintenances requested by the
@@ -169,6 +199,11 @@ struct MaintenanceDefinition {
    * used to know whether this particular maintenance has completed or not.
    */
   17: MaintenanceProgress progress,
+  /**
+   * The maintenance priority defined for this maintenance. By default if unset
+   * the priority will be treated as MEDIUM
+   */
+  18: optional MaintenancePriority priority,
 }
 
 /**

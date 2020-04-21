@@ -15,6 +15,7 @@ namespace facebook { namespace logdevice { namespace maintenance {
 using ShardOperationalState = thrift::ShardOperationalState;
 using SequencingState = thrift::SequencingState;
 using MaintenanceDefinition = thrift::MaintenanceDefinition;
+using MaintenancePriority = thrift::MaintenancePriority;
 using GroupID = thrift::MaintenanceGroupID;
 using MaintenanceStatus = thrift::MaintenanceStatus;
 using ShardDataHealth = thrift::ShardDataHealth;

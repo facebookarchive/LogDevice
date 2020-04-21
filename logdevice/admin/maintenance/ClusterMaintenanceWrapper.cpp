@@ -14,6 +14,39 @@ using facebook::logdevice::configuration::nodes::NodesConfiguration;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
+namespace {
+
+/**
+ * Helper function to check if any group should skip safety checks.
+ *
+ * @param group_ids List of group ids to check.
+ * @param maintenances_per_group Mapping from group id to maintenances.
+ *
+ * @return Whether any of the groups should skip safety checks.
+ */
+template <class SetT, class MapT>
+bool anyGroupShouldSkipSafetyChecks(const SetT& group_ids,
+                                    const MapT& maintenances_per_group) {
+  for (const GroupID& group : group_ids) {
+    ld_assert(maintenances_per_group.count(group) > 0);
+    const MaintenanceDefinition* definition = maintenances_per_group.at(group);
+
+    if (definition->get_skip_safety_checks()) {
+      return true;
+    }
+
+    const auto& priority_opt = definition->priority_ref();
+    if (priority_opt.has_value() &&
+        priority_opt.value() == MaintenancePriority::IMMINENT) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+} // namespace
+
 ClusterMaintenanceWrapper::ClusterMaintenanceWrapper(
     std::unique_ptr<thrift::ClusterMaintenanceState> state,
     const std::shared_ptr<const NodesConfiguration>& nodes_config)
@@ -134,13 +167,19 @@ ClusterMaintenanceWrapper::getGroupsForSequencer(node_index_t node) const {
 
 folly::F14FastMap<GroupID, ShardSet>
 ClusterMaintenanceWrapper::groupShardsByGroupID(
-    const std::vector<ShardID>& shards) const {
+    const std::vector<ShardID>& shards,
+    MaintenancePriority priority) const {
   folly::F14FastMap<GroupID, ShardSet> output;
   for (const auto& shard : shards) {
     // Let's find it in out groups index
     auto groups = getGroupsForShard(shard);
     for (const GroupID& group : groups) {
-      output[group].insert(shard);
+      const auto* maintenance = getMaintenanceByGroupID(group);
+      ld_assert(maintenance);
+      if (maintenance->priority_ref().value_or(MaintenancePriority::MEDIUM) ==
+          priority) {
+        output[group].insert(shard);
+      }
     }
   }
   return output;
@@ -148,13 +187,19 @@ ClusterMaintenanceWrapper::groupShardsByGroupID(
 
 folly::F14FastMap<GroupID, folly::F14FastSet<node_index_t>>
 ClusterMaintenanceWrapper::groupSequencersByGroupID(
-    const std::vector<node_index_t>& nodes) const {
+    const std::vector<node_index_t>& nodes,
+    MaintenancePriority priority) const {
   folly::F14FastMap<GroupID, folly::F14FastSet<node_index_t>> output;
   for (const auto& node : nodes) {
     // Let's find it in out groups index
     auto groups = getGroupsForSequencer(node);
     for (const GroupID& group : groups) {
-      output[group].insert(node);
+      const auto* maintenance = getMaintenanceByGroupID(group);
+      ld_assert(maintenance);
+      if (maintenance->priority_ref().value_or(MaintenancePriority::MEDIUM) ==
+          priority) {
+        output[group].insert(node);
+      }
     }
   }
   return output;
@@ -183,29 +228,21 @@ SequencingState ClusterMaintenanceWrapper::getSequencerTargetState(
 
 bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(
     const ShardID& shard) const {
-  const auto& groups = getGroupsForShard(shard);
-  bool skip_safety_check = false;
-
-  for (const GroupID& group : groups) {
-    // we use [] operator as we are sure that group exists.
-    ld_assert(groups_.count(group) > 0);
-    auto* definition = groups_.at(group);
-    skip_safety_check |= definition->get_skip_safety_checks();
-  }
-  return skip_safety_check;
+  return anyGroupShouldSkipSafetyChecks(getGroupsForShard(shard), groups_);
 }
 
 bool ClusterMaintenanceWrapper::shouldForceRestoreRebuilding(
     const ShardID& shard) const {
   const auto& groups = getGroupsForShard(shard);
-  bool force_restore_mode = false;
 
   for (const GroupID& group : groups) {
     ld_assert(groups_.count(group) > 0);
-    auto* definition = groups_.at(group);
-    force_restore_mode |= definition->get_force_restore_rebuilding();
+    const MaintenanceDefinition* definition = groups_.at(group);
+    if (definition->get_force_restore_rebuilding()) {
+      return true;
+    }
   }
-  return force_restore_mode;
+  return false;
 }
 
 size_t ClusterMaintenanceWrapper::size() const {
@@ -220,15 +257,8 @@ ClusterMaintenanceWrapper::getMaintenances() const {
 
 bool ClusterMaintenanceWrapper::shouldSkipSafetyCheck(
     node_index_t node_id) const {
-  const auto& groups = getGroupsForSequencer(node_id);
-  bool skip_safety_check = false;
-
-  for (const GroupID& group : groups) {
-    ld_assert(groups_.count(group) > 0);
-    auto* definition = groups_.at(group);
-    skip_safety_check |= definition->get_skip_safety_checks();
-  }
-  return skip_safety_check;
+  return anyGroupShouldSkipSafetyChecks(
+      getGroupsForSequencer(node_id), groups_);
 }
 
 bool ClusterMaintenanceWrapper::isPassiveDrainAllowed(
@@ -239,7 +269,8 @@ bool ClusterMaintenanceWrapper::isPassiveDrainAllowed(
   for (const GroupID& group : groups) {
     ld_assert(groups_.count(group) > 0);
     auto* definition = groups_.at(group);
-    passive_drain_allowed |= definition->get_allow_passive_drains();
+    passive_drain_allowed =
+        passive_drain_allowed || definition->get_allow_passive_drains();
   }
   return passive_drain_allowed;
 }
