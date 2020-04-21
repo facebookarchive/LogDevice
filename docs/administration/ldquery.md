@@ -359,11 +359,9 @@ Lists the nodes in the cluster from the configuration.
 | admin\_address | string | The IP address, including port number, for admin server |
 | generation | long | Generation of the node.  This value is bumped each time the node is swapped, sent to repair, or has one of its drives sent to repair. |
 | location | string | Location of the node: <region>.<cluster>.<row>.<rack> |
-| sequencer | int | 1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'sequencer\_enabled'. |
+| sequencer | int | 1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. |
 | storage | int | 1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage\_state'. |
-| sequencer\_enabled | int | 1 if sequencing on this node is enabled. Othewise 0. |
 | sequencer\_weight | real | A non-negative value indicating how many logs this node should be a sequencer for relative to other nodes in the cluster.  A value of 0 means this node cannot run sequencers. |
-| is\_storage | int | 1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage\_state'. |
 | storage\_state | string | Determines the current state of the storage node. One of "read-write", "read-only" or "none". |
 | storage\_weight | real | A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster. |
 | num\_shards | long | Number of storage shards on this node.  0 if this node is not a storage node. |
