@@ -204,6 +204,14 @@ struct MaintenanceDefinition {
    * the priority will be treated as MEDIUM
    */
   18: optional MaintenancePriority priority,
+  /**
+   * This will ignore capacity checking during maintenance evaluation. This can
+   * be very useful if the operation is meant to (shrink) the cluster size.
+   * Default is "false".
+   *
+   * The rest of the safety checks will still be performed.
+   */
+  19: bool skip_capacity_checks = false,
 }
 
 /**

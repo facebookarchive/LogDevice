@@ -224,6 +224,7 @@ void fillSystemGeneratedAttributes(
     def.set_shard_target_state(input.get_shard_target_state());
     def.set_sequencer_target_state(input.get_sequencer_target_state());
     def.set_skip_safety_checks(input.get_skip_safety_checks());
+    def.set_skip_capacity_checks(input.get_skip_capacity_checks());
     // A temporary backward compatibility hack to support both IMMINENT
     // maintenances and maintenances with the skip_safety_check flags at the
     // same time.

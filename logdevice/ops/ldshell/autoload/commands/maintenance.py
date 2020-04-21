@@ -249,6 +249,12 @@ def _render_expanded(
                 skip_safety_checks = str(mv.skip_safety_checks)
             tbl.append(["Skip Safety Checks", skip_safety_checks])
 
+            if mv.skip_capacity_checks:
+                skip_capacity_checks = colored(str(mv.skip_capacity_checks), "red")
+            else:
+                skip_capacity_checks = str(mv.skip_capacity_checks)
+            tbl.append(["Skip Capacity Checks", skip_capacity_checks])
+
             tbl.append(["Allow Passive Drains", str(mv.allow_passive_drains)])
             tbl.append(
                 ["RESTORE rebuilding enforced", str(mv.force_restore_rebuilding)]
@@ -868,6 +874,9 @@ class MaintenanceCommand:
     )
     @argument("skip_safety_checks", description="If set safety-checks will be skipped")
     @argument(
+        "skip_capacity_checks", description="If set capacity-checks will be skipped"
+    )
+    @argument(
         "ttl",
         description="If set this maintenance will be auto-expired "
         "after given number of seconds",
@@ -896,6 +905,7 @@ class MaintenanceCommand:
         user: Optional[str] = "",
         group: Optional[bool] = True,
         skip_safety_checks: Optional[bool] = False,
+        skip_capacity_checks: Optional[bool] = False,
         ttl: Optional[int] = 0,
         allow_passive_drains: Optional[bool] = False,
         force_restore_rebuilding: Optional[bool] = False,
@@ -966,6 +976,7 @@ class MaintenanceCommand:
                     user=user or getuser(),
                     reason=reason,
                     skip_safety_checks=skip_safety_checks,
+                    skip_capacity_checks=skip_capacity_checks,
                     allow_passive_drains=allow_passive_drains,
                     force_restore_rebuilding=force_restore_rebuilding,
                     priority=_parse_priority(priority),

@@ -54,7 +54,8 @@ TEST_F(MaintenanceAPITestDisabled, NotSupported) {
 
 class MaintenanceAPITest : public IntegrationTestBase {
  public:
-  void init();
+  void init(size_t max_unavailable_storage_capacity_pct = 80,
+            size_t max_unavailable_sequencing_capacity_pct = 80);
   std::unique_ptr<IntegrationTestUtils::Cluster> cluster_;
 
  protected:
@@ -63,7 +64,8 @@ class MaintenanceAPITest : public IntegrationTestBase {
   }
 };
 
-void MaintenanceAPITest::init() {
+void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
+                              size_t max_unavailable_sequencing_capacity_pct) {
   const size_t num_nodes = 6;
   const size_t num_shards = 2;
 
@@ -110,7 +112,10 @@ void MaintenanceAPITest::init() {
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")
-          .setParam("--max-unavailable-storage-capacity-pct", "80")
+          .setParam("--max-unavailable-storage-capacity-pct",
+                    std::to_string(max_unavailable_storage_capacity_pct))
+          .setParam("--max-unavailable-sequencing-capacity-pct",
+                    std::to_string(max_unavailable_sequencing_capacity_pct))
           .setParam("--loglevel", "debug")
           // Starts MaintenanceManager on N2
           .runMaintenanceManagerOn(maintenance_leader)
@@ -1060,4 +1065,72 @@ TEST_F(MaintenanceAPITest, RemoveNodesInMaintenance) {
   EXPECT_EQ(1, output.size());
   EXPECT_THAT(resp.get_maintenances()[0].get_shards(),
               UnorderedElementsAre(mkShardID(3, 0)));
+}
+
+TEST_F(MaintenanceAPITest, SkipCapacityChecks) {
+  // Setting the capacity thresholds too low to make sure that all our
+  // operations fail capacity checking.
+  init(
+      /*max_unavailable_storage_capacity_pct = */ 10,
+      /*max_unavailable_sequencing_capacity_pct = */ 10);
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  // Wait until the RSM has replayed
+  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+
+  // Creating a simple maintenance that will fail capacity checking
+  thrift::MaintenanceDefinition request;
+  // Needs to be the same user for us to match an existing maintenance.
+  request.set_user("dummy");
+  request.set_shard_target_state(ShardOperationalState::DRAINED);
+  request.set_shards({mkShardID(0, -1)});
+  request.set_sequencer_nodes({mkNodeID(1)});
+  request.set_sequencer_target_state(SequencingState::DISABLED);
+  request.set_group(true);
+  thrift::MaintenanceDefinitionResponse resp;
+  admin_client->sync_applyMaintenance(resp, request);
+  ASSERT_EQ(1, resp.get_maintenances().size());
+  wait_until("MaintenanceManager runs the workflow", [&]() {
+    thrift::MaintenancesFilter req1;
+    thrift::MaintenanceDefinitionResponse resp1;
+    admin_client->sync_getMaintenances(resp1, req1);
+    const auto& def = resp1.get_maintenances()[0];
+    // We expect us to be blocked on capacity checking.
+    return thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE ==
+        def.get_progress();
+  });
+  thrift::MaintenancesFilter req;
+  admin_client->sync_getMaintenances(resp, req);
+  const auto& def = resp.get_maintenances()[0];
+  ASSERT_TRUE(def.last_check_impact_result_ref().has_value());
+  const auto& check_impact_result = def.last_check_impact_result_ref().value();
+  EXPECT_THAT(
+      check_impact_result.get_impact(),
+      UnorderedElementsAre(thrift::OperationImpact::SEQUENCING_CAPACITY_LOSS,
+                           thrift::OperationImpact::STORAGE_CAPACITY_LOSS));
+  ASSERT_EQ(
+      thrift::MaintenanceProgress::BLOCKED_UNTIL_SAFE, def.get_progress());
+
+  // Let's remove this maintenance and re-submit with disabling capacity
+  // checks
+  thrift::RemoveMaintenancesRequest rm_request;
+  thrift::MaintenancesFilter filter;
+  filter.set_user("dummy");
+  rm_request.set_filter(filter);
+  thrift::RemoveMaintenancesResponse rm_resp;
+  admin_client->sync_removeMaintenances(rm_resp, rm_request);
+  // Editing the request
+  request.set_skip_capacity_checks(true);
+
+  admin_client->sync_applyMaintenance(resp, request);
+  ASSERT_EQ(1, resp.get_maintenances().size());
+  wait_until("MaintenanceManager runs the workflow", [&]() {
+    thrift::MaintenancesFilter req1;
+    thrift::MaintenanceDefinitionResponse resp1;
+    admin_client->sync_getMaintenances(resp1, req1);
+    const auto& def = resp1.get_maintenances()[0];
+    // We expect us to be be able to finish.
+    return thrift::MaintenanceProgress::COMPLETED == def.get_progress();
+  });
 }

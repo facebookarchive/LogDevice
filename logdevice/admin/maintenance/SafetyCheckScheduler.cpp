@@ -72,7 +72,8 @@ SafetyCheckScheduler::executePlan(
                          nodes_config,
                          shards_sequencers_to_check.first,
                          shards_sequencers_to_check.second,
-                         safety_check_job.safety_margin);
+                         safety_check_job.safety_margin,
+                         safety_check_job.skip_capacity_checks);
 
   folly::SemiFuture<folly::Expected<Result, Status>> result_fut =
       std::move(safety_future)
@@ -152,7 +153,8 @@ SafetyCheckScheduler::performSafetyCheck(
         nodes_config,
     ShardSet shards,
     NodeIndexSet sequencers,
-    SafetyMargin safety_margin) const {
+    SafetyMargin safety_margin,
+    bool skip_capacity_checks) const {
   // We must have nodes configuration to operate.
   ld_assert(nodes_config != nullptr);
   ld_assert(processor_);
@@ -180,7 +182,7 @@ SafetyCheckScheduler::performSafetyCheck(
       safety_margin,
       /* check_metadata_logs= */ true,
       /* check_internal_logs= */ true,
-      /* check_capacity= */ true,
+      /* check_capacity= */ !skip_capacity_checks,
       settings_->max_unavailable_storage_capacity_pct,
       settings_->max_unavailable_sequencing_capacity_pct,
       /* logids_to_check= */ folly::none);
@@ -307,6 +309,7 @@ SafetyCheckScheduler::buildExecutionPlanPerPriority(
     MaintenanceManifest manifest{};
     manifest.group_id = group_id;
     manifest.timestamp = maintenance->created_on_ref().value_or(0);
+    manifest.skip_capacity_checks = maintenance->get_skip_capacity_checks();
     // Do we have sequencer disable requests for this group?
     NodeIndexSet sequencers_to_disable;
     auto seq_it = group_to_sequencers.find(group_id);
@@ -356,31 +359,30 @@ SafetyCheckScheduler::buildExecutionPlanPerPriority(
   std::for_each(may_disappear.begin(),
                 may_disappear.end(),
                 [&](const MaintenanceManifest& v) {
-                  plan.push_back(SafetyCheckJob{
-                      .group_id = v.group_id,
-                      .shards_and_seqs = v.shards_and_seqs,
-                      .safety_margin = safety_margin,
-                  });
+                  plan.push_back(SafetyCheckJob(v.group_id,
+                                                v.shards_and_seqs,
+                                                safety_margin,
+                                                v.skip_capacity_checks));
                 });
 
   std::for_each(
       drained.begin(), drained.end(), [&](const MaintenanceManifest& v) {
-        plan.push_back(SafetyCheckJob{
-            .group_id = v.group_id,
-            .shards_and_seqs = v.shards_and_seqs,
-            .safety_margin = safety_margin,
-        });
+        plan.push_back(SafetyCheckJob(v.group_id,
+                                      v.shards_and_seqs,
+                                      safety_margin,
+                                      v.skip_capacity_checks));
       });
 
   // Do we have sequencer-only maintenances still left?
   if (group_to_sequencers.size() > 0) {
     for (const auto& it : group_to_sequencers) {
       ShardSet empty;
-      plan.push_back(SafetyCheckJob{
-          .group_id = it.first,
-          .shards_and_seqs = std::make_pair(empty, it.second),
-          .safety_margin = safety_margin,
-      });
+      GroupID group_id = it.first;
+      auto* maintenance = maintenance_state.getMaintenanceByGroupID(group_id);
+      plan.push_back(SafetyCheckJob(group_id,
+                                    std::make_pair(empty, it.second),
+                                    safety_margin,
+                                    maintenance->get_skip_capacity_checks()));
     }
   }
 

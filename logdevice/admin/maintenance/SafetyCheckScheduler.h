@@ -118,6 +118,8 @@ class SafetyCheckScheduler {
     // The different location strings (only for the biggest replication scope)
     // that is affected by this maintenance.
     folly::F14FastSet<std::string> locations;
+    // Whether this maintenance wants to ignore capacity checks or not.
+    bool skip_capacity_checks;
   };
 
   /**
@@ -126,12 +128,22 @@ class SafetyCheckScheduler {
    * safety check run.
    */
   struct SafetyCheckJob {
+    SafetyCheckJob(const GroupID& group_id,
+                   const ShardsAndSequencers& shards_and_seqs,
+                   const SafetyMargin& safety_margin,
+                   bool skip_capacity_checks)
+        : group_id(group_id),
+          shards_and_seqs(shards_and_seqs),
+          safety_margin(safety_margin),
+          skip_capacity_checks(skip_capacity_checks) {}
     // the maintenance group ID.
     GroupID group_id;
     // The shards and sequencers in this maintenance.
     ShardsAndSequencers shards_and_seqs;
     // The safety margin requested for this safety check run
     SafetyMargin safety_margin;
+    // Whether we should skip capacity check or not
+    bool skip_capacity_checks;
   };
 
   /**
@@ -183,7 +195,8 @@ class SafetyCheckScheduler {
       std::shared_ptr<const configuration::nodes::NodesConfiguration>,
       ShardSet shards,
       NodeIndexSet sequencers,
-      SafetyMargin safety_margin) const;
+      SafetyMargin safety_margin,
+      bool skip_capacity_check) const;
 
   /**
    * Build execution plans for shard+sequencer safety checks.

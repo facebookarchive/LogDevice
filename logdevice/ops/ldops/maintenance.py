@@ -164,6 +164,7 @@ async def apply_maintenance(
     allow_passive_drains: Optional[bool] = False,
     force_restore_rebuilding: Optional[bool] = False,
     priority: MaintenancePriority = MaintenancePriority.MEDIUM,
+    skip_capacity_checks: Optional[bool] = False,
 ) -> Collection[MaintenanceDefinition]:
     """
     Applies maintenance to MaintenanceManager.
@@ -200,6 +201,7 @@ async def apply_maintenance(
         reason=reason,
         extras=extras,
         skip_safety_checks=skip_safety_checks,
+        skip_capacity_checks=skip_capacity_checks,
         group=group,
         ttl_seconds=int(ttl.total_seconds()),
         allow_passive_drains=allow_passive_drains,

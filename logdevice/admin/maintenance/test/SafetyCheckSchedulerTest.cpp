@@ -45,7 +45,8 @@ class SafetyCheckSchedulerMock : public SafetyCheckScheduler {
                      std::shared_ptr<const NodesConfiguration>,
                      ShardSet shards,
                      NodeIndexSet sequencers,
-                     SafetyMargin safety_margin) const override;
+                     SafetyMargin safety_margin,
+                     bool skip_capacity_check) const override;
 
   virtual std::deque<SafetyCheckScheduler::SafetyCheckJob> buildExecutionPlan(
       const ClusterMaintenanceWrapper& maintenance_state,
@@ -63,7 +64,8 @@ SafetyCheckSchedulerMock::performSafetyCheck(
     std::shared_ptr<const NodesConfiguration> /* unused */,
     ShardSet shards,
     SafetyCheckScheduler::NodeIndexSet sequencers,
-    SafetyMargin /* unused */) const {
+    SafetyMargin /* unused */,
+    bool /* unused */) const {
   auto promise_future_pair =
       folly::makePromiseContract<folly::Expected<Impact, Status>>();
   for (const auto& it : shard_impacts) {
@@ -120,7 +122,8 @@ TEST(SafetyCheckerSchedulerTest, TestMock) {
                                    nullptr,
                                    canned.shards,
                                    canned.sequencers,
-                                   SafetyMargin());
+                                   SafetyMargin(),
+                                   false);
   folly::Expected<Impact, Status> result = std::move(f).get();
   ASSERT_TRUE(result.hasValue());
   ASSERT_EQ(impact.result, result->result);
@@ -138,7 +141,8 @@ TEST(SafetyCheckerSchedulerTest, TestMock) {
                                     nullptr,
                                     canned.shards,
                                     canned.sequencers,
-                                    SafetyMargin());
+                                    SafetyMargin(),
+                                    false);
 
   ASSERT_TRUE(f2.isReady());
   result = std::move(f2).get();
