@@ -482,11 +482,9 @@
 <tr><td>admin_address</td><td style="text-align:center">string</td><td>The IP address, including port number, for admin server</td></tr>
 <tr><td>generation</td><td style="text-align:center">long</td><td>Generation of the node.  This value is bumped each time the node is swapped, sent to repair, or has one of its drives sent to repair.</td></tr>
 <tr><td>location</td><td style="text-align:center">string</td><td>Location of the node: <region>.<cluster>.<row>.<rack></td></tr>
-<tr><td>sequencer</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'sequencer_enabled'.</td></tr>
+<tr><td>sequencer</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active.</td></tr>
 <tr><td>storage</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage_state'.</td></tr>
-<tr><td>sequencer_enabled</td><td style="text-align:center">int</td><td>1 if sequencing on this node is enabled. Othewise 0.</td></tr>
 <tr><td>sequencer_weight</td><td style="text-align:center">real</td><td>A non-negative value indicating how many logs this node should be a sequencer for relative to other nodes in the cluster.  A value of 0 means this node cannot run sequencers.</td></tr>
-<tr><td>is_storage</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage_state'.</td></tr>
 <tr><td>storage_state</td><td style="text-align:center">string</td><td>Determines the current state of the storage node. One of &quot;read-write&quot;, &quot;read-only&quot; or &quot;none&quot;.</td></tr>
 <tr><td>storage_weight</td><td style="text-align:center">real</td><td>A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster.</td></tr>
 <tr><td>num_shards</td><td style="text-align:center">long</td><td>Number of storage shards on this node.  0 if this node is not a storage node.</td></tr>
