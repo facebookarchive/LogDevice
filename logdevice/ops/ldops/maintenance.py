@@ -25,6 +25,7 @@ from logdevice.admin.clients import AdminAPI
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
     MaintenanceDefinitionResponse,
+    MaintenancePriority,
     MaintenancesFilter,
     MarkAllShardsUnrecoverableRequest,
     MarkAllShardsUnrecoverableResponse,
@@ -162,6 +163,7 @@ async def apply_maintenance(
     skip_safety_checks: Optional[bool] = False,
     allow_passive_drains: Optional[bool] = False,
     force_restore_rebuilding: Optional[bool] = False,
+    priority: MaintenancePriority = MaintenancePriority.MEDIUM,
 ) -> Collection[MaintenanceDefinition]:
     """
     Applies maintenance to MaintenanceManager.
@@ -202,6 +204,7 @@ async def apply_maintenance(
         ttl_seconds=int(ttl.total_seconds()),
         allow_passive_drains=allow_passive_drains,
         force_restore_rebuilding=force_restore_rebuilding,
+        priority=priority,
     )
     resp: MaintenanceDefinitionResponse = await admin_api.apply_maintenance(
         client=client, req=req

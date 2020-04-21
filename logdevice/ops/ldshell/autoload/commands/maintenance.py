@@ -30,6 +30,7 @@ from ldshell.autoload.commands import safety
 from ldshell.helpers import confirm_prompt
 from logdevice.admin.maintenance.types import (
     MaintenanceDefinition,
+    MaintenancePriority,
     MaintenanceProgress,
     MarkAllShardsUnrecoverableResponse,
 )
@@ -107,6 +108,11 @@ def _render_compact(
         else:
             sequencer_progress = "-"
 
+        priority = MaintenancePriority.MEDIUM
+        if mv.priority is not None:
+            priority = mv.priority
+        priority_str = colored(priority.name, _color_priority(priority))
+
         created_by = mv.user
 
         if mv.reason:
@@ -130,6 +136,7 @@ def _render_compact(
             status,
             shard_progress,
             sequencer_progress,
+            priority_str,
             created_by,
             created_reason,
             created_on,
@@ -143,6 +150,7 @@ def _render_compact(
             "STATUS",
             "SHARDS",
             "SEQUENCERS",
+            "PRIORITY",
             "CREATED BY",
             "REASON",
             "CREATED AT",
@@ -172,6 +180,11 @@ def _render_expanded(
         def overview(mv: MaintenanceView, cv: ClusterView) -> str:
             tbl = []
             tbl.append(["Maintenance ID", mv.group_id])
+            priority = MaintenancePriority.MEDIUM
+            if mv.priority is not None:
+                priority = mv.priority
+
+            tbl.append(["Priority", colored(priority.name, _color_priority(priority))])
 
             tbl.append(
                 [
@@ -537,6 +550,17 @@ def _color_maintenance_overall_status(arg: MaintenanceProgress) -> str:
     return color
 
 
+def _color_priority(arg: MaintenancePriority) -> str:
+    color = "white"
+    if arg == MaintenancePriority.IMMINENT:
+        color = "magenta"
+    elif arg == MaintenancePriority.HIGH:
+        color = "red"
+    elif arg == MaintenancePriority.LOW:
+        color = "blue"
+    return color
+
+
 def _color(arg: Union[MaintenanceProgress, MaintenanceStatus]) -> str:
     return {
         MaintenanceProgress: _color_maintenance_overall_status,
@@ -582,6 +606,7 @@ def _filter_maintenance_views(
     blocked: Optional[bool] = None,
     completed: Optional[bool] = None,
     in_progress: Optional[bool] = None,
+    priority: Optional[MaintenancePriority] = None,
     include_internal_maintenances: Optional[bool] = None,
 ) -> Generator[MaintenanceView, None, None]:
     cv = cluster_view
@@ -621,6 +646,8 @@ def _filter_maintenance_views(
             for mv in mvs
             if set(mv.affected_node_indexes).intersection(node_indexes_set)
         )
+    if priority is not None:
+        mvs = (mv for mv in mvs if mv.priority == priority)
 
     if blocked is not None:
         mvs = (mv for mv in mvs if mv.is_blocked == blocked)
@@ -635,12 +662,23 @@ def _filter_maintenance_views(
 
 
 def _parse_shard_target_state(tgt_state: str) -> ShardOperationalState:
-    if tgt_state == "may-disappear":
+    if tgt_state.lower() == "may-disappear":
         return ShardOperationalState.MAY_DISAPPEAR
-    elif tgt_state == "drained":
+    elif tgt_state.lower() == "drained":
         return ShardOperationalState.DRAINED
     else:
         raise ValueError(f"Can't parse shard_target_state: {tgt_state}")
+
+
+def _parse_priority(priority: Optional[str]) -> Optional[MaintenancePriority]:
+    # pass through
+    if priority is None:
+        return None
+    upper_priority = priority.upper()
+    try:
+        return MaintenancePriority[upper_priority]
+    except KeyError:
+        raise ValueError(f"Can't parse priority: {priority}")
 
 
 @command("maintenance")
@@ -658,6 +696,7 @@ class MaintenanceCommand:
         blocked: Optional[bool] = None,
         completed: Optional[bool] = None,
         in_progress: Optional[bool] = None,
+        priority: Optional[MaintenancePriority] = None,
         rendering_mode: Optional[RenderingMode] = RenderingMode.COMPACT,
     ) -> str:
         ctx = context.get_context()
@@ -677,6 +716,8 @@ class MaintenanceCommand:
                 blocked=blocked,
                 completed=completed,
                 in_progress=in_progress,
+                priority=priority,
+                include_internal_maintenances=None,
             )
         )
         if len(mvs) == 0:
@@ -705,6 +746,11 @@ class MaintenanceCommand:
         "in_progress",
         description="Show only maintenances which are in progress (including blocked)",
     )
+    @argument(
+        "priority",
+        description="Show only maintenances with a given priority",
+        choices=["imminent", "high", "medium", "low"],
+    )
     async def list_maintenances(
         self,
         ids: Optional[List[str]] = None,
@@ -714,6 +760,7 @@ class MaintenanceCommand:
         blocked: Optional[bool] = None,
         completed: Optional[bool] = None,
         in_progress: Optional[bool] = None,
+        priority: Optional[str] = None,
     ) -> None:
         """
         Prints compact list of maintenances applied to the cluster
@@ -727,6 +774,7 @@ class MaintenanceCommand:
                 blocked=blocked,
                 completed=completed,
                 in_progress=in_progress,
+                priority=_parse_priority(priority),
                 rendering_mode=RenderingMode.COMPACT,
             )
         )
@@ -800,6 +848,7 @@ class MaintenanceCommand:
     @argument(
         "shard_target_state",
         description='Shard Target State, either "may-disappear" or "drained"',
+        choices=["may-disappear", "drained"],
     )
     @argument(
         "sequencer_node_indexes",
@@ -830,6 +879,11 @@ class MaintenanceCommand:
         "force_restore_rebuilding",
         description="Forces rebuilding to run in RESTORE mode",
     )
+    @argument(
+        "priority",
+        description="The maintenance priority",
+        choices=["imminent", "high", "medium", "low"],
+    )
     async def apply(
         self,
         reason: str,
@@ -845,6 +899,7 @@ class MaintenanceCommand:
         ttl: Optional[int] = 0,
         allow_passive_drains: Optional[bool] = False,
         force_restore_rebuilding: Optional[bool] = False,
+        priority: Optional[str] = "medium",
     ):
         """
         Applies new maintenance to Maintenance Manager
@@ -913,6 +968,7 @@ class MaintenanceCommand:
                     skip_safety_checks=skip_safety_checks,
                     allow_passive_drains=allow_passive_drains,
                     force_restore_rebuilding=force_restore_rebuilding,
+                    priority=_parse_priority(priority),
                 )
                 cv = await get_cluster_view(client)
         except Exception as e:
@@ -967,6 +1023,11 @@ class MaintenanceCommand:
         description="Should we include internal maintenances in our removal "
         "request?",
     )
+    @argument(
+        "priority",
+        description="The maintenance priority",
+        choices=["imminent", "high", "medium", "low"],
+    )
     async def remove(
         self,
         reason: str,
@@ -978,6 +1039,7 @@ class MaintenanceCommand:
         completed: Optional[bool] = None,
         in_progress: Optional[bool] = None,
         log_user: Optional[str] = None,
+        priority: Optional[str] = None,
         include_internal_maintenances=False,
     ) -> None:
         """
@@ -1001,6 +1063,7 @@ class MaintenanceCommand:
                 blocked=blocked,
                 completed=completed,
                 in_progress=in_progress,
+                priority=_parse_priority(priority),
                 include_internal_maintenances=include_internal_maintenances,
             )
         )
