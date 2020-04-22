@@ -106,6 +106,11 @@ ReadUnavailableMapping = Mapping[LocationScope, Mapping[str, Set[ShardID]]]
     type=int,
     description="The maximum percentage of storage capacity that can be unavailable",
 )
+@argument(
+    "skip_capacity_checks",
+    type=bool,
+    description="Disable capacity checking altogether",
+)
 async def check_impact(
     shards: Optional[List[str]] = None,
     node_indexes: Optional[List[int]] = None,
@@ -121,6 +126,7 @@ async def check_impact(
     short: bool = False,
     max_unavailable_storage_capacity_pct=25,
     max_unavailable_sequencing_capacity_pct=25,
+    skip_capacity_checks=False,
 ):
     """
     Return true if performaing operations to the given shards will cause
@@ -160,6 +166,10 @@ async def check_impact(
 
     # pyre-fixme[9]: target_state has type `str`; used as `ShardStorageState`.
     target_state = convert.to_storage_state(target_state)
+
+    if skip_capacity_checks:
+        max_unavailable_sequencing_capacity_pct = 100
+        max_unavailable_storage_capacity_pct = 100
 
     async with ctx.get_cluster_admin_client() as client:
         try:
@@ -300,7 +310,9 @@ def get_biggest_scope(replication: ReplicationProperty) -> LocationScope:
 
 # TODO (T62931988) change this back to Location
 def location_up_to_scope(
-    shard: ShardID, location_per_scope: Mapping[LocationScope, str], scope: LocationScope
+    shard: ShardID,
+    location_per_scope: Mapping[LocationScope, str],
+    scope: LocationScope,
 ) -> str:
     """
     Generates a string of the location string up to a given scope. The input
