@@ -95,7 +95,7 @@ class NodesConfiguration {
   }
 
   bool isBootstrapped() const {
-    return !this->getSequencerMembership()->isBootstrapping() ||
+    return !this->getSequencerMembership()->isBootstrapping() &&
         !this->getStorageMembership()->isBootstrapping();
   }
 
