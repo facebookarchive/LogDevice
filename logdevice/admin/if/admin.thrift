@@ -148,9 +148,10 @@ service AdminAPI extends fb303.FacebookService {
    *      replication property.
    *   4- Mark the NodesConfiguration as bootstrapped.
    *
-   * Calls to this function will fail if the cluster is already bootstrapped
-   * or if there are not enough provisioned storage nodes to satisfy the
-   * requested replication property.
+   * Calls to this function are idempotent: if it is already bootstrapped, it
+   * will do nothing but return a valid response with the current nodes
+   * configuration version. Calls will fail if there are not enough provisioned
+   * storage nodes to satisfy the requested replication property.
    */
   cluster_membership.BootstrapClusterResponse bootstrapCluster(1:
       cluster_membership.BootstrapClusterRequest request) throws

@@ -94,6 +94,11 @@ class NodesConfiguration {
     return storage_config_->getMembership()->hasNode(node);
   }
 
+  bool isBootstrapped() const {
+    return !this->getSequencerMembership()->isBootstrapping() ||
+        !this->getStorageMembership()->isBootstrapping();
+  }
+
   const std::shared_ptr<const SequencerConfig>& getSequencerConfig() const {
     return sequencer_config_;
   }
