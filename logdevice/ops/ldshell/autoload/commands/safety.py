@@ -215,6 +215,7 @@ async def check_impact(
         lines.append(f"Total logs checked ({response.total_logs_checked}) in {delta}s")
     print("\n".join(lines))
     if not short:
+        # pyre-fixme[6]: Expected `List[ShardID]` for 2nd param but got `List[str]`.
         print(check_impact_string(response, shards, target_state))
     if not response.impact:
         return 0

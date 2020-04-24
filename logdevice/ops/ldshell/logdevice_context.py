@@ -124,11 +124,8 @@ class LDShellContext(context.Context):
     async def _fetch_config(self) -> None:
         config = await self.get_config_contents()
         self._config_file = tempfile.NamedTemporaryFile()
-        # pyre-ignore
         self._config_file.write(config)
-        # pyre-ignore
         self._config_file.flush()
-        # pyre-ignore
         self._temp_config_path = self._config_file.name
         logging.info("Config downloaded and stored in %s", self._temp_config_path)
 

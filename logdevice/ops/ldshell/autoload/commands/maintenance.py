@@ -56,7 +56,6 @@ def _render(
     cluster_view: ClusterView,
     mode: RenderingMode = RenderingMode.COMPACT,
 ) -> str:
-    # pyre-ignore
     return {
         RenderingMode.COMPACT: _render_compact,
         RenderingMode.EXPANDED: _render_expanded,
@@ -979,6 +978,8 @@ class MaintenanceCommand:
                     skip_capacity_checks=skip_capacity_checks,
                     allow_passive_drains=allow_passive_drains,
                     force_restore_rebuilding=force_restore_rebuilding,
+                    # pyre-fixme[6]: Expected `MaintenancePriority` for 13th param
+                    #  but got `Optional[MaintenancePriority]`.
                     priority=_parse_priority(priority),
                 )
                 cv = await get_cluster_view(client)

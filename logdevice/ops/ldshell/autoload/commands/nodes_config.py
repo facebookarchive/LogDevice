@@ -252,8 +252,6 @@ class NodesConfig:
         replication_property: ReplicationProperty = {}
         for scope_str, factor in metadata_replicate_across.items():
             try:
-                # pyre-fixme[24]: Non-generic type `LocationScope` cannot take
-                #  parameters.
                 scope = LocationScope[scope_str.upper()]
                 # pyre-fixme[16]: `Map__LocationScope_i32` has no attribute
                 #  `__setitem__`.

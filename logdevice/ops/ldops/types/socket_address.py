@@ -53,6 +53,7 @@ class SocketAddress:
             assert self.address is not None
             # TODO Admin Server uses string comparison for IP addresses
             # on 'compressed' (T45290450)
+            # pyre-fixme[16]: `None` has no attribute `compressed`.
             addr = self.address.compressed
         elif self.address_family == SocketAddressFamily.UNIX:
             assert self.path is not None
