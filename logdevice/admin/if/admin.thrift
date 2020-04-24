@@ -256,6 +256,25 @@ service AdminAPI extends fb303.FacebookService {
   settings.SettingsResponse getSettings(1: settings.SettingsRequest request) (cpp.coroutine);
 
   /**
+   * Apply a temporary override setting.
+   * An InvalidRequest is thrown if the setting name is unknown of if the TTL is
+   * non-positive. An OperationError is thrown if a TTL could not be set.
+   * Note: this will only run on a single node and not affect the entire
+   * cluster.
+   */
+  void applySettingOverride(
+      1: settings.ApplySettingOverrideRequest request) throws
+      (1: exceptions.InvalidRequest invalid_request,
+       2: exceptions.OperationError operation_error)
+      (cpp.coroutine);
+
+  /**
+   * Remove a temporary override setting
+   */
+  void removeSettingOverride(1: settings.RemoveSettingOverrideRequest request)
+      (cpp.coroutine);
+
+  /**
    * Force the server to take new snapshot of the LogsTree state in memory. The
    * argument to this is `min_version` which means that the snapshot should only
    * be taken if the server is running with this LogTree version (or newer)

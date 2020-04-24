@@ -217,7 +217,6 @@ TEST_F(AdminAPILowLevelTest, SettingsAPITest) {
 
   thrift::SettingsResponse response;
   admin_client->sync_getSettings(response, thrift::SettingsRequest());
-  ASSERT_NE(nullptr, admin_client);
 
   // For LogsConfig manager, we pass this as both a CLI argument and in CONFIG
   auto& logsconfig_setting = response.settings["enable-logsconfig-manager"];
@@ -258,6 +257,138 @@ TEST_F(AdminAPILowLevelTest, SettingsAPITest) {
   ASSERT_EQ("60min", rebuilding_window_setting.currentValue);
   store_timeout_setting = filtered_response.settings["store-timeout"];
   ASSERT_EQ("1s..12s", store_timeout_setting.currentValue);
+}
+
+TEST_F(AdminAPILowLevelTest, ApplySettingOverrideAPITest) {
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--rebuilding-local-window", "60min")
+                     .useHashBasedSequencerAssignment()
+                     .create(2);
+
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
+  ASSERT_NE(nullptr, admin_client);
+
+  auto fbStatus = admin_client->sync_getStatus();
+  ASSERT_EQ(facebook::fb303::cpp2::fb_status::ALIVE, fbStatus);
+
+  // Apply a temporary override
+  auto apply_setting_override_request = thrift::ApplySettingOverrideRequest();
+  apply_setting_override_request.name = "rebuilding-local-window";
+  apply_setting_override_request.value = "30min";
+  apply_setting_override_request.ttl_seconds = 3;
+  admin_client->sync_applySettingOverride(apply_setting_override_request);
+
+  thrift::SettingsResponse response;
+  // Check that overridden setting is in there
+  admin_client->sync_getSettings(response, thrift::SettingsRequest());
+  auto& rebuilding_window_setting =
+      response.settings["rebuilding-local-window"];
+  ASSERT_EQ("30min", rebuilding_window_setting.currentValue);
+
+  // Wait for the TTL to expire and the setting to get removed
+  auto setting_applied = wait_until(
+      [&]() {
+        thrift::SettingsResponse response2;
+        admin_client->sync_getSettings(response2, thrift::SettingsRequest());
+        rebuilding_window_setting =
+            response2.settings["rebuilding-local-window"];
+        return rebuilding_window_setting.currentValue == "60min";
+      },
+      std::chrono::steady_clock::now() + std::chrono::seconds(30));
+  ASSERT_EQ(0, setting_applied);
+}
+
+TEST_F(AdminAPILowLevelTest, ApplySettingOverrideAPITestValidation) {
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .useHashBasedSequencerAssignment()
+                     .create(2);
+
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
+  ASSERT_NE(nullptr, admin_client);
+
+  auto fbStatus = admin_client->sync_getStatus();
+  ASSERT_EQ(facebook::fb303::cpp2::fb_status::ALIVE, fbStatus);
+
+  // Zero TTL isn't allowed
+  auto request1 = thrift::ApplySettingOverrideRequest();
+  request1.name = "rebuilding-local-window";
+  request1.value = "30min";
+  request1.ttl_seconds = 0;
+  ASSERT_THROW(admin_client->sync_applySettingOverride(request1),
+               thrift::InvalidRequest);
+
+  // Negative TTL isn't allowed
+  auto request2 = thrift::ApplySettingOverrideRequest();
+  request2.name = "rebuilding-local-window";
+  request2.value = "30min";
+  request2.ttl_seconds = -1;
+  ASSERT_THROW(admin_client->sync_applySettingOverride(request2),
+               thrift::InvalidRequest);
+
+  // Invalid setting name
+  auto request3 = thrift::ApplySettingOverrideRequest();
+  request3.name = "foo";
+  request3.value = "30min";
+  request3.ttl_seconds = 1;
+  ASSERT_THROW(admin_client->sync_applySettingOverride(request2),
+               thrift::InvalidRequest);
+}
+
+TEST_F(AdminAPILowLevelTest, RemoveSettingOverrideAPITest) {
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--rebuilding-local-window", "60min")
+                     .useHashBasedSequencerAssignment()
+                     .create(2);
+
+  cluster->waitUntilAllAvailable();
+  auto admin_client = cluster->getNode(0).createAdminClient();
+  ASSERT_NE(nullptr, admin_client);
+
+  auto fbStatus = admin_client->sync_getStatus();
+  ASSERT_EQ(facebook::fb303::cpp2::fb_status::ALIVE, fbStatus);
+
+  // Apply a temporary override
+  auto apply_setting_override_request = thrift::ApplySettingOverrideRequest();
+  apply_setting_override_request.name = "rebuilding-local-window";
+  apply_setting_override_request.value = "30min";
+  apply_setting_override_request.ttl_seconds = 3600;
+  admin_client->sync_applySettingOverride(apply_setting_override_request);
+
+  thrift::SettingsResponse response;
+  // Check that overridden setting is in there
+  admin_client->sync_getSettings(response, thrift::SettingsRequest());
+  auto& rebuilding_window_setting =
+      response.settings["rebuilding-local-window"];
+  ASSERT_EQ("30min", rebuilding_window_setting.currentValue);
+
+  // Remove the temporary override
+  auto remove_setting_override_request = thrift::RemoveSettingOverrideRequest();
+  remove_setting_override_request.name = "rebuilding-local-window";
+  admin_client->sync_removeSettingOverride(remove_setting_override_request);
+
+  // Wait for the setting to get removed
+  auto setting_removed = wait_until(
+      [&]() {
+        thrift::SettingsResponse response2;
+        admin_client->sync_getSettings(response2, thrift::SettingsRequest());
+        rebuilding_window_setting =
+            response2.settings["rebuilding-local-window"];
+        return rebuilding_window_setting.currentValue == "60min";
+      },
+      std::chrono::steady_clock::now() + std::chrono::seconds(30));
+  ASSERT_EQ(0, setting_removed);
+
+  // Remove the temporary override again to ensure it's a noop
+  auto remove_setting_override_request2 =
+      thrift::RemoveSettingOverrideRequest();
+  remove_setting_override_request2.name = "rebuilding-local-window";
+  admin_client->sync_removeSettingOverride(remove_setting_override_request2);
+  thrift::SettingsResponse response3;
+  admin_client->sync_getSettings(response3, thrift::SettingsRequest());
+  rebuilding_window_setting = response3.settings["rebuilding-local-window"];
+  ASSERT_EQ("60min", rebuilding_window_setting.currentValue);
 }
 
 TEST_F(AdminAPILowLevelTest, LogGroupThroughputAPITest) {

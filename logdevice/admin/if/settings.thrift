@@ -49,3 +49,27 @@ struct SettingsRequest {
    */
   1: optional set<string> settings;
 }
+
+struct ApplySettingOverrideRequest {
+  /*
+   * The setting name. See https://logdevice.io/docs/Settings.html for a list
+   * of available settings.
+   */
+  1: string name,
+  /*
+   * The setting value
+   */
+  2: string value,
+  /*
+   * The TTL for the setting expiration
+   */
+  3: i32 ttl_seconds,
+}
+
+struct RemoveSettingOverrideRequest {
+  /*
+   * The setting name. See https://logdevice.io/docs/Settings.html for a list
+   * of available settings.
+   */
+  1: string name,
+}

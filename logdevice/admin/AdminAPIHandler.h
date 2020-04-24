@@ -60,6 +60,14 @@ class AdminAPIHandler : public facebook::fb303::FacebookBase2,
   void getSettings(thrift::SettingsResponse& response,
                    std::unique_ptr<thrift::SettingsRequest> request) override;
 
+  // Set a temporary override setting
+  folly::SemiFuture<folly::Unit> semifuture_applySettingOverride(
+      std::unique_ptr<thrift::ApplySettingOverrideRequest> request) override;
+
+  // Unset a temporary override setting
+  folly::SemiFuture<folly::Unit> semifuture_removeSettingOverride(
+      std::unique_ptr<thrift::RemoveSettingOverrideRequest> request) override;
+
   // Take a snapshot of the LogTree running on this server.
   folly::SemiFuture<folly::Unit>
   semifuture_takeLogTreeSnapshot(thrift::unsigned64 min_version) override;

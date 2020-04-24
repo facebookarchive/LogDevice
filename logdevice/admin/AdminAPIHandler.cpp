@@ -15,6 +15,7 @@
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "logdevice/admin/Conv.h"
+#include "logdevice/admin/SettingOverrideTTLRequest.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/admin/safety/SafetyChecker.h"
 #include "logdevice/common/BuildInfo.h"
@@ -147,6 +148,69 @@ void AdminAPIHandler::getSettings(
 
     response.settings[setting.first] = std::move(s);
   }
+}
+
+folly::SemiFuture<folly::Unit>
+logdevice::AdminAPIHandler::semifuture_applySettingOverride(
+    std::unique_ptr<thrift::ApplySettingOverrideRequest> request) {
+  folly::Promise<folly::Unit> p;
+  auto future = p.getSemiFuture();
+
+  // Validate request
+  if (request->ttl_seconds <= 0) {
+    p.setException(thrift::InvalidRequest("TTL must be > 0 seconds"));
+    return future;
+  }
+
+  try {
+    // Apply the temporary setting
+    settings_updater_->setFromAdminCmd(request->name, request->value);
+
+    // Post a request to unset the setting after ttl expires.
+    // If the request fails, do nothing
+    auto ttl = std::chrono::seconds(request->ttl_seconds);
+    std::unique_ptr<Request> req = std::make_unique<SettingOverrideTTLRequest>(
+        ttl, request->name, settings_updater_);
+
+    if (processor_->postImportant(req) != 0) {
+      ld_error("Failed to post SettingOverrideTTLRequest, error: %s.",
+               error_name(err));
+
+      // We have a problem. Roll back the temporary setting since it will
+      // otherwise never get removed.
+      settings_updater_->unsetFromAdminCmd(request->name);
+
+      p.setException(thrift::OperationError(
+          folly::format("Failed to post SettingOverrideTTLRequest, error: {}",
+                        error_name(err))
+              .str()));
+      return future;
+    }
+
+  } catch (const boost::program_options::error& ex) {
+    p.setException(
+        thrift::InvalidRequest(folly::format("Error: {}", ex.what()).str()));
+    return future;
+  }
+
+  return folly::makeSemiFuture();
+}
+
+folly::SemiFuture<folly::Unit>
+AdminAPIHandler::semifuture_removeSettingOverride(
+    std::unique_ptr<thrift::RemoveSettingOverrideRequest> request) {
+  folly::Promise<folly::Unit> p;
+  auto future = p.getSemiFuture();
+
+  try {
+    settings_updater_->unsetFromAdminCmd(request->name);
+  } catch (const boost::program_options::error& ex) {
+    p.setException(
+        thrift::InvalidRequest(folly::format("Error: {}", ex.what()).str()));
+    return future;
+  }
+
+  return folly::makeSemiFuture();
 }
 
 folly::SemiFuture<folly::Unit> AdminAPIHandler::semifuture_takeLogTreeSnapshot(
