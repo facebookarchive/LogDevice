@@ -28,11 +28,13 @@ class StatsHolder;
 
 class SSLFetcher {
  public:
-  SSLFetcher(const std::string& cert_path,
-             const std::string& key_path,
-             const std::string& ca_path,
-             bool load_certs,
-             StatsHolder* stats = nullptr);
+  static std::unique_ptr<SSLFetcher> create(const std::string& cert_path,
+                                            const std::string& key_path,
+                                            const std::string& ca_path,
+                                            bool load_certs,
+                                            StatsHolder* stats = nullptr);
+
+  virtual ~SSLFetcher() = default;
 
   /**
    * @return                  a pointer to the created SSLContext or a null
@@ -47,7 +49,14 @@ class SSLFetcher {
    * It's not thread safe, so should only be called from the worker owning the
    * SSLFetcher.
    */
-  void reloadSSLContext();
+  virtual void reloadSSLContext();
+
+ protected:
+  SSLFetcher(const std::string& cert_path,
+             const std::string& key_path,
+             const std::string& ca_path,
+             bool load_certs,
+             StatsHolder* stats = nullptr);
 
  protected:
   const std::string cert_path_;

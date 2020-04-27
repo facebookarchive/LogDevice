@@ -9,11 +9,11 @@
 
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
-#include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/ServerMessageDispatch.h"
 #include "logdevice/server/ServerProcessor.h"
+#include "logdevice/server/ServerSSLFetcher.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
 #include "logdevice/server/rebuilding/ChunkRebuilding.h"
 #include "logdevice/server/sequencer_boycotting/NodeStatsController.h"
@@ -195,11 +195,14 @@ void ServerWorker::onServerConfigUpdated() {
 
 void ServerWorker::initSSLFetcher() {
   auto& setting = settings();
-  ssl_fetcher_ = std::make_unique<SSLFetcher>(setting.ssl_cert_path,
-                                              setting.ssl_key_path,
-                                              setting.ssl_ca_path,
-                                              true,
-                                              stats());
+  auto server_settings = processor_->updateableServerSettings().get();
+  ssl_fetcher_ =
+      ServerSSLFetcher::create(setting.ssl_cert_path,
+                               setting.ssl_key_path,
+                               setting.ssl_ca_path,
+                               server_settings->use_tls_ticket_seeds,
+                               server_settings->tls_ticket_seeds_path,
+                               stats());
 }
 
 void ServerWorker::setupWorker() {

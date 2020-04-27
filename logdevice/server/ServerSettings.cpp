@@ -562,6 +562,26 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::Configuration)
 
+    ("use-tls-ticket-seeds",
+     &use_tls_ticket_seeds,
+     "false",
+     nullptr,
+     "If enabled, TLS tickets seed will be read and used to initiate TLS ticket encryption "
+     "keys. Once enabled, and all the servers share the same seeds file, they will all use the "
+     "same ticket encrpytion key, and they all can decrypt each others generated tickets "
+     "enabling clients to resume TLS sessions between all the servers in the same cluster.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::Configuration)
+
+    ("tls-ticket-seeds-path",
+     &tls_ticket_seeds_path,
+     "",
+     nullptr,
+     "The path to the TLS ticket seed file, only useful when use-tls-ticket-seeds is set. Read "
+     "TLSCredProcessor::processTLSTickets to understand the format of the seed.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::Configuration)
+
     ;
   // clang-format on
 

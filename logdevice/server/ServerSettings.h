@@ -105,6 +105,9 @@ struct ServerSettings : public SettingsBundle {
   double storage_capacity;
   int num_shards;
 
+  bool use_tls_ticket_seeds;
+  std::string tls_ticket_seeds_path;
+
  private:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

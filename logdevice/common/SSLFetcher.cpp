@@ -11,6 +11,18 @@
 
 namespace facebook { namespace logdevice {
 
+/* static */ std::unique_ptr<SSLFetcher>
+SSLFetcher::create(const std::string& cert_path,
+                   const std::string& key_path,
+                   const std::string& ca_path,
+                   bool load_certs,
+                   StatsHolder* stats) {
+  std::unique_ptr<SSLFetcher> fetcher{
+      new SSLFetcher(cert_path, key_path, ca_path, load_certs, stats)};
+  fetcher->reloadSSLContext();
+  return fetcher;
+}
+
 SSLFetcher::SSLFetcher(const std::string& cert_path,
                        const std::string& key_path,
                        const std::string& ca_path,
@@ -20,9 +32,7 @@ SSLFetcher::SSLFetcher(const std::string& cert_path,
       key_path_(key_path),
       ca_path_(ca_path),
       load_certs_(load_certs),
-      stats_(stats) {
-  reloadSSLContext();
-}
+      stats_(stats) {}
 
 std::shared_ptr<folly::SSLContext> SSLFetcher::getSSLContext() const {
   return context_;

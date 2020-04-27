@@ -157,6 +157,8 @@ class ServerProcessor : public Processor {
  private:
   void fixupLogStorageStateMap();
 
+  void initTLSCredMonitor() override;
+
   std::shared_ptr<LocalLogFile> audit_log_;
   UpdateableSettings<ServerSettings> server_settings_;
   UpdateableSettings<GossipSettings> gossip_settings_;

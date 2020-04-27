@@ -544,11 +544,11 @@ void Worker::initializeSubscriptions() {
 
 void Worker::initSSLFetcher() {
   auto& setting = settings();
-  ssl_fetcher_ = std::make_unique<SSLFetcher>(setting.ssl_cert_path,
-                                              setting.ssl_key_path,
-                                              setting.ssl_ca_path,
-                                              setting.ssl_load_client_cert,
-                                              stats());
+  ssl_fetcher_ = SSLFetcher::create(setting.ssl_cert_path,
+                                    setting.ssl_key_path,
+                                    setting.ssl_ca_path,
+                                    setting.ssl_load_client_cert,
+                                    stats());
 }
 
 void Worker::setupWorker() {

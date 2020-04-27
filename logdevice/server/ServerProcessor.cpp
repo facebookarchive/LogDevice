@@ -10,6 +10,7 @@
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/server/FailureDetector.h"
+#include "logdevice/server/ServerTLSCredMonitor.h"
 #include "logdevice/server/storage/PurgeCoordinator.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
@@ -194,6 +195,18 @@ void ServerProcessor::shutdown() {
 
 ServerProcessor::~ServerProcessor() {
   shutdown();
+}
+
+void ServerProcessor::initTLSCredMonitor() {
+  auto settings = updateableSettings().get();
+  auto server_settings = updateableServerSettings().get();
+  tls_cred_monitor_ = std::make_unique<ServerTLSCredMonitor>(
+      this,
+      settings->ssl_cert_refresh_interval,
+      std::set<std::string>{settings->ssl_cert_path,
+                            settings->ssl_key_path,
+                            settings->ssl_ca_path},
+      server_settings->tls_ticket_seeds_path);
 }
 
 }} // namespace facebook::logdevice

@@ -36,7 +36,11 @@ class TLSCredMonitor : public wangle::TLSCredProcessor {
     setCertPathsToWatch(cert_paths);
   }
 
-  virtual ~TLSCredMonitor() = default;
+  virtual ~TLSCredMonitor() {
+    // We need to stop the poller before destructing this class to avoid any
+    // callbacks during shutdown.
+    stop();
+  }
 
  protected:
   virtual void onCertificatesUpdated();

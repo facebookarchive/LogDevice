@@ -708,6 +708,9 @@ STAT_DEFINE(append_rejected_cancelled, SUM)
 // number of rocksdb manual compaction performed
 STAT_DEFINE(manual_compactions, SUM)
 
+// How many times we reloaded the TLS ticket seeds
+STAT_DEFINE(tls_ticket_seeds_reloaded, SUM)
+
 STAT_DEFINE(server_read_streams_created, SUM)
 
 // Total number of records read by LocalLogStoreReader for all read streams.
