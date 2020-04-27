@@ -851,6 +851,10 @@ struct Settings : public SettingsBundle {
   // TTL for the cert loaded from file
   std::chrono::seconds ssl_cert_refresh_interval;
 
+  // If enabled, new SSL connections will attempt to resume previously cached
+  // sessions.
+  bool ssl_use_session_resumption;
+
   // Sets the boundary which triggers enabling SSL. Communication that crosses
   // this boundary will be encrypted; communication that doesn't will not.
   // For instance, if set to NodeLocationScope::RACK, all cross-rack traffic

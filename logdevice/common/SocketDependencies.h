@@ -30,6 +30,7 @@ class ServerConfig;
 class StatsHolder;
 struct Settings;
 class Sockaddr;
+class SSLSessionCache;
 class Worker;
 
 /**
@@ -55,6 +56,7 @@ class SocketDependencies {
   virtual size_t getBytesPending() const;
 
   virtual SSLCtxPtr getSSLContext() const;
+  virtual SSLSessionCache& getSSLSessionCache() const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID node_id,

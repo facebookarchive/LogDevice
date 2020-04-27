@@ -11,6 +11,8 @@
 
 namespace facebook { namespace logdevice {
 
+const std::string kSSLCacheContext = "LogDevice";
+
 /* static */ std::unique_ptr<SSLFetcher>
 SSLFetcher::create(const std::string& cert_path,
                    const std::string& key_path,
@@ -54,6 +56,8 @@ void SSLFetcher::reloadSSLContext() {
     // Dropping the buffers we are not using and not compressing data
     context_->setOptions(SSL_OP_NO_COMPRESSION);
     SSL_CTX_set_mode(context_->getSSLCtx(), SSL_MODE_RELEASE_BUFFERS);
+
+    context_->setSessionCacheContext(kSSLCacheContext);
 
     // Check peers cert not their hostname
     context_->authenticate(true, false);

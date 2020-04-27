@@ -33,6 +33,7 @@
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/network/MessageReader.h"
+#include "logdevice/common/network/SessionInjectorCallback.h"
 #include "logdevice/common/network/SocketAdapter.h"
 #include "logdevice/common/network/SocketConnectCallback.h"
 #include "logdevice/common/protocol/Compatibility.h"
@@ -368,13 +369,22 @@ folly::Future<Status> Connection::asyncConnect() {
         pow(connect_timeout_retry_multiplier, retry_count));
   }
 
-  auto connect_cb = std::make_unique<SocketConnectCallback>();
-
+  auto socket_connect_cb = std::make_unique<SocketConnectCallback>();
   /* TODO(gauresh) : Go to worker in future. using unsafe future for now.
   auto executor = worker_ != nullptr ? worker_->getExecutor()
                                      : &folly::InlineExecutor::instance();
                                      */
-  auto fut = connect_cb->getConnectStatus().toUnsafeFuture();
+  auto fut = socket_connect_cb->getConnectStatus().toUnsafeFuture();
+
+  std::unique_ptr<folly::AsyncSocket::ConnectCallback> connect_cb =
+      std::move(socket_connect_cb);
+
+  if (isSSL() && getSettings().ssl_use_session_resumption) {
+    connect_cb =
+        std::make_unique<SessionInjectorCallback>(std::move(connect_cb),
+                                                  &deps_->getSSLSessionCache(),
+                                                  proto_handler_->sock());
+  }
 
   proto_handler_->sock()->connect(connect_cb.get(),
                                   peer_sockaddr_.getSocketAddress(),

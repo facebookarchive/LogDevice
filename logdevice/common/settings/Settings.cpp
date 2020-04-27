@@ -1980,6 +1980,14 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "TTL for an SSL certificate that we have loaded from disk.",
        SERVER | CLIENT | REQUIRES_RESTART /* used in Worker ctor */,
        SettingsCategory::Security);
+  init("ssl-use-session-resumption",
+       &ssl_use_session_resumption,
+       "false",
+       nullptr,
+       "If enabled, new SSL connections will attempt to resume previously "
+       "cached sessions.",
+       SERVER | CLIENT,
+       SettingsCategory::Security);
   init("ssl-boundary",
        &ssl_boundary,
        "none",

@@ -217,6 +217,22 @@ class SocketAdapter {
                                 int optname,
                                 void const* optval,
                                 socklen_t optlen) = 0;
+
+  /**
+   * Determine if the session specified during setSSLSession was reused
+   * or if the server rejected it and issued a new session.
+   */
+  virtual bool getSSLSessionReused() const = 0;
+
+  /**
+   * Get a handle to the negotiated SSL session.
+   */
+  virtual folly::ssl::SSLSessionUniquePtr getSSLSession() = 0;
+
+  /**
+   * Set the SSL session to be used during sslConn.
+   */
+  virtual void setSSLSession(folly::ssl::SSLSessionUniquePtr session) = 0;
 };
 
 }} // namespace facebook::logdevice

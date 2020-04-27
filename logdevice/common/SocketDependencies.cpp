@@ -79,6 +79,10 @@ std::shared_ptr<SSLContext> SocketDependencies::getSSLContext() const {
   return Worker::onThisThread()->sslFetcher().getSSLContext();
 }
 
+SSLSessionCache& SocketDependencies::getSSLSessionCache() const {
+  return Worker::onThisThread()->processor_->sslSessionCache();
+}
+
 bool SocketDependencies::shuttingDown() const {
   return Worker::onThisThread()->shuttingDown();
 }

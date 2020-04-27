@@ -277,6 +277,22 @@ class AsyncSocketAdapter : public SocketAdapter {
                         void const* optval,
                         socklen_t optlen) override;
 
+  /**
+   * Determine if the session specified during setSSLSession was reused
+   * or if the server rejected it and issued a new session.
+   */
+  bool getSSLSessionReused() const override;
+
+  /**
+   * Get a handle to the negotiated SSL session.
+   */
+  folly::ssl::SSLSessionUniquePtr getSSLSession() override;
+
+  /**
+   * Set the SSL session to be used during sslConn.
+   */
+  void setSSLSession(folly::ssl::SSLSessionUniquePtr session) override;
+
  private:
   folly::AsyncSocket::UniquePtr transport_;
   std::shared_ptr<folly::SSLContext> sslCtx_;

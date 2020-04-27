@@ -159,4 +159,23 @@ int AsyncSocketAdapter::getSockOptVirtual(int level,
   return transport_->getSockOptVirtual(level, optname, optval, optlen);
 }
 
+bool AsyncSocketAdapter::getSSLSessionReused() const {
+  auto transport = dynamic_cast<folly::AsyncSSLSocket*>(transport_.get());
+  ld_check(transport);
+  return transport->getSSLSession();
+}
+
+folly::ssl::SSLSessionUniquePtr AsyncSocketAdapter::getSSLSession() {
+  auto transport = dynamic_cast<folly::AsyncSSLSocket*>(transport_.get());
+  ld_check(transport);
+  return folly::ssl::SSLSessionUniquePtr(transport->getSSLSession());
+}
+
+void AsyncSocketAdapter::setSSLSession(
+    folly::ssl::SSLSessionUniquePtr session) {
+  auto transport = dynamic_cast<folly::AsyncSSLSocket*>(transport_.get());
+  ld_check(transport);
+  transport->setSSLSession(session.release(), /* takeOwnership= */ true);
+}
+
 }} // namespace facebook::logdevice

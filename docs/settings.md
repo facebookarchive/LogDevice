@@ -499,6 +499,7 @@ sidebar_label: Settings
 | ssl-key-path | Path to LogDevice SSL key. |  | requires&nbsp;restart |
 | ssl-load-client-cert | Set to include client certificate for mutual ssl authentication | false | requires&nbsp;restart, client&nbsp;only |
 | ssl-on-gossip-port | If true, gossip port will reject all plaintext connections. Only SSL connections will be accepted. WARNING: Any change to this setting should only be performed while send-to-gossip-port = false, in order to avoid failure detection issues while the setting change propagates through the cluster. | false | server&nbsp;only |
+| ssl-use-session-resumption | If enabled, new SSL connections will attempt to resume previously cached sessions. | false |  |
 
 ## Sequencer State
 |   Name    |   Description   |  Default  |   Notes   |

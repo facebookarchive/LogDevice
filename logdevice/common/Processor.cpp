@@ -32,6 +32,7 @@
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
 #include "logdevice/common/Request.h"
+#include "logdevice/common/SSLSessionCache.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/SequencerLocator.h"
@@ -107,7 +108,8 @@ class ProcessorImpl {
         nc_publisher_(processor->config_, settings, std::move(trace_logger)),
         read_stream_debug_info_sampling_config_(
             processor->getPluginRegistry(),
-            settings->all_read_streams_debug_config_path) {
+            settings->all_read_streams_debug_config_path),
+        ssl_session_cache_(processor->stats_) {
     dbg::externalLoggerLogLevel = settings->external_loglevel;
   }
 
@@ -139,6 +141,7 @@ class ProcessorImpl {
 
   // If anything depends on worker make sure that it is deleted in the
   // destructor above.
+  SSLSessionCache ssl_session_cache_;
 };
 
 namespace {
@@ -800,6 +803,10 @@ void Processor::setSequencerBatching(
 
 ResourceBudget::Token Processor::getIncomingMessageToken(size_t payload_size) {
   return impl_->incoming_message_budget_.acquireToken(payload_size);
+}
+
+SSLSessionCache& Processor::sslSessionCache() const {
+  return impl_->ssl_session_cache_;
 }
 
 void Processor::onSettingsUpdated() {
