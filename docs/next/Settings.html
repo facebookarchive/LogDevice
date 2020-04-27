@@ -150,7 +150,9 @@
 <tr><td>server_based_nodes_configuration_store_polling_extra_requests</td><td>how many extra requests to send for server based Nodes Configuration Store polling in addition to the required response for each wave</td><td style="text-align:center">1</td><td></td></tr>
 <tr><td>shutdown-on-node-configuration-mismatch</td><td>Gracefully shutdown whenever the server's NodeID and/or service discovery configuration changes.</td><td style="text-align:center">true</td><td>server only</td></tr>
 <tr><td>sleep-secs-after-self-registeration</td><td>If set, the node will sleep for these many secs after self registeration</td><td style="text-align:center">5s</td><td>server only</td></tr>
+<tr><td>tls-ticket-seeds-path</td><td>The path to the TLS ticket seed file, only useful when use-tls-ticket-seeds is set. Read TLSCredProcessor::processTLSTickets to understand the format of the seed.</td><td style="text-align:center"></td><td>requires restart, server only</td></tr>
 <tr><td>use-nodes-configuration-manager-nodes-configuration</td><td>If true and enable_nodes_configuration_manager is set, logdevice will use the nodes configuration from the NodesConfigurationManager.</td><td style="text-align:center">false</td><td></td></tr>
+<tr><td>use-tls-ticket-seeds</td><td>If enabled, TLS tickets seed will be read and used to initiate TLS ticket encryption keys. Once enabled, and all the servers share the same seeds file, they will all use the same ticket encrpytion key, and they all can decrypt each others generated tickets enabling clients to resume TLS sessions between all the servers in the same cluster.</td><td style="text-align:center">false</td><td>requires restart, server only</td></tr>
 <tr><td>wipe-storage-when-storage-state-none</td><td>Allow wiping the local RocksDB store when its storage state is none</td><td style="text-align:center">false</td><td>requires restart, server only</td></tr>
 <tr><td>zk-config-polling-interval</td><td>polling and retry interval for Zookeeper config source</td><td style="text-align:center">1000ms</td><td>CLI only</td></tr>
 </tbody>
@@ -619,8 +621,9 @@
 <tr><td>ssl-cert-path</td><td>Path to LogDevice SSL certificate.</td><td style="text-align:center"></td><td>requires restart</td></tr>
 <tr><td>ssl-cert-refresh-interval</td><td>TTL for an SSL certificate that we have loaded from disk.</td><td style="text-align:center">300s</td><td>requires restart</td></tr>
 <tr><td>ssl-key-path</td><td>Path to LogDevice SSL key.</td><td style="text-align:center"></td><td>requires restart</td></tr>
-<tr><td>ssl-load-client-cert</td><td>Set to include client certificate for mutual ssl authentication</td><td style="text-align:center">false</td><td></td></tr>
+<tr><td>ssl-load-client-cert</td><td>Set to include client certificate for mutual ssl authentication</td><td style="text-align:center">false</td><td>requires restart, client only</td></tr>
 <tr><td>ssl-on-gossip-port</td><td>If true, gossip port will reject all plaintext connections. Only SSL connections will be accepted. WARNING: Any change to this setting should only be performed while send-to-gossip-port = false, in order to avoid failure detection issues while the setting change propagates through the cluster.</td><td style="text-align:center">false</td><td>server only</td></tr>
+<tr><td>ssl-use-session-resumption</td><td>If enabled, new SSL connections will attempt to resume previously cached sessions.</td><td style="text-align:center">false</td><td></td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="sequencer-state"></a><a href="#sequencer-state" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>Sequencer State</h2>
