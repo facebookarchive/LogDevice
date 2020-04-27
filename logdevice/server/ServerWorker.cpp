@@ -9,6 +9,7 @@
 
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/PrincipalParser.h"
+#include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/ServerMessageDispatch.h"
@@ -190,6 +191,15 @@ void ServerWorker::onServerConfigUpdated() {
     }
   }
   Worker::onServerConfigUpdated();
+}
+
+void ServerWorker::initSSLFetcher() {
+  auto& setting = settings();
+  ssl_fetcher_ = std::make_unique<SSLFetcher>(setting.ssl_cert_path,
+                                              setting.ssl_key_path,
+                                              setting.ssl_ca_path,
+                                              true,
+                                              stats());
 }
 
 void ServerWorker::setupWorker() {

@@ -1950,7 +1950,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "false",
        nullptr, // no validation
        "Set to include client certificate for mutual ssl authentication",
-       CLIENT | SERVER,
+       CLIENT | REQUIRES_RESTART,
        SettingsCategory::Security);
   init("ssl-cert-path",
        &ssl_cert_path,

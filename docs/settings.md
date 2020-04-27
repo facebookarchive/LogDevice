@@ -495,7 +495,7 @@ sidebar_label: Settings
 | ssl-cert-path | Path to LogDevice SSL certificate. |  | requires&nbsp;restart |
 | ssl-cert-refresh-interval | TTL for an SSL certificate that we have loaded from disk. | 300s | requires&nbsp;restart |
 | ssl-key-path | Path to LogDevice SSL key. |  | requires&nbsp;restart |
-| ssl-load-client-cert | Set to include client certificate for mutual ssl authentication | false |  |
+| ssl-load-client-cert | Set to include client certificate for mutual ssl authentication | false | requires&nbsp;restart, client&nbsp;only |
 | ssl-on-gossip-port | If true, gossip port will reject all plaintext connections. Only SSL connections will be accepted. WARNING: Any change to this setting should only be performed while send-to-gossip-port = false, in order to avoid failure detection issues while the setting change propagates through the cluster. | false | server&nbsp;only |
 
 ## Sequencer State

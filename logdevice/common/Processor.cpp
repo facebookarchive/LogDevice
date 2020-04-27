@@ -32,10 +32,10 @@
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/SequencerLocator.h"
+#include "logdevice/common/TLSCredMonitor.h"
 #include "logdevice/common/Thread.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
@@ -107,12 +107,7 @@ class ProcessorImpl {
         nc_publisher_(processor->config_, settings, std::move(trace_logger)),
         read_stream_debug_info_sampling_config_(
             processor->getPluginRegistry(),
-            settings->all_read_streams_debug_config_path),
-        sslFetcher_(settings->ssl_cert_path,
-                    settings->ssl_key_path,
-                    settings->ssl_ca_path,
-                    settings->ssl_cert_refresh_interval,
-                    processor->stats_) {
+            settings->all_read_streams_debug_config_path) {
     dbg::externalLoggerLogLevel = settings->external_loglevel;
   }
 
@@ -141,9 +136,9 @@ class ProcessorImpl {
   std::unique_ptr<AllSequencers> allSequencers_;
   std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
   ReadStreamDebugInfoSamplingConfig read_stream_debug_info_sampling_config_;
+
   // If anything depends on worker make sure that it is deleted in the
   // destructor above.
-  SSLFetcher sslFetcher_;
 };
 
 namespace {
@@ -248,6 +243,9 @@ void Processor::init() {
   applySettings(settings_);
   settingsUpdateHandle_ = settings_.subscribeToUpdates(
       std::bind(&Processor::onSettingsUpdated, this));
+
+  initTLSCredMonitor();
+
   if (settings_->server) {
     // Remaining necessary steps are implemented in ServerProcessor::init().
     return;
@@ -804,12 +802,18 @@ ResourceBudget::Token Processor::getIncomingMessageToken(size_t payload_size) {
   return impl_->incoming_message_budget_.acquireToken(payload_size);
 }
 
-SSLFetcher& Processor::sslFetcher() const {
-  return impl_->sslFetcher_;
-}
-
 void Processor::onSettingsUpdated() {
   impl_->allSequencers_->onSettingsUpdated();
+}
+
+void Processor::initTLSCredMonitor() {
+  auto settings = settings_.get();
+  tls_cred_monitor_ = std::make_unique<TLSCredMonitor>(
+      this,
+      settings->ssl_cert_refresh_interval,
+      std::set<std::string>{settings->ssl_cert_path,
+                            settings->ssl_key_path,
+                            settings->ssl_ca_path});
 }
 
 }} // namespace facebook::logdevice

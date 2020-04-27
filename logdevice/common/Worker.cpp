@@ -542,6 +542,15 @@ void Worker::initializeSubscriptions() {
   onSettingsUpdated();
 }
 
+void Worker::initSSLFetcher() {
+  auto& setting = settings();
+  ssl_fetcher_ = std::make_unique<SSLFetcher>(setting.ssl_cert_path,
+                                              setting.ssl_key_path,
+                                              setting.ssl_ca_path,
+                                              setting.ssl_load_client_cert,
+                                              stats());
+}
+
 void Worker::setupWorker() {
   requests_stuck_timer_ = std::make_unique<Timer>(
       std::bind(&Worker::reportOldestRecoveryRequest, this));
@@ -576,6 +585,8 @@ void Worker::setupWorker() {
   // Initialize load reporting and start timer
   reportLoad();
   reportOldestRecoveryRequest();
+
+  initSSLFetcher();
 }
 
 const std::shared_ptr<TraceLogger> Worker::getTraceLogger() const {
@@ -1233,7 +1244,7 @@ Worker::runningGetEpochRecoveryMetadata() const {
 }
 
 SSLFetcher& Worker::sslFetcher() const {
-  return processor_->sslFetcher();
+  return *ssl_fetcher_;
 }
 
 std::unique_ptr<SequencerBackgroundActivator>&

@@ -21,9 +21,9 @@ namespace facebook { namespace logdevice {
 class StatsHolder;
 
 /**
- * @file Loads the SSL context from the specified files, reloads it if it gets
- *       older than the defined expiration interval, provides a shared_ptr to
- *       folly::SSLContext. Does not implement any thread safety mechanics.
+ * @file Loads the SSL context from the specified files, and provides a
+ * shared_ptr to folly::SSLContext. Does not implement any thread safety
+ * mechanics.
  */
 
 class SSLFetcher {
@@ -31,49 +31,32 @@ class SSLFetcher {
   SSLFetcher(const std::string& cert_path,
              const std::string& key_path,
              const std::string& ca_path,
-             std::chrono::seconds refresh_interval,
-             StatsHolder* stats = nullptr)
-      : cert_path_(cert_path),
-        key_path_(key_path),
-        ca_path_(ca_path),
-        refresh_interval_(refresh_interval),
-        stats_(stats) {}
+             bool load_certs,
+             StatsHolder* stats = nullptr);
 
   /**
-   * @param loadCert          Defines whether or not the certificate will be
-   *                          loaded into the SSLContext.
-   * @param ssl_accepting     Defines whether the SSLContext is for accepting or
-   *                          connecting side of the socket.
-   *
    * @return                  a pointer to the created SSLContext or a null
    *                          pointer if the certificate could not be loaded.
    */
-  std::shared_ptr<folly::SSLContext> getSSLContext(bool loadCert);
+  std::shared_ptr<folly::SSLContext> getSSLContext() const;
 
- private:
+  /**
+   * Invoked by an external entity to force recreate the SSL context. Used
+   * mainly when a change of certs is detected on disk.
+   *
+   * It's not thread safe, so should only be called from the worker owning the
+   * SSLFetcher.
+   */
+  void reloadSSLContext();
+
+ protected:
   const std::string cert_path_;
   const std::string key_path_;
   const std::string ca_path_;
-  const std::chrono::seconds refresh_interval_;
-
-  struct ContextState {
-    std::chrono::time_point<std::chrono::steady_clock> last_loaded_;
-    bool last_load_cert_{false};
-    bool context_created_{false};
-  };
+  const bool load_certs_;
 
   std::shared_ptr<folly::SSLContext> context_;
   StatsHolder* stats_{nullptr};
-  ContextState state_;
-  std::mutex mutex_;
-
-  // a context update is required when refresh_interval_ has passed or when any
-  // of the input information is changed
-  // lock needs to be acquired in at least read mode
-  bool requireContextUpdate(bool loadCert) const;
-
-  // lock needs to be acquired in write mode
-  void updateState(bool loadCert, X509* cert);
 };
 
 }} // namespace facebook::logdevice

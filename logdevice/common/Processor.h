@@ -58,9 +58,9 @@ class Request;
 class SequencerBatching;
 class ReadStreamDebugInfoSamplingConfig;
 class SequencerLocator;
-class SSLFetcher;
 class StatsHolder;
 class TraceLogger;
+class TLSCredMonitor;
 class UpdateableConfig;
 class UpdateableSecurityInfo;
 class Worker;
@@ -697,9 +697,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   void
   setSequencerBatching(std::unique_ptr<SequencerBatching> sequencer_batching);
 
-  // SSL context fetcher, used to refresh certificate data
-  SSLFetcher& sslFetcher() const;
-
  private:
   const std::shared_ptr<TraceLogger> trace_logger_;
 
@@ -759,6 +756,13 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   // Callback called when settings are update
   void onSettingsUpdated();
+
+ protected:
+  // A component that monitors TLS certificates and TLS ticket seeds and invokes
+  // the callbacks on SSLFetchers on workers.
+  std::unique_ptr<TLSCredMonitor> tls_cred_monitor_;
+
+  virtual void initTLSCredMonitor();
 };
 
 }} // namespace facebook::logdevice

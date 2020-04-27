@@ -89,6 +89,8 @@ class ServerWorker : public Worker {
   // This overrides Worker::setupWorker() but calls it first thing
   void setupWorker() override;
 
+  void initSSLFetcher() override;
+
   /**
    * Gets the storage task queue. This is the main access point
    * for workers to create storage tasks.

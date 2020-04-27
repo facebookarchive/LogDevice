@@ -805,6 +805,8 @@ class Worker : public WorkContext {
   void setLongExecutionCallback(SlowRequestCallback cb);
   void setLongQueuedCallback(SlowRequestCallback cb);
 
+  virtual void initSSLFetcher();
+
   // Execution probability distribution of different tasks. Hi Priority tasks
   // are called such because they have a higher chance of getting executed.
   static constexpr int kHiPriTaskExecDistribution = 70;
@@ -939,6 +941,9 @@ class Worker : public WorkContext {
   double worker_queue_stall_error_injection_chance_;
   std::chrono::milliseconds worker_stall_inj_ms_;
   std::chrono::milliseconds worker_queue_inj_ms_;
+
+ protected:
+  std::unique_ptr<SSLFetcher> ssl_fetcher_;
 
   friend struct ::testing::SocketConnectRequest;
 };

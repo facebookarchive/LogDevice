@@ -76,12 +76,7 @@ size_t SocketDependencies::getBytesPending() const {
 }
 
 std::shared_ptr<SSLContext> SocketDependencies::getSSLContext() const {
-  // Servers are required to have a certificate so that the client can verify
-  // them. If clients specify that they want to include their certificate, then
-  // the server will also authenticate the client certificates.
-  bool loadCert = getSettings().server || getSettings().ssl_load_client_cert;
-
-  return Worker::onThisThread()->sslFetcher().getSSLContext(loadCert);
+  return Worker::onThisThread()->sslFetcher().getSSLContext();
 }
 
 bool SocketDependencies::shuttingDown() const {
