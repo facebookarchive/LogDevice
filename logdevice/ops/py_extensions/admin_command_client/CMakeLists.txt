@@ -9,6 +9,7 @@ add_dependencies(admin_command_client folly)
 
 target_link_libraries(admin_command_client
   common
+  admin-cpp2
   ${LOGDEVICE_EXTERNAL_DEPS}
 )
 
