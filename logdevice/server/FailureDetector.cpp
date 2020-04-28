@@ -1677,18 +1677,18 @@ void FailureDetector::updateVersions(
       }
       if (new_instance_id ||
           (accepting_durable_ver_indirectly && (recvd > existing))) {
-        ld_info("Updating RSM %s versions for N%zu, GOSSIP received from:%s, "
-                "new_instance_id:%s, rsm_type:%lu, "
-                "recvd:%s, existing:%s, accepting indirectly:%d",
-                msg.flags_ & GOSSIP_Message::HAS_IN_MEM_VERSIONS ? "in-memory"
-                                                                 : "durable",
-                id,
-                msg.gossip_node_.toString().c_str(),
-                new_instance_id ? "yes" : "no",
-                msg.rsm_types_[i].val_,
-                lsn_to_string(recvd).c_str(),
-                lsn_to_string(existing).c_str(),
-                accepting_durable_ver_indirectly);
+        ld_debug("Updating RSM %s versions for N%zu, GOSSIP received from:%s, "
+                 "new_instance_id:%s, rsm_type:%lu, "
+                 "recvd:%s, existing:%s, accepting indirectly:%d",
+                 msg.flags_ & GOSSIP_Message::HAS_IN_MEM_VERSIONS ? "in-memory"
+                                                                  : "durable",
+                 id,
+                 msg.gossip_node_.toString().c_str(),
+                 new_instance_id ? "yes" : "no",
+                 msg.rsm_types_[i].val_,
+                 lsn_to_string(recvd).c_str(),
+                 lsn_to_string(existing).c_str(),
+                 accepting_durable_ver_indirectly);
         fdnode_rsm_versions[msg.rsm_types_[i]] = node.rsm_versions_[i];
       }
     }
