@@ -69,11 +69,13 @@ class PromiseRequest : public Request {
   PromiseRequest(folly::Optional<worker_id_t> worker,
                  WorkerType worker_type,
                  RequestType type,
+                 int8_t priority,
                  folly::Promise<T>&& p,
                  folly::Function<void(folly::Promise<T>)> func)
       : Request(type),
         worker_(std::move(worker)),
         worker_type_(std::move(worker_type)),
+        priority_(priority),
         p_(std::move(p)),
         func_(std::move(func)) {}
 
@@ -84,9 +86,14 @@ class PromiseRequest : public Request {
     return std::make_unique<PromiseRequest>(std::forward<Args>(args)...);
   }
 
+  virtual int8_t getExecutorPriority() const override {
+    return priority_;
+  }
+
  private:
   folly::Optional<worker_id_t> worker_;
   WorkerType worker_type_;
+  uint8_t priority_;
   folly::Promise<T> p_;
   folly::Function<void(folly::Promise<T>)> func_;
 
@@ -243,7 +250,8 @@ fulfill_on_worker(Processor* processor,
                   WorkerType worker_type,
                   folly::Function<void(folly::Promise<T>)> cb,
                   RequestType request_type = RequestType::MISC,
-                  bool with_retrying = false) {
+                  bool with_retrying = false,
+                  int8_t priority = folly::Executor::LO_PRI) {
   ld_check(processor);
   folly::Promise<T> p; // will be moved to Request;
   auto future = p.getSemiFuture();
@@ -265,6 +273,7 @@ fulfill_on_worker(Processor* processor,
   auto req = PromiseRequest<T>::make(std::move(worker_id),
                                      worker_type,
                                      request_type,
+                                     priority,
                                      std::move(p),
                                      std::move(cb));
 
@@ -307,7 +316,8 @@ fulfill_on_worker_pool(Processor* processor,
                        WorkerType worker_type,
                        folly::Function<void(folly::Promise<T>) const> cb,
                        RequestType request_type = RequestType::MISC,
-                       bool with_retrying = false) {
+                       bool with_retrying = false,
+                       int8_t priority = folly::Executor::LO_PRI) {
   const int nworkers = processor->getWorkerCount(worker_type);
   std::vector<folly::SemiFuture<T>> futures;
   auto func = std::move(cb).asSharedProxy();
@@ -317,7 +327,8 @@ fulfill_on_worker_pool(Processor* processor,
                                               worker_type,
                                               func,
                                               request_type,
-                                              with_retrying));
+                                              with_retrying,
+                                              priority));
   }
   return futures;
 }
@@ -327,7 +338,8 @@ std::vector<folly::SemiFuture<T>>
 fulfill_on_all_workers(Processor* processor,
                        folly::Function<void(folly::Promise<T>) const> cb,
                        RequestType request_type = RequestType::MISC,
-                       bool with_retrying = false) {
+                       bool with_retrying = false,
+                       int8_t priority = folly::Executor::LO_PRI) {
   ld_check(processor);
   const auto nWorkers = processor->getAllWorkersCount();
   std::vector<folly::SemiFuture<T>> futures;
@@ -336,7 +348,7 @@ fulfill_on_all_workers(Processor* processor,
   for (int i = 0; i < numOfWorkerTypes(); ++i) {
     WorkerType worker_type = workerTypeByIndex(i);
     auto pool_futures = fulfill_on_worker_pool<T>(
-        processor, worker_type, func, request_type, with_retrying);
+        processor, worker_type, func, request_type, with_retrying, priority);
     futures.insert(futures.end(),
                    std::make_move_iterator(pool_futures.begin()),
                    std::make_move_iterator(pool_futures.end()));

@@ -461,7 +461,8 @@ void NodesConfigurationManager::maybeProcessStagedConfig() {
         p.setValue();
       },
       RequestType::NODES_CONFIGURATION_MANAGER,
-      /* with_retrying = */ true);
+      /* with_retrying = */ true,
+      folly::Executor::HI_PRI);
 
   // If one of the worker is stuck, it will block us from making progress.
   // This is probably OK since we would need to propagate new configs to every

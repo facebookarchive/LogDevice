@@ -143,6 +143,12 @@ class NCMRequest : public Request {
     return worker_id_.val();
   }
 
+  // All the NCM requests are critical and should be executed with HI_PRI
+  // priority.
+  virtual int8_t getExecutorPriority() const override {
+    return folly::Executor::HI_PRI;
+  }
+
   Request::Execution execute() final override;
 
  protected:

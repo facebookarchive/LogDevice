@@ -241,7 +241,8 @@ NodesConfigurationPoller::sendRequestToNode(Poller::RoundID round,
   const auto& nodes_configuration = getNodesConfiguration();
   NodeID nid = nodes_configuration->getNodeID(node);
 
-  auto ticket = callback_helper_.ticket();
+  auto ticket = callback_helper_.ticket(
+      RequestType::NODES_CONFIGURATION_MANAGER, folly::Executor::HI_PRI);
   auto cb_wrapper = [ticket, round, node](Status status,
                                           CONFIG_CHANGED_Header /* header */,
                                           std::string config) {
