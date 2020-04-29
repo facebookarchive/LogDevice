@@ -32,6 +32,7 @@ class NodesConfigurationStoreFactory {
     // ZookeeperNodesConfigurationStore with the specified zookeeper config
     std::shared_ptr<configuration::ZookeeperConfig> zk_config{nullptr};
     std::shared_ptr<ZookeeperClientFactory> zk_client_factory{nullptr};
+    int max_transient_errors_retries{};
 
     // used when type == NCSType::File
     std::string file_store_root_dir{};

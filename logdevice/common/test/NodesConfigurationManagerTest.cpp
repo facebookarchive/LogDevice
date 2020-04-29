@@ -97,7 +97,8 @@ class NodesConfigurationManagerTest : public ::testing::Test {
     auto store = std::make_unique<ZookeeperNodesConfigurationStore>(
         kConfigKey,
         NodesConfigurationCodec::extractConfigVersion,
-        std::move(z));
+        std::move(z),
+        /* max_retries= */ 3);
 
     Settings settings = create_default_settings<Settings>();
     settings.num_workers = 3;

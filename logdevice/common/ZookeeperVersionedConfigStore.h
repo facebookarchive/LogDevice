@@ -22,9 +22,11 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
  public:
   explicit ZookeeperVersionedConfigStore(
       extract_version_fn extract_fn,
-      std::unique_ptr<ZookeeperClientBase> zk)
+      std::unique_ptr<ZookeeperClientBase> zk,
+      int max_retries)
       : VersionedConfigStore(std::move(extract_fn)),
         zk_(std::move(zk)),
+        max_retries_(max_retries),
         shutdown_signaled_(false),
         shutdown_completed_(false) {
     ld_check(extract_fn_ != nullptr);
@@ -56,7 +58,36 @@ class ZookeeperVersionedConfigStore : public VersionedConfigStore {
   bool shutdownSignaled() const;
 
  private:
+  void writeModifiedValue(std::string key,
+                          std::string write_value,
+                          version_t new_version,
+                          zk::version_t znode_version,
+                          write_callback_t write_callback,
+                          int trial_number);
+
+  void writeModifiedValueNewZnode(std::string key,
+                                  std::string write_value,
+                                  version_t new_version,
+                                  write_callback_t write_callback,
+                                  int trial_number);
+
+  void getConfigImpl(std::string key,
+                     value_callback_t cb,
+                     folly::Optional<version_t> base_version,
+                     int trial_number) const;
+
+  void getLatestConfigImpl(std::string key,
+                           value_callback_t cb,
+                           int trial_number) const;
+
+  void readModifyWriteConfigImpl(std::string key,
+                                 mutation_callback_t mcb,
+                                 write_callback_t cb,
+                                 int trial_number);
+
   std::unique_ptr<ZookeeperClientBase> zk_;
+
+  int max_retries_;
 
   std::atomic<bool> shutdown_signaled_;
   // Only safe to access `this` (for zk_) if tryRLock succeeds, since after

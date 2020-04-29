@@ -1474,6 +1474,9 @@ struct Settings : public SettingsBundle {
   // Time interval after which trim request is considered to be timed out
   std::chrono::milliseconds metadata_log_trim_timeout;
 
+  // Number of transient error retries for the zookeeper versioned config store.
+  int zk_vcs_max_retries;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

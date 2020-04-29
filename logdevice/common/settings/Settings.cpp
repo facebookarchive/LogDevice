@@ -3674,5 +3674,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "completed",
        SERVER,
        SettingsCategory::Sequencer);
+  init("zk-vsc-max-retries",
+       &zk_vcs_max_retries,
+       "3",
+       validate_positive<int>(),
+       "Number of transient error retries for the zookeeper versioned config "
+       "store.",
+       SERVER | CLIENT | REQUIRES_RESTART,
+       SettingsCategory::Configuration);
 }
 }} // namespace facebook::logdevice

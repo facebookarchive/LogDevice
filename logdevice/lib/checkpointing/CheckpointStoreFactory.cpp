@@ -45,7 +45,9 @@ CheckpointStoreFactory::createZookeeperBasedCheckpointStore(
     return nullptr;
   }
   auto versioned_config_store = std::make_unique<ZookeeperVersionedConfigStore>(
-      CheckpointStoreImpl::extractVersion, std::move(zookeeper_client));
+      CheckpointStoreImpl::extractVersion,
+      std::move(zookeeper_client),
+      client_impl->getProcessor().settings()->zk_vcs_max_retries);
 
   std::string prefix = folly::sformat(
       "/logdevice/{}/checkpoints/",
