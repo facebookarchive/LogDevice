@@ -7,7 +7,6 @@
  */
 #include "logdevice/common/ConfigPermissionChecker.h"
 
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 

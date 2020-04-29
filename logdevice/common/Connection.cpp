@@ -27,8 +27,10 @@
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/FlowGroup.h"
+#include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/ProtocolHandler.h"
 #include "logdevice/common/ResourceBudget.h"
+#include "logdevice/common/SSLPrincipalParser.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/debug.h"
@@ -1771,13 +1773,21 @@ bool Connection::peerIsClient() const {
   return peer_type_ == PeerType::CLIENT;
 }
 
-folly::ssl::X509UniquePtr Connection::getPeerCert() const {
+folly::Optional<PrincipalIdentity> Connection::extractPeerIdentity() {
   ld_check(isSSL());
+
+  folly::ssl::X509UniquePtr cert;
   auto sock_peer_cert = proto_handler_->sock()->getPeerCertificate();
   if (sock_peer_cert) {
-    return sock_peer_cert->getX509();
+    cert = sock_peer_cert->getX509();
   }
-  return nullptr;
+
+  auto principal_parser = deps_->getPrincipalParser();
+  if (principal_parser == nullptr) {
+    return folly::none;
+  }
+
+  return principal_parser->getPrincipal(cert.get());
 }
 
 SocketDrainStatusType

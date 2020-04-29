@@ -9,7 +9,6 @@
 
 #include <openssl/ssl.h>
 
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
@@ -67,18 +66,20 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
   Worker* w = Worker::onThisThread();
   // Take a snapshot of security info.
   auto security_info = w->processor_->security_info_->get();
-  auto& principal_parser = security_info->principal_parser;
 
   // If the authentication type is set to SSL and a cluster node identity is
   // configured, we verify that the presented certificate contains the required
   // identity.
-  if (principal_parser && !security_info->cluster_node_identity.empty() &&
-      principal_parser->getAuthenticationType() == AuthenticationType::SSL) {
+  if (security_info->isAuthenticationEnabled() &&
+      !security_info->cluster_node_identity.empty() &&
+      security_info->auth_type == AuthenticationType::SSL) {
     std::string idType, identity;
     if (folly::split(
             ':', security_info->cluster_node_identity, idType, identity)) {
-      folly::ssl::X509UniquePtr cert = w->sender().getPeerCert(from);
-      if (cert) {
+      auto principal_result = w->sender().extractPeerIdentity(from);
+      if (principal_result.first ==
+          Sender::ExtractPeerIdentityResult::SUCCESS) {
+        auto& principal = principal_result.second;
         // We only support server authentication for SSL connections. If the
         // server presents a certificate, we verify that the bundled identity
         // matches what's configured for cluster nodes. On the other hand,
@@ -87,8 +88,6 @@ static Message::Disposition checkValidity(const ACK_Header& hdr,
         // otherwise the SSL handshake would have failed already at this point
         // since we set SSL_VERIFY_PEER option in the SSL context.
         // Note we use 1 as size as it is ignored anyway for SSL certficate
-        PrincipalIdentity principal =
-            principal_parser->getPrincipal(cert.get(), 1);
         if (!principal.match(idType, identity)) {
           RATELIMIT_ERROR(std::chrono::seconds(1),
                           1,

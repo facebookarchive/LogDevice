@@ -597,15 +597,34 @@ class Sender : public SenderBase {
                             const Message& msg,
                             config_version_t version);
 
+  // An enum representing the result of the peer identity extractions.
+  enum class ExtractPeerIdentityResult {
+    // Indicates that the connection wasn't found, and translates to
+    // PrincipalIdentity::UNAUTHENTICATED.
+    NOT_FOUND,
+    // Indicates that the connection wasnt SSL, and translates to
+    // PrincipalIdentity::UNAUTHENTICATED.
+    NOT_SSL,
+    // Indicates that the parsing the certificate fails and translates to
+    // PrincipalIdentity::INVALID.
+    PARSING_FAILED,
+    // Indicates that the parsing was successfull and the parsed identity is
+    // returned.
+    SUCCESS,
+  };
+
   /**
+   * Check the documentation of Connection::extractPeerIdentity.
+   *
    * @param addr  peer name of a client or server Connection expected to be
    *              under the management of this Sender.
    *
-   * @return      a pointer to the X509 certificate used by the peer if one
-   *              was presented. Returns a nullptr if no certificate was found,
-   *              or if no Connections known to this sender match addr.
+   * @returns     An enum representing the result of the parsing and the
+   * corresponding identity. Check documentation ExtractPeerIdentityResult for
+   * what each result translates to.
    */
-  folly::ssl::X509UniquePtr getPeerCert(const Address& addr);
+  std::pair<ExtractPeerIdentityResult, PrincipalIdentity>
+  extractPeerIdentity(const Address& addr);
 
   /**
    * Returns the NodeID of the peer with the given address.
@@ -1059,6 +1078,9 @@ class Sender : public SenderBase {
     }
     return 0;
   }
+
+  Connection* findConnection(const Address& addr) const;
+  Connection* findClientConnection(const ClientID& client_id) const;
 };
 
 }} // namespace facebook::logdevice

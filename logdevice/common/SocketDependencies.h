@@ -26,6 +26,7 @@ class NodesConfiguration;
 class Processor;
 class Sender;
 class Configuration;
+class SSLPrincipalParser;
 class ServerConfig;
 class StatsHolder;
 struct Settings;
@@ -57,6 +58,7 @@ class SocketDependencies {
 
   virtual SSLCtxPtr getSSLContext() const;
   virtual SSLSessionCache& getSSLSessionCache() const;
+  virtual std::shared_ptr<SSLPrincipalParser> getPrincipalParser() const;
   virtual bool shuttingDown() const;
   virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID node_id,

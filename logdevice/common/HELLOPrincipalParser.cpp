@@ -11,6 +11,7 @@
 
 #include "folly/String.h"
 #include "logdevice/common/PrincipalIdentity.h"
+#include "logdevice/common/SecurityInformation.h"
 #include "logdevice/common/checks.h"
 
 namespace facebook { namespace logdevice {

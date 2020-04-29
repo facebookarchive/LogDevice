@@ -49,7 +49,6 @@
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodesConfigurationUpdatedRequest.h"
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/SequencerBackgroundActivator.h"

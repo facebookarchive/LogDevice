@@ -26,7 +26,6 @@
 #include "logdevice/common/GetHeadAttributesRequest.h"
 #include "logdevice/common/LogsConfigApiRequest.h"
 #include "logdevice/common/NoopTraceLogger.h"
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/Semaphore.h"

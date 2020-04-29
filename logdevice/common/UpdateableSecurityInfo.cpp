@@ -8,13 +8,13 @@
 
 #include "logdevice/common/UpdateableSecurityInfo.h"
 
-#include "logdevice/common/PrincipalParser.h"
+#include "logdevice/common/SSLPrincipalParser.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/plugin/PermissionCheckerFactory.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
-#include "logdevice/common/plugin/PrincipalParserFactory.h"
+#include "logdevice/common/plugin/SSLPrincipalParserFactory.h"
 
 namespace facebook { namespace logdevice {
 
@@ -28,6 +28,10 @@ UpdateableSecurityInfo::UpdateableSecurityInfo(
   config_update_sub_ = server_config_->callAndSubscribeToUpdates(
       std::bind(&UpdateableSecurityInfo::onConfigUpdate, this));
 };
+
+bool UpdateableSecurityInfo::SecurityInfo::isAuthenticationEnabled() const {
+  return auth_type != AuthenticationType::NONE;
+}
 
 void UpdateableSecurityInfo::shutdown() {
   config_update_sub_.unsubscribe();
@@ -58,21 +62,29 @@ void UpdateableSecurityInfo::onConfigUpdate() {
   std::shared_ptr<ServerConfig> server_config = server_config_->get();
   auto& securityConfig = server_config->getSecurityConfig();
 
-  AuthenticationType auth_type_cur;
-  if (current_info->principal_parser) {
-    auth_type_cur = current_info->principal_parser->getAuthenticationType();
-  } else {
-    auth_type_cur = AuthenticationType::NONE;
+  bool has_ssl_parser_plugin = current_info->principal_parser != nullptr;
+
+  if (first_update) {
+    auto pp_plugin =
+        plugin_registry_->getSinglePlugin<SSLPrincipalParserFactory>(
+            PluginType::PRINCIPAL_PARSER_FACTORY);
+    new_info()->principal_parser = pp_plugin ? (*pp_plugin)() : nullptr;
+    has_ssl_parser_plugin = true;
   }
+
+  if (!has_ssl_parser_plugin &&
+      server_config->getAuthenticationType() == AuthenticationType::SSL) {
+    ld_critical("The cluster is configured to use SSL but no SSL principal "
+                "parser pluing found. All connections to the server will most "
+                "likely failed with E::ACCESS.");
+  }
+
+  AuthenticationType auth_type_cur = current_info->auth_type;
   if (auth_type_cur != server_config->getAuthenticationType()) {
     if (!first_update) {
-      ld_info("PrincipalParser is changed");
+      ld_info("AuthenticationType changed");
     }
-    auto pp_plugin = plugin_registry_->getSinglePlugin<PrincipalParserFactory>(
-        PluginType::PRINCIPAL_PARSER_FACTORY);
-    new_info()->principal_parser = pp_plugin
-        ? (*pp_plugin)(server_config->getAuthenticationType())
-        : nullptr;
+    new_info()->auth_type = server_config->getAuthenticationType();
   }
 
   PermissionCheckerType permission_checker_type_cur;
@@ -146,17 +158,15 @@ void UpdateableSecurityInfo::onConfigUpdate() {
 
 void UpdateableSecurityInfo::dumpSecurityInfo() const {
   std::shared_ptr<const SecurityInfo> info = current_.get();
-  auto principal_parser = info->principal_parser;
-  ld_debug("Authentication Enabled: %d", principal_parser != nullptr);
 
-  if (principal_parser) {
+  ld_debug("Authentication enabled: %d", info->isAuthenticationEnabled());
+
+  if (info->isAuthenticationEnabled()) {
     auto server_config = server_config_->get();
     ld_debug("Allow Unauthenticated: %d",
              server_config->getSecurityConfig().allowUnauthenticated);
     ld_debug("Authentication Type: %s",
-             AuthenticationTypeTranslator::toString(
-                 principal_parser->getAuthenticationType())
-                 .c_str());
+             AuthenticationTypeTranslator::toString(info->auth_type).c_str());
   }
 
   auto permission_checker = info->permission_checker;

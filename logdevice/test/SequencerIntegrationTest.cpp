@@ -17,7 +17,6 @@
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/Worker.h"

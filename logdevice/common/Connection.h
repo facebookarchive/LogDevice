@@ -591,10 +591,17 @@ class Connection : public TrafficShappingSocket {
   }
 
   /**
-   * @return should only be called if the socket is SSL enabled. Returns
-   *         the peers certificate if one was provided and nullptr otherwise.
+   * Extracts the underlying connection certificate and parses the principal
+   * identity out of it.
+   * NOTES:
+   *  - The caller must guarantee that this function is only called on SSL
+   * conections (isSSL() == true).
+   *
+   * @returns The parsed principal identity out of the SSL certificate or
+   * folly::none if the an SSL principal plugin was not found.
+   *
    */
-  folly::ssl::X509UniquePtr getPeerCert() const;
+  folly::Optional<PrincipalIdentity> extractPeerIdentity();
 
   void setPeerShuttingDown() {
     peer_shuttingdown_ = true;
@@ -1067,6 +1074,7 @@ class Connection : public TrafficShappingSocket {
 
   static void handshakeTimeoutCallback(void*, short);
 
+ private:
   // The file descriptor of the underlying OS socket. Set to -1 in situations
   // where the file descriptor is not known (e.g., before connecting).
   int fd_;

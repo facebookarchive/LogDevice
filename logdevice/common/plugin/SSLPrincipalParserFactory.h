@@ -17,9 +17,9 @@ namespace facebook { namespace logdevice {
  * instance.
  */
 
-class PrincipalParser;
+class SSLPrincipalParser;
 
-class PrincipalParserFactory : public Plugin {
+class SSLPrincipalParserFactory : public Plugin {
  public:
   PluginType type() const override {
     return PluginType::PRINCIPAL_PARSER_FACTORY;
@@ -28,15 +28,12 @@ class PrincipalParserFactory : public Plugin {
   /**
    * Creates a PrincipalParser which will be used to obtain the principal for a
    * connection after authentication has completed.
-   * @param type The AuthenticationType representing which PrincipalParser
-   *             will be created.
    * @return     A unique pointer to the PrincipalParser if successful. A
    *             nullptr will be returned when the AuthenticationType is NONE,
    *             invalid or, when no suitable PrincipalParser is found for the
    *             AuthenticationType
    */
-  virtual std::unique_ptr<PrincipalParser>
-  operator()(AuthenticationType type) = 0;
+  virtual std::unique_ptr<SSLPrincipalParser> operator()() = 0;
 };
 
 }} // namespace facebook::logdevice

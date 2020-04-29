@@ -14,7 +14,8 @@
 #include <openssl/ssl.h>
 
 #include "logdevice/common/ClientHelloInfoTracer.h"
-#include "logdevice/common/PrincipalParser.h"
+#include "logdevice/common/HELLOPrincipalParser.h"
+#include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
@@ -137,8 +138,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
                                                  const std::string& csid) {
   Worker* w = Worker::onThisThread();
 
-  auto principal_parser =
-      w->processor_->security_info_->get()->principal_parser;
+  auto security_info = w->processor_->security_info_->get();
 
   PrincipalIdentity principal;
 
@@ -156,7 +156,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
     principal.client_address = client_sock_str;
   };
 
-  if (principal_parser != nullptr) {
+  if (security_info->isAuthenticationEnabled()) {
     bool useAuthenticationData = true;
 
     // If enable_server_ip_authentication is set, we ignore the credentials
@@ -188,18 +188,16 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
     // We have not authenticated by IP, use provided authentication data
     if (useAuthenticationData) {
       // obtain principal from authentication data
-      switch (principal_parser->getAuthenticationType()) {
+      switch (security_info->auth_type) {
         case AuthenticationType::SELF_IDENTIFICATION: {
           // authentication data are already stored in the hellohdr.
-          principal = principal_parser->getPrincipal(
+          principal = HELLOPrincipalParser().getPrincipal(
               hellohdr.credentials, HELLO_Header::CREDS_SIZE_V1);
           break;
         }
         case AuthenticationType::SSL: {
-          folly::ssl::X509UniquePtr cert = w->sender().getPeerCert(from);
-          // cert can be nullptr. it is handled by getPrincipal
-          // use 1 as size as is not used for SSL cetficate
-          principal = principal_parser->getPrincipal(cert.get(), 1);
+          // The returned identity regardless of the result is good enough here.
+          principal = w->sender().extractPeerIdentity(from).second;
           break;
         }
         case AuthenticationType::NONE:

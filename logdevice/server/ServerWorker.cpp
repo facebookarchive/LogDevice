@@ -8,7 +8,6 @@
 #include "logdevice/server/ServerWorker.h"
 
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/ServerMessageDispatch.h"

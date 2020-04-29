@@ -15,7 +15,6 @@
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/debug.h"
@@ -108,7 +107,6 @@ class Info : public AdminCommand {
 
     auto security_info = processor->security_info_->get();
     auto permission_checker = security_info->permission_checker;
-    auto principal_parser = security_info->principal_parser;
 
     table.next()
         .set<0>(getpid())
@@ -122,7 +120,7 @@ class Info : public AdminCommand {
         .set<10>(dbg::loglevelToString(dbg::currentLevel))
         .set<11>(Compatibility::MIN_PROTOCOL_SUPPORTED)
         .set<12>(processor->settings()->max_protocol)
-        .set<13>(principal_parser != nullptr)
+        .set<13>(security_info->isAuthenticationEnabled())
         .set<16>(permission_checker != nullptr)
         .set<18>(std::to_string(ROCKSDB_MAJOR) + "." +
                  std::to_string(ROCKSDB_MINOR) + "." +
@@ -143,10 +141,10 @@ class Info : public AdminCommand {
     if (!server_id.empty()) {
       table.set<8>(server_id);
     }
-    if (principal_parser != nullptr) {
-      table.set<14>(AuthenticationTypeTranslator::toString(
-                        principal_parser->getAuthenticationType())
-                        .c_str());
+    if (security_info->isAuthenticationEnabled()) {
+      table.set<14>(
+          AuthenticationTypeTranslator::toString(security_info->auth_type)
+              .c_str());
       table.set<15>(config->get()->serverConfig()->allowUnauthenticated());
     }
 

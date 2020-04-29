@@ -15,7 +15,6 @@
 #include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/settings/GossipSettings.h"

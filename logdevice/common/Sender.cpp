@@ -586,6 +586,23 @@ Connection* Sender::findServerConnection(node_index_t idx) const {
   return c;
 }
 
+Connection* Sender::findClientConnection(const ClientID& client_id) const {
+  auto it = impl_->client_conns_.find(client_id);
+  if (it == impl_->client_conns_.end()) {
+    return nullptr;
+  }
+  auto c = it->second.get();
+  ld_check(c);
+  ld_check(c->peer_name_.isClientAddress());
+  ld_check(c->peer_name_.id_.client_ == client_id);
+  return c;
+}
+
+Connection* Sender::findConnection(const Address& addr) const {
+  return addr.isClientAddress() ? findClientConnection(addr.id_.client_)
+                                : findServerConnection(addr.asNodeID().index());
+}
+
 folly::Optional<uint16_t>
 Sender::getSocketProtocolVersion(node_index_t idx) const {
   auto conn = findServerConnection(idx);
@@ -1316,31 +1333,24 @@ void Sender::setPeerConfigVersion(const Address& addr,
   conn->setPeerConfigVersion(version);
 }
 
-folly::ssl::X509UniquePtr Sender::getPeerCert(const Address& addr) {
-  if (addr.isClientAddress()) {
-    auto pos = impl_->client_conns_.find(addr.id_.client_);
-    if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->peer_name_ == addr);
-      if (pos->second->isSSL()) {
-        return pos->second->getPeerCert();
-      }
-    }
-  } else { // addr is a server address
-    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
-    if (pos != impl_->server_conns_.end() &&
-        pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
-      if (pos->second->isSSL()) {
-        folly::ssl::X509UniquePtr cert = pos->second->getPeerCert();
-
-        // Logdevice server nodes are required to send their certificate
-        // to the client when creating an SSL socket.
-        ld_check(cert);
-        return cert;
-      }
-    }
+std::pair<Sender::ExtractPeerIdentityResult, PrincipalIdentity>
+Sender::extractPeerIdentity(const Address& addr) {
+  auto connection = findConnection(addr);
+  if (connection == nullptr) {
+    return std::make_pair(Sender::ExtractPeerIdentityResult::NOT_FOUND,
+                          PrincipalIdentity(Principal::UNAUTHENTICATED));
   }
-
-  return nullptr;
+  if (!connection->isSSL()) {
+    return std::make_pair(Sender::ExtractPeerIdentityResult::NOT_SSL,
+                          PrincipalIdentity(Principal::UNAUTHENTICATED));
+  }
+  auto identity = connection->extractPeerIdentity();
+  if (!identity.has_value()) {
+    return std::make_pair(Sender::ExtractPeerIdentityResult::PARSING_FAILED,
+                          PrincipalIdentity(Principal::INVALID));
+  }
+  return std::make_pair(
+      Sender::ExtractPeerIdentityResult::SUCCESS, std::move(identity).value());
 }
 
 Sockaddr Sender::thisThreadSockaddr(const Address& addr) {

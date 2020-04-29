@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "logdevice/common/PrincipalParser.h"
+#include "logdevice/common/PrincipalIdentity.h"
 
 namespace facebook { namespace logdevice {
 
@@ -17,12 +17,8 @@ namespace facebook { namespace logdevice {
  * connection
  */
 
-class HELLOPrincipalParser : public PrincipalParser {
+class HELLOPrincipalParser {
  public:
-  explicit HELLOPrincipalParser() : PrincipalParser() {}
-
-  ~HELLOPrincipalParser() override{};
-
   /**
    * See PrincipalParser.h
    *
@@ -30,11 +26,7 @@ class HELLOPrincipalParser : public PrincipalParser {
    * be returned. If the credential field is non-empty then the output will be
    * the value of credentials.
    */
-  PrincipalIdentity getPrincipal(const void* data, size_t size) const override;
-
-  AuthenticationType getAuthenticationType() const override {
-    return AuthenticationType::SELF_IDENTIFICATION;
-  }
+  PrincipalIdentity getPrincipal(const void* data, size_t size) const;
 };
 
 }} // namespace facebook::logdevice

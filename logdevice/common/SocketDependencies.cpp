@@ -5,9 +5,9 @@
 #include <folly/io/async/SSLContext.h>
 
 #include "logdevice/common/BuildInfo.h"
-#include "logdevice/common/PrincipalParser.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SSLFetcher.h"
+#include "logdevice/common/SSLPrincipalParser.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/Timestamp.h"
@@ -81,6 +81,13 @@ std::shared_ptr<SSLContext> SocketDependencies::getSSLContext() const {
 
 SSLSessionCache& SocketDependencies::getSSLSessionCache() const {
   return Worker::onThisThread()->processor_->sslSessionCache();
+}
+
+std::shared_ptr<SSLPrincipalParser>
+SocketDependencies::getPrincipalParser() const {
+  return Worker::onThisThread()
+      ->processor_->security_info_->get()
+      ->principal_parser;
 }
 
 bool SocketDependencies::shuttingDown() const {
@@ -285,11 +292,8 @@ SteadyTimestamp SocketDependencies::getCurrentTimestamp() {
 }
 
 bool SocketDependencies::authenticationEnabled() {
-  if (processor_->security_info_) {
-    return processor_->security_info_->get()->principal_parser != nullptr;
-  } else {
-    return false;
-  }
+  return processor_->security_info_ &&
+      processor_->security_info_->get()->isAuthenticationEnabled();
 }
 
 bool SocketDependencies::allowUnauthenticated() {
@@ -299,10 +303,8 @@ bool SocketDependencies::allowUnauthenticated() {
 bool SocketDependencies::includeHELLOCredentials() {
   // Only include HELLOCredentials in HELLO_Message when the PrincipalParser
   // will use the data.
-  auto principal_parser = processor_->security_info_->get()->principal_parser;
-  return principal_parser != nullptr &&
-      (principal_parser->getAuthenticationType() ==
-       AuthenticationType::SELF_IDENTIFICATION);
+  const auto auth_type = processor_->security_info_->get()->auth_type;
+  return auth_type == AuthenticationType::SELF_IDENTIFICATION;
 }
 
 void SocketDependencies::onStartedRunning(RunContext context) {

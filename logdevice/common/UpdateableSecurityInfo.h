@@ -8,7 +8,7 @@
 #pragma once
 
 #include "logdevice/common/PermissionChecker.h"
-#include "logdevice/common/PrincipalParser.h"
+#include "logdevice/common/SSLPrincipalParser.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
@@ -25,9 +25,13 @@ class UpdateableSecurityInfo {
     std::shared_ptr<PermissionChecker> permission_checker;
     // PrincipalParser owned by the processor used to obtain the principal after
     // authentication
-    std::shared_ptr<PrincipalParser> principal_parser;
+    std::shared_ptr<SSLPrincipalParser> principal_parser;
+
+    AuthenticationType auth_type{AuthenticationType::NONE};
     std::string cluster_node_identity;
     bool enforce_cluster_node_identity{false};
+
+    bool isAuthenticationEnabled() const;
   };
 
   UpdateableSecurityInfo(std::shared_ptr<UpdateableServerConfig> server_config,
