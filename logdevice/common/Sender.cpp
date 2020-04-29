@@ -1480,7 +1480,10 @@ void Sender::noteConfigurationChanged(
     if (node_service_discovery != nullptr) {
       node_gen_t generation = nodes_->getNodeGeneration(i);
       const Sockaddr& newaddr = node_service_discovery->getSockaddr(
-          s->getSockType(), s->getConnType(), s->getPeerType());
+          s->getSockType(),
+          s->getConnType(),
+          s->getPeerType(),
+          Worker::settings().use_dedicated_server_to_server_address);
       if (s->peer_name_.asNodeID().generation() == generation &&
           s->peer_sockaddr_ == newaddr) {
         ++it;

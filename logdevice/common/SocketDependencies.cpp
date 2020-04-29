@@ -111,18 +111,16 @@ SocketDependencies::getNodeSockaddr(NodeID node_id,
   const auto* node_service_discovery =
       nodes_configuration->getNodeServiceDiscovery(node_id.index());
 
+  bool use_s2s_addr = getSettings().use_dedicated_server_to_server_address;
   if (node_service_discovery) {
     if (socket_type == SocketType::GOSSIP &&
         !getSettings().send_to_gossip_port) {
       return node_service_discovery->getSockaddr(
-          SocketType::DATA, connection_type, peer_type);
+          SocketType::DATA, connection_type, peer_type, use_s2s_addr);
     }
 
     return node_service_discovery->getSockaddr(
-        socket_type,
-        connection_type,
-        peer_type,
-        getSettings().use_dedicated_server_to_server_address);
+        socket_type, connection_type, peer_type, use_s2s_addr);
   }
 
   return Sockaddr::INVALID;

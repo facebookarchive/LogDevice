@@ -43,7 +43,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_GetDefaultSockAddr) {
   nodeServiceDiscovery.address = kTestDefaultAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE);
+      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE, false);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -55,7 +55,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_GetDefaultSockAddrClient) {
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::CLIENT);
+      SocketType::DATA, ConnectionType::PLAIN, PeerType::CLIENT, false);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -81,7 +81,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddress) {
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::SSL, PeerType::NODE);
+      SocketType::DATA, ConnectionType::SSL, PeerType::NODE, false);
 
   EXPECT_EQ(actual, kTestSslAddress);
 }
@@ -93,7 +93,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddressClient) {
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::SSL, PeerType::CLIENT);
+      SocketType::DATA, ConnectionType::SSL, PeerType::CLIENT, false);
 
   EXPECT_EQ(actual, kTestSslAddress);
 }
@@ -110,7 +110,7 @@ TEST(ServiceDiscoveryConfigTest,
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE);
+      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE, false);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }

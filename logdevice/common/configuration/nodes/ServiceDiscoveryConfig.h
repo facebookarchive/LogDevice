@@ -127,7 +127,7 @@ struct NodeServiceDiscovery {
   getSockaddr(SocketType socket_type,
               ConnectionType connection_type,
               PeerType peer_type,
-              bool use_dedicated_server_to_server_address = false) const;
+              bool use_dedicated_server_to_server_address) const;
 
   const RoleSet& getRoles() const {
     return roles;
