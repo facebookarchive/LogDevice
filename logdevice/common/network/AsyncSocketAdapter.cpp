@@ -110,9 +110,12 @@ folly::NetworkSocket AsyncSocketAdapter::getNetworkSocket() const {
   return transport_->getNetworkSocket();
 }
 
-const folly::AsyncTransportCertificate*
-AsyncSocketAdapter::getPeerCertificate() const {
-  return transport_->getPeerCertificate();
+const SSL* AsyncSocketAdapter::getSSL() const {
+  auto ssl_socket = dynamic_cast<folly::AsyncSSLSocket*>(transport_.get());
+  if (ssl_socket == nullptr) {
+    return nullptr;
+  }
+  return ssl_socket->getSSL();
 }
 
 size_t AsyncSocketAdapter::getRawBytesWritten() const {

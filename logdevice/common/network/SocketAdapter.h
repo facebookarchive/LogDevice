@@ -150,9 +150,9 @@ class SocketAdapter {
   }
 
   /**
-   * Get the peer certificate information if any
+   * Get the SSL object associated with socket if any.
    */
-  virtual const folly::AsyncTransportCertificate* getPeerCertificate() const {
+  virtual const SSL* getSSL() const {
     return nullptr;
   }
 

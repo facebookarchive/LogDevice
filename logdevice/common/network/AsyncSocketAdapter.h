@@ -212,9 +212,9 @@ class AsyncSocketAdapter : public SocketAdapter {
   folly::NetworkSocket getNetworkSocket() const override;
 
   /**
-   * Get the peer certificate information if any
+   * Get the SSL object associated with socket if any.
    */
-  const folly::AsyncTransportCertificate* getPeerCertificate() const override;
+  const SSL* getSSL() const override;
 
   size_t getRawBytesWritten() const override;
   size_t getRawBytesReceived() const override;

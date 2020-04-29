@@ -35,6 +35,13 @@ class SSLPrincipalParser {
    * type field.
    */
   virtual PrincipalIdentity getPrincipal(X509* cert) const = 0;
+
+  /**
+   * An API that's called after SSL certificates are no longer needed and can be
+   * evicted from memory. It's an optimization to save server/client memory and
+   * it doesn't affect the correctness of the program if it's not implemented.
+   */
+  virtual void clearCertificates(SSL* ssl) const {}
 };
 
 }} // namespace facebook::logdevice

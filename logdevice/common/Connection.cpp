@@ -1776,18 +1776,25 @@ bool Connection::peerIsClient() const {
 folly::Optional<PrincipalIdentity> Connection::extractPeerIdentity() {
   ld_check(isSSL());
 
-  folly::ssl::X509UniquePtr cert;
-  auto sock_peer_cert = proto_handler_->sock()->getPeerCertificate();
-  if (sock_peer_cert) {
-    cert = sock_peer_cert->getX509();
-  }
+  SSL* ssl = const_cast<SSL*>(proto_handler_->sock()->getSSL());
+
+  // This means this should always return a valid ssl context.
+  ld_check(ssl);
+
+  folly::ssl::X509UniquePtr cert(SSL_get_peer_certificate(ssl));
 
   auto principal_parser = deps_->getPrincipalParser();
   if (principal_parser == nullptr) {
     return folly::none;
   }
 
-  return principal_parser->getPrincipal(cert.get());
+  auto principal = principal_parser->getPrincipal(cert.get());
+
+  // Now that the principal parser is extracted, we no longer need to keep the
+  // certificates in memory. Allow the SSL plugin to do cleanups if any.
+  principal_parser->clearCertificates(ssl);
+
+  return principal;
 }
 
 SocketDrainStatusType
