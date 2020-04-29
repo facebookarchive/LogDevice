@@ -43,7 +43,7 @@ if (${BUILD_TESTS})
   file(GLOB test_hfiles "${LOGDEVICE_CLIENT_SRC_DIR}/test/*.h")
   file(GLOB test_files  "${LOGDEVICE_CLIENT_SRC_DIR}/test/*.cpp")
 
-  add_executable(ldclient_test ${test_hfiles} ${test_files})
+  add_executable(ldclient_test ${LOGDEVICE_PHONY_MAIN} ${test_hfiles} ${test_files})
 
   target_link_libraries(ldclient_test
     ldclient_static
