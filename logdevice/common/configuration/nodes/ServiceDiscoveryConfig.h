@@ -118,7 +118,7 @@ struct NodeServiceDiscovery {
    *
    * @param socket_type     Type of socket.
    * @param connection_type Type of connection.
-   * @param peer_type       Type of peer.
+   * @param is_server       Whether the caller is a server.
    * @param use_dedicated_server_to_server_address Temporary switch to control
    *        whether nodes use a dedicated address to talk to other nodes.
    *        Ignored if the peer type is not NODE.
@@ -126,7 +126,7 @@ struct NodeServiceDiscovery {
   const Sockaddr&
   getSockaddr(SocketType socket_type,
               ConnectionType connection_type,
-              PeerType peer_type,
+              bool is_server,
               bool use_dedicated_server_to_server_address) const;
 
   const RoleSet& getRoles() const {

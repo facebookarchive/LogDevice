@@ -33,7 +33,6 @@ class AsyncSocketConnectionFactory : public IConnectionFactory {
   createConnection(NodeID node_id,
                    SocketType socket_type,
                    ConnectionType connection_type,
-                   PeerType peer_type,
                    FlowGroup& flow_group,
                    std::unique_ptr<SocketDependencies> deps) override;
 

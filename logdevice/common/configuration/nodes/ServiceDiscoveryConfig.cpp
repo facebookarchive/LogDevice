@@ -136,15 +136,14 @@ std::string NodeServiceDiscovery::toString() const {
 const Sockaddr& NodeServiceDiscovery::getSockaddr(
     SocketType socket_type,
     ConnectionType connection_type,
-    PeerType peer_type,
+    bool is_server,
     bool use_dedicated_server_to_server_address) const {
   switch (socket_type) {
     case SocketType::GOSSIP:
       return getGossipAddress();
 
     case SocketType::DATA:
-      if (peer_type == PeerType::NODE &&
-          use_dedicated_server_to_server_address) {
+      if (is_server && use_dedicated_server_to_server_address) {
         if (!server_to_server_address.has_value()) {
           return Sockaddr::INVALID;
         }

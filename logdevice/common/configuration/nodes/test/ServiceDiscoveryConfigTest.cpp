@@ -36,26 +36,32 @@ const Sockaddr kTestServerToServerAddress =
 
 class ServiceDiscoveryConfigTest : public ::testing::Test {};
 
-// When only the 'address' member is populated, getSockAddr(DATA, PLAIN, NODE)
+// When only the 'address' member is populated, getSockAddr
 // should return the default address.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_GetDefaultSockAddr) {
   NodeServiceDiscovery nodeServiceDiscovery;
   nodeServiceDiscovery.address = kTestDefaultAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE, false);
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ false);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
 
-// Ditto for client peer.
+// Ditto of above, for clients.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_GetDefaultSockAddrClient) {
   NodeServiceDiscovery nodeServiceDiscovery;
   nodeServiceDiscovery.address = kTestDefaultAddress;
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::CLIENT, false);
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ false,
+      /* use_dedicated_server_to_server_address */ false);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -68,12 +74,15 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_IgnoreServerToServerAddressParam) {
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::CLIENT, true);
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ false,
+      /* use_dedicated_server_to_server_address */ true);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
 
-// When only the 'address' member is populated, getSockAddr(DATA, PLAIN, NODE)
+// When only the 'address' member is populated, getSockAddr
 // should return the default address.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddress) {
   NodeServiceDiscovery nodeServiceDiscovery;
@@ -81,28 +90,31 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddress) {
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::SSL, PeerType::NODE, false);
+      SocketType::DATA,
+      ConnectionType::SSL,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ false);
 
   EXPECT_EQ(actual, kTestSslAddress);
 }
 
-// Ditto for client peer.
+// Same as above, for clients.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddressClient) {
   NodeServiceDiscovery nodeServiceDiscovery;
   nodeServiceDiscovery.address = kTestDefaultAddress;
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::SSL, PeerType::CLIENT, false);
+      SocketType::DATA,
+      ConnectionType::SSL,
+      /* is_server */ false,
+      /* use_dedicated_server_to_server_address */ false);
 
   EXPECT_EQ(actual, kTestSslAddress);
 }
 
 // When both the 'address' and 'server_to_server_address' members are populated,
-// getSockAddr(DATA, PLAIN, NODE) should return the default address.
-// This test will become the same as
-// getSockaddr_DedicatedServerToServerAddressIfEnabled once the 4th argument of
-// getSockaddr(...) is removed.
+// getSockAddr should return the default address if the feature flag is not set.
 TEST(ServiceDiscoveryConfigTest,
      getSockaddr_DefaultServerToServerIsBaseAddress) {
   NodeServiceDiscovery nodeServiceDiscovery;
@@ -110,14 +122,17 @@ TEST(ServiceDiscoveryConfigTest,
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE, false);
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ false);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
 
 // When both the 'address' and 'server_to_server_address' members are populated,
-// getSockAddr(DATA, PLAIN, NODE, true) should return the server-to-server
-// address.
+// getSockAddr should return the server-to-server address when the feature flag
+// is set.
 TEST(ServiceDiscoveryConfigTest,
      getSockaddr_DedicatedServerToServerAddressIfEnabled) {
   NodeServiceDiscovery nodeServiceDiscovery;
@@ -125,14 +140,16 @@ TEST(ServiceDiscoveryConfigTest,
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE, true);
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ true);
 
   EXPECT_EQ(actual, kTestServerToServerAddress);
 }
 
-// When all off 'address', 'ssl_address', and 'server_to_server_address'
-// members are populated, getSockAddr(DATA, SSL, NODE, true) should return the
-// server-to-server address.
+// When all addresses are populated, it should return the server-to-server
+// address if the feature flag is set.
 TEST(ServiceDiscoveryConfigTest,
      getSockaddr_ServerToServerOverridesSslAddress) {
   NodeServiceDiscovery nodeServiceDiscovery;
@@ -141,11 +158,16 @@ TEST(ServiceDiscoveryConfigTest,
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::SSL, PeerType::NODE, true);
+      SocketType::DATA,
+      ConnectionType::SSL,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ true);
 
   EXPECT_EQ(actual, kTestServerToServerAddress);
 }
 
+// When the gossip address is present and client asks for it, it should be
+// returned even if the server-to-server address is set and enabled.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_gossipAddressOverridesData) {
   NodeServiceDiscovery nodeServiceDiscovery;
   nodeServiceDiscovery.address = kTestDefaultAddress;
@@ -153,7 +175,10 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_gossipAddressOverridesData) {
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::GOSSIP, ConnectionType::SSL, PeerType::NODE, true);
+      SocketType::GOSSIP,
+      ConnectionType::SSL,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ true);
 
   EXPECT_EQ(actual, kTestGossipAddress);
 }
@@ -166,7 +191,10 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_invalidServerToServerAddress) {
   nodeServiceDiscovery.address = kTestDefaultAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::PLAIN, PeerType::NODE, true);
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ true);
 
   EXPECT_EQ(actual, Sockaddr::INVALID);
 }
@@ -179,7 +207,10 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_invalidSslAddress) {
   nodeServiceDiscovery.address = kTestDefaultAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
-      SocketType::DATA, ConnectionType::SSL, PeerType::NODE, true);
+      SocketType::DATA,
+      ConnectionType::SSL,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ true);
 
   EXPECT_EQ(actual, Sockaddr::INVALID);
 }

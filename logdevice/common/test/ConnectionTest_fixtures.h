@@ -53,10 +53,10 @@ class TestSocketDependencies : public SocketDependencies {
   virtual std::shared_ptr<folly::SSLContext> getSSLContext() const override;
   virtual bool shuttingDown() const override;
   virtual std::string dumpQueuedMessages(Address addr) const override;
-  virtual const Sockaddr& getNodeSockaddr(NodeID node_id,
-                                          SocketType socket_type,
-                                          ConnectionType connection_type,
-                                          PeerType peer_type) override;
+  virtual const Sockaddr&
+  getNodeSockaddr(NodeID node_id,
+                  SocketType socket_type,
+                  ConnectionType connection_type) override;
   EvBase* getEvBase() override;
   virtual SteadyTimestamp getCurrentTimestamp() override;
   virtual void onSent(std::unique_ptr<Message> msg,
@@ -188,7 +188,6 @@ class ClientConnectionTest : public ConnectionTest {
         std::make_unique<Connection>(server_name_,
                                      SocketType::DATA,
                                      ConnectionType::PLAIN,
-                                     PeerType::CLIENT,
                                      flow_group_,
                                      std::unique_ptr<SocketDependencies>(deps_),
                                      std::move(sock));

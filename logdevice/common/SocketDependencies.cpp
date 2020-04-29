@@ -101,8 +101,7 @@ std::string SocketDependencies::dumpQueuedMessages(Address addr) const {
 const Sockaddr&
 SocketDependencies::getNodeSockaddr(NodeID node_id,
                                     SocketType socket_type,
-                                    ConnectionType connection_type,
-                                    PeerType peer_type) {
+                                    ConnectionType connection_type) {
   auto nodes_configuration = getNodesConfiguration();
   ld_check(nodes_configuration != nullptr);
 
@@ -111,16 +110,19 @@ SocketDependencies::getNodeSockaddr(NodeID node_id,
   const auto* node_service_discovery =
       nodes_configuration->getNodeServiceDiscovery(node_id.index());
 
-  bool use_s2s_addr = getSettings().use_dedicated_server_to_server_address;
+  const Settings& settings = getSettings();
+  bool is_server = settings.server;
+  bool use_s2s_addr = settings.use_dedicated_server_to_server_address;
+
   if (node_service_discovery) {
     if (socket_type == SocketType::GOSSIP &&
         !getSettings().send_to_gossip_port) {
       return node_service_discovery->getSockaddr(
-          SocketType::DATA, connection_type, peer_type, use_s2s_addr);
+          SocketType::DATA, connection_type, is_server, use_s2s_addr);
     }
 
     return node_service_discovery->getSockaddr(
-        socket_type, connection_type, peer_type, use_s2s_addr);
+        socket_type, connection_type, is_server, use_s2s_addr);
   }
 
   return Sockaddr::INVALID;

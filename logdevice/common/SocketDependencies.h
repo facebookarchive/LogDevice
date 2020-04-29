@@ -63,8 +63,7 @@ class SocketDependencies {
   virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID node_id,
                                           SocketType socket_type,
-                                          ConnectionType connection_type,
-                                          PeerType peer_type);
+                                          ConnectionType connection_type);
   virtual EvBase* getEvBase();
 
   virtual void onSent(std::unique_ptr<Message> msg,

@@ -41,7 +41,6 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     NodeID node_id,
     SocketType socket_type,
     ConnectionType connection_type,
-    PeerType peer_type,
     FlowGroup& flow_group,
     std::unique_ptr<SocketDependencies> deps) {
   std::unique_ptr<AsyncSocketAdapter> sock_adapter;
@@ -60,7 +59,6 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
   auto connection = std::make_unique<Connection>(node_id,
                                                  socket_type,
                                                  connection_type,
-                                                 peer_type,
                                                  flow_group,
                                                  std::move(deps),
                                                  std::move(sock_adapter));

@@ -155,30 +155,25 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
 Connection::Connection(NodeID server_name,
                        SocketType socket_type,
                        ConnectionType connection_type,
-                       PeerType peer_type,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps)
-    : Connection(deps,
-                 Address(server_name),
-                 deps->getNodeSockaddr(server_name,
-                                       socket_type,
-                                       connection_type,
-                                       peer_type),
-                 socket_type,
-                 connection_type,
-                 flow_group) {}
+    : Connection(
+          deps,
+          Address(server_name),
+          deps->getNodeSockaddr(server_name, socket_type, connection_type),
+          socket_type,
+          connection_type,
+          flow_group) {}
 
 Connection::Connection(NodeID server_name,
                        SocketType socket_type,
                        ConnectionType connection_type,
-                       PeerType peer_type,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps,
                        std::unique_ptr<SocketAdapter> sock_adapter)
     : Connection(server_name,
                  socket_type,
                  connection_type,
-                 peer_type,
                  flow_group,
                  std::move(deps)) {
   proto_handler_ = std::make_shared<ProtocolHandler>(
