@@ -175,9 +175,11 @@ CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
 
   int rv = sendMessage(std::move(msg), from);
   if (rv != 0) {
-    ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
-             from.toString().c_str(),
-             error_description(err));
+    RATELIMIT_ERROR(std::chrono::seconds(10),
+                    1,
+                    "Sending CONFIG_CHANGED_Message to %s failed with error %s",
+                    from.toString().c_str(),
+                    error_description(err));
   }
   return Disposition::NORMAL;
 }
