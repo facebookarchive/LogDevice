@@ -19,7 +19,6 @@
 #include "logdevice/lib/ops/EventLogUtils.h"
 #include "logdevice/ops/ldquery/Errors.h"
 
-
 namespace facebook {
   namespace logdevice {
     namespace ldquery {
@@ -43,6 +42,9 @@ TableColumns ShardAuthoritativeStatus::getColumns() const {
       {"drain",
        DataType::INTEGER,
        "Whether the shard is being drained or has been drained."},
+      {"mode",
+       DataType::TEXT,
+       "Whether rebuilding is in RESTORE or RELOCATE mode"},
       {"dirty_ranges",
        DataType::TEXT,
        "Time ranges where this shard may be missing data.  This happens if the "
@@ -66,7 +68,6 @@ TableColumns ShardAuthoritativeStatus::getColumns() const {
       {"source",
        DataType::TEXT,
        "Entity that triggered rebuilding for this shard."},
-      {"details", DataType::TEXT, "Reason for rebuilding this shard."},
       {"rebuilding_started_ts", DataType::TEXT, "When rebuilding was started."},
       {"rebuilding_completed_ts",
        DataType::TEXT,
@@ -74,10 +75,6 @@ TableColumns ShardAuthoritativeStatus::getColumns() const {
   });
 
   if (verbose_ >= Verbose::VERBOSE) {
-    res.push_back(
-        TableColumn{"mode",
-                    DataType::TEXT,
-                    "Whether the shard participates in its own rebuilding"});
     res.push_back(TableColumn{
         "acked",
         DataType::INTEGER,
@@ -152,6 +149,7 @@ ShardAuthoritativeStatus::getData(QueryContext& /*ctx*/) {
       cached_->cols["donors_remaining"].push_back(
           folly::join(",", donors_remaining));
       cached_->cols["drain"].push_back(s(node.second.drain));
+      cached_->cols["mode"].push_back(logdevice::toString(node.second.mode));
       cached_->cols["dirty_ranges"].push_back(
           logdevice::toString(node.second.dc_dirty_ranges));
       cached_->cols["rebuilding_is_authoritative"].push_back(
@@ -159,31 +157,15 @@ ShardAuthoritativeStatus::getData(QueryContext& /*ctx*/) {
       cached_->cols["data_is_recoverable"].push_back(
           s(node.second.recoverable));
       cached_->cols["source"].push_back(node.second.source);
-      cached_->cols["details"].push_back(node.second.details);
       cached_->cols["rebuilding_started_ts"].push_back(
           format_time(node.second.rebuilding_started_ts));
       cached_->cols["rebuilding_completed_ts"].push_back(
           format_time(node.second.rebuilding_completed_ts));
 
-      if (verbose_ >= Verbose::VERBOSE) {
-        std::string mode_name = "???";
-        switch (node.second.mode) {
-          case RebuildingMode::RELOCATE:
-            mode_name = "RELOCATE";
-            break;
-          case RebuildingMode::RESTORE:
-            mode_name = "RESTORE";
-            break;
-          case RebuildingMode::INVALID:
-            mode_name = "INVALID";
-            break;
-        }
-        cached_->cols["mode"].push_back(mode_name);
-        cached_->cols["acked"].push_back(s(node.second.acked));
-        cached_->cols["ack_lsn"].push_back(lsn_to_string(node.second.ack_lsn));
-        cached_->cols["ack_version"].push_back(
-            lsn_to_string(node.second.ack_version));
-      }
+      cached_->cols["acked"].push_back(s(node.second.acked));
+      cached_->cols["ack_lsn"].push_back(lsn_to_string(node.second.ack_lsn));
+      cached_->cols["ack_version"].push_back(
+          lsn_to_string(node.second.ack_version));
 
       if (verbose_ >= Verbose::SPEW) {
         cached_->cols["donors_complete"].push_back(
