@@ -31,8 +31,8 @@ foreach(_boost_py_component ${_boost_py_component1} ${_boost_py_component2} ${_b
     thread
     ${_boost_py_component})
 
-
-  if(Boost_FOUND)
+  string(TOUPPER ${_boost_py_component} _BOOST_PY_COMP)
+  if(Boost_${_BOOST_PY_COMP}_FOUND)
     message(STATUS "Boost Python Component ${_boost_py_component} found")
     break()
   else()
@@ -40,7 +40,7 @@ foreach(_boost_py_component ${_boost_py_component1} ${_boost_py_component2} ${_b
   endif()
 endforeach()
 
-if(NOT Boost_FOUND)
+if(NOT Boost_${_BOOST_PY_COMP}_FOUND)
   message(FATAL_ERROR "Couldn't find any Boost python component. At least one is required, terminating. ${Boost_ERROR_REASON}")
 endif()
 
