@@ -400,12 +400,13 @@ int EventLogRebuildingSet::onShardAckRebuilt(
   if (node_info.drain) {
     // The node acknowledged rebuilding but a drain is still requested (the user
     // did not get a chance to write a SHARD_UNDRAIN event). This should not
-    // happen as storage nodes should wait for that message. However there are
-    // old versions of the server that may not wait for that message so do not
-    // fail.
+    // happen as storage nodes should wait for that message.
     ld_warning("Found event log record %s but the shard is being drained",
                record.describe().c_str());
+    err = E::FAILED;
+    return -1;
   }
+
   node_info.ack_lsn = lsn;
   node_info.ack_version = ptr->header.version;
 
