@@ -498,7 +498,9 @@ void RebuildingCoordinator::onMarkerWrittenForShard(uint32_t shard,
   // Write RemoveMaintenance request if ClusterMaintenanceStateMachine
   // is enabled
   if (adminSettings_->enable_cluster_maintenance_state_machine) {
-    writeRemoveMaintenance(ShardID(myNodeId_, shard));
+    writeRemoveMaintenance(
+        ShardID(myNodeId_, shard),
+        "Rebuilding has finished and shard came back online");
   }
   notifyProcessorShardRebuilt(shard);
   notifyAckMyShardRebuilt(shard, version);
@@ -910,9 +912,10 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
       // Write a remove maintenance if I am rebuilding in
       // restore mode and ClusterMaintenanceStateMachine
       // is enabled.
-      if (adminSettings_->enable_cluster_maintenance_state_machine) {
-        writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
-      }
+      removeInternalMaintenancesIfPossible(shard_idx,
+                                           set,
+                                           /* force = */ true,
+                                           "Shard came back with data intact");
 
       if (!my_shard_draining) {
         // 1/. The data is intact and the user does not wish to drain this
@@ -948,8 +951,7 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
           delta->set_apply_maintenances(
               {maintenance::MaintenanceLogWriter::
                    buildMaintenanceDefinitionForRebuilding(
-                       ShardID(myNodeId_, shard_idx),
-                       "Triggered by RebuildingCoordinator")});
+                       ShardID(myNodeId_, shard_idx), "Shard lost all data")});
           maintenance_log_writer_->writeDelta(std::move(delta));
 
         } else {
@@ -1006,13 +1008,15 @@ void RebuildingCoordinator::normalizeTimeRanges(uint32_t shard_idx,
   store.normalizeTimeRanges(rtis);
 }
 
-void RebuildingCoordinator::writeRemoveMaintenance(ShardID shard) {
+void RebuildingCoordinator::writeRemoveMaintenance(
+    ShardID shard,
+    const std::string& reason_message) {
   // We should remove maintenance only for our own shard
   ld_check(shard.node() == myNodeId_);
   auto delta = std::make_unique<maintenance::MaintenanceDelta>();
   delta->set_remove_maintenances(
       maintenance::MaintenanceLogWriter::buildRemoveMaintenancesRequest(
-          shard, "Data intact"));
+          shard, reason_message));
   maintenance_log_writer_->writeDelta(std::move(delta));
 }
 
@@ -1159,11 +1163,24 @@ void RebuildingCoordinator::onShardMarkUnrecoverable(
 
   auto& shard_state = it_shard->second;
   if (shouldAcknowledgeRebuilding(shard_idx, set)) {
+    // Note that if drain flag is unset, we can immediately write the marker.
+    //
     // Issue a storage task to write a RebuildingCompleteMetadata marker
-    // locally. Once the task comes back we will write SHARD_ACK_REBUILT to the
-    // event log.
+    // locally. Once the task comes back we will write SHARD_ACK_REBUILT to
+    // the event log.
+    //
+    // Note that internal maintenances will be removed once the marker is
+    // written.
     writeMarkerForShard(shard_idx, shard_state.version);
   } else {
+    // This handles the case if the shard is marked unrecoverable but the drain
+    // flag is set to true.
+    removeInternalMaintenancesIfPossible(
+        shard_idx,
+        set,
+        /* force = */ false,
+        "Shard data has been marked unrecoverable");
+
     if (!shard_state.isAuthoritative && shard_state.recoverableShards > 0) {
       WORKER_STAT_DECR(rebuilding_waiting_for_recoverable_shards);
     }
@@ -1205,11 +1222,23 @@ void RebuildingCoordinator::onShardIsRebuilt(node_index_t donor_node_idx,
     shard_state.progressStat.setValue((int64_t)1e6);
   }
 
+  // This will always return false if the drain flag is set.
   if (shouldAcknowledgeRebuilding(shard_idx, set)) {
     // Issue a storage task to write a RebuildingCompleteMetadata marker
     // locally. Once the task comes back we will write SHARD_ACK_REBUILT to the
     // event log.
+    //
+    // Note that internal maintenances will be removed once the marker has been
+    // written.
     writeMarkerForShard(shard_idx, shard_state.version);
+  } else {
+    // This handles the case if the shard is marked unrecoverable but the drain
+    // flag is set to true.
+    removeInternalMaintenancesIfPossible(
+        shard_idx,
+        set,
+        /* force = */ false,
+        "Lost data has been rebuilt and node is alive");
   }
 
   if (rsi->donor_progress.empty()) {
@@ -1220,9 +1249,32 @@ void RebuildingCoordinator::onShardIsRebuilt(node_index_t donor_node_idx,
   trySlideGlobalWindow(shard_idx, set);
 }
 
+void RebuildingCoordinator::removeInternalMaintenancesIfPossible(
+    uint32_t shard_idx,
+    const EventLogRebuildingSet& set,
+    bool force,
+    const std::string& reason_message) {
+  if (adminSettings_->enable_cluster_maintenance_state_machine) {
+    // We pass the flag ignore_drain_flag=true in this case because we
+    // want to check if the shard is AUTHORITATIVE_EMPTY or not regardless
+    // of the drain flag. Internal maintenances don't set the drain flag
+    // but it's possible that we have another stacked rebuilding that
+    // added the drain flag.
+    if (force ||
+        shouldAcknowledgeRebuilding(
+            shard_idx, set, /* ignore_drain_flag = */ true)) {
+      // We will remove the internal maintenance and let rebuilding get
+      // cancelled by maintenance manager if this was the last maintenance
+      // requesting this shard to be drained.
+      writeRemoveMaintenance(ShardID(myNodeId_, shard_idx), reason_message);
+    }
+  }
+}
+
 bool RebuildingCoordinator::shouldAcknowledgeRebuilding(
     uint32_t shard_idx,
-    const EventLogRebuildingSet& set) {
+    const EventLogRebuildingSet& set,
+    bool ignore_drain_flag) {
   auto& shard_state = getShardState(shard_idx);
 
   if (!shard_state.rebuildingSetContainsMyself) {
@@ -1239,7 +1291,7 @@ bool RebuildingCoordinator::shouldAcknowledgeRebuilding(
     // state. We'll persist this change when we write the rebuilding complete
     // marker which could be only after processing a SHARD_UNDRAIN.
     dirtyShards_.erase(shard_idx);
-    if (shard->drain) {
+    if (!ignore_drain_flag && shard->drain) {
       ld_info("Not ready to ack rebuilding of shard %u with version %s, "
               "rebuilding set %s because this shard is drained. Write a "
               "SHARD_UNDRAIN message to allow this shard to ack rebuilding and "
@@ -1665,7 +1717,8 @@ void RebuildingCoordinator::publishDirtyShards(
                 {maintenance::MaintenanceLogWriter::
                      buildMaintenanceDefinitionForRebuilding(
                          ShardID(myNodeId_, shard_idx),
-                         "Triggered by RebuildingCoordinator")});
+                         "Shard is missing (some) data, forcing RESTORE "
+                         "rebuilding")});
             maintenance_log_writer_->writeDelta(std::move(delta));
           } else {
             ld_info("Shard %u: Converting drain from RELOCATE to RESTORE",
@@ -1688,9 +1741,10 @@ void RebuildingCoordinator::publishDirtyShards(
     }
     // My shard's data is intact, any previously requested internal
     // maintenance should be removed.
-    if (adminSettings_->enable_cluster_maintenance_state_machine) {
-      writeRemoveMaintenance(ShardID(myNodeId_, shard_idx));
-    }
+    removeInternalMaintenancesIfPossible(shard_idx,
+                                         set,
+                                         /* force = */ true,
+                                         "Node came back with data intact");
     pendingPubs_[shard_idx] = last_seen_event_log_version_;
     restartForMyShard(shard_idx, 0, &dirty_ranges);
   }

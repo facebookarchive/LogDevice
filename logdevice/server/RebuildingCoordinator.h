@@ -618,7 +618,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
    * event log.
    */
   bool shouldAcknowledgeRebuilding(uint32_t shard_idx,
-                                   const EventLogRebuildingSet& set);
+                                   const EventLogRebuildingSet& set,
+                                   bool ignore_drain_flag = false);
 
   /**
    * Abort ShardRebuilding state machine currently running for the given shard.
@@ -639,6 +640,14 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
                         uint32_t shard_idx,
                         lsn_t version,
                         const EventLogRebuildingSet& set);
+  /**
+   * Checks if we have finished rebuilding (AUTHORITATIVE_EMPTY) and request
+   * the removal of the internal maintenances.
+   */
+  void removeInternalMaintenancesIfPossible(uint32_t shard_idx,
+                                            const EventLogRebuildingSet& set,
+                                            bool force,
+                                            const std::string& reason_message);
   /**
    * Actual callback used to send the SHARD_IS_REBUILT message.
    *
@@ -732,7 +741,7 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
   // A helper method to write a thrift:;RemoveMaintenanceRequest to
   // maintenance log
-  void writeRemoveMaintenance(ShardID shard);
+  void writeRemoveMaintenance(ShardID shard, const std::string& reason_message);
 
   std::unique_ptr<NonAuthoritativeRebuildingChecker>
       nonAuthoratitiveRebuildingChecker_;
