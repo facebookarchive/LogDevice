@@ -177,8 +177,6 @@ std::shared_ptr<Processor> NodesConfigurationInit::buildBootstrappingProcessor(
   settings.num_workers = 1;
   settings.bootstrapping = true;
 
-  // Given that we don't have the cluster name at this point.
-  settings.include_cluster_name_on_handshake = false;
   settings.include_destination_on_handshake = false;
   settings.enable_config_synchronization = false;
   injectExtraSettings(settings);
