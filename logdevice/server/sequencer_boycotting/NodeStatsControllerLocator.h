@@ -79,10 +79,11 @@ class NodeStatsControllerLocator {
          /*modifiable*/ std::vector<node_index_t>* controller_indices);
 
   /**
-   * Creates a weight for each node in the state list. 1 if ALIVE, 0 if any
-   * other state
+   * Creates a weight for each node in the state list. 1 if ALIVE and in NCM, 0
+   * otherwise.
    */
-  std::vector<double> initialWeightVector(const StateList& states) const;
+  std::vector<double> initialWeightVector(const StateList& states,
+                                          const NodesConfiguration& nc) const;
   /**
    * Sets the weight to 0 for the nodes that share a rack with the banned_rack.
    * Nodes without location also have their weights set to 0, they are assumed

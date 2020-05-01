@@ -133,6 +133,21 @@ TEST_F(NodeStatsControllerLocatorTest, GapInIndex) {
   EXPECT_TRUE(locator.isController(N2, 2));
 }
 
+TEST_F(NodeStatsControllerLocatorTest, StaleClusterState) {
+  // The first node is shrinked away but cluster state is not aware
+  auto nodes = nodesWithLocations(
+      {folly::none, "rg0.dc0.cl0.ro0.rk0"s, "rg0.dc0.cl0.ro0.rk0"s});
+
+  EXPECT_CALL(locator, getNodesConfiguration()).WillRepeatedly(Return(nodes));
+
+  EXPECT_CALL(locator, getNodeState(_))
+      .WillRepeatedly(
+          Return(StateList{FULLY_STARTED, FULLY_STARTED, FULLY_STARTED}));
+
+  EXPECT_TRUE(locator.isController(N1, 2));
+  EXPECT_TRUE(locator.isController(N2, 2));
+}
+
 TEST_F(NodeStatsControllerLocatorTest, WithoutLocation) {
   auto nodes =
       nodesWithLocations({"rg0.dc0.cl0.ro0.rk0"s, ""s, "rg0.dc0.cl0.ro0.rk2"s});

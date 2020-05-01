@@ -45,7 +45,7 @@ NodeStatsControllerLocator::locateControllers(int controller_count) {
   std::vector<node_index_t> controller_indices;
   controller_indices.reserve(controller_count);
 
-  auto weights = initialWeightVector(states);
+  auto weights = initialWeightVector(states, *nc);
   ld_check(max_node_index < weights.size());
 
   // remove weight for any nodes without location before using the rack-aware
@@ -60,7 +60,11 @@ NodeStatsControllerLocator::locateControllers(int controller_count) {
   locate(controller_count,
          [this, nc](node_index_t new_controller, std::vector<double>* weights) {
            auto svd = nc->getNodeServiceDiscovery(new_controller);
-           ld_check(svd != nullptr);
+           if (svd == nullptr) {
+             ld_critical(
+                 "Failed to get service discovery for node %u", new_controller);
+             ld_check(false);
+           }
 
            // only nodes with location should be considered this time
            ld_check(svd->location);
@@ -70,7 +74,7 @@ NodeStatsControllerLocator::locateControllers(int controller_count) {
          &controller_indices);
 
   if (controller_indices.size() < controller_count) {
-    weights = initialWeightVector(states);
+    weights = initialWeightVector(states, *nc);
     ld_check(max_node_index < weights.size());
 
     for (const auto& controller : controller_indices) {
@@ -134,13 +138,14 @@ NodeStatsControllerLocator::getNodeState(node_index_t max_node_index) const {
   return states;
 }
 
-std::vector<double>
-NodeStatsControllerLocator::initialWeightVector(const StateList& states) const {
+std::vector<double> NodeStatsControllerLocator::initialWeightVector(
+    const StateList& states,
+    const NodesConfiguration& nc) const {
   std::vector<double> weights;
-  weights.reserve(states.size());
+  weights.resize(states.size());
 
-  for (size_t i = 0; i < states.size(); ++i) {
-    weights.emplace_back(ClusterState::isAliveState(states[i]) ? 1 : 0);
+  for (const auto& [node_id, _] : *nc.getServiceDiscovery()) {
+    weights[node_id] = ClusterState::isAliveState(states[node_id]) ? 1 : 0;
   }
 
   return weights;
