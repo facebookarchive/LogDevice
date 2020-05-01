@@ -34,7 +34,7 @@ ExternalProject_Add(rocksdb
         # Disable ZSTD for now as it breaks internal build
         -DWITH_ZSTD=OFF
         -DCMAKE_POSITION_INDEPENDENT_CODE=True
-    INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
+    INSTALL_COMMAND $(MAKE) install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
 ExternalProject_Get_Property(rocksdb BINARY_DIR)

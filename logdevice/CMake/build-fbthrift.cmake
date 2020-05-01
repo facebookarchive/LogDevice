@@ -22,7 +22,7 @@ ExternalProject_Add(fbthrift
         -Denable_tests=OFF
         -DCXX_STD=gnu++17
         -DCMAKE_CXX_STANDARD=17
-    INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
+    INSTALL_COMMAND $(MAKE) install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
 ExternalProject_Get_Property(fbthrift SOURCE_DIR)

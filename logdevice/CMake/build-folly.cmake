@@ -24,7 +24,7 @@ ExternalProject_Add(folly
       -DCMAKE_CXX_STANDARD=17
       -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
        ${_folly_cmake_extra_opts}
-    INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
+    INSTALL_COMMAND $(MAKE) install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
 ExternalProject_Get_Property(folly SOURCE_DIR)

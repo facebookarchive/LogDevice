@@ -21,7 +21,7 @@ ExternalProject_Add(rsocket
         -DBUILD_EXAMPLES=OFF
         -DCMAKE_CXX_STANDARD=17
         -DCXX_STD=gnu++17
-    INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
+    INSTALL_COMMAND $(MAKE) install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
 # Specify include dir

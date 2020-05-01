@@ -17,7 +17,7 @@ ExternalProject_Add(fizz
         -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
         -DBUILD_TESTS=OFF
         -DBUILD_EXAMPLES=OFF
-    INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
+    INSTALL_COMMAND $(MAKE) install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
 ExternalProject_Get_Property(fizz BINARY_DIR)

@@ -16,7 +16,7 @@ ExternalProject_Add(fmt
         -DCMAKE_CXX_STANDARD=17
         -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
         -DFMT_TEST=OFF
-    INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
+    INSTALL_COMMAND $(MAKE) install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )
 
 # Specify include dir

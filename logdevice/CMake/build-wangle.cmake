@@ -16,7 +16,7 @@ ExternalProject_Add(wangle
         -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DBUILD_TESTS=OFF
-    INSTALL_COMMAND make install DESTDIR=${LOGDEVICE_STAGING_DIR}
+    INSTALL_COMMAND $(MAKE) install DESTDIR=${LOGDEVICE_STAGING_DIR}
 )
 
 ExternalProject_Get_Property(wangle BINARY_DIR)
