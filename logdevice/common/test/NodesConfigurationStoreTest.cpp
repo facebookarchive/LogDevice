@@ -404,26 +404,26 @@ TEST(NodesConfigurationStore, zk_retryTransientErrors) {
   // Utilities to build mock callbacks responding with a certain status
   const auto build_read_cb =
       [](int rc, std::string data = "", zk::Stat stat = zk::Stat{}) {
-        return [=](std::string, ZookeeperClientBase::data_callback_t cb) {
-          cb(rc, data, stat);
+        return [=](std::string, ZookeeperClientBase::data_callback_t* cb) {
+          (*cb)(rc, data, stat);
         };
       };
   const auto build_sync_cb = [](int rc) {
-    return [=](ZookeeperClientBase::sync_callback_t cb) { cb(rc); };
+    return [=](ZookeeperClientBase::sync_callback_t* cb) { (*cb)(rc); };
   };
   const auto build_create_cb = [](int rc) {
     return [=](std::string path,
                std::string,
-               ZookeeperClientBase::create_callback_t cb,
+               ZookeeperClientBase::create_callback_t* cb,
                std::vector<zk::ACL>,
-               int32_t) { cb(rc, path); };
+               int32_t) { (*cb)(rc, path); };
   };
 
   const auto build_stat_cb = [](int rc) {
     return [=](std::string path,
                std::string,
-               ZookeeperClientBase::stat_callback_t cb,
-               zk::version_t) { cb(rc, zk::Stat{}); };
+               ZookeeperClientBase::stat_callback_t* cb,
+               zk::version_t) { (*cb)(rc, zk::Stat{}); };
   };
 
   static const std::string data1 = TestEntry{10, "foo123"}.serialize();
