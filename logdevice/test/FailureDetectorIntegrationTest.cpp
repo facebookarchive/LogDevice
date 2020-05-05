@@ -514,13 +514,13 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
       NodeSetSelectorFactory::create(NodeSetSelectorType::CONSISTENT_HASHING);
 
   const auto config = cluster->getConfig()->get();
-  auto selected = selector->getStorageSet(
-      configuration::InternalLogs::CONFIG_LOG_DELTAS,
-      config.get(),
-      *config->getNodesConfigurationFromServerConfigSource(),
-      /* target_nodeset_size */ 1,
-      /* seed */ 0,
-      nullptr);
+  auto selected =
+      selector->getStorageSet(configuration::InternalLogs::CONFIG_LOG_DELTAS,
+                              config.get(),
+                              *cluster->getConfig()->getNodesConfiguration(),
+                              /* target_nodeset_size */ 1,
+                              /* seed */ 0,
+                              nullptr);
   ASSERT_EQ(selected.decision, NodeSetSelector::Decision::NEEDS_CHANGE);
   ASSERT_EQ(selected.storage_set.size(), 1);
   auto S = selected.storage_set[0];

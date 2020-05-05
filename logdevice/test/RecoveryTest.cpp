@@ -745,19 +745,18 @@ RecoveryTest::buildDigest(epoch_t epoch,
                           epoch_t expect_seal_epoch) {
   ld_check(cluster_ != nullptr);
 
-  std::shared_ptr<Configuration> config = cluster_->getConfig()->get();
+  auto nodes_cfg = cluster_->getConfig()->getNodesConfiguration();
   auto digest = std::make_unique<Digest>(
       LOG_ID,
       epoch,
       EpochMetaData(
           shards, ReplicationProperty(replication, sync_replication_scope)),
       expect_seal_epoch,
-      config->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      nodes_cfg,
       Digest::Options({bridge_empty_epoch_}));
 
   for (ShardID shard : shards) {
-    auto* n = config->serverConfig()->getNode(shard.node());
-    if (!n || !n->isReadableStorageNode()) {
+    if (!nodes_cfg->getStorageMembership()->shouldReadFromShard(shard)) {
       continue;
     }
 

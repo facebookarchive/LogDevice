@@ -160,7 +160,7 @@ void NodeSetTest::updateMetaDataInEpochStore(logid_t log) {
               log,
               std::make_shared<CustomEpochMetaDataUpdater>(
                   config,
-                  config->getNodesConfigurationFromServerConfigSource(),
+                  cluster_->getConfig()->getNodesConfiguration(),
                   selector,
                   true,
                   true /* provision_if_empty */,
@@ -254,12 +254,10 @@ void NodeSetTest::writeMetaDataLog() {
     reader->setRecordCallback(
         [expected, &sem, this, log](std::unique_ptr<DataRecord>& record) {
           EpochMetaData info;
-          int rv = info.fromPayload(
-              record->payload,
-              log,
-              *cluster_->getConfig()
-                   ->getServerConfig()
-                   ->getNodesConfigurationFromServerConfigSource());
+          int rv =
+              info.fromPayload(record->payload,
+                               log,
+                               *cluster_->getConfig()->getNodesConfiguration());
           EXPECT_EQ(0, rv);
           EXPECT_EQ(info.h.epoch, info.h.effective_since);
           if (info.h.epoch == expected) {

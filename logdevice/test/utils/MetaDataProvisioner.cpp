@@ -54,7 +54,7 @@ int MetaDataProvisioner::provisionEpochMetaDataForLog(
       log_id,
       std::make_shared<CustomEpochMetaDataUpdater>(
           config,
-          config->getNodesConfigurationFromServerConfigSource(),
+          config_->getNodesConfiguration(),
           std::move(selector),
           use_storage_set_format,
           provision_if_empty,
@@ -153,14 +153,10 @@ int MetaDataProvisioner::provisionEpochMetaDataForLog(
 int MetaDataProvisioner::prepopulateMetaDataLog(
     logid_t log_id,
     const std::vector<std::pair<epoch_t, std::string>>& metadata_payloads) {
-  std::shared_ptr<Configuration> config = config_->get();
-  ld_check(config != nullptr);
-
   const logid_t meta_logid(MetaDataLog::metaDataLogID(log_id));
 
   // get the metadata storage nodes and replication factor from the config
-  const auto& nodes_configuration =
-      config->serverConfig()->getNodesConfigurationFromServerConfigSource();
+  const auto& nodes_configuration = config_->getNodesConfiguration();
 
   auto meta_storage_set = EpochMetaData::nodesetToStorageSet(
       nodes_configuration->getStorageMembership()->getMetaDataNodeIndices(),
