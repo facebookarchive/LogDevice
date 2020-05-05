@@ -382,12 +382,12 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
     }
 
     auto my_node_id = Worker::onThisThread()->processor_->getMyNodeID();
-    if (destination_node_id_ != my_node_id) {
+    if (destination_node_id_.index() != my_node_id.index()) {
       ld_error("Got a HELLO from %s with a DESTINATION_NODE which does not "
-               "match this node. Destination NodeID: %s. My NodeID: %s.",
+               "match this node. Destination node idx: %d. My node idx: %d.",
                Sender::describeConnection(from).c_str(),
-               destination_node_id_.toString().c_str(),
-               my_node_id.toString().c_str());
+               destination_node_id_.index(),
+               my_node_id.index());
       err = E::DESTINATION_MISMATCH;
       return Disposition::ERROR;
     }
