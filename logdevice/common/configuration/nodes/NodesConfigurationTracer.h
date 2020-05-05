@@ -30,7 +30,7 @@ class NodesConfigurationTracer : SampledTracer {
     UNKNOWN = 0,
     NCM_UPDATE = 1,
     NCM_OVERWRITE = 2,
-    NC_PUBLISHER = 3,
+    //  NC_PUBLISHER = 3, // Deprecated
   };
   static std::string toString(const Source&);
 

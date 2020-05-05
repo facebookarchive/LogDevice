@@ -46,12 +46,7 @@ void OverwriteRequestData::onDestruction() {
     return;
   }
   NodesConfigurationTracer::Sample sample;
-  sample.nc_update_gen_ = [configuration = nc_]() mutable {
-    // TODO: we don't have NodesConfiguration::toString(), so we use
-    // the debug JSON string instead. This could likely be more
-    // efficient.
-    return NodesConfigurationCodec::debugJsonString(*configuration);
-  };
+
   // Note that nc is the published nc only if status is OK
   sample.published_nc_ = std::move(nc_);
   sample.source_ = NodesConfigurationTracer::Source::NCM_OVERWRITE;

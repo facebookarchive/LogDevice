@@ -31,8 +31,6 @@ NodesConfigurationTracer::NodesConfigurationTracer(
       return "ncm_update";
     case NodesConfigurationTracer::Source::NCM_OVERWRITE:
       return "ncm_overwrite";
-    case NodesConfigurationTracer::Source::NC_PUBLISHER:
-      return "nc_publisher";
     case NodesConfigurationTracer::Source::UNKNOWN:
       FOLLY_FALLTHROUGH;
     default:
