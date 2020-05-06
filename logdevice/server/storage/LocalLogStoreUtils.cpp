@@ -9,7 +9,6 @@
 
 #include "logdevice/common/debug.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/server/AuditLogFile.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 
@@ -37,8 +36,6 @@ int updateTrimPoints(const TrimPointUpdateMap& trim_points,
       error = E::LOCAL_LOG_STORE_WRITE;
       continue;
     }
-    auto server_processor = checked_downcast<ServerProcessor*>(processor);
-    log_trim_movement(*server_processor, store, kv.first, kv.second);
 
     if (state_map) {
       LogStorageState* log_state =

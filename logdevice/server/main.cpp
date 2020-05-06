@@ -62,9 +62,6 @@ constexpr size_t MEMLOCK_MEM = 2ULL * 1024 * 1024 * 1024;
 Semaphore main_thread_sem;
 std::atomic<bool> shutdown_requested{false};
 
-// only used from main thread
-bool rotate_logs_requested{false};
-
 static void signal_shutdown() {
   shutdown_requested.store(true);
   main_thread_sem.post();
@@ -96,12 +93,6 @@ static void shutdown_signal_handler(int sig) {
 
 static void coredump_signal_handler(int sig) {
   handle_fatal_signal(sig);
-}
-
-static void rotate_logs_handler(int sig) {
-  ld_check(sig == SIGHUP);
-  rotate_logs_requested = true;
-  main_thread_sem.post();
 }
 
 static void setup_signal_handler(int signum, void (*handler)(int)) {
@@ -200,16 +191,6 @@ static void drop_root(UpdateableSettings<ServerSettings> server_settings) {
     if (pw == nullptr) {
       ld_error("Cannot find user \"%s\" to switch to", user);
       exit(1);
-    }
-
-    // chown() any rotating log files that we created while still root
-    // For now, this is just the audit log
-    if (!settings->audit_log.empty()) {
-      const char* audit_log = settings->audit_log.c_str();
-      if (chown(audit_log, pw->pw_uid, pw->pw_gid) < 0) {
-        ld_error("Failed to chown the file %s to user %s", audit_log, user);
-        exit(1);
-      }
     }
 
     if (setgid(pw->pw_gid) < 0 || setuid(pw->pw_uid) < 0) {
@@ -478,16 +459,10 @@ int main(int argc, const char** argv) {
   setup_signal_handler(SIGINT, shutdown_signal_handler);
   setup_signal_handler(SIGTERM, shutdown_signal_handler);
   setup_signal_handler(SIGUSR1, watchdog_stall_handler);
-  setup_signal_handler(SIGHUP, rotate_logs_handler);
   for (;;) {
     main_thread_sem.wait();
     if (shutdown_requested.load()) {
       break;
-    }
-    if (rotate_logs_requested) {
-      server.rotateLocalLogs();
-      rotate_logs_requested = false;
-      continue;
     }
     ld_check(false);
   }

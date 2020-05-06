@@ -22,7 +22,6 @@
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 #include "logdevice/server/ConnectionListener.h"
-#include "logdevice/server/LocalLogFile.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/UnreleasedRecordDetector.h"
 #include "logdevice/server/admincommands/CommandProcessor.h"
@@ -90,7 +89,6 @@ class ServerParameters {
 
   std::shared_ptr<UpdateableConfig> getUpdateableConfig();
   std::shared_ptr<TraceLogger> getTraceLogger();
-  const std::shared_ptr<LocalLogFile>& getAuditLog();
   StatsHolder* getStats();
   void requestStop();
   std::shared_ptr<PluginRegistry> getPluginRegistry() const {
@@ -149,7 +147,6 @@ class ServerParameters {
 
   std::shared_ptr<UpdateableConfig> updateable_config_;
   std::shared_ptr<TraceLogger> trace_logger_;
-  std::shared_ptr<LocalLogFile> audit_log_;
 
   // Assigned when config is loaded.
   folly::Optional<NodeID> my_node_id_;
@@ -267,8 +264,6 @@ class Server {
       ssl_connection_listener_->stopAcceptingConnections().wait();
     }
   }
-
-  void rotateLocalLogs();
 
  private:
   ServerParameters* params_;

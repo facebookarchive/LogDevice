@@ -490,7 +490,6 @@ sidebar_label: Settings
 ## Security
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
-| audit-log | Path for log file storing information about all trim point changes. For log rotation using logrotate send SIGHUP to process after rotation to reopen the log. |  | requires&nbsp;restart, server&nbsp;only |
 | require-permission-message-types | Check permissions only for the received message of the type(s) specified. Separate different types with a comma. 'all' to apply to all messages. Prefix the value with '~' to include all types except the given ones, e.g. '~WINDOW,RELEASE' will check permissions for messages of all types except WINDOW and RELEASE. | START | server&nbsp;only |
 | require-ssl-on-command-port | Requires SSL for admin commands sent to the command port. --ssl-cert-path, --ssl-key-path and --ssl-ca-path settings must be properly configured | false | **experimental**, server&nbsp;only |
 | ssl-boundary | Enable SSL in cross-X traffic, where X is the setting. Example: if set to "rack", all cross-rack traffic will be sent over SSL. Can be one of "none", "node", "rack", "row", "cluster", "data\_center" or "region". If a value other than "none" or "node" is specified on the client, --my-location has to be specified as well. | none |  |

@@ -387,7 +387,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "Path for log file storing information about all trim point changes. "
      "For log rotation using logrotate send SIGHUP to process after rotation "
      "to reopen the log.",
-     SERVER | REQUIRES_RESTART,
+     SERVER | REQUIRES_RESTART | DEPRECATED,
      SettingsCategory::Security)
 
     ("connection-backlog", &connection_backlog, "2000",

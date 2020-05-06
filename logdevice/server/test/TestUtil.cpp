@@ -95,7 +95,6 @@ std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
     setGossipSettings(std::move(gossip_settings));
   }
   auto p = ServerProcessor::createWithoutStarting(
-      /* audit log */ nullptr,
       sharded_storage_thread_pool_,
       /* log storage state map */ nullptr,
       std::move(server_settings_).value(),

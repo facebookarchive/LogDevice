@@ -543,15 +543,6 @@ void ServerParameters::init() {
              "not set");
     throw ConstructorFailed();
   }
-  if (!server_settings_->audit_log.empty()) {
-    audit_log_ = std::make_shared<LocalLogFile>();
-    if (audit_log_->open(server_settings_->audit_log) < 0) {
-      ld_error("Could not open audit log \"%s\": %s",
-               server_settings_->audit_log.c_str(),
-               strerror(errno));
-      throw ConstructorFailed();
-    };
-  }
 
   // This is a hack to update num_logs_configured across all stat objects
   // so that aggregate returns the correct value when number of log decreases
@@ -635,10 +626,6 @@ std::shared_ptr<UpdateableConfig> ServerParameters::getUpdateableConfig() {
 
 std::shared_ptr<TraceLogger> ServerParameters::getTraceLogger() {
   return trace_logger_;
-}
-
-const std::shared_ptr<LocalLogFile>& ServerParameters::getAuditLog() {
-  return audit_log_;
 }
 
 StatsHolder* ServerParameters::getStats() {
@@ -970,7 +957,6 @@ bool Server::initProcessor() {
   ld_check(!params_->isStorageNode() || log_storage_state_map_);
   try {
     processor_ = ServerProcessor::createWithoutStarting(
-        params_->getAuditLog(),
         sharded_storage_thread_pool_.get(),
         std::move(log_storage_state_map_),
         params_->getServerSettings(),
@@ -1731,13 +1717,6 @@ EventLogStateMachine* Server::getEventLogStateMachine() {
 
 maintenance::MaintenanceManager* Server::getMaintenanceManager() {
   return maintenance_manager_.get();
-}
-
-void Server::rotateLocalLogs() {
-  auto audit_log = params_->getAuditLog();
-  if (audit_log) {
-    audit_log->reopen();
-  }
 }
 
 Server::~Server() {

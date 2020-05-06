@@ -14,11 +14,11 @@
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
+#include "logdevice/server/ServerProcessor.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/protocol/TRIMMED_Message.h"
 #include "logdevice/common/stats/Stats.h"
-#include "logdevice/server/AuditLogFile.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
@@ -76,15 +76,6 @@ class WriteTrimMetadataTask : public StorageTask {
       status_ = (err == E::UPTODATE ? E::OK : E::FAILED);
       return;
     }
-    auto processor =
-        checked_downcast<ServerProcessor*>(&storageThreadPool_->getProcessor());
-    log_trim_movement(*processor,
-                      store,
-                      log_id_,
-                      trim_point_,
-                      client_name_,
-                      client_address_,
-                      identity_);
 
     LogStorageState* log_state =
         map.insertOrGet(log_id_, storageThreadPool_->getShardIdx());

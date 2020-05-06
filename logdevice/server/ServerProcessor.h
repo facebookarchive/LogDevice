@@ -17,7 +17,6 @@
 #include "logdevice/common/settings/GossipSettings.h"
 #include "logdevice/server/FailureDetector.h"
 #include "logdevice/server/HealthMonitor.h"
-#include "logdevice/server/LocalLogFile.h"
 #include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/WatchDogThread.h"
@@ -77,10 +76,6 @@ class ServerProcessor : public Processor {
         Processor::getWorker(worker_id, type));
   }
 
-  const std::shared_ptr<LocalLogFile>& getAuditLog() {
-    return audit_log_;
-  }
-
   LogStorageStateMap& getLogStorageStateMap() const;
 
   // Alternative factory for tests that need to construct a half-baked
@@ -121,8 +116,7 @@ class ServerProcessor : public Processor {
   ShardedStorageThreadPool* const sharded_storage_thread_pool_;
 
   template <typename... Args>
-  ServerProcessor(std::shared_ptr<LocalLogFile> audit_log,
-                  ShardedStorageThreadPool* const sharded_storage_thread_pool,
+  ServerProcessor(ShardedStorageThreadPool* const sharded_storage_thread_pool,
                   std::unique_ptr<LogStorageStateMap> log_storage_state_map,
                   UpdateableSettings<ServerSettings> server_settings,
                   UpdateableSettings<GossipSettings> gossip_settings,
@@ -130,7 +124,6 @@ class ServerProcessor : public Processor {
                   Args&&... args)
       : Processor(std::forward<Args>(args)...),
         sharded_storage_thread_pool_(sharded_storage_thread_pool),
-        audit_log_(audit_log),
         server_settings_(std::move(server_settings)),
         gossip_settings_(std::move(gossip_settings)),
         admin_server_settings_(std::move(admin_server_settings)),
@@ -159,7 +152,6 @@ class ServerProcessor : public Processor {
 
   void initTLSCredMonitor() override;
 
-  std::shared_ptr<LocalLogFile> audit_log_;
   UpdateableSettings<ServerSettings> server_settings_;
   UpdateableSettings<GossipSettings> gossip_settings_;
   UpdateableSettings<AdminServerSettings> admin_server_settings_;
