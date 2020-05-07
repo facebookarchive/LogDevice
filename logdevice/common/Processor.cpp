@@ -811,6 +811,7 @@ SSLSessionCache& Processor::sslSessionCache() const {
 
 void Processor::onSettingsUpdated() {
   impl_->allSequencers_->onSettingsUpdated();
+  applySettings(settings_);
 }
 
 void Processor::initTLSCredMonitor() {
