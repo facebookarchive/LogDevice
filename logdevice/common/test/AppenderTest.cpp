@@ -120,13 +120,14 @@ class AppenderTest : public ::testing::Test {
   // return.
   bool is_accepting_work_{true};
 
-  // Keep track of the state of the Appender's timers.
-  // Note that instead of mocking the timers directly, this test suite will call
+  // Keep track of the state of the store timer.
+  // Note that instead of mocking the timer directly, this test suite will call
   // the onTimeout() method of Appender directly.
-  // These values are only used to assert that the timers have been activated
-  // through calls to activateStoreTimer() and activateRetryTimer(), and
+  // This value is only used to assert that the timer has been activated
+  // through call to activateStoreTimer()
   bool store_timer_active_{false};
-  bool retry_timer_active_{false};
+  // Indicates that immediate retry wave was scheduled after send failure.
+  bool retry_wave_scheduled_{false};
 
   // Keep track of which nodes are not available following Appender calling
   // setNotAvailableUntil(). Used by checkNotAvailableUntil() to inform the
@@ -188,6 +189,9 @@ class AppenderTest : public ::testing::Test {
 
   // call Appender::onTimeout().
   void triggerTimeout();
+
+  // Sends previously scheduled retry wave
+  void triggerRetryWave();
 
   // Trigger the on socket close callback for `nid`.
   void triggerOnSocketClosed(ShardID shard);
@@ -453,24 +457,17 @@ class AppenderTest::MockAppender : public Appender {
   void checkWorkerThread() override {}
 
   void initStoreTimer() override {}
-  void initRetryTimer() override {}
   void cancelStoreTimer() override {
     test_->store_timer_active_ = false;
   }
   bool storeTimerIsActive() override {
     return test_->store_timer_active_;
   }
-  void cancelRetryTimer() override {
-    test_->retry_timer_active_ = false;
-  }
-  void activateRetryTimer() override {
-    test_->retry_timer_active_ = true;
-  }
   void activateStoreTimer(std::chrono::milliseconds) override {
     test_->store_timer_active_ = true;
   }
-  bool retryTimerIsActive() override {
-    return test_->retry_timer_active_;
+  void scheduleSendWave() override {
+    test_->retry_wave_scheduled_ = true;
   }
   bool isNodeAlive(NodeID node) override {
     // if we can't find the node in dead_nodes_, it is alive.
@@ -732,10 +729,14 @@ const STORE_Header& AppenderTest::getHeader(const STORE_Message* msg) {
 }
 
 void AppenderTest::triggerTimeout() {
-  ASSERT_TRUE(retry_timer_active_ || store_timer_active_);
-  retry_timer_active_ = false;
+  ASSERT_TRUE(store_timer_active_);
   store_timer_active_ = false;
   appender_->onTimeout();
+}
+
+void AppenderTest::triggerRetryWave() {
+  ASSERT_TRUE(retry_wave_scheduled_);
+  appender_->sendWave();
 }
 
 void AppenderTest::triggerOnSocketClosed(ShardID shard) {
@@ -1025,7 +1026,7 @@ TEST_F(AppenderTest, NotEnoughRepliesExpectedTryNewWave) {
 
   // At this point, Appender should give up this wave because 3 out of 5 nodes
   // could not store a copy of the record, meaning that there is not enough
-  // nodes left to fully replicate it. The retry timer is activated.
+  // nodes left to fully replicate it. The retry wave is scheduled.
 
   // Check that Appender notified NodeSetState that N4S0 has no space.
   CHECK_NOT_AVAILABLE(N4S0, NO_SPC);
@@ -1033,8 +1034,9 @@ TEST_F(AppenderTest, NotEnoughRepliesExpectedTryNewWave) {
   // The candidate iterator will propose N4S0 first but pickDestinations should
   // discard it.
   first_candidate_idx_ = 4;
-  // Retry timer is triggered.
-  triggerTimeout();
+  // Triggers retry
+  ASSERT_TRUE(retry_wave_scheduled_);
+  triggerRetryWave();
   // STORE could be sent to 5 nodes with wave 2.
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 2, N5S0, N6S0, N7S0, N8S0, N0S0);
   CHECK_NO_STORE_MSG();
@@ -1169,13 +1171,13 @@ TEST_F(AppenderTest, ChainSendingFail) {
   CHECK_NO_STORE_MSG();
 
   // Since this is a chain sending, one node not reachable should be enough for
-  // deciding to immediately retry a new wave after the retry timer triggers.
+  // deciding to schedyle immediate retry wave.
   ASSERT_FALSE(store_timer_active_);
-  ASSERT_TRUE(retry_timer_active_);
+  ASSERT_TRUE(retry_wave_scheduled_);
 
-  // Retry timer triggers, we start another wave.
+  // Retry wave triggers, we start another wave.
   first_candidate_idx_ = 2;
-  triggerTimeout();
+  triggerRetryWave();
 
   // Second wave, use chain sending again and N2S0 is the first recipient.
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 2, N2S0);
@@ -1211,12 +1213,12 @@ TEST_F(AppenderTest, ChainSendingForwardingFailure) {
   // wave immediately.
   ON_STORED_SENT(E::FORWARD, 1, N1S0);
 
-  // The retry timer is activated so that we retry another wave immediately.
+  // The retry wave is scheduled so that we retry another wave immediately.
   ASSERT_FALSE(store_timer_active_);
-  ASSERT_TRUE(retry_timer_active_);
+  ASSERT_TRUE(retry_wave_scheduled_);
   // The new wave has the following chain link: N2S0 -> N3S0 -> N4S0
   first_candidate_idx_ = 2;
-  triggerTimeout();
+  triggerRetryWave();
 
   // Second wave, use chain sending again and N2S0 is the first recipient.
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 2, N2S0);
@@ -1243,12 +1245,12 @@ TEST_F(AppenderTest, ChainSendingFailToSendFirstNode) {
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::NOBUFS, 1, N0S0);
   CHECK_NO_STORE_MSG();
 
-  // The retry timer is activated so that we retry another wave immediately.
+  // The retry wave is scheduled so that we retry another wave immediately.
   ASSERT_FALSE(store_timer_active_);
-  ASSERT_TRUE(retry_timer_active_);
+  ASSERT_TRUE(retry_wave_scheduled_);
   // The new wave has the following chain link: N2S0 -> N3S0 -> N4S0
   first_candidate_idx_ = 2;
-  triggerTimeout();
+  triggerRetryWave();
 
   // Second wave, use chain sending again and N2S0 is the first recipient.
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 2, N2S0);
@@ -1409,10 +1411,10 @@ TEST_F(AppenderTest, GraylistingCorrectOnError) {
   CHECK_NOT_AVAILABLE(N2S0, NO_SPC);
   CHECK_NOT_AVAILABLE(N3S0, NO_SPC);
   CHECK_NOT_AVAILABLE(N4S0, NO_SPC);
-  // check if retry timer is active since we failed a wave
-  ASSERT_TRUE(retry_timer_active_);
-  // retry timer active means timeout would have been called
-  triggerTimeout();
+  // check if retry wave is scheduled since we failed a wave
+  ASSERT_TRUE(retry_wave_scheduled_);
+  // Trigger a scheduled retry wave
+  triggerRetryWave();
   // check other nodes not graylisted
   CHECK_AVAILABLE(N0S0);
   CHECK_AVAILABLE(N1S0);
@@ -1431,7 +1433,9 @@ TEST_F(AppenderTest, NodesStoredAmendable) {
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 1, N0S0, N1S0);
   // FAILED reply should not affect the set
   appender_->onReply(storedHeader(1, E::FAILED, NodeID(), 0 /* flags */), N0S0);
-  triggerTimeout();
+  ASSERT_TRUE(retry_wave_scheduled_);
+  // Trigger a scheduled retry wave
+  triggerRetryWave();
   ASSERT_EQ((std::multiset<ShardID>{}), appender_->getNodesStoredAmendable());
 
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 2, N0S0, N1S0);
@@ -1475,7 +1479,8 @@ TEST_F(AppenderTest, SubsequentWavesAmendDirect) {
   // Issue {N3S0, N0S0, N1S0} for the second wave.  N0S0 should get a STORE with
   // the AMEND flag set.
   first_candidate_idx_ = 3;
-  triggerTimeout();
+  ASSERT_TRUE(retry_wave_scheduled_);
+  triggerRetryWave();
   auto STORE_has_amend_flag = [&](ShardID shard) -> bool {
     auto it = store_msgs_.find(shard);
     if (it == store_msgs_.end()) {
@@ -1521,7 +1526,8 @@ TEST_F(AppenderTest, SubsequentWavesAmendChained) {
   appender_->onReply(storedHeader(1, E::OK, NodeID(), 0 /* flags */), N3S0);
   appender_->onReply(storedHeader(1, E::FAILED, NodeID(), 0 /* flags */), N4S0);
 
-  triggerTimeout();
+  ASSERT_TRUE(retry_wave_scheduled_);
+  triggerRetryWave();
   // Because N4S0 failed to store, the second wave is not amendable at all (N4S0
   // needs the payload and is last in the chain)
   {
@@ -1619,10 +1625,10 @@ TEST_F(AppenderTest, SoftPreemptedWhenDraining) {
 
   // there is no hope to finish the wave, the Appender should retry
   // for a new wave
-  ASSERT_TRUE(retry_timer_active_);
+  ASSERT_TRUE(retry_wave_scheduled_);
   ASSERT_FALSE(store_timer_active_);
   first_candidate_idx_ = 3;
-  triggerTimeout();
+  triggerRetryWave();
 
   // this checks the DRAINING flag in STORE header
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 2, N3S0, N4S0, N5S0, N6S0);
@@ -1662,10 +1668,10 @@ TEST_F(AppenderTest, PremptedByNormalSealWhenDraining) {
   EXPECT_EQ(EPOCH_INVALID, preempted_epoch_);
   EXPECT_FALSE(preempted_by_.isNodeID());
   ASSERT_FALSE(reply_.has_value());
-  ASSERT_TRUE(retry_timer_active_);
+  ASSERT_TRUE(retry_wave_scheduled_);
   ASSERT_FALSE(store_timer_active_);
   first_candidate_idx_ = 3;
-  triggerTimeout();
+  triggerRetryWave();
   CHECK_STORE_MSG_AND_TRIGGER_ON_SENT(E::OK, 2, N3S0, N4S0, N5S0, N6S0);
   CHECK_NO_STORE_MSG();
   // in this case, N3S0 sents a NORMAL preemption

@@ -28,6 +28,7 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Timestamp.h"
+#include "logdevice/common/WorkerCallbackHelper.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
 #include "logdevice/common/stats/Stats.h"
@@ -692,14 +693,10 @@ class Appender : public IntrusiveUnorderedMapHook {
 
   // Initialize/activate/cancel timers used by this Appender.
   virtual void initStoreTimer();
-  virtual void initRetryTimer();
   virtual void cancelStoreTimer();
   virtual void activateStoreTimer(std::chrono::milliseconds delay);
   virtual void fireStoreTimer();
   virtual bool storeTimerIsActive();
-  virtual void cancelRetryTimer();
-  virtual void activateRetryTimer();
-  virtual bool retryTimerIsActive();
   virtual bool isNodeAlive(NodeID node);
 
  private:
@@ -841,11 +838,6 @@ class Appender : public IntrusiveUnorderedMapHook {
   // of STOREs to be sent on the next iteration of the event loop
   // Note: in tests, this is left uninitialized.
   Timer retry_timer_;
-
-  // Used to diferentiate if we failed due to an error or a timeout. If we
-  // failed with an error we don't want onTimeout to graylist a first node that
-  // did not respond.
-  bool wave_failed_with_error_{false};
 
   // If the append was created by SequencerBatching, this contains the number
   // of constituent appends (APPEND messages that came over the wire).  Used
@@ -1087,6 +1079,8 @@ class Appender : public IntrusiveUnorderedMapHook {
   virtual int registerOnSocketClosed(NodeID nid, SocketCallback& cb);
   virtual void replyToAppendRequest(APPENDED_Header& replyhdr);
   virtual void schedulePeriodicReleases();
+  // Schedules a new wave to be sent on the next iteration of event loop
+  virtual void scheduleSendWave();
 
   // Request that is used to send an E::OK reply back to a client on the worker
   // it received the append message on. Used in onReaped().
@@ -1111,6 +1105,9 @@ class Appender : public IntrusiveUnorderedMapHook {
     worker_id_t worker_;
     Appender* appender_;
   };
+
+  // Used to delegate retrying wave on Appender's worker
+  WorkerCallbackHelper<Appender> callback_helper_;
 
   // check if the appender is the one of the appenders that the sequencer
   // would like to drain during graceful reactivation/migration

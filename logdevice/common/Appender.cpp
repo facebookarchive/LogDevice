@@ -84,7 +84,8 @@ Appender::Appender(Worker* worker,
       append_request_id_(append_request_id),
       passthru_flags_(passthru_flags),
       release_type_(static_cast<ReleaseTypeRaw>(ReleaseType::GLOBAL)),
-      lsn_before_redirect_(lsn_before_redirect) {
+      lsn_before_redirect_(lsn_before_redirect),
+      callback_helper_(this) {
   // Increment the total count of Appenders. Note: created_on_ can be nullptr
   // inside tests.
   if (created_on_) {
@@ -308,7 +309,7 @@ void Appender::sendDeferredSTORE(std::unique_ptr<STORE_Message> msg,
     ld_check(err == E::SYSLIMIT || err == E::NOBUFS);
   }
 
-  if ((rv != 0 || deferred_stores_ == 0) && !retryTimerIsActive()) {
+  if (rv != 0 || deferred_stores_ == 0) {
     // This check should never fire, because we can get here only from
     // bwAvailCB which cannot be called without shard_ so the copyset has been
     // selected and the store timeout has been set.
@@ -328,7 +329,6 @@ void Appender::onDeferredSTORECancelled(std::unique_ptr<STORE_Message> msg,
 }
 
 void Appender::forgetThePreviousWave(const copyset_size_t cfg_synced) {
-  wave_failed_with_error_ = false;
   deferred_stores_ = 0;
   replies_expected_ = 0;
   store_hdr_.wave++;
@@ -605,7 +605,6 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
   ld_check(lsn != LSN_INVALID);
 
   initStoreTimer();
-  initRetryTimer();
 
   const std::shared_ptr<const Configuration> cfg(getClusterConfig());
 
@@ -1133,7 +1132,7 @@ void Appender::onTimeout() {
   }
 
   auto worker = Worker::onThisThread(false);
-  if (worker && !wave_failed_with_error_ &&
+  if (worker &&
       worker->updateable_settings_->enable_store_histogram_calculations) {
     if (store_hdr_.flags & STORE_Header::CHAIN) {
       worker->getWorkerTimeoutStats().onReply(
@@ -1156,7 +1155,7 @@ void Appender::onTimeout() {
   //
   // On the other hand, if chain-sending is disabled, we'll still
   // graylist the slow nodes in future waves.
-  if (getSettings().disable_graylisting == false && !wave_failed_with_error_) {
+  if (!getSettings().disable_graylisting) {
     // Technique for avoiding "death spiral of retries":
     // Don't graylist nodes if they belonged in an all_timed_out wave
     if (!recipients_.allRecipientsOutstanding()) {
@@ -1170,9 +1169,8 @@ void Appender::onTimeout() {
     }
   }
 
-  // There should not be any other timer active.
+  // Store timer should not be active.
   ld_check(!storeTimerIsActive());
-  ld_check(!retryTimerIsActive());
 
   // Send a new wave.
 
@@ -1801,7 +1799,6 @@ void Appender::onRecipientSucceeded(Recipient* recipient) {
   sendReply(compose_lsn(store_hdr_.rid.epoch, store_hdr_.rid.esn), E::OK);
 
   cancelStoreTimer();
-  cancelRetryTimer();
 
   if (release_type_ != static_cast<ReleaseTypeRaw>(ReleaseType::INVALID)) {
     // Build the set of recipients to which we should send a RELEASE message
@@ -1849,17 +1846,17 @@ bool Appender::onRecipientFailed(Recipient* recipient,
     return true;
   }
 
-  wave_failed_with_error_ = true;
   // If we won't be able to make progress for this wave.
   cancelStoreTimer();
-  cancelRetryTimer();
   store_timeout_set_ = false;
 
   // If we have enough nodes, and wave is not too high (threshold 2 is
   // arbitrary, to prevent fast retry loops if many storage nodes are failing
   // quickly every time), send another wave right away.
   if (store_hdr_.wave <= 2 && checkNodeSet()) {
-    activateRetryTimer();
+    // Yield retry to the next iteration of event loop to avoid long chunk of
+    // work on single iteration
+    scheduleSendWave();
   } else {
     // Retry after a store timeout.
     ld_check(timeout_.has_value());
@@ -1868,6 +1865,15 @@ bool Appender::onRecipientFailed(Recipient* recipient,
 
   // We aborted the wave.
   return false;
+}
+
+void Appender::scheduleSendWave() {
+  auto ticket = callback_helper_.ticket();
+  ticket.postCallbackRequest([](Appender* appender) {
+    if (appender != nullptr) {
+      appender->sendWave();
+    }
+  });
 }
 
 void Appender::deleteExtras() {
@@ -1958,7 +1964,6 @@ bool Appender::isDone(uint8_t flag) {
 
 void Appender::onComplete(bool linked) {
   cancelStoreTimer();
-  cancelRetryTimer();
 
   if (recipients_.isFullyReplicated()) {
     deleteExtras();
@@ -2098,10 +2103,6 @@ void Appender::initStoreTimer() {
   store_timer_.assign(std::bind(&Appender::onTimeout, this));
 }
 
-void Appender::initRetryTimer() {
-  retry_timer_.assign(std::bind(&Appender::onTimeout, this));
-}
-
 void Appender::cancelStoreTimer() {
   store_timer_.cancel();
 }
@@ -2115,17 +2116,6 @@ void Appender::activateStoreTimer(std::chrono::milliseconds delay) {
   HISTOGRAM_ADD(
       Worker::stats(), store_timeouts, to_usec(timeout_.value()).count());
   store_timer_.activate(delay);
-}
-
-void Appender::cancelRetryTimer() {
-  retry_timer_.cancel();
-}
-
-bool Appender::retryTimerIsActive() {
-  return retry_timer_.isActive();
-}
-void Appender::activateRetryTimer() {
-  retry_timer_.activate(std::chrono::microseconds(0));
 }
 
 lsn_t Appender::getLastKnownGood() const {
