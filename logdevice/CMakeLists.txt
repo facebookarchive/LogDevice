@@ -16,6 +16,7 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories("${LOGDEVICE_STAGING_DIR}/usr/include/")
 include_directories("${LOGDEVICE_STAGING_DIR}/usr/local/include/")
 
 set(PACKAGE_NAME "logdevice")
