@@ -14,7 +14,6 @@
 #include <folly/Random.h>
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NoopTraceLogger.h"

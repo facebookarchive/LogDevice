@@ -8,9 +8,7 @@
 #include <folly/stats/BucketedTimeSeries.h>
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
 #include "logdevice/common/Address.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/server/sequencer_boycotting/BoycottingStats.h"
@@ -43,13 +41,8 @@ Address address(NodeID(1, 1));
 }
 
 TEST(NODE_STATS_MessageTest, SerializationAndDeserialization) {
-  using unique_evbuffer =
-      std::unique_ptr<struct evbuffer, std::function<void(struct evbuffer*)>>;
-
-  unique_evbuffer evbuf(LD_EV(evbuffer_new)(), [](auto ptr) {
-    LD_EV(evbuffer_free)(ptr);
-  });
-
+  std::unique_ptr<folly::IOBuf> buffer =
+      folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
   // currently no difference in versions, use w/e
   uint16_t proto = Compatibility::MIN_PROTOCOL_SUPPORTED;
 
@@ -65,7 +58,7 @@ TEST(NODE_STATS_MessageTest, SerializationAndDeserialization) {
   EXPECT_EQ(append_successes, msg.append_successes_);
   EXPECT_EQ(append_fails, msg.append_fails_);
 
-  ProtocolWriter writer(msg.type_, evbuf.get(), proto);
+  ProtocolWriter writer(msg.type_, buffer.get(), proto);
 
   msg.serialize(writer);
   auto write_count = writer.result();
@@ -74,7 +67,7 @@ TEST(NODE_STATS_MessageTest, SerializationAndDeserialization) {
   ASSERT_GT(write_count, 0);
 
   std::unique_ptr<Message> deserialized_msg_base;
-  ProtocolReader reader(msg.type_, evbuf.get(), write_count, proto);
+  ProtocolReader reader(msg.type_, std::move(buffer), proto);
   deserialized_msg_base = NODE_STATS_Message::deserialize(reader).msg;
   ASSERT_NE(nullptr, deserialized_msg_base);
 

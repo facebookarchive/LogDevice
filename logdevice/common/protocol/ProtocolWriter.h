@@ -19,13 +19,11 @@
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
-struct evbuffer;
-
 namespace facebook { namespace logdevice {
 
 /**
  * @file Utility class for serializing object into destination buffer (e.g.,
- * serializing Message subclasses onto the network evbuffer). Simplifies of a
+ * serializing Message subclasses onto the network buffer). Simplifies of a
  * lot of boilerplate like handling protocol errors, protocol versions etc.
  * The idea is to allow the callsite (message serializer) to repeatedly call
  * write() without checking for errors every time.
@@ -262,9 +260,6 @@ class ProtocolWriter {
                  const char* context,
                  folly::Optional<uint16_t> proto = folly::none);
 
-  ProtocolWriter(MessageType type,
-                 struct evbuffer* dest, // may be null
-                 folly::Optional<uint16_t> proto = folly::none);
   ProtocolWriter(MessageType type,
                  folly::IOBuf* iobuf,
                  folly::Optional<uint16_t> proto);

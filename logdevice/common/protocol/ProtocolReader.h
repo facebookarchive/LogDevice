@@ -20,13 +20,11 @@
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/include/Err.h"
 
-struct evbuffer;
-
 namespace facebook { namespace logdevice {
 
 /**
  * @file Utility class for reading bytes of an object (e.g., message) bytes
- * off the a buffer source (e.g., network evbuffer). For messages it also
+ * off the a buffer source (e.g., network buffer). For messages it also
  * support parsing them to form Message subclasses.  Simplifies of a lot of
  * boilerplate like handling protocol errors, protocol versions etc.
  *
@@ -35,7 +33,7 @@ namespace facebook { namespace logdevice {
  * when it is ready to construct a message.
  *
  * If ProtocolReader encounters an error (such as running out of bytes in the
- * input evbuffer), it moves into an error state which makes subsequent read()
+ * input buffer), it moves into an error state which makes subsequent read()
  * calls no-ops.  The error is reported to the Connection later, when result*()
  * is called.
  *
@@ -69,13 +67,6 @@ class ProtocolReader {
      *                   and err must be set
      */
     virtual int read(void* dest, size_t to_read, size_t nread) = 0;
-
-    /**
-     * Similar to read() except the destination is an evbuffer so that copy
-     * could be avoided in certain source types. For sources that do not support
-     * such type of reading, return -1 with err set to E::NOTSUPPORTED.
-     */
-    virtual int readEvbuffer(evbuffer* dest, size_t to_read, size_t nread) = 0;
 
     virtual int readIOBuf(folly::IOBuf* dest, size_t to_read, size_t nread) {
       // Default implementation just allocates an IOBuf and copies into it.
@@ -186,13 +177,6 @@ class ProtocolReader {
     }
   }
 
-  /**
-   * Reads into an evbuffer/IOBuf.
-   * Zero-copies reads of larger amounts of data when possible.
-   * If the provided buffer is not empty, it will be overwritten.
-   * In case of error leaves the output buffer empty.
-   */
-  void readEvbuffer(evbuffer* out, size_t to_read);
   void readIOBuf(folly::IOBuf* out, size_t to_read);
 
   uint64_t computeChecksum(size_t msglen) {
@@ -388,7 +372,7 @@ class ProtocolReader {
 
   /**
    * By default, `result()' fails with E::TOOBIG if there are bytes left
-   * unconsumed in the evbuffer.  If this is called, the extra bytes will be
+   * unconsumed in the buffer.  If this is called, the extra bytes will be
    * warned about and discarded, but message construction will be allowed to
    * succeed.
    */
@@ -408,11 +392,6 @@ class ProtocolReader {
   // must outlive the ProtocolReader.
   ProtocolReader(Source* src,
                  const char* context,
-                 folly::Optional<uint16_t> proto = folly::none);
-
-  ProtocolReader(MessageType type,
-                 struct evbuffer* src,
-                 size_t to_read,
                  folly::Optional<uint16_t> proto = folly::none);
 
   ProtocolReader(Slice src,

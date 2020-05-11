@@ -13,18 +13,13 @@
 
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
 #include "logdevice/common/configuration/Configuration.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/sequencer_boycotting/BoycottAdaptiveDuration.h"
 
 using namespace std::literals::chrono_literals;
 using namespace facebook::logdevice;
-
-using unique_evbuffer =
-    std::unique_ptr<struct evbuffer, std::function<void(struct evbuffer*)>>;
 
 using node_list_t = GOSSIP_Message::node_list_t;
 using failover_list_t = GOSSIP_Message::failover_list_t;
@@ -127,9 +122,8 @@ void checkVersions(uint16_t proto,
 }
 
 void serializeAndDeserializeTest(Params params) {
-  unique_evbuffer evbuf(LD_EV(evbuffer_new)(), [](auto ptr) {
-    LD_EV(evbuffer_free)(ptr);
-  });
+  std::unique_ptr<folly::IOBuf> buffer =
+      folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
   NodeID this_node{1};
   node_list_t node_list{{0, 1, 5ms, 0ms, 0}, {1, 2, 10ms, 0ms, 0}};
   std::chrono::milliseconds instance_id{1};
@@ -210,17 +204,16 @@ void serializeAndDeserializeTest(Params params) {
                 msg.rsm_types_,
                 flags);
 
-  ProtocolWriter writer(msg.type_, evbuf.get(), params.proto);
+  ProtocolWriter writer(msg.type_, buffer.get(), params.proto);
   msg.serialize(writer);
   auto write_count = writer.result();
 
   ASSERT_GT(write_count, 0);
-  size_t size = LD_EV(evbuffer_get_length)(evbuf.get());
-  unsigned char* serialized = LD_EV(evbuffer_pullup)(evbuf.get(), -1);
-  std::string serialized_hex = hexdump_buf(serialized, size);
+  buffer->coalesce();
+  std::string serialized_hex = hexdump_buf(buffer->data(), buffer->length());
   EXPECT_EQ(params.expected, serialized_hex);
 
-  ProtocolReader reader(msg.type_, evbuf.get(), write_count, params.proto);
+  ProtocolReader reader(msg.type_, std::move(buffer), params.proto);
   std::unique_ptr<Message> deserialized_msg_base =
       GOSSIP_Message::deserialize(reader).msg;
   ASSERT_NE(nullptr, deserialized_msg_base);

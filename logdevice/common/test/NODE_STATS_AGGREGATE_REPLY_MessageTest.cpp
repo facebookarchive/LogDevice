@@ -11,8 +11,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 
@@ -20,12 +18,8 @@ using namespace facebook::logdevice;
 
 namespace {
 void testSerializeDeserialize(uint16_t proto) {
-  using unique_evbuffer =
-      std::unique_ptr<struct evbuffer, std::function<void(struct evbuffer*)>>;
-
-  unique_evbuffer evbuf(LD_EV(evbuffer_new)(), [](auto ptr) {
-    LD_EV(evbuffer_free)(ptr);
-  });
+  std::unique_ptr<folly::IOBuf> buffer =
+      folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
 
   NODE_STATS_AGGREGATE_REPLY_Header header;
   header.msg_id = 1;
@@ -69,14 +63,14 @@ void testSerializeDeserialize(uint16_t proto) {
   EXPECT_EQ(sums, *msg.stats_.summed_counts);
   EXPECT_EQ(clients, *msg.stats_.client_counts);
 
-  ProtocolWriter writer(msg.type_, evbuf.get(), proto);
+  ProtocolWriter writer(msg.type_, buffer.get(), proto);
   msg.serialize(writer);
   auto write_count = writer.result();
 
   ASSERT_GT(write_count, 0);
-
+  buffer->coalesce();
   std::unique_ptr<Message> deserialized_msg_base;
-  ProtocolReader reader(msg.type_, evbuf.get(), write_count, proto);
+  ProtocolReader reader(msg.type_, std::move(buffer), proto);
   deserialized_msg_base =
       NODE_STATS_AGGREGATE_REPLY_Message::deserialize(reader).msg;
   ASSERT_NE(nullptr, deserialized_msg_base);

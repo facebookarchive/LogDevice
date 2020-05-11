@@ -12,8 +12,6 @@
 #include <folly/ScopeGuard.h>
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
@@ -37,7 +35,7 @@ class ChecksumTest : public ::testing::Test {
   // checksums:
   // (1) An APPEND message is created on the client with the client's payload
   //     ("123456789").
-  // (2) The APPEND message is serialized into an evbuffer, at which time the
+  // (2) The APPEND message is serialized into folly::IOBuf, at which time the
   //     checksum (if requested) is injected at the front of the payload.
   // (3) The APPEND message makes it to the server cluster, record gets stored.
   // (4) Later on, the client tries to reads the record.
@@ -79,21 +77,17 @@ std::unique_ptr<RECORD_Message> ChecksumTest::roundTrip(
     attrs.optional_keys[KeyType::FINDKEY] = std::string("abcdefgh");
     ap_send_hdr.flags |= APPEND_Header::CUSTOM_KEY;
     APPEND_Message ap_send_msg(ap_send_hdr, LSN_INVALID, attrs, std::move(ph));
-    struct evbuffer* ap_send_evbuf = LD_EV(evbuffer_new)();
-    SCOPE_EXIT {
-      LD_EV(evbuffer_free)(ap_send_evbuf);
-    };
 
-    ProtocolWriter writer(ap_send_msg.type_,
-                          ap_send_evbuf,
-                          Compatibility::MAX_PROTOCOL_SUPPORTED);
+    std::unique_ptr<folly::IOBuf> buffer =
+        folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
+    ProtocolWriter writer(
+        ap_send_msg.type_, buffer.get(), Compatibility::MAX_PROTOCOL_SUPPORTED);
     ap_send_msg.serialize(writer);
     ssize_t ap_send_size = writer.result();
     ld_check(ap_send_size > 0);
-
+    buffer->coalesce();
     ProtocolReader reader(MessageType::APPEND,
-                          ap_send_evbuf,
-                          ap_send_size,
+                          std::move(buffer),
                           Compatibility::MAX_PROTOCOL_SUPPORTED);
     ap_recv_msg = checked_downcast<std::unique_ptr<APPEND_Message>>(
         APPEND_Message::deserialize(reader).msg);
@@ -116,21 +110,17 @@ std::unique_ptr<RECORD_Message> ChecksumTest::roundTrip(
 
   RECORD_Message record_send_msg(
       record_send_hdr, TrafficClass::READ_TAIL, payload, nullptr);
-  struct evbuffer* record_send_evbuf = LD_EV(evbuffer_new)();
-  SCOPE_EXIT {
-    LD_EV(evbuffer_free)(record_send_evbuf);
-  };
-
+  std::unique_ptr<folly::IOBuf> buffer =
+      folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
   ProtocolWriter writer(record_send_msg.type_,
-                        record_send_evbuf,
+                        buffer.get(),
                         Compatibility::MAX_PROTOCOL_SUPPORTED);
   record_send_msg.serialize(writer);
   ssize_t record_send_size = writer.result();
   ld_check(record_send_size > 0);
-
+  buffer->coalesce();
   ProtocolReader reader(MessageType::RECORD,
-                        record_send_evbuf,
-                        record_send_size,
+                        std::move(buffer),
                         Compatibility::MAX_PROTOCOL_SUPPORTED);
   return checked_downcast<std::unique_ptr<RECORD_Message>>(
       RECORD_Message::deserialize(reader).msg);

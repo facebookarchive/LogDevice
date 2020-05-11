@@ -9,11 +9,8 @@
 
 #include <folly/io/IOBuf.h>
 
-#include "event2/buffer.h"
-#include "event2/event.h"
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 
 namespace facebook { namespace logdevice {
@@ -124,66 +121,6 @@ class IOBufDestination : public ProtocolWriter::Destination {
   folly::IOBuf* const iobuf_;
 };
 
-class EvbufferDestination : public ProtocolWriter::Destination {
- public:
-  int write(const void* src, size_t nbytes, size_t /*nwritten*/) override {
-    // caller should check and shouldn't call this when dest isNull
-    ld_check(!isNull());
-    int rv = LD_EV(evbuffer_add)(dest_evbuf_, src, nbytes);
-    if (rv != 0) {
-      err = E::INTERNAL;
-      ld_check(false);
-    }
-    return rv;
-  }
-
-  int writeWithoutCopy(const void* src,
-                       size_t nbytes,
-                       size_t /*nwritten*/) override {
-    ld_check(!isNull());
-    int rv = LD_EV(evbuffer_add_reference)(
-        dest_evbuf_, src, nbytes, nullptr, nullptr);
-    if (rv != 0) {
-      err = E::INTERNAL;
-      ld_check(false);
-    }
-    return rv;
-  }
-
-  int writeWithoutCopy(const folly::IOBuf* buffer, size_t nwritten) override {
-    return writeWithoutCopy(buffer->data(), buffer->length(), nwritten);
-  }
-
-  uint64_t computeChecksum() override {
-    uint64_t checksum = 0;
-    ld_check(dest_evbuf_);
-
-    const size_t len = LD_EV(evbuffer_get_length)(dest_evbuf_);
-    std::string data(len, 0);
-    ev_ssize_t nbytes = LD_EV(evbuffer_copyout)(dest_evbuf_, &data[0], len);
-    ld_check(nbytes == len);
-    Slice slice(&data[0], nbytes);
-    checksum_bytes(slice, 64, (char*)&checksum);
-
-    return checksum;
-  }
-
-  const char* identify() const override {
-    return "evbuffer destination";
-  }
-
-  bool isNull() const override {
-    return dest_evbuf_ == nullptr;
-  }
-
-  explicit EvbufferDestination(evbuffer* dest) : dest_evbuf_(dest) {}
-
-  ~EvbufferDestination() override {}
-
- private:
-  struct evbuffer* const dest_evbuf_;
-};
-
 class LinearBufferDestinationBase : public ProtocolWriter::Destination {
  public:
   static int writeBuffer(const void* src,
@@ -290,16 +227,6 @@ ProtocolWriter::ProtocolWriter(Destination* dest,
                                folly::Optional<uint16_t> proto)
     : dest_(dest), context_(context), proto_(std::move(proto)) {
   ld_assert(dest_);
-}
-
-ProtocolWriter::ProtocolWriter(MessageType type,
-                               struct evbuffer* dest,
-                               folly::Optional<uint16_t> proto)
-    : dest_owned_(true),
-      dest_(new (dest_space_) EvbufferDestination(dest)),
-      context_(messageTypeNames()[type].c_str()),
-      proto_(proto) {
-  static_assert(sizeof(dest_space_) >= sizeof(EvbufferDestination), "");
 }
 
 ProtocolWriter::ProtocolWriter(MessageType type,
