@@ -701,8 +701,8 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "false",
        nullptr,
        "Use libevent2 based event base to create EventLoop threadpool in "
-       "logdevice.",
-       SERVER | CLIENT | REQUIRES_RESTART,
+       "logdevice. DEPRECATED as libevent2 is being removed from codebase",
+       SERVER | CLIENT | REQUIRES_RESTART | DEPRECATED,
        SettingsCategory::Execution);
   init("request-exec-threshold",
        &request_execution_delay_threshold,
