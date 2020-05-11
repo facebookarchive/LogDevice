@@ -7,12 +7,21 @@
  */
 #include "logdevice/common/MetaDataLogTrimmer.h"
 
+#include <folly/Random.h>
+
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/TrimRequest.h"
 #include "logdevice/common/request_util.h"
 
+using std::chrono::duration_cast;
+
 namespace facebook { namespace logdevice {
+
+// Sets the range (as fraction of original value) for trim interval. Each time
+// the new trimming  round is scheduled the delay is picked randomly from
+// [interval * (1 - jitter), interval * (1 + jitter)].
+constexpr double kTrimIntervalJitter = 0.25;
 
 MetaDataLogTrimmer::MetaDataLogTrimmer(Sequencer* sequencer)
     : sequencer_(sequencer),
@@ -81,12 +90,27 @@ folly::Optional<lsn_t> MetaDataLogTrimmer::getTrimPoint() {
   return state_->metadata_trim_point.loadOptional();
 }
 
+std::chrono::milliseconds MetaDataLogTrimmer::State::pickRandomizedDelay() {
+  if (run_interval.count() == 0) {
+    return run_interval;
+  }
+  static_assert(kTrimIntervalJitter > 0 && kTrimIntervalJitter < 1);
+  auto next_delay_us =
+      duration_cast<std::chrono::microseconds>(run_interval).count();
+  std::uniform_int_distribution<int64_t> dist_us(
+      next_delay_us * (1 - kTrimIntervalJitter),
+      next_delay_us * (1 + kTrimIntervalJitter));
+  folly::ThreadLocalPRNG rng;
+  return duration_cast<std::chrono::milliseconds>(
+      std::chrono::microseconds(dist_us(rng)));
+}
+
 // Called from Worker thread
 void MetaDataLogTrimmer::schedulePeriodicTrimming() {
   ld_check(!state_->stopped.load());
   RATELIMIT_INFO(std::chrono::seconds(10),
                  1,
-                 "Will run periodic trimming every %lu s for %lu",
+                 "Will run periodic trimming every ~%lu s for %lu",
                  state_->run_interval.count(),
                  log_id_.val_);
   state_->timer->setCallback([this, s = state_]() {
@@ -96,31 +120,26 @@ void MetaDataLogTrimmer::schedulePeriodicTrimming() {
       return;
     }
     // Re-activate timer for next round
-    s->timer->activate(s->run_interval);
+    s->timer->activate(s->pickRandomizedDelay());
     trim();
   });
-  state_->timer->activate(state_->run_interval);
+  state_->timer->activate(state_->pickRandomizedDelay());
 }
 
 // Called from Worker thread
 folly::Optional<lsn_t> MetaDataLogTrimmer::findMetadataTrimLSN() {
   auto metadata_extras = sequencer_->getMetaDataExtrasMap();
   if (metadata_extras == nullptr) {
-    RATELIMIT_INFO(
-        std::chrono::seconds(10),
-        1,
-        "Failed to load metadata log extras, skipping trimming metadata "
-        "log for %lu",
-        log_id_.val_);
+    ld_debug("Failed to load metadata log extras, skipping trimming metadata "
+             "log for %lu",
+             log_id_.val_);
     return folly::none;
   }
   auto data_trim_point = sequencer_->getTrimPoint();
   if (data_trim_point == LSN_INVALID) {
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   1,
-                   "Data trim point is not loaded, skipping trimming metadata "
-                   "log for %lu",
-                   log_id_.val_);
+    ld_debug("Data trim point is not loaded, skipping trimming metadata "
+             "log for %lu",
+             log_id_.val_);
     return folly::none;
   }
 

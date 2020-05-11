@@ -92,6 +92,9 @@ class MetaDataLogTrimmer {
     std::atomic<bool> stopped = false;
     // Furthest LSN of metadata log up to which we trimmed
     AtomicOptional<lsn_t> metadata_trim_point;
+    // Picks randomized (with jitter) delay for the next run based on run
+    // interval
+    std::chrono::milliseconds pickRandomizedDelay();
   };
 
   // Schedules periodic trimming of metadata log with respect to current run
