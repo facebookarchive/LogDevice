@@ -367,6 +367,18 @@ class ServerConfig {
   }
 
   /**
+   * Returns a clone of the ServerConfig object with new server settings.
+   */
+  std::shared_ptr<ServerConfig>
+  withServerSettings(SettingsConfig server_settings) const;
+
+  /**
+   * Returns a clone of the ServerConfig object with new client settings.
+   */
+  std::shared_ptr<ServerConfig>
+  withClientSettings(SettingsConfig client_settings) const;
+
+  /**
    * Returns the maximum finite backlog duration of a log.
    */
   std::chrono::seconds getMaxBacklogDuration() const;

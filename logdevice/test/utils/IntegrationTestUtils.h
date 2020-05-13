@@ -496,6 +496,22 @@ class ClusterFactory {
   }
 
   /**
+   * Sets a config setting for logdeviced processes.
+   */
+  ClusterFactory& setServerSetting(std::string key, std::string value) {
+    server_settings_[std::move(key)] = std::move(value);
+    return *this;
+  }
+
+  /**
+   * Sets a config setting for clients
+   */
+  ClusterFactory& setClientSetting(std::string key, std::string value) {
+    client_settings_[std::move(key)] = std::move(value);
+    return *this;
+  }
+
+  /**
    * Sets the root directory for all the cluster's data.  If never called, a
    * temporary directory is created.
    */
@@ -654,6 +670,8 @@ class ClusterFactory {
   configuration::InternalLogs internal_logs_;
 
   ParamMaps cmd_param_;
+  ServerConfig::SettingsConfig server_settings_;
+  ServerConfig::SettingsConfig client_settings_;
 
   // If set to true, allocate tcp ports to be used by the tests for the nodes'
   // protocol and command ports instead of unix domain sockets.

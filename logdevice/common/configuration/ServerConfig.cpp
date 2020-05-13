@@ -445,6 +445,46 @@ ServerConfig::withVersion(config_version_t version) const {
   return config;
 }
 
+std::shared_ptr<ServerConfig>
+ServerConfig::withServerSettings(SettingsConfig server_settings) const {
+  std::shared_ptr<ServerConfig> config = fromData(clusterName_,
+                                                  nodesConfig_,
+                                                  metaDataLogsConfig_,
+                                                  principalsConfig_,
+                                                  securityConfig_,
+                                                  trafficShapingConfig_,
+                                                  readIOShapingConfig_,
+                                                  std::move(server_settings),
+                                                  clientSettingsConfig_,
+                                                  internalLogs_,
+                                                  getClusterCreationTime(),
+                                                  getCustomFields(),
+                                                  ns_delimiter_);
+  config->setVersion(version_);
+  config->setMainConfigMetadata(main_config_metadata_);
+  return config;
+}
+
+std::shared_ptr<ServerConfig>
+ServerConfig::withClientSettings(SettingsConfig client_settings) const {
+  std::shared_ptr<ServerConfig> config = fromData(clusterName_,
+                                                  nodesConfig_,
+                                                  metaDataLogsConfig_,
+                                                  principalsConfig_,
+                                                  securityConfig_,
+                                                  trafficShapingConfig_,
+                                                  readIOShapingConfig_,
+                                                  serverSettingsConfig_,
+                                                  std::move(client_settings),
+                                                  internalLogs_,
+                                                  getClusterCreationTime(),
+                                                  getCustomFields(),
+                                                  ns_delimiter_);
+  config->setVersion(version_);
+  config->setMainConfigMetadata(main_config_metadata_);
+  return config;
+}
+
 std::shared_ptr<ServerConfig> ServerConfig::createEmpty() {
   return fromData(
       std::string(),

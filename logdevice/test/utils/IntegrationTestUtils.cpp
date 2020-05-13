@@ -745,12 +745,25 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   std::string epoch_store_path = root_path + "/epoch_store";
   mkdir(epoch_store_path.c_str(), 0777);
 
+  ServerConfig::SettingsConfig server_settings =
+      source_config.serverConfig()->getServerSettingsConfig();
+
+  // Merge the provided server settings with the existing settings
+  for (const auto& [key, value] : server_settings_) {
+    server_settings[key] = value;
+  }
+
+  ServerConfig::SettingsConfig client_settings =
+      source_config.serverConfig()->getClientSettingsConfig();
+  // Merge the provided client settings with the client settings
+  for (const auto& [key, value] : client_settings_) {
+    client_settings[key] = value;
+  }
+
   std::string ncs_path;
   {
     // If the settings specify a certain NCS path, use it, otherwise, use a
     // default one under root_path.
-    const auto& server_settings =
-        source_config.serverConfig()->getServerSettingsConfig();
     auto config_ncs_path =
         server_settings.find("nodes-configuration-file-store-dir");
     if (config_ncs_path != server_settings.end()) {
@@ -788,9 +801,12 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   ld_info("Cluster created with data in %s", root_path.c_str());
 
   Configuration::NodesConfig nodes_config(std::move(nodes));
-  std::unique_ptr<Configuration> config = std::make_unique<Configuration>(
-      source_config.serverConfig()->withNodes(nodes_config),
-      source_config.logsConfig());
+  std::unique_ptr<Configuration> config =
+      std::make_unique<Configuration>(source_config.serverConfig()
+                                          ->withNodes(nodes_config)
+                                          ->withServerSettings(server_settings)
+                                          ->withClientSettings(client_settings),
+                                      source_config.logsConfig());
 
   // Write new config to disk so that logdeviced processes can access it
   std::string config_path = root_path + "/logdevice.conf";
