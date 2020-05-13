@@ -277,21 +277,21 @@ TEST_F(SettingsTest, Priority) {
   ASSERT_FALSE(bundle_2->setting_2);
   EXPECT_EQ(3, bundle_2->setting_3);
 
-  // Change one setting from the CLI
-  parseFromCLI({"--bundle-1-setting-1=43"});
-  EXPECT_EQ(43, bundle_1->setting_1);
-  EXPECT_EQ(std::chrono::milliseconds{100}, bundle_1->setting_2.lo);
-  EXPECT_EQ(std::chrono::seconds{1}, bundle_1->setting_2.hi);
-  EXPECT_EQ(1337, bundle_2->setting_1);
-  ASSERT_FALSE(bundle_2->setting_2);
-  EXPECT_EQ(3, bundle_2->setting_3);
-
   // Override some values from the config.
   ServerConfig::SettingsConfig s;
   s["bundle-1-setting-1"] = "52";
   s["bundle-1-setting-2"] = "333ms..444ms";
   settings.setFromConfig(s);
   EXPECT_EQ(52, bundle_1->setting_1);
+  EXPECT_EQ(std::chrono::milliseconds{333}, bundle_1->setting_2.lo);
+  EXPECT_EQ(std::chrono::milliseconds{444}, bundle_1->setting_2.hi);
+  EXPECT_EQ(1337, bundle_2->setting_1);
+  ASSERT_FALSE(bundle_2->setting_2);
+  EXPECT_EQ(3, bundle_2->setting_3);
+
+  // Change one setting from the CLI
+  parseFromCLI({"--bundle-1-setting-1=43"});
+  EXPECT_EQ(43, bundle_1->setting_1);
   EXPECT_EQ(std::chrono::milliseconds{333}, bundle_1->setting_2.lo);
   EXPECT_EQ(std::chrono::milliseconds{444}, bundle_1->setting_2.hi);
   EXPECT_EQ(1337, bundle_2->setting_1);
@@ -368,22 +368,11 @@ TEST_F(SettingsTest, RequiresRestartAndCliOnly) {
   EXPECT_EQ(3, bundle_2->setting_3);
   EXPECT_EQ(8, bundle_2->setting_4);
 
-  // Set some settings from the CLI
-  parseFromCLI({"--bundle-1-setting-1=43", "--bundle-1-setting-3=663"});
-  EXPECT_EQ(43, bundle_1->setting_1);
-  EXPECT_EQ(std::chrono::milliseconds{100}, bundle_1->setting_2.lo);
-  EXPECT_EQ(std::chrono::seconds{1}, bundle_1->setting_2.hi);
-  EXPECT_EQ(663, bundle_1->setting_3);
-  EXPECT_EQ(1337, bundle_2->setting_1);
-  EXPECT_FALSE(bundle_2->setting_2);
-  EXPECT_EQ(3, bundle_2->setting_3);
-  EXPECT_EQ(8, bundle_2->setting_4);
-
   // Set some settings from the config
   ServerConfig::SettingsConfig s;
   s["bundle-1-setting-3"] = "664";
   settings.setFromConfig(s);
-  EXPECT_EQ(43, bundle_1->setting_1);
+  EXPECT_EQ(42, bundle_1->setting_1);
   EXPECT_EQ(std::chrono::milliseconds{100}, bundle_1->setting_2.lo);
   EXPECT_EQ(std::chrono::seconds{1}, bundle_1->setting_2.hi);
   EXPECT_EQ(664, bundle_1->setting_3);
@@ -393,7 +382,7 @@ TEST_F(SettingsTest, RequiresRestartAndCliOnly) {
   EXPECT_EQ(8, bundle_2->setting_4);
 
   // Set the setting from the admin command, which should fail because the
-  // setting has the REQUIRES_RESTART flag.
+  // setting is a CLI only setting.
   ASSERT_THROW(settings.setFromAdminCmd("bundle-2-setting-4", "12"),
                boost::program_options::error);
 

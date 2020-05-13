@@ -50,9 +50,9 @@ class SettingsUpdater {
   // from the other sources according to precedence rules.
   enum class Source {
     INTERNAL = 0,
-    CLI,
     CLIENT,
     CONFIG,
+    CLI,
     ADMIN_OVERRIDE,
     CURRENT
   };
