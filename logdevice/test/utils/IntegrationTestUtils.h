@@ -115,19 +115,17 @@ using ParamMaps = std::map<ParamScope, ParamMap>;
 class ParamSpec {
  public:
   std::string key_;
-  folly::Optional<std::string> value_;
+  std::string value_;
   ParamScope scope_;
 
   /* implicit */ ParamSpec(std::string key, ParamScope scope = ParamScope::ALL)
-      : key_(key), scope_(scope) {
-    ld_check(!key_.empty());
-  }
+      : ParamSpec(std::move(key), "true", scope) {}
 
   ParamSpec(std::string key,
             std::string value,
             ParamScope scope = ParamScope::ALL)
-      : ParamSpec(key, scope) {
-    value_ = value;
+      : key_(key), value_(value), scope_(scope) {
+    ld_check(!key_.empty());
   }
 };
 
@@ -142,6 +140,8 @@ enum class NodesConfigurationSourceOfTruth { NCM, SERVER_CONFIG };
  */
 class ClusterFactory {
  public:
+  ClusterFactory();
+
   /**
    * Creates a Cluster object, configured with logs 1 and 2.
    *
@@ -315,6 +315,8 @@ class ClusterFactory {
    */
   ClusterFactory& setRocksDBType(RocksDBType db_type) {
     rocksdb_type_ = db_type;
+    setParam("--rocksdb-partitioned",
+             db_type == RocksDBType::PARTITIONED ? "true" : "false");
     return *this;
   }
 
@@ -484,14 +486,25 @@ class ClusterFactory {
    */
   ClusterFactory& setParam(std::string key,
                            ParamScope scope = ParamScope::ALL) {
-    return setParam(ParamSpec{key, scope});
+    return setParam(ParamSpec{key, "true", scope});
   }
 
   /**
    * Same as setParam(key, value, scope) or setParam(key, scope) as appropriate.
    */
   ClusterFactory& setParam(ParamSpec spec) {
-    cmd_param_[spec.scope_][spec.key_] = spec.value_;
+    // If the scope is ParamScope::ALL, we can safely add this to the server
+    // config instead of command line args.
+    // TODO: Codemod all the usages of ParamScope::ALL to use setServerSettings
+    // directly.
+    if (spec.scope_ == ParamScope::ALL) {
+      // Trim the "--" prefix from the command line arg name.
+      auto& key = spec.key_;
+      ld_check(key.substr(0, 2) == "--");
+      setServerSetting(spec.key_.substr(2), spec.value_);
+    } else {
+      cmd_param_[spec.scope_][spec.key_] = spec.value_;
+    }
     return *this;
   }
 
@@ -784,6 +797,8 @@ class ClusterFactory {
    */
   std::unique_ptr<client::LogGroup>
   createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster);
+
+  void populateDefaultServerSettings();
 };
 
 // All ports logdeviced can listen on.

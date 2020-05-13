@@ -392,6 +392,10 @@ ClusterFactory::createLogAttributesStub(int nstorage_nodes) {
   return attrs;
 }
 
+ClusterFactory::ClusterFactory() {
+  populateDefaultServerSettings();
+}
+
 ClusterFactory& ClusterFactory::enableMessageErrorInjection() {
   // defaults
   double chance = 5.0;
@@ -744,21 +748,10 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
 
   std::string epoch_store_path = root_path + "/epoch_store";
   mkdir(epoch_store_path.c_str(), 0777);
+  setServerSetting("epoch-store-path", epoch_store_path);
 
   ServerConfig::SettingsConfig server_settings =
       source_config.serverConfig()->getServerSettingsConfig();
-
-  // Merge the provided server settings with the existing settings
-  for (const auto& [key, value] : server_settings_) {
-    server_settings[key] = value;
-  }
-
-  ServerConfig::SettingsConfig client_settings =
-      source_config.serverConfig()->getClientSettingsConfig();
-  // Merge the provided client settings with the client settings
-  for (const auto& [key, value] : client_settings_) {
-    client_settings[key] = value;
-  }
 
   std::string ncs_path;
   {
@@ -773,6 +766,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
       mkdir(ncs_path.c_str(), 0777);
     }
   }
+  setServerSetting("nodes-configuration-file-store-dir", ncs_path);
 
   std::vector<ServerAddresses> addrs;
   if (Cluster::pickAddressesForServers(
@@ -798,8 +792,31 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
       nodes_configuration_sot_.value() == NodesConfigurationSourceOfTruth::NCM
           ? "NCM"
           : "SERVER_CONFIG");
-  ld_info("Cluster created with data in %s", root_path.c_str());
+  switch (nodes_configuration_sot_.value()) {
+    case NodesConfigurationSourceOfTruth::NCM:
+      setServerSetting("enable-nodes-configuration-manager", "true");
+      setServerSetting(
+          "use-nodes-configuration-manager-nodes-configuration", "true");
+      break;
+    case NodesConfigurationSourceOfTruth::SERVER_CONFIG:
+      setServerSetting(
+          "use-nodes-configuration-manager-nodes-configuration", "false");
+      break;
+  }
 
+  // Merge the provided server settings with the existing settings
+  for (const auto& [key, value] : server_settings_) {
+    server_settings[key] = value;
+  }
+
+  ServerConfig::SettingsConfig client_settings =
+      source_config.serverConfig()->getClientSettingsConfig();
+  // Merge the provided client settings with the client settings
+  for (const auto& [key, value] : client_settings_) {
+    client_settings[key] = value;
+  }
+
+  ld_info("Cluster created with data in %s", root_path.c_str());
   Configuration::NodesConfig nodes_config(std::move(nodes));
   std::unique_ptr<Configuration> config =
       std::make_unique<Configuration>(source_config.serverConfig()
@@ -843,11 +860,6 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   cluster->hash_based_sequencer_assignment_ = hash_based_sequencer_assignment_;
   cluster->setNodeReplacementCounters(std::move(replacement_counters));
   cluster->maintenance_manager_node_ = maintenance_manager_node_;
-
-  if (cluster->rocksdb_type_ == RocksDBType::SINGLE) {
-    cluster->setParam(
-        "--rocksdb-partitioned", "false", ParamScope::STORAGE_NODE);
-  }
 
   // create Node objects, but don't start the processes
   for (int i = 0; i < nnodes; i++) {
@@ -903,6 +915,68 @@ ClusterFactory::createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster) {
       "/test_logs",
       logid_range_t(logid_t(1), logid_t(num_logs_config_manager_logs_)),
       attrs);
+}
+
+void ClusterFactory::populateDefaultServerSettings() {
+  // Poll for config updates more frequently in tests so that they
+  // progress faster
+  setServerSetting("file-config-update-interval", "100ms");
+
+  setServerSetting("assert-on-data", "true");
+  setServerSetting("enable-config-synchronization", "true");
+  // Disable rebuilding by default in tests, the test framework
+  // (`waitUntilRebuilt' etc) is not ready for it: #14697277
+  setServerSetting("disable-rebuilding", "true");
+  // Disable the random delay for SHARD_IS_REBUILT messages
+  setServerSetting("shard-is-rebuilt-msg-delay", "0s..0s");
+  // TODO(T22614431): remove this option once it's been enabled
+  // everywhere.
+  setServerSetting("allow-conditional-rebuilding-restarts", "true");
+  setServerSetting("rebuilding-restarts-grace-period", "1ms");
+  setServerSetting("planner-scheduling-delay", "1s");
+  // RebuildingTest does not expect this: #14697312
+  setServerSetting("enable-self-initiated-rebuilding", "false");
+  // disable failure detector because it delays sequencer startup
+  setServerSetting("gossip-enabled", "false");
+  setServerSetting("ignore-cluster-marker", "true");
+  setServerSetting("rocksdb-auto-create-shards", "true");
+  setServerSetting("num-workers", "5");
+  // always enable NCM
+  setServerSetting("enable-nodes-configuration-manager", "true");
+  setServerSetting(
+      "nodes-configuration-manager-store-polling-interval", "100ms");
+
+  // Small timeout is needed so that appends that happen right after
+  // rebuilding, when socket isn't reconnected yet, retry quickly.
+  setServerSetting("store-timeout", "10ms..1s");
+  // smaller recovery retry timeout for reading seqencer metadata
+  setServerSetting("recovery-seq-metadata-timeout", "100ms..500ms");
+  // Smaller mutation and cleaning timeout, to make recovery retry faster
+  // if a participating node died at the wrong moment.
+  // TODO (#54460972): Would be better to make recovery detect such
+  // situations by itself, probably using ClusterState.
+  setServerSetting("recovery-timeout", "5s");
+  // if we fail to store something on a node, we should retry earlier than
+  // the default 60s
+  setServerSetting("unroutable-retry-interval", "1s");
+
+  // Disable disk space checking by default; tests that want it can
+  // override
+  setServerSetting("free-disk-space-threshold", "0.000001");
+  // Run fewer than the default 4 threads to perform better under load
+  setServerSetting("storage-threads-per-shard-slow", "2");
+  setServerSetting("rocksdb-allow-fallocate", "false");
+  // Reduce memory usage for storage thread queues compared to the
+  // default setting
+  setServerSetting("max-inflight-storage-tasks", "512");
+
+  if (!no_ssl_address_) {
+    setServerSetting(
+        "ssl-ca-path", TEST_SSL_FILE("logdevice_test_valid_ca.cert"));
+    setServerSetting(
+        "ssl-cert-path", TEST_SSL_FILE("logdevice_test_valid.cert"));
+    setServerSetting("ssl-key-path", TEST_SSL_FILE("logdevice_test.key"));
+  }
 }
 
 int Cluster::pickAddressesForServers(
@@ -1295,34 +1369,9 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
         {"--name", ParamValue{node.name_}},
         {"--test-mode", ParamValue{"true"}},
         {"--config-path", ParamValue{"file:" + node.config_path_}},
-        {"--epoch-store-path", ParamValue{epoch_store_path_}},
-        {"--nodes-configuration-file-store-dir", ParamValue{ncs_path_}},
-        // Poll for config updates more frequently in tests so that they
-        // progress faster
-        {"--file-config-update-interval", ParamValue{"100ms"}},
         {"--loglevel", ParamValue{loglevelToString(default_log_level_)}},
         {"--log-file", ParamValue{node.getLogPath()}},
         {"--server-id", ParamValue{node.server_id_}},
-        {"--assert-on-data", ParamValue{}},
-        {"--enable-config-synchronization", ParamValue{}},
-        // Disable rebuilding by default in tests, the test framework
-        // (`waitUntilRebuilt' etc) is not ready for it: #14697277
-        {"--disable-rebuilding", ParamValue{"true"}},
-        // Disable the random delay for SHARD_IS_REBUILT messages
-        {"--shard-is-rebuilt-msg-delay", ParamValue{"0s..0s"}},
-        // TODO(T22614431): remove this option once it's been enabled
-        // everywhere.
-        {"--allow-conditional-rebuilding-restarts", ParamValue{"true"}},
-        {"--rebuilding-restarts-grace-period", ParamValue{"1ms"}},
-        {"--planner-scheduling-delay", ParamValue{"1s"}},
-        // RebuildingTest does not expect this: #14697312
-        {"--enable-self-initiated-rebuilding", ParamValue{"false"}},
-        // disable failure detector because it delays sequencer startup
-        {"--gossip-enabled", ParamValue{"false"}},
-        {"--ignore-cluster-marker", ParamValue{"true"}},
-        {"--rocksdb-auto-create-shards", ParamValue{"true"}},
-        {"--num-workers", ParamValue{"5"}},
-        {"--nodes-configuration-manager-store-polling-interval", ParamValue{"100ms"}},
         {"--enable-maintenance-manager",
           ParamValue{node.should_run_maintenance_manager_ ?"true" : "false"}},
       }
@@ -1330,74 +1379,15 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
     { ParamScope::SEQUENCER,
       {
         {"--sequencers", ParamValue{"all"}},
-        // Small timeout is needed so that appends that happen right after
-        // rebuilding, when socket isn't reconnected yet, retry quickly.
-        {"--store-timeout", ParamValue{"10ms..1s"}},
-        // smaller recovery retry timeout for reading seqencer metadata
-        {"--recovery-seq-metadata-timeout", ParamValue{"100ms..500ms"}},
-        // Smaller mutation and cleaning timeout, to make recovery retry faster
-        // if a participating node died at the wrong moment.
-        // TODO (#54460972): Would be better to make recovery detect such
-        // situations by itself, probably using ClusterState.
-        {"--recovery-timeout", ParamValue{"5s"}},
-        // if we fail to store something on a node, we should retry earlier than
-        // the default 60s
-        {"--unroutable-retry-interval", ParamValue{"1s"}},
       }
     },
     { ParamScope::STORAGE_NODE,
       {
         {"--local-log-store-path", ParamValue{node.getDatabasePath()}},
         {"--num-shards", ParamValue{std::to_string(node.num_db_shards_)}},
-        // Disable disk space checking by default; tests that want it can
-        // override
-        {"--free-disk-space-threshold", ParamValue{"0.000001"}},
-        // Run fewer than the default 4 threads to perform better under load
-        {"--storage-threads-per-shard-slow", ParamValue{"2"}},
-        {"--rocksdb-allow-fallocate", ParamValue{"false"}},
-        // Reduce memory usage for storage thread queues compared to the
-        // default setting
-        {"--max-inflight-storage-tasks", ParamValue{"512"}},
       }
     }
   };
-
-  // TODO(tau0) Remove this.
-  if (enable_logsconfig_manager_) {
-    default_param_map[ParamScope::ALL]
-      ["--enable-logsconfig-manager"] = ParamValue{"true"};
-  } else {
-    default_param_map[ParamScope::ALL]
-      ["--enable-logsconfig-manager"] = ParamValue{"false"};
-  }
-
-  // always enable NCM
-  default_param_map[ParamScope::ALL]["--enable-nodes-configuration-manager"]
-    = ParamValue{"true"};
-
-  switch (nodes_configuration_sot_) {
-    case NodesConfigurationSourceOfTruth::NCM:
-      default_param_map[ParamScope::ALL][
-          "--enable-nodes-configuration-manager"] = ParamValue{"true"};
-      default_param_map[ParamScope::ALL][
-          "--use-nodes-configuration-manager-nodes-configuration"]
-        = ParamValue{"true"};
-      break;
-    case NodesConfigurationSourceOfTruth::SERVER_CONFIG:
-      default_param_map[ParamScope::ALL][
-          "--use-nodes-configuration-manager-nodes-configuration"]
-        = ParamValue{"false"};
-      break;
-  }
-
-  if (!no_ssl_address_) {
-    default_param_map[ParamScope::ALL]["--ssl-ca-path"] =
-        ParamValue(TEST_SSL_FILE("logdevice_test_valid_ca.cert"));
-    default_param_map[ParamScope::ALL]["--ssl-cert-path"] =
-        ParamValue(TEST_SSL_FILE("logdevice_test_valid.cert"));
-    default_param_map[ParamScope::ALL]["--ssl-key-path"] =
-        ParamValue(TEST_SSL_FILE("logdevice_test.key"));
-  }
 
   // clang-format on
 
@@ -3157,19 +3147,9 @@ int Cluster::waitUntilAllClientsPickedConfig(
 }
 
 bool Cluster::isGossipEnabled() const {
-  static const std::string gossip_flag = "--gossip-enabled";
-  if (cmd_param_.find(ParamScope::ALL) == cmd_param_.end()) {
-    // Assumes the --gossip-enabled flag is explicitly set to false when passing
-    // cmdline arguments.
-    return false;
-  }
-  const auto& params = cmd_param_.at(ParamScope::ALL);
-  if (params.find(gossip_flag) == params.end()) {
-    // Assumes the --gossip-enabled flag is explicitly set to false when passing
-    // cmdline arguments.
-    return false;
-  }
-  return params.at(gossip_flag).value_or("true") == "true";
+  // Assumes gossip is always set in the config regardless of its value.
+  return config_->getServerConfig()->getServerSettingsConfig().at(
+             "gossip-enabled") == "true";
 }
 
 int Cluster::checkConsistency(argv_t additional_args) {
