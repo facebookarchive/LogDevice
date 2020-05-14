@@ -9,10 +9,13 @@
 
 #include <folly/Format.h>
 #include <folly/Preprocessor.h>
+#include <folly/SpinLock.h>
+#include <folly/Synchronized.h>
 #include <folly/ThreadLocal.h>
 #include <folly/Utility.h>
 #include <folly/lang/Aligned.h>
 
+#include "logdevice/common/ThreadID.h"
 #include "logdevice/common/checks.h"
 #include "logdevice/common/toString.h"
 #include "logdevice/common/types_internal.h"
@@ -62,6 +65,24 @@
 namespace facebook { namespace logdevice {
 
 class IOTracing {
+ private:
+  // Thread-local information about a thread that may do IO.
+  struct ThreadState {
+    // Description of the current IO operation and its context, formed by
+    // concatenating strings provided to all active
+    // SCOPED_IO_TRACING_CONTEXT and SCOPED_IO_TRACED_OP invocations.
+    std::string context;
+
+    // If this thread is currently performing an IO operation, this is the
+    // timestamp when the operation began. Otherwise time_point::max().
+    std::chrono::steady_clock::time_point currentOpStartTime =
+        std::chrono::steady_clock::time_point::max();
+  };
+
+  using ThreadStateWithMutex =
+      folly::Synchronized<ThreadState, folly::SpinLock>;
+  using LockedThreadState = ThreadStateWithMutex::LockedPtr;
+
  public:
   // Appends the given string, formatted with folly::format(), to IOTracing's
   // thread-local context string.
@@ -81,8 +102,10 @@ class IOTracing {
     }
 
     AddContext(AddContext&& rhs) noexcept
-        : str_(rhs.str_), prevSize_(rhs.prevSize_), addedSize_(rhs.addedSize_) {
-      rhs.str_ = nullptr;
+        : threadState_(rhs.threadState_),
+          prevSize_(rhs.prevSize_),
+          addedSize_(rhs.addedSize_) {
+      rhs.threadState_ = nullptr;
       rhs.prevSize_ = std::numeric_limits<size_t>::max();
       rhs.addedSize_ = 0;
     }
@@ -104,23 +127,27 @@ class IOTracing {
     template <class... Args>
     void assign(IOTracing* tracing, folly::StringPiece format, Args&&... args) {
       clear();
-      str_ = &tracing->state_->context;
-      prevSize_ = str_->size();
+
+      threadState_ = tracing->threadStates_.get();
+      auto locked_state = threadState_->lock();
+      std::string& str = locked_state->context;
+
+      prevSize_ = str.size();
 
       try {
         // This overload of folly::format() appends to string.
-        folly::format(str_, format, std::forward<Args>(args)...);
+        folly::format(&str, format, std::forward<Args>(args)...);
       } catch (std::invalid_argument& ex) {
         // Format string doesn't match argument list.
         // Crash right here to dump a useful stack trace.
-        // This is only reachable if tracing is enabled, so it won't
-        // mass-crash production.
+        // This is only reachable if tracing is enabled, so if you're getting
+        // this crash in production, set rocksdb-io-tracing-shards to "none".
         std::abort();
       }
-      str_->append("|");
+      str.append("|");
 
-      ld_check_ge(str_->size(), prevSize_);
-      addedSize_ = str_->size() - prevSize_;
+      ld_check_ge(str.size(), prevSize_);
+      addedSize_ = str.size() - prevSize_;
     }
 
     void clear() {
@@ -128,15 +155,18 @@ class IOTracing {
         ld_check_eq(0, addedSize_);
         return;
       }
-      ld_check(str_);
-      ld_check_eq(str_->size(), prevSize_ + addedSize_);
-      str_->resize(prevSize_);
+
+      ld_check(threadState_);
+      auto locked_state = threadState_->lock();
+      std::string& str = locked_state->context;
+      ld_check_eq(str.size(), prevSize_ + addedSize_);
+      str.resize(prevSize_);
       prevSize_ = std::numeric_limits<size_t>::max();
       addedSize_ = 0;
     }
 
    private:
-    std::string* str_ = nullptr;
+    ThreadStateWithMutex* threadState_ = nullptr;
     size_t prevSize_ = std::numeric_limits<size_t>::max();
     size_t addedSize_ = 0;
   };
@@ -158,7 +188,12 @@ class IOTracing {
     OpTimer(IOTracing* tracing, folly::StringPiece format, Args&&... args)
         : tracing_(tracing),
           addContext_(tracing, format, std::forward<Args>(args)...),
-          startTime_(std::chrono::steady_clock::now()) {}
+          startTime_(std::chrono::steady_clock::now()) {
+      auto locked_state = tracing_->threadStates_->lock();
+      ld_check(locked_state->currentOpStartTime ==
+               std::chrono::steady_clock::time_point::max());
+      locked_state->currentOpStartTime = startTime_;
+    }
 
     OpTimer(OpTimer&& rhs) noexcept
         : tracing_(rhs.tracing_),
@@ -176,7 +211,13 @@ class IOTracing {
       }
       auto duration = std::chrono::steady_clock::now() - startTime_;
 
-      tracing_->reportCompletedOp(duration);
+      auto locked_state = tracing_->threadStates_->lock();
+      ld_check_eq(locked_state->currentOpStartTime.time_since_epoch().count(),
+                  startTime_.time_since_epoch().count());
+      locked_state->currentOpStartTime =
+          std::chrono::steady_clock::time_point::max();
+
+      tracing_->reportCompletedOp(duration, locked_state);
     }
 
    private:
@@ -187,36 +228,52 @@ class IOTracing {
   };
 
   explicit IOTracing(shard_index_t shard_idx);
+  ~IOTracing();
 
   bool isEnabled() const {
     return options_->enabled.load(std::memory_order_relaxed);
   }
-  void setEnabled(bool enabled) {
-    options_->enabled.store(enabled);
-  }
-  void setThreshold(std::chrono::milliseconds t) {
-    options_->threshold.store(t);
-  }
 
-  // Logs the current context along with operation duration.
-  // Does _not_ check isEnabled() or threshold; they need to be checked before
-  // calling this.
-  // Usually used through OpTimer/SCOPED_IO_TRACED_OP() rather than directly.
-  void reportCompletedOp(std::chrono::steady_clock::duration duration);
+  // Not thread safe.
+  void updateOptions(bool tracing_enabled,
+                     std::chrono::milliseconds threshold,
+                     std::chrono::milliseconds stall_threshold);
 
  private:
-  struct State {
-    std::string context;
-  };
   struct Options {
     std::atomic<bool> enabled{false};
     std::atomic<std::chrono::milliseconds> threshold{
+        std::chrono::milliseconds(0)};
+    std::atomic<std::chrono::milliseconds> stall_threshold{
         std::chrono::milliseconds(0)};
   };
 
   shard_index_t shardIdx_;
   folly::cacheline_aligned<Options> options_;
-  folly::ThreadLocal<State> state_;
+
+  // Information about all threads that touched this IOTracing.
+  // The folly::Synchronized is needed to synchronize between the TheadState
+  // owner and stallDetectionThread_; there should be hardly any contention,
+  // and almost all accesses are from a single thread, so we're using spinlock.
+  struct Tag {};
+  folly::ThreadLocal<folly::Synchronized<ThreadState, folly::SpinLock>, Tag>
+      threadStates_;
+
+  struct {
+    std::mutex mutex;           // protects `cv`
+    std::condition_variable cv; // notified to wake up the thread
+    bool enabled = false;       // if false, thread will exit when woken up
+    std::thread thread;
+  } stallDetectionThread_;
+
+  void stallDetectionThreadMain();
+
+  // Logs the current context along with operation duration.
+  // Does _not_ check isEnabled() or threshold; they need to be checked before
+  // calling this.
+  // Usually used through OpTimer/SCOPED_IO_TRACED_OP() rather than directly.
+  void reportCompletedOp(std::chrono::steady_clock::duration duration,
+                         LockedThreadState& locked_state);
 };
 
 // Declares a local variable of type AddContext, passing it the given arguments.

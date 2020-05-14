@@ -724,7 +724,6 @@ void ShardedRocksDBLocalLogStore::printDiskShardMapping() {
 void ShardedRocksDBLocalLogStore::refreshIOTracingSettings() {
   auto settings = db_settings_.get();
   auto shards = settings->io_tracing_shards;
-  std::chrono::milliseconds threshold = settings->io_tracing_threshold;
 
   std::vector<bool> enabled_by_shard(io_tracing_by_shard_.size());
   if (shards.all_shards) {
@@ -744,8 +743,10 @@ void ShardedRocksDBLocalLogStore::refreshIOTracingSettings() {
   }
 
   for (shard_index_t i = 0; i < enabled_by_shard.size(); ++i) {
-    io_tracing_by_shard_[i]->setEnabled(enabled_by_shard[i]);
-    io_tracing_by_shard_[i]->setThreshold(threshold);
+    io_tracing_by_shard_[i]->updateOptions(
+        enabled_by_shard[i],
+        settings->io_tracing_threshold,
+        settings->io_tracing_stall_threshold);
   }
 }
 

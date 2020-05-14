@@ -1617,6 +1617,20 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::LogsDB);
 
+  init("rocksdb-io-tracing-stall-threshold",
+       &io_tracing_stall_threshold,
+       "30s",
+       nullptr,
+       "If this setting is nonzero, and rocksdb-io-tracing-shards is enabled, "
+       "IO tracing will spin up a background thread to periodically poll the "
+       "list of active IO operations and report when an operation is stuck for "
+       "at least this long. The purpose is to detect stuck IO operations, "
+       "which wouldn't be reported by the regular IO tracing because it only "
+       "reports an operation after it completes. If set to '0', stall "
+       "detection will be disabled, and no background thread will be created.",
+       SERVER,
+       SettingsCategory::LogsDB);
+
   init("rocksdb-paranoid-checks",
        &paranoid_checks,
        "true",

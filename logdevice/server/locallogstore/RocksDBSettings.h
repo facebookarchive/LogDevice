@@ -379,6 +379,8 @@ class RocksDBSettings : public SettingsBundle {
 
   std::chrono::milliseconds io_tracing_threshold;
 
+  std::chrono::milliseconds io_tracing_stall_threshold;
+
   // When ld manages flushes, memory limit for the node and memtable
   // within rocksdb set to a very high value. rocksdb should never be
   // able to reach those limits and initiate a flush. This limit is a
