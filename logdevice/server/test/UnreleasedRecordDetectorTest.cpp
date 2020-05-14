@@ -257,7 +257,8 @@ void UnreleasedRecordDetectorTest::SetUp() {
       folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
       std::make_shared<ConnectionListener::SharedState>(),
       ConnectionListener::ListenerType::DATA,
-      budget_);
+      budget_,
+      /* enable_dscp_reflection= */ true);
   connection_listener_->setProcessor(processor_.get());
   ld_notify("ConnectionListener created.");
 

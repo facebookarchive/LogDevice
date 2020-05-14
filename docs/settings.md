@@ -235,6 +235,7 @@ sidebar_label: Settings
 | connect-timeout-retry-multiplier | Multiplier that is applied to the connect timeout after every failed connection attempt | 3 |  |
 | connection-backlog | (server-only setting) Maximum number of incoming connections that have been accepted by listener (have an open FD) but have not been processed by workers (made logdevice protocol handshake). | 2000 | server&nbsp;only |
 | connection-retries | the number of TCP connection retries before giving up | 4 |  |
+| enable-dscp-reflection | If enabled, server will use DSCP TypeOfService used by client for communicationoIf disabled, server will use default DSCP value  | true | requires&nbsp;restart, server&nbsp;only |
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
 | incoming-messages-max-bytes-limit | maximum byte limit of unprocessed messages within the system. | 524288000 | requires&nbsp;restart |

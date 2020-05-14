@@ -29,8 +29,9 @@ ConnectionListener::ConnectionListener(
     KeepAlive loop,
     std::shared_ptr<SharedState> shared_state,
     ListenerType listener_type,
-    ResourceBudget& connection_backlog_budget)
-    : Listener(std::move(iface), loop),
+    ResourceBudget& connection_backlog_budget,
+    bool enable_dscp_reflection)
+    : Listener(std::move(iface), loop, enable_dscp_reflection),
       loop_(loop),
       connection_backlog_budget_(connection_backlog_budget),
       shared_state_(shared_state),

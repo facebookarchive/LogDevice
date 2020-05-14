@@ -108,6 +108,8 @@ struct ServerSettings : public SettingsBundle {
   bool use_tls_ticket_seeds;
   std::string tls_ticket_seeds_path;
 
+  bool enable_dscp_reflection;
+
  private:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

@@ -90,7 +90,7 @@ class Listener : public folly::AsyncServerSocket::AcceptCallback {
     bool ssl_;
   };
 
-  explicit Listener(const InterfaceDef& iface, KeepAlive loop);
+  explicit Listener(const InterfaceDef& iface, KeepAlive loop, bool enable_dscp_reflection);
 
   virtual ~Listener();
 
@@ -133,6 +133,9 @@ class Listener : public folly::AsyncServerSocket::AcceptCallback {
 
   // EventLoop on which listener is running
   KeepAlive loop_;
+
+  // Whether to use DSCP value provided by client
+  bool enable_dscp_reflection_;
 
   // Must be accessed only from evenloop thread
   std::shared_ptr<folly::AsyncServerSocket> socket_;
