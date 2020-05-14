@@ -273,7 +273,8 @@ class RocksDBSequentialFile : public rocksdb::SequentialFileWrapper {
 class RocksDBRandomAccessFile : public rocksdb::RandomAccessFileWrapper {
  public:
   RocksDBRandomAccessFile(std::unique_ptr<rocksdb::RandomAccessFile> file,
-                          FileTracingInfo tracing);
+                          FileTracingInfo tracing,
+                          UpdateableSettings<RocksDBSettings> settings);
   ~RocksDBRandomAccessFile() override;
 
   rocksdb::Status Read(uint64_t offset,
@@ -288,6 +289,7 @@ class RocksDBRandomAccessFile : public rocksdb::RandomAccessFileWrapper {
  private:
   std::unique_ptr<rocksdb::RandomAccessFile> file_;
   FileTracingInfo tracing_;
+  UpdateableSettings<RocksDBSettings> settings_;
 };
 
 class RocksDBDirectory : public rocksdb::DirectoryWrapper {

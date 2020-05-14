@@ -975,6 +975,17 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::Testing);
 
+  init("rocksdb-test-stall-sst-reads",
+       &test_stall_sst_reads,
+       "false",
+       nullptr,
+       "Used for testing. If set to 'true', rocksdb::RandomAccessFile::Read() "
+       "calls will stall indefinitely, until the setting is changed to "
+       "'false'. This simulates a file read getting stuck. Can be used for "
+       "testing resilience of read path to such situation.",
+       SERVER,
+       SettingsCategory::Testing);
+
   init("rocksdb-bloom-bits-per-key",
        &bloom_bits_per_key_,
        "10",

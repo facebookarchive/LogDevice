@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <folly/Optional.h>
 #include <folly/ThreadLocal.h>
 
@@ -273,7 +274,8 @@ RocksDBEnv::NewRandomAccessFile(const std::string& f,
       return status;
     }
   }
-  *r = std::make_unique<RocksDBRandomAccessFile>(std::move(file), tracing);
+  *r = std::make_unique<RocksDBRandomAccessFile>(
+      std::move(file), tracing, settings_);
   return rocksdb::Status::OK();
 }
 rocksdb::Status
@@ -428,10 +430,12 @@ rocksdb::Status RocksDBSequentialFile::PositionedRead(uint64_t offset,
 
 RocksDBRandomAccessFile::RocksDBRandomAccessFile(
     std::unique_ptr<rocksdb::RandomAccessFile> file,
-    FileTracingInfo tracing)
+    FileTracingInfo tracing,
+    UpdateableSettings<RocksDBSettings> settings)
     : rocksdb::RandomAccessFileWrapper(file.get()),
       file_(std::move(file)),
-      tracing_(tracing) {}
+      tracing_(tracing),
+      settings_(settings) {}
 RocksDBRandomAccessFile::~RocksDBRandomAccessFile() {
   SCOPED_IO_TRACED_OP(tracing_.io_tracing, "rf:{}|close", tracing_.filename);
   file_.reset();
@@ -445,6 +449,11 @@ rocksdb::Status RocksDBRandomAccessFile::Read(uint64_t offset,
                       tracing_.filename,
                       offset,
                       n);
+  while (UNLIKELY(settings_->test_stall_sst_reads) &&
+         boost::ends_with(tracing_.filename, ".sst")) {
+    // Re-check the setting every 100ms.
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
   return rocksdb::RandomAccessFileWrapper::Read(offset, n, result, scratch);
 }
 rocksdb::Status RocksDBRandomAccessFile::Prefetch(uint64_t offset, size_t n) {

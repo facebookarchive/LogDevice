@@ -358,6 +358,8 @@ class RocksDBSettings : public SettingsBundle {
   // as corrupted.
   bool test_corrupt_stores{false};
 
+  bool test_stall_sst_reads{false};
+
   // Various settings related to the rocksdb flush policy.
 
   // Total size limit for all memtables in the system.
