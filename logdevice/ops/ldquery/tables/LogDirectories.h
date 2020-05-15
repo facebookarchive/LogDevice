@@ -13,21 +13,20 @@
 #include "../Context.h"
 #include "../Table.h"
 
-
 namespace facebook {
   namespace logdevice {
     namespace ldquery {
       namespace tables {
 
-class LogGroups : public Table {
+class LogDirectories : public Table {
  public:
-  explicit LogGroups(std::shared_ptr<Context> ctx) : Table(ctx) {}
+  explicit LogDirectories(std::shared_ptr<Context> ctx) : Table(ctx) {}
   static std::string getName() {
-    return "log_groups";
+    return "log_dirs";
   }
   std::string getDescription() override {
-    return "A table that lists the log groups configured in the cluster.  A log"
-           " group is an interval of log ids that share common configuration "
+    return "A table that lists the directories configured in the cluster.  A "
+           "directory is a namespace that share common configuration "
            "property.";
   }
   TableColumns getColumns() const override;

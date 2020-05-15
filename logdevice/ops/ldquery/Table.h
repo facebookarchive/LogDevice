@@ -252,6 +252,9 @@ class Table {
   bool columnHasEqualityConstraint(int col,
                                    QueryContext& ctx,
                                    std::string& expr) const;
+  bool columnHasLikeConstraint(int col,
+                             QueryContext& ctx,
+                             std::string& expr) const;
 
   /**
    * Checks if there is an equality constraint on column `col` for a log id.

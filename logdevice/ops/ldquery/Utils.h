@@ -31,4 +31,6 @@ std::string s(const folly::Optional<std::chrono::seconds>& val);
 
 std::string s(const folly::Optional<std::chrono::milliseconds>& val);
 
+bool match_likexpr(std::string str, std::string likexpr);
+
 }}} // namespace facebook::logdevice::ldquery

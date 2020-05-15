@@ -179,6 +179,13 @@ bool Table::columnHasEqualityConstraint(int col,
   return columnhasconstraint(col, SQLITE_INDEX_CONSTRAINT_EQ, ctx, expr);
 }
 
+bool Table::columnHasLikeConstraint(int col,
+                                 QueryContext& ctx,
+                                 std::string& expr) const {
+  return columnhasconstraint(col, SQLITE_INDEX_CONSTRAINT_LIKE, ctx, expr);
+}
+
+
 bool Table::columnHasEqualityConstraintOnLogid(int col,
                                                QueryContext& ctx,
                                                logid_t& logid) const {
