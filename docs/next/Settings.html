@@ -325,6 +325,7 @@
 <tr><td>connect-timeout-retry-multiplier</td><td>Multiplier that is applied to the connect timeout after every failed connection attempt</td><td style="text-align:center">3</td><td></td></tr>
 <tr><td>connection-backlog</td><td>(server-only setting) Maximum number of incoming connections that have been accepted by listener (have an open FD) but have not been processed by workers (made logdevice protocol handshake).</td><td style="text-align:center">2000</td><td>server only</td></tr>
 <tr><td>connection-retries</td><td>the number of TCP connection retries before giving up</td><td style="text-align:center">4</td><td></td></tr>
+<tr><td>enable-dscp-reflection</td><td>If enabled, server will use DSCP TypeOfService used by client for communicationoIf disabled, server will use default DSCP value</td><td style="text-align:center">true</td><td>requires restart, server only</td></tr>
 <tr><td>handshake-timeout</td><td>LogDevice protocol handshake timeout</td><td style="text-align:center">1s</td><td></td></tr>
 <tr><td>include-destination-on-handshake</td><td>Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated.</td><td style="text-align:center">true</td><td></td></tr>
 <tr><td>incoming-messages-max-bytes-limit</td><td>maximum byte limit of unprocessed messages within the system.</td><td style="text-align:center">524288000</td><td>requires restart</td></tr>
