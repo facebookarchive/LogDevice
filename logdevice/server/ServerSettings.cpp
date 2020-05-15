@@ -582,6 +582,14 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::Configuration)
 
+    ("enable-dscp-reflection",
+     &enable_dscp_reflection,
+     "true",
+     nullptr,
+     "If enabled, server will use DSCP TypeOfService used by client for communicationo"
+     "If disabled, server will use default DSCP value ",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::Network)
     ;
   // clang-format on
 

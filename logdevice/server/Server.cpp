@@ -701,7 +701,8 @@ bool Server::initListeners() {
         folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
         conn_shared_state,
         ConnectionListener::ListenerType::DATA,
-        conn_budget_backlog_);
+        conn_budget_backlog_,
+        server_settings_->enable_dscp_reflection);
 
     auto nodes_configuration = updateable_config_->getNodesConfiguration();
     ld_check(nodes_configuration);
@@ -757,7 +758,8 @@ bool Server::initListeners() {
                 ssl_connection_listener_loop_->getEventBase()),
             conn_shared_state,
             ConnectionListener::ListenerType::DATA_SSL,
-            conn_budget_backlog_);
+            conn_budget_backlog_,
+            server_settings_->enable_dscp_reflection);
       }
     }
 
@@ -797,7 +799,8 @@ bool Server::initListeners() {
             folly::getKeepAliveToken(gossip_listener_loop_->getEventBase()),
             conn_shared_state,
             ConnectionListener::ListenerType::GOSSIP,
-            conn_budget_backlog_unlimited_);
+            conn_budget_backlog_unlimited_,
+            server_settings_->enable_dscp_reflection);
       }
     } else {
       ld_info("Gossip listener initialization not required"
@@ -833,7 +836,8 @@ bool Server::initListeners() {
               server_to_server_listener_loop_->getEventBase()),
           conn_shared_state,
           ConnectionListener::ListenerType::SERVER_TO_SERVER,
-          conn_budget_backlog_unlimited_);
+          conn_budget_backlog_unlimited_,
+          server_settings_->enable_dscp_reflection);
     }
 
   } catch (const ConstructorFailed&) {
