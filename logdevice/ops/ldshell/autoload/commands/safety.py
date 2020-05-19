@@ -129,8 +129,8 @@ async def check_impact(
     skip_capacity_checks=False,
 ):
     """
-    Return true if performaing operations to the given shards will cause
-    loss of read/write availiability or data loss.
+    Return true if performing operations to the given shards will cause
+    loss of read/write availability or data loss.
     """
 
     if shards is None:
