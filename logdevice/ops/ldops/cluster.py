@@ -17,7 +17,7 @@ Implements cluster-specific operations.
 import asyncio
 import operator
 from collections import defaultdict
-from typing import Dict, FrozenSet, Optional, Tuple
+from typing import Dict, FrozenSet, Optional, Sequence, Tuple
 
 from ldops import admin_api
 from ldops.exceptions import NodeNotFoundError
@@ -25,8 +25,10 @@ from ldops.types.cluster import Cluster
 from ldops.types.cluster_view import ClusterView
 from ldops.types.node import Node
 from ldops.types.socket_address import SocketAddress
+from libfb.py.asyncio.await_utils import make_awaitable
 from logdevice.admin.clients import AdminAPI
 from logdevice.admin.exceptions.types import NotSupported
+from logdevice.admin.logtree.types import ReplicationInfo
 from logdevice.admin.nodes.types import (
     NodeConfig,
     NodesConfigResponse,
@@ -179,10 +181,20 @@ async def get_cluster_view(client: AdminAPI) -> ClusterView:
     )
 
 
-async def group_nodes_by_scope(client: AdminAPI) -> Tuple[Tuple[NodeID, ...], ...]:
-    (replication_info, nodes_config) = await asyncio.gather(
-        admin_api.get_replication_info(client), admin_api.get_nodes_config(client)
+async def group_nodes_by_scope(
+    client: AdminAPI,
+    nodes: Optional[Sequence[NodeConfig]] = None,
+    replication_info: Optional[ReplicationInfo] = None,
+) -> Tuple[Tuple[NodeID, ...], ...]:
+    replication_info, nodes_config = await asyncio.gather(
+        admin_api.get_replication_info(client)
+        if replication_info is None
+        else make_awaitable(replication_info),
+        admin_api.get_nodes_config(client)
+        if nodes is None
+        else make_awaitable(NodesConfigResponse(nodes=nodes)),
     )
+
     scope = replication_info.tolerable_failure_domains.domain
     ret = defaultdict(set)
 
