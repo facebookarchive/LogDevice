@@ -106,6 +106,15 @@ STAT_DEFINE(append_stores_received_bytes, SUM)
 STAT_DEFINE(rebuilding_stores_received, SUM)
 STAT_DEFINE(rebuilding_stores_received_bytes, SUM)
 
+// How many IO operations took longer than rocksdb-io-tracing-threshold.
+// Note that this counts different types of IO operations together: file
+// creations/deletions, file writes/reads, syncs, etc. And also some of the
+// tracked operations don't actually do file IO. For these reasons, it wouldn't
+// be useful to try to measure an "average" or "p99" latency here, but it still
+// makes sense to count really slow operations (IO operations are not expected
+// to take > 5 seconds under normal circumstances, regardless of the IO kind).
+STAT_DEFINE(slow_iops, SUM)
+
 /*
  * The following stats will not be reset by Stats::reset() and the 'reset'
  * admin command.
@@ -162,9 +171,6 @@ STAT_DEFINE(sbt_num_storage_trims, SUM)
 // incorrectly.
 STAT_DEFINE(sbt_effective_retention_seconds, SUM)
 
-#endif // RESETTING_STATS
-
-
 /*
  * These stats will not be aggregated for destroyed threads.
  */
@@ -180,7 +186,17 @@ STAT_DEFINE(pending_retention_compactions, SUM)
 // How many partitions are waiting to be compacted for coalescing.
 STAT_DEFINE(pending_partial_compactions, SUM)
 
+// The longest-running IO operation that is still running. Updated at around
+// rocksdb-io-tracing-stall-threshold granularity, and only if
+// rocksdb-io-tracing-shards is enabled.
+STAT_DEFINE(longest_ongoing_io_ms, MAX)
+
+// Number of threads currently executing an IO operation that has already took
+// longer than rocksdb-io-tracing-stall-threshold.
+STAT_DEFINE(num_threads_stalled_on_io, SUM)
+
 #endif // DESTROYING_THREAD
+#endif // RESETTING_STATS
 
 #undef STAT_DEFINE
 #undef RESETTING_STATS

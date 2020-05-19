@@ -110,7 +110,7 @@ void ShardedRocksDBLocalLogStore::init(
 
   std::vector<IOTracing*> tracing_ptrs;
   for (shard_index_t i = 0; i < nshards_; ++i) {
-    io_tracing_by_shard_.push_back(std::make_unique<IOTracing>(i));
+    io_tracing_by_shard_.push_back(std::make_unique<IOTracing>(i, stats_));
     tracing_ptrs.push_back(io_tracing_by_shard_[i].get());
   }
   // If tracing is enabled in settings, enable it before opening the DBs.

@@ -12,7 +12,8 @@
 
 namespace facebook { namespace logdevice {
 
-IOTracing::IOTracing(shard_index_t shard_idx) : shardIdx_(shard_idx) {}
+IOTracing::IOTracing(shard_index_t shard_idx, StatsHolder* stats)
+    : shardIdx_(shard_idx), stats_(stats) {}
 
 IOTracing::~IOTracing() {
   if (stallDetectionThread_.enabled) {
@@ -30,6 +31,7 @@ void IOTracing::reportCompletedOp(std::chrono::steady_clock::duration duration,
                                   LockedThreadState& locked_state) {
   auto threshold = options_->threshold.load(std::memory_order_relaxed);
   if (threshold.count() <= 0 || duration >= threshold) {
+    PER_SHARD_STAT_INCR(stats_, slow_iops, shardIdx_);
     ld_info("[io:S%d] %s  %.3fms",
             static_cast<int>(shardIdx_),
             locked_state->context.c_str(),
@@ -84,6 +86,8 @@ void IOTracing::stallDetectionThreadMain() {
   while (stallDetectionThread_.enabled) {
     std::chrono::milliseconds stall_threshold =
         options_->stall_threshold.load();
+    std::chrono::milliseconds longest_ongoing_op{0};
+    size_t num_stalled_threads = 0;
 
     // Check all threads.
     for (auto& state : threadStates_.accessAllThreads()) {
@@ -96,16 +100,23 @@ void IOTracing::stallDetectionThreadMain() {
           std::chrono::duration_cast<std::chrono::milliseconds>(
               std::chrono::steady_clock::now() -
               locked_state->currentOpStartTime);
+      longest_ongoing_op = std::max(longest_ongoing_op, duration);
       if (duration < stall_threshold) {
         continue;
       }
 
+      ++num_stalled_threads;
       ld_warning("An IO operation in shard %d appears to be stuck for %.3fs "
                  "(so far): %s",
                  static_cast<int>(shardIdx_),
                  to_sec_double(duration),
                  locked_state->context.c_str());
     }
+
+    PER_SHARD_STAT_SET(
+        stats_, longest_ongoing_io_ms, shardIdx_, longest_ongoing_op.count());
+    PER_SHARD_STAT_SET(
+        stats_, num_threads_stalled_on_io, shardIdx_, num_stalled_threads);
 
     // Wake every 1/3 of the stall threshold, rounded up. The 1/3 is arbitrary.
     std::chrono::milliseconds wait_duration{(stall_threshold.count() + 2) / 3};

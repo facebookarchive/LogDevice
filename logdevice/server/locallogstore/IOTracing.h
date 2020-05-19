@@ -17,6 +17,7 @@
 
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/checks.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/toString.h"
 #include "logdevice/common/types_internal.h"
 
@@ -227,7 +228,7 @@ class IOTracing {
         std::chrono::steady_clock::time_point::min();
   };
 
-  explicit IOTracing(shard_index_t shard_idx);
+  explicit IOTracing(shard_index_t shard_idx, StatsHolder* stats);
   ~IOTracing();
 
   bool isEnabled() const {
@@ -249,6 +250,7 @@ class IOTracing {
   };
 
   shard_index_t shardIdx_;
+  StatsHolder* stats_;
   folly::cacheline_aligned<Options> options_;
 
   // Information about all threads that touched this IOTracing.
