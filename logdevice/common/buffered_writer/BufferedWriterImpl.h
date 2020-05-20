@@ -342,9 +342,6 @@ class BufferedWriterImpl : public BufferedWriter {
     return 2 * payload_bytes;
   }
 
-  // implementation of append(vector)
-  std::vector<Status> appendImpl(std::vector<Append>&& appends, bool atomic);
-
   template <typename RequestClass>
   void postToAllWorkersAndBlockUntilDone();
 

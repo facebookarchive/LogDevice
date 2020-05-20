@@ -417,12 +417,6 @@ int BufferedWriterImpl::append(logid_t log_id,
   return rv;
 }
 
-std::vector<Status>
-BufferedWriterImpl::append(std::vector<Append>&& input_appends) {
-  STAT_ADD(stats_, buffered_appends, input_appends.size());
-  return appendImpl(std::move(input_appends), /* atomic */ false);
-}
-
 int BufferedWriterImpl::appendAtomic(logid_t log_id,
                                      std::vector<Append>&& input_appends) {
   if (input_appends.empty()) {
@@ -487,7 +481,7 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
   }
 
   std::unique_ptr<Request> req = std::make_unique<BufferedAppendRequest>(
-      worker_id_t(shard), shards_[shard], std::move(chunks), true);
+      worker_id_t(shard), shards_[shard], std::move(chunks), /* atomic */ true);
   append_sink_->onBytesSentToWorker(append_sizes);
   int rv = processor()->postRequest(req);
   if (rv != 0) {
@@ -506,14 +500,15 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
 }
 
 std::vector<Status>
-BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
-                               bool atomic) {
+BufferedWriterImpl::append(std::vector<Append>&& input_appends) {
   // This is the multi-write variant of append().  It groups appends into
   // chunks that map to the same target shard/worker.  A single `Request` is
   // used to pass an entire chunk to the right LogDevice worker, instead of
   // one `Request` per append.
   //
   // NOTE: this is O(shards_.size() + input_appends.size()).
+
+  STAT_ADD(stats_, buffered_appends, input_appends.size());
 
   if (shutting_down_.load()) {
     STAT_ADD(stats_, buffered_append_failed_shutdown, input_appends.size());
@@ -576,7 +571,7 @@ BufferedWriterImpl::appendImpl(std::vector<Append>&& input_appends,
     // Post a BufferedAppendRequest to process this shard's chunk on the
     // appropriate Worker.
     std::unique_ptr<Request> req = std::make_unique<BufferedAppendRequest>(
-        worker_id_t(i), shards_[i], std::move(chunks[i]), atomic);
+        worker_id_t(i), shards_[i], std::move(chunks[i]), /* atomic */ false);
     append_sink_->onBytesSentToWorker(shard_bytes);
     int rv = processor()->postRequest(req);
     if (rv == 0) {
