@@ -64,6 +64,10 @@ class NodeStateUpdatedRequest : public Request {
   ClusterState::NodeState state_{ClusterState::NodeState::FULLY_STARTED};
 };
 
+bool ClusterState::isAnyNodeAlive() const {
+  return getFirstNodeAlive().has_value();
+}
+
 /**
  * Inserts a callback to the subscription list of the current worker
  * and inserts its worker id to the list of subscribers if not present already

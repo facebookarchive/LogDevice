@@ -63,6 +63,9 @@ void GetLogInfoRequest::changeTargetNode(std::unique_lock<std::mutex>& lock) {
   if (worker != nullptr) {
     cluster_state = worker->getClusterState();
   }
+  if (cluster_state != nullptr && !cluster_state->isAnyNodeAlive()) {
+    cluster_state = nullptr;
+  }
   const auto new_node = RandomNodeSelector::getAliveNode(
       *nodes_configuration, cluster_state, exclude);
   shared_state_->node_id_ = new_node;

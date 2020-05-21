@@ -82,4 +82,31 @@ TEST_F(ClusterStateTest, GetFirstNodeAliveReturnsNoneIfAllNodesAreDead) {
   ASSERT_FALSE(cs->getFirstNodeAlive().has_value());
 }
 
+TEST_F(ClusterStateTest, IsAnyNodeAliveCanReturnTrue) {
+  using namespace NodesConfigurationTestUtil;
+  std::vector<node_index_t> node_idxs(1);
+
+  auto config = provisionNodes(node_idxs);
+  ASSERT_TRUE(config->validate());
+
+  auto cs = makeOne(*config);
+
+  ASSERT_TRUE(cs->isAnyNodeAlive());
+}
+
+TEST_F(ClusterStateTest, IsAnyNodeAliveCanReturnFalse) {
+  using namespace NodesConfigurationTestUtil;
+  std::vector<node_index_t> node_idxs(1);
+
+  auto config = provisionNodes(node_idxs);
+  ASSERT_TRUE(config->validate());
+
+  auto cs = makeOne(*config);
+  for (auto [node_index, _] : cs->getWholeClusterStatus()) {
+    cs->setNodeState(node_index, ClusterState::NodeState::DEAD);
+  }
+
+  ASSERT_FALSE(cs->isAnyNodeAlive());
+}
+
 }} // namespace facebook::logdevice

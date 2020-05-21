@@ -105,6 +105,8 @@ class ClusterState {
     return state == NodeState::FULLY_STARTED || state == NodeState::STARTING;
   }
 
+  bool isAnyNodeAlive() const;
+
   bool isNodeAlive(node_index_t idx) const {
     return isAliveState(getNodeState(idx));
   }

@@ -64,6 +64,12 @@ NodesConfigurationPoller::createPoller() {
       cluster_state = getClusterState();
     }
 
+    // If the cluster state contains no alive nodes, don't use it as a filter
+    // and let RandomNodeSelector pick any node.
+    if (cluster_state != nullptr && !cluster_state->isAnyNodeAlive()) {
+      cluster_state = nullptr;
+    }
+
     return RandomNodeSelector::select(candidates,
                                       existing,
                                       blacklist,
