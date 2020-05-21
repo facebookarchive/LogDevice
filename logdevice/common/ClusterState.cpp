@@ -106,39 +106,27 @@ void ClusterState::setBoycottedNodes(std::vector<node_index_t> boycotts) {
       std::make_shared<std::vector<node_index_t>>(std::move(boycotts)));
 }
 
-node_index_t ClusterState::getFirstNodeAlive() const {
+folly::Optional<node_index_t> ClusterState::getFirstNodeAlive() const {
   return getFirstNodeWithPred(
       [this](node_index_t nid) { return isNodeAlive(nid); });
 }
 
-node_index_t ClusterState::getFirstNodeFullyStarted() const {
+folly::Optional<node_index_t> ClusterState::getFirstNodeFullyStarted() const {
   return getFirstNodeWithPred(
       [this](node_index_t nid) { return isNodeFullyStarted(nid); });
 }
 
-node_index_t ClusterState::getFirstNodeWithPred(
+folly::Optional<node_index_t> ClusterState::getFirstNodeWithPred(
     folly::Function<bool(node_index_t)> pred) const {
   size_t cluster_size = cluster_size_.load();
-  folly::Optional<node_index_t> first_node;
 
-  for (node_index_t nid = 0; nid < cluster_size; nid++) {
-    if (isNodeInConfig(nid)) {
-      if (pred(nid)) {
-        return nid;
-      } else if (!first_node.has_value()) {
-        first_node = nid;
-      }
+  for (node_index_t nid = 0; nid < cluster_size; ++nid) {
+    if (isNodeInConfig(nid) && pred(nid)) {
+      return nid;
     }
   }
 
-  if (!first_node.has_value()) {
-    RATELIMIT_WARNING(
-        std::chrono::seconds{5}, 1, "No node in service discovery config.");
-    first_node = 0;
-  }
-
-  // If all nodes are seen as dead, return first node.
-  return first_node.value();
+  return folly::none;
 }
 
 void ClusterState::postUpdateToWorkers(node_index_t node_id, NodeState state) {

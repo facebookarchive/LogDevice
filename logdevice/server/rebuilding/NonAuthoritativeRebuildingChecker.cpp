@@ -8,6 +8,8 @@
 
 #include "logdevice/server/rebuilding/NonAuthoritativeRebuildingChecker.h"
 
+#include <folly/Optional.h>
+
 #include "logdevice/common/Request.h"
 
 namespace facebook { namespace logdevice {
@@ -121,7 +123,10 @@ void NonAuthoritativeRebuildingChecker::checkShard(ShardID sid) {
   // check if current worker is `the leader'.
   auto cs = Worker::onThisThread()->getClusterState();
   ld_check(cs != nullptr);
-  if (cs->getFirstNodeAlive() != myNodeId_) {
+  folly::Optional<node_index_t> first_alive_node_index =
+      cs->getFirstNodeAlive();
+  if (!first_alive_node_index.has_value() ||
+      first_alive_node_index.value() != myNodeId_) {
     return; // not a leader, nothing to do here
   }
 

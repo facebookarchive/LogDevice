@@ -11,6 +11,8 @@
 #include <string>
 #include <zstd.h>
 
+#include <folly/Optional.h>
+
 #include "logdevice/common/AppendRequest.h"
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/Processor.h"
@@ -146,7 +148,10 @@ bool LogBasedRSMSnapshotStore::isWritable() const {
 
   // The node responsible for snapshotting is the first node
   // that's alive according to the failure detector.
-  return cs->getFirstNodeAlive() == my_node_id.value().index();
+  folly::Optional<node_index_t> first_alive_node_index =
+      cs->getFirstNodeAlive();
+  return first_alive_node_index.has_value() &&
+      first_alive_node_index.value() == my_node_id.value().index();
 }
 
 void LogBasedRSMSnapshotStore::writeSnapshot(lsn_t snapshot_ver,

@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 
+#include <folly/Optional.h>
+
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/TrimRequest.h"
 
@@ -51,7 +53,10 @@ bool EventLogStateMachine::thisNodeCanTrimAndSnapshot() const {
   auto w = Worker::onThisThread();
   auto cs = w->getClusterState();
   ld_check(cs != nullptr);
-  return cs->getFirstNodeAlive() == myNodeId_->index();
+  folly::Optional<node_index_t> first_alive_node_index =
+      cs->getFirstNodeAlive();
+  return first_alive_node_index.has_value() &&
+      first_alive_node_index.value() == myNodeId_->index();
 }
 
 void EventLogStateMachine::start() {

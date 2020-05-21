@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <folly/Optional.h>
+
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/SnapshotStoreTypes.h"
 #include "logdevice/common/Timestamp.h"
@@ -1308,8 +1310,9 @@ bool ReplicatedStateMachine<T, D>::canTrim() const {
 
   auto cs = w->getClusterState();
   ld_check(cs != nullptr);
-  auto first_idx = cs->getFirstNodeAlive();
-  return first_idx == my_node_id.value().index();
+  folly::Optional<node_index_t> first_alive_node_idx = cs->getFirstNodeAlive();
+  return first_alive_node_idx.has_value() &&
+      first_alive_node_idx.value() == my_node_id.value().index();
 }
 
 template <typename T, typename D>

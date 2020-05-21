@@ -10,6 +10,8 @@
 #include <cstring>
 #include <functional>
 
+#include <folly/Optional.h>
+
 #include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/logs/FBuffersLogsConfigCodec.h"
@@ -86,7 +88,10 @@ bool LogsConfigStateMachine::canTrimAndSnapshot() const {
 
   // The node responsible for trimming and snapshotting is the first node
   // that's alive according to the failure detector.
-  return cs->getFirstNodeFullyStarted() == my_node_id.index();
+  folly::Optional<node_index_t> first_fully_started_node_index =
+      cs->getFirstNodeFullyStarted();
+  return first_fully_started_node_index.has_value() &&
+      first_fully_started_node_index.value() == my_node_id.index();
 }
 
 bool LogsConfigStateMachine::shouldTrim() const {

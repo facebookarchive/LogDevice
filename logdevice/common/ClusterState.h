@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include <folly/Optional.h>
 #include <folly/SharedMutex.h>
 #include <folly/container/F14Map.h>
 
@@ -167,20 +168,22 @@ class ClusterState {
   }
 
   /**
-   * @return Id of the first node seen as alive.
+   * @return Id of the first node seen as alive or none if no node is alive.
    */
-  node_index_t getFirstNodeAlive() const;
+  folly::Optional<node_index_t> getFirstNodeAlive() const;
 
   /**
    * @return Id of the first node seen as fully started. Used to determine which
-   * node should perform some actions such as trim the event log.
+   * node should perform some actions such as trim the event log. If no node is
+   * fully started, it returns none.
    */
-  node_index_t getFirstNodeFullyStarted() const;
+  folly::Optional<node_index_t> getFirstNodeFullyStarted() const;
 
   /**
-   * @return Id of the first node that matches predicate function.
+   * @return Id of the first node that matches predicate function. If no node
+   * satisfied the predicate funcion, it returns none.
    */
-  node_index_t
+  folly::Optional<node_index_t>
   getFirstNodeWithPred(folly::Function<bool(node_index_t)> pred) const;
 
   void setNodeState(node_index_t idx, NodeState state);
