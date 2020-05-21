@@ -1025,9 +1025,10 @@ class Sender : public SenderBase {
   void processSocketsToClose();
 
   /**
-   * Detects and closes Connections that are not actively sending traffic.
+   * Detects and closes connections that are either slow or idle for prolonged
+   * period of time.
    */
-  void closeSlowSockets();
+  void cleanupConnections();
 
   static void onCompletedMessagesAvailable(void* self, short);
 

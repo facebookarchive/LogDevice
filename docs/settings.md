@@ -238,6 +238,7 @@ sidebar_label: Settings
 | connection-retries | the number of TCP connection retries before giving up | 4 |  |
 | enable-dscp-reflection | If enabled, server will use DSCP TypeOfService used by client for communicationoIf disabled, server will use default DSCP value  | true | requires&nbsp;restart, server&nbsp;only |
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
+| idle-connection-keep-alive | How long inactive client-to-server connection will stay open before being shut down automatically. | 1min | client&nbsp;only |
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |
 | incoming-messages-max-bytes-limit | maximum byte limit of unprocessed messages within the system. | 524288000 | requires&nbsp;restart |
 | inline-message-execution | Indicates whether message should be processed right after deserialization. Usually within new worker model all messages are processed after posting them into the work context. This option works only when worker context is run with previous eventloop architecture. | false | requires&nbsp;restart |
@@ -250,6 +251,7 @@ sidebar_label: Settings
 | outbuf-socket-min-kb | Minimum outstanding bytes per socket in kb. Global sender's budget will be ignored if socket's outstanding bytes is less than this value. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | 1 | server&nbsp;only |
 | outbufs-limit-per-peer-type | If enabled, the outbytes-mb limit is split in half between client-to-server and server-to-server connections. If disabled, the limit is shared; in particular, a few misbehaving clients may cause the server to use up all its outbytes-mb and become unable to send to other servers. | true | server&nbsp;only |
 | outbytes-mb | per-thread limit on bytes pending in output evbuffers (in MB) | 512 |  |
+| rate-limit-idle-connection-closed | Max number of idle connections closed in single round of socket healh check. Set to 0 to disable closing of idle connections completely. | 0 | client&nbsp;only |
 | rate-limit-socket-closed | Max number of sockets closed in a socket health check period. | 1 |  |
 | rcvbuf-kb | TCP socket rcvbuf size in KB. Changing this setting on-the-fly will not apply it to existing sockets, only to newly created ones | -1 |  |
 | read-messages | read up to this many incoming messages before returning to libevent | 128 |  |

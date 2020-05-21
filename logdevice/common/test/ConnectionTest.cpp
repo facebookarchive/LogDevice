@@ -274,6 +274,65 @@ TEST_F(ServerConnectionTest, Handshake) {
   EXPECT_TRUE(handshaken());
 }
 
+// Check that last used time gets updated on key events
+TEST_F(ClientConnectionTest, LastUsedUpdatedOnMessages) {
+  std::unique_ptr<folly::IOBuf> hello_buf;
+  ON_CALL(*sock_, connect_(_, _, _, _, _))
+      .WillByDefault(SaveArg<0>(&conn_callback_));
+  ON_CALL(*sock_, good()).WillByDefault(Return(true));
+  EXPECT_CALL(*sock_, writeChain_(_, _, _))
+      .WillOnce(Invoke([this, &hello_buf](folly::AsyncSocket::WriteCallback* cb,
+                                          folly::IOBuf* buf,
+                                          folly::WriteFlags) {
+        wr_callback_ = cb;
+        hello_buf.reset(buf);
+      }));
+  ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
+  EXPECT_EQ(conn_->connect(), 0);
+  conn_callback_->connectSuccess();
+  EXPECT_TRUE(usedSinceLastCheck());
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  receiveAckMessage();
+  EXPECT_TRUE(usedSinceLastCheck());
+  // Send a message.
+  Envelope* envelope = create_message(*conn_);
+  ASSERT_NE(envelope, nullptr);
+  conn_->releaseMessage(*envelope);
+  EXPECT_TRUE(usedSinceLastCheck());
+  // No activity on connection since last check
+  EXPECT_FALSE(usedSinceLastCheck());
+}
+
+// Check that last used time gets updated on key events
+TEST_F(ClientConnectionTest, ListenerKeepConnectionActive) {
+  std::unique_ptr<folly::IOBuf> hello_buf;
+  ON_CALL(*sock_, connect_(_, _, _, _, _))
+      .WillByDefault(SaveArg<0>(&conn_callback_));
+  ON_CALL(*sock_, good()).WillByDefault(Return(true));
+  EXPECT_CALL(*sock_, writeChain_(_, _, _))
+      .WillOnce(Invoke([this, &hello_buf](folly::AsyncSocket::WriteCallback* cb,
+                                          folly::IOBuf* buf,
+                                          folly::WriteFlags) {
+        wr_callback_ = cb;
+        hello_buf.reset(buf);
+      }));
+  ON_CALL(*sock_, setReadCB(_)).WillByDefault(SaveArg<0>(&rd_callback_));
+  EXPECT_EQ(conn_->connect(), 0);
+  conn_callback_->connectSuccess();
+  EXPECT_TRUE(usedSinceLastCheck());
+  ev_base_folly_.loopOnce();
+  writeSuccess();
+  receiveAckMessage();
+  EXPECT_TRUE(usedSinceLastCheck());
+  {
+    EmptySocketCallback cb;
+    conn_->pushOnCloseCallback(cb);
+    EXPECT_TRUE(usedSinceLastCheck());
+  }
+  EXPECT_FALSE(usedSinceLastCheck());
+}
+
 TEST_F(ServerConnectionTest, IncomingMessageBytesLimitHandshake) {
   incoming_message_bytes_limit_.setLimit(0);
   // Simulate HELLO to be received by the server.

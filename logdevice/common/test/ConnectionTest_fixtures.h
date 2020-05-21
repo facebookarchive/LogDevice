@@ -16,6 +16,7 @@
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SSLFetcher.h"
+#include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
@@ -131,6 +132,12 @@ class ConnectionTest : public ::testing::Test {
 
   int getDscp();
 
+  bool usedSinceLastCheck() {
+    bool used = !conn_->isIdleAfter(last_usage_check_time_);
+    last_usage_check_time_ = SteadyTimestamp::now();
+    return used;
+  }
+
   const int client_id_{1};
   const uint16_t max_proto_ = Compatibility::MAX_PROTOCOL_SUPPORTED;
 
@@ -175,6 +182,7 @@ class ConnectionTest : public ::testing::Test {
   folly::AsyncSocket::ReadCallback* rd_callback_;
   bool tamper_checksum_;
   bool socket_closed_{false};
+  SteadyTimestamp last_usage_check_time_{SteadyTimestamp::min()};
 };
 
 class ClientConnectionTest : public ConnectionTest {
@@ -257,6 +265,10 @@ class TestFixedSizeMessage
 
  private:
   TestFixedSizeMessage() {}
+};
+
+struct EmptySocketCallback : public SocketCallback {
+  void operator()(Status /*unused*/, const Address& /*unused*/) override {}
 };
 
 // Various message types we can use for ACK and HELLO messages.

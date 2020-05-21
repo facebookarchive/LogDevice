@@ -438,6 +438,8 @@ STAT_DEFINE(sock_stalled, SUM)
 STAT_DEFINE(sock_app_limited, SUM)
 STAT_DEFINE(sock_receiver_throttled, SUM)
 STAT_DEFINE(sock_network_throttled, SUM)
+// Socket has been inactive for prolonged period of time
+STAT_DEFINE(sock_idle, SUM)
 STAT_DEFINE(slow_socket_detection_time, SUM)
 STAT_DEFINE(sock_health_unknown, SUM)
 STAT_DEFINE(client_connection_close_backlog, SUM)

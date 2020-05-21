@@ -85,6 +85,7 @@ ERROR_CODE(NOTSUPPORTEDLOG          ,   60, "not supported for this log")
 ERROR_CODE(DATALOSS                 ,   61, "data is lost")
 ERROR_CODE(NEVER_CONNECTED          ,   62, "connection never attempted")
 ERROR_CODE(NOTANODE                 ,   63, "peer with given client Id is not a logdevice node/server")
+ERROR_CODE(IDLE                     ,   64, "Connection closed after being idle for too long")
 // Errors about invalid entities
 
 ERROR_CODE(INVALID_PARAM            ,  100, "invalid parameter")

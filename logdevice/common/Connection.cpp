@@ -113,7 +113,8 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       num_bytes_received_(0),
       end_stream_rewind_event_(deps_->getEvBase()),
       retry_receipt_of_message_(deps_->getEvBase()),
-      sched_write_chain_(deps_->getEvBase()) {
+      sched_write_chain_(deps_->getEvBase()),
+      last_used_time_(SteadyTimestamp::now()) {
   conntype_ = conntype;
 
   if (!peer_sockaddr.valid()) {
@@ -417,6 +418,7 @@ int Connection::connect() {
     return rv;
   }
 
+  last_used_time_ = SteadyTimestamp::now();
   auto fut = asyncConnect();
 
   fd_ = proto_handler_->sock()->getNetworkSocket().toFd();
@@ -578,6 +580,16 @@ void Connection::setSoMark(uint32_t so_mark) {
   }
 }
 
+bool Connection::isIdleAfter(SteadyTimestamp watermark) {
+  // If connection has any on_close listeners set we consider it as "not idle"
+  // assuming that active listener indicates waiting for some data to arrive
+  // through this connection in the future.
+  if (!impl_->on_close_.empty()) {
+    return false;
+  }
+  return last_used_time_ <= watermark;
+}
+
 void Connection::close(Status reason) {
   auto g = folly::makeGuard(deps_->setupContextGuard());
   ld_debug("Closing Socket %s, reason %s ",
@@ -598,14 +610,15 @@ void Connection::close(Status reason) {
 
   *conn_closed_ = true;
 
-  RATELIMIT_LEVEL((reason == E::CONNFAILED || reason == E::TIMEDOUT)
-                      ? dbg::Level::DEBUG
-                      : dbg::Level::INFO,
-                  std::chrono::seconds(10),
-                  10,
-                  "Closing socket %s. Reason: %s",
-                  conn_description_.c_str(),
-                  error_description(reason));
+  RATELIMIT_LEVEL(
+      (reason == E::CONNFAILED || reason == E::TIMEDOUT || reason == E::IDLE)
+          ? dbg::Level::DEBUG
+          : dbg::Level::INFO,
+      std::chrono::seconds(10),
+      10,
+      "Closing socket %s. Reason: %s",
+      conn_description_.c_str(),
+      error_description(reason));
 
   if (getBytesPending() > 0) {
     ld_debug("Socket %s had %zu bytes pending when closed.",
@@ -618,7 +631,11 @@ void Connection::close(Status reason) {
 
   endStreamRewind();
 
-  if (connect_throttle_ && (peer_shuttingdown_ || reason != E::SHUTDOWN)) {
+  bool connection_failed = reason != E::SHUTDOWN && reason != E::IDLE;
+  // Mark down the server only if
+  // 1) connection has been broken or
+  // 2) the remote server reported itself as being shutdown
+  if (connect_throttle_ && (peer_shuttingdown_ || connection_failed)) {
     if (peer_shuttingdown_ && !peer_name_.isClientAddress()) {
       reason = E::SHUTDOWN;
     }
@@ -1015,6 +1032,8 @@ void Connection::send(std::unique_ptr<Envelope> envelope) {
 
 Envelope* FOLLY_NULLABLE
 Connection::registerMessage(std::unique_ptr<Message>&& msg) {
+  last_used_time_ = SteadyTimestamp::now();
+
   if (preSendCheck(*msg) != 0) {
     return nullptr;
   }
@@ -1410,6 +1429,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
 
   ++num_messages_received_;
   num_bytes_received_ += ph.len;
+  last_used_time_ = SteadyTimestamp::now();
 
   // 1. compute and verify checksum in header.
 

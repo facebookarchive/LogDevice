@@ -659,6 +659,13 @@ class Connection : public TrafficShappingSocket {
   int dispatchMessageBody(ProtocolHeader header,
                           std::unique_ptr<folly::IOBuf> msg_buffer);
 
+  /**
+   * Checks whether connection has been idle for all time since given timestamp.
+   * If connection sent/received any messages after this point or if it has
+   * active subscription then it is not treated as idle.
+   **/
+  bool isIdleAfter(SteadyTimestamp watermark);
+
  protected:
   void transitionToConnected();
   /**
@@ -1106,6 +1113,13 @@ class Connection : public TrafficShappingSocket {
 
   // Used to note down delays in writing into the asyncsocket.
   SteadyTimestamp sched_start_time_;
+
+  // Momemnt of last activity happened on this connection such as
+  // - connection created
+  // - message sent
+  // - message receieved
+  // Used to find and proactevely close idle connections
+  SteadyTimestamp last_used_time_;
 
   /**
    * For Testing only!

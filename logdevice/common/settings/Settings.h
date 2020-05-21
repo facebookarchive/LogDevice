@@ -218,6 +218,12 @@ struct Settings : public SettingsBundle {
   // expected value.
   size_t rate_limit_socket_closed;
 
+  // How long client will keep inactive connection to the server. If zero it
+  // will not attempt to close automatically.
+  std::chrono::milliseconds idle_connection_keep_alive;
+  // Limits the number of idle connections closed during single check
+  size_t rate_limit_idle_connection_closed;
+
   // How many kilobytes of RECORD messages the delivery code tries to push
   // to the client at once.  If -1, use the TCP sendbuf size.
   int output_max_records_kb;

@@ -93,7 +93,19 @@ class SenderImpl {
 
   ClientIdxAllocator* client_id_allocator_;
 
-  Timer detect_slow_socket_timer_;
+  // Starts cleanup_connections_timer_ if has not been started yet
+  void ensureCleanupTimerActive(Sender& sender) {
+    if (!cleanup_connections_timer_.isActive()) {
+      auto prev_context = Worker::packRunContext();
+      cleanup_connections_timer_.setCallback(
+          [&sender]() { sender.cleanupConnections(); });
+      cleanup_connections_timer_.activate(
+          Worker::settings().socket_health_check_period);
+      Worker::unpackRunContext(prev_context);
+    }
+  }
+
+  Timer cleanup_connections_timer_;
 };
 
 bool SenderProxy::canSendToImpl(const Address& addr,
@@ -175,15 +187,7 @@ int Sender::addClient(int fd,
   }
 
   eraseDisconnectedClients();
-  // Activate slow_socket_timer if not active already.
-  if (!impl_->detect_slow_socket_timer_.isActive()) {
-    auto prev_context = Worker::packRunContext();
-    impl_->detect_slow_socket_timer_.setCallback(
-        [this]() { closeSlowSockets(); });
-    impl_->detect_slow_socket_timer_.activate(
-        Worker::settings().socket_health_check_period);
-    Worker::unpackRunContext(prev_context);
-  }
+  impl_->ensureCleanupTimerActive(*this);
 
   auto w = Worker::onThisThread();
   ClientID client_name(
@@ -995,15 +999,7 @@ Connection* Sender::initServerConnection(NodeID nid, SocketType sock_type) {
   }
 
   if (it == impl_->server_conns_.end()) {
-    // Activate slow_socket_timer if not active already.
-    if (!impl_->detect_slow_socket_timer_.isActive()) {
-      auto prev_context = Worker::packRunContext();
-      impl_->detect_slow_socket_timer_.setCallback(
-          [this]() { closeSlowSockets(); });
-      impl_->detect_slow_socket_timer_.activate(
-          Worker::settings().max_time_to_allow_socket_drain);
-      Worker::unpackRunContext(prev_context);
-    }
+    impl_->ensureCleanupTimerActive(*this);
     // Don't try to connect if we expect a generation and it's different than
     // what is in the config.
     if (nid.generation() == 0) {
@@ -1620,33 +1616,51 @@ void Sender::forAllClientConnections(std::function<void(Connection&)> fn) {
   }
 }
 
-void Sender::closeSlowSockets() {
+void Sender::cleanupConnections() {
   size_t num_sockets = 0, sockets_closed = 0;
   size_t sock_stalled = 0, sock_active = 0;
   size_t reason_net_slow = 0, reason_recv_slow = 0, app_limited = 0;
-  size_t max_closures_allowed = settings_->rate_limit_socket_closed;
-  auto startTime = SteadyTimestamp::now();
+  size_t max_slow_closures = settings_->rate_limit_socket_closed;
+  auto start_time = SteadyTimestamp::now();
   auto close_if_slow = [&](Connection& conn) {
-    ++num_sockets;
     auto status = conn.checkSocketHealth();
-    bool close_socket = status == SocketDrainStatusType::STALLED ||
+    bool is_slow = status == SocketDrainStatusType::STALLED ||
         (status == SocketDrainStatusType::NET_SLOW &&
-         reason_net_slow < max_closures_allowed);
+         reason_net_slow < max_slow_closures);
     sock_active += status == SocketDrainStatusType::ACTIVE ? 1 : 0;
     app_limited += status == SocketDrainStatusType::IDLE ? 1 : 0;
     sock_stalled += status == SocketDrainStatusType::STALLED ? 1 : 0;
     reason_recv_slow += status == SocketDrainStatusType::RECV_SLOW ? 1 : 0;
     reason_net_slow += status == SocketDrainStatusType::NET_SLOW ? 1 : 0;
-    if (close_socket) {
+
+    if (is_slow) {
       ++sockets_closed;
       conn.close(E::TIMEDOUT);
+    }
+  };
+
+  bool is_client = !settings_->server;
+  size_t idle_connections_closed = 0;
+  size_t max_idle_closures = settings_->rate_limit_idle_connection_closed;
+  auto watermark = start_time - settings_->idle_connection_keep_alive;
+  auto close_if_idle = [&](Connection& conn) {
+    if (conn.isIdleAfter(watermark)) {
+      ++idle_connections_closed;
+      ++sockets_closed;
+      conn.close(E::IDLE);
     }
   };
 
   for (auto& entry : impl_->server_conns_) {
     Connection* conn = entry.second.get();
     if (conn) {
+      ++num_sockets;
       close_if_slow(*conn);
+      // Only close client to server connections
+      if (is_client && idle_connections_closed < max_idle_closures &&
+          !conn->isClosed()) {
+        close_if_idle(*conn);
+      }
     } else {
       RATELIMIT_CRITICAL(
           std::chrono::seconds(10),
@@ -1658,6 +1672,7 @@ void Sender::closeSlowSockets() {
   for (auto& entry : impl_->client_conns_) {
     Connection* conn = entry.second.get();
     if (conn) {
+      ++num_sockets;
       close_if_slow(*conn);
     } else {
       RATELIMIT_CRITICAL(
@@ -1671,11 +1686,12 @@ void Sender::closeSlowSockets() {
     RATELIMIT_WARNING(
         std::chrono::seconds(10),
         10,
-        "Sender closed %lu Connection s of which %lu had slow network , "
-        "Found %lu Connection  with slow receiver",
+        "Sender closed %lu connections of which %lu had slow network"
+        ", %lu had slow receiver, %lu connections were idle",
         sockets_closed,
         reason_net_slow,
-        reason_recv_slow);
+        reason_recv_slow,
+        idle_connections_closed);
   }
   auto socket_health_unknown = num_sockets - sock_active - app_limited -
       sock_stalled - reason_recv_slow - reason_net_slow;
@@ -1686,9 +1702,10 @@ void Sender::closeSlowSockets() {
   STAT_SET(Worker::stats(), sock_app_limited, app_limited);
   STAT_SET(Worker::stats(), sock_receiver_throttled, reason_recv_slow);
   STAT_SET(Worker::stats(), sock_network_throttled, reason_net_slow);
-  auto diff = SteadyTimestamp::now() - startTime;
+  STAT_SET(Worker::stats(), sock_idle, idle_connections_closed);
+  auto diff = SteadyTimestamp::now() - start_time;
   STAT_ADD(Worker::stats(), slow_socket_detection_time, to_msec(diff).count());
-  impl_->detect_slow_socket_timer_.activate(
+  impl_->cleanup_connections_timer_.activate(
       Worker::settings().socket_health_check_period);
 }
 }} // namespace facebook::logdevice

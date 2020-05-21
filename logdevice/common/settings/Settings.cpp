@@ -621,6 +621,22 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Max number of sockets closed in a socket health check period.",
        SERVER | CLIENT,
        SettingsCategory::Network);
+  init("idle-connection-keep-alive",
+       &idle_connection_keep_alive,
+       "1min",
+       validate_positive<ssize_t>(),
+       "How long inactive client-to-server connection will stay open before "
+       "being shut down automatically.",
+       CLIENT,
+       SettingsCategory::Network);
+  init("rate-limit-idle-connection-closed",
+       &rate_limit_idle_connection_closed,
+       "0",
+       validate_nonnegative<ssize_t>(),
+       "Max number of idle connections closed in single round of socket healh "
+       "check. Set to 0 to disable closing of idle connections completely.",
+       CLIENT,
+       SettingsCategory::Network);
   init("max-cached-digest-record-queued-kb",
        &max_cached_digest_record_queued_kb,
        "256",
