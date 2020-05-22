@@ -49,6 +49,7 @@ ReadUnavailableMapping = Mapping[LocationScope, Mapping[str, Set[ShardID]]]
 @command
 @argument(
     "shards",
+    # pyre-fixme[16]: Optional type has no attribute `__getitem__`.
     type=Optional[List[str]],
     description="List of strings in the format NX[:SY] where X is the "
     "node id and Y is the shard id",
@@ -69,6 +70,7 @@ ReadUnavailableMapping = Mapping[LocationScope, Mapping[str, Set[ShardID]]]
 )
 @argument(
     "safety_margin",
+    # pyre-fixme[16]: `Mapping` has no attribute `__getitem__`.
     type=Mapping[str, int],
     description="Extra domains which should be available. Dictionary"
     " format <scope>:<replication> "
@@ -408,7 +410,6 @@ def impact_on_log_string(
 
     # Maps LocationScope to the unique locations of read available domains.
     read_unavailable: ReadUnavailableMapping
-    # pyre-ignore (T47856310)
     read_unavailable = defaultdict(lambda: defaultdict(lambda: set()))
 
     n_writeable = 0

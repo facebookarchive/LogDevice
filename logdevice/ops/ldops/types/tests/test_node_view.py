@@ -114,11 +114,7 @@ class TestNodeView(TestCase):
             assert from_nc.address is not None
 
             self.assertEqual(nv.thrift_address.port, 6440)
-            self.assertEqual(
-                # pyre-fixme[16]: `None` has no attribute `compressed`.
-                nv_address.compressed,
-                from_nc.address.compressed,
-            )
+            self.assertEqual(nv_address.compressed, from_nc.address.compressed)
 
         self.assertEqual(
             nv.node_id,
