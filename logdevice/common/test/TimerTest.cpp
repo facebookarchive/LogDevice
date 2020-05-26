@@ -13,6 +13,7 @@
 #include <folly/MPMCQueue.h>
 #include <folly/futures/Future.h>
 #include <folly/futures/Promise.h>
+#include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Processor.h"

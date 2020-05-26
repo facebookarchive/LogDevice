@@ -12,6 +12,7 @@
 #include <mutex>
 
 #include <folly/futures/Future.h>
+#include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
 using namespace facebook::logdevice;

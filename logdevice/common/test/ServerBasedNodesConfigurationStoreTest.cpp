@@ -8,6 +8,7 @@
 
 #include "logdevice/common/configuration/nodes/ServerBasedNodesConfigurationStore.h"
 
+#include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/ConfigurationFetchRequest.h"

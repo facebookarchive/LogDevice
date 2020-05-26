@@ -10,6 +10,8 @@
 
 #include <tuple>
 
+#include <folly/synchronization/Baton.h>
+
 #include "logdevice/common/RetryHandler.h"
 
 namespace facebook { namespace logdevice {
