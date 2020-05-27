@@ -138,6 +138,7 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
   std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>
       cluster_maintenance_state_machine;
 
+  uint64_t shutdown_duration_ms = 0;
   shutdown_server(admin_handle,
                   connection_listener,
                   gossip_listener,
@@ -157,6 +158,7 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
                   rebuilding_supervisor,
                   unreleased_record_detector,
                   cluster_maintenance_state_machine,
-                  false);
+                  false,
+                  shutdown_duration_ms);
 }
 }} // namespace facebook::logdevice

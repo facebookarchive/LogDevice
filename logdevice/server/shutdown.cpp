@@ -150,7 +150,8 @@ void shutdown_server(
     std::shared_ptr<UnreleasedRecordDetector>& unreleased_record_detector,
     std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>&
         cluster_maintenance_state_machine,
-    bool fast_shutdown) {
+    bool fast_shutdown,
+    uint64_t& shutdown_duration_ms) {
   auto t1 = steady_clock::now();
 
   // Stop the Admin API Server
@@ -369,6 +370,7 @@ void shutdown_server(
       t.join();
     }
   }
+
   if (sharded_store) {
     ld_info("Destroying local log store");
     sharded_store.reset();
@@ -377,8 +379,7 @@ void shutdown_server(
   processor.reset();
 
   auto t2 = steady_clock::now();
-  int64_t duration = duration_cast<milliseconds>(t2 - t1).count();
-  ld_info("Shutdown took %ld ms", duration);
+  shutdown_duration_ms = duration_cast<milliseconds>(t2 - t1).count();
 }
 
 }} // namespace facebook::logdevice

@@ -12,6 +12,8 @@
 #define STAT_DEFINE(...)
 #endif
 
+// MS we took to shutdown server
+STAT_DEFINE(shutdown_time_ms, SUM)
 // Total number of read requests
 STAT_DEFINE(read_requests, SUM)
 // Number of read requests that got kicked to storage threads

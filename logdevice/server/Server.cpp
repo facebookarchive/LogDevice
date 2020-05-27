@@ -1654,6 +1654,8 @@ void Server::gracefulShutdown() {
   if (is_shut_down_.exchange(true)) {
     return;
   }
+
+  uint64_t shutdown_duration_ms = 0;
   shutdown_server(admin_server_handle_,
                   connection_listener_,
                   gossip_listener_,
@@ -1673,7 +1675,10 @@ void Server::gracefulShutdown() {
                   rebuilding_supervisor_,
                   unreleased_record_detector_,
                   cluster_maintenance_state_machine_,
-                  params_->isFastShutdownEnabled());
+                  params_->isFastShutdownEnabled(),
+                  shutdown_duration_ms);
+  ld_info("Shutdown took %ld ms", shutdown_duration_ms);
+  STAT_ADD(params_->getStats(), shutdown_time_ms, shutdown_duration_ms);
 }
 
 void Server::shutdownWithTimeout() {

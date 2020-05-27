@@ -76,7 +76,8 @@ void shutdown_server(
     std::shared_ptr<UnreleasedRecordDetector>& unreleased_record_detector,
     std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>&
         cluster_maintenance_state_machine,
-    bool fast_shutdown);
+    bool fast_shutdown,
+    uint64_t& shutdown_duration_ms);
 
 /**
  * Helper function to post a request with a semaphore on workers with the
