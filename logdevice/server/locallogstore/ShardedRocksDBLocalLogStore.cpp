@@ -206,6 +206,7 @@ void ShardedRocksDBLocalLogStore::init(
           std::count(
               disabled_shards_.begin(), disabled_shards_.end(), shard_idx) == 0;
 
+      auto tstart = std::chrono::steady_clock::now();
       if (should_open_shard) {
         shard_store = factory.create(shard_idx,
                                      nshards_,
@@ -213,14 +214,24 @@ void ShardedRocksDBLocalLogStore::init(
                                      io_tracing_by_shard_[shard_idx].get());
       }
 
+      auto tend = std::chrono::steady_clock::now();
+      uint64_t open_duration_ms =
+          std::chrono::duration_cast<std::chrono::milliseconds>(tend - tstart)
+              .count();
       if (shard_store) {
-        ld_info("Opened RocksDB instance at %s", shard_path.c_str());
+        PER_SHARD_STAT_SET(
+            stats_, rocksdb_open_duration_ms, shard_idx, open_duration_ms);
+        ld_info("Opened RocksDB instance at %s in %ld ms",
+                shard_path.c_str(),
+                open_duration_ms);
         ld_check(dynamic_cast<RocksDBLogStoreBase*>(shard_store.get()) !=
                  nullptr);
       } else {
         PER_SHARD_STAT_INCR(stats_, failing_log_stores, shard_idx);
         shard_store = std::make_unique<FailingLocalLogStore>();
-        ld_info("Opened FailingLocalLogStore instance for shard %d", shard_idx);
+        ld_info("Opened FailingLocalLogStore instance for shard %d in %ld ms",
+                shard_idx,
+                open_duration_ms);
       }
 
       return std::make_pair(std::move(shard_store), std::move(filter_factory));
