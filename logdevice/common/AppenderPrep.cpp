@@ -142,6 +142,16 @@ void AppenderPrep::execute(std::unique_ptr<Appender> appender) {
     return;
   }
 
+  if (!isClientConnected()) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   10,
+                   "APPEND Request for log %lu failed because "
+                   "connection creating this append is no longer there",
+                   header_.logid.val_);
+    // Intentionally not sending a reply here since connection is lost
+    return;
+  }
+
   const PrincipalIdentity* principal = getPrincipal();
   if (principal == nullptr) {
     ld_critical("APPEND Request from %s for log %lu failed because "
@@ -1007,6 +1017,10 @@ const Settings& AppenderPrep::getSettings() const {
 
 const PrincipalIdentity* AppenderPrep::getPrincipal() {
   return Worker::onThisThread()->sender().getPrincipal(Address(from_));
+}
+
+bool AppenderPrep::isClientConnected() const {
+  return !Worker::onThisThread()->sender().isClosed(Address(from_));
 }
 
 void AppenderPrep::isAllowed(

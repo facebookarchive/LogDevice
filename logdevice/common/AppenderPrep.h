@@ -77,7 +77,7 @@ class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
     return header_.seen;
   }
 
- protected: // can be overridden in tests
+ private:
   // Returns a pointer to the Sequencer object for a given log, if one exists.
   // See AllSequencers::findSequencer() for a description of err codes.
   virtual std::shared_ptr<Sequencer> findSequencer(logid_t log_id) const;
@@ -151,6 +151,9 @@ class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
   // proxy for sender::getPrincipal()
   virtual const PrincipalIdentity* getPrincipal();
 
+  // Returns whether the client is still connected
+  virtual bool isClientConnected() const;
+
   // Calls the PermissionChecker owned by the processor to determine if the
   // client is allowed to perform an append to the specified logid
   virtual void isAllowed(std::shared_ptr<PermissionChecker> permission_checker,
@@ -162,7 +165,6 @@ class AppenderPrep : public std::enable_shared_from_this<AppenderPrep> {
   // Returns processor's sequencer locator
   virtual SequencerLocator& getSequencerLocator();
 
- private:
   // Write stream request id, if the append belongs to a write stream.
   write_stream_request_id_t write_stream_rqid_ =
       WRITE_STREAM_REQUEST_ID_INVALID;

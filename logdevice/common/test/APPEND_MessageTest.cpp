@@ -216,6 +216,7 @@ class MockAppenderPrep : public AppenderPrep {
   RateLimiter* limiter_{nullptr};
   bool can_activate_{true};
   NodeID my_node_id_;
+  bool is_client_connected_{true};
   // if set, next call to runAppender() returns this value instead of proxying
   // it to Sequencer
   folly::Optional<Status> next_status_;
@@ -336,6 +337,9 @@ class MockAppenderPrep : public AppenderPrep {
   }
   const PrincipalIdentity* getPrincipal() override {
     return &owner_->principal_;
+  }
+  bool isClientConnected() const {
+    return is_client_connected_;
   }
   void isAllowed(std::shared_ptr<PermissionChecker> permission_checker,
                  const PrincipalIdentity& principal,
@@ -540,6 +544,19 @@ TEST_F(APPEND_MessageTest, Basic) {
     // N2 is boycotted
     prep->execute(std::move(a));
     ASSERT_RUNNING(prep, {raw});
+  }
+  {
+    std::unique_ptr<Appender> a(new MockAppender);
+    auto prep = create(log1);
+    prep->my_node_id_ = N1;
+    prep->setSequencer(log1, N1);
+    prep->setAlive({N1, N2});
+    prep->is_client_connected_ = false;
+
+    // Since client is disconnected, we do not expect
+    // a running appender
+    prep->execute(std::move(a));
+    ASSERT_EQ(0, prep->running_appenders_.size());
   }
 }
 
