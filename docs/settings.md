@@ -39,6 +39,7 @@ sidebar_label: Settings
 | sequencer-batching-passthru-threshold | Sequencer batching (if used) will pass through any appends with payload size over this threshold (if positive).  This saves us a compression round trip when a large batch comes in from BufferedWriter and the benefit of batching and recompressing would be small. | -1 | server&nbsp;only |
 | sequencer-batching-size-trigger | Sequencer batching (if used) flushes buffered appends for a log when the total amount of buffered uncompressed data reaches this many bytes (if positive). When enabled, this gets applied to the first new batch. This setting is only used when the log group doesn't override it | -1 | server&nbsp;only |
 | sequencer-batching-time-trigger | Sequencer batching (if used) flushes buffered appends for a log when the oldest buffered append is this old. When enabled, this gets applied to the first new batch. This setting is only used when the log group doesn't override it | 1s | server&nbsp;only |
+| socket-batching-time-trigger | Socket batching allows us to batch data before flushing it to the socket to save CPU. It increases the amount of memory consumed. And introduces additional latency when sending messages. | 0s |  |
 
 ## Configuration
 |   Name    |   Description   |  Default  |   Notes   |

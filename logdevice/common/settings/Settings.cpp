@@ -2329,6 +2329,16 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "group doesn't override it",
        SERVER,
        SettingsCategory::Batching);
+  init("socket-batching-time-trigger",
+       &socket_batching_time_trigger,
+       "0s",
+       nullptr, // no validation
+       "Socket batching allows us to batch data before flushing it to the "
+       "socket to save CPU. It increases the amount of "
+       "memory consumed. And introduces additional latency when sending "
+       "messages.",
+       SERVER | CLIENT,
+       SettingsCategory::Batching);
   init("sequencer-batching-time-trigger",
        &sequencer_batching_time_trigger,
        "1s",

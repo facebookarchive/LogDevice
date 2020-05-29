@@ -818,7 +818,8 @@ Connection::sendBuffer(std::unique_ptr<folly::IOBuf>&& io_buf) {
       sendChain_ = std::move(io_buf);
       ld_check(!sched_write_chain_.isScheduled());
       sched_write_chain_.attachCallback([this]() { scheduleWriteChain(); });
-      sched_write_chain_.scheduleTimeout(0);
+      sched_write_chain_.scheduleTimeout(
+          getSettings().socket_batching_time_trigger);
       sched_start_time_ = SteadyTimestamp::now();
     }
   }

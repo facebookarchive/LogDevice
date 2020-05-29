@@ -1016,6 +1016,8 @@ struct Settings : public SettingsBundle {
   // buffered append is this old.  See BufferedWriter::Options.
   std::chrono::milliseconds sequencer_batching_time_trigger;
 
+  std::chrono::milliseconds socket_batching_time_trigger;
+
   // DEPRECATED! Corresponding log attribute should be used instead.
   // Sequencer batching flushes buffered appends for a log when the total
   // amount of buffered uncompressed data reaches this many bytes (if
