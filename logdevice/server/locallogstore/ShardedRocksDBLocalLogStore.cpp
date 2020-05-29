@@ -318,8 +318,9 @@ bool ShardedRocksDBLocalLogStore::wipe(
         fs::remove_all(dir_it->path());
       }
     } catch (const fs::filesystem_error& e) {
-      ld_critical("Failed to wipe/validate %s. Failing safe and aborting",
-                  shard_path.string().c_str());
+      ld_critical("Failed to wipe/validate %s: %s. Failing safe and aborting",
+                  shard_path.string().c_str(),
+                  e.what());
       return false;
     }
   }
