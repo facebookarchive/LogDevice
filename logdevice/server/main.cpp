@@ -95,6 +95,13 @@ static void coredump_signal_handler(int sig) {
   handle_fatal_signal(sig);
 }
 
+// The default for SIGHUP is to terminate the process.
+// DO NOT REMOVE it can cause large scale outage if SIGHUP is sent by
+// tooling to multiple nodes at once
+static void sighup_signal_handler(int /* sig */) {
+  ld_info("Caught SIGHUP");
+}
+
 static void setup_signal_handler(int signum, void (*handler)(int)) {
   struct sigaction sa;
   sa.sa_handler = handler;
@@ -459,6 +466,8 @@ int main(int argc, const char** argv) {
   setup_signal_handler(SIGINT, shutdown_signal_handler);
   setup_signal_handler(SIGTERM, shutdown_signal_handler);
   setup_signal_handler(SIGUSR1, watchdog_stall_handler);
+  setup_signal_handler(SIGHUP, sighup_signal_handler);
+
   for (;;) {
     main_thread_sem.wait();
     if (shutdown_requested.load()) {
