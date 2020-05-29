@@ -32,8 +32,8 @@ class AdminCommandClient {
     enum class ConnectionType { PLAIN, SSL };
     Request(folly::SocketAddress addr,
             std::string req,
-            ConnectionType type = ConnectionType::PLAIN)
-        : sockaddr(addr), request(req) {}
+            ConnectionType conn_type = ConnectionType::PLAIN)
+        : sockaddr(addr), request(req), type(conn_type) {}
 
     folly::SocketAddress sockaddr;
     std::string request;
