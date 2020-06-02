@@ -50,6 +50,8 @@ class AsyncCheckpointedReaderImpl : public AsyncCheckpointedReader {
 
   void setMonitoringTier(MonitoringTier tier) override;
 
+  void addMonitoringTag(std::string) override;
+
   void withoutPayload() override;
 
   void forceNoSingleCopyDelivery() override;

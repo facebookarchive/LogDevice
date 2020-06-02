@@ -77,7 +77,6 @@ class ClientReadersFlowTracer : public SampledTracer {
 
   ClientReadersFlowTracer(std::shared_ptr<TraceLogger> logger,
                           ClientReadStream* owner,
-                          MonitoringTier tier = MonitoringTier::MEDIUM_PRI,
                           bool push_samples = true,
                           bool ignore_overload = false);
   virtual ~ClientReadersFlowTracer();
@@ -137,7 +136,6 @@ class ClientReadersFlowTracer : public SampledTracer {
   bool should_track_{true};
 
   State last_reported_state_{State::HEALTHY};
-  MonitoringTier monitoring_tier_{MonitoringTier::MEDIUM_PRI};
 
   TimePoint last_time_stuck_{TimePoint::max()};
   TimePoint last_time_lagging_{TimePoint::max()};

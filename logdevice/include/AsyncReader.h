@@ -200,6 +200,15 @@ class AsyncReader {
   virtual void setMonitoringTier(MonitoringTier tier) = 0;
 
   /**
+   * Adds a monitoring tag to this reader. Monitoring tags are used to help
+   * identify readers that belong to a particular user, use case, function, etc
+   * for monitoring purposes.
+   *
+   * Only affects subsequent startReading() calls.
+   */
+  virtual void addMonitoringTag(std::string tag) = 0;
+
+  /**
    * If called, data records read by this AsyncReader will not include payloads.
    *
    * This makes reading more efficient when payloads are not needed (they won't

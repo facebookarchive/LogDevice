@@ -291,6 +291,7 @@ read_stream_id_t ReplicatedStateMachine<T, D>::createBasicReadStream(
       nullptr,
       nullptr,
       MonitoringTier::MEDIUM_PRI,
+      std::set<std::string>{},
       SCDCopysetReordering(processor->settings()->rsm_scd_copyset_reordering));
 
   // SCD adds complexity and may incur latency on storage node failures. Since

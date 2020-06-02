@@ -169,8 +169,18 @@ class Reader {
    * allowing for different alarming, SLAs, etc for each.
    *
    * Only affects subsequent startReading() calls.
+   *
+   * ** DEPRECATED, use addMonitoringTag instead **
    */
   virtual void setMonitoringTier(MonitoringTier tier) = 0;
+
+  /**
+   * Adds a tag to this reader. Tags are a generic mechanism that can help
+   * identify readers that belong to a particular user, use case, function, etc.
+   *
+   * Only affects subsequent startReading() calls.
+   */
+  virtual void addMonitoringTag(std::string tag) = 0;
 
   /**
    * If called, data records read by this Reader will not include payloads.

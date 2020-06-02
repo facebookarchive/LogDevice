@@ -325,7 +325,8 @@ int ReaderImpl::startReadingImpl(logid_t log_id,
       processor_->config_,
       bridge_.get(),
       attrs,
-      monitoring_tier_);
+      monitoring_tier_,
+      monitoring_tags_);
 
   if (without_payload_) {
     read_stream->setNoPayload();
@@ -629,6 +630,10 @@ void ReaderImpl::read_handleData(
 
 void ReaderImpl::setMonitoringTier(MonitoringTier tier) {
   monitoring_tier_ = tier;
+}
+
+void ReaderImpl::addMonitoringTag(std::string tag) {
+  monitoring_tags_.emplace(std::move(tag));
 }
 
 void ReaderImpl::read_handleGap(QueueEntry& entry,

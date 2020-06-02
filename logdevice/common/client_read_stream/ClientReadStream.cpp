@@ -109,6 +109,7 @@ ClientReadStream::ClientReadStream(
     ReaderBridge* reader,
     const ReadStreamAttributes* attrs,
     MonitoringTier tier,
+    const std::set<std::string>& monitoring_tags,
     folly::Optional<SCDCopysetReordering> scd_copyset_reordering)
     : id_(id),
       log_id_(log_id),
@@ -127,7 +128,7 @@ ClientReadStream::ClientReadStream(
       last_epoch_with_metadata_(EPOCH_INVALID),
       gap_end_outside_window_(LSN_INVALID),
       trim_point_(LSN_INVALID),
-      monitoring_tier_(tier),
+      monitoring_tags_(monitoring_tags.begin(), monitoring_tags.end()),
       reader_(reader),
       coordinated_proto_(Compatibility::MAX_PROTOCOL_SUPPORTED),
       window_update_pending_(false),
@@ -138,6 +139,8 @@ ClientReadStream::ClientReadStream(
   if (attrs != nullptr) {
     attrs_ = *attrs;
   }
+  monitoring_tags_.emplace_back(toString(tier));
+
   calcWindowHigh();
   calcNextLSNToSlideWindow();
   updateServerWindow();
@@ -462,7 +465,7 @@ void ClientReadStream::start() {
                    // SyncSequencerRequest.
   ) {
     readers_flow_tracer_ = std::make_unique<ClientReadersFlowTracer>(
-        worker_->getTraceLogger(), this, monitoring_tier_);
+        worker_->getTraceLogger(), this);
   }
 
   auto gap_grace_period = deps_->computeGapGracePeriod();
@@ -489,8 +492,7 @@ void ClientReadStream::start() {
   // The first stat counts read streams that are alive, second one counts
   // read stream creation events (i.e. it's not decremented when
   // ClientReadStream is destroyed).
-  MONITORING_TIER_STAT_INCR(
-      Worker::stats(), monitoring_tier_, num_read_streams);
+  TAGGED_STAT_INCR(Worker::stats(), monitoring_tags_, num_read_streams);
   WORKER_STAT_INCR(client_read_streams_created);
 
   // getLogByIDAsync might be synchronously called for LocalLogsConfig and
@@ -3851,8 +3853,7 @@ void ClientReadStream::updateLastReleased(lsn_t last_released_lsn) {
 
 ClientReadStream::~ClientReadStream() {
   if (started_) {
-    MONITORING_TIER_STAT_DECR(
-        Worker::stats(), monitoring_tier_, num_read_streams);
+    TAGGED_STAT_DECR(Worker::stats(), monitoring_tags_, num_read_streams);
   }
 
   // Not safe to destroy while executing a callback

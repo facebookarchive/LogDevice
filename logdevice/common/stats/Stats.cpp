@@ -150,17 +150,17 @@ void PerTrafficClassStats::reset() {
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
 }
 
-void PerMonitoringTierStats::aggregate(PerMonitoringTierStats const& other,
-                                       StatsAggOptional agg_override) {
+void PerMonitoringTagStats::aggregate(PerMonitoringTagStats const& other,
+                                      StatsAggOptional agg_override) {
 #define STAT_DEFINE(name, agg) \
   aggregateStat(StatsAgg::agg, agg_override, name, other.name);
-#include "logdevice/common/stats/per_monitoring_tier_stats.inc" // nolint
+#include "logdevice/common/stats/per_monitoring_tag_stats.inc" // nolint
 }
 
-void PerMonitoringTierStats::reset() {
+void PerMonitoringTagStats::reset() {
 #define RESETTING_STATS
 #define STAT_DEFINE(name, _) name = {};
-#include "logdevice/common/stats/per_monitoring_tier_stats.inc" // nolint
+#include "logdevice/common/stats/per_monitoring_tag_stats.inc" // nolint
 }
 
 PerShapingPriorityStats::PerShapingPriorityStats()
@@ -420,11 +420,15 @@ void Stats::aggregateCompoundStats(Stats const& other,
         other.per_traffic_class_stats[i], agg_override);
   }
 
-  // per_monitoring_tier_stats
-  for (int i = 0; i < per_monitoring_tier_stats.size(); ++i) {
-    per_monitoring_tier_stats[i].aggregate(
-        other.per_monitoring_tier_stats[i], agg_override);
-  }
+  // per_monitoring_tag_stats
+  per_monitoring_tag_stats.withWLock(
+      [&agg_override,
+       other_copy = other.synchronizedCopy(&Stats::per_monitoring_tag_stats)](
+          auto& stats) {
+        for (const auto& [tag, other_stats] : other_copy) {
+          stats[tag].aggregate(other_stats, agg_override);
+        }
+      });
 
   for (int i = 0; i < per_flow_group_stats.size(); ++i) {
     per_flow_group_stats[i].aggregate(
@@ -538,9 +542,7 @@ void Stats::reset() {
         tcs.reset();
       }
 
-      for (auto& pmts : per_monitoring_tier_stats) {
-        pmts.reset();
-      }
+      per_monitoring_tag_stats.wlock()->clear();
 
       for (auto& fgs : per_flow_group_stats) {
         fgs.reset();
@@ -699,11 +701,10 @@ void Stats::enumerate(EnumerationCallbacks* cb, bool list_all) const {
 #include "logdevice/common/stats/per_traffic_class_stats.inc" // nolint
   }
 
-  // Per monitoring tier
-  for (int i = 0; i < per_monitoring_tier_stats.size(); ++i) {
-#define STAT_DEFINE(c, _) \
-  cb->stat(#c, static_cast<MonitoringTier>(i), per_monitoring_tier_stats[i].c);
-#include "logdevice/common/stats/per_monitoring_tier_stats.inc" // nolint
+  // Per monitoring tag
+  for (const auto& [tag, stats] : *per_monitoring_tag_stats.ulock()) {
+#define STAT_DEFINE(c, _) cb->statWithTag(#c, tag, stats.c);
+#include "logdevice/common/stats/per_monitoring_tag_stats.inc" // nolint
   }
 
   /* Network Traffic Shaping specific stats */

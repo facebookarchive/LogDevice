@@ -48,6 +48,8 @@ class SyncCheckpointedReaderImpl : public SyncCheckpointedReader {
 
   void setMonitoringTier(MonitoringTier tier) override;
 
+  void addMonitoringTag(std::string) override;
+
   void withoutPayload() override;
 
   void forceNoSingleCopyDelivery() override;

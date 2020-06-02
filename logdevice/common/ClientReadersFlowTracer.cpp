@@ -44,10 +44,11 @@ inline uint16_t get_initial_ttl(size_t group_size, size_t num_groups) {
   return 1.25 * group_size * num_groups;
 }
 
-void updateCountersForState(ClientReadersFlowTracer::State state,
-                            bool ignoring_overload,
-                            MonitoringTier monitoring_tier,
-                            int increment) {
+void updateCountersForState(
+    ClientReadersFlowTracer::State state,
+    bool ignoring_overload,
+    const folly::small_vector<std::string>& monitoring_tags,
+    int increment) {
   using State = ClientReadersFlowTracer::State;
 
   if (ignoring_overload) {
@@ -67,26 +68,26 @@ void updateCountersForState(ClientReadersFlowTracer::State state,
 
   } else {
     if (state == State::STUCK || state == State::LAGGING) {
-      MONITORING_TIER_STAT_ADD(Worker::stats(),
-                               monitoring_tier,
-                               read_streams_stuck_or_lagging,
-                               increment);
+      TAGGED_STAT_ADD(Worker::stats(),
+                      monitoring_tags,
+                      read_streams_stuck_or_lagging,
+                      increment);
     }
 
     if (state == State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ) {
-      MONITORING_TIER_STAT_ADD(Worker::stats(),
-                               monitoring_tier,
-                               read_streams_stuck_failing_sync_seq_req,
-                               increment);
+      TAGGED_STAT_ADD(Worker::stats(),
+                      monitoring_tags,
+                      read_streams_stuck_failing_sync_seq_req,
+                      increment);
     }
 
     if (state == State::STUCK ||
         state == State::STUCK_WHILE_FAILING_SYNC_SEQ_REQ) {
-      MONITORING_TIER_STAT_ADD(
-          Worker::stats(), monitoring_tier, read_streams_stuck, increment);
+      TAGGED_STAT_ADD(
+          Worker::stats(), monitoring_tags, read_streams_stuck, increment);
     } else if (state == State::LAGGING) {
-      MONITORING_TIER_STAT_ADD(
-          Worker::stats(), monitoring_tier, read_streams_lagging, increment);
+      TAGGED_STAT_ADD(
+          Worker::stats(), monitoring_tags, read_streams_lagging, increment);
     } else {
       // ignore
     }
@@ -96,7 +97,6 @@ void updateCountersForState(ClientReadersFlowTracer::State state,
 ClientReadersFlowTracer::ClientReadersFlowTracer(
     std::shared_ptr<TraceLogger> logger,
     ClientReadStream* owner,
-    MonitoringTier tier,
     bool push_samples,
     bool ignore_overload)
     : SampledTracer(std::move(logger)),
@@ -104,7 +104,6 @@ ClientReadersFlowTracer::ClientReadersFlowTracer(
       params_{/*tracer_period=*/0ms,
               /*push_samples=*/push_samples,
               /*ignore_overload=*/ignore_overload},
-      monitoring_tier_{tier},
       owner_(owner) {
   timer_ = std::make_unique<Timer>([this] { onTimerTriggered(); });
 
@@ -114,7 +113,7 @@ ClientReadersFlowTracer::ClientReadersFlowTracer(
   if (!ignore_overload) {
     // build a version that ignores overload
     tracer_ignoring_overload_ = std::make_unique<ClientReadersFlowTracer>(
-        logger, owner, tier, /*push_samples=*/false, /*ignore_overload=*/true);
+        logger, owner, /*push_samples=*/false, /*ignore_overload=*/true);
   }
 }
 
@@ -188,7 +187,9 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
         "waiting_for_node", readerIsStuck() ? owner_->waitingForNodeStr() : "");
     sample->addNormalValue("reading_mode", owner_->readingModeStr());
     sample->addNormalValue("state", toString(last_reported_state_));
-    sample->addNormalValue("monitoring_tier", toString(monitoring_tier_));
+    sample->addNormalValue(
+        "monitoring_tier",
+        folly::join(",", owner_->monitoring_tags_)); // deprecated
     return sample;
   };
   last_num_bytes_read_ = num_bytes_read;
@@ -442,16 +443,7 @@ void ClientReadersFlowTracer::updateTimeLagging(Status st) {
       cur_ts_lag - time_lag_record_.front().time_lag - correction <=
           slope_threshold * time_window;
 
-  bool below_max_lag_threshold = true;
-  if (monitoring_tier_ == MonitoringTier::HIGH_PRI) {
-    // High priority readers need to be below a certain lag threshold to not be
-    // lagging.
-    if (cur_ts_lag >= settings.client_readers_flow_tracer_high_pri_max_lag) {
-      below_max_lag_threshold = false;
-    }
-  }
-
-  if (is_catching_up && below_max_lag_threshold) {
+  if (is_catching_up) {
     last_time_lagging_ = TimePoint::max();
   } else if (last_time_lagging_ == TimePoint::max()) {
     last_time_lagging_ = SystemClock::now();
@@ -486,11 +478,11 @@ void ClientReadersFlowTracer::maybeBumpStats(bool force_healthy) {
   if (state_to_report != last_reported_state_) {
     updateCountersForState(last_reported_state_,
                            /*ignoring_overload=*/params_.ignore_overload,
-                           monitoring_tier_,
+                           owner_->monitoring_tags_,
                            -1);
     updateCountersForState(state_to_report,
                            /*ignoring_overload=*/params_.ignore_overload,
-                           monitoring_tier_,
+                           owner_->monitoring_tags_,
                            +1);
     last_reported_state_ = state_to_report;
   }

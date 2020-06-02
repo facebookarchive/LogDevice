@@ -442,6 +442,7 @@ class ClientReadStream : boost::noncopyable {
                    ReaderBridge* reader = nullptr,
                    const ReadStreamAttributes* attrs = nullptr,
                    MonitoringTier tier = MonitoringTier::MEDIUM_PRI,
+                   const std::set<std::string>& monitoring_tags = {},
                    folly::Optional<SCDCopysetReordering>
                        scd_copyset_reordering = folly::none);
 
@@ -1508,7 +1509,7 @@ class ClientReadStream : boost::noncopyable {
   // @see shipCorruptedRecords
   bool ship_corrupted_records_ = false;
 
-  MonitoringTier monitoring_tier_{MonitoringTier::MEDIUM_PRI};
+  folly::small_vector<std::string> monitoring_tags_;
 
   // Reader object to deliver to when not using callbacks.  Null if using
   // callbacks
