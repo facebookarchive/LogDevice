@@ -165,7 +165,7 @@ int AsyncSocketAdapter::getSockOptVirtual(int level,
 bool AsyncSocketAdapter::getSSLSessionReused() const {
   auto transport = dynamic_cast<folly::AsyncSSLSocket*>(transport_.get());
   ld_check(transport);
-  return transport->getSSLSession();
+  return transport->getSSLSessionReused();
 }
 
 folly::ssl::SSLSessionUniquePtr AsyncSocketAdapter::getSSLSession() {
