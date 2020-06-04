@@ -161,22 +161,21 @@ class HistogramInterface {
   /**
    * Returns whether to publish bucket counts on StatsPublisher.
    */
-  virtual bool shouldPublishFrequencyCounters() const {
+  virtual bool shouldPublishCumulativeFrequencyCounters() const {
     return false;
   }
 
-  struct FrequencyCounters {
-    using ValueInterval = std::pair<int64_t, int64_t>;
-
-    std::vector<std::pair<ValueInterval, uint64_t>> counters;
+  struct CumulativeFrequencyCounters {
+    std::vector<std::pair<int64_t, uint64_t>>
+        counters; // counters[x] = y means that there are y counts above value x
   };
 
   /**
-   * Returns a object of type `FrequencyCounters` with
+   * Returns a object of type `CumulativeFrequencyCounters` with
    */
-  virtual FrequencyCounters getFrequencyCounters() const {
+  virtual CumulativeFrequencyCounters getCumulativeFrequencyCounters() const {
     ld_check(false); // not implemented
-    return FrequencyCounters();
+    return CumulativeFrequencyCounters();
   }
 
   // Returns the unit of measurement, e.g. "B" for bytes, "us" for microseconds.
@@ -462,8 +461,8 @@ class CompactHistogram : public HistogramInterface {
     size_t from;
     size_t to;
   };
-  bool shouldPublishFrequencyCounters() const override;
-  FrequencyCounters getFrequencyCounters() const override;
+  bool shouldPublishCumulativeFrequencyCounters() const override;
+  CumulativeFrequencyCounters getCumulativeFrequencyCounters() const override;
 
  protected:
   struct Unit {

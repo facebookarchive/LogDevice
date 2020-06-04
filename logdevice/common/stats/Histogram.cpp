@@ -831,43 +831,33 @@ void CompactHistogram::print(std::ostream& out) const {
   }
 }
 
-bool CompactHistogram::shouldPublishFrequencyCounters() const {
+bool CompactHistogram::shouldPublishCumulativeFrequencyCounters() const {
   return publish_range_.has_value() &&
       publish_range_->to >= publish_range_->from &&
       publish_range_->to < buckets_.size();
 }
 
-HistogramInterface::FrequencyCounters
-CompactHistogram::getFrequencyCounters() const {
-  using ValueInterval = FrequencyCounters::ValueInterval;
-  ld_check(shouldPublishFrequencyCounters());
-  constexpr static auto kMinValue = std::numeric_limits<int64_t>::min();
-  constexpr static auto kMaxValue = std::numeric_limits<int64_t>::max();
+HistogramInterface::CumulativeFrequencyCounters
+CompactHistogram::getCumulativeFrequencyCounters() const {
+  ld_check(shouldPublishCumulativeFrequencyCounters());
 
   const auto first_idx = publish_range_->from;
   const auto last_idx = publish_range_->to;
 
-  FrequencyCounters result;
+  CumulativeFrequencyCounters result;
   auto& counters = result.counters;
 
-  if (first_idx > 0) {
-    counters.emplace_back(std::make_pair(
-        ValueInterval{kMinValue, indexToValue(first_idx - 1)},
-        std::accumulate(&buckets_[0], &buckets_[first_idx], 0l)));
+  uint64_t acc = 0;
+
+  for (int idx = buckets_.size() - 1; idx >= first_idx && idx > 0; idx--) {
+    acc += buckets_[idx];
+
+    if (idx <= last_idx) {
+      counters.emplace_back(std::make_pair(indexToValue(idx - 1), acc));
+    }
   }
 
-  for (auto idx = first_idx; idx <= last_idx; idx++) {
-    const int64_t interval_max = indexToValue(idx);
-    const int64_t interval_min = indexToValue(idx ? idx - 1 : 0);
-    counters.emplace_back(std::make_pair(
-        ValueInterval{interval_min, interval_max}, buckets_[idx].load()));
-  }
-
-  counters.emplace_back(std::make_pair(
-      ValueInterval{indexToValue(last_idx), kMaxValue},
-      std::accumulate(
-          &buckets_[last_idx + 1], &buckets_[buckets_.size()], 0l)));
-
+  reverse(counters.begin(), counters.end());
   return result;
 }
 
