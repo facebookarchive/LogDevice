@@ -150,6 +150,9 @@ inline void printStats(const Stats& stats,
     void histogram(const std::string& /*name*/,
                    shard_index_t /*shard*/,
                    const HistogramInterface& /*hist*/) override {}
+    void histogramWithTag(const std::string& /*name*/,
+                          const std::string& /*tag*/,
+                          const HistogramInterface& /*hist*/) override {}
 
    private:
     folly::io::Appender& out_;

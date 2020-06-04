@@ -60,6 +60,7 @@ class HistogramInterface;
 struct ClientHistograms;
 struct PerShardHistograms;
 struct ServerHistograms;
+struct PerMonitoringTagHistograms;
 
 /**
  * How to combine two Stats objects.
@@ -170,6 +171,9 @@ struct PerTrafficClassStats {
 };
 
 struct PerMonitoringTagStats {
+  PerMonitoringTagStats();
+  PerMonitoringTagStats(const PerMonitoringTagStats&);
+
   /**
    * Add values from @param other.
    */
@@ -183,6 +187,8 @@ struct PerMonitoringTagStats {
 
 #define STAT_DEFINE(name, _) StatsCounter name{};
 #include "logdevice/common/stats/per_monitoring_tag_stats.inc" // nolint
+
+  std::unique_ptr<PerMonitoringTagHistograms> histograms;
 };
 
 struct PerShapingPriorityStats {
@@ -843,6 +849,9 @@ class Stats::EnumerationCallbacks {
   virtual void histogram(const std::string& name,
                          shard_index_t shard,
                          const HistogramInterface& hist) = 0;
+  virtual void histogramWithTag(const std::string& name,
+                                const std::string& tag,
+                                const HistogramInterface& hist) = 0;
 };
 
 /**
@@ -1232,6 +1241,18 @@ class PerShardStatToken {
       (stats_struct)->get().per_shard_histograms->name.add((shard), (value)); \
     }                                                                         \
   } while (0)
+
+#define TAGGED_HISTOGRAM_ADD(stats_struct, name, tags, usecs)   \
+  do {                                                          \
+    if (stats_struct) {                                         \
+      for (const auto& tag : tags) {                            \
+        stats_struct->get().per_monitoring_tag_stats.withWLock( \
+            [&tag, val = (usecs)](auto& stats) {                \
+              stats[tag].histograms->name.add(val);             \
+            });                                                 \
+      }                                                         \
+    }                                                           \
+  } while (0);
 
 #define HISTOGRAM_ADD(stats_struct, name, usecs)                   \
   do {                                                             \

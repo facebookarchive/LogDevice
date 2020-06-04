@@ -49,6 +49,7 @@
 #include "logdevice/common/protocol/STARTED_Message.h"
 #include "logdevice/common/protocol/STOP_Message.h"
 #include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/stats/PerMonitoringTagHistograms.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Record.h"
 

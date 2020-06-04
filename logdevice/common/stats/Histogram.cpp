@@ -681,6 +681,7 @@ void CompactHistogram::assign(const HistogramInterface& other_if) {
     buckets_[i].store(other.buckets_[i].load(std::memory_order_relaxed),
                       std::memory_order_relaxed);
   }
+  publish_range_ = other.publish_range_;
 }
 void CompactHistogram::merge(const HistogramInterface& other_if) {
   auto& other = checked_cref_cast<CompactHistogram>(other_if);

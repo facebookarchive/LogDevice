@@ -19,6 +19,7 @@
 #include "logdevice/common/client_read_stream/ClientReadStreamScd.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/network/OverloadDetector.h"
+#include "logdevice/common/stats/PerMonitoringTagHistograms.h"
 #include "logdevice/common/stats/Stats.h"
 namespace facebook { namespace logdevice {
 
@@ -334,6 +335,7 @@ void ClientReadersFlowTracer::onSyncSequencerRequestResponse(
     updateTimeStuck(LSN_INVALID, st);
   }
   updateTimeLagging(st);
+  bumpHistograms();
 }
 
 /**
@@ -638,6 +640,21 @@ lsn_t ClientReadersFlowTracer::estimateTailLSN() const {
         std::max(latest_tail_info_->lsn_approx, latest_tail_approx);
   }
   return latest_tail_approx;
+}
+
+void ClientReadersFlowTracer::bumpHistograms() {
+  auto time_stuck = std::max(usec_since(last_time_stuck_), 0l);
+  auto time_lag = estimateTimeLag();
+
+  TAGGED_HISTOGRAM_ADD(
+      Worker::stats(), time_stuck, owner_->monitoring_tags_, time_stuck);
+
+  if (time_lag.hasValue()) {
+    TAGGED_HISTOGRAM_ADD(Worker::stats(),
+                         time_lag,
+                         owner_->monitoring_tags_,
+                         to_usec(time_lag.value()).count());
+  }
 }
 
 }} // namespace facebook::logdevice

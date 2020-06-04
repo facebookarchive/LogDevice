@@ -111,6 +111,7 @@ class ClientReadersFlowTracer : public SampledTracer {
   void updateTimeLagging(Status st = E::OK);
   void updateShouldTrack();
   void maybeBumpStats(bool force_healthy = false);
+  void bumpHistograms();
   double calculateSamplingWeight();
   bool readerIsUnhealthy() const;
   bool readerIsStuck() const;
