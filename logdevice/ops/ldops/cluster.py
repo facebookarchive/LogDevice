@@ -204,7 +204,13 @@ async def group_nodes_by_scope(
         # This is okay because we omit the name of the location from the
         # return value.
         if scope != LocationScope.NODE:
-            location = node_config.location_per_scope[scope]
+            location = tuple(
+                node_config.location_per_scope.get(scope_kind, "")
+                for scope_kind in sorted(
+                    list(LocationScope), key=lambda x: x.value, reverse=True
+                )
+                if scope_kind.value >= scope.value
+            )
         else:
             location = node_config.node_index
 
