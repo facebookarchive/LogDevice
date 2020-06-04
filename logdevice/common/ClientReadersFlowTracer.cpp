@@ -191,6 +191,9 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
     sample->addNormalValue(
         "monitoring_tier",
         folly::join(",", owner_->monitoring_tags_)); // deprecated
+    sample->addSetValue("monitoring_tags",
+                        std::set<std::string>(owner_->monitoring_tags_.begin(),
+                                              owner_->monitoring_tags_.end()));
     return sample;
   };
   last_num_bytes_read_ = num_bytes_read;
