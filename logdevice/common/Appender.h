@@ -28,7 +28,6 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Timestamp.h"
-#include "logdevice/common/WorkerCallbackHelper.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
 #include "logdevice/common/stats/Stats.h"
@@ -1079,8 +1078,9 @@ class Appender : public IntrusiveUnorderedMapHook {
   virtual int registerOnSocketClosed(NodeID nid, SocketCallback& cb);
   virtual void replyToAppendRequest(APPENDED_Header& replyhdr);
   virtual void schedulePeriodicReleases();
-  // Schedules a new wave to be sent on the next iteration of event loop
-  virtual void scheduleSendWave();
+  // Sends a new wave when previous one fails. We keep this as separate virtual
+  // method to allow tighter control over execution in tests.
+  virtual void sendRetryWave();
 
   // Request that is used to send an E::OK reply back to a client on the worker
   // it received the append message on. Used in onReaped().
@@ -1105,9 +1105,6 @@ class Appender : public IntrusiveUnorderedMapHook {
     worker_id_t worker_;
     Appender* appender_;
   };
-
-  // Used to delegate retrying wave on Appender's worker
-  WorkerCallbackHelper<Appender> callback_helper_;
 
   // check if the appender is the one of the appenders that the sequencer
   // would like to drain during graceful reactivation/migration

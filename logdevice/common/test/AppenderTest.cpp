@@ -466,7 +466,7 @@ class AppenderTest::MockAppender : public Appender {
   void activateStoreTimer(std::chrono::milliseconds) override {
     test_->store_timer_active_ = true;
   }
-  void scheduleSendWave() override {
+  void sendRetryWave() override {
     test_->retry_wave_scheduled_ = true;
   }
   bool isNodeAlive(NodeID node) override {

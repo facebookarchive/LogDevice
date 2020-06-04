@@ -84,8 +84,7 @@ Appender::Appender(Worker* worker,
       append_request_id_(append_request_id),
       passthru_flags_(passthru_flags),
       release_type_(static_cast<ReleaseTypeRaw>(ReleaseType::GLOBAL)),
-      lsn_before_redirect_(lsn_before_redirect),
-      callback_helper_(this) {
+      lsn_before_redirect_(lsn_before_redirect) {
   // Increment the total count of Appenders. Note: created_on_ can be nullptr
   // inside tests.
   if (created_on_) {
@@ -1854,9 +1853,7 @@ bool Appender::onRecipientFailed(Recipient* recipient,
   // arbitrary, to prevent fast retry loops if many storage nodes are failing
   // quickly every time), send another wave right away.
   if (store_hdr_.wave <= 2 && checkNodeSet()) {
-    // Yield retry to the next iteration of event loop to avoid long chunk of
-    // work on single iteration
-    scheduleSendWave();
+    sendRetryWave();
   } else {
     // Retry after a store timeout.
     ld_check(timeout_.has_value());
@@ -1867,13 +1864,8 @@ bool Appender::onRecipientFailed(Recipient* recipient,
   return false;
 }
 
-void Appender::scheduleSendWave() {
-  auto ticket = callback_helper_.ticket();
-  ticket.postCallbackRequest([](Appender* appender) {
-    if (appender != nullptr) {
-      appender->sendWave();
-    }
-  });
+void Appender::sendRetryWave() {
+  sendWave();
 }
 
 void Appender::deleteExtras() {
