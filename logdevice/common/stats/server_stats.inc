@@ -1197,6 +1197,11 @@ STAT_DEFINE(appenderbuffer_pending_appenders, SUM)
 STAT_DEFINE(num_backlog_connections, SUM)
 // Total number of open connections
 STAT_DEFINE(num_connections, SUM)
+STAT_DEFINE(num_connections_incoming_data, SUM)
+STAT_DEFINE(num_connections_incoming_data_ssl, SUM)
+STAT_DEFINE(num_connections_incoming_gossip, SUM)
+STAT_DEFINE(num_connections_incoming_server_to_server, SUM)
+
 // Total number of open connections using ssl
 STAT_DEFINE(num_ssl_connections, SUM)
 // Dropped connections due to limit/burst
