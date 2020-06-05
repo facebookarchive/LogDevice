@@ -16,6 +16,11 @@
 // when the client object is created.
 STAT_DEFINE(client_started, MAX)
 
+// Count the number of clients failing to initialize for whatever reason
+// e.g. failing to fetch the nodes configuration, failing to materialize
+// the logs config etc. Bumped when ClientFactory::create() returns a nullptr.
+STAT_DEFINE(client_init_failed, SUM)
+
 // Appends that came back with different common statuses.  These are
 // client-level statuses (which we pass to the client-provided callback), not
 // internal error codes that we pass over the wire in APPENDED messages.

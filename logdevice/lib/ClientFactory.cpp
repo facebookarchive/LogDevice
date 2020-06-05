@@ -7,6 +7,9 @@
  */
 #include "logdevice/include/ClientFactory.h"
 
+#include <memory>
+#include <utility>
+
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -15,12 +18,16 @@
 #include "logdevice/common/NodesConfigurationInit.h"
 #include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
+#include "logdevice/common/StatsCollectionThread.h"
 #include "logdevice/common/checks.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/plugin/Logger.h"
+#include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
+#include "logdevice/common/stats/Stats.h"
+#include "logdevice/include/ClientSettings.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ClientPluginHelper.h"
 #include "logdevice/lib/ClientProcessor.h"
@@ -91,10 +98,7 @@ ClientFactory::setClientSettings(std::unique_ptr<ClientSettings> v) {
   return *this;
 }
 
-std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
-  auto start_time = std::chrono::steady_clock::now();
-  ld_info("Creating Client with config: %s", config_url.c_str());
-
+std::unique_ptr<ClientSettings> ClientFactory::loadSettings() noexcept {
   // Only one of these is allowed
   ld_check(string_settings_.empty() || client_settings_ == nullptr);
 
@@ -112,11 +116,12 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
     }
   }
   ld_check(client_settings_);
-  std::unique_ptr<ClientSettingsImpl> impl_settings(
-      static_cast<ClientSettingsImpl*>(client_settings_.release()));
+  return std::move(client_settings_);
+}
 
+std::shared_ptr<PluginRegistry> ClientFactory::loadPluginRegistry(
+    const ClientSettingsImpl* impl_settings) noexcept {
   auto settings_updater = impl_settings->getSettingsUpdater();
-
   auto plugin_registry = impl_settings->getPluginRegistry();
   if (!plugin_registry) {
     plugin_registry =
@@ -136,33 +141,20 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
     }
   });
 
-  if (!applySettingOverrides(*settings_updater)) {
-    err = E::INVALID_PARAM;
-    return nullptr;
-  }
+  return plugin_registry;
+}
 
-  auto update_settings = [settings_updater](ServerConfig& config) -> bool {
-    auto settings = config.getClientSettingsConfig();
-
-    try {
-      settings_updater->setFromConfig(settings);
-    } catch (const boost::program_options::error&) {
-      return false;
-    }
-    return true;
-  };
-
-  auto config = std::make_shared<UpdateableConfig>();
-  auto handle =
-      config->updateableServerConfig()->addHook(std::move(update_settings));
-
+int ClientFactory::loadConfig(const std::string& config_url,
+                              std::shared_ptr<UpdateableConfig> config,
+                              const ClientSettingsImpl* impl_settings,
+                              std::shared_ptr<PluginRegistry> plugin_registry,
+                              std::shared_ptr<std::weak_ptr<Processor>>&
+                                  logs_cfg_processor_ptr_ptr) noexcept {
   std::unique_ptr<LogsConfig> logs_cfg;
-
   bool enable_remote_logsconfig =
       impl_settings->getSettings()->on_demand_logs_config ||
       impl_settings->getSettings()->force_on_demand_logs_config;
 
-  std::shared_ptr<std::weak_ptr<Processor>> logs_cfg_processor_ptr_ptr;
   if (enable_remote_logsconfig) {
     // We don't want internal logsconfig management if we have
     // on_demand_logs_config enabled
@@ -176,16 +168,20 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
   ConfigParserOptions options;
   ConfigInit config_init(timeout_);
 
-  int rv = config_init.attach(config_url,
-                              plugin_registry,
-                              config,
-                              std::move(logs_cfg),
-                              impl_settings->getSettings(),
-                              options);
-  if (rv != 0) {
-    return nullptr;
-  }
+  return config_init.attach(config_url,
+                            plugin_registry,
+                            config,
+                            std::move(logs_cfg),
+                            impl_settings->getSettings(),
+                            options);
+}
 
+std::shared_ptr<Client> ClientFactory::attemptToCreate(
+    std::unique_ptr<ClientSettingsImpl> impl_settings,
+    std::shared_ptr<PluginRegistry> plugin_registry,
+    std::shared_ptr<UpdateableConfig> config,
+    std::shared_ptr<std::weak_ptr<Processor>>
+        logs_cfg_processor_ptr_ptr) noexcept {
   auto ncm_enabled =
       impl_settings->getSettings()->enable_nodes_configuration_manager;
   // Init Nodes Configuration
@@ -278,8 +274,6 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
   ld_check(impl != nullptr);
   ld_check(impl->getProcessorPtr());
 
-  impl->addServerConfigHookHandle(std::move(handle));
-
   // Setting the logs config's shared processor pointer to the actual
   // processor
   if (logs_cfg_processor_ptr_ptr) {
@@ -287,16 +281,100 @@ std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
         std::weak_ptr<Processor>(impl->getProcessorPtr());
   }
 
-  auto end_time = std::chrono::steady_clock::now();
-  ld_info("Created Client in %.3f seconds. Cluster name: %s, Config: %s",
-          std::chrono::duration_cast<std::chrono::duration<double>>(end_time -
-                                                                    start_time)
-              .count(),
-          cluster_name_.empty()
-              ? impl->getConfig()->getServerConfig()->getClusterName().c_str()
-              : cluster_name_.c_str(),
-          config_url.c_str());
-
-  return std::shared_ptr<Client>(impl);
+  return impl;
 }
+
+std::shared_ptr<StatsHolder> ClientFactory::createStatsHolder() {
+  return std::make_shared<StatsHolder>(StatsParams().setIsServer(false));
+}
+
+void ClientFactory::logTimeTaken(
+    const std::chrono::time_point<std::chrono::steady_clock>& start_time,
+    const std::string& cluster_name,
+    const std::string& config_url) noexcept {
+  auto end_time = std::chrono::steady_clock::now();
+  auto time_taken = std::chrono::duration_cast<std::chrono::duration<double>>(
+      end_time - start_time);
+  ld_info("Created Client in %.3f seconds. Cluster name: %s, Config: %s",
+          time_taken.count(),
+          cluster_name.c_str(),
+          config_url.c_str());
+}
+
+std::shared_ptr<Client> ClientFactory::create(std::string config_url) noexcept {
+  auto start_time = std::chrono::steady_clock::now();
+  ld_info("Creating Client with config: %s", config_url.c_str());
+
+  std::unique_ptr<ClientSettingsImpl> impl_settings;
+  {
+    auto settings = loadSettings();
+    if (!settings) {
+      return nullptr;
+    }
+    impl_settings.reset(static_cast<ClientSettingsImpl*>(settings.release()));
+  }
+
+  auto plugin_registry = loadPluginRegistry(impl_settings.get());
+  if (!plugin_registry) {
+    return nullptr;
+  }
+
+  auto settings_updater = impl_settings->getSettingsUpdater();
+  if (!applySettingOverrides(*settings_updater)) {
+    err = E::INVALID_PARAM;
+    return nullptr;
+  }
+
+  auto update_settings = [settings_updater](ServerConfig& config) -> bool {
+    auto config_settings = config.getClientSettingsConfig();
+    try {
+      settings_updater->setFromConfig(config_settings);
+    } catch (const boost::program_options::error&) {
+      return false;
+    }
+    return true;
+  };
+
+  std::shared_ptr<std::weak_ptr<Processor>> processor_ptr_ptr;
+  auto config = std::make_shared<UpdateableConfig>();
+  auto config_update_handle =
+      config->updateableServerConfig()->addHook(std::move(update_settings));
+  auto rv = loadConfig(config_url,
+                       config,
+                       impl_settings.get(),
+                       plugin_registry,
+                       processor_ptr_ptr);
+  if (rv != 0) {
+    return nullptr;
+  }
+
+  auto updateable_settings = impl_settings->getSettings();
+  auto client_instance = attemptToCreate(
+      std::move(impl_settings), plugin_registry, config, processor_ptr_ptr);
+  if (!client_instance) {
+    auto stats_holder = createStatsHolder();
+    // TODO T67303981 aakram: replace the below Stats collection thread
+    // with the one time push API
+    auto stats_collection =
+        StatsCollectionThread::maybeCreate(updateable_settings,
+                                           config->get()->serverConfig(),
+                                           plugin_registry,
+                                           /* num_shards */ 0,
+                                           stats_holder.get());
+    STAT_INCR(stats_holder, client.client_init_failed);
+    return nullptr;
+  }
+
+  auto client_impl = std::static_pointer_cast<ClientImpl>(client_instance);
+  client_impl->addServerConfigHookHandle(std::move(config_update_handle));
+
+  auto cluster_name = cluster_name_.empty()
+      ? config->getServerConfig()->getClusterName()
+      : cluster_name_;
+  logTimeTaken(start_time, cluster_name, config_url);
+
+  return client_instance;
+}
+
+ClientFactory::~ClientFactory() {}
 }} // namespace facebook::logdevice

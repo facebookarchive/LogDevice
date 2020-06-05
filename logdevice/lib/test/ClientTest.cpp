@@ -10,15 +10,21 @@
 #include <chrono>
 
 #include <folly/synchronization/Baton.h>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Semaphore.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/ClientFactory.h"
 
 using namespace facebook::logdevice;
+using namespace ::testing;
 
-class ClientTest : public ::testing::Test {
+namespace facebook { namespace logdevice {
+
+class ClientTest : public Test {
  protected:
   void SetUp() override {
     // In order for writes to closed pipes to return EPIPE (instead of bringing
@@ -239,3 +245,57 @@ TEST_F(ClientTest, PayloadSizeLimitTest) {
   EXPECT_EQ(-1, client->append(log_id, std::move(payload_string), callback));
   EXPECT_EQ(E::TOOBIG, err);
 }
+
+class MockFactory : public ClientFactory {
+ public:
+  MOCK_METHOD0(createStatsHolder, std::shared_ptr<StatsHolder>(void));
+};
+
+TEST_F(ClientTest, BumpMetricOnClientCreationFailure) {
+  std::string config_path =
+      std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
+  auto stats_holder =
+      std::make_shared<StatsHolder>(StatsParams().setIsServer(false));
+  auto clientFactory = std::make_unique<MockFactory>();
+
+  ON_CALL(*clientFactory, createStatsHolder())
+      .WillByDefault(Return(stats_holder));
+
+  // simulate a dependency failure that we should be alerted on.
+  // This will attempt to fetch NodesConfiguration from Zookeeper but we
+  // didn't setup a cluster so it would fail.
+  std::shared_ptr<Client> client =
+      clientFactory->setSetting("enable-nodes-configuration-manager", "true")
+          .setSetting("admin-client-capabilities", "true")
+          .setSetting("nodes-configuration-init-timeout", "5s")
+          .setSetting("nodes-configuration-init-retry-timeout", "100ms..500ms")
+          .create(config_path);
+  auto stats = stats_holder->aggregate();
+
+  EXPECT_EQ(nullptr, client);
+  EXPECT_EQ(1, stats.client.client_init_failed);
+}
+
+TEST_F(ClientTest, DontBumpMetricOnUnworthyFailures) {
+  std::string config_path =
+      std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
+  auto stats_holder =
+      std::make_shared<StatsHolder>(StatsParams().setIsServer(false));
+  auto clientFactory = std::make_unique<MockFactory>();
+
+  ON_CALL(*clientFactory, createStatsHolder())
+      .WillByDefault(Return(stats_holder));
+
+  // forcing a failure by attempting to set a random settings
+  // string not recognized by ClientSettings. This illustrates a customer
+  // error that we shouldn't alert on.
+  std::shared_ptr<Client> client =
+      clientFactory->setSetting("random-nonexistent-setting", "true")
+          .create(config_path);
+  auto stats = stats_holder->aggregate();
+
+  EXPECT_EQ(nullptr, client);
+  EXPECT_EQ(0, stats.client.client_init_failed);
+}
+
+}} // namespace facebook::logdevice

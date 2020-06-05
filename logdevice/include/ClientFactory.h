@@ -18,6 +18,11 @@
 namespace facebook { namespace logdevice {
 
 class Client;
+class PluginRegistry;
+class Processor;
+class StatsHolder;
+class UpdateableConfig;
+
 /**
  * This is the only supported way to create new Client instances. Can be used
  * like this:
@@ -125,6 +130,8 @@ class ClientFactory {
   // have to call it again before each subsequent call to create().
   ClientFactory& setClientSettings(std::unique_ptr<ClientSettings> v);
 
+  virtual ~ClientFactory();
+
  private:
   std::string cluster_name_;
   std::chrono::milliseconds timeout_{60000};
@@ -132,6 +139,53 @@ class ClientFactory {
   std::unique_ptr<ClientSettings> client_settings_;
   std::unordered_map<std::string, std::string> string_settings_;
   std::string csid_;
+
+  /**
+   * The method that attempts to creates a Client instance
+   * and is called by create()
+   *
+   * @return on success, a fully constructed LogDevice client object for the
+   *         specified LogDevice cluster. On failure nullptr is returned
+   */
+  std::shared_ptr<Client>
+  attemptToCreate(std::unique_ptr<ClientSettingsImpl> impl_settings,
+                  std::shared_ptr<PluginRegistry> plugin_registry,
+                  std::shared_ptr<UpdateableConfig> config,
+                  std::shared_ptr<std::weak_ptr<Processor>>
+                      logs_cfg_processor_ptr_ptr) noexcept;
+
+  /**
+   * Create the ClientSettings object from the setting strings
+   * set by the caller e.g.
+   * ClientFactory().setSetting("on-demand-logs-config", "true")
+   */
+  std::unique_ptr<ClientSettings> loadSettings() noexcept;
+
+  std::shared_ptr<PluginRegistry>
+  loadPluginRegistry(const ClientSettingsImpl*) noexcept;
+
+  /**
+   * Load the config into the passed config ptr and returns a ptr to the
+   * remote logs config if Remote (on-demand) LogsConfig is ENABLED.
+   */
+  int loadConfig(const std::string& config_url,
+                 std::shared_ptr<UpdateableConfig> config,
+                 const ClientSettingsImpl* impl_settings,
+                 std::shared_ptr<PluginRegistry> plugin_registry,
+                 std::shared_ptr<std::weak_ptr<Processor>>&) noexcept;
+
+  /**
+   * Creates and returns a StatsHolder instance to bump counters.
+   */
+  virtual std::shared_ptr<StatsHolder> createStatsHolder();
+
+  /**
+   * Calcualtes the time taken to build the client.
+   */
+  void logTimeTaken(
+      const std::chrono::time_point<std::chrono::steady_clock>& start_time,
+      const std::string& cluster_name,
+      const std::string& config_url) noexcept;
 };
 
 }} // namespace facebook::logdevice
