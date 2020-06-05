@@ -12,6 +12,7 @@
 #include "logdevice/admin/SimpleAdminServer.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/common/ConfigInit.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/CopySetManager.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
@@ -691,8 +692,7 @@ bool Server::initListeners() {
     connection_listener_loop_ = std::make_unique<folly::EventBaseThread>(
         true,
         nullptr,
-        ConnectionListener::listenerTypeNames()
-            [ConnectionListener::ListenerType::DATA]);
+        ConnectionListener::connectionKindNames()[ConnectionKind::DATA]);
 
     connection_listener_ = initListener<ConnectionListener>(
         server_settings_->port,
@@ -700,7 +700,7 @@ bool Server::initListeners() {
         false,
         folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
         conn_shared_state,
-        ConnectionListener::ListenerType::DATA,
+        ConnectionKind::DATA,
         conn_budget_backlog_,
         server_settings_->enable_dscp_reflection);
 
@@ -748,8 +748,8 @@ bool Server::initListeners() {
             std::make_unique<folly::EventBaseThread>(
                 true,
                 nullptr,
-                ConnectionListener::listenerTypeNames()
-                    [ConnectionListener::ListenerType::DATA_SSL]);
+                ConnectionListener::connectionKindNames()
+                    [ConnectionKind::DATA_SSL]);
         ssl_connection_listener_ = initListener<ConnectionListener>(
             ssl_port,
             ssl_unix_socket,
@@ -757,7 +757,7 @@ bool Server::initListeners() {
             folly::getKeepAliveToken(
                 ssl_connection_listener_loop_->getEventBase()),
             conn_shared_state,
-            ConnectionListener::ListenerType::DATA_SSL,
+            ConnectionKind::DATA_SSL,
             conn_budget_backlog_,
             server_settings_->enable_dscp_reflection);
       }
@@ -789,8 +789,7 @@ bool Server::initListeners() {
         gossip_listener_loop_ = std::make_unique<folly::EventBaseThread>(
             true,
             nullptr,
-            ConnectionListener::listenerTypeNames()
-                [ConnectionListener::ListenerType::GOSSIP]);
+            ConnectionListener::connectionKindNames()[ConnectionKind::GOSSIP]);
 
         gossip_listener_ = initListener<ConnectionListener>(
             gossip_port,
@@ -798,7 +797,7 @@ bool Server::initListeners() {
             false,
             folly::getKeepAliveToken(gossip_listener_loop_->getEventBase()),
             conn_shared_state,
-            ConnectionListener::ListenerType::GOSSIP,
+            ConnectionKind::GOSSIP,
             conn_budget_backlog_unlimited_,
             server_settings_->enable_dscp_reflection);
       }
@@ -826,8 +825,8 @@ bool Server::initListeners() {
           std::make_unique<folly::EventBaseThread>(
               /* autostart */ true,
               /* eventBaseManager */ nullptr,
-              ConnectionListener::listenerTypeNames()
-                  [ConnectionListener::ListenerType::SERVER_TO_SERVER]);
+              ConnectionListener::connectionKindNames()
+                  [ConnectionKind::SERVER_TO_SERVER]);
       server_to_server_listener_ = initListener<ConnectionListener>(
           server_to_server_port,
           server_to_server_socket,
@@ -835,7 +834,7 @@ bool Server::initListeners() {
           folly::getKeepAliveToken(
               server_to_server_listener_loop_->getEventBase()),
           conn_shared_state,
-          ConnectionListener::ListenerType::SERVER_TO_SERVER,
+          ConnectionKind::SERVER_TO_SERVER,
           conn_budget_backlog_unlimited_,
           server_settings_->enable_dscp_reflection);
     }

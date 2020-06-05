@@ -21,6 +21,7 @@
 
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/AppendRequest.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/MetaDataLogWriter.h"
@@ -250,13 +251,12 @@ void UnreleasedRecordDetectorTest::SetUp() {
   connection_listener_loop_ = std::make_unique<folly::EventBaseThread>(
       true,
       nullptr,
-      ConnectionListener::listenerTypeNames()
-          [ConnectionListener::ListenerType::DATA]);
+      ConnectionListener::connectionKindNames()[ConnectionKind::DATA]);
   connection_listener_ = std::make_unique<ConnectionListener>(
       Listener::InterfaceDef(std::move(socketPath), false),
       folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
       std::make_shared<ConnectionListener::SharedState>(),
-      ConnectionListener::ListenerType::DATA,
+      ConnectionKind::DATA,
       budget_,
       /* enable_dscp_reflection= */ true);
   connection_listener_->setProcessor(processor_.get());
