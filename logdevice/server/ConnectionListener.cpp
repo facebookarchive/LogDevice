@@ -172,6 +172,7 @@ void ConnectionListener::connectionAccepted(
                                                   std::move(conn_backlog_token),
                                                   sock_type,
                                                   ConnectionType::NONE,
+                                                  connection_kind_,
                                                   target_worker_type),
            this)});
   auto& ret = read_event_handlers_.at(fd);

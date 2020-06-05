@@ -10,6 +10,7 @@
 #include <folly/io/async/AsyncSocket.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/ProtocolHandler.h"
 #include "logdevice/common/libevent/test/EvBaseMock.h"
 #include "logdevice/common/network/MessageReader.h"
@@ -51,7 +52,8 @@ class ServerConnectionTest : public ConnectionTest {
         ConnectionType::PLAIN,
         flow_group_,
         std::unique_ptr<SocketDependencies>(deps_),
-        std::move(sock));
+        std::move(sock),
+        ConnectionKind::DATA);
     // A server socket is connected from the beginning.
     EXPECT_TRUE(connected());
     EXPECT_FALSE(handshaken());

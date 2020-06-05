@@ -9,6 +9,7 @@
 #include <folly/container/F14Map.h>
 
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SocketTypes.h"
@@ -44,7 +45,8 @@ class AsyncSocketConnectionFactory : public IConnectionFactory {
                    SocketType type,
                    ConnectionType conntype,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const override;
+                   std::unique_ptr<SocketDependencies> deps,
+                   ConnectionKind connection_kind) const override;
 
  private:
   folly::EventBase* base_{nullptr};

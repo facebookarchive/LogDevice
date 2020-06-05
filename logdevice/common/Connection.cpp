@@ -190,7 +190,8 @@ Connection::Connection(int fd,
                        SocketType type,
                        ConnectionType conntype,
                        FlowGroup& flow_group,
-                       std::unique_ptr<SocketDependencies> deps)
+                       std::unique_ptr<SocketDependencies> deps,
+                       ConnectionKind connection_kind)
     : Connection(deps,
                  Address(client_name),
                  client_addr,
@@ -200,6 +201,7 @@ Connection::Connection(int fd,
   ld_check(fd >= 0);
   ld_check(client_name.valid());
   ld_check(client_addr.valid());
+  connection_kind_ = connection_kind;
 
   // note that caller (Sender.addClient()) does not close(fd) on error.
   // If you add code here that throws ConstructorFailed you must close(fd)!
@@ -213,11 +215,7 @@ Connection::Connection(int fd,
   peer_shuttingdown_ = false;
   fd_ = fd;
 
-  STAT_INCR(deps_->getStats(), num_connections);
-  STAT_DECR(deps_->getStats(), num_backlog_connections);
-  if (isSSL()) {
-    STAT_INCR(deps_->getStats(), num_ssl_connections);
-  }
+  updateOpenConnectionStats();
 }
 
 Connection::Connection(int fd,
@@ -228,7 +226,8 @@ Connection::Connection(int fd,
                        ConnectionType conntype,
                        FlowGroup& flow_group,
                        std::unique_ptr<SocketDependencies> deps,
-                       std::unique_ptr<SocketAdapter> sock_adapter)
+                       std::unique_ptr<SocketAdapter> sock_adapter,
+                       ConnectionKind connection_kind)
     : Connection(fd,
                  client_name,
                  client_addr,
@@ -236,7 +235,8 @@ Connection::Connection(int fd,
                  type,
                  conntype,
                  flow_group,
-                 std::move(deps)) {
+                 std::move(deps),
+                 connection_kind) {
   proto_handler_ = std::make_shared<ProtocolHandler>(
       this, std::move(sock_adapter), conn_description_, deps_->getEvBase());
   sock_write_cb_ = SocketWriteCallback(proto_handler_.get());
@@ -250,6 +250,65 @@ Connection::~Connection() {
   auto g = folly::makeGuard(deps_->setupContextGuard());
   ld_debug("Destroying Socket %s", conn_description_.c_str());
   close(E::SHUTDOWN);
+}
+
+void Connection::updateOpenConnectionStats() {
+  STAT_DECR(deps_->getStats(), num_backlog_connections);
+  if (isSSL()) {
+    STAT_INCR(deps_->getStats(), num_ssl_connections);
+  }
+  STAT_INCR(deps_->getStats(), num_connections);
+
+  if (!connection_kind_.has_value()) {
+    return;
+  }
+
+  switch (connection_kind_.value()) {
+    case ConnectionKind::DATA:
+      STAT_INCR(deps_->getStats(), num_connections_incoming_data);
+      break;
+    case ConnectionKind::DATA_SSL:
+      STAT_INCR(deps_->getStats(), num_connections_incoming_data_ssl);
+      break;
+    case ConnectionKind::GOSSIP:
+      STAT_INCR(deps_->getStats(), num_connections_incoming_gossip);
+      break;
+    case ConnectionKind::SERVER_TO_SERVER:
+      STAT_INCR(deps_->getStats(), num_connections_incoming_server_to_server);
+      break;
+    case ConnectionKind::MAX:
+      ld_check(false);
+      break;
+  }
+}
+
+void Connection::updateCloseConnectionStats() {
+  if (isSSL()) {
+    STAT_DECR(deps_->getStats(), num_ssl_connections);
+  }
+  STAT_DECR(deps_->getStats(), num_connections);
+
+  if (!connection_kind_.has_value()) {
+    return;
+  }
+
+  switch (connection_kind_.value()) {
+    case ConnectionKind::DATA:
+      STAT_DECR(deps_->getStats(), num_connections_incoming_data);
+      break;
+    case ConnectionKind::DATA_SSL:
+      STAT_DECR(deps_->getStats(), num_connections_incoming_data_ssl);
+      break;
+    case ConnectionKind::GOSSIP:
+      STAT_DECR(deps_->getStats(), num_connections_incoming_gossip);
+      break;
+    case ConnectionKind::SERVER_TO_SERVER:
+      STAT_DECR(deps_->getStats(), num_connections_incoming_server_to_server);
+      break;
+    case ConnectionKind::MAX:
+      ld_check(false);
+      break;
+  }
 }
 
 int Connection::preConnectAttempt() {
@@ -459,11 +518,7 @@ int Connection::connect() {
                   connected_,
                   !proto_handler_->good());
 
-  STAT_INCR(deps_->getStats(), num_connections);
-  if (isSSL()) {
-    STAT_INCR(deps_->getStats(), num_ssl_connections);
-  }
-
+  updateOpenConnectionStats();
   return 0;
 }
 
@@ -658,10 +713,7 @@ void Connection::close(Status reason) {
 
   markDisconnectedOnClose();
   clearConnQueues(reason);
-  STAT_DECR(deps_->getStats(), num_connections);
-  if (isSSL()) {
-    STAT_DECR(deps_->getStats(), num_ssl_connections);
-  }
+  updateCloseConnectionStats();
 }
 void Connection::markDisconnectedOnClose() {
   // socket was just closed; make sure it's properly accounted for

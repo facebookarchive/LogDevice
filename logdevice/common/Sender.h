@@ -22,6 +22,7 @@
 #include <folly/ssl/OpenSSLPtrTypes.h>
 
 #include "logdevice/common/Address.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Priority.h"
 #include "logdevice/common/ResourceBudget.h"
@@ -698,7 +699,8 @@ class Sender : public SenderBase {
                 const Sockaddr& client_addr,
                 ResourceBudget::Token conn_token,
                 SocketType type,
-                ConnectionType conntype);
+                ConnectionType conntype,
+                ConnectionKind connection_kind);
 
   /**
    * Called by a Connection managed by this Sender when bytes are added to one

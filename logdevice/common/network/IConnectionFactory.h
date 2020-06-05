@@ -8,6 +8,7 @@
 
 #pragma once
 #include "logdevice/common/ClientID.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SocketTypes.h"
@@ -36,7 +37,8 @@ class IConnectionFactory {
                    SocketType socket_type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) const = 0;
+                   std::unique_ptr<SocketDependencies> deps,
+                   ConnectionKind connection_kind) const = 0;
 };
 
 }} // namespace facebook::logdevice

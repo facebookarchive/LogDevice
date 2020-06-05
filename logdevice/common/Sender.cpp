@@ -178,7 +178,8 @@ int Sender::addClient(int fd,
                       const Sockaddr& client_addr,
                       ResourceBudget::Token conn_token,
                       SocketType type,
-                      ConnectionType conntype) {
+                      ConnectionType conntype,
+                      ConnectionKind connection_kind) {
   if (shutting_down_) {
     ld_check(false); // listeners are shut down before Senders.
     ld_error("Sender is shut down");
@@ -212,7 +213,8 @@ int Sender::addClient(int fd,
         conntype,
         flow_group,
         std::make_unique<SocketDependencies>(
-            Worker::onThisThread()->processor_, this));
+            Worker::onThisThread()->processor_, this),
+        connection_kind);
 
     auto res = impl_->client_conns_.emplace(client_name, std::move(conn));
 

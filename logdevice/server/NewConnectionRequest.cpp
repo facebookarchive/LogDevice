@@ -23,8 +23,12 @@ Request::Execution NewConnectionRequest::execute() {
     conntype_ = ConnectionType::SSL;
   }
 
-  int rv = w->sender().addClient(
-      fd_, client_addr_, std::move(conn_token_), sock_type_, conntype_);
+  int rv = w->sender().addClient(fd_,
+                                 client_addr_,
+                                 std::move(conn_token_),
+                                 sock_type_,
+                                 conntype_,
+                                 connection_kind_);
 
   if (rv == 0) {
     ld_debug("A new connection from %s is running on "

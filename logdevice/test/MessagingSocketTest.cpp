@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Connection.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
@@ -766,7 +767,8 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
                                              ResourceBudget::Token(),
                                              ResourceBudget::Token(),
                                              SocketType::DATA,
-                                             ConnectionType::NONE);
+                                             ConnectionType::NONE,
+                                             ConnectionKind::DATA);
   sem = Semaphore();
   ncrq->setClientBlockedSemaphore(&sem);
   EXPECT_EQ(0, srv_w->tryPost(ncrq));
@@ -783,7 +785,8 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
                                              ResourceBudget::Token(),
                                              ResourceBudget::Token(),
                                              SocketType::DATA,
-                                             ConnectionType::NONE);
+                                             ConnectionType::NONE,
+                                             ConnectionKind::DATA);
   sem = Semaphore();
   ncrq2->setClientBlockedSemaphore(&sem);
   EXPECT_EQ(0, srv_w->tryPost(ncrq2));

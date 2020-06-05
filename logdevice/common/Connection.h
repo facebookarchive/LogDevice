@@ -18,6 +18,7 @@
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/ConnectThrottle.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/CostQueue.h"
 #include "logdevice/common/Envelope.h"
 #include "logdevice/common/PrincipalIdentity.h"
@@ -192,7 +193,8 @@ class Connection : public TrafficShappingSocket {
              SocketType type,
              ConnectionType conntype,
              FlowGroup& flow_group,
-             std::unique_ptr<SocketDependencies> deps);
+             std::unique_ptr<SocketDependencies> deps,
+             ConnectionKind connection_kind);
 
   /**
    * Constructs a new Connection from a TCP socket fd that was returned by
@@ -228,7 +230,8 @@ class Connection : public TrafficShappingSocket {
              ConnectionType conntype,
              FlowGroup& flow_group,
              std::unique_ptr<SocketDependencies> deps,
-             std::unique_ptr<SocketAdapter> sock_adapter);
+             std::unique_ptr<SocketAdapter> sock_adapter,
+             ConnectionKind connection_kind);
 
   /**
    * Disconnects, deletes the underlying bufferevent, and closes the TCP socket.
@@ -843,6 +846,10 @@ class Connection : public TrafficShappingSocket {
    */
   void addHandshakeTimeoutEvent();
 
+  // used to increment/decrement counter stats like num_connections
+  void updateOpenConnectionStats();
+  void updateCloseConnectionStats();
+
   /**
    * A helper function to determine the reason for lower socket throughput.
    * Returns a decision for the socket slow if it can determine it otherwise
@@ -1120,6 +1127,9 @@ class Connection : public TrafficShappingSocket {
   // - message receieved
   // Used to find and proactevely close idle connections
   SteadyTimestamp last_used_time_;
+
+  // used for num_connections counter
+  folly::Optional<ConnectionKind> connection_kind_;
 
   /**
    * For Testing only!

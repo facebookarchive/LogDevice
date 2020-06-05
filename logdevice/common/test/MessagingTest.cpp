@@ -18,6 +18,7 @@
 
 #include "logdevice/common/Address.h"
 #include "logdevice/common/ConnectThrottle.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
@@ -363,7 +364,8 @@ class OnClientCloseTestRequest : public Request {
                                    Sockaddr("127.0.0.1", port),
                                    ResourceBudget::Token(),
                                    SocketType::DATA,
-                                   ConnectionType::PLAIN);
+                                   ConnectionType::PLAIN,
+                                   ConnectionKind::DATA);
     EXPECT_EQ(0, rv);
 
     rv = w->sender().registerOnSocketClosed(Address(cid_), *(new OnClose()));
@@ -510,7 +512,8 @@ TEST(MessagingTest, ConnectionLimit) {
           Sockaddr("127.0.0.1", folly::to<std::string>(fd_).c_str()),
           std::move(token_),
           SocketType::DATA,
-          ConnectionType::PLAIN);
+          ConnectionType::PLAIN,
+          ConnectionKind::DATA);
       EXPECT_EQ(0, rv);
       sem_.post();
       return Execution::COMPLETE;

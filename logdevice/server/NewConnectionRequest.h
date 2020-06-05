@@ -9,6 +9,7 @@
 
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/Connection.h"
+#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/ResourceBudget.h"
@@ -32,6 +33,7 @@ class NewConnectionRequest : public Request {
                        ResourceBudget::Token conn_backlog_token,
                        SocketType type,
                        ConnectionType conntype,
+                       ConnectionKind connection_kind,
                        WorkerType worker_type = WorkerType::GENERAL)
       : Request(RequestType::NEW_CONNECTION),
         fd_(fd),
@@ -41,7 +43,8 @@ class NewConnectionRequest : public Request {
         conn_backlog_token_(std::move(conn_backlog_token)),
         sock_type_(type),
         conntype_(conntype),
-        worker_type_(worker_type) {}
+        worker_type_(worker_type),
+        connection_kind_(connection_kind) {}
 
   ~NewConnectionRequest() override {}
 
@@ -72,6 +75,7 @@ class NewConnectionRequest : public Request {
   ConnectionType conntype_;
   // New connections on this listener will be routed to this worker type
   WorkerType worker_type_{WorkerType::GENERAL};
+  ConnectionKind connection_kind_;
 };
 
 }} // namespace facebook::logdevice

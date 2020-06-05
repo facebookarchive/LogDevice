@@ -82,7 +82,8 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     SocketType type,
     ConnectionType connection_type,
     FlowGroup& flow_group,
-    std::unique_ptr<SocketDependencies> deps) const {
+    std::unique_ptr<SocketDependencies> deps,
+    ConnectionKind connection_kind) const {
   if (connection_type != ConnectionType::SSL &&
       (forceSSLSockets() && type != SocketType::GOSSIP)) {
     connection_type = ConnectionType::SSL;
@@ -106,6 +107,7 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
                                       connection_type,
                                       flow_group,
                                       std::move(deps),
-                                      std::move(sock_adapter));
+                                      std::move(sock_adapter),
+                                      connection_kind);
 }
 }} // namespace facebook::logdevice
