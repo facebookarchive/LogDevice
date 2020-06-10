@@ -54,7 +54,7 @@ class EventLoop : public folly::Executor {
       bool enable_priority_queues = true,
       const std::array<uint32_t, EventLoopTaskQueue::kNumberOfPriorities>&
           requests_per_iteration = {13, 3, 1},
-      EvBase::EvBaseType base_type = EvBase::LEGACY_EVENTBASE,
+      EvBase::EvBaseType base_type = EvBase::FOLLY_EVENTBASE,
       bool start_running = true);
 
   // destructor has to be virtual because it is invoked by EventLoop::run()

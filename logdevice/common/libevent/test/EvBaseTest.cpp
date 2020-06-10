@@ -39,6 +39,5 @@ TEST_P(EvBaseTest, LoopOnce) {
 
 INSTANTIATE_TEST_CASE_P(TestAllBase,
                         EvBaseTest,
-                        ::testing::Values(EvBase::EvBaseType::LEGACY_EVENTBASE,
-                                          EvBase::EvBaseType::FOLLY_EVENTBASE));
+                        ::testing::Values(EvBase::EvBaseType::FOLLY_EVENTBASE));
 }} // namespace facebook::logdevice

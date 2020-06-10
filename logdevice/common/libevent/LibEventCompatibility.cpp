@@ -19,8 +19,6 @@ static EvBase::EvBaseType getType(IEvBase* base) {
     base_type = specific_base->getType();
   } else if (dynamic_cast<EvBaseWithFolly*>(base)) {
     base_type = EvBase::FOLLY_EVENTBASE;
-  } else if (dynamic_cast<EvBaseLegacy*>(base)) {
-    base_type = EvBase::LEGACY_EVENTBASE;
   } else {
     ld_check(false);
   }
@@ -31,11 +29,9 @@ static EvBase::EvBaseType getType(IEvBase* base) {
 void EvBase::selectEvBase(EvBaseType base_type) {
   ld_check(!curr_selection_);
   ld_check(base_type_ == UNKNOWN);
-  ld_check_in(base_type, ({LEGACY_EVENTBASE, FOLLY_EVENTBASE}));
+  ld_check_in(base_type, ({FOLLY_EVENTBASE}));
   base_type_ = base_type;
-  if (base_type_ == LEGACY_EVENTBASE) {
-    curr_selection_ = &ev_base_legacy_;
-  } else if (base_type == FOLLY_EVENTBASE) {
+  if (base_type == FOLLY_EVENTBASE) {
     curr_selection_ = &ev_base_with_folly_;
   }
 }
@@ -49,7 +45,7 @@ EvBase::Status EvBase::free() {
 }
 
 void EvBase::runInEventBaseThread(EventCallback fn) {
-  if (base_type_ == LEGACY_EVENTBASE || base_type_ == UNKNOWN) {
+  if (base_type_ == UNKNOWN) {
     ld_assert(false);
     return;
   }
@@ -111,10 +107,6 @@ Event::Event(IEvBase::EventCallback callback,
              IEvBase* base) {
   auto base_type = getType(base);
   switch (base_type) {
-    case EvBase::LEGACY_EVENTBASE:
-      event_legacy_ =
-          std::make_unique<EventLegacy>(std::move(callback), events, fd, base);
-      break;
     case EvBase::FOLLY_EVENTBASE:
       event_folly_ = std::make_unique<EventWithFolly>(
           std::move(callback), events, fd, base);
@@ -130,9 +122,6 @@ Event::Event(IEvBase::EventCallback callback,
 EvTimer::EvTimer(IEvBase* base) {
   auto base_type = getType(base);
   switch (base_type) {
-    case EvBase::LEGACY_EVENTBASE:
-      evtimer_legacy_ = std::make_unique<EvTimerLegacy>(base);
-      break;
     case EvBase::FOLLY_EVENTBASE:
       evtimer_folly_ = std::make_unique<EvTimerWithFolly>(base);
       break;
@@ -143,9 +132,7 @@ EvTimer::EvTimer(IEvBase* base) {
 }
 
 void EvTimer::attachTimeoutManager(folly::TimeoutManager* tm) {
-  if (evtimer_legacy_) {
-    evtimer_legacy_->attachTimeoutManager(tm);
-  } else if (evtimer_folly_) {
+  if (evtimer_folly_) {
     evtimer_folly_->attachTimeoutManager(tm);
   } else {
     ld_check(false);
@@ -153,9 +140,7 @@ void EvTimer::attachTimeoutManager(folly::TimeoutManager* tm) {
 }
 
 void EvTimer::attachCallback(folly::Func callback) {
-  if (evtimer_legacy_) {
-    evtimer_legacy_->attachCallback(std::move(callback));
-  } else if (evtimer_folly_) {
+  if (evtimer_folly_) {
     evtimer_folly_->attachCallback(std::move(callback));
   } else {
     ld_check(false);
@@ -163,9 +148,7 @@ void EvTimer::attachCallback(folly::Func callback) {
 }
 
 void EvTimer::timeoutExpired() noexcept {
-  if (evtimer_legacy_) {
-    evtimer_legacy_->timeoutExpired();
-  } else if (evtimer_folly_) {
+  if (evtimer_folly_) {
     evtimer_folly_->timeoutExpired();
   } else {
     ld_check(false);
@@ -173,9 +156,6 @@ void EvTimer::timeoutExpired() noexcept {
 }
 
 struct event* FOLLY_NULLABLE EvTimer::getEvent() {
-  if (evtimer_legacy_) {
-    return evtimer_legacy_->getEvent();
-  }
   if (evtimer_folly_) {
     return evtimer_folly_->getEvent()->getEvent();
   }
@@ -184,9 +164,6 @@ struct event* FOLLY_NULLABLE EvTimer::getEvent() {
 }
 
 bool EvTimer::scheduleTimeout(uint32_t ms) {
-  if (evtimer_legacy_) {
-    return evtimer_legacy_->scheduleTimeout(ms);
-  }
   if (evtimer_folly_) {
     return evtimer_folly_->scheduleTimeout(ms);
   }
@@ -195,9 +172,6 @@ bool EvTimer::scheduleTimeout(uint32_t ms) {
 }
 
 bool EvTimer::scheduleTimeout(folly::TimeoutManager::timeout_type timeout) {
-  if (evtimer_legacy_) {
-    return evtimer_legacy_->scheduleTimeout(timeout);
-  }
   if (evtimer_folly_) {
     return evtimer_folly_->scheduleTimeout(timeout);
   }
@@ -206,9 +180,7 @@ bool EvTimer::scheduleTimeout(folly::TimeoutManager::timeout_type timeout) {
 }
 
 void EvTimer::cancelTimeout() {
-  if (evtimer_legacy_) {
-    evtimer_legacy_->cancelTimeout();
-  } else if (evtimer_folly_) {
+  if (evtimer_folly_) {
     evtimer_folly_->cancelTimeout();
   } else {
     ld_check(false);
@@ -216,9 +188,6 @@ void EvTimer::cancelTimeout() {
 }
 
 bool EvTimer::isScheduled() const {
-  if (evtimer_legacy_) {
-    return evtimer_legacy_->isScheduled();
-  }
   if (evtimer_folly_) {
     return evtimer_folly_->isScheduled();
   }
@@ -227,9 +196,6 @@ bool EvTimer::isScheduled() const {
 }
 
 int EvTimer::setPriority(int pri) {
-  if (evtimer_legacy_) {
-    return evtimer_legacy_->setPriority(pri);
-  }
   if (evtimer_folly_) {
     return evtimer_folly_->setPriority(pri);
   }
@@ -238,9 +204,7 @@ int EvTimer::setPriority(int pri) {
 }
 
 void EvTimer::activate(int res, short ncalls) {
-  if (evtimer_legacy_) {
-    evtimer_legacy_->activate(res, ncalls);
-  } else if (evtimer_folly_) {
+  if (evtimer_folly_) {
     evtimer_folly_->activate(res, ncalls);
   } else {
     ld_check(false);
@@ -256,8 +220,6 @@ EvTimer::getCommonTimeout(std::chrono::microseconds timeout) {
   EvBase::EvBaseType base_type = getType(base);
 
   switch (base_type) {
-    case EvBase::LEGACY_EVENTBASE:
-      return EvTimerLegacy::getCommonTimeout(timeout);
     case EvBase::FOLLY_EVENTBASE:
       return EvTimerWithFolly::getCommonTimeout(timeout);
     case EvBase::UNKNOWN:

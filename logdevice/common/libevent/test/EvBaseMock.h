@@ -15,8 +15,8 @@ namespace facebook { namespace logdevice {
 
 class EvBaseMock : public EvBase {
  public:
-  EvBaseMock(bool legacy = false) : EvBase() {
-    selectEvBase(legacy ? LEGACY_EVENTBASE : FOLLY_EVENTBASE);
+  EvBaseMock() : EvBase() {
+    selectEvBase(FOLLY_EVENTBASE);
     assert(curr_selection_);
   }
 

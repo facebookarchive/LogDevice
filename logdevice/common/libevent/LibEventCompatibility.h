@@ -7,18 +7,15 @@
  */
 #pragma once
 
-#include "logdevice/common/libevent/EvBaseLegacy.h"
 #include "logdevice/common/libevent/EvBaseWithFolly.h"
-#include "logdevice/common/libevent/EvTimerLegacy.h"
 #include "logdevice/common/libevent/EvTimerWithFolly.h"
-#include "logdevice/common/libevent/EventLegacy.h"
 #include "logdevice/common/libevent/EventWithFolly.h"
 #include "logdevice/common/libevent/IEvBase.h"
 namespace facebook { namespace logdevice {
 
 class EvBase : public IEvBase {
  public:
-  enum EvBaseType { UNKNOWN, LEGACY_EVENTBASE, FOLLY_EVENTBASE };
+  enum EvBaseType { UNKNOWN, FOLLY_EVENTBASE };
   EvBase() {}
   EvBase(const EvBase&) = delete;
   EvBase& operator=(const EvBase&) = delete;
@@ -66,7 +63,6 @@ class EvBase : public IEvBase {
 
  protected:
   EvBaseType base_type_{UNKNOWN};
-  EvBaseLegacy ev_base_legacy_;
   EvBaseWithFolly ev_base_with_folly_;
 
   IEvBase* curr_selection_{nullptr};
@@ -80,7 +76,6 @@ class Event {
                  IEvBase* base = IEvBase::getRunningBase());
 
  protected:
-  std::unique_ptr<EventLegacy> event_legacy_;
   std::unique_ptr<EventWithFolly> event_folly_;
 };
 
@@ -102,7 +97,6 @@ class EvTimer {
   getCommonTimeout(std::chrono::microseconds timeout);
 
  protected:
-  std::unique_ptr<EvTimerLegacy> evtimer_legacy_;
   std::unique_ptr<EvTimerWithFolly> evtimer_folly_;
 };
 
