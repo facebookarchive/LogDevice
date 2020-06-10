@@ -47,8 +47,7 @@
 using namespace facebook::logdevice;
 using PortOwner = facebook::logdevice::IntegrationTestUtils::detail::PortOwner;
 
-class MessagingSocketTest
-    : public testing::TestWithParam<facebook::logdevice::EvBase::EvBaseType> {
+class MessagingSocketTest : public IntegrationTestBase {
  protected:
   explicit MessagingSocketTest(
       std::chrono::milliseconds timeout = getDefaultTestTimeout())
@@ -89,7 +88,6 @@ struct SocketConnectRequest : public Request {
     bool constructor_failed = false;
     int rv;
     auto& base = Worker::onThisThread()->getEvBase();
-    auto base_type = base.getType();
 
     if (SocketConnectRequest::conn) {
       // This is the second request. Test is done. Clean up. Simulate
@@ -101,24 +99,14 @@ struct SocketConnectRequest : public Request {
     }
 
     try {
-      if (base_type == EvBase::LEGACY_EVENTBASE) {
-        Connection s(badNodeID,
-                     SocketType::DATA,
-                     ConnectionType::PLAIN,
-                     flow_group,
-                     std::make_unique<SocketDependencies>(
-                         Worker::onThisThread()->processor_,
-                         &Worker::onThisThread()->sender()));
-      } else {
-        Connection s(badNodeID,
-                     SocketType::DATA,
-                     ConnectionType::PLAIN,
-                     flow_group,
-                     std::make_unique<SocketDependencies>(
-                         Worker::onThisThread()->processor_,
-                         &Worker::onThisThread()->sender()),
-                     std::make_unique<AsyncSocketAdapter>(base.getEventBase()));
-      }
+      Connection s(badNodeID,
+                   SocketType::DATA,
+                   ConnectionType::PLAIN,
+                   flow_group,
+                   std::make_unique<SocketDependencies>(
+                       Worker::onThisThread()->processor_,
+                       &Worker::onThisThread()->sender()),
+                   std::make_unique<AsyncSocketAdapter>(base.getEventBase()));
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
     }
@@ -133,22 +121,13 @@ struct SocketConnectRequest : public Request {
           &Worker::onThisThread()->sender());
       const auto throttle_settings = deps->getSettings().connect_throttle;
       connect_throttle = std::make_unique<ConnectThrottle>(throttle_settings);
-      if (base_type == EvBase::LEGACY_EVENTBASE) {
-        SocketConnectRequest::conn =
-            std::make_unique<Connection>(firstNodeID,
-                                         SocketType::DATA,
-                                         ConnectionType::PLAIN,
-                                         flow_group,
-                                         std::move(deps));
-      } else {
-        SocketConnectRequest::conn = std::make_unique<Connection>(
-            firstNodeID,
-            SocketType::DATA,
-            ConnectionType::PLAIN,
-            flow_group,
-            std::move(deps),
-            std::make_unique<AsyncSocketAdapter>(base.getEventBase()));
-      }
+      SocketConnectRequest::conn = std::make_unique<Connection>(
+          firstNodeID,
+          SocketType::DATA,
+          ConnectionType::PLAIN,
+          flow_group,
+          std::move(deps),
+          std::make_unique<AsyncSocketAdapter>(base.getEventBase()));
       SocketConnectRequest::conn->setConnectThrottle(connect_throttle.get());
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
@@ -368,8 +347,7 @@ struct WorkerAndEventLoop {
 };
 
 WorkerAndEventLoop createWorker(Processor* p,
-                                std::shared_ptr<UpdateableConfig>& config,
-                                EvBase::EvBaseType base_type) {
+                                std::shared_ptr<UpdateableConfig>& config) {
   static int idx_alloc = 0;
   int idx = idx_alloc++;
   ld_info("Creating worker %d", idx);
@@ -378,7 +356,7 @@ WorkerAndEventLoop createWorker(Processor* p,
                                        1024,
                                        true,
                                        folly::make_array<uint32_t>(13, 3, 1),
-                                       base_type);
+                                       EvBase::FOLLY_EVENTBASE);
   auto w = std::make_unique<Worker>(
       folly::getKeepAliveToken(h.get()), p, worker_id_t(0), config);
 
@@ -394,13 +372,11 @@ WorkerAndEventLoop createWorker(Processor* p,
  * Worker. Posts a SocketConnectRequest that creates a new
  * server connection. Connects to the remote and Sends HELLO.
  */
-TEST_P(MessagingSocketTest, SocketConnect) {
+TEST_F(MessagingSocketTest, SocketConnect) {
   int rv;
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
-  settings.use_legacy_eventbase =
-      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
   UpdateableSettings<Settings> updateable_settings(settings);
   settings.num_workers = 1;
   ServerSocket server;
@@ -410,7 +386,7 @@ TEST_P(MessagingSocketTest, SocketConnect) {
   Processor processor(config, updateable_settings);
 
   ld_check((bool)config);
-  auto out = createWorker(&processor, config, GetParam());
+  auto out = createWorker(&processor, config);
   auto w = out.worker.get();
 
   SCOPE_EXIT {
@@ -516,13 +492,11 @@ STORED_Header SenderBasicSendRequest::hdr1out =
  * underlying TCP socket, and nc exiting. pclose() will block until nc
  * exits.
  */
-TEST_P(MessagingSocketTest, SenderBasicSend) {
+TEST_F(MessagingSocketTest, SenderBasicSend) {
   int rv;
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
-  settings.use_legacy_eventbase =
-      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
   UpdateableSettings<Settings> updateable_settings(settings);
 
   ServerSocket server;
@@ -533,7 +507,7 @@ TEST_P(MessagingSocketTest, SenderBasicSend) {
 
   ld_check((bool)config);
 
-  auto out = createWorker(&processor, config, GetParam());
+  auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
     w->sender().shutdownSockets(w);
@@ -639,14 +613,12 @@ struct SenderVarLenMessageRequest : public Request {
   Address node_addr_;
 };
 
-void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
-                      EvBase::EvBaseType type) {
+void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled) {
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
   settings.outbufs_mb_max_per_thread = 1;
   settings.outbuf_socket_min_kb = 1;
-  settings.use_legacy_eventbase = type == EvBase::EvBaseType::LEGACY_EVENTBASE;
   // Tell Sender to not actually send any messages (except HELLO).
   // Instead, the messages will be kept in flight indefinitely.
   settings.message_error_injection_status = E::DROPPED;
@@ -671,11 +643,11 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   // Client processor
   auto cl_processor =
       Processor::createNoInit(config, updateable_cl_settings, firstNodeID);
-  auto out = createWorker(cl_processor.get(), config, type);
+  auto out = createWorker(cl_processor.get(), config);
   auto cl_w = out.worker.get();
   auto cl_processor2 =
       Processor::createNoInit(config, updateable_cl_settings, clNodeID);
-  auto out2 = createWorker(cl_processor2.get(), config, type);
+  auto out2 = createWorker(cl_processor2.get(), config);
   auto cl_w2 = out2.worker.get();
 
   // Create server processor.
@@ -683,7 +655,7 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
   UpdateableSettings<Settings> updateable_srv_settings(settings);
   auto srv_processor =
       Processor::createNoInit(config, updateable_srv_settings, secondNodeID);
-  auto out3 = createWorker(srv_processor.get(), config, type);
+  auto out3 = createWorker(srv_processor.get(), config);
   auto srv_w = out3.worker.get();
 
   ld_check((bool)config);
@@ -904,8 +876,8 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled,
  *   The above set of tests are repeated for CLIENT output buffer budget as
  *   well ( by having server node sending to two client end points).
  */
-TEST_P(MessagingSocketTest, SenderOutBufLimitsPerPeerType) {
-  testOutBufsLimit(false, GetParam());
+TEST_F(MessagingSocketTest, SenderOutBufLimitsPerPeerType) {
+  testOutBufsLimit(false);
 }
 
 /**
@@ -914,8 +886,8 @@ TEST_P(MessagingSocketTest, SenderOutBufLimitsPerPeerType) {
  *   limit.
  *  It also verifies the per connection minimum guaranteed budget.
  */
-TEST_P(MessagingSocketTest, SenderOutBufPerPeerLimitsDisabled) {
-  testOutBufsLimit(true, GetParam());
+TEST_F(MessagingSocketTest, SenderOutBufPerPeerLimitsDisabled) {
+  testOutBufsLimit(true);
 }
 
 struct SendStoredWithTimeoutRequest : public Request {
@@ -951,13 +923,11 @@ struct SendStoredWithTimeoutRequest : public Request {
  * Use nc as a server and send HELLO to it. Make sure that the client socket
  * is closed after some time (since we haven't received an ACK).
  */
-TEST_P(MessagingSocketTest, OnHandshakeTimeout) {
+TEST_F(MessagingSocketTest, OnHandshakeTimeout) {
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
   settings.handshake_timeout = std::chrono::milliseconds(1000);
-  settings.use_legacy_eventbase =
-      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
   UpdateableSettings<Settings> updateable_settings(settings);
 
   ServerSocket server;
@@ -966,7 +936,7 @@ TEST_P(MessagingSocketTest, OnHandshakeTimeout) {
 
   Processor processor(config, updateable_settings);
 
-  auto out = createWorker(&processor, config, GetParam());
+  auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
     w->sender().shutdownSockets(w);
@@ -1045,12 +1015,10 @@ struct SendMessageOnCloseRequest : public Request {
   bool first_msg_{true};
 };
 
-TEST_P(MessagingSocketTest, SendFromCloseCB) {
+TEST_F(MessagingSocketTest, SendFromCloseCB) {
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
-  settings.use_legacy_eventbase =
-      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
   settings.connect_throttle =
       chrono_expbackoff_t<std::chrono::milliseconds>(0, 0);
   UpdateableSettings<Settings> updateable_settings(settings);
@@ -1064,7 +1032,7 @@ TEST_P(MessagingSocketTest, SendFromCloseCB) {
 
   ld_check((bool)config);
 
-  auto out = createWorker(processor.get(), config, GetParam());
+  auto out = createWorker(processor.get(), config);
   auto w = out.worker.get();
   SCOPE_EXIT {
     w->sender().shutdownSockets(w);
@@ -1222,17 +1190,15 @@ struct SendMessageExpectBadProtoRequest : public Request {
  * If server sends ACK with E::PROTONOSUPPORT error, client should close
  * connection. Even if server doesns't close it and never reads from it.
  */
-TEST_P(MessagingSocketTest, AckProtoNoSupportClose) {
+TEST_F(MessagingSocketTest, AckProtoNoSupportClose) {
   Settings settings = create_default_settings<Settings>();
-  settings.use_legacy_eventbase =
-      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
   UpdateableSettings<Settings> updateable_settings(settings);
   ServerSocket server;
   std::shared_ptr<UpdateableConfig> config(
       create_config(std::vector<int>{server.getPort()}));
 
   Processor processor(config, updateable_settings);
-  auto out = createWorker(&processor, config, GetParam());
+  auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
     w->sender().shutdownSockets(w);
@@ -1267,20 +1233,18 @@ TEST_P(MessagingSocketTest, AckProtoNoSupportClose) {
 // not compatible with this protocol, and one that is compatible. We verify
 // that the first one gets its onSent() method called with E::PROTONOSUPPORT
 // and the second one is successfully sent.
-TEST_P(MessagingSocketTest, MessageProtoNoSupportOnSent) {
+TEST_F(MessagingSocketTest, MessageProtoNoSupportOnSent) {
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
   settings.handshake_timeout = std::chrono::milliseconds(1000);
-  settings.use_legacy_eventbase =
-      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
   UpdateableSettings<Settings> updateable_settings(settings);
   ServerSocket server;
   std::shared_ptr<UpdateableConfig> config(
       create_config(std::vector<int>{server.getPort()}));
 
   Processor processor(config, updateable_settings);
-  auto out = createWorker(&processor, config, GetParam());
+  auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
     w->sender().shutdownSockets(w);
@@ -1363,19 +1327,17 @@ struct SendMessageOnCloseInvalidCluster : public Request {
  * If server sends ACK with E::INVALID_CLUSTER error, client should close
  * connection. Even if server doesns't close it and never reads from it.
  */
-TEST_P(MessagingSocketTest, AckInvalidClusterClose) {
+TEST_F(MessagingSocketTest, AckInvalidClusterClose) {
   Settings settings = create_default_settings<Settings>();
   settings.include_cluster_name_on_handshake = true;
   settings.include_destination_on_handshake = true;
-  settings.use_legacy_eventbase =
-      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
   UpdateableSettings<Settings> updateable_settings(settings);
   ServerSocket server;
   std::shared_ptr<UpdateableConfig> config(
       create_config(std::vector<int>{server.getPort()}));
 
   Processor processor(config, updateable_settings);
-  auto out = createWorker(&processor, config, GetParam());
+  auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
     w->sender().shutdownSockets(w);
@@ -1429,16 +1391,14 @@ struct SendReentrantMessage : public Request {
  * transmitted. Queue message again post handshake and again both messages
  * should be sent.
  */
-TEST_P(MessagingSocketTest, ReentrantOnSent) {
+TEST_F(MessagingSocketTest, ReentrantOnSent) {
   Settings settings = create_default_settings<Settings>();
-  settings.use_legacy_eventbase =
-      GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE;
   UpdateableSettings<Settings> updateable_settings(settings);
   ServerSocket server;
   std::shared_ptr<UpdateableConfig> config(
       create_config(std::vector<int>{server.getPort()}));
   Processor processor(config, updateable_settings);
-  auto out = createWorker(&processor, config, GetParam());
+  auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
     w->sender().shutdownSockets(w);
@@ -1488,28 +1448,18 @@ TEST_P(MessagingSocketTest, ReentrantOnSent) {
  * requests. Sends a SIGCONT to the sequencer. Expects all requests to
  * fail with CONNFAILED.
  */
-TEST_P(MessagingSocketTest, PROTONOSUPPORT) {
+TEST_F(MessagingSocketTest, PROTONOSUPPORT) {
   // One node would have been enough in here for this test, but we added another
   // one for the client to able the nodes config.
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setParam("--test-reject-hello",
-                    "PROTONOSUPPORT",
-                    IntegrationTestUtils::ParamScope::SEQUENCER)
-          .setParam("--use-legacy-eventbase",
-                    GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
-                        ? "true"
-                        : "false")
-          .create(2);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--test-reject-hello",
+                               "PROTONOSUPPORT",
+                               IntegrationTestUtils::ParamScope::SEQUENCER)
+                     .create(2);
 
   cluster->getSequencerNode().suspend();
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0,
-            client_settings->set(
-                "use-legacy-eventbase",
-                GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE ? "true"
-                                                                   : "false"));
 
   std::shared_ptr<Client> client =
       cluster->createClient(testTimeout(), std::move(client_settings));
@@ -1547,28 +1497,18 @@ TEST_P(MessagingSocketTest, PROTONOSUPPORT) {
  * requests. Sends a SIGCONT to the sequencer. Expects all requests to
  * fail with CONNFAILED.
  */
-TEST_P(MessagingSocketTest, DestinationMismatchTestReject) {
+TEST_F(MessagingSocketTest, DestinationMismatchTestReject) {
   // One node would have been enough in here for this test, but we added another
   // one for the client to able the nodes config.
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setParam("--test-reject-hello",
-                    "DESTINATION_MISMATCH",
-                    IntegrationTestUtils::ParamScope::SEQUENCER)
-          .setParam("--use-legacy-eventbase",
-                    GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
-                        ? "true"
-                        : "false")
-          .create(2);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--test-reject-hello",
+                               "DESTINATION_MISMATCH",
+                               IntegrationTestUtils::ParamScope::SEQUENCER)
+                     .create(2);
 
   cluster->getSequencerNode().suspend();
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0,
-            client_settings->set(
-                "use-legacy-eventbase",
-                GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE ? "true"
-                                                                   : "false"));
 
   std::shared_ptr<Client> client =
       cluster->createClient(testTimeout(), std::move(client_settings));
@@ -1606,27 +1546,17 @@ TEST_P(MessagingSocketTest, DestinationMismatchTestReject) {
  * requests. Sends a SIGCONT to the sequencer. Expects all requests to
  * fail with CONNFAILED.
  */
-TEST_P(MessagingSocketTest, InvalidClusterNameTestReject) {
+TEST_F(MessagingSocketTest, InvalidClusterNameTestReject) {
   // One node would have been enough in here for this test, but we added another
   // one for the client to able the nodes config.
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setParam("--test-reject-hello",
-                    "INVALID_CLUSTER",
-                    IntegrationTestUtils::ParamScope::SEQUENCER)
-          .setParam("--use-legacy-eventbase",
-                    GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
-                        ? "true"
-                        : "false")
-          .create(2);
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setParam("--test-reject-hello",
+                               "INVALID_CLUSTER",
+                               IntegrationTestUtils::ParamScope::SEQUENCER)
+                     .create(2);
   cluster->getSequencerNode().suspend();
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0,
-            client_settings->set(
-                "use-legacy-eventbase",
-                GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE ? "true"
-                                                                   : "false"));
 
   std::shared_ptr<Client> client =
       cluster->createClient(std::chrono::hours(1), std::move(client_settings));
@@ -1663,21 +1593,10 @@ TEST_P(MessagingSocketTest, InvalidClusterNameTestReject) {
  * Suspends logdeviced. Sends another append with a large timeout.
  * Kills logdeviced. Expects the second append to fail with E::CONNFAILED.
  */
-TEST_P(MessagingSocketTest, ServerCloses) {
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setParam("--use-legacy-eventbase",
-                    GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
-                        ? "true"
-                        : "false")
-          .create(1);
+TEST_F(MessagingSocketTest, ServerCloses) {
+  auto cluster = IntegrationTestUtils::ClusterFactory().create(1);
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
-  ASSERT_EQ(0,
-            client_settings->set(
-                "use-legacy-eventbase",
-                GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE ? "true"
-                                                                   : "false"));
 
   std::shared_ptr<Client> client =
       cluster->createClient(testTimeout(), std::move(client_settings));
@@ -1713,24 +1632,14 @@ TEST_P(MessagingSocketTest, ServerCloses) {
   ASSERT_TRUE(cb_called.load());
 }
 
-TEST_P(MessagingSocketTest, ServerShutdownWithOpenConnections) {
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          .setNumLogs(1)
-          .setParam("--num-workers", "1")
-          .setParam("--use-legacy-eventbase",
-                    GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
-                        ? "true"
-                        : "false")
-          .create(1);
+TEST_F(MessagingSocketTest, ServerShutdownWithOpenConnections) {
+  auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setNumLogs(1)
+                     .setParam("--num-workers", "1")
+                     .create(1);
 
   std::unique_ptr<ClientSettings> settings(ClientSettings::create());
   ASSERT_EQ(0, settings->set("num-workers", "1"));
-  ASSERT_EQ(0,
-            settings->set("use-legacy-eventbase",
-                          GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
-                              ? "true"
-                              : "false"));
 
   auto client = cluster->createClient(testTimeout(), std::move(settings));
 
@@ -1762,7 +1671,7 @@ TEST_P(MessagingSocketTest, ServerShutdownWithOpenConnections) {
 // connection layer (put into serializeq_) as opposed to being flushed to the
 // output evbuffer (when the protocol version of the peer is finally known)
 // don't cause crashes. See t6281298 for more details.
-TEST_P(MessagingSocketTest, DifferentProtocolsT6281298) {
+TEST_F(MessagingSocketTest, DifferentProtocolsT6281298) {
   std::string proto = std::to_string(Compatibility::MIN_PROTOCOL_SUPPORTED);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -1770,20 +1679,11 @@ TEST_P(MessagingSocketTest, DifferentProtocolsT6281298) {
           .doPreProvisionEpochMetaData()     // avoids running a STORE that has
                                          // flags incompatible with the proto
                                          // version
-          .setParam("--use-legacy-eventbase",
-                    GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE
-                        ? "true"
-                        : "false")
           .create(1);
 
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   ASSERT_EQ(0, client_settings->set("connect-timeout", "5s"));
   ASSERT_EQ(0, client_settings->set("handshake-timeout", "5s"));
-  ASSERT_EQ(0,
-            client_settings->set(
-                "use-legacy-eventbase",
-                GetParam() == EvBase::EvBaseType::LEGACY_EVENTBASE ? "true"
-                                                                   : "false"));
   auto client =
       cluster->createClient(testTimeout(), std::move(client_settings));
   ASSERT_TRUE((bool)client);
@@ -1799,9 +1699,5 @@ TEST_P(MessagingSocketTest, DifferentProtocolsT6281298) {
   ASSERT_EQ(0, reader->startReading(logid_t(1), LSN_OLDEST));
   cluster->getNode(0).resume();
 }
-
-INSTANTIATE_TEST_CASE_P(MessagingSocketTestAllBase,
-                        MessagingSocketTest,
-                        ::testing::Values(EvBase::EvBaseType::FOLLY_EVENTBASE));
 
 } // namespace

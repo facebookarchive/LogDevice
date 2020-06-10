@@ -287,8 +287,7 @@ workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
               local_settings->hi_requests_per_iteration,
               local_settings->mid_requests_per_iteration,
               local_settings->lo_requests_per_iteration),
-          local_settings->use_legacy_eventbase ? EvBase::LEGACY_EVENTBASE
-                                               : EvBase::FOLLY_EVENTBASE,
+          EvBase::FOLLY_EVENTBASE,
           /* start_running */ false));
       auto executor = folly::getKeepAliveToken(loops.back().get());
       worker.reset(createWorker(std::move(executor), worker_id_t(i), type));
