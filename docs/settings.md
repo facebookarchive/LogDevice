@@ -107,7 +107,7 @@ sidebar_label: Settings
 | rsm-force-all-send-all | Forces ALL\_SEND\_ALL mode for read streams associated with RSM. | true | requires&nbsp;restart |
 | rsm-include-read-pointer-in-snapshot | Allow inclusion of read pointer in RSM snapshots. Note that if this is set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE! | true |  |
 | rsm-snapshot-enable-dual-writes | Decides whether snapshots should be written to log based store as well(to roll back from local store to log based in case of emergency | true | server&nbsp;only |
-| rsm-snapshot-store-type | One of the following: legacy (use legacy way of storing and retrieving snapshots from a log), log (use Log Based snapshot store and point queries to fetch snapshots instead of tailing), message (Message Based for bootstrapping RSM snapshot from a Remote cluster host)local-store (From snapshot stored in local store) | legacy | requires&nbsp;restart |
+| rsm-snapshot-store-type | One of the following: legacy (use legacy way of storing and retrieving snapshots from a log), log (use Log Based snapshot store and point queries to fetch snapshots instead of tailing), message (Message Based for bootstrapping RSM snapshot from a Remote cluster host)local-store (From snapshot stored in local store) | log | requires&nbsp;restart |
 | server-id | optional server ID, reported by INFO admin command |  | requires&nbsp;restart, server&nbsp;only |
 | shutdown-timeout | amount of time to wait for the server to shut down before terminating the process. Consider modifying --time-delay-before-force-abort when changing this value. | 120s | server&nbsp;only |
 | store-histogram-min-samples-per-bucket | How many stores should the store histogram wait for before reporting latency estimates | 30 | server&nbsp;only |

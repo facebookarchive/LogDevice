@@ -3344,7 +3344,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
   init(
       "rsm-snapshot-store-type",
       &rsm_snapshot_store_type,
-      "legacy",
+      "log",
       validate_rsm_snapshot_store,
       "One of the following: "
       "legacy (use legacy way of storing and retrieving snapshots from a log), "
