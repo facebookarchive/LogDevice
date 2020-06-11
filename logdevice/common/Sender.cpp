@@ -1465,6 +1465,7 @@ void Sender::noteConfigurationChanged(
   nodes_ = std::move(nodes_configuration);
 
   auto it = impl_->server_conns_.begin();
+  std::vector<std::unique_ptr<Connection>> to_close;
   while (it != impl_->server_conns_.end()) {
     auto& s = it->second;
     auto i = it->first;
@@ -1506,8 +1507,15 @@ void Sender::noteConfigurationChanged(
           nodes_->clusterSize());
     }
 
-    s->close(E::NOTINCONFIG);
+    // Socket close might trigger a rehash on the map
+    // and invalidate iterators which will cause a memory violation.
+    // So let's move it out first.
+    to_close.push_back(std::move(it->second));
     it = impl_->server_conns_.erase(it);
+  }
+
+  for (auto& socket : to_close) {
+    socket->close(E::NOTINCONFIG);
   }
 }
 
