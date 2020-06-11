@@ -8,14 +8,15 @@
 #include "logdevice/test/utils/port_selection.h"
 
 #include <cerrno>
+#include <fcntl.h>
 #include <random>
+#include <unistd.h>
 
 #include <folly/Memory.h>
 #include <netinet/in.h>
 
 #include "event2/util.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice { namespace IntegrationTestUtils {
 namespace detail {
@@ -28,11 +29,20 @@ folly::Optional<PortOwner> claim_port(int port) {
   ld_check(sock != -1);
 
   // Subprocesses must not inherit this fd
-  rv = LD_EV(evutil_make_socket_closeonexec)(sock);
+  int flags;
+  rv = 0;
+  if ((flags = fcntl(sock, F_GETFD, NULL)) < 0) {
+    rv = -1;
+  }
+  if (fcntl(sock, F_SETFD, flags | FD_CLOEXEC) == -1) {
+    rv = -1;
+  }
   ld_check(rv == 0);
   // Subprocesses need to be able to bind to this port immediately after we
   // close it
-  rv = LD_EV(evutil_make_listen_socket_reuseable)(sock);
+  int one = 1;
+  rv = setsockopt(
+      sock, SOL_SOCKET, SO_REUSEADDR, (void*)&one, (ev_socklen_t)sizeof(one));
   ld_check(rv == 0);
 
   struct sockaddr_storage ss;

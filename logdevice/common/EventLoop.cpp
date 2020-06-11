@@ -23,7 +23,6 @@
 #include "logdevice/common/Request.h"
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {

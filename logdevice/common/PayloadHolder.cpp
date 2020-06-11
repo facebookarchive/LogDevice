@@ -13,7 +13,6 @@
 #include <event2/buffer.h>
 
 #include "logdevice/common/EventLoop.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 namespace facebook { namespace logdevice {

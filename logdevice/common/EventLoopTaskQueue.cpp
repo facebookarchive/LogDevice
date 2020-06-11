@@ -14,7 +14,6 @@
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 
 namespace facebook { namespace logdevice {
 
