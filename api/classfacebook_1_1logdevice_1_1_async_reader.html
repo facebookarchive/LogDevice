@@ -89,6 +89,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:aed6742bbd7a2a61566d8a1deb44ff25f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3a41c126dddd280f95f660616e446357"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#a3a41c126dddd280f95f660616e446357">setMonitoringTier</a> (MonitoringTier tier)=0</td></tr>
 <tr class="separator:a3a41c126dddd280f95f660616e446357"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adfff84d4c1ad88896d30e288850e9856"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#adfff84d4c1ad88896d30e288850e9856">addMonitoringTag</a> (std::string tag)=0</td></tr>
+<tr class="separator:adfff84d4c1ad88896d30e288850e9856"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a59b684294bf9b6c97ab26671a5bb3894"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#a59b684294bf9b6c97ab26671a5bb3894">withoutPayload</a> ()=0</td></tr>
 <tr class="separator:a59b684294bf9b6c97ab26671a5bb3894"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae12350808c55ead68ad150cd8c6bec59"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#ae12350808c55ead68ad150cd8c6bec59">forceNoSingleCopyDelivery</a> ()=0</td></tr>
@@ -113,6 +115,34 @@ Static Public Member Functions</h2></td></tr>
 <tr class="separator:a5059c10f5e16a5c6dfb78c6b0a5d6733"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Function Documentation</h2>
+<a id="adfff84d4c1ad88896d30e288850e9856"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adfff84d4c1ad88896d30e288850e9856">&#9670;&nbsp;</a></span>addMonitoringTag()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void facebook::logdevice::AsyncReader::addMonitoringTag </td>
+          <td>(</td>
+          <td class="paramtype">std::string&#160;</td>
+          <td class="paramname"><em>tag</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<p>Adds a monitoring tag to this reader. Monitoring tags are used to help identify readers that belong to a particular user, use case, function, etc for monitoring purposes.</p>
+<p>Only affects subsequent <a class="el" href="classfacebook_1_1logdevice_1_1_async_reader.html#a13331e00d2b9fd60c3d956927dd3cefc">startReading()</a> calls. </p>
+
+</div>
+</div>
 <a id="a8ccc11109a00b0806cc213567f37929c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8ccc11109a00b0806cc213567f37929c">&#9670;&nbsp;</a></span>doNotDecodeBufferedWrites()</h2>
 
