@@ -117,7 +117,7 @@ class Readers : public AdminCommandTable {
          "thread for reading a batch of records."},
         {"csid", DataType::TEXT, "Client Session ID"},
         {"rsid", DataType::TEXT, "Read stream ID"},
-        {"sndbuf_occupancy",
+        {"tcp_sndbuf",
          DataType::INTEGER,
          "Number of bytes in TCP sndbuf waiting to be sent"},
     };
