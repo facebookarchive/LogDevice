@@ -25,7 +25,6 @@ from ldops.types.cluster import Cluster
 from ldops.types.cluster_view import ClusterView
 from ldops.types.node import Node
 from ldops.types.socket_address import SocketAddress
-from libfb.py.asyncio.await_utils import make_awaitable
 from logdevice.admin.clients import AdminAPI
 from logdevice.admin.exceptions.types import NotSupported
 from logdevice.admin.logtree.types import ReplicationInfo
@@ -183,22 +182,19 @@ async def get_cluster_view(client: AdminAPI) -> ClusterView:
 
 async def group_nodes_by_scope(
     client: AdminAPI,
-    nodes: Optional[Sequence[NodeConfig]] = None,
+    node_configs: Optional[Sequence[NodeConfig]] = None,
     replication_info: Optional[ReplicationInfo] = None,
 ) -> Tuple[Tuple[NodeID, ...], ...]:
-    replication_info, nodes_config = await asyncio.gather(
-        admin_api.get_replication_info(client)
-        if replication_info is None
-        else make_awaitable(replication_info),
-        admin_api.get_nodes_config(client)
-        if nodes is None
-        else make_awaitable(NodesConfigResponse(nodes=nodes)),
-    )
+    if node_configs is None:
+        response = await admin_api.get_nodes_config(client)
+        node_configs = response.nodes
+    if replication_info is None:
+        replication_info = await admin_api.get_replication_info(client)
 
     scope = replication_info.tolerable_failure_domains.domain
     ret = defaultdict(set)
 
-    for node_config in nodes_config.nodes:
+    for node_config in node_configs:
         # location_per_scope doesn't have NODE as a key, so we insert a
         # dummy value for the location, which is different for each node.
         # This is okay because we omit the name of the location from the
@@ -207,7 +203,7 @@ async def group_nodes_by_scope(
             location = tuple(
                 node_config.location_per_scope.get(scope_kind, "")
                 for scope_kind in sorted(
-                    list(LocationScope), key=lambda x: x.value, reverse=True
+                    LocationScope, key=lambda x: x.value, reverse=True
                 )
                 if scope_kind.value >= scope.value
             )
