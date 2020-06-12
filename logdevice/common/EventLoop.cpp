@@ -10,7 +10,6 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include <event2/event.h>
 #include <folly/Memory.h>
 #include <folly/container/Array.h>
 #include <folly/io/async/Request.h>
@@ -18,7 +17,6 @@
 #include <sys/types.h>
 
 #include "logdevice/common/ConstructorFailed.h"
-#include "logdevice/common/EventHandler.h"
 #include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/ThreadID.h"

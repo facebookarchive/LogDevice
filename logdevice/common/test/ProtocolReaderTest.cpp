@@ -11,7 +11,6 @@
 
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/Message.h"

@@ -10,7 +10,6 @@
 
 #include <cstdint>
 
-#include "event2/buffer.h"
 #include "logdevice/common/AppendRequestBase.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"

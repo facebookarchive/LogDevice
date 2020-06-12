@@ -13,14 +13,12 @@
 #include <folly/Random.h>
 #include <folly/small_vector.h>
 
-#include "event2/event.h"
 #include "logdevice/common/ConstructorFailed.h"
 #include "logdevice/common/EventHandler.h"
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ShapingConfig.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 
 /**

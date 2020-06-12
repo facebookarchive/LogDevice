@@ -4,11 +4,6 @@
 
 #include <folly/io/async/SSLContext.h>
 
-#include "event2/buffer.h"
-#include "event2/bufferevent.h"
-#include "event2/bufferevent_ssl.h"
-#include "event2/event.h"
-#include "event2/event_struct.h"
 #include "logdevice/common/Address.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/PrincipalIdentity.h"

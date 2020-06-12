@@ -7,7 +7,6 @@
  */
 #include "logdevice/common/TimeoutMap.h"
 
-#include <event2/event.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/libevent/compat.h"

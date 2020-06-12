@@ -7,8 +7,6 @@
  */
 #pragma once
 
-#include "event2/buffer.h"
-#include "event2/bufferevent.h"
 #include "logdevice/common/EventLoop.h"
 #include "logdevice/common/ThreadID.h"
 

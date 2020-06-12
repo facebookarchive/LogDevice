@@ -15,7 +15,6 @@
 #include <folly/Memory.h>
 #include <netinet/in.h>
 
-#include "event2/util.h"
 #include "logdevice/common/Sockaddr.h"
 
 namespace facebook { namespace logdevice { namespace IntegrationTestUtils {
@@ -41,8 +40,7 @@ folly::Optional<PortOwner> claim_port(int port) {
   // Subprocesses need to be able to bind to this port immediately after we
   // close it
   int one = 1;
-  rv = setsockopt(
-      sock, SOL_SOCKET, SO_REUSEADDR, (void*)&one, (ev_socklen_t)sizeof(one));
+  rv = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void*)&one, sizeof(one));
   ld_check(rv == 0);
 
   struct sockaddr_storage ss;

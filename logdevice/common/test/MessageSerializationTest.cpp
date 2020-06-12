@@ -12,7 +12,6 @@
 #include <folly/ScopeGuard.h>
 #include <gtest/gtest.h>
 
-#include "event2/buffer.h"
 #include "logdevice/common/Metadata.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Worker.h"

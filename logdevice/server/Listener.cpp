@@ -87,12 +87,6 @@ bool Listener::setupAsyncSocket() {
   return true;
 }
 
-void Listener::connectionAccepted(
-    folly::NetworkSocket fd,
-    const folly::SocketAddress& clientAddr) noexcept {
-  acceptCallback(fd.toFd(), clientAddr);
-}
-
 void Listener::acceptError(const std::exception& ex) noexcept {
   RATELIMIT_ERROR(std::chrono::seconds(10),
                   5,

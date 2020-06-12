@@ -7,7 +7,6 @@
  */
 #include "logdevice/common/EventLoopTaskQueue.h"
 
-#include <event2/event.h>
 #include <folly/Function.h>
 
 #include "logdevice/common/ConstructorFailed.h"
