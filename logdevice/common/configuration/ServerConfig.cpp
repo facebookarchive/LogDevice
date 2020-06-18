@@ -357,7 +357,6 @@ std::unique_ptr<ServerConfig> ServerConfig::copy() const {
                                                   getCustomFields(),
                                                   ns_delimiter_);
   config->setVersion(version_);
-  config->setServerOrigin(server_origin_);
   config->setMainConfigMetadata(main_config_metadata_);
   return config;
 }

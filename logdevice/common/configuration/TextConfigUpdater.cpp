@@ -263,13 +263,6 @@ int TextConfigUpdaterImpl::compareServerConfig(
                  old_metadata.hash.c_str(),
                  new_metadata.hash.c_str());
       STAT_INCR(stats_, config_update_hash_mismatch);
-    } else if (old_metadata.logs_config_may_be_outdated) {
-      ld_info("Received config with same version (%u) and hash (%s), but "
-              "updating anyway because logs config may be outdated, because "
-              "our current main config came from config synchronization, which "
-              "doesn't update logs config",
-              new_version.val(),
-              old_metadata.hash.c_str());
     } else {
       ld_info("Received same config as already running "
               "(version: %u - hash: %s).",

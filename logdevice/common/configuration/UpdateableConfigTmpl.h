@@ -304,26 +304,6 @@ class UpdateableConfigTmpl : public UpdateableConfigBase {
     }
   }
 
-  /**
-   * Attempts to update the last known version to version. Returns true iff the
-   * last known version is successfully updated (version > current last known
-   * version)
-   */
-  bool updateLastKnownVersion(config_version_t version) {
-    uint32_t prev = atomic_fetch_max(last_known_version_, version.val());
-    return version.val() > prev;
-  }
-
-  /**
-   * Attempts to update the last known version received though config
-   * changed message. Returns true iff the last received version is
-   * successfully updated (version > current last received version)
-   */
-  bool updateLastReceivedVersion(config_version_t version) {
-    uint32_t prev = atomic_fetch_max(last_received_version_, version.val());
-    return version.val() > prev;
-  }
-
  private:
   /**
    * Removes a hook from the hook list while holding the mutex.
@@ -339,12 +319,6 @@ class UpdateableConfigTmpl : public UpdateableConfigBase {
 
   // List of registered config hooks
   HookList hooks_;
-
-  // The highest known config version. Used to determine if the current config
-  // is stale.
-  std::atomic<uint32_t> last_known_version_{0};
-  // The highest received config version from CONFIG_CHANGED.
-  std::atomic<uint32_t> last_received_version_{0};
 
   // Updater for this config
   std::shared_ptr<ConfigUpdater> config_updater_;

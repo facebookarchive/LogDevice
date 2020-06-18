@@ -43,21 +43,14 @@ constexpr bool isHandshakeMessage(MessageType type) {
   return isHELLOMessage(type) || isACKMessage(type);
 }
 
-constexpr bool isConfigSynchronizationMessage(MessageType type) {
-  return type == MessageType::CONFIG_ADVISORY ||
-      type == MessageType::CONFIG_CHANGED || type == MessageType::CONFIG_FETCH;
-}
-
 constexpr bool allowedOnGossipConnection(MessageType type) {
   return type == MessageType::GOSSIP ||
       type == MessageType::GET_CLUSTER_STATE ||
-      type == MessageType::GET_CLUSTER_STATE_REPLY ||
-      isHandshakeMessage(type) || isConfigSynchronizationMessage(type);
+      type == MessageType::GET_CLUSTER_STATE_REPLY || isHandshakeMessage(type);
 }
 
 constexpr bool shouldBeInlined(MessageType type) {
-  return isHandshakeMessage(type) || isConfigSynchronizationMessage(type) ||
-      type == MessageType::SHARD_STATUS_UPDATE;
+  return isHandshakeMessage(type) || type == MessageType::SHARD_STATUS_UPDATE;
 }
 
 }} // namespace facebook::logdevice

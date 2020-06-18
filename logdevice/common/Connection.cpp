@@ -723,7 +723,6 @@ void Connection::markDisconnectedOnClose() {
   our_name_at_peer_ = ClientID::INVALID;
   connected_ = false;
   handshaken_ = false;
-  peer_config_version_ = config_version_t(0);
 
   handshake_timeout_event_.cancelTimeout();
   end_stream_rewind_event_.cancelTimeout();
@@ -1365,7 +1364,7 @@ bool Connection::validateReceivedMessage(const Message* msg) const {
     }
   }
   /* verify that gossip sockets don't receive non-gossip messages
-   * exceptions: handshake, config synchronization, shutdown
+   * exceptions: handshake, shutdown
    */
   if (type_ == SocketType::GOSSIP) {
     if (!(msg->type_ == MessageType::SHUTDOWN ||
@@ -1832,9 +1831,8 @@ void Connection::getDebugInfo(InfoSocketsTable& table) const {
                    : 100.0 * total_sndbuf_limited_time / total_busy_time)
       .set<11>(proto_)
       .set<12>(this->getTcpSendBufSize())
-      .set<13>(getPeerConfigVersion().val())
-      .set<14>(isSSL())
-      .set<15>(fd_);
+      .set<13>(isSSL())
+      .set<14>(fd_);
 }
 
 bool Connection::peerIsClient() const {

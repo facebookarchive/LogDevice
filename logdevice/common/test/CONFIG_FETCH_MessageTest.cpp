@@ -92,10 +92,6 @@ TEST(CONFIG_FETCH_MessageTest, LegacySerializeAndDeserialize) {
 struct CONFIG_FETCH_MessageMock : public CONFIG_FETCH_Message {
   using CONFIG_FETCH_Message::CONFIG_FETCH_Message;
 
-  std::shared_ptr<Configuration> getConfig() override {
-    return config;
-  }
-
   NodeID getMyNodeID() const override {
     return NodeID(2, 1);
   }
@@ -209,36 +205,6 @@ TEST(CONFIG_FETCH_MessageTest, OnReceivedNodesConfigurationConditional) {
       .WillOnce(
           Invoke([&](std::unique_ptr<CONFIG_CHANGED_Message>& got, Address) {
             compareChangedMessages(expected, got, true);
-            return 0;
-          }));
-
-  EXPECT_EQ(CONFIG_FETCH_MessageMock::Disposition::NORMAL,
-            msg.onReceived(Address(NodeID(1, 1))));
-}
-
-TEST(CONFIG_FETCH_MessageTest, OnReceivedUpdate) {
-  CONFIG_FETCH_MessageMock msg{
-      CONFIG_FETCH_Header{CONFIG_FETCH_Header::ConfigType::MAIN_CONFIG},
-  };
-  auto config = createSimpleConfig(3, 1);
-  msg.config = config;
-
-  auto expected = std::make_unique<CONFIG_CHANGED_Message>(
-      CONFIG_CHANGED_Header{Status::OK,
-                            REQUEST_ID_INVALID,
-                            static_cast<uint64_t>(config->serverConfig()
-                                                      ->getMainConfigMetadata()
-                                                      .modified_time.count()),
-                            1,
-                            config->serverConfig()->getServerOrigin(),
-                            CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
-                            CONFIG_CHANGED_Header::Action::UPDATE},
-      "");
-
-  EXPECT_CALL(msg, sendMessage_(_, Address(NodeID(1, 1))))
-      .WillOnce(
-          Invoke([&](std::unique_ptr<CONFIG_CHANGED_Message>& got, Address) {
-            compareChangedMessages(expected, got, false);
             return 0;
           }));
 

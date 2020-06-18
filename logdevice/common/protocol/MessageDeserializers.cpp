@@ -18,7 +18,6 @@
 #include "logdevice/common/protocol/CHECK_SEAL_REPLY_Message.h"
 #include "logdevice/common/protocol/CLEANED_Message.h"
 #include "logdevice/common/protocol/CLEAN_Message.h"
-#include "logdevice/common/protocol/CONFIG_ADVISORY_Message.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 #include "logdevice/common/protocol/CONFIG_FETCH_Message.h"
 #include "logdevice/common/protocol/DATA_SIZE_Message.h"

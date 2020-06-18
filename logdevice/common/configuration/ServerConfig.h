@@ -185,18 +185,6 @@ class ServerConfig {
   const Node* getNode(const NodeID& id) const;
 
   /**
-   * Returns the NodeID of the server that this config was received from.
-   * Returns an invalid NodeID if the config did not originate from a server.
-   */
-  NodeID getServerOrigin() const {
-    return server_origin_;
-  }
-
-  void setServerOrigin(const NodeID& id) {
-    server_origin_ = id;
-  }
-
-  /**
    * @return if unauthenticated connections are allowed
    */
   bool allowUnauthenticated() const {
@@ -215,26 +203,6 @@ class ServerConfig {
     std::string hash;
     std::chrono::milliseconds modified_time;
     std::chrono::milliseconds loaded_time;
-
-    // This is a hacky fix for a race condition in config synchronization.
-    //
-    // If this flag is true, it means we're updated the main config to the
-    // version corresponding to `hash`, but left logs config at a potentially
-    // older version (even if `hash` is a hash of a string that contains the
-    // new logs config!). This happens when config synchronization updates
-    // main config using data+hash received from a peer; such data doesn't
-    // include logs config, even if the `hash` bundled with it does.
-    //
-    // When we get a config update from the main config source (as opposed to
-    // configu synchronization messages), this flag will tell us that we need
-    // to update logs config even if hash matches.
-    //
-    // This is a hack because this flag is not really a property of the server
-    // config, but rather tells whether logs config (which is not part of server
-    // config) has been updated. The source of this abstraction leak (at least
-    // in part) is the fact that `hash` also doesn't describe just server config
-    // but both server and logs config. This is all a mess.
-    bool logs_config_may_be_outdated = false;
   };
 
   void setMainConfigMetadata(const ConfigMetadata& metadata) {
@@ -532,12 +500,6 @@ class ServerConfig {
 
   // version of this config
   config_version_t version_{1};
-
-  NodeID my_node_id_;
-
-  // The server this config was received from. This will be an invalid NodeID if
-  // the config did not originate at a server.
-  NodeID server_origin_;
 
   /**
    * Arbitrary fields that logdevice does not recognize

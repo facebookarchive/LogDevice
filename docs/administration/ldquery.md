@@ -684,7 +684,6 @@ Tracks all Connections on all nodes in the cluster.
 | sndbuf\_limited\_pct | real | Portion of last health check peiod, when Connection throughput was limited by send buffer. |
 | proto | int | Protocol that was handshaken. Do not trust this value if the Connection's state is not active. |
 | sendbuf | int | Size of the send buffer of the underlying TCP socket. |
-| peer\_config\_version | int | Last config version that the peer advertised |
 | is\_ssl | int | Set to true if this Connection uses SSL. |
 | fd | int | The file descriptor of the underlying os socket. |
 

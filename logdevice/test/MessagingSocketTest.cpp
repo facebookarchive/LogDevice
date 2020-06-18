@@ -28,7 +28,6 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/network/AsyncSocketAdapter.h"
 #include "logdevice/common/protocol/ACK_Message.h"
-#include "logdevice/common/protocol/CONFIG_ADVISORY_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
 #include "logdevice/common/protocol/STORED_Message.h"
@@ -191,12 +190,6 @@ struct ACK_Raw {
 struct STORED_Raw {
   ProtocolHeader ph;
   STORED_Header hdr;
-} __attribute__((__packed__));
-
-// CONFIG_ADVISORY_Message on the wire
-struct CONFIG_ADVISORY_Raw {
-  ProtocolHeader ph;
-  CONFIG_ADVISORY_Header hdr;
 } __attribute__((__packed__));
 
 static std::shared_ptr<UpdateableConfig>
@@ -523,7 +516,6 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   const int fd = server.accept();
 
   HELLO_Raw hin;
-  CONFIG_ADVISORY_Raw cin;
   STORED_Raw r1in, r2in;
 
   // Skip initial HELLO message.
@@ -539,17 +531,6 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   ack.hdr.proto = Compatibility::MAX_PROTOCOL_SUPPORTED;
   ack.hdr.status = E::OK;
   ASSERT_EQ(sizeof(ACK_Raw), write(fd, &ack, sizeof(ACK_Raw)));
-
-  // Skip CONFIG_ADVISORY
-  size_t expected_size_of_config_advisory = sizeof(CONFIG_ADVISORY_Raw) -
-      (ProtocolHeader::needChecksumInHeader(
-           MessageType::CONFIG_ADVISORY, ack.hdr.proto)
-           ? 0
-           : sizeof(ProtocolHeader::cksum));
-  ASSERT_EQ(expected_size_of_config_advisory,
-            read(fd, &cin, expected_size_of_config_advisory));
-  EXPECT_EQ(MessageType::CONFIG_ADVISORY, cin.ph.type);
-  EXPECT_EQ(expected_size_of_config_advisory, cin.ph.len);
 
   bool need_checksum_for_stored =
       ProtocolHeader::needChecksumInHeader(MessageType::STORED, ack.hdr.proto);
@@ -1054,7 +1035,6 @@ TEST_F(MessagingSocketTest, SendFromCloseCB) {
   // Complete the handshake so that message get written into the real socket
   // instead of being held up in serializeq.
   HELLO_Raw hin;
-  CONFIG_ADVISORY_Raw cin;
   STORED_Raw r1in, r2in;
 
   // Skip initial HELLO message.
@@ -1070,17 +1050,6 @@ TEST_F(MessagingSocketTest, SendFromCloseCB) {
   ack.hdr.proto = Compatibility::MAX_PROTOCOL_SUPPORTED;
   ack.hdr.status = E::OK;
   ASSERT_EQ(sizeof(ACK_Raw), write(fd, &ack, sizeof(ACK_Raw)));
-
-  // Skip CONFIG_ADVISORY
-  size_t expected_size_of_config_advisory = sizeof(CONFIG_ADVISORY_Raw) -
-      (ProtocolHeader::needChecksumInHeader(
-           MessageType::CONFIG_ADVISORY, ack.hdr.proto)
-           ? 0
-           : sizeof(ProtocolHeader::cksum));
-  ASSERT_EQ(expected_size_of_config_advisory,
-            read(fd, &cin, expected_size_of_config_advisory));
-  EXPECT_EQ(MessageType::CONFIG_ADVISORY, cin.ph.type);
-  EXPECT_EQ(expected_size_of_config_advisory, cin.ph.len);
 
   // Once the first connection is closed and onclose is invoked sem post will be
   // invoked to finish this wait.

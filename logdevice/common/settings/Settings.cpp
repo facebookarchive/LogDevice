@@ -2493,7 +2493,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::WritePath);
   init("enable-config-synchronization",
        &enable_config_synchronization,
-       "true",
+       "false",
        nullptr, // no validation
        "With config synchronization enabled, nodes on both ends of a connection"
        "will synchronize their configs if there is a mismatch in the config"
@@ -2564,7 +2564,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        nullptr, // no validation
        "If true, servers will be allowed to fetch configs from the client side "
        "of a connection during config synchronization.",
-       SERVER,
+       SERVER | DEPRECATED,
        SettingsCategory::Configuration);
 
   init("unreleased-record-detector-interval",

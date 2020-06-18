@@ -58,7 +58,7 @@ MESSAGE_TYPE(ACK,   'I')   // server at passive connection end sends this in
 MESSAGE_TYPE(GOSSIP, 'G')   // used to exchange information about dead nodes
 
 MESSAGE_TYPE(CONFIG_CHANGED, 'g')     // we send this on config change
-MESSAGE_TYPE(CONFIG_ADVISORY, 'X')    // used to send the config version
+// MESSAGE_TYPE(CONFIG_ADVISORY, 'X')    // used to send the config version
 MESSAGE_TYPE(CONFIG_FETCH, 'z')       // used to fetch a config
 
 // MESSAGE_TYPE(IS_LOG_EMPTY, 'e')        // request to know whether a log is empty

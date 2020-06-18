@@ -34,7 +34,6 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/network/IConnectionFactory.h"
-#include "logdevice/common/protocol/CONFIG_ADVISORY_Message.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
@@ -316,78 +315,6 @@ void Sender::eraseDisconnectedClients() {
   }
 }
 
-int Sender::notifyPeerConfigUpdated(Connection& conn) {
-  auto server_config = Worker::onThisThread()->getServerConfig();
-  config_version_t config_version = server_config->getVersion();
-  config_version_t peer_config_version = conn.getPeerConfigVersion();
-  if (peer_config_version >= config_version) {
-    // The peer config is more recent. nothing to do here.
-    return 0;
-  }
-  // The peer config version on the Connection is outdated, so we need to notify
-  // the peer and update it.
-  std::unique_ptr<Message> msg;
-  const Address& addr = conn.peer_name_;
-  if (addr.isClientAddress()) {
-    // The peer is a client, in the sense that it is the client-side of the
-    // connection. It may very well be a node however.
-
-    if (peer_config_version == CONFIG_VERSION_INVALID) {
-      // We never received a CONFIG_ADVISORY message on this Connection, so we
-      // can assume that config synchronization is disabled on this client
-      // or it hasn't got a chance to send the message yet. either way,
-      // don't do anything yet.
-      return 0;
-    }
-
-    ld_info("Detected stale peer config (%u < %u). "
-            "Sending CONFIG_CHANGED to %s",
-            peer_config_version.val(),
-            config_version.val(),
-            describeConnection(addr).c_str());
-    ServerConfig::ConfigMetadata metadata =
-        server_config->getMainConfigMetadata();
-
-    // Send a CONFIG_CHANGED message to update the main config on the peer
-    CONFIG_CHANGED_Header hdr{
-        static_cast<uint64_t>(metadata.modified_time.count()),
-        config_version,
-        server_config->getServerOrigin(),
-        CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
-        CONFIG_CHANGED_Header::Action::UPDATE};
-    metadata.hash.copy(hdr.hash, sizeof hdr.hash);
-
-    msg = std::make_unique<CONFIG_CHANGED_Message>(
-        hdr,
-        server_config->toString(
-            /* with_logs */ nullptr, /* with_zk */ nullptr, true));
-  } else {
-    // The peer is a server. Send a CONFIG_ADVISORY to let it know about our
-    // config version. Upon receiving this message, if the server config
-    // hasn't been updated already, it will either fetch it from us in
-    // another round trip, or fetch the newest version directly from the
-    // source.
-    CONFIG_ADVISORY_Header hdr = {config_version};
-    msg = std::make_unique<CONFIG_ADVISORY_Message>(hdr);
-  }
-  int rv = sendMessageImpl(std::move(msg), conn);
-  if (rv != 0) {
-    RATELIMIT_INFO(
-        std::chrono::seconds(10),
-        10,
-        "Failed to send %s with error %s.",
-        addr.isClientAddress() ? "CONFIG_CHANGED" : "CONFIG_ADVISORY",
-        error_description(err));
-    return -1;
-  }
-  // Message was sent successfully. Peer should now have a version
-  // greater than or equal to config_version.
-  // Update peer version in Connection to avoid sending CONFIG_ADVISORY or
-  // CONFIG_CHANGED again on the same connection.
-  conn.setPeerConfigVersion(config_version);
-  return 0;
-}
-
 bool Sender::canSendToImpl(const Address& addr,
                            TrafficClass tc,
                            BWAvailableCallback& on_bw_avail) {
@@ -435,17 +362,6 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   if (!conn) {
     // err set by getConnection()
     return -1;
-  }
-
-  // If the message is neither a handshake message nor a config sychronization
-  // message, we need to update the client config version on the Connection.
-  if (!isHandshakeMessage(msg->type_) &&
-      !isConfigSynchronizationMessage(msg->type_) &&
-      settings_->enable_config_synchronization) {
-    int rv = notifyPeerConfigUpdated(*conn);
-    if (rv != 0) {
-      return -1;
-    }
   }
 
   int rv = sendMessageImpl(std::move(msg), *conn, on_bw_avail, onclose);
@@ -1315,18 +1231,6 @@ void Sender::setClientLocation(const ClientID& cid,
     return;
   }
   conn->peer_location_ = location;
-}
-
-void Sender::setPeerConfigVersion(const Address& addr,
-                                  const Message& msg,
-                                  config_version_t version) {
-  Connection* conn = getConnection(addr, msg);
-  if (!conn) {
-    ld_check(err == E::SHUTDOWN);
-    ld_info("Shutting down. Cannot set peer config version.");
-    return;
-  }
-  conn->setPeerConfigVersion(version);
 }
 
 std::pair<Sender::ExtractPeerIdentityResult, PrincipalIdentity>

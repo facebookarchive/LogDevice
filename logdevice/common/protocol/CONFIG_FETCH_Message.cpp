@@ -86,44 +86,13 @@ Message::Disposition CONFIG_FETCH_Message::onReceived(const Address& from) {
 
 Message::Disposition
 CONFIG_FETCH_Message::handleMainConfigRequest(const Address& from) {
-  auto config = getConfig();
-  auto server_config = config->serverConfig();
-  auto zk_config = config->zookeeperConfig();
-
-  ServerConfig::ConfigMetadata metadata =
-      server_config->getMainConfigMetadata();
-  CONFIG_CHANGED_Header hdr{
-      Status::OK,
-      header_.rid,
-      static_cast<uint64_t>(metadata.modified_time.count()),
-      server_config->getVersion(),
-      server_config->getServerOrigin(),
-      CONFIG_CHANGED_Header::ConfigType::MAIN_CONFIG,
-      isCallerWaitingForCallback() ? CONFIG_CHANGED_Header::Action::CALLBACK
-                                   : CONFIG_CHANGED_Header::Action::UPDATE};
-  metadata.hash.copy(hdr.hash, sizeof hdr.hash);
-
-  std::unique_ptr<CONFIG_CHANGED_Message> msg;
-  if (server_config->getVersion().val() <= header_.my_version) {
-    // The requester already have an up to date version.
-    hdr.status = Status::UPTODATE;
-    msg = std::make_unique<CONFIG_CHANGED_Message>(hdr, "");
-  } else {
-    // We still send the Zookeeper section for backwards compatibility on
-    // older servers, but on newer servers this is ignored
-    // Clients already ignore / don't use the Zookeeper section
-    // TODO deprecate in T32793726
-    msg = std::make_unique<CONFIG_CHANGED_Message>(
-        hdr, server_config->toString(nullptr, zk_config.get(), true));
-  }
-
-  int rv = sendMessage(std::move(msg), from);
-  if (rv != 0) {
-    ld_error("Sending CONFIG_CHANGED_Message to %s failed with error %s",
-             from.toString().c_str(),
-             error_description(err));
-  }
-  return Disposition::NORMAL;
+  RATELIMIT_ERROR(std::chrono::seconds(10),
+                  1,
+                  "CONFIG_FETCH for the main config is no longer supported.");
+  auto msg = std::make_unique<CONFIG_CHANGED_Message>(
+      CONFIG_CHANGED_Header(E::NOTSUPPORTED));
+  sendMessage(std::move(msg), from);
+  return Disposition::ERROR;
 }
 
 Message::Disposition
@@ -182,10 +151,6 @@ CONFIG_FETCH_Message::handleNodesConfigurationRequest(const Address& from) {
                     error_description(err));
   }
   return Disposition::NORMAL;
-}
-
-std::shared_ptr<Configuration> CONFIG_FETCH_Message::getConfig() {
-  return Worker::onThisThread()->getConfig();
 }
 
 NodeID CONFIG_FETCH_Message::getMyNodeID() const {

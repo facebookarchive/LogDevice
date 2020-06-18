@@ -20,6 +20,7 @@ namespace facebook { namespace logdevice {
 
 struct CONFIG_CHANGED_Header {
   enum class ConfigType : uint8_t {
+    // MAIN_CONFIG is deprecated.
     MAIN_CONFIG = 0,
     LOGS_CONFIG = 1,
     NODES_CONFIGURATION = 2
@@ -28,7 +29,7 @@ struct CONFIG_CHANGED_Header {
     // Used by RemoteLogsConfig to signal that current config should be
     // invalidated
     RELOAD = 0,
-    // Used by config synchronization to provide the new config
+    // Deprecated.
     UPDATE = 1,
     // Used when there's some request that's waiting for this response.
     // rid should never be invalid in this case

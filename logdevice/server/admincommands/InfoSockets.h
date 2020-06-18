@@ -49,7 +49,6 @@ class InfoSockets : public AdminCommand {
                            "SNDBUF Limited pct",
                            "Proto",
                            "Sendbuf",
-                           "Peer Config Version",
                            "Is ssl",
                            "FD");
 

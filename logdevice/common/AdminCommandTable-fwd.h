@@ -91,7 +91,6 @@ typedef AdminCommandTable<std::string, /* State */
                           float,       /* SNDBuf Limited % */
                           int,         /* Proto */
                           size_t,      /* Send buf-sz */
-                          uint32_t,    /* Peer Config Version */
                           bool,        /* Is ssl */
                           int          /* FD of the underlying socket */
                           >

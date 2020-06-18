@@ -10,7 +10,6 @@
 
 #include "logdevice/common/DataConfigSource.h"
 #include "logdevice/common/FileConfigSource.h"
-#include "logdevice/common/ServerConfigSource.h"
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/ZookeeperConfigSource.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
@@ -31,7 +30,6 @@ operator()(std::shared_ptr<PluginRegistry> plugin_registry) {
   res.push_back(std::make_unique<ZookeeperConfigSource>(
       settings_->zk_config_polling_interval,
       std::move(zookeeper_client_factory)));
-  res.push_back(std::make_unique<ServerConfigSource>());
   return res;
 }
 

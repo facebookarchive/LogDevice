@@ -170,7 +170,6 @@ class ServerParameters {
   bool hasMyNodeInfoChanged(const NodesConfiguration& config);
 
   // Server Config Hooks
-  bool updateServerOrigin(ServerConfig& config);
   bool updateConfigSettings(ServerConfig& config);
 
   // The main server config hook that invokes other hooks

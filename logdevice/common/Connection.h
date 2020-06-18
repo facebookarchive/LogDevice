@@ -542,17 +542,6 @@ class Connection : public TrafficShappingSocket {
    */
   void getDebugInfo(InfoSocketsTable& table) const;
 
-  void setPeerConfigVersion(config_version_t version) {
-    peer_config_version_ = version;
-  }
-
-  /**
-   * @return the last known config version that the peer advertised
-   */
-  config_version_t getPeerConfigVersion() const {
-    return peer_config_version_;
-  }
-
   PeerType getPeerType() const {
     return peer_type_;
   }
@@ -935,12 +924,6 @@ class Connection : public TrafficShappingSocket {
   // getMinProtocolVersion() should return
   // Compatibility::MIN_PROTOCOL_SUPPORTED for them.
   uint16_t proto_;
-
-  // The highest config version known to the peer of the connection.
-  // The peer_config_version_ is commmunicated to the server using a
-  // CONFIG_ADVISORY message. Servers can update the peer_config_version_
-  // using a CONFIG_CHANGED message, which updates the client config.
-  config_version_t peer_config_version_{0};
 
   // For Sockets that initiated an outgoing connection to a server and received
   // a positive ACK, this is the ClientID that the other end assigned to our

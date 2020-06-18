@@ -62,17 +62,6 @@ STAT_DEFINE(metadata_log_read_failed_other, SUM)
 
 // Number of CONFIG_CHANGED_Messages received with Action::Reload.
 STAT_DEFINE(config_changed_reload, SUM)
-// Number of CONFIG_CHANGED_Messages ignored because the config is already
-// up-to-date.
-STAT_DEFINE(config_changed_ignored_uptodate, SUM)
-// Number of CONFIG_CHANGED_Messages ignored because the config is not trusted.
-STAT_DEFINE(config_changed_ignored_not_trusted, SUM)
-// Number of CONFIG_CHANGED_Messages ignored because one with same or newer
-// config is already being processed.
-STAT_DEFINE(config_changed_ignored_update_in_progress, SUM)
-// Number of config updates that occurred as a result of
-// CONFIG_CHANGED_Messages.
-STAT_DEFINE(config_changed_update, SUM)
 
 // Number of times nodes configuration polling gets a success result
 STAT_DEFINE(nodes_configuration_polling_success, SUM)

@@ -159,20 +159,6 @@ bool ServerParameters::hasMyNodeInfoChanged(const NodesConfiguration& config) {
   return false;
 }
 
-bool ServerParameters::updateServerOrigin(ServerConfig& config) {
-  if (!my_node_id_.has_value()) {
-    return true;
-  }
-
-  // If the config doesn't have a valid ServerOrigin, then we are the source.
-  if (!config.getServerOrigin().isNodeID()) {
-    // Update the server origin of the config to my node ID if it is not
-    // set already
-    config.setServerOrigin(my_node_id_.value());
-  }
-  return true;
-}
-
 bool ServerParameters::updateConfigSettings(ServerConfig& config) {
   SteadyTimestamp start_ts(SteadyTimestamp::now());
   SCOPE_EXIT {
@@ -189,7 +175,7 @@ bool ServerParameters::updateConfigSettings(ServerConfig& config) {
 }
 
 bool ServerParameters::onServerConfigUpdate(ServerConfig& config) {
-  return updateServerOrigin(config) && updateConfigSettings(config);
+  return updateConfigSettings(config);
 }
 
 bool ServerParameters::setConnectionLimits() {

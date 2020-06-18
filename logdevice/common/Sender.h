@@ -549,20 +549,6 @@ class Sender : public SenderBase {
   ConnectionType getSockConnType(const Address& addr);
 
   /**
-   * Notifies the peer that our configuration is newer and updates the config
-   * version on the given Connection if needed.
-   *
-   * If the peer address is a NodeID, it sends a CONFIG_ADVISORY_Message
-   * to update the Connection config version on the other side, and possibly
-   * triggers asynchronous fetch of the newer config. If the peer address is a
-   * ClientID, it sends a CONFIG_CHANGED_Message to update both the Connection
-   * config version and the main config.
-   *
-   * @return 0 on success, -1 otherwise
-   */
-  int notifyPeerConfigUpdated(Connection& conn);
-
-  /**
    * @param addr    peer name of a client or server Connection expected to be
    *                under the management of this Sender.
    * @return a pointer to the principal held in the Connection matching the addr
@@ -584,19 +570,6 @@ class Sender : public SenderBase {
    * match addr
    */
   int setPrincipal(const Address& addr, PrincipalIdentity principal);
-
-  /**
-   * This method finds the Connection associated with addr and sets its peer
-   * config version to version.
-   *
-   * @param addr      peer name of a client or server Connection expected to be
-   *                  under the management of this Sender.
-   * @param version   the config_version_t that the Connection's peer config
-   *                  version will be set to.
-   */
-  void setPeerConfigVersion(const Address& addr,
-                            const Message& msg,
-                            config_version_t version);
 
   // An enum representing the result of the peer identity extractions.
   enum class ExtractPeerIdentityResult {

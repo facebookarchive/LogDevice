@@ -43,8 +43,9 @@ class InfoConfig : public AdminCommand {
   void run() override {
     std::shared_ptr<Configuration> config =
         server_->getProcessor()->config_->get();
+    auto my_node_id = server_->getProcessor()->getMyNodeID();
     if (metadata_only_) {
-      metadata(*config);
+      metadata(*config, my_node_id);
     } else if (hash_only_) {
       hash(*config);
     } else {
@@ -58,7 +59,7 @@ class InfoConfig : public AdminCommand {
   bool hash_only_ = false;
   bool json_ = false;
 
-  void metadata(const Configuration& config) {
+  void metadata(const Configuration& config, NodeID my_node_id) {
     const ServerConfig::ConfigMetadata& main_config_metadata =
         config.serverConfig()->getMainConfigMetadata();
 
@@ -67,9 +68,7 @@ class InfoConfig : public AdminCommand {
 
     table.next()
         .set<0>(main_config_metadata.uri)
-        .set<1>(config.serverConfig()->getServerOrigin().isNodeID()
-                    ? config.serverConfig()->getServerOrigin().index()
-                    : -1)
+        .set<1>(my_node_id.index())
         .set<2>(main_config_metadata.hash)
         .set<3>(main_config_metadata.modified_time)
         .set<4>(main_config_metadata.loaded_time);
