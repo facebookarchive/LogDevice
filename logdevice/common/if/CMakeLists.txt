@@ -11,6 +11,7 @@ set(
   _common_if_include_prefix
   "logdevice/common/if"
  )
+ add_subdirectory(for_open_source/common/fb303/if)
 
 file(
   MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_common_if_include_prefix}
@@ -26,6 +27,12 @@ ld_thrift_py3_library(
   PY3_NAMESPACE "logdevice"
  )
 
+set(_languages cpp2)
+
+if(thriftpy3)
+  list(APPEND _languages py3)
+endif()
+
 add_dependencies(common-cpp2-target fbthrift)
 
 set_target_properties(
@@ -37,3 +44,7 @@ target_link_libraries(
   common-cpp2
   ${THRIFT_DEPS}
 )
+
+foreach(_lang ${_languages})
+  add_dependencies(common-${_lang}-target fb303-${_lang}-target)
+endforeach()

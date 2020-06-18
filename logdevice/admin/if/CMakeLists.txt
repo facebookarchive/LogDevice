@@ -10,8 +10,6 @@ link_directories("${CMAKE_BINARY_DIR}/staging/usr/local/lib")
 set(_adminapi_if_include_prefix "logdevice/admin/if")
 set(_adminapi_binary_dir "${CMAKE_BINARY_DIR}/logdevice/admin/if")
 
-add_subdirectory(for_open_source/common/fb303/if)
-
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_adminapi_if_include_prefix})
 
 set(_common_libs
@@ -24,7 +22,6 @@ set(_common_libs
   "logtree-cpp2"
   "common-cpp2"
   "exceptions-cpp2"
-  "fb303-cpp2"
   )
 
 if(NOT ${BUILD_SUBMODULES})
@@ -84,7 +81,7 @@ ld_thrift_py3_library(
     "${CMAKE_BINARY_DIR}/fbthrift-prefix/src/fbthrift-build/thrift/lib/py3/cybld"
     "${CMAKE_BINARY_DIR}/logdevice/common/membership/gen-py3/"
   THRIFT_INCLUDE_DIRECTORIES
-    "${CMAKE_CURRENT_SOURCE_DIR}/for_open_source"
+    "${FB303_INCLUDE_DIR}"
 )
 
 set(_languages cpp2)
@@ -130,6 +127,7 @@ add_dependencies(admin-cpp2-target fbthrift)
 target_link_libraries(admin-cpp2
   ${_common_libs}
   ${THRIFT_DEPS}
+  "fb303-cpp2"
 )
 
 foreach(_lang ${_languages})
