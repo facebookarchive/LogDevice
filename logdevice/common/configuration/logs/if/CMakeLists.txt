@@ -28,7 +28,7 @@ ld_thrift_py3_library(
     "${CMAKE_BINARY_DIR}/logdevice/common/if/gen-py3/"
  )
 
-add_dependencies(logsconfig-cpp2-target fbthrift)
+add_dependencies(logsconfig-cpp2-target fbthrift common-cpp2)
 
 set_target_properties(
         logsconfig-cpp2-obj
