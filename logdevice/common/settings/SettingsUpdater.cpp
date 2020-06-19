@@ -9,6 +9,8 @@
 
 #include <boost/program_options.hpp>
 #include <folly/Memory.h>
+#include <folly/dynamic.h>
+#include <folly/json.h>
 
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/debug.h"
@@ -137,6 +139,39 @@ std::string SettingsUpdater::markdownDoc(bool include_deprecated) const {
   }
 
   return doc.str();
+}
+
+std::string SettingsUpdater::jsonConfigSchema() const {
+  folly::dynamic output = folly::dynamic::array;
+
+  for (const auto& opt : settings_) {
+    const auto& desc = opt.second;
+    folly::dynamic setting = folly::dynamic::object;
+    setting["name"] = opt.first;
+    setting["bundle_name"] = desc.bundle_name;
+    setting["category"] = desc.descriptor.category;
+    setting["default"] = desc.descriptor.default_value_docs_override.value_or(
+        desc.descriptor.default_value.at(0));
+    setting["is_internal"] =
+        static_cast<bool>(desc.descriptor.flags & SettingFlag::INTERNAL_ONLY);
+    setting["is_cli_only"] =
+        static_cast<bool>(desc.descriptor.flags & SettingFlag::CLI_ONLY);
+    setting["is_deprecated"] =
+        static_cast<bool>(desc.descriptor.flags & SettingFlag::DEPRECATED);
+    setting["is_experimental"] =
+        static_cast<bool>(desc.descriptor.flags & SettingFlag::EXPERIMENTAL);
+    setting["is_client"] =
+        static_cast<bool>(desc.descriptor.flags & SettingFlag::CLIENT);
+    setting["is_server"] =
+        static_cast<bool>(desc.descriptor.flags & SettingFlag::SERVER);
+    setting["requires_restart"] = static_cast<bool>(
+        desc.descriptor.flags & SettingFlag::REQUIRES_RESTART);
+    output.push_back(std::move(setting));
+  }
+
+  auto serialized =
+      folly::json::serialize(output, folly::json::serialization_opts());
+  return serialized;
 }
 
 /**

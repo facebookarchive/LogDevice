@@ -104,6 +104,12 @@ class SettingsUpdater {
   std::string markdownDoc(bool include_deprecated = false) const;
 
   /**
+   * @return a JSON structure describing all settings.
+   * @return JSON structure.
+   */
+  std::string jsonConfigSchema() const;
+
+  /**
    * Register a new bundle to contain settings to be updated by this object.
    * @bundle Setting bundle to be registered.
    */

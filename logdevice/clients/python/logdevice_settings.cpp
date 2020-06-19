@@ -42,11 +42,7 @@ dict_to_map(boost::python::dict input) {
   return input_settings;
 }
 
-void validate_server_settings(boost::python::dict input) {
-  if (input.is_none()) {
-    return;
-  }
-
+std::shared_ptr<SettingsUpdater> build_settings_updater() {
   UpdateableSettings<ServerSettings> server_settings;
   UpdateableSettings<RebuildingSettings> rebuilding_settings;
   UpdateableSettings<LocalLogStoreSettings> locallogstore_settings;
@@ -71,6 +67,15 @@ void validate_server_settings(boost::python::dict input) {
                              BuiltinPluginProvider>());
   plugin_registry->addOptions(settings_updater.get());
 
+  return settings_updater;
+}
+
+void validate_server_settings(boost::python::dict input) {
+  if (input.is_none()) {
+    return;
+  }
+
+  auto settings_updater = build_settings_updater();
   auto input_settings = dict_to_map(input);
   try {
     settings_updater->validateFromConfig(input_settings, SettingFlag::SERVER);
@@ -84,13 +89,8 @@ void validate_client_settings(boost::python::dict input) {
     return;
   }
 
-  UpdateableSettings<RebuildingSettings> rebuilding_settings;
-  UpdateableSettings<GossipSettings> gossip_settings;
   UpdateableSettings<Settings> settings;
-
   auto settings_updater = std::make_shared<SettingsUpdater>();
-  settings_updater->registerSettings(rebuilding_settings);
-  settings_updater->registerSettings(gossip_settings);
   settings_updater->registerSettings(settings);
 
   std::shared_ptr<PluginRegistry> plugin_registry =
@@ -105,7 +105,13 @@ void validate_client_settings(boost::python::dict input) {
   }
 }
 
+std::string get_json_config_schema() {
+  auto settings_updater = build_settings_updater();
+  return settings_updater->jsonConfigSchema();
+}
+
 BOOST_PYTHON_MODULE(settings) {
   def("validate_server_settings", &validate_server_settings);
   def("validate_client_settings", &validate_client_settings);
+  def("get_json_config_schema", &get_json_config_schema);
 }
