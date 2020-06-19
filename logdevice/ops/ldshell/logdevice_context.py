@@ -27,6 +27,7 @@ from logdevice.common.types import SocketAddress, SocketAddressFamily
 from logdevice.ldquery import LDQuery
 from nubia import context, exceptions
 from nubia.internal.io.eventbus import Message
+from nubia.internal.io.session_logger import SessionLogger
 from pygments.token import Token
 from termcolor import colored, cprint
 from thrift.py3 import get_client as create_thrift_client
@@ -39,6 +40,9 @@ class LDShellContext(context.Context):
         self._config_file = None
         self._temp_config_path = None
         self._cluster_name = None
+        self._session_logger = SessionLogger(
+            tempfile.NamedTemporaryFile(mode="w+", prefix="ldshell-session-")
+        )
         # Reset all cache variables
         self._reset()
 
@@ -270,3 +274,6 @@ class LDShellContext(context.Context):
             ]
 
         return tokens
+
+    def get_session_logger(self):
+        return self._session_logger
