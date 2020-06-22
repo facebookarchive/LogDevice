@@ -116,6 +116,12 @@ class LogDevicePlugin(PluginInterface):
             default=0,
             help="Say YES to all prompts. " "Use with caution.",
         )
+        opts_parser.add_argument(
+            "--disable-session-logging",
+            action="store_true",
+            default=True,
+            help="Disables session logging",
+        )
         return opts_parser
 
     def create_usage_logger(self, context):

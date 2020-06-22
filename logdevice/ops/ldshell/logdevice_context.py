@@ -40,9 +40,7 @@ class LDShellContext(context.Context):
         self._config_file = None
         self._temp_config_path = None
         self._cluster_name = None
-        self._session_logger = SessionLogger(
-            tempfile.NamedTemporaryFile(mode="w+", prefix="ldshell-session-")
-        )
+        self._session_logger = None
         # Reset all cache variables
         self._reset()
 
@@ -84,6 +82,10 @@ class LDShellContext(context.Context):
         else:
             self._admin_server_address = None
         self._set_log_level(args.loglevel)
+        if not args.disable_session_logging:
+            self._session_logger = SessionLogger(
+                tempfile.NamedTemporaryFile(mode="w+", prefix="ldshell-session-")
+            )
 
     def _set_admin_server_socket_address(self, address):
         """
