@@ -61,9 +61,22 @@ struct ReplicationInfo {
  * Log group operations for throughput gathering
  */
 enum LogGroupOperation {
-  APPENDS = 0, # Appends received by the sequencer
+  /**
+  * Append throughput as received by the sequencer.
+  * When sequencer batching is enabled, this is the
+  * throughput before decompression.
+  **/
+  APPENDS = 0,
+  /**
+  * Read throughput
+  */
   READS = 1,
-  APPENDS_OUT = 2, # Append bytes after sequencer batching
+  /**
+  * Append throughput after sequencer batching re-compression.
+  * This is equal to the throughput sent to storages before
+  * replication.
+  **/
+  APPENDS_OUT = 2,
 }
 
 struct LogGroupCustomCountersRequest {
