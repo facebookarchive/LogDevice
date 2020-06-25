@@ -3686,7 +3686,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Core);
   init("metadata-log-trim-interval",
        &metadata_log_trim_interval,
-       "0ms",
+       "7200s",
        validate_nonnegative<ssize_t>(),
        "How often periodic trimming of metadata logs should run. Zero value "
        "prevents it from running at all. ",
