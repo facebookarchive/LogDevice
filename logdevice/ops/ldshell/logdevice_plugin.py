@@ -119,7 +119,6 @@ class LogDevicePlugin(PluginInterface):
         opts_parser.add_argument(
             "--disable-session-logging",
             action="store_true",
-            default=True,
             help="Disables session logging",
         )
         return opts_parser
