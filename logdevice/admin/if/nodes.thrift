@@ -11,6 +11,7 @@ include "logdevice/common/if/common.thrift"
 include "logdevice/common/membership/Membership.thrift"
 
 namespace cpp2 facebook.logdevice.thrift
+namespace go logdevice.admin.if.nodes
 namespace py3 logdevice.admin
 namespace php LogDevice
 namespace wiki Thriftdoc.LogDevice.Nodes

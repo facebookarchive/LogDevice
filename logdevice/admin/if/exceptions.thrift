@@ -9,6 +9,7 @@
 include "logdevice/common/if/common.thrift"
 
 namespace cpp2 facebook.logdevice.thrift
+namespace go logdevice.admin.if.exceptions
 namespace py3 logdevice.admin
 namespace php LogDevice
 namespace wiki Thriftdoc.LogDevice.Exceptions

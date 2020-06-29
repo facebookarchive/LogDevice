@@ -7,6 +7,7 @@
  */
 
 namespace cpp2 facebook.logdevice.membership.thrift
+namespace go logdevice.common.membership.Membership
 namespace py3 logdevice.membership
 
 typedef byte (cpp2.type = "std::uint8_t") u8

@@ -7,6 +7,7 @@
  */
 
 namespace cpp2 facebook.logdevice.thrift
+namespace go logdevice.common.if.common
 namespace py3 logdevice
 namespace php LogDevice
 namespace wiki Thriftdoc.LogDevice.Common
