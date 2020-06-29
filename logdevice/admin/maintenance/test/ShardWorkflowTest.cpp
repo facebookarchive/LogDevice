@@ -327,6 +327,33 @@ TEST_F(ShardWorkflowTest, SimpleMayDisappear) {
   ASSERT_TRUE(f.isReady());
   ASSERT_EQ(f.value(), MaintenanceStatus::COMPLETED);
   ASSERT_EQ(event, nullptr);
+
+  // When the node is already in NONE it should only go to READ_ONLY when it's
+  // alive.
+  shard_state.storage_state = membership::StorageState::NONE;
+  f = wf->run(shard_state,
+              /* excluded_from_nodeset = */ false,
+              ShardDataHealth::HEALTHY,
+              RebuildingMode::INVALID,
+              false,
+              false,
+              ClusterStateNodeState::DEAD);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE);
+  ASSERT_EQ(event, nullptr);
+
+  shard_state.storage_state = membership::StorageState::NONE;
+  f = wf->run(shard_state,
+              /* excluded_from_nodeset = */ false,
+              ShardDataHealth::HEALTHY,
+              RebuildingMode::INVALID,
+              false,
+              false,
+              ClusterStateNodeState::FULLY_STARTED);
+  ASSERT_TRUE(f.isReady());
+  ASSERT_EQ(f.value(), MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+  ASSERT_EQ(wf->getExpectedStorageStateTransition().value(),
+            membership::StorageStateTransition::ENABLING_READ);
 }
 
 TEST_F(ShardWorkflowTest, SimpleEnable) {

@@ -206,6 +206,9 @@ class ShardWorkflow {
   // 2 * nodes-configuration-manager-intermediary-shard-state-timeout since
   // last time the status_ was updated
   virtual bool isNcTransitionStuck() const;
+
+  // Returns true if the node is alive, false otherwise.
+  bool isNodeAlive() const;
 };
 
 }}} // namespace facebook::logdevice::maintenance

@@ -224,6 +224,14 @@ void ShardWorkflow::computeMaintenanceStatusForMayDisappear() {
   ld_check(!target_op_state_.count(ShardOperationalState::DRAINED));
   switch (current_storage_state_) {
     case membership::StorageState::NONE:
+      // We require that the node is in FULLY_STARTED|STARTING state before we
+      // proceed with making it READ_ONLY. This ensures that we are not setting
+      // the shards or sequencers to READ_ONLY before the nodes are actually up
+      // and running.
+      if (!isNodeAlive()) {
+        updateStatus(MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE);
+        return;
+      }
       createAbortEventIfRequired();
       expected_storage_state_transition_ =
           membership::StorageStateTransition::ENABLING_READ;
@@ -263,8 +271,7 @@ void ShardWorkflow::computeMaintenanceStatusForEnable() {
   // proceed with the enable workflow. This ensures that we are not setting the
   // shards or sequencers to READ_WRITE before the nodes are actually up and
   // running.
-  if (gossip_state_ != ClusterStateNodeState::FULLY_STARTED &&
-      gossip_state_ != ClusterStateNodeState::STARTING) {
+  if (!isNodeAlive()) {
     updateStatus(MaintenanceStatus::AWAITING_NODE_TO_BE_ALIVE);
     return;
   }
@@ -423,6 +430,11 @@ bool ShardWorkflow::isNcTransitionStuck() const {
         Worker::onThisThread()
             ->settings()
             .nodes_configuration_manager_intermediary_shard_state_timeout));
+}
+
+bool ShardWorkflow::isNodeAlive() const {
+  return gossip_state_ == ClusterStateNodeState::FULLY_STARTED ||
+      gossip_state_ == ClusterStateNodeState::STARTING;
 }
 
 }}} // namespace facebook::logdevice::maintenance
