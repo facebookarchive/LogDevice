@@ -24,6 +24,7 @@ namespace configuration { namespace nodes {
 // is fetched from random servers in the cluster.
 class ServerBasedNodesConfigurationStore : public NodesConfigurationStore {
  public:
+  ServerBasedNodesConfigurationStore();
   ~ServerBasedNodesConfigurationStore() override = default;
 
   // Enqueues a ConfigurationFetchRequest request of type NodesConfiguration on
@@ -67,6 +68,7 @@ class ServerBasedNodesConfigurationStore : public NodesConfigurationStore {
 
  private:
   std::atomic<bool> shutdown_signaled_{false};
+  folly::Optional<u_int32_t> node_order_seed_;
 
   // helper utility to generate a polling option based on processor
   // settings and existing nodes configuration

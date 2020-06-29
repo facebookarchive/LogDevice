@@ -22,12 +22,14 @@ NodesConfigurationPoller::NodesConfigurationPoller(
     Poller::Options options,
     VersionExtFn version_fn,
     Callback cb,
+    folly::Optional<u_int32_t> node_order_seed,
     folly::Optional<Version> conditional_base_version)
     : options_(std::move(options)),
       version_fn_(std::move(version_fn)),
       cb_(std::move(cb)),
       conditional_base_version_(std::move(conditional_base_version)),
-      callback_helper_(this) {
+      callback_helper_(this),
+      node_order_seed_(node_order_seed) {
   ld_check(version_fn_ != nullptr);
   ld_check(cb_ != nullptr);
 }
@@ -76,6 +78,7 @@ NodesConfigurationPoller::createPoller() {
                                       graylist,
                                       num_required,
                                       num_extras,
+                                      node_order_seed_,
                                       cluster_state);
   };
 

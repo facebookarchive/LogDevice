@@ -74,6 +74,7 @@ struct SelectionParams {
   NodeSourceSet graylist;
   size_t num_required;
   size_t num_extras;
+  folly::Optional<u_int32_t> seed;
   ClusterState* filter;
 };
 
@@ -175,20 +176,41 @@ inline NodeSourceSet genRandomSet(node_index_t min,
 TEST(RandomNodeSelector, SourceSelectBasicTest) {
   {
     auto result = RandomNodeSelector::select(
-        {1, 2, 3, 4, 5}, {1}, {2}, {3}, 2, 1, nullptr);
+        {1, 2, 3, 4, 5}, {1}, {2}, {3}, 2, 1, folly::none, nullptr);
     NodeSourceSet expected{3, 4, 5};
     EXPECT_EQ(expected, result);
   }
   {
     auto result = RandomNodeSelector::select(
-        {1, 2, 3, 4, 5}, {1}, {2, 3}, {}, 2, 1, nullptr);
+        {1, 2, 3, 4, 5}, {1}, {2, 3}, {}, 2, 1, folly::none, nullptr);
     NodeSourceSet expected{4, 5};
     EXPECT_EQ(expected, result);
   }
   {
     auto result = RandomNodeSelector::select(
-        {1, 2, 3, 4, 5}, {1, 4}, {2, 3}, {}, 2, 0, nullptr);
+        {1, 2, 3, 4, 5}, {1, 4}, {2, 3}, {}, 2, 0, folly::none, nullptr);
     EXPECT_TRUE(result.empty());
+  }
+}
+
+TEST(RandomNodeSelector, SameOrderTest) {
+  for (int i = 0; i < 100; i++) {
+    folly::Optional<u_int32_t> seed = folly::Random::rand32();
+    std::vector<int> candidates(10);
+    std::iota(candidates.begin(), candidates.end(), 0);
+    NodeSourceSet set(candidates.begin(), candidates.end());
+    auto expected =
+        RandomNodeSelector::select(set, {1}, {2}, {3}, 2, 1, seed, nullptr);
+    for (int j = 0; j < 10; j++) {
+      u_int32_t randomSeed = folly::Random::rand32();
+      std::shuffle(candidates.begin(),
+                   candidates.end(),
+                   std::default_random_engine(randomSeed));
+      NodeSourceSet shuffledSet(candidates.begin(), candidates.end());
+      auto result = RandomNodeSelector::select(
+          shuffledSet, {1}, {2}, {3}, 2, 1, seed, nullptr);
+      EXPECT_EQ(expected, result);
+    }
   }
 }
 
@@ -201,6 +223,7 @@ TEST(RandomNodeSelector, SourceSelectionRandomTest) {
     params.graylist = genRandomSet(0, 100, 0, 100);
     params.num_required = folly::Random::rand32(1, 15);
     params.num_extras = folly::Random::rand32(0, 15);
+    params.seed = folly::none;
     params.filter = nullptr;
     auto result = RandomNodeSelector::select(params.candidates,
                                              params.existing,
@@ -208,6 +231,7 @@ TEST(RandomNodeSelector, SourceSelectionRandomTest) {
                                              params.graylist,
                                              params.num_required,
                                              params.num_extras,
+                                             params.seed,
                                              params.filter);
     validateResult(params, result);
   }

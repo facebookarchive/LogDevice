@@ -24,16 +24,21 @@
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
+ServerBasedNodesConfigurationStore::ServerBasedNodesConfigurationStore()
+    : node_order_seed_{folly::Random::rand32()} {}
+
 class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
  public:
   NodesConfigurationOneTimePollRequest(
       NodesConfigurationPoller::Poller::Options options,
       NodesConfigurationStore::value_callback_t cb,
-      folly::Optional<NodesConfigurationStore::version_t> base_version)
+      folly::Optional<NodesConfigurationStore::version_t> base_version,
+      folly::Optional<u_int32_t> node_order_seed)
       : FireAndForgetRequest(RequestType::NODES_CONFIGURATION_ONETIME_POLL),
         options_(std::move(options)),
         cb_(std::move(cb)),
-        base_version_(base_version) {}
+        base_version_(base_version),
+        node_order_seed_(node_order_seed) {}
 
   void executionBody() override {
     poller_ = std::make_unique<NodesConfigurationPoller>(
@@ -44,6 +49,7 @@ class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
                folly::Optional<std::string> config_str) {
           onPollerCallback(st, std::move(config_str));
         },
+        node_order_seed_,
         base_version_);
     poller_->start();
   }
@@ -71,6 +77,7 @@ class NodesConfigurationOneTimePollRequest : public FireAndForgetRequest {
   NodesConfigurationStore::value_callback_t cb_;
   const folly::Optional<NodesConfigurationStore::version_t> base_version_;
   std::unique_ptr<NodesConfigurationPoller> poller_;
+  folly::Optional<u_int32_t> node_order_seed_;
 };
 
 /*static*/
@@ -113,7 +120,8 @@ void ServerBasedNodesConfigurationStore::getConfig(
                            *worker->processor_->config_
                                 ->getNodesConfigurationFromNCMSource()),
           std::move(callback),
-          base_version);
+          base_version,
+          node_order_seed_);
   worker->processor_->postRequest(rq);
 }
 

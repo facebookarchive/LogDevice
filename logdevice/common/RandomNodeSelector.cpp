@@ -62,6 +62,7 @@ std::vector<node_index_t> filterCandidates(const CandidatesSet& candidates,
 // @return number of nodes picked
 size_t randomlySelectNodes(std::vector<node_index_t> candidates,
                            size_t n,
+                           folly::Optional<u_int32_t> node_order_seed,
                            NodeSourceSet* out) {
   ld_check(n > 0);
   ld_check(out != nullptr);
@@ -71,7 +72,15 @@ size_t randomlySelectNodes(std::vector<node_index_t> candidates,
     return candidates.size();
   }
 
-  std::shuffle(candidates.begin(), candidates.end(), folly::ThreadLocalPRNG());
+  if (node_order_seed.has_value()) {
+    std::sort(candidates.begin(), candidates.end());
+    std::shuffle(candidates.begin(),
+                 candidates.end(),
+                 std::default_random_engine(node_order_seed.value()));
+  } else {
+    std::shuffle(
+        candidates.begin(), candidates.end(), folly::ThreadLocalPRNG());
+  }
   out->insert(candidates.begin(), candidates.begin() + n);
   return n;
 }
@@ -79,19 +88,21 @@ size_t randomlySelectNodes(std::vector<node_index_t> candidates,
 // @type CandidateSet              an iteratable map/set container type whose
 //                                 key is of node_index_t type
 template <typename CandidatesSet>
-RandomNodeSelector::NodeSourceSet select(const CandidatesSet& candidates,
-                                         const NodeSourceSet& existing,
-                                         const NodeSourceSet& blacklist,
-                                         const NodeSourceSet& graylist,
-                                         size_t num_required,
-                                         size_t num_extras,
-                                         ClusterState* cluster_state_filter) {
+RandomNodeSelector::NodeSourceSet
+select(const CandidatesSet& candidates,
+       const NodeSourceSet& existing,
+       const NodeSourceSet& blacklist,
+       const NodeSourceSet& graylist,
+       size_t num_required,
+       size_t num_extras,
+       folly::Optional<u_int32_t> node_order_seed,
+       ClusterState* cluster_state_filter) {
   NodeSourceSet result;
   std::vector<node_index_t> filtered_candidates = filterCandidates(
       candidates, existing, blacklist, graylist, cluster_state_filter);
   const size_t target = num_required + num_extras;
-  size_t selected =
-      randomlySelectNodes(std::move(filtered_candidates), target, &result);
+  size_t selected = randomlySelectNodes(
+      std::move(filtered_candidates), target, node_order_seed, &result);
   ld_check(selected == result.size());
   ld_check(selected <= target);
   if (selected == target) {
@@ -104,8 +115,10 @@ RandomNodeSelector::NodeSourceSet select(const CandidatesSet& candidates,
                        blacklist,
                        {},
                        cluster_state_filter);
-  randomlySelectNodes(
-      std::move(filtered_candidates), target - selected, &result);
+  randomlySelectNodes(std::move(filtered_candidates),
+                      target - selected,
+                      node_order_seed,
+                      &result);
 
   if (result.size() < num_required) {
     // selection failed
@@ -126,6 +139,7 @@ RandomNodeSelector::select(const NodeSourceSet& candidates,
                            const NodeSourceSet& graylist,
                            size_t num_required,
                            size_t num_extras,
+                           folly::Optional<u_int32_t> node_order_seed,
                            ClusterState* cluster_state_filter) {
   return random_node_select_detail::select(candidates,
                                            existing,
@@ -133,6 +147,7 @@ RandomNodeSelector::select(const NodeSourceSet& candidates,
                                            graylist,
                                            num_required,
                                            num_extras,
+                                           node_order_seed,
                                            cluster_state_filter);
 }
 
@@ -155,6 +170,7 @@ NodeID RandomNodeSelector::getAliveNode(
       /*graylist*/ std::move(graylist),
       /*num_required*/ 1,
       /*num_extras*/ 0,
+      folly::none,
       /*cluster_state_filter*/ filter);
 
   if (result_set.empty()) {

@@ -32,6 +32,7 @@ class RandomNodeSelector {
                               const NodeSourceSet& graylist,
                               size_t num_required,
                               size_t num_extras,
+                              folly::Optional<u_int32_t> node_order_seed,
                               ClusterState* cluster_state_filter = nullptr);
 
   /**
