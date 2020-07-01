@@ -56,7 +56,6 @@ if(${BUILD_SUBMODULES})
   include(build-folly)
   include(build-fizz)
   include(build-wangle)
-  include(build-rsocket)
   include(build-fbthrift)
   include(${LOGDEVICE_DIR}/external/fbthrift/ThriftLibrary.cmake)
 else()
@@ -75,8 +74,6 @@ else()
   find_package(wangle CONFIG REQUIRED)
   find_package(FBThrift CONFIG REQUIRED)
   find_package(fmt CONFIG REQUIRED)
-  find_package(yarpl CONFIG REQUIRED)
-  find_package(rsocket CONFIG REQUIRED)
   find_program(THRIFT1 thrift1)
   find_path(THRIFT_COMPILER_INCLUDE thrift/lib/cpp2/Thrift.h)
   set(FBTHRIFT_LIBRARIES
@@ -99,7 +96,6 @@ else()
   add_custom_target(wangle)
   add_custom_target(fbthrift)
   add_custom_target(fmt)
-  add_custom_target(rsocket)
 endif()
 
 include(build-docs)
@@ -130,7 +126,6 @@ set (THRIFT_DEPS
   ${FOLLY_LIBRARIES}
   ${FIZZ_LIBRARIES}
   ${LIBSODIUM_LIBRARIES}
-  ${RSOCKET_LIBRARIES}
   ${FMT_LIBRARIES}
   ${BZIP2_LIBRARIES}
   ${ZLIB_LIBRARIES}

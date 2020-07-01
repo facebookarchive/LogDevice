@@ -28,8 +28,7 @@ ExternalProject_Add(fbthrift
 ExternalProject_Get_Property(fbthrift SOURCE_DIR)
 ExternalProject_Get_Property(fbthrift BINARY_DIR)
 
-ExternalProject_Add_StepDependencies(fbthrift configure folly wangle
-  rsocket fmt)
+ExternalProject_Add_StepDependencies(fbthrift configure folly wangle fmt)
 
 # The following settings are required by ThriftLibrary.cmake; to create rules
 # for thrift compilation:
