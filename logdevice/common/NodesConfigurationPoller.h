@@ -21,7 +21,11 @@ namespace facebook { namespace logdevice {
 class ClusterState;
 
 // an instantiation of ObjectPoller which can be used to poll NodesConfiguration
-// updates from existing server nodes in NodesConfiguration
+// updates from existing server nodes in NodesConfiguration.
+// If the same seed is provided to the NodesConfigurationPoller, the same set of
+// servers will be picked for the polling round. This can be used to implement
+// stickiness in the polling set.
+
 class NodesConfigurationPoller {
  public:
   struct NodeResponse {
@@ -49,6 +53,7 @@ class NodesConfigurationPoller {
       Poller::Options options,
       VersionExtFn version_fn,
       Callback cb,
+      folly::Optional<u_int32_t> node_order_seed,
       folly::Optional<Version> conditional_base_version = {});
   virtual ~NodesConfigurationPoller() {}
 
@@ -89,6 +94,10 @@ class NodesConfigurationPoller {
 
   // used to re-route the ConfigurationFetchRequest result callback
   WorkerCallbackHelper<NodesConfigurationPoller> callback_helper_;
+
+  // We have one seed per ServerBasedNodesConfigurationManager instance to
+  // ensure total ordering among nodes to be picked for fetching config
+  folly::Optional<u_int32_t> node_order_seed_;
 
   std::unique_ptr<Poller> createPoller();
 
