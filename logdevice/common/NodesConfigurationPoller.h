@@ -12,6 +12,7 @@
 #include <folly/Optional.h>
 
 #include "logdevice/common/ObjectPoller.h"
+#include "logdevice/common/RandomNodeSelector.h"
 #include "logdevice/common/WorkerCallbackHelper.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationStore.h"
@@ -82,6 +83,14 @@ class NodesConfigurationPoller {
   // return true if the NCPoller is running in the bootstrapping environment
   // (e.g., NodesConfigurationInit). If so, conditional polling will be disabled
   virtual bool isBootstrapping() const;
+
+  virtual RandomNodeSelector::NodeSourceSet
+  buildPollingSet(const NodeSourceSet& candidates,
+                  const NodeSourceSet& existing,
+                  const NodeSourceSet& blacklist,
+                  const NodeSourceSet& graylist,
+                  size_t num_required,
+                  size_t num_extras);
 
  private:
   Poller::Options options_;

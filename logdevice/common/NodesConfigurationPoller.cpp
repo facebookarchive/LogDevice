@@ -10,7 +10,6 @@
 
 #include "logdevice/common/ConfigurationFetchRequest.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/RandomNodeSelector.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/stats/Stats.h"
@@ -49,6 +48,38 @@ void NodesConfigurationPoller::stop() {
   }
 }
 
+RandomNodeSelector::NodeSourceSet
+NodesConfigurationPoller::buildPollingSet(const NodeSourceSet& candidates,
+                                          const NodeSourceSet& existing,
+                                          const NodeSourceSet& blacklist,
+                                          const NodeSourceSet& graylist,
+                                          size_t num_required,
+                                          size_t num_extras) {
+  // We can't use cluster state in bootstrapping processor because our address
+  // to NodeID mapping can be different from the actual one. So for
+  // example, Cluster state's N5, can be different from bootstrapping
+  // processor's N5.
+  ClusterState* cluster_state{nullptr};
+  if (!isBootstrapping()) {
+    cluster_state = getClusterState();
+  }
+
+  // If the cluster state contains no alive nodes, don't use it as a filter
+  // and let RandomNodeSelector pick any node.
+  if (cluster_state != nullptr && !cluster_state->isAnyNodeAlive()) {
+    cluster_state = nullptr;
+  }
+
+  return RandomNodeSelector::select(candidates,
+                                    existing,
+                                    blacklist,
+                                    graylist,
+                                    num_required,
+                                    num_extras,
+                                    node_order_seed_,
+                                    cluster_state);
+}
+
 std::unique_ptr<NodesConfigurationPoller::Poller>
 NodesConfigurationPoller::createPoller() {
   auto selection_fn = [this](const NodeSourceSet& candidates,
@@ -57,29 +88,8 @@ NodesConfigurationPoller::createPoller() {
                              const NodeSourceSet& graylist,
                              size_t num_required,
                              size_t num_extras) {
-    // We can't use cluster state in bootstrapping processor because our address
-    // to NodeID mapping can be different from the actual one. So for
-    // example, Cluster state's N5, can be different from bootstrapping
-    // processor's N5.
-    ClusterState* cluster_state{nullptr};
-    if (!isBootstrapping()) {
-      cluster_state = getClusterState();
-    }
-
-    // If the cluster state contains no alive nodes, don't use it as a filter
-    // and let RandomNodeSelector pick any node.
-    if (cluster_state != nullptr && !cluster_state->isAnyNodeAlive()) {
-      cluster_state = nullptr;
-    }
-
-    return RandomNodeSelector::select(candidates,
-                                      existing,
-                                      blacklist,
-                                      graylist,
-                                      num_required,
-                                      num_extras,
-                                      node_order_seed_,
-                                      cluster_state);
+    return buildPollingSet(
+        candidates, existing, blacklist, graylist, num_required, num_extras);
   };
 
   auto req_fn = [this](Poller::RoundID round, node_index_t node) {
