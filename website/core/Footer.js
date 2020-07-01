@@ -3,6 +3,8 @@
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
+ *
+ * @format
  */
 
 const React = require('react');
@@ -35,9 +37,7 @@ class Footer extends React.Component {
           </a>
           <div>
             <h5>Docs</h5>
-            <a href={this.docUrl('Overview.html')}>
-              Getting Started
-            </a>
+            <a href={this.docUrl('Overview.html')}>Getting Started</a>
             <a href={this.docUrl('FirstCluster.html')}>
               Creating your first cluster
             </a>
@@ -47,7 +47,9 @@ class Footer extends React.Component {
           </div>
           <div>
             <h5>Community</h5>
-            <a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a>
+            <a href="https://facebook.com/groups/logdevice.oss/">
+              LogDevice Users Group
+            </a>
             <a
               href="http://stackoverflow.com/questions/tagged/logdevice"
               target="_blank"
@@ -59,6 +61,23 @@ class Footer extends React.Component {
             <h5>More</h5>
             <a href={this.props.config.baseUrl + 'blog'}>Blog</a>
             <a href="https://github.com/facebookincubator/LogDevice">GitHub</a>
+          </div>
+          <div>
+            <h5>Legal</h5>
+            <a
+              href="https://opensource.facebook.com/legal/privacy/"
+              alt="Privacy"
+              target="_blank"
+              rel="noreferrer noopener">
+              Privacy
+            </a>
+            <a
+              href="https://opensource.facebook.com/legal/terms/"
+              alt="Terms"
+              target="_blank"
+              rel="noreferrer noopener">
+              Terms
+            </a>
           </div>
         </section>
         <a
