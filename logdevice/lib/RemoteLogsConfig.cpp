@@ -21,9 +21,9 @@
 #include "logdevice/common/configuration/logs/LogsConfigStateMachine.h"
 #include "logdevice/include/LogAttributes.h"
 
+using facebook::logdevice::logsconfig::LogGroupNodePtr;
 using folly::RWSpinLock;
 using std::chrono::steady_clock;
-using facebook::logdevice::logsconfig::LogGroupNodePtr;
 
 namespace facebook { namespace logdevice {
 

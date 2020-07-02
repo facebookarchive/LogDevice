@@ -21,7 +21,6 @@
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/ops/ldquery/Errors.h"
 
-
 namespace facebook {
   namespace logdevice {
     namespace ldquery {

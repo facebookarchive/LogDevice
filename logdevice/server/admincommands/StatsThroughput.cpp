@@ -93,7 +93,6 @@ static std::set<std::string>& allowedStats() {
 }
 
 std::string StatsThroughput::getUsage() {
-
   return "Reports estimated per-log-group append/read throughput over the "
          "specified "
          "time periods.  Result unit is B/s.  "

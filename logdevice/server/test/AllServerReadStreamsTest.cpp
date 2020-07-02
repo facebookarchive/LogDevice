@@ -240,7 +240,7 @@ TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
                                               std::chrono::milliseconds::max(),
                                               LSN_MAX,
                                               bytes,
-                                              true,  // first_record_any_size
+                                              true, // first_record_any_size
                                               std::make_shared<LLSFilter>(),
                                               CatchupEventTrigger::OTHER);
     LocalLogStore::ReadOptions options("ReadStorageTasksMemoryLimit");

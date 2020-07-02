@@ -12,7 +12,6 @@
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/util.h"
 
-
 namespace facebook { namespace logdevice { namespace ldquery {
 
 int VirtualTable::xOpen(sqlite3_vtab* /*pVTab*/,

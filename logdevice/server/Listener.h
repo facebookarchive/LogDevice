@@ -108,15 +108,14 @@ class Listener : public folly::AsyncServerSocket::AcceptCallback {
   virtual folly::SemiFuture<folly::Unit> stopAcceptingConnections();
 
  protected:
-
   /* Returns true if TLS handshake header is detected in buf. */
   static bool isTLSHeader(const TLSHeader& buf);
 
   void acceptError(const std::exception& ex) noexcept override;
 
-  void
-  connectionAccepted(folly::NetworkSocket fd,
-                     const folly::SocketAddress& clientAddr) noexcept override = 0;
+  void connectionAccepted(
+      folly::NetworkSocket fd,
+      const folly::SocketAddress& clientAddr) noexcept override = 0;
 
   bool isSSL() const;
 

@@ -127,6 +127,5 @@ class PerWorkerStorageTaskQueue {
     // last time drop() was called
     std::chrono::steady_clock::time_point last_queue_drop_time{};
   } taskBuffer_[(int)StorageTask::ThreadType::MAX];
-
 };
 }} // namespace facebook::logdevice

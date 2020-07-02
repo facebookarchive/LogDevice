@@ -15,10 +15,7 @@ namespace facebook {
     namespace ldquery {
       namespace tables {
 
-enum class RecordQueryMode : bool {
-  CSI = true,
-  DATA = false
-};
+enum class RecordQueryMode : bool { CSI = true, DATA = false };
 
 template <RecordQueryMode mode>
 class Record : public AdminCommandTable {
@@ -34,10 +31,11 @@ class Record : public AdminCommandTable {
   std::string getDescription() override {
     std::string additional_info = "";
     if (mode == RecordQueryMode::CSI) {
-      additional_info = " This table is different from the record table in the "
-        "sense that it only queries the copyset index and therefore can be "
-        "more efficient. It can be used to check for divergence between the "
-        "data and copyset index.";
+      additional_info =
+          " This table is different from the record table in the "
+          "sense that it only queries the copyset index and therefore can be "
+          "more efficient. It can be used to check for divergence between the "
+          "data and copyset index.";
     }
     return "This table allows fetching information about individual record "
            "copies in the cluster.  The user must provide query constraints on "
@@ -46,7 +44,8 @@ class Record : public AdminCommandTable {
            "metadata.  Do not use it to serve production use cases as this "
            "query runs very inneficiently (it bypasses the normal read "
            "protocol and instead performs a point query on all storage nodes "
-           "in the cluster)." + additional_info;
+           "in the cluster)." +
+        additional_info;
   }
   TableColumns getFetchableColumns() const override {
     return {
@@ -78,7 +77,7 @@ class Record : public AdminCommandTable {
          "Flags for that record.  See "
          "\"logdevice/common/LocalLogStoreRecordFormat.h\" to see the list of "
          "flags."},
-         // TODO (T36984535) : deprecate column offset_within_epoch
+        // TODO (T36984535) : deprecate column offset_within_epoch
         {"offset_within_epoch",
          DataType::TEXT,
          "Amount of data written to that record within the epoch."},

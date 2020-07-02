@@ -15,7 +15,6 @@
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 
-
 namespace facebook { namespace logdevice {
 
 void NodesConfigAPIHandler::getNodesConfig(

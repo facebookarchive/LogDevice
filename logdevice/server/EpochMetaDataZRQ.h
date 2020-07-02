@@ -182,7 +182,6 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
 
   EpochStore::WriteNodeID write_node_id_;
 
-
   // Can be folly::none when it's being called from the tooling.
   folly::Optional<NodeID> my_node_id_;
 };

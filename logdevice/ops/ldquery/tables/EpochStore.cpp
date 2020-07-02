@@ -28,7 +28,6 @@
 #include "logdevice/ops/ldquery/Errors.h"
 #include "logdevice/server/ZookeeperEpochStore.h"
 
-
 namespace facebook {
   namespace logdevice {
     namespace ldquery {

@@ -86,7 +86,6 @@ createExceptionClass(const char* name,
                      const char* doc = nullptr,
                      PyObject* baseClass = PyExc_Exception);
 
-
 template <typename T>
 inline std::vector<T> to_std_vector(const boost::python::object& iterable) {
   return std::vector<T>(boost::python::stl_input_iterator<T>(iterable),

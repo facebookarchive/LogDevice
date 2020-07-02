@@ -18,7 +18,6 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientImpl.h"
 
-
 namespace facebook {
   namespace logdevice {
     namespace ldquery {

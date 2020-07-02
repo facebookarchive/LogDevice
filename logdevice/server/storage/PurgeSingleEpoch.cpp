@@ -29,7 +29,6 @@
 
 namespace facebook { namespace logdevice {
 
-
 namespace {
 esn_t nextEsn(esn_t esn) {
   return esn == ESN_MAX ? ESN_MAX : esn_t(esn.val_ + 1);

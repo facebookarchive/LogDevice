@@ -18,7 +18,6 @@
 
 namespace facebook { namespace logdevice { namespace maintenance {
 
-
 int MaintenanceDeltaTypes::applyMaintenances(
     const std::vector<thrift::MaintenanceDefinition>& defs,
     thrift::ClusterMaintenanceState& state,
