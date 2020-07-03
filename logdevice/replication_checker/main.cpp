@@ -600,7 +600,7 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
         start_lsn_(std::max(1ul, rq.start_lsn)),
         until_lsn_(std::min(LSN_MAX, rq.until_lsn)),
         latest_replication_factor_(rq.latest_replication_factor),
-        nodes_cfg_(config->getNodesConfiguration()),
+        nodes_cfg_(config->updateableNodesConfiguration()),
         perf_stats_(perf_stats),
         callbackHelper_(this) {
     ld_check(nodes_cfg_);
@@ -754,7 +754,7 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
   lsn_t until_lsn_;
   size_t latest_replication_factor_;
   read_stream_id_t rsid_{READ_STREAM_ID_INVALID};
-  std::shared_ptr<const NodesConfiguration> nodes_cfg_;
+  std::shared_ptr<UpdateableNodesConfiguration> nodes_cfg_;
   std::shared_ptr<PerfStats> perf_stats_;
 
   CheckStats stats_;
@@ -921,7 +921,7 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     const auto meta = stream_->getCurrentEpochMetadata();
     ld_check(meta);
     replication_checker_ = std::make_unique<FailureDomainNodeSet<lsn_t>>(
-        meta->shards, *nodes_cfg_, meta->replication);
+        meta->shards, *nodes_cfg_->get(), meta->replication);
   }
 
   bool gotAllCopiesOfRecord(lsn_t lsn) {
