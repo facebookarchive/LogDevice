@@ -78,6 +78,17 @@ getTimeDiff(std::chrono::steady_clock::time_point& start_time) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(diff);
 }
 
+class Connection::HandshakeTimeout : public folly::HHWheelTimer::Callback {
+ public:
+  explicit HandshakeTimeout(Connection& connection) : connection_(connection) {}
+  void timeoutExpired() noexcept override {
+    bumpEventHandersCalled();
+    connection_.onHandshakeTimeout();
+    bumpEventHandlersCompleted();
+  }
+  Connection& connection_;
+};
+
 Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
                        Address peer_name,
                        const Sockaddr& peer_sockaddr,
@@ -103,7 +114,7 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       our_name_at_peer_(ClientID::INVALID),
       outbuf_overflow_(getSettings().outbuf_overflow_kb * 1024),
       outbufs_min_budget_(getSettings().outbuf_socket_min_kb * 1024),
-      handshake_timeout_event_(deps_->getEvBase()),
+      handshake_timeout_event_(std::make_unique<HandshakeTimeout>(*this)),
       first_attempt_(true),
       tcp_sndbuf_cache_({128 * 1024, std::chrono::steady_clock::now()}),
       tcp_rcvbuf_size_(128 * 1024),
@@ -135,11 +146,6 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
     throw ConstructorFailed();
   }
 
-  handshake_timeout_event_.attachCallback([this] {
-    bumpEventHandersCalled();
-    onHandshakeTimeout();
-    bumpEventHandlersCompleted();
-  });
   end_stream_rewind_event_.attachCallback([this] {
     bumpEventHandersCalled();
     endStreamRewind();
@@ -724,7 +730,7 @@ void Connection::markDisconnectedOnClose() {
   connected_ = false;
   handshaken_ = false;
 
-  handshake_timeout_event_.cancelTimeout();
+  handshake_timeout_event_->cancelTimeout();
   end_stream_rewind_event_.cancelTimeout();
 }
 
@@ -1557,7 +1563,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   if (isHandshakeMessage(ph.type)) {
     handshaken_ = true;
     first_attempt_ = false;
-    handshake_timeout_event_.cancelTimeout();
+    handshake_timeout_event_->cancelTimeout();
   }
 
   MESSAGE_TYPE_STAT_INCR(deps_->getStats(), ph.type, message_received);
@@ -1729,7 +1735,8 @@ uint64_t Connection::getNumBytesReceived() const {
 void Connection::addHandshakeTimeoutEvent() {
   std::chrono::milliseconds timeout = getSettings().handshake_timeout;
   if (timeout.count() > 0) {
-    handshake_timeout_event_.scheduleTimeout(timeout);
+    auto evb = deps_->getEvBase()->getEventBase();
+    evb->timer().scheduleTimeout(handshake_timeout_event_.get(), timeout);
   }
 }
 

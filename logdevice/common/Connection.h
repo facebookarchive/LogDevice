@@ -948,7 +948,7 @@ class Connection : public TrafficShappingSocket {
   // Timer event used to close the connection if the LD protocol handshake
   // (HELLO/ACK message received) is not fully established within some
   // reasonable period of time.
-  EvTimer handshake_timeout_event_;
+  std::unique_ptr<folly::HHWheelTimer::Callback> handshake_timeout_event_;
 
   // Indicates that we haven't had a fully established connection (including
   // the handshake) to the peer yet. Used by checkConnection() to differentiate
@@ -1069,6 +1069,7 @@ class Connection : public TrafficShappingSocket {
   static void handshakeTimeoutCallback(void*, short);
 
  private:
+  class HandshakeTimeout;
   // The file descriptor of the underlying OS socket. Set to -1 in situations
   // where the file descriptor is not known (e.g., before connecting).
   int fd_;
