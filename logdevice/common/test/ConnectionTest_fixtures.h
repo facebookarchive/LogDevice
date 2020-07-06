@@ -20,7 +20,6 @@
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/libevent/test/EvBaseMock.h"
 #include "logdevice/common/protocol/ACK_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"

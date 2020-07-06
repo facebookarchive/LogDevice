@@ -9,7 +9,6 @@
 
 #include <gtest/gtest.h>
 
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/libevent/test/EvBaseMock.h"
 
 using namespace facebook::logdevice;

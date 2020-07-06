@@ -15,7 +15,6 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/libevent/LibEventCompatibility.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/protocol/ACK_Message.h"
 #include "logdevice/common/protocol/HELLO_Message.h"

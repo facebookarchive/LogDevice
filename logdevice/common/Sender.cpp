@@ -32,7 +32,6 @@
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/network/IConnectionFactory.h"
 #include "logdevice/common/protocol/CONFIG_CHANGED_Message.h"
 #include "logdevice/common/protocol/Message.h"

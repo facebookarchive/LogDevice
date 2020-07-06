@@ -25,7 +25,6 @@
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"

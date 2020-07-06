@@ -15,7 +15,6 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/debug.h"
-#include "logdevice/common/libevent/compat.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/util.h"
