@@ -1298,11 +1298,6 @@ void Connection::drainSendQueue() {
   }
 }
 
-void Connection::endStreamRewindCallback(void* instance, short) {
-  auto self = reinterpret_cast<Connection*>(instance);
-  self->endStreamRewind();
-}
-
 void Connection::endStreamRewind() {
   if (message_error_injection_rewinding_stream_) {
     ld_error("Ending Error Injection on Socket (%p) - %jd diverted",

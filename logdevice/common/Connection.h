@@ -1059,9 +1059,6 @@ class Connection : public TrafficShappingSocket {
   ResourceBudget::Token conn_incoming_token_;
   ResourceBudget::Token conn_external_token_;
 
-  // called when the end_stream_rewind_event_ is signed.
-  static void endStreamRewindCallback(void* instance, short);
-
   // called by endStreamRewindCallback to terminate the rewind on a parituclar
   // socket instance.
   void endStreamRewind();
