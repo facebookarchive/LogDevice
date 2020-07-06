@@ -16,8 +16,6 @@
         <summary type="html"><![CDATA[<p>We are excited to announce that today we are open-sourcing LogDevice! The code is now <a href="https://github.com/facebookincubator/LogDevice">available on GitHub</a> under the permissive 3-clause BSD license.</p> <p>LogDevice is a distributed data store for sequential data originally developed within Facebook. <a href="https://code.fb.com/core-data/logdevice-a-distributed-data-store-for-logs/">This ...</a></p>]]></summary>
         <author>
             <name/>
-            <email/>
-            <uri/>
         </author>
     </entry>
 </feed>
