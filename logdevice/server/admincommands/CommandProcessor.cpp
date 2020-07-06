@@ -7,17 +7,6 @@
  */
 #include <sstream>
 
-// clang-format off
-/**
- * Order matters!
- * Without this include token functions will not compile in boost 1.65 which
- * ubuntu is using now.
- * https://github.com/boostorg/tokenizer/pull/10 (internal task T53218151)
- */
-#include <boost/type_traits/is_pointer.hpp>
-#include <boost/token_functions.hpp>
-// clang-format on
-
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RequestType.h"
 #include "logdevice/common/Semaphore.h"
@@ -60,7 +49,7 @@ CommandProcessor::processCommand(const char* command_line,
   std::vector<std::string> args;
   try {
     args = boost::program_options::split_unix(command_line);
-  } catch (boost::escaped_list_error& e) {
+  } catch (const std::exception& e) {
     output.printf("Failed to split: %s\r\nEND\r\n", e.what());
     RATELIMIT_INFO(std::chrono::seconds(10),
                    2,
