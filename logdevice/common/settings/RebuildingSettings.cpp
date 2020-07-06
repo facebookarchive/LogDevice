@@ -432,7 +432,7 @@ void RebuildingSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Rebuilding);
   init("filter-relocate-shards",
        &filter_relocate_shards,
-       "false",
+       "true",
        nullptr,
        "Enables an optimization that mitigates a bias causing shards in "
        "RELOCATE mode to end up rebuilding 1/3rd of the data (assuming "
