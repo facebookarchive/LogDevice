@@ -786,4 +786,53 @@ TEST_F(ShardWorkflowTest, NonAuthoritativeRebuilding) {
   ASSERT_EQ(std::move(result).get(), MaintenanceStatus::COMPLETED);
 }
 
+TEST_F(ShardWorkflowTest, UndrainShardAfterEmpty) {
+  init();
+  wf->addTargetOpState({ShardOperationalState::ENABLED});
+  membership::ShardState shard_state;
+  shard_state.storage_state = membership::StorageState::NONE;
+  auto result = wf->run(shard_state,
+                        /* excluded_from_nodeset = */ false,
+                        ShardDataHealth::EMPTY,
+                        RebuildingMode::RESTORE,
+                        true /*is_draining*/,
+                        false /*is_non_authoritative*/,
+                        ClusterStateNodeState::FULLY_STARTED);
+  ASSERT_EQ(std::move(result).get(),
+            MaintenanceStatus::AWAITING_NODES_CONFIG_CHANGES);
+  ASSERT_EQ(wf->getExpectedStorageStateTransition().value(),
+            membership::StorageStateTransition::ENABLING_READ);
+  ASSERT_EQ(event, nullptr);
+  shard_state.storage_state = membership::StorageState::READ_ONLY;
+  result = wf->run(shard_state,
+                   /* excluded_from_nodeset = */ false,
+                   ShardDataHealth::EMPTY,
+                   RebuildingMode::RESTORE,
+                   true /*is_draining*/,
+                   false /*is_non_authoritative*/,
+                   ClusterStateNodeState::FULLY_STARTED);
+
+  ASSERT_NE(event, nullptr);
+  EventType expected_event_type{EventType::SHARD_UNDRAIN};
+  ASSERT_EQ(expected_event_type,
+            (static_cast<SHARD_UNDRAIN_Event*>(event.get()))->getType());
+
+  // We should be aborting rebuilding if drain=0 instead of UNDRAIN
+  shard_state.storage_state = membership::StorageState::READ_ONLY;
+  result = wf->run(shard_state,
+                   /* excluded_from_nodeset = */ false,
+                   ShardDataHealth::EMPTY,
+                   RebuildingMode::RESTORE,
+                   false /*is_draining*/,
+                   false /*is_non_authoritative*/,
+                   ClusterStateNodeState::FULLY_STARTED);
+
+  ASSERT_NE(event, nullptr);
+  expected_event_type = EventType::SHARD_ABORT_REBUILD;
+  ASSERT_EQ(expected_event_type,
+            (static_cast<SHARD_ABORT_REBUILD_Event*>(event.get()))->getType());
+
+  //... rest of workflow is same as test above
+}
+
 }}} // namespace facebook::logdevice::maintenance

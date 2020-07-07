@@ -589,15 +589,6 @@ int EventLogRebuildingSet::onShardUndrain(
     return -1;
   }
 
-  if (!shard_info.nodes_[ptr->header.nodeIdx].drain) {
-    ld_warning("Found event log record with lsn %s: %s but this shard is not "
-               "being drained. Discarding.",
-               lsn_to_string(lsn).c_str(),
-               record.describe().c_str());
-    err = E::FAILED;
-    return -1;
-  }
-
   shard_info.nodes_[ptr->header.nodeIdx].drain = false;
 
   checkConsistency();

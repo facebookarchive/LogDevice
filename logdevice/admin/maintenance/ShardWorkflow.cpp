@@ -325,18 +325,39 @@ void ShardWorkflow::computeMaintenanceStatusForEnable() {
 }
 
 void ShardWorkflow::createAbortEventIfRequired() {
-  /* ShardDataHealth  RebuildingMode  Shard Rebuilding Type
+  /* ShardDataHealth  RebuildingMode  Shard Rebuilding Type  Draining
    * Healthy          Relocate        Full (ABORT)
    * Lost_Regions     Restore         Mini (DO NOT ABORT)
    * Healthy          Invalid         NA   (DO NOT ABORT)
    * Unavilable       Restore         Full (ABORT)
    * Underreplication Restore         Full (ABORT)
-   * Empty            Restore         Full (ABORT)
-   * Empty            Relocate        Full (ABORT)
+   * Empty            Restore         Full (ABORT)               0
+   * Empty            Relocate        Full (ABORT)               0
+   * Empty            Restore         Full (UNDRAIN)             1
+   * Empty            Relocate        Full (UNDRAIN)             1
    */
-  if (current_rebuilding_mode_ == RebuildingMode::RELOCATE ||
-      (current_data_health_ != ShardDataHealth::LOST_REGIONS &&
-       current_data_health_ != ShardDataHealth::HEALTHY)) {
+
+  if (current_data_health_ == ShardDataHealth::EMPTY && current_is_draining_) {
+    // The reason we are doing this here is due to how RebuildingCoordinator
+    // currently works. The UNDRAIN message will remove
+    // the drain flag (unset it) and ask the shards to write the
+    // RebuildingCompleteMetadata marker. This will ensure that the shard's
+    // internal rebuilding state is reset to NONE before we enable this shard.
+    //
+    // In principle, we don't need to do any of this (including the drain flag)
+    // once we make maintenance manager the only driver of rebuilding. The drain
+    // flag was designed to ask rebuilding to NOT enable shards again even if
+    // they are online. With maintenance manager this is controlled by whether
+    // the shard has effective DRAINED maintenances or not.
+
+    // Enabling a shard should be done only by maintenance manager in a single
+    // unified way once we clean up RebuildingCoordinator and the rest of
+    // rebuilding.
+    event_ = std::make_unique<SHARD_UNDRAIN_Event>(
+        shard_.node(), (uint32_t)shard_.shard());
+  } else if (current_rebuilding_mode_ == RebuildingMode::RELOCATE ||
+             (current_data_health_ != ShardDataHealth::LOST_REGIONS &&
+              current_data_health_ != ShardDataHealth::HEALTHY)) {
     event_ = std::make_unique<SHARD_ABORT_REBUILD_Event>(
         shard_.node(), (uint32_t)shard_.shard(), LSN_INVALID);
   }
