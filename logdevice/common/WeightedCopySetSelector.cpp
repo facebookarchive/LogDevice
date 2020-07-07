@@ -283,12 +283,6 @@ std::vector<double> WeightedCopySetSelector::calculateWeightsBasedOnConfig(
       // domain target weight
       domain_target_weight[domain] +=
           nodes_configuration.getNodeWritableStorageCapacity(node);
-    } else {
-      // Some positive-weight domain has no positive-weight nodes in nodeset.
-      // This is unusual but possible if e.g. a new rack was added to config,
-      // and nodesets haven't been updated yet.
-      // Act as if this domain had zero weight.
-      domain_target_weight[domain]; // make sure domain is in the map
     }
   }
 
@@ -344,20 +338,6 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
     const logsconfig::LogAttributes* log_attrs,
     std::unordered_map<std::string, double>& domain_target_weight) {
-  // Find primary sequencer domain.
-  ld_check(log_attrs != nullptr);
-  node_index_t sequencer_node =
-      HashBasedSequencerLocator::getPrimarySequencerNode(
-          logid_, nodes_configuration, log_attrs);
-
-  const auto* node_sd =
-      nodes_configuration.getNodeServiceDiscovery(sequencer_node);
-  ld_check(node_sd != nullptr);
-  std::string sequencer_domain =
-      node_sd->location.value_or(NodeLocation())
-          .getDomain(secondary_replication_scope_, sequencer_node);
-  ld_check(domain_target_weight.count(sequencer_domain));
-
   // See doc/weighted-copyset-selector-locality.md for explanation.
 
   // First calculate some total weights.
@@ -372,6 +352,10 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
                                       ->getEffectiveSequencerWeight(n);
     domain_sequencer_weight[domain] += sequencer_weight;
     total_sequencer_weight += sequencer_weight;
+
+    // Make sure domain_target_weight has the same set of keys as
+    // domain_sequencer_weight, including sequencer-only domains.
+    domain_target_weight[domain];
   }
 
   // Note that, unlike the doc, we have unnormalized weights, so we'll need to
@@ -379,6 +363,10 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
   double total_weight = 0;
   for (const auto& p : domain_target_weight) {
     total_weight += p.second;
+
+    // Make sure domain_sequencer_weight has the same set of keys as
+    // domain_target_weight, including storage-only domains.
+    domain_sequencer_weight[p.first];
   }
 
   if (total_sequencer_weight < Sampling::EPSILON ||
@@ -391,6 +379,22 @@ void WeightedCopySetSelector::optimizeWeightsForLocality(
         total_sequencer_weight);
     return;
   }
+
+  // Find primary sequencer domain.
+
+  ld_check(log_attrs != nullptr);
+  node_index_t sequencer_node =
+      HashBasedSequencerLocator::getPrimarySequencerNode(
+          logid_, nodes_configuration, log_attrs);
+
+  const auto* node_sd =
+      nodes_configuration.getNodeServiceDiscovery(sequencer_node);
+  ld_check(node_sd != nullptr);
+  std::string sequencer_domain =
+      node_sd->location.value_or(NodeLocation())
+          .getDomain(secondary_replication_scope_, sequencer_node);
+
+  ld_check(domain_target_weight.count(sequencer_domain));
 
   // Pick domain_weight_shift[s] (a.k.a. D[s]) for every s. D[s] is by how much
   // we want to increase the weight of sequencer domain for logs with
