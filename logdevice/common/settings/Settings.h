@@ -901,10 +901,6 @@ struct Settings : public SettingsBundle {
   // it is reasonable to keep it as high as 5min.
   std::chrono::milliseconds scd_all_send_all_timeout;
 
-  // (client-only setting) Default namespace to use on the client. This will
-  // be used for any client functions that take log group name as a parameter.
-  std::string default_log_namespace;
-
   // Time interval that ConfigurationUpdatedRequest would retry sending
   // CONFIG_CHANGED messages after it got NOBUFS.
   // TODO (t13314297): this setting is not modified anywhere

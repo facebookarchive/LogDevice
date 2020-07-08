@@ -196,12 +196,6 @@ class LogsConfig {
     return configuration::InternalLogs::isInternal(logid);
   }
 
-  /**
-   * Returns the log name prefixed with the given namespace.
-   */
-  std::string getNamespacePrefixedLogRangeName(const std::string& ns,
-                                               const std::string& name) const;
-
   constexpr static char default_namespace_delimiter_[] = "/";
 
   virtual uint64_t getVersion() const {

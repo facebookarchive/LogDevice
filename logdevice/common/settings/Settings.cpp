@@ -2123,13 +2123,6 @@ void Settings::defineSettings(SettingEasyInit& init) {
       "storage nodes reject the record.",
       SERVER,
       SettingsCategory::WritePath);
-  init("default-log-namespace",
-       &default_log_namespace,
-       "",
-       nullptr, // no validation
-       "Default log namespace to use on the client.",
-       CLIENT | DEPRECATED,
-       SettingsCategory::Configuration);
   init("server-based-nodes-configuration-store-timeout",
        &server_based_nodes_configuration_store_timeout,
        "60s",

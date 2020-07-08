@@ -23,18 +23,6 @@ constexpr char LogsConfig::default_namespace_delimiter_[];
 
 std::atomic<uint64_t> LogsConfig::max_version{0};
 
-std::string
-LogsConfig::getNamespacePrefixedLogRangeName(const std::string& ns,
-                                             const std::string& name) const {
-  if (ns.empty()) {
-    return namespace_delimiter_ + name;
-  }
-  if (name.empty()) {
-    return ns;
-  }
-  return namespace_delimiter_ + ns + namespace_delimiter_ + name;
-}
-
 LogsConfig::NamespaceRangeLookupMap
 LogsConfig::getLogRangesByNamespace(const std::string& ns) const {
   LogsConfig::NamespaceRangeLookupMap res;
