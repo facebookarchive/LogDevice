@@ -19,7 +19,6 @@
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/ClientFactory.h"
 
-using namespace facebook::logdevice;
 using namespace ::testing;
 
 namespace facebook { namespace logdevice {
