@@ -7,7 +7,6 @@
  */
 
 #include <boost/filesystem.hpp>
-#include <folly/FileUtil.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/test/TestUtil.h"
