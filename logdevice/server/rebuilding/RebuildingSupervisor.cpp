@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/server/RebuildingSupervisor.h"
+#include "logdevice/server/rebuilding/RebuildingSupervisor.h"
 
 #include <chrono>
 #include <cmath>

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/RecordRebuildingBase.h"
+#include "logdevice/server/rebuilding/RecordRebuildingBase.h"
 
 #include <folly/Random.h>
 

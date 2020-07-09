@@ -19,10 +19,10 @@
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/Listener.h"
 #include "logdevice/server/LogStoreMonitor.h"
-#include "logdevice/server/RebuildingCoordinator.h"
-#include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
+#include "logdevice/server/rebuilding/RebuildingCoordinator.h"
+#include "logdevice/server/rebuilding/RebuildingSupervisor.h"
 #include "logdevice/server/shutdown.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 

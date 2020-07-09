@@ -10,8 +10,8 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationAPI.h"
 #include "logdevice/common/membership/StorageMembership.h"
 #include "logdevice/common/membership/types.h"
-#include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
+#include "logdevice/server/rebuilding/RebuildingSupervisor.h"
 
 namespace facebook { namespace logdevice {
 

@@ -13,7 +13,7 @@
 #include "logdevice/common/NodeSetState.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/test/TestUtil.h"
-#include "logdevice/server/RecordRebuildingStore.h"
+#include "logdevice/server/rebuilding/RecordRebuildingStore.h"
 
 // Shortcuts for writing ShardIDs
 #define N10 ShardID(10, 0)

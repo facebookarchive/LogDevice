@@ -5,13 +5,13 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/server/RebuildingLogEnumerator.h"
+#include "logdevice/server/rebuilding/RebuildingLogEnumerator.h"
 
 #include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/server/RebuildingEnumerateMetadataLogsTask.h"
 #include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/rebuilding/RebuildingEnumerateMetadataLogsTask.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 
 namespace facebook { namespace logdevice {

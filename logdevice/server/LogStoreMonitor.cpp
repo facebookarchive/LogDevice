@@ -11,11 +11,11 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/ThreadID.h"
-#include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/CompactionRequest.h"
 #include "logdevice/server/locallogstore/RocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
+#include "logdevice/server/rebuilding/RebuildingSupervisor.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
 
 namespace facebook { namespace logdevice {

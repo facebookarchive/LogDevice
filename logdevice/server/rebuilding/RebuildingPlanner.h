@@ -21,7 +21,7 @@
 #include "logdevice/common/settings/RebuildingSettings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/LogTailAttributes.h"
-#include "logdevice/server/RebuildingLogEnumerator.h"
+#include "logdevice/server/rebuilding/RebuildingLogEnumerator.h"
 #include "logdevice/server/rebuilding/RebuildingPlan.h"
 
 namespace facebook { namespace logdevice {

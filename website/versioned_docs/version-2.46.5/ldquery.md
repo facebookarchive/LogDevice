@@ -256,7 +256,7 @@ A table that lists the log groups configured in the cluster.  A log group is an 
 | custom\_fields | string | Custom text field provided by the user. |
 
 ## log\_rebuildings
-This table dumps debugging information about the state of LogRebuilding state machines (see "logdevice/server/LogRebuilding.h") which are state machines running on donor storage nodes and responsible for rebuilding records of that log.
+This table dumps debugging information about the state of LogRebuilding state machines (see "logdevice/server/rebuilding/LogRebuilding.h") which are state machines running on donor storage nodes and responsible for rebuilding records of that log.
 
 |   Column   |   Type   |   Description   |
 |------------|:--------:|-----------------|

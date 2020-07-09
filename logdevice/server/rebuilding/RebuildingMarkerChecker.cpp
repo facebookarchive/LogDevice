@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/RebuildingMarkerChecker.h"
+#include "logdevice/server/rebuilding/RebuildingMarkerChecker.h"
 
 #include <tuple>
 

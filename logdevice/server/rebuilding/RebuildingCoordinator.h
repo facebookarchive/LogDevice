@@ -26,9 +26,9 @@
 #include "logdevice/common/event_log/EventLogWriter.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
-#include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/rebuilding/NonAuthoritativeRebuildingChecker.h"
 #include "logdevice/server/rebuilding/RebuildingPlanner.h"
+#include "logdevice/server/rebuilding/RebuildingSupervisor.h"
 
 /**
  * @file RebuildingCoordinator coordinates all RebuildingPlanner and

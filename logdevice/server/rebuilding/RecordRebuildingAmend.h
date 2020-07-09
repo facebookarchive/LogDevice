@@ -11,7 +11,7 @@
 
 #include <folly/small_vector.h>
 
-#include "logdevice/server/RecordRebuildingBase.h"
+#include "logdevice/server/rebuilding/RecordRebuildingBase.h"
 
 /**
  * @file RecordRebuildingAmend is a state machine for Amending

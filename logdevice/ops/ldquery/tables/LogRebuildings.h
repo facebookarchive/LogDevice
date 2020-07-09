@@ -39,7 +39,8 @@ class LogRebuildings : public AdminCommandTable {
         {"until_lsn",
          DataType::LSN,
          "LSN up to which the log must be rebuilt.  See "
-         "\"logdevice/server/rebuilding/RebuildingPlanner.h\" for how this LSN "
+         "\"logdevice/server/rebuilding/RebuildingPlanner.h\" for "
+         "how this LSN "
          "is computed."},
         {"rebuilt_up_to",
          DataType::LSN,

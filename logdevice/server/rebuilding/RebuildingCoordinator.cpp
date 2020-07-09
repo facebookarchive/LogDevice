@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/server/RebuildingCoordinator.h"
+#include "logdevice/server/rebuilding/RebuildingCoordinator.h"
 
 #include <folly/hash/Hash.h>
 
@@ -18,12 +18,12 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationManager.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/request_util.h"
-#include "logdevice/server/RebuildingMarkerChecker.h"
-#include "logdevice/server/RebuildingSupervisor.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/read_path/AllServerReadStreams.h"
+#include "logdevice/server/rebuilding/RebuildingMarkerChecker.h"
+#include "logdevice/server/rebuilding/RebuildingSupervisor.h"
 #include "logdevice/server/rebuilding/ShardRebuilding.h"
 #include "logdevice/server/storage_tasks/PerWorkerStorageTaskQueue.h"
 #include "logdevice/server/storage_tasks/ReadStorageTask.h"
