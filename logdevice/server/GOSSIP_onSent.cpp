@@ -7,9 +7,9 @@
  */
 
 #include "logdevice/server/FailureDetector.h"
-#include "logdevice/server/GOSSIP_onReceived.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerWorker.h"
+#include "logdevice/server/message_handlers/GOSSIP_onReceived.h"
 
 namespace facebook { namespace logdevice {
 

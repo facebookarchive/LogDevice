@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/GET_RSM_SNAPSHOT_onReceived.h"
+#include "logdevice/server/message_handlers/GET_RSM_SNAPSHOT_onReceived.h"
 
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/WorkerType.h"

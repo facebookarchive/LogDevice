@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "logdevice/server/GOSSIP_onReceived.h"
+#include "logdevice/server/message_handlers/GOSSIP_onReceived.h"
 
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Worker.h"
