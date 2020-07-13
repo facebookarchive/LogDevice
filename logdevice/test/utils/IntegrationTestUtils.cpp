@@ -1884,7 +1884,8 @@ std::unique_ptr<thrift::AdminAPIAsyncClient> Node::createAdminClient() const {
   folly::SocketAddress address = getAdminAddress();
   auto transport = folly::AsyncSocket::newSocket(
       folly::EventBaseManager::get()->getEventBase(), address);
-  auto channel = apache::thrift::HeaderClientChannel::newChannel(transport);
+  auto channel =
+      apache::thrift::HeaderClientChannel::newChannel(std::move(transport));
   channel->setTimeout(5000);
   if (!channel->good()) {
     ld_debug("Couldn't create a thrift client for the Admin server for node "
