@@ -18,6 +18,7 @@
 
 #include <folly/Format.h>
 #include <folly/Singleton.h>
+#include <folly/synchronization/HazptrThreadPoolExecutor.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 
@@ -570,6 +571,8 @@ std::string get_username(bool effective) {
 
 void logdeviceInit() {
   folly::SingletonVault::singleton()->registrationComplete();
+
+  folly::enable_hazptr_thread_pool_executor();
 
   // Ignore SIGPIPE.
   struct sigaction sa;
