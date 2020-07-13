@@ -41,6 +41,7 @@
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/plugin/AdminServerFactory.h"
 #include "logdevice/common/plugin/BuiltinZookeeperClientFactory.h"
+#include "logdevice/common/plugin/ThriftServerFactory.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
 #include "logdevice/common/settings/SSLSettingValidation.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
@@ -855,6 +856,7 @@ Server::initThriftServer(std::string name, int port, std::string unix_socket) {
     ld_info("%s Thrift API server disabled", name.c_str());
     return nullptr;
   }
+
   Sockaddr address =
       unix_socket.empty() ? Sockaddr("::", port) : Sockaddr(unix_socket);
   auto handler =
@@ -863,8 +865,18 @@ Server::initThriftServer(std::string name, int port, std::string unix_socket) {
                                                   params_->getSettingsUpdater(),
                                                   params_->getServerSettings(),
                                                   params_->getStats());
-  return std::make_unique<SimpleThriftServer>(
-      name, address, std::move(handler));
+
+  auto factory_plugin =
+      params_->getPluginRegistry()->getSinglePlugin<ThriftServerFactory>(
+          PluginType::THRIFT_SERVER_FACTORY);
+
+  if (factory_plugin) {
+    return (*factory_plugin)(name, address, std::move(handler));
+  } else {
+    // Fallback to built-in SimpleThriftApiServer
+    return std::make_unique<SimpleThriftServer>(
+        name, address, std::move(handler));
+  }
 }
 
 bool Server::initStore() {

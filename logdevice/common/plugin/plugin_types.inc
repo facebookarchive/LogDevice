@@ -23,10 +23,7 @@
 // type of plugin or for plugin loaders. See PluginProvider.h
 PLUGIN_TYPE(PLUGIN_PROVIDER, 1, "Plugin provider", true)
 // See StatsPublisherFactory.h
-PLUGIN_TYPE(STATS_PUBLISHER_FACTORY,
-            2,
-            "Stats publisher factory",
-            false)
+PLUGIN_TYPE(STATS_PUBLISHER_FACTORY, 2, "Stats publisher factory", false)
 // See BuildInfo.h
 PLUGIN_TYPE(BUILD_INFO, 3, "Build Info", false)
 // See LocationProvider.h
@@ -57,5 +54,7 @@ PLUGIN_TYPE(LOGGER, 15, "Logger plugin", false)
 PLUGIN_TYPE(DEFAULT_SETTINGS_PROVIDER, 16, "Default settings provider", false)
 // See server/locallogstore/RocksDBCustomiser.h
 PLUGIN_TYPE(ROCKSDB_CUSTOMISER_FACTORY, 17, "RocksDB customiser factory", false)
+// See ThriftServerFactory.h
+PLUGIN_TYPE(THRIFT_SERVER_FACTORY, 18, "ThriftServer factory", false)
 
 #undef PLUGIN_TYPE

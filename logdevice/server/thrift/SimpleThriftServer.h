@@ -8,16 +8,10 @@
 
 #pragma once
 
+#include <thrift/lib/cpp2/server/ThriftServer.h>
+#include <thrift/lib/cpp2/util/ScopedServerThread.h>
+
 #include "logdevice/server/thrift/LogDeviceThriftServer.h"
-
-namespace apache { namespace thrift {
-class ThriftServer;
-class ServerInterface;
-
-namespace util {
-class ScopedServerThread;
-}
-}} // namespace apache::thrift
 
 namespace facebook { namespace logdevice {
 

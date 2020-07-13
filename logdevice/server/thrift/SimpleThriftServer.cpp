@@ -8,9 +8,6 @@
 
 #include "logdevice/server/thrift/SimpleThriftServer.h"
 
-#include <thrift/lib/cpp2/server/ThriftServer.h>
-#include <thrift/lib/cpp2/util/ScopedServerThread.h>
-
 #include "logdevice/common/configuration/UpdateableConfig.h"
 
 using apache::thrift::util::ScopedServerThread;
