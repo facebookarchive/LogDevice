@@ -892,6 +892,12 @@ bool Server::initStore() {
     auto rocksdb_plugin =
         params_->getPluginRegistry()->getSinglePlugin<RocksDBCustomiserFactory>(
             PluginType::ROCKSDB_CUSTOMISER_FACTORY);
+
+    node_index_t node_index = params_->getMyNodeID()->index();
+    uint64_t node_version = updateable_config_->getNodesConfiguration()
+                                ->getNodeServiceDiscovery(node_index)
+                                ->version;
+
     // If there's no plugin, use the default customiser.
     std::unique_ptr<RocksDBCustomiser> rocksdb_customiser =
         rocksdb_plugin == nullptr
@@ -899,7 +905,8 @@ bool Server::initStore() {
         : (*rocksdb_plugin)(
               local_log_store_path,
               updateable_config_->getServerConfig()->getClusterName(),
-              params_->getMyNodeID()->index(),
+              node_index,
+              node_version,
               params_->getNumDBShards(),
               params_->getRocksDBSettings());
     ld_check(rocksdb_customiser);

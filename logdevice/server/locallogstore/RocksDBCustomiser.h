@@ -111,6 +111,7 @@ class RocksDBCustomiserFactory : public Plugin {
   operator()(std::string local_log_store_path,
              std::string cluster_name,
              node_index_t my_node_id,
+             uint64_t my_node_version,
              shard_size_t num_shards,
              UpdateableSettings<RocksDBSettings> db_settings) = 0;
 };
