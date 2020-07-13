@@ -806,11 +806,13 @@ bool GET_SEQ_STATE_Message::shouldRedirectOrFail(logid_t datalog_id,
   }
 
   if (status_out != E::OK) {
-    RATELIMIT_WARNING(std::chrono::seconds(5),
-                      5,
-                      "No sequencer node found for log:%lu, replying with "
-                      "E::NOSEQUENCER.",
-                      datalog_id.val_);
+    RATELIMIT_WARNING(
+        std::chrono::seconds(5),
+        5,
+        "No sequencer node found for log:%lu (status=%s), replying with "
+        "E::NOSEQUENCER.",
+        datalog_id.val_,
+        error_name(status_out));
     status_out = E::NOSEQUENCER;
     return true;
   }
