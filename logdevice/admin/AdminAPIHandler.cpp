@@ -31,6 +31,7 @@
 namespace facebook { namespace logdevice {
 
 AdminAPIHandler::AdminAPIHandler(
+    const std::string& service_name,
     Processor* processor,
     std::shared_ptr<SettingsUpdater> settings_updater,
     UpdateableSettings<ServerSettings> updateable_server_settings,
@@ -41,36 +42,9 @@ AdminAPIHandler::AdminAPIHandler(
                           std::move(updateable_server_settings),
                           std::move(updateable_admin_server_settings),
                           stats_holder),
-      facebook::fb303::FacebookBase2("LogDevice Admin API Service") {
-  start_time_ = std::chrono::steady_clock::now();
+      LogDeviceThriftHandler(service_name, processor) {
   safety_checker_ = std::make_shared<SafetyChecker>(processor_);
   safety_checker_->useAdminSettings(updateable_admin_server_settings_);
-}
-
-facebook::fb303::cpp2::fb_status AdminAPIHandler::getStatus() {
-  // Given that this thrift / Admin API service is started as soon as we
-  // start accepting connections, the service can only be:
-  // - ALIVE
-  // - STOPPING
-  if (processor_->isShuttingDown()) {
-    return facebook::fb303::cpp2::fb_status::STOPPING;
-  } else if (!processor_->isLogsConfigLoaded()) {
-    return facebook::fb303::cpp2::fb_status::STARTING;
-  } else {
-    return facebook::fb303::cpp2::fb_status::ALIVE;
-  }
-}
-
-void AdminAPIHandler::getVersion(std::string& _return) {
-  auto build_info = processor_->getPluginRegistry()->getSinglePlugin<BuildInfo>(
-      PluginType::BUILD_INFO);
-  _return = build_info->version();
-}
-
-int64_t AdminAPIHandler::aliveSince() {
-  auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
-      std::chrono::steady_clock::now() - start_time_);
-  return uptime.count();
 }
 
 void AdminAPIHandler::getLogTreeInfo(thrift::LogTreeInfo& response) {

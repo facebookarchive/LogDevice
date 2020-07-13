@@ -514,6 +514,30 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER | REQUIRES_RESTART,
      SettingsCategory::NodeRegistration)
 
+     ("client-thrift-api-unix-socket", &client_thrift_api_unix_socket, "", validate_unix_socket,
+     "[Only used when node self registration is enabled] Path to the Unix domain socket "
+     "the server will use to listen for incoming Thrift API requests from clients.",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("client-thrift-api-port", &client_thrift_api_port, "0", validate_optional_port,
+     "[Only used when node self registration is enabled] TCP port the server will use to listen "
+     "for incoming Thrift API requests from clients. A value of zero disables client Thrift API.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
+
+     ("server-thrift-api-unix-socket", &server_thrift_api_unix_socket, "", validate_unix_socket,
+     "[Only used when node self registration is enabled] Path to the Unix domain socket "
+     "the server will use to listen for incoming Thrift API requests from other servers.",
+     SERVER | REQUIRES_RESTART | CLI_ONLY,
+     SettingsCategory::NodeRegistration)
+
+    ("server-thrift-api-port", &server_thrift_api_port, "0", validate_optional_port,
+     "[Only used when node self registration is enabled] TCP port the server will use to listen "
+     "for incoming Thrift API requests from servers. A value of zero disables server Thrift API.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
+
     ("roles", &roles, "sequencer,storage",
      parse_roles,
      "[Only used when node self registration is enabled] Defines whether the "

@@ -21,7 +21,8 @@ AdminServer::AdminServer(
     StatsHolder* stats_holder)
     : processor_(processor), admin_server_settings_(admin_server_settings) {
   admin_api_handler_ =
-      std::make_shared<AdminAPIHandler>(processor,
+      std::make_shared<AdminAPIHandler>("LogDevice Admin API Service",
+                                        processor,
                                         std::move(settings_updater),
                                         std::move(server_settings),
                                         admin_server_settings_,

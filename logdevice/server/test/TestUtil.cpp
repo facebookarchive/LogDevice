@@ -25,6 +25,7 @@
 #include "logdevice/server/rebuilding/RebuildingSupervisor.h"
 #include "logdevice/server/shutdown.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
+#include "logdevice/server/thrift/LogDeviceThriftServer.h"
 
 namespace facebook { namespace logdevice {
 
@@ -119,6 +120,8 @@ std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
 
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
   std::unique_ptr<AdminServer> admin_handle;
+  std::unique_ptr<LogDeviceThriftServer> s2s_thrift_api_server;
+  std::unique_ptr<LogDeviceThriftServer> c2s_thrift_api_server;
   std::unique_ptr<Listener> connection_listener;
   std::unique_ptr<Listener> gossip_listener;
   std::unique_ptr<Listener> ssl_connection_listener;
@@ -140,6 +143,8 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
 
   uint64_t shutdown_duration_ms = 0;
   shutdown_server(admin_handle,
+                  s2s_thrift_api_server,
+                  c2s_thrift_api_server,
                   connection_listener,
                   gossip_listener,
                   ssl_connection_listener,

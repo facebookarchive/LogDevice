@@ -27,6 +27,7 @@
 #include "logdevice/server/admincommands/CommandProcessor.h"
 #include "logdevice/server/locallogstore/LocalLogStoreSettings.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
+#include "logdevice/server/thrift/LogDeviceThriftServer.h"
 
 namespace facebook { namespace logdevice {
 
@@ -282,6 +283,8 @@ class Server {
   std::unique_ptr<folly::EventBaseThread> ssl_connection_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> gossip_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> server_to_server_listener_loop_;
+  std::unique_ptr<LogDeviceThriftServer> s2s_thrift_api_handle_;
+  std::unique_ptr<LogDeviceThriftServer> c2s_thrift_api_handle_;
   std::unique_ptr<AdminServer> admin_server_handle_;
   std::unique_ptr<Listener> connection_listener_;
   std::unique_ptr<Listener> ssl_connection_listener_;
@@ -338,6 +341,13 @@ class Server {
   // These methods should be called in this order.
   // In case of error, log it and return false.
   bool initListeners();
+  // Initializes both (client-facing and server-to-server) Thrift API servers
+  bool initThriftServers();
+  // Initializes single Thrift API server and returns pointer to it or nullptr
+  // if server is disabled
+  std::unique_ptr<LogDeviceThriftServer>
+  initThriftServer(std::string name, int port, std::string unix_socket);
+
   bool initStore();
   bool initLogStorageStateMap();
   bool initStorageThreadPool();

@@ -32,6 +32,7 @@
 #include "logdevice/server/rebuilding/RebuildingCoordinator.h"
 #include "logdevice/server/rebuilding/RebuildingSupervisor.h"
 #include "logdevice/server/storage_tasks/ShardedStorageThreadPool.h"
+#include "logdevice/server/thrift/LogDeviceThriftServer.h"
 #include "logdevice/server/util.h"
 
 namespace facebook { namespace logdevice {
@@ -131,6 +132,8 @@ using std::chrono::steady_clock;
 
 void shutdown_server(
     std::unique_ptr<AdminServer>& admin_server,
+    std::unique_ptr<LogDeviceThriftServer>& s2s_thrift_api_server,
+    std::unique_ptr<LogDeviceThriftServer>& c2s_thrift_api_server,
     std::unique_ptr<Listener>& connection_listener,
     std::unique_ptr<Listener>& gossip_listener,
     std::unique_ptr<Listener>& ssl_connection_listener,
@@ -161,6 +164,18 @@ void shutdown_server(
     // cleanly shutdown any threads/workers managed by the Admin API server.
     admin_server->stop();
     ld_info("Admin API server stopped accepting requests");
+  }
+
+  if (s2s_thrift_api_server) {
+    ld_info("Stopping server to server Thrift API server");
+    s2s_thrift_api_server->stop();
+    ld_info("Server to server Thrift API server stopped accepting requests");
+  }
+
+  if (c2s_thrift_api_server) {
+    ld_info("Stopping client-facing Thrift API server");
+    c2s_thrift_api_server->stop();
+    ld_info("Client-facing Thrift API server stopped accepting requests");
   }
 
   if (sequencer_placement && !fast_shutdown) {

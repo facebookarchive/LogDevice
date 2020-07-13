@@ -9,7 +9,6 @@
 
 #include <folly/Optional.h>
 
-#include "common/fb303/cpp/FacebookBase2.h"
 #include "logdevice/admin/AdminCommandAPIHandler.h"
 #include "logdevice/admin/CheckImpactHandler.h"
 #include "logdevice/admin/ClusterMembershipAPIHandler.h"
@@ -20,6 +19,7 @@
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/WorkerType.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/server/thrift/LogDeviceThriftHandler.h"
 
 namespace facebook { namespace logdevice {
 class SafetyChecker;
@@ -32,7 +32,7 @@ class SafetyChecker;
  * preferred to used the future_Fn flavor if you are performing an operation
  * on a background worker.
  */
-class AdminAPIHandler : public facebook::fb303::FacebookBase2,
+class AdminAPIHandler : public LogDeviceThriftHandler,
                         public NodesConfigAPIHandler,
                         public NodesStateAPIHandler,
                         public CheckImpactHandler,
@@ -41,16 +41,12 @@ class AdminAPIHandler : public facebook::fb303::FacebookBase2,
                         public AdminCommandAPIHandler {
  public:
   AdminAPIHandler(
+      const std::string& service_name,
       Processor* processor,
       std::shared_ptr<SettingsUpdater> settings_updater,
       UpdateableSettings<ServerSettings> updateable_server_settings,
       UpdateableSettings<AdminServerSettings> updateable_admin_server_settings,
       StatsHolder* stats_holder);
-
-  /* FB303 exports */
-  facebook::fb303::cpp2::fb_status getStatus() override;
-  void getVersion(std::string& _return) override;
-  int64_t aliveSince() override;
 
   // *** LogTree-related APIs
   void getLogTreeInfo(thrift::LogTreeInfo&) override;
@@ -86,9 +82,5 @@ class AdminAPIHandler : public facebook::fb303::FacebookBase2,
 
   void dumpServerConfigJson(std::string& response) override;
   void getClusterName(std::string& response) override;
-
- private:
-  // When was the admin server started.
-  std::chrono::steady_clock::time_point start_time_;
 };
 }} // namespace facebook::logdevice

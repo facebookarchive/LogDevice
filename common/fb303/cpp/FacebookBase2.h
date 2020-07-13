@@ -9,6 +9,7 @@
  */
 #pragma once
 
+#include <chrono>
 #include <unistd.h>
 
 #include <common/fb303/if/gen-cpp2/FacebookService.h>
@@ -17,11 +18,18 @@ namespace facebook { namespace fb303 {
 
 class FacebookBase2 : virtual public cpp2::FacebookServiceSvIf {
  public:
-  explicit FacebookBase2(const char*) {}
+  explicit FacebookBase2(std::string /*unused*/) : start_time_(time(nullptr)) {}
 
   int64_t getPid() override {
     return getpid();
   }
+
+  int64_t aliveSince() override {
+    return start_time_.count();
+  }
+
+ private:
+  std::chrono::seconds start_time_;
 };
 
 }} // namespace facebook::fb303

@@ -104,6 +104,12 @@ struct ServerSettings : public SettingsBundle {
   double sequencer_weight;
   double storage_capacity;
   int num_shards;
+  // Connection config for client-facing Thrift API
+  int client_thrift_api_port;
+  std::string client_thrift_api_unix_socket;
+  // Connection config for server-to-server Thrift API
+  int server_thrift_api_port;
+  std::string server_thrift_api_unix_socket;
 
   bool use_tls_ticket_seeds;
   std::string tls_ticket_seeds_path;
