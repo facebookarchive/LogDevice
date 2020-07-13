@@ -27,7 +27,7 @@ AdminCommandAPIHandler::semifuture_executeAdminCommand(
         auto response = std::make_unique<thrift::AdminCommandResponse>();
         response->response = folly::io::Cursor(buf.get()).readFixedString(
             buf->computeChainDataLength());
-        return std::move(response);
+        return response;
       });
 }
 }} // namespace facebook::logdevice
