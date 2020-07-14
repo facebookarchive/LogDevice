@@ -34,8 +34,8 @@ class WorkContext : public folly::Executor {
   }
 
  protected:
-  bool keepAliveAcquire() override;
-  void keepAliveRelease() override;
+  bool keepAliveAcquire() noexcept override;
+  void keepAliveRelease() noexcept override;
   /**
    * KeepAlive of underlying executor that executes added work. This keep alive
    * token provides a way to access the executor and also prevents it from going

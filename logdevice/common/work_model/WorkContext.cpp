@@ -37,12 +37,12 @@ bool WorkContext::anonymous() const {
   return id_ == kAnonymousId;
 }
 
-bool WorkContext::keepAliveAcquire() {
+bool WorkContext::keepAliveAcquire() noexcept {
   num_references_++;
   return true;
 }
 
-void WorkContext::keepAliveRelease() {
+void WorkContext::keepAliveRelease() noexcept {
   num_references_.fetch_sub(1);
 }
 

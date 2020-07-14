@@ -19,10 +19,10 @@ class NOOPExecutor : public folly::Executor {
   NOOPExecutor() {}
   ~NOOPExecutor() override {}
   void add(folly::Func /* func */) override {}
-  bool keepAliveAcquire() override {
+  bool keepAliveAcquire() noexcept override {
     return true;
   }
-  void keepAliveRelease() override {}
+  void keepAliveRelease() noexcept override {}
 };
 
 TEST(WorkContextTest, SimpleTest) {

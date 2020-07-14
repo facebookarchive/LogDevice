@@ -159,12 +159,12 @@ class EventLoop : public folly::Executor {
   std::atomic<size_t> event_handlers_completed_{0};
 
  protected:
-  bool keepAliveAcquire() override {
+  bool keepAliveAcquire() noexcept override {
     num_references_.fetch_add(1, std::memory_order_relaxed);
     return true;
   }
 
-  void keepAliveRelease() override {
+  void keepAliveRelease() noexcept override {
     auto prev = num_references_.fetch_sub(1, std::memory_order_acq_rel);
     ld_assert(prev > 0);
   }
