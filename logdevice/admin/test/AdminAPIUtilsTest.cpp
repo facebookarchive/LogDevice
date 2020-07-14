@@ -38,7 +38,7 @@ const Sockaddr kTestServerToServerSocketAddress =
     Sockaddr{kTestAddress, kTestServerToServerPort};
 const Sockaddr kTestSslSocketAddress = Sockaddr{kTestAddress, kTestSslPort};
 const Sockaddr kTestAdminSocketAddress = Sockaddr{kTestAddress, kTestAdminPort};
-const uint64_t kTestUpdateVersion = 3147;
+const uint64_t kTestNodeVersion = 3147;
 const NodeLocation kTestNodeLocation =
     locationFromDomainString(kTestDomainString);
 
@@ -162,15 +162,19 @@ TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
   roleSet.set(static_cast<uint8_t>(NodeRole::STORAGE));
   roleSet.set(static_cast<uint8_t>(NodeRole::SEQUENCER));
 
+  const NodeServiceDiscovery::TagMap tagMap = {
+      {"test_key_1", "value_1"}, {"key_2", "value_2"}};
+
   NodeServiceDiscovery nodeServiceDiscovery{kTestNodeName,
-                                            kTestUpdateVersion,
+                                            kTestNodeVersion,
                                             kTestSocketAddress,
                                             kTestGossipSocketAddress,
                                             kTestSslSocketAddress,
                                             kTestAdminSocketAddress,
                                             kTestServerToServerSocketAddress,
                                             kTestNodeLocation,
-                                            std::move(roleSet)};
+                                            std::move(roleSet),
+                                            tagMap};
 
   ServiceDiscoveryConfig::NodeUpdate nodeUpdate{
       ServiceDiscoveryConfig::UpdateType::PROVISION,
@@ -205,6 +209,7 @@ TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
       toThrift<thrift::Location>(folly::make_optional(kTestNodeLocation)));
   expected.roles.emplace(thrift::Role::STORAGE);
   expected.roles.emplace(thrift::Role::SEQUENCER);
+  expected.tags.insert(tagMap.begin(), tagMap.end());
 
   // Test
   thrift::NodeConfig actual;

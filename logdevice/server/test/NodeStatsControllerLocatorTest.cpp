@@ -46,11 +46,11 @@ class NodeStatsControllerLocatorTest : public Test {
       if (!location_str.has_value()) {
         continue;
       }
-      templates.emplace_back(NodeTemplate{
-          idx,
-          kBothRoles,
-          *location_str,
-      });
+      NodeTemplate node_template;
+      node_template.id = idx;
+      node_template.roles = kBothRoles;
+      node_template.location = *location_str;
+      templates.emplace_back(std::move(node_template));
     }
     auto nc = provisionNodes(std::move(templates));
     ld_check(nc != nullptr);

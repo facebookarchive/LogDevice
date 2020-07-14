@@ -82,6 +82,12 @@ NodeUpdateBuilder& NodeUpdateBuilder::setSequencerWeight(double weight) {
   return *this;
 }
 
+NodeUpdateBuilder& NodeUpdateBuilder::addTag(std::string key,
+                                             std::string value) {
+  tags_[std::move(key)] = std::move(value);
+  return *this;
+}
+
 NodeUpdateBuilder::Result NodeUpdateBuilder::validate() const {
   if (!node_index_.has_value()) {
     return Result{
@@ -135,6 +141,7 @@ NodeUpdateBuilder::buildNodeServiceDiscovery() {
   sd->server_to_server_address = std::move(server_to_server_address_);
   sd->location = std::move(location_);
   sd->roles = roles_;
+  sd->tags = std::move(tags_);
 
   return sd;
 }

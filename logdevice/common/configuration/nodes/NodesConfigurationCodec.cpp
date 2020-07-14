@@ -42,6 +42,7 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
     disc.set_location(discovery.location.value().toString());
   }
   disc.set_roles(discovery.roles.to_ullong());
+  disc.tags.insert(discovery.tags.begin(), discovery.tags.end());
   return disc;
 }
 
@@ -115,6 +116,7 @@ int NodesConfigurationThriftConverter::fromThrift(
   }
 
   result.roles = NodeServiceDiscovery::RoleSet(obj.roles);
+  result.tags = NodeServiceDiscovery::TagMap(obj.tags.begin(), obj.tags.end());
 
   if (out != nullptr) {
     *out = result;

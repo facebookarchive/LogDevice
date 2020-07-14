@@ -42,6 +42,7 @@ class NodeUpdateBuilder {
   NodeUpdateBuilder& setNumShards(shard_size_t);
   NodeUpdateBuilder& setStorageCapacity(double);
   NodeUpdateBuilder& setSequencerWeight(double);
+  NodeUpdateBuilder& addTag(std::string key, std::string value);
 
   /**
    * Validates the correctness of the update by checking:
@@ -92,6 +93,9 @@ class NodeUpdateBuilder {
 
   // Sequencer Attributes
   folly::Optional<double> sequencer_weight_;
+
+  // Custom tags. Opaque to LogDevice servers. Useful for companion services.
+  std::unordered_map<std::string, std::string> tags_;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

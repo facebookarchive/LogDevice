@@ -101,6 +101,10 @@ nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
         .setNumShards(storage_cfg.num_shards);
   }
 
+  for (const auto& tag : cfg.tags) {
+    update_builder.addTag(tag.first, tag.second);
+  }
+
   if (auto validation_result = update_builder.validate();
       validation_result.status != Status::OK) {
     return folly::makeUnexpected(make_invalid_nodes_config_request(

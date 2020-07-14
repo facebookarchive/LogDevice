@@ -16,10 +16,12 @@ namespace facebook {
 extern const configuration::nodes::NodeServiceDiscovery::RoleSet kSeqRole;
 extern const configuration::nodes::NodeServiceDiscovery::RoleSet kStorageRole;
 extern const configuration::nodes::NodeServiceDiscovery::RoleSet kBothRoles;
+extern const configuration::nodes::NodeServiceDiscovery::TagMap kTestTags;
 
 struct NodeTemplate {
   node_index_t id;
   configuration::nodes::NodeServiceDiscovery::RoleSet roles{kBothRoles};
+  configuration::nodes::NodeServiceDiscovery::TagMap tags{kTestTags};
   std::string location{};
   double sequencer_weight{1.0};
   shard_size_t num_shards{2};
@@ -30,6 +32,7 @@ struct NodeTemplate {
 configuration::nodes::NodeServiceDiscovery
 genDiscovery(node_index_t n,
              configuration::nodes::NodeServiceDiscovery::RoleSet roles,
+             configuration::nodes::NodeServiceDiscovery::TagMap tags,
              std::string location);
 
 configuration::nodes::NodesConfiguration::Update

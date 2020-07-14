@@ -28,6 +28,7 @@ typedef u16 node_idx
   8: optional string admin_address;
   9: u64 version;
   10: optional string server_to_server_address;
+  11: map<string, string> tags;
 }
 
 struct ServiceDiscoveryConfig {

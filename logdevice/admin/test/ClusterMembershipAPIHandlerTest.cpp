@@ -100,6 +100,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
       }
 
       cfg.set_roles({thrift::Role::SEQUENCER, thrift::Role::STORAGE});
+      cfg.set_tags({{"tag1", "value1"}, {"tag2", "value2"}});
 
       {
         thrift::SequencerConfig seq_cfg;
@@ -285,7 +286,7 @@ MATCHER_P2(NodeConfigEq, expected_idx, req, "") {
       req.data_address == arg.data_address &&
       req.other_addresses_ref() == arg.other_addresses_ref() &&
       req.location_ref() == arg.location_ref() && req.roles == arg.roles &&
-      req.sequencer_ref() == arg.sequencer_ref() &&
+      req.tags == arg.tags && req.sequencer_ref() == arg.sequencer_ref() &&
       req.storage_ref() == arg.storage_ref();
 };
 

@@ -10,6 +10,7 @@
 #include <array>
 #include <chrono>
 #include <string>
+#include <unordered_map>
 
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/StorageTask-enums.h"
@@ -29,6 +30,17 @@
 namespace facebook { namespace logdevice {
 
 struct ServerSettings : public SettingsBundle {
+  using NodesConfigTagMapT = std::unordered_map<std::string, std::string>;
+
+  /**
+   * Validates and parses a string containing a list of tags (key-value pairs).
+   * The list of key-value pairs must be separated by commas. Keys and values
+   * must contain only alphanumeric or underscore characters. Values can be
+   * empty, but keys must not. Key-value pairs are specified as "key:value".
+   * Example: key_1:value_1,key_2:,key_3:value_3
+   */
+  static NodesConfigTagMapT parse_tags(const std::string& tags_string);
+
   struct TaskQueueParams {
     int nthreads = 0;
   };
@@ -110,6 +122,7 @@ struct ServerSettings : public SettingsBundle {
   // Connection config for server-to-server Thrift API
   int server_thrift_api_port;
   std::string server_thrift_api_unix_socket;
+  NodesConfigTagMapT tags;
 
   bool use_tls_ticket_seeds;
   std::string tls_ticket_seeds_path;

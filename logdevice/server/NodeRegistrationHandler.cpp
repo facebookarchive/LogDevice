@@ -152,6 +152,11 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
         .setStorageCapacity(server_settings_.storage_capacity)
         .setNumShards(server_settings_.num_shards);
   }
+
+  for (const auto& kvp : server_settings_.tags) {
+    update_builder.addTag(kvp.first, kvp.second);
+  }
+
   return update_builder;
 }
 

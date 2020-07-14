@@ -19,13 +19,16 @@ namespace facebook {
 using namespace configuration::nodes;
 using namespace membership;
 using RoleSet = NodeServiceDiscovery::RoleSet;
+using TagMap = NodeServiceDiscovery::TagMap;
 
-constexpr configuration::nodes::NodeServiceDiscovery::RoleSet kSeqRole{1};
-constexpr configuration::nodes::NodeServiceDiscovery::RoleSet kStorageRole{2};
-constexpr configuration::nodes::NodeServiceDiscovery::RoleSet kBothRoles{3};
+constexpr RoleSet kSeqRole{1};
+constexpr RoleSet kStorageRole{2};
+constexpr RoleSet kBothRoles{3};
+const TagMap kTestTags{{"key1", "value1"}, {"key_2", ""}};
 
 NodeServiceDiscovery genDiscovery(node_index_t n,
                                   RoleSet roles,
+                                  TagMap tags,
                                   std::string location) {
   folly::Optional<NodeLocation> l;
   if (!location.empty()) {
@@ -41,7 +44,8 @@ NodeServiceDiscovery genDiscovery(node_index_t n,
                               /*admin address*/ Sockaddr(addr, 6440),
                               /*internal address*/ Sockaddr(addr, 4442),
                               l,
-                              roles};
+                              roles,
+                              tags};
 }
 
 configuration::nodes::NodesConfiguration::Update
@@ -174,7 +178,7 @@ initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
         ServiceDiscoveryConfig::NodeUpdate{
             ServiceDiscoveryConfig::UpdateType::PROVISION,
             std::make_unique<NodeServiceDiscovery>(
-                genDiscovery(node.id, node.roles, node.location))});
+                genDiscovery(node.id, node.roles, node.tags, node.location))});
   }
 
   // 2. provision sequencer config
@@ -244,6 +248,7 @@ initialAddShardsUpdate(std::vector<node_index_t> node_idxs) {
   for (auto nid : node_idxs) {
     nodes.push_back({nid,
                      kBothRoles,
+                     kTestTags,
                      "aa.bb.cc.dd.ee",
                      1.0,
                      /* num_shard=*/1,
@@ -264,6 +269,7 @@ NodesConfiguration::Update initialAddShardsUpdate() {
   for (node_index_t n : NodeSetIndices({1, 2, 7, 9, 11, 13})) {
     nodes.push_back({n,
                      role_map[n],
+                     kTestTags,
                      n % 2 == 0 ? "aa.bb.cc.dd.ee" : "aa.bb.cc.dd.ff",
                      n == 1 ? 1.0 : 7.0,
                      /*num_shards=*/1,
@@ -285,7 +291,7 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
       ServiceDiscoveryConfig::NodeUpdate{
           ServiceDiscoveryConfig::UpdateType::PROVISION,
           std::make_unique<NodeServiceDiscovery>(
-              genDiscovery(node.id, node.roles, node.location))});
+              genDiscovery(node.id, node.roles, node.tags, node.location))});
 
   update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
   update.sequencer_config_update->membership_update =
@@ -339,7 +345,8 @@ addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
   // is something a user could do and we'd want to test for. In that case, when
   // the user tries to apply / propose the update, they'll get an error.
   return addNewNodeUpdate(
-      existing, {new_node_idx, kBothRoles, "aa.bb.cc.dd.ee", 0.0, 1});
+      existing,
+      {new_node_idx, kBothRoles, kTestTags, "aa.bb.cc.dd.ee", 0.0, 1});
 }
 
 NodesConfiguration::Update

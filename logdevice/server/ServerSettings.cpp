@@ -7,6 +7,8 @@
  */
 #include "logdevice/server/ServerSettings.h"
 
+#include <regex>
+
 #include <boost/program_options.hpp>
 #include <folly/String.h>
 
@@ -20,7 +22,35 @@ namespace facebook { namespace logdevice {
 // maximum allowed number of storage threads to run
 #define STORAGE_THREADS_MAX 10000
 
+ServerSettings::NodesConfigTagMapT
+ServerSettings::parse_tags(const std::string& tags_string) {
+  if (tags_string.empty()) {
+    return {};
+  }
+
+  if (!std::regex_match(tags_string, std::regex("(\\w+:\\w*)(,\\w+:\\w*)*"))) {
+    throw boost::program_options::error(
+        "Invalid tags list format. Expected list of key-value pairs, separated "
+        "by commas. Keys and values must contain only alphanumeric or "
+        "underscore characters. Values can be empty, but keys must not. "
+        "Key-value pairs are specified as \"key:value\". Example: "
+        "key_1:value_1,key_2:,key_3:value_3");
+  }
+
+  NodesConfigTagMapT tags;
+  folly::StringPiece splitter(tags_string);
+
+  while (!splitter.empty()) {
+    folly::StringPiece key = splitter.split_step(':');
+    folly::StringPiece value = splitter.split_step(',');
+    tags[key.toString()] = value.toString();
+  }
+
+  return tags;
+}
+
 namespace {
+
 static void validate_storage_threads(const char* name, int value, int min) {
   if (value < min || value > STORAGE_THREADS_MAX) {
     char buf[1024];
@@ -575,6 +605,14 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "[Only used when node self registration is enabled] defines how many "
      "storage shards this node will have. Sharding can be useful to distribute "
      "the IO load on multiple disks that are managed by the same daemon.",
+     SERVER | REQUIRES_RESTART,
+     SettingsCategory::NodeRegistration)
+
+    ("tags", &tags, "",
+     parse_tags,
+     "[Only used when node self registration is enabled] Arbitrary key:value pairs "
+     "to be associated with this node. Values might be empty. Example: "
+     "key_1:value_1,key_2:,key_3:value_3",
      SERVER | REQUIRES_RESTART,
      SettingsCategory::NodeRegistration)
 

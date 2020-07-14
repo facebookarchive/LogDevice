@@ -21,6 +21,7 @@ namespace nodes {
 
 struct NodeServiceDiscovery {
   using RoleSet = configuration::nodes::RoleSet;
+  using TagMap = std::unordered_map<std::string, std::string>;
 
   /*
    * This is a unique name for the node in the cluster. This is currently not a
@@ -81,6 +82,12 @@ struct NodeServiceDiscovery {
    */
   RoleSet roles{};
 
+  /**
+   * Custom tags. LogDevice server doesn't use them but they're useful to
+   * companion services.
+   */
+  TagMap tags;
+
   const Sockaddr& getGossipAddress() const;
 
   const Sockaddr& getServerToServerAddress() const;
@@ -101,8 +108,8 @@ struct NodeServiceDiscovery {
     return address == rhs.address && gossip_address == rhs.gossip_address &&
         ssl_address == rhs.ssl_address && admin_address == rhs.admin_address &&
         server_to_server_address == rhs.server_to_server_address &&
-        location == rhs.location && roles == rhs.roles && name == rhs.name &&
-        version == rhs.version;
+        location == rhs.location && roles == rhs.roles && tags == rhs.tags &&
+        name == rhs.name && version == rhs.version;
   }
 
   bool operator!=(const NodeServiceDiscovery& rhs) const {

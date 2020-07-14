@@ -78,6 +78,10 @@ struct NodeConfig {
    * A unique name for the node in the cluster.
    */
   9: string name;
+  /**
+   * Custom tags.
+   */
+   10: map<string, string> tags;
 }
 
 /**

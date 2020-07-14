@@ -105,8 +105,12 @@ class MockGraylistingTracker : public GraylistingTracker {
   NodesConfigurationTestUtil::NodeTemplate buildNode(node_index_t id,
                                                      std::string domain,
                                                      bool metadata = false) {
-    return {
-        id, NodesConfigurationTestUtil::kBothRoles, domain, 1.0, 2, metadata};
+    NodesConfigurationTestUtil::NodeTemplate node;
+    node.id = id;
+    node.roles = NodesConfigurationTestUtil::kBothRoles;
+    node.location = domain;
+    node.metadata_node = metadata;
+    return node;
   }
 
   void addNode(node_index_t id, std::string domain) {

@@ -119,7 +119,7 @@ bool NodeServiceDiscovery::isValidForReset(
 
 std::string NodeServiceDiscovery::toString() const {
   return folly::sformat(
-      "[{} => A:{},G:{},S:{},AA:{},S2SA:{},L:{},R:{},V:{}]",
+      "[{} => A:{},G:{},S:{},AA:{},S2SA:{},L:{},R:{},V:{},T:{}]",
       name,
       address.toString(),
       gossip_address.has_value() ? gossip_address->toString() : "",
@@ -130,7 +130,8 @@ std::string NodeServiceDiscovery::toString() const {
           : "",
       location.has_value() ? location->toString() : "",
       logdevice::toString(roles),
-      version);
+      version,
+      logdevice::toString(tags));
 }
 
 const Sockaddr& NodeServiceDiscovery::getSockaddr(
