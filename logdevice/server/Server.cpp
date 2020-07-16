@@ -58,6 +58,7 @@
 #include "logdevice/server/ZookeeperEpochStore.h"
 #include "logdevice/server/fatalsignal.h"
 #include "logdevice/server/locallogstore/ClusterMarkerChecker.h"
+#include "logdevice/server/locallogstore/RocksDBMetricsExport.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/rebuilding/RebuildingCoordinator.h"
 #include "logdevice/server/rebuilding/RebuildingSupervisor.h"
@@ -644,7 +645,8 @@ Server::Server(ServerParameters* params)
         initSequencers() && initSequencerPlacement() &&
         initRebuildingCoordinator() && initClusterMaintenanceStateMachine() &&
         initLogStoreMonitor() && initUnreleasedRecordDetector() &&
-        initLogsConfigManager() && initAdminServer() && initThriftServers())) {
+        initLogsConfigManager() && initAdminServer() && initThriftServers() &&
+        initRocksDBMetricsExport())) {
     _exit(EXIT_FAILURE);
   }
 }
@@ -1359,6 +1361,19 @@ bool Server::initLogStoreMonitor() {
                                           rebuilding_supervisor_.get(),
                                           params_->getLocalLogStoreSettings());
     logstore_monitor_->start();
+  }
+
+  return true;
+}
+
+bool Server::initRocksDBMetricsExport() {
+  if (sharded_store_) {
+    auto registry = params_->getPluginRegistry();
+    auto metrics_export = registry->getSinglePlugin<RocksDBMetricsExport>(
+        PluginType::ROCKSDB_METRICS_EXPORT);
+    if (metrics_export) {
+      (*metrics_export)(sharded_store_.get(), processor_.get());
+    }
   }
 
   return true;
