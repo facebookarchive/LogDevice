@@ -125,6 +125,7 @@ sidebar_label: Settings
 | gcs-wait-duration | How long to wait for get-cluster-state reply to come, to initialize state of cluster nodes. Bringup is sent after this reply comes or after timeout | 1s | server&nbsp;only |
 | gossip-include-rsm-versions-frequency | How frequently to send RSM and NCM version information in a GOSSIP message. If the value is 10, it means the versions will be present in 1/10th of the GOSSIP\_Messages. | 10 | server&nbsp;only |
 | gossip-interval | How often to send a gossip message. Lower values improve detection time, but make nodes more chatty. | 100ms | requires&nbsp;restart, server&nbsp;only |
+| gossip-intervals-without-processing-threshold | How many intervals is a node allowed to go through without processinggossip messages. If this is crossed, the node will be marked as DEADeven if it's still sending OUT gossip messages. | 0 | server&nbsp;only |
 | gossip-logging-duration | How long to keep logging FailureDetector/Gossip related activity after server comes up. | 0s | server&nbsp;only |
 | gossip-mode | How to select a node to send a gossip message to. One of: 'round-robin', 'random' (default) | random | requires&nbsp;restart, server&nbsp;only |
 | gossip-threshold | Specifies after how many gossip intervals of inactivity a node is marked as dead. Lower values reduce detection time, but make false positives more likely. | 30 | server&nbsp;only |

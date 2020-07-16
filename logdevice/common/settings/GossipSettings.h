@@ -33,6 +33,7 @@ struct GossipSettings : public SettingsBundle {
   std::chrono::milliseconds failover_wait_time;
   std::chrono::milliseconds suspect_duration;
   std::chrono::seconds gossip_msg_dump_duration;
+  int gossip_intervals_without_processing_threshold;
   SelectionMode mode;
   // Determines whether to ignore isolation detection
   // This settings is used to bypass the minority partition check in the

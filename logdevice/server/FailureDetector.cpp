@@ -591,6 +591,25 @@ void FailureDetector::gossip() {
       versions_list.push_back(rnode);
     }
   }
+
+  // if it has been too long since we processed a gossip message, set a flag
+  // so the receiving node(s) can mark this node appropriately.
+  if (settings_->gossip_intervals_without_processing_threshold) {
+    auto window = (settings_->gossip_interval *
+                   settings_->gossip_intervals_without_processing_threshold);
+    if (now > last_gossip_received_ts_ + window) {
+      RATELIMIT_WARNING(
+          std::chrono::seconds(1),
+          1,
+          "Node %s hasn't been processing gossips for %ld seconds"
+          "(%ld intervals)",
+          this_node.toString().c_str(),
+          (now - last_gossip_received_ts_).count(),
+          ((now - last_gossip_received_ts_) / settings_->gossip_interval));
+      flags |= GOSSIP_Message::LONG_TIME_SINCE_LAST_GOSSIP;
+    }
+  }
+
   skip_sending_versions_ = (skip_sending_versions_ + 1) %
       (settings_->gossip_include_rsm_versions_frequency);
 
@@ -865,6 +884,8 @@ void FailureDetector::onGossipReceived(const GOSSIP_Message& msg) {
   if (num_gossips_received_ <= settings_->min_gossips_for_stable_state) {
     ld_debug("Received gossip#%zu", num_gossips_received_);
   }
+
+  last_gossip_received_ts_ = SteadyTimestamp::now();
 }
 
 void FailureDetector::startSuspectTimer() {
