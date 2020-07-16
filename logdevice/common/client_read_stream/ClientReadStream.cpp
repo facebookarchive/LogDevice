@@ -4031,7 +4031,7 @@ void ClientReadStream::handleStartPROTONOSUPPORT(ShardID shard_id) {
 void ClientReadStream::scheduleRewind(RewindReason reason,
                                       std::string reason_str) {
   ld_check(!reason_str.empty());
-  rewind_scheduler_->schedule(nullptr, std::move(reason_str));
+  rewind_scheduler_->schedule(std::move(reason_str));
 
   if (!rewind_imminent_) {
     WORKER_STAT_INCR(rewind_scheduled);

@@ -15,7 +15,6 @@
 namespace facebook { namespace logdevice {
 
 class ClientReadStream;
-class TimeoutMap;
 class Timer;
 
 /**
@@ -29,11 +28,10 @@ class RewindScheduler {
 
   /**
    * Schedule a rewind.
-   * @map    TimeoutMap to use for the underlying timer;
    * @reason Reason for this rewind. If another rewind was already scheduled,
    *         this value is appended to the existing reason.
    */
-  void schedule(TimeoutMap* map, std::string reason);
+  void schedule(std::string reason);
 
   /**
    * Cancel any scheduled rewind.

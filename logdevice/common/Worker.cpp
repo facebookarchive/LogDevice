@@ -55,7 +55,6 @@
 #include "logdevice/common/ServerConfigUpdatedRequest.h"
 #include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/SyncSequencerRequest.h"
-#include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/TrimRequest.h"
 #include "logdevice/common/WorkerTimeoutStats.h"

@@ -93,9 +93,6 @@ class EvTimer {
   int setPriority(int pri);
   void activate(int res, short ncalls);
 
-  static const timeval* FOLLY_NULLABLE
-  getCommonTimeout(std::chrono::microseconds timeout);
-
  protected:
   std::unique_ptr<EvTimerWithFolly> evtimer_folly_;
 };

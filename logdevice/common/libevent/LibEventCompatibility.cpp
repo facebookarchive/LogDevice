@@ -211,24 +211,4 @@ void EvTimer::activate(int res, short ncalls) {
   }
 }
 
-const timeval* FOLLY_NULLABLE
-EvTimer::getCommonTimeout(std::chrono::microseconds timeout) {
-  auto base = EvBase::getRunningBase();
-  if (!base) {
-    return nullptr;
-  }
-  EvBase::EvBaseType base_type = getType(base);
-
-  switch (base_type) {
-    case EvBase::FOLLY_EVENTBASE:
-      return EvTimerWithFolly::getCommonTimeout(timeout);
-    case EvBase::UNKNOWN:
-      ld_check(false);
-      break;
-  }
-
-  ld_check(false);
-  return nullptr;
-}
-
 }} // namespace facebook::logdevice

@@ -12,12 +12,9 @@
 
 namespace facebook { namespace logdevice {
 
-class TimeoutMap;
-
 class TimerInterface {
  public:
-  virtual void activate(std::chrono::microseconds delay,
-                        TimeoutMap* timeout_map = nullptr) = 0;
+  virtual void activate(std::chrono::microseconds delay) = 0;
   virtual void cancel() = 0;
   virtual bool isActive() const = 0;
   virtual void setCallback(std::function<void()> callback) = 0;

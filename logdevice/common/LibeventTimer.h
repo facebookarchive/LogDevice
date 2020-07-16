@@ -27,7 +27,6 @@
 
 namespace facebook { namespace logdevice {
 
-class TimeoutMap;
 class Worker;
 
 class LibeventTimer : boost::noncopyable {
@@ -61,15 +60,10 @@ class LibeventTimer : boost::noncopyable {
    * classes implicitly convert to smaller ones so you can call this with
    * seconds or milliseconds too.
    *
-   * If a TimeoutMap object is provided, it will be used to convert the given
-   * delay to struct timeval (possibly using libevent's common timeout
-   * optimization).
-   *
    * If activate() is called while the timer is already active, it effectively
    * cancels the previous timer.
    */
-  virtual void activate(std::chrono::microseconds delay,
-                        TimeoutMap* timeout_map = nullptr);
+  virtual void activate(std::chrono::microseconds delay);
 
   /**
    * Cancels the timer if active.

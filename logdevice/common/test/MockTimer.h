@@ -26,8 +26,7 @@ class MockTimer : public Timer {
   void assign(std::function<void()> callback) override {
     callback_ = std::move(callback);
   }
-  void activate(std::chrono::microseconds delay,
-                TimeoutMap* /*timeout_map*/ = nullptr) override {
+  void activate(std::chrono::microseconds delay) override {
     delay_ = delay;
     active_ = true;
   }

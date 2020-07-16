@@ -30,7 +30,6 @@
 #include "logdevice/common/RecordID.h"
 #include "logdevice/common/RunContext.h"
 #include "logdevice/common/ThreadID.h"
-#include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/WorkerType.h"
 #include "logdevice/common/settings/Settings.h"

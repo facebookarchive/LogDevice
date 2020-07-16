@@ -17,7 +17,7 @@ namespace facebook { namespace logdevice {
 RewindScheduler::RewindScheduler(ClientReadStream* owner)
     : owner_(owner), timer_(owner_->deps_->createTimer([this] { rewind(); })) {}
 
-void RewindScheduler::schedule(TimeoutMap* map, std::string reason) {
+void RewindScheduler::schedule(std::string reason) {
   if (isScheduled()) {
     // rewind is already scheduled. concatenate the reasons to not overwrite
     // the original one.
@@ -28,7 +28,7 @@ void RewindScheduler::schedule(TimeoutMap* map, std::string reason) {
     // Decrease delay according to how much time passed since the last call to
     // positiveFeedback() (last scheduled rewind).
     delay_.positiveFeedback(SteadyTimestamp::now());
-    timer_->activate(delay_.getCurrentValue(), map);
+    timer_->activate(delay_.getCurrentValue());
     assert(isScheduled());
 
     // Double delay for the next time since we are scheduling a rewind.

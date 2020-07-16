@@ -21,7 +21,6 @@
 #include "logdevice/common/PThread.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ThreadID.h"
-#include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/libevent/LibEventCompatibility.h"
 
 namespace facebook { namespace logdevice {
@@ -118,28 +117,6 @@ class EventLoop : public folly::Executor {
     return EventLoop::thisThreadLoop_;
   }
 
-  // A map that translates std::chrono::milliseconds values into
-  // struct timevals suitable for use with evtimer_add() for append request
-  // timers. The first kMaxFastTimeouts *distinct* timeout values are
-  // mapped into fake struct timeval created by
-  // event_base_init_common_timeout() and actually containing timer queue
-  // ids for this thread's event_base.
-  TimeoutMap& commonTimeouts() {
-    return common_timeouts_;
-  }
-
-  // Convenience function so callers of commonTimeouts().get() don't need
-  // to declare a local timeval. Must only be used from the Worker's thread.
-  template <typename Duration>
-  const timeval* getCommonTimeout(Duration d) {
-    ld_check(EventLoop::onThisThread() == this);
-    auto timeout = std::chrono::duration_cast<std::chrono::microseconds>(d);
-    return commonTimeouts().get(timeout);
-  }
-  const timeval* getZeroTimeout() {
-    return commonTimeouts().get(std::chrono::milliseconds(0));
-  }
-
   static const int PRIORITY_LOW = 2;    // lowest priority
   static const int PRIORITY_NORMAL = 1; // default libevent priority
   static const int PRIORITY_HIGH = 0;   // elevated priority (numerically lower)
@@ -202,17 +179,10 @@ class EventLoop : public folly::Executor {
   // eventloop.
   std::atomic<size_t> num_references_{0};
 
-  // TimeoutMap to cache common timeouts.
-  TimeoutMap common_timeouts_{kMaxFastTimeouts};
-
   // True indicates eventloop honors the priority with used in
   // EventLoop::addWithPriority. If false EventLoop will override the priority
   // of the task and make all work added as single priority.
   bool priority_queues_enabled_;
-
-  // Size limit for commonTimeouts_ (NB: libevent has a default upper bound
-  // of MAX_COMMON_TIMEOUTS = 256)
-  static constexpr int kMaxFastTimeouts = 200;
 };
 
 }} // namespace facebook::logdevice

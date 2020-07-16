@@ -11,7 +11,6 @@
 
 #include <folly/Random.h>
 
-#include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/Worker.h"
 
 namespace facebook { namespace logdevice {
@@ -46,7 +45,7 @@ void ExponentialBackoffTimer::activate() {
   }
 
   current_delay_ = next_effective_delay_;
-  timer_.activate(next_effective_delay_, timeout_map_);
+  timer_.activate(next_effective_delay_);
 
   // Exponential backoff: next time we try to reconnect, multiply the delay
   if (next_delay_.count() == 0) {
@@ -97,7 +96,6 @@ void ExponentialBackoffTimer::calculateNextEffectiveDelay() {
   if (randomization_ == 0) {
     next_effective_delay_ = next_delay_;
   } else {
-    ld_check(timeout_map_ == nullptr);
     auto next_delay_us = duration_cast<microseconds>(next_delay_).count();
     std::uniform_int_distribution<int64_t> dist_us(
         next_delay_us * (1 - randomization_),

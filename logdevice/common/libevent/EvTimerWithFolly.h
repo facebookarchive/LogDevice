@@ -26,12 +26,6 @@ class EvTimerWithFolly : public folly::AsyncTimeout {
   void timeoutExpired() noexcept override {
     callback_();
   }
-  /**
-   * This is unsupported for folly evenbase, you need to use AsyncTimeout.
-   */
-  static const timeval* getCommonTimeout(std::chrono::microseconds timeout) {
-    return nullptr;
-  }
 
   int setPriority(int pri);
 

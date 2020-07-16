@@ -28,7 +28,6 @@
 
 namespace facebook { namespace logdevice {
 
-class TimeoutMap;
 class Worker;
 
 class ExponentialBackoffTimer : public BackoffTimer, boost::noncopyable {
@@ -96,19 +95,6 @@ class ExponentialBackoffTimer : public BackoffTimer, boost::noncopyable {
   void cancel() override;
 
   /**
-   * Sets the TimeoutMap instance to use when adding libevent timers.  This is
-   * optional but can reduce the amount of processing in libevent if there are
-   * many timers with the same timeout.
-   *
-   * The TimeoutMap instance must live at least as long as activate() calls
-   * happen.
-   */
-  void setTimeoutMap(TimeoutMap* timeout_map) {
-    ld_check(randomization_ == 0);
-    timeout_map_ = timeout_map;
-  }
-
-  /**
    * Add some randomness to the delay period when scheduling the timer.  The
    * purpose is to avoid a bunch of timers firing around the same time,
    * instead diffusing them over time.
@@ -116,11 +102,8 @@ class ExponentialBackoffTimer : public BackoffTimer, boost::noncopyable {
    * The actual delay every time the timer is activated will be `expected_delay'
    * * [1 - factor, 1 + factor], where `expected_delay' grows exponentially.
    *
-   * NOTE: because this generates many different delays, it must not be used
-   * in conjunction with setTimeoutMap().
    */
   void randomize(double factor = 0.5) {
-    ld_check(timeout_map_ == nullptr);
     ld_check(factor > 0 && factor <= 1.0);
     randomization_ = factor;
   }
@@ -154,8 +137,6 @@ class ExponentialBackoffTimer : public BackoffTimer, boost::noncopyable {
   Duration next_effective_delay_;
 
   double randomization_ = 0;
-
-  TimeoutMap* timeout_map_ = nullptr; // unowned
 
   /**
    * Calculate the next actual delay which is being used in the following

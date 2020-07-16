@@ -9,7 +9,6 @@
 
 #include <cstring>
 
-#include "logdevice/common/TimeoutMap.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 
@@ -38,8 +37,7 @@ void LibeventTimer::assign(EvBase* base, std::function<void()> callback) {
   ld_assert(!timer_->isScheduled());
 }
 
-void LibeventTimer::activate(std::chrono::microseconds delay,
-                             TimeoutMap* /* timeout_map */) {
+void LibeventTimer::activate(std::chrono::microseconds delay) {
   ld_check(isAssigned());
   ld_check(callback_);
   timer_->scheduleTimeout(

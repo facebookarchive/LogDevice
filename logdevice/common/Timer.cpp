@@ -26,9 +26,8 @@ class LibEventTimerImpl : public TimerInterface, public LibeventTimer {
 
   void assign(std::function<void()> callback) override;
 
-  void activate(std::chrono::microseconds delay,
-                TimeoutMap* timeout_map = nullptr) override {
-    LibeventTimer::activate(delay, timeout_map);
+  void activate(std::chrono::microseconds delay) override {
+    LibeventTimer::activate(delay);
   }
 
   void cancel() override {
@@ -68,8 +67,7 @@ class WheelTimerDispatchImpl : public TimerInterface {
 
   explicit WheelTimerDispatchImpl(std::function<void()> callback);
 
-  void activate(std::chrono::microseconds delay,
-                TimeoutMap* timeout_map = nullptr) override;
+  void activate(std::chrono::microseconds delay) override;
 
   void cancel() override;
 
@@ -164,7 +162,7 @@ void WheelTimerDispatchImpl::cancel() {
   }
 }
 
-void WheelTimerDispatchImpl::activate(microseconds delay, TimeoutMap*) {
+void WheelTimerDispatchImpl::activate(microseconds delay) {
   // reactivation: should cancel the old one
   if (is_activated_) {
     // it seems here should be a race condition
