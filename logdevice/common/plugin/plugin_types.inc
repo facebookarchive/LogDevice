@@ -44,8 +44,8 @@ PLUGIN_TYPE(SEQUENCER_LOCATOR_FACTORY, 10, "SequencerLocator factory", false)
 PLUGIN_TYPE(OPEN_TRACER_FACTORY, 11, "Open Tracing tracer factory", false)
 // See HotTextOptimizerPlugin.h
 PLUGIN_TYPE(HOT_TEXT_OPTIMIZER, 12, "HotTextOptimizer", false)
-// See AdminServerFactory.h
-PLUGIN_TYPE(ADMIN_SERVER_FACTORY, 13, "AdminServer factory", false)
+// See ThriftServerFactory.h
+PLUGIN_TYPE(THRIFT_SERVER_FACTORY, 13, "ThriftServer factory", false)
 // See ZookeeperClientFactory.h
 PLUGIN_TYPE(ZOOKEEPER_CLIENT_FACTORY, 14, "ZookeeperClient factory", false)
 // See Logger.h
@@ -54,9 +54,7 @@ PLUGIN_TYPE(LOGGER, 15, "Logger plugin", false)
 PLUGIN_TYPE(DEFAULT_SETTINGS_PROVIDER, 16, "Default settings provider", false)
 // See server/locallogstore/RocksDBCustomiser.h
 PLUGIN_TYPE(ROCKSDB_CUSTOMISER_FACTORY, 17, "RocksDB customiser factory", false)
-// See ThriftServerFactory.h
-PLUGIN_TYPE(THRIFT_SERVER_FACTORY, 18, "ThriftServer factory", false)
 // See server/locallogstore/RocksDBMetricsExport.h
-PLUGIN_TYPE(ROCKSDB_METRICS_EXPORT, 19, "RocksDB metrics export", false)
+PLUGIN_TYPE(ROCKSDB_METRICS_EXPORT, 18, "RocksDB metrics export", false)
 
 #undef PLUGIN_TYPE

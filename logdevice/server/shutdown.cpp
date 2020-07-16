@@ -15,7 +15,6 @@
 
 #include <folly/io/async/EventBaseThread.h>
 
-#include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
@@ -131,7 +130,7 @@ using std::chrono::milliseconds;
 using std::chrono::steady_clock;
 
 void shutdown_server(
-    std::unique_ptr<AdminServer>& admin_server,
+    std::unique_ptr<LogDeviceThriftServer>& admin_server,
     std::unique_ptr<LogDeviceThriftServer>& s2s_thrift_api_server,
     std::unique_ptr<LogDeviceThriftServer>& c2s_thrift_api_server,
     std::unique_ptr<Listener>& connection_listener,

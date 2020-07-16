@@ -12,8 +12,6 @@
 
 #include <folly/io/async/EventBaseThread.h>
 
-#include "logdevice/admin/AdminServer.h"
-#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -47,6 +45,8 @@ class ShardedRocksDBLocalLogStore;
 class ShardedStorageThreadPool;
 class TraceLogger;
 class UnreleasedRecordDetector;
+class AdminAPIHandler;
+class AdminServerSettings;
 
 namespace maintenance {
 class ClusterMaintenanceStateMachine;
@@ -285,7 +285,7 @@ class Server {
   std::unique_ptr<folly::EventBaseThread> server_to_server_listener_loop_;
   std::unique_ptr<LogDeviceThriftServer> s2s_thrift_api_handle_;
   std::unique_ptr<LogDeviceThriftServer> c2s_thrift_api_handle_;
-  std::unique_ptr<AdminServer> admin_server_handle_;
+  std::unique_ptr<LogDeviceThriftServer> admin_server_handle_;
   std::unique_ptr<Listener> connection_listener_;
   std::unique_ptr<Listener> ssl_connection_listener_;
   std::unique_ptr<Listener> gossip_listener_;
@@ -361,7 +361,7 @@ class Server {
   bool initSequencerPlacement();
   bool initRebuildingCoordinator();
   bool initClusterMaintenanceStateMachine();
-  bool createAndAttachMaintenanceManager(AdminServer* server);
+  bool createAndAttachMaintenanceManager(AdminAPIHandler*);
   bool initUnreleasedRecordDetector();
   bool initLogsConfigManager();
   bool initAdminServer();

@@ -8,7 +8,6 @@
 
 #include "logdevice/server/test/TestUtil.h"
 
-#include "logdevice/admin/AdminServer.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/NoopTraceLogger.h"
@@ -119,7 +118,7 @@ std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
 }
 
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
-  std::unique_ptr<AdminServer> admin_handle;
+  std::unique_ptr<LogDeviceThriftServer> admin_handle;
   std::unique_ptr<LogDeviceThriftServer> s2s_thrift_api_server;
   std::unique_ptr<LogDeviceThriftServer> c2s_thrift_api_server;
   std::unique_ptr<Listener> connection_listener;

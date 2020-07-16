@@ -9,8 +9,10 @@
 
 #include <folly/io/async/EventBaseThread.h>
 
-#include "logdevice/admin/SimpleAdminServer.h"
+#include "logdevice/admin/AdminAPIHandler.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
+#include "logdevice/admin/maintenance/MaintenanceManager.h"
+#include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/ConstructorFailed.h"
@@ -39,7 +41,6 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
-#include "logdevice/common/plugin/AdminServerFactory.h"
 #include "logdevice/common/plugin/BuiltinZookeeperClientFactory.h"
 #include "logdevice/common/plugin/ThriftServerFactory.h"
 #include "logdevice/common/plugin/TraceLoggerFactory.h"
@@ -1498,7 +1499,7 @@ bool Server::initRebuildingCoordinator() {
   return true;
 }
 
-bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
+bool Server::createAndAttachMaintenanceManager(AdminAPIHandler* handler) {
   // MaintenanceManager can generally be run on any server. However
   // MaintenanceManager lacks the leader election logic and hence
   // we cannot have multiple MaintenanceManager-s running for the
@@ -1510,7 +1511,7 @@ bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
   if (admin_settings->enable_maintenance_manager) {
     ld_check(cluster_maintenance_state_machine_);
     ld_check(event_log_);
-    ld_check(admin_server);
+    ld_check(handler);
     auto deps = std::make_unique<maintenance::MaintenanceManagerDependencies>(
         processor_.get(),
         admin_settings,
@@ -1518,7 +1519,7 @@ bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
         cluster_maintenance_state_machine_.get(),
         event_log_.get(),
         std::make_unique<maintenance::SafetyCheckScheduler>(
-            processor_.get(), admin_settings, admin_server->getSafetyChecker()),
+            processor_.get(), admin_settings, handler->getSafetyChecker()),
         std::make_unique<maintenance::MaintenanceLogWriter>(processor_.get()),
         std::make_unique<maintenance::MaintenanceManagerTracer>(
             params_->getTraceLogger()));
@@ -1530,7 +1531,7 @@ bool Server::createAndAttachMaintenanceManager(AdminServer* admin_server) {
         maintenance::MaintenanceManager::workerType(processor_.get()));
     maintenance_manager_ =
         std::make_unique<maintenance::MaintenanceManager>(&w, std::move(deps));
-    admin_server->setMaintenanceManager(maintenance_manager_.get());
+    handler->setMaintenanceManager(maintenance_manager_.get());
     maintenance_manager_->start();
   } else {
     ld_info("Not initializing MaintenanceManager since it is disabled in "
@@ -1607,10 +1608,6 @@ bool Server::initAdminServer() {
     auto server_config = updateable_config_->getServerConfig();
     ld_check(server_config);
 
-    auto adm_plugin =
-        params_->getPluginRegistry()->getSinglePlugin<AdminServerFactory>(
-            PluginType::ADMIN_SERVER_FACTORY);
-
     auto my_node_id = params_->getMyNodeID().value();
     auto svd =
         updateable_config_->getNodesConfiguration()->getNodeServiceDiscovery(
@@ -1634,28 +1631,33 @@ bool Server::initAdminServer() {
           admin_listen_addr->toString().c_str());
     }
 
-    if (adm_plugin) {
-      admin_server_handle_ = (*adm_plugin)(admin_listen_addr.value(),
-                                           processor_.get(),
-                                           params_->getSettingsUpdater(),
-                                           params_->getServerSettings(),
-                                           params_->getAdminServerSettings(),
-                                           params_->getStats());
+    std::string name = "LogDevice Admin API Service";
+    auto handler =
+        std::make_shared<AdminAPIHandler>(name,
+                                          processor_.get(),
+                                          params_->getSettingsUpdater(),
+                                          params_->getServerSettings(),
+                                          params_->getAdminServerSettings(),
+                                          params_->getStats());
+
+    auto factory_plugin =
+        params_->getPluginRegistry()->getSinglePlugin<ThriftServerFactory>(
+            PluginType::THRIFT_SERVER_FACTORY);
+
+    auto address = admin_listen_addr.value();
+    if (factory_plugin) {
+      admin_server_handle_ = (*factory_plugin)(name, address, handler);
     } else {
-      // Use built-in SimpleAdminServer
+      // Fallback to built-in SimpleThriftApiServer
       admin_server_handle_ =
-          std::make_unique<SimpleAdminServer>(admin_listen_addr.value(),
-                                              processor_.get(),
-                                              params_->getSettingsUpdater(),
-                                              params_->getServerSettings(),
-                                              params_->getAdminServerSettings(),
-                                              params_->getStats());
+          std::make_unique<SimpleThriftServer>(name, address, handler);
     }
+
     if (sharded_store_) {
-      admin_server_handle_->setShardedRocksDBStore(sharded_store_.get());
+      handler->setShardedRocksDBStore(sharded_store_.get());
     }
-    createAndAttachMaintenanceManager(admin_server_handle_.get());
-    admin_server_handle_->setAdminCommandHandler(
+    createAndAttachMaintenanceManager(handler.get());
+    handler->setAdminCommandHandler(
         std::bind(&CommandProcessor::asyncProcessCommand,
                   admin_command_processor_.get(),
                   std::placeholders::_1,

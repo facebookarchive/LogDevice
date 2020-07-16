@@ -9,7 +9,7 @@
 
 #include <folly/executors/CPUThreadPoolExecutor.h>
 
-#include "logdevice/admin/AdminServer.h"
+#include "logdevice/admin/maintenance/MaintenanceManager.h"
 #include "logdevice/admin/settings/AdminServerSettings.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/StatsCollectionThread.h"
@@ -26,7 +26,9 @@
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
 
 namespace facebook { namespace logdevice {
+class AdminAPIHandler;
 class ClientImpl;
+class LogDeviceThriftServer;
 class SettingsUpdater;
 
 namespace maintenance {
@@ -76,7 +78,8 @@ class StandaloneAdminServer {
 
   std::unique_ptr<StatsHolder> stats_;
   std::unique_ptr<StatsCollectionThread> stats_thread_;
-  std::unique_ptr<AdminServer> admin_server_;
+  std::unique_ptr<LogDeviceThriftServer> admin_server_;
+  std::shared_ptr<AdminAPIHandler> api_handler_;
   std::unique_ptr<maintenance::ClusterMaintenanceStateMachine>
       cluster_maintenance_state_machine_;
   std::unique_ptr<maintenance::MaintenanceManager> maintenance_manager_;
@@ -100,7 +103,7 @@ class StandaloneAdminServer {
   void initClusterMaintenanceStateMachine();
   // Creates maintenance manager if it is enabled in settings
   // starts it on a random worker and sets a handle on AdminServer
-  void createAndAttachMaintenanceManager(AdminServer* server);
+  void createAndAttachMaintenanceManager(AdminAPIHandler* server);
   // Gets called whenever ServerSettings is updated, this is also called on
   // startup to set the initial values supplied from the CLI.
   void onSettingsUpdate();
