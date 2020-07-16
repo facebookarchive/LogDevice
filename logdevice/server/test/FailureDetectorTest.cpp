@@ -110,6 +110,14 @@ class MockFailureDetector : public FailureDetector {
     report_logsconfig_loaded_.store(val);
   }
 
+  void setLastGossipReceivedTS(SteadyTimestamp ts) {
+    last_gossip_received_ts_ = ts;
+  }
+
+  SteadyTimestamp getLastGossipReceivedTS() {
+    return last_gossip_received_ts_;
+  }
+
  protected:
   bool isLogsConfigLoaded() override {
     return report_logsconfig_loaded_.load();
@@ -699,6 +707,64 @@ TEST_F(FailureDetectorTest, ClusterStateUpdate) {
     EXPECT_EQ(NodeHealthStatus::OVERLOADED,
               detectors[idx]->getClusterState()->getNodeStatus(1));
   }
+
+  shutdown_processors(processors);
+}
+
+// Simulate a node failing to process gossip messages for some time while
+// still able to send out gossips. Such a node should be marked as dead.
+TEST_F(FailureDetectorTest, StalledGossipProcessor) {
+  const int num_nodes = 2;
+
+  GossipSettings settings = create_default_settings<GossipSettings>();
+  settings.gossip_intervals_without_processing_threshold = 30;
+  settings.suspect_duration = std::chrono::milliseconds(0);
+
+  settings.mode = GossipSettings::SelectionMode::ROUND_ROBIN;
+  UpdateableSettings<GossipSettings> updateable(settings);
+  std::vector<std::shared_ptr<ServerProcessor>> processors;
+  detector_list_t detectors;
+
+  std::tie(processors, detectors) =
+      create_processors_and_detectors(num_nodes, settings);
+
+  // gossip until both nodes are aware that the other is alive
+  for (int i = 0; i <= settings.min_gossips_for_stable_state; ++i) {
+    gossip_round(detectors[0], detectors[1]);
+  }
+
+  for (node_index_t idx = 0; idx < num_nodes; ++idx) {
+    EXPECT_TRUE(detectors[0]->isAlive(idx));
+    EXPECT_TRUE(detectors[1]->isAlive(idx));
+  }
+
+  // override the last time N0 processed a gossip message to
+  // exceed the allowed threshold of gossip_intervals passed without
+  // processing.
+  auto last_time = SteadyTimestamp::now() -
+      (settings.gossip_interval *
+       (settings.gossip_intervals_without_processing_threshold + 5));
+  detectors[0]->setLastGossipReceivedTS(last_time);
+
+  gossip_round(detectors[0], detectors[1]);
+  gossip_round(detectors[0], detectors[1]);
+
+  // N0 still thinks its alive and N1 is alive
+  EXPECT_TRUE(detectors[0]->isAlive(node_index_t(0)));
+  EXPECT_TRUE(detectors[0]->isAlive(node_index_t(1)));
+
+  EXPECT_LT(
+      std::chrono::duration_cast<std::chrono::seconds>(
+          SteadyTimestamp::now() - detectors[0]->getLastGossipReceivedTS())
+          .count(),
+      1);
+
+  // N1 notices the flag set by N0 indicating it hasn't been processing
+  // and sets it to dead.
+  EXPECT_FALSE(detectors[1]->isAlive(node_index_t(0)));
+  EXPECT_TRUE(detectors[1]->isAlive(node_index_t(1)));
+  EXPECT_EQ(NodeHealthStatus::UNHEALTHY,
+            detectors[1]->getClusterState()->getNodeStatus(0));
 
   shutdown_processors(processors);
 }

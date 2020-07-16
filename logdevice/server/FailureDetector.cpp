@@ -8,6 +8,7 @@
 
 #include "logdevice/server/FailureDetector.h"
 
+#include <chrono>
 #include <unordered_set>
 
 #include <folly/Memory.h>
@@ -147,6 +148,9 @@ FailureDetector::FailureDetector(UpdateableSettings<GossipSettings> settings,
   registered_rsms_.push_back(configuration::InternalLogs::EVENT_LOG_DELTAS);
   registered_rsms_.push_back(configuration::InternalLogs::CONFIG_LOG_DELTAS);
   /* skipping maintenance log as it doesn't run on cluster */
+
+  // Set this to now so we know if the node stops processing gossip messages.
+  last_gossip_received_ts_ = SteadyTimestamp::now();
 }
 
 void FailureDetector::fetchVersions(RsmVersionType type) {
@@ -598,14 +602,16 @@ void FailureDetector::gossip() {
     auto window = (settings_->gossip_interval *
                    settings_->gossip_intervals_without_processing_threshold);
     if (now > last_gossip_received_ts_ + window) {
-      RATELIMIT_WARNING(
-          std::chrono::seconds(1),
-          1,
-          "Node %s hasn't been processing gossips for %ld seconds"
-          "(%ld intervals)",
-          this_node.toString().c_str(),
-          (now - last_gossip_received_ts_).count(),
-          ((now - last_gossip_received_ts_) / settings_->gossip_interval));
+      RATELIMIT_WARNING(std::chrono::seconds(1),
+                        1,
+                        "haven't been processing gossips for %lu seconds"
+                        "(%ld intervals)",
+                        std::chrono::duration_cast<std::chrono::seconds>(
+                            now - last_gossip_received_ts_)
+                            .count(),
+                        (std::chrono::duration_cast<std::chrono::milliseconds>(
+                             now - last_gossip_received_ts_) /
+                         settings_->gossip_interval));
       flags |= GOSSIP_Message::LONG_TIME_SINCE_LAST_GOSSIP;
     }
   }
@@ -653,9 +659,16 @@ bool FailureDetector::processFlags(
       bool(msg.flags_ & GOSSIP_Message::SUSPECT_STATE_FINISHED);
   const bool is_start_state_finished =
       bool(msg.flags_ & GOSSIP_Message::STARTING_STATE_FINISHED);
+  const bool is_stalled_gossip_processor =
+      bool(msg.flags_ & GOSSIP_Message::LONG_TIME_SINCE_LAST_GOSSIP);
   auto msg_type = flagsToString(msg.flags_);
 
-  if (!is_node_bringup && !is_suspect_state_finished) {
+  if (!is_stalled_gossip_processor) {
+    sender_node.stalled_gossip_processor_ = false;
+  }
+
+  if (!is_node_bringup && !is_suspect_state_finished &&
+      !is_stalled_gossip_processor) {
     return false; /* not a special broadcast message */
   }
 
@@ -707,6 +720,9 @@ bool FailureDetector::processFlags(
     updateNodeState(sender_idx, sender_node, false, false, false);
     // When new instance id comes up, reset all version information
     resetVersions(sender_idx);
+  } else if (is_stalled_gossip_processor) {
+    ld_info("N%hu has stopped processing gossip messages.", sender_idx);
+    sender_node.stalled_gossip_processor_ = true;
   } else {
     return true;
   }
@@ -732,6 +748,13 @@ FailureDetector::flagsToString(GOSSIP_Message::GOSSIP_flags_t flags) {
       s += "|";
     }
     s += "starting_state_finished";
+  }
+
+  if (flags & GOSSIP_Message::LONG_TIME_SINCE_LAST_GOSSIP) {
+    if (!s.empty()) {
+      s += "|";
+    }
+    s += "long-time-since-last-gossip";
   }
 
   if (!s.empty()) {
@@ -1076,9 +1099,12 @@ void FailureDetector::detectFailures(
     // other nodes haven't heard from it in a long time
     // OR
     // Node 'it' is performing a graceful shutdown.
+    // OR
+    // 'it' hasn't been processgin gossip messages from some time.
     // Mark it DEAD so no work ends up sent its way.
     bool failover = (it.second.failover_ > std::chrono::milliseconds::zero());
-    bool dead = (it.second.gossip_ > threshold);
+    bool dead = (it.second.gossip_ > threshold) ||
+        (it.second.stalled_gossip_processor_);
     if (dead) {
       // if the node is actually dead, clear the failover boolean, to make
       // sure we don't mistakenly transition from DEAD to FAILING_OVER in the

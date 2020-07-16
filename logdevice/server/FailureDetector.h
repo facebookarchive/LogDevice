@@ -333,6 +333,10 @@ class FailureDetector {
     // - storage_membership_version
     std::array<membership::MembershipVersion::Type, 3> ncm_versions_;
 
+    // This is set when a node hasn't been processing gossips for some time
+    // indicated by a setting GOSSIP_Message::LONG_TIME_SINCE_LAST_GOSSIP flag.
+    bool stalled_gossip_processor_{false};
+
     Node()
         : state_(NodeState::DEAD),
           blacklisted_(false),
