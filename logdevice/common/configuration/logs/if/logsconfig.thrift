@@ -86,7 +86,7 @@ struct LogAttrs {
  * (inclusive range).
  */
 struct LogRange {
-  1: u64 from;
+  1: u64 from (py3.name = "from_");
   2: u64 to;
 }
 
