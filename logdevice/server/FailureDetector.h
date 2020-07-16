@@ -435,6 +435,10 @@ class FailureDetector {
   // to let everyone know we've started.
   bool need_to_broadcast_starting_state_finished_{false};
 
+  // The last time this node processed a gossip message. This is updated
+  // inside FailureDetector::onGossipReceived
+  SteadyTimestamp last_gossip_received_ts_;
+
   // All private and protected methods are called with locked mutex_ and
   // unlocked nodes_mutex_, unless stated otherwise.
 

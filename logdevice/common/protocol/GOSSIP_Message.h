@@ -159,6 +159,13 @@ class GOSSIP_Message : public Message {
   // The message contains durable RSM versions(in local store) on cluster nodes
   static const GOSSIP_flags_t HAS_DURABLE_SNAPSHOT_VERSIONS = 1 << 6;
 
+  // Node didn't process any gossip messages for some time. It's able to send
+  // gossips though. This can happen in case of either partial network failure
+  // or node overload preventing it from processing received gossip messages.
+  // If this flag is set, the rest of the message is ignored by the receiving
+  // node.
+  static const GOSSIP_flags_t LONG_TIME_SINCE_LAST_GOSSIP = 1 << 7;
+
  private:
   // flattens the matrices and then writes them
   void writeBoycottList(ProtocolWriter& writer) const;

@@ -349,6 +349,9 @@ void FailureDetector::buildInitialState(
   // gossips.
   broadcastBringupUpdate(0);
 
+  // Set this to now so we know if the node stops processing gossip messages.
+  last_gossip_received_ts_ = SteadyTimestamp::now();
+
   // Start gossiping after we have got a chance to build FD state.
   // If cluster-state reply doesn't come, it is fine, since we will
   // move every potentially ALIVE node from DEAD to SUSPECT on receiving
