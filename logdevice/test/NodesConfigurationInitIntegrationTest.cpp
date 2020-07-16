@@ -39,9 +39,11 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
   auto nodes_cfg = config->getNodesConfigurationFromNCMSource();
   ASSERT_NE(nullptr, nodes_cfg);
   EXPECT_EQ(get_protocol_addr(0),
-            nodes_cfg->getNodeServiceDiscovery(0)->address.toString());
+            nodes_cfg->getNodeServiceDiscovery(0)
+                ->default_client_data_address.toString());
   EXPECT_EQ(get_protocol_addr(4),
-            nodes_cfg->getNodeServiceDiscovery(4)->address.toString());
+            nodes_cfg->getNodeServiceDiscovery(4)
+                ->default_client_data_address.toString());
 }
 
 TEST_F(NodesConfigurationInitIntegrationTest, SeedDown) {

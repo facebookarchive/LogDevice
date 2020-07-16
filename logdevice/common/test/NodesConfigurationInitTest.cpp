@@ -123,11 +123,14 @@ TEST(NodesConfigurationInitTest, ConfigCreation) {
   auto nodes = config->getNodesConfiguration()->getServiceDiscovery();
   EXPECT_EQ(3, nodes->numNodes());
   EXPECT_EQ("10.0.0.2:4440",
-            nodes->getNodeAttributesPtr(node_index_t(0))->address.toString());
+            nodes->getNodeAttributesPtr(node_index_t(0))
+                ->default_client_data_address.toString());
   EXPECT_EQ("10.0.0.3:4440",
-            nodes->getNodeAttributesPtr(node_index_t(1))->address.toString());
+            nodes->getNodeAttributesPtr(node_index_t(1))
+                ->default_client_data_address.toString());
   EXPECT_EQ("10.0.0.4:4440",
-            nodes->getNodeAttributesPtr(node_index_t(2))->address.toString());
+            nodes->getNodeAttributesPtr(node_index_t(2))
+                ->default_client_data_address.toString());
 }
 
 TEST(NodesConfigurationInitTest, InitTest) {

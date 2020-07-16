@@ -24,7 +24,8 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
   thrift::NodeServiceDiscovery disc;
   disc.set_name(discovery.name);
   disc.set_version(discovery.version);
-  disc.set_address(discovery.address.toString());
+  disc.set_default_client_data_address(
+      discovery.default_client_data_address.toString());
   if (discovery.gossip_address.has_value()) {
     disc.set_gossip_address(discovery.gossip_address->toString());
   }
@@ -63,16 +64,17 @@ int NodesConfigurationThriftConverter::fromThrift(
   result.name = obj.name;
   result.version = obj.version;
 
-  if (obj.address.empty()) {
+  if (obj.default_client_data_address_ref()->empty()) {
     ld_error("Missing required field address.");
     return -1;
   } else {
-    auto sock = Sockaddr::fromString(obj.address);
+    auto sock =
+        Sockaddr::fromString(obj.default_client_data_address_ref().value());
     if (!sock.has_value()) {
       ld_error("malformed socket addr field address.");
       return -1;
     }
-    result.address = sock.value();
+    result.default_client_data_address = sock.value();
   }
 
   if (obj.gossip_address_ref().has_value()) {

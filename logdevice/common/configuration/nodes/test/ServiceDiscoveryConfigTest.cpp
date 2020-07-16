@@ -40,7 +40,7 @@ class ServiceDiscoveryConfigTest : public ::testing::Test {};
 // should return the default address.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_GetDefaultSockAddr) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
       SocketType::DATA,
@@ -54,7 +54,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_GetDefaultSockAddr) {
 // Ditto of above, for clients.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_GetDefaultSockAddrClient) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
@@ -70,7 +70,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_GetDefaultSockAddrClient) {
 // peer is a client.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_IgnoreServerToServerAddressParam) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
@@ -86,7 +86,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_IgnoreServerToServerAddressParam) {
 // should return the default address.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddress) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
@@ -101,7 +101,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddress) {
 // Same as above, for clients.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddressClient) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
@@ -118,7 +118,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_SslAddressClient) {
 TEST(ServiceDiscoveryConfigTest,
      getSockaddr_DefaultServerToServerIsBaseAddress) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
@@ -136,7 +136,7 @@ TEST(ServiceDiscoveryConfigTest,
 TEST(ServiceDiscoveryConfigTest,
      getSockaddr_DedicatedServerToServerAddressIfEnabled) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
@@ -153,7 +153,7 @@ TEST(ServiceDiscoveryConfigTest,
 TEST(ServiceDiscoveryConfigTest,
      getSockaddr_ServerToServerOverridesSslAddress) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
   nodeServiceDiscovery.ssl_address = kTestSslAddress;
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
@@ -170,7 +170,7 @@ TEST(ServiceDiscoveryConfigTest,
 // returned even if the server-to-server address is set and enabled.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_gossipAddressOverridesData) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
   nodeServiceDiscovery.gossip_address = kTestGossipAddress;
   nodeServiceDiscovery.server_to_server_address = kTestServerToServerAddress;
 
@@ -188,7 +188,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_gossipAddressOverridesData) {
 // object was not constructed with a valid server_to_server_address.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_invalidServerToServerAddress) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
       SocketType::DATA,
@@ -204,7 +204,7 @@ TEST(ServiceDiscoveryConfigTest, getSockaddr_invalidServerToServerAddress) {
 // object was not constructed with a valid ssl_address.
 TEST(ServiceDiscoveryConfigTest, getSockaddr_invalidSslAddress) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestDefaultAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
 
   const Sockaddr& actual = nodeServiceDiscovery.getSockaddr(
       SocketType::DATA,

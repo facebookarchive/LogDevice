@@ -75,10 +75,9 @@ void FailureDomainNodeSet<AttrType, HashFn>::addShard(
       domain_name = std::to_string(shard.node());
     } else if (!service_disc->location.has_value() ||
                !service_disc->location.value().scopeSpecified(scope)) {
-      ld_error("Node %d (%s) in the storage_set does not have location "
+      ld_error("Node %d in the storage_set does not have location "
                "information in location scope: %s.",
                shard.node(),
-               service_disc->address.toString().c_str(),
                NodeLocation::scopeNames()[scope].c_str());
       continue;
     } else {

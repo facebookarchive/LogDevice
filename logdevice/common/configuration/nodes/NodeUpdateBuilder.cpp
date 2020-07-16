@@ -22,8 +22,8 @@ NodeUpdateBuilder& NodeUpdateBuilder::setVersion(uint64_t version) {
   return *this;
 }
 
-NodeUpdateBuilder& NodeUpdateBuilder::setDataAddress(Sockaddr addr) {
-  data_address_ = std::move(addr);
+NodeUpdateBuilder& NodeUpdateBuilder::setDefaultDataAddress(Sockaddr addr) {
+  default_data_address_ = std::move(addr);
   return *this;
 }
 
@@ -104,9 +104,9 @@ NodeUpdateBuilder::Result NodeUpdateBuilder::validate() const {
         Status::INVALID_PARAM, "Mandatory field 'node_index' is missing"};
   }
 
-  if (!data_address_.has_value()) {
-    return Result{
-        Status::INVALID_PARAM, "Mandatory field 'data_address' is missing"};
+  if (!default_data_address_.has_value()) {
+    return Result{Status::INVALID_PARAM,
+                  "Mandatory field 'default_client_data_address' is missing"};
   }
 
   if (!name_.has_value()) {
@@ -144,7 +144,7 @@ NodeUpdateBuilder::buildNodeServiceDiscovery() {
 
   sd->name = std::move(name_).value();
   sd->version = version_.value();
-  sd->address = std::move(data_address_).value();
+  sd->default_client_data_address = std::move(default_data_address_).value();
   sd->gossip_address = std::move(gossip_address_);
   sd->ssl_address = std::move(ssl_address_);
   sd->admin_address = std::move(admin_address_);

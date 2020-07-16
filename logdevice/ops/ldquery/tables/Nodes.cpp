@@ -98,7 +98,7 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
     if (!node_sd.name.empty()) {
       result->set("name", node_sd.name);
     }
-    result->set("address", node_sd.address.toString());
+    result->set("address", node_sd.default_client_data_address.toString());
     if (node_sd.ssl_address.has_value()) {
       result->set("ssl_address", node_sd.ssl_address.value().toString());
     }

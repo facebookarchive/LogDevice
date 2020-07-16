@@ -27,11 +27,12 @@ bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
                       const thrift::SocketAddress& address) {
   // UNIX
   // Match address on exact path for unix sockets
-  if (node_sd.address.isUnixAddress() &&
+  if (node_sd.default_client_data_address.isUnixAddress() &&
       address.address_family == thrift::SocketAddressFamily::UNIX) {
     if (address.address_ref().has_value()) {
       // match by the address value if it's set.
-      return node_sd.address.getPath() == address.address_ref().value();
+      return node_sd.default_client_data_address.getPath() ==
+          address.address_ref().value();
     }
     return true;
   }
@@ -43,17 +44,20 @@ bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
   // Fields:
   // 1. Address
   // 2. Port
-  if (!node_sd.address.isUnixAddress() &&
+  if (!node_sd.default_client_data_address.isUnixAddress() &&
       address.address_family == thrift::SocketAddressFamily::INET) {
     if (!address.address_ref().has_value()) {
       if (address.port_ref().has_value()) {
-        return node_sd.address.port() == address.port_ref().value();
+        return node_sd.default_client_data_address.port() ==
+            address.port_ref().value();
       }
       return false;
     } else {
       auto node_address = folly::SocketAddress(
-          node_sd.address.getAddress().str(),
-          address.port_ref().has_value() ? node_sd.address.port() : 0);
+          node_sd.default_client_data_address.getAddress().str(),
+          address.port_ref().has_value()
+              ? node_sd.default_client_data_address.port()
+              : 0);
       auto other_address = folly::SocketAddress(
           address.address_ref().value(),
           address.port_ref().has_value() ? address.port_ref().value() : 0);
@@ -210,7 +214,7 @@ void fillNodeConfig(
   out.tags.insert(node_sd->tags.begin(), node_sd->tags.end());
 
   thrift::SocketAddress data_address;
-  fillSocketAddress(data_address, node_sd->address);
+  fillSocketAddress(data_address, node_sd->default_client_data_address);
   out.set_data_address(std::move(data_address));
 
   // Other Addresses

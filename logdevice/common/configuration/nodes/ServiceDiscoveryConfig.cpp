@@ -39,16 +39,18 @@ bool isOptionalFieldValid(const F& field, folly::StringPiece name) {
 } // namespace
 
 const Sockaddr& NodeServiceDiscovery::getGossipAddress() const {
-  return gossip_address.has_value() ? gossip_address.value() : address;
+  return gossip_address.has_value() ? gossip_address.value()
+                                    : default_client_data_address;
 }
 
 const Sockaddr& NodeServiceDiscovery::getServerToServerAddress() const {
   return server_to_server_address.has_value() ? server_to_server_address.value()
-                                              : address;
+                                              : default_client_data_address;
 }
 
 bool NodeServiceDiscovery::isValid() const {
-  if (!isFieldValid(address, "address") ||
+  if (!isFieldValid(
+          default_client_data_address, "default_client_data_address") ||
       !isOptionalFieldValid(gossip_address, "gossip_address") ||
       !isOptionalFieldValid(ssl_address, "ssl_address") ||
       !isOptionalFieldValid(admin_address, "admin_address") ||
@@ -125,7 +127,7 @@ std::string NodeServiceDiscovery::toString() const {
   return folly::sformat(
       "[{} => A:{},G:{},S:{},AA:{},S2SA:{},STA:{},CTA:{},L:{},R:{},V:{},T:{}]",
       name,
-      address.toString(),
+      default_client_data_address.toString(),
       gossip_address.has_value() ? gossip_address->toString() : "",
       ssl_address.has_value() ? ssl_address->toString() : "",
       admin_address.has_value() ? admin_address->toString() : "",
@@ -167,7 +169,7 @@ const Sockaddr& NodeServiceDiscovery::getSockaddr(
         }
         return ssl_address.value();
       }
-      return address;
+      return default_client_data_address;
 
     default:
       RATELIMIT_CRITICAL(std::chrono::seconds(1),
@@ -184,7 +186,7 @@ namespace {
 bool validateAddressUniqueness(ServiceDiscoveryConfig::MapType node_states) {
   std::unordered_map<Sockaddr, node_index_t, Sockaddr::Hash> seen_addresses;
   for (const auto& kv : node_states) {
-    if (!kv.second.address.valid()) {
+    if (!kv.second.default_client_data_address.valid()) {
       // This should have been caught in a better check, but let's avoid
       // crashing in the following lines by returning false here.
       RATELIMIT_CRITICAL(
@@ -195,10 +197,11 @@ bool validateAddressUniqueness(ServiceDiscoveryConfig::MapType node_states) {
           "been caught in an earlier validation on the ServiceDiscoveryConfig "
           "struct.",
           kv.first);
-      ld_assert(kv.second.address.valid());
+      ld_assert(kv.second.default_client_data_address.valid());
       return false;
     }
-    auto res = seen_addresses.emplace(kv.second.address, kv.first);
+    auto res =
+        seen_addresses.emplace(kv.second.default_client_data_address, kv.first);
     if (!res.second) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       5,

@@ -756,7 +756,7 @@ bool Server::initListeners() {
     }
 
     auto gossip_sock_addr = node_svc->getGossipAddress().getSocketAddress();
-    auto hostStr = node_svc->address.toString();
+    auto hostStr = node_svc->default_client_data_address.toString();
     auto gossip_addr_str = node_svc->getGossipAddress().toString();
     if (gossip_addr_str != hostStr) {
       std::string gossip_unix_socket;

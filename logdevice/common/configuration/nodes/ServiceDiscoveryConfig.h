@@ -40,7 +40,7 @@ struct NodeServiceDiscovery {
   /**
    * The IP (v4 or v6) address, including port number.
    */
-  Sockaddr address{};
+  Sockaddr default_client_data_address{};
 
   /**
    * The IP (v4 or v6) gossip address, including port number. Semantically, if
@@ -119,7 +119,8 @@ struct NodeServiceDiscovery {
   }
 
   bool operator==(const NodeServiceDiscovery& rhs) const {
-    return address == rhs.address && gossip_address == rhs.gossip_address &&
+    return default_client_data_address == rhs.default_client_data_address &&
+        gossip_address == rhs.gossip_address &&
         ssl_address == rhs.ssl_address && admin_address == rhs.admin_address &&
         server_to_server_address == rhs.server_to_server_address &&
         server_thrift_api_address == rhs.server_thrift_api_address &&

@@ -224,8 +224,8 @@ void UnreleasedRecordDetectorTest::SetUp() {
   ASSERT_NE(nullptr, nodes_configuration);
   const auto* serv_disc = nodes_configuration->getNodeServiceDiscovery(0);
   ASSERT_NE(nullptr, serv_disc);
-  const_cast<configuration::nodes::NodeServiceDiscovery*>(serv_disc)->address =
-      node->address;
+  const_cast<configuration::nodes::NodeServiceDiscovery*>(serv_disc)
+      ->default_client_data_address = node->address;
 
   // create processor
   processor_ =

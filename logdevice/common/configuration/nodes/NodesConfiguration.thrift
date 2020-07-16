@@ -18,7 +18,7 @@ typedef i64 (cpp2.type = "std::uint64_t") u64
 typedef u16 node_idx
 
  struct NodeServiceDiscovery {
-  1: string address;
+  1: string default_client_data_address;
   2: optional string gossip_address;
   3: optional string ssl_address;
   4: optional string location;

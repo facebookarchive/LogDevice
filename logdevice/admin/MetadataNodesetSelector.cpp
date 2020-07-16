@@ -84,7 +84,7 @@ MetadataNodeSetSelector::getNodeSet(
         ld_error("Can't select nodeset because node %d (%s) does not have "
                  "location information",
                  node,
-                 sd->address.toString().c_str());
+                 sd->default_client_data_address.toString().c_str());
         return folly::makeUnexpected<Status>(E::FAILED);
       }
 
@@ -95,7 +95,7 @@ MetadataNodeSetSelector::getNodeSet(
                  "doesn't have location for scope %s.",
                  location.toString().c_str(),
                  node,
-                 sd->address.toString().c_str(),
+                 sd->default_client_data_address.toString().c_str(),
                  NodeLocation::scopeNames()[replication_scope].c_str());
         return folly::makeUnexpected<Status>(E::FAILED);
       }

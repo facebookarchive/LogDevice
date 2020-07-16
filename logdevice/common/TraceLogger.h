@@ -52,7 +52,7 @@ class TraceLogger {
     if (node == nullptr) {
       return std::string();
     }
-    return node->address.toStringNoBrackets();
+    return node->default_client_data_address.toStringNoBrackets();
   }
 
   std::shared_ptr<Configuration> getConfiguration() const {

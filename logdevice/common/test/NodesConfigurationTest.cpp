@@ -170,7 +170,7 @@ TEST_F(NodesConfigurationTest, TestGossipDefaultingToDataAddress) {
   // Add one node with gossip address
   auto desc1 = genDiscovery(10, kBothRoles, {}, "aa.bb.cc.dd.ee");
   // For the correctness of the test, assert that both addresses are differect.
-  ASSERT_NE(desc1.address, desc1.gossip_address.value());
+  ASSERT_NE(desc1.default_client_data_address, desc1.gossip_address.value());
 
   update.service_discovery_update->addNode(
       10,
@@ -195,7 +195,7 @@ TEST_F(NodesConfigurationTest, TestGossipDefaultingToDataAddress) {
             new_config->getNodeServiceDiscovery(10)->getGossipAddress());
 
   // Gossip address is not set on N20, should return data address.
-  EXPECT_EQ(desc2.address,
+  EXPECT_EQ(desc2.default_client_data_address,
             new_config->getNodeServiceDiscovery(20)->getGossipAddress());
 }
 
@@ -210,7 +210,8 @@ TEST_F(NodesConfigurationTest, TestServerToServerDefaultingToDataAddress) {
   // Add one node with dedicated server-to-server address
   auto desc1 = genDiscovery(10, kBothRoles, {}, "aa.bb.cc.dd.ee");
   // For the correctness of the test, assert that both addresses are different.
-  ASSERT_NE(desc1.address, desc1.server_to_server_address.value());
+  ASSERT_NE(desc1.default_client_data_address,
+            desc1.server_to_server_address.value());
 
   update.service_discovery_update->addNode(
       10,
@@ -237,7 +238,7 @@ TEST_F(NodesConfigurationTest, TestServerToServerDefaultingToDataAddress) {
 
   // Server-to-server address is not set on N20, should return data address.
   EXPECT_EQ(
-      desc2.address,
+      desc2.default_client_data_address,
       new_config->getNodeServiceDiscovery(20)->getServerToServerAddress());
 }
 
@@ -250,7 +251,7 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
     // Changing the name / addresses of the node should be allowed
     auto new_svc = *config->getNodeServiceDiscovery(2);
     new_svc.name = "NewName";
-    new_svc.address = Sockaddr("/tmp/new_addr1");
+    new_svc.default_client_data_address = Sockaddr("/tmp/new_addr1");
     new_svc.gossip_address = Sockaddr("/tmp/new_addr2");
     new_svc.ssl_address = Sockaddr("/tmp/new_addr3");
 
@@ -265,8 +266,9 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
     auto new_config = config->applyUpdate(std::move(update));
     ASSERT_NE(nullptr, new_config);
     EXPECT_EQ("NewName", new_config->getNodeServiceDiscovery(2)->name);
-    EXPECT_EQ(Sockaddr("/tmp/new_addr1"),
-              new_config->getNodeServiceDiscovery(2)->address);
+    EXPECT_EQ(
+        Sockaddr("/tmp/new_addr1"),
+        new_config->getNodeServiceDiscovery(2)->default_client_data_address);
     EXPECT_EQ(Sockaddr("/tmp/new_addr2"),
               new_config->getNodeServiceDiscovery(2)->gossip_address);
     EXPECT_EQ(Sockaddr("/tmp/new_addr3"),
@@ -599,7 +601,7 @@ TEST_F(NodesConfigurationTest, touch) {
 TEST_F(NodesConfigurationTest, SingleInvalidAddressIsInvalid) {
   auto svc = std::make_unique<NodeServiceDiscovery>();
   svc->name = "test";
-  svc->address = Sockaddr::INVALID;
+  svc->default_client_data_address = Sockaddr::INVALID;
   svc->gossip_address = Sockaddr("127.0.0.1", 1234);
   svc->roles = 3;
 
@@ -828,7 +830,7 @@ TEST_F(NodesConfigurationTest, LegacyMetadataLogsConfigConversion) {
                   .value());
     EXPECT_EQ(metadata_nodeset, metadata_cfg.metadata_nodes);
   }
-} // namespace
+}
 
 TEST_F(NodesConfigurationTest, ExtractVersionErrorEmptyString) {
   auto version = NodesConfigurationCodec::extractConfigVersion(std::string());

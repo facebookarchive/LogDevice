@@ -2617,7 +2617,7 @@ void Cluster::populateClientSettings(std::unique_ptr<ClientSettings>& settings,
       auto nc = readNodesConfigurationFromStore();
       std::vector<std::string> addrs;
       for (const auto& [_, node] : *nc->getServiceDiscovery()) {
-        addrs.push_back(node.address.toString());
+        addrs.push_back(node.default_client_data_address.toString());
       }
       std::string seed_addr =
           folly::sformat("data:{}", folly::join(",", addrs));

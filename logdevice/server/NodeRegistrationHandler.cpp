@@ -89,9 +89,10 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
   }
 
   if (!server_settings_.unix_socket.empty()) {
-    update_builder.setDataAddress(Sockaddr(server_settings_.unix_socket));
+    update_builder.setDefaultDataAddress(
+        Sockaddr(server_settings_.unix_socket));
   } else {
-    update_builder.setDataAddress(
+    update_builder.setDefaultDataAddress(
         Sockaddr(server_settings_.address, server_settings_.port));
   }
 

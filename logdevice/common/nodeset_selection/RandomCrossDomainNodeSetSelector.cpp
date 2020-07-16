@@ -52,7 +52,7 @@ int RandomCrossDomainNodeSetSelector::buildDomainMap(
       ld_error("Node %d (%s) does not have location information, cross-domain "
                "selection cannot continue.",
                node,
-               sd->address.toString().c_str());
+               sd->default_client_data_address.toString().c_str());
       return -1;
     }
 
@@ -62,7 +62,7 @@ int RandomCrossDomainNodeSetSelector::buildDomainMap(
       ld_error("Node %d (%s) does not have location scope %s specified in "
                "its location %s. Abort.",
                node,
-               sd->address.toString().c_str(),
+               sd->default_client_data_address.toString().c_str(),
                NodeLocation::scopeNames()[sync_replication_scope].c_str(),
                location.toString().c_str());
       return -1;

@@ -103,7 +103,7 @@ bool NodeIDMatcher::matchByAddresses(
     const configuration::nodes::NodeServiceDiscovery& sd,
     const std::vector<Sockaddr>& addresses) const {
   for (const auto& addr : addresses) {
-    if (sd.address == addr) {
+    if (sd.default_client_data_address == addr) {
       return true;
     }
   }

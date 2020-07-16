@@ -77,7 +77,7 @@ AddNodesHandler::validateUniquness(
 
   for (const auto& sd : *nodes_configuration.getServiceDiscovery()) {
     thrift::SocketAddress addr;
-    fillSocketAddress(addr, sd.second.address);
+    fillSocketAddress(addr, sd.second.default_client_data_address);
 
     node_idxs.insert(sd.first);
     names.insert(sd.second.name);

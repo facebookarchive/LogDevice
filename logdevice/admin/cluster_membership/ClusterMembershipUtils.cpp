@@ -53,7 +53,8 @@ nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
 
   update_builder.setNodeIndex(cfg.node_index)
       .setName(cfg.name)
-      .setDataAddress(convert_thrift_address(cfg.data_address));
+      .setDefaultDataAddress(
+          convert_thrift_address(cfg.data_address_ref().value()));
 
   if (cfg.other_addresses_ref().has_value()) {
     const auto& other_addresses = cfg.other_addresses_ref().value();

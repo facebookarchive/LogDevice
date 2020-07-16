@@ -105,11 +105,13 @@ static bool isValidServerConnection(const NodeID& peer_nid,
   }
 
   // Only do IP authentication for real IP addresses
-  if (!peer_svc->address.isUnixAddress() && !conn_addr.isUnixAddress()) {
+  if (!peer_svc->default_client_data_address.isUnixAddress() &&
+      !conn_addr.isUnixAddress()) {
     // If the IP addresses of the sender matches the IP address of the
     // peer_node_id_ in the Connection, then we can be reasonably assured that
     // the connection is from that server node.
-    if (peer_svc->address.getAddress() == conn_addr.getAddress() ||
+    if (peer_svc->default_client_data_address.getAddress() ==
+            conn_addr.getAddress() ||
         (peer_svc->ssl_address &&
          peer_svc->ssl_address->getAddress() == conn_addr.getAddress())) {
       return true;

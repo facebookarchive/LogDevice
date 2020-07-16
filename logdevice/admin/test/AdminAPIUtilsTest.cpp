@@ -93,7 +93,7 @@ TEST(AdminAPIUtilsTest, MatchNodeByIndex) {
 
 TEST(AdminAPIUtilsTest, MatchNodeByAddressIpV4) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = kTestSocketAddress;
+  nodeServiceDiscovery.default_client_data_address = kTestSocketAddress;
 
   thrift::NodeID thriftNodeId;
 
@@ -109,7 +109,8 @@ TEST(AdminAPIUtilsTest, MatchNodeByAddressIpV4) {
 TEST(AdminAPIUtilsTest, MatchNodeByAddressIpV6WithCompression) {
   std::string compressedV6Address = "2001:4860:4860::8888";
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = Sockaddr{compressedV6Address, kTestDataPort};
+  nodeServiceDiscovery.default_client_data_address =
+      Sockaddr{compressedV6Address, kTestDataPort};
 
   std::string uncompressedV6Address = "2001:4860:4860:0000:0000:0000:0000:8888";
   thrift::NodeID thriftNodeId;
@@ -122,7 +123,7 @@ TEST(AdminAPIUtilsTest, MatchNodeByAddressIpV6WithCompression) {
 
 TEST(AdminAPIUtilsTest, MatchNodeByAddressUnixSocket) {
   NodeServiceDiscovery nodeServiceDiscovery;
-  nodeServiceDiscovery.address = Sockaddr{kTestUnixPath};
+  nodeServiceDiscovery.default_client_data_address = Sockaddr{kTestUnixPath};
 
   thrift::SocketAddress thriftSocketAddress;
   thriftSocketAddress.set_address(kTestUnixPath);
@@ -149,7 +150,8 @@ TEST(AdminAPIUtilsTest, MatchByNameAndIndex) {
 TEST(AdminAPIUtilsTest, EmptyIDMatchesAnything) {
   NodeServiceDiscovery nodeServiceDiscovery;
   nodeServiceDiscovery.name = kTestNodeName;
-  nodeServiceDiscovery.address = Sockaddr{kTestAddress, kTestDataPort};
+  nodeServiceDiscovery.default_client_data_address =
+      Sockaddr{kTestAddress, kTestDataPort};
 
   thrift::NodeID thriftNodeId;
 
@@ -157,7 +159,7 @@ TEST(AdminAPIUtilsTest, EmptyIDMatchesAnything) {
       nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
 
   // Also matches any unix path
-  nodeServiceDiscovery.address = Sockaddr{kTestUnixPath};
+  nodeServiceDiscovery.default_client_data_address = Sockaddr{kTestUnixPath};
   EXPECT_TRUE(
       nodeMatchesID(kTestNodeIndex, nodeServiceDiscovery, thriftNodeId));
 }

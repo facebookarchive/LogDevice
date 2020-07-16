@@ -149,7 +149,7 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     auto serv = serv_disc->nodeAttributesAt(n);
     auto& node = res_nodes[n];
     node.name = serv.name;
-    node.address = serv.address;
+    node.address = serv.default_client_data_address;
     // During parsing the ServerConfig, if the gossip field is missing it's set
     // to the data address. There's no way to know if the field was actually set
     // or not. As a result, converting from an NC with a folly::none to

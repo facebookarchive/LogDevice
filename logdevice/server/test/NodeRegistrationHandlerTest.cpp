@@ -97,7 +97,7 @@ TEST_F(NodeRegistrationHandlerTest, testAddNode) {
   const auto& svd = nc->getNodeServiceDiscovery(index);
   ASSERT_NE(nullptr, svd);
   EXPECT_EQ("node1", svd->name);
-  EXPECT_EQ("/node1/address", svd->address.toString());
+  EXPECT_EQ("/node1/address", svd->default_client_data_address.toString());
   EXPECT_EQ("/node1/ssl", svd->ssl_address->toString());
   EXPECT_EQ("/node1/gossip", svd->gossip_address->toString());
   EXPECT_EQ("/node1/admin", svd->admin_address->toString());
@@ -157,7 +157,7 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   const auto& svd = nc->getNodeServiceDiscovery(index);
   ASSERT_NE(nullptr, svd);
   EXPECT_EQ("node1", svd->name);
-  EXPECT_EQ("/new/address", svd->address.toString());
+  EXPECT_EQ("/new/address", svd->default_client_data_address.toString());
   EXPECT_EQ("/new/ssl", svd->ssl_address->toString());
   EXPECT_EQ("/new/gossip", svd->gossip_address->toString());
   EXPECT_EQ("/new/s2s", svd->server_to_server_address->toString());

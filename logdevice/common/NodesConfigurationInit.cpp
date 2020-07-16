@@ -151,7 +151,7 @@ NodesConfigurationInit::buildBootstrappingServerConfig(
     auto sd = std::make_unique<NodeServiceDiscovery>();
 
     sd->name = folly::sformat("server-{}", index);
-    sd->address = maybe_address.value();
+    sd->default_client_data_address = maybe_address.value();
     sd->ssl_address = maybe_address.value();
     sd->roles.set(static_cast<uint8_t>(NodeRole::SEQUENCER));
 
