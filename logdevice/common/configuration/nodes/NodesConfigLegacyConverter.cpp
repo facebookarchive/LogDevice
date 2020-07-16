@@ -159,6 +159,8 @@ int NodesConfigLegacyConverter::toLegacyNodesConfig(
     node.ssl_address = serv.ssl_address;
     node.admin_address = serv.admin_address;
     node.server_to_server_address = serv.server_to_server_address;
+    node.server_thrift_api_address = serv.server_thrift_api_address;
+    node.client_thrift_api_address = serv.client_thrift_api_address;
     node.location = serv.location;
     node.roles = serv.roles;
   }
@@ -204,6 +206,8 @@ NodesConfigLegacyConverter::fromLegacyNodesConfig(
          node.ssl_address,
          node.admin_address,
          node.server_to_server_address,
+         node.server_thrift_api_address,
+         node.client_thrift_api_address,
          node.location,
          node.roles});
 

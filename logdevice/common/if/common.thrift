@@ -111,6 +111,14 @@ struct Addresses {
    * The socket address for server-to-server connections.
    */
   4: optional SocketAddress server_to_server;
+    /**
+   * The socket address for server-to-server Thrift API.
+   */
+  5: optional SocketAddress server_thrift_api;
+  /**
+   * The socket address for client-facing Thrift API.
+   */
+  6: optional SocketAddress client_thrift_api;
 }
 
 /**

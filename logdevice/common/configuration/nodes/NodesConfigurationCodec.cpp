@@ -38,6 +38,14 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
     disc.set_server_to_server_address(
         discovery.server_to_server_address.value().toString());
   }
+  if (discovery.server_thrift_api_address.has_value()) {
+    disc.set_server_thrift_api_address(
+        discovery.server_thrift_api_address.value().toString());
+  }
+  if (discovery.client_thrift_api_address.has_value()) {
+    disc.set_client_thrift_api_address(
+        discovery.client_thrift_api_address.value().toString());
+  }
   if (discovery.location.has_value()) {
     disc.set_location(discovery.location.value().toString());
   }
@@ -102,6 +110,26 @@ int NodesConfigurationThriftConverter::fromThrift(
       return -1;
     }
     result.server_to_server_address = sock.value();
+  }
+
+  if (obj.server_thrift_api_address_ref().has_value()) {
+    auto sock =
+        Sockaddr::fromString(obj.server_thrift_api_address_ref().value());
+    if (!sock.has_value()) {
+      ld_error("malformed socket addr field server_thrift_api_address.");
+      return -1;
+    }
+    result.server_thrift_api_address = sock.value();
+  }
+
+  if (obj.client_thrift_api_address_ref().has_value()) {
+    auto sock =
+        Sockaddr::fromString(obj.client_thrift_api_address_ref().value());
+    if (!sock.has_value()) {
+      ld_error("malformed socket addr field client_thrift_api_address.");
+      return -1;
+    }
+    result.client_thrift_api_address = sock.value();
   }
 
   if (obj.location_ref().has_value()) {

@@ -73,6 +73,14 @@ nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
       update_builder.setServerToServerAddress(convert_thrift_address(
           other_addresses.server_to_server_ref().value()));
     }
+    if (other_addresses.server_thrift_api_ref().has_value()) {
+      update_builder.setServerThriftApiAddress(convert_thrift_address(
+          other_addresses.server_thrift_api_ref().value()));
+    }
+    if (other_addresses.client_thrift_api_ref().has_value()) {
+      update_builder.setClientThriftApiAddress(convert_thrift_address(
+          other_addresses.client_thrift_api_ref().value()));
+    }
   }
 
   if (cfg.location_ref().has_value()) {

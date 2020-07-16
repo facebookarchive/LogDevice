@@ -803,13 +803,15 @@ class ClusterFactory {
 
 // All ports logdeviced can listen on.
 struct ServerAddresses {
-  static constexpr size_t COUNT = 7;
+  static constexpr size_t COUNT = 9;
 
   Sockaddr protocol;
   Sockaddr gossip;
   Sockaddr admin;
   Sockaddr server_to_server;
   Sockaddr protocol_ssl;
+  Sockaddr server_thrift_api;
+  Sockaddr client_thrift_api;
 
   // If we're holding open sockets on the above ports, this list contains the
   // fd-s of these sockets. This list is cleared (and sockets closed) just
@@ -824,6 +826,8 @@ struct ServerAddresses {
     }
     node.admin_address.assign(admin);
     node.server_to_server_address.assign(server_to_server);
+    node.server_thrift_api_address.assign(server_thrift_api);
+    node.client_thrift_api_address.assign(client_thrift_api);
   }
 
   static ServerAddresses withTCPPorts(std::vector<detail::PortOwner> ports) {
@@ -835,6 +839,8 @@ struct ServerAddresses {
     r.admin = Sockaddr(addr, ports[3].port);
     r.protocol_ssl = Sockaddr(addr, ports[4].port);
     r.server_to_server = Sockaddr(addr, ports[6].port);
+    r.server_thrift_api = Sockaddr(addr, ports[7].port);
+    r.client_thrift_api = Sockaddr(addr, ports[8].port);
 
     r.owners = std::move(ports);
 
@@ -848,6 +854,8 @@ struct ServerAddresses {
     r.admin = Sockaddr(path + "/socket_admin");
     r.server_to_server = Sockaddr(path + "/socket_server_to_server");
     r.protocol_ssl = Sockaddr(path + "/ssl_socket_main");
+    r.server_thrift_api = Sockaddr(path + "/server_thrift_api");
+    r.client_thrift_api = Sockaddr(path + "/client_thrift_api");
     return r;
   }
 };

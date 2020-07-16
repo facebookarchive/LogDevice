@@ -136,6 +136,26 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
         server_settings_.address, server_settings_.server_to_server_port));
   }
 
+  // Dedicated server-to-server Thrift API address is optional, so only set it
+  // if the unix socket is passed or if the port is greater than the default 0.
+  if (!server_settings_.server_thrift_api_unix_socket.empty()) {
+    update_builder.setServerThriftApiAddress(
+        Sockaddr(server_settings_.server_thrift_api_unix_socket));
+  } else if (server_settings_.server_thrift_api_port > 0) {
+    update_builder.setServerThriftApiAddress(Sockaddr(
+        server_settings_.address, server_settings_.server_thrift_api_port));
+  }
+
+  // Dedicated client-facing Thrift API address is optional, so only set it
+  // if the unix socket is passed or if the port is greater than the default 0.
+  if (!server_settings_.client_thrift_api_unix_socket.empty()) {
+    update_builder.setClientThriftApiAddress(
+        Sockaddr(server_settings_.client_thrift_api_unix_socket));
+  } else if (server_settings_.client_thrift_api_port > 0) {
+    update_builder.setClientThriftApiAddress(Sockaddr(
+        server_settings_.address, server_settings_.client_thrift_api_port));
+  }
+
   if (!server_settings_.location.isEmpty()) {
     update_builder.setLocation(server_settings_.location);
   }

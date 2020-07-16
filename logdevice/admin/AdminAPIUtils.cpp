@@ -236,6 +236,18 @@ void fillNodeConfig(
         server_to_server_address, node_sd->server_to_server_address.value());
     other_addresses.set_server_to_server(std::move(server_to_server_address));
   }
+  if (node_sd->server_thrift_api_address) {
+    thrift::SocketAddress server_thrift_api_address;
+    fillSocketAddress(
+        server_thrift_api_address, node_sd->server_thrift_api_address.value());
+    other_addresses.set_server_thrift_api(std::move(server_thrift_api_address));
+  }
+  if (node_sd->client_thrift_api_address) {
+    thrift::SocketAddress client_thrift_api_address;
+    fillSocketAddress(
+        client_thrift_api_address, node_sd->client_thrift_api_address.value());
+    other_addresses.set_client_thrift_api(std::move(client_thrift_api_address));
+  }
   out.set_other_addresses(std::move(other_addresses));
 }
 

@@ -47,6 +47,16 @@ NodeUpdateBuilder& NodeUpdateBuilder::setServerToServerAddress(Sockaddr addr) {
   return *this;
 }
 
+NodeUpdateBuilder& NodeUpdateBuilder::setServerThriftApiAddress(Sockaddr addr) {
+  server_thrift_api_address_ = std::move(addr);
+  return *this;
+}
+
+NodeUpdateBuilder& NodeUpdateBuilder::setClientThriftApiAddress(Sockaddr addr) {
+  client_thrift_api_address_ = std::move(addr);
+  return *this;
+}
+
 NodeUpdateBuilder& NodeUpdateBuilder::setLocation(NodeLocation loc) {
   location_ = std::move(loc);
   return *this;
@@ -139,6 +149,8 @@ NodeUpdateBuilder::buildNodeServiceDiscovery() {
   sd->ssl_address = std::move(ssl_address_);
   sd->admin_address = std::move(admin_address_);
   sd->server_to_server_address = std::move(server_to_server_address_);
+  sd->server_thrift_api_address = std::move(server_thrift_api_address_);
+  sd->client_thrift_api_address = std::move(client_thrift_api_address_);
   sd->location = std::move(location_);
   sd->roles = roles_;
   sd->tags = std::move(tags_);

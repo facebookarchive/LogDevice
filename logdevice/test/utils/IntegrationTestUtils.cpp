@@ -1262,7 +1262,8 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   node->cmd_args_ = commandArgsForNode(*node);
 
   ld_info("Node N%d:%d will be started on addresses: protocol:%s, ssl:%s"
-          ", gossip:%s, admin:%s (data in %s), server-to-server:%s",
+          ", gossip:%s, admin:%s (data in %s), server-to-server:%s"
+          ", server thrift:%s, client thrift:%s",
           index,
           getNodeReplacementCounter(index),
           node->addrs_.protocol.toString().c_str(),
@@ -1270,7 +1271,9 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
           node->addrs_.gossip.toString().c_str(),
           node->addrs_.admin.toString().c_str(),
           node->data_path_.c_str(),
-          node->addrs_.server_to_server.toString().c_str());
+          node->addrs_.server_to_server.toString().c_str(),
+          node->addrs_.server_thrift_api.toString().c_str(),
+          node->addrs_.client_thrift_api.toString().c_str());
 
   return node;
 }
@@ -1322,14 +1325,16 @@ Cluster::createSelfRegisteringNode(const std::string& name) const {
 
   ld_info("Node %s (with self registration) will be started on addresses: "
           "protocol:%s, ssl: %s, gossip:%s, admin:%s (data in %s), "
-          "server-to-server:%s",
+          "server-to-server:%s, server thrift api:%s, client thrift api:%s",
           name.c_str(),
           node->addrs_.protocol.toString().c_str(),
           node->addrs_.protocol_ssl.toString().c_str(),
           node->addrs_.gossip.toString().c_str(),
           node->addrs_.admin.toString().c_str(),
           node->data_path_.c_str(),
-          node->addrs_.server_to_server.toString().c_str());
+          node->addrs_.server_to_server.toString().c_str(),
+          node->addrs_.server_thrift_api.toString().c_str(),
+          node->addrs_.client_thrift_api.toString().c_str());
 
   return node;
 }
@@ -1359,6 +1364,20 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
       : std::make_pair(
             "--server-to-server-port", ParamValue{std::to_string(s2s.port())});
 
+  const auto& server_thrift = node.addrs_.server_thrift_api;
+  auto server_thrift_addr_param = server_thrift.isUnixAddress()
+      ? std::make_pair("--server-thrift-api-unix-socket",
+                       ParamValue{server_thrift.getPath()})
+      : std::make_pair("--server-thrift-api-port",
+                       ParamValue{std::to_string(server_thrift.port())});
+
+  const auto& client_thrift = node.addrs_.client_thrift_api;
+  auto client_thrift_addr_param = client_thrift.isUnixAddress()
+      ? std::make_pair("--client-thrift-api-unix-socket",
+                       ParamValue{client_thrift.getPath()})
+      : std::make_pair("--client-thrift-api-port",
+                       ParamValue{std::to_string(client_thrift.port())});
+
   // clang-format off
 
   // Construct the default parameters.
@@ -1366,6 +1385,7 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
     { ParamScope::ALL,
       {
         protocol_addr_param, gossip_addr_param, admin_addr_param, s2s_addr_param,
+        server_thrift_addr_param, client_thrift_addr_param,
         {"--name", ParamValue{node.name_}},
         {"--test-mode", ParamValue{"true"}},
         {"--config-path", ParamValue{"file:" + node.config_path_}},

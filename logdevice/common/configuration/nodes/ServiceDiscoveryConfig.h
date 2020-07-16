@@ -73,6 +73,20 @@ struct NodeServiceDiscovery {
   folly::Optional<Sockaddr> server_to_server_address;
 
   /**
+   * The IP (v4 or v6) address, including port number, for server-to-server
+   * Thrift API request traffic. If it's folly::none, it means the node does not
+   * accept requests from other nodes over Thrift.
+   */
+  folly::Optional<Sockaddr> server_thrift_api_address;
+
+  /**
+   * The IP (v4 or v6) address, including port number, for server-facing
+   * Thrift API request traffic. If it's folly::none, it means the node does not
+   * accept requests from clients over Thrift.
+   */
+  folly::Optional<Sockaddr> client_thrift_api_address;
+
+  /**
    * Location information of the node.
    */
   folly::Optional<NodeLocation> location{};
@@ -108,6 +122,8 @@ struct NodeServiceDiscovery {
     return address == rhs.address && gossip_address == rhs.gossip_address &&
         ssl_address == rhs.ssl_address && admin_address == rhs.admin_address &&
         server_to_server_address == rhs.server_to_server_address &&
+        server_thrift_api_address == rhs.server_thrift_api_address &&
+        client_thrift_api_address == rhs.client_thrift_api_address &&
         location == rhs.location && roles == rhs.roles && tags == rhs.tags &&
         name == rhs.name && version == rhs.version;
   }

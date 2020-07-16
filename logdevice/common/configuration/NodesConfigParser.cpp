@@ -41,7 +41,9 @@ parseHostFields(const folly::dynamic&,
                 Sockaddr&, /* gossip address */
                 folly::Optional<Sockaddr>& /* ssl address */,
                 folly::Optional<Sockaddr>& /* admin_address */,
-                folly::Optional<Sockaddr>& /* server_to_server_address */);
+                folly::Optional<Sockaddr>& /* server_to_server_address */,
+                folly::Optional<Sockaddr>& /* server_thrift_api_address */,
+                folly::Optional<Sockaddr>& /* client_thrift_api_address */);
 static bool parseLocation(const folly::dynamic&, Configuration::Node&);
 static bool parseRoles(const folly::dynamic&, Configuration::Node&);
 using RoleParser = bool(const folly::dynamic&, Configuration::Node&);
@@ -214,7 +216,9 @@ static bool parseOneNode(const folly::dynamic& nodeMap,
                          output.gossip_address,
                          output.ssl_address,
                          output.admin_address,
-                         output.server_to_server_address) &&
+                         output.server_to_server_address,
+                         output.server_thrift_api_address,
+                         output.client_thrift_api_address) &&
       parseLocation(nodeMap, output) && parseRoles(nodeMap, output);
 }
 
@@ -291,11 +295,15 @@ parseHostFields(const folly::dynamic& nodeMap,
                 Sockaddr& gossip_addr_out,
                 folly::Optional<Sockaddr>& ssl_addr_out,
                 folly::Optional<Sockaddr>& admin_addr_out,
-                folly::Optional<Sockaddr>& server_to_server_addr_out) {
+                folly::Optional<Sockaddr>& server_to_server_addr_out,
+                folly::Optional<Sockaddr>& server_thrift_api_addr_out,
+                folly::Optional<Sockaddr>& client_thrift_api_addr_out) {
   std::string hostStr;
   std::string gossipAddressStr, adminAddressStr, serverToServerAddressStr;
+  std::string serverThriftApiAddressStr, clientThriftApiAddressStr;
   std::string sslHostStr;
   int sslPort, gossipPort, adminPort, serverToServerPort;
+  int serverThriftApiPort, clientThriftApiPort;
 
   // Parse the name of the node, if it's there
   // TODO(T44427489): Make the name field a required field.
@@ -423,6 +431,60 @@ parseHostFields(const folly::dynamic& nodeMap,
       return false;
     }
     server_to_server_addr_out.assign(server_to_server_addr);
+  }
+
+  if (getIntFromMap<int>(
+          nodeMap, "server_thrift_api_port", serverThriftApiPort)) {
+    size_t posn = hostStr.find_last_of(":");
+    std::string host_prefix = hostStr.substr(0, posn + 1);
+    serverThriftApiAddressStr = host_prefix;
+    serverThriftApiAddressStr += folly::to<std::string>(serverThriftApiPort);
+  } else {
+    // Port not found, looking for unix domain socket / full address
+    if (!getStringFromMap(
+            nodeMap, "server_thrift_api_address", serverThriftApiAddressStr)) {
+      // we don't have a server Thrift API address in this case
+      serverThriftApiAddressStr = "";
+    }
+  }
+  if (!serverThriftApiAddressStr.empty()) {
+    Sockaddr server_thrift_api_addr;
+    if (!parseHostString(serverThriftApiAddressStr,
+                         server_thrift_api_addr,
+                         "server_thrift_api_address")) {
+      ld_warning("parseHostString() failed for server_thrift_api_address:%s",
+                 serverThriftApiAddressStr.c_str());
+      // err set by parseHostString()
+      return false;
+    }
+    server_thrift_api_addr_out.assign(server_thrift_api_addr);
+  }
+
+  if (getIntFromMap<int>(
+          nodeMap, "client_thrift_api_port", clientThriftApiPort)) {
+    size_t posn = hostStr.find_last_of(":");
+    std::string host_prefix = hostStr.substr(0, posn + 1);
+    clientThriftApiAddressStr = host_prefix;
+    clientThriftApiAddressStr += folly::to<std::string>(clientThriftApiPort);
+  } else {
+    // Port not found, looking for unix domain socket / full address
+    if (!getStringFromMap(
+            nodeMap, "client_thrift_api_address", clientThriftApiAddressStr)) {
+      // we don't have a client Thrift API address in this case
+      clientThriftApiAddressStr = "";
+    }
+  }
+  if (!clientThriftApiAddressStr.empty()) {
+    Sockaddr client_thrift_api_addr;
+    if (!parseHostString(clientThriftApiAddressStr,
+                         client_thrift_api_addr,
+                         "client_thrift_api_address")) {
+      ld_warning("parseHostString() failed for client_thrift_api_address:%s",
+                 clientThriftApiAddressStr.c_str());
+      // err set by parseHostString()
+      return false;
+    }
+    client_thrift_api_addr_out.assign(client_thrift_api_addr);
   }
 
   return true;

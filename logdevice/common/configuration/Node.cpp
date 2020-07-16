@@ -22,6 +22,8 @@ Node::Node(const Node& other) {
   ssl_address = other.ssl_address;
   admin_address = other.admin_address;
   server_to_server_address = other.server_to_server_address;
+  server_thrift_api_address = other.server_thrift_api_address;
+  client_thrift_api_address = other.client_thrift_api_address;
   generation = other.generation;
   location = other.location;
   roles = other.roles;

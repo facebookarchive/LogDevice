@@ -30,12 +30,18 @@ const in_port_t kTestDataPort = 4440;
 const in_port_t kTestGossipPort = 4441;
 const in_port_t kTestServerToServerPort = 4442;
 const in_port_t kTestSslPort = 4443;
+const in_port_t kTestClientThriftApiPort = 7440;
+const in_port_t kTestServerThriftApiPort = 7441;
 const in_port_t kTestAdminPort = 6440;
 const Sockaddr kTestSocketAddress = Sockaddr{kTestAddress, kTestDataPort};
 const Sockaddr kTestGossipSocketAddress =
     Sockaddr{kTestAddress, kTestGossipPort};
 const Sockaddr kTestServerToServerSocketAddress =
     Sockaddr{kTestAddress, kTestServerToServerPort};
+const Sockaddr kTestServerThriftApiSocketAddress =
+    Sockaddr{kTestAddress, kTestServerThriftApiPort};
+const Sockaddr kTestClientThriftApiSocketAddress =
+    Sockaddr{kTestAddress, kTestClientThriftApiPort};
 const Sockaddr kTestSslSocketAddress = Sockaddr{kTestAddress, kTestSslPort};
 const Sockaddr kTestAdminSocketAddress = Sockaddr{kTestAddress, kTestAdminPort};
 const uint64_t kTestNodeVersion = 3147;
@@ -172,6 +178,8 @@ TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
                                             kTestSslSocketAddress,
                                             kTestAdminSocketAddress,
                                             kTestServerToServerSocketAddress,
+                                            kTestServerThriftApiSocketAddress,
+                                            kTestClientThriftApiSocketAddress,
                                             kTestNodeLocation,
                                             std::move(roleSet),
                                             tagMap};
@@ -202,6 +210,10 @@ TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
   otherAddresses.set_admin(toThrift(kTestAdminSocketAddress));
   otherAddresses.set_server_to_server(
       toThrift(kTestServerToServerSocketAddress));
+  otherAddresses.set_server_thrift_api(
+      toThrift(kTestServerThriftApiSocketAddress));
+  otherAddresses.set_client_thrift_api(
+      toThrift(kTestClientThriftApiSocketAddress));
   expected.set_other_addresses(std::move(otherAddresses));
 
   expected.set_location(kTestDomainString);

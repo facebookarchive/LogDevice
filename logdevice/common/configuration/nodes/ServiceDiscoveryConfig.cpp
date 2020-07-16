@@ -53,7 +53,11 @@ bool NodeServiceDiscovery::isValid() const {
       !isOptionalFieldValid(ssl_address, "ssl_address") ||
       !isOptionalFieldValid(admin_address, "admin_address") ||
       !isOptionalFieldValid(
-          server_to_server_address, "server_to_server_address")) {
+          server_to_server_address, "server_to_server_address") ||
+      !isOptionalFieldValid(
+          server_thrift_api_address, "server_thrift_api_address") ||
+      !isOptionalFieldValid(
+          client_thrift_api_address, "client_thrift_api_address")) {
     return false;
   }
 
@@ -119,7 +123,7 @@ bool NodeServiceDiscovery::isValidForReset(
 
 std::string NodeServiceDiscovery::toString() const {
   return folly::sformat(
-      "[{} => A:{},G:{},S:{},AA:{},S2SA:{},L:{},R:{},V:{},T:{}]",
+      "[{} => A:{},G:{},S:{},AA:{},S2SA:{},STA:{},CTA:{},L:{},R:{},V:{},T:{}]",
       name,
       address.toString(),
       gossip_address.has_value() ? gossip_address->toString() : "",
@@ -127,6 +131,12 @@ std::string NodeServiceDiscovery::toString() const {
       admin_address.has_value() ? admin_address->toString() : "",
       server_to_server_address.has_value()
           ? server_to_server_address->toString()
+          : "",
+      server_thrift_api_address.has_value()
+          ? server_thrift_api_address->toString()
+          : "",
+      client_thrift_api_address.has_value()
+          ? client_thrift_api_address->toString()
           : "",
       location.has_value() ? location->toString() : "",
       logdevice::toString(roles),

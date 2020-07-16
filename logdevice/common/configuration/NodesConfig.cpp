@@ -148,6 +148,14 @@ folly::dynamic NodesConfig::toJson() const {
       node_dict["server_to_server_address"] =
           node.server_to_server_address->toString();
     }
+    if (node.server_thrift_api_address) {
+      node_dict["server_thrift_api_address"] =
+          node.server_thrift_api_address->toString();
+    }
+    if (node.client_thrift_api_address) {
+      node_dict["client_thrift_api_address"] =
+          node.client_thrift_api_address->toString();
+    }
 
     // Sequencer Role Attributes.
     auto roles = folly::dynamic::array();

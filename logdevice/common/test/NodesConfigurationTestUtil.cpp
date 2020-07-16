@@ -43,6 +43,8 @@ NodeServiceDiscovery genDiscovery(node_index_t n,
                               /*ssl address*/ folly::none,
                               /*admin address*/ Sockaddr(addr, 6440),
                               /*internal address*/ Sockaddr(addr, 4442),
+                              /*server Thrift API*/ Sockaddr(addr, 7441),
+                              /*client Thrift API*/ Sockaddr(addr, 7440),
                               l,
                               roles,
                               tags};

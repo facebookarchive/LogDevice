@@ -29,6 +29,8 @@ typedef u16 node_idx
   9: u64 version;
   10: optional string server_to_server_address;
   11: map<string, string> tags;
+  12: optional string server_thrift_api_address;
+  13: optional string client_thrift_api_address;
 }
 
 struct ServiceDiscoveryConfig {

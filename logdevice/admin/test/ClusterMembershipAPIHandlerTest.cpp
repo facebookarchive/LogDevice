@@ -96,6 +96,10 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
         other_addresses.set_admin(make_address(75 + idx, 4000 + idx));
         other_addresses.set_server_to_server(
             make_address(100 + idx, 5000 + idx));
+        other_addresses.set_server_thrift_api(
+            make_address(125 + idx, 6000 + idx));
+        other_addresses.set_client_thrift_api(
+            make_address(150 + idx, 7000 + idx));
         cfg.set_other_addresses(other_addresses);
       }
 
@@ -403,6 +407,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
   cfg.other_addresses_ref()->gossip_ref()->set_address("/test2");
   cfg.other_addresses_ref()->ssl_ref()->set_address("/test3");
   cfg.other_addresses_ref()->server_to_server_ref()->set_address("/test4");
+  cfg.other_addresses_ref()->server_thrift_api_ref()->set_address("/test5");
+  cfg.other_addresses_ref()->client_thrift_api_ref()->set_address("/test6");
   cfg.storage_ref()->set_weight(123);
   cfg.sequencer_ref()->set_weight(122);
 

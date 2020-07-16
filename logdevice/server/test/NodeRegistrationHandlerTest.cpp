@@ -41,6 +41,10 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
     settings.gossip_unix_socket = folly::format("/{}/gossip", name).str();
     settings.server_to_server_unix_socket =
         folly::format("/{}/server-to-server", name).str();
+    settings.server_thrift_api_unix_socket =
+        folly::format("/{}/server-thrift-api", name).str();
+    settings.client_thrift_api_unix_socket =
+        folly::format("/{}/client-thrift-api", name).str();
     settings.roles = 3 /* sequencer + storage */;
     settings.sequencer_weight = 12;
     settings.storage_capacity = 13;
@@ -99,6 +103,10 @@ TEST_F(NodeRegistrationHandlerTest, testAddNode) {
   EXPECT_EQ("/node1/admin", svd->admin_address->toString());
   EXPECT_EQ(
       "/node1/server-to-server", svd->server_to_server_address->toString());
+  EXPECT_EQ(
+      "/node1/server-thrift-api", svd->server_thrift_api_address->toString());
+  EXPECT_EQ(
+      "/node1/client-thrift-api", svd->client_thrift_api_address->toString());
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
 
@@ -131,6 +139,8 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   settings.ssl_unix_socket = "/new/ssl";
   settings.gossip_unix_socket = "/new/gossip";
   settings.server_to_server_unix_socket = "/new/s2s";
+  settings.server_thrift_api_unix_socket = "/new/sta";
+  settings.client_thrift_api_unix_socket = "/new/cta";
   settings.sequencer_weight = 22;
   settings.storage_capacity = 23;
   settings.admin_enabled = false;
@@ -151,6 +161,8 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   EXPECT_EQ("/new/ssl", svd->ssl_address->toString());
   EXPECT_EQ("/new/gossip", svd->gossip_address->toString());
   EXPECT_EQ("/new/s2s", svd->server_to_server_address->toString());
+  EXPECT_EQ("/new/sta", svd->server_thrift_api_address->toString());
+  EXPECT_EQ("/new/cta", svd->client_thrift_api_address->toString());
   EXPECT_FALSE(svd->admin_address.has_value());
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
