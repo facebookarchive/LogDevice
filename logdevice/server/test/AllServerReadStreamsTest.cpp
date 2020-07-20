@@ -30,6 +30,7 @@ const shard_index_t SHARD_IDX = 0;
 class TestAllServerReadStreams : public AllServerReadStreams {
  public:
   TestAllServerReadStreams(UpdateableSettings<Settings> settings,
+                           UpdateableSettings<ServerSettings> serverSettings,
                            size_t max_read_storage_tasks_mem,
                            worker_id_t worker_id,
                            LogStorageStateMap* log_storage_state_map,
@@ -37,6 +38,7 @@ class TestAllServerReadStreams : public AllServerReadStreams {
                            StatsHolder* stats,
                            bool on_worker_thread)
       : AllServerReadStreams(settings,
+                             serverSettings,
                              max_read_storage_tasks_mem,
                              worker_id,
                              log_storage_state_map,
@@ -84,8 +86,9 @@ TEST(AllServerReadStreamsTest, Subscriptions) {
   LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   const worker_id_t worker_id(1);
   Settings settings = create_default_settings<Settings>();
+  ServerSettings serverSettings = create_default_settings<ServerSettings>();
   AllServerReadStreams streams(
-      settings, 9999, worker_id, &map, nullptr, nullptr, false);
+      settings, serverSettings, 9999, worker_id, &map, nullptr, nullptr, false);
 
   const ClientID c1(111), c2(112);
   const logid_t log1(222), log2(223);
@@ -127,9 +130,16 @@ TEST(AllServerReadStreamsTest, Capacity) {
   LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   const worker_id_t worker_id(1);
   Settings settings = create_default_settings<Settings>();
+  ServerSettings serverSettings = create_default_settings<ServerSettings>();
   settings.max_server_read_streams = 4;
-  AllServerReadStreams streams(
-      settings, 99999, worker_id, &map, nullptr, nullptr, false);
+  AllServerReadStreams streams(settings,
+                               serverSettings,
+                               99999,
+                               worker_id,
+                               &map,
+                               nullptr,
+                               nullptr,
+                               false);
 
   const logid_t log_id(1);
   const read_stream_id_t rs1(1), rs2(2);
@@ -182,8 +192,15 @@ TEST(AllServerReadStreams, OnReleaseUseAfterFree) {
   LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   Settings settings = create_default_settings<Settings>();
   settings.max_server_read_streams = 4;
-  TestAllServerReadStreams streams(
-      settings, 99999, worker_id_t(1), &map, nullptr, nullptr, false);
+  ServerSettings serverSettings = create_default_settings<ServerSettings>();
+  TestAllServerReadStreams streams(settings,
+                                   serverSettings,
+                                   99999,
+                                   worker_id_t(1),
+                                   &map,
+                                   nullptr,
+                                   nullptr,
+                                   false);
 
   const logid_t LOG_ID(1);
   const read_stream_id_t rs1(1), rs2(2);
@@ -207,10 +224,10 @@ TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
   LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
   const worker_id_t worker_id(1);
   Settings settings = create_default_settings<Settings>();
-
+  ServerSettings serverSettings = create_default_settings<ServerSettings>();
   // There is a limit of 100 bytes for memory allocated by ReadStorageTasks.
   TestAllServerReadStreams streams(
-      settings, 100, worker_id, &map, nullptr, nullptr, false);
+      settings, serverSettings, 100, worker_id, &map, nullptr, nullptr, false);
 
   const logid_t log_id(1);
   const read_stream_id_t rs1(1);
@@ -330,5 +347,36 @@ TEST(AllServerReadStreams, ReadStorageTasksMemoryLimit) {
   ASSERT_EQ(0, streams.getTasks().size());
   ASSERT_EQ(100, streams.getMemoryBudget().available());
 
+  streams.clear();
+}
+TEST(AllServerReadStreams, TestLastDeliveredTimestamp) {
+  LogStorageStateMap map(1, /*stats*/ nullptr, /*record_cache*/ false);
+  const worker_id_t worker_id(1);
+  Settings settings = create_default_settings<Settings>();
+  ServerSettings serverSettings = create_default_settings<ServerSettings>();
+  std::chrono::milliseconds millis(1800);
+  serverSettings.automatic_traffic_class_selection_threshhold = millis;
+  // There is a limit of 100 bytes for memory allocated by ReadStorageTasks.
+  TestAllServerReadStreams streams(
+      settings, serverSettings, 100, worker_id, &map, nullptr, nullptr, false);
+
+  const logid_t log_id(1);
+  const read_stream_id_t rs1(1);
+  const ClientID c1(111);
+  const std::string csid{""};
+
+  auto stream = streams.insertOrGet(c1, log_id, SHARD_IDX, csid, rs1).first;
+  ASSERT_NE(stream, nullptr);
+
+  WINDOW_Header window_header{log_id, rs1, {50, 200}};
+  stream->setTrafficClass(TrafficClass::READ_BACKLOG);
+  stream->setWindowHigh(100);
+  stream->until_lsn_ = 300;
+  stream->last_delivered_timestamp_ = SystemTimestamp::now().toMilliseconds();
+  // This is done so that notifyNeedsCatchup is not called
+  stream->rebuilding_ = true;
+  const ClientID client_id_{9999};
+  streams.onWindowMessage(c1, window_header);
+  ASSERT_EQ(stream->trafficClass(), TrafficClass::READ_TAIL);
   streams.clear();
 }

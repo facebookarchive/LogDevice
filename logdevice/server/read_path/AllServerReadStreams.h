@@ -26,6 +26,7 @@
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/Timer.h"
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/protocol/STARTED_Message.h"
 #include "logdevice/common/protocol/STOP_Message.h"
 #include "logdevice/common/protocol/WINDOW_Message.h"
@@ -33,6 +34,7 @@
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
+#include "logdevice/server/ServerSettings.h"
 #include "logdevice/server/read_path/CatchupQueue.h"
 #include "logdevice/server/read_path/LogStorageStateMap.h"
 #include "logdevice/server/read_path/ReadIoShapingCallback.h"
@@ -74,6 +76,7 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
    *                                         on a worker thread.
    */
   AllServerReadStreams(UpdateableSettings<Settings> settings,
+                       UpdateableSettings<ServerSettings> server_settings,
                        size_t max_read_storage_tasks_mem,
                        worker_id_t worker_id,
                        LogStorageStateMap* log_storage_state_map,
@@ -527,6 +530,8 @@ class AllServerReadStreams : public ShardAuthoritativeStatusSubscriber {
   StatsHolder* stats_;
 
   UpdateableSettings<Settings> settings_;
+
+  UpdateableSettings<ServerSettings> server_settings_;
 
   ResourceBudget memory_budget_;
 

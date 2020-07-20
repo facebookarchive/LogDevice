@@ -74,6 +74,7 @@ ServerWorker::ServerWorker(WorkContext::KeepAlive event_loop,
       impl_(new ServerWorkerImpl(this)) {
   server_read_streams_ = std::make_unique<AllServerReadStreams>(
       processor->updateableSettings(),
+      processor_->updateableServerSettings(),
       immutable_settings_->read_storage_tasks_max_mem_bytes /
           immutable_settings_->num_workers,
       idx_,

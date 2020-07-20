@@ -16,6 +16,7 @@
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/ShapingContainer.h"
+#include "logdevice/common/Timestamp.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
@@ -36,6 +37,7 @@ namespace facebook { namespace logdevice {
 
 AllServerReadStreams::AllServerReadStreams(
     UpdateableSettings<Settings> settings,
+    UpdateableSettings<ServerSettings> server_settings,
     size_t max_read_storage_tasks_mem,
     worker_id_t worker_id,
     LogStorageStateMap* log_storage_state_map,
@@ -49,6 +51,7 @@ AllServerReadStreams::AllServerReadStreams(
       processor_(processor),
       stats_(stats),
       settings_(settings),
+      server_settings_(server_settings),
       memory_budget_(max_read_storage_tasks_mem),
       worker_id_(worker_id),
       log_storage_state_map_(log_storage_state_map),
@@ -498,6 +501,12 @@ void AllServerReadStreams::onWindowMessage(ClientID from,
     // sent a gap to the client with higher bound >= window high. We do not
     // need to notify the catchup queue.
     return;
+  }
+
+  if (server_settings_->automatic_traffic_class_selection_threshhold !=
+      std::chrono::milliseconds::zero()) {
+    stream->updateTrafficClass(
+        server_settings_->automatic_traffic_class_selection_threshhold);
   }
 
   if (stream->rebuilding_) {

@@ -140,6 +140,8 @@ class ServerReadStream : boost::noncopyable {
 
   const LocalLogStoreReader::ReadPointer& getReadPtr() const;
 
+  const std::chrono::milliseconds getLastDeliveredTimestamp() const;
+
   /**
    * Change the client provided window.
    */
@@ -255,6 +257,17 @@ class ServerReadStream : boost::noncopyable {
     return flow_group.level(getReadPriority());
   }
 
+  void updateTrafficClass(
+      std::chrono::milliseconds automatic_traffic_class_selection_threshhold) {
+    if (last_delivered_timestamp_ +
+            automatic_traffic_class_selection_threshhold >
+        SystemTimestamp::now().toMilliseconds()) {
+      traffic_class_ = TrafficClass::READ_TAIL;
+    } else {
+      traffic_class_ = TrafficClass::READ_BACKLOG;
+    }
+  }
+
   // Client session ID
   std::string csid_;
 
@@ -287,6 +300,12 @@ class ServerReadStream : boost::noncopyable {
   // Last lsn we delivered to the client. Either the lsn of a record or the
   // higher bound of a gap.
   lsn_t last_delivered_lsn_;
+
+  // timestamp of last delivered record, used to set traffic class based on how
+  // lagging the stream is from current time.
+  std::chrono::milliseconds
+      last_delivered_timestamp_; // TODO: Update details why chose this over
+                                 // read_ptr.lsn in issue and commit message
 
   // Used to remember end lsn for filtered out gap when processing records.
   // Then we can merge filterted out gaps into one interval and reset this

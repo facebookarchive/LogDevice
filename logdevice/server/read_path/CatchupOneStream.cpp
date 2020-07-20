@@ -422,6 +422,7 @@ int ReadingCallback::processRecord(
 
     ld_check(!stream_->storage_task_in_flight_);
     stream_->last_delivered_lsn_ = lsn;
+    stream_->last_delivered_timestamp_ = timestamp;
     stream_->last_delivered_record_ = lsn;
   }
 

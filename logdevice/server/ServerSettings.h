@@ -109,6 +109,7 @@ struct ServerSettings : public SettingsBundle {
   std::string tls_ticket_seeds_path;
 
   bool enable_dscp_reflection;
+  std::chrono::milliseconds automatic_traffic_class_selection_threshhold;
 
  private:
   // Only UpdateableSettings can create this bundle to ensure defaults are

@@ -590,6 +590,20 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "If disabled, server will use default DSCP value ",
      SERVER | REQUIRES_RESTART,
      SettingsCategory::Network)
+
+    ("automatic-traffic-class-selection-threshhold",
+     &automatic_traffic_class_selection_threshhold,"0s",
+     [](std::chrono::milliseconds val) -> void {
+       if (val.count() < 0) {
+         throw boost::program_options::error(
+           "automatic-traffic-class-selection-threshhold must be positive"
+         );
+       }
+     },
+     "If enabled (value greater than 0), traffic classes of read stream are update automatically "
+     "on the basis of how much they have caught up",
+     SERVER,
+     SettingsCategory::Configuration)
     ;
   // clang-format on
 

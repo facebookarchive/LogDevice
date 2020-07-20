@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/read_path/CatchupQueue.h"
 
+#include <chrono>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -60,6 +61,7 @@ class TestAllServerReadStreams : public AllServerReadStreams {
   TestAllServerReadStreams(LogStorageStateMap* log_storage_state_map,
                            InterceptedTasks* tasks)
       : AllServerReadStreams(UpdateableSettings<Settings>(),
+                             UpdateableSettings<ServerSettings>(),
                              1ul << 30,
                              worker_id_t(0),
                              log_storage_state_map,
@@ -200,8 +202,10 @@ class CatchupQueueTest : public ::testing::Test {
                              uint32_t wave = 1,
                              STORE_flags_t flags = 0,
                              folly::StringPiece key = folly::StringPiece(),
-                             bool include_filter = false) const {
-    std::chrono::milliseconds timestamp(0);
+                             bool include_filter = false,
+                             std::chrono::milliseconds timestamp =
+                                 std::chrono::milliseconds::zero()) const {
+    // std::chrono::milliseconds timestamp(0);
 
     STORE_Header header;
     header.rid = RecordID{lsn_to_esn(lsn), lsn_to_epoch(lsn), log_id_};
@@ -533,6 +537,8 @@ TEST_F(CatchupQueueTest, LargeRecordPauses) {
   ServerReadStream& stream1 = createStream(id1);
   stream1.setReadPtr(100);
   stream1.last_delivered_lsn_ = 100 - 1;
+  auto timestamp1 = SystemTimestamp::now().toMilliseconds();
+  stream1.last_delivered_timestamp_ = timestamp1;
   notifyNeedsCatchup(stream1, id1);
   ServerReadStream& stream2 = createStream(id2);
   stream2.setReadPtr(200);
@@ -556,6 +562,7 @@ TEST_F(CatchupQueueTest, LargeRecordPauses) {
   task->records_ = std::move(records);
   task->read_ctx_.read_ptr_ = {lsn_t{102}};
   streams_.onReadTaskDone(*task);
+  ASSERT_NE(stream1.last_delivered_timestamp_, timestamp1);
   // 2 STARTED messages. 2 Records.
   ASSERT_EQ(4, messages_.size());
 
@@ -2129,6 +2136,24 @@ TEST_F(CatchupQueueTest, StreamValidations) {
     streams_.onGapSent(client_id_, *msg, enqueue_time);
     ASSERT_EQ(1, stats.read_stream_gap_violations);
   }
+}
+
+TEST_F(CatchupQueueTest, TestLastDeliveredTimestamp) {
+  read_stream_id_t id1(1);
+  ServerReadStream& stream = createStream(id1);
+  auto timestamp1 = SystemTimestamp::now().toMilliseconds();
+  // check that initially last_delivered_timestamp_ in unset
+  ASSERT_EQ(stream.last_delivered_timestamp_.count(), 0);
+  notifyNeedsCatchup(stream, id1);
+  std::unique_ptr<ReadStorageTask> task = std::move(tasks_.front());
+  ReadStorageTask::RecordContainer records;
+  records.push_back(createFakeRecord(
+      100, 5000, {N1}, 1, 0, folly::StringPiece(), false, timestamp1));
+  task->status_ = E::CAUGHT_UP;
+  task->records_ = std::move(records);
+  streams_.onReadTaskDone(*task);
+  // Check that last_delivered_timestamp_ is updated
+  ASSERT_EQ(stream.last_delivered_timestamp_, timestamp1);  
 }
 
 }} // namespace facebook::logdevice

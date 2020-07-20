@@ -115,6 +115,11 @@ const LocalLogStoreReader::ReadPointer& ServerReadStream::getReadPtr() const {
   return read_ptr_;
 }
 
+const std::chrono::milliseconds
+ServerReadStream::getLastDeliveredTimestamp() const {
+  return last_delivered_timestamp_;
+}
+
 void ServerReadStream::setWindowHigh(lsn_t window_high) {
   const bool was_past_window = isPastWindow();
   window_high_ = window_high;
