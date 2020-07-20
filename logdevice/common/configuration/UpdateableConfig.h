@@ -55,9 +55,10 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
       return nullptr;
     }
     auto logs_config = updateable_logs_config_->get();
+    auto nodes_configuration = updateable_nodes_configuration_->get();
     auto zookeeper_config = updateable_zookeeper_config_->get();
     return std::make_shared<Configuration>(
-        server_config, logs_config, zookeeper_config);
+        server_config, logs_config, nodes_configuration, zookeeper_config);
   }
   std::shared_ptr<ServerConfig> getServerConfig() const {
     return updateable_server_config_->get();

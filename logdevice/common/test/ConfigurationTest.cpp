@@ -600,6 +600,7 @@ TEST(ConfigurationTest, SSLNodeToNode) {
     config =
         std::make_shared<Configuration>(sc->withNodes(sc->getNodesConfig()),
                                         config->logsConfig(),
+                                        nullptr,
                                         config->zookeeperConfig());
     ld_check(config != nullptr);
   };

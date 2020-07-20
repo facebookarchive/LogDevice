@@ -35,10 +35,12 @@ Configuration::getLocalLogsConfig() const {
 Configuration::Configuration(
     std::shared_ptr<ServerConfig> server_config,
     std::shared_ptr<LogsConfig> logs_config,
+    std::shared_ptr<const NodesConfiguration> nodes_configuration,
     std::shared_ptr<facebook::logdevice::configuration::ZookeeperConfig>
         zookeeper_config)
     : server_config_(std::move(server_config)),
       logs_config_(std::move(logs_config)),
+      nodes_configuration_(std::move(nodes_configuration)),
       zookeeper_config_(std::move(zookeeper_config)) {}
 
 LogsConfig::LogGroupNodePtr
@@ -137,8 +139,10 @@ Configuration::fromJson(const folly::dynamic& parsed,
       }
       // We couldn't not parse the logs/defaults section of the config, we will
       // return the nullptr logsconfig.
-      return std::make_unique<Configuration>(
-          std::move(server_config), nullptr, std::move(zookeeper_config));
+      return std::make_unique<Configuration>(std::move(server_config),
+                                             nullptr,
+                                             nullptr,
+                                             std::move(zookeeper_config));
     }
     local_logs_config->setInternalLogsConfig(
         server_config->getInternalLogsConfig());
@@ -151,8 +155,10 @@ Configuration::fromJson(const folly::dynamic& parsed,
   // specified in the server config).
   logs_config->setNamespaceDelimiter(server_config->getNamespaceDelimiter());
 
-  return std::make_unique<Configuration>(
-      std::move(server_config), logs_config, std::move(zookeeper_config));
+  return std::make_unique<Configuration>(std::move(server_config),
+                                         logs_config,
+                                         nullptr,
+                                         std::move(zookeeper_config));
 }
 
 std::unique_ptr<Configuration>
@@ -198,7 +204,7 @@ Configuration::loadFromString(const std::string& server,
         LocalLogsConfig::fromJson(logs, *server_config, ConfigParserOptions());
     if (logs_config) {
       return std::make_unique<Configuration>(
-          server_config, logs_config, zookeeper_config);
+          server_config, logs_config, nullptr, zookeeper_config);
     }
   }
   return nullptr;

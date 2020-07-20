@@ -65,6 +65,8 @@ class Configuration {
   using NodeRole = facebook::logdevice::configuration::NodeRole;
   using Nodes = facebook::logdevice::configuration::Nodes;
   using NodesConfig = facebook::logdevice::configuration::NodesConfig;
+  using NodesConfiguration =
+      facebook::logdevice::configuration::nodes::NodesConfiguration;
   using SecurityConfig = facebook::logdevice::configuration::SecurityConfig;
   using SequencersConfig = facebook::logdevice::configuration::SequencersConfig;
   using TrafficShapingConfig =
@@ -72,9 +74,11 @@ class Configuration {
   using MetaDataLogsConfig =
       facebook::logdevice::configuration::MetaDataLogsConfig;
 
-  Configuration(std::shared_ptr<ServerConfig> server_config,
-                std::shared_ptr<LogsConfig> logs_config,
-                std::shared_ptr<ZookeeperConfig> zookeeper_config = nullptr);
+  Configuration(
+      std::shared_ptr<ServerConfig> server_config,
+      std::shared_ptr<LogsConfig> logs_config,
+      std::shared_ptr<const NodesConfiguration> nodes_configuration = nullptr,
+      std::shared_ptr<ZookeeperConfig> zookeeper_config = nullptr);
 
   /**
    * NOTE: This returns a *reference* to the shared_ptr, but the shared_ptr and
@@ -86,9 +90,14 @@ class Configuration {
     return server_config_;
   }
 
-  const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
+  const std::shared_ptr<const NodesConfiguration>&
   getNodesConfigurationFromServerConfigSource() const {
     return server_config_->getNodesConfigurationFromServerConfigSource();
+  }
+
+  const std::shared_ptr<const NodesConfiguration>&
+  getNodesConfiguration() const {
+    return nodes_configuration_;
   }
 
   /**
@@ -238,16 +247,13 @@ class Configuration {
   std::chrono::seconds getMaxBacklogDuration() const;
 
   std::string toString() const;
-  std::unique_ptr<Configuration> copy() const {
-    return std::make_unique<Configuration>(
-        server_config_->copy(), logs_config_->copy());
-  }
 
  private:
   static std::unique_ptr<Configuration>
   loadFromString(const std::string& server, const std::string& logs);
   const std::shared_ptr<ServerConfig> server_config_;
   const std::shared_ptr<LogsConfig> logs_config_;
+  const std::shared_ptr<const NodesConfiguration> nodes_configuration_;
   const std::shared_ptr<ZookeeperConfig> zookeeper_config_;
 };
 }} // namespace facebook::logdevice
