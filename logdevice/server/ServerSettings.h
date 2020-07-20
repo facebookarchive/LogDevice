@@ -34,10 +34,10 @@ struct ServerSettings : public SettingsBundle {
 
   /**
    * Validates and parses a string containing a list of tags (key-value pairs).
-   * The list of key-value pairs must be separated by commas. Keys and values
-   * must contain only alphanumeric or underscore characters. Values can be
-   * empty, but keys must not. Key-value pairs are specified as "key:value".
-   * Example: key_1:value_1,key_2:,key_3:value_3
+   * The list of key-value pairs must be separated by commas. Keys must not
+   * contain colons or commas and values can contain anything but commas. Values
+   * can be empty, but keys must not. Key-value pairs are specified as
+   * "key:value". Example: key_1:value_1,key_2:,key_3:value_3
    */
   static NodesConfigTagMapT parse_tags(const std::string& tags_string);
 

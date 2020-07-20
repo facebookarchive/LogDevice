@@ -287,7 +287,7 @@ sidebar_label: Settings
 | ssl-port | [Only used when node self registration is enabled] TCP port on which the server listens for SSL clients. A value of zero means that the server won't listen for SSL connections. | 0 | requires&nbsp;restart, server&nbsp;only |
 | ssl-unix-socket | [Only used when node self registration is enabled] Path to the unix domain socket the server will use to listen for SSL clients |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | storage-capacity | [Only used when node self registration is enabled] defines a proportional value for the amount of data to be stored compared to other machines. When e.g. total disk size is used as weight for machines with variable disk sizes, the storage will be used proportionally.  | 1 | requires&nbsp;restart, server&nbsp;only |
-| tags | [Only used when node self registration is enabled] Arbitrary key:value pairs to be associated with this node. Values might be empty. Example: key\_1:value\_1,key\_2:,key\_3:value\_3 |  | requires&nbsp;restart, server&nbsp;only |
+| tags | [Only used when node self registration is enabled] Tags to be associated with this node. Tags are specified as a list of key-value pairs, separated by commas. Keys must not contain colons or commas and values can contain anything but commas. Values can be empty, but keys must not. Key-value pairs are specified as "key:value". Example: key\_1:value\_1,key\_2:,key\_3:value\_3. |  | requires&nbsp;restart, server&nbsp;only |
 
 ## Performance
 |   Name    |   Description   |  Default  |   Notes   |

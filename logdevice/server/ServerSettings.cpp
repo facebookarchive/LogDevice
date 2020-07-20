@@ -28,11 +28,12 @@ ServerSettings::parse_tags(const std::string& tags_string) {
     return {};
   }
 
-  if (!std::regex_match(tags_string, std::regex("(\\w+:\\w*)(,\\w+:\\w*)*"))) {
+  if (!std::regex_match(
+          tags_string, std::regex("[^,]+:[^,]*(,[^,]+:[^,]*)*"))) {
     throw boost::program_options::error(
         "Invalid tags list format. Expected list of key-value pairs, separated "
-        "by commas. Keys and values must contain only alphanumeric or "
-        "underscore characters. Values can be empty, but keys must not. "
+        "by commas. Keys must not contain colons or commas and values can "
+        "contain anything but commas. Values can be empty, but keys must not. "
         "Key-value pairs are specified as \"key:value\". Example: "
         "key_1:value_1,key_2:,key_3:value_3");
   }
@@ -610,9 +611,11 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
 
     ("tags", &tags, "",
      parse_tags,
-     "[Only used when node self registration is enabled] Arbitrary key:value pairs "
-     "to be associated with this node. Values might be empty. Example: "
-     "key_1:value_1,key_2:,key_3:value_3",
+     "[Only used when node self registration is enabled] Tags to be associated with "
+     "this node. Tags are specified as a list of key-value pairs, separated by commas. "
+     "Keys must not contain colons or commas and values can contain anything but "
+     "commas. Values can be empty, but keys must not. Key-value pairs are specified "
+     "as \"key:value\". Example: key_1:value_1,key_2:,key_3:value_3.",
      SERVER | REQUIRES_RESTART,
      SettingsCategory::NodeRegistration)
 
