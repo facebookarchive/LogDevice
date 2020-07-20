@@ -26,21 +26,20 @@ class MockAppendRequest : public AppendRequest {
  public:
   using MockSender = SenderTestProxy<MockAppendRequest>;
   MockAppendRequest(logid_t log_id,
-                    std::shared_ptr<Configuration> configuration,
+                    std::shared_ptr<const NodesConfiguration> nodes_config,
                     std::shared_ptr<SequencerLocator> locator,
                     ClusterState* cluster_state)
-      : AppendRequest(
-            nullptr,
-            log_id,
-            AppendAttributes(),
-            PayloadHolder(),
-            std::chrono::milliseconds(0),
-            append_callback_t(),
-            std::make_unique<MockSequencerRouter>(log_id,
-                                                  this,
-                                                  configuration->serverConfig(),
-                                                  locator,
-                                                  cluster_state)),
+      : AppendRequest(nullptr,
+                      log_id,
+                      AppendAttributes(),
+                      PayloadHolder(),
+                      std::chrono::milliseconds(0),
+                      append_callback_t(),
+                      std::make_unique<MockSequencerRouter>(log_id,
+                                                            this,
+                                                            nodes_config,
+                                                            locator,
+                                                            cluster_state)),
         settings_(create_default_settings<Settings>()) {
     dbg::assertOnData = true;
 
@@ -101,16 +100,12 @@ class AppendRequestTest : public ::testing::Test {
             size_t nlogs,
             LocatorType type = LocatorType::HASH_BASED) {
     auto simple_config = createSimpleConfig(nnodes, nlogs);
-    config_ = UpdateableConfig::createEmpty();
-    config_->updateableServerConfig()->update(simple_config->serverConfig());
-    config_->updateableLogsConfig()->update(simple_config->logsConfig());
+    config_ = std::make_shared<UpdateableConfig>(simple_config);
     cluster_state_ = std::make_unique<MockClusterState>(nnodes);
     switch (type) {
       case LocatorType::HASH_BASED:
         locator_ = std::make_unique<MockHashBasedSequencerLocator>(
-            config_->updateableServerConfig(),
-            cluster_state_.get(),
-            simple_config);
+            cluster_state_.get(), simple_config);
         break;
       case LocatorType::STATIC:
         locator_ = std::make_unique<StaticSequencerLocator>(config_);
@@ -119,8 +114,10 @@ class AppendRequestTest : public ::testing::Test {
   }
 
   std::unique_ptr<MockAppendRequest> create(logid_t log_id) {
-    return std::make_unique<MockAppendRequest>(
-        log_id, config_->get(), locator_, cluster_state_.get());
+    return std::make_unique<MockAppendRequest>(log_id,
+                                               config_->getNodesConfiguration(),
+                                               locator_,
+                                               cluster_state_.get());
   }
 
   bool isNodeAlive(NodeID node_id) {
@@ -269,15 +266,17 @@ TEST_F(AppendRequestTest, SequencerAffinityTest) {
   config_ = std::make_shared<UpdateableConfig>(Configuration::fromJsonFile(
       TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf")));
 
+  // TODO Replace getNodesConfigurationFromServerConfigSource when we can
+  // correctly build a nodes config from file
+  config_->updateableNodesConfiguration()->update(
+      config_->getNodesConfigurationFromServerConfigSource());
+
   cluster_state_ = std::make_unique<MockClusterState>(
-      config_->getNodesConfigurationFromServerConfigSource()->clusterSize());
+      config_->getNodesConfiguration()->clusterSize());
 
   settings.use_sequencer_affinity = true;
   locator_ = std::make_unique<MockHashBasedSequencerLocator>(
-      config_->updateableServerConfig(),
-      cluster_state_.get(),
-      config_->get(),
-      settings);
+      cluster_state_.get(), config_->get(), settings);
 
   // Log with id 1 prefers rgn1. N0 is the only node in that region.
   auto rq = create(logid_t(1));
@@ -299,10 +298,7 @@ TEST_F(AppendRequestTest, SequencerAffinityTest) {
   // use-sequencer-affinity is false.
   settings.use_sequencer_affinity = false;
   locator_ = std::make_unique<MockHashBasedSequencerLocator>(
-      config_->updateableServerConfig(),
-      cluster_state_.get(),
-      config_->get(),
-      settings);
+      cluster_state_.get(), config_->get(), settings);
 
   rq = create(logid_t(2));
   ASSERT_EQ(Request::Execution::CONTINUE, rq->execute());

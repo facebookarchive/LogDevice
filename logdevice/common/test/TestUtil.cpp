@@ -205,8 +205,7 @@ createMetaDataLogsConfig(const ServerConfig::NodesConfig& nodes_config,
                                   sync_replication_scope);
 }
 
-std::shared_ptr<Configuration>
-createSimpleConfig(ServerConfig::NodesConfig nodes, size_t logs) {
+std::shared_ptr<Configuration> createSimpleConfig(size_t nnodes, size_t logs) {
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(1);
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
   logs_config->insert(
@@ -214,29 +213,20 @@ createSimpleConfig(ServerConfig::NodesConfig nodes, size_t logs) {
       "log1",
       log_attrs);
 
-  ServerConfig::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes, 1, 1);
+  auto nodes = createSimpleNodesConfig(nnodes);
+  nodes =
+      nodes->applyUpdate(NodesConfigurationTestUtil::setStorageMembershipUpdate(
+          *nodes,
+          {ShardID(0, -1)},
+          membership::StorageState::READ_WRITE,
+          membership::MetaDataStorageState::METADATA));
+  nodes = nodes->applyUpdate(
+      NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+          *nodes, ReplicationProperty{{NodeLocationScope::NODE, 1}}));
 
-  auto server_config = ServerConfig::fromDataTest(__FILE__, nodes, meta_config);
+  auto server_config = ServerConfig::fromDataTest(__FILE__);
   return std::make_shared<Configuration>(
-      std::move(server_config), std::move(logs_config));
-}
-
-std::shared_ptr<Configuration> createSimpleConfig(size_t nnodes, size_t logs) {
-  ServerConfig::Nodes nodes;
-  for (size_t i = 0; i < nnodes; ++i) {
-    Configuration::Node node;
-    node.name = folly::sformat("server-{}", i);
-    node.address = Sockaddr("::1", folly::to<std::string>(4440 + i));
-    node.gossip_address =
-        Sockaddr("::1", folly::to<std::string>(4440 + nnodes + i));
-    node.generation = 1;
-    node.addSequencerRole();
-    node.addStorageRole(/*num_shards*/ 2);
-    nodes[i] = std::move(node);
-  }
-  ServerConfig::NodesConfig nodes_config(nodes);
-  return createSimpleConfig(std::move(nodes_config), logs);
+      std::move(server_config), std::move(logs_config), std::move(nodes));
 }
 
 int wait_until(const char* reason,

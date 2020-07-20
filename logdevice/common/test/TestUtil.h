@@ -133,16 +133,6 @@ ServerConfig::MetaDataLogsConfig createMetaDataLogsConfig(
 std::shared_ptr<Configuration> createSimpleConfig(size_t nodes, size_t logs);
 
 /**
- * Creates a simple config with the given node configuration and the target
- * number of logs.
- *
- *  @param nodes    node configuration
- *  @param logs     how many logs to use (1..logs)
- */
-std::shared_ptr<Configuration>
-createSimpleConfig(ServerConfig::NodesConfig nodes, size_t logs);
-
-/**
  * Waits until a condition is satisfied.  The condition is periodically
  * evaluated with sleeping inbetween.
  * The condition is always checked at least once, even if deadline is in the

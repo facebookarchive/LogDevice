@@ -27,13 +27,14 @@ class MockGetRsmSnapshotRequest : public GetRsmSnapshotRequest {
   using MockSender = SenderTestProxy<MockGetRsmSnapshotRequest>;
 
  public:
-  MockGetRsmSnapshotRequest(Settings settings,
-                            std::shared_ptr<ServerConfig> config,
-                            ClusterState* cluster_state,
-                            RSMSnapshotStore::snapshot_cb_t cb)
+  MockGetRsmSnapshotRequest(
+      Settings settings,
+      std::shared_ptr<const NodesConfiguration> nodes_config,
+      ClusterState* cluster_state,
+      RSMSnapshotStore::snapshot_cb_t cb)
       : GetRsmSnapshotRequest(0, WorkerType::GENERAL, "1", LSN_OLDEST, cb),
         settings_(settings),
-        config_(config),
+        nodes_config_(nodes_config),
         cluster_state_(cluster_state) {
     sender_ = std::make_unique<MockSender>(this);
   }
@@ -64,7 +65,7 @@ class MockGetRsmSnapshotRequest : public GetRsmSnapshotRequest {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
   bool canSendToImpl(const Address&, TrafficClass, BWAvailableCallback&) {
@@ -101,7 +102,7 @@ class MockGetRsmSnapshotRequest : public GetRsmSnapshotRequest {
 
   std::vector<NodeID> recipients_;
   Settings settings_;
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   GetRsmSnapshotRequestTest* test_;
   ClusterState* cluster_state_;
 };
@@ -109,7 +110,7 @@ class MockGetRsmSnapshotRequest : public GetRsmSnapshotRequest {
 class GetRsmSnapshotRequestTest : public ::testing::Test {
  public:
   void init(size_t nnodes, size_t nlogs) {
-    config_ = createSimpleConfig(nnodes, nlogs);
+    nodes_config_ = createSimpleNodesConfig(nnodes);
     cluster_state_ = std::make_unique<MockClusterState>(nnodes);
   }
 
@@ -129,7 +130,7 @@ class GetRsmSnapshotRequestTest : public ::testing::Test {
       status_ = st;
     };
     return std::make_unique<MockGetRsmSnapshotRequest>(
-        settings, config_->serverConfig(), cluster_state_.get(), snapshot_cb);
+        settings, nodes_config_, cluster_state_.get(), snapshot_cb);
   }
 
   void checkStatus(Status st) {
@@ -141,7 +142,7 @@ class GetRsmSnapshotRequestTest : public ::testing::Test {
   }
 
  private:
-  std::shared_ptr<Configuration> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   std::unique_ptr<ClusterState> cluster_state_;
 
   bool callback_called_{false};

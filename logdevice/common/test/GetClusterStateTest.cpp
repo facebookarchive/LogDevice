@@ -18,17 +18,18 @@ namespace facebook { namespace logdevice {
 
 class MockGetClusterStateRequest : public GetClusterStateRequest {
  public:
-  MockGetClusterStateRequest(Settings settings,
-                             std::shared_ptr<ServerConfig> config,
-                             ClusterState* cluster_state,
-                             get_cs_callback_t cb,
-                             folly::Optional<NodeID> dest = folly::none)
+  MockGetClusterStateRequest(
+      Settings settings,
+      std::shared_ptr<const NodesConfiguration> nodes_config,
+      ClusterState* cluster_state,
+      get_cs_callback_t cb,
+      folly::Optional<NodeID> dest = folly::none)
       : GetClusterStateRequest(settings.get_cluster_state_timeout,
                                settings.get_cluster_state_wave_timeout,
                                cb,
                                dest),
         settings_(settings),
-        config_(config),
+        nodes_config_(nodes_config),
         cluster_state_(cluster_state) {}
 
  protected:
@@ -38,7 +39,7 @@ class MockGetClusterStateRequest : public GetClusterStateRequest {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
   ClusterState* getClusterState() const override {
@@ -59,7 +60,7 @@ class MockGetClusterStateRequest : public GetClusterStateRequest {
  public:
   std::vector<NodeID> recipients_;
   Settings settings_;
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   ClusterState* cluster_state_;
 };
 
@@ -91,7 +92,11 @@ class GetClusterStateTest : public ::testing::Test {
     settings.get_cluster_state_timeout = timeout;
     settings.get_cluster_state_wave_timeout = wave_timeout;
     return std::make_unique<MockGetClusterStateRequest>(
-        settings, config_->serverConfig(), cluster_state_.get(), cb, dest);
+        settings,
+        config_->getNodesConfiguration(),
+        cluster_state_.get(),
+        cb,
+        dest);
   }
 
   void checkStatus(Status st) {

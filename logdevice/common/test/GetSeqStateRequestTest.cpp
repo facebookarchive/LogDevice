@@ -24,7 +24,7 @@ class MockGetSeqStateRequest : public GetSeqStateRequest {
  public:
   MockGetSeqStateRequest(logid_t log_id,
                          GetSeqStateRequest::Options options,
-                         std::shared_ptr<const Configuration> config,
+                         std::shared_ptr<const NodesConfiguration> nodes_config,
                          std::shared_ptr<SequencerLocator> locator,
                          ClusterState* cluster_state)
       : GetSeqStateRequest(
@@ -33,7 +33,7 @@ class MockGetSeqStateRequest : public GetSeqStateRequest {
             std::move(options),
             std::make_unique<MockSequencerRouter>(log_id,
                                                   this,
-                                                  config->serverConfig(),
+                                                  nodes_config,
                                                   locator,
                                                   cluster_state)) {}
 
@@ -67,17 +67,18 @@ class GetSeqStateRequestTest : public ::testing::Test {
     config_ = std::make_shared<UpdateableConfig>(simple_config);
     cluster_state_ = std::make_unique<MockClusterState>(nnodes);
     locator_ = std::make_unique<MockHashBasedSequencerLocator>(
-        config_->updateableServerConfig(), cluster_state_.get(), simple_config);
+        cluster_state_.get(), simple_config);
     dbg::assertOnData = true;
   }
 
   std::unique_ptr<MockGetSeqStateRequest>
   create(logid_t log_id, GetSeqStateRequest::Options options) {
-    return std::make_unique<MockGetSeqStateRequest>(log_id,
-                                                    std::move(options),
-                                                    config_->get(),
-                                                    locator_,
-                                                    cluster_state_.get());
+    return std::make_unique<MockGetSeqStateRequest>(
+        log_id,
+        std::move(options),
+        config_->getNodesConfiguration(),
+        locator_,
+        cluster_state_.get());
   }
 
   void onReplyTimeout(std::unique_ptr<MockGetSeqStateRequest>& req,

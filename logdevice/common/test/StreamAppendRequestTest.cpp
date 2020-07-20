@@ -26,13 +26,14 @@ class MockStreamAppendRequest : public StreamAppendRequest {
   // internally calls 'canSendToImpl' and 'sendMessageImpl'
   using MockSender = SenderTestProxy<MockStreamAppendRequest>;
 
-  MockStreamAppendRequest(logid_t log_id,
-                          std::shared_ptr<Configuration> configuration,
-                          std::shared_ptr<SequencerLocator> locator,
-                          ClusterState* cluster_state,
-                          PayloadHolder payload,
-                          write_stream_request_id_t stream_rqid,
-                          bool stream_resume)
+  MockStreamAppendRequest(
+      logid_t log_id,
+      std::shared_ptr<const NodesConfiguration> nodes_config,
+      std::shared_ptr<SequencerLocator> locator,
+      ClusterState* cluster_state,
+      PayloadHolder payload,
+      write_stream_request_id_t stream_rqid,
+      bool stream_resume)
       : StreamAppendRequest(
             nullptr,
             log_id,
@@ -42,7 +43,7 @@ class MockStreamAppendRequest : public StreamAppendRequest {
             append_callback_t(),
             std::make_unique<MockSequencerRouter>(log_id,
                                                   this,
-                                                  configuration->serverConfig(),
+                                                  nodes_config,
                                                   locator,
                                                   cluster_state),
             stream_rqid,
@@ -143,12 +144,10 @@ class StreamAppendRequestTest : public ::testing::Test {
  public:
   void init(size_t nnodes, size_t nlogs) {
     auto simple_config = createSimpleConfig(nnodes, nlogs);
-    config_ = UpdateableConfig::createEmpty();
-    config_->updateableServerConfig()->update(simple_config->serverConfig());
-    config_->updateableLogsConfig()->update(simple_config->logsConfig());
+    nodes_config_ = simple_config->getNodesConfiguration();
     cluster_state_ = std::make_unique<MockClusterState>(nnodes);
     locator_ = std::make_unique<MockHashBasedSequencerLocator>(
-        config_->updateableServerConfig(), cluster_state_.get(), simple_config);
+        cluster_state_.get(), simple_config);
   }
 
   std::unique_ptr<MockStreamAppendRequest> create(logid_t log_id,
@@ -160,7 +159,7 @@ class StreamAppendRequestTest : public ::testing::Test {
         write_stream_seq_num_t(write_stream_seq_num)};
     return std::make_unique<MockStreamAppendRequest>(
         log_id,
-        config_->get(),
+        nodes_config_,
         locator_,
         cluster_state_.get(),
         MockStreamAppendRequest::makePayload(
@@ -169,7 +168,7 @@ class StreamAppendRequestTest : public ::testing::Test {
         stream_resume);
   }
 
-  std::shared_ptr<UpdateableConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   std::shared_ptr<SequencerLocator> locator_;
   std::unique_ptr<ClusterState> cluster_state_;
 };
