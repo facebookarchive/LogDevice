@@ -24,6 +24,7 @@ struct NodeTemplate {
   configuration::nodes::NodeServiceDiscovery::TagMap tags{kTestTags};
   std::string location{};
   double sequencer_weight{1.0};
+  double capacity{1.0};
   shard_size_t num_shards{2};
   bool metadata_node{false};
   node_gen_t generation{1};
@@ -50,6 +51,10 @@ std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
 configuration::nodes::NodesConfiguration::Update
 addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
                  NodeTemplate node);
+
+configuration::nodes::NodesConfiguration::Update
+addNewNodesUpdate(const configuration::nodes::NodesConfiguration& existing,
+                  std::vector<NodeTemplate> nodes);
 
 // Create an NC::Update to transition all PROVISIONING shards to NONE by
 // applying a MARK_SHARD_PROVISIONED transition.
@@ -100,5 +105,21 @@ enablingReadUpdate(membership::MembershipVersion::Type base_version);
 // start disabling writes on N11 and N13
 configuration::nodes::NodesConfiguration::Update
 disablingWriteUpdate(membership::MembershipVersion::Type base_version);
+
+configuration::nodes::NodesConfiguration::Update setStorageMembershipUpdate(
+    const configuration::nodes::NodesConfiguration& existing,
+    std::vector<ShardID> shards,
+    folly::Optional<membership::StorageState> target_storage_state,
+    folly::Optional<membership::MetaDataStorageState> target_metadata_state);
+
+configuration::nodes::NodesConfiguration::Update excludeFromNodesetUpdate(
+    const configuration::nodes::NodesConfiguration& existing,
+    std::vector<node_index_t> nodes,
+    bool target_exclude_from_nodeset);
+
+configuration::nodes::NodesConfiguration::Update
+setMetadataReplicationPropertyUpdate(
+    const configuration::nodes::NodesConfiguration& existing,
+    ReplicationProperty metadata_rep);
 
 }}} // namespace facebook::logdevice::NodesConfigurationTestUtil

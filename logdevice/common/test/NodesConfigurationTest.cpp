@@ -664,7 +664,7 @@ TEST_F(NodesConfigurationTest, StorageHash) {
 TEST_F(NodesConfigurationTest, WritableStorageCapacity) {
   auto config = provisionNodes(
       initialAddShardsUpdate(
-          {{13, kBothRoles, {}, "a.b.c.d.e", 1.0, /*num_shards*/ 2}}),
+          {{13, kBothRoles, {}, "a.b.c.d.e", 1.0, 256.0, /*num_shards*/ 2}}),
       {ShardID(13, 0), ShardID(13, 1)});
   ASSERT_TRUE(config->validate());
 
