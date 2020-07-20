@@ -24,6 +24,7 @@
 #include "logdevice/common/protocol/GOSSIP_Message.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/GossipSettings.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/ServerSettings.h"
@@ -57,12 +58,11 @@ class MockFailureDetector : public FailureDetector {
                                ServerProcessor* p)
       : FailureDetector(std::move(settings), p, /* stats */ nullptr),
         my_node_id_(p->getMyNodeID()),
-        config_(p->config_->get()->serverConfig()),
-        cluster_state_(new ClusterState(
-            1000,
-            nullptr,
-            *config_->getNodesConfigurationFromServerConfigSource()
-                 ->getServiceDiscovery())) {
+        nodes_config_(p->config_->getNodesConfiguration()),
+        cluster_state_(
+            new ClusterState(1000,
+                             nullptr,
+                             *nodes_config_->getServiceDiscovery())) {
     // Hijack the FailureDetector's startup sequence to not do anything on a
     // worker and to not start any timers.
     // In real code you would call FailureDetector::start(), which would
@@ -83,7 +83,7 @@ class MockFailureDetector : public FailureDetector {
   }
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
   NodeID getMyNodeID() const override {
     return my_node_id_;
@@ -130,7 +130,7 @@ class MockFailureDetector : public FailureDetector {
 
   MockBoycottTracker mock_tracker_;
   NodeID my_node_id_;
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   std::unique_ptr<ClusterState> cluster_state_;
   std::atomic<bool> report_logsconfig_loaded_{true};
 };
@@ -151,27 +151,22 @@ class FailureDetectorTest : public testing::Test {
 };
 
 // generates a dummy config consisting of num_nodes sequencers
-std::shared_ptr<ServerConfig> gen_config(size_t num_nodes,
-                                         node_index_t this_node) {
-  configuration::Nodes nodes;
+std::shared_ptr<Configuration> gen_config(size_t num_nodes) {
+  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
   for (node_index_t i = 0; i < num_nodes; ++i) {
-    auto& node = nodes[i];
-    node.address =
-        Sockaddr(get_localhost_address_str(), folly::to<std::string>(1337 + i));
-    node.generation = 1;
-    node.addSequencerRole();
-    node.addStorageRole();
+    nodes.push_back({
+        .id = i,
+        .metadata_node = true,
+    });
   }
-
-  Configuration::NodesConfig nodes_config(std::move(nodes));
-
   // metadata stored on all nodes with max replication factor 3
-  configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 3}});
 
-  std::shared_ptr<ServerConfig> config =
-      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config);
-  return config;
+  return std::make_shared<Configuration>(
+      ServerConfig::fromDataTest(__FILE__),
+      std::make_shared<configuration::LocalLogsConfig>(),
+      std::move(nodes_configuration));
 }
 
 std::pair<std::shared_ptr<ServerProcessor>, MockFailureDetector*>
@@ -185,14 +180,19 @@ make_processor_with_detector(node_index_t nid,
   main_settings.num_workers = 1;
   main_settings.worker_request_pipe_capacity = 1000000;
 
+  // TODO the following 2 settings are required to make the NCPublisher pick
+  // the NCM NodesConfiguration. Should be removed when NCM is the default.
+  main_settings.enable_nodes_configuration_manager = true;
+  main_settings.use_nodes_configuration_manager_nodes_configuration = true;
+
   if (!create_monitor)
     main_settings.enable_health_monitor = false;
 
   /* make config for this index */
   std::shared_ptr<UpdateableConfig> uconfig =
-      std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
-          gen_config(num_nodes, nid),
-          std::make_shared<configuration::LocalLogsConfig>()));
+      std::make_shared<UpdateableConfig>(gen_config(num_nodes));
+  uconfig->updateableNCMNodesConfiguration()->update(
+      uconfig->getNodesConfiguration());
 
   auto processor_builder = TestServerProcessorBuilder{main_settings}
                                .setServerSettings(server_settings)

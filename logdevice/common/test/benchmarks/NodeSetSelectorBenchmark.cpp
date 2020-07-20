@@ -11,6 +11,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
 namespace facebook { namespace logdevice {
 
@@ -19,25 +20,22 @@ namespace facebook { namespace logdevice {
 static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
   std::shared_ptr<Configuration> config;
   BENCHMARK_SUSPEND {
-    configuration::Nodes nodes;
+    std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
     const int nodes_per_rack = 20;
     for (int rack = 0; rack < 10; ++rack) {
       for (int node = 0; node < nodes_per_rack; ++node) {
         configuration::Node n;
-        node_index_t id = rack * nodes_per_rack + node;
-        n.address = Sockaddr("::1", std::to_string(id));
-        NodeLocation loc;
-        int rv = loc.fromDomainString("region.dc.cluster.row.rack" +
-                                      std::to_string(rack));
-        ld_check(rv == 0);
-        n.location = std::move(loc);
-        n.addStorageRole(1);
-
-        nodes[id] = std::move(n);
+        nodes.push_back(NodesConfigurationTestUtil::NodeTemplate{
+            .id = node_index_t(rack * nodes_per_rack + node),
+            .location = "region.dc.cluster.row.rack" + std::to_string(rack),
+            .num_shards = 1,
+            .roles = NodesConfigurationTestUtil::kBothRoles,
+        });
       }
     }
 
-    Configuration::NodesConfig nodes_config(std::move(nodes));
+    auto nodes_config =
+        NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
 
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     auto log_attrs = logsconfig::LogAttributes().with_replicateAcross(
@@ -48,21 +46,20 @@ static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
         log_attrs);
 
     config = std::make_shared<Configuration>(
-        ServerConfig::fromDataTest(
-            "NodeSetSelectorBenchmark", std::move(nodes_config)),
-        std::move(logs_config));
+        ServerConfig::fromDataTest("NodeSetSelectorBenchmark"),
+        std::move(logs_config),
+        std::move(nodes_config));
   }
 
   for (unsigned i = 0; i < iterations; ++i) {
     auto selector = NodeSetSelectorFactory::create(type);
-    auto res = selector->getStorageSet(
-        logid_t(1),
-        config.get(),
-        *config->getNodesConfigurationFromServerConfigSource(),
-        20,
-        0,
-        nullptr,
-        nullptr);
+    auto res = selector->getStorageSet(logid_t(1),
+                                       config.get(),
+                                       *config->getNodesConfiguration(),
+                                       20,
+                                       0,
+                                       nullptr,
+                                       nullptr);
     ld_check(res.decision == NodeSetSelector::Decision::NEEDS_CHANGE);
   }
 }

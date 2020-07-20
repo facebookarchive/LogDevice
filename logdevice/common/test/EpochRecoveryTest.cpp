@@ -21,6 +21,7 @@
 #include "logdevice/common/test/DigestTestUtil.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockTimer.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 
 #define N0 ShardID(0, 0)
@@ -295,42 +296,35 @@ EpochRecoveryTest::EpochRecoveryTest()
 
 void EpochRecoveryTest::initConfig() {
   // init cluster config
-  configuration::Nodes nodes;
+  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
   for (ShardID shard : all_shards_) {
-    Configuration::Node& node = nodes[shard.node()];
-    node.address = Sockaddr("::1", folly::to<std::string>(4440 + shard.node()));
-    node.generation = 1;
-    node.addSequencerRole();
-    node.addStorageRole();
-
+    std::string loc;
     auto it = node_locations_.find(shard.node());
     if (it != node_locations_.end()) {
-      NodeLocation loc;
-      int rv = loc.fromDomainString(it->second);
-      ASSERT_EQ(0, rv);
-      node.location = std::move(loc);
+      loc = it->second;
     }
-
+    nodes.push_back({
+        .id = shard.node(),
+        .location = loc,
+        .metadata_node = true,
+    });
     node_state_map_[shard] = ClusterStateNodeState::FULLY_STARTED;
   }
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 3}});
 
   // we won't use these
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
-  Configuration::NodesConfig nodes_config(std::move(nodes));
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
   logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                           LOG_ID.val_, LOG_ID.val_ + 1),
                       "log",
                       log_attrs);
 
-  // metadata stored on all nodes with max replication factor 3
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
-
   updateable_config_->updateableServerConfig()->update(
-      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
+      ServerConfig::fromDataTest(__FILE__));
   updateable_config_->updateableNodesConfiguration()->update(
-      updateable_config_->getNodesConfigurationFromServerConfigSource());
+      std::move(nodes_configuration));
   updateable_config_->updateableLogsConfig()->update(std::move(logs_config));
 }
 

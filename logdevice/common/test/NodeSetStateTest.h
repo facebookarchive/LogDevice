@@ -29,12 +29,13 @@ class NodeSetStateTest : public ::testing::Test {
 
 class MyNodeSetState : public NodeSetState {
  public:
-  MyNodeSetState(const StorageSet& shards,
-                 logid_t log_id,
-                 HealthCheck healthCheck,
-                 std::shared_ptr<Configuration> config = nullptr)
+  MyNodeSetState(
+      const StorageSet& shards,
+      logid_t log_id,
+      HealthCheck healthCheck,
+      std::shared_ptr<const NodesConfiguration> nodes_config = nullptr)
       : NodeSetState(shards, log_id, healthCheck) {
-    config_ = config;
+    nodes_config_ = nodes_config;
   }
 
   void postHealthCheckRequest(ShardID /* unused */,
@@ -58,8 +59,7 @@ class MyNodeSetState : public NodeSetState {
 
   const std::shared_ptr<const NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->serverConfig()
-        ->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
   const Settings* getSettings() const override {
@@ -67,7 +67,7 @@ class MyNodeSetState : public NodeSetState {
   }
 
  private:
-  std::shared_ptr<Configuration> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
 };
 
 }} // namespace facebook::logdevice

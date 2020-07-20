@@ -28,6 +28,7 @@
 #include "logdevice/common/protocol/STORED_Message.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/test/CopySetSelectorTestUtil.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {
@@ -674,44 +675,34 @@ void AppenderTest::start(bool stream_message) {
 }
 
 void AppenderTest::updateConfig() {
-  configuration::Nodes nodes;
+  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
   for (ShardID shard : shards_) {
-    node_index_t nid = shard.node();
-    ld_check(!nodes.count(nid));
-    Configuration::Node& node = nodes[nid];
-    node.address = Sockaddr("::1", folly::to<std::string>(4440 + nid));
-    node.generation = 1;
-    node.addStorageRole();
-    node.addSequencerRole();
+    nodes.push_back({
+        .id = shard.node(),
+        .metadata_node = true,
+    });
   }
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 3}});
 
   auto log_attrs =
       logsconfig::LogAttributes().with_replicationFactor(replication_);
 
-  Configuration::NodesConfig nodes_config(nodes);
   auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
   logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                           LOG_ID.val_, LOG_ID.val_ + 1),
                       "mylog",
                       log_attrs);
 
-  // metadata stored on all nodes with max replication factor 3
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
-
   std::shared_ptr<ServerConfig> server_cfg =
-      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config);
+      ServerConfig::fromDataTest(__FILE__);
   config_.updateableServerConfig()->update(server_cfg);
   config_.updateableNodesConfiguration()->update(
-      server_cfg->getNodesConfigurationFromServerConfigSource());
+      std::move(nodes_configuration));
   config_.updateableLogsConfig()->update(std::move(logs_config));
 
-  StorageSet shards;
-  for (const auto& it : nodes) {
-    for (shard_index_t s = 0; s < it.second.getNumShards(); ++s) {
-      shards.push_back(ShardID(it.first, s));
-    }
-  }
+  StorageSet shards =
+      config_.getNodesConfiguration()->getStorageMembership()->getAllShards();
   std::sort(shards.begin(), shards.end());
   auto nodeset_state = std::make_shared<MockNodeSetState>(
       this, shards, LOG_ID, NodeSetState::HealthCheck::DISABLED);

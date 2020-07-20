@@ -34,6 +34,7 @@
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Record.h"
@@ -353,7 +354,7 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const {
     auto cfg = state_.config->get();
-    return cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
+    return cfg->getNodesConfiguration();
   }
 
   ShardAuthoritativeStatusMap getShardStatus() const override {
@@ -515,23 +516,21 @@ class ClientReadStreamTest
    * Updates state_.config with shards from state_.shards.
    */
   void updateConfig() {
-    configuration::Nodes nodes;
+    std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
     for (ShardID shard : state_.shards) {
-      Configuration::Node& node = nodes[shard.node()];
-      node.address =
-          Sockaddr("::1", folly::to<std::string>(4440 + shard.node()));
-      node.generation = 1;
-      node.addSequencerRole();
-      node.addStorageRole();
-
+      std::string loc;
       auto it = node_locations_.find(shard.node());
       if (it != node_locations_.end()) {
-        NodeLocation loc;
-        int rv = loc.fromDomainString(it->second);
-        ASSERT_EQ(0, rv);
-        node.location = std::move(loc);
+        loc = it->second;
       }
+      nodes.push_back({
+          .id = shard.node(),
+          .location = loc,
+          .metadata_node = true,
+      });
     }
+    auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+        std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 3}});
 
     auto log_attrs = logsconfig::LogAttributes()
                          .with_replicationFactor(replication_factor_)
@@ -539,28 +538,23 @@ class ClientReadStreamTest
                          .with_scdEnabled(scd_enabled_)
                          .with_maxWritesInFlight(sequencer_window_size_);
 
-    Configuration::NodesConfig nodes_config(std::move(nodes));
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
                             LOG_ID.val_, LOG_ID.val_ + 1),
                         "log",
                         log_attrs);
 
-    // metadata stored on all nodes with max replication factor 3
-    Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-        nodes_config, nodes_config.getNodes().size(), 3);
-
     state_.config->updateableServerConfig()->update(
-        ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
+        ServerConfig::fromDataTest(__FILE__));
     state_.config->updateableNodesConfiguration()->update(
-        getNodesConfiguration());
+        std::move(nodes_configuration));
     state_.config->updateableLogsConfig()->update(std::move(logs_config));
   }
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const {
     auto cfg = state_.config->get();
-    return cfg->serverConfig()->getNodesConfigurationFromServerConfigSource();
+    return cfg->getNodesConfiguration();
   }
 
   BackoffTimer* getGracePeriodTimer() const {

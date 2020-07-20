@@ -22,6 +22,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/rebuilding/RebuildingPlan.h"
 
@@ -454,14 +455,16 @@ class RebuildingCoordinatorTest : public ::testing::Test {
   }
 
   void updateConfig() {
-    Configuration::Nodes nodes;
+    std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
     for (int i = 0; i < num_nodes; ++i) {
-      Configuration::Node& node = nodes[i];
-      node.address = Sockaddr("::1", folly::to<std::string>(4440 + i));
-      node.generation = 1;
-      node.addSequencerRole();
-      node.addStorageRole(/*num_shards*/ 2);
+      nodes.push_back({
+          .id = node_index_t(i),
+          .metadata_node = true,
+          .num_shards = 2,
+      });
     }
+    auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+        std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 3}});
 
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
 
@@ -479,20 +482,18 @@ class RebuildingCoordinatorTest : public ::testing::Test {
     const auto log_group = internal_logs.insert("event_log_deltas", log_attrs);
     ld_check(log_group);
 
-    Configuration::NodesConfig nodes_config(std::move(nodes));
-    Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-        nodes_config, nodes_config.getNodes().size(), 3);
-
     config_->updateableServerConfig()->update(
-        ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
+        ServerConfig::fromDataTest(__FILE__));
     logs_config->setInternalLogsConfig(internal_logs);
     logs_config->markAsFullyLoaded();
     config_->updateableLogsConfig()->update(std::move(logs_config));
+    config_->updateableNodesConfiguration()->update(
+        std::move(nodes_configuration));
   }
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return config_->getNodesConfiguration();
   }
 
   void triggerScheduledRestarts() {

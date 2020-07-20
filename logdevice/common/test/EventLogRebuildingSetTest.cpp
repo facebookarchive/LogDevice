@@ -14,6 +14,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/util.h"
 
 /**
@@ -33,20 +34,21 @@ std::shared_ptr<UpdateableConfig> config;
 static UpdateableSettings<Settings> settings;
 
 std::shared_ptr<UpdateableConfig> buildConfig() {
-  configuration::Nodes nodes;
+  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
   for (node_index_t nid = 0; nid < kNumNodes; ++nid) {
-    Configuration::Node& node = nodes[nid];
-    node.address = Sockaddr("::1", folly::to<std::string>(4440 + nid));
-    node.generation = 1;
-    node.addSequencerRole();
-    node.addStorageRole(kNumShards);
+    nodes.push_back({
+        .id = nid,
+        .metadata_node = true,
+        .num_shards = kNumShards,
+    });
   }
-  Configuration::NodesConfig nodes_config(std::move(nodes));
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 2);
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 2}});
   auto config = std::make_shared<UpdateableConfig>();
   config->updateableServerConfig()->update(
-      ServerConfig::fromDataTest(__FILE__, nodes_config, meta_config));
+      ServerConfig::fromDataTest(__FILE__));
+  config->updateableNodesConfiguration()->update(
+      std::move(nodes_configuration));
   return config;
 }
 
@@ -63,7 +65,7 @@ class EventLogRebuildingSetTest : public ::testing::Test {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return config_->getNodesConfiguration();
   }
 
  private:
@@ -80,9 +82,7 @@ class EventLogRebuildingSetTest : public ::testing::Test {
 
 #define ASSERT_SHARD_STATUS(set, nid, sid, status)                        \
   {                                                                       \
-    const auto nc = buildConfig()                                         \
-                        ->getServerConfig()                               \
-                        ->getNodesConfigurationFromServerConfigSource();  \
+    const auto nc = buildConfig()->getNodesConfiguration();               \
     auto map = set.toShardStatusMap(*nc);                                 \
     EXPECT_EQ(AuthoritativeStatus::status, map.getShardStatus(nid, sid)); \
   }
