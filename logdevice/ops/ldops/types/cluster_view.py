@@ -193,7 +193,7 @@ class ClusterView:
 
     @property
     def _node_index_to_maintenances(
-        self
+        self,
     ) -> Dict[int, Tuple[MaintenanceDefinition, ...]]:
         if self._node_index_to_maintenances_dict is None:
             self._node_index_to_maintenances_dict = {
@@ -432,7 +432,11 @@ class ClusterView:
 
             normalized_sequencer_node_indexes = tuple(
                 sorted(
-                    self.normalize_node_id(node_id).node_index for node_id in node_ids
+                    # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+                    #  _SupportsLessThan)]]` for 1st param but got
+                    #  `Generator[Optional[int], None, None]`.
+                    self.normalize_node_id(node_id).node_index
+                    for node_id in node_ids
                 )
             )
 
@@ -461,6 +465,9 @@ class ClusterView:
 
         if sequencer_nodes is not None:
             normalized_sequencer_node_indexes = tuple(
+                # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+                #  _SupportsLessThan)]]` for 1st param but got
+                #  `Generator[Optional[int], None, None]`.
                 sorted(self.normalize_node_id(n).node_index for n in sequencer_nodes)
             )
             mvs = (

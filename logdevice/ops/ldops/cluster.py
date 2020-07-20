@@ -165,6 +165,7 @@ async def get_cluster_view(client: AdminAPI) -> ClusterView:
     elif isinstance(maintenances_resp, Exception):
         raise maintenances_resp
     else:
+        # pyre-fixme[16]: `BaseException` has no attribute `maintenances`.
         maintenances = maintenances_resp.maintenances
 
     if isinstance(nodes_config_resp, Exception):
@@ -174,7 +175,9 @@ async def get_cluster_view(client: AdminAPI) -> ClusterView:
         raise nodes_state_resp
 
     return ClusterView(
+        # pyre-fixme[16]: `BaseException` has no attribute `nodes`.
         nodes_config=nodes_config_resp.nodes,
+        # pyre-fixme[16]: `BaseException` has no attribute `states`.
         nodes_state=nodes_state_resp.states,
         maintenances=maintenances,
     )

@@ -133,7 +133,11 @@ class TestClusterView(TestCase):
         self.assertEqual(sorted(cv.get_all_node_names()), sorted(nc.name for nc in ncs))
 
         self.assertEqual(
-            sorted(cv.get_all_maintenance_ids()), sorted(mnt.group_id for mnt in mnts)
+            sorted(cv.get_all_maintenance_ids()),
+            # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+            #  _SupportsLessThan)]]` for 1st param but got
+            #  `Generator[typing.Optional[str], None, None]`.
+            sorted(mnt.group_id for mnt in mnts),
         )
 
         self.assertEqual(
@@ -244,6 +248,9 @@ class TestClusterView(TestCase):
             self.assertEqual(group_id, cv.get_maintenance_view_by_id(group_id).group_id)
 
         self.assertListEqual(
+            # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+            #  _SupportsLessThan)]]` for 1st param but got
+            #  `Generator[typing.Optional[str], None, None]`.
             list(sorted(m.group_id for m in mnts)),
             list(sorted(mv.group_id for mv in cv.get_all_maintenance_views())),
         )

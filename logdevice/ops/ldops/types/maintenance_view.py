@@ -130,7 +130,8 @@ class MaintenanceView:
         if self.expires_on is None:
             return None
         else:
-            # pyre-fixme[16]: `Optional` has no attribute `__sub__`.
+            # pyre-fixme[6]: `-` is not supported for operand types
+            #  `Optional[datetime]` and `datetime`.
             return self.expires_on - datetime.now()
 
     @property

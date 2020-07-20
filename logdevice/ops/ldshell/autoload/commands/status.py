@@ -480,6 +480,8 @@ FIELDS = [field.name for field in fields(NodeInfo)]
 @argument("nodes", type=List[int], aliases=["n"], description="list of node ids")
 @argument("hostnames", type=List[str], aliases=["o"], description="list of hostnames")
 @argument("hosts", type=List[str], description="list of hostnames")
+# pyre-fixme[56]: Argument `list(FIELDS)` to decorator factory `nubia.argument`
+#  could not be resolved in a global scope.
 @argument(
     "sort",
     type=str,

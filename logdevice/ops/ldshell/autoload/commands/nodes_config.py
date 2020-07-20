@@ -212,9 +212,9 @@ class NodesConfig:
         return 0
 
     @nubia.command
+    # pyre-fixme[56]: Argument `textwrap.dedent("
     @nubia.argument(
         "metadata_replicate_across",
-        # pyre-fixme[16]: `Mapping` has no attribute `__getitem__`.
         type=typing.Mapping[str, int],
         description=dedent(
             """

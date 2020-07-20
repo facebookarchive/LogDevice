@@ -135,29 +135,52 @@ class TestMaintenanceView(TestCase):
 
         self.assertListEqual(
             sorted(
-                ni.node_index for ni in maintenance_view.affected_sequencer_node_ids
+                # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+                #  _SupportsLessThan)]]` for 1st param but got
+                #  `Generator[typing.Optional[int], None, None]`.
+                ni.node_index
+                for ni in maintenance_view.affected_sequencer_node_ids
             ),
+            # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+            #  _SupportsLessThan)]]` for 1st param but got
+            #  `Generator[typing.Optional[int], None, None]`.
             sorted(sn.node_index for sn in maintenance.sequencer_nodes),
         )
 
         self.assertTupleEqual(
             maintenance_view.affected_sequencer_node_indexes,
+            # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+            #  _SupportsLessThan)]]` for 1st param but got
+            #  `Generator[typing.Optional[int], None, None]`.
             tuple(sorted(sn.node_index for sn in maintenance.sequencer_nodes)),
         )
 
         self.assertListEqual(
+            # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+            #  _SupportsLessThan)]]` for 1st param but got
+            #  `Generator[typing.Optional[int], None, None]`.
             sorted(ni.node_index for ni in maintenance_view.affected_storage_node_ids),
+            # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+            #  _SupportsLessThan)]]` for 1st param but got `Set[typing.Optional[int]]`.
             sorted({shard.node.node_index for shard in maintenance.shards}),
         )
 
         self.assertTupleEqual(
             maintenance_view.affected_storage_node_indexes,
+            # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+            #  _SupportsLessThan)]]` for 1st param but got `Set[typing.Optional[int]]`.
             tuple(sorted({shard.node.node_index for shard in maintenance.shards})),
         )
 
         self.assertListEqual(
+            # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+            #  _SupportsLessThan)]]` for 1st param but got
+            #  `Generator[typing.Optional[int], None, None]`.
             sorted(ni.node_index for ni in maintenance_view.affected_node_ids),
             sorted(
+                # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+                #  _SupportsLessThan)]]` for 1st param but got
+                #  `Set[typing.Optional[int]]`.
                 {sn.node_index for sn in maintenance.sequencer_nodes}.union(
                     {shard.node.node_index for shard in maintenance.shards}
                 )
@@ -168,6 +191,9 @@ class TestMaintenanceView(TestCase):
             maintenance_view.affected_node_indexes,
             tuple(
                 sorted(
+                    # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
+                    #  _SupportsLessThan)]]` for 1st param but got
+                    #  `Set[typing.Optional[int]]`.
                     {sn.node_index for sn in maintenance.sequencer_nodes}.union(
                         {shard.node.node_index for shard in maintenance.shards}
                     )

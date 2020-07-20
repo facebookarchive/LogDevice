@@ -101,7 +101,6 @@ _attributes = [
     ),
     argument(
         "replicate_across",
-        # pyre-fixme[16]: `Mapping` has no attribute `__getitem__`.
         type=typing.Mapping[str, int],
         description=dedent(
             """
