@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
@@ -379,16 +380,21 @@ TEST_F(FailureDomainIntegrationTest,
 // read availability and no write availability.
 TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
   // 4 racks, with different number of nodes.
-  Configuration::Nodes nodes_cfg;
+  auto nodes = std::make_shared<const NodesConfiguration>();
   std::vector<node_index_t> rack_start = {0};
-  NodeSetTestUtil::addNodes(&nodes_cfg, 4, 1, "region.dc.cl.ro.rk1"); // 0,1,2,3
-  rack_start.push_back(nodes_cfg.size());
-  NodeSetTestUtil::addNodes(&nodes_cfg, 3, 1, "region.dc.cl.ro.rk2"); // 4, 5, 6
-  rack_start.push_back(nodes_cfg.size());
-  NodeSetTestUtil::addNodes(&nodes_cfg, 2, 1, "region.dc.cl.ro.rk3"); // 7, 8
-  rack_start.push_back(nodes_cfg.size());
-  NodeSetTestUtil::addNodes(&nodes_cfg, 2, 1, "region.dc.cl.ro.rk4"); // 9, 10
-  rack_start.push_back(nodes_cfg.size());
+  NodeSetTestUtil::addNodes(nodes, 4, 1, "region.dc.cl.ro.rk1"); // 0,1,2,3
+  rack_start.push_back(nodes->clusterSize());
+  NodeSetTestUtil::addNodes(nodes, 3, 1, "region.dc.cl.ro.rk2"); // 4, 5, 6
+  rack_start.push_back(nodes->clusterSize());
+  NodeSetTestUtil::addNodes(nodes, 2, 1, "region.dc.cl.ro.rk3"); // 7, 8
+  rack_start.push_back(nodes->clusterSize());
+  NodeSetTestUtil::addNodes(nodes, 2, 1, "region.dc.cl.ro.rk4"); // 9, 10
+  rack_start.push_back(nodes->clusterSize());
+
+  // TODO Remove legacy conversion when it's accepted in ClusterUtility
+  configuration::NodesConfig nodes_cfg;
+  configuration::nodes::NodesConfigLegacyConverter::toLegacyNodesConfig(
+      *nodes, &nodes_cfg);
 
   configuration::MetaDataLogsConfig meta_logs_config;
   // Metadata nodeset is whole cluster.
@@ -406,7 +412,7 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
   meta_logs_config.sequencers_provision_epoch_store = true;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes_cfg)
+                     .setNodes(nodes_cfg.getNodes())
                      .setLogGroupName("test_logs")
                      .setLogAttributes(logsconfig::LogAttributes()
                                            .with_replicateAcross(

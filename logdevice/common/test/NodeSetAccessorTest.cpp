@@ -18,6 +18,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
@@ -39,13 +40,14 @@ namespace {
 
 class TestCopySetSelector : public CopySetSelector {
  public:
-  TestCopySetSelector(const StorageSet& nodeset,
-                      const std::shared_ptr<Configuration> cfg,
-                      copyset_size_t replication,
-                      NodeLocationScope sync_replication_scope)
+  TestCopySetSelector(
+      const StorageSet& nodeset,
+      const std::shared_ptr<const NodesConfiguration> nodes_config,
+      copyset_size_t replication,
+      NodeLocationScope sync_replication_scope)
       : failure_domain_(
             nodeset,
-            *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+            *nodes_config,
             ReplicationProperty(replication, sync_replication_scope)),
         replication_(replication) {
     ld_check(replication_ > 0 && replication_ <= COPYSET_SIZE_MAX);
@@ -153,18 +155,13 @@ class NodeSetAccessorTest : public ::testing::Test {
   bool job_timer_active_{false};
 
   // cluster config
-  std::shared_ptr<Configuration> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
 
   std::unique_ptr<CopySetSelector> copyset_selector_;
 
-  std::shared_ptr<const Configuration> getConfig() const {
-    return config_;
-  }
-
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const {
-    return config_->serverConfig()
-        ->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
   void triggerJobTimer() {
@@ -270,26 +267,15 @@ class MockedStorageSetAccessor : public StorageSetAccessor {
 };
 
 void NodeSetAccessorTest::setUp() {
-  Configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
-  addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
-  addNodes(&nodes, 1, 1, "rg1.dc0.cl0..", 1);
-  addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk1", 1);
-  addNodes(&nodes, 1, 1, "....", 1);
-
-  Configuration::NodesConfig nodes_config;
-  const size_t nodeset_size = nodes.size();
-  nodes_config.setNodes(std::move(nodes));
-
-  auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), LOG_ID, replication_, extras_, nodeset_size, {});
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          "nodeset_accessor_test", std::move(nodes_config)),
-      std::move(logs_config));
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes_config_, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
+  addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
+  addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0..", 1);
+  addNodes(nodes_config_, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 1, 1, "rg2.dc0.cl0.ro0.rk1", 1);
+  addNodes(nodes_config_, 1, 1, "....", 1);
 
   accessor_.reset(new MockedStorageSetAccessor(this));
   accessor_->setExtras(extras_);
@@ -311,7 +297,7 @@ void NodeSetAccessorTest::setUp() {
   }
 
   copyset_selector_ = std::unique_ptr<CopySetSelector>(new TestCopySetSelector(
-      nodeset_, config_, replication_, sync_replication_scope_));
+      nodeset_, nodes_config_, replication_, sync_replication_scope_));
 }
 
 #define verifyWave(...)                                                 \

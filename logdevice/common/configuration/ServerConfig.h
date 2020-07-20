@@ -287,7 +287,7 @@ class ServerConfig {
    */
   static std::unique_ptr<ServerConfig> fromDataTest(
       std::string cluster_name,
-      NodesConfig nodes,
+      NodesConfig nodes = NodesConfig{},
       MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
       PrincipalsConfig = PrincipalsConfig(),
       SecurityConfig securityConfig = SecurityConfig(),

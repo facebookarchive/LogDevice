@@ -11,6 +11,7 @@
 
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
 
 using namespace facebook::logdevice;
@@ -75,10 +76,24 @@ class RebuildingReadStorageTaskTest : public ::testing::TestWithParam<bool> {
     // Create nodes and logs config. This part is super boilerplaty, just skip
     // the code and read comments.
 
-    configuration::Nodes nodes;
+    auto nodes = std::make_shared<const NodesConfiguration>();
     // Nodes 0..9.
-    NodeSetTestUtil::addNodes(&nodes, /* nodes */ 10, /* shards */ 2, "....");
+    NodeSetTestUtil::addNodes(nodes, /* nodes */ 10, /* shards */ 2, "....");
 
+    // Metadata logs, nodeset 5..9, replication factor 3.
+    nodes = nodes->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes,
+            {ShardID(5, -1),
+             ShardID(6, -1),
+             ShardID(7, -1),
+             ShardID(8, -1),
+             ShardID(9, -1)},
+            folly::none,
+            membership::MetaDataStorageState::METADATA));
+    nodes = nodes->applyUpdate(
+        NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+            *nodes, ReplicationProperty{{NodeLocationScope::NODE, 3}}));
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
     // Logs 1..10, replication factor 3.
     auto log_attrs =
@@ -96,23 +111,13 @@ class RebuildingReadStorageTaskTest : public ::testing::TestWithParam<bool> {
     ld_check(internal_logs.insert("event_log_deltas", log_attrs));
     logs_config->setInternalLogsConfig(internal_logs);
     logs_config->markAsFullyLoaded();
-    // Metadata logs, nodeset 5..9, replication factor 3.
-    configuration::MetaDataLogsConfig meta_logs_config;
-    meta_logs_config.metadata_nodes = {5, 6, 7, 8, 9};
-    meta_logs_config.setMetadataLogGroup(
-        logsconfig::LogGroupNode("metadata logs",
-                                 log_attrs,
-                                 logid_range_t(LOGID_INVALID, LOGID_INVALID)));
 
     auto server_config = std::shared_ptr<ServerConfig>(
-        ServerConfig::fromDataTest("RebuildingReadStorageTaskTest",
-                                   configuration::NodesConfig(nodes),
-                                   meta_logs_config));
+        ServerConfig::fromDataTest("RebuildingReadStorageTaskTest"));
 
-    auto cfg = std::make_shared<Configuration>(server_config, logs_config);
+    auto cfg = std::make_shared<Configuration>(
+        server_config, logs_config, std::move(nodes));
     config = std::make_shared<UpdateableConfig>(cfg);
-    config->updateableNodesConfiguration()->update(
-        config->getNodesConfigurationFromServerConfigSource());
 
     // Create local log store (logsdb) and 6 partitions, 15 minutes apart.
     store = std::make_unique<TemporaryPartitionedStore>();

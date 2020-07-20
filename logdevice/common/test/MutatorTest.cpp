@@ -55,7 +55,7 @@ class MutatorTest : public ::testing::Test {
 
   bool hole_{false};
 
-  std::shared_ptr<Configuration> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   ReplicationProperty replication_{{NodeLocationScope::NODE, 3}};
   StorageSet shards_{N0, N1, N2, N3, N4, N5, N6, N7, N8};
   NodeID my_node_{NodeID(1)};
@@ -87,10 +87,6 @@ class MutatorTest : public ::testing::Test {
   std::unordered_map<ShardID, ClusterStateNodeState> node_state_map_;
 
  public:
-  std::shared_ptr<Configuration> getConfig() const {
-    return config_;
-  }
-
   void initStoreHeaderAndExtras();
   void setUp();
   MUTATED_Header createMutatedHeader(uint32_t wave = 1,
@@ -135,8 +131,7 @@ class MockedNodeSetAccessor : public StorageSetAccessor {
       StorageSetAccessor::Property property)
       : StorageSetAccessor(test->LOG_ID,
                            test->shards_,
-                           test->config_->serverConfig()
-                               ->getNodesConfigurationFromServerConfigSource(),
+                           test->nodes_config_,
                            test->replication_,
                            node_access,
                            completion,
@@ -233,9 +228,7 @@ class MockMutator : public Mutator {
  protected:
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return test_->getConfig()
-        ->serverConfig()
-        ->getNodesConfigurationFromServerConfigSource();
+    return test_->nodes_config_;
   }
 
   std::unique_ptr<StorageSetAccessor> createStorageSetAccessor(
@@ -308,29 +301,19 @@ void MutatorTest::setUp() {
   dbg::assertOnData = true;
 
   // initialize the cluster config
-  Configuration::Nodes nodes;
-  addNodes(&nodes, 1, 2, "rg0.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 1, 2, "rg1.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 2, 2, "rg1.dc0.cl0.ro0.rk1", 2);
-  addNodes(&nodes, 1, 2, "rg1.dc0.cl0.ro0.rk2", 1);
-  addNodes(&nodes, 2, 2, "rg1.dc0.cl0..", 1);
-  addNodes(&nodes, 1, 2, "rg2.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 1, 2, "rg2.dc0.cl0.ro0.rk1", 1);
-  addNodes(&nodes, 2, 2, "....", 1);
-
-  const size_t nodeset_size = nodes.size();
-  Configuration::NodesConfig nodes_config(std::move(nodes));
-
-  auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), LOG_ID, replication_, 0, nodeset_size, {});
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes_config_, 1, 2, "rg0.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 1, 2, "rg1.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 2, 2, "rg1.dc0.cl0.ro0.rk1", 2);
+  addNodes(nodes_config_, 1, 2, "rg1.dc0.cl0.ro0.rk2", 1);
+  addNodes(nodes_config_, 2, 2, "rg1.dc0.cl0..", 1);
+  addNodes(nodes_config_, 1, 2, "rg2.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 1, 2, "rg2.dc0.cl0.ro0.rk1", 1);
+  addNodes(nodes_config_, 2, 2, "....", 1);
 
   for (ShardID shard : shards_) {
     node_state_map_[shard] = ClusterStateNodeState::FULLY_STARTED;
   }
-
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest("mutator_test", std::move(nodes_config)),
-      std::move(logs_config));
 
   nodeset_state_ = std::make_shared<NodeSetState>(
       shards_, LOG_ID, NodeSetState::HealthCheck::DISABLED);

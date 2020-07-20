@@ -76,15 +76,8 @@ class GetEpochRecoveryMetadataRequestTest : public ::testing::Test {
     dbg::currentLevel = dbg::Level::DEBUG;
     dbg::assertOnData = true;
 
-    Configuration::Nodes nodes;
-    NodeSetTestUtil::addNodes(&nodes, 10, 1, "rg0.dc0.cl0.ro0.rk0", 1);
-    Configuration::NodesConfig nodes_config(std::move(nodes));
-    auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-    NodeSetTestUtil::addLog(logs_config.get(), kLogID, 1, 0, 1, {});
-    config_ = std::make_shared<Configuration>(
-        ServerConfig::fromDataTest(
-            "GetEpochRecoveryMetadataRequestTest", std::move(nodes_config)),
-        std::move(logs_config));
+    nodes_config_ = std::make_shared<const NodesConfiguration>();
+    NodeSetTestUtil::addNodes(nodes_config_, 10, 1, "rg0.dc0.cl0.ro0.rk0", 1);
     int i = 0;
     while (i < nodeSetSize) {
       nodes_.push_back(ShardID(node_index_t(i), shard_index_t(0)));
@@ -126,7 +119,7 @@ class GetEpochRecoveryMetadataRequestTest : public ::testing::Test {
   std::shared_ptr<EpochMetaData> epoch_metadata_;
   GetEpochRecoveryMetadataRequestCallback cb_;
   std::vector<node_index_t> destination_;
-  std::shared_ptr<Configuration> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   Settings settings_ = create_default_settings<Settings>();
   BackoffTimer* wave_timer_{nullptr};
   std::shared_ptr<NodeSetState> nodeset_state_;
@@ -304,8 +297,7 @@ class MockGetEpochRecoveryMetadataRequest
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const {
-    return test_->config_->serverConfig()
-        ->getNodesConfigurationFromServerConfigSource();
+    return test_->nodes_config_;
   }
 
   const Settings& getSettings() const override {

@@ -57,7 +57,7 @@ class FailureDomainTest : public ::testing::Test {
   copyset_size_t replication_{3};
 
   StorageSet storage_set_;
-  std::shared_ptr<Configuration> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
 
   using FailureDomainTestSet =
       FailureDomainNodeSet<TestAttr, HashEnum<TestAttr>>;
@@ -91,33 +91,21 @@ void FailureDomainTest::setUp() {
 
   // 10 nodes in the cluster each with 5 shards, from 4 different
   // network-clusters
-  configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk1", 1); // 0
-  addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk2", 1); // 1
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl1.ro0.rk3", 2); // 2-5
-  addNodes(&nodes, 1, 1, "rg0.dc0.cl2.ro0.rk6", 1); // 6
-  addNodes(&nodes, 2, 1, "rg0.dc0.cl3.ro0.rk7", 2); // 7-8
-  addNodes(&nodes, 1, 1, "rg0.dc0.cl4.ro0.rk8", 1); // 9
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes_config_, 1, 1, "rg0.dc0.cl0.ro0.rk1", 1); // 0
+  addNodes(nodes_config_, 1, 1, "rg0.dc0.cl0.ro0.rk2", 1); // 1
+  addNodes(nodes_config_, 4, 1, "rg0.dc0.cl1.ro0.rk3", 2); // 2-5
+  addNodes(nodes_config_, 1, 1, "rg0.dc0.cl2.ro0.rk6", 1); // 6
+  addNodes(nodes_config_, 2, 1, "rg0.dc0.cl3.ro0.rk7", 2); // 7-8
+  addNodes(nodes_config_, 1, 1, "rg0.dc0.cl4.ro0.rk8", 1); // 9
 
-  for (node_index_t nid = 0; nid < nodes.size(); ++nid) {
+  for (node_index_t nid = 0; nid < nodes_config_->clusterSize(); ++nid) {
     storage_set_.push_back(ShardID(nid, 0));
   }
 
-  Configuration::NodesConfig nodes_config;
-  const size_t nodeset_size = nodes.size();
-  nodes_config.setNodes(std::move(nodes));
-
-  auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), LOG_ID, replication_, 0, nodeset_size, {});
-
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          "failure_domain_test", std::move(nodes_config)),
-      std::move(logs_config));
-
   failure_set_ = std::make_unique<FailureDomainTestSet>(
       storage_set_,
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      *nodes_config_,
       ReplicationProperty(replication_, sync_replication_scope_));
   failure_set_->fullConsistencyCheck();
 }
@@ -125,39 +113,25 @@ void FailureDomainTest::setUp() {
 void FailureDomainTest::setUpWithMultiScopes() {
   dbg::assertOnData = true;
 
-  configuration::Nodes nodes;
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
-  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk6", 1); // 12-15
-  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk7", 2); // 16-19
-  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk8", 1); // 20-23
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes_config_, 4, 1, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
+  addNodes(nodes_config_, 4, 1, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
+  addNodes(nodes_config_, 4, 1, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
+  addNodes(nodes_config_, 4, 1, "rg1.dc0.cl0.ro0.rk6", 1); // 12-15
+  addNodes(nodes_config_, 4, 1, "rg1.dc0.cl0.ro0.rk7", 2); // 16-19
+  addNodes(nodes_config_, 4, 1, "rg1.dc0.cl0.ro0.rk8", 1); // 20-23
 
-  for (node_index_t nid = 0; nid < nodes.size(); ++nid) {
+  for (node_index_t nid = 0; nid < nodes_config_->clusterSize(); ++nid) {
     storage_set_.push_back(ShardID(nid, 0));
   }
-
-  Configuration::NodesConfig nodes_config;
-  const size_t nodeset_size = nodes.size();
-  nodes_config.setNodes(std::move(nodes));
-
-  auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), LOG_ID, replication_, 0, nodeset_size, {});
-
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          "failure_domain_test", std::move(nodes_config)),
-      std::move(logs_config));
 
   ReplicationProperty rep;
   rep.setReplication(NodeLocationScope::NODE, 3);
   rep.setReplication(NodeLocationScope::RACK, 3);
   rep.setReplication(NodeLocationScope::REGION, 2);
 
-  failure_set_ = std::make_unique<FailureDomainTestSet>(
-      storage_set_,
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      rep);
+  failure_set_ =
+      std::make_unique<FailureDomainTestSet>(storage_set_, *nodes_config_, rep);
   failure_set_->fullConsistencyCheck();
 }
 
@@ -165,10 +139,10 @@ void FailureDomainTest::setUpWithShards() {
   dbg::assertOnData = true;
 
   // 24 shards spanning 3 racks.
-  configuration::Nodes nodes;
-  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
-  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
-  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes_config_, 4, 2, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
+  addNodes(nodes_config_, 4, 2, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
+  addNodes(nodes_config_, 4, 2, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
 
   // Shard set contains 24 nodes (2 shards per node in the cluster).
   for (node_index_t i = 0; i < 12; ++i) {
@@ -176,26 +150,12 @@ void FailureDomainTest::setUpWithShards() {
     storage_set_.push_back(ShardID(i, 1));
   }
 
-  Configuration::NodesConfig nodes_config;
-  const size_t nodeset_size = nodes.size();
-  nodes_config.setNodes(std::move(nodes));
-
-  auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), LOG_ID, replication_, 0, nodeset_size, {});
-
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          "failure_domain_test", std::move(nodes_config)),
-      std::move(logs_config));
-
   ReplicationProperty rep;
   rep.setReplication(NodeLocationScope::NODE, 3);
   rep.setReplication(NodeLocationScope::RACK, 2);
 
-  failure_set_ = std::make_unique<FailureDomainTestSet>(
-      storage_set_,
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      rep);
+  failure_set_ =
+      std::make_unique<FailureDomainTestSet>(storage_set_, *nodes_config_, rep);
   failure_set_->fullConsistencyCheck();
 }
 
@@ -203,10 +163,10 @@ void FailureDomainTest::setUpWithShardsAndOnlyRackReplication() {
   dbg::assertOnData = true;
 
   // 24 shards spanning 3 racks.
-  configuration::Nodes nodes;
-  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
-  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
-  addNodes(&nodes, 4, 2, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes_config_, 4, 2, "rg0.dc0.cl0.ro0.rk1", 1); // 0-3
+  addNodes(nodes_config_, 4, 2, "rg0.dc0.cl0.ro0.rk2", 1); // 4-7
+  addNodes(nodes_config_, 4, 2, "rg0.dc0.cl0.ro0.rk3", 2); // 8-11
 
   // Shard set contains 24 nodes (2 shards per node in the cluster).
   for (node_index_t i = 0; i < 12; ++i) {
@@ -214,27 +174,13 @@ void FailureDomainTest::setUpWithShardsAndOnlyRackReplication() {
     storage_set_.push_back(ShardID(i, 1));
   }
 
-  Configuration::NodesConfig nodes_config;
-  const size_t nodeset_size = nodes.size();
-  nodes_config.setNodes(std::move(nodes));
-
-  auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), LOG_ID, replication_, 0, nodeset_size, {});
-
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          "failure_domain_test", std::move(nodes_config)),
-      std::move(logs_config));
-
   // We only require 2-way replication at rack scope.
   // replication at NODE and SHARD scope is implicit.
   ReplicationProperty rep;
   rep.setReplication(NodeLocationScope::RACK, 2);
 
-  failure_set_ = std::make_unique<FailureDomainTestSet>(
-      storage_set_,
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      rep);
+  failure_set_ =
+      std::make_unique<FailureDomainTestSet>(storage_set_, *nodes_config_, rep);
   failure_set_->fullConsistencyCheck();
 }
 
@@ -852,38 +798,24 @@ TEST_F(FailureDomainTest, CanReplicationWithPredTest) {
 TEST_F(FailureDomainTest, T30067676) {
   dbg::assertOnData = true;
 
-  configuration::Nodes nodes;
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk1", 4); // 0-3
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk2", 4); // 4-7
-  addNodes(&nodes, 4, 1, "rg0.dc0.cl0.ro0.rk3", 4); // 8-11
-  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk6", 4); // 12-15
-  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk7", 4); // 16-19
-  addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk8", 4); // 20-23
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes_config_, 4, 1, "rg0.dc0.cl0.ro0.rk1", 4); // 0-3
+  addNodes(nodes_config_, 4, 1, "rg0.dc0.cl0.ro0.rk2", 4); // 4-7
+  addNodes(nodes_config_, 4, 1, "rg0.dc0.cl0.ro0.rk3", 4); // 8-11
+  addNodes(nodes_config_, 4, 1, "rg1.dc0.cl0.ro0.rk6", 4); // 12-15
+  addNodes(nodes_config_, 4, 1, "rg1.dc0.cl0.ro0.rk7", 4); // 16-19
+  addNodes(nodes_config_, 4, 1, "rg1.dc0.cl0.ro0.rk8", 4); // 20-23
 
   for (node_index_t nid = 0; nid < 20; ++nid) {
     storage_set_.push_back(ShardID(nid, 0));
   }
 
-  Configuration::NodesConfig nodes_config;
-  const size_t nodeset_size = nodes.size();
-  nodes_config.setNodes(std::move(nodes));
-
-  auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), LOG_ID, replication_, 0, nodeset_size, {});
-
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          "failure_domain_test", std::move(nodes_config)),
-      std::move(logs_config));
-
   ReplicationProperty rep;
   rep.setReplication(NodeLocationScope::NODE, 2);
   rep.setReplication(NodeLocationScope::RACK, 2);
 
-  failure_set_ = std::make_unique<FailureDomainTestSet>(
-      storage_set_,
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      rep);
+  failure_set_ =
+      std::make_unique<FailureDomainTestSet>(storage_set_, *nodes_config_, rep);
   failure_set_->fullConsistencyCheck();
 
   setShardsAttr(TestAttr(RecoveryNode::State::DIGESTING), {N0});

@@ -12,11 +12,12 @@
 #include <folly/String.h>
 
 #include "logdevice/common/configuration/LocalLogsConfig.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice { namespace NodeSetTestUtil {
 
-void addNodes(ServerConfig::Nodes* nodes,
+void addNodes(std::shared_ptr<const NodesConfiguration>& nodes,
               size_t num_nodes,
               shard_size_t num_shards,
               std::string location_string,
@@ -26,41 +27,52 @@ void addNodes(ServerConfig::Nodes* nodes,
   ld_check(nodes != nullptr);
   ld_check(num_nodes >= num_non_zw_nodes);
 
-  node_index_t first_new_index = 0;
-  for (const auto& it : *nodes) {
-    first_new_index = std::max(first_new_index, (node_index_t)(it.first + 1));
-  }
+  std::vector<ShardID> ro_nodes;
+  std::vector<ShardID> rw_nodes;
 
-  std::vector<ServerConfig::Node> new_nodes;
+  std::vector<NodesConfigurationTestUtil::NodeTemplate> new_nodes;
+  node_index_t idx =
+      nodes->clusterSize() > 0 ? nodes->getMaxNodeIndex() + 1 : 0;
   for (size_t i = 0; i < num_nodes; ++i) {
-    ServerConfig::Node node;
-    node.address = Sockaddr("::1", std::to_string(first_new_index + i));
-    node.generation = 1;
-    if (!location_string.empty()) {
-      NodeLocation loc;
-      int rv = loc.fromDomainString(location_string);
-      ld_check(rv == 0);
-      node.location = std::move(loc);
+    new_nodes.push_back(NodesConfigurationTestUtil::NodeTemplate{
+        .id = idx,
+        .location = location_string,
+        .sequencer_weight = sequencer,
+        .capacity = weight,
+        .num_shards = num_shards,
+    });
+
+    if (i < num_non_zw_nodes) {
+      rw_nodes.emplace_back(idx, -1);
+    } else {
+      ro_nodes.emplace_back(idx, -1);
     }
-
-    node.addSequencerRole(true, sequencer);
-    node.addStorageRole(num_shards);
-    node.storage_attributes->state = (i < num_non_zw_nodes)
-        ? configuration::StorageState::READ_WRITE
-        : configuration::StorageState::READ_ONLY;
-    node.storage_attributes->capacity = weight;
-
-    new_nodes.push_back(node);
+    idx++;
   }
 
-  const size_t size_begin = nodes->size();
-  // shuffle the nodes added
-  std::shuffle(new_nodes.begin(), new_nodes.end(), folly::ThreadLocalPRNG());
-  for (size_t i = 0; i < new_nodes.size(); ++i) {
-    (*nodes)[first_new_index + i] = std::move(new_nodes[i]);
+  nodes = nodes->applyUpdate(NodesConfigurationTestUtil::addNewNodesUpdate(
+      *nodes, std::move(new_nodes)));
+  ld_check(nodes);
+
+  if (ro_nodes.size() > 0) {
+    nodes = nodes->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes,
+            ro_nodes,
+            membership::StorageState::READ_ONLY,
+            folly::none));
+    ld_check(nodes);
   }
 
-  ld_check(nodes->size() == size_begin + num_nodes);
+  if (rw_nodes.size() > 0) {
+    nodes = nodes->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes,
+            rw_nodes,
+            membership::StorageState::READ_WRITE,
+            folly::none));
+    ld_check(nodes);
+  }
 }
 
 void addLog(configuration::LocalLogsConfig* logs_config,

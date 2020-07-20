@@ -24,7 +24,7 @@ class DomainIsolationTest : public ::testing::Test {
 
  public:
   node_index_t my_node_idx_{2};
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   std::unique_ptr<MockDomainIsolationChecker> checker_;
 
   bool isNodeAlive(node_index_t idx) const {
@@ -38,7 +38,7 @@ class DomainIsolationTest : public ::testing::Test {
     down_nodes_ = std::move(down_nodes);
   }
 
-  void setUp(std::unique_ptr<ServerConfig::Nodes> nodes = nullptr);
+  void setUp(std::shared_ptr<const NodesConfiguration> nodes = nullptr);
 };
 
 class MockDomainIsolationChecker : public DomainIsolationChecker {
@@ -61,8 +61,7 @@ class MockDomainIsolationChecker : public DomainIsolationChecker {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    // TODO: migrate it to use NodesConfiguration with switchable source
-    return test_->config_->getNodesConfigurationFromServerConfigSource();
+    return test_->nodes_config_;
   }
 
   NodeID getMyNodeID() const override {
@@ -74,25 +73,20 @@ class MockDomainIsolationChecker : public DomainIsolationChecker {
 };
 
 void DomainIsolationTest::setUp(
-    std::unique_ptr<ServerConfig::Nodes> preset_nodes) {
-  ServerConfig::Nodes nodes;
+    std::shared_ptr<const NodesConfiguration> preset_nodes) {
   if (preset_nodes != nullptr) {
-    nodes = *preset_nodes;
+    nodes_config_ = std::move(preset_nodes);
   } else {
-    addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
-    addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
-    addNodes(&nodes, 1, 1, "rg1.dc0.cl0..", 1);
-    addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk1", 1);
-    addNodes(&nodes, 1, 1, "....", 1);
+    nodes_config_ = std::make_shared<const NodesConfiguration>();
+    addNodes(nodes_config_, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+    addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
+    addNodes(nodes_config_, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
+    addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
+    addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0..", 1);
+    addNodes(nodes_config_, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
+    addNodes(nodes_config_, 1, 1, "rg2.dc0.cl0.ro0.rk1", 1);
+    addNodes(nodes_config_, 1, 1, "....", 1);
   }
-  Configuration::NodesConfig nodes_config(std::move(nodes));
-  // auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
-  // addLog(logs_config.get(), logid_t(1), 1, 0, 2, {});
-  config_ = ServerConfig::fromDataTest(
-      "copyset_selector_test", std::move(nodes_config));
   checker_ = std::make_unique<MockDomainIsolationChecker>(this);
   checker_->init();
 }
@@ -190,17 +184,7 @@ TEST_F(DomainIsolationTest, ClusterExpansion) {
 
   // add a new node to the config with a specific location
   auto add_node = [this](const std::string& location_str) {
-    auto nodes = config_->getNodes();
-    Configuration::Node node;
-    node.addStorageRole();
-    node.address = Sockaddr("::1", std::to_string(nodes.size()));
-    NodeLocation location;
-    ASSERT_EQ(0, location.fromDomainString(location_str));
-    node.location = std::move(location);
-    nodes.insert({nodes.size(), std::move(node)});
-    auto new_config =
-        config_->withNodes(ServerConfig::NodesConfig(std::move(nodes)));
-    config_ = std::move(new_config);
+    addNodes(nodes_config_, 1, 1, location_str, 1);
   };
 
   // add node 9 to region2 dc0 but a different cluster
@@ -220,10 +204,10 @@ TEST_F(DomainIsolationTest, ClusterExpansion) {
 }
 
 TEST_F(DomainIsolationTest, WholeClusterScopeNotIsolated) {
-  auto nodes = std::make_unique<configuration::Nodes>();
-  addNodes(nodes.get(), 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
-  addNodes(nodes.get(), 1, 1, "rg0.dc0.cl0.ro0.rk1", 1);
-  addNodes(nodes.get(), 1, 1, "rg0.dc0.cl0.ro0.rk1", 1);
+  auto nodes = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes, 1, 1, "rg0.dc0.cl0.ro0.rk1", 1);
+  addNodes(nodes, 1, 1, "rg0.dc0.cl0.ro0.rk1", 1);
   my_node_idx_ = 2;
   setDownNodes({0});
   setUp(std::move(nodes));

@@ -59,8 +59,7 @@ class TestMetaDataLogReader : public MetaDataLogReader {
 
   std::shared_ptr<const NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->serverConfig()
-        ->getNodesConfigurationFromServerConfigSource();
+    return config_->getNodesConfiguration();
   }
 
  public:
@@ -104,18 +103,14 @@ class TestMetaDataLogReader : public MetaDataLogReader {
   }
 
   void initConfig() {
-    Configuration::Nodes nodes;
-    addNodes(&nodes, 3, 1, "rg0.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 3, 1, "rg1.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 3, 1, "rg1.dc0.cl0.ro0.rk1", 1);
-    Configuration::NodesConfig nodes_config;
-    nodes_config.setNodes(std::move(nodes));
-
+    auto nodes = std::make_shared<const NodesConfiguration>();
+    addNodes(nodes, 3, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+    addNodes(nodes, 3, 1, "rg1.dc0.cl0.ro0.rk0", 1);
+    addNodes(nodes, 3, 1, "rg1.dc0.cl0.ro0.rk1", 1);
     config_ = std::make_shared<Configuration>(
-        ServerConfig::fromDataTest(__FILE__,
-                                   std::move(nodes_config),
-                                   Configuration::MetaDataLogsConfig()),
-        std::make_shared<configuration::LocalLogsConfig>());
+        ServerConfig::fromDataTest(__FILE__),
+        std::make_shared<configuration::LocalLogsConfig>(),
+        std::move(nodes));
   }
 
   bool started_{false};

@@ -178,26 +178,21 @@ TEST(NodeLocationTest, ClosestSharedScope) {
 using Domain = facebook::logdevice::NodeLocationHierarchy::Domain;
 
 TEST(NodeLocationTest, BuildHierarchy) {
-  Configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, "rg1.dc1...", 1);          // node 0
-  addNodes(&nodes, 1, 1, "rg2.dc2.cl1.ro1.rk1", 1); // node 1
-  addNodes(&nodes, 1, 1, "....", 1);                // node 2
-  addNodes(&nodes, 1, 1, "rg2.dc2...", 1);          // node 3
-  addNodes(&nodes, 1, 1, "rg2.dc1.cl1.ro1.", 1);    // node 4
-  addNodes(&nodes, 1, 1, "rg2.dc1.cl1.ro1.rk1", 1); // node 5
+  auto nodes = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes, 1, 1, "rg1.dc1...", 1);          // node 0
+  addNodes(nodes, 1, 1, "rg2.dc2.cl1.ro1.rk1", 1); // node 1
+  addNodes(nodes, 1, 1, "....", 1);                // node 2
+  addNodes(nodes, 1, 1, "rg2.dc2...", 1);          // node 3
+  addNodes(nodes, 1, 1, "rg2.dc1.cl1.ro1.", 1);    // node 4
+  addNodes(nodes, 1, 1, "rg2.dc1.cl1.ro1.rk1", 1); // node 5
 
-  Configuration::NodesConfig nodes_config;
-  nodes_config.setNodes(std::move(nodes));
-  std::shared_ptr<ServerConfig> config =
-      ServerConfig::fromDataTest("node_location_test", std::move(nodes_config));
   StorageSet nodeset = {ShardID(0, 0),
                         ShardID(1, 0),
                         ShardID(2, 0),
                         ShardID(3, 0),
                         ShardID(4, 0),
                         ShardID(5, 0)};
-  NodeLocationHierarchy h(
-      config->getNodesConfigurationFromServerConfigSource(), nodeset);
+  NodeLocationHierarchy h(nodes, nodeset);
   ASSERT_EQ(6, h.numClusterNodes());
   const Domain* root = h.getRoot();
   ASSERT_EQ(nullptr, root->parent_);
@@ -207,8 +202,8 @@ TEST(NodeLocationTest, BuildHierarchy) {
   ASSERT_EQ(StorageSet{ShardID(2, 0)}, root->direct_nodes_);
   std::map<ShardID, const Domain*> node_subdomains;
   for (const auto shard : nodeset) {
-    const Configuration::Node* node = config->getNode(shard.node());
-    const Domain* domain = h.findDomain(node->location.value());
+    const Domain* domain = h.findDomain(
+        nodes->getNodeServiceDiscovery(shard.node())->location.value());
     const Domain* domain_from_index = h.findDomainForShard(shard);
     ASSERT_NE(nullptr, domain);
     ASSERT_EQ(domain, domain_from_index);

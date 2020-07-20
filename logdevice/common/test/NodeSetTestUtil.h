@@ -19,7 +19,7 @@ namespace facebook { namespace logdevice { namespace NodeSetTestUtil {
 
 // add num_nodes in the nodes map with given attributes
 // @param num_non_zw_nodes     number of non-zero weight storage nodes
-void addNodes(ServerConfig::Nodes* nodes,
+void addNodes(std::shared_ptr<const NodesConfiguration>& nodes,
               size_t num_nodes,
               shard_size_t num_shards,
               std::string location_string,
@@ -27,7 +27,7 @@ void addNodes(ServerConfig::Nodes* nodes,
               double sequencer,
               size_t num_non_zw_nodes);
 
-inline void addNodes(ServerConfig::Nodes* nodes,
+inline void addNodes(std::shared_ptr<const NodesConfiguration>& nodes,
                      size_t num_nodes,
                      shard_size_t num_shards,
                      std::string location_string = "",

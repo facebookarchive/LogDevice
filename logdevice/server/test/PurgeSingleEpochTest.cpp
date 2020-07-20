@@ -67,7 +67,6 @@ class PurgeSingleEpochTest : public ::testing::Test {
   }
 
   std::vector<std::unique_ptr<StorageTask>> tasks_;
-  std::shared_ptr<Configuration> config_;
   std::unique_ptr<MockPurgeSingleEpoch> purge_;
   logid_t log_id_{1234};
   shard_index_t shard_{0};
@@ -124,16 +123,6 @@ class MockPurgeSingleEpoch : public PurgeSingleEpoch {
 void PurgeSingleEpochTest::setUp() {
   dbg::currentLevel = dbg::Level::DEBUG;
   dbg::assertOnData = true;
-
-  Configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, "....", 1);
-  Configuration::NodesConfig nodes_config(std::move(nodes));
-  auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), log_id_, 1, 0, 1, {});
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          "purge_single_epoch_test", std::move(nodes_config)),
-      std::move(logs_config));
 
   metadata_ = std::make_shared<EpochMetaData>(nodes_, replication_);
   purge_ = std::make_unique<MockPurgeSingleEpoch>(this);

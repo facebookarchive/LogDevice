@@ -19,6 +19,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/server/locallogstore/test/TemporaryLogStore.h"
@@ -162,8 +163,7 @@ class MockPurgeUncleanEpochs : public PurgeUncleanEpochs {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return test_->config_->serverConfig()
-        ->getNodesConfigurationFromServerConfigSource();
+    return test_->config_->getNodesConfiguration();
   }
 
   const std::shared_ptr<LogsConfig> getLogsConfig() const override {
@@ -220,21 +220,25 @@ void PurgeUncleanEpochsTest::setUp() {
   dbg::currentLevel = dbg::Level::DEBUG;
   dbg::assertOnData = true;
 
-  Configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, "....", 1);
-  Configuration::NodesConfig nodes_config(std::move(nodes));
+  auto nodes = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes, 1, 1, "....", 1);
+  nodes =
+      nodes->applyUpdate(NodesConfigurationTestUtil::setStorageMembershipUpdate(
+          *nodes,
+          {ShardID(0, -1)},
+          folly::none,
+          membership::MetaDataStorageState::METADATA));
+  nodes = nodes->applyUpdate(
+      NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+          *nodes, ReplicationProperty{{NodeLocationScope::NODE, 1}}));
 
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
   addLog(logs_config.get(), log_id_, 1, 0, 1, {});
 
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 1);
-
   config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest("purge_unclean_epochs_test",
-                                 std::move(nodes_config),
-                                 std::move(meta_config)),
-      std::move(logs_config));
+      ServerConfig::fromDataTest("purge_unclean_epochs_test"),
+      std::move(logs_config),
+      std::move(nodes));
 
   if (test_metadata_log_) {
     log_id_ = MetaDataLog::metaDataLogID(log_id_);

@@ -22,24 +22,20 @@ class MemtableFlushedRequestTest : public ::testing::Test {
  public:
   void init(NodeID my_node_id) {
     // initialize the cluster config
-    Configuration::Nodes nodes;
-    addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
-    addNodes(&nodes, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
-    addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
-    addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
+    nodes_config = std::make_shared<const NodesConfiguration>();
+    addNodes(nodes_config, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+    addNodes(nodes_config, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
+    addNodes(nodes_config, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
+    addNodes(nodes_config, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
+    addNodes(nodes_config, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
 
-    const size_t nodeset_size = nodes.size();
-    Configuration::NodesConfig nodes_config(std::move(nodes));
-    config = ServerConfig::fromDataTest(
-        "memtableflushedrequest_test", std::move(nodes_config));
     this->my_node_id = my_node_id;
   }
 
   ~MemtableFlushedRequestTest() override {}
 
   NodeID my_node_id;
-  std::shared_ptr<ServerConfig> config;
+  std::shared_ptr<const NodesConfiguration> nodes_config;
   uint32_t numMessageSent{0};
   bool applyFlushCalled{false};
 };
@@ -69,8 +65,7 @@ class MockMemtableFlushedRequest : public MemtableFlushedRequest {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    // TODO: migrate it to use NodesConfiguration with switchable source
-    return test_->config->getNodesConfigurationFromServerConfigSource();
+    return test_->nodes_config;
   }
 
   bool responsibleForNodesUpdates(node_index_t /*unused*/) override {

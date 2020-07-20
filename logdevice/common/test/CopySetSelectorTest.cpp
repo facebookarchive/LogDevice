@@ -84,8 +84,8 @@ class CopySetSelectorTest : public ::testing::Test {
 
   ////// cluster information
 
-  // cluster config
-  std::shared_ptr<Configuration> config_;
+  // Nodes Config
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
 
   // NodeID of the sequencer node
   node_index_t seq_node_idx_{2};
@@ -104,16 +104,9 @@ class CopySetSelectorTest : public ::testing::Test {
 
   TestCopySetSelectorDeps deps_;
 
-  std::shared_ptr<Configuration> getConfig() const {
-    return config_;
-  }
-
   size_t getClusterSize() const {
     // TODO: test non-consecutive node indexes
-    // TODO: migrate it to use NodesConfiguration with switchable source
-    return config_->serverConfig()
-        ->getNodesConfigurationFromServerConfigSource()
-        ->clusterSize();
+    return nodes_config_->clusterSize();
   }
 
   NodeID getMyNodeID() {
@@ -188,17 +181,14 @@ class MockLinearCopySetSelector : public LinearCopySetSelector {
 class MockCrossDomainCopySetSelector : public CrossDomainCopySetSelector {
  public:
   explicit MockCrossDomainCopySetSelector(CopySetSelectorTest* test)
-      : CrossDomainCopySetSelector(
-            test->LOG_ID,
-            test->nodeset_,
-            test->nodeset_state_,
-            test->getConfig()
-                ->serverConfig()
-                ->getNodesConfigurationFromServerConfigSource(),
-            test->getMyNodeID(),
-            test->replication_,
-            test->sync_replication_scope_,
-            &test->deps_) {}
+      : CrossDomainCopySetSelector(test->LOG_ID,
+                                   test->nodeset_,
+                                   test->nodeset_state_,
+                                   test->nodes_config_,
+                                   test->getMyNodeID(),
+                                   test->replication_,
+                                   test->sync_replication_scope_,
+                                   &test->deps_) {}
 };
 
 class MockStickyCopySetManager : public StickyCopySetManager {
@@ -308,33 +298,22 @@ class MockStickyCopySetManager : public StickyCopySetManager {
 void CopySetSelectorTest::setUp() {
   dbg::assertOnData = true;
 
-  configuration::Nodes nodes;
-  addNodes(&nodes, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
-  addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
-  addNodes(&nodes, 1, 1, "rg1.dc0.cl0..", 1);
-  addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
-  addNodes(&nodes, 1, 1, "rg2.dc0.cl0.ro0.rk1", 1);
-  addNodes(&nodes, 1, 1, "....", 1);
-
-  const size_t nodeset_size = nodes.size();
-  configuration::NodesConfig nodes_config(std::move(nodes));
-
-  auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), LOG_ID, replication_, extras_, nodeset_size, {});
-
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          "copyset_selector_test", std::move(nodes_config)),
-      std::move(logs_config));
+  nodes_config_ = std::make_shared<const NodesConfiguration>();
+  addNodes(nodes_config_, 1, 1, "rg0.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 2, 1, "rg1.dc0.cl0.ro0.rk1", 2);
+  addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0.ro0.rk2", 1);
+  addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0..", 1);
+  addNodes(nodes_config_, 1, 1, "rg2.dc0.cl0.ro0.rk0", 1);
+  addNodes(nodes_config_, 1, 1, "rg2.dc0.cl0.ro0.rk1", 1);
+  addNodes(nodes_config_, 1, 1, "....", 1);
 
   NodeID seq_node_id = getMyNodeID();
   ASSERT_TRUE(seq_node_id.isNodeID());
   ld_info("My node id: %s", seq_node_id.toString().c_str());
 
-  const Configuration::Node* my_node =
-      config_->serverConfig()->getNode(seq_node_id.index());
+  const auto* my_node =
+      nodes_config_->getNodeServiceDiscovery(seq_node_id.index());
   ASSERT_NE(nullptr, my_node);
   if (my_node->location.has_value()) {
     seq_domain_name_ = my_node->location.value().getDomain();
@@ -348,11 +327,8 @@ void CopySetSelectorTest::setUp() {
   nodeset_state_ = std::make_shared<NodeSetState>(
       nodeset_indices, LOG_ID, NodeSetState::HealthCheck::DISABLED);
 
-  hierarchy_ = std::make_unique<NodeLocationHierarchy>(
-      getConfig()
-          ->serverConfig()
-          ->getNodesConfigurationFromServerConfigSource(),
-      nodeset_indices);
+  hierarchy_ =
+      std::make_unique<NodeLocationHierarchy>(nodes_config_, nodeset_indices);
 
   if (sticky_copysets_) {
     copyset_manager_.reset(new MockStickyCopySetManager(this));
@@ -445,8 +421,7 @@ CopySetSelectorTest::buildNodeGroups(const StorageSet& shards) const {
   ld_check(shards.size() > 0);
   std::map<std::string, StorageSet> scope_map;
   for (const auto& i : shards) {
-    const Configuration::Node* node =
-        config_->serverConfig()->getNode(i.node());
+    const auto* node = nodes_config_->getNodeServiceDiscovery(i.node());
     ld_check(node);
     ld_check(node->location.has_value());
     const auto& location = node->location.value();
@@ -459,7 +434,7 @@ CopySetSelectorTest::buildNodeGroups(const StorageSet& shards) const {
 std::string
 CopySetSelectorTest::getNodeDomainName(node_index_t index,
                                        NodeLocationScope scope) const {
-  const Configuration::Node* node = config_->serverConfig()->getNode(index);
+  const auto* node = nodes_config_->getNodeServiceDiscovery(index);
   if (node && node->location.has_value()) {
     return node->location.value().getDomain(scope);
   }
@@ -472,8 +447,7 @@ size_t CopySetSelectorTest::countShardsWithDomainName(
   return std::count_if(
       shards.begin(), shards.end(), [this, &domain_name](const ShardID& i) {
         NodeLocation loc;
-        const Configuration::Node* node =
-            config_->serverConfig()->getNode(i.node());
+        const auto* node = nodes_config_->getNodeServiceDiscovery(i.node());
         int rv = loc.fromDomainString(domain_name);
         ld_check(rv == 0);
         return node && node->location.has_value() &&
@@ -1190,8 +1164,7 @@ TEST_F(CopySetSelectorTest, CrossDomainCopysetSelectorDistribution) {
   std::map<std::string, size_t> scope_stores;
 
   for (const auto& s : node_stores) {
-    const Configuration::Node* node =
-        config_->serverConfig()->getNode(s.first.node());
+    const auto* node = nodes_config_->getNodeServiceDiscovery(s.first.node());
     ld_check(node);
     ld_check(node->location.has_value());
     const auto& location = node->location.value();

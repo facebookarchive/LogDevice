@@ -12,12 +12,9 @@
 #include "logdevice/common/client_read_stream/ClientReadStreamScd.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
-#include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/common/util.h"
 
 namespace facebook { namespace logdevice {
-
-using namespace facebook::logdevice::NodeSetTestUtil;
 
 #define N0 ShardID(0, 0)
 #define N1 ShardID(1, 0)
@@ -29,25 +26,7 @@ class ClientReadStreamScd_FilteredOutTest : public ::testing::Test {
  public:
   using FilteredOut = ClientReadStreamScd::FilteredOut;
   void SetUp() override {
-    const size_t nodeset_size{5};
-    const copyset_size_t replication{4};
-    const logid_t LOG_ID{1};
-
-    configuration::Nodes nodes;
-    // for simplicity just use 5 nodes with 1 shard each
-    addNodes(&nodes, nodeset_size, 1, "rg0.dc0.cl0.ro0.rk1", 5);
     storage_set_ = StorageSet{N0, N1, N2, N3, N4};
-
-    Configuration::NodesConfig nodes_config;
-    nodes_config.setNodes(std::move(nodes));
-
-    auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-    addLog(logs_config.get(), LOG_ID, replication, 0, nodeset_size, {});
-
-    config_ = std::make_shared<Configuration>(
-        ServerConfig::fromDataTest(
-            "failure_domain_test", std::move(nodes_config)),
-        std::move(logs_config));
   }
 
   void assert_equal_shardset(small_shardset_t left, small_shardset_t right) {
@@ -80,7 +59,6 @@ class ClientReadStreamScd_FilteredOutTest : public ::testing::Test {
   FilteredOut filtered_out;
 
  private:
-  std::shared_ptr<Configuration> config_;
   StorageSet storage_set_;
 };
 

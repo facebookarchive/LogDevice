@@ -64,33 +64,28 @@ class DigestTest : public ::testing::Test {
     dbg::assertOnData = true;
 
     // initialize the cluster config
-    Configuration::Nodes nodes;
-    addNodes(&nodes, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1); // 0
-    addNodes(&nodes, 4, 1, "rg1.dc0.cl0.ro0.rk1", 2); // 1-4
-    addNodes(&nodes, 2, 1, "rg1.dc0.cl0..", 1);       // 5-6
-    addNodes(&nodes, 2, 1, "rg2.dc0.cl0.ro0.rk1", 1); // 7-8
-    addNodes(&nodes, 2, 1, "....", 1);                // 9-10
-
-    Configuration::NodesConfig nodes_config(std::move(nodes));
-
-    config_ =
-        ServerConfig::fromDataTest("digest_test", std::move(nodes_config));
+    nodes_config_ = std::make_shared<const NodesConfiguration>();
+    addNodes(nodes_config_, 1, 1, "rg1.dc0.cl0.ro0.rk0", 1); // 0
+    addNodes(nodes_config_, 4, 1, "rg1.dc0.cl0.ro0.rk1", 2); // 1-4
+    addNodes(nodes_config_, 2, 1, "rg1.dc0.cl0..", 1);       // 5-6
+    addNodes(nodes_config_, 2, 1, "rg2.dc0.cl0.ro0.rk1", 1); // 7-8
+    addNodes(nodes_config_, 2, 1, "....", 1);                // 9-10
   }
 
   void setUp() {
-    ld_check(config_ != nullptr);
-    digest_ = std::make_unique<Digest>(
-        TEST_LOG,
-        TEST_EPOCH,
-        EpochMetaData(nodeset_, replication_),
-        seal_epoch_,
-        config_->getNodesConfigurationFromServerConfigSource(),
-        Digest::Options({bridge_for_empty_epoch_}));
+    ld_check(nodes_config_ != nullptr);
+    digest_ =
+        std::make_unique<Digest>(TEST_LOG,
+                                 TEST_EPOCH,
+                                 EpochMetaData(nodeset_, replication_),
+                                 seal_epoch_,
+                                 nodes_config_,
+                                 Digest::Options({bridge_for_empty_epoch_}));
   }
 
  public:
   const logid_t TEST_LOG{2};
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   StorageSet nodeset_{N0, N1, N2, N3};
   ReplicationProperty replication_{{NodeLocationScope::NODE, 3}};
   epoch_t seal_epoch_{50};

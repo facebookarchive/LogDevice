@@ -133,7 +133,8 @@ class WeightedCopySetSelectorTest : public ::testing::Test {
     addNodes(location_string, weights, {}, in_nodeset);
   }
 
-  configuration::Nodes nodes_in_config_;
+  std::shared_ptr<const NodesConfiguration> nodes_in_config_{
+      std::make_shared<const NodesConfiguration>()};
   StorageSet nodeset_indices_; // in increasing order
   ReplicationProperty replication_;
 
@@ -142,7 +143,6 @@ class WeightedCopySetSelectorTest : public ::testing::Test {
   XorShift128PRNG rng_;
   EpochMetaData epoch_metadata_;
   std::shared_ptr<NodeSetState> nodeset_state_;
-  std::unique_ptr<ServerConfig> anon_server_config_; // doesn't have my node ID
   // Only sequencer affinity matters.
   logsconfig::DefaultLogAttributes default_log_attrs_;
   // Blacklist nodes here.
@@ -154,7 +154,7 @@ class WeightedCopySetSelectorTest : public ::testing::Test {
   // there are some exceptions: (a) primary sequencer node is unavailable,
   // (b) rebuilding.
   struct Selector {
-    std::shared_ptr<ServerConfig> server_config;
+    std::shared_ptr<const NodesConfiguration> nodes_config;
 
     // The copyset selector that we're testing.
     std::unique_ptr<WeightedCopySetSelector> selector;
@@ -185,9 +185,9 @@ void WeightedCopySetSelectorTest::addNodes(std::string location_string,
   for (size_t i = 0; i < weights.size(); ++i) {
     if (i < in_nodeset) {
       nodeset_indices_.push_back(
-          ShardID((node_index_t)nodes_in_config_.size(), 0));
+          ShardID((node_index_t)nodes_in_config_->clusterSize(), 0));
     }
-    ::addNodes(&nodes_in_config_,
+    ::addNodes(nodes_in_config_,
                1,
                NUM_SHARDS,
                location_string,
@@ -204,22 +204,14 @@ void WeightedCopySetSelectorTest::initIfNeeded() {
   nodeset_state_ = std::make_shared<NodeSetState>(
       nodeset_indices_, LOG_ID, NodeSetState::HealthCheck::DISABLED);
   epoch_metadata_ = EpochMetaData(nodeset_indices_, replication_);
-  configuration::NodesConfig nodes_config(nodes_in_config_);
-  anon_server_config_ =
-      std::unique_ptr<ServerConfig>(ServerConfig::fromDataTest(
-          "weighted_copyset_selector_test(anon)", std::move(nodes_config)));
   replication_checker_ = std::make_unique<FailureDomainNodeSet<size_t>>(
-      nodeset_indices_,
-      *anon_server_config_->getNodesConfigurationFromServerConfigSource(),
-      replication_);
+      nodeset_indices_, *nodes_in_config_, replication_);
 }
 
 node_index_t WeightedCopySetSelectorTest::getPrimarySequencerNode(logid_t log) {
   initIfNeeded();
   return HashBasedSequencerLocator::getPrimarySequencerNode(
-      log,
-      *anon_server_config_->getNodesConfigurationFromServerConfigSource(),
-      &default_log_attrs_);
+      log, *nodes_in_config_, &default_log_attrs_);
 }
 
 WeightedCopySetSelector&
@@ -251,32 +243,25 @@ WeightedCopySetSelectorTest::getSelector(logid_t log,
     nodeset_state_ = std::make_shared<NodeSetState>(
         nodeset_indices_, LOG_ID, NodeSetState::HealthCheck::DISABLED);
     epoch_metadata_ = EpochMetaData(nodeset_indices_, replication_);
-    configuration::NodesConfig nodes_config(nodes_in_config_);
-    anon_server_config_ =
-        std::unique_ptr<ServerConfig>(ServerConfig::fromDataTest(
-            "weighted_copyset_selector_test(anon)", std::move(nodes_config)));
     replication_checker_ = std::make_unique<FailureDomainNodeSet<size_t>>(
-        nodeset_indices_,
-        *anon_server_config_->getNodesConfigurationFromServerConfigSource(),
-        replication_);
+        nodeset_indices_, *nodes_in_config_, replication_);
   }
 
   Selector& s = selectors_[key];
-  configuration::NodesConfig nodes_config(nodes_in_config_);
-  s.server_config = std::shared_ptr<ServerConfig>(ServerConfig::fromDataTest(
-      "weighted_copyset_selector_test", std::move(nodes_config)));
-  s.selector = std::make_unique<WeightedCopySetSelector>(
-      log,
-      epoch_metadata_,
-      nodeset_state_,
-      s.server_config->getNodesConfigurationFromServerConfigSource(),
-      NodeID(my_node, 1),
-      &default_log_attrs_,
-      locality,
-      &stats,
-      rng_,
-      /* print_bias_warnings */ true,
-      &deps_);
+  s.nodes_config =
+      std::make_shared<const NodesConfiguration>(*nodes_in_config_);
+  s.selector =
+      std::make_unique<WeightedCopySetSelector>(log,
+                                                epoch_metadata_,
+                                                nodeset_state_,
+                                                s.nodes_config,
+                                                NodeID(my_node, 1),
+                                                &default_log_attrs_,
+                                                locality,
+                                                &stats,
+                                                rng_,
+                                                /* print_bias_warnings */ true,
+                                                &deps_);
   return *s.selector;
 }
 
@@ -420,7 +405,7 @@ void WeightedCopySetSelectorTest::testDistributionImpl(
   selectors_.clear();
 
   auto get_weight = [&](ShardID n) {
-    double w = nodes_in_config_.at(n.node()).getWritableStorageCapacity();
+    double w = nodes_in_config_->getShardWritableStorageCapacity(n);
     if (fake_weight_adjustments.count(n)) {
       w += fake_weight_adjustments[n];
     }
@@ -440,9 +425,8 @@ void WeightedCopySetSelectorTest::testDistributionImpl(
   std::unordered_map<node_index_t, std::string> node_domain;
   std::map<std::string, double> domain_total_weight;
   std::map<std::string, double> domain_nodeset_weight;
-  for (size_t i = 0; i < nodes_in_config_.size(); ++i) {
+  for (const auto& [i, node] : *nodes_in_config_->getServiceDiscovery()) {
     ShardID shard(i, 0);
-    const configuration::Node& node = nodes_in_config_.at(i);
     double w = get_weight(shard);
     std::string domain = node.location->getDomain(secondary_scope, i);
     node_domain[i] = domain;
@@ -455,9 +439,8 @@ void WeightedCopySetSelectorTest::testDistributionImpl(
 
   std::unordered_map<ShardID, double, ShardID::Hash> effective_weights;
   double sum_weights = 0;
-  for (size_t i = 0; i < nodes_in_config_.size(); ++i) {
+  for (const auto& [i, node] : *nodes_in_config_->getServiceDiscovery()) {
     ShardID shard(i, 0);
-    const configuration::Node& node = nodes_in_config_.at(i);
     double w = get_weight(shard);
     std::string domain = node.location->getDomain(secondary_scope, i);
     if (w > 0 &&
@@ -497,7 +480,7 @@ void WeightedCopySetSelectorTest::testDistributionImpl(
     // With 20% probability pick my node ID randomly. Otherwise use
     // my_node = sequencer_node.
     if (rng_() * 1. / RNG::max() < .2) {
-      my_node = rng_() % nodes_in_config_.size();
+      my_node = rng_() % nodes_in_config_->clusterSize();
     } else {
       my_node = sequencer_node;
     }
