@@ -36,14 +36,28 @@ addWeightedNodes(std::shared_ptr<const NodesConfiguration>& nodes,
                  size_t num_nodes,
                  shard_size_t num_shards,
                  std::string location_string,
-                 size_t num_non_zw_nodes) {
-  return addNodes(nodes,
-                  num_nodes,
-                  num_shards,
-                  location_string,
-                  /*storage_capacity*/ 1.,
-                  /*sequencer_weight*/ 1.,
-                  num_non_zw_nodes);
+                 size_t num_read_write) {
+  ld_check(num_nodes >= num_read_write);
+  auto num_read_only = num_nodes - num_read_write;
+  if (num_read_write > 0) {
+    addNodes(nodes,
+             num_read_write,
+             num_shards,
+             location_string,
+             /*storage_capacity*/ 1.,
+             /*sequencer_weight*/ 1.,
+             membership::StorageState::READ_WRITE);
+  }
+
+  if (num_read_only > 0) {
+    addNodes(nodes,
+             num_read_only,
+             num_shards,
+             location_string,
+             /*storage_capacity*/ 1.,
+             /*sequencer_weight*/ 1.,
+             membership::StorageState::READ_ONLY);
+  }
 }
 
 static void

@@ -13,34 +13,21 @@
 
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ReplicationProperty.h"
+#include "logdevice/common/membership/StorageState.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice { namespace NodeSetTestUtil {
 
 // add num_nodes in the nodes map with given attributes
-// @param num_non_zw_nodes     number of non-zero weight storage nodes
-void addNodes(std::shared_ptr<const NodesConfiguration>& nodes,
-              size_t num_nodes,
-              shard_size_t num_shards,
-              std::string location_string,
-              double weight,
-              double sequencer,
-              size_t num_non_zw_nodes);
-
-inline void addNodes(std::shared_ptr<const NodesConfiguration>& nodes,
-                     size_t num_nodes,
-                     shard_size_t num_shards,
-                     std::string location_string = "",
-                     double weight = 1.,
-                     double sequencer = 1.) {
-  addNodes(nodes,
-           num_nodes,
-           num_shards,
-           location_string,
-           weight,
-           sequencer,
-           /*num_non_zw_nodes*/ num_nodes);
-}
+void addNodes(
+    std::shared_ptr<const NodesConfiguration>& nodes,
+    size_t num_nodes,
+    shard_size_t num_shards,
+    std::string location_string = "",
+    double weight = 1.,
+    double sequencer = 1.,
+    membership::StorageState state = membership::StorageState::READ_WRITE,
+    bool metadata_node = false);
 
 // add a log to the logs_config with given attributes
 void addLog(configuration::LocalLogsConfig* logs_config,
