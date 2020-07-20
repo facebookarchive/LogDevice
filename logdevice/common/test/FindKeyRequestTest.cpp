@@ -18,6 +18,7 @@
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockNodeSetAccessor.h"
 #include "logdevice/common/test/MockTimer.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/types.h"
 
@@ -158,10 +159,17 @@ class MockFindKeyRequest : public FindKeyRequest {
                        find_key_callback_t(),
                        FindKeyAccuracy::STRICT),
         settings_(settings) {
-    Configuration::NodesConfig nodes_config = createSimpleNodesConfig(nnodes);
-    // metadata stored on all nodes with max replication factor 3
-    Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-        nodes_config, nodes_config.getNodes().size(), 3);
+    nodes_config_ = createSimpleNodesConfig(nnodes);
+    // All READ_WRITE, All metadata nodes
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes_config_,
+            nodes_config_->getStorageMembership()->getAllShards(),
+            membership::StorageState::READ_WRITE,
+            membership::MetaDataStorageState::METADATA));
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+            *nodes_config_, ReplicationProperty{{NodeLocationScope::NODE, 3}}));
 
     auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
@@ -169,8 +177,6 @@ class MockFindKeyRequest : public FindKeyRequest {
         boost::icl::right_open_interval<logid_t::raw_type>(1, 2),
         "mylog",
         log_attrs);
-    config_ = ServerConfig::fromDataTest(
-        __FILE__, std::move(nodes_config), std::move(meta_config));
 
     logs_config_ = std::move(logs_config);
 
@@ -190,10 +196,17 @@ class MockFindKeyRequest : public FindKeyRequest {
                        std::ref(callback),
                        FindKeyAccuracy::STRICT),
         settings_(settings) {
-    Configuration::NodesConfig nodes_config = createSimpleNodesConfig(nnodes);
-    // metadata stored on all nodes with max replication factor 3
-    Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-        nodes_config, nodes_config.getNodes().size(), 3);
+    nodes_config_ = createSimpleNodesConfig(nnodes);
+    // All READ_WRITE, All metadata nodes
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes_config_,
+            nodes_config_->getStorageMembership()->getAllShards(),
+            membership::StorageState::READ_WRITE,
+            membership::MetaDataStorageState::METADATA));
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+            *nodes_config_, ReplicationProperty{{NodeLocationScope::NODE, 3}}));
 
     auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
@@ -201,8 +214,6 @@ class MockFindKeyRequest : public FindKeyRequest {
         boost::icl::right_open_interval<logid_t::raw_type>(1, 2),
         "mylog",
         log_attrs);
-    config_ = ServerConfig::fromDataTest(
-        __FILE__, std::move(nodes_config), std::move(meta_config));
 
     logs_config_ = std::move(logs_config);
 
@@ -257,13 +268,13 @@ class MockFindKeyRequest : public FindKeyRequest {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
   void onShardStatusChanged() override {}
 
  private:
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   std::shared_ptr<LogsConfig> logs_config_;
   std::vector<sent_t> sent_;
   Settings settings_;

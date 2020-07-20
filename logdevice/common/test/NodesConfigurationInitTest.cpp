@@ -135,10 +135,9 @@ TEST(NodesConfigurationInitTest, ConfigCreation) {
 
 TEST(NodesConfigurationInitTest, InitTest) {
   // Create a dummy nodes configuration
-  auto node_config = createSimpleNodesConfig(3);
-  auto metadata_config = createMetaDataLogsConfig(node_config, 2, 1);
-  node_config.generateNodesConfiguration(metadata_config, config_version_t(2));
-  auto nodes_configuration = node_config.getNodesConfiguration();
+  auto nodes_configuration = provisionNodes();
+  auto cluster_size = nodes_configuration->clusterSize();
+  auto version = nodes_configuration->getVersion();
 
   // Serialize it
   auto serialized = NodesConfigurationCodec::serialize(*nodes_configuration);
@@ -164,8 +163,8 @@ TEST(NodesConfigurationInitTest, InitTest) {
                           current_server_config);
   EXPECT_TRUE(success);
   ASSERT_NE(nullptr, fetched_node_config->get());
-  EXPECT_EQ(vcs_config_version_t(2), fetched_node_config->get()->getVersion());
-  EXPECT_EQ(3, fetched_node_config->get()->clusterSize());
+  EXPECT_EQ(version, fetched_node_config->get()->getVersion());
+  EXPECT_EQ(cluster_size, fetched_node_config->get()->clusterSize());
 }
 
 TEST(NodesConfigurationInitTest, Retry) {

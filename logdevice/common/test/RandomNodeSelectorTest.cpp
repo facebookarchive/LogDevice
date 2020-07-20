@@ -22,49 +22,27 @@ using NodeSourceSet = RandomNodeSelector::NodeSourceSet;
 
 TEST(RandomNodeSelector, OneNode) {
   auto node_config = createSimpleNodesConfig(1 /* 1 node */);
-  auto server_config = ServerConfig::fromDataTest(
-      "random_node_selector_test", std::move(node_config));
 
-  auto nodes = server_config->getNodes();
-  auto node_id = NodeID(nodes.begin()->first, nodes.begin()->second.generation);
-
-  EXPECT_EQ(node_id,
-            RandomNodeSelector::getNode(
-                *server_config->getNodesConfigurationFromServerConfigSource()));
+  EXPECT_EQ(
+      node_config->getNodeID(0), RandomNodeSelector::getNode(*node_config));
 }
 
 TEST(RandomNodeSelector, ExcludeNode) {
   auto node_config = createSimpleNodesConfig(2 /* 2 nodes*/);
-  auto server_config = ServerConfig::fromDataTest(
-      "random_node_selector_test", std::move(node_config));
 
-  auto nodes = server_config->getNodes();
-
-  auto exclude = NodeID(nodes.begin()->first, nodes.begin()->second.generation);
-  auto node =
-      NodeID((++nodes.begin())->first, (++nodes.begin())->second.generation);
-
-  EXPECT_EQ(node,
-            RandomNodeSelector::getNode(
-                *server_config->getNodesConfigurationFromServerConfigSource(),
-                exclude));
+  auto exclude = node_config->getNodeID(0);
+  auto node = node_config->getNodeID(1);
+  EXPECT_EQ(node, RandomNodeSelector::getNode(*node_config, exclude));
 }
 
 TEST(RandomNodeSelector, DontExcludeSingleNode) {
   auto node_config = createSimpleNodesConfig(1 /* 1 node */);
-  auto server_config = ServerConfig::fromDataTest(
-      "random_node_selector_test", std::move(node_config));
-
-  auto nodes = server_config->getNodes();
 
   // exclude the only node there is
-  auto exclude = NodeID(nodes.begin()->first, nodes.begin()->second.generation);
+  auto exclude = node_config->getNodeID(0);
   auto node = exclude;
 
-  EXPECT_EQ(node,
-            RandomNodeSelector::getNode(
-                *server_config->getNodesConfigurationFromServerConfigSource(),
-                exclude));
+  EXPECT_EQ(node, RandomNodeSelector::getNode(*node_config, exclude));
 }
 
 struct SelectionParams {

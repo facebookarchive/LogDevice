@@ -269,6 +269,8 @@ class StorageMembership : public Membership {
   StorageSet writerViewMetaData() const;
   StorageSet readerViewMetaData() const;
 
+  std::vector<ShardID> getAllShards() const;
+
   /**
    * Return the list of storage shards whose MetaDataStorageState is either
    * METADATA or PROMOTING (i.e., not NONE).

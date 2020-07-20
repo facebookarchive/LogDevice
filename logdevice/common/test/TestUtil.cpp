@@ -42,6 +42,7 @@
 #include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/Reader.h"
 
@@ -138,18 +139,16 @@ TemporaryDirectory::~TemporaryDirectory() {
   }
 }
 
-ServerConfig::NodesConfig createSimpleNodesConfig(size_t nnodes) {
-  ServerConfig::Nodes nodes;
+std::shared_ptr<const NodesConfiguration>
+createSimpleNodesConfig(size_t nnodes) {
+  std::vector<NodesConfigurationTestUtil::NodeTemplate> templates;
   for (size_t i = 0; i < nnodes; ++i) {
-    auto& node = nodes[i];
-    node.name = folly::sformat("server-{}", i);
-    node.address = Sockaddr("::1", folly::to<std::string>(4440 + i));
-    node.gossip_address = Sockaddr("::1", folly::to<std::string>(5440 + i));
-    node.generation = 1;
-    node.addSequencerRole();
-    node.addStorageRole(/*num_shards*/ 2);
+    templates.push_back(NodesConfigurationTestUtil::NodeTemplate{
+        .id = node_index_t(i),
+        .num_shards = 2,
+    });
   }
-  return ServerConfig::NodesConfig(std::move(nodes));
+  return NodesConfigurationTestUtil::provisionNodes(std::move(templates));
 }
 
 ServerConfig::MetaDataLogsConfig

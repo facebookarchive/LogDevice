@@ -17,6 +17,7 @@
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockNodeSetAccessor.h"
 #include "logdevice/common/test/MockNodeSetFinder.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/types.h"
 
@@ -29,14 +30,19 @@ class MockGetTrimPointRequest : public GetTrimPointRequest {
   MockGetTrimPointRequest(int storage_set_size, ReplicationProperty replication)
       : GetTrimPointRequest(logid_t(1), std::chrono::seconds(1)),
         replication_(replication) {
-    Configuration::NodesConfig nodes_config =
-        createSimpleNodesConfig(storage_set_size);
-    Configuration::MetaDataLogsConfig meta_config =
-        createMetaDataLogsConfig(nodes_config,
-                                 nodes_config.getNodes().size(),
-                                 replication.getReplicationFactor());
-    config_ = ServerConfig::fromDataTest(
-        __FILE__, std::move(nodes_config), std::move(meta_config));
+    nodes_config_ = createSimpleNodesConfig(storage_set_size);
+    // All READ_WRITE, All metadata nodes
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes_config_,
+            nodes_config_->getStorageMembership()->getAllShards(),
+            membership::StorageState::READ_WRITE,
+            membership::MetaDataStorageState::METADATA));
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+            *nodes_config_,
+            ReplicationProperty{{NodeLocationScope::NODE,
+                                 replication.getReplicationFactor()}}));
 
     storage_set_.reserve(storage_set_size);
     for (node_index_t nid = 0; nid < storage_set_size; ++nid) {
@@ -49,7 +55,7 @@ class MockGetTrimPointRequest : public GetTrimPointRequest {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
   void updateTrimPoint(Status status, lsn_t trim_point) const override {
@@ -64,7 +70,7 @@ class MockGetTrimPointRequest : public GetTrimPointRequest {
  private:
   StorageSet storage_set_;
   ReplicationProperty replication_;
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
 };
 
 static ShardID node(node_index_t index) {

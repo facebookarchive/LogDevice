@@ -16,6 +16,7 @@
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockTimer.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/types.h"
 
@@ -46,7 +47,7 @@ class NodeSetFinderTest : public ::testing::Test {
   bool called_ = false;
   Status status_ = E::UNKNOWN;
 
-  std::shared_ptr<Configuration> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
 
   int sequencer_attempts_ = 0;
   std::chrono::milliseconds seq_timeout_{0};
@@ -118,21 +119,18 @@ class MockNodeSetFinder : public NodeSetFinder {
 constexpr logid_t NodeSetFinderTest::LOG_ID;
 
 void NodeSetFinderTest::setUp() {
-  Configuration::NodesConfig nodes_config = createSimpleNodesConfig(nnodes);
+  nodes_config_ = createSimpleNodesConfig(nnodes);
+  // All READ_WRITE, All metadata nodes
   // metadata stored on all nodes with max replication factor 3
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes_config.getNodes().size(), 3);
-
-  auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
-  auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(1, 2),
-                      "mylog",
-                      log_attrs);
-
-  config_ = std::make_shared<Configuration>(
-      ServerConfig::fromDataTest(
-          __FILE__, std::move(nodes_config), std::move(meta_config)),
-      std::move(logs_config));
+  nodes_config_ = nodes_config_->applyUpdate(
+      NodesConfigurationTestUtil::setStorageMembershipUpdate(
+          *nodes_config_,
+          nodes_config_->getStorageMembership()->getAllShards(),
+          membership::StorageState::READ_WRITE,
+          membership::MetaDataStorageState::METADATA));
+  nodes_config_ = nodes_config_->applyUpdate(
+      NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+          *nodes_config_, ReplicationProperty{{NodeLocationScope::NODE, 3}}));
 
   finder_ = std::make_unique<MockNodeSetFinder>(this);
 }
@@ -258,38 +256,27 @@ TEST_F(NodeSetFinderTest, ReadMetadataLog) {
   minRep = *result->getNarrowestReplication(EPOCH_MIN, EPOCH_MIN);
   ASSERT_EQ(ReplicationProperty({{S::NODE, 2}}).toString(), minRep.toString());
 
-  auto storage_set = finder_->getUnionStorageSet(
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource());
+  auto storage_set = finder_->getUnionStorageSet(*nodes_config_);
   ASSERT_EQ(storage_set.size(), 5);
 
-  storage_set = *result->getUnionStorageSet(
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      epoch_t(50),
-      EPOCH_MAX);
+  storage_set =
+      *result->getUnionStorageSet(*nodes_config_, epoch_t(50), EPOCH_MAX);
   ASSERT_EQ(storage_set.size(), 2);
 
-  storage_set = *result->getUnionStorageSet(
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      EPOCH_MAX,
-      EPOCH_MAX);
+  storage_set =
+      *result->getUnionStorageSet(*nodes_config_, EPOCH_MAX, EPOCH_MAX);
   ASSERT_EQ(storage_set.size(), 2);
 
-  storage_set = *result->getUnionStorageSet(
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      EPOCH_MIN,
-      epoch_t(50));
+  storage_set =
+      *result->getUnionStorageSet(*nodes_config_, EPOCH_MIN, epoch_t(50));
   ASSERT_EQ(storage_set.size(), 5);
 
-  storage_set = *result->getUnionStorageSet(
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      EPOCH_MIN,
-      epoch_t(40));
+  storage_set =
+      *result->getUnionStorageSet(*nodes_config_, EPOCH_MIN, epoch_t(40));
   ASSERT_EQ(storage_set.size(), 3);
 
-  storage_set = *result->getUnionStorageSet(
-      *config_->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      EPOCH_MIN,
-      EPOCH_MIN);
+  storage_set =
+      *result->getUnionStorageSet(*nodes_config_, EPOCH_MIN, EPOCH_MIN);
   ASSERT_EQ(storage_set.size(), 3);
 }
 

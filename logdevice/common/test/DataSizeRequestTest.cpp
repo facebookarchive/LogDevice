@@ -17,6 +17,7 @@
 #include "logdevice/common/test/MockNodeSetAccessor.h"
 #include "logdevice/common/test/MockNodeSetFinder.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/NodeLocationScope.h"
 #include "logdevice/include/types.h"
@@ -70,9 +71,7 @@ class MockDataSizeRequest : public DataSizeRequest {
                       Callback& callback,
                       std::chrono::milliseconds start,
                       std::chrono::milliseconds end,
-                      ShardAuthoritativeStatusMap starting_map,
-                      folly::Optional<Configuration::NodesConfig>
-                          nodes_config_override = folly::none)
+                      ShardAuthoritativeStatusMap starting_map)
       : DataSizeRequest(logid_t(1),
                         start,
                         end,
@@ -81,17 +80,19 @@ class MockDataSizeRequest : public DataSizeRequest {
                         std::chrono::seconds(1)),
         replication_(replication),
         map_(starting_map) {
-    Configuration::NodesConfig nodes_config = nodes_config_override.has_value()
-        ? std::move(nodes_config_override.value())
-        : createSimpleNodesConfig(storage_set_size);
-
-    Configuration::MetaDataLogsConfig meta_config =
-        createMetaDataLogsConfig(nodes_config,
-                                 nodes_config.getNodes().size(),
-                                 replication.getReplicationFactor());
-
-    config_ = ServerConfig::fromDataTest(
-        __FILE__, std::move(nodes_config), std::move(meta_config));
+    nodes_config_ = createSimpleNodesConfig(storage_set_size);
+    // All READ_WRITE, All metadata nodes
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes_config_,
+            nodes_config_->getStorageMembership()->getAllShards(),
+            membership::StorageState::READ_WRITE,
+            membership::MetaDataStorageState::METADATA));
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+            *nodes_config_,
+            ReplicationProperty{{NodeLocationScope::NODE,
+                                 replication.getReplicationFactor()}}));
 
     storage_set_.reserve(storage_set_size);
     for (node_index_t nid = 0; nid < storage_set_size; ++nid) {
@@ -165,7 +166,7 @@ class MockDataSizeRequest : public DataSizeRequest {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
   ShardAuthoritativeStatusMap& getShardAuthoritativeStatusMap() override {
@@ -180,7 +181,7 @@ class MockDataSizeRequest : public DataSizeRequest {
 
   StorageSet storage_set_;
   ReplicationProperty replication_;
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   ShardAuthoritativeStatusMap map_;
 };
 

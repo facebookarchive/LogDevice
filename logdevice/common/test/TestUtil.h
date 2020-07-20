@@ -84,7 +84,8 @@ inline void writeSimpleConfig(const char* path, int server_generation) {
   overwriteConfigFile(path, contents);
 }
 
-ServerConfig::NodesConfig createSimpleNodesConfig(size_t nnodes);
+std::shared_ptr<const NodesConfiguration>
+createSimpleNodesConfig(size_t nnodes);
 
 /**
  * Create a MetaDataLogsConfig object from an existing NodesConfig. Nodes

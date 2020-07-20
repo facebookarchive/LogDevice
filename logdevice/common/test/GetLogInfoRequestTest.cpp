@@ -14,6 +14,7 @@
 
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/types.h"
 
@@ -86,14 +87,17 @@ class MockGetLogInfoRequest : public GetLogInfoRequest {
                           std::make_shared<GetLogInfoRequestSharedState>(),
                           std::ref(callback),
                           worker_id_t(-1)) {
-    Configuration::NodesConfig nodes_config = createSimpleNodesConfig(nnodes);
-    // metadata stored on all nodes with max replication factor 3
-    Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-        nodes_config, nodes_config.getNodes().size(), 3);
-    config_ = std::make_shared<Configuration>(
-        ServerConfig::fromDataTest(
-            __FILE__, std::move(nodes_config), std::move(meta_config)),
-        std::make_shared<configuration::LocalLogsConfig>());
+    nodes_config_ = createSimpleNodesConfig(nnodes);
+    // All READ_WRITE, All metadata nodes
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes_config_,
+            nodes_config_->getStorageMembership()->getAllShards(),
+            membership::StorageState::READ_WRITE,
+            membership::MetaDataStorageState::METADATA));
+    nodes_config_ = nodes_config_->applyUpdate(
+        NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+            *nodes_config_, ReplicationProperty{{NodeLocationScope::NODE, 3}}));
 
     // Start immediately, every test needs this
     start();
@@ -114,7 +118,7 @@ class MockGetLogInfoRequest : public GetLogInfoRequest {
  protected: // mock stuff that communicates externally
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
   int reloadConfig() override {
@@ -148,7 +152,7 @@ class MockGetLogInfoRequest : public GetLogInfoRequest {
   void deleteThis() override {}
 
  private:
-  std::shared_ptr<Configuration> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   std::vector<std::unique_ptr<MockGetLogInfoFromNodeRequest>> per_node_reqs_;
 };
 

@@ -715,6 +715,16 @@ StorageSet StorageMembership::readerViewMetaData() const {
   });
 }
 
+std::vector<ShardID> StorageMembership::getAllShards() const {
+  std::vector<ShardID> all_shards;
+  for (const auto& [nid, state] : node_states_) {
+    for (const auto& [sid, _] : state.shard_states) {
+      all_shards.emplace_back(nid, sid);
+    }
+  }
+  return all_shards;
+}
+
 StorageSet StorageMembership::getMetaDataStorageSet() const {
   return storageset_filter(
       metadata_shards_, [](ShardID shard) { return true; });
