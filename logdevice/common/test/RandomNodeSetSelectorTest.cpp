@@ -832,7 +832,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, AddNode) {
   // another node added to the 5th rack
   addWeightedNodes(nodes2, 1, 1, "region1.datacenter1.02.a.b", 1);
 
-#ifdef FOLLY_SANITIZE_ADDRESS
+#ifdef FOLLY_SANITIZE
   // ASAN builds are 3-10 times slower than normal, use much fewer iterations.
   const int numlogs = 1000;
 #else
