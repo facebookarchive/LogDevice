@@ -380,7 +380,10 @@ void RebuildingSupervisor::requestRebuilding(RebuildingTrigger& trigger,
   auto ticket = callbackHelper_.ticket();
   auto cb = [trigger, shard, ticket](
                 Status st, lsn_t version, const std::string& /* unused */) {
-    if (st == E::TIMEDOUT && version != LSN_INVALID) {
+    if ((st == E::TIMEDOUT && version != LSN_INVALID) ||
+        st == E::MAINTENANCE_CLASH) {
+      // If the maintenance already exists we will get MAINTENANCE_CLASH, this
+      // means that an existing maintenance has already been applied.
       // Confirmation timed out but the append succeeded.
       // Consider it a success, as rebuilding event was written.
       st = E::OK;
