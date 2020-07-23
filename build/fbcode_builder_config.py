@@ -39,6 +39,18 @@ Which outputs a legocastle job to stdout; to be fed into scutil create ...
 """
 
 
+class FakeClangModule:
+    @staticmethod
+    def fbcode_builder_spec(builder):
+        return {
+            "depends_on": [],
+            "steps": [
+                builder.set_env("CC", "clang-9"),
+                builder.set_env("CXX", "clang++-9"),
+            ],
+        }
+
+
 def fbcode_builder_spec(builder):
     # This API should change rarely, so build the latest tag instead of master.
     builder.add_option(
@@ -48,8 +60,12 @@ def fbcode_builder_spec(builder):
     builder.add_option(
         "LogDevice/logdevice/_build:cmake_defines", {"BUILD_SUBMODULES": "OFF"}
     )
+    builder.add_option(
+        "folly/_build:cmake_defines",
+        {"BUILD_SHARED_LIBS": "OFF", "BUILD_TESTS": "ON", "FOLLY_USE_JEMALLOC": "OFF"},
+    )
     return {
-        "depends_on": [zstd, fmt, folly, fizz, wangle, sodium],
+        "depends_on": [FakeClangModule, zstd, fmt, folly, fizz, wangle, sodium],
         "steps": [
             # This isn't a separete spec, since only fbthrift uses mstch.
             builder.github_project_workdir("no1msd/mstch", "build"),

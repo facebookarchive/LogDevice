@@ -6,8 +6,13 @@
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fno-new-ttp-matching")
+set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS}\
+  -Wno-nullability-completeness\
+  -Wno-deprecated-declarations\
+  -Wno-inconsistent-missing-override\
+  -Wno-defaulted-function-deleted")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--export-dynamic")
+set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -latomic")
 set(LOGDEVICE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(LOGDEVICE_ADMIN_DIR "${LOGDEVICE_DIR}/admin")
 set(LOGDEVICE_ADMIN_SERVER_DIR "${LOGDEVICE_DIR}/ops/admin_server")
@@ -22,6 +27,8 @@ set(FB303_INCLUDE_DIR "${LOGDEVICE_COMMON_DIR}/if/for_open_source")
 
 set(LOGDEVICE_STAGING_DIR "${CMAKE_BINARY_DIR}/staging")
 set(LOGDEVICE_PYTHON_CLIENT_DIR "${LOGDEVICE_DIR}/clients/python")
+set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 
 # Setting Output
