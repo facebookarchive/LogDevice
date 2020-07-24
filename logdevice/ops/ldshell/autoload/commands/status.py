@@ -10,6 +10,7 @@ import asyncio
 import datetime
 import json
 import sys
+import time
 from collections import Counter, OrderedDict, defaultdict
 from dataclasses import asdict, dataclass, field, fields
 from datetime import timedelta
@@ -148,9 +149,7 @@ async def print_results_tabular(results, *args, **kwargs):
             ("STATE", lambda result: result.state if result.state else "?"),
             (
                 "UPTIME",
-                lambda result: naturaltime(timedelta(seconds=int(result.uptime)))
-                if result.uptime
-                else "?",
+                lambda result: render_uptime(result.uptime) if result.uptime else "?",
             ),
             ("LOCATION", lambda result: result.location),
             (
@@ -210,6 +209,14 @@ async def print_results_json(results, *args, **kwargs):
         representations[hostname] = representation
 
     print(json.dumps(representations))
+
+
+def render_uptime(uptime: float):
+    # TODO(T70149915): Remove as soon as new version is rolled out
+    year = timedelta(days=365).total_seconds()
+    now = time.time()
+    elapsed_secs = uptime if uptime < year else now - uptime
+    return naturaltime(timedelta(seconds=int(elapsed_secs)))
 
 
 def color_op_state(op_state: ShardOperationalState):
