@@ -623,7 +623,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Network);
   init("idle-connection-keep-alive",
        &idle_connection_keep_alive,
-       "1min",
+       "5min",
        validate_positive<ssize_t>(),
        "How long inactive client-to-server connection will stay open before "
        "being shut down automatically.",
@@ -631,7 +631,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::Network);
   init("rate-limit-idle-connection-closed",
        &rate_limit_idle_connection_closed,
-       "0",
+       "10",
        validate_nonnegative<ssize_t>(),
        "Max number of idle connections closed in single round of socket healh "
        "check. Set to 0 to disable closing of idle connections completely.",
