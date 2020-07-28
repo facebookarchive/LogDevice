@@ -157,31 +157,100 @@ size_t calculateHeaderSize(int checksum_bits, size_t appends_count) {
 
 } // namespace
 
-BufferedWriteCodec::Encoder::Encoder(int checksum_bits,
-                                     size_t appends_count,
-                                     size_t capacity)
+template <>
+BufferedWriteCodec::Encoder<BufferedWriteSinglePayloadsCodec::Encoder>::Encoder(
+    int checksum_bits,
+    size_t appends_count,
+    size_t capacity)
     : checksum_bits_(checksum_bits),
       appends_count_(appends_count),
       header_size_(calculateHeaderSize(checksum_bits_, appends_count_)),
       payloads_encoder_(capacity - header_size_, header_size_) {}
 
-void BufferedWriteCodec::Encoder::append(const folly::IOBuf& payload) {
-  payloads_encoder_.append(payload);
+template <>
+BufferedWriteCodec::Encoder<PayloadGroupCodec::Encoder>::Encoder(
+    int checksum_bits,
+    size_t appends_count,
+    // not used by PayloadGroupCodec::Encoder
+    size_t /* capacity */)
+    : checksum_bits_(checksum_bits),
+      appends_count_(appends_count),
+      header_size_(calculateHeaderSize(checksum_bits_, appends_count_)),
+      payloads_encoder_(appends_count_) {}
+
+template <typename PayloadsEncoder>
+void BufferedWriteCodec::Encoder<PayloadsEncoder>::append(
+    folly::IOBuf&& payload) {
+  payloads_encoder_.append(std::move(payload));
 }
 
-void BufferedWriteCodec::Encoder::encode(folly::IOBufQueue& out,
-                                         Compression compression,
-                                         int zstd_level) {
+template <>
+void BufferedWriteCodec::Encoder<PayloadGroupCodec::Encoder>::append(
+    const PayloadGroup& payload_group) {
+  payloads_encoder_.append(payload_group);
+}
+
+template <>
+void BufferedWriteCodec::Encoder<BufferedWriteSinglePayloadsCodec::Encoder>::
+    append(const PayloadGroup& /* payload_group */) {
+  // this should never be called: if there's at least one PayloadGroup appended,
+  // then PayloadGroupCodec must be used
+  ld_check(false);
+}
+
+template <typename PayloadsEncoder>
+void BufferedWriteCodec::Encoder<PayloadsEncoder>::encode(
+    folly::IOBufQueue& out,
+    Compression compression,
+    int zstd_level) {
   folly::IOBufQueue queue;
+  if constexpr (std::is_same_v<PayloadsEncoder, PayloadGroupCodec::Encoder>) {
+    // Make sure there's headroom reserved
+    // Initial buffer size is based on kDesiredGrowth in thrift
+    // BinaryProtocolWriter (16Kb - IOBuf overhead)
+    auto iobuf = folly::IOBuf::create((2 << 14) - 64);
+    iobuf->advance(header_size_);
+    queue.append(std::move(iobuf));
+  }
+
   payloads_encoder_.encode(queue, compression, zstd_level);
 
   auto blob = queue.move();
-  ld_check(!blob->isChained());
+  if constexpr (std::is_same_v<PayloadsEncoder, PayloadGroupCodec::Encoder>) {
+    // TODO checksumming requires a contiguous blob, so coalesce the blob
+    // this can be removed once non-contiguous IOBufs are fully supported
+    blob->coalesceWithHeadroomTailroom(header_size_, 0);
+
+    // Compression for payloads in payload groups is encoded separately.
+    // This compression can be tratead as compression used for the whole batch,
+    // which is not compressed in case of payload groups encoder.
+    compression = Compression::NONE;
+  } else {
+    ld_check(!blob->isChained());
+  }
   ld_check(blob->headroom() >= header_size_);
   blob->prepend(header_size_);
   encodeHeader(*blob, compression);
   out.append(std::move(blob));
 }
+
+namespace {
+/** Returns format based on encoder type. */
+template <typename PayloadsEncoder>
+BufferedWriteCodec::Format getFormat();
+
+template <>
+BufferedWriteCodec::Format
+getFormat<BufferedWriteSinglePayloadsCodec::Encoder>() {
+  return BufferedWriteCodec::Format::SINGLE_PAYLOADS;
+}
+
+template <>
+BufferedWriteCodec::Format getFormat<PayloadGroupCodec::Encoder>() {
+  return BufferedWriteCodec::Format::PAYLOAD_GROUPS;
+}
+
+} // namespace
 
 // Format of the header:
 // * 0-8 bytes reserved for checksum -- this is not really part of the
@@ -189,8 +258,10 @@ void BufferedWriteCodec::Encoder::encode(folly::IOBufQueue& out,
 // * 1 magic marker byte
 // * 1 flags byte
 // * 0-9 bytes varint batch size
-void BufferedWriteCodec::Encoder::encodeHeader(folly::IOBuf& blob,
-                                               Compression compression) {
+template <typename PayloadsEncoder>
+void BufferedWriteCodec::Encoder<PayloadsEncoder>::encodeHeader(
+    folly::IOBuf& blob,
+    Compression compression) {
   using batch_flags_t = BufferedWriteDecoderImpl::flags_t;
 
   const batch_flags_t flags = BufferedWriteDecoderImpl::Flags::SIZE_INCLUDED |
@@ -200,7 +271,7 @@ void BufferedWriteCodec::Encoder::encodeHeader(folly::IOBuf& blob,
   // Skip checksum
   out += checksum_bits_ / 8;
   // Magic marker & flags
-  *out++ = 0xb1;
+  *out++ = static_cast<uint8_t>(getFormat<PayloadsEncoder>());
   *out++ = flags;
 
   size_t len = folly::encodeVarint(appends_count_, out);
@@ -217,14 +288,45 @@ void BufferedWriteCodec::Encoder::encodeHeader(folly::IOBuf& blob,
   }
 }
 
+// Instantiate Encoder with all supported variants of payload encoders
+template class BufferedWriteCodec::Encoder<
+    BufferedWriteSinglePayloadsCodec::Encoder>;
+template class BufferedWriteCodec::Encoder<PayloadGroupCodec::Encoder>;
+
 void BufferedWriteCodec::Estimator::append(const folly::IOBuf& payload) {
-  payloads_estimator_.append(payload);
+  // For single payloads format we should update payload groups format too
+  // in case payload group is appended. However once format is switched to
+  // payload groups, there's no need to do single payloads estimates, since they
+  // will be discarded.
+  switch (format_) {
+    case Format::SINGLE_PAYLOADS:
+      single_payloads_estimator_.append(payload);
+      FOLLY_FALLTHROUGH;
+    case Format::PAYLOAD_GROUPS:
+      payload_groups_estimator_.append(payload);
+      break;
+  }
+  appends_count_++;
+}
+
+void BufferedWriteCodec::Estimator::append(const PayloadGroup& payload_group) {
+  // PayloadGroup encoding requires PAYLOAD_GROUPS format
+  format_ = Format::PAYLOAD_GROUPS;
+  payload_groups_estimator_.append(payload_group);
   appends_count_++;
 }
 
 size_t BufferedWriteCodec::Estimator::calculateSize(int checksum_bits) const {
-  return calculateHeaderSize(checksum_bits, appends_count_) +
-      payloads_estimator_.calculateSize();
+  size_t size = calculateHeaderSize(checksum_bits, appends_count_);
+  switch (format_) {
+    case Format::SINGLE_PAYLOADS:
+      size += single_payloads_estimator_.calculateSize();
+      break;
+    case Format::PAYLOAD_GROUPS:
+      size += payload_groups_estimator_.calculateSize();
+      break;
+  }
+  return size;
 }
 
 }} // namespace facebook::logdevice

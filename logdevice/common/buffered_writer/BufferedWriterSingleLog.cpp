@@ -19,10 +19,12 @@
 #include <folly/Varint.h>
 
 #include "logdevice/common/AppendRequest.h"
+#include "logdevice/common/PayloadGroupCodec.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
+#include "logdevice/common/buffered_writer/BufferedWriteCodec.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/buffered_writer/BufferedWriterShard.h"
@@ -601,34 +603,68 @@ int BufferedWriterSingleLog::checksumBits() const {
       : 0;
 }
 
+namespace {
+template <typename PayloadsEncoder>
+void encode_batch(BufferedWriterSingleLog::Batch& batch,
+                  int checksum_bits,
+                  Compression compression,
+                  int zstd_level,
+                  bool destroy_payloads) {
+  ld_check(batch.total_size_freed == 0);
+
+  BufferedWriteCodec::Encoder<PayloadsEncoder> encoder(
+      checksum_bits, batch.appends.size(), batch.blob_bytes_total);
+  for (auto& append : batch.appends) {
+    if (destroy_payloads) {
+      batch.total_size_freed += append.second.size();
+
+      // Payload should be destroyed, so pass ownership to the encoder
+      std::string* client_payload = new std::string(std::move(append.second));
+      folly::IOBuf iobuf =
+          folly::IOBuf(folly::IOBuf::TAKE_OWNERSHIP,
+                       client_payload->data(),
+                       client_payload->size(),
+                       +[](void* /* buf */, void* userData) {
+                         delete reinterpret_cast<std::string*>(userData);
+                       },
+                       /* userData */ reinterpret_cast<void*>(client_payload));
+      encoder.append(std::move(iobuf));
+
+      // Can't do append.second.clear() because that usually doesn't free
+      // memory.
+      append.second.clear();
+      append.second.shrink_to_fit();
+    } else {
+      const std::string& client_payload = append.second;
+      // It's safe to wrap buffer, since payloads are preserved in batch.
+      encoder.append(folly::IOBuf::wrapBufferAsValue(
+          client_payload.data(), client_payload.size()));
+    }
+  }
+  folly::IOBufQueue encoded;
+  encoder.encode(encoded, compression, zstd_level);
+  batch.blob = encoded.moveAsValue();
+}
+} // namespace
+
 void BufferedWriterSingleLog::Impl::construct_compressed_blob(
     BufferedWriterSingleLog::Batch& batch,
     int checksum_bits,
     Compression compression,
     int zstd_level,
     bool destroy_payloads) {
-  ld_check(batch.total_size_freed == 0);
-
-  BufferedWriteCodec::Encoder encoder(
-      checksum_bits, batch.appends.size(), batch.blob_bytes_total);
-
-  for (auto& append : batch.appends) {
-    const std::string& client_payload = append.second;
-    // It's safe to wrap buffer, even though it can be destroyed soon,
-    // since encoder makes a copy on append
-    encoder.append(folly::IOBuf::wrapBufferAsValue(
-        client_payload.data(), client_payload.size()));
-    if (destroy_payloads) {
-      batch.total_size_freed += append.second.size();
-      // Can't do append.second.clear() because that usually doesn't free
-      // memory.
-      append.second.clear();
-      append.second.shrink_to_fit();
+  switch (batch.blob_size_estimator.getFormat()) {
+    case BufferedWriteCodec::Format::SINGLE_PAYLOADS: {
+      encode_batch<BufferedWriteSinglePayloadsCodec::Encoder>(
+          batch, checksum_bits, compression, zstd_level, destroy_payloads);
+      break;
+    }
+    case BufferedWriteCodec::Format::PAYLOAD_GROUPS: {
+      encode_batch<PayloadGroupCodec::Encoder>(
+          batch, checksum_bits, compression, zstd_level, destroy_payloads);
+      break;
     }
   }
-  folly::IOBufQueue encoded;
-  encoder.encode(encoded, compression, zstd_level);
-  batch.blob = encoded.moveAsValue();
 }
 
 void BufferedWriterSingleLog::Impl::construct_blob_long_running(

@@ -12,6 +12,7 @@
 #include <folly/io/Cursor.h>
 #include <folly/io/IOBuf.h>
 
+#include "logdevice/common/PayloadGroupCodec.h"
 #include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
@@ -72,7 +73,11 @@ class BufferedWriteSinglePayloadsCodec {
  */
 class BufferedWriteCodec {
  public:
+  // Enum values are persisted in storage to identify encoding.
+  enum class Format : uint8_t { SINGLE_PAYLOADS = 0xb1, PAYLOAD_GROUPS = 0xb2 };
+
   /** Supports encoding of the payloads. */
+  template <typename PayloadsEncoder>
   class Encoder {
    public:
     /**
@@ -83,7 +88,9 @@ class BufferedWriteCodec {
     Encoder(int checksum_bits, size_t appends_count, size_t capacity);
 
     /** Appends single payload to the batch. */
-    void append(const folly::IOBuf& payload);
+    void append(folly::IOBuf&& payload);
+    /** Appends payload group to the batch. */
+    void append(const PayloadGroup& payload_group);
 
     /**
      * Encodes added appends into output specified in constructor.
@@ -104,7 +111,7 @@ class BufferedWriteCodec {
     size_t appends_count_;
     size_t header_size_;
 
-    BufferedWriteSinglePayloadsCodec::Encoder payloads_encoder_;
+    PayloadsEncoder payloads_encoder_;
   };
 
   /**
@@ -114,6 +121,11 @@ class BufferedWriteCodec {
    public:
     /** Appends single payload to the batch. */
     void append(const folly::IOBuf& payload);
+    /**
+     * Appends payload group to the batch. This can change required format for
+     * the encoding.
+     */
+    void append(const PayloadGroup& payload_group);
 
     /**
      * Returns resulting encoded uncompressed blob size, including space for
@@ -123,10 +135,20 @@ class BufferedWriteCodec {
      */
     size_t calculateSize(int checksum_bits) const;
 
+    /**
+     * Returns format required for the batch encoding. Format is updated
+     * dynamically based on perormed appends.
+     */
+    Format getFormat() const {
+      return format_;
+    }
+
    private:
+    Format format_ = Format::SINGLE_PAYLOADS;
     // Appends count is required to calculate header size correctly
     size_t appends_count_ = 0;
-    BufferedWriteSinglePayloadsCodec::Estimator payloads_estimator_;
+    BufferedWriteSinglePayloadsCodec::Estimator single_payloads_estimator_;
+    PayloadGroupCodec::Estimator payload_groups_estimator_;
   };
 };
 
