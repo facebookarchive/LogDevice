@@ -494,21 +494,19 @@ size_t BufferedWriteCodec::Estimator::calculateSize(int checksum_bits) const {
 namespace {
 // A helper function to extract flags and the number of records in the batch.
 // Updates the slice to point to data directly following the header.
-size_t decodeHeader(Slice& blob,
+size_t decodeHeader(folly::IOBuf& blob,
                     BufferedWriteDecoderImpl::flags_t* flags_out,
                     BufferedWriteCodec::Format* format_out,
                     size_t* size_out) {
-  const uint8_t* ptr = reinterpret_cast<const uint8_t*>(blob.data);
-  const uint8_t* end = ptr + blob.size;
-
-  if (ptr == end) {
+  folly::io::Cursor cursor{&blob};
+  if (cursor.isAtEnd()) {
     RATELIMIT_ERROR(
         std::chrono::seconds(1), 1, "Reached end looking for marker byte 0xb1");
     return 0;
   }
 
   using Format = BufferedWriteCodec::Format;
-  auto format = static_cast<Format>(*ptr++);
+  auto format = cursor.read<Format>();
   if (format != Format::SINGLE_PAYLOADS && format != Format::PAYLOAD_GROUPS) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
@@ -517,36 +515,35 @@ size_t decodeHeader(Slice& blob,
     return 0;
   }
 
-  if (ptr == end) {
+  if (cursor.isAtEnd()) {
     RATELIMIT_ERROR(
         std::chrono::seconds(1), 1, "Reached end looking for flags");
     return 0;
   }
-  BufferedWriteDecoderImpl::flags_t flags = *ptr++;
+  auto flags = cursor.read<BufferedWriteDecoderImpl::flags_t>();
 
   size_t batch_size;
   if (flags & BufferedWriteDecoderImpl::Flags::SIZE_INCLUDED) {
-    if (ptr == end) {
+    if (cursor.isAtEnd()) {
       RATELIMIT_ERROR(
           std::chrono::seconds(1), 1, "Reached end looking for the batch size");
       return 0;
     }
-    try {
-      folly::ByteRange range(ptr, end);
-      batch_size = folly::decodeVarint(range);
-      ptr = range.begin();
-    } catch (...) {
+    auto decoded_batch_size = decodeVarint(cursor);
+    if (!decoded_batch_size) {
       RATELIMIT_ERROR(std::chrono::seconds(1), 1, "Failed to decode varint");
       return 0;
     }
+    batch_size = *decoded_batch_size;
   } else {
     // If size is not included in the blob, we'll treat the whole batch as a
     // single record.
     batch_size = 1;
   }
 
-  const size_t header_size = ptr - reinterpret_cast<const uint8_t*>(blob.data);
-  blob = Slice(ptr, end - ptr);
+  const size_t header_size = cursor.getCurrentPosition();
+  blob.trimStart(header_size);
+
   if (flags_out != nullptr) {
     *flags_out = flags;
   }
@@ -558,6 +555,18 @@ size_t decodeHeader(Slice& blob,
   }
   return header_size;
 }
+
+size_t decodeHeader(Slice& blob,
+                    BufferedWriteDecoderImpl::flags_t* flags_out,
+                    BufferedWriteCodec::Format* format_out,
+                    size_t* size_out) {
+  auto iobuf = folly::IOBuf::wrapBufferAsValue(blob.data, blob.size);
+  size_t header_size = decodeHeader(iobuf, flags_out, format_out, size_out);
+  blob = Slice(reinterpret_cast<const uint8_t*>(blob.data) + header_size,
+               blob.size - header_size);
+  return header_size;
+}
+
 } // namespace
 
 FOLLY_NODISCARD
