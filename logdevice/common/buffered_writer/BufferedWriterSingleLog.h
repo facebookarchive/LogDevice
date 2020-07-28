@@ -21,6 +21,7 @@
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/SimpleEnumMap.h"
+#include "logdevice/common/buffered_writer/BufferedWriteCodec.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/BufferedWriter.h"
@@ -106,6 +107,8 @@ class BufferedWriterSingleLog {
     // batch is BUILDING so that we can early-flush when a large append would
     // take us over the max payload size.
     size_t blob_bytes_total = 0;
+    // Estimator for calculating blob_bytes_total.
+    BufferedWriteCodec::Estimator blob_size_estimator;
     // Keeps track of amount of payload destroyed in
     // construct_uncompressed_blob().
     size_t total_size_freed = 0;

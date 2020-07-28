@@ -85,28 +85,33 @@ void BufferedWriterSingleLog::append(AppendChunk chunk) {
 
 int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
                                         bool defer_client_size_trigger) {
-  // Calculate how many bytes these records will take up in the blob
+  // Calculate how many bytes (approx.) these records will take up in the memory
   size_t payload_bytes_added = 0;
-  size_t blob_bytes_added = 0;
   for (const BufferedWriter::Append& append : chunk) {
     const std::string& payload = append.payload;
-    uint8_t buf[folly::kMaxVarintLength64];
     payload_bytes_added += payload.size();
-    blob_bytes_added +=
-        folly::encodeVarint(payload.size(), buf) + payload.size();
   }
   const size_t max_payload_size = Worker::settings().max_payload_size;
 
-  if (haveBuildingBatch() &&
-      batches_->back()->blob_bytes_total + blob_bytes_added >
-          max_payload_size) {
-    // These records would take us over the payload size limit. Flush the
-    // already buffered records first, then we will create a new batch for
-    // these records.
-    StatsHolder* stats{parent_->parent_->processor()->stats_};
-    STAT_INCR(stats, buffered_writer_max_payload_flush);
-    flushBuildingBatch();
-    ld_check(!haveBuildingBatch());
+  if (haveBuildingBatch()) {
+    auto& batch = batches_->back();
+    // Calculate how many bytes these records will take up in the blob
+    for (const BufferedWriter::Append& append : chunk) {
+      batch->blob_size_estimator.append(append.payload);
+    }
+    const size_t new_blob_bytes_total =
+        batch->blob_size_estimator.calculateSize(checksumBits());
+    if (new_blob_bytes_total > max_payload_size) {
+      // These records would take us over the payload size limit. Flush the
+      // already buffered records first, then we will create a new batch for
+      // these records.
+      StatsHolder* stats{parent_->parent_->processor()->stats_};
+      STAT_INCR(stats, buffered_writer_max_payload_flush);
+      flushBuildingBatch();
+      ld_check(!haveBuildingBatch());
+    } else {
+      batch->blob_bytes_total = new_blob_bytes_total;
+    }
   }
 
   // If there is no batch in the BUILDING state, create one now.
@@ -122,15 +127,13 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
     options_ = get_log_options_(log_id_);
 
     auto batch = std::make_unique<Batch>(next_batch_num_++);
+
+    // Calculate how many bytes these records will take up in the blob
+    for (const BufferedWriter::Append& append : chunk) {
+      batch->blob_size_estimator.append(append.payload);
+    }
     batch->blob_bytes_total =
-        // Any bytes for the checksum.  This goes first since it gets stripped
-        // first on the read path.
-        (checksumBits() / 8) +
-        // 2 bytes for header (magic marker and header)
-        2 +
-        // The batch size.  The number of bytes for this is an overestimate
-        // since the batch size is unknown until we flush the batch.
-        folly::kMaxVarintLength64;
+        batch->blob_size_estimator.calculateSize(checksumBits());
     batches_->push_back(std::move(batch));
     // Intentionally setting state after pushing to make sure is_flushable_
     // becomes true *during* the setBatchState() call
@@ -143,7 +146,6 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
   Batch& batch = *batches_->back();
   // Add these appends to the BUILDING batch
   batch.payload_bytes_total += payload_bytes_added;
-  batch.blob_bytes_total += blob_bytes_added;
   ld_check(batch.blob_bytes_total <= MAX_PAYLOAD_SIZE_INTERNAL);
   for (auto& append : chunk) {
     std::string& payload = append.payload;
@@ -604,53 +606,13 @@ void BufferedWriterSingleLog::Impl::construct_uncompressed_blob(
     int checksum_bits,
     bool destroy_payloads) {
   ld_check(batch.total_size_freed == 0);
-  // Note that due to the variable-sized header, blob_bytes_total is usually
-  // slightly larger than the size of the constructed blob.
-  folly::IOBuf blob_buf(folly::IOBuf::CREATE, batch.blob_bytes_total);
-  uint8_t* out = blob_buf.writableTail();
-  uint8_t* const end = out + batch.blob_bytes_total;
-  ld_check(out < end);
-  // Format of the header:
-  // * 0-8 bytes reserved for checksum -- this is not really part of the
-  //   BufferedWriter format, see BufferedWriterImpl::prependChecksums()
-  // * 1 magic marker byte
-  // * 1 flags byte
-  // * 0-9 bytes varint batch size (optional, depending on flags)
-  batch.blob_header_size = 0;
 
-  if (checksum_bits > 0) {
-    // construct_blob() expects the checksum to go at the beginning
-    ld_check(out == blob_buf.data());
-    size_t nbytes = checksum_bits / 8;
-    ld_check(out + nbytes < end);
-    std::memset(out, 0, nbytes);
-    out += nbytes;
-    batch.blob_header_size += nbytes;
-  }
+  BufferedWriteCodec::Encoder encoder(
+      checksum_bits, batch.appends.size(), batch.blob_bytes_total);
 
-  batch.blob_header_size += 2;
-  *out++ = 0xb1;
-  ld_check(out < end);
-  // Adjust flags to indicate no compression for now; maybe_compress_blob() will
-  // overwrite it if it decides to compress.
-  *out++ = (batch_flags_t)BufferedWriter::Options::Compression::NONE |
-      (flags & ~Flags::COMPRESSION_MASK);
-  size_t batch_size_varint_len = 0;
-  if (flags & Flags::SIZE_INCLUDED) {
-    // Append the number of records in this batch.
-    batch_size_varint_len = folly::encodeVarint(batch.appends.size(), out);
-    out += batch_size_varint_len;
-    batch.blob_header_size += batch_size_varint_len;
-    ld_check(out <= end);
-  }
   for (auto& append : batch.appends) {
     const std::string& client_payload = append.second;
-    size_t len = folly::encodeVarint(client_payload.size(), out);
-    out += len;
-    ld_check(out <= end);
-    ld_check((ssize_t)(end - out) >= (ssize_t)client_payload.size());
-    memcpy(out, client_payload.data(), client_payload.size());
-    out += client_payload.size();
+    encoder.append(client_payload);
     if (destroy_payloads) {
       batch.total_size_freed += append.second.size();
       // Can't do append.second.clear() because that usually doesn't free
@@ -659,11 +621,10 @@ void BufferedWriterSingleLog::Impl::construct_uncompressed_blob(
       append.second.shrink_to_fit();
     }
   }
-  // Assert that the running count (batch.blob_bytes_total) was accurate, taking
-  // into account that we didn't use all the bytes we'd reserved for the varint.
-  ld_check(out + (folly::kMaxVarintLength64 - batch_size_varint_len) == end);
-  blob_buf.append(out - blob_buf.writableTail());
-  batch.blob = std::move(blob_buf);
+  batch.blob_header_size = encoder.getHeaderSize();
+  folly::IOBufQueue encoded;
+  encoder.encode(encoded);
+  batch.blob = encoded.moveAsValue();
 }
 
 void BufferedWriterSingleLog::Impl::maybe_compress_blob(
