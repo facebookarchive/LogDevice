@@ -13,6 +13,7 @@
 #include <functional>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include <folly/Range.h>
@@ -166,6 +167,18 @@ struct Payload {
   const void* data_;
   size_t size_;
 };
+
+// Key used to uniquely identify payload in PayloadGroup.
+typedef int32_t PayloadKey;
+
+/**
+ * An group of payloads that can be stored in a record and read from LogDevice.
+ * Each payload in a group is uniquely identified by a key.
+ * When using buffered writes payloads with same key from multiple records are
+ * compressed together.
+ * Users must not modify IOBufs once group is submitted for any operations.
+ */
+typedef std::unordered_map<PayloadKey, folly::IOBuf> PayloadGroup;
 
 /**
  * Convert lsn into a string in the format e<epoch>n<esn>.

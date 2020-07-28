@@ -9,6 +9,61 @@
 
 namespace facebook { namespace logdevice {
 
+namespace {
+
+PayloadGroup makePayloadGroup(const Payload& payload) {
+  return PayloadGroup{
+      {0, folly::IOBuf::wrapBufferAsValue(payload.data(), payload.size())}};
+}
+
+Payload makePrimaryPayload(PayloadGroup& payload_group) {
+  auto payload = payload_group.find(0);
+  if (payload != payload_group.end()) {
+    auto& iobuf = payload->second;
+    // Since payload requires contiguous memory range, IOBuf needs to be
+    // coalesced
+    iobuf.coalesce();
+    return Payload(iobuf.empty() ? nullptr : iobuf.data(), iobuf.length());
+  } else {
+    return {};
+  }
+}
+
+} // namespace
+
+DataRecord::DataRecord(logid_t log_id,
+                       const Payload& pl,
+                       lsn_t lsn,
+                       std::chrono::milliseconds timestamp,
+                       int batch_offset,
+                       RecordOffset offsets)
+    : LogRecord(log_id),
+      payload(pl),
+      payloads(makePayloadGroup(payload)),
+      attrs(lsn, timestamp, batch_offset, std::move(offsets)) {}
+
+DataRecord::DataRecord(logid_t log_id,
+                       Payload&& pl,
+                       lsn_t lsn,
+                       std::chrono::milliseconds timestamp,
+                       int batch_offset,
+                       RecordOffset offsets)
+    : LogRecord(log_id),
+      payload(std::move(pl)),
+      payloads(makePayloadGroup(payload)),
+      attrs(lsn, timestamp, batch_offset, std::move(offsets)) {}
+
+DataRecord::DataRecord(logid_t log_id,
+                       PayloadGroup&& pl,
+                       lsn_t lsn,
+                       std::chrono::milliseconds timestamp,
+                       int batch_offset,
+                       RecordOffset offsets)
+    : LogRecord(log_id),
+      payload(makePrimaryPayload(pl)),
+      payloads(std::move(pl)),
+      attrs(lsn, timestamp, batch_offset, std::move(offsets)) {}
+
 std::string gapTypeToString(GapType type) {
 #define LD_GAP_TYPE_TO_STRING(t) \
   case GapType::t:               \

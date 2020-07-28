@@ -117,22 +117,28 @@ struct DataRecord : public LogRecord {
              lsn_t lsn = LSN_INVALID,
              std::chrono::milliseconds timestamp = std::chrono::milliseconds{0},
              int batch_offset = 0,
-             RecordOffset offsets = RecordOffset())
-      : LogRecord(log_id),
-        payload(pl),
-        attrs(lsn, timestamp, batch_offset, std::move(offsets)) {}
+             RecordOffset offsets = RecordOffset());
 
   DataRecord(logid_t log_id,
              Payload&& pl,
              lsn_t lsn = LSN_INVALID,
              std::chrono::milliseconds timestamp = std::chrono::milliseconds{0},
              int batch_offset = 0,
-             RecordOffset offsets = RecordOffset())
-      : LogRecord(log_id),
-        payload(std::move(pl)),
-        attrs(lsn, timestamp, batch_offset, std::move(offsets)) {}
+             RecordOffset offsets = RecordOffset());
 
-  Payload payload;            // payload of this record
+  DataRecord(logid_t log_id,
+             PayloadGroup&& pl,
+             lsn_t lsn = LSN_INVALID,
+             std::chrono::milliseconds timestamp = std::chrono::milliseconds{0},
+             int batch_offset = 0,
+             RecordOffset offsets = RecordOffset());
+
+  // Payload of this record. In case record contains multiple payloads in
+  // payload group, this will be set to payload with key 0 for compatibility.
+  // Note that this may require IOBuf in PayloadGroup to be coalesced to get
+  // a conigous memory range required by Payload.
+  Payload payload;
+  PayloadGroup payloads;      // all payloads of this record
   DataRecordAttributes attrs; // attributes of this record. Not const,
                               // can be set after the record instance
                               // is constructed. Log::append() will use this.
