@@ -8,6 +8,7 @@
 
 #include "logdevice/common/PayloadGroupCodec.h"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/ThriftCodec.h"
@@ -179,5 +180,79 @@ TEST_F(PayloadGroupCodecTest, FailDecodeCorruptBinary) {
       0);
   EXPECT_EQ(err, E::BADMSG);
 }
+
+class PayloadGroupEncoderTest
+    : public ::testing::TestWithParam<std::vector<PayloadGroup>> {};
+
+MATCHER(PayloadGroupEq, "") {
+  const PayloadGroup& p1 = std::get<0>(arg);
+  const PayloadGroup& p2 = std::get<1>(arg);
+
+  testing::Matcher<std::unordered_map<PayloadKey, std::string>> matcher =
+      testing::ContainerEq(to_map(p2));
+  return matcher.MatchAndExplain(to_map(p1), result_listener);
+}
+
+TEST_P(PayloadGroupEncoderTest, EncodeDecodeMatch) {
+  const auto& payload_groups = GetParam();
+
+  PayloadGroupCodec::Encoder encoder(payload_groups.size());
+
+  std::vector<PayloadGroup> payload_groups_in;
+  for (const auto& payload_group : payload_groups) {
+    payload_groups_in.push_back(payload_group);
+    encoder.append(payload_group);
+
+    folly::IOBufQueue queue;
+    encoder.encode(queue);
+    folly::IOBuf encoded = queue.moveAsValue();
+    encoded.coalesce();
+
+    std::vector<PayloadGroup> payload_groups_out;
+    size_t consumed = PayloadGroupCodec::decode(
+        Slice(encoded.data(), encoded.length()), payload_groups_out);
+    EXPECT_EQ(consumed, encoded.length());
+
+    EXPECT_THAT(payload_groups_out,
+                testing::Pointwise(PayloadGroupEq(), payload_groups_in));
+  }
+}
+
+TEST_F(PayloadGroupEncoderTest, NoAppends) {
+  folly::IOBufQueue queue;
+  PayloadGroupCodec::Encoder encoder(0);
+  encoder.encode(queue);
+  folly::IOBuf encoded = queue.moveAsValue();
+  encoded.coalesce();
+  std::vector<PayloadGroup> decoded;
+  size_t consumed = PayloadGroupCodec::decode(
+      Slice(encoded.data(), encoded.length()), decoded);
+  EXPECT_EQ(consumed, encoded.length());
+  EXPECT_TRUE(decoded.empty());
+}
+
+namespace {
+const PayloadGroup empty = from_map({});
+const PayloadGroup group1 = from_map({{1, "payload1"}});
+const PayloadGroup group2 = from_map({{2, "data2"}});
+const PayloadGroup group12 = from_map({{1, "p1"}, {2, "p22"}});
+} // namespace
+
+INSTANTIATE_TEST_CASE_P(EncodeDecodeMatch,
+                        PayloadGroupEncoderTest,
+                        ::testing::ValuesIn<std::vector<PayloadGroup>>(
+                            {{empty, empty, empty, group1},
+                             {empty, group1, empty, group2, empty, group12},
+                             {group1, empty, group2, empty, group12},
+
+                             {group1, group1, group1},
+                             {group1, group2, group1, group2},
+
+                             {group1, group2, group12},
+                             {group1, group12, group2},
+                             {group2, group1, group12},
+                             {group2, group12, group1},
+                             {group12, group1, group12},
+                             {group12, group2, group1}}));
 
 } // namespace facebook::logdevice

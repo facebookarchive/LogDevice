@@ -8,8 +8,10 @@
 
 #include "logdevice/common/PayloadGroupCodec.h"
 
+#include <folly/Likely.h>
+#include <folly/io/IOBufQueue.h>
+
 #include "logdevice/common/ThriftCodec.h"
-#include "logdevice/common/if/gen-cpp2/payload_types.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 
 namespace facebook { namespace logdevice {
@@ -18,42 +20,94 @@ namespace {
 
 using ThriftSerializer = apache::thrift::BinarySerializer;
 
-/**
- * Converts single PayloadGroup to its uncompressed Thrift representation.
- */
-thrift::CompressedPayloadGroups convert(const PayloadGroup& payload_group) {
-  thrift::CompressedPayloadGroups compressed_payload_groups;
-  auto& compressed_payloads_map =
-      compressed_payload_groups.payloads_ref().emplace();
-  if (payload_group.empty()) {
-    // this a special case: there are no keys in payload, but one descriptor to
-    // indicate that there's one payload group, so just add key 0 with one empty
-    // descriptor
-    thrift::CompressedPayloads& compressed_payloads =
-        compressed_payloads_map[0];
-    compressed_payloads.compression_ref() =
-        static_cast<int8_t>(Compression::NONE);
-    compressed_payloads.descriptors_ref().ensure().resize(1);
-    return compressed_payload_groups;
-  }
-
-  for (const auto& [key, payload] : payload_group) {
-    thrift::CompressedPayloads& compressed_payloads =
-        compressed_payloads_map[key];
-
-    auto& descriptors = compressed_payloads.descriptors_ref().ensure();
-    descriptors.reserve(1);
-    thrift::PayloadDescriptor& payload_descriptor =
-        descriptors.emplace_back().descriptor_ref().emplace();
-    payload_descriptor.uncompressed_size_ref() =
-        payload.computeChainDataLength();
-
-    compressed_payloads.compression_ref() =
-        static_cast<int8_t>(Compression::NONE);
-    compressed_payloads.payload_ref() = payload;
-  }
-  return compressed_payload_groups;
 }
+
+PayloadGroupCodec::Encoder::Encoder(size_t expected_appends_count)
+    : expected_appends_count_(expected_appends_count) {
+  encoded_payload_groups_.payloads_ref().ensure();
+}
+
+void PayloadGroupCodec::Encoder::append(folly::IOBuf&& payload) {
+  PayloadGroup payload_group{{0, std::move(payload)}};
+  append(payload_group);
+}
+
+void PayloadGroupCodec::Encoder::update(PayloadKey key,
+                                        const folly::IOBuf* iobuf) {
+  auto [it, inserted] =
+      encoded_payload_groups_.payloads_ref()->try_emplace(key);
+  auto& encoded_payloads = it->second;
+  auto& descriptors = encoded_payloads.descriptors_ref().ensure();
+  if (inserted) {
+    encoded_payloads.compression_ref() = static_cast<int8_t>(Compression::NONE);
+    encoded_payloads.payload_ref().ensure();
+    descriptors.reserve(expected_appends_count_);
+    descriptors.resize(appends_count_);
+  }
+  if (iobuf) {
+    // For the existing keys, update should be called after reserving empty
+    // descriptors for these keys. For the new keys, descriptors are allocated
+    // in the code above.
+    ld_check(!descriptors.empty());
+    auto& desc = descriptors.back().descriptor_ref().emplace();
+    desc.uncompressed_size_ref() = iobuf->computeChainDataLength();
+    encoded_payloads.payload_ref()->prependChain(iobuf->clone());
+  }
+}
+
+void PayloadGroupCodec::Encoder::append(const PayloadGroup& payload_group) {
+  appends_count_++;
+
+  // Add empty descriptor for each known key.
+  for (auto& [key, encoded_payloads] :
+       *encoded_payload_groups_.payloads_ref()) {
+    encoded_payloads.descriptors_ref()->emplace_back();
+  }
+
+  // Now update payloads and descriptors for the appended group.
+  constexpr PayloadKey tmp_empty_key = 0;
+  if (UNLIKELY(payload_group.empty())) {
+    // When encoding empty group, we need to create empty descriptors for it.
+    // In case there are non-empty groups we can just reuse any of the existing
+    // keys to do the update. However, if there are no keys to reuse, we need
+    // to use a temporary key to encode payload and change this key once first
+    // non-empty payload is appended.
+    PayloadKey key;
+    if (encoded_payload_groups_.payloads_ref()->empty()) {
+      // use temporary key
+      key = tmp_empty_key;
+      contains_only_empty_groups_ = true;
+    } else {
+      // reuse existing key (note: it can be from the previous empty payload)
+      key = encoded_payload_groups_.payloads_ref()->begin()->first;
+    }
+    update(key, nullptr);
+  } else {
+    if (UNLIKELY(contains_only_empty_groups_)) {
+      // update temporary key used to encode empty payloads
+      const PayloadKey key = payload_group.begin()->first;
+      if (key != tmp_empty_key) {
+        auto node =
+            encoded_payload_groups_.payloads_ref()->extract(tmp_empty_key);
+        node.key() = key;
+        encoded_payload_groups_.payloads_ref()->insert(std::move(node));
+      }
+      contains_only_empty_groups_ = false;
+    }
+    for (const auto& [key, iobuf] : payload_group) {
+      update(key, &iobuf);
+    }
+  }
+}
+
+void PayloadGroupCodec::Encoder::encode(folly::IOBufQueue& out) {
+  ThriftCodec::serialize<ThriftSerializer>(
+      encoded_payload_groups_,
+      &out,
+      apache::thrift::ExternalBufferSharing::SHARE_EXTERNAL_BUFFER);
+}
+
+namespace {
 
 /**
  * Converts uncompressed Thrift representation to a vector of PayloadGroups.
@@ -168,9 +222,18 @@ int uncompress(thrift::CompressedPayloadGroups& compressed_payload_groups) {
 
 void PayloadGroupCodec::encode(const PayloadGroup& payload_group,
                                folly::IOBufQueue& out) {
-  thrift::CompressedPayloadGroups compressed_payload_groups =
-      convert(payload_group);
-  ThriftCodec::serialize<ThriftSerializer>(compressed_payload_groups, &out);
+  Encoder encoder(1);
+  encoder.append(payload_group);
+  encoder.encode(out);
+}
+
+void PayloadGroupCodec::encode(const std::vector<PayloadGroup>& payload_groups,
+                               folly::IOBufQueue& out) {
+  Encoder encoder(payload_groups.size());
+  for (const auto& payload_group : payload_groups) {
+    encoder.append(payload_group);
+  }
+  encoder.encode(out);
 }
 
 size_t PayloadGroupCodec::decode(Slice binary,
