@@ -581,6 +581,11 @@ bool BufferedWriteCodec::decodeCompression(Slice binary,
 }
 
 FOLLY_NODISCARD
+bool BufferedWriteCodec::decodeFormat(Slice binary, Format* format_out) {
+  return decodeHeader(binary, nullptr, format_out, nullptr) != 0;
+}
+
+FOLLY_NODISCARD
 size_t BufferedWriteCodec::decode(Slice binary,
                                   std::vector<folly::IOBuf>& payloads_out,
                                   bool allow_buffer_sharing) {

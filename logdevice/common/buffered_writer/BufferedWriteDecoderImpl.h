@@ -53,6 +53,10 @@ class BufferedWriteDecoderImpl : public BufferedWriteDecoder {
   int decodeOne(const DataRecord& record,
                 std::vector<PayloadGroup>& payload_groups_out);
 
+  // Returns the number of individual records stored in a single DataRecord.
+  static int getBatchSize(const DataRecord& record, size_t* size_out);
+
+ private:
   // Internal variant of decodeOne() where `record' is optional (`blob' may
   // point into a manually managed piece of memory).
   int decodeOne(Slice blob,
@@ -64,10 +68,6 @@ class BufferedWriteDecoderImpl : public BufferedWriteDecoder {
                 std::unique_ptr<DataRecord>&& record,
                 bool allow_buffer_sharing);
 
-  // Returns the number of individual records stored in a single DataRecord.
-  static int getBatchSize(const DataRecord& record, size_t* size_out);
-
- private:
   template <typename T>
   int decodeImpl(std::vector<std::unique_ptr<DataRecord>>&& records,
                  std::vector<T>& payload_groups_out);

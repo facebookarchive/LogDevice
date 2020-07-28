@@ -15,6 +15,7 @@
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/buffered_writer/BufferedWriteCodec.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
+#include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/test/TestUtil.h"
@@ -27,10 +28,64 @@
 
 using namespace facebook::logdevice;
 
-class SequencerBatchingTest : public IntegrationTestBase {};
+namespace {
+
+using PayloadGenerator = std::function<BufferedWriter::PayloadVariant(int)>;
+
+class SequencerBatchingTest : public IntegrationTestBase {
+ protected:
+  void testSimple(PayloadGenerator generator);
+  void testBufferedWrites(PayloadGenerator generator);
+};
+
+// Conversion of different types of payloads to strings to simplify comparisons
+std::string convert(const std::string& s) {
+  return s;
+}
+
+std::string convert(const PayloadGroup& payload_group) {
+  if (payload_group.size() == 1 &&
+      payload_group.find(0) != payload_group.end()) {
+    return payload_group.at(0).cloneAsValue().moveToFbString().toStdString();
+  }
+
+  std::map<PayloadKey, folly::IOBuf> sorted{
+      payload_group.begin(), payload_group.end()};
+  std::stringstream ss;
+  ss << "{";
+  for (const auto& [key, payload] : sorted) {
+    ss << "{" << key << ": "
+       << payload.cloneAsValue().moveToFbString().toStdString() << "}, ";
+  }
+  ss << "}";
+  return ss.str();
+}
+
+std::string convert(const BufferedWriter::PayloadVariant& payload) {
+  return std::visit([](const auto& p) { return convert(p); }, payload);
+}
+
+PayloadGenerator singlePayloadsGenerator(const std::string& prefix) {
+  return [prefix](int i) { return prefix + std::to_string(i); };
+}
+
+PayloadGenerator payloadGroupsGenerator(const std::string& prefix) {
+  return [prefix](int i) -> BufferedWriter::PayloadVariant {
+    if (i % 5 == 0) {
+      return prefix + std::to_string(i);
+    } else {
+      const folly::IOBuf payload(
+          folly::IOBuf::COPY_BUFFER, prefix + std::to_string(i));
+      PayloadGroup payload_group{{i % 3, payload}, {1, payload}};
+      return payload_group;
+    }
+  };
+}
+
+} // namespace
 
 // Write&read some records with sequencer batching on
-TEST_F(SequencerBatchingTest, Simple) {
+void SequencerBatchingTest::testSimple(PayloadGenerator generator) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableMessageErrorInjection()
                      .setParam("--sequencer-batching")
@@ -55,11 +110,16 @@ TEST_F(SequencerBatchingTest, Simple) {
   // Do a few nonblocking writes in quick succession.  They should get batched
   // on the sequencer.
   for (int i = 1; i <= NWRITES; ++i) {
-    std::string payload = "payloadcompressible" + std::to_string(i);
-    int rv = client->append(logid_t(1), payload, cb);
-    ASSERT_EQ(0, rv);
-    payloads_written.insert(payload);
-    payload_size_total += payload.size();
+    auto payload_variant = generator(i);
+    payloads_written.insert(convert(payload_variant));
+    payload_size_total +=
+        BufferedWriterPayloadMeter::memorySize(payload_variant);
+    std::visit(
+        [&](auto& payload) {
+          int rv = client->append(logid_t(1), std::move(payload), cb);
+          ASSERT_EQ(0, rv);
+        },
+        payload_variant);
   }
   for (int i = 1; i <= NWRITES; ++i) {
     sem.wait();
@@ -86,8 +146,7 @@ TEST_F(SequencerBatchingTest, Simple) {
 
   std::multiset<std::string> payloads_read;
   for (const auto& record : data) {
-    payloads_read.emplace(
-        (const char*)record->payload.data(), record->payload.size());
+    payloads_read.emplace(convert(record->payloads));
   }
   ASSERT_EQ(payloads_written, payloads_read);
 
@@ -102,10 +161,21 @@ TEST_F(SequencerBatchingTest, Simple) {
   ASSERT_LT(stats["append_bytes_seq_batching_out"], payload_size_total);
 }
 
+TEST_F(SequencerBatchingTest, Simple) {
+  testSimple(singlePayloadsGenerator("payloadcompressible"));
+}
+
+TEST_F(SequencerBatchingTest, SimplePayloadGroups) {
+  // due to payload groups encoding overhead, payload needs to be quite long
+  // to pass append_bytes_seq_batching_out < append_bytes_seq_batching_in test
+  testSimple(payloadGroupsGenerator(
+      "payloadcompressibleandlongduetopayloadgroupsoverhead"));
+}
+
 // Write&read some records with sequencer batching on as well as buffered
 // writers on the client.  The sequencer should be able to unbundle incoming
 // buffered writes and recombine them into bigger batches.
-TEST_F(SequencerBatchingTest, BufferedWriters) {
+void SequencerBatchingTest::testBufferedWrites(PayloadGenerator generator) {
   const int NLOGS = 10;
   const int NBUFFEREDWRITERS = 50;
   const int NWRITES = 10000;
@@ -182,11 +252,16 @@ TEST_F(SequencerBatchingTest, BufferedWriters) {
 
   std::multiset<std::string> payloads_written;
   for (int i = 1; i <= NWRITES; ++i) {
-    std::string payload = "pay" + std::to_string(i);
-    payloads_written.insert(payload);
+    auto payload_variant = generator(i);
+    payloads_written.insert(convert(payload_variant));
     BufferedWriter& writer = *buffered_writers[writer_dist(rng)];
-    int rv = writer.append(logid_t(log_dist(rng)), std::move(payload), nullptr);
-    ASSERT_EQ(0, rv);
+    std::visit(
+        [&](auto& payload) {
+          int rv = writer.append(
+              logid_t(log_dist(rng)), std::move(payload), nullptr);
+          ASSERT_EQ(0, rv);
+        },
+        payload_variant);
   }
   for (auto& writer : buffered_writers) {
     writer->flushAll();
@@ -225,11 +300,18 @@ TEST_F(SequencerBatchingTest, BufferedWriters) {
 
   std::multiset<std::string> payloads_read;
   for (const auto& record : data) {
-    payloads_read.emplace(
-        (const char*)record->payload.data(), record->payload.size());
+    payloads_read.emplace(convert(record->payloads));
   }
   ASSERT_EQ(payloads_written.size(), payloads_read.size());
   ASSERT_EQ(payloads_written, payloads_read);
+}
+
+TEST_F(SequencerBatchingTest, BufferedWriters) {
+  testBufferedWrites(singlePayloadsGenerator("pay"));
+}
+
+TEST_F(SequencerBatchingTest, BufferedWritersPayloadGroups) {
+  testBufferedWrites(payloadGroupsGenerator("pay"));
 }
 
 // TODO(t10046246): test disabled, some appends still fail with PEER_CLOSED

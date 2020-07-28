@@ -18,14 +18,15 @@
 #include "logdevice/common/Connection.h"
 #include "logdevice/common/InternalAppendRequest.h"
 #include "logdevice/common/MetaDataLogWriter.h"
+#include "logdevice/common/PayloadGroupCodec.h"
 #include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
+#include "logdevice/common/buffered_writer/BufferedWriteCodec.h"
+#include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/Settings.h"
-#include "logdevice/include/BufferedWriter.h"
 
 namespace facebook { namespace logdevice {
 
@@ -98,51 +99,167 @@ void SequencerBatching::shutDown() {
 
 namespace {
 
-static int prepare_batch(logid_t log_id,
-                         Appender& appender,
+std::string iobuf_to_string(const folly::IOBuf& iobuf) {
+  std::string str;
+  str.reserve(iobuf.computeChainDataLength());
+  for (auto chunk : iobuf) {
+    str.append(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+  }
+  return str;
+}
+
+void append_batch(logid_t log_id,
+                  BufferedWriter::AppendCallback::Context context,
+                  std::vector<folly::IOBuf>&& batch,
+                  const AppendAttributes& attributes,
+                  std::vector<BufferedWriter::Append>* out) {
+  out->reserve(batch.size());
+  // NOTE: This makes a copy of every payload as an std::string to conform
+  // to the BufferedWriter interface.  There is room for optimization here
+  // by keeping `decoder' around and making BufferedWriter accept raw
+  // pointers into the blob or by making BufferedWriter accept IOBufs.
+  StatsHolder* stats = Worker::stats();
+  for (folly::IOBuf& iobuf : batch) {
+    std::string str = iobuf_to_string(iobuf);
+    const size_t appended_bytes = BufferedWriterPayloadMeter::memorySize(str);
+    out->emplace_back(log_id, std::move(str), context, attributes);
+    STAT_ADD(stats, append_bytes_seq_batching_in, appended_bytes);
+    iobuf = {};
+  }
+}
+
+void append_batch(logid_t log_id,
+                  BufferedWriter::AppendCallback::Context context,
+                  std::vector<PayloadGroup>&& batch,
+                  const AppendAttributes& attributes,
+                  std::vector<BufferedWriter::Append>* out) {
+  out->reserve(batch.size());
+  StatsHolder* stats = Worker::stats();
+  for (PayloadGroup& p : batch) {
+    const size_t appended_bytes = BufferedWriterPayloadMeter::memorySize(p);
+    out->emplace_back(log_id, std::move(p), context, attributes);
+    STAT_ADD(stats, append_bytes_seq_batching_in, appended_bytes);
+  }
+}
+
+template <typename T>
+int append_batch(logid_t log_id,
+                 BufferedWriter::AppendCallback::Context context,
+                 const folly::StringPiece payload,
+                 const AppendAttributes& attributes,
+                 std::vector<BufferedWriter::Append>* out,
+                 bool allow_buffer_sharing) {
+  std::vector<T> batch;
+  size_t bytes_consumed = BufferedWriteCodec::decode(
+      Slice(payload.data(), payload.size()), batch, allow_buffer_sharing);
+  if (bytes_consumed != 0) {
+    append_batch(log_id, context, std::move(batch), attributes, out);
+    return 0;
+  } else {
+    err = E::BADPAYLOAD;
+    return -1;
+  }
+}
+
+int append_decoded_plain(logid_t log_id,
                          BufferedWriter::AppendCallback::Context context,
+                         STORE_flags_t flags,
+                         const folly::StringPiece payload,
+                         const AppendAttributes& attributes,
                          std::vector<BufferedWriter::Append>* out) {
+  size_t appended_bytes;
+  if (flags & STORE_Header::PAYLOAD_GROUP) {
+    PayloadGroup payload_group;
+    const size_t bytes_consumed =
+        PayloadGroupCodec::decode(Slice(payload.data(), payload.size()),
+                                  payload_group,
+                                  /* allow_buffer_sharing */ false);
+    if (bytes_consumed == 0) {
+      err = E::BADPAYLOAD;
+      return -1;
+    }
+    appended_bytes = BufferedWriterPayloadMeter::memorySize(payload_group);
+    out->emplace_back(log_id, std::move(payload_group), context, attributes);
+  } else {
+    auto str = payload.str();
+    appended_bytes = BufferedWriterPayloadMeter::memorySize(str);
+    out->emplace_back(log_id, std::move(str), context, attributes);
+  }
+  STAT_ADD(Worker::stats(), append_bytes_seq_batching_in, appended_bytes);
+  return 0;
+}
+
+int append_decoded_batch(logid_t log_id,
+                         BufferedWriter::AppendCallback::Context context,
+                         const folly::StringPiece payload,
+                         const AppendAttributes& attributes,
+                         std::vector<BufferedWriter::Append>* out) {
+  BufferedWriteCodec::Format format;
+  if (!BufferedWriteCodec::decodeFormat(
+          Slice(payload.data(), payload.size()), &format)) {
+    err = E::BADPAYLOAD;
+    return -1;
+  }
+
+  // Decode and append records using different APIs depending on format
+  // to preserve client compatibility, i.e. if all writes are in SINGLE_PAYLOADS
+  // format, then result will also be in SINGLE_PAYLOADS format, compatible with
+  // older clients.
+  switch (format) {
+    case BufferedWriteCodec::Format::SINGLE_PAYLOADS: {
+      return append_batch<folly::IOBuf>(log_id,
+                                        context,
+                                        payload,
+                                        attributes,
+                                        out,
+                                        /* allow_buffer_sharing */ true);
+    }
+    case BufferedWriteCodec::Format::PAYLOAD_GROUPS: {
+      // NOTE: Buffer sharing is not allowed, since payload owned by Appender
+      // will be destroyed while request is being processed. This can be fixed
+      // by using managed IOBufs throughout. However this only matters for
+      // uncompressible payloads, since only they can share output buffers with
+      // input buffers.
+      return append_batch<PayloadGroup>(log_id,
+                                        context,
+                                        payload,
+                                        attributes,
+                                        out,
+                                        /* allow_buffer_sharing */ false);
+    }
+  }
+
+  ld_check(false);
+  err = E::BADPAYLOAD;
+  return -1;
+}
+
+int prepare_batch(logid_t log_id,
+                  Appender& appender,
+                  BufferedWriter::AppendCallback::Context context,
+                  std::vector<BufferedWriter::Append>* out) {
   ld_check(appender.getLSNBeforeRedirect() == LSN_INVALID);
 
   Payload payload =
       const_cast<PayloadHolder*>(appender.getPayload())->getPayload();
   folly::StringPiece range{payload.toStringPiece()};
 
-  STORE_flags_t passthru_flags = appender.getPassthruFlags();
+  const STORE_flags_t passthru_flags = appender.getPassthruFlags();
   if (passthru_flags & STORE_Header::CHECKSUM) {
     // NOTE: Assumes checksum was already checked
     range.advance((passthru_flags & STORE_Header::CHECKSUM_64BIT) ? 8 : 4);
   }
-  if (!(passthru_flags & STORE_Header::BUFFERED_WRITER_BLOB)) {
-    // Not a buffered writer blob, just a plain append
-    out->emplace_back(
-        log_id, range.str(), context, appender.getAppendAttributes());
-    STAT_ADD(Worker::stats(), append_bytes_seq_batching_in, range.size());
-    return 0;
-  }
 
-  BufferedWriteDecoderImpl decoder;
-  std::vector<Payload> outp;
-  int rv = decoder.decodeOne(Slice(range.data(), range.size()),
-                             outp,
-                             nullptr,
-                             /* allow_buffer_sharing */ true);
-  if (rv == 0) {
-    out->reserve(outp.size());
-    // NOTE: This makes a copy of every payload as an std::string to conform
-    // to the BufferedWriter interface.  There is room for optimization here
-    // by keeping `decoder' around and making BufferedWriter accept raw
-    // pointers into the blob.
-    StatsHolder* stats = Worker::stats();
-    for (Payload p : outp) {
-      out->emplace_back(
-          log_id, p.toString(), context, appender.getAppendAttributes());
-      STAT_ADD(stats, append_bytes_seq_batching_in, p.size());
-    }
-    return 0;
+  if (!(passthru_flags & STORE_Header::BUFFERED_WRITER_BLOB)) {
+    return append_decoded_plain(log_id,
+                                context,
+                                passthru_flags,
+                                range,
+                                appender.getAppendAttributes(),
+                                out);
   } else {
-    err = E::BADPAYLOAD;
-    return -1;
+    return append_decoded_batch(
+        log_id, context, range, appender.getAppendAttributes(), out);
   }
 }
 

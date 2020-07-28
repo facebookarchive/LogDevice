@@ -170,6 +170,10 @@ class BufferedWriteCodec {
   FOLLY_NODISCARD
   static bool decodeCompression(Slice binary, Compression* compression_out);
 
+  /** Decodes format in use. Fails is format is unknown. */
+  FOLLY_NODISCARD
+  static bool decodeFormat(Slice binary, Format* format_out);
+
   /**
    * Decodes payloads stored in batch.
    * Resulting payloads can optionally share data with input (for example in
