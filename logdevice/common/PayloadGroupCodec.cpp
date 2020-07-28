@@ -166,11 +166,11 @@ int uncompress(thrift::CompressedPayloadGroups& compressed_payload_groups) {
 
 } // namespace
 
-std::string PayloadGroupCodec::encode(const PayloadGroup& payload_group) {
+void PayloadGroupCodec::encode(const PayloadGroup& payload_group,
+                               folly::IOBufQueue& out) {
   thrift::CompressedPayloadGroups compressed_payload_groups =
       convert(payload_group);
-  // TODO replace with serialization to IOBuf
-  return ThriftCodec::serialize<ThriftSerializer>(compressed_payload_groups);
+  ThriftCodec::serialize<ThriftSerializer>(compressed_payload_groups, &out);
 }
 
 size_t PayloadGroupCodec::decode(Slice binary,

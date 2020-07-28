@@ -2272,22 +2272,15 @@ ClientImpl::prepareRequest(logid_t logid,
                            AppendAttributes attrs,
                            worker_id_t target_worker,
                            std::unique_ptr<std::string> per_request_token) {
-  // TODO change serialization to IOBuf once PayloadHolder supports
-  // chained IOBufs
-  std::string encoded = PayloadGroupCodec::encode(payload_group);
-  if (!checkAppend(logid, encoded.size())) {
+  folly::IOBufQueue queue;
+  PayloadGroupCodec::encode(payload_group, queue);
+  auto iobuf = queue.moveAsValue();
+  if (!checkAppend(logid, iobuf.computeChainDataLength())) {
     return nullptr;
   }
 
-  auto payload = std::make_unique<std::string>(std::move(encoded));
-  folly::IOBuf::FreeFunction deleter = +[](void* /* buf */, void* userData) {
-    delete reinterpret_cast<std::string*>(userData);
-  };
-  folly::IOBuf iobuf{folly::IOBuf::TAKE_OWNERSHIP,
-                     payload->data(),
-                     payload->size(),
-                     deleter,
-                     reinterpret_cast<void*>(payload.release())};
+  // TODO remove coalesce once PayloadHolder supports chained IOBufs
+  iobuf.coalesceWithHeadroomTailroom(0, 0);
   auto req = createRequest(
       logid,
       PayloadHolder{std::move(iobuf)},

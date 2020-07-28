@@ -10,6 +10,7 @@
 #include <string>
 
 #include <folly/Portability.h>
+#include <folly/io/IOBufQueue.h>
 
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/types.h"
@@ -25,7 +26,7 @@ class PayloadGroupCodec {
   /**
    * Encodes single PayloadGroup to binary representation.
    */
-  static std::string encode(const PayloadGroup& payload_group);
+  static void encode(const PayloadGroup& payload_group, folly::IOBufQueue& out);
 
   /**
    * Decodes single PayloadGroup from binary representation.

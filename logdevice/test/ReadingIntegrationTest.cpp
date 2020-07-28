@@ -862,9 +862,12 @@ static std::pair<uint32_t, uint32_t> calc_hash(const std::string& s) {
 
 static std::pair<uint32_t, uint32_t>
 calc_hash(const PayloadGroup& payload_group) {
-  std::string s = PayloadGroupCodec::encode(payload_group);
-  return std::make_pair(
-      (uint32_t)s.size(), folly::crc32c((const uint8_t*)s.data(), s.size()));
+  folly::IOBufQueue queue;
+  PayloadGroupCodec::encode(payload_group, queue);
+  auto iobuf = queue.move();
+  iobuf->coalesce();
+  return std::make_pair(static_cast<uint32_t>(iobuf->length()),
+                        folly::crc32c(iobuf->data(), iobuf->length()));
 }
 
 // Parse the hash returned by a reader with PAYLOAD_HASH_ONLY flag.

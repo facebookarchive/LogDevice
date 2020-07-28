@@ -26,6 +26,11 @@ class ThriftCodec {
     return Serializer::template serialize<std::string>(thrift);
   }
 
+  template <class Serializer, class T, class... Args>
+  static void serialize(const T& thrift, Args&&... args) {
+    Serializer::template serialize(thrift, std::forward<Args>(args)...);
+  }
+
   template <class Serializer, class T>
   static std::unique_ptr<T> deserialize(const Slice& binary) {
     T thrift;

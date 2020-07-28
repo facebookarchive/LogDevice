@@ -418,8 +418,11 @@ mockRecord(lsn_t lsn,
   for (const auto& [key, value] : data) {
     payload_group[key] = *folly::IOBuf::copyBuffer(value.data(), value.size());
   }
-  record->payload =
-      PayloadHolder::copyString(PayloadGroupCodec::encode(payload_group));
+  folly::IOBufQueue queue;
+  PayloadGroupCodec::encode(payload_group, queue);
+  folly::IOBuf encoded = queue.moveAsValue();
+  encoded.coalesce();
+  record->payload = PayloadHolder{std::move(encoded)};
   return record;
 }
 

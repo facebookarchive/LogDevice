@@ -44,13 +44,20 @@ to_map(const PayloadGroup& payload_group) {
   return result;
 }
 
+folly::IOBuf encode(const PayloadGroup& payload_group) {
+  folly::IOBufQueue queue;
+  PayloadGroupCodec::encode(payload_group, queue);
+  return queue.moveAsValue();
+}
+
 using ThriftSerializer = apache::thrift::BinarySerializer;
 thrift::CompressedPayloadGroups to_thrift(const PayloadGroup& payload_group) {
-  auto encoded = PayloadGroupCodec::encode(payload_group);
+  auto encoded = encode(payload_group);
+  encoded.coalesce();
 
   thrift::CompressedPayloadGroups compressed_payload_groups;
   size_t size = ThriftCodec::deserialize<ThriftSerializer>(
-      Slice(encoded.data(), encoded.size()), compressed_payload_groups);
+      Slice(encoded.data(), encoded.length()), compressed_payload_groups);
   CHECK_NE(size, 0);
 
   return compressed_payload_groups;
@@ -59,10 +66,12 @@ thrift::CompressedPayloadGroups to_thrift(const PayloadGroup& payload_group) {
 size_t
 from_thrift(const thrift::CompressedPayloadGroups& compressed_payload_groups,
             PayloadGroup& payload_group_out) {
-  auto encoded =
-      ThriftCodec::serialize<ThriftSerializer>(compressed_payload_groups);
+  folly::IOBufQueue queue;
+  ThriftCodec::serialize<ThriftSerializer>(compressed_payload_groups, &queue);
+  auto encoded = queue.move();
+  encoded->coalesce();
   return PayloadGroupCodec::decode(
-      Slice(encoded.data(), encoded.size()), payload_group_out);
+      Slice(encoded->data(), encoded->length()), payload_group_out);
 }
 
 } // namespace
@@ -72,13 +81,14 @@ class PayloadGroupCodecTest : public ::testing::TestWithParam<PayloadGroup> {};
 TEST_P(PayloadGroupCodecTest, EncodeDecodeMatch) {
   PayloadGroup payload_group_in = GetParam();
 
-  const auto encoded = PayloadGroupCodec::encode(payload_group_in);
+  auto encoded = encode(payload_group_in);
+  encoded.coalesce();
 
   PayloadGroup payload_group_out;
   size_t consumed = PayloadGroupCodec::decode(
-      Slice(encoded.data(), encoded.size()), payload_group_out);
+      Slice(encoded.data(), encoded.length()), payload_group_out);
 
-  EXPECT_EQ(consumed, encoded.size());
+  EXPECT_EQ(consumed, encoded.length());
   EXPECT_EQ(to_map(payload_group_out), to_map(payload_group_in));
 }
 
