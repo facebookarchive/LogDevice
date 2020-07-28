@@ -28,6 +28,24 @@ add_dependencies(common-cpp2-target fbthrift)
 set_target_properties(common-cpp2-obj PROPERTIES POSITION_INDEPENDENT_CODE True)
 target_link_libraries(common-cpp2 ${THRIFT_DEPS})
 
+thrift_library(
+  "payload"
+  ""
+  "cpp2"
+  ""
+  "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${_common_binary_dir}"
+  "${_common_if_inc_prefix}"
+  THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
+ )
+
+ add_dependencies(payload-cpp2-target fbthrift)
+
+ set_target_properties(
+         payload-cpp2-obj
+         PROPERTIES POSITION_INDEPENDENT_CODE True
+ )
+
 # API Model thrift
 thrift_library(
   "api_model"
@@ -68,6 +86,7 @@ add_dependencies(api_service-cpp2-target fb303-cpp2-target)
 
 target_link_libraries(
   common-cpp2
+  payload-cpp2
   ${THRIFT_DEPS}
 )
 
