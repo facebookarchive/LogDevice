@@ -911,9 +911,8 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
   disposeIfDone();
 }
 
-void ClientReadStream::onDataRecord(
-    ShardID shard,
-    std::unique_ptr<DataRecordOwnsPayload> record) {
+void ClientReadStream::onDataRecord(ShardID shard,
+                                    std::unique_ptr<RawDataRecord> record) {
   ld_check(!done());
 
   // There are several possible actions to take with the record:
@@ -933,8 +932,8 @@ void ClientReadStream::onDataRecord(
   ld_spew("Log=%lu,%s%s,%s from %s, next_lsn_to_deliver=%s",
           log_id_.val_,
           lsn_to_string(lsn).c_str(),
-          (record->invalid_checksum_ ||
-           (record->flags_ & RECORD_Header::UNDER_REPLICATED_REGION))
+          (record->invalid_checksum ||
+           (record->flags & RECORD_Header::UNDER_REPLICATED_REGION))
               ? "(UNDERREPLICATED)"
               : "",
           logdevice::toString(RecordTimestamp(record->attrs.timestamp)).c_str(),
@@ -1039,7 +1038,7 @@ void ClientReadStream::onDataRecord(
     return;
   }
 
-  if (record->invalid_checksum_ && !ship_corrupted_records_) {
+  if (record->invalid_checksum && !ship_corrupted_records_) {
     // issuing a gap instead of shipping a record with an invalid checksum
     GAP_Header gap_header = {log_id_,
                              this->getID(),
@@ -1053,8 +1052,8 @@ void ClientReadStream::onDataRecord(
   }
 
   // Update state for the sender.
-  bool under_replicated = record->invalid_checksum_ ||
-      (record->flags_ & RECORD_Header::UNDER_REPLICATED_REGION);
+  bool under_replicated = record->invalid_checksum ||
+      (record->flags & RECORD_Header::UNDER_REPLICATED_REGION);
 
   sender_state.max_data_record_lsn =
       std::max(sender_state.max_data_record_lsn, lsn);
@@ -1123,9 +1122,20 @@ void ClientReadStream::onDataRecord(
                                       readSetSize());
 
     if (!rstate->record) {
-      rstate->record = std::move(record);
       // Updating info reg. buffer usage.
-      bytes_buffered_ += rstate->record->payload.size();
+      bytes_buffered_ += record->payload.size();
+      // TODO deserialize PayloadGroup
+      auto data_record = std::make_unique<DataRecordOwnsPayload>(
+          record->logid,
+          std::move(record->payload),
+          record->attrs.lsn,
+          record->attrs.timestamp,
+          record->flags,
+          std::move(record->extra_metadata),
+          record->attrs.batch_offset,
+          std::move(record->attrs.offsets),
+          record->invalid_checksum);
+      rstate->record = std::move(data_record);
     }
     // This shard won't send us anything before `lsn'+1.
     // Use that information for gap detection.

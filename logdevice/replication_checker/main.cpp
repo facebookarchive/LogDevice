@@ -841,7 +841,7 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
             },
             nullptr, // metadata_cache
             nullptr,
-            [self_weak](ShardID from, const DataRecordOwnsPayload* record) {
+            [self_weak](ShardID from, const RawDataRecord* record) {
               if (auto self = self_weak.lock()) {
                 self->gotRecordCopy(from, record);
               }
@@ -874,7 +874,7 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     throttle_timer_->activate(std::chrono::milliseconds{100});
   }
 
-  void gotRecordCopy(ShardID from, const DataRecordOwnsPayload* record) {
+  void gotRecordCopy(ShardID from, const RawDataRecord* record) {
     lsn_t lsn = record->attrs.lsn;
 
     ld_debug("log %lu: got record from %s with lsn %s",
@@ -882,7 +882,7 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
              from.toString().c_str(),
              lsn_to_string(record->attrs.lsn).c_str());
 
-    if (!record->extra_metadata_) {
+    if (!record->extra_metadata) {
       ld_error("log %lu: got record without extra metadata from %s with "
                "lsn %s; ignoring",
                log_id_.val_,
@@ -893,14 +893,14 @@ class LogChecker : public std::enable_shared_from_this<LogChecker> {
     }
 
     RecordCopy rec = {
-        record->extra_metadata_->header.wave,
+        record->extra_metadata->header.wave,
         0, // payload hash
-        record->extra_metadata_->copyset,
+        record->extra_metadata->copyset,
         record->attrs.timestamp,
         0, // payload size
-        record->flags_,
+        record->flags,
     };
-    rec.parsePayload(record->payload);
+    rec.parsePayload(record->payload.getPayload());
 
     ++perf_stats_->ncopies_received;
     perf_stats_->payload_bytes += rec.payload_size;

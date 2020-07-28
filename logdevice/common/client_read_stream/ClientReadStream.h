@@ -22,6 +22,7 @@
 #include "logdevice/common/MetaDataLogReader.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/NodeSetFinder.h"
+#include "logdevice/common/RawDataRecord.h"
 #include "logdevice/common/ReadStreamAttributes.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/Timer.h"
@@ -114,8 +115,7 @@ class ClientReadStreamDependencies {
   using record_cb_t = std::function<bool(std::unique_ptr<DataRecord>&)>;
   using gap_cb_t = std::function<bool(const GapRecord&)>;
   using done_cb_t = std::function<void(logid_t)>;
-  using record_copy_cb_t =
-      std::function<void(ShardID, const DataRecordOwnsPayload*)>;
+  using record_copy_cb_t = std::function<void(ShardID, const RawDataRecord*)>;
   using health_cb_t = std::function<void(bool)>;
 
   ClientReadStreamDependencies(read_stream_id_t rsid,
@@ -261,8 +261,7 @@ class ClientReadStreamDependencies {
    * shard (in onDataRecord()), so these callbacks can come out of order
    * and have duplicate LSNs.
    */
-  virtual void recordCopyCallback(ShardID from,
-                                  const DataRecordOwnsPayload* record) {
+  virtual void recordCopyCallback(ShardID from, const RawDataRecord* record) {
     if (record_copy_callback_) {
       record_copy_callback_(from, record);
     }
@@ -482,8 +481,7 @@ class ClientReadStream : boost::noncopyable {
    * Called by a worker thread when a RECORD message is received from a
    * storage shard.
    */
-  void onDataRecord(ShardID shard,
-                    std::unique_ptr<DataRecordOwnsPayload> record);
+  void onDataRecord(ShardID shard, std::unique_ptr<RawDataRecord> record);
 
   /**
    * Called by a worker thread when a STARTED message is received from a

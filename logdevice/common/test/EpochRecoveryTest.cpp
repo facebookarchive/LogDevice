@@ -400,11 +400,10 @@ void EpochRecoveryTest::checkRecoveryState(ERMState expected_state) {
     ASSERT_EQ(set, std::set<ShardID>({__VA_ARGS__}));           \
   } while (0)
 
-std::unique_ptr<DataRecordOwnsPayload>
-mockRecord(lsn_t lsn,
-           uint64_t ts,
-           size_t payload_size = 128,
-           OffsetMap offsets = OffsetMap()) {
+std::unique_ptr<RawDataRecord> mockRecord(lsn_t lsn,
+                                          uint64_t ts,
+                                          size_t payload_size = 128,
+                                          OffsetMap offsets = OffsetMap()) {
   return create_record(EpochRecoveryTest::LOG_ID,
                        lsn,
                        RecordType::NORMAL,
@@ -414,7 +413,7 @@ mockRecord(lsn_t lsn,
                        std::move(offsets));
 }
 
-std::unique_ptr<DataRecordOwnsPayload>
+std::unique_ptr<RawDataRecord>
 mockWriteStreamRecord(lsn_t lsn,
                       uint64_t ts,
                       size_t payload_size = 128,
@@ -428,10 +427,10 @@ mockWriteStreamRecord(lsn_t lsn,
                        std::move(offsets));
 }
 
-std::unique_ptr<DataRecordOwnsPayload> mockRecord(lsn_t lsn,
-                                                  RecordType type,
-                                                  uint32_t wave_or_seal_epoch,
-                                                  uint64_t ts = 1) {
+std::unique_ptr<RawDataRecord> mockRecord(lsn_t lsn,
+                                          RecordType type,
+                                          uint32_t wave_or_seal_epoch,
+                                          uint64_t ts = 1) {
   return create_record(EpochRecoveryTest::LOG_ID,
                        lsn,
                        type,

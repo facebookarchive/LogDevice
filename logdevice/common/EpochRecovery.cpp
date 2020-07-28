@@ -14,10 +14,10 @@
 
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/AllSequencers.h"
-#include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/LogRecoveryRequest.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/RawDataRecord.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/SimpleEnumMap.h"
 #include "logdevice/common/SocketCallback.h"
@@ -185,10 +185,9 @@ bool EpochRecovery::setNodeAuthoritativeStatus(ShardID shard,
   return false;
 }
 
-void EpochRecovery::onDigestRecord(
-    ShardID from,
-    read_stream_id_t rsid,
-    std::unique_ptr<DataRecordOwnsPayload> record) {
+void EpochRecovery::onDigestRecord(ShardID from,
+                                   read_stream_id_t rsid,
+                                   std::unique_ptr<RawDataRecord> record) {
   ld_check(record);
   ld_check(record->logid == getLogID());
   ld_check(rsid != READ_STREAM_ID_INVALID);
@@ -231,14 +230,14 @@ void EpochRecovery::onDigestRecord(
     return;
   }
 
-  if (record->invalid_checksum_) {
+  if (record->invalid_checksum) {
     RATELIMIT_ERROR(std::chrono::seconds(10),
                     10,
                     "Got a digest record %s (flags %s) with bad checksum "
                     "from %s for read stream %lu. Current active epoch "
                     "recovery: %s. Reporting as a gap.",
                     rid.toString().c_str(),
-                    RECORD_Message::flagsToString(record->flags_).c_str(),
+                    RECORD_Message::flagsToString(record->flags).c_str(),
                     from.toString().c_str(),
                     rsid.val_,
                     identify().c_str());
@@ -667,11 +666,11 @@ void EpochRecovery::updateEpochTailRecord() {
         STAT_INCR(deps_->getStats(), epoch_recovery_tail_record_hole_plug);
       } else {
         OffsetMap offsets_within_epoch;
-        if ((tail_entry->record->flags_ &
+        if ((tail_entry->record->flags &
              RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) &&
-            tail_entry->record->extra_metadata_ != nullptr) {
+            tail_entry->record->extra_metadata != nullptr) {
           offsets_within_epoch =
-              tail_entry->record->extra_metadata_->offsets_within_epoch;
+              tail_entry->record->extra_metadata->offsets_within_epoch;
         }
 
         TailRecordHeader::flags_t flags = TailRecordHeader::OFFSET_WITHIN_EPOCH;
@@ -803,7 +802,7 @@ bool EpochRecovery::mutateEpoch(const std::set<ShardID>& mutation_set,
       mutation_flags |= STORE_Header::BRIDGE;
     }
 
-    DataRecordOwnsPayload* record = nullptr;
+    RawDataRecord* record = nullptr;
     Payload payload;
     std::set<ShardID> successfully_stored;
     std::set<ShardID> amend_metadata;
@@ -1004,26 +1003,26 @@ std::pair<STORE_Header, STORE_Extra>
 EpochRecovery::createMutationHeader(esn_t esn,
                                     uint64_t timestamp,
                                     STORE_flags_t flags,
-                                    DataRecordOwnsPayload* record) const {
+                                    RawDataRecord* record) const {
   OffsetMap offsets_within_epoch;
   NodeID my_node_id = deps_->getMyNodeID();
 
   if (record != nullptr) {
-    if (record->flags_ & RECORD_Header::BUFFERED_WRITER_BLOB) {
+    if (record->flags & RECORD_Header::BUFFERED_WRITER_BLOB) {
       flags |= STORE_Header::BUFFERED_WRITER_BLOB;
     }
-    if (record->flags_ & RECORD_Header::PAYLOAD_GROUP) {
+    if (record->flags & RECORD_Header::PAYLOAD_GROUP) {
       flags |= STORE_Header::PAYLOAD_GROUP;
     }
-    if (record->flags_ & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) {
+    if (record->flags & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) {
       flags |= STORE_Header::OFFSET_WITHIN_EPOCH;
       // TODO (T35832374) : remove if condition when all servers support
       // OffsetMap
       if (deps_->getSettings().enable_offset_map) {
         flags |= STORE_Header::OFFSET_MAP;
       }
-      if (record->extra_metadata_) {
-        offsets_within_epoch = record->extra_metadata_->offsets_within_epoch;
+      if (record->extra_metadata) {
+        offsets_within_epoch = record->extra_metadata->offsets_within_epoch;
       }
     }
   }

@@ -8,7 +8,7 @@
 #include "logdevice/common/test/DigestTestUtil.h"
 
 namespace facebook { namespace logdevice { namespace DigestTestUtil {
-std::unique_ptr<DataRecordOwnsPayload>
+std::unique_ptr<RawDataRecord>
 create_record(logid_t logid,
               lsn_t lsn,
               RecordType type,
@@ -52,15 +52,14 @@ create_record(logid_t logid,
   extra_metadata->header.wave = wave_or_seal_epoch;
   extra_metadata->offsets_within_epoch = std::move(offsets_within_epoch);
 
-  auto record = std::make_unique<DataRecordOwnsPayload>(
-      logid,
-      PayloadHolder::copyString(payload),
-      lsn,
-      timestamp,
-      flags,
-      std::move(extra_metadata),
-      0 /* batch_offset */,
-      OffsetMap::toRecord(std::move(offsets)));
+  auto record =
+      std::make_unique<RawDataRecord>(logid,
+                                      PayloadHolder::copyString(payload),
+                                      lsn,
+                                      timestamp,
+                                      flags,
+                                      std::move(extra_metadata),
+                                      OffsetMap::toRecord(std::move(offsets)));
 
   return record;
 }

@@ -824,7 +824,7 @@ RecoveryTest::buildDigest(epoch_t epoch,
         record_flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
       }
 
-      auto record = std::make_unique<DataRecordOwnsPayload>(
+      auto record = std::make_unique<RawDataRecord>(
           LOG_ID,
           PayloadHolder(PayloadHolder::COPY_BUFFER, payload),
           lsn,

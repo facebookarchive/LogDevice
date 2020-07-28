@@ -11,7 +11,7 @@
 
 #include <folly/Memory.h>
 
-#include "logdevice/common/DataRecordOwnsPayload.h"
+#include "logdevice/common/RawDataRecord.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/include/Record.h"
 
@@ -48,7 +48,7 @@ enum RecordType {
 };
 
 // TODO 11866467: support for specifying copyset
-std::unique_ptr<DataRecordOwnsPayload> create_record(
+std::unique_ptr<RawDataRecord> create_record(
     logid_t logid,
     lsn_t lsn,
     RecordType type,

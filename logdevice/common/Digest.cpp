@@ -56,13 +56,13 @@ std::string Digest::RecordMetadata::toString() const {
 }
 
 Digest::RecordMetadata
-Digest::RecordMetadata::fromRecord(const DataRecordOwnsPayload& record) {
-  return RecordMetadata{record.flags_,
-                        // TODO 11866467: record.extra_metadata_ can be absent
+Digest::RecordMetadata::fromRecord(const RawDataRecord& record) {
+  return RecordMetadata{record.flags,
+                        // TODO 11866467: record.extra_metadata can be absent
                         // if storage node is running with an older version
-                        record.extra_metadata_
-                            ? record.extra_metadata_->header.wave
-                            : (record.flags_ & RECORD_Header::HOLE ? 0 : 1)};
+                        record.extra_metadata
+                            ? record.extra_metadata->header.wave
+                            : (record.flags & RECORD_Header::HOLE ? 0 : 1)};
 }
 
 Digest::Digest(
@@ -167,8 +167,7 @@ bool Digest::needsMutation(Entry& entry,
   return !failure_domain_.canReplicate(true);
 }
 
-void Digest::onRecord(ShardID from,
-                      std::unique_ptr<DataRecordOwnsPayload> record) {
+void Digest::onRecord(ShardID from, std::unique_ptr<RawDataRecord> record) {
   esn_t esn = lsn_to_esn(record->attrs.lsn);
   Entry& entry = entries_[esn];
 
@@ -207,15 +206,14 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
 
     // apply the bridge record received so far to each digest entry,
     // overwriting the entry if needed
-    std::unique_ptr<DataRecordOwnsPayload>& existing_record =
-        eit->second.record;
+    std::unique_ptr<RawDataRecord>& existing_record = eit->second.record;
     ld_check(existing_record != nullptr);
 
     // already collected the bridge information upto this record, it is OK to
     // remove the bridge flag in the record to be mutated. This is also needed
     // to get the correct set of nodes in needsMutation(). The new bridge
     // record will be computed later in this function
-    existing_record->flags_ &= ~RECORD_Header::BRIDGE;
+    existing_record->flags &= ~RECORD_Header::BRIDGE;
 
     for (const auto& kv : bridges) {
       if (RecordMetadata::fromRecord(*existing_record) < kv.second) {
@@ -230,7 +228,7 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
             RECORD_Header::HOLE | RECORD_Header::DIGEST;
 
         // create a hole record from the existing record
-        auto hole_record = std::make_unique<DataRecordOwnsPayload>(
+        auto hole_record = std::make_unique<RawDataRecord>(
             existing_record->logid,
             // empty payload
             PayloadHolder(),
@@ -239,7 +237,6 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
             existing_record->attrs.timestamp,
             flags,
             std::move(extra_metadata),
-            0, // batch_offset
             std::move(existing_record->attrs.offsets),
             /*invalid_checksum=*/false);
 
@@ -293,7 +290,7 @@ esn_t Digest::applyBridgeRecords(esn_t last_known_good,
   // needsMutation() can get a correct amend set
   auto it_bridge = entries_.find(bridge);
   if (it_bridge != entries_.end()) {
-    it_bridge->second.record->flags_ |= RECORD_Header::BRIDGE;
+    it_bridge->second.record->flags |= RECORD_Header::BRIDGE;
   }
 
   return bridge;
@@ -328,7 +325,7 @@ void Digest::applyWriteStreamHoles(esn_t last_known_good) {
         // Marking HOLE flag will send appropriate overwriting messages to all
         // nodes that disagree with dentry. Refer EpochRecovery::mutateEpoch()
         // and Digest::needsMutations() for how this happens.
-        dentry.record->flags_ |= RECORD_Header::HOLE;
+        dentry.record->flags |= RECORD_Header::HOLE;
         ld_check(dentry.isHolePlug());
       }
 
@@ -377,9 +374,9 @@ int Digest::recomputeOffsetsWithinEpoch(
     }
     ld_check(iter->second.record != nullptr);
 
-    if (iter->second.record->extra_metadata_ != nullptr) {
+    if (iter->second.record->extra_metadata != nullptr) {
       offsets_within_epoch =
-          iter->second.record->extra_metadata_->offsets_within_epoch;
+          iter->second.record->extra_metadata->offsets_within_epoch;
     } else {
       offsets_within_epoch = OffsetMap();
     }
@@ -417,12 +414,12 @@ int Digest::recomputeOffsetsWithinEpoch(
     // this can ensure that mutation phase will amend the copy's metadata
     // to have the correct OffsetMap
     // update rebuild_matadata_
-    if (entry.record->extra_metadata_ != nullptr &&
-        entry.record->extra_metadata_->offsets_within_epoch !=
+    if (entry.record->extra_metadata != nullptr &&
+        entry.record->extra_metadata->offsets_within_epoch !=
             offsets_within_epoch.value()) {
-      entry.record->extra_metadata_->offsets_within_epoch =
+      entry.record->extra_metadata->offsets_within_epoch =
           offsets_within_epoch.value();
-      entry.record->flags_ |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
+      entry.record->flags |= RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH;
       entry.byte_offset_changed = true;
     }
   }

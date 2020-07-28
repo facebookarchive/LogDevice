@@ -10,7 +10,7 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/AdminCommandTable.h"
-#include "logdevice/common/DataRecordOwnsPayload.h"
+#include "logdevice/common/RawDataRecord.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/protocol/STOP_Message.h"
@@ -42,7 +42,7 @@ void AllClientReadStreams::onDataRecord(
     ShardID shard,
     logid_t log_id,
     read_stream_id_t read_stream_id,
-    std::unique_ptr<DataRecordOwnsPayload>&& record) {
+    std::unique_ptr<RawDataRecord>&& record) {
   auto it = streams_.find(read_stream_id);
   if (it == streams_.end()) {
     // If the stream no longer exists on the client, tell the server to stop

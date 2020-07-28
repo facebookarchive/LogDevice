@@ -379,11 +379,11 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
   TestState& state_;
 };
 
-static std::unique_ptr<DataRecordOwnsPayload>
-mockRecord(lsn_t lsn, RECORD_flags_t flags = 0) {
+static std::unique_ptr<RawDataRecord> mockRecord(lsn_t lsn,
+                                                 RECORD_flags_t flags = 0) {
   std::chrono::milliseconds timestamp(0);
 
-  return std::make_unique<DataRecordOwnsPayload>(
+  return std::make_unique<RawDataRecord>(
       LOG_ID, PayloadHolder::copyString("data"), lsn, timestamp, flags);
 }
 
@@ -463,8 +463,7 @@ class ClientReadStreamTest
     overrideConnectionStates(ConnectionState::READING);
   }
 
-  void onDataRecord(ShardID shard,
-                    std::unique_ptr<DataRecordOwnsPayload> record) {
+  void onDataRecord(ShardID shard, std::unique_ptr<RawDataRecord> record) {
     read_stream_->onDataRecord(shard, std::move(record));
   }
 

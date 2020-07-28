@@ -14,10 +14,10 @@
 
 #include <folly/Optional.h>
 
-#include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/RawDataRecord.h"
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/types_internal.h"
@@ -111,7 +111,7 @@ class Digest {
     std::string toString() const;
 
     // extract the record metadata from a record
-    static RecordMetadata fromRecord(const DataRecordOwnsPayload& record);
+    static RecordMetadata fromRecord(const RawDataRecord& record);
   };
 
   struct Entry {
@@ -119,7 +119,7 @@ class Digest {
     // record or a hole plug. When the digest phase completed, this will be
     // the final determined state of the LSN and will be properly replicated
     // to the mutation and cleaning set by epoch recovery.
-    std::unique_ptr<DataRecordOwnsPayload> record;
+    std::unique_ptr<RawDataRecord> record;
 
     // keep the record metadata for this LSN slot receievd from all shards
     // participating the digest, indexed by their ShardID
@@ -130,26 +130,26 @@ class Digest {
     bool byte_offset_changed = false;
 
     bool isHolePlug() const {
-      return record && (record->flags_ & RECORD_Header::HOLE);
+      return record && (record->flags & RECORD_Header::HOLE);
     }
 
     bool isBridgeRecord() const {
-      return record && (record->flags_ & RECORD_Header::BRIDGE);
+      return record && (record->flags & RECORD_Header::BRIDGE);
     }
 
     bool isWriteStreamRecord() {
-      return record && (record->flags_ & RECORD_Header::WRITE_STREAM);
+      return record && (record->flags & RECORD_Header::WRITE_STREAM);
     }
 
-    const Payload& getPayload() const {
+    Payload getPayload() const {
       ld_check(!isHolePlug() && record != nullptr);
-      return record->payload;
+      return record->payload.getPayload();
     }
 
     size_t getChecksumBytes() const {
       // TODO T31241526: support checksum in epoch recovery
-      // if (record->flags_ & STORE_Header::CHECKSUM) {
-      //   return record->flags_ & STORE_Header::CHECKSUM_64BIT ? 8 : 4;
+      // if (record->flags & STORE_Header::CHECKSUM) {
+      //   return record->flags & STORE_Header::CHECKSUM_64BIT ? 8 : 4;
       // }
       // currently digest records do not contain checksum
       return 0;
@@ -193,7 +193,7 @@ class Digest {
    *                or a hole plug (determined by record.flags_ and an empty
    *                payload)
    */
-  void onRecord(ShardID from, std::unique_ptr<DataRecordOwnsPayload> record);
+  void onRecord(ShardID from, std::unique_ptr<RawDataRecord> record);
 
   /**
    * Trim the digest, discarding entries whose esn <= @param last_known_good

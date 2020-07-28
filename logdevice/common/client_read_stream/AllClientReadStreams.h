@@ -28,7 +28,7 @@
 
 namespace facebook { namespace logdevice {
 
-struct DataRecordOwnsPayload;
+struct RawDataRecord;
 class Processor;
 
 class AllClientReadStreams : public ShardAuthoritativeStatusSubscriber {
@@ -52,7 +52,7 @@ class AllClientReadStreams : public ShardAuthoritativeStatusSubscriber {
   void onDataRecord(ShardID shard,
                     logid_t log_id,
                     read_stream_id_t read_stream_id,
-                    std::unique_ptr<DataRecordOwnsPayload>&& record);
+                    std::unique_ptr<RawDataRecord>&& record);
 
   /**
    * Informs the appropriate ClientReadStream of the outcome of trying to send

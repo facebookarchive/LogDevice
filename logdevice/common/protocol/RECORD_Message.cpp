@@ -13,6 +13,7 @@
 
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/EpochRecovery.h"
+#include "logdevice/common/RawDataRecord.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/client_read_stream/AllClientReadStreams.h"
@@ -224,14 +225,13 @@ Message::Disposition RECORD_Message::onReceived(const Address& from) {
 
   bool invalid_checksum = (verifyChecksum() != 0);
 
-  auto record = std::make_unique<DataRecordOwnsPayload>(
+  auto record = std::make_unique<RawDataRecord>(
       header_.log_id,
       std::move(payload_),
       lsn_t(header_.lsn),
       std::chrono::milliseconds(header_.timestamp),
       RECORD_flags_t(header_.flags),
       std::move(extra_metadata_),
-      0, // batch_offset
       OffsetMap::toRecord(offsets_),
       invalid_checksum);
   // We have transferred ownership of the payload.

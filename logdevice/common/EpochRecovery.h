@@ -36,7 +36,7 @@ namespace facebook { namespace logdevice {
  *       recovery of that log.
  */
 
-struct DataRecordOwnsPayload;
+struct RawDataRecord;
 struct GAP_Header;
 struct MUTATED_Header;
 struct Settings;
@@ -310,7 +310,7 @@ class EpochRecovery {
    */
   void onDigestRecord(ShardID from,
                       read_stream_id_t rsid,
-                      std::unique_ptr<DataRecordOwnsPayload> record);
+                      std::unique_ptr<RawDataRecord> record);
 
   /**
    * Called by GAP_Message::onReceived() when a GAP message is received
@@ -591,7 +591,7 @@ class EpochRecovery {
   createMutationHeader(esn_t esn,
                        uint64_t timestamp,
                        STORE_flags_t flags,
-                       DataRecordOwnsPayload* record) const;
+                       RawDataRecord* record) const;
 
   /**
    * Given the final digest, perform mutations for the epoch. Starting from
