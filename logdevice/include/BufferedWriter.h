@@ -10,6 +10,7 @@
 #include <chrono>
 #include <memory>
 #include <tuple>
+#include <variant>
 #include <vector>
 
 #include "logdevice/include/Client.h"
@@ -62,6 +63,9 @@ class BufferedWriterAppendSink;
 
 class BufferedWriter {
  public:
+  /** Variants of payloads, which can be appended using BufferedWriter. */
+  using PayloadVariant = std::variant<std::string, PayloadGroup>;
+
   /**
    * Callback interface.  All methods get called on an unspecified thread.
    * Applications should subclass and override desired notification methods.
@@ -69,7 +73,7 @@ class BufferedWriter {
   class AppendCallback {
    public:
     using Context = void*;
-    using ContextSet = std::vector<std::pair<Context, std::string>>;
+    using ContextSet = std::vector<std::pair<Context, PayloadVariant>>;
 
     /**
      * Called when a batch of records for the same log was successfully
@@ -136,11 +140,20 @@ class BufferedWriter {
           context(context),
           attrs(std::move(attrs)) {}
 
+    Append(logid_t log_id,
+           PayloadGroup&& payload,
+           AppendCallback::Context context,
+           AppendAttributes attrs = AppendAttributes())
+        : log_id(log_id),
+          payload(std::move(payload)),
+          context(context),
+          attrs(std::move(attrs)) {}
+
     Append(const Append&) = delete;
     Append(Append&&) = default;
     Append& operator=(Append&&) = default;
     logid_t log_id;
-    std::string payload;
+    PayloadVariant payload;
     AppendCallback::Context context;
     AppendAttributes attrs;
   };
@@ -267,12 +280,15 @@ class BufferedWriter {
    * with a ContextSet containing callback_context.
    *
    * If the call succeeds (returns 0), the class assumes ownership of the
-   * payload.  If the call fails, the payload remains in the given
-   * std::string.
+   * payload.  If the call fails, the payload remains in the given parameter.
    * See Client::append for explanation of AppendAttributes
    */
   int append(logid_t logid,
              std::string&& payload,
+             AppendCallback::Context callback_context,
+             AppendAttributes&& attrs = AppendAttributes());
+  int append(logid_t logid,
+             PayloadGroup&& payload_group,
              AppendCallback::Context callback_context,
              AppendAttributes&& attrs = AppendAttributes());
 

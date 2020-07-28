@@ -14,6 +14,7 @@
 
 #include <folly/IntrusiveList.h>
 #include <folly/Memory.h>
+#include <folly/Overload.h>
 #include <folly/Random.h>
 #include <folly/ScopeGuard.h>
 #include <folly/Varint.h>
@@ -87,10 +88,11 @@ void BufferedWriterSingleLog::append(AppendChunk chunk) {
 int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
                                         bool defer_client_size_trigger) {
   // Calculate how many bytes (approx.) these records will take up in the memory
-  size_t payload_bytes_added = 0;
+  size_t payload_memory_bytes_added = 0;
   for (const BufferedWriter::Append& append : chunk) {
-    const std::string& payload = append.payload;
-    payload_bytes_added += payload.size();
+    const auto& payload = append.payload;
+    payload_memory_bytes_added +=
+        BufferedWriterPayloadMeter::memorySize(payload);
   }
   const size_t max_payload_size = Worker::settings().max_payload_size;
 
@@ -98,9 +100,16 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
     auto& batch = batches_->back();
     // Calculate how many bytes these records will take up in the blob
     for (const BufferedWriter::Append& append : chunk) {
-      auto iobuf = folly::IOBuf::wrapBufferAsValue(
-          append.payload.data(), append.payload.size());
-      batch->blob_size_estimator.append(iobuf);
+      std::visit(folly::overload(
+                     [&](const std::string& payload) {
+                       auto iobuf = folly::IOBuf::wrapBufferAsValue(
+                           payload.data(), payload.size());
+                       batch->blob_size_estimator.append(iobuf);
+                     },
+                     [&](const PayloadGroup& payload_group) {
+                       batch->blob_size_estimator.append(payload_group);
+                     }),
+                 append.payload);
     }
     const size_t new_blob_bytes_total =
         batch->blob_size_estimator.calculateSize(checksumBits());
@@ -114,6 +123,7 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
       ld_check(!haveBuildingBatch());
     } else {
       batch->blob_bytes_total = new_blob_bytes_total;
+      batch->blob_format = batch->blob_size_estimator.getFormat();
     }
   }
 
@@ -133,12 +143,20 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
 
     // Calculate how many bytes these records will take up in the blob
     for (const BufferedWriter::Append& append : chunk) {
-      auto iobuf = folly::IOBuf::wrapBufferAsValue(
-          append.payload.data(), append.payload.size());
-      batch->blob_size_estimator.append(iobuf);
+      std::visit(folly::overload(
+                     [&](const std::string& payload) {
+                       auto iobuf = folly::IOBuf::wrapBufferAsValue(
+                           payload.data(), payload.size());
+                       batch->blob_size_estimator.append(iobuf);
+                     },
+                     [&](const PayloadGroup& payload_group) {
+                       batch->blob_size_estimator.append(payload_group);
+                     }),
+                 append.payload);
     }
     batch->blob_bytes_total =
         batch->blob_size_estimator.calculateSize(checksumBits());
+    batch->blob_format = batch->blob_size_estimator.getFormat();
     batches_->push_back(std::move(batch));
     // Intentionally setting state after pushing to make sure is_flushable_
     // becomes true *during* the setBatchState() call
@@ -150,10 +168,10 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
   }
   Batch& batch = *batches_->back();
   // Add these appends to the BUILDING batch
-  batch.payload_bytes_total += payload_bytes_added;
+  batch.payload_memory_bytes_total += payload_memory_bytes_added;
   ld_check(batch.blob_bytes_total <= MAX_PAYLOAD_SIZE_INTERNAL);
   for (auto& append : chunk) {
-    std::string& payload = append.payload;
+    auto& payload = append.payload;
     BufferedWriter::AppendCallback::Context& context = append.context;
     batch.appends.emplace_back(std::move(context), std::move(payload));
 
@@ -207,7 +225,7 @@ void BufferedWriterSingleLog::flushMeMaybe(bool defer_client_size_trigger) {
   // If client set `Options::size_trigger', check if the sum of payload bytes
   // buffered exceeds it
   if (!defer_client_size_trigger && options_.size_trigger >= 0 &&
-      batch.payload_bytes_total >= options_.size_trigger) {
+      batch.payload_memory_bytes_total >= options_.size_trigger) {
     STAT_INCR(w->getStats(), buffered_writer_size_trigger_flush);
     flushBuildingBatch();
     return;
@@ -304,7 +322,7 @@ void BufferedWriterSingleLog::readyToSend(Batch& batch) {
 
   // Collect before&after byte counters to give clients an
   // idea of the compression ratio
-  STAT_ADD(stats, buffered_writer_bytes_in, batch.payload_bytes_total);
+  STAT_ADD(stats, buffered_writer_bytes_in, batch.payload_memory_bytes_total);
   STAT_ADD(stats, buffered_writer_bytes_batched, batch.blob.length());
 
   setBatchState(batch, Batch::State::READY_TO_SEND);
@@ -471,13 +489,12 @@ void BufferedWriterSingleLog::dropBlockedAppends(Status status,
                                                  NodeID redirect) {
   BufferedWriterImpl::AppendCallbackInternal* cb =
       parent_->parent_->getCallback();
-  int64_t payload_bytes = 0;
+  int64_t payload_mem_bytes = 0;
   for (auto& chunk : *blocked_appends_) {
-    std::vector<std::pair<BufferedWriter::AppendCallback::Context, std::string>>
-        context_set;
+    BufferedWriter::AppendCallback::ContextSet context_set;
     for (auto& append : chunk) {
-      std::string& payload = append.payload;
-      payload_bytes += payload.size();
+      auto& payload = append.payload;
+      payload_mem_bytes += BufferedWriterPayloadMeter::memorySize(payload);
       BufferedWriter::AppendCallback::Context& context = append.context;
       context_set.emplace_back(std::move(context), std::move(payload));
     }
@@ -489,7 +506,7 @@ void BufferedWriterSingleLog::dropBlockedAppends(Status status,
   blocked_appends_.compact();
   blocked_appends_flush_deferred_count_ = 0;
   // Return the memory budget
-  parent_->parent_->releaseMemory(payload_bytes);
+  parent_->parent_->releaseMemory(payload_mem_bytes);
 
   flushableMayHaveChanged();
 }
@@ -589,7 +606,7 @@ void BufferedWriterSingleLog::finishBatch(Batch& batch) {
   // Free/unlink the buffer.
   batch.blob = folly::IOBuf();
   // Return the memory budget
-  parent_->parent_->releaseMemory(batch.payload_bytes_total);
+  parent_->parent_->releaseMemory(batch.payload_memory_bytes_total);
 }
 
 void BufferedWriterSingleLog::setBatchState(Batch& batch, Batch::State state) {
@@ -616,29 +633,48 @@ void encode_batch(BufferedWriterSingleLog::Batch& batch,
       checksum_bits, batch.appends.size(), batch.blob_bytes_total);
   for (auto& append : batch.appends) {
     if (destroy_payloads) {
-      batch.total_size_freed += append.second.size();
+      batch.total_size_freed +=
+          BufferedWriterPayloadMeter::memorySize(append.second);
 
-      // Payload should be destroyed, so pass ownership to the encoder
-      std::string* client_payload = new std::string(std::move(append.second));
-      folly::IOBuf iobuf =
-          folly::IOBuf(folly::IOBuf::TAKE_OWNERSHIP,
-                       client_payload->data(),
-                       client_payload->size(),
-                       +[](void* /* buf */, void* userData) {
-                         delete reinterpret_cast<std::string*>(userData);
-                       },
-                       /* userData */ reinterpret_cast<void*>(client_payload));
-      encoder.append(std::move(iobuf));
+      std::visit(
+          folly::overload(
+              [&](std::string& payload) {
+                // Payload should be destroyed, so pass ownership to the encoder
+                std::string* client_payload =
+                    new std::string(std::move(payload));
+                folly::IOBuf iobuf = folly::IOBuf(
+                    folly::IOBuf::TAKE_OWNERSHIP,
+                    client_payload->data(),
+                    client_payload->size(),
+                    +[](void* /* buf */, void* userData) {
+                      delete reinterpret_cast<std::string*>(userData);
+                    },
+                    /* userData */ reinterpret_cast<void*>(client_payload));
+                encoder.append(std::move(iobuf));
 
-      // Can't do append.second.clear() because that usually doesn't free
-      // memory.
-      append.second.clear();
-      append.second.shrink_to_fit();
+                // Can't do payload.clear() because that usually doesn't free
+                // memory.
+                payload.clear();
+                payload.shrink_to_fit();
+              },
+              [&](PayloadGroup& payload_group) {
+                encoder.append(payload_group);
+
+                payload_group.clear();
+              }),
+          append.second);
     } else {
-      const std::string& client_payload = append.second;
-      // It's safe to wrap buffer, since payloads are preserved in batch.
-      encoder.append(folly::IOBuf::wrapBufferAsValue(
-          client_payload.data(), client_payload.size()));
+      std::visit(folly::overload(
+                     [&](const std::string& client_payload) {
+                       // It's safe to wrap buffer, since payloads are preserved
+                       // in batch.
+                       encoder.append(folly::IOBuf::wrapBufferAsValue(
+                           client_payload.data(), client_payload.size()));
+                     },
+                     [&](const PayloadGroup& payload_group) {
+                       encoder.append(payload_group);
+                     }),
+                 append.second);
     }
   }
   folly::IOBufQueue encoded;
@@ -653,7 +689,7 @@ void BufferedWriterSingleLog::Impl::construct_compressed_blob(
     Compression compression,
     int zstd_level,
     bool destroy_payloads) {
-  switch (batch.blob_size_estimator.getFormat()) {
+  switch (batch.blob_format) {
     case BufferedWriteCodec::Format::SINGLE_PAYLOADS: {
       encode_batch<BufferedWriteSinglePayloadsCodec::Encoder>(
           batch, checksum_bits, compression, zstd_level, destroy_payloads);

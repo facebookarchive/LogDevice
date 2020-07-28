@@ -9,12 +9,16 @@
 #pragma once
 #include <chrono>
 #include <functional>
+#include <variant>
+
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice { namespace ldbench {
 using LogIDType = uint64_t;
 using LogPositionType = uint64_t;
 using Context = void*;
-using ContextSet = std::vector<std::pair<Context, std::string>>;
+using ContextSet =
+    std::vector<std::pair<Context, std::variant<std::string, PayloadGroup>>>;
 /**
  * Customized append callbacks for logstore
  * This callback only uses standard data types

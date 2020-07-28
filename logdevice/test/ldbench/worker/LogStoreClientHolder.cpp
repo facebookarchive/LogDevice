@@ -183,7 +183,8 @@ void LogStoreClientHolder::onAppendDone(bool successful,
       StatsType::INFLIGHT, -1 * static_cast<int64_t>(contexts.size()));
   uint64_t payload_size = 0;
   for (auto it = contexts.begin(); it != contexts.end(); it++) {
-    payload_size += it->second.size();
+    const std::string& payload = std::get<std::string>(it->second);
+    payload_size += payload.size();
     // start to sample event
     // Current example is sampling latency
     if (bench_tracer_) {
@@ -191,7 +192,7 @@ void LogStoreClientHolder::onAppendDone(bool successful,
           bench_tracer_->isSample()) {
         std::string event_name =
             options.use_buffered_writer ? "bufferedWriter" : "Writer";
-        doSample(log_id, lsn, it->second, event_name);
+        doSample(log_id, lsn, payload, event_name);
       }
     }
   }

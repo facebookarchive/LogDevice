@@ -8,8 +8,10 @@
 #include "logdevice/common/buffered_writer/BufferedWriterImpl.h"
 
 #include <folly/Memory.h>
+#include <folly/Overload.h>
 #include <folly/hash/Hash.h>
 
+#include "logdevice/common/PayloadGroupCodec.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
 #include "logdevice/common/Semaphore.h"
@@ -103,6 +105,42 @@ void WaitableCounter::waitForZeroAndDisallowMore() {
   if (counter_ != 0) {
     ld_error("Waitable counter not zero after waiting!");
   }
+}
+
+size_t BufferedWriterPayloadMeter::encodedSize(const std::string& payload) {
+  return payload.size();
+}
+
+size_t
+BufferedWriterPayloadMeter::encodedSize(const PayloadGroup& payload_group) {
+  PayloadGroupCodec::Estimator estimator;
+  estimator.append(payload_group);
+  return estimator.calculateSize();
+}
+
+size_t BufferedWriterPayloadMeter::encodedSize(
+    const std::variant<std::string, PayloadGroup>& payload_variant) {
+  return std::visit([&](const auto& payload) { return encodedSize(payload); },
+                    payload_variant);
+}
+
+size_t BufferedWriterPayloadMeter::memorySize(const std::string& payload) {
+  return payload.size();
+}
+
+size_t
+BufferedWriterPayloadMeter::memorySize(const PayloadGroup& payload_group) {
+  size_t size = 0;
+  for (const auto& [key, iobuf] : payload_group) {
+    size += iobuf.computeChainDataLength();
+  }
+  return size + payload_group.size() * sizeof(PayloadKey);
+}
+
+size_t BufferedWriterPayloadMeter::memorySize(
+    const std::variant<std::string, PayloadGroup>& payload_variant) {
+  return std::visit([&](const auto& payload) { return memorySize(payload); },
+                    payload_variant);
 }
 
 using GetLogOptionsFunc = std::function<BufferedWriter::LogOptions(logid_t)>;
@@ -355,6 +393,25 @@ int BufferedWriterImpl::append(logid_t log_id,
                                std::string&& payload,
                                AppendCallback::Context cb_context,
                                AppendAttributes&& attrs) {
+  return appendImpl(
+      log_id, std::move(payload), std::move(cb_context), std::move(attrs));
+}
+
+int BufferedWriterImpl::append(logid_t log_id,
+                               PayloadGroup&& payload_group,
+                               AppendCallback::Context cb_context,
+                               AppendAttributes&& attrs) {
+  return appendImpl(log_id,
+                    std::move(payload_group),
+                    std::move(cb_context),
+                    std::move(attrs));
+}
+
+template <typename T>
+int BufferedWriterImpl::appendImpl(logid_t log_id,
+                                   T&& payload,
+                                   AppendCallback::Context cb_context,
+                                   AppendAttributes&& attrs) {
   STAT_INCR(stats_, buffered_appends);
 
   if (shutting_down_.load()) {
@@ -363,7 +420,8 @@ int BufferedWriterImpl::append(logid_t log_id,
     return -1;
   }
 
-  if (!append_sink_->checkAppend(log_id, payload.size(), false)) {
+  if (!append_sink_->checkAppend(
+          log_id, BufferedWriterPayloadMeter::encodedSize(payload), false)) {
     STAT_INCR(stats_, buffered_append_failed_invalid_param);
     return -1;
   }
@@ -375,17 +433,18 @@ int BufferedWriterImpl::append(logid_t log_id,
     return -1;
   }
 
-  size_t payload_size = payload.size();
+  const size_t payload_mem_bytes =
+      BufferedWriterPayloadMeter::memorySize(payload);
 
-  if (acquireMemory(payload_size) != 0) {
+  if (acquireMemory(payload_mem_bytes) != 0) {
     log_memory_limit_exceeded(memory_limit_bytes_);
     err = E::NOBUFS;
     STAT_INCR(stats_, buffered_append_failed_memory_limit);
     return -1;
   }
 
-  auto release_memory_on_fail =
-      folly::makeGuard([this, payload_size] { releaseMemory(payload_size); });
+  auto release_memory_on_fail = folly::makeGuard(
+      [this, payload_mem_bytes] { releaseMemory(payload_mem_bytes); });
 
   // Post a BufferedAppendRequest to the appropriate Worker.
   int shard_idx = mapLogToShardIndex(log_id);
@@ -398,19 +457,19 @@ int BufferedWriterImpl::append(logid_t log_id,
                                               shards_[shard_idx],
                                               std::move(chunk),
                                               /* atomic */ false);
-  append_sink_->onBytesSentToWorker(payload_size);
+  append_sink_->onBytesSentToWorker(payload_mem_bytes);
   int rv = processor()->postRequest(req);
   if (rv == 0) {
     // BufferedWriterSingleLog will release memory budget after append is done.
     release_memory_on_fail.dismiss();
   } else {
     // Failed to queue the append.  Return the payload to the caller.
-    append_sink_->onBytesSentToWorker(-payload_size);
+    append_sink_->onBytesSentToWorker(-payload_mem_bytes);
     BufferedAppendRequest* rawreq =
         static_cast<BufferedAppendRequest*>(req.get());
     chunk = rawreq->releaseChunk();
     ld_check(chunk.size() == 1);
-    payload = std::move(chunk.front().payload);
+    payload = std::move(std::get<T>(chunk.front().payload));
     attrs = std::move(chunk.front().attrs);
     STAT_INCR(stats_, buffered_append_failed_post_request);
   }
@@ -431,9 +490,9 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
     return -1;
   }
 
-  int64_t payload_bytes = 0;
+  int64_t payload_mem_bytes = 0;
   for (const Append& append : input_appends) {
-    payload_bytes += append.payload.size();
+    payload_mem_bytes += BufferedWriterPayloadMeter::memorySize(append.payload);
     if (log_id != append.log_id) {
       ld_info("Input appends must all be for the same log "
               "but at least two logs passed (%lu and %lu)",
@@ -445,7 +504,10 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
       return -1;
     }
 
-    if (!append_sink_->checkAppend(log_id, append.payload.size(), false)) {
+    if (!append_sink_->checkAppend(
+            log_id,
+            BufferedWriterPayloadMeter::encodedSize(append.payload),
+            false)) {
       err = E::TOOBIG;
       STAT_ADD(
           stats_, buffered_append_failed_invalid_param, input_appends.size());
@@ -461,32 +523,32 @@ int BufferedWriterImpl::appendAtomic(logid_t log_id,
   }
 
   // Check if we have enough memory for these writes
-  if (acquireMemory(payload_bytes) != 0) {
+  if (acquireMemory(payload_mem_bytes) != 0) {
     log_memory_limit_exceeded(memory_limit_bytes_);
     err = E::NOBUFS;
     STAT_ADD(stats_, buffered_append_failed_memory_limit, input_appends.size());
     return -1;
   }
 
-  auto release_memory_on_fail =
-      folly::makeGuard([this, payload_bytes] { releaseMemory(payload_bytes); });
+  auto release_memory_on_fail = folly::makeGuard(
+      [this, payload_mem_bytes] { releaseMemory(payload_mem_bytes); });
 
   BufferedWriterShard::AppendChunk chunks;
   int shard = mapLogToShardIndex(log_id);
-  size_t append_sizes = 0;
+  size_t append_mem_sizes = 0;
 
   for (Append& append : input_appends) {
-    append_sizes += append.payload.size();
+    append_mem_sizes += BufferedWriterPayloadMeter::memorySize(append.payload);
     chunks.emplace_back(std::move(append));
   }
 
   std::unique_ptr<Request> req = std::make_unique<BufferedAppendRequest>(
       worker_id_t(shard), shards_[shard], std::move(chunks), /* atomic */ true);
-  append_sink_->onBytesSentToWorker(append_sizes);
+  append_sink_->onBytesSentToWorker(append_mem_sizes);
   int rv = processor()->postRequest(req);
   if (rv != 0) {
     // Failed to queue the append.  Return the payload to the caller.
-    append_sink_->onBytesSentToWorker(-append_sizes);
+    append_sink_->onBytesSentToWorker(-append_mem_sizes);
     BufferedAppendRequest* rawreq =
         static_cast<BufferedAppendRequest*>(req.get());
     chunks = rawreq->releaseChunk();
@@ -524,7 +586,10 @@ BufferedWriterImpl::append(std::vector<Append>&& input_appends) {
   for (size_t i = 0; i < input_appends.size(); ++i) {
     auto& append = input_appends[i];
     logid_t log_id = append.log_id;
-    if (!append_sink_->checkAppend(log_id, append.payload.size(), false)) {
+    if (!append_sink_->checkAppend(
+            log_id,
+            BufferedWriterPayloadMeter::encodedSize(append.payload),
+            false)) {
       shard_idxs.push_back(-1);
       result[i] = E::TOOBIG;
       STAT_INCR(stats_, buffered_append_failed_invalid_param);
@@ -542,7 +607,8 @@ BufferedWriterImpl::append(std::vector<Append>&& input_appends) {
       STAT_INCR(stats_, buffered_append_failed_other);
       continue;
     }
-    shard_append_sizes[shard_idx] += append.payload.size();
+    shard_append_sizes[shard_idx] +=
+        BufferedWriterPayloadMeter::memorySize(append.payload);
 
     chunks[shard_idx].emplace_back(std::move(append));
     // Record the shard ID so we can match up return codes

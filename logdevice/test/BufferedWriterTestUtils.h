@@ -34,7 +34,8 @@ class TestCallback : public BufferedWriter::AppendCallback {
     lsn_range.first = std::min(lsn_range.first, attrs.lsn);
     lsn_range.second = std::max(lsn_range.second, attrs.lsn);
     for (auto& ctx : contexts) {
-      payloads_succeeded.push_back(std::move(ctx.second));
+      payloads_succeeded.push_back(
+          std::move(std::get<std::string>(ctx.second)));
       sem.post();
     }
   }

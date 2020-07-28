@@ -23,17 +23,18 @@ void BufferedWriterShard::append(AppendChunk chunk, bool atomic) {
     // BufferedWriter()::shutDown().
     BufferedWriterImpl::AppendCallbackInternal* cb = parent_->getCallback();
 
-    int64_t payload_bytes = 0;
+    int64_t payload_mem_bytes = 0;
     for (auto& append : chunk) {
       BufferedWriter::AppendCallback::ContextSet appends;
-      payload_bytes += append.payload.size();
+      payload_mem_bytes +=
+          BufferedWriterPayloadMeter::memorySize(append.payload);
       appends.emplace_back(
           std::move(append.context), std::move(append.payload));
       cb->onFailureInternal(
           append.log_id, std::move(appends), E::SHUTDOWN, NodeID());
     }
     WORKER_STAT_ADD(buffered_append_failed_shutdown, chunk.size());
-    parent_->releaseMemory(payload_bytes);
+    parent_->releaseMemory(payload_mem_bytes);
 
     RATELIMIT_ERROR(
         std::chrono::seconds(10), 1, "Append received after shutdown.");

@@ -399,8 +399,9 @@ void SequencerBatching::onResult(logid_t log_id,
           std::min(contexts.size(), worker_state_machines_.size()));
 
   using Context = BufferedWriter::AppendCallback::Context;
+  using PayloadVariant = BufferedWriter::PayloadVariant;
   for (int i = 0; i < contexts.size(); ++i) {
-    const std::pair<Context, std::string>& ctx = contexts[i];
+    const std::pair<Context, PayloadVariant>& ctx = contexts[i];
     AppendMessageState* ptr = static_cast<AppendMessageState*>(ctx.first);
     // Since AppendMessageState instances get destroyed in the BufferedWriter
     // callback and our destructor tears down BufferedWriter first, `ptr' is

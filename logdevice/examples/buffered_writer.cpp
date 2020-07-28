@@ -69,7 +69,7 @@ class BufferedWriterCallback : public BufferedWriter::AppendCallback {
     // Handle the error if needed. For example, collect the
     // failed payloads to retry them later.
     for (auto& ctx : contexts) {
-      payloadsFailed.push_back(std::move(ctx.second));
+      payloadsFailed.push_back(std::move(std::get<std::string>(ctx.second)));
     }
     appendsAckd += contexts.size();
     cv.notify_all();

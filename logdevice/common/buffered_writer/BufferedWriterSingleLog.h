@@ -102,7 +102,7 @@ class BufferedWriterSingleLog {
     // 2/ Custom counters. We keep the sum.
     AppendAttributes attrs;
     // Sum of payload sizes in `appends'
-    size_t payload_bytes_total = 0;
+    size_t payload_memory_bytes_total = 0;
     // Projection of how big the uncompressed blob will be.  Updated while the
     // batch is BUILDING so that we can early-flush when a large append would
     // take us over the max payload size.
@@ -112,6 +112,9 @@ class BufferedWriterSingleLog {
     // Keeps track of amount of payload destroyed in
     // construct_uncompressed_blob().
     size_t total_size_freed = 0;
+    // Encoding format which must be used to allow encoding of all appends.
+    BufferedWriteCodec::Format blob_format =
+        BufferedWriteCodec::Format::SINGLE_PAYLOADS;
     // Blob to send to LogDevice, with the entire batch serialized.
     // Constructed the first time the batch transitions from BUILDING to
     // INFLIGHT.

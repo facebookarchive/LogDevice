@@ -65,6 +65,16 @@ int BufferedWriter::append(logid_t log_id,
       log_id, std::move(payload), std::move(cb_context), std::move(attrs));
 }
 
+int BufferedWriter::append(logid_t log_id,
+                           PayloadGroup&& payload_group,
+                           AppendCallback::Context cb_context,
+                           AppendAttributes&& attrs) {
+  return impl()->append(log_id,
+                        std::move(payload_group),
+                        std::move(cb_context),
+                        std::move(attrs));
+}
+
 std::vector<Status> BufferedWriter::append(std::vector<Append>&& appends) {
   return impl()->append(std::move(appends));
 }
