@@ -18,6 +18,7 @@
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/include/types.h"
 
 namespace facebook { namespace logdevice {
 
@@ -611,6 +612,58 @@ size_t BufferedWriteCodec::decode(Slice binary,
           1,
           "Batch containing PayloadGroups cannot be decoded using this API");
       return 0;
+  }
+  ld_check(false); // decodeHeader should check format
+  return 0;
+}
+
+namespace {
+void convert(std::vector<folly::IOBuf>&& payloads,
+             std::vector<PayloadGroup>& payload_groups_out) {
+  payload_groups_out.reserve(payload_groups_out.size() + payloads.size());
+  for (auto& payload : payloads) {
+    PayloadGroup payload_group{{0, std::move(payload)}};
+    payload_groups_out.emplace_back(std::move(payload_group));
+  }
+}
+} // namespace
+
+FOLLY_NODISCARD
+size_t BufferedWriteCodec::decode(Slice binary,
+                                  std::vector<PayloadGroup>& payload_groups_out,
+                                  bool allow_buffer_sharing) {
+  BufferedWriteDecoderImpl::flags_t flags;
+  Format format;
+  size_t batch_size;
+  const size_t header_size = decodeHeader(binary, &flags, &format, &batch_size);
+  if (header_size == 0) {
+    return 0;
+  }
+  const Compression compression = static_cast<Compression>(
+      flags & BufferedWriteDecoderImpl::Flags::COMPRESSION_MASK);
+  switch (format) {
+    case Format::SINGLE_PAYLOADS: {
+      if (binary.size == 0) {
+        // Nothing else to decode. Just the header.
+        return header_size;
+      }
+      std::vector<folly::IOBuf> payloads;
+      const size_t bytes_decoded = BufferedWriteSinglePayloadsCodec::decode(
+          binary, compression, payloads, allow_buffer_sharing);
+      if (bytes_decoded == 0) {
+        return 0;
+      }
+      convert(std::move(payloads), payload_groups_out);
+      return header_size + bytes_decoded;
+    }
+    case Format::PAYLOAD_GROUPS: {
+      const size_t bytes_decoded = PayloadGroupCodec::decode(
+          binary, payload_groups_out, allow_buffer_sharing);
+      if (bytes_decoded == 0) {
+        return 0;
+      }
+      return header_size + bytes_decoded;
+    }
   }
   ld_check(false); // decodeHeader should check format
   return 0;

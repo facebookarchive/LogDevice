@@ -180,6 +180,17 @@ class BufferedWriteCodec {
   static size_t decode(Slice binary,
                        std::vector<folly::IOBuf>& payloads_out,
                        bool allow_buffer_sharing);
+
+  /**
+   * Decodes payloads stored in batch.
+   * Resulting payloads can optionally share data with input (for example in
+   * case it's uncompressed).
+   * Returns number of bytes consumed, or 0 if decoding fails.
+   */
+  FOLLY_NODISCARD
+  static size_t decode(Slice binary,
+                       std::vector<PayloadGroup>& payload_groups_out,
+                       bool allow_buffer_sharing);
 };
 
 }} // namespace facebook::logdevice

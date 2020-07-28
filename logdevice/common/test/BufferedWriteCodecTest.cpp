@@ -13,6 +13,7 @@
 
 #include <folly/Overload.h>
 #include <folly/Varint.h>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 namespace facebook { namespace logdevice {
@@ -24,7 +25,7 @@ using PayloadVariant = std::variant<std::string, PayloadGroup>;
 class BufferedWriteSinglePayloadEncoderTest
     : public ::testing::TestWithParam<std::vector<std::string>> {};
 
-class BufferedWriteEstimatorTest
+class BufferedWriteCodecTest
     : public ::testing::TestWithParam<
           std::pair<int, std::vector<PayloadVariant>>> {};
 
@@ -63,6 +64,15 @@ convert(const std::vector<std::string>& payloads_in) {
   return payloads;
 }
 
+std::unordered_map<PayloadKey, std::string>
+convert(const PayloadGroup& payload_group) {
+  std::unordered_map<PayloadKey, std::string> result;
+  for (auto& [key, payload] : payload_group) {
+    result[key] = payload.cloneAsValue().moveToFbString().toStdString();
+  }
+  return result;
+}
+
 BufferedWriteCodec::Estimator
 estimate(const std::vector<PayloadVariant>& payloads) {
   BufferedWriteCodec::Estimator estimator;
@@ -70,6 +80,14 @@ estimate(const std::vector<PayloadVariant>& payloads) {
     withPayload(payload, [&](auto&& p) { estimator.append(std::move(p)); });
   }
   return estimator;
+}
+
+MATCHER_P(PayloadGroupEq, p1, "") {
+  const PayloadGroup& p2 = arg;
+
+  testing::Matcher<std::unordered_map<PayloadKey, std::string>> matcher =
+      testing::ContainerEq(convert(p2));
+  return matcher.MatchAndExplain(convert(p1), result_listener);
 }
 
 } // namespace
@@ -246,7 +264,7 @@ INSTANTIATE_TEST_CASE_P(EncodeDecodeMatch,
                             std::vector<std::string>(100000, "p100000"),
                         }));
 
-TEST_F(BufferedWriteEstimatorTest, FormatChange) {
+TEST(BufferedWriteEstimatorTest, FormatChange) {
   const folly::IOBuf payload1 =
       folly::IOBuf::wrapBufferAsValue(folly::StringPiece("payload1"));
   const folly::IOBuf payload2 =
@@ -265,27 +283,56 @@ TEST_F(BufferedWriteEstimatorTest, FormatChange) {
   EXPECT_EQ(estimator.getFormat(), BufferedWriteCodec::Format::PAYLOAD_GROUPS);
 }
 
-TEST_P(BufferedWriteEstimatorTest, EstimateMatch) {
-  const auto& [checksum_bits, payloads] = GetParam();
+TEST_P(BufferedWriteCodecTest, EncodeDecodeMatch) {
+  const auto& [checksum_bits, payloads_in] = GetParam();
 
-  BufferedWriteCodec::Estimator estimator;
-  for (const auto& payload : payloads) {
-    withPayload(payload, [&](const auto& p) { estimator.append(p); });
-  }
-  const size_t size = estimator.calculateSize(checksum_bits);
+  // estimate payloads size
+  BufferedWriteCodec::Estimator estimator = estimate(payloads_in);
+  size_t size = estimator.calculateSize(checksum_bits);
 
+  // encode payloads
   folly::IOBuf encoded;
   switch (estimator.getFormat()) {
     case BufferedWriteCodec::Format::SINGLE_PAYLOADS:
       encoded = encode<BufferedWriteSinglePayloadsCodec::Encoder>(
-          checksum_bits, size, payloads);
+          checksum_bits, size, payloads_in);
       break;
     case BufferedWriteCodec::Format::PAYLOAD_GROUPS:
       encoded =
-          encode<PayloadGroupCodec::Encoder>(checksum_bits, size, payloads);
+          encode<PayloadGroupCodec::Encoder>(checksum_bits, size, payloads_in);
       break;
   }
+
+  // check estimator provides correct estimate
   EXPECT_EQ(size, encoded.computeChainDataLength());
+
+  encoded.coalesce();
+
+  // trim checksum since it's always trimmed before passing data to decoder
+  encoded.trimStart(checksum_bits / 8);
+
+  std::vector<PayloadGroup> payloads_out;
+  size_t consumed =
+      BufferedWriteCodec::decode(Slice(encoded.data(), encoded.length()),
+                                 payloads_out,
+                                 /* allow_buffer_sharing */ true);
+  EXPECT_EQ(consumed, encoded.length());
+
+  // check decoded payloads match
+  ASSERT_EQ(payloads_out.size(), payloads_in.size());
+  for (int i = 0; i < payloads_out.size(); i++) {
+    std::visit(
+        folly::overload(
+            [&](const PayloadGroup& payload_group) {
+              EXPECT_THAT(payloads_out[i], PayloadGroupEq(payload_group));
+            },
+            [&](const std::string& payload) {
+              ASSERT_EQ(payloads_out[i].size(), 1);
+              EXPECT_EQ(payloads_out[i].at(0).moveToFbString().toStdString(),
+                        payload);
+            }),
+        payloads_in[i]);
+  }
 }
 
 namespace {
@@ -322,8 +369,8 @@ const std::vector<std::pair<int, std::vector<PayloadVariant>>> payloads{
     {64, {group1, group1, "", "payload"}},
 };
 
-INSTANTIATE_TEST_CASE_P(EstimateMatch,
-                        BufferedWriteEstimatorTest,
+INSTANTIATE_TEST_CASE_P(EncodeDecodeMatch,
+                        BufferedWriteCodecTest,
                         ::testing::ValuesIn(payloads));
 } // namespace
 
