@@ -71,8 +71,9 @@ from_thrift(const thrift::CompressedPayloadGroups& compressed_payload_groups,
   ThriftCodec::serialize<ThriftSerializer>(compressed_payload_groups, &queue);
   auto encoded = queue.move();
   encoded->coalesce();
-  return PayloadGroupCodec::decode(
-      Slice(encoded->data(), encoded->length()), payload_group_out);
+  return PayloadGroupCodec::decode(Slice(encoded->data(), encoded->length()),
+                                   payload_group_out,
+                                   /* allow_buffer_sharing */ true);
 }
 
 } // namespace
@@ -86,8 +87,10 @@ TEST_P(PayloadGroupCodecTest, EncodeDecodeMatch) {
   encoded.coalesce();
 
   PayloadGroup payload_group_out;
-  size_t consumed = PayloadGroupCodec::decode(
-      Slice(encoded.data(), encoded.length()), payload_group_out);
+  size_t consumed =
+      PayloadGroupCodec::decode(Slice(encoded.data(), encoded.length()),
+                                payload_group_out,
+                                /* allow_buffer_sharing */ true);
 
   EXPECT_EQ(consumed, encoded.length());
   EXPECT_EQ(to_map(payload_group_out), to_map(payload_group_in));
@@ -168,16 +171,18 @@ TEST_F(PayloadGroupCodecTest, FailDecodeCorruptBinary) {
   PayloadGroup payload_group;
 
   err = E::OK;
-  EXPECT_EQ(
-      PayloadGroupCodec::decode(Slice(data.data(), data.size()), payload_group),
-      0);
+  EXPECT_EQ(PayloadGroupCodec::decode(Slice(data.data(), data.size()),
+                                      payload_group,
+                                      /* allow_buffer_sharing */ true),
+            0);
   EXPECT_EQ(err, E::BADMSG);
 
   data = "damaged";
   err = E::OK;
-  EXPECT_EQ(
-      PayloadGroupCodec::decode(Slice(data.data(), data.size()), payload_group),
-      0);
+  EXPECT_EQ(PayloadGroupCodec::decode(Slice(data.data(), data.size()),
+                                      payload_group,
+                                      /* allow_buffer_sharing */ true),
+            0);
   EXPECT_EQ(err, E::BADMSG);
 }
 
@@ -209,8 +214,10 @@ TEST_P(PayloadGroupEncoderTest, EncodeDecodeMatch) {
     encoded.coalesce();
 
     std::vector<PayloadGroup> payload_groups_out;
-    size_t consumed = PayloadGroupCodec::decode(
-        Slice(encoded.data(), encoded.length()), payload_groups_out);
+    size_t consumed =
+        PayloadGroupCodec::decode(Slice(encoded.data(), encoded.length()),
+                                  payload_groups_out,
+                                  /* allow_buffer_sharing */ true);
     EXPECT_EQ(consumed, encoded.length());
 
     EXPECT_THAT(payload_groups_out,
@@ -225,10 +232,63 @@ TEST_F(PayloadGroupEncoderTest, NoAppends) {
   folly::IOBuf encoded = queue.moveAsValue();
   encoded.coalesce();
   std::vector<PayloadGroup> decoded;
-  size_t consumed = PayloadGroupCodec::decode(
-      Slice(encoded.data(), encoded.length()), decoded);
+  size_t consumed =
+      PayloadGroupCodec::decode(Slice(encoded.data(), encoded.length()),
+                                decoded,
+                                /* allow_buffer_sharing */ true);
   EXPECT_EQ(consumed, encoded.length());
   EXPECT_TRUE(decoded.empty());
+}
+
+TEST(PayloadGroupDecoderTest, BufferSharing) {
+  // Encode payload group
+  PayloadGroupCodec::Encoder encoder(1);
+  const PayloadKey key = 1;
+  std::string payload = "payload";
+  encoder.append(PayloadGroup{
+      {key, folly::IOBuf::wrapBufferAsValue(payload.data(), payload.size())}});
+  folly::IOBufQueue queue;
+  encoder.encode(queue, Compression::NONE);
+
+  folly::IOBuf encoded = queue.moveAsValue();
+  encoded.coalesce();
+
+  // Now decode it with sharing disabled and enabled
+  PayloadGroup payload_group_no_sharing;
+  ASSERT_GT(PayloadGroupCodec::decode(Slice(encoded.data(), encoded.length()),
+                                      payload_group_no_sharing,
+                                      /* allow_buffer_sharing */ false),
+            0);
+  EXPECT_TRUE(payload_group_no_sharing.at(key).isManaged());
+  EXPECT_FALSE(payload_group_no_sharing.at(key).isChained());
+
+  PayloadGroup payload_group_sharing;
+  ASSERT_GT(
+      PayloadGroupCodec::decode(
+          Slice(encoded.data(), encoded.length()), payload_group_sharing, true),
+      0);
+  // IOBuf will be unnmanaged, since it points to slice fragment
+  EXPECT_FALSE(payload_group_sharing.at(key).isManaged());
+  EXPECT_FALSE(payload_group_sharing.at(key).isChained());
+
+  // Change payload in encoded buffer
+  size_t index = folly::qfind(
+      folly::StringPiece(
+          reinterpret_cast<const char*>(encoded.data()), encoded.length()),
+      folly::StringPiece(payload));
+  encoded.writableData()[index] = 'P';
+
+  // Decoded group, sharing buffer, should see the change
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(
+                            payload_group_sharing.at(key).data()),
+                        payload_group_sharing.at(key).length()),
+            "Payload");
+
+  // Decoded group, not sharing buffer, should remain unchanged
+  EXPECT_EQ(std::string(reinterpret_cast<const char*>(
+                            payload_group_no_sharing.at(key).data()),
+                        payload_group_no_sharing.at(key).length()),
+            "payload");
 }
 
 class PayloadGroupEncoderCompressionTest
@@ -269,8 +329,10 @@ TEST_P(PayloadGroupEncoderCompressionTest, CompressUncompress) {
             static_cast<int>(Compression::NONE));
 
   std::vector<PayloadGroup> payload_groups_out;
-  size_t consumed = PayloadGroupCodec::decode(
-      Slice(encoded.data(), encoded.length()), payload_groups_out);
+  size_t consumed =
+      PayloadGroupCodec::decode(Slice(encoded.data(), encoded.length()),
+                                payload_groups_out,
+                                /* allow_buffer_sharing */ true);
   EXPECT_EQ(consumed, encoded.length());
 
   EXPECT_THAT(payload_groups_out,

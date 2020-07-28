@@ -115,18 +115,25 @@ class PayloadGroupCodec {
   /**
    * Decodes single PayloadGroup from binary representation.
    * Returns number of bytes consumed, or 0 in case of error.
+   * Resulting PayloadGroup can optionally share data with input (for example in
+   * case it's uncompressed).
    */
   FOLLY_NODISCARD
-  static size_t decode(Slice binary, PayloadGroup& payload_group_out);
+  static size_t decode(Slice binary,
+                       PayloadGroup& payload_group_out,
+                       bool allow_buffer_sharing);
 
   /**
    * Decodes PayloadGroups from binary representation.
    * Decoded PayloadGroups are appended to payload_groups_out on success.
    * Returns number of bytes consumed, or 0 in case of error.
+   * Resulting PayloadGroup can optionally share data with input (for example in
+   * case it's uncompressed).
    */
   FOLLY_NODISCARD
   static size_t decode(Slice binary,
-                       std::vector<PayloadGroup>& payload_groups_out);
+                       std::vector<PayloadGroup>& payload_groups_out,
+                       bool allow_buffer_sharing);
 };
 
 }} // namespace facebook::logdevice

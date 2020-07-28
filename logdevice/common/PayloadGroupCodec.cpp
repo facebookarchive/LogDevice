@@ -398,9 +398,11 @@ void PayloadGroupCodec::encode(const std::vector<PayloadGroup>& payload_groups,
 }
 
 size_t PayloadGroupCodec::decode(Slice binary,
-                                 PayloadGroup& payload_group_out) {
+                                 PayloadGroup& payload_group_out,
+                                 bool allow_buffer_sharing) {
   std::vector<PayloadGroup> payload_groups;
-  const size_t deserialized_size = decode(binary, payload_groups);
+  const size_t deserialized_size =
+      decode(binary, payload_groups, allow_buffer_sharing);
   if (deserialized_size == 0) {
     return 0;
   }
@@ -417,18 +419,31 @@ size_t PayloadGroupCodec::decode(Slice binary,
   return deserialized_size;
 }
 
-size_t
-PayloadGroupCodec::decode(Slice binary,
-                          std::vector<PayloadGroup>& payload_groups_out) {
+size_t PayloadGroupCodec::decode(Slice binary,
+                                 std::vector<PayloadGroup>& payload_groups_out,
+                                 bool allow_buffer_sharing) {
   thrift::CompressedPayloadGroups compressed_payload_groups;
   const size_t deserialized_size = ThriftCodec::deserialize<ThriftSerializer>(
-      binary, compressed_payload_groups);
+      binary,
+      compressed_payload_groups,
+      // allow_buffer_sharing is ignored here, since payload will be
+      // uncompressed, which can stop sharing, and therefore saving on
+      // making any copies at all.
+      apache::thrift::ExternalBufferSharing::SHARE_EXTERNAL_BUFFER);
   if (deserialized_size == 0) {
     return 0;
   }
   int rv = uncompress(compressed_payload_groups);
   if (rv != 0) {
     return 0;
+  }
+  if (!allow_buffer_sharing) {
+    // Payloads can share buffer with binary, if no compression was used,
+    // so make a copy if needed.
+    for (auto& [key, compressed_payloads] :
+         *compressed_payload_groups.payloads_ref()) {
+      compressed_payloads.payload_ref()->makeManaged();
+    }
   }
   rv = convert(std::move(compressed_payload_groups), payload_groups_out);
   if (rv != 0) {

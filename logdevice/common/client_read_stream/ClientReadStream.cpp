@@ -957,8 +957,10 @@ ClientReadStream::decodePayload(const RawDataRecord& record) const {
   if (record.flags & RECORD_Header::PAYLOAD_GROUP) {
     // Record contains single payload group.
     PayloadGroup payload_group;
-    if (PayloadGroupCodec::decode(
-            Slice(record.payload.getPayload()), payload_group) != 0) {
+    // TODO pass iobuf instead of slice and allow sharing?
+    if (PayloadGroupCodec::decode(Slice(record.payload.getPayload()),
+                                  payload_group,
+                                  /* allow_buffer_sharing */ false) != 0) {
       return payload_group;
     }
     // Failed to decode payload.

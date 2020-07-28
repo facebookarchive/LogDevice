@@ -46,11 +46,13 @@ class ThriftCodec {
    * Deserializes object from binary representation.
    * Returns number of bytes consumed or 0 in case of error.
    */
-  template <class Serializer, class T>
-  static size_t deserialize(const Slice& binary, T& thrift) {
+  template <class Serializer, class T, class... Args>
+  static size_t deserialize(const Slice& binary, T& thrift, Args&&... args) {
     try {
       return Serializer::template deserialize<T>(
-          folly::StringPiece(binary.ptr(), binary.size), thrift);
+          folly::StringPiece(binary.ptr(), binary.size),
+          thrift,
+          std::forward<Args>(args)...);
     } catch (const std::exception& exception) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       5,
