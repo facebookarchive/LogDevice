@@ -81,8 +81,11 @@ int Shadow::appendShadow(const AppendRequest& req) {
   AppendAttributes req_attrs;
   std::tie(payload, req_attrs) = req.getShadowData();
 
-  int rv = shadow_client->append(
-      logid, std::move(payload), req_attrs, req.getBufferedWriterBlobFlag());
+  int rv = shadow_client->append(logid,
+                                 std::move(payload),
+                                 req_attrs,
+                                 req.getBufferedWriterBlobFlag(),
+                                 req.getPayloadGroupFlag());
   if (rv == -1) {
     // TODO detailed scuba stats T20416930 including error code
     STAT_INCR(stats_, client.shadow_append_failed);

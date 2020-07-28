@@ -160,6 +160,14 @@ class AppendRequest : public AppendRequestBase,
     return buffered_writer_blob_flag_;
   }
 
+  void setPayloadGroupFlag() {
+    payload_group_flag_ = true;
+  }
+
+  bool getPayloadGroupFlag() const {
+    return payload_group_flag_;
+  }
+
   void setFailedToPost() {
     failed_to_post_ = true;
   }
@@ -372,6 +380,10 @@ class AppendRequest : public AppendRequestBase,
   // Appends coming from BufferedWriter should have the BUFFERED_WRITER_BLOB
   // flag set in APPEND_Header.
   bool buffered_writer_blob_flag_ = false;
+
+  // Indicates that request contains serialized payload set. Such appends should
+  // have PAYLOAD_GROUP flag set in APPEND_Header.
+  bool payload_group_flag_ = false;
 
   bool bypass_write_token_check_ = false;
 

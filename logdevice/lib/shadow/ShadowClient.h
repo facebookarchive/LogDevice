@@ -123,7 +123,8 @@ class ShadowClient {
   int append(logid_t logid,
              PayloadHolder&& payload,
              AppendAttributes attrs,
-             bool buffered_writer_blob) noexcept;
+             bool buffered_writer_blob,
+             bool payload_group) noexcept;
 
  private:
   ShadowClient(std::shared_ptr<Client> client,

@@ -66,7 +66,7 @@ class MockAppendRequest : public AppendRequest {
     return true;
   }
 
-  int sendMessageImpl(std::unique_ptr<Message>&& /*msg*/,
+  int sendMessageImpl(std::unique_ptr<Message>&& message,
                       const Address& addr,
                       BWAvailableCallback*,
                       SocketCallback*) {
@@ -76,6 +76,7 @@ class MockAppendRequest : public AppendRequest {
       return -1;
     }
     dest_ = addr.id_.node_;
+    sent_message_ = std::move(message);
     return 0;
   }
 
@@ -85,8 +86,13 @@ class MockAppendRequest : public AppendRequest {
     return status_;
   }
 
+  Message* getSentMessage() const {
+    return sent_message_.get();
+  }
+
   NodeID dest_;
   Settings settings_;
+  std::unique_ptr<Message> sent_message_;
 };
 
 class AppendRequestTest : public ::testing::Test {
@@ -344,6 +350,50 @@ TEST_F(AppendRequestTest, ShouldAddStatAppendFail) {
             << "Enum val: " << enum_val;
     }
   }
+}
+
+// Checks that AppendRequest sets PAYLOAD_GROUP and BUFFERED_WRITER_BLOB
+// correctly on APPEND_Message
+TEST_F(AppendRequestTest, MessageFlags) {
+  init(4, 1);
+
+  std::unique_ptr<MockAppendRequest> request;
+  APPEND_Message* message;
+
+  // regular request
+  request = create(logid_t(1));
+  EXPECT_FALSE(request->getBufferedWriterBlobFlag());
+  EXPECT_FALSE(request->getPayloadGroupFlag());
+  ASSERT_EQ(Request::Execution::CONTINUE, request->execute());
+
+  message = dynamic_cast<APPEND_Message*>(request->getSentMessage());
+  ASSERT_NE(message, nullptr);
+  EXPECT_EQ(message->header_.flags & APPEND_Header::PAYLOAD_GROUP, 0);
+  EXPECT_EQ(message->header_.flags & APPEND_Header::BUFFERED_WRITER_BLOB, 0);
+
+  // buffered writer append request
+  request = create(logid_t(1));
+  request->setBufferedWriterBlobFlag();
+  EXPECT_TRUE(request->getBufferedWriterBlobFlag());
+  EXPECT_FALSE(request->getPayloadGroupFlag());
+  ASSERT_EQ(Request::Execution::CONTINUE, request->execute());
+
+  message = dynamic_cast<APPEND_Message*>(request->getSentMessage());
+  ASSERT_NE(message, nullptr);
+  EXPECT_EQ(message->header_.flags & APPEND_Header::PAYLOAD_GROUP, 0);
+  EXPECT_NE(message->header_.flags & APPEND_Header::BUFFERED_WRITER_BLOB, 0);
+
+  // payload group append request
+  request = create(logid_t(1));
+  request->setPayloadGroupFlag();
+  EXPECT_FALSE(request->getBufferedWriterBlobFlag());
+  EXPECT_TRUE(request->getPayloadGroupFlag());
+  ASSERT_EQ(Request::Execution::CONTINUE, request->execute());
+
+  message = dynamic_cast<APPEND_Message*>(request->getSentMessage());
+  ASSERT_NE(message, nullptr);
+  EXPECT_NE(message->header_.flags & APPEND_Header::PAYLOAD_GROUP, 0);
+  EXPECT_EQ(message->header_.flags & APPEND_Header::BUFFERED_WRITER_BLOB, 0);
 }
 
 }} // namespace facebook::logdevice

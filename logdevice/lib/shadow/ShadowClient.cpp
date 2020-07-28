@@ -207,7 +207,8 @@ ShadowClient::~ShadowClient() {}
 int ShadowClient::append(logid_t logid,
                          PayloadHolder&& payload,
                          AppendAttributes attrs,
-                         bool buffered_writer_blob) noexcept {
+                         bool buffered_writer_blob,
+                         bool payload_group) noexcept {
   auto callback = [&](auto a, const auto& b) { this->appendCallback(a, b); };
 
   ld_spew(LD_SHADOW_PREFIX "Shadowing payload of size %zu to shadow '%s'",
@@ -216,8 +217,9 @@ int ShadowClient::append(logid_t logid,
 
   // Downcast client in order to use lower level API. The reason is we need
   // to be able to alter append request flags to match those of the original
-  // request. In particular, we need to propage the BUFFERED_WRITER_BLOB
-  // flag so readers can detect buffered writer batches and unpack them.
+  // request. In particular, we need to propage the BUFFERED_WRITER_BLOB and
+  // PAYLOAD_GROUP flags so readers can detect buffered writer batches or
+  // PayloadGroups and unpack them.
   ClientImpl* client_impl = checked_downcast<ClientImpl*>(client_.get());
   int rv = -1;
   auto req = client_impl->prepareRequest(
@@ -225,6 +227,9 @@ int ShadowClient::append(logid_t logid,
   if (req) {
     if (buffered_writer_blob) {
       req->setBufferedWriterBlobFlag();
+    }
+    if (payload_group) {
+      req->setPayloadGroupFlag();
     }
     rv = client_impl->postAppend(std::move(req));
   }

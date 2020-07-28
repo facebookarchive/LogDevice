@@ -290,8 +290,11 @@ TEST(ShadowClientTest, ShadowClientInitAppend) {
       "test", shadowAttr, std::chrono::seconds(10), nullptr);
   ASSERT_NE(shadow_client, nullptr);
 
-  int rv = shadow_client->append(
-      logid_t{1}, PayloadHolder::copyString("test"), {}, false);
+  int rv = shadow_client->append(logid_t{1},
+                                 PayloadHolder::copyString("test"),
+                                 {},
+                                 /* buffered_writer_blob */ false,
+                                 /* payload_set */ false);
   ASSERT_EQ(rv, 0);
 }
 
