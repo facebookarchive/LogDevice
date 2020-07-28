@@ -97,7 +97,9 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
     auto& batch = batches_->back();
     // Calculate how many bytes these records will take up in the blob
     for (const BufferedWriter::Append& append : chunk) {
-      batch->blob_size_estimator.append(append.payload);
+      auto iobuf = folly::IOBuf::wrapBufferAsValue(
+          append.payload.data(), append.payload.size());
+      batch->blob_size_estimator.append(iobuf);
     }
     const size_t new_blob_bytes_total =
         batch->blob_size_estimator.calculateSize(checksumBits());
@@ -130,7 +132,9 @@ int BufferedWriterSingleLog::appendImpl(AppendChunk& chunk,
 
     // Calculate how many bytes these records will take up in the blob
     for (const BufferedWriter::Append& append : chunk) {
-      batch->blob_size_estimator.append(append.payload);
+      auto iobuf = folly::IOBuf::wrapBufferAsValue(
+          append.payload.data(), append.payload.size());
+      batch->blob_size_estimator.append(iobuf);
     }
     batch->blob_bytes_total =
         batch->blob_size_estimator.calculateSize(checksumBits());
@@ -612,7 +616,10 @@ void BufferedWriterSingleLog::Impl::construct_uncompressed_blob(
 
   for (auto& append : batch.appends) {
     const std::string& client_payload = append.second;
-    encoder.append(client_payload);
+    // It's safe to wrap buffer, even though it can be destroyed soon,
+    // since encoder makes a copy on append
+    encoder.append(folly::IOBuf::wrapBufferAsValue(
+        client_payload.data(), client_payload.size()));
     if (destroy_payloads) {
       batch.total_size_freed += append.second.size();
       // Can't do append.second.clear() because that usually doesn't free

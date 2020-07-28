@@ -21,13 +21,17 @@ TEST_P(BufferedWriteEstimatorTest, EstimateMatch) {
 
   BufferedWriteCodec::Estimator estimator;
   for (const auto& payload : payloads) {
-    estimator.append(payload);
+    auto iobuf =
+        folly::IOBuf::wrapBufferAsValue(payload.data(), payload.size());
+    estimator.append(iobuf);
   }
   const size_t size = estimator.calculateSize(checksum_bits);
 
   BufferedWriteCodec::Encoder encoder(checksum_bits, payloads.size(), size);
   for (const auto& payload : payloads) {
-    encoder.append(payload);
+    auto iobuf =
+        folly::IOBuf::wrapBufferAsValue(payload.data(), payload.size());
+    encoder.append(iobuf);
   }
   folly::IOBufQueue queue;
   encoder.encode(queue);

@@ -42,13 +42,18 @@ BufferedWriteCodec::Encoder::Encoder(int checksum_bits,
   appender_.append(header_size_);
 }
 
-void BufferedWriteCodec::Encoder::append(const std::string& payload) {
-  size_t len = folly::encodeVarint(payload.size(), appender_.writableData());
+void BufferedWriteCodec::Encoder::append(const folly::IOBuf& payload) {
+  size_t len = folly::encodeVarint(
+      payload.computeChainDataLength(), appender_.writableData());
   ld_check(len <= appender_.length());
   appender_.append(len);
 
-  size_t appended = appender_.pushAtMost(folly::StringPiece(payload));
-  ld_check(appended == payload.size());
+  // TODO this makes a copy of payload to make sure result is contiguous,
+  // once non-contiguous IOBufs are supported payload can appended as is
+  for (const auto& bytes : payload) {
+    size_t appended = appender_.pushAtMost(bytes);
+    ld_check(appended == bytes.size());
+  }
 }
 
 void BufferedWriteCodec::Encoder::encode(folly::IOBufQueue& out) {
@@ -90,10 +95,10 @@ void BufferedWriteCodec::Encoder::encodeHeader() {
   }
 }
 
-void BufferedWriteCodec::Estimator::append(const std::string& payload) {
+void BufferedWriteCodec::Estimator::append(const folly::IOBuf& payload) {
   appends_count_++;
-  encoded_payloads_size_ +=
-      folly::encodeVarintSize(payload.size()) + payload.size();
+  const size_t len = payload.computeChainDataLength();
+  encoded_payloads_size_ += folly::encodeVarintSize(len) + len;
 }
 
 size_t BufferedWriteCodec::Estimator::calculateSize(int checksum_bits) const {

@@ -30,7 +30,7 @@ class BufferedWriteCodec {
     Encoder(int checksum_bits, size_t appends_count, size_t capacity);
 
     /** Appends single payload to the batch. */
-    void append(const std::string& payload);
+    void append(const folly::IOBuf& payload);
 
     /**
      * Encodes added appends into output specified in constructor.
@@ -64,7 +64,7 @@ class BufferedWriteCodec {
   class Estimator {
    public:
     /** Appends single payload to the batch. */
-    void append(const std::string& payload);
+    void append(const folly::IOBuf& payload);
 
     /**
      * Returns resulting encoded uncompressed blob size, including space for
