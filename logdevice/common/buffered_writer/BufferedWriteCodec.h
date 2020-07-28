@@ -195,6 +195,16 @@ class BufferedWriteCodec {
   static size_t decode(Slice binary,
                        std::vector<PayloadGroup>& payload_groups_out,
                        bool allow_buffer_sharing);
+
+  /**
+   * Decodes payload groups without uncompressing them. This requires payloads
+   * to be in PAYLOAD_GROUPS format, otherwise decoding fails.
+   * Returns number of bytes consumed, or 0 if decoding fails.
+   */
+  FOLLY_NODISCARD
+  static size_t decode(const folly::IOBuf& iobuf,
+                       CompressedPayloadGroups& compressed_payload_groups_out,
+                       bool allow_buffer_sharing);
 };
 
 }} // namespace facebook::logdevice

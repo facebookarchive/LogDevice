@@ -134,6 +134,15 @@ class PayloadGroupCodec {
   static size_t decode(Slice binary,
                        std::vector<PayloadGroup>& payload_groups_out,
                        bool allow_buffer_sharing);
+
+  /**
+   * Decodes compressed representation of payload groups batch.
+   * Returns number of bytes consumed, or 0 in case of error.
+   */
+  FOLLY_NODISCARD
+  static size_t decode(const folly::IOBuf& iobuf,
+                       CompressedPayloadGroups& compressed_payload_group_out,
+                       bool allow_buffer_sharing);
 };
 
 }} // namespace facebook::logdevice

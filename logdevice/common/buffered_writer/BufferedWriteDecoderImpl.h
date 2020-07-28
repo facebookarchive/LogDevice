@@ -53,6 +53,11 @@ class BufferedWriteDecoderImpl : public BufferedWriteDecoder {
   int decodeOne(const DataRecord& record,
                 std::vector<PayloadGroup>& payload_groups_out);
 
+  // Decodes compresssed payloads and their descriptors without uncompressing.
+  int decodeOneCompressed(
+      std::unique_ptr<DataRecord>&& record,
+      CompressedPayloadGroups& compressed_payload_groups_out);
+
   // Returns the number of individual records stored in a single DataRecord.
   static int getBatchSize(const DataRecord& record, size_t* size_out);
 

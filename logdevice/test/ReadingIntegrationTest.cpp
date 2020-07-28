@@ -12,6 +12,7 @@
 #include <folly/Conv.h>
 #include <folly/Overload.h>
 #include <folly/Random.h>
+#include <folly/compression/Compression.h>
 #include <folly/hash/Checksum.h>
 #include <gtest/gtest.h>
 
@@ -25,7 +26,9 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/include/BufferedWriteDecoder.h"
 #include "logdevice/include/Client.h"
+#include "logdevice/include/types.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
@@ -1922,6 +1925,151 @@ TEST_P(ReadingIntegrationTest, EmptyPayload) {
   EXPECT_EQ(lsn, recs[0]->attrs.lsn);
   EXPECT_EQ(std::string(1000, '\0'), recs[0]->payload.toString());
   EXPECT_FALSE(reader->isReadingAny());
+}
+
+TEST_P(ReadingIntegrationTest, ReadCompressedPayloadGroups) {
+  auto cluster = clusterFactory()
+                     .setNumDBShards(1)
+                     // Disable checksums because in some places they're
+                     // treated as part of payload.
+                     .setParam("--checksum-bits", "0")
+                     .create(1);
+  cluster->waitUntilAllSequencersQuiescent();
+
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  int rv = client_settings->set("checksum-bits", "0");
+  ASSERT_EQ(0, rv) << err;
+  auto client = cluster->createClient(
+      getDefaultTestTimeout(), std::move(client_settings));
+
+  class CB : public BufferedWriter::AppendCallback {
+   public:
+    bool done = false;
+    lsn_t lsn = LSN_INVALID;
+    Semaphore sem;
+
+    void onSuccess(logid_t,
+                   ContextSet,
+                   const DataRecordAttributes& attrs) override {
+      EXPECT_FALSE(done);
+      done = true;
+      lsn = attrs.lsn;
+      sem.post();
+    }
+    void onFailure(logid_t, ContextSet, Status) override {
+      ADD_FAILURE(); // appends are not supposed to fail
+      EXPECT_FALSE(done);
+      done = true;
+      sem.post();
+    }
+
+    void reset() {
+      ld_check(!sem.try_wait());
+      done = false;
+      lsn = LSN_INVALID;
+    }
+  };
+
+  // We're going to read payloads without decoding them and use decoder to
+  // decode them
+  auto reader = client->createReader(1);
+  reader->doNotDecodeBufferedWrites();
+
+  auto decoder = BufferedWriteDecoder::create();
+
+  // Write single payload using buffered writer
+  CB cb;
+  std::unique_ptr<BufferedWriter> writer = BufferedWriter::create(client, &cb);
+  rv = writer->append(logid_t(1), "payload", nullptr);
+  ASSERT_EQ(0, rv) << err;
+  rv = writer->flushAll();
+  ASSERT_EQ(0, rv) << err;
+  cb.sem.wait();
+  lsn_t lsn = cb.lsn;
+
+  // Read and decode
+  reader->startReading(logid_t(1), lsn, lsn);
+  ASSERT_TRUE(reader->isReadingAny());
+
+  std::vector<std::unique_ptr<DataRecord>> recs;
+  GapRecord gap;
+  ssize_t n = reader->read(1, &recs, &gap);
+  ASSERT_EQ(1, n);
+  EXPECT_EQ(lsn, recs[0]->attrs.lsn);
+  EXPECT_FALSE(reader->isReadingAny());
+
+  // Decoding should fail, since payload is not in the right format
+  CompressedPayloadGroups compressed_payload_groups;
+  rv = decoder->decodeOneCompressed(
+      std::move(recs[0]), compressed_payload_groups);
+  EXPECT_TRUE(compressed_payload_groups.empty());
+  EXPECT_NE(0, rv);
+
+  // Now write mix of single payload and payload groups
+  cb.reset();
+  const std::string payload1 = "single";
+  rv = writer->append(logid_t(1), folly::copy(payload1), nullptr);
+  ASSERT_EQ(0, rv) << err;
+
+  const std::string payload2_0(64, 'a');
+  const std::string payload2_5("b");
+  rv = writer->append(
+      logid_t(1),
+      PayloadGroup{
+          {0, folly::IOBuf::wrapBufferAsValue(folly::StringPiece(payload2_0))},
+          {5, folly::IOBuf::wrapBufferAsValue(folly::StringPiece(payload2_5))}},
+      nullptr);
+  ASSERT_EQ(0, rv) << err;
+  rv = writer->flushAll();
+  ASSERT_EQ(0, rv) << err;
+  cb.sem.wait();
+  lsn = cb.lsn;
+
+  // It should be decodable now
+  reader->startReading(logid_t(1), lsn, lsn);
+  ASSERT_TRUE(reader->isReadingAny());
+  recs.clear();
+  n = reader->read(1, &recs, &gap);
+  ASSERT_EQ(1, n);
+  EXPECT_EQ(lsn, recs[0]->attrs.lsn);
+  EXPECT_FALSE(reader->isReadingAny());
+
+  rv = decoder->decodeOneCompressed(
+      std::move(recs[0]), compressed_payload_groups);
+  ASSERT_EQ(0, rv) << err;
+
+  // Decoded group should contain 2 keys
+  EXPECT_EQ(2, compressed_payload_groups.size());
+  ASSERT_EQ(1, compressed_payload_groups.count(0));
+  ASSERT_EQ(1, compressed_payload_groups.count(5));
+
+  // Only key 0 can be compressed
+  EXPECT_EQ(Compression::LZ4, compressed_payload_groups.at(0).compression);
+  EXPECT_EQ(Compression::NONE, compressed_payload_groups.at(5).compression);
+
+  // Should contain two records for each key
+  ASSERT_EQ(2, compressed_payload_groups.at(0).descriptors.size());
+  ASSERT_EQ(2, compressed_payload_groups.at(5).descriptors.size());
+
+  // Check uncompressed payload sizes
+  EXPECT_EQ(payload1.size(),
+            compressed_payload_groups.at(0).descriptors[0]->uncompressed_size);
+  EXPECT_EQ(payload2_0.size(),
+            compressed_payload_groups.at(0).descriptors[1]->uncompressed_size);
+  EXPECT_EQ(folly::none, compressed_payload_groups.at(5).descriptors[0]);
+  EXPECT_EQ(payload2_5.size(),
+            compressed_payload_groups.at(5).descriptors[1]->uncompressed_size);
+
+  // Payloads should match after uncompression
+  EXPECT_EQ(
+      payload2_5,
+      compressed_payload_groups.at(5).payload.moveToFbString().toStdString());
+  EXPECT_EQ(payload1 + payload2_0,
+            folly::io::getCodec(folly::io::CodecType::LZ4)
+                ->uncompress(&compressed_payload_groups.at(0).payload,
+                             payload1.size() + payload2_0.size())
+                ->moveToFbString()
+                .toStdString());
 }
 
 INSTANTIATE_TEST_CASE_P(ReadingIntegrationTest,

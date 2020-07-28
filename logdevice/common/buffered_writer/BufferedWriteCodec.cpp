@@ -683,4 +683,22 @@ size_t BufferedWriteCodec::decode(Slice binary,
   return 0;
 }
 
+FOLLY_NODISCARD
+size_t BufferedWriteCodec::decode(
+    const folly::IOBuf& blob,
+    CompressedPayloadGroups& compressed_payload_groups_out,
+    bool allow_buffer_sharing) {
+  Format format;
+  folly::IOBuf iobuf = blob;
+  const size_t bytes_decoded = decodeHeader(iobuf, nullptr, &format, nullptr);
+  if (bytes_decoded == 0) {
+    return 0;
+  }
+  if (format != Format::PAYLOAD_GROUPS) {
+    return 0;
+  }
+  return PayloadGroupCodec::decode(
+      iobuf, compressed_payload_groups_out, allow_buffer_sharing);
+}
+
 }} // namespace facebook::logdevice

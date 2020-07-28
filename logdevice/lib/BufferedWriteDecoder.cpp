@@ -45,6 +45,13 @@ int BufferedWriteDecoder::decodeOne(
   return impl()->decodeOne(std::move(record), payload_groups_out);
 }
 
+int BufferedWriteDecoder::decodeOneCompressed(
+    std::unique_ptr<DataRecord>&& record,
+    CompressedPayloadGroups& compressed_payload_groups_out) {
+  return impl()->decodeOneCompressed(
+      std::move(record), compressed_payload_groups_out);
+}
+
 BufferedWriteDecoderImpl* BufferedWriteDecoder::impl() {
   return static_cast<BufferedWriteDecoderImpl*>(this);
 }

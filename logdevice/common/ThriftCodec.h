@@ -47,12 +47,12 @@ class ThriftCodec {
    * Returns number of bytes consumed or 0 in case of error.
    */
   template <class Serializer, class T, class... Args>
-  static size_t deserialize(const Slice& binary, T& thrift, Args&&... args) {
+  static size_t deserialize(const folly::IOBuf* binary,
+                            T& thrift,
+                            Args&&... args) {
     try {
       return Serializer::template deserialize<T>(
-          folly::StringPiece(binary.ptr(), binary.size),
-          thrift,
-          std::forward<Args>(args)...);
+          binary, thrift, std::forward<Args>(args)...);
     } catch (const std::exception& exception) {
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       5,
@@ -62,6 +62,16 @@ class ThriftCodec {
       err = E::BADMSG;
     }
     return 0;
+  }
+
+  /**
+   * Deserializes object from binary representation.
+   * Returns number of bytes consumed or 0 in case of error.
+   */
+  template <class Serializer, class T, class... Args>
+  static size_t deserialize(const Slice& binary, T& thrift, Args&&... args) {
+    auto iobuf = folly::IOBuf::wrapBufferAsValue(binary.data, binary.size);
+    return deserialize<Serializer>(&iobuf, thrift, std::forward<Args>(args)...);
   }
 };
 

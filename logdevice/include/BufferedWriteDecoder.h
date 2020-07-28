@@ -74,6 +74,19 @@ class BufferedWriteDecoder {
   int decodeOne(std::unique_ptr<DataRecord>&& record,
                 std::vector<PayloadGroup>& payload_groups_out);
 
+  /**
+   * Decodes record without uncompressing any of the payloads. Batch must be
+   * written using PayloadGroups API in BufferedWriter, otherwise decoding will
+   * fail.
+   * Claims ownership of DataRecord on success.
+   *
+   * @returns On success, returns 0.  If the DataRecord failed to decode,
+   *          returns -1.
+   */
+  int decodeOneCompressed(
+      std::unique_ptr<DataRecord>&& record,
+      CompressedPayloadGroups& compressed_payload_groups_out);
+
   virtual ~BufferedWriteDecoder() {}
 
  private:

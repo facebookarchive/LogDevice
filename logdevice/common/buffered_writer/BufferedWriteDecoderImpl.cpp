@@ -10,6 +10,7 @@
 #include <lz4.h>
 #include <zstd.h>
 
+#include <folly/Overload.h>
 #include <folly/Varint.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
@@ -169,6 +170,50 @@ int BufferedWriteDecoderImpl::decodeOne(
   }
   // If we succeeded, steal the DataRecordOwnsPayload from the client to
   // be consistent with the uncompressed case.
+  record.reset();
+  return 0;
+}
+
+namespace {
+/**
+ * Gets IOBuf from the record to allow IOBuf sharing. If record is backed by
+ * IOBuf, then that IOBuf is returned. Otherwise just wraps payload in IOBuf.
+ */
+folly::IOBuf getIOBuf(const DataRecord& record) {
+  auto record_owns_payload =
+      dynamic_cast<const DataRecordOwnsPayload*>(&record);
+  if (record_owns_payload != nullptr) {
+    const folly::IOBuf* iobuf =
+        std::visit(folly::overload(
+                       [&](const PayloadHolder& payload_holder) {
+                         return &payload_holder.iobuf();
+                       },
+                       [](const std::shared_ptr<BufferedWriteDecoder>&)
+                           -> const folly::IOBuf* { return nullptr; }),
+                   record_owns_payload->owner_);
+    if (iobuf != nullptr) {
+      return *iobuf;
+    }
+  }
+  return folly::IOBuf::wrapBufferAsValue(
+      record.payload.data(), record.payload.size());
+}
+} // namespace
+
+int BufferedWriteDecoderImpl::decodeOneCompressed(
+    std::unique_ptr<DataRecord>&& record,
+    CompressedPayloadGroups& compressed_payload_groups_out) {
+  auto iobuf = getIOBuf(*record);
+  // record is expected to be DataRecordOwnsPayload
+  ld_check(iobuf.isManaged());
+  const size_t bytes_decoded =
+      BufferedWriteCodec::decode(iobuf,
+                                 compressed_payload_groups_out,
+                                 /* allow_buffer_sharing */ iobuf.isManaged());
+  if (bytes_decoded == 0) {
+    return -1;
+  }
+
   record.reset();
   return 0;
 }

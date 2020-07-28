@@ -452,4 +452,51 @@ size_t PayloadGroupCodec::decode(Slice binary,
   return deserialized_size;
 }
 
+namespace {
+std::vector<folly::Optional<PayloadDescriptor>>
+convert(const std::vector<thrift::OptionalPayloadDescriptor>& thrift) {
+  std::vector<folly::Optional<PayloadDescriptor>> result;
+  result.reserve(thrift.size());
+  for (const auto& thrift_opt_descriptor : thrift) {
+    auto& descriptor = result.emplace_back();
+    if (const auto thrift_descriptor = thrift_opt_descriptor.descriptor_ref()) {
+      descriptor.emplace().uncompressed_size =
+          *thrift_descriptor->uncompressed_size_ref();
+    }
+  }
+  return result;
+}
+
+FOLLY_NODISCARD
+CompressedPayloadGroups convert(thrift::CompressedPayloadGroups&& thrift) {
+  CompressedPayloadGroups result;
+  for (auto& [key, thrift_payloads] : *thrift.payloads_ref()) {
+    auto& payloads = result[key];
+    payloads.compression =
+        static_cast<Compression>(*thrift_payloads.compression_ref());
+    payloads.payload = std::move(*thrift_payloads.payload_ref());
+    payloads.descriptors = convert(*thrift_payloads.descriptors_ref());
+  }
+  return result;
+}
+} // namespace
+
+size_t PayloadGroupCodec::decode(
+    const folly::IOBuf& binary,
+    CompressedPayloadGroups& compressed_payload_groups_out,
+    bool allow_buffer_sharing) {
+  using apache::thrift::ExternalBufferSharing;
+  thrift::CompressedPayloadGroups thrift;
+  const size_t deserialized_size = ThriftCodec::deserialize<ThriftSerializer>(
+      &binary,
+      thrift,
+      allow_buffer_sharing ? ExternalBufferSharing::SHARE_EXTERNAL_BUFFER
+                           : ExternalBufferSharing::COPY_EXTERNAL_BUFFER);
+  if (deserialized_size == 0) {
+    return 0;
+  }
+  compressed_payload_groups_out = convert(std::move(thrift));
+  return deserialized_size;
+}
+
 }} // namespace facebook::logdevice
