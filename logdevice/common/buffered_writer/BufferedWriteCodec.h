@@ -12,6 +12,8 @@
 #include <folly/io/Cursor.h>
 #include <folly/io/IOBuf.h>
 
+#include "logdevice/include/types.h"
+
 namespace facebook { namespace logdevice {
 
 /**
@@ -37,17 +39,21 @@ class BufferedWriteCodec {
      * Output queue will be appended with a single contigous IOBuf containing
      * encoded payloads.
      * Encoder must not be re-used after calling this.
+     * zstd_level must be specified if ZSTD compression is used.
      */
-    void encode(folly::IOBufQueue& out);
-
-    // TODO: remove this once compression support is added
-    size_t getHeaderSize() const {
-      return header_size_;
-    }
+    void encode(folly::IOBufQueue& out,
+                Compression compression,
+                int zstd_level = 0);
 
    private:
+    /**
+     * Replaces blob with compressed blob if compression saves some space and
+     * returns true. Otherwise leaves blob as is and returns false.
+     */
+    bool compress(Compression compression, int zstd_level);
+
     /** Writes header (checksum, flags, etc) to the blob */
-    void encodeHeader();
+    void encodeHeader(Compression compression);
 
     int checksum_bits_;
     size_t appends_count_;

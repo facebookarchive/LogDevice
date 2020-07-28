@@ -116,7 +116,6 @@ class BufferedWriterSingleLog {
     // Constructed the first time the batch transitions from BUILDING to
     // INFLIGHT.
     folly::IOBuf blob;
-    size_t blob_header_size = 0;
 
     // How many times we've retried sending this batch
     int retry_count = 0;
@@ -160,27 +159,19 @@ class BufferedWriterSingleLog {
    public:
     // Constructs, compresses (if appropriate), and checksums blob.  Potentially
     // long running, so is typically called on the processor's BackgroundThread.
-    static void
-    construct_blob_long_running(Batch& batch,
-                                BufferedWriteDecoderImpl::flags_t flags,
-                                int checksum_bits,
-                                bool destroy_payloads,
-                                int zstd_level);
+    static void construct_blob_long_running(Batch& batch,
+                                            int checksum_bits,
+                                            Compression compression,
+                                            int zstd_level,
+                                            bool destroy_payloads);
 
-    // Possibly long running.  Checks conditions for compression, and if
-    // satisfied, compresses.
-    static void
-    maybe_compress_blob(Batch& batch,
-                        BufferedWriter::Options::Compression compression,
-                        int checksum_bits,
-                        int zstd_level);
-    // Constructs a blob from a batch.  Copies the data, so is therefore
-    // potentially long running.
-    static void
-    construct_uncompressed_blob(Batch& batch,
-                                BufferedWriteDecoderImpl::flags_t flags,
-                                int checksum_bits,
-                                bool destroy_payloads);
+    // Constructs a blob from a batch.  Copies and compresses the data, so is
+    // therefore potentially long running.
+    static void construct_compressed_blob(Batch& batch,
+                                          int checksum_bits,
+                                          Compression compression,
+                                          int zstd_level,
+                                          bool destroy_payloads);
   };
 
   // We add ourselves to the BufferedWriterShard's `flushable' list when there
@@ -283,8 +274,8 @@ class BufferedWriterSingleLog {
   void finishBatch(Batch&);
 
   void construct_blob(Batch& batch,
-                      BufferedWriteDecoderImpl::flags_t flags,
                       int checksum_bits,
+                      Compression compresssion,
                       bool destroy_payloads);
 
   BufferedWriterShard* parent_;

@@ -34,7 +34,7 @@ TEST_P(BufferedWriteEstimatorTest, EstimateMatch) {
     encoder.append(iobuf);
   }
   folly::IOBufQueue queue;
-  encoder.encode(queue);
+  encoder.encode(queue, Compression::NONE);
   auto payload = queue.move();
 
   EXPECT_EQ(size, payload->computeChainDataLength());
