@@ -100,6 +100,12 @@ class ClientImpl : public Client,
              AppendAttributes attrs = AppendAttributes(),
              std::chrono::milliseconds* timestamp = nullptr) noexcept override;
 
+  lsn_t
+  appendSync(logid_t logid,
+             PayloadGroup&& payload_group,
+             AppendAttributes attrs = AppendAttributes(),
+             std::chrono::milliseconds* timestamp = nullptr) noexcept override;
+
   int append(logid_t logid,
              std::string payload,
              append_callback_t cb,
@@ -107,6 +113,11 @@ class ClientImpl : public Client,
 
   int append(logid_t logid,
              const Payload& payload,
+             append_callback_t cb,
+             AppendAttributes attrs = AppendAttributes()) noexcept override;
+
+  int append(logid_t logid,
+             PayloadGroup&& payload_group,
              append_callback_t cb,
              AppendAttributes attrs = AppendAttributes()) noexcept override;
 

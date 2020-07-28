@@ -293,6 +293,28 @@ class Client {
    * Appends a new record to the log. Blocks until operation completes.
    * The delivery of a signal does not interrupt the wait.
    *
+   * @param logid         unique id of the log to which to append a new record
+   *
+   * @param payload_group record payloads. Other threads of the caller must not
+   *                      modify IOBufs of the group until the call returns.
+   *
+   * @param attrs         additional append attributes. See AppendAttributes
+   *
+   * @param timestamp     Timestamp set and stored with the record by the
+   *                      LogDevice cluster.
+   *
+   * See appendSync(logid_t, std::string) for a description of return values.
+   */
+  virtual lsn_t
+  appendSync(logid_t logid,
+             PayloadGroup&& payload_group,
+             AppendAttributes attrs = AppendAttributes(),
+             std::chrono::milliseconds* timestamp = nullptr) noexcept = 0;
+
+  /**
+   * Appends a new record to the log. Blocks until operation completes.
+   * The delivery of a signal does not interrupt the wait.
+   *
    * @param logid     unique id of the log to which to append a new record
    *
    * @param payload   record payload, see Record.h. The function does not
@@ -305,8 +327,7 @@ class Client {
    * @param timestamp Timestamp set and stored with the record by the
    *                  LogDevice cluster.
    *
-   * See appendSync(logid_t, const Payload&) for a description of return
-   * values.
+   * See appendSync(logid_t, std::string) for a description of return values.
    */
   virtual lsn_t
   appendSync(logid_t logid,
@@ -353,6 +374,16 @@ class Client {
    */
   virtual int append(logid_t logid,
                      std::string payload,
+                     append_callback_t cb,
+                     AppendAttributes attrs = AppendAttributes()) noexcept = 0;
+
+  /**
+   * Appends a new record to the log without blocking. Payloads must not by
+   * modified until callback is called.
+   * Behavior is the same as in append(logid_t, std::string, ...).
+   */
+  virtual int append(logid_t logid,
+                     PayloadGroup&& payload_group,
                      append_callback_t cb,
                      AppendAttributes attrs = AppendAttributes()) noexcept = 0;
 

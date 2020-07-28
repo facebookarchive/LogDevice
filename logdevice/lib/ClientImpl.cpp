@@ -551,6 +551,14 @@ int ClientImpl::append(logid_t logid,
   return append(logid, payload, cb, std::move(attrs), worker_id_t{-1}, nullptr);
 }
 
+int ClientImpl::append(logid_t /* logid */,
+                       PayloadGroup&& /* payload_group */,
+                       append_callback_t /* cb */,
+                       AppendAttributes /* attrs */) noexcept {
+  err = E::INTERNAL;
+  return -1;
+}
+
 lsn_t ClientImpl::appendSync(logid_t logid,
                              const Payload& payload,
                              AppendAttributes attrs,
@@ -564,6 +572,14 @@ lsn_t ClientImpl::appendSync(logid_t logid,
                              std::chrono::milliseconds* ts) noexcept {
   return append_sync_helper(
       this, logid, std::move(payload), std::move(attrs), ts);
+}
+
+lsn_t ClientImpl::appendSync(logid_t /* logid */,
+                             PayloadGroup&& /* payload_group */,
+                             AppendAttributes /* attrs */,
+                             std::chrono::milliseconds* /* ts */) noexcept {
+  err = E::INTERNAL;
+  return LSN_INVALID;
 }
 
 std::unique_ptr<Reader> ClientImpl::createReader(size_t max_logs,
