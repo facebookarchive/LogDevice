@@ -36,16 +36,22 @@ class BufferedWriteDecoderImpl : public BufferedWriteDecoder {
 
   int decode(std::vector<std::unique_ptr<DataRecord>>&& records,
              std::vector<Payload>& payloads_out);
+  int decode(std::vector<std::unique_ptr<DataRecord>>&& records,
+             std::vector<PayloadGroup>& payload_groups_out);
   // Decodes a single DataRecord.  Claims ownership of the DataRecord if
   // successful.  Allowed to partially fill `payloads_out' in case of failed
   // decoding.  If necessary, caller will ensure atomicity in appending to the
   // client-supplied output vector.
   int decodeOne(std::unique_ptr<DataRecord>&& record,
                 std::vector<Payload>& payloads_out);
+  int decodeOne(std::unique_ptr<DataRecord>&& record,
+                std::vector<PayloadGroup>& payload_groups_out);
   // Variant that does not consume the input DataRecord.  Instead, the blob is
   // copied if uncompressed.  This is useful when the caller cannot afford to
   // unconditionally relinquish ownership of the DataRecord.
   int decodeOne(const DataRecord& record, std::vector<Payload>& payloads_out);
+  int decodeOne(const DataRecord& record,
+                std::vector<PayloadGroup>& payload_groups_out);
 
   // Internal variant of decodeOne() where `record' is optional (`blob' may
   // point into a manually managed piece of memory).
@@ -53,11 +59,19 @@ class BufferedWriteDecoderImpl : public BufferedWriteDecoder {
                 std::vector<Payload>& payloads_out,
                 std::unique_ptr<DataRecord>&& record,
                 bool allow_buffer_sharing);
+  int decodeOne(Slice blob,
+                std::vector<PayloadGroup>& payload_groups_out,
+                std::unique_ptr<DataRecord>&& record,
+                bool allow_buffer_sharing);
 
   // Returns the number of individual records stored in a single DataRecord.
   static int getBatchSize(const DataRecord& record, size_t* size_out);
 
  private:
+  template <typename T>
+  int decodeImpl(std::vector<std::unique_ptr<DataRecord>>&& records,
+                 std::vector<T>& payload_groups_out);
+
   // DataRecord instances we decoded and assumed ownership of from the client
   folly::fbvector<std::unique_ptr<DataRecord>> pinned_data_records_;
   // Buffers used for decompression; Payload instances we returned to the

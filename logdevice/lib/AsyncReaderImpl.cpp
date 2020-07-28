@@ -469,11 +469,11 @@ bool AsyncReaderImpl::handleBufferedWrite(std::unique_ptr<DataRecord>& record) {
   record_with_attributes = nullptr; // no longer safe
 
   auto decoder = std::make_shared<BufferedWriteDecoderImpl>();
-  std::vector<Payload> payloads;
+  std::vector<PayloadGroup> payload_groups;
   // We use an overload of BufferedWriteDecoderImpl that does not claim
   // ownership of the input DataRecord, in case the client rejects delivery
   // and we need to return the record to ClientReadStream intact.
-  int rv = decoder->decodeOne(*record, payloads);
+  int rv = decoder->decodeOne(*record, payload_groups);
   if (rv != 0) {
     // Whoops, decoding failed. This is tragic and unlikely with checksums
     // but let's generate a DATALOSS gap to inform the client.
@@ -496,11 +496,11 @@ bool AsyncReaderImpl::handleBufferedWrite(std::unique_ptr<DataRecord>& record) {
   folly::SharedMutex::ReadHolder guard_map(nullptr);
   LogState* log_state = nullptr;
 
-  for (const Payload& payload : payloads) {
+  for (PayloadGroup& payload_group : payload_groups) {
     std::unique_ptr<DataRecord> sub_record =
         std::make_unique<DataRecordOwnsPayload>(
             log_id,
-            payload,
+            std::move(payload_group),
             decoder, // shared ownership of the decoder
             attrs.lsn,
             attrs.timestamp,

@@ -23,9 +23,22 @@ using Compression = BufferedWriter::Options::Compression;
 int BufferedWriteDecoderImpl::decode(
     std::vector<std::unique_ptr<DataRecord>>&& records,
     std::vector<Payload>& payloads_out) {
+  return decodeImpl(std::move(records), payloads_out);
+}
+
+int BufferedWriteDecoderImpl::decode(
+    std::vector<std::unique_ptr<DataRecord>>&& records,
+    std::vector<PayloadGroup>& payload_groups_out) {
+  return decodeImpl(std::move(records), payload_groups_out);
+}
+
+template <typename T>
+int BufferedWriteDecoderImpl::decodeImpl(
+    std::vector<std::unique_ptr<DataRecord>>&& records,
+    std::vector<T>& payloads_out) {
   // We'll decode into this vector first to avoid partially filling
   // `payloads_out' with a batch that ends up failing to decode.
-  std::vector<Payload> payloads_tmp;
+  std::vector<T> payloads_tmp;
   int rv = 0;
   for (auto& recordptr : records) {
     payloads_tmp.clear();
@@ -48,10 +61,29 @@ int BufferedWriteDecoderImpl::decodeOne(std::unique_ptr<DataRecord>&& record,
                    /* allow_buffer_sharing */ true);
 };
 
+int BufferedWriteDecoderImpl::decodeOne(
+    std::unique_ptr<DataRecord>&& record,
+    std::vector<PayloadGroup>& payload_groups_out) {
+  Slice slice(record->payload);
+  return decodeOne(slice,
+                   payload_groups_out,
+                   std::move(record),
+                   /* allow_buffer_sharing */ true);
+};
+
 int BufferedWriteDecoderImpl::decodeOne(const DataRecord& record,
                                         std::vector<Payload>& payloads_out) {
   return decodeOne(Slice(record.payload),
                    payloads_out,
+                   nullptr,
+                   /* allow_buffer_sharing */ false);
+};
+
+int BufferedWriteDecoderImpl::decodeOne(
+    const DataRecord& record,
+    std::vector<PayloadGroup>& payload_groups_out) {
+  return decodeOne(Slice(record.payload),
+                   payload_groups_out,
                    nullptr,
                    /* allow_buffer_sharing */ false);
 };
@@ -96,6 +128,44 @@ int BufferedWriteDecoderImpl::decodeOne(Slice blob,
       // Blob belongs to the record, so it must be pined to preserve blob
       pinned_data_records_.push_back(std::move(record));
     }
+  }
+  // If we succeeded, steal the DataRecordOwnsPayload from the client to
+  // be consistent with the uncompressed case.
+  record.reset();
+  return 0;
+}
+
+int BufferedWriteDecoderImpl::decodeOne(
+    Slice blob,
+    std::vector<PayloadGroup>& payload_groups_out,
+    std::unique_ptr<DataRecord>&& record,
+    bool allow_buffer_sharing) {
+  if (record) {
+    // For the memory ownership transfer to work as intended, `recordptr'
+    // needs to be a DataRecordOwnsPayload under the hood.
+    ld_assert(dynamic_cast<DataRecordOwnsPayload*>(record.get()) != nullptr);
+  }
+
+  const size_t start_index = payload_groups_out.size();
+  size_t bytes_decoded = BufferedWriteCodec::decode(
+      blob, payload_groups_out, allow_buffer_sharing);
+  if (bytes_decoded == 0) {
+    return -1;
+  }
+  if (allow_buffer_sharing && record != nullptr) {
+    // Check if record needs to be pinned due to IOBufs in payloads sharing data
+    // with it
+    std::find_if(payload_groups_out.begin() + start_index,
+                 payload_groups_out.end(),
+                 [&](const PayloadGroup& payload_group) {
+                   for (const auto& [key, iobuf] : payload_group) {
+                     if (!iobuf.isManaged()) {
+                       pinned_data_records_.push_back(std::move(record));
+                       return true;
+                     }
+                   }
+                   return false;
+                 });
   }
   // If we succeeded, steal the DataRecordOwnsPayload from the client to
   // be consistent with the uncompressed case.

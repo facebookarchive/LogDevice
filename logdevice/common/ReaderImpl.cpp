@@ -688,8 +688,8 @@ void ReaderImpl::read_decodeBuffered(QueueEntry& entry) {
   ld_check(!entry.getData().extra_metadata_);
 
   auto decoder = std::make_shared<BufferedWriteDecoderImpl>();
-  std::vector<Payload> payloads;
-  int rv = decoder->decodeOne(entry.releaseData(), payloads);
+  std::vector<PayloadGroup> payload_groups;
+  int rv = decoder->decodeOne(entry.releaseData(), payload_groups);
   if (rv != 0) {
     // Whoops, decoding failed.  This is tragic and unlikely with checksums
     // but let's generate a DATALOSS gap to inform the client.
@@ -704,10 +704,10 @@ void ReaderImpl::read_decodeBuffered(QueueEntry& entry) {
   // each original record, push them onto `pre_queue_' and let the main
   // read() loop consume them.
   int batch_offset = 0;
-  for (const Payload& payload : payloads) {
+  for (PayloadGroup& payload_group : payload_groups) {
     auto record = std::make_unique<DataRecordOwnsPayload>(
         log_id,
-        payload,
+        std::move(payload_group),
         decoder, // shared ownership of the decoder
         attrs.lsn,
         attrs.timestamp,
@@ -720,7 +720,8 @@ void ReaderImpl::read_decodeBuffered(QueueEntry& entry) {
         1);
     // Only allow read() to stop reading the log after consuming the last
     // record
-    pre_queue_.back().setAllowEndReading(&payload == &payloads.back());
+    pre_queue_.back().setAllowEndReading(&payload_group ==
+                                         &payload_groups.back());
   }
 }
 

@@ -48,7 +48,7 @@ struct DataRecordOwnsPayload : public DataRecord {
                         bool invalid_checksum = false);
 
   DataRecordOwnsPayload(logid_t log_id,
-                        Payload payload,
+                        PayloadGroup&& payload_group,
                         std::shared_ptr<BufferedWriteDecoder> decoder,
                         lsn_t lsn,
                         std::chrono::milliseconds timestamp,

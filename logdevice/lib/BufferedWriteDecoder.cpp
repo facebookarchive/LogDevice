@@ -28,9 +28,21 @@ int BufferedWriteDecoder::decode(
   return impl()->decode(std::move(records), payloads_out);
 }
 
+int BufferedWriteDecoder::decode(
+    std::vector<std::unique_ptr<DataRecord>>&& records,
+    std::vector<PayloadGroup>& payload_groups_out) {
+  return impl()->decode(std::move(records), payload_groups_out);
+}
+
 int BufferedWriteDecoder::decodeOne(std::unique_ptr<DataRecord>&& record,
                                     std::vector<Payload>& payloads_out) {
   return impl()->decodeOne(std::move(record), payloads_out);
+}
+
+int BufferedWriteDecoder::decodeOne(
+    std::unique_ptr<DataRecord>&& record,
+    std::vector<PayloadGroup>& payload_groups_out) {
+  return impl()->decodeOne(std::move(record), payload_groups_out);
 }
 
 BufferedWriteDecoderImpl* BufferedWriteDecoder::impl() {

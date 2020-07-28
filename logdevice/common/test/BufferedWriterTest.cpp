@@ -10,6 +10,7 @@
 #include <random>
 
 #include <folly/Memory.h>
+#include <folly/Overload.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
@@ -35,6 +36,7 @@ using namespace facebook::logdevice;
 // Null context for appenders that don't need one
 constexpr BufferedWriter::AppendCallback::Context NULL_CONTEXT(nullptr);
 using Compression = BufferedWriter::Options::Compression;
+using PayloadVariant = BufferedWriter::PayloadVariant;
 
 /**
  * This sub-class of ProcessorProxy intercepts calls to postWithRetrying(),
@@ -75,6 +77,48 @@ class ProcessorTestProxy : public ProcessorProxy {
 };
 
 namespace {
+
+// Converts payload group to string to simoplify comparisons in tests
+std::string convertPayload(const PayloadGroup& payload_group) {
+  if (payload_group.size() == 1 &&
+      payload_group.find(0) != payload_group.end()) {
+    // treat this as a special case and convert like a regular payload,
+    // since when decoding regular payloads as payload groups, they are
+    // represented as payload group with single 0 key
+    return payload_group.at(0).cloneAsValue().moveToFbString().toStdString();
+  }
+
+  std::stringstream result;
+  result << "{";
+  for (const auto& [key, payload] : payload_group) {
+    result << "{" << key << ": "
+           << payload.cloneAsValue().moveToFbString().toStdString();
+    result << "}, ";
+  }
+  result << "}";
+  return result.str();
+}
+
+std::string convertPayload(const std::string& payload) {
+  // nothing to convert
+  return payload;
+}
+
+std::string convertPayload(const PayloadVariant& payload) {
+  return std::visit([](const auto& p) { return convertPayload(p); }, payload);
+}
+
+std::vector<std::string>
+convertPayloads(const std::vector<PayloadVariant>& payloads) {
+  std::vector<std::string> result;
+  result.reserve(payloads.size());
+  for (const auto& payload : payloads) {
+    auto str =
+        std::visit([&](const auto& p) { return convertPayload(p); }, payload);
+    result.push_back(std::move(str));
+  }
+  return result;
+}
 
 // Simulates APPENDED message for an append that supposedly went out to the
 // cluster
@@ -160,7 +204,8 @@ class TestAppendSink : public BufferedWriterAppendSink {
   }
 
   // Passes the result of getFlushedBlobs() through BufferedWriteDecoder
-  std::vector<std::string> getFlushedOriginalPayloads(logid_t log) {
+  std::vector<PayloadVariant>
+  getFlushedOriginalPayloads(logid_t log, bool decode_payload_groups) {
     // BufferedWriterDecoder needs DataRecordOwnsPayload instances like those
     // that would arrive in RECORD messages
     std::vector<std::unique_ptr<DataRecord>> blob_payloads;
@@ -176,21 +221,36 @@ class TestAppendSink : public BufferedWriterAppendSink {
     const size_t nread = blob_payloads.size();
 
     BufferedWriteDecoderImpl decoder;
-    std::vector<Payload> payloads;
-    EXPECT_EQ(0, decoder.decode(std::move(blob_payloads), payloads));
+    std::vector<PayloadVariant> rv;
+    if (!decode_payload_groups) {
+      std::vector<Payload> payloads;
+      EXPECT_EQ(0, decoder.decode(std::move(blob_payloads), payloads));
+
+      // It is fine to access `payloads' because `decoder' is still in scope.
+      for (Payload p : payloads) {
+        rv.emplace_back(p.toString());
+      }
+    } else {
+      std::vector<PayloadGroup> payload_groups;
+      EXPECT_EQ(0, decoder.decode(std::move(blob_payloads), payload_groups));
+
+      for (PayloadGroup& payload_group : payload_groups) {
+        for (auto& [key, iobuf] : payload_group) {
+          // detach iobufs from decoder if needed
+          iobuf.makeManaged();
+        }
+        rv.emplace_back(std::move(payload_group));
+      }
+    }
+
     // At this point `decoder' owns the memory that `payloads' point into.
     // The pointers in `data' are now empty.
     EXPECT_EQ(std::vector<std::unique_ptr<DataRecord>>(nread), blob_payloads);
 
     ld_info("read %zd records from LogDevice, %zu after decoding batch",
             nread,
-            payloads.size());
+            rv.size());
 
-    // It is fine to access `payloads' because `decoder' is still in scope.
-    std::vector<std::string> rv;
-    for (Payload p : payloads) {
-      rv.emplace_back(p.toString());
-    }
     return rv;
   }
 
@@ -229,8 +289,7 @@ class TestCallback : public BufferedWriter::AppendCallback {
     lsn_range.second = std::max(lsn_range.second, attrs.lsn);
     last_time = std::chrono::steady_clock::now();
     for (auto& ctx : contexts) {
-      payloads_succeeded.push_back(
-          std::move(std::get<std::string>(ctx.second)));
+      payloads_succeeded.push_back(ctx.second);
       sem.post();
     }
   }
@@ -260,7 +319,7 @@ class TestCallback : public BufferedWriter::AppendCallback {
   // Each complete append (success or failure) posts to this semaphore
   Semaphore sem;
   // Collects payloads for all successful writes
-  std::vector<std::string> payloads_succeeded;
+  std::vector<BufferedWriter::PayloadVariant> payloads_succeeded;
 
   size_t getNumSucceeded() const {
     std::lock_guard<std::mutex> guard(mutex_);
@@ -269,13 +328,21 @@ class TestCallback : public BufferedWriter::AppendCallback {
 
   // Don't care about order?
   std::multiset<std::string> payloadsSucceededAsMultiset() const {
-    return std::multiset<std::string>(
-        payloads_succeeded.begin(), payloads_succeeded.end());
+    std::multiset<std::string> result;
+    std::transform(payloads_succeeded.begin(),
+                   payloads_succeeded.end(),
+                   std::inserter(result, result.begin()),
+                   [](const auto& payload) { return convertPayload(payload); });
+    return result;
   }
   // Don't care about duplicates?
   std::set<std::string> payloadsSucceededAsSet() const {
-    return std::set<std::string>(
-        payloads_succeeded.begin(), payloads_succeeded.end());
+    std::set<std::string> result;
+    std::transform(payloads_succeeded.begin(),
+                   payloads_succeeded.end(),
+                   std::inserter(result, result.begin()),
+                   [](const auto& payload) { return convertPayload(payload); });
+    return result;
   }
   // Failure statuses
   std::multiset<Status> failures;
@@ -350,7 +417,6 @@ class BufferedWriterTest : public ::testing::Test {
 
   void explicitFlushTest(BufferedWriter::Options::Mode,
                          size_t numAppendsBeforePosting);
-  void roundTripTest(Compression, bool payloads_compressible);
   void bigPayloadFlushesTest(size_t);
 
  protected:
@@ -387,13 +453,14 @@ void BufferedWriterTest::explicitFlushTest(BufferedWriter::Options::Mode mode,
 
   std::vector<std::string> read_payloads;
   wait_until("BufferedWriter has flushed everything", [&]() {
-    read_payloads = sink_->getFlushedOriginalPayloads(LOG_ID);
+    read_payloads = convertPayloads(sink_->getFlushedOriginalPayloads(
+        LOG_ID, /* decode_payload_groups */ false));
     return read_payloads.size() == orig_payloads.size() &&
         orig_payloads.size() == cb.getNumSucceeded();
   });
 
   ASSERT_EQ(orig_payloads, read_payloads);
-  ASSERT_EQ(orig_payloads, cb.payloads_succeeded);
+  ASSERT_EQ(orig_payloads, convertPayloads(cb.payloads_succeeded));
 }
 
 TEST_F(BufferedWriterTest, ExplicitFlushIndependent) {
@@ -422,10 +489,20 @@ TEST_F(BufferedWriterTest, ExplicitFlushOneAtATimeUseBackgroundThread) {
   this->explicitFlushTest(BufferedWriter::Options::Mode::ONE_AT_A_TIME, 0);
 }
 
+class BufferedWriterRoundTripTest : public BufferedWriterTest,
+                                    public ::testing::WithParamInterface<
+                                        std::tuple<Compression, bool, bool>> {
+ public:
+  void roundTripTest(Compression compression,
+                     bool payloads_compressible,
+                     bool use_payload_groups);
+};
+
 // Round-trip test for compression with manual decoding to track compression
 // ratio.  Parametrized by compression mode.
-void BufferedWriterTest::roundTripTest(Compression compression,
-                                       bool payloads_compressible) {
+void BufferedWriterRoundTripTest::roundTripTest(Compression compression,
+                                                bool payloads_compressible,
+                                                bool use_payload_groups) {
   TestCallback cb;
   BufferedWriter::Options opts;
   opts.compression = compression;
@@ -436,34 +513,48 @@ void BufferedWriterTest::roundTripTest(Compression compression,
 
   std::mt19937_64 rnd(0xbabadeda);
   int counter = 1; // goes in payload
-  auto gen_payload = [&]() {
-    std::string ret = std::to_string(counter++);
-    while (ret.size() < 20) {
-      ret += payloads_compressible ? 'a' : rnd();
+  auto gen_payload = [&]() -> PayloadVariant {
+    std::string payload = std::to_string(counter++);
+    while (payload.size() < 50) {
+      payload += payloads_compressible ? 'a' : rnd();
     }
-    return ret;
+    if (!use_payload_groups || counter % 10 == 0) {
+      return std::move(payload);
+    } else {
+      folly::IOBuf iobuf(folly::IOBuf::COPY_BUFFER, payload);
+      PayloadGroup payload_group{{1, iobuf}, {2, iobuf}};
+      return std::move(payload_group);
+    }
   };
 
   for (int nbatch = 0; nbatch < 10; ++nbatch) {
     if (nbatch % 2 == 0) {
       // We can call the single-write append() many times ...
       for (int i = 0; i < 100; ++i) {
-        std::string str = gen_payload();
-        orig_payloads.insert(str);
-        int rv = writer->append(LOG_ID, std::move(str), NULL_CONTEXT);
+        auto payload = gen_payload();
+        orig_payloads.insert(convertPayload(payload));
+        int rv = std::visit(
+            [&](auto& payload) {
+              return writer->append(LOG_ID, std::move(payload), NULL_CONTEXT);
+            },
+            payload);
         ASSERT_EQ(0, rv);
       }
     } else {
       // ... or use the more efficient multi-write
       std::vector<BufferedWriter::Append> v;
       for (int i = 0; i < 100; ++i) {
-        std::string str = gen_payload();
-        orig_payloads.insert(str);
+        auto payload = gen_payload();
+        orig_payloads.insert(convertPayload(payload));
         AppendAttributes attrs;
         attrs.optional_keys[KeyType::FINDKEY] = std::string("12345678");
 
-        v.push_back(BufferedWriter::Append(
-            LOG_ID, std::move(str), NULL_CONTEXT, std::move(attrs)));
+        std::visit(
+            [&](auto& payload) {
+              v.push_back(BufferedWriter::Append(
+                  LOG_ID, std::move(payload), NULL_CONTEXT, std::move(attrs)));
+            },
+            payload);
       }
       std::vector<Status> rv = writer->append(std::move(v));
       ASSERT_EQ(std::vector<Status>(v.size(), E::OK), rv);
@@ -471,9 +562,10 @@ void BufferedWriterTest::roundTripTest(Compression compression,
     writer->flushAll();
   }
 
-  std::vector<std::string> read_payloads;
+  std::vector<PayloadVariant> read_payloads;
   wait_until("BufferedWriter has flushed everything", [&]() {
-    read_payloads = sink_->getFlushedOriginalPayloads(LOG_ID);
+    read_payloads =
+        sink_->getFlushedOriginalPayloads(LOG_ID, use_payload_groups);
     return read_payloads.size() == orig_payloads.size() &&
         orig_payloads.size() == cb.getNumSucceeded();
   });
@@ -483,12 +575,23 @@ void BufferedWriterTest::roundTripTest(Compression compression,
     bytes_read += str.size();
   }
   size_t bytes_after_decoding = 0;
-  for (const std::string& str : read_payloads) {
-    bytes_after_decoding += str.size();
+  for (const auto& payload : read_payloads) {
+    std::visit(
+        folly::overload(
+            [&](const std::string& str) { bytes_after_decoding += str.size(); },
+            [&](const PayloadGroup& payload_group) {
+              for (const auto& [key, iobuf] : payload_group) {
+                bytes_after_decoding +=
+                    sizeof(key) + iobuf.computeChainDataLength();
+              }
+            }),
+        payload);
   }
 
+  auto converted_read_payloads = convertPayloads(read_payloads);
   ASSERT_EQ(orig_payloads,
-            std::set<std::string>(read_payloads.begin(), read_payloads.end()));
+            std::set<std::string>(converted_read_payloads.begin(),
+                                  converted_read_payloads.end()));
   ASSERT_EQ(orig_payloads, cb.payloadsSucceededAsSet());
   double compression_ratio = double(bytes_read) / bytes_after_decoding;
   ld_info("overall compression ratio was %.2f", compression_ratio);
@@ -498,25 +601,56 @@ void BufferedWriterTest::roundTripTest(Compression compression,
   }
 }
 
-TEST_F(BufferedWriterTest, RoundTripNoCompression) {
-  this->roundTripTest(Compression::NONE, true);
+TEST_P(BufferedWriterRoundTripTest, RoundTrip) {
+  auto [compression, payloads_compressible, use_payload_groups] = GetParam();
+  this->roundTripTest(compression, payloads_compressible, use_payload_groups);
 }
 
-TEST_F(BufferedWriterTest, RoundTripZstd) {
-  this->roundTripTest(Compression::ZSTD, true);
+namespace {
+auto roundTripTestName = [](auto info) {
+  const auto& [compression, payloads_compressible, use_payload_groups] =
+      info.param;
+  std::stringstream ss;
+  auto compression_name = compressionToString(compression);
+  std::transform(compression_name.begin(),
+                 compression_name.end(),
+                 compression_name.begin(),
+                 toupper);
+  ss << compression_name;
+  if (payloads_compressible) {
+    ss << "Compressible";
+  }
+  if (use_payload_groups) {
+    ss << "WithPayloadGroups";
+  }
+  return ss.str();
+};
 }
 
-TEST_F(BufferedWriterTest, RoundTripLZ4) {
-  this->roundTripTest(Compression::LZ4, true);
-}
+INSTANTIATE_TEST_CASE_P(Compresssible,
+                        BufferedWriterRoundTripTest,
+                        ::testing::Combine(
+                            // compression
+                            ::testing::Values(Compression::NONE,
+                                              Compression::ZSTD,
+                                              Compression::LZ4,
+                                              Compression::LZ4_HC),
+                            // payloads_compressible
+                            ::testing::Values(true),
+                            // use_payload_groups
+                            ::testing::Bool()),
+                        roundTripTestName);
 
-TEST_F(BufferedWriterTest, RoundTripLZ4_HC) {
-  this->roundTripTest(Compression::LZ4_HC, true);
-}
-
-TEST_F(BufferedWriterTest, RoundTripLZ4NotCompressible) {
-  this->roundTripTest(Compression::LZ4, false);
-}
+INSTANTIATE_TEST_CASE_P(Uncompressible,
+                        BufferedWriterRoundTripTest,
+                        ::testing::Combine(
+                            // compression
+                            ::testing::Values(Compression::LZ4),
+                            // payloads_compressible
+                            ::testing::Values(false),
+                            // use_payload_groups
+                            ::testing::Bool()),
+                        roundTripTestName);
 
 // Test Options::size_trigger.
 TEST_F(BufferedWriterTest, SizeTrigger) {
@@ -811,7 +945,7 @@ TEST_F(BufferedWriterTest, OneAtATimeWithFailure) {
     cb.sem.wait();
   }
   std::vector<std::string> expected{"1", "2", "3"};
-  ASSERT_EQ(expected, cb.payloads_succeeded);
+  ASSERT_EQ(expected, convertPayloads(cb.payloads_succeeded));
 }
 
 // Test that buffered writer fails with the error code that checkShard() returns
@@ -846,7 +980,7 @@ TEST_F(BufferedWriterTest, DestroyPayloads) {
   ASSERT_EQ(1, cb.payloadsSucceededAsMultiset().size());
   ASSERT_EQ(0, cb.failures.size());
   std::vector<std::string> expected{""};
-  ASSERT_EQ(expected, cb.payloads_succeeded);
+  ASSERT_EQ(expected, convertPayloads(cb.payloads_succeeded));
 }
 
 // Test that accounting in buffered writer works correctly
@@ -887,7 +1021,7 @@ TEST_F(BufferedWriterTest, Accounting) {
   ASSERT_EQ(total_payload_size, sink_->bytes_freed_by_shard_);
   std::vector<std::string> expected(13, "");
 
-  ASSERT_EQ(expected, cb.payloads_succeeded);
+  ASSERT_EQ(expected, convertPayloads(cb.payloads_succeeded));
 }
 
 TEST_F(BufferedWriterTest, InitialDelayGreaterThanMaxDelay) {
@@ -907,5 +1041,5 @@ TEST_F(BufferedWriterTest, InitialDelayGreaterThanMaxDelay) {
 
   ASSERT_EQ(1, cb.nretries);
   std::vector<std::string> expected = {"a"};
-  ASSERT_EQ(expected, cb.payloads_succeeded);
+  ASSERT_EQ(expected, convertPayloads(cb.payloads_succeeded));
 }

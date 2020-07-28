@@ -60,6 +60,8 @@ class BufferedWriteDecoder {
    */
   int decode(std::vector<std::unique_ptr<DataRecord>>&& records,
              std::vector<Payload>& payloads_out);
+  int decode(std::vector<std::unique_ptr<DataRecord>>&& records,
+             std::vector<PayloadGroup>& payload_groups_out);
 
   /**
    * Same as decode() but for a single record only.
@@ -69,6 +71,8 @@ class BufferedWriteDecoder {
    */
   int decodeOne(std::unique_ptr<DataRecord>&& record,
                 std::vector<Payload>& payloads_out);
+  int decodeOne(std::unique_ptr<DataRecord>&& record,
+                std::vector<PayloadGroup>& payload_groups_out);
 
   virtual ~BufferedWriteDecoder() {}
 

@@ -57,7 +57,7 @@ DataRecordOwnsPayload::DataRecordOwnsPayload(
 
 DataRecordOwnsPayload::DataRecordOwnsPayload(
     logid_t log_id,
-    Payload payload,
+    PayloadGroup&& payload_group,
     std::shared_ptr<BufferedWriteDecoder> decoder,
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
@@ -67,7 +67,7 @@ DataRecordOwnsPayload::DataRecordOwnsPayload(
     RecordOffset offsets,
     bool invalid_checksum)
     : DataRecord(log_id,
-                 payload,
+                 std::move(payload_group),
                  lsn,
                  timestamp,
                  batch_offset,
