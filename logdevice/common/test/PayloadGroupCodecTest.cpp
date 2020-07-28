@@ -231,28 +231,77 @@ TEST_F(PayloadGroupEncoderTest, NoAppends) {
   EXPECT_TRUE(decoded.empty());
 }
 
+class PayloadGroupEstimatorTest
+    : public ::testing::TestWithParam<std::vector<PayloadGroup>> {};
+
+TEST_P(PayloadGroupEstimatorTest, EstimateMatch) {
+  const auto& payload_groups = GetParam();
+
+  PayloadGroupCodec::Estimator estimator;
+  PayloadGroupCodec::Encoder encoder(payload_groups.size());
+
+  std::vector<PayloadGroup> payload_groups_in;
+  for (const auto& payload_group : payload_groups) {
+    payload_groups_in.push_back(payload_group);
+    estimator.append(payload_group);
+    encoder.append(payload_group);
+
+    folly::IOBufQueue encoded{folly::IOBufQueue::cacheChainLength()};
+    encoder.encode(encoded);
+    EXPECT_EQ(estimator.calculateSize(), encoded.chainLength());
+  }
+}
+
+TEST_P(PayloadGroupEstimatorTest, NoAppends) {
+  folly::IOBufQueue encoded{folly::IOBufQueue::cacheChainLength()};
+  PayloadGroupCodec::Encoder encoder(0);
+  encoder.encode(encoded);
+  PayloadGroupCodec::Estimator estimator;
+  EXPECT_EQ(estimator.calculateSize(), encoded.chainLength());
+  encoded.move().reset();
+}
+
 namespace {
 const PayloadGroup empty = from_map({});
 const PayloadGroup group1 = from_map({{1, "payload1"}});
 const PayloadGroup group2 = from_map({{2, "data2"}});
 const PayloadGroup group12 = from_map({{1, "p1"}, {2, "p22"}});
+
+const auto test_groups = ::testing::ValuesIn<std::vector<PayloadGroup>>(
+    {{empty, empty, empty, empty, empty},
+     {empty, group1, group2, empty},
+     {empty, group1, group1, empty},
+     {empty, group1, group12, empty},
+     {empty, group12, group1, group2, empty},
+
+     {group1},
+     {group2},
+     {group12},
+
+     {group1, group1},
+     {group1, group2},
+     {group1, group12},
+     {group1, empty, group1, empty},
+     {group1, empty, group2, empty},
+     {group1, empty, group12, empty},
+     {group1, group1, group2, group1, group12, group1},
+
+     {group12, group1, group2, empty},
+     {group12, group12, group2, group12, empty},
+
+     {group1, group2, group12},
+     {group1, group12, group2},
+     {group2, group1, group12},
+     {group2, group12, group1},
+     {group12, group1, group12},
+     {group12, group2, group1}});
+
 } // namespace
 
 INSTANTIATE_TEST_CASE_P(EncodeDecodeMatch,
                         PayloadGroupEncoderTest,
-                        ::testing::ValuesIn<std::vector<PayloadGroup>>(
-                            {{empty, empty, empty, group1},
-                             {empty, group1, empty, group2, empty, group12},
-                             {group1, empty, group2, empty, group12},
+                        test_groups);
 
-                             {group1, group1, group1},
-                             {group1, group2, group1, group2},
-
-                             {group1, group2, group12},
-                             {group1, group12, group2},
-                             {group2, group1, group12},
-                             {group2, group12, group1},
-                             {group12, group1, group12},
-                             {group12, group2, group1}}));
+INSTANTIATE_TEST_CASE_P(EstimateMatch, PayloadGroupEstimatorTest, test_groups);
 
 } // namespace facebook::logdevice

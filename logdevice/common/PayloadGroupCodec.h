@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <folly/Portability.h>
@@ -59,6 +60,39 @@ class PayloadGroupCodec {
     size_t appends_count_ = 0;
     bool contains_only_empty_groups_ = false;
     thrift::CompressedPayloadGroups encoded_payload_groups_;
+  };
+
+  /**
+   * Calculates encoded payloads size without doing actual encoding.
+   */
+  class Estimator {
+   public:
+    Estimator();
+
+    /** Updates estimate for payload group */
+    void append(const PayloadGroup& payload_group);
+    /** Updates estimate for single payload */
+    void append(const folly::IOBuf& payload);
+
+    /** Claculates current size of the encoded blob */
+    size_t calculateSize() const {
+      return encoded_bytes_;
+    }
+
+   private:
+    /**
+     * Updates key in the last added payload group. During append, an empty
+     * payload group is appended first, and then this group is updated for
+     * each key.
+     * iobuf parameter can be null, indicating that key has no payload (used to
+     * append empty payload groups).
+     */
+    void update(PayloadKey key, const folly::IOBuf* iobuf);
+
+    size_t appends_count_ = 0;
+    bool contains_only_empty_groups_ = false;
+    size_t encoded_bytes_;
+    std::unordered_set<PayloadKey> payload_keys_;
   };
 
   /**

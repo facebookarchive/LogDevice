@@ -20,7 +20,35 @@ namespace {
 
 using ThriftSerializer = apache::thrift::BinarySerializer;
 
-}
+// Calculate some constants used by Estimator
+
+const size_t empty_groups_encoded_bytes = [] {
+  thrift::CompressedPayloadGroups payload_groups;
+  return ThriftCodec::serialize<ThriftSerializer>(payload_groups).size();
+}();
+
+const size_t new_payloads_encoded_bytes = [] {
+  // When new payload key is added, the cost of adding it includes storing the
+  // key and value in payloads map. Calculate it by serializing a group with
+  // only one key added and subtract empty groups size.
+  thrift::CompressedPayloadGroups payload_groups;
+  payload_groups.payloads_ref().ensure()[0] = {};
+  return ThriftCodec::serialize<ThriftSerializer>(payload_groups).size() -
+      empty_groups_encoded_bytes;
+}();
+
+const size_t payload_descriptor_encoded_bytes = [] {
+  thrift::OptionalPayloadDescriptor payload_descriptor;
+  payload_descriptor.descriptor_ref().emplace();
+  return ThriftCodec::serialize<ThriftSerializer>(payload_descriptor).size();
+}();
+
+const size_t empty_payload_descriptor_encoded_bytes = [] {
+  thrift::OptionalPayloadDescriptor payload_descriptor;
+  return ThriftCodec::serialize<ThriftSerializer>(payload_descriptor).size();
+}();
+
+} // namespace
 
 PayloadGroupCodec::Encoder::Encoder(size_t expected_appends_count)
     : expected_appends_count_(expected_appends_count) {
@@ -105,6 +133,73 @@ void PayloadGroupCodec::Encoder::encode(folly::IOBufQueue& out) {
       encoded_payload_groups_,
       &out,
       apache::thrift::ExternalBufferSharing::SHARE_EXTERNAL_BUFFER);
+}
+
+PayloadGroupCodec::Estimator::Estimator()
+    : encoded_bytes_(empty_groups_encoded_bytes) {}
+
+void PayloadGroupCodec::Estimator::append(const folly::IOBuf& payload) {
+  PayloadGroup payload_group{{0, payload}};
+  append(payload_group);
+}
+
+void PayloadGroupCodec::Estimator::update(PayloadKey key,
+                                          const folly::IOBuf* iobuf) {
+  auto [it, inserted] = payload_keys_.insert(key);
+  if (inserted) {
+    // account for the newly added key
+    encoded_bytes_ += new_payloads_encoded_bytes;
+    // account for empty descriptors added for this key each of already appended
+    // groups
+    encoded_bytes_ += appends_count_ * empty_payload_descriptor_encoded_bytes;
+  }
+  if (iobuf) {
+    // change empty descriptor to non-empty
+    encoded_bytes_ += payload_descriptor_encoded_bytes -
+        empty_payload_descriptor_encoded_bytes;
+    // account for bytes in payload
+    encoded_bytes_ += iobuf->computeChainDataLength();
+  }
+}
+
+void PayloadGroupCodec::Estimator::append(const PayloadGroup& payload_group) {
+  appends_count_++;
+
+  // Add empty descriptor for each existing key.
+  encoded_bytes_ +=
+      payload_keys_.size() * empty_payload_descriptor_encoded_bytes;
+
+  constexpr PayloadKey tmp_empty_key = 0;
+  if (UNLIKELY(payload_group.empty())) {
+    // When encoding empty group, we need to create empty descriptors for it.
+    // In case there are non-empty groups we can just reuse any of the existing
+    // keys to do the update. However, if there are no keys to reuse, we need
+    // to use a temporary key to encode payload and change this key once first
+    // non-empty payload is appended.
+    PayloadKey key;
+    if (payload_keys_.empty()) {
+      // use temporary key
+      key = tmp_empty_key;
+      contains_only_empty_groups_ = true;
+    } else {
+      // reuse existing key (note: it can be from the previous empty payload)
+      key = *payload_keys_.begin();
+    }
+    update(key, nullptr);
+  } else {
+    if (UNLIKELY(contains_only_empty_groups_)) {
+      // update temporary key used to encode empty payloads
+      // this should be the only key in payload_keys_
+      const PayloadKey key = payload_group.begin()->first;
+      if (key != tmp_empty_key) {
+        payload_keys_ = {key};
+      }
+      contains_only_empty_groups_ = false;
+    }
+    for (const auto& [key, iobuf] : payload_group) {
+      update(key, &iobuf);
+    }
+  }
 }
 
 namespace {
