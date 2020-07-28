@@ -125,8 +125,8 @@ static int prepare_batch(logid_t log_id,
   std::vector<Payload> outp;
   int rv = decoder.decodeOne(Slice(range.data(), range.size()),
                              outp,
-                             std::unique_ptr<DataRecord>(),
-                             /* copy_blob_if_uncompressed */ false);
+                             nullptr,
+                             /* allow_buffer_sharing */ true);
   if (rv == 0) {
     out->reserve(outp.size());
     // NOTE: This makes a copy of every payload as an std::string to conform

@@ -12,6 +12,7 @@
 #include <variant>
 
 #include <folly/Overload.h>
+#include <folly/Varint.h>
 #include <gtest/gtest.h>
 
 namespace facebook { namespace logdevice {
@@ -19,6 +20,9 @@ namespace facebook { namespace logdevice {
 namespace {
 
 using PayloadVariant = std::variant<std::string, PayloadGroup>;
+
+class BufferedWriteSinglePayloadEncoderTest
+    : public ::testing::TestWithParam<std::vector<std::string>> {};
 
 class BufferedWriteEstimatorTest
     : public ::testing::TestWithParam<
@@ -50,7 +54,197 @@ folly::IOBuf encode(int checksum_bits,
   return queue.moveAsValue();
 }
 
+std::vector<PayloadVariant>
+convert(const std::vector<std::string>& payloads_in) {
+  std::vector<PayloadVariant> payloads;
+  for (const auto& payload : payloads_in) {
+    payloads.push_back(payload);
+  }
+  return payloads;
+}
+
+BufferedWriteCodec::Estimator
+estimate(const std::vector<PayloadVariant>& payloads) {
+  BufferedWriteCodec::Estimator estimator;
+  for (const auto& payload : payloads) {
+    withPayload(payload, [&](auto&& p) { estimator.append(std::move(p)); });
+  }
+  return estimator;
+}
+
 } // namespace
+
+TEST(BufferedWriteCodecTest, FailDecodePayloadGroupFormat) {
+  const int checksum_bits = 0;
+  const size_t capacity = 0; // unused for PayloadGroupCodec, so use 0
+  std::vector<PayloadVariant> payloads{PayloadGroup{}};
+  auto encoded =
+      encode<PayloadGroupCodec::Encoder>(checksum_bits, capacity, payloads);
+  encoded.coalesce();
+
+  // this API cannot decode Format::PAYLOAD_GROUPS, and should fail
+  std::vector<folly::IOBuf> decoded;
+  size_t consumed =
+      BufferedWriteCodec::decode(Slice(encoded.data(), encoded.length()),
+                                 decoded,
+                                 /* allow_buffer_sharing */ true);
+  EXPECT_EQ(consumed, 0);
+  EXPECT_TRUE(decoded.empty());
+}
+
+TEST(BufferedWriteCodecTest, FailDecodeTrimmedData) {
+  const int checksum_bits = 0;
+
+  const std::string payload1 = "p1";
+  // this should be big enough to take more than 1 byte to encode varint size
+  const std::string payload2(1024, '-');
+  ASSERT_GT(folly::encodeVarintSize(payload2.size()), 1);
+
+  // prepare encoded data
+  std::vector<PayloadVariant> payloads{payload1, payload2};
+  auto estimator = estimate(payloads);
+  ASSERT_EQ(estimator.getFormat(), BufferedWriteCodec::Format::SINGLE_PAYLOADS);
+  auto encoded = encode<BufferedWriteSinglePayloadsCodec::Encoder>(
+      checksum_bits, estimator.calculateSize(checksum_bits), payloads);
+  encoded.coalesce();
+
+  // trim encoded data to trigger different decoding failures
+  std::vector<folly::IOBuf> decoded;
+
+  auto checkDecode = [&] {
+    size_t consumed =
+        BufferedWriteCodec::decode(Slice(encoded.data(), encoded.length()),
+                                   decoded,
+                                   /* allow_buffer_sharing */ true);
+    EXPECT_EQ(consumed, 0);
+    EXPECT_TRUE(decoded.empty());
+  };
+
+  // too short payload (1 bytes missing)
+  encoded.trimEnd(1);
+  checkDecode();
+
+  // no payload
+  encoded.trimEnd(payload2.size() - 1);
+  checkDecode();
+
+  // invalid payload size varint
+  encoded.trimEnd(1);
+  checkDecode();
+}
+
+TEST(BufferedWriteCodecTest, FailDecodeTrimmedHeader) {
+  const int checksum_bits = 0;
+
+  // prepare encoded data
+  std::vector<PayloadVariant> payloads;
+  auto estimator = estimate(payloads);
+  ASSERT_EQ(estimator.getFormat(), BufferedWriteCodec::Format::SINGLE_PAYLOADS);
+  auto encoded = encode<BufferedWriteSinglePayloadsCodec::Encoder>(
+      checksum_bits, estimator.calculateSize(checksum_bits), payloads);
+  encoded.coalesce();
+
+  // check that untouched data is decodable
+  std::vector<folly::IOBuf> decoded;
+  size_t consumed =
+      BufferedWriteCodec::decode(Slice(encoded.data(), encoded.length()),
+                                 decoded,
+                                 /* allow_buffer_sharing */ true);
+  EXPECT_EQ(consumed, encoded.length());
+  EXPECT_TRUE(decoded.empty());
+
+  // now trim bytes one by one and check that decoding fails
+  while (!encoded.empty()) {
+    encoded.trimEnd(1);
+
+    consumed =
+        BufferedWriteCodec::decode(Slice(encoded.data(), encoded.length()),
+                                   decoded,
+                                   /* allow_buffer_sharing */ true);
+    EXPECT_EQ(consumed, 0);
+    EXPECT_TRUE(decoded.empty());
+  }
+}
+
+TEST(BufferedWriteCodecTest, FailDecodeCorruptedHeader) {
+  const int checksum_bits = 0;
+
+  // prepare encoded data
+  std::vector<PayloadVariant> payloads;
+  auto estimator = estimate(payloads);
+  ASSERT_EQ(estimator.getFormat(), BufferedWriteCodec::Format::SINGLE_PAYLOADS);
+  auto encoded = encode<BufferedWriteSinglePayloadsCodec::Encoder>(
+      checksum_bits, estimator.calculateSize(checksum_bits), payloads);
+  encoded.coalesce();
+
+  // first byte stores encoding format, replace it with invalid format
+  encoded.writableBuffer()[0] = 0;
+
+  // check that decoding fails
+  std::vector<folly::IOBuf> decoded;
+  size_t consumed =
+      BufferedWriteCodec::decode(Slice(encoded.data(), encoded.length()),
+                                 decoded,
+                                 /* allow_buffer_sharing */ true);
+  EXPECT_EQ(consumed, 0);
+  EXPECT_TRUE(decoded.empty());
+}
+
+TEST_P(BufferedWriteSinglePayloadEncoderTest, EncodeDecodeMatch) {
+  const auto& payloads_in = GetParam();
+
+  const auto converted = convert(payloads_in);
+
+  // Use estimator to calculate capacity
+  BufferedWriteCodec::Estimator estimator = estimate(converted);
+  ASSERT_EQ(estimator.getFormat(), BufferedWriteCodec::Format::SINGLE_PAYLOADS);
+
+  // Encode payloads
+  const int checksum_bits = 0;
+  auto encoded = encode<BufferedWriteSinglePayloadsCodec::Encoder>(
+      checksum_bits, estimator.calculateSize(checksum_bits), converted);
+  encoded.coalesce();
+
+  // Check encoded batch size is correct
+  size_t batch_size = 0;
+  EXPECT_TRUE(BufferedWriteCodec::decodeBatchSize(
+      Slice(encoded.data(), encoded.length()), &batch_size));
+  EXPECT_EQ(batch_size, payloads_in.size());
+
+  // Decode payloads
+  std::vector<folly::IOBuf> decoded;
+  size_t consumed =
+      BufferedWriteCodec::decode(Slice(encoded.data(), encoded.length()),
+                                 decoded,
+                                 /* allow_buffer_sharing */ true);
+
+  EXPECT_EQ(consumed, encoded.length());
+
+  // Payloads should match
+  std::vector<std::string> payloads_out;
+  for (auto& payload : decoded) {
+    payloads_out.push_back(payload.moveToFbString().toStdString());
+  }
+
+  EXPECT_EQ(payloads_in, payloads_out);
+}
+
+INSTANTIATE_TEST_CASE_P(EncodeDecodeMatch,
+                        BufferedWriteSinglePayloadEncoderTest,
+                        ::testing::ValuesIn<std::vector<std::string>>({
+                            {},
+                            {""},
+                            {"", ""},
+                            {"payload"},
+                            {"", "payload"},
+                            {"payload", ""},
+                            {"", "payload", ""},
+                            std::vector<std::string>(10, "p10"),
+                            std::vector<std::string>(100, "p100"),
+                            std::vector<std::string>(1000, "p1000"),
+                            std::vector<std::string>(10000, "p10000"),
+                            std::vector<std::string>(100000, "p100000"),
+                        }));
 
 TEST_F(BufferedWriteEstimatorTest, FormatChange) {
   const folly::IOBuf payload1 =
@@ -95,7 +289,6 @@ TEST_P(BufferedWriteEstimatorTest, EstimateMatch) {
 }
 
 namespace {
-
 folly::IOBuf iobuf_empty;
 folly::IOBuf iobuf_payload =
     *folly::IOBuf::copyBuffer(folly::StringPiece("payload1"));

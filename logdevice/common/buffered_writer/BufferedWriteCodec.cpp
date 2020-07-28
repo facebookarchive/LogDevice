@@ -7,11 +7,13 @@
  */
 #include "logdevice/common/buffered_writer/BufferedWriteCodec.h"
 
+#include <iterator>
 #include <lz4.h>
 #include <lz4hc.h>
 #include <zstd.h>
 
 #include <folly/Varint.h>
+#include <folly/io/Cursor.h>
 
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
@@ -129,6 +131,165 @@ bool BufferedWriteSinglePayloadsCodec::Encoder::compress(
   } else {
     return false;
   }
+}
+
+namespace {
+folly::Optional<folly::IOBuf> uncompress(const Slice& slice,
+                                         const Compression compression) {
+  if (compression == Compression::NONE) {
+    return folly::IOBuf::wrapBufferAsValue(slice.data, slice.size);
+  }
+
+  const uint8_t *ptr = (const uint8_t*)slice.data, *end = ptr + slice.size;
+
+  // Blob should start with a varint containing the uncompressed size
+  uint64_t uncompressed_size;
+  try {
+    folly::ByteRange range(ptr, end);
+    uncompressed_size = folly::decodeVarint(range);
+    ptr = range.begin();
+  } catch (...) {
+    RATELIMIT_ERROR(std::chrono::seconds(1), 1, "Failed to decode varint");
+    return folly::none;
+  }
+
+  ld_spew("uncompressed length in header is %lu", uncompressed_size);
+  if (uncompressed_size > MAX_PAYLOAD_SIZE_INTERNAL) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    1,
+                    "Compressed buffered write header says uncompressed length "
+                    "is %lu, should be at most MAX_PAYLOAD_SIZE_INTERNAL (%zu)",
+                    uncompressed_size,
+                    MAX_PAYLOAD_SIZE_INTERNAL);
+    return folly::none;
+  }
+
+  ld_spew("decompressing blob of size %ld", end - ptr);
+  folly::IOBuf out{folly::IOBuf::CREATE, uncompressed_size};
+  switch (compression) {
+    case Compression::NONE:
+      ld_check(false);
+      return folly::none;
+    case Compression::ZSTD: {
+      size_t rv = ZSTD_decompress(out.writableTail(), // dst
+                                  uncompressed_size,  // dstCapacity
+                                  ptr,                // src
+                                  end - ptr);         // compressedSize
+      if (ZSTD_isError(rv)) {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "ZSTD_decompress() failed: %s",
+                        ZSTD_getErrorName(rv));
+        return folly::none;
+      }
+      if (rv != uncompressed_size) {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "Zstd decompression length %zu does not match %lu found"
+                        "in header",
+                        rv,
+                        uncompressed_size);
+        return folly::none;
+      }
+      out.append(uncompressed_size);
+      return out;
+    }
+    case Compression::LZ4:
+    case Compression::LZ4_HC: {
+      int rv = LZ4_decompress_safe(reinterpret_cast<const char*>(ptr),
+                                   reinterpret_cast<char*>(out.writableTail()),
+                                   end - ptr,
+                                   uncompressed_size);
+
+      if (rv < 0) {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "LZ4 decompression failed with error %d",
+                        rv);
+        return folly::none;
+      }
+      if (rv != uncompressed_size) {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "LZ4 decompression length %d does not match %lu found"
+                        "in header",
+                        rv,
+                        uncompressed_size);
+        return folly::none;
+      }
+      out.append(uncompressed_size);
+      return out;
+    }
+  }
+  RATELIMIT_ERROR(std::chrono::seconds(1),
+                  1,
+                  "Unknown compression %d",
+                  static_cast<int>(compression));
+  return folly::none;
+}
+
+folly::Expected<uint64_t, folly::DecodeVarintError>
+decodeVarint(folly::io::Cursor& cursor) {
+  std::array<uint8_t, folly::kMaxVarintLength64> buffer;
+  folly::ByteRange bytes = cursor.peekBytes();
+  if (UNLIKELY(bytes.size() < buffer.size())) {
+    bytes = {buffer.data(), cursor.pullAtMost(buffer.data(), buffer.size())};
+    cursor.retreat(bytes.size());
+  }
+  auto begin = bytes.data();
+  auto result = folly::tryDecodeVarint(bytes);
+  if (!result) {
+    return result;
+  }
+  cursor.skip(bytes.data() - begin);
+  return result;
+}
+
+} // namespace
+
+size_t BufferedWriteSinglePayloadsCodec::decode(
+    const Slice& binary,
+    Compression compression,
+    std::vector<folly::IOBuf>& payloads_out,
+    bool allow_buffer_sharing) {
+  auto uncompressed = uncompress(binary, compression);
+  if (!uncompressed) {
+    return 0;
+  }
+
+  // uncompressed can share buffer with binary (e.g. in case of NO_COMPRESSION)
+  // If sharing is not allowed, ensure that uncompressed manages its own copy
+  if (!allow_buffer_sharing) {
+    uncompressed->makeManaged();
+  }
+
+  std::vector<folly::IOBuf> payloads;
+  payloads.reserve(payloads_out.capacity() - payloads_out.size());
+  folly::io::Cursor cursor{uncompressed.get_pointer()};
+  while (!cursor.isAtEnd()) {
+    auto len = decodeVarint(cursor);
+    if (!len) {
+      RATELIMIT_ERROR(std::chrono::seconds(1), 1, "Failed to decode varint");
+      return 0;
+    }
+    folly::IOBuf payload;
+    size_t available = cursor.cloneAtMost(payload, *len);
+    if (available != *len) {
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      1,
+                      "Expected %lu more bytes based on length varint but "
+                      "there are only %zu left",
+                      *len,
+                      available);
+      return 0;
+    }
+    payloads.push_back(std::move(payload));
+  }
+
+  payloads_out.insert(payloads_out.end(),
+                      std::make_move_iterator(payloads.begin()),
+                      std::make_move_iterator(payloads.end()));
+  return cursor.getCurrentPosition();
 }
 
 void BufferedWriteSinglePayloadsCodec::Estimator::append(
@@ -327,6 +488,132 @@ size_t BufferedWriteCodec::Estimator::calculateSize(int checksum_bits) const {
       break;
   }
   return size;
+}
+
+namespace {
+// A helper function to extract flags and the number of records in the batch.
+// Updates the slice to point to data directly following the header.
+size_t decodeHeader(Slice& blob,
+                    BufferedWriteDecoderImpl::flags_t* flags_out,
+                    BufferedWriteCodec::Format* format_out,
+                    size_t* size_out) {
+  const uint8_t* ptr = reinterpret_cast<const uint8_t*>(blob.data);
+  const uint8_t* end = ptr + blob.size;
+
+  if (ptr == end) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(1), 1, "Reached end looking for marker byte 0xb1");
+    return 0;
+  }
+
+  using Format = BufferedWriteCodec::Format;
+  auto format = static_cast<Format>(*ptr++);
+  if (format != Format::SINGLE_PAYLOADS && format != Format::PAYLOAD_GROUPS) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    1,
+                    "Got unexpected marker byte 0x%02x",
+                    static_cast<uint8_t>(format));
+    return 0;
+  }
+
+  if (ptr == end) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(1), 1, "Reached end looking for flags");
+    return 0;
+  }
+  BufferedWriteDecoderImpl::flags_t flags = *ptr++;
+
+  size_t batch_size;
+  if (flags & BufferedWriteDecoderImpl::Flags::SIZE_INCLUDED) {
+    if (ptr == end) {
+      RATELIMIT_ERROR(
+          std::chrono::seconds(1), 1, "Reached end looking for the batch size");
+      return 0;
+    }
+    try {
+      folly::ByteRange range(ptr, end);
+      batch_size = folly::decodeVarint(range);
+      ptr = range.begin();
+    } catch (...) {
+      RATELIMIT_ERROR(std::chrono::seconds(1), 1, "Failed to decode varint");
+      return 0;
+    }
+  } else {
+    // If size is not included in the blob, we'll treat the whole batch as a
+    // single record.
+    batch_size = 1;
+  }
+
+  const size_t header_size = ptr - reinterpret_cast<const uint8_t*>(blob.data);
+  blob = Slice(ptr, end - ptr);
+  if (flags_out != nullptr) {
+    *flags_out = flags;
+  }
+  if (format_out != nullptr) {
+    *format_out = format;
+  }
+  if (size_out != nullptr) {
+    *size_out = batch_size;
+  }
+  return header_size;
+}
+} // namespace
+
+FOLLY_NODISCARD
+bool BufferedWriteCodec::decodeBatchSize(Slice binary, size_t* size_out) {
+  return decodeHeader(binary, nullptr, nullptr, size_out) != 0;
+}
+
+FOLLY_NODISCARD
+bool BufferedWriteCodec::decodeCompression(Slice binary,
+                                           Compression* compression_out) {
+  BufferedWriteDecoderImpl::flags_t flags;
+  const size_t header_size = decodeHeader(binary, &flags, nullptr, nullptr);
+  if (header_size == 0) {
+    return false;
+  }
+  if (compression_out) {
+    *compression_out = static_cast<Compression>(
+        flags & BufferedWriteDecoderImpl::Flags::COMPRESSION_MASK);
+  }
+  return true;
+}
+
+FOLLY_NODISCARD
+size_t BufferedWriteCodec::decode(Slice binary,
+                                  std::vector<folly::IOBuf>& payloads_out,
+                                  bool allow_buffer_sharing) {
+  BufferedWriteDecoderImpl::flags_t flags;
+  Format format;
+  size_t batch_size;
+  const size_t header_size = decodeHeader(binary, &flags, &format, &batch_size);
+  if (header_size == 0) {
+    return 0;
+  }
+  if (binary.size == 0) {
+    // Nothing else to decode. Just the header.
+    return header_size;
+  }
+  const Compression compression = static_cast<Compression>(
+      flags & BufferedWriteDecoderImpl::Flags::COMPRESSION_MASK);
+  switch (format) {
+    case Format::SINGLE_PAYLOADS: {
+      size_t bytes_decoded = BufferedWriteSinglePayloadsCodec::decode(
+          binary, compression, payloads_out, allow_buffer_sharing);
+      if (bytes_decoded == 0) {
+        return 0;
+      }
+      return header_size + bytes_decoded;
+    }
+    case Format::PAYLOAD_GROUPS:
+      RATELIMIT_ERROR(
+          std::chrono::seconds(1),
+          1,
+          "Batch containing PayloadGroups cannot be decoded using this API");
+      return 0;
+  }
+  ld_check(false); // decodeHeader should check format
+  return 0;
 }
 
 }} // namespace facebook::logdevice

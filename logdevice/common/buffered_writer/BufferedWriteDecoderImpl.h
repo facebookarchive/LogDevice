@@ -52,29 +52,16 @@ class BufferedWriteDecoderImpl : public BufferedWriteDecoder {
   int decodeOne(Slice blob,
                 std::vector<Payload>& payloads_out,
                 std::unique_ptr<DataRecord>&& record,
-                bool copy_blob_if_uncompressed);
+                bool allow_buffer_sharing);
 
   // Returns the number of individual records stored in a single DataRecord.
   static int getBatchSize(const DataRecord& record, size_t* size_out);
 
-  // Returns compression codec of a single DataRecord.
-  static int getCompression(const DataRecord& record,
-                            Compression* compression_out);
-
  private:
-  // Decodes an uncompressed blob without claiming ownership of the memory.
-  int decodeUnowned(const Slice& slice, std::vector<Payload>& payloads_out);
-  // Decodes a compressed blob.  In case of successful decoding, adds the
-  // buffer containing uncompressed data to pinned_buffers_; the source
-  // DataRecord is no longer needed.
-  int decodeCompressed(const Slice& slice,
-                       BufferedWriter::Options::Compression compression,
-                       std::vector<Payload>& payloads_out);
-
   // DataRecord instances we decoded and assumed ownership of from the client
   folly::fbvector<std::unique_ptr<DataRecord>> pinned_data_records_;
   // Buffers used for decompression; Payload instances we returned to the
   // client point into these buffers.
-  folly::fbvector<std::unique_ptr<uint8_t[]>> pinned_buffers_;
+  folly::fbvector<folly::IOBuf> pinned_buffers_;
 };
 }} // namespace facebook::logdevice

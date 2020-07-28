@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Semaphore.h"
+#include "logdevice/common/buffered_writer/BufferedWriteCodec.h"
 #include "logdevice/common/buffered_writer/BufferedWriteDecoderImpl.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
@@ -427,7 +428,8 @@ TEST_F(SequencerBatchingTest, DifferentLogGroupSettingsReloading) {
 
     for (const auto& record : data) {
       Compression c;
-      ASSERT_EQ(0, BufferedWriteDecoderImpl::getCompression(*record, &c));
+      ASSERT_TRUE(
+          BufferedWriteCodec::decodeCompression(Slice(record->payload), &c));
       ASSERT_EQ(expected, c);
     }
   };

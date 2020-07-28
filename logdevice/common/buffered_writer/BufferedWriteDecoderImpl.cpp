@@ -13,73 +13,12 @@
 #include <folly/Varint.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
+#include "logdevice/common/buffered_writer/BufferedWriteCodec.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 
 using Compression = BufferedWriter::Options::Compression;
-
-namespace {
-// A helper function to extract flags and the number of records in the batch.
-// Updates the slice to point to data directly following the header.
-int decodeHeader(Slice& blob,
-                 BufferedWriteDecoderImpl::flags_t* flags_out,
-                 size_t* size_out) {
-  const uint8_t* ptr = (const uint8_t*)blob.data;
-  const uint8_t* end = ptr + blob.size;
-
-  if (ptr == end) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(1), 1, "Reached end looking for marker byte 0xb1");
-    return -1;
-  }
-  uint8_t marker = *ptr++;
-  if (marker != 0xb1) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    1,
-                    "Expected marker byte 0xb1, got 0x%02x",
-                    marker);
-    return -1;
-  }
-
-  if (ptr == end) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(1), 1, "Reached end looking for flags");
-    return -1;
-  }
-  BufferedWriteDecoderImpl::flags_t flags = *ptr++;
-
-  size_t batch_size;
-  if (flags & BufferedWriteDecoderImpl::Flags::SIZE_INCLUDED) {
-    if (ptr == end) {
-      RATELIMIT_ERROR(
-          std::chrono::seconds(1), 1, "Reached end looking for the batch size");
-      return -1;
-    }
-    try {
-      folly::ByteRange range(ptr, end);
-      batch_size = folly::decodeVarint(range);
-      ptr = range.begin();
-    } catch (...) {
-      RATELIMIT_ERROR(std::chrono::seconds(1), 1, "Failed to decode varint");
-      return -1;
-    }
-  } else {
-    // If size is not included in the blob, we'll treat the whole batch as a
-    // single record.
-    batch_size = 1;
-  }
-
-  blob = Slice(ptr, end - ptr);
-  if (flags_out != nullptr) {
-    *flags_out = flags;
-  }
-  if (size_out != nullptr) {
-    *size_out = batch_size;
-  }
-  return 0;
-}
-} // namespace
 
 int BufferedWriteDecoderImpl::decode(
     std::vector<std::unique_ptr<DataRecord>>&& records,
@@ -106,7 +45,7 @@ int BufferedWriteDecoderImpl::decodeOne(std::unique_ptr<DataRecord>&& record,
   return decodeOne(slice,
                    payloads_out,
                    std::move(record),
-                   /* copy_blob_if_uncompressed */ false);
+                   /* allow_buffer_sharing */ true);
 };
 
 int BufferedWriteDecoderImpl::decodeOne(const DataRecord& record,
@@ -114,195 +53,60 @@ int BufferedWriteDecoderImpl::decodeOne(const DataRecord& record,
   return decodeOne(Slice(record.payload),
                    payloads_out,
                    nullptr,
-                   /* copy_blob_if_uncompressed */ true);
+                   /* allow_buffer_sharing */ false);
 };
 
 int BufferedWriteDecoderImpl::decodeOne(Slice blob,
                                         std::vector<Payload>& payloads_out,
                                         std::unique_ptr<DataRecord>&& record,
-                                        bool copy_blob_if_uncompressed) {
+                                        bool allow_buffer_sharing) {
   if (record) {
     // For the memory ownership transfer to work as intended, `recordptr'
     // needs to be a DataRecordOwnsPayload under the hood.
     ld_assert(dynamic_cast<DataRecordOwnsPayload*>(record.get()) != nullptr);
   }
 
-  flags_t flags;
-  if (decodeHeader(blob, &flags, nullptr) != 0) {
+  std::vector<folly::IOBuf> payloads;
+  size_t bytes_decoded =
+      BufferedWriteCodec::decode(blob, payloads, allow_buffer_sharing);
+  if (bytes_decoded == 0) {
     return -1;
   }
 
-  Compression compression = (Compression)(flags & Flags::COMPRESSION_MASK);
-  switch (compression) {
-    case Compression::NONE: {
-      std::unique_ptr<uint8_t[]> buf;
-      if (copy_blob_if_uncompressed) {
-        buf = std::make_unique<uint8_t[]>(blob.size);
-        memcpy(buf.get(), blob.data, blob.size);
-        blob = Slice(buf.get(), blob.size);
-      }
+  payloads_out.reserve(payloads_out.size() + payloads.size());
 
-      int rv = decodeUnowned(blob, payloads_out);
-      if (rv == 0) {
-        if (copy_blob_if_uncompressed) {
-          pinned_buffers_.push_back(std::move(buf));
-        } else if (record) {
-          pinned_data_records_.push_back(std::move(record));
-        }
-      }
-      return rv;
+  bool has_unmanaged_buffers = false;
+  for (auto& iobuf : payloads) {
+    iobuf.coalesce();
+    const size_t len = iobuf.length();
+    payloads_out.emplace_back(len ? iobuf.data() : nullptr, len);
+    if (iobuf.isManaged()) {
+      // Data is not shared with blob, so it must be pinned, otherwise payload
+      // will point to deallocated memory
+      pinned_buffers_.push_back(std::move(iobuf));
+    } else {
+      has_unmanaged_buffers = true;
     }
-
-    case Compression::ZSTD:
-    case Compression::LZ4:
-    case Compression::LZ4_HC: {
-      int rv = decodeCompressed(blob, compression, payloads_out);
-      // If we succeeded, steal the DataRecordOwnsPayload from the client to
-      // be consistent with the uncompressed case.
-      if (rv == 0) {
-        record.reset();
-      }
-      return rv;
-    }
-
-    default:
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Invalid compression flag value 0x%02x",
-                      (uint8_t)compression);
-      return -1;
   }
+  if (has_unmanaged_buffers) {
+    // There are payloads which share buffer blob. This can only happen if
+    // allow_buffer_sharing was true.
+    ld_check(allow_buffer_sharing);
+    if (record) {
+      // Blob belongs to the record, so it must be pined to preserve blob
+      pinned_data_records_.push_back(std::move(record));
+    }
+  }
+  // If we succeeded, steal the DataRecordOwnsPayload from the client to
+  // be consistent with the uncompressed case.
+  record.reset();
+  return 0;
 }
 
 int BufferedWriteDecoderImpl::getBatchSize(const DataRecord& record,
                                            size_t* size_out) {
   Slice blob(record.payload);
-  return decodeHeader(blob, nullptr, size_out);
+  return BufferedWriteCodec::decodeBatchSize(blob, size_out) ? 0 : -1;
 }
 
-int BufferedWriteDecoderImpl::getCompression(const DataRecord& record,
-                                             Compression* compression_out) {
-  Slice blob(record.payload);
-  BufferedWriteDecoderImpl::flags_t flags;
-  int rv = decodeHeader(blob, &flags, nullptr);
-  if (rv == 0) {
-    *compression_out =
-        static_cast<Compression>(flags & Flags::COMPRESSION_MASK);
-    return 0;
-  }
-  return -1;
-}
-
-int BufferedWriteDecoderImpl::decodeUnowned(
-    const Slice& slice,
-    std::vector<Payload>& payloads_out) {
-  const uint8_t *ptr = (const uint8_t*)slice.data, *end = ptr + slice.size;
-  for (; ptr < end;) {
-    uint64_t len;
-    try {
-      folly::ByteRange range(ptr, end);
-      len = folly::decodeVarint(range);
-      ptr = range.begin();
-    } catch (...) {
-      RATELIMIT_ERROR(std::chrono::seconds(1), 1, "Failed to decode varint");
-      return -1;
-    }
-    if (ptr + len > end) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Expected %lu more bytes based on length varint but "
-                      "there are only %zd left",
-                      len,
-                      end - ptr);
-      return -1;
-    }
-    payloads_out.push_back(Payload(len ? ptr : nullptr, len));
-    ptr += len;
-  }
-  ld_check(ptr == end);
-  return 0;
-}
-
-int BufferedWriteDecoderImpl::decodeCompressed(
-    const Slice& slice,
-    const Compression compression,
-    std::vector<Payload>& payloads_out) {
-  const uint8_t *ptr = (const uint8_t*)slice.data, *end = ptr + slice.size;
-
-  // Blob should start with a varint containing the uncompressed size
-  uint64_t uncompressed_size;
-  try {
-    folly::ByteRange range(ptr, end);
-    uncompressed_size = folly::decodeVarint(range);
-    ptr = range.begin();
-  } catch (...) {
-    RATELIMIT_ERROR(std::chrono::seconds(1), 1, "Failed to decode varint");
-    return -1;
-  }
-
-  ld_spew("uncompressed length in header is %lu", uncompressed_size);
-  if (uncompressed_size > MAX_PAYLOAD_SIZE_INTERNAL) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    1,
-                    "Compressed buffered write header says uncompressed length "
-                    "is %lu, should be at most MAX_PAYLOAD_SIZE_INTERNAL (%zu)",
-                    uncompressed_size,
-                    MAX_PAYLOAD_SIZE_INTERNAL);
-    return -1;
-  }
-
-  ld_spew("decompressing blob of size %ld", end - ptr);
-  std::unique_ptr<uint8_t[]> buf(new uint8_t[uncompressed_size]);
-  if (compression == Compression::ZSTD) {
-    size_t rv = ZSTD_decompress(buf.get(),         // dst
-                                uncompressed_size, // dstCapacity
-                                ptr,               // src
-                                end - ptr);        // compressedSize
-    if (ZSTD_isError(rv)) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "ZSTD_decompress() failed: %s",
-                      ZSTD_getErrorName(rv));
-      return -1;
-    }
-    if (rv != uncompressed_size) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Zstd decompression length %zu does not match %lu found"
-                      "in header",
-                      rv,
-                      uncompressed_size);
-      return -1;
-    }
-  }
-  if (compression == Compression::LZ4 || compression == Compression::LZ4_HC) {
-    int rv = LZ4_decompress_safe(
-        (char*)ptr, (char*)buf.get(), end - ptr, uncompressed_size);
-
-    if (rv < 0) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "LZ4 decompression failed with error %d",
-                      rv);
-      return -1;
-    }
-    if (rv != uncompressed_size) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "LZ4 decompression length %d does not match %lu found"
-                      "in header",
-                      rv,
-                      uncompressed_size);
-      return -1;
-    }
-  }
-
-  if (decodeUnowned(Slice(buf.get(), uncompressed_size), payloads_out) != 0) {
-    return -1;
-  }
-
-  // Decoding succeeded.  Pin the decompressed buffer.
-  pinned_buffers_.push_back(std::move(buf));
-  return 0;
-}
 }} // namespace facebook::logdevice

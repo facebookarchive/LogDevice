@@ -66,6 +66,17 @@ class BufferedWriteSinglePayloadsCodec {
     // Number of bytes required to encode payloads.
     size_t encoded_payloads_size_ = 0;
   };
+
+  /**
+   * Uncompress and decode payloads stored in batch.
+   * Resulting payloads can optionally share data with input (for example in
+   * case it's uncompressed).
+   * Returns number of bytes consumed, or 0 if decoding fails.
+   */
+  static size_t decode(const Slice& binary,
+                       Compression compression,
+                       std::vector<folly::IOBuf>& payloads_out,
+                       bool allow_buffer_sharing);
 };
 
 /**
@@ -150,6 +161,25 @@ class BufferedWriteCodec {
     BufferedWriteSinglePayloadsCodec::Estimator single_payloads_estimator_;
     PayloadGroupCodec::Estimator payload_groups_estimator_;
   };
+
+  /** Decodes number of records stored in batch */
+  FOLLY_NODISCARD
+  static bool decodeBatchSize(Slice binary, size_t* size_out);
+
+  /** Decodes batch compression in use */
+  FOLLY_NODISCARD
+  static bool decodeCompression(Slice binary, Compression* compression_out);
+
+  /**
+   * Decodes payloads stored in batch.
+   * Resulting payloads can optionally share data with input (for example in
+   * case it's uncompressed).
+   * Returns number of bytes consumed, or 0 if decoding fails.
+   */
+  FOLLY_NODISCARD
+  static size_t decode(Slice binary,
+                       std::vector<folly::IOBuf>& payloads_out,
+                       bool allow_buffer_sharing);
 };
 
 }} // namespace facebook::logdevice
