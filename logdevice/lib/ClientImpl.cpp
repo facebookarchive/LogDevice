@@ -26,6 +26,7 @@
 #include "logdevice/common/GetHeadAttributesRequest.h"
 #include "logdevice/common/LogsConfigApiRequest.h"
 #include "logdevice/common/NoopTraceLogger.h"
+#include "logdevice/common/PayloadGroupCodec.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReaderImpl.h"
 #include "logdevice/common/Semaphore.h"
@@ -368,6 +369,24 @@ int ClientImpl::append(logid_t logid,
   return postAppend(std::move(req));
 }
 
+int ClientImpl::append(logid_t logid,
+                       PayloadGroup&& payload_group,
+                       append_callback_t cb,
+                       AppendAttributes attrs,
+                       worker_id_t target_worker,
+                       std::unique_ptr<std::string> per_request_token) {
+  auto req = prepareRequest(logid,
+                            std::move(payload_group),
+                            std::move(cb),
+                            std::move(attrs),
+                            target_worker,
+                            std::move(per_request_token));
+  if (!req) {
+    return -1;
+  }
+  return postAppend(std::move(req));
+}
+
 std::pair<Status, NodeID> ClientImpl::appendBuffered(
     logid_t logid,
     const BufferedWriter::AppendCallback::ContextSet&,
@@ -551,12 +570,16 @@ int ClientImpl::append(logid_t logid,
   return append(logid, payload, cb, std::move(attrs), worker_id_t{-1}, nullptr);
 }
 
-int ClientImpl::append(logid_t /* logid */,
-                       PayloadGroup&& /* payload_group */,
-                       append_callback_t /* cb */,
-                       AppendAttributes /* attrs */) noexcept {
-  err = E::INTERNAL;
-  return -1;
+int ClientImpl::append(logid_t logid,
+                       PayloadGroup&& payload_group,
+                       append_callback_t cb,
+                       AppendAttributes attrs) noexcept {
+  return append(logid,
+                std::move(payload_group),
+                cb,
+                std::move(attrs),
+                worker_id_t{-1},
+                nullptr);
 }
 
 lsn_t ClientImpl::appendSync(logid_t logid,
@@ -574,12 +597,14 @@ lsn_t ClientImpl::appendSync(logid_t logid,
       this, logid, std::move(payload), std::move(attrs), ts);
 }
 
-lsn_t ClientImpl::appendSync(logid_t /* logid */,
-                             PayloadGroup&& /* payload_group */,
-                             AppendAttributes /* attrs */,
-                             std::chrono::milliseconds* /* ts */) noexcept {
-  err = E::INTERNAL;
-  return LSN_INVALID;
+lsn_t ClientImpl::appendSync(logid_t logid,
+                             PayloadGroup&& payload_group,
+                             AppendAttributes attrs,
+                             std::chrono::milliseconds* ts) noexcept {
+  // TODO this consumes payload_group in case of failure. should return it to
+  // the caller?
+  return append_sync_helper(
+      this, logid, std::move(payload_group), std::move(attrs), ts);
 }
 
 std::unique_ptr<Reader> ClientImpl::createReader(size_t max_logs,
@@ -2232,6 +2257,65 @@ ClientImpl::prepareRequest(logid_t logid,
     return nullptr;
   }
 
+  return createRequest(logid,
+                       std::move(payload),
+                       std::move(cb),
+                       std::move(attrs),
+                       target_worker,
+                       std::move(per_request_token));
+}
+
+std::unique_ptr<AppendRequest>
+ClientImpl::prepareRequest(logid_t logid,
+                           PayloadGroup&& payload_group,
+                           append_callback_t cb,
+                           AppendAttributes attrs,
+                           worker_id_t target_worker,
+                           std::unique_ptr<std::string> per_request_token) {
+  // TODO change serialization to IOBuf once PayloadHolder supports
+  // chained IOBufs
+  std::string encoded = PayloadGroupCodec::encode(payload_group);
+  if (!checkAppend(logid, encoded.size())) {
+    return nullptr;
+  }
+
+  auto payload = std::make_unique<std::string>(std::move(encoded));
+  folly::IOBuf::FreeFunction deleter = +[](void* /* buf */, void* userData) {
+    delete reinterpret_cast<std::string*>(userData);
+  };
+  folly::IOBuf iobuf{folly::IOBuf::TAKE_OWNERSHIP,
+                     payload->data(),
+                     payload->size(),
+                     deleter,
+                     reinterpret_cast<void*>(payload.release())};
+  auto req = createRequest(
+      logid,
+      PayloadHolder{std::move(iobuf)},
+      [cb = std::move(cb), payload_group = std::move(payload_group)](
+          Status st, const DataRecord& r) mutable {
+        // pass PayloadGroup ownership back to the caller
+        DataRecord record{r.logid,
+                          std::move(payload_group),
+                          r.attrs.lsn,
+                          r.attrs.timestamp,
+                          r.attrs.batch_offset,
+                          r.attrs.offsets};
+        cb(st, record);
+      },
+      std::move(attrs),
+      target_worker,
+      std::move(per_request_token));
+  req->setPayloadGroupFlag();
+  return req;
+}
+
+std::unique_ptr<AppendRequest>
+ClientImpl::createRequest(logid_t logid,
+                          PayloadHolder&& payload,
+                          append_callback_t cb,
+                          AppendAttributes attrs,
+                          worker_id_t target_worker,
+                          std::unique_ptr<std::string> per_request_token) {
   auto req = std::make_unique<AppendRequest>(
       bridge_.get(),
       logid,
