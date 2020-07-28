@@ -277,6 +277,7 @@ APPEND_Message::getDebugInfo() const {
     FLAG(CUSTOM_KEY)
     FLAG(NO_ACTIVATION)
     FLAG(CUSTOM_COUNTERS)
+    FLAG(PAYLOAD_GROUP)
 #undef FLAG
     return folly::join('|', strings);
   };

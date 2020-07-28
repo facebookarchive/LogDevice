@@ -226,13 +226,13 @@ struct RecordCopy {
   copyset_t copyset;
   std::chrono::milliseconds timestamp;
   size_t payload_size;
-  // The interesting flags are BUFFERED_WRITER_BLOB and HOLE.
+  // The interesting flags are BUFFERED_WRITER_BLOB, PAYLOAD_GROUP and HOLE.
   RECORD_flags_t flags;
 
   bool sameData(const RecordCopy& rhs) const {
     auto f = [](const RecordCopy& r) {
-      const RECORD_flags_t flag_mask =
-          RECORD_Header::BUFFERED_WRITER_BLOB | RECORD_Header::HOLE;
+      const RECORD_flags_t flag_mask = RECORD_Header::BUFFERED_WRITER_BLOB |
+          RECORD_Header::PAYLOAD_GROUP | RECORD_Header::HOLE;
       return std::make_tuple(
           r.timestamp, r.payload_hash, r.payload_size, r.flags & flag_mask);
     };

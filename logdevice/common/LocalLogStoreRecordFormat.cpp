@@ -985,6 +985,7 @@ std::string flagsToString(flags_t flags) {
   FLAG(SHARD_ID)
   FLAG(OFFSET_MAP)
   FLAG(WRITE_STREAM)
+  FLAG(PAYLOAD_GROUP)
 
 #undef FLAG
 

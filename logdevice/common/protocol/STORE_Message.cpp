@@ -472,6 +472,7 @@ std::string STORE_Message::flagsToString(STORE_flags_t flags) {
   FLAG(EPOCH_BEGIN)
   FLAG(DRAINED)
   FLAG(WRITE_STREAM)
+  FLAG(PAYLOAD_GROUP)
 
 #undef FLAG
 

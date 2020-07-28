@@ -1012,6 +1012,9 @@ EpochRecovery::createMutationHeader(esn_t esn,
     if (record->flags_ & RECORD_Header::BUFFERED_WRITER_BLOB) {
       flags |= STORE_Header::BUFFERED_WRITER_BLOB;
     }
+    if (record->flags_ & RECORD_Header::PAYLOAD_GROUP) {
+      flags |= STORE_Header::PAYLOAD_GROUP;
+    }
     if (record->flags_ & RECORD_Header::INCLUDE_OFFSET_WITHIN_EPOCH) {
       flags |= STORE_Header::OFFSET_WITHIN_EPOCH;
       // TODO (T35832374) : remove if condition when all servers support

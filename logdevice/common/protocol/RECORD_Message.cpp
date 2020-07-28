@@ -353,6 +353,7 @@ std::string RECORD_Message::flagsToString(RECORD_flags_t flags) {
   FLAG(UNDER_REPLICATED_REGION)
   FLAG(DRAINED)
   FLAG(WRITE_STREAM)
+  FLAG(PAYLOAD_GROUP)
 
 #undef FLAG
 

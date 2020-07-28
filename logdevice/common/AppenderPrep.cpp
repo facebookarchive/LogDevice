@@ -403,11 +403,13 @@ std::unique_ptr<Appender> AppenderPrep::constructAppender() {
           APPEND_Header::CHECKSUM_64BIT == STORE_Header::CHECKSUM_64BIT &&
           APPEND_Header::CHECKSUM_PARITY == STORE_Header::CHECKSUM_PARITY &&
           APPEND_Header::BUFFERED_WRITER_BLOB ==
-              STORE_Header::BUFFERED_WRITER_BLOB,
+              STORE_Header::BUFFERED_WRITER_BLOB &&
+          APPEND_Header::PAYLOAD_GROUP == STORE_Header::PAYLOAD_GROUP,
       "");
   STORE_flags_t passthru_flags = header_.flags &
       (APPEND_Header::CHECKSUM | APPEND_Header::CHECKSUM_64BIT |
-       APPEND_Header::CHECKSUM_PARITY | APPEND_Header::BUFFERED_WRITER_BLOB);
+       APPEND_Header::CHECKSUM_PARITY | APPEND_Header::BUFFERED_WRITER_BLOB |
+       APPEND_Header::PAYLOAD_GROUP);
 
   // TODO: This does not account for Appender's PayloadHolder's shared segment.
   //       There is no longer a reason to calculate this externally and pass

@@ -98,7 +98,12 @@ struct RECORD_Header {
   // denotes that record belongs to a write stream. Used mainly during recovery.
   // Flag value must match that of LocalLogStoreRecordFormat::FLAG_WRITE_STREAM
   // and STORE_Header::WRITE_STREAM
-  static const RECORD_flags_t WRITE_STREAM = 1u << 22; // 4194304
+  static const RECORD_flags_t WRITE_STREAM = 1u << 22; //=4194304
+
+  // Record contains serialized PayloadGroup.
+  // Flag value must match that of LocalLogStoreRecordFormat::FLAG_PAYLOAD_GROUP
+  // and STORE_Header::PAYLOAD_GROUP
+  static const RECORD_flags_t PAYLOAD_GROUP = 1u << 23; //=8388608
 
   // Please update RECORD_Message::flagsToString() when adding flags.
 

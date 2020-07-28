@@ -120,6 +120,9 @@ const flags_t FLAG_OFFSET_MAP = 1u << 21; //=2097152
 // Indicates if the record belongs to a write stream.
 const flags_t FLAG_WRITE_STREAM = 1u << 22; //=4194304
 
+// Record contains serialized PayloadGroup.
+const flags_t FLAG_PAYLOAD_GROUP = 1u << 23; //=8388608
+
 // Please update flagsToString() when adding new flags.
 
 // Flags that indicate that the record in question is a pseudorecord, and can
@@ -132,7 +135,7 @@ const flags_t PSEUDORECORD_MASK =
 const flags_t FLAG_MASK = FLAG_CHECKSUM | FLAG_CHECKSUM_64BIT |
     FLAG_CHECKSUM_PARITY | FLAG_HOLE | FLAG_BUFFERED_WRITER_BLOB |
     FLAG_WRITTEN_BY_RECOVERY | FLAG_BRIDGE | FLAG_EPOCH_BEGIN | FLAG_DRAINED |
-    FLAG_WRITE_STREAM;
+    FLAG_WRITE_STREAM | FLAG_PAYLOAD_GROUP;
 
 static_assert(FLAG_CHECKSUM == RECORD_Header::CHECKSUM &&
                   FLAG_CHECKSUM_64BIT == RECORD_Header::CHECKSUM_64BIT &&
@@ -145,7 +148,8 @@ static_assert(FLAG_CHECKSUM == RECORD_Header::CHECKSUM &&
                   FLAG_BRIDGE == RECORD_Header::BRIDGE &&
                   FLAG_EPOCH_BEGIN == RECORD_Header::EPOCH_BEGIN &&
                   FLAG_DRAINED == RECORD_Header::DRAINED &&
-                  FLAG_WRITE_STREAM == RECORD_Header::WRITE_STREAM,
+                  FLAG_WRITE_STREAM == RECORD_Header::WRITE_STREAM &&
+                  FLAG_PAYLOAD_GROUP == RECORD_Header::PAYLOAD_GROUP,
               "Flag constants don't match");
 
 static_assert(FLAG_CHECKSUM == STORE_Header::CHECKSUM &&
@@ -157,7 +161,8 @@ static_assert(FLAG_CHECKSUM == STORE_Header::CHECKSUM &&
                   FLAG_BRIDGE == STORE_Header::BRIDGE &&
                   FLAG_EPOCH_BEGIN == STORE_Header::EPOCH_BEGIN &&
                   FLAG_DRAINED == STORE_Header::DRAINED &&
-                  FLAG_WRITE_STREAM == STORE_Header::WRITE_STREAM,
+                  FLAG_WRITE_STREAM == STORE_Header::WRITE_STREAM &&
+                  FLAG_PAYLOAD_GROUP == STORE_Header::PAYLOAD_GROUP,
               "Flag constants don't match");
 
 using csi_flags_t = uint8_t;

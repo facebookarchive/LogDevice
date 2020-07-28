@@ -166,6 +166,9 @@ struct STORE_Header {
   // RECORD_Header::WRITE_STREAM
   static const STORE_flags_t WRITE_STREAM = 1u << 22; //=4194304
 
+  // Record contains serialized PayloadGroup
+  static const STORE_flags_t PAYLOAD_GROUP = 1u << 23; //=8388608
+
   // Please update STORE_Message::flagsToString() when adding flags.
 } __attribute__((__packed__));
 

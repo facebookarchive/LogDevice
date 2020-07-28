@@ -444,7 +444,8 @@ class APPEND_MessageTest_MockAppender : public Appender {
   STORE_flags_t passthru_flags(STORE_flags_t flags) {
     return flags &
         (APPEND_Header::CHECKSUM | APPEND_Header::CHECKSUM_64BIT |
-         APPEND_Header::CHECKSUM_PARITY | APPEND_Header::BUFFERED_WRITER_BLOB);
+         APPEND_Header::CHECKSUM_PARITY | APPEND_Header::BUFFERED_WRITER_BLOB |
+         APPEND_Header::PAYLOAD_GROUP);
   }
 };
 using MockAppender = APPEND_MessageTest_MockAppender;
