@@ -16,6 +16,57 @@
 
 namespace facebook { namespace logdevice {
 
+/** Codec for batches of single payloads */
+class BufferedWriteSinglePayloadsCodec {
+ public:
+  class Encoder {
+   public:
+    /**
+     * Creates encoder with specified capacity for the encoding buffer
+     * (uncompressed). In addition to capacity, a headroom can be reserved.
+     * encode ensures that returned IOBuf has this headroom available.
+     */
+    Encoder(size_t capacity, size_t headroom);
+
+    /** Appends single payload to the batch. */
+    void append(const folly::IOBuf& payload);
+
+    /*
+     * Encodes and compressess payloads. If compressing payloads with requested
+     * compresssion doesn't improve required space, then it can be left
+     * uncompressed. compression parameter is updated accordingly.
+     */
+    void encode(folly::IOBufQueue& out,
+                Compression& compression,
+                int zstd_level = 0);
+
+   private:
+    /**
+     * Replaces blob with compressed blob if compression saves some space and
+     * returns true. Otherwise leaves blob as is and returns false.
+     */
+    bool compress(Compression compression, int zstd_level);
+
+    // Payloads are appended to the blob_ using appender_ */
+    folly::IOBuf blob_;
+    folly::io::Appender appender_;
+  };
+
+  /** Estimator for uncompressed batch size. */
+  class Estimator {
+   public:
+    /** Appends payload to the batch */
+    void append(const folly::IOBuf& payload);
+
+    /** Returns size of current batch in encoded form */
+    size_t calculateSize() const;
+
+   private:
+    // Number of bytes required to encode payloads.
+    size_t encoded_payloads_size_ = 0;
+  };
+};
+
 /**
  * Codec for encoding/decoding buffered writes.
  */
@@ -46,22 +97,14 @@ class BufferedWriteCodec {
                 int zstd_level = 0);
 
    private:
-    /**
-     * Replaces blob with compressed blob if compression saves some space and
-     * returns true. Otherwise leaves blob as is and returns false.
-     */
-    bool compress(Compression compression, int zstd_level);
-
-    /** Writes header (checksum, flags, etc) to the blob */
-    void encodeHeader(Compression compression);
+    /** Writes header (checksum, flags, etc) to the blob's headroom */
+    void encodeHeader(folly::IOBuf& blob, Compression compression);
 
     int checksum_bits_;
     size_t appends_count_;
     size_t header_size_;
 
-    // Payloads are appended to the blob_ using appender_ */
-    folly::IOBuf blob_;
-    folly::io::Appender appender_;
+    BufferedWriteSinglePayloadsCodec::Encoder payloads_encoder_;
   };
 
   /**
@@ -83,8 +126,7 @@ class BufferedWriteCodec {
    private:
     // Appends count is required to calculate header size correctly
     size_t appends_count_ = 0;
-    // Number of bytes required to encode payloads only (without header).
-    size_t encoded_payloads_size_ = 0;
+    BufferedWriteSinglePayloadsCodec::Estimator payloads_estimator_;
   };
 };
 
