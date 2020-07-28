@@ -38,6 +38,16 @@ struct DataRecordOwnsPayload : public DataRecord {
                         bool invalid_checksum = false);
 
   DataRecordOwnsPayload(logid_t log_id,
+                        PayloadGroup&& payload_group,
+                        lsn_t lsn,
+                        std::chrono::milliseconds timestamp,
+                        RECORD_flags_t flags,
+                        std::unique_ptr<ExtraMetadata> extra_metadata = nullptr,
+                        int batch_offset = 0,
+                        RecordOffset offsets = RecordOffset(),
+                        bool invalid_checksum = false);
+
+  DataRecordOwnsPayload(logid_t log_id,
                         Payload payload,
                         std::shared_ptr<BufferedWriteDecoder> decoder,
                         lsn_t lsn,

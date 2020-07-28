@@ -37,6 +37,26 @@ DataRecordOwnsPayload::DataRecordOwnsPayload(
 
 DataRecordOwnsPayload::DataRecordOwnsPayload(
     logid_t log_id,
+    PayloadGroup&& payload_group,
+    lsn_t lsn,
+    std::chrono::milliseconds timestamp,
+    RECORD_flags_t flags,
+    std::unique_ptr<ExtraMetadata> extra_metadata,
+    int batch_offset,
+    RecordOffset offsets,
+    bool invalid_checksum)
+    : DataRecord(log_id,
+                 std::move(payload_group),
+                 lsn,
+                 timestamp,
+                 batch_offset,
+                 std::move(offsets)),
+      flags_(flags),
+      invalid_checksum_(invalid_checksum),
+      extra_metadata_(std::move(extra_metadata)) {}
+
+DataRecordOwnsPayload::DataRecordOwnsPayload(
+    logid_t log_id,
     Payload payload,
     std::shared_ptr<BufferedWriteDecoder> decoder,
     lsn_t lsn,

@@ -10,10 +10,12 @@
 #include <thread>
 
 #include <folly/Conv.h>
+#include <folly/Overload.h>
 #include <folly/Random.h>
 #include <folly/hash/Checksum.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/PayloadGroupCodec.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReadStreamAttributes.h"
 #include "logdevice/common/ReaderImpl.h"
@@ -100,19 +102,33 @@ TEST_P(ReadingIntegrationTest, AsyncReaderTest) {
   const logid_t logid(2);
   const size_t num_records = 10;
   // a map <lsn, data> for appended records
-  std::map<lsn_t, std::string> lsn_map;
+  using PayloadVariant = std::variant<std::string, PayloadGroup>;
+  std::map<lsn_t, PayloadVariant> lsn_map;
 
   lsn_t first_lsn = LSN_INVALID;
   for (int i = 0; i < num_records; ++i) {
-    std::string data("data" + std::to_string(i));
-    lsn_t lsn = client->appendSync(logid, Payload(data.data(), data.size()));
+    lsn_t lsn;
+    PayloadVariant payload;
+    if (i % 2 == 0) {
+      std::string data("data" + std::to_string(i));
+      lsn = client->appendSync(logid, Payload(data.data(), data.size()));
+      payload = data;
+    } else {
+      std::string data1("data1." + std::to_string(i));
+      std::string data2("data2." + std::to_string(i));
+      PayloadGroup payload_group = {
+          {0, folly::IOBuf::wrapBufferAsValue(data1.data(), data1.size())},
+          {5, folly::IOBuf::wrapBufferAsValue(data2.data(), data2.size())}};
+      lsn = client->appendSync(logid, folly::copy(payload_group));
+      payload = std::move(payload_group);
+    }
     EXPECT_NE(LSN_INVALID, lsn);
     if (first_lsn == LSN_INVALID) {
       first_lsn = lsn;
     }
 
     EXPECT_EQ(lsn_map.end(), lsn_map.find(lsn));
-    lsn_map[lsn] = data;
+    lsn_map[lsn] = payload;
   }
 
   cluster->waitForRecovery();
@@ -129,15 +145,24 @@ TEST_P(ReadingIntegrationTest, AsyncReaderTest) {
   auto record_cb = [&](std::unique_ptr<DataRecord>& r) {
     EXPECT_EQ(logid, r->logid);
     EXPECT_NE(lsn_map.cend(), it);
-    EXPECT_EQ(it->first, r->attrs.lsn);
+    const auto& [expected_lsn, expected_payload_variant] = *it;
+    EXPECT_EQ(expected_lsn, r->attrs.lsn);
     const Payload& p = r->payload;
     if (has_payload) {
       EXPECT_NE(nullptr, p.data());
-      EXPECT_EQ(it->second.size(), p.size());
-      EXPECT_EQ(it->second, p.toString());
+      std::visit(folly::overload(
+                     [&](const std::string& expected_payload) {
+                       EXPECT_EQ(expected_payload.size(), p.size());
+                       EXPECT_EQ(expected_payload, p.toString());
+                     },
+                     [&](const PayloadGroup& expected_payload) {
+                       EXPECT_EQ(expected_payload.size(), r->payloads.size());
+                     }),
+                 expected_payload_variant);
     } else {
       EXPECT_EQ(nullptr, p.data());
       EXPECT_EQ(0, p.size());
+      EXPECT_TRUE(r->payloads.empty());
     }
     if (++it == lsn_map.cend()) {
       sem.post();
@@ -835,6 +860,13 @@ static std::pair<uint32_t, uint32_t> calc_hash(const std::string& s) {
       (uint32_t)s.size(), folly::crc32c((const uint8_t*)s.data(), s.size()));
 }
 
+static std::pair<uint32_t, uint32_t>
+calc_hash(const PayloadGroup& payload_group) {
+  std::string s = PayloadGroupCodec::encode(payload_group);
+  return std::make_pair(
+      (uint32_t)s.size(), folly::crc32c((const uint8_t*)s.data(), s.size()));
+}
+
 // Parse the hash returned by a reader with PAYLOAD_HASH_ONLY flag.
 static std::pair<uint32_t, uint32_t> parse_hash(Payload payload) {
   std::pair<uint32_t, uint32_t> res;
@@ -861,14 +893,20 @@ TEST_P(ReadingIntegrationTest, PayloadHashOnly) {
   std::shared_ptr<Client> client = cluster->createClient();
   ASSERT_TRUE((bool)client);
 
-  std::string payload1 = "abra";
-  std::string payload2 = "cadabra";
+  const std::string payload1 = "abra";
+  const std::string payload2 = "cadabra";
+  const PayloadGroup payload3 = {
+      {1, folly::IOBuf::wrapBufferAsValue(payload1.data(), payload1.size())},
+      {2, folly::IOBuf::wrapBufferAsValue(payload2.data(), payload2.size())}};
 
   lsn_t lsn1 = client->appendSync(LOG_ID, payload1);
   ASSERT_NE(LSN_INVALID, lsn1);
   lsn_t lsn2 = client->appendSync(LOG_ID, payload2);
   ASSERT_NE(LSN_INVALID, lsn2);
   ASSERT_EQ(lsn1 + 1, lsn2);
+  lsn_t lsn3 = client->appendSync(LOG_ID, folly::copy(payload3));
+  ASSERT_NE(LSN_INVALID, lsn3);
+  ASSERT_EQ(lsn2 + 1, lsn3);
 
   std::unique_ptr<Reader> reader = client->createReader(1);
   auto reader_impl = dynamic_cast<ReaderImpl*>(reader.get());
@@ -894,12 +932,14 @@ TEST_P(ReadingIntegrationTest, PayloadHashOnly) {
   ASSERT_EQ(lsn1 - 1, gap.hi);
   ASSERT_EQ(GapType::BRIDGE, gap.type);
 
-  nread = reader->read(2, &recs, &gap);
-  ASSERT_EQ(2, nread);
+  nread = reader->read(3, &recs, &gap);
+  ASSERT_EQ(3, nread);
   EXPECT_EQ(lsn1, recs[0]->attrs.lsn);
   EXPECT_EQ(calc_hash(payload1), parse_hash(recs[0]->payload));
   EXPECT_EQ(lsn2, recs[1]->attrs.lsn);
   EXPECT_EQ(calc_hash(payload2), parse_hash(recs[1]->payload));
+  EXPECT_EQ(lsn3, recs[2]->attrs.lsn);
+  EXPECT_EQ(calc_hash(payload3), parse_hash(recs[2]->payload));
 }
 
 TEST_P(ReadingIntegrationTest, LogTailAttributes) {

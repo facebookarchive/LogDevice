@@ -16,6 +16,7 @@
 
 #include <folly/CppAttributes.h>
 #include <folly/Memory.h>
+#include <folly/Overload.h>
 #include <folly/String.h>
 
 #include "logdevice/common/AdminCommandTable.h"
@@ -29,6 +30,7 @@
 #include "logdevice/common/EpochMetaDataCache.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
+#include "logdevice/common/PayloadGroupCodec.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
 #include "logdevice/common/Sender.h"
@@ -911,6 +913,60 @@ void ClientReadStream::onStarted(ShardID from, const STARTED_Message& msg) {
   disposeIfDone();
 }
 
+namespace {
+
+/**
+ * Creates DataRecordOwnsPayload from RawDataRecord with specified payload.
+ */
+template <typename T>
+std::unique_ptr<DataRecordOwnsPayload>
+create_data_record(std::unique_ptr<RawDataRecord> record, T&& payload) {
+  static_assert(std::is_rvalue_reference_v<T&&>);
+  return std::make_unique<DataRecordOwnsPayload>(
+      record->logid,
+      std::move(payload),
+      record->attrs.lsn,
+      record->attrs.timestamp,
+      record->flags,
+      std::move(record->extra_metadata),
+      record->attrs.batch_offset,
+      std::move(record->attrs.offsets),
+      record->invalid_checksum);
+}
+
+} // namespace
+
+ClientReadStream::DecodedPayload
+ClientReadStream::decodePayload(const RawDataRecord& record) const {
+  if (UNLIKELY(additional_start_flags_ & START_Header::NO_PAYLOAD)) {
+    // Reading without payload: create empty record.
+    if (record.payload.size() != 0) {
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      1,
+                      "Unexpected payload of size %lu in NO_PAYLOAD stream",
+                      record.payload.size());
+    }
+    // Create with empty payload group to ensure all payloads are empty.
+    return PayloadGroup{};
+  }
+  if (UNLIKELY((additional_start_flags_ & START_Header::PAYLOAD_HASH_ONLY))) {
+    // Reading hash only: ignore record flags and pass raw payload to reader.
+    // In this case payload contains encoded size and hash of the raw payload.
+    return record.payload;
+  }
+  if (record.flags & RECORD_Header::PAYLOAD_GROUP) {
+    // Record contains single payload group.
+    PayloadGroup payload_group;
+    if (PayloadGroupCodec::decode(
+            Slice(record.payload.getPayload()), payload_group) != 0) {
+      return payload_group;
+    }
+    // Failed to decode payload.
+    return nullptr;
+  }
+  return record.payload;
+}
+
 void ClientReadStream::onDataRecord(ShardID shard,
                                     std::unique_ptr<RawDataRecord> record) {
   ld_check(!done());
@@ -927,7 +983,7 @@ void ClientReadStream::onDataRecord(ShardID shard,
   // (3) Buffer: this is one of the next records we will deliver to the
   //     application.
 
-  lsn_t lsn = record->attrs.lsn;
+  const lsn_t lsn = record->attrs.lsn;
 
   ld_spew("Log=%lu,%s%s,%s from %s, next_lsn_to_deliver=%s",
           log_id_.val_,
@@ -1038,6 +1094,20 @@ void ClientReadStream::onDataRecord(ShardID shard,
     return;
   }
 
+  // Try to decode payload and mark record as corrupted if it fails
+  DecodedPayload decoded_payload;
+  if (lsn >= next_lsn_to_deliver_ && !record->invalid_checksum) {
+    RecordState* rstate = buffer_->find(lsn);
+    if (rstate == nullptr || rstate->record == nullptr ||
+        rstate->record_corrupted) {
+      decoded_payload = decodePayload(*record);
+      if (std::holds_alternative<std::nullptr_t>(decoded_payload)) {
+        // Failed to decode payload
+        record->invalid_checksum = true;
+      }
+    }
+  }
+
   if (record->invalid_checksum && !ship_corrupted_records_) {
     // issuing a gap instead of shipping a record with an invalid checksum
     GAP_Header gap_header = {log_id_,
@@ -1121,20 +1191,30 @@ void ClientReadStream::onDataRecord(ShardID shard,
                                       trim_point_,
                                       readSetSize());
 
-    if (!rstate->record) {
+    if (!rstate->record || rstate->record_corrupted) {
       // Updating info reg. buffer usage.
       bytes_buffered_ += record->payload.size();
-      // TODO deserialize PayloadGroup
-      auto data_record = std::make_unique<DataRecordOwnsPayload>(
-          record->logid,
-          std::move(record->payload),
-          record->attrs.lsn,
-          record->attrs.timestamp,
-          record->flags,
-          std::move(record->extra_metadata),
-          record->attrs.batch_offset,
-          std::move(record->attrs.offsets),
-          record->invalid_checksum);
+      std::unique_ptr<DataRecordOwnsPayload> data_record;
+      std::visit(folly::overload(
+                     [&](auto& payload) {
+                       // Decoding was successful
+                       data_record = create_data_record(
+                           std::move(record), std::move(payload));
+                       rstate->record_corrupted = false;
+                     },
+                     [&](std::nullptr_t) {
+                       // Payload is corrupted: this code is only reachable if
+                       // shipping corrupted records is enabled.
+                       ld_check(ship_corrupted_records_);
+                       // Just put raw data as payload and mark record state as
+                       // corrupted so that decoding can be retried with other
+                       // shards
+                       auto payload = std::move(record->payload);
+                       data_record = create_data_record(
+                           std::move(record), std::move(payload));
+                       rstate->record_corrupted = true;
+                     }),
+                 decoded_payload);
       rstate->record = std::move(data_record);
     }
     // This shard won't send us anything before `lsn'+1.

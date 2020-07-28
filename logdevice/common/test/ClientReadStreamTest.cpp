@@ -14,10 +14,12 @@
 
 #include <folly/MapUtil.h>
 #include <folly/Memory.h>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/PayloadGroupCodec.h"
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/ShardAuthoritativeStatusMap.h"
 #include "logdevice/common/Timer.h"
@@ -46,6 +48,8 @@
 #define N3 ShardID(3, 0)
 #define N4 ShardID(4, 0)
 #define N5 ShardID(5, 0)
+
+using namespace testing;
 
 namespace facebook { namespace logdevice {
 
@@ -220,7 +224,12 @@ struct TestState {
  */
 class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
  public:
-  explicit MockClientReadStreamDependencies(TestState& state) : state_(state) {}
+  explicit MockClientReadStreamDependencies(TestState* state) : state_(*state) {
+    ON_CALL(*this, recordCallback(_))
+        .WillByDefault(Invoke([&](std::unique_ptr<DataRecord>& record) {
+          return recordCallbackImpl(record);
+        }));
+  }
 
   bool getMetaDataForEpoch(read_stream_id_t /*rsid*/,
                            epoch_t epoch,
@@ -301,7 +310,8 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
     return 0;
   }
 
-  bool recordCallback(std::unique_ptr<DataRecord>& record) override {
+  MOCK_METHOD1(recordCallback, bool(std::unique_ptr<DataRecord>& record));
+  bool recordCallbackImpl(std::unique_ptr<DataRecord>& record) {
     state_.recv.push_back(record->attrs.lsn);
     return state_.callbacks_accepting;
   }
@@ -314,6 +324,9 @@ class MockClientReadStreamDependencies : public ClientReadStreamDependencies {
   void healthCallback(bool is_healthy) override {
     state_.connection_healthy = is_healthy;
   }
+
+  MOCK_METHOD2(recordCopyCallback,
+               void(ShardID from, const RawDataRecord* record));
 
   void dispose() override {
     state_.disposed = true;
@@ -387,6 +400,29 @@ static std::unique_ptr<RawDataRecord> mockRecord(lsn_t lsn,
       LOG_ID, PayloadHolder::copyString("data"), lsn, timestamp, flags);
 }
 
+static std::unique_ptr<RawDataRecord> mockRecord(lsn_t lsn,
+                                                 const std::string& data,
+                                                 RECORD_flags_t flags = 0) {
+  std::chrono::milliseconds timestamp(0);
+
+  return std::make_unique<RawDataRecord>(
+      LOG_ID, PayloadHolder::copyString(data), lsn, timestamp, flags);
+}
+
+static std::unique_ptr<RawDataRecord>
+mockRecord(lsn_t lsn,
+           const std::unordered_map<PayloadKey, std::string>& data,
+           RECORD_flags_t flags = 0) {
+  auto record = mockRecord(lsn, flags | RECORD_Header::PAYLOAD_GROUP);
+  PayloadGroup payload_group;
+  for (const auto& [key, value] : data) {
+    payload_group[key] = *folly::IOBuf::copyBuffer(value.data(), value.size());
+  }
+  record->payload =
+      PayloadHolder::copyString(PayloadGroupCodec::encode(payload_group));
+  return record;
+}
+
 static GAP_Message mockGap(ShardID shard,
                            lsn_t lo,
                            lsn_t hi,
@@ -427,8 +463,8 @@ class ClientReadStreamTest
 
   void start(logid_t logid = LOG_ID,
              const ReadStreamAttributes* attrs = nullptr) {
-    std::unique_ptr<ClientReadStreamDependencies> deps(
-        new MockClientReadStreamDependencies(state_));
+    deps_ = new NiceMock<MockClientReadStreamDependencies>(&state_);
+    std::unique_ptr<ClientReadStreamDependencies> deps(deps_);
 
     updateConfig();
     read_stream_ = std::make_unique<ClientReadStream>(
@@ -456,6 +492,12 @@ class ClientReadStreamTest
     }
     if (do_not_skip_partially_trimmed_sections_) {
       read_stream_->doNotSkipPartiallyTrimmedSections();
+    }
+    if (ship_corrupted_records_) {
+      read_stream_->shipCorruptedRecords();
+    }
+    if (wait_for_all_copies_) {
+      read_stream_->waitForAllCopies();
     }
 
     read_stream_->start();
@@ -701,6 +743,8 @@ class ClientReadStreamTest
 
   void runTestSteps(std::vector<TestStep> steps);
 
+  MockClientReadStreamDependencies* deps_ = nullptr;
+
   lsn_t start_lsn_ = LSN_MIN;
   lsn_t until_lsn_ = LSN_MAX;
   double flow_control_threshold_ = 0.5;
@@ -713,6 +757,8 @@ class ClientReadStreamTest
   bool scd_enabled_ = false;
   bool ignore_released_status_ = false;
   bool do_not_skip_partially_trimmed_sections_ = false;
+  bool ship_corrupted_records_ = false;
+  bool wait_for_all_copies_ = false;
   std::unordered_map<node_index_t, std::string> node_locations_;
 
   TestState state_;
@@ -867,11 +913,11 @@ INSTANTIATE_TEST_CASE_P(
  */
 TEST_P(ClientReadStreamTest, Simple) {
   start();
-  onDataRecord(N0, mockRecord(lsn(1, 1)));
+  onDataRecord(N0, mockRecord(lsn(1, 1), {{0, "payload10"}}));
   ASSERT_RECV(lsn(1, 1));
   onDataRecord(N1, mockRecord(lsn(1, 2)));
   ASSERT_RECV(lsn(1, 2));
-  onDataRecord(N0, mockRecord(lsn(1, 3)));
+  onDataRecord(N0, mockRecord(lsn(1, 3), {{0, "payload30"}, {1, "payload31"}}));
   ASSERT_RECV(lsn(1, 3));
   onDataRecord(N2, mockRecord(lsn(1, 4)));
   ASSERT_RECV(lsn(1, 4));
@@ -884,11 +930,11 @@ TEST_P(ClientReadStreamTest, Buffering) {
   buffer_size_ = 3;
   start();
   onDataRecord(N0, mockRecord(lsn(1, 2)));
-  onDataRecord(N0, mockRecord(lsn(1, 3)));
+  onDataRecord(N0, mockRecord(lsn(1, 3), {{0, "payload30"}}));
   ASSERT_RECV();
   onDataRecord(N1, mockRecord(lsn(1, 1)));
   ASSERT_RECV(lsn(1, 1), lsn(1, 2), lsn(1, 3));
-  onDataRecord(N0, mockRecord(lsn(1, 5)));
+  onDataRecord(N0, mockRecord(lsn(1, 5), {{0, "payload50"}, {1, "payload51"}}));
   onDataRecord(N0, mockRecord(lsn(1, 6)));
   ASSERT_RECV();
   onDataRecord(N1, mockRecord(lsn(1, 4)));
@@ -916,6 +962,173 @@ TEST_P(ClientReadStreamTest, Deduplication) {
   onDataRecord(N2, mockRecord(lsn(1, 2)));
   onDataRecord(N3, mockRecord(lsn(1, 2)));
   ASSERT_RECV(lsn(1, 2), lsn(1, 3));
+}
+
+TEST_P(ClientReadStreamTest, CorruptedRegularRecord) {
+  state_.shards.resize(2);
+  start();
+
+  // Both copies are corrupted
+  auto record_N0_1 = mockRecord(lsn(1, 1));
+  record_N0_1->invalid_checksum = true;
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(0);
+  onDataRecord(N0, std::move(record_N0_1));
+  // should wait for the second shard
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  auto record_N1_1 = mockRecord(lsn(1, 1));
+  record_N1_1->invalid_checksum = true;
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(0);
+  onDataRecord(N1, std::move(record_N1_1));
+  ASSERT_RECV();
+  // TODO this seems like a wrong type of gap
+  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(1, 1), lsn(1, 1)});
+
+  // Only first copy is corrupted
+  auto record_N0_2 = mockRecord(lsn(1, 2));
+  record_N0_2->invalid_checksum = true;
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(0);
+  onDataRecord(N0, std::move(record_N0_2));
+  // should wait for the second shard
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  auto record_N1_2 = mockRecord(lsn(1, 2));
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  onDataRecord(N1, std::move(record_N1_2));
+  ASSERT_GAP_MESSAGES();
+  ASSERT_RECV(lsn(1, 2));
+}
+
+TEST_P(ClientReadStreamTest, CorruptedPayloadGroupRecord) {
+  state_.shards.resize(2);
+  start();
+
+  // Both copies are corrupted
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(0);
+  // this delivers undecodable record with valid checksum
+  onDataRecord(N0, mockRecord(lsn(1, 1), RECORD_Header::PAYLOAD_GROUP));
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(0);
+  // this delivers undecodable record with valid checksum
+  onDataRecord(N1, mockRecord(lsn(1, 1), RECORD_Header::PAYLOAD_GROUP));
+  ASSERT_RECV();
+  // TODO this seems like a wrong type of gap
+  ASSERT_GAP_MESSAGES(GapMessage{GapType::BRIDGE, lsn(1, 1), lsn(1, 1)});
+
+  // Only first copy is corrupted
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(0);
+  // this delivers undecodable record with valid checksum
+  onDataRecord(N0, mockRecord(lsn(1, 2), RECORD_Header::PAYLOAD_GROUP));
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  EXPECT_CALL(*deps_, recordCallback(_)).WillOnce(Invoke([&](auto& record) {
+    EXPECT_EQ(record->payloads.size(), 2);
+    return deps_->recordCallbackImpl(record);
+  }));
+  onDataRecord(N1, mockRecord(lsn(1, 2), {{1, "payload1"}, {2, "payload2"}}));
+  ASSERT_GAP_MESSAGES();
+  ASSERT_RECV(lsn(1, 2));
+}
+
+TEST_P(ClientReadStreamTest, CorruptedRegularRecordShipCorrupted) {
+  state_.shards.resize(2);
+  ship_corrupted_records_ = true;
+  wait_for_all_copies_ = true;
+  start();
+
+  const std::string corrupted = "corrupted";
+
+  // Both copies are corrupted
+  auto record_N0_1 = mockRecord(lsn(1, 1), corrupted);
+  record_N0_1->invalid_checksum = true;
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  onDataRecord(N0, std::move(record_N0_1));
+  // should wait for the second shard
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  auto record_N1_1 = mockRecord(lsn(1, 1), corrupted);
+  record_N1_1->invalid_checksum = true;
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  EXPECT_CALL(*deps_, recordCallback(_)).WillOnce(Invoke([&](auto& record) {
+    EXPECT_EQ(record->payload.toString(), corrupted);
+    return deps_->recordCallbackImpl(record);
+  }));
+  onDataRecord(N1, std::move(record_N1_1));
+  ASSERT_RECV(lsn(1, 1));
+
+  // Only first copy is corrupted
+  auto record_N0_2 = mockRecord(lsn(1, 2), corrupted);
+  record_N0_2->invalid_checksum = true;
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  onDataRecord(N0, std::move(record_N0_2));
+  // should wait for the second shard
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  const std::string data = "data";
+  auto record_N1_2 = mockRecord(lsn(1, 2), data);
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  EXPECT_CALL(*deps_, recordCallback(_)).WillOnce(Invoke([&](auto& record) {
+    EXPECT_EQ(record->payload.toString(), data);
+    return deps_->recordCallbackImpl(record);
+  }));
+  onDataRecord(N1, std::move(record_N1_2));
+  ASSERT_GAP_MESSAGES();
+  ASSERT_RECV(lsn(1, 2));
+}
+
+TEST_P(ClientReadStreamTest, CorruptedPayloadGroupShipCorrupted) {
+  state_.shards.resize(2);
+  ship_corrupted_records_ = true;
+  wait_for_all_copies_ = true;
+  start();
+
+  const std::string corrupted = "corrupted";
+
+  // Both copies are corrupted
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  // this delivers undecodable record with valid checksum
+  onDataRecord(
+      N0, mockRecord(lsn(1, 1), corrupted, RECORD_Header::PAYLOAD_GROUP));
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  EXPECT_CALL(*deps_, recordCallback(_)).WillOnce(Invoke([&](auto& record) {
+    // raw corrupted payload should be delivered
+    EXPECT_EQ(record->payloads.size(), 1);
+    EXPECT_EQ(record->payloads.count(0), 1);
+    EXPECT_EQ(record->payload.toString(), corrupted);
+    return deps_->recordCallbackImpl(record);
+  }));
+  // this delivers undecodable record with valid checksum
+  onDataRecord(
+      N1, mockRecord(lsn(1, 1), corrupted, RECORD_Header::PAYLOAD_GROUP));
+  ASSERT_RECV(lsn(1, 1));
+
+  // Only first copy is corrupted
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  // this delivers undecodable record with valid checksum
+  onDataRecord(N0, mockRecord(lsn(1, 2), RECORD_Header::PAYLOAD_GROUP));
+  ASSERT_RECV();
+  ASSERT_GAP_MESSAGES();
+
+  EXPECT_CALL(*deps_, recordCopyCallback(_, _)).Times(1);
+  EXPECT_CALL(*deps_, recordCallback(_)).WillOnce(Invoke([&](auto& record) {
+    EXPECT_EQ(record->payloads.size(), 2);
+    EXPECT_EQ(record->payload.data(), nullptr);
+    return deps_->recordCallbackImpl(record);
+  }));
+  onDataRecord(N1, mockRecord(lsn(1, 2), {{1, "payload1"}, {2, "payload2"}}));
+  ASSERT_GAP_MESSAGES();
+  ASSERT_RECV(lsn(1, 2));
 }
 
 /**

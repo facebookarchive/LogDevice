@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <queue>
@@ -389,6 +390,12 @@ struct ClientReadStreamRecordState {
   std::unique_ptr<DataRecordOwnsPayload> record{};
 
   /**
+   * Indicates that record is corrupted (can be set if shipping corrupted
+   * records is enabled), and record->payload can be some garbage.
+   */
+  bool record_corrupted = false;
+
+  /**
    * List of storage shards for which one of the records the shard delivered
    * has this LSN, or which sent a gap message for this LSN.
    *
@@ -423,6 +430,13 @@ class ClientReadStream : boost::noncopyable {
   using SenderState = ClientReadStreamSenderState;
   using RecordState = ClientReadStreamRecordState;
   using GapState = SenderState::GapState;
+
+  /**
+   * Contains possible outcomes of payload decoding.
+   * nullptr is used to indicate decoding failure.
+   */
+  using DecodedPayload =
+      std::variant<std::nullptr_t, PayloadHolder, PayloadGroup>;
 
  public:
   using GapFailureDomain =
@@ -847,6 +861,14 @@ class ClientReadStream : boost::noncopyable {
    * ie the front of `buffer_` contains a record.
    */
   bool canDeliverRecordsNow() const;
+
+  /**
+   * Decodes raw data record payload into payload suitable for delivery to the
+   * client, taking into account different delivery modes, such as NO_PAYLOAD
+   * and PAYLOAD_HASH_ONLY.
+   * @return nullptr if decoding fails. In this case record is left intact.
+   */
+  DecodedPayload decodePayload(const RawDataRecord& record) const;
 
   /**
    * Delivers the record and pops it from buffer, updating state accordingly.
