@@ -43,8 +43,14 @@ class PayloadGroupCodec {
      */
     void append(folly::IOBuf&& payload);
 
-    /** Encodes all currently added payloads to a binary representation. */
-    void encode(folly::IOBufQueue& out);
+    /**
+     * Encodes all currently added payloads to a binary representation.
+     * Encoder must not be re-used after calling this.
+     * zstd_level must be specified if ZSTD compression is used.
+     */
+    void encode(folly::IOBufQueue& out,
+                Compression compression,
+                int zstd_level = 0);
 
    private:
     /**

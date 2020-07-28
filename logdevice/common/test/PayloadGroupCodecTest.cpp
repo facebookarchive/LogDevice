@@ -204,7 +204,7 @@ TEST_P(PayloadGroupEncoderTest, EncodeDecodeMatch) {
     encoder.append(payload_group);
 
     folly::IOBufQueue queue;
-    encoder.encode(queue);
+    encoder.encode(queue, Compression::NONE);
     folly::IOBuf encoded = queue.moveAsValue();
     encoded.coalesce();
 
@@ -221,7 +221,7 @@ TEST_P(PayloadGroupEncoderTest, EncodeDecodeMatch) {
 TEST_F(PayloadGroupEncoderTest, NoAppends) {
   folly::IOBufQueue queue;
   PayloadGroupCodec::Encoder encoder(0);
-  encoder.encode(queue);
+  encoder.encode(queue, Compression::NONE);
   folly::IOBuf encoded = queue.moveAsValue();
   encoded.coalesce();
   std::vector<PayloadGroup> decoded;
@@ -230,6 +230,58 @@ TEST_F(PayloadGroupEncoderTest, NoAppends) {
   EXPECT_EQ(consumed, encoded.length());
   EXPECT_TRUE(decoded.empty());
 }
+
+class PayloadGroupEncoderCompressionTest
+    : public ::testing::TestWithParam<Compression> {};
+
+TEST_P(PayloadGroupEncoderCompressionTest, CompressUncompress) {
+  const PayloadKey compressible_key = 0;
+  const PayloadKey incompressible_key = 1;
+  std::vector<PayloadGroup> payload_groups_in = {
+      from_map({{compressible_key, std::string(1024, 'a')}}),
+      from_map({{compressible_key, std::string(1024, 'b')},
+                {incompressible_key, "A"}}),
+      from_map({{incompressible_key, "b"}}),
+  };
+
+  PayloadGroupCodec::Encoder encoder(payload_groups_in.size());
+
+  for (const auto& payload_group : payload_groups_in) {
+    encoder.append(payload_group);
+  }
+  const Compression compression = GetParam();
+  folly::IOBufQueue queue;
+  encoder.encode(queue, compression, 1);
+
+  folly::IOBuf encoded = queue.moveAsValue();
+  encoded.coalesce();
+  thrift::CompressedPayloadGroups compressed_payload_groups;
+  size_t size = ThriftCodec::deserialize<ThriftSerializer>(
+      Slice(encoded.data(), encoded.length()), compressed_payload_groups);
+  CHECK_NE(size, 0);
+  EXPECT_EQ(*compressed_payload_groups.payloads_ref()
+                 ->at(compressible_key)
+                 .compression_ref(),
+            static_cast<int>(compression));
+  EXPECT_EQ(*compressed_payload_groups.payloads_ref()
+                 ->at(incompressible_key)
+                 .compression_ref(),
+            static_cast<int>(Compression::NONE));
+
+  std::vector<PayloadGroup> payload_groups_out;
+  size_t consumed = PayloadGroupCodec::decode(
+      Slice(encoded.data(), encoded.length()), payload_groups_out);
+  EXPECT_EQ(consumed, encoded.length());
+
+  EXPECT_THAT(payload_groups_out,
+              testing::Pointwise(PayloadGroupEq(), payload_groups_in));
+}
+
+INSTANTIATE_TEST_CASE_P(CompressUncompress,
+                        PayloadGroupEncoderCompressionTest,
+                        ::testing::Values(Compression::LZ4,
+                                          Compression::LZ4_HC,
+                                          Compression::ZSTD));
 
 class PayloadGroupEstimatorTest
     : public ::testing::TestWithParam<std::vector<PayloadGroup>> {};
@@ -247,7 +299,7 @@ TEST_P(PayloadGroupEstimatorTest, EstimateMatch) {
     encoder.append(payload_group);
 
     folly::IOBufQueue encoded{folly::IOBufQueue::cacheChainLength()};
-    encoder.encode(encoded);
+    encoder.encode(encoded, Compression::NONE);
     EXPECT_EQ(estimator.calculateSize(), encoded.chainLength());
   }
 }
@@ -255,7 +307,7 @@ TEST_P(PayloadGroupEstimatorTest, EstimateMatch) {
 TEST_P(PayloadGroupEstimatorTest, NoAppends) {
   folly::IOBufQueue encoded{folly::IOBufQueue::cacheChainLength()};
   PayloadGroupCodec::Encoder encoder(0);
-  encoder.encode(encoded);
+  encoder.encode(encoded, Compression::NONE);
   PayloadGroupCodec::Estimator estimator;
   EXPECT_EQ(estimator.calculateSize(), encoded.chainLength());
   encoded.move().reset();

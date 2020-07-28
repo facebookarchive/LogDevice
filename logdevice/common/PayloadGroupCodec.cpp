@@ -9,6 +9,7 @@
 #include "logdevice/common/PayloadGroupCodec.h"
 
 #include <folly/Likely.h>
+#include <folly/compression/Compression.h>
 #include <folly/io/IOBufQueue.h>
 
 #include "logdevice/common/ThriftCodec.h"
@@ -47,6 +48,85 @@ const size_t empty_payload_descriptor_encoded_bytes = [] {
   thrift::OptionalPayloadDescriptor payload_descriptor;
   return ThriftCodec::serialize<ThriftSerializer>(payload_descriptor).size();
 }();
+
+/** Creates codec for compression/uncompression. */
+std::unique_ptr<folly::io::Codec>
+createCompressionCodec(Compression compression,
+                       int level = folly::io::COMPRESSION_LEVEL_DEFAULT) {
+  switch (compression) {
+    case Compression::NONE:
+      return folly::io::getCodec(folly::io::CodecType::NO_COMPRESSION);
+    case Compression::LZ4:
+      return folly::io::getCodec(
+          folly::io::CodecType::LZ4, folly::io::COMPRESSION_LEVEL_DEFAULT);
+    case Compression::LZ4_HC:
+      return folly::io::getCodec(
+          folly::io::CodecType::LZ4, folly::io::COMPRESSION_LEVEL_BEST);
+    case Compression::ZSTD:
+      return folly::io::getCodec(folly::io::CodecType::ZSTD, level);
+  }
+  return nullptr;
+}
+
+/** Compresses all payloads in place. */
+void compress(thrift::CompressedPayloadGroups& payload_groups,
+              Compression compression,
+              int zstd_level) {
+  if (compression == Compression::NONE) {
+    return;
+  }
+  auto codec = createCompressionCodec(compression, zstd_level);
+  ld_check(codec);
+  for (auto& [key, compressed_payloads] : *payload_groups.payloads_ref()) {
+    auto compressed =
+        codec->compress(&compressed_payloads.payload_ref().value());
+    if (compressed->computeChainDataLength() <
+        compressed_payloads.payload_ref()->computeChainDataLength()) {
+      compressed_payloads.compression_ref() = static_cast<int>(compression);
+      compressed_payloads.payload_ref() = std::move(*compressed);
+    }
+  }
+}
+
+/** Uncompresses all payloads in place. */
+FOLLY_NODISCARD
+int uncompress(thrift::CompressedPayloadGroups& compressed_payload_groups) {
+  for (auto& [key, compressed_payloads] :
+       *compressed_payload_groups.payloads_ref()) {
+    auto codec = createCompressionCodec(
+        static_cast<Compression>(*compressed_payloads.compression_ref()));
+    if (codec == nullptr) {
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      1,
+                      "Failed to create codec %d for key %d",
+                      *compressed_payloads.compression_ref(),
+                      key);
+      err = E::BADMSG;
+      return -1;
+    }
+    size_t uncompressed_size = 0;
+    for (const auto& opt_desc : *compressed_payloads.descriptors_ref()) {
+      if (const auto& desc = opt_desc.descriptor_ref()) {
+        uncompressed_size += *desc->uncompressed_size_ref();
+      }
+    }
+    try {
+      compressed_payloads.payload_ref() = *codec->uncompress(
+          &compressed_payloads.payload_ref().value(), uncompressed_size);
+      compressed_payloads.compression_ref() =
+          static_cast<int>(Compression::NONE);
+    } catch (const std::runtime_error& e) {
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      1,
+                      "Failed to uncompress payloads for key %d: %s",
+                      key,
+                      e.what());
+      err = E::BADMSG;
+      return -1;
+    }
+  }
+  return 0;
+}
 
 } // namespace
 
@@ -128,7 +208,10 @@ void PayloadGroupCodec::Encoder::append(const PayloadGroup& payload_group) {
   }
 }
 
-void PayloadGroupCodec::Encoder::encode(folly::IOBufQueue& out) {
+void PayloadGroupCodec::Encoder::encode(folly::IOBufQueue& out,
+                                        Compression compression,
+                                        int zstd_level) {
+  compress(encoded_payload_groups_, compression, zstd_level);
   ThriftCodec::serialize<ThriftSerializer>(
       encoded_payload_groups_,
       &out,
@@ -296,30 +379,13 @@ int convert(thrift::CompressedPayloadGroups&& compressed_payload_groups,
   return 0;
 }
 
-/**
- * Uncompresses all payloads in place.
- */
-FOLLY_NODISCARD
-int uncompress(thrift::CompressedPayloadGroups& compressed_payload_groups) {
-  for (auto& [key, compressed_payloads] :
-       *compressed_payload_groups.payloads_ref()) {
-    // TODO compression/uncompression is not currently supported
-    if (compressed_payloads.compression_ref() !=
-        static_cast<int8_t>(Compression::NONE)) {
-      err = E::BADMSG;
-      return -1;
-    }
-  }
-  return 0;
-}
-
 } // namespace
 
 void PayloadGroupCodec::encode(const PayloadGroup& payload_group,
                                folly::IOBufQueue& out) {
   Encoder encoder(1);
   encoder.append(payload_group);
-  encoder.encode(out);
+  encoder.encode(out, Compression::NONE);
 }
 
 void PayloadGroupCodec::encode(const std::vector<PayloadGroup>& payload_groups,
@@ -328,7 +394,7 @@ void PayloadGroupCodec::encode(const std::vector<PayloadGroup>& payload_groups,
   for (const auto& payload_group : payload_groups) {
     encoder.append(payload_group);
   }
-  encoder.encode(out);
+  encoder.encode(out, Compression::NONE);
 }
 
 size_t PayloadGroupCodec::decode(Slice binary,
