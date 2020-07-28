@@ -34,10 +34,29 @@ double extract_timestamp(DataRecord const& record) {
  * transport binary data back to the Python layer.
  */
 object extract_payload(DataRecord const& record) {
-  return object(handle<>(PyBytes_FromStringAndSize(
-      static_cast<const char*>(record.payload.data()), record.payload.size())));
+  if (record.payload.data()) {
+    return object(handle<>(PyBytes_FromStringAndSize(
+        static_cast<const char*>(record.payload.data()),
+        record.payload.size())));
+  } else {
+    return object();
+  }
 }
 
+/**
+ * Return the payloads of the DataRecord, as a Python dict representing
+ * PayloadGroup; since NULL bytes don't terminate the Python string, this can
+ * also transport binary data back to the Python layer.
+ */
+dict extract_payloads(DataRecord const& record) {
+  dict payloads;
+  for (const auto& [key, payload] : record.payloads) {
+    auto bytes = payload.cloneCoalescedAsValue();
+    payloads[key] = object(handle<>(PyBytes_FromStringAndSize(
+        reinterpret_cast<const char*>(bytes.data()), bytes.length())));
+  }
+  return payloads;
+}
 } // namespace
 
 void register_logdevice_record() {
@@ -49,7 +68,8 @@ A record that was written to a log, containing a data payload.
       .add_property("logid", &extract_data_logid)
       .add_property("lsn", &extract_lsn)
       .add_property("timestamp", &extract_timestamp)
-      .add_property("payload", &extract_payload);
+      .add_property("payload", &extract_payload)
+      .add_property("payloads", &extract_payloads);
 
   static const char* GapRecord_doc = R"DOC(
 A gap in the numbering sequence of a log, which can occur during reading.

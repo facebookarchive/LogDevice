@@ -76,6 +76,8 @@ class LogDeviceIntegrationTest(TestCase):
                         data.payload,
                     )
                 )
+                self.assertEqual(len(data.payloads), 1)
+                self.assertEqual(data.payloads[0], data.payload)
                 records.append(data.payload)
                 if len(records) >= 4:
                     reader.stop_iteration()
