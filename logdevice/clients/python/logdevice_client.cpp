@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <type_traits>
+#include <variant>
 
 #include <boost/format.hpp>
 #include <boost/python.hpp>
@@ -278,12 +279,48 @@ tuple logdevice_get_head_attributes(Client& self, logid_t logid) {
   }
 }
 
+namespace {
+folly::IOBuf string_to_iobuf(std::string&& s) {
+  auto data = std::make_unique<std::string>(std::move(s));
+  folly::IOBuf::FreeFunction deleter = +[](void* /* buf */, void* userData) {
+    delete reinterpret_cast<std::string*>(userData);
+  };
+  return folly::IOBuf{folly::IOBuf::TAKE_OWNERSHIP,
+                      data->data(),
+                      data->size(),
+                      deleter,
+                      reinterpret_cast<void*>(data.release())};
+}
+
+std::variant<std::string, PayloadGroup> extract_payload(const object& from,
+                                                        const char* name) {
+  extract<dict> get_dict(from);
+  if (get_dict.check()) {
+    PayloadGroup payload_group;
+    list items = get_dict().items();
+    for (int i = 0; i < len(items); i++) {
+      auto key = extract<int>(items[i][0]);
+      auto payload = extract_string(items[i][1], name);
+      payload_group[key] = string_to_iobuf(std::move(payload));
+    }
+    return payload_group;
+  } else {
+    return extract_string(from, name);
+  }
+}
+
+} // namespace
+
 lsn_t logdevice_append(Client& self, logid_t logid, object data) {
   lsn_t lsn;
-  std::string pl = extract_string(data, "data");
+  auto pl = extract_payload(data, "data");
   {
     gil_release_and_guard guard;
-    lsn = self.appendSync(logid, std::move(pl));
+    std::visit(
+        [&](auto& payload) {
+          lsn = self.appendSync(logid, std::move(payload));
+        },
+        pl);
   }
   if (lsn != LSN_INVALID)
     return lsn;

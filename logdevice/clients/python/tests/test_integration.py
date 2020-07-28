@@ -45,8 +45,21 @@ class LogDeviceIntegrationTest(TestCase):
         client = self.client()
         logid = 1
 
-        raw_messages = [b"you say", b"goodbye", b"i say", b"hello"]
-        messages = ["you say", "goodbye", b"i say", "hello"]
+        raw_payloads = [None, b"goodbye", b"i say", b"hello", None]
+        raw_payload_groups = [
+            {1: b"you say", 2: b"i say"},
+            {0: b"goodbye"},
+            {0: b"i say", 1: b"you say"},
+            {0: b"hello"},
+            {},
+        ]
+        messages = [
+            {1: "you say", 2: b"i say"},
+            b"goodbye",
+            {0: b"i say", 1: "you say"},
+            "hello",
+            {},
+        ]
 
         for body in messages:
             client.append(logid, body)
@@ -76,16 +89,15 @@ class LogDeviceIntegrationTest(TestCase):
                         data.payload,
                     )
                 )
-                self.assertEqual(len(data.payloads), 1)
-                self.assertEqual(data.payloads[0], data.payload)
-                records.append(data.payload)
-                if len(records) >= 4:
+                records.append(data)
+                if len(records) >= len(messages):
                     reader.stop_iteration()
 
         reader.stop_reading(logid)
         print("timeout while reading records, exiting")
 
-        self.assertEqual(raw_messages, records)
+        self.assertEqual(raw_payloads, [r.payload for r in records])
+        self.assertEqual(raw_payload_groups, [r.payloads for r in records])
 
     def test_client_create(self):
         name = "cluster_name?"
