@@ -52,21 +52,61 @@ folly::IOBuf encode(const PayloadGroup& payload_group) {
 }
 
 using ThriftSerializer = apache::thrift::BinarySerializer;
-thrift::CompressedPayloadGroups to_thrift(const PayloadGroup& payload_group) {
-  auto encoded = encode(payload_group);
-  encoded.coalesce();
 
+void to_thrift(
+    const folly::IOBuf& encoded,
+    std::map<PayloadKey, thrift::CompressedPayloadsMetadata>& metadata_out,
+    std::map<PayloadKey, folly::IOBuf>& payloads_out) {
   thrift::CompressedPayloadGroups compressed_payload_groups;
   size_t size = ThriftCodec::deserialize<ThriftSerializer>(
-      Slice(encoded.data(), encoded.length()), compressed_payload_groups);
+      &encoded, compressed_payload_groups);
   CHECK_NE(size, 0);
 
-  return compressed_payload_groups;
+  for (auto& [key, compressed_payloads] :
+       *compressed_payload_groups.payloads_ref()) {
+    CHECK_EQ(*compressed_payloads.metadata_compression_ref(),
+             static_cast<int8_t>(Compression::NONE));
+
+    size = ThriftCodec::deserialize<ThriftSerializer>(
+        &compressed_payloads.compressed_metadata_ref().value(),
+        metadata_out[key]);
+    CHECK_NE(size, 0);
+    payloads_out[key] =
+        std::move(*compressed_payloads.compressed_payloads_ref());
+  }
 }
 
-size_t
-from_thrift(const thrift::CompressedPayloadGroups& compressed_payload_groups,
-            PayloadGroup& payload_group_out) {
+void to_thrift(
+    const PayloadGroup& payload_group,
+    std::map<PayloadKey, thrift::CompressedPayloadsMetadata>& metadata_out,
+    std::map<PayloadKey, folly::IOBuf>& payloads_out) {
+  auto encoded = encode(payload_group);
+  encoded.coalesce();
+  to_thrift(encoded, metadata_out, payloads_out);
+}
+
+size_t from_thrift(
+    const std::map<PayloadKey, thrift::CompressedPayloadsMetadata>& metadata,
+    const std::map<PayloadKey, folly::IOBuf>& payloads,
+    PayloadGroup& payload_group_out) {
+  thrift::CompressedPayloadGroups compressed_payload_groups;
+
+  for (auto& [key, payload] : payloads) {
+    folly::IOBufQueue queue;
+
+    ThriftCodec::serialize<ThriftSerializer>(metadata.at(key), &queue);
+
+    auto& compressed_payloads = compressed_payload_groups.payloads_ref()[key];
+    compressed_payloads.metadata_compression_ref() =
+        static_cast<int8_t>(Compression::NONE);
+    compressed_payloads.compressed_metadata_ref() = queue.moveAsValue();
+    compressed_payloads.metadata_uncompressed_size_ref() =
+        compressed_payloads.compressed_metadata_ref()->computeChainDataLength();
+    compressed_payloads.payloads_compression_ref() =
+        static_cast<int8_t>(Compression::NONE);
+    compressed_payloads.compressed_payloads_ref() = payload;
+  }
+
   folly::IOBufQueue queue;
   ThriftCodec::serialize<ThriftSerializer>(compressed_payload_groups, &queue);
   auto encoded = queue.move();
@@ -107,62 +147,60 @@ TEST_F(PayloadGroupCodecTest, FailDecodeCorruptDescriptors) {
   const PayloadKey key = 1;
   PayloadGroup payload_group_in =
       from_map({{key, "payload1"}, {42, "payload42"}});
-  thrift::CompressedPayloadGroups compressed_payload_groups =
-      to_thrift(payload_group_in);
+  std::map<PayloadKey, thrift::CompressedPayloadsMetadata> metadata;
+  std::map<PayloadKey, folly::IOBuf> payloads;
+  to_thrift(payload_group_in, metadata, payloads);
 
   // make sure thrift is correct
   PayloadGroup payload_group_out;
-  EXPECT_NE(from_thrift(compressed_payload_groups, payload_group_out), 0);
+  EXPECT_NE(from_thrift(metadata, payloads, payload_group_out), 0);
 
   // add extra descriptor - should fail decoding
   err = E::OK;
-  compressed_payload_groups.payloads_ref()[key]
-      .descriptors_ref()
-      ->emplace_back();
-  EXPECT_EQ(from_thrift(compressed_payload_groups, payload_group_out), 0);
+  metadata[key].descriptors_ref()->emplace_back();
+  EXPECT_EQ(from_thrift(metadata, payloads, payload_group_out), 0);
   EXPECT_EQ(err, E::BADMSG);
 
-  compressed_payload_groups.payloads_ref()[key].descriptors_ref()->pop_back();
+  metadata[key].descriptors_ref()->pop_back();
 
   // negative payload size
   err = E::OK;
-  compressed_payload_groups.payloads_ref()[key]
+  metadata[key]
       .descriptors_ref()
       ->back()
       .descriptor_ref()
       ->uncompressed_size_ref() = -5;
-  EXPECT_EQ(from_thrift(compressed_payload_groups, payload_group_out), 0);
+  EXPECT_EQ(from_thrift(metadata, payloads, payload_group_out), 0);
   EXPECT_EQ(err, E::BADMSG);
 
   // remove descriptors - should fail decoding
   err = E::OK;
-  compressed_payload_groups.payloads_ref()[key].descriptors_ref()->pop_back();
-  EXPECT_EQ(from_thrift(compressed_payload_groups, payload_group_out), 0);
+  metadata[key].descriptors_ref()->pop_back();
+  EXPECT_EQ(from_thrift(metadata, payloads, payload_group_out), 0);
   EXPECT_EQ(err, E::BADMSG);
 }
 
 TEST_F(PayloadGroupCodecTest, FailDecodeCorruptPayload) {
   const PayloadKey key = 1;
   PayloadGroup payload_group_in = from_map({{key, "payload1"}});
-  thrift::CompressedPayloadGroups compressed_payload_groups =
-      to_thrift(payload_group_in);
+  std::map<PayloadKey, thrift::CompressedPayloadsMetadata> metadata;
+  std::map<PayloadKey, folly::IOBuf> payloads;
+  to_thrift(payload_group_in, metadata, payloads);
 
   // make sure thrift is correct
   PayloadGroup payload_group_out;
-  EXPECT_NE(from_thrift(compressed_payload_groups, payload_group_out), 0);
+  EXPECT_NE(from_thrift(metadata, payloads, payload_group_out), 0);
 
   // extra data in payload - should fail decoding
   err = E::OK;
-  compressed_payload_groups.payloads_ref()[key].payload_ref()->prependChain(
-      folly::IOBuf::copyBuffer("extra"));
-  EXPECT_EQ(from_thrift(compressed_payload_groups, payload_group_out), 0);
+  payloads[key].prependChain(folly::IOBuf::copyBuffer("extra"));
+  EXPECT_EQ(from_thrift(metadata, payloads, payload_group_out), 0);
   EXPECT_EQ(err, E::BADMSG);
 
   // not enough data in payload - should fail decoding
   err = E::OK;
-  compressed_payload_groups.payloads_ref()[key].payload_ref() =
-      *folly::IOBuf::copyBuffer("damaged");
-  EXPECT_EQ(from_thrift(compressed_payload_groups, payload_group_out), 0);
+  payloads[key] = *folly::IOBuf::copyBuffer("damaged");
+  EXPECT_EQ(from_thrift(metadata, payloads, payload_group_out), 0);
   EXPECT_EQ(err, E::BADMSG);
 }
 
@@ -201,12 +239,18 @@ MATCHER(PayloadGroupEq, "") {
 TEST_P(PayloadGroupEncoderTest, EncodeDecodeMatch) {
   const auto& payload_groups = GetParam();
 
-  PayloadGroupCodec::Encoder encoder(payload_groups.size());
+  // Loop to test intermediate results
+  for (int i = 1; i <= payload_groups.size(); i++) {
+    PayloadGroupCodec::Encoder encoder(i);
 
-  std::vector<PayloadGroup> payload_groups_in;
-  for (const auto& payload_group : payload_groups) {
-    payload_groups_in.push_back(payload_group);
-    encoder.append(payload_group);
+    std::vector<PayloadGroup> payload_groups_in;
+    for (const auto& payload_group : payload_groups) {
+      payload_groups_in.push_back(payload_group);
+      encoder.append(payload_group);
+      if (payload_groups_in.size() == i) {
+        break;
+      }
+    }
 
     folly::IOBufQueue queue;
     encoder.encode(queue, Compression::NONE);
@@ -315,24 +359,21 @@ TEST_P(PayloadGroupEncoderCompressionTest, CompressUncompress) {
 
   folly::IOBuf encoded = queue.moveAsValue();
   encoded.coalesce();
-  thrift::CompressedPayloadGroups compressed_payload_groups;
-  size_t size = ThriftCodec::deserialize<ThriftSerializer>(
-      Slice(encoded.data(), encoded.length()), compressed_payload_groups);
-  CHECK_NE(size, 0);
-  EXPECT_EQ(*compressed_payload_groups.payloads_ref()
-                 ->at(compressible_key)
-                 .compression_ref(),
-            static_cast<int>(compression));
-  EXPECT_EQ(*compressed_payload_groups.payloads_ref()
-                 ->at(incompressible_key)
-                 .compression_ref(),
-            static_cast<int>(Compression::NONE));
+
+  CompressedPayloadGroups compressed_payload_groups;
+  size_t consumed;
+  consumed = PayloadGroupCodec::decode(
+      encoded, compressed_payload_groups, /* allow_buffer_sharing */ false);
+  EXPECT_EQ(consumed, encoded.length());
+  EXPECT_EQ(
+      compressed_payload_groups.at(compressible_key).compression, compression);
+  EXPECT_EQ(compressed_payload_groups.at(incompressible_key).compression,
+            Compression::NONE);
 
   std::vector<PayloadGroup> payload_groups_out;
-  size_t consumed =
-      PayloadGroupCodec::decode(Slice(encoded.data(), encoded.length()),
-                                payload_groups_out,
-                                /* allow_buffer_sharing */ true);
+  consumed = PayloadGroupCodec::decode(Slice(encoded.data(), encoded.length()),
+                                       payload_groups_out,
+                                       /* allow_buffer_sharing */ true);
   EXPECT_EQ(consumed, encoded.length());
 
   EXPECT_THAT(payload_groups_out,
@@ -351,14 +392,20 @@ class PayloadGroupEstimatorTest
 TEST_P(PayloadGroupEstimatorTest, EstimateMatch) {
   const auto& payload_groups = GetParam();
 
-  PayloadGroupCodec::Estimator estimator;
-  PayloadGroupCodec::Encoder encoder(payload_groups.size());
+  // Loop to test intermediate results
+  for (int i = 1; i <= payload_groups.size(); i++) {
+    PayloadGroupCodec::Estimator estimator;
+    PayloadGroupCodec::Encoder encoder(i);
 
-  std::vector<PayloadGroup> payload_groups_in;
-  for (const auto& payload_group : payload_groups) {
-    payload_groups_in.push_back(payload_group);
-    estimator.append(payload_group);
-    encoder.append(payload_group);
+    std::vector<PayloadGroup> payload_groups_in;
+    for (const auto& payload_group : payload_groups) {
+      payload_groups_in.push_back(payload_group);
+      estimator.append(payload_group);
+      encoder.append(payload_group);
+      if (payload_groups_in.size() == i) {
+        break;
+      }
+    }
 
     folly::IOBufQueue encoded{folly::IOBufQueue::cacheChainLength()};
     encoder.encode(encoded, Compression::NONE);

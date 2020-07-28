@@ -30,11 +30,13 @@ const size_t empty_groups_encoded_bytes = [] {
 
 const size_t new_payloads_encoded_bytes = [] {
   // When new payload key is added, the cost of adding it includes storing the
-  // key and value in payloads map. Calculate it by serializing a group with
-  // only one key added and subtract empty groups size.
+  // key, value and metadata in payloads map. Calculate it by serializing a
+  // group with only one key added and subtract empty groups size.
   thrift::CompressedPayloadGroups payload_groups;
+  thrift::CompressedPayloadsMetadata metadata;
   payload_groups.payloads_ref().ensure()[0] = {};
-  return ThriftCodec::serialize<ThriftSerializer>(payload_groups).size() -
+  return ThriftCodec::serialize<ThriftSerializer>(payload_groups).size() +
+      ThriftCodec::serialize<ThriftSerializer>(metadata).size() -
       empty_groups_encoded_bytes;
 }();
 
@@ -68,72 +70,48 @@ createCompressionCodec(Compression compression,
   return nullptr;
 }
 
-/** Compresses all payloads in place. */
-void compress(thrift::CompressedPayloadGroups& payload_groups,
-              Compression compression,
-              int zstd_level) {
+/**
+ * Compresses payload in place and returns compression method used. It can
+ * decide to skip compression if compression does not reduce size of payload.
+ */
+Compression compress(Compression compression,
+                     int zstd_level,
+                     folly::IOBuf& payload) {
   if (compression == Compression::NONE) {
-    return;
+    return compression;
   }
   auto codec = createCompressionCodec(compression, zstd_level);
   ld_check(codec);
-  for (auto& [key, compressed_payloads] : *payload_groups.payloads_ref()) {
-    auto compressed =
-        codec->compress(&compressed_payloads.payload_ref().value());
-    if (compressed->computeChainDataLength() <
-        compressed_payloads.payload_ref()->computeChainDataLength()) {
-      compressed_payloads.compression_ref() = static_cast<int>(compression);
-      compressed_payloads.payload_ref() = std::move(*compressed);
-    }
+  auto compressed = codec->compress(&payload);
+  if (compressed->computeChainDataLength() < payload.computeChainDataLength()) {
+    payload = std::move(*compressed);
+    return compression;
   }
+  return Compression::NONE;
 }
 
-/** Uncompresses all payloads in place. */
-FOLLY_NODISCARD
-int uncompress(thrift::CompressedPayloadGroups& compressed_payload_groups) {
-  for (auto& [key, compressed_payloads] :
-       *compressed_payload_groups.payloads_ref()) {
-    auto codec = createCompressionCodec(
-        static_cast<Compression>(*compressed_payloads.compression_ref()));
-    if (codec == nullptr) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Failed to create codec %d for key %d",
-                      *compressed_payloads.compression_ref(),
-                      key);
-      err = E::BADMSG;
-      return -1;
-    }
-    size_t uncompressed_size = 0;
-    for (const auto& opt_desc : *compressed_payloads.descriptors_ref()) {
-      if (const auto& desc = opt_desc.descriptor_ref()) {
-        uncompressed_size += *desc->uncompressed_size_ref();
-      }
-    }
-    try {
-      compressed_payloads.payload_ref() = *codec->uncompress(
-          &compressed_payloads.payload_ref().value(), uncompressed_size);
-      compressed_payloads.compression_ref() =
-          static_cast<int>(Compression::NONE);
-    } catch (const std::runtime_error& e) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Failed to uncompress payloads for key %d: %s",
-                      key,
-                      e.what());
-      err = E::BADMSG;
-      return -1;
-    }
+folly::Optional<folly::IOBuf> uncompress(Compression compression,
+                                         size_t uncompressed_size,
+                                         const folly::IOBuf& payload) {
+  auto codec = createCompressionCodec(compression);
+  if (codec == nullptr) {
+    return folly::none;
   }
-  return 0;
+  try {
+    return *codec->uncompress(&payload, uncompressed_size);
+  } catch (const std::exception& e) {
+    RATELIMIT_ERROR(std::chrono::seconds(1),
+                    1,
+                    "Failed to uncompress payload: %s",
+                    e.what());
+    return folly::none;
+  }
 }
 
 } // namespace
 
 PayloadGroupCodec::Encoder::Encoder(size_t expected_appends_count)
-    : expected_appends_count_(expected_appends_count) {
-  encoded_payload_groups_.payloads_ref().ensure();
-}
+    : expected_appends_count_(expected_appends_count) {}
 
 void PayloadGroupCodec::Encoder::append(folly::IOBuf&& payload) {
   PayloadGroup payload_group{{0, std::move(payload)}};
@@ -142,13 +120,10 @@ void PayloadGroupCodec::Encoder::append(folly::IOBuf&& payload) {
 
 void PayloadGroupCodec::Encoder::update(PayloadKey key,
                                         const folly::IOBuf* iobuf) {
-  auto [it, inserted] =
-      encoded_payload_groups_.payloads_ref()->try_emplace(key);
+  auto [it, inserted] = encoded_payload_groups_.try_emplace(key);
   auto& encoded_payloads = it->second;
-  auto& descriptors = encoded_payloads.descriptors_ref().ensure();
+  auto& descriptors = encoded_payloads.metadata.descriptors_ref().ensure();
   if (inserted) {
-    encoded_payloads.compression_ref() = static_cast<int8_t>(Compression::NONE);
-    encoded_payloads.payload_ref().ensure();
     descriptors.reserve(expected_appends_count_);
     descriptors.resize(appends_count_);
   }
@@ -159,7 +134,7 @@ void PayloadGroupCodec::Encoder::update(PayloadKey key,
     ld_check(!descriptors.empty());
     auto& desc = descriptors.back().descriptor_ref().emplace();
     desc.uncompressed_size_ref() = iobuf->computeChainDataLength();
-    encoded_payloads.payload_ref()->prependChain(iobuf->clone());
+    encoded_payloads.payloads.prependChain(iobuf->clone());
   }
 }
 
@@ -167,9 +142,8 @@ void PayloadGroupCodec::Encoder::append(const PayloadGroup& payload_group) {
   appends_count_++;
 
   // Add empty descriptor for each known key.
-  for (auto& [key, encoded_payloads] :
-       *encoded_payload_groups_.payloads_ref()) {
-    encoded_payloads.descriptors_ref()->emplace_back();
+  for (auto& [key, encoded_payloads] : encoded_payload_groups_) {
+    encoded_payloads.metadata.descriptors_ref()->emplace_back();
   }
 
   // Now update payloads and descriptors for the appended group.
@@ -181,13 +155,13 @@ void PayloadGroupCodec::Encoder::append(const PayloadGroup& payload_group) {
     // to use a temporary key to encode payload and change this key once first
     // non-empty payload is appended.
     PayloadKey key;
-    if (encoded_payload_groups_.payloads_ref()->empty()) {
+    if (encoded_payload_groups_.empty()) {
       // use temporary key
       key = tmp_empty_key;
       contains_only_empty_groups_ = true;
     } else {
       // reuse existing key (note: it can be from the previous empty payload)
-      key = encoded_payload_groups_.payloads_ref()->begin()->first;
+      key = encoded_payload_groups_.begin()->first;
     }
     update(key, nullptr);
   } else {
@@ -195,10 +169,9 @@ void PayloadGroupCodec::Encoder::append(const PayloadGroup& payload_group) {
       // update temporary key used to encode empty payloads
       const PayloadKey key = payload_group.begin()->first;
       if (key != tmp_empty_key) {
-        auto node =
-            encoded_payload_groups_.payloads_ref()->extract(tmp_empty_key);
+        auto node = encoded_payload_groups_.extract(tmp_empty_key);
         node.key() = key;
-        encoded_payload_groups_.payloads_ref()->insert(std::move(node));
+        encoded_payload_groups_.insert(std::move(node));
       }
       contains_only_empty_groups_ = false;
     }
@@ -211,9 +184,32 @@ void PayloadGroupCodec::Encoder::append(const PayloadGroup& payload_group) {
 void PayloadGroupCodec::Encoder::encode(folly::IOBufQueue& out,
                                         Compression compression,
                                         int zstd_level) {
-  compress(encoded_payload_groups_, compression, zstd_level);
+  thrift::CompressedPayloadGroups thrift;
+  thrift.payloads_ref().ensure();
+  for (auto& [key, encoded_payloads] : encoded_payload_groups_) {
+    auto& compressed_payloads = thrift.payloads_ref()[key];
+
+    // Serialize and compress metadata.
+    folly::IOBufQueue queue;
+    ThriftCodec::serialize<ThriftSerializer>(encoded_payloads.metadata, &queue);
+    compressed_payloads.compressed_metadata_ref() = queue.moveAsValue();
+    compressed_payloads.metadata_uncompressed_size_ref() =
+        compressed_payloads.compressed_metadata_ref()->computeChainDataLength();
+    compressed_payloads.metadata_compression_ref() = static_cast<int8_t>(
+        compress(compression,
+                 zstd_level,
+                 *compressed_payloads.compressed_metadata_ref()));
+
+    // Compress payloads.
+    compressed_payloads.compressed_payloads_ref() =
+        std::move(encoded_payloads.payloads);
+    compressed_payloads.payloads_compression_ref() = static_cast<int8_t>(
+        compress(compression,
+                 zstd_level,
+                 *compressed_payloads.compressed_payloads_ref()));
+  }
   ThriftCodec::serialize<ThriftSerializer>(
-      encoded_payload_groups_,
+      thrift,
       &out,
       apache::thrift::ExternalBufferSharing::SHARE_EXTERNAL_BUFFER);
 }
@@ -285,102 +281,6 @@ void PayloadGroupCodec::Estimator::append(const PayloadGroup& payload_group) {
   }
 }
 
-namespace {
-
-/**
- * Converts uncompressed Thrift representation to a vector of PayloadGroups.
- * Returns 0 if successful.
- */
-FOLLY_NODISCARD
-int convert(thrift::CompressedPayloadGroups&& compressed_payload_groups,
-            std::vector<PayloadGroup>& payload_groups_out) {
-  auto& group_payloads = *compressed_payload_groups.payloads_ref();
-  if (group_payloads.empty()) {
-    // nothing to convert
-    return 0;
-  }
-
-  // all descriptors should have same size, so use first one to reserve capacity
-  const size_t size = group_payloads.cbegin()->second.descriptors_ref()->size();
-
-  std::vector<PayloadGroup> decoded_groups{size};
-  for (auto& [key, compressed_payloads] : group_payloads) {
-    // this function must not be called for compresssed payloads
-    ld_check(*compressed_payloads.compression_ref() ==
-             static_cast<int>(Compression::NONE));
-
-    if (compressed_payloads.descriptors_ref()->size() != size) {
-      RATELIMIT_ERROR(std::chrono::seconds(1),
-                      1,
-                      "Descriptors size %zu of key %d doesn't match "
-                      "descriptors size %zu of key %d",
-                      size,
-                      group_payloads.cbegin()->first,
-                      compressed_payloads.descriptors_ref()->size(),
-                      key);
-      err = E::BADMSG;
-      return -1;
-    }
-
-    // split compressed_payload.payload into pieces according to the
-    // uncompressed_size specified in descriptors
-    size_t index = 0;
-    folly::io::Cursor cursor{&compressed_payloads.payload_ref().value()};
-    for (const auto& opt_descriptor : *compressed_payloads.descriptors_ref()) {
-      if (auto descriptor = opt_descriptor.descriptor_ref()) {
-        const auto uncompressed_size = *descriptor->uncompressed_size_ref();
-        if (uncompressed_size < 0) {
-          RATELIMIT_ERROR(std::chrono::seconds(1),
-                          1,
-                          "Negative payload size (%d) for key %d",
-                          uncompressed_size,
-                          key);
-          err = E::BADMSG;
-          return -1;
-        }
-        folly::IOBuf iobuf;
-        if (cursor.cloneAtMost(iobuf, uncompressed_size) != uncompressed_size) {
-          RATELIMIT_ERROR(std::chrono::seconds(1),
-                          1,
-                          "Underflow while splitting payload for key %d: "
-                          "%d bytes expected, but only %lu bytes remaining",
-                          key,
-                          uncompressed_size,
-                          iobuf.computeChainDataLength());
-          err = E::BADMSG;
-          return -1;
-        }
-        decoded_groups[index][key] = std::move(iobuf);
-      }
-      ++index;
-    }
-    if (!cursor.isAtEnd()) {
-      // all payload should be consumed at this point
-      // if more data is remaining then something is wrong with descriptors of
-      // payload
-      RATELIMIT_ERROR(
-          std::chrono::seconds(1),
-          1,
-          "Extra data in payload for key %d: consumed %zu, total %zu",
-          key,
-          cursor.getCurrentPosition(),
-          compressed_payloads.payload_ref()->computeChainDataLength());
-      err = E::BADMSG;
-      return -1;
-    }
-  }
-
-  // move decoded groups to output
-  payload_groups_out.reserve(payload_groups_out.size() + decoded_groups.size());
-  for (auto& decoded_group : decoded_groups) {
-    payload_groups_out.emplace_back(std::move(decoded_group));
-  }
-
-  return 0;
-}
-
-} // namespace
-
 void PayloadGroupCodec::encode(const PayloadGroup& payload_group,
                                folly::IOBufQueue& out) {
   Encoder encoder(1);
@@ -419,6 +319,61 @@ size_t PayloadGroupCodec::decode(Slice binary,
   return deserialized_size;
 }
 
+namespace {
+/**
+ * Decodes and validates metadata.
+ * Returns 0 if successful.
+ */
+FOLLY_NODISCARD
+int decodeMetadata(PayloadKey key,
+                   const thrift::CompressedPayloads& compressed_payloads,
+                   thrift::CompressedPayloadsMetadata& metadata_out) {
+  auto uncompressed_metadata = uncompress(
+      static_cast<Compression>(*compressed_payloads.metadata_compression_ref()),
+      *compressed_payloads.metadata_uncompressed_size_ref(),
+      *compressed_payloads.compressed_metadata_ref());
+  if (!uncompressed_metadata) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(1),
+        1,
+        "Failed to uncompress metadata for key %d with compression %d, "
+        "uncompressed size %d",
+        key,
+        *compressed_payloads.metadata_compression_ref(),
+        *compressed_payloads.metadata_uncompressed_size_ref());
+    return -1;
+  }
+  const size_t deserialized_size = ThriftCodec::deserialize<ThriftSerializer>(
+      &uncompressed_metadata.value(), metadata_out);
+  if (deserialized_size != uncompressed_metadata->computeChainDataLength()) {
+    RATELIMIT_ERROR(
+        std::chrono::seconds(1),
+        1,
+        "Decoded metadata size mismatch for key %d: actual %zu, expected %d",
+        key,
+        deserialized_size,
+        *compressed_payloads.metadata_uncompressed_size_ref());
+    return -1;
+  }
+
+  // Descriptors must not contain negative values.
+  for (const auto& opt_descriptor : *metadata_out.descriptors_ref()) {
+    if (auto descriptor = opt_descriptor.descriptor_ref()) {
+      const auto uncompressed_size = *descriptor->uncompressed_size_ref();
+      if (uncompressed_size < 0) {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "Negative payload size (%d) for key %d",
+                        uncompressed_size,
+                        key);
+        return -1;
+      }
+    }
+  }
+  return 0;
+}
+} // namespace
+
 size_t PayloadGroupCodec::decode(Slice binary,
                                  std::vector<PayloadGroup>& payload_groups_out,
                                  bool allow_buffer_sharing) {
@@ -426,29 +381,90 @@ size_t PayloadGroupCodec::decode(Slice binary,
   const size_t deserialized_size = ThriftCodec::deserialize<ThriftSerializer>(
       binary,
       compressed_payload_groups,
-      // allow_buffer_sharing is ignored here, since payload will be
-      // uncompressed, which can stop sharing, and therefore saving on
-      // making any copies at all.
       apache::thrift::ExternalBufferSharing::SHARE_EXTERNAL_BUFFER);
   if (deserialized_size == 0) {
+    err = E::BADMSG;
     return 0;
   }
-  int rv = uncompress(compressed_payload_groups);
-  if (rv != 0) {
-    return 0;
-  }
-  if (!allow_buffer_sharing) {
-    // Payloads can share buffer with binary, if no compression was used,
-    // so make a copy if needed.
-    for (auto& [key, compressed_payloads] :
-         *compressed_payload_groups.payloads_ref()) {
-      compressed_payloads.payload_ref()->makeManaged();
+
+  folly::Optional<size_t> batch_size;
+  std::vector<PayloadGroup> decoded_groups;
+  for (auto& [key, compressed_payloads] :
+       *compressed_payload_groups.payloads_ref()) {
+    thrift::CompressedPayloadsMetadata metadata;
+    int rv = decodeMetadata(key, compressed_payloads, metadata);
+    if (rv != 0) {
+      err = E::BADMSG;
+      return 0;
+    }
+
+    size_t payloads_uncompressed_size = 0;
+    for (const auto& opt_descriptor : *metadata.descriptors_ref()) {
+      if (auto descriptor = opt_descriptor.descriptor_ref()) {
+        payloads_uncompressed_size += *descriptor->uncompressed_size_ref();
+      }
+    }
+    auto uncompressed_payloads =
+        uncompress(static_cast<Compression>(
+                       *compressed_payloads.payloads_compression_ref()),
+                   payloads_uncompressed_size,
+                   *compressed_payloads.compressed_payloads_ref());
+    if (!uncompressed_payloads) {
+      err = E::BADMSG;
+      return 0;
+    }
+    if (!allow_buffer_sharing) {
+      // Payloads can share buffer with binary, if no compression was used,
+      // so make a copy if needed.
+      uncompressed_payloads->makeManaged();
+    }
+
+    // All descriptors must have same size. Preallocate decoded_groups when
+    // first group is decoded and verify equality for the remaining groups.
+    if (!batch_size) {
+      batch_size = metadata.descriptors_ref()->size();
+      decoded_groups.resize(*batch_size);
+    } else {
+      if (metadata.descriptors_ref()->size() != *batch_size) {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "Descriptors sizes mismatch for key %d: %zu vs %zu",
+                        key,
+                        *batch_size,
+                        metadata.descriptors_ref()->size());
+        err = E::BADMSG;
+        return 0;
+      }
+    }
+
+    // Split uncompressed_payloads into pieces according to the
+    // uncompressed_size specified in descriptors.
+    size_t index = 0;
+    folly::io::Cursor cursor{&uncompressed_payloads.value()};
+    for (const auto& opt_descriptor : *metadata.descriptors_ref()) {
+      if (auto descriptor = opt_descriptor.descriptor_ref()) {
+        const auto uncompressed_size = *descriptor->uncompressed_size_ref();
+        folly::IOBuf iobuf;
+        if (cursor.cloneAtMost(iobuf, uncompressed_size) != uncompressed_size) {
+          RATELIMIT_ERROR(std::chrono::seconds(1),
+                          1,
+                          "Underflow while splitting payload for key %d: "
+                          "%d bytes expected, but only %lu bytes remaining",
+                          key,
+                          uncompressed_size,
+                          iobuf.computeChainDataLength());
+          err = E::BADMSG;
+          return 0;
+        }
+        decoded_groups[index][key] = std::move(iobuf);
+      }
+      ++index;
     }
   }
-  rv = convert(std::move(compressed_payload_groups), payload_groups_out);
-  if (rv != 0) {
-    return 0;
-  }
+
+  payload_groups_out.insert(payload_groups_out.end(),
+                            std::make_move_iterator(decoded_groups.begin()),
+                            std::make_move_iterator(decoded_groups.end()));
   return deserialized_size;
 }
 
@@ -466,36 +482,54 @@ convert(const std::vector<thrift::OptionalPayloadDescriptor>& thrift) {
   }
   return result;
 }
-
-FOLLY_NODISCARD
-CompressedPayloadGroups convert(thrift::CompressedPayloadGroups&& thrift) {
-  CompressedPayloadGroups result;
-  for (auto& [key, thrift_payloads] : *thrift.payloads_ref()) {
-    auto& payloads = result[key];
-    payloads.compression =
-        static_cast<Compression>(*thrift_payloads.compression_ref());
-    payloads.payload = std::move(*thrift_payloads.payload_ref());
-    payloads.descriptors = convert(*thrift_payloads.descriptors_ref());
-  }
-  return result;
-}
 } // namespace
 
 size_t PayloadGroupCodec::decode(
     const folly::IOBuf& binary,
     CompressedPayloadGroups& compressed_payload_groups_out,
     bool allow_buffer_sharing) {
-  using apache::thrift::ExternalBufferSharing;
-  thrift::CompressedPayloadGroups thrift;
+  thrift::CompressedPayloadGroups compressed_payload_groups;
   const size_t deserialized_size = ThriftCodec::deserialize<ThriftSerializer>(
       &binary,
-      thrift,
-      allow_buffer_sharing ? ExternalBufferSharing::SHARE_EXTERNAL_BUFFER
-                           : ExternalBufferSharing::COPY_EXTERNAL_BUFFER);
+      compressed_payload_groups,
+      apache::thrift::ExternalBufferSharing::SHARE_EXTERNAL_BUFFER);
   if (deserialized_size == 0) {
+    err = E::BADMSG;
     return 0;
   }
-  compressed_payload_groups_out = convert(std::move(thrift));
+
+  folly::Optional<size_t> batch_size;
+  CompressedPayloadGroups result;
+  for (auto& [key, compressed_payloads] :
+       *compressed_payload_groups.payloads_ref()) {
+    thrift::CompressedPayloadsMetadata metadata;
+    int rv = decodeMetadata(key, compressed_payloads, metadata);
+    if (rv != 0) {
+      err = E::BADMSG;
+      return 0;
+    }
+    if (!batch_size) {
+      batch_size = metadata.descriptors_ref()->size();
+    } else {
+      if (metadata.descriptors_ref()->size() != *batch_size) {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "Descriptors sizes mismatch for key %d: %zu vs %zu",
+                        key,
+                        *batch_size,
+                        metadata.descriptors_ref()->size());
+        err = E::BADMSG;
+        return 0;
+      }
+    }
+    auto& result_payloads = result[key];
+    result_payloads.payload = *compressed_payloads.compressed_payloads_ref();
+    result_payloads.compression = static_cast<Compression>(
+        *compressed_payloads.payloads_compression_ref());
+    result_payloads.descriptors = convert(*metadata.descriptors_ref());
+  }
+
+  compressed_payload_groups_out = result;
   return deserialized_size;
 }
 

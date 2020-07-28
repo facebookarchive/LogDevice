@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -65,7 +66,12 @@ class PayloadGroupCodec {
     const size_t expected_appends_count_;
     size_t appends_count_ = 0;
     bool contains_only_empty_groups_ = false;
-    thrift::CompressedPayloadGroups encoded_payload_groups_;
+
+    struct EncodedPayloads {
+      thrift::CompressedPayloadsMetadata metadata;
+      folly::IOBuf payloads;
+    };
+    std::unordered_map<PayloadKey, EncodedPayloads> encoded_payload_groups_;
   };
 
   /**
