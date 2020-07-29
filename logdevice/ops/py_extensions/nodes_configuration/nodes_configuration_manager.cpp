@@ -408,7 +408,6 @@ BOOST_PYTHON_MODULE(nodes_configuration_manager) {
 
     @param server_config_str: The JSON serialized ServerConfig
 
-
     @raises NodesConfigurationManagerParseException if either the ServerConfig
       or the NodesConfiguration are not parsable.
 
@@ -423,7 +422,6 @@ BOOST_PYTHON_MODULE(nodes_configuration_manager) {
     Check if the NodesConfiguration exists in zookeeper or not.
 
     @param server_config_str: The JSON serialized ServerConfig
-
 
     @raises NodesConfigurationManagerParseException if either the ServerConfig
       is not parsable.
