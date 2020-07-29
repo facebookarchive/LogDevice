@@ -23,6 +23,9 @@ ExternalProject_Add(folly
       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
       -DCMAKE_CXX_STANDARD=17
       -DCMAKE_PREFIX_PATH=${LOGDEVICE_STAGING_DIR}/usr/local
+      # Folly doesn't build on clang without this flag
+      # ((https://github.com/facebook/folly/issues/976))
+      -DFOLLY_USE_JEMALLOC=OFF
        ${_folly_cmake_extra_opts}
     INSTALL_COMMAND $(MAKE) install DESTDIR=${LOGDEVICE_STAGING_DIR}
     )

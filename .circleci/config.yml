@@ -20,6 +20,8 @@ jobs:
       - run:
           name: Build LogDevice
           command: |
+            export CC=clang-9
+            export CXX=clang++-9
             mkdir -p _build/staging/usr/local
             python3 -m pip install virtualenv
             python3 -m virtualenv _build/staging/usr/local

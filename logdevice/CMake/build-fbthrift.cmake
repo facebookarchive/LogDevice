@@ -40,15 +40,10 @@ set(THRIFT1 ${BINARY_DIR}/bin/thrift1)
 set(FBTHRIFT_LIBRARIES
     ${BINARY_DIR}/lib/libprotocol.so
     ${BINARY_DIR}/lib/libthriftcpp2.so
-    ${BINARY_DIR}/lib/libcompiler_ast.so
     ${BINARY_DIR}/lib/libtransport.so
     ${BINARY_DIR}/lib/libthriftfrozen2.so
-    ${BINARY_DIR}/lib/libmustache_lib.so
-    ${BINARY_DIR}/lib/libcompiler_generators.so
-    ${BINARY_DIR}/lib/libcompiler_lib.so
     ${BINARY_DIR}/lib/libasync.so
     ${BINARY_DIR}/lib/libthrift-core.so
-    ${BINARY_DIR}/lib/libcompiler_base.so
     ${BINARY_DIR}/lib/libthriftprotocol.so
     ${BINARY_DIR}/lib/libconcurrency.so
     ${BINARY_DIR}/lib/libthriftmetadata.so
