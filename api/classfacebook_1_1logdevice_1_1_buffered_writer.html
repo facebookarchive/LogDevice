@@ -64,6 +64,7 @@ $(function() {
 <div class="header">
   <div class="summary">
 <a href="#nested-classes">Classes</a> &#124;
+<a href="#pub-types">Public Types</a> &#124;
 <a href="#pub-methods">Public Member Functions</a> &#124;
 <a href="#pub-static-methods">Static Public Member Functions</a> &#124;
 <a href="#friends">Friends</a> &#124;
@@ -84,10 +85,18 @@ Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_options.html">Options</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-types"></a>
+Public Types</h2></td></tr>
+<tr class="memitem:ae0a977ecaef28112ce816866ba18d2d1"><td class="memItemLeft" align="right" valign="top">using&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#ae0a977ecaef28112ce816866ba18d2d1">PayloadVariant</a> = std::variant&lt; std::string, PayloadGroup &gt;</td></tr>
+<tr class="separator:ae0a977ecaef28112ce816866ba18d2d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a1a9dc6ecd14efcda214658d73e05c52f"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#a1a9dc6ecd14efcda214658d73e05c52f">append</a> (logid_t logid, std::string &amp;&amp;payload, AppendCallback::Context callback_context, AppendAttributes &amp;&amp;attrs=AppendAttributes())</td></tr>
 <tr class="separator:a1a9dc6ecd14efcda214658d73e05c52f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7234a25bab35a66be88f6b8b63550d62"><td class="memItemLeft" align="right" valign="top"><a id="a7234a25bab35a66be88f6b8b63550d62"></a>
+int&#160;</td><td class="memItemRight" valign="bottom"><b>append</b> (logid_t logid, PayloadGroup &amp;&amp;payload_group, AppendCallback::Context callback_context, AppendAttributes &amp;&amp;attrs=AppendAttributes())</td></tr>
+<tr class="separator:a7234a25bab35a66be88f6b8b63550d62"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8113d5e7023a6b66ac0a7170647af833"><td class="memItemLeft" align="right" valign="top">std::vector&lt; Status &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#a8113d5e7023a6b66ac0a7170647af833">append</a> (std::vector&lt; <a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_append.html">Append</a> &gt; &amp;&amp;appends)</td></tr>
 <tr class="separator:a8113d5e7023a6b66ac0a7170647af833"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa3131537024efc32fcb05aaea4a17d41"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#aa3131537024efc32fcb05aaea4a17d41">flushAll</a> ()</td></tr>
@@ -106,6 +115,22 @@ Friends</h2></td></tr>
 class&#160;</td><td class="memItemRight" valign="bottom"><b>BufferedWriterImpl</b></td></tr>
 <tr class="separator:a05ebfbb12bd86dfea07d2c9148d85f2a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
+<h2 class="groupheader">Member Typedef Documentation</h2>
+<a id="ae0a977ecaef28112ce816866ba18d2d1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae0a977ecaef28112ce816866ba18d2d1">&#9670;&nbsp;</a></span>PayloadVariant</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">using <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#ae0a977ecaef28112ce816866ba18d2d1">facebook::logdevice::BufferedWriter::PayloadVariant</a> =  std::variant&lt;std::string, PayloadGroup&gt;</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Variants of payloads, which can be appended using <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a>. </p>
+
+</div>
+</div>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="adf83b1dda804fd101f0ad47c6688f288"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#adf83b1dda804fd101f0ad47c6688f288">&#9670;&nbsp;</a></span>~BufferedWriter()</h2>
@@ -172,7 +197,7 @@ class&#160;</td><td class="memItemRight" valign="bottom"><b>BufferedWriterImpl</
       </table>
 </div><div class="memdoc">
 <p>Same as <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">Client::append()</a> except the append may get buffered. If the call succeeds it is added into a buffer, and finally appended to the log as a batch of appends. Once it has been successfully stored in LogDevice, <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer_1_1_append_callback.html#aeacea69c608664c841f92ca97994f1be">BufferedWriter::AppendCallback::onSuccess</a> (passed in <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#a09c466c0852cd7b8a4c531967aeb8bb1">create()</a>) is invoked with a ContextSet containing callback_context.</p>
-<p>If the call succeeds (returns 0), the class assumes ownership of the payload. If the call fails, the payload remains in the given std::string. See <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">Client::append</a> for explanation of AppendAttributes </p>
+<p>If the call succeeds (returns 0), the class assumes ownership of the payload. If the call fails, the payload remains in the given parameter. See <a class="el" href="classfacebook_1_1logdevice_1_1_client.html#aadaa483f8ea0d2fc39d0eb3c5f65c09a">Client::append</a> for explanation of AppendAttributes </p>
 
 </div>
 </div>

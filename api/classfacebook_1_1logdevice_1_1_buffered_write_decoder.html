@@ -76,8 +76,16 @@ $(function() {
 Public Member Functions</h2></td></tr>
 <tr class="memitem:afe3d17b824232aa6eb7567e3670442ca"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#afe3d17b824232aa6eb7567e3670442ca">decode</a> (std::vector&lt; std::unique_ptr&lt; DataRecord &gt;&gt; &amp;&amp;records, std::vector&lt; Payload &gt; &amp;payloads_out)</td></tr>
 <tr class="separator:afe3d17b824232aa6eb7567e3670442ca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af4adcb04b0e734c118be3f1e23d4f37c"><td class="memItemLeft" align="right" valign="top"><a id="af4adcb04b0e734c118be3f1e23d4f37c"></a>
+int&#160;</td><td class="memItemRight" valign="bottom"><b>decode</b> (std::vector&lt; std::unique_ptr&lt; DataRecord &gt;&gt; &amp;&amp;records, std::vector&lt; PayloadGroup &gt; &amp;payload_groups_out)</td></tr>
+<tr class="separator:af4adcb04b0e734c118be3f1e23d4f37c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a114b36f88e274c8f6af45195098d5903"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#a114b36f88e274c8f6af45195098d5903">decodeOne</a> (std::unique_ptr&lt; DataRecord &gt; &amp;&amp;record, std::vector&lt; Payload &gt; &amp;payloads_out)</td></tr>
 <tr class="separator:a114b36f88e274c8f6af45195098d5903"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaab5d71f10a80f6a75092663c2c9050c"><td class="memItemLeft" align="right" valign="top"><a id="aaab5d71f10a80f6a75092663c2c9050c"></a>
+int&#160;</td><td class="memItemRight" valign="bottom"><b>decodeOne</b> (std::unique_ptr&lt; DataRecord &gt; &amp;&amp;record, std::vector&lt; PayloadGroup &gt; &amp;payload_groups_out)</td></tr>
+<tr class="separator:aaab5d71f10a80f6a75092663c2c9050c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6a6631604b6190a2203bf37db8b141f5"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#a6a6631604b6190a2203bf37db8b141f5">decodeOneCompressed</a> (std::unique_ptr&lt; DataRecord &gt; &amp;&amp;record, CompressedPayloadGroups &amp;compressed_payload_groups_out)</td></tr>
+<tr class="separator:a6a6631604b6190a2203bf37db8b141f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
@@ -178,6 +186,36 @@ class&#160;</td><td class="memItemRight" valign="bottom"><b>BufferedWriteDecoder
 </div><div class="memdoc">
 <p>Same as <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_write_decoder.html#afe3d17b824232aa6eb7567e3670442ca">decode()</a> but for a single record only.</p>
 <dl class="section return"><dt>Returns</dt><dd>On success, returns 0. If the DataRecord failed to decode, return -1. </dd></dl>
+
+</div>
+</div>
+<a id="a6a6631604b6190a2203bf37db8b141f5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6a6631604b6190a2203bf37db8b141f5">&#9670;&nbsp;</a></span>decodeOneCompressed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int facebook::logdevice::BufferedWriteDecoder::decodeOneCompressed </td>
+          <td>(</td>
+          <td class="paramtype">std::unique_ptr&lt; DataRecord &gt; &amp;&amp;&#160;</td>
+          <td class="paramname"><em>record</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">CompressedPayloadGroups &amp;&#160;</td>
+          <td class="paramname"><em>compressed_payload_groups_out</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Decodes record without uncompressing any of the payloads. Batch must be written using PayloadGroups API in <a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html">BufferedWriter</a>, otherwise decoding will fail. Claims ownership of DataRecord on success.</p>
+<dl class="section return"><dt>Returns</dt><dd>On success, returns 0. If the DataRecord failed to decode, returns -1. </dd></dl>
 
 </div>
 </div>

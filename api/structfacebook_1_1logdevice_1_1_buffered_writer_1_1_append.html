@@ -76,6 +76,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a723bc0509bf4e2396757beb22d74a944"><td class="memItemLeft" align="right" valign="top"><a id="a723bc0509bf4e2396757beb22d74a944"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>Append</b> (logid_t log_id, std::string payload, AppendCallback::Context context, AppendAttributes attrs=AppendAttributes())</td></tr>
 <tr class="separator:a723bc0509bf4e2396757beb22d74a944"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a04cd8289a89a0e5bda695f39754a984d"><td class="memItemLeft" align="right" valign="top"><a id="a04cd8289a89a0e5bda695f39754a984d"></a>
+&#160;</td><td class="memItemRight" valign="bottom"><b>Append</b> (logid_t log_id, PayloadGroup &amp;&amp;payload, AppendCallback::Context context, AppendAttributes attrs=AppendAttributes())</td></tr>
+<tr class="separator:a04cd8289a89a0e5bda695f39754a984d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae082d723e5ae2f644897ab0ea2cc7d92"><td class="memItemLeft" align="right" valign="top"><a id="ae082d723e5ae2f644897ab0ea2cc7d92"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>Append</b> (const <a class="el" href="structfacebook_1_1logdevice_1_1_buffered_writer_1_1_append.html">Append</a> &amp;)=delete</td></tr>
 <tr class="separator:ae082d723e5ae2f644897ab0ea2cc7d92"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -91,9 +94,9 @@ Public Attributes</h2></td></tr>
 <tr class="memitem:a4d2d0a02d9da10baaf15e904f9336322"><td class="memItemLeft" align="right" valign="top"><a id="a4d2d0a02d9da10baaf15e904f9336322"></a>
 logid_t&#160;</td><td class="memItemRight" valign="bottom"><b>log_id</b></td></tr>
 <tr class="separator:a4d2d0a02d9da10baaf15e904f9336322"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:abe37fce810459c2d093b3a1e4b72d8ff"><td class="memItemLeft" align="right" valign="top"><a id="abe37fce810459c2d093b3a1e4b72d8ff"></a>
-std::string&#160;</td><td class="memItemRight" valign="bottom"><b>payload</b></td></tr>
-<tr class="separator:abe37fce810459c2d093b3a1e4b72d8ff"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9aa37222bcb3905e7805c62fb136dcdf"><td class="memItemLeft" align="right" valign="top"><a id="a9aa37222bcb3905e7805c62fb136dcdf"></a>
+<a class="el" href="classfacebook_1_1logdevice_1_1_buffered_writer.html#ae0a977ecaef28112ce816866ba18d2d1">PayloadVariant</a>&#160;</td><td class="memItemRight" valign="bottom"><b>payload</b></td></tr>
+<tr class="separator:a9aa37222bcb3905e7805c62fb136dcdf"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aec1b169435f658feea1d3f23d852c63e"><td class="memItemLeft" align="right" valign="top"><a id="aec1b169435f658feea1d3f23d852c63e"></a>
 AppendCallback::Context&#160;</td><td class="memItemRight" valign="bottom"><b>context</b></td></tr>
 <tr class="separator:aec1b169435f658feea1d3f23d852c63e"><td class="memSeparator" colspan="2">&#160;</td></tr>
