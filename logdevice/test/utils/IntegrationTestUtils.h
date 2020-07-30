@@ -379,30 +379,6 @@ class ClusterFactory {
   }
 
   /**
-   * By default, the cluster factory generates a single config file that is
-   * shared among all nodes. When this option is set, the factory will generate
-   * one config file per node in their own directory. They will initially be
-   * identical. but this allows testing with inconsistent configurations.
-   * In paritcular this option is required to simulate netwrok paritioning (see
-   * partition method below)
-   * Note: expand/shrink/replace and maybe some other functionalities are not
-   * compatible with this setting yet.
-   *
-   * TODO T52924503: currently oneConfigPerNode() is not compatible with
-   * NodesConfiguration with NCM source-of-truth. We will add test utilities to
-   * simulate config divergence in NCM.
-   */
-  ClusterFactory& oneConfigPerNode() {
-    one_config_per_node_ = true;
-
-    setNodesConfigurationSourceOfTruth(
-        NodesConfigurationSourceOfTruth::SERVER_CONFIG);
-    setParam("--enable-config-synchronization", "false");
-
-    return *this;
-  }
-
-  /**
    * If metadata is to be provisioned by the test cluster, and it already
    * exists, the default behaviour is to fail provisioning with E::EXISTS.
    * Call this method to silently use existing metadata instead.
@@ -678,7 +654,6 @@ class ClusterFactory {
   folly::Optional<Configuration::Nodes> node_configs_;
   folly::Optional<Configuration::MetaDataLogsConfig> meta_config_;
   bool enable_logsconfig_manager_ = false;
-  bool one_config_per_node_{false};
 
   configuration::InternalLogs internal_logs_;
 
@@ -1379,7 +1354,6 @@ class Cluster {
           std::string server_binary,
           std::string cluster_name,
           bool enable_logsconfig_manager,
-          bool one_config_per_node,
           dbg::Level default_log_level,
           bool sync_server_config_to_nodes_configuration,
           NodesConfigurationSourceOfTruth nodes_configuration_sot);
@@ -1448,7 +1422,6 @@ class Cluster {
   bool enable_logsconfig_manager_ = false;
   const NodesConfigurationSourceOfTruth nodes_configuration_sot_;
 
-  bool one_config_per_node_ = false;
   std::shared_ptr<UpdateableConfig> config_;
   std::unique_ptr<NodesConfigurationPublisher> nodes_configuration_publisher_;
   FileConfigSource* config_source_;

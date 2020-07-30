@@ -3701,5 +3701,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "store.",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Configuration);
+  init("test-same-partition-nodes",
+       &test_same_partition_nodes,
+       "",
+       parse_recipients_list,
+       "Used for isolation testing. Only nodes in this set will be addressable "
+       "from this node. An empty list disables this error injection.",
+       SERVER,
+       SettingsCategory::Testing);
 }
 }} // namespace facebook::logdevice

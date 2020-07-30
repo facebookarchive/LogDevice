@@ -1481,6 +1481,10 @@ struct Settings : public SettingsBundle {
   // Number of transient error retries for the zookeeper versioned config store.
   int zk_vcs_max_retries;
 
+  // Used for isolation testing. Only nodes in this set will be addressable
+  // from this node.
+  std::vector<node_index_t> test_same_partition_nodes;
+
  protected:
   // Only UpdateableSettings can create this bundle to ensure defaults are
   // populated.

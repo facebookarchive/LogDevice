@@ -365,7 +365,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedNode) {
                      .useHashBasedSequencerAssignment()
                      .setParam("--min-gossips-for-stable-state", "0")
                      .setNumDBShards(num_shards)
-                     .oneConfigPerNode()
                      .create(num_nodes);
 
   waitForNodesToReadEventLog(*cluster);
@@ -436,7 +435,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedRack) {
                      .setNumDBShards(num_shards)
                      .setNumRacks(num_racks)
                      .setEventLogAttributes(event_log_attrs)
-                     .oneConfigPerNode()
                      .deferStart()
                      .create(num_nodes);
 
@@ -531,7 +529,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, s143309) {
                      .setNumDBShards(num_shards)
                      .setNumRacks(num_racks)
                      .setEventLogAttributes(event_log_attrs)
-                     .oneConfigPerNode()
                      .create(num_nodes);
 
   waitForNodesToReadEventLog(*cluster);

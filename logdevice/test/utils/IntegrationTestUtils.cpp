@@ -300,7 +300,6 @@ Cluster::Cluster(std::string root_path,
                  std::string server_binary,
                  std::string cluster_name,
                  bool enable_logsconfig_manager,
-                 bool one_config_per_node,
                  dbg::Level default_log_level,
                  bool sync_server_config_to_nodes_configuration,
                  NodesConfigurationSourceOfTruth nodes_configuration_sot)
@@ -313,7 +312,6 @@ Cluster::Cluster(std::string root_path,
       cluster_name_(std::move(cluster_name)),
       enable_logsconfig_manager_(enable_logsconfig_manager),
       nodes_configuration_sot_(nodes_configuration_sot),
-      one_config_per_node_(one_config_per_node),
       default_log_level_(default_log_level),
       sync_server_config_to_nodes_configuration_(
           sync_server_config_to_nodes_configuration) {
@@ -842,7 +840,6 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
                   actual_server_binary,
                   cluster_name_,
                   enable_logsconfig_manager_,
-                  one_config_per_node_,
                   default_log_level_,
                   sync_server_config_to_nodes_configuration_,
                   nodes_configuration_sot_.value()));
@@ -1018,8 +1015,6 @@ int Cluster::pickAddressesForServers(
 int Cluster::expand(std::vector<node_index_t> new_indices,
                     bool start_nodes,
                     bool bump_config_version) {
-  // TODO: make it work with one config per nodes.
-  ld_check(!one_config_per_node_);
   Configuration::Nodes nodes = config_->get()->serverConfig()->getNodes();
 
   std::sort(new_indices.begin(), new_indices.end());
@@ -1097,9 +1092,6 @@ int Cluster::expand(int nnodes, bool start, bool bump_config_version) {
 }
 
 int Cluster::shrink(std::vector<node_index_t> indices) {
-  // TODO: make it work with one config per nodes.
-  ld_check(!one_config_per_node_);
-
   if (indices.empty()) {
     ld_error("shrink() called with no nodes");
     return -1;
@@ -1245,14 +1237,7 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
   // /tmp/logdevice/IntegrationTestUtils.MkkZyS/N0:1/
   node->data_path_ = Cluster::getNodeDataPath(root_path_, index);
   boost::filesystem::create_directories(node->data_path_);
-
-  if (one_config_per_node_) {
-    // create individual config file for each node under their own directory
-    node->config_path_ = node->data_path_ + "/logdevice.conf";
-    overwriteConfigFile(node->config_path_.c_str(), config_->get()->toString());
-  } else {
-    node->config_path_ = config_path_;
-  }
+  node->config_path_ = config_path_;
 
   node->is_storage_node_ =
       config_->getNodesConfiguration()->isStorageNode(index);
@@ -1285,8 +1270,6 @@ Cluster::createSelfRegisteringNode(const std::string& name) const {
   ld_check(isGossipEnabled());
   // Self registration only works with the NCM being the source of truth.
   ld_check(nodes_configuration_sot_ == NodesConfigurationSourceOfTruth::NCM);
-  // NCM doesn't work with one_config_per_node.
-  ld_check(!one_config_per_node_);
 
   std::unique_ptr<Node> node = std::make_unique<Node>();
   node->name_ = name;
@@ -1445,40 +1428,24 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
 }
 
 void Cluster::partition(std::vector<std::set<int>> partitions) {
-  // one_config_per_node_ is required
-  ld_check(one_config_per_node_);
-  // TODO T52924503: current only ServerConfig source of truth is
-  // supported.
-  ld_check(getNodesConfigurationSourceOfTruth() ==
-           NodesConfigurationSourceOfTruth::SERVER_CONFIG);
-
   // for every node in a partition, update the address of nodes outside
   // the partition to a non-existent unix socket. this effectively create a
   // virtual network partition.
   for (auto p : partitions) {
-    Configuration::Nodes nodes = getConfig()->get()->serverConfig()->getNodes();
+    auto same_parition_nodes = folly::join(",", p);
 
-    for (auto& n : nodes) {
-      if (p.find(n.first) == p.end()) {
-        // node is outside the partition, update its address to unreachable
-        // unix socket (to trigger sender reload on config update)
-        std::string addr = "/nonexistent" + folly::to<std::string>(n.first);
-        n.second.address = Sockaddr(addr);
-        n.second.gossip_address = Sockaddr(addr);
-      }
-    }
-
-    Configuration::NodesConfig nodes_config(std::move(nodes));
-    auto old_config = config_->get();
-    Configuration config(old_config->serverConfig()
-                             ->withNodes(nodes_config)
-                             ->withIncrementedVersion(),
-                         old_config->logsConfig());
-    for (auto i : p) {
-      // replace config file of all the nodes within that partition.
-      overwriteConfigFile(getNode(i).config_path_.c_str(), config.toString());
+    for (auto& n : p) {
+      nodes_[n]->cmd_args_.emplace(
+          "--test-same-partition-nodes", same_parition_nodes);
+      nodes_[n]->updateSetting(
+          "test-same-partition-nodes", same_parition_nodes);
     }
   }
+
+  // Dummy nodes config change to trigger address connection re-creation
+  auto old_config = getConfig()->get();
+  writeConfig(old_config->serverConfig()->withIncrementedVersion().get(),
+              old_config->logsConfig().get());
 }
 
 std::unique_ptr<Cluster>
@@ -2741,8 +2708,6 @@ std::unique_ptr<MetaDataProvisioner> Cluster::createMetaDataProvisioner() {
 }
 
 int Cluster::replace(node_index_t index, bool defer_start) {
-  // TODO: make it work with one config per nodes.
-  ld_check(!one_config_per_node_);
   ld_debug("replacing node %d", (int)index);
 
   if (hasStorageRole(index)) {
@@ -2807,8 +2772,6 @@ int Cluster::replace(node_index_t index, bool defer_start) {
 }
 
 int Cluster::bumpGeneration(node_index_t index) {
-  // TODO: make it work with one config per nodes.
-  ld_check(!one_config_per_node_);
   Configuration::Nodes nodes = config_->get()->serverConfig()->getNodes();
   if (hasStorageRole(index)) {
     // expect internal tracked replacemnt counter is in sync with configuration
@@ -2846,8 +2809,6 @@ int Cluster::updateNodeAttributes(node_index_t index,
               ? enable_sequencing.value() ? "true" : "false"
               : "unchanged");
 
-  // TODO: make it work with one config per nodes.
-  ld_check(!one_config_per_node_);
   Configuration::Nodes nodes = config_->get()->serverConfig()->getNodes();
   if (!nodes.count(index)) {
     ld_error("No such node: %d", (int)index);
@@ -2884,8 +2845,6 @@ int Cluster::updateNodeAttributes(node_index_t index,
 }
 
 void Cluster::waitForServersToPartiallyProcessConfigUpdate() {
-  // TODO: make it work with one config per nodes.
-  ld_check(!one_config_per_node_);
   auto check = [this]() {
     std::shared_ptr<const Configuration> our_config = config_->get();
     const std::string expected_text = our_config->toString() + "\r\n";

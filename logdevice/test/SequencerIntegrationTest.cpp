@@ -777,7 +777,6 @@ TEST_F(SequencerIntegrationTest, SequencerIsolation) {
           .setParam("--isolated-sequencer-ttl", "5s")
           .useHashBasedSequencerAssignment()
           .enableMessageErrorInjection()
-          .oneConfigPerNode()
           .doPreProvisionEpochMetaData() // prevents spurious sequencer
                                          // reactivations due to metadata log
                                          // writes

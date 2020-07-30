@@ -410,7 +410,7 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   node.generation = 1;
   node.addSequencerRole();
 
-  factory.setNodes(nodes).oneConfigPerNode();
+  factory.setNodes(nodes);
 
   // Prevent client's logsconfig API from picking N3 to execute requests, since
   // N3 will be isolated for part of the test.
@@ -563,7 +563,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   node.generation = 1;
   node.addSequencerRole();
 
-  factory.setNodes(nodes).oneConfigPerNode();
+  factory.setNodes(nodes);
 
   buildClusterAndClient(
       std::move(factory), {{"logsconfig-api-blacklist-nodes", "3"}});

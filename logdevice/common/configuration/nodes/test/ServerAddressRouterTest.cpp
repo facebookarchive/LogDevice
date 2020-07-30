@@ -51,7 +51,8 @@ TEST(ServerAddressRouterTest, GetDefaultSockAddr) {
       ConnectionType::PLAIN,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -69,7 +70,8 @@ TEST(ServerAddressRouterTest, GetDefaultSockAddrClient) {
       ConnectionType::PLAIN,
       /* is_server */ false,
       /* use_dedicated_server_to_server_address */ false,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -88,7 +90,8 @@ TEST(ServerAddressRouterTest, IgnoreServerToServerAddressParam) {
       ConnectionType::PLAIN,
       /* is_server */ false,
       /* use_dedicated_server_to_server_address */ true,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -107,7 +110,8 @@ TEST(ServerAddressRouterTest, SslAddress) {
       ConnectionType::SSL,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestSslAddress);
 }
@@ -125,7 +129,8 @@ TEST(ServerAddressRouterTest, SslAddressClient) {
       ConnectionType::SSL,
       /* is_server */ false,
       /* use_dedicated_server_to_server_address */ false,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestSslAddress);
 }
@@ -144,7 +149,8 @@ TEST(ServerAddressRouterTest, DefaultServerToServerIsBaseAddress) {
       ConnectionType::PLAIN,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -164,7 +170,8 @@ TEST(ServerAddressRouterTest, DedicatedServerToServerAddressIfEnabled) {
       ConnectionType::PLAIN,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestServerToServerAddress);
 }
@@ -184,7 +191,8 @@ TEST(ServerAddressRouterTest, ServerToServerOverridesSslAddress) {
       ConnectionType::SSL,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestServerToServerAddress);
 }
@@ -204,7 +212,8 @@ TEST(ServerAddressRouterTest, gossipAddressOverridesData) {
       ConnectionType::SSL,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestGossipAddress);
 }
@@ -223,7 +232,8 @@ TEST(ServerAddressRouterTest, invalidServerToServerAddress) {
       ConnectionType::PLAIN,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, Sockaddr::INVALID);
 }
@@ -242,7 +252,8 @@ TEST(ServerAddressRouterTest, invalidSslAddress) {
       ConnectionType::SSL,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
-      /* use_dedicated_gossip_port */ true);
+      /* use_dedicated_gossip_port */ true,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, Sockaddr::INVALID);
 }
@@ -260,7 +271,49 @@ TEST(ServerAddressRouterTest, dedicatedGossipPortDisabled) {
       ConnectionType::PLAIN,
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
-      /* use_dedicated_gossip_port */ false);
+      /* use_dedicated_gossip_port */ false,
+      /* same_parition_nodes */ {});
+
+  EXPECT_EQ(actual, kTestDefaultAddress);
+}
+
+TEST(ServerAddressRouterTest, sameParitionNodes) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
+
+  // Test for a node in the same partition.
+  auto actual = ServerAddressRouter().getAddress(
+      1,
+      nodeServiceDiscovery,
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ false,
+      /* use_dedicated_gossip_port */ false,
+      /* same_parition_nodes */ {1, 2, 3});
+  EXPECT_EQ(actual, kTestDefaultAddress);
+
+  // Test for a node in a different partition
+  actual = ServerAddressRouter().getAddress(
+      10,
+      nodeServiceDiscovery,
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ false,
+      /* use_dedicated_gossip_port */ false,
+      /* same_parition_nodes */ {1, 2, 3});
+
+  // Test with this error injection disabled.
+  actual = ServerAddressRouter().getAddress(
+      10,
+      nodeServiceDiscovery,
+      SocketType::DATA,
+      ConnectionType::PLAIN,
+      /* is_server */ true,
+      /* use_dedicated_server_to_server_address */ false,
+      /* use_dedicated_gossip_port */ false,
+      /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }

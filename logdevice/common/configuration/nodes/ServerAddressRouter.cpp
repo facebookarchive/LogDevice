@@ -11,14 +11,29 @@
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
-const Sockaddr&
-ServerAddressRouter::getAddress(node_index_t /* idx */,
-                                const NodeServiceDiscovery& node_svc,
-                                SocketType socket_type,
-                                ConnectionType connection_type,
-                                bool is_server,
-                                bool use_dedicated_server_to_server_address,
-                                bool use_dedicated_gossip_port) const {
+const Sockaddr& ServerAddressRouter::getAddress(
+    node_index_t idx,
+    const NodeServiceDiscovery& node_svc,
+    SocketType socket_type,
+    ConnectionType connection_type,
+    bool is_server,
+    bool use_dedicated_server_to_server_address,
+    bool use_dedicated_gossip_port,
+    const std::vector<node_index_t>& same_partition_nodes) const {
+  {
+    // An error injection mechanism to simulate isolation. If the node we're
+    // trying to reach is not in our partition. We're going to return an invalid
+    // address to simulate it being unreachable.
+    if (!same_partition_nodes.empty()) {
+      if (std::find(same_partition_nodes.begin(),
+                    same_partition_nodes.end(),
+                    idx) == same_partition_nodes.end()) {
+        static const Sockaddr non_existent_address{"/nonexistent"};
+        return non_existent_address;
+      }
+    }
+  }
+
   // If use_dedicated_gossip_port is false, it means we should use the data
   // port for connections.
   if (socket_type == SocketType::GOSSIP && !use_dedicated_gossip_port) {
@@ -67,7 +82,8 @@ ServerAddressRouter::getAddress(node_index_t idx,
                     connection_type,
                     settings.server,
                     settings.use_dedicated_server_to_server_address,
-                    settings.send_to_gossip_port);
+                    settings.send_to_gossip_port,
+                    settings.test_same_partition_nodes);
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

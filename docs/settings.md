@@ -643,6 +643,7 @@ sidebar_label: Settings
 | test-do-not-pick-in-copysets | Copyset selectors won't pick these nodes. Comma-separated list of node indexes, e.g. '1,2,3'. Used in tests. |  | server&nbsp;only |
 | test-get-cluster-state-recipients | Force get-cluster-state recipients as a comma-separated list of node ids |  | client&nbsp;only |
 | test-reject-hello | if set to the name of an error code, reject all HELLOs with the specified error code. Currently supported values are ACCESS and PROTONOSUPPORT. Used for testing. | OK | requires&nbsp;restart, server&nbsp;only |
+| test-same-partition-nodes | Used for isolation testing. Only nodes in this set will be addressable from this node. An empty list disables this error injection. |  | server&nbsp;only |
 | test-sequencer-corrupt-stores | Simulates bad hardware flipping a bit in the payload of a STORE message. | false | server&nbsp;only |
 | test-stall-rebuilding | Makes rebuilding pretend to start but not make any actual progress. Used in tests. | false | server&nbsp;only |
 | test-timestamp-linear-transform | Coefficients for transforming the timestamp of records for test. The value should contain two integers separated by ','. For example 'm,c'. Records timestamp is transformed as m * now() + c.A default value of '1,0' makes the timestamp = now() which is expected for all the normal use cases. | 1,0 | requires&nbsp;restart, server&nbsp;only |
